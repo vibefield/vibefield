@@ -468,6 +468,94 @@ async fn a_burst_of_doors_coalesces_into_a_snapshot_and_never_closes_the_managem
 /// THE FLOOR WALKS, on the real kernel: this test process's parent stands in for a pane root the floor lists, so the
 /// door from this process resolves to that pane one step up. A row whose root started at another time is not the
 /// pane (the 60 s birth rule), and the door outside it names none.
+// OB-3d — on a real floor: the caller here is this test process itself, named as a helper root over the management
+// channel, and the kernel's reading of its start decides the match.
+#[tokio::test]
+async fn a_door_from_a_named_helper_says_its_root_and_a_cleared_root_says_nothing() {
+    let (_dir, daemon) = boot().await;
+    let endpoint = door_endpoint(&daemon);
+    let mut mgmt = Mgmt::paired(&daemon).await;
+    let own = std::process::id();
+    let set = mgmt
+        .call(
+            "native.door.roots.set",
+            json!({"rootId": "attempt-1", "pid": own}),
+        )
+        .await;
+    assert_eq!(
+        set["result"]["startedAtMs"],
+        json!(
+            process_facts(own)
+                .expect("this process has facts")
+                .started_at_ms
+        ),
+        "the floor answers the start it read: {set}"
+    );
+
+    let _named = UnixStream::connect(&endpoint).await.unwrap();
+    assert!(settles(|| daemon.state.door.open_count() == 1).await);
+    let opened = daemon.state.door.snapshot().doors.remove(0);
+    let root = opened.root.expect("the door names its root");
+    assert_eq!((root.root_id.as_str(), root.depth), ("attempt-1", 0));
+    assert!(opened.pane.is_none());
+
+    let clear = mgmt
+        .call("native.door.roots.clear", json!({"rootId": "attempt-1"}))
+        .await;
+    assert_eq!(clear["result"]["cleared"], json!(true), "{clear}");
+    let again = mgmt
+        .call("native.door.roots.clear", json!({"rootId": "attempt-1"}))
+        .await;
+    assert_eq!(again["result"]["cleared"], json!(false), "{again}");
+
+    let _unnamed = UnixStream::connect(&endpoint).await.unwrap();
+    assert!(settles(|| daemon.state.door.open_count() == 2).await);
+    let doors = daemon.state.door.snapshot().doors;
+    assert!(doors[1].root.is_none(), "{:?}", doors[1]);
+    assert!(doors[1].pane.is_none(), "{:?}", doors[1]);
+}
+
+#[tokio::test]
+async fn a_pid_the_kernel_cannot_read_or_another_root_holds_is_refused_by_name() {
+    let (_dir, daemon) = boot().await;
+    let mut mgmt = Mgmt::paired(&daemon).await;
+    let own = std::process::id();
+    let gone = mgmt
+        .call(
+            "native.door.roots.set",
+            json!({"rootId": "attempt-1", "pid": 4_194_303}),
+        )
+        .await;
+    assert_eq!(
+        gone["error"]["data"]["kind"],
+        json!("PRECONDITION_FAILED"),
+        "{gone}"
+    );
+    assert_eq!(
+        gone["error"]["data"]["details"]["reason"],
+        json!("pid-unreadable"),
+        "{gone}"
+    );
+    let first = mgmt
+        .call(
+            "native.door.roots.set",
+            json!({"rootId": "attempt-1", "pid": own}),
+        )
+        .await;
+    assert!(first.get("result").is_some(), "{first}");
+    let held = mgmt
+        .call(
+            "native.door.roots.set",
+            json!({"rootId": "attempt-2", "pid": own}),
+        )
+        .await;
+    assert_eq!(
+        held["error"]["data"]["details"]["reason"],
+        json!("pid-held"),
+        "{held}"
+    );
+}
+
 #[tokio::test]
 async fn a_door_from_inside_a_listed_pane_names_the_pane_and_how_far_up_its_root_stood() {
     let (_dir, daemon) = boot().await;

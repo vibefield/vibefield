@@ -28,7 +28,9 @@
 
 use super::peer::ProcessTable;
 use crate::contracts::ObservedState;
-use crate::registries::native_door::{ROOT_BIRTH_TOLERANCE_MS, WALK_MAX_STEPS};
+use crate::registries::native_door::{
+    ROOT_BIRTH_TOLERANCE_MS, START_RESOLUTION_MS, WALK_MAX_STEPS,
+};
 use std::collections::{HashMap, HashSet};
 
 /// One pane as the walk reads it.
@@ -92,23 +94,51 @@ impl RootRefused {
 pub struct HelperRoots(HashMap<String, HelperRoot>);
 
 impl HelperRoots {
-    /// Name a helper: its start is read here, from the table, never taken from the caller.
+    /// Name a helper: its start is read here, from the table, never taken from the caller. The system's first process
+    /// is refused with the unreadable: no walk ever stands on it. Another pid under the same id replaces the root (a
+    /// helper reborn), and the dead are dropped first, so a pid the system handed on is free to be named.
     pub fn set(
         &mut self,
-        _table: &impl ProcessTable,
-        _root_id: &str,
-        _pid: u32,
+        table: &impl ProcessTable,
+        root_id: &str,
+        pid: u32,
     ) -> Result<u64, RootRefused> {
-        Err(RootRefused::Unreadable)
+        self.prune(table);
+        if pid <= 1 {
+            return Err(RootRefused::Unreadable);
+        }
+        let facts = table.process(pid).ok_or(RootRefused::Unreadable)?;
+        if self
+            .0
+            .values()
+            .any(|root| root.pid == pid && root.root_id != root_id)
+        {
+            return Err(RootRefused::Held);
+        }
+        self.0.insert(
+            root_id.to_owned(),
+            HelperRoot {
+                root_id: root_id.to_owned(),
+                pid,
+                started_at_ms: facts.started_at_ms,
+            },
+        );
+        Ok(facts.started_at_ms)
     }
 
     /// Forget a root; `false` when none was held.
-    pub fn clear(&mut self, _root_id: &str) -> bool {
-        false
+    pub fn clear(&mut self, root_id: &str) -> bool {
+        self.0.remove(root_id).is_some()
     }
 
     /// Drop every root whose process is gone, or whose pid now belongs to a later process.
-    pub fn prune(&mut self, _table: &impl ProcessTable) {}
+    pub fn prune(&mut self, table: &impl ProcessTable) {
+        self.0.retain(|_, root| {
+            table
+                .process(root.pid)
+                .is_some_and(|facts| same_start(facts.started_at_ms, root.started_at_ms))
+        });
+    }
 
     /// The roots a walk reads.
     pub fn rows(&self) -> Vec<HelperRoot> {
@@ -133,27 +163,36 @@ pub fn pane_roots(observed: &ObservedState) -> Vec<PaneRoot> {
         .collect()
 }
 
+/// Are these two readings one process's start, at the resolution the kernel's readings agree to?
+fn same_start(a_ms: u64, b_ms: u64) -> bool {
+    a_ms / START_RESOLUTION_MS == b_ms / START_RESOLUTION_MS
+}
+
 /// Did the process that started at `started_at_ms` start with the pane born at `created_at_ms`?
 pub fn born_with(started_at_ms: u64, created_at_ms: u64) -> bool {
     started_at_ms.abs_diff(created_at_ms) <= ROOT_BIRTH_TOLERANCE_MS
 }
 
-/// From `caller` up its parents, at most `WALK_MAX_STEPS` of them, to the first pane whose root it reaches. It ends
-/// with none at the system's first process (pid 1, or 0), at a process the table no longer knows, or on a cycle,
-/// which a live table never holds and a racing read can.
+/// From `caller` up its parents, at most `WALK_MAX_STEPS` of them, to the first pane whose root it reaches, or, with no
+/// pane on the chain, the nearest helper root passed on the way. It ends at the system's first process (pid 1, or 0), at
+/// a process the table no longer knows, or on a cycle, which a live table never holds and a racing read can; a root
+/// passed before the end still names the caller.
 pub fn walk(
     table: &impl ProcessTable,
     caller: u32,
     panes: &[PaneRoot],
-    _roots: &[HelperRoot],
+    roots: &[HelperRoot],
 ) -> Option<Reached> {
     let mut pid = caller;
     let mut seen = HashSet::new();
+    let mut nearest_root = None;
     for depth in 0..=WALK_MAX_STEPS as u32 {
         if pid <= 1 || !seen.insert(pid) {
-            return None;
+            break;
         }
-        let facts = table.process(pid)?;
+        let Some(facts) = table.process(pid) else {
+            break;
+        };
         let root = panes
             .iter()
             .find(|pane| pane.pid == pid && born_with(facts.started_at_ms, pane.created_at_ms));
@@ -163,9 +202,20 @@ pub fn walk(
                 depth,
             }));
         }
+        if nearest_root.is_none() {
+            nearest_root = roots
+                .iter()
+                .find(|root| root.pid == pid && same_start(facts.started_at_ms, root.started_at_ms))
+                .map(|root| {
+                    Reached::Root(FoundRoot {
+                        root_id: root.root_id.clone(),
+                        depth,
+                    })
+                });
+        }
         pid = facts.parent;
     }
-    None
+    nearest_root
 }
 
 #[cfg(test)]
@@ -326,10 +376,19 @@ mod tests {
     #[test]
     fn a_helper_root_reaches_its_run() {
         let roots = [root("attempt-a", 600, BIRTH)];
-        assert_eq!(walk(&helper_desk(), 610, &[], &roots), found_root("attempt-a", 1));
-        assert_eq!(walk(&helper_desk(), 620, &[], &roots), found_root("attempt-a", 2));
+        assert_eq!(
+            walk(&helper_desk(), 610, &[], &roots),
+            found_root("attempt-a", 1)
+        );
+        assert_eq!(
+            walk(&helper_desk(), 620, &[], &roots),
+            found_root("attempt-a", 2)
+        );
         // the helper dialing the door itself
-        assert_eq!(walk(&helper_desk(), 600, &[], &roots), found_root("attempt-a", 0));
+        assert_eq!(
+            walk(&helper_desk(), 600, &[], &roots),
+            found_root("attempt-a", 0)
+        );
         // fieldd above it, and a process beside it, are under no root
         assert_eq!(walk(&helper_desk(), 400, &[], &roots), None);
         assert_eq!(walk(&helper_desk(), 700, &[], &roots), None);
@@ -342,7 +401,10 @@ mod tests {
         assert_eq!(walk(&helper_desk(), 610, &[], &later), None);
         // and the comparison is at the kernel's resolution: the same second is the same process
         let same_second = [root("attempt-a", 600, BIRTH + 900)];
-        assert_eq!(walk(&helper_desk(), 610, &[], &same_second), found_root("attempt-a", 1));
+        assert_eq!(
+            walk(&helper_desk(), 610, &[], &same_second),
+            found_root("attempt-a", 1)
+        );
     }
 
     #[test]
@@ -354,7 +416,10 @@ mod tests {
         let Reached::Pane(found) = reached else {
             panic!("a root beat a pane: {reached:?}");
         };
-        assert_eq!((found.terminal_session_id.as_str(), found.depth), ("pane-a", 2));
+        assert_eq!(
+            (found.terminal_session_id.as_str(), found.depth),
+            ("pane-a", 2)
+        );
         // the same process named as both
         let both = [root("attempt-c", 700, BIRTH)];
         assert!(matches!(
@@ -365,11 +430,11 @@ mod tests {
 
     #[test]
     fn the_nearest_of_two_roots_names_the_caller() {
-        let roots = [
-            root("outer", 600, BIRTH),
-            root("inner", 610, BIRTH + 2_000),
-        ];
-        assert_eq!(walk(&helper_desk(), 620, &[], &roots), found_root("inner", 1));
+        let roots = [root("outer", 600, BIRTH), root("inner", 610, BIRTH + 2_000)];
+        assert_eq!(
+            walk(&helper_desk(), 620, &[], &roots),
+            found_root("inner", 1)
+        );
     }
 
     #[test]
@@ -384,7 +449,12 @@ mod tests {
             found_root("far", steps)
         );
         assert_eq!(
-            walk(&chain, 1_000, &[], &[root("too-far", 1_000 + steps + 1, BIRTH)]),
+            walk(
+                &chain,
+                1_000,
+                &[],
+                &[root("too-far", 1_000 + steps + 1, BIRTH)]
+            ),
             None
         );
     }
@@ -423,7 +493,10 @@ mod tests {
         assert_eq!(RootRefused::Held.reason(), "pid-held");
         // the same id again is the same root; another pid under it is a helper reborn
         assert_eq!(roots.set(&helper_desk(), "attempt-a", 600), Ok(BIRTH));
-        assert_eq!(roots.set(&helper_desk(), "attempt-a", 610), Ok(BIRTH + 2_000));
+        assert_eq!(
+            roots.set(&helper_desk(), "attempt-a", 610),
+            Ok(BIRTH + 2_000)
+        );
         assert_eq!(roots.rows(), vec![root("attempt-a", 610, BIRTH + 2_000)]);
     }
 

@@ -8,9 +8,18 @@
 //!
 //! A subscription is also what lets fieldd be sent doors' bytes (`DoorHandle::subscriber`): taken after the answer
 //! that lists every door, and dropped when the connection goes.
+//!
+//! OB-3d — `native.door.roots.set` and `.clear`: fieldd names a run's helper process, before its first MCP-bearing
+//! request, so a door it opens is walked to the run (`services/door/walk.rs`). They are answered here and nowhere
+//! else, so nothing a caller does at the door can reach them (EL7).
 
 use super::{err, ok, send};
-use crate::contracts::{NativeDoorCloseParams, NativeDoorCloseResult, NativeDoorSubscribeResult};
+use crate::contracts::{
+    NativeDoorCloseParams, NativeDoorCloseResult, NativeDoorRootsClearParams,
+    NativeDoorRootsClearResult, NativeDoorRootsSetParams, NativeDoorRootsSetResult,
+    NativeDoorSubscribeResult,
+};
+use crate::services::door::walk::RootRefused;
 use crate::services::door::{DoorEvent, DoorSubscriber};
 use crate::state::{DaemonState, MgmtOutbox, Offered};
 use serde_json::{json, Value};
@@ -59,6 +68,50 @@ pub(super) fn handle(
                 None,
             ),
         },
+        "native.door.roots.set" => match serde_json::from_value::<NativeDoorRootsSetParams>(params)
+        {
+            Ok(set) => match u32::try_from(set.pid.get())
+                .map_err(|_| RootRefused::Unreadable)
+                .and_then(|pid| state.door.set_root(&set.root_id, pid))
+            {
+                Ok(started_at_ms) => ok(id, json!(NativeDoorRootsSetResult { started_at_ms })),
+                Err(refused) => err(
+                    id,
+                    "PRECONDITION_FAILED",
+                    -32005,
+                    match refused {
+                        RootRefused::Unreadable => "the kernel cannot read that process",
+                        RootRefused::Held => "another helper root holds that process",
+                    },
+                    false,
+                    Some(json!({ "reason": refused.reason() })),
+                ),
+            },
+            Err(e) => err(
+                id,
+                "PRECONDITION_FAILED",
+                -32005,
+                &format!("bad helper root: {e}"),
+                false,
+                None,
+            ),
+        },
+        "native.door.roots.clear" => {
+            match serde_json::from_value::<NativeDoorRootsClearParams>(params) {
+                Ok(clear) => {
+                    let cleared = state.door.clear_root(&clear.root_id);
+                    ok(id, json!(NativeDoorRootsClearResult { cleared }))
+                }
+                Err(e) => err(
+                    id,
+                    "PRECONDITION_FAILED",
+                    -32005,
+                    &format!("bad helper root: {e}"),
+                    false,
+                    None,
+                ),
+            }
+        }
         "native.door.info" => match state.door.info() {
             Ok(info) => ok(id, json!(info)),
             Err(why) => {

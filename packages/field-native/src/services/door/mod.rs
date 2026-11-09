@@ -3,7 +3,7 @@
 //! pane the floor walks it to.
 //!
 //! - `peer`: what the kernel says about a caller and its processes.
-//! - `walk`: from a caller up its parents to the pane it was started in.
+//! - `walk`: from a caller up its parents to the pane it was started in, or the helper root fieldd named (OB-3d).
 //!
 //! **A door is a lane.** Each door opens a local lane on the MeshData bridge (protocol `mcp`, peer `door:<connId>`):
 //! the caller's bytes reach fieldd as that lane's DATA frames, and fieldd's DATA on that lane reach the caller. The
@@ -31,7 +31,7 @@ use crate::config::NativeConfig;
 use crate::contracts::{
     NativeDoorCaller, NativeDoorClosed, NativeDoorClosedConnId, NativeDoorInfoResult,
     NativeDoorOpen, NativeDoorOpenConnId, NativeDoorPane, NativeDoorPaneTerminalSessionId,
-    NativeDoorSnapshot, ObservedState, UnitHealth, UnitState,
+    NativeDoorRoot, NativeDoorRootRootId, NativeDoorSnapshot, ObservedState, UnitHealth, UnitState,
 };
 use crate::manager::NativeService;
 use crate::orphan::{Census, SessionCensus, FRESH_COUNT_WAIT};
@@ -111,6 +111,8 @@ struct Shared {
     observed: OnceLock<watch::Receiver<ObservedState>>,
     /// the cells' census (wiring, `DoorHandle::configure_census`): how a missed walk asks for a fresh inventory
     census: OnceLock<Arc<dyn SessionCensus>>,
+    /// OB-3d — the helper roots fieldd named over the management channel. Nothing at the door can reach this (EL7).
+    roots: Mutex<walk::HelperRoots>,
     /// live door subscriptions; fieldd takes a door's bytes only while one is
     subscribers: watch::Sender<usize>,
     refusals: Mutex<HashMap<&'static str, Refusals>>,
@@ -257,42 +259,62 @@ impl Shared {
         );
     }
 
-    fn walk_now(&self, pid: u32) -> Option<walk::Found> {
-        let panes = walk::pane_roots(&self.observed.get()?.borrow());
-        match walk::walk(&peer::Kernel, pid, &panes, &[])? {
-            walk::Reached::Pane(found) => Some(found),
-            walk::Reached::Root(_) => None,
-        }
+    fn walk_now(&self, pid: u32) -> Option<walk::Reached> {
+        let panes = self
+            .observed
+            .get()
+            .map(|observed| walk::pane_roots(&observed.borrow()))
+            .unwrap_or_default();
+        let roots = self.roots.lock().unwrap().rows();
+        walk::walk(&peer::Kernel, pid, &panes, &roots)
     }
 
-    /// The caller's pane. A miss may be a pane born a moment ago that the inventory has not reached yet: a quiet cell
-    /// reconciles on an event or at its backstop, and under load an event's reconcile lags. So every cell is asked
-    /// now, and the walk looks once more on the inventory from after the ask (a reconcile writes its rows before it
-    /// stamps itself, terminal.rs `reconcile_cell`), or at `FRESH_COUNT_WAIT` on what there is. Only a caller outside
-    /// every pane pays for the second look.
-    async fn resolve_pane(&self, pid: u32) -> Option<NativeDoorPane> {
-        let found = match self.walk_now(pid) {
-            Some(found) => found,
-            None => {
-                let census = self.census.get()?.clone();
-                let asked = std::time::Instant::now();
-                census.ask();
-                let deadline = tokio::time::Instant::now() + FRESH_COUNT_WAIT;
-                while matches!(census.count(Some(asked)), Census::NotYet)
-                    && tokio::time::Instant::now() < deadline
-                {
-                    tokio::time::sleep(CENSUS_POLL).await;
-                }
-                self.walk_now(pid)?
-            }
-        };
-        Some(NativeDoorPane {
-            terminal_session_id: NativeDoorPaneTerminalSessionId::try_from(
-                found.terminal_session_id,
-            )
-            .ok()?,
-            depth: u64::from(found.depth),
-        })
+    /// The caller's pane, or the helper root it stands under. A miss may be a pane born a moment ago that the
+    /// inventory has not reached yet: a quiet cell reconciles on an event or at its backstop, and under load an
+    /// event's reconcile lags. So every cell is asked now, and the walk looks once more on the inventory from after
+    /// the ask (a reconcile writes its rows before it stamps itself, terminal.rs `reconcile_cell`), or at
+    /// `FRESH_COUNT_WAIT` on what there is. Only a caller outside every pane and every root pays for the second look:
+    /// a root in hand is an answer, and every helper door would otherwise wait out a census.
+    async fn resolve(&self, pid: u32) -> Option<walk::Reached> {
+        self.roots.lock().unwrap().prune(&peer::Kernel);
+        if let Some(reached) = self.walk_now(pid) {
+            return Some(reached);
+        }
+        let census = self.census.get()?.clone();
+        let asked = std::time::Instant::now();
+        census.ask();
+        let deadline = tokio::time::Instant::now() + FRESH_COUNT_WAIT;
+        while matches!(census.count(Some(asked)), Census::NotYet)
+            && tokio::time::Instant::now() < deadline
+        {
+            tokio::time::sleep(CENSUS_POLL).await;
+        }
+        self.walk_now(pid)
+    }
+}
+
+/// A walk's answer as the door's row says it: a pane, or a helper root, never both.
+fn place_of(reached: Option<walk::Reached>) -> (Option<NativeDoorPane>, Option<NativeDoorRoot>) {
+    match reached {
+        Some(walk::Reached::Pane(found)) => (
+            NativeDoorPaneTerminalSessionId::try_from(found.terminal_session_id)
+                .ok()
+                .map(|terminal_session_id| NativeDoorPane {
+                    terminal_session_id,
+                    depth: u64::from(found.depth),
+                }),
+            None,
+        ),
+        Some(walk::Reached::Root(found)) => (
+            None,
+            NativeDoorRootRootId::try_from(found.root_id)
+                .ok()
+                .map(|root_id| NativeDoorRoot {
+                    root_id,
+                    depth: u64::from(found.depth),
+                }),
+        ),
+        None => (None, None),
     }
 }
 
@@ -373,8 +395,8 @@ impl Shared {
             return self.refused("limit", facts);
         }
         let pid = caller.pid.get() as u32;
-        let pane = self.resolve_pane(pid).await;
-        self.open(stream, caller, pane, facts);
+        let (pane, root) = place_of(self.resolve(pid).await);
+        self.open(stream, caller, pane, root, facts);
     }
 
     fn open(
@@ -382,6 +404,7 @@ impl Shared {
         stream: tokio::net::UnixStream,
         caller: NativeDoorCaller,
         pane: Option<NativeDoorPane>,
+        root: Option<NativeDoorRoot>,
         facts: Option<PeerFacts>,
     ) {
         let conn_id = format!("door-{}", self.next_conn.fetch_add(1, Ordering::Relaxed));
@@ -406,7 +429,7 @@ impl Shared {
                     state: "open".into(),
                     caller,
                     pane,
-                    root: None,
+                    root,
                 },
                 io: Mutex::new(DoorIo::default()),
                 out,
@@ -437,6 +460,8 @@ impl Shared {
                 .as_ref()
                 .map(|p| p.terminal_session_id.as_str()),
             depth = door.row.pane.as_ref().map(|p| p.depth),
+            root = door.row.root.as_ref().map(|r| r.root_id.as_str()),
+            root_depth = door.row.root.as_ref().map(|r| r.depth),
             "A door opened"
         );
         let (read, write) = stream.into_split();
@@ -542,6 +567,20 @@ impl DoorHandle {
         }
     }
 
+    /// `native.door.roots.set`: this pid is `root_id`'s helper. Answers the start the floor read, or why it refused.
+    pub fn set_root(&self, root_id: &str, pid: u32) -> Result<u64, walk::RootRefused> {
+        self.shared
+            .roots
+            .lock()
+            .unwrap()
+            .set(&peer::Kernel, root_id, pid)
+    }
+
+    /// `native.door.roots.clear`. `false` for a root already gone.
+    pub fn clear_root(&self, root_id: &str) -> bool {
+        self.shared.roots.lock().unwrap().clear(root_id)
+    }
+
     /// `native.door.close`. `false` for a door already gone.
     pub fn close(&self, conn_id: &str, reason: &str) -> bool {
         self.shared.close_door(conn_id, reason)
@@ -631,6 +670,7 @@ impl DoorUnit {
                 events: broadcast::channel(EVENT_CAPACITY).0,
                 observed: OnceLock::new(),
                 census: OnceLock::new(),
+                roots: Mutex::new(walk::HelperRoots::default()),
                 subscribers: watch::channel(0).0,
                 refusals: Mutex::new(HashMap::new()),
             }),

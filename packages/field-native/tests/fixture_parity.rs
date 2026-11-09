@@ -11,13 +11,15 @@ use field_native::contracts::{
     MeshEgressRouteRef, MeshEgressRouteTable, MeshLaneCloseRequest, MeshLaneClosed,
     MeshLaneOpenRequest, MeshLanePeerOpened, MeshNotUpDetails, MeshSelfIdentity,
     NativeDetachParams, NativeDetachResult, NativeDoorCloseParams, NativeDoorCloseResult,
-    NativeDoorClosed, NativeDoorInfoResult, NativeDoorOpen, NativeDoorSnapshot,
-    NativeDoorSubscribeResult, NativeFileTransferDelta, NativeFileTransferPullParams,
-    NativeFileTransferPullResult, NativeFileTransferRootsParams, NativeFileTransferRootsResult,
-    NativeFileTransferSnapshot, NativeHealth, NativePrepareRestartParams,
-    NativePrepareRestartResult, NativeShutdownParams, NativeShutdownResult, NativeTickParams,
-    ObservedState, PeerInfo, PingAck, RpcNotification, RpcRequest, RpcResponse, ServeConfig,
-    ServeEntry, StoreSnapshot, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
+    NativeDoorClosed, NativeDoorInfoResult, NativeDoorOpen, NativeDoorRootsClearParams,
+    NativeDoorRootsClearResult, NativeDoorRootsSetParams, NativeDoorRootsSetResult,
+    NativeDoorSnapshot, NativeDoorSubscribeResult, NativeFileTransferDelta,
+    NativeFileTransferPullParams, NativeFileTransferPullResult, NativeFileTransferRootsParams,
+    NativeFileTransferRootsResult, NativeFileTransferSnapshot, NativeHealth,
+    NativePrepareRestartParams, NativePrepareRestartResult, NativeShutdownParams,
+    NativeShutdownResult, NativeTickParams, ObservedState, PeerInfo, PingAck, RpcNotification,
+    RpcRequest, RpcResponse, ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot,
+    TerminalRoutesStreamPayload,
 };
 use field_native::registries::{mesh_file_transfer, native_refusals, terminal_inventory};
 use serde_json::Value;
@@ -357,6 +359,8 @@ fn native_door_fixtures() {
     for name in [
         "native-door-open.valid.json",
         "native-door-open.outside.json",
+        // OB-3d — a helper root beside the pane
+        "native-door-open.root.json",
     ] {
         roundtrip::<NativeDoorOpen>(name, true);
     }
@@ -376,6 +380,17 @@ fn native_door_fixtures() {
     roundtrip::<NativeDoorCloseResult>("native-door-close-result.valid.json", true);
     roundtrip::<NativeDoorInfoResult>("native-door-info.valid.json", true);
     roundtrip::<NativeDoorCloseParams>("native-door-close-params.valid.json", false);
+    // OB-3d — fieldd names and forgets a helper root (inbound, tolerant); the floor emits the two answers (strict)
+    roundtrip::<NativeDoorRootsSetParams>("native-door-roots-set-params.valid.json", false);
+    roundtrip::<NativeDoorRootsClearParams>("native-door-roots-clear-params.valid.json", false);
+    roundtrip::<NativeDoorRootsSetResult>("native-door-roots-set-result.valid.json", true);
+    roundtrip::<NativeDoorRootsClearResult>("native-door-roots-clear-result.valid.json", true);
+
+    // a helper's door names its root and no pane
+    let rooted: NativeDoorOpen =
+        serde_json::from_value(load("native-door-open.root.json")).expect("rooted");
+    assert!(rooted.pane.is_none());
+    assert_eq!(rooted.root.expect("the root").depth, 1);
 
     // a caller outside every pane has no `pane`, and the floor writes none back
     let outside: NativeDoorOpen =
