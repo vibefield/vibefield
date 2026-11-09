@@ -930,7 +930,7 @@ rect, its props, its stratum (pads · sheets · things), taped or not — is ICE
 
 | Material | Means | Wears it | On the desk |
 |---|---|---|---|
-| **paper** | writable | notes, the notebook's pages, the whiteboard's face; off the desk, the hand's cards (§5, HN-D1) | drawn |
+| **paper** | writable | notes, the whiteboard's face; off the desk, the hand's cards (§5, HN-D1) | drawn |
 | **ink** | drawn by hand | strokes on a board or a page, a note's handwriting | drawn |
 | **pictures** | a captured image | prints; off the desk, the print on a picture card (§8 "The hand") | drawn — device-local until the upload plane (DK-D21) |
 | **string** | a relation | wires, mind-map edges, patch cables | not yet — STRING |
@@ -2797,7 +2797,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the draft (§8 "Chat's composer", a card from the hand). Over the line the carried card ducks to 0.55; **held over a view's
     cell for 520ms** (HN-D6) that view opens under it, the cell saying "Opening Godview" with its
     progress — copy in History and play in Godview in one drag.
-  - **Picking one up** (HN-D5): a click picks a card up the way the desk opens its notebook — it flies
+  - **Picking one up** (HN-D5): a click picks a card up the way the desk opens its whiteboard — it flies
     to the window's centre and grows to reading size, **2.6×**, in 560ms on the island curve, while
     the window behind it blurs 14 and dims 8% (the desk's held object, §8); the bar under the head,
     at the tools in hand's place (y 64), says where it came from and holds **Remove** and **Done**.
@@ -4038,17 +4038,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   reads on the night glass, in a 28 × 32 cell; the one in hand wears a 1.5px foreground ring 2px
   off the dot — the ring the notch's pin wore (§8 "Edge trays", retired at HN-8); a dot grows 1.18× under the pointer (160ms, pop). A **mode
   without one** (the eraser) is a 32 cell, the inverted solid while it is the
-  one in hand (`aria-pressed`); an **action** (`kind: "action"` — undo, a page) is a 32
+  one in hand (`aria-pressed`); an **action** (`kind: "action"` — undo) is a 32
   cell; a slot with no `kind` waits, faint by ink. Glyphs by §13's table (R2). **The readout**
-  (MC-D9, I22's `HeldAnchor.readout` — "Page 1", a clock's time) is ONE slot after the tools, before
+  (MC-D9, I22's `HeldAnchor.readout` — a clock's time) is ONE slot after the tools, before
   Done, since the string carries no position (R13): 12/500 `tabular-nums` in secondary ink, at
   least 44 wide, padded 0 4; a kind that says none shows none. **Done** is VibeField's primary at
   32: the inverted solid, 13/500, padded 0 15, no glyph, the chip shadow (`0 4px 10px` black/14,
   /40 by night); 0.9 opacity under the pointer and 0.96 pressed (R13); it runs `ops.putDown()`.
-  Tooltips say the slot's `label` and its `hint` the frame's way — "Felt pen  1", "Eraser  E",
-  "Put it down  Esc". **The specimens:** VibeField uses five of ICE's built-ins (the note, the print,
-  the notebook, the whiteboard and the mini mat). Two open — the notebook ‹ › · felt, ball, fountain,
-  red · undo, reading "Page 1"; the whiteboard black, blue, red, green · eraser · undo · redo — and the example plugin's clock
+  Tooltips say the slot's `label` and its `hint` the frame's way — "Eraser  E",
+  "Put it down  Esc". **The specimens:** VibeField uses four of ICE's built-ins (the note, the print,
+  the whiteboard and the mini mat). One opens — the whiteboard black, blue, red, green · eraser · undo · redo — and the example plugin's clock
   (`@ice-examples/desk-clock`) holds seconds · the 24-hour ring · an hour back · an hour ahead · the
   next dial, its own five drawings (§13), reading its time.
   **Canvas gestures (2026-11-02):** click-drag on empty canvas draws a selection marquee; Shift-drag
@@ -4067,6 +4066,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   **Calendar retired (2026-11-02):** its implementation stays in ICE, but VibeField does not mount its
   renderer, drivers or input. It is absent from the tray and new-board seeds; saved calendar rows,
   entries and pins remain dormant and recoverable, without appearing on the canvas.
+
+  **Notebook retired (2026-11-09; James, the first launch's lineup):** the same way: its implementation stays in ICE,
+  VibeField does not mount it, it is absent from the tray and new-board seeds, and saved notebooks remain dormant and
+  recoverable.
+
+  **The comment pad and the browser pane (2026-11-09; the same lineup):** the comment pad hangs on no hook and lies on
+  no user's first board; the selection bar's Comment is its door. The browser pane ships in no packaged app (it left
+  `BUNDLED_PLUGINS`), so what this file says of it holds for a dev run until it returns, and Settings › General's
+  Clear browsing data stands only where a pane is.
 - **The pegboard — Objects, behind the line** (Chrome on the Mat §3.4–§3.5; MC-D7 ⊕ Objects, B,
   ruled through One Frame's lock; MC-D3 ruled 2026-10-01: segmented; One Frame §7; ICE I21; R14,
   R19, R21; DK-13): **the door is the line's create on Canvas** (§8, the line): Objects, B, calling
