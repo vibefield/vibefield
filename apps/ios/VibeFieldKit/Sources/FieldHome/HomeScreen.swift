@@ -1002,6 +1002,10 @@ public struct HomeScreen: View {
 
   /// ES-5c (E2) — the home's runs for the night's starters: held until a live home answers for the board.
   private var chatNightRuns: ChatStarters.Read<ChatStarters.Run> {
+    #if DEBUG
+      // the stills: under `-vf-mock` no link answers for the board, so the night reads an empty one, a new install's
+      if mock != nil { return .rows([]) }
+    #endif
     guard let link, link.fieldIsLive else { return .out }
     return .rows(ChatStarters.runs(link.rows.map(\.board), home: linkHome))
   }
