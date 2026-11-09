@@ -2265,7 +2265,7 @@ public struct HomeScreen: View {
         if let door = link.openHistoryDoor(desktop.deviceId) {
           historyDesktops.attach(
             deviceId: desktop.deviceId, name: desktop.name, isHome: isHome, door: door.client,
-            ownsDoor: door.owned)
+            ownsDoor: door.owned, direct: historyDirectPlane(desktop.deviceId, link: link))
           continue
         }
       }
@@ -2280,6 +2280,17 @@ public struct HomeScreen: View {
     // PJ-7 — the one ledger of projects reads the home's door, else another
     // answering desktop's
     historyDesktops.chooseLedger(roster: historyRoster)
+  }
+
+  /// SP-7b's 7b-2b — how History reads a desktop's sessions directly: the ticket asked at the home, and the mesh's own
+  /// network, the one session that reaches a tailnet address. History never learns either.
+  private func historyDirectPlane(_ deviceId: String, link: FieldLink) -> HistoryDirectPlane {
+    HistoryDirectPlane(
+      ticket: { [weak link] sessionId in
+        guard let link else { throw CancellationError() }
+        return try await link.openIndexTicket(on: deviceId, sessionId: sessionId)
+      },
+      session: { [mesh] in await mesh.urlSessionProvider })
   }
 
   /// PJ-7 — the desktops as History's ledger draws them: the mark (the
