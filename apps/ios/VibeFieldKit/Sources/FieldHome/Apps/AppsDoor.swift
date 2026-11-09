@@ -75,6 +75,14 @@ struct AppsCues: Equatable, Codable {
   private(set) var unseen: Set<String> = []
   private(set) var primed = false
   private(set) var peeked = false
+  /// What this account opened on this phone, newest first. Absent from a ledger written before MA-6e.
+  private var openedKeys: [String]?
+
+  /// How many opens head Recent, at most (§8: "the four Recent icons").
+  static let openedCap = 4
+
+  /// Newest first; RED: a stub.
+  var opened: [String] { [] }
 
   /// Search's dot: an app you have not seen waits.
   var dot: Bool { !unseen.isEmpty }
@@ -99,6 +107,9 @@ struct AppsCues: Equatable, Codable {
   mutating func seen(_ foldKeys: [String]) {
     unseen.subtract(foldKeys)
   }
+
+  /// An app opened on this phone. RED: a stub.
+  mutating func open(_ foldKey: String) {}
 
   /// Whether the first peek is due now; true once per account per phone, when the first app has reached it.
   mutating func takePeek() -> Bool {
