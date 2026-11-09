@@ -29,6 +29,7 @@ import { type CardTarget, CardTargets, cardTargets } from "../src/frame/cards/ca
 import { type Card, namedTextCardOf, pictureCardOf } from "../src/frame/cards/cards-model";
 import { waitingCardOf } from "../src/frame/cards/cards-outside";
 import { cardsStore } from "../src/frame/cards/cards-store";
+import { resetHandOverForTest, setHandOverDoor } from "../src/frame/cards/hand-over";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { hearLineSays } from "../src/frame/line-door";
 
@@ -211,7 +212,9 @@ describe('the composer as a place for cards (DESIGN.md §8 "Chat\'s composer", a
       window.getSelection()?.addRange(range);
       field.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    const played = await act(async () => only(targets).play(text("pnpm test\nfails\n"), POINT));
+    const played = await act(async () =>
+      only(targets).play(text("pnpm test\nfails\n"), "text", POINT),
+    );
     expect(played).toEqual({ ok: true, note: "Added to your message to Vela" });
     const chip = editor().querySelector<HTMLElement>('[data-chip="card"]');
     expect(chip?.dataset.card).toBe("text");
@@ -234,6 +237,54 @@ describe('the composer as a place for cards (DESIGN.md §8 "Chat\'s composer", a
     );
   });
 
+  it("lets a Live face land as a chip, and sending it grants the spark first: a refused grant stops the send (OB-L1)", async () => {
+    const targets = new CardTargets();
+    const send = await mount(targets);
+    const refCard: Card = {
+      id: "m1",
+      at: 0,
+      origin: { view: "canvas", how: "copy" },
+      title: "Q3 plan",
+      about: "Mind map",
+      faces: [
+        {
+          id: "ref",
+          type: "ref",
+          label: "Live",
+          ref: "vf:obj/7hk2qx4m",
+          kindName: "Mind map",
+          title: "Q3 plan",
+          still: { src: "", width: 40, height: 20 },
+        },
+      ],
+    };
+    const asked: Array<[string, string]> = [];
+    const off = setHandOverDoor(async (ref, run) => {
+      asked.push([ref, run]);
+      return { handed: false, reason: "That object has closed" };
+    });
+    await act(async () => only(targets).play(refCard, "ref", POINT));
+    expect(editor().querySelectorAll('[data-chip="card"]')).toHaveLength(1);
+    act(() => {
+      editor().dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    await act(async () => undefined);
+    expect(asked).toEqual([["vf:obj/7hk2qx4m", "run-vela"]]);
+    expect(send).not.toHaveBeenCalled();
+    off();
+    setHandOverDoor(async () => ({ handed: true }));
+    act(() => {
+      editor().dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    await act(async () => undefined);
+    expect(send).toHaveBeenCalledTimes(1);
+    resetHandOverForTest();
+  });
+
   it("never takes an @ being typed as its place: the card lands at the caret, and the @ and its query stay", async () => {
     const targets = new CardTargets();
     await mount(targets);
@@ -249,7 +300,7 @@ describe('the composer as a place for cards (DESIGN.md §8 "Chat\'s composer", a
       window.getSelection()?.addRange(range);
       field.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await act(async () => only(targets).play(text("ship it"), POINT));
+    await act(async () => only(targets).play(text("ship it"), "text", POINT));
     expect(editor().textContent).toContain("ask @cla");
     expect(editor().querySelectorAll('[data-chip="card"]')).toHaveLength(1);
   });

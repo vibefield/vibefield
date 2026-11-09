@@ -6,8 +6,9 @@ import { describe, expect, it } from "vitest";
 import {
   birthWithDoor,
   carriesDoor,
-  refusedTheDoor,
+  type HelperRootFloor,
   RunHelperRoots,
+  refusedTheDoor,
   UNSUPPORTED_LAUNCH_FIELD,
   withHelperProcess,
 } from "../src/agent-door-launch";
@@ -69,7 +70,10 @@ describe("a run's helper process, named to the floor (OB-3d)", () => {
   it("adds the hook beside what the ingress already says, and an adapter that never calls it holds no root", () => {
     const onBound = () => undefined;
     const hook = async () => undefined;
-    const ingress = withHelperProcess({ onBound }, hook) as { onBound: unknown; onHelperProcess: unknown };
+    const ingress = withHelperProcess({ onBound }, hook) as {
+      onBound: unknown;
+      onHelperProcess: unknown;
+    };
     expect(ingress.onBound).toBe(onBound);
     expect(ingress.onHelperProcess).toBe(hook);
     const roots = new RunHelperRoots({ floor: floor(), logger: createNoopLogger() });
@@ -96,16 +100,48 @@ describe("a run's helper process, named to the floor (OB-3d)", () => {
       floor: floor(() => Promise.reject(new Error("pid-held"))),
       logger,
     });
-    await expect(refusing.announce("attempt-1")({ pid: 1, startedAtMs: 0 })).resolves.toBeUndefined();
+    await expect(
+      refusing.announce("attempt-1")({ pid: 1, startedAtMs: 0 }),
+    ).resolves.toBeUndefined();
     expect(refusing.birth("attempt-1")).toBeUndefined();
     expect(warned).toEqual(["fieldd.agents.helper_root_refused"]);
 
     const noFloor = new RunHelperRoots({ logger });
-    await expect(noFloor.announce("attempt-2")({ pid: 1, startedAtMs: 0 })).resolves.toBeUndefined();
+    await expect(
+      noFloor.announce("attempt-2")({ pid: 1, startedAtMs: 0 }),
+    ).resolves.toBeUndefined();
     expect(warned).toEqual([
       "fieldd.agents.helper_root_refused",
       "fieldd.agents.helper_root_refused",
     ]);
+  });
+
+  // puppeteer refuses a launch whose hook throws or rejects (`announceRunHelper`), and Codex fires it on every run,
+  // briefed or not, so a plain launch would be refused for the door's sake
+  it("never rejects on the ingress, whatever the floor does and however its line fails to write", async () => {
+    const helper = { pid: 4242, startedAtMs: 7 };
+    const throwing = () => {
+      throw new Error("the log is gone");
+    };
+    const floors: [string, HelperRootFloor][] = [
+      ["refuses", floor(() => Promise.reject(new Error("pid-unreadable")))],
+      ["down", floor(() => Promise.reject(new Error("NOT_CONNECTED")))],
+      ["rejects with nothing", floor(() => Promise.reject(undefined))],
+      ["throws at the call", { set: throwing, clear: async () => undefined }],
+    ];
+    for (const [label, f] of floors) {
+      for (const logger of [
+        createNoopLogger(),
+        { ...createNoopLogger(), warn: throwing } as ReturnType<typeof createNoopLogger>,
+      ]) {
+        const roots = new RunHelperRoots({ floor: f, logger });
+        const ingress = withHelperProcess({}, roots.announce("attempt-1")) as {
+          onHelperProcess: (h: typeof helper) => Promise<void>;
+        };
+        await expect(ingress.onHelperProcess(helper), label).resolves.toBeUndefined();
+        expect(roots.birth("attempt-1"), label).toBeUndefined();
+      }
+    }
   });
 
   it("clears a root the floor holds when its run ends, once, and asks nothing of a run that has none", async () => {

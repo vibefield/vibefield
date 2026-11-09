@@ -111,7 +111,7 @@ export function cardsLab(seams: CardsLabSeams = {}): CardsLab {
       const refused = said?.label ?? "the place said nothing to the card";
       return { at, target: target.kind, answer, played: null, refused };
     }
-    const played = await target.play(card, at);
+    const played = await target.play(card, card.faces[0].id, at);
     if (played.note !== "") sayOnLine(played.note, played.stand);
     return {
       at,

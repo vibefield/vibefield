@@ -174,6 +174,7 @@ declare global {
         stillBytes(name: string): Promise<Uint8Array<ArrayBuffer> | null>;
         /** HN-4 — whether the tool still keeps a still, by its basename. */
         stillKept(name: string): Promise<boolean>;
+        writeHandPicture(png: Uint8Array<ArrayBuffer>): Promise<string | null>;
         capture(): Promise<ScreenshotCaptureResult>;
         /** SNAP-3 — the result of a capture MAIN ran (the View menu's item);
          * the latest is retained until the renderer subscribes. */

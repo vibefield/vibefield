@@ -1,12 +1,12 @@
 import {
   type CallerContext,
   ObjectIntentAnswer,
+  ObjectsHandParams,
   ObjectsHeldParams,
   ObjectsIntentsSubscribeParams,
   ObjectsRefParams,
   ObjectsResolveParams,
   ObjectsRunParams,
-  ObjectsHandParams,
 } from "@vibefield/contracts";
 import { RpcCallError } from "../native-link";
 import { wholeValueDoor } from "../projection";

@@ -1,4 +1,5 @@
 import type { NoteStand } from "../line-door";
+import type { Destination } from "./card-landing";
 import type { Card } from "./cards-model";
 
 /**
@@ -60,8 +61,15 @@ export interface CardTarget {
   /** What it says to this card let go at this window point; null when no part
    * of it that takes a card is there (between two panes of a deck). */
   answer(card: Card, at: { readonly x: number; readonly y: number }): CardAnswer | null;
-  /** Play a copy of the card in, let go at this window point. */
-  play(card: Card, at: { readonly x: number; readonly y: number }): Promise<CardPlayed>;
+  /** What a card let go at this point lands on (`card-landing.ts`, §4.4), the drop's model; absent, or null: the card's
+   * first face plays, as a place that only ever takes one thing. */
+  destination?(at: { readonly x: number; readonly y: number }): Destination | null;
+  /** Play a copy of this face of the card in, let go at this window point. */
+  play(
+    card: Card,
+    face: string,
+    at: { readonly x: number; readonly y: number },
+  ): Promise<CardPlayed>;
 }
 
 export const TARGET_LAYER = { desk: 10, pane: 30, prompt: 30 } as const;

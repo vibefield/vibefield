@@ -93,7 +93,14 @@ import {
   DistributionRecordStore,
   type RevealPath,
 } from "./agent-distribution";
-import { birthWithDoor, refusedTheDoor, UNSUPPORTED_LAUNCH_FIELD } from "./agent-door-launch";
+import {
+  birthWithDoor,
+  type HelperRootFloor,
+  RunHelperRoots,
+  refusedTheDoor,
+  UNSUPPORTED_LAUNCH_FIELD,
+  withHelperProcess,
+} from "./agent-door-launch";
 import { AgentExtensionStore } from "./agent-extension-store";
 import { AgentExtensionService } from "./agent-extensions";
 import { agentEnvironment, createTerminalAgentHost, type TerminalAgentHost } from "./agent-host";
@@ -512,6 +519,8 @@ export interface AgentRuntimeServiceOptions {
   /** AR-7 test seam: how often a typed run's pid is asked, and the grace its
    * terminal's own exit report is given (defaults in agent-typed-run.ts) */
   typedWatch?: TypedWatchOptions;
+  /** OB-3d — the floor's door for a run's helper root; absent, a helper's run holds nothing at the door */
+  helperRoots?: HelperRootFloor;
   /** FS-1a (L2) — a run entered the fold in this folder at this moment
    * (spawned, resumed, re-attached or adopted): the files service makes the
    * folder a PLACE, or moves its `lastActiveAt`. Called after the record is
@@ -734,6 +743,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** the fold: managed runs by runtimeRunId, the pending ones beside them
    * (AR-4), and the terminal → run index over both */
   private readonly managed = new Map<string, ManagedEntry>();
+  /** OB-3d — the helpers this fieldd named to the floor, by attempt */
+  private readonly helperRoots: RunHelperRoots;
   private readonly pending = new Map<string, PendingEntry>();
   /** MF-1f — runs whose process ended while the floor still lists their PTY */
   private readonly exited = new Map<string, ExitedEntry>();
@@ -812,6 +823,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.logger = opts.logger ?? createNoopLogger();
     this.now = opts.now ?? (() => new Date());
     this.home = opts.home ?? homedir();
+    this.helperRoots = new RunHelperRoots({ floor: opts.helperRoots, logger: this.logger });
     this.records = new SessionRecordStore({
       dir: join(opts.userRoot, ...LAYOUT.AGENT_SESSIONS_DIR),
       keyPath: join(opts.userRoot, ...LAYOUT.AGENT_SESSIONS_KEY_FILE),
@@ -2442,6 +2454,24 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     | undefined {
     const runtimeRunId = this.byTerminal.get(terminalSessionId);
     if (runtimeRunId === undefined) return undefined;
+    return this.doorRun(runtimeRunId);
+  }
+
+  /** OB-3d — the run a helper root names: the attempt that named it (`identity`, item 124's retry makes each attempt its
+   * own process) once it has entered, or, while puppeteer's spawn is still running, the birth itself. Its helper dials
+   * inside that spawn, before there is a record to verify. */
+  runForRoot(
+    rootId: string,
+  ): ReturnType<AgentRuntimeService["runForTerminal"]> | ReturnType<RunHelperRoots["birth"]> {
+    for (const [runtimeRunId, entry] of this.managed)
+      if (entry.creationRequestId === rootId) return this.doorRun(runtimeRunId);
+    for (const [runtimeRunId, entry] of this.pending)
+      if (entry.record.creationRequestId === rootId) return this.doorRun(runtimeRunId);
+    return this.helperRoots.birth(rootId);
+  }
+
+  /** What a run's record says for the door, either way the door reached it. */
+  private doorRun(runtimeRunId: string): ReturnType<AgentRuntimeService["runForTerminal"]> {
     if (!this.managed.has(runtimeRunId) && !this.pending.has(runtimeRunId)) return undefined;
     const record = this.records.read(runtimeRunId);
     return {
@@ -2968,7 +2998,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * the launch, it is held here until the run's record exists; reported after
    * (a helper reborn on a new endpoint), it is written into that record, so
    * the next boot hands the adapter the latest. */
-  identity(): {
+  identity(spark?: SparkId): {
     creationRequestId: string;
     ingress: HostIngress;
     launched(): LaunchedIdentity;
@@ -2978,21 +3008,25 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     let attach: AgentSessionAttach | undefined;
     return {
       creationRequestId,
-      ingress: {
-        onBound: (b) => {
-          bound = b;
-        },
-        onAttachRecord: (reported) => {
-          const kept = this.attachRecordOf(reported, { creationRequestId });
-          if (kept === undefined) return;
-          attach = kept;
-          for (const entry of this.managed.values()) {
-            if (entry.creationRequestId === creationRequestId) {
-              this.keepAttach(entry.info.runtimeRunId, kept);
+      // OB-3d — the attempt's own id is its helper root's: fresh for every attempt, and on the run's record
+      ingress: withHelperProcess(
+        {
+          onBound: (b) => {
+            bound = b;
+          },
+          onAttachRecord: (reported) => {
+            const kept = this.attachRecordOf(reported, { creationRequestId });
+            if (kept === undefined) return;
+            attach = kept;
+            for (const entry of this.managed.values()) {
+              if (entry.creationRequestId === creationRequestId) {
+                this.keepAttach(entry.info.runtimeRunId, kept);
+              }
             }
-          }
+          },
         },
-      },
+        this.helperRoots.announce(creationRequestId, spark),
+      ),
       launched: () => ({
         creationRequestId,
         ...(bound !== undefined ? { ingress: bound } : {}),
@@ -3516,8 +3550,16 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const born = await birthWithDoor(
       briefing,
       async (attempt) => {
-        const identity = this.identity();
-        return { result: await launch(attempt, identity), identity };
+        const identity = this.identity(context.spark);
+        try {
+          const result = await launch(attempt, identity);
+          // OB-3d — a failed attempt has no run to end: the floor forgets its helper now
+          if (isSessionFailure(result)) this.helperRoots.end(identity.creationRequestId);
+          return { result, identity };
+        } catch (err) {
+          this.helperRoots.end(identity.creationRequestId);
+          throw err;
+        }
       },
       (attempt) => refusedTheDoor(attempt.result),
       (refused, again) => {
@@ -4947,6 +4989,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * supersession (`closePending`), or a held run ended by its replacement. Each listener hears it once. A G5 retry
    * handing a held row to its own run (`releasePending`) and fieldd's own stop (`dispose`) end nothing. */
   private ended(runtimeRunId: string): void {
+    // OB-3d — told while the run is still in the fold, so its attempt can be read
+    const attempt =
+      this.managed.get(runtimeRunId)?.creationRequestId ??
+      this.pending.get(runtimeRunId)?.record.creationRequestId;
+    if (attempt !== undefined) this.helperRoots.end(attempt);
     for (const listener of this.runEndedListeners) {
       try {
         listener(runtimeRunId);

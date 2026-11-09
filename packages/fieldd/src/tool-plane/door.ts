@@ -4,6 +4,7 @@ import {
   NativeDoorClosed,
   NativeDoorOpen,
   type NativeDoorPane,
+  type NativeDoorRoot,
   NativeDoorSnapshot,
   type SparkId,
 } from "@vibefield/contracts";
@@ -30,12 +31,24 @@ import { McpConnection, type McpServerOptions } from "./mcp";
 // profile that names a persona is placed by the profile listing that persona, so until fieldd has read the profiles
 // (the monitor's first frame) it is unsettled, and a door opened in a boot's first moments is never fixed in no
 // profile for its life.
+// OB-3d: a helper outside every pane (Codex's app-server, a Grok leader of its own) is walked to the root fieldd named
+// to the floor, and a root maps to its run by the attempt that named it. The settle rule is the same.
 
 /** Why an unsettled run is served nothing yet: its record is missing or does not verify, or it names a spark that does
  * not (a spark's run must never be served a plain run's rows, nor a forged spark's run anything).
  * *Amended 2026-11-01 (TU-1, §12 Q1):* or it is a plain run filed under no profile whose persona's profile fieldd has
- * not read yet (`profiles-unread`). */
-export type DoorUnsettled = "record-unverified" | "spark-unverified" | "profiles-unread";
+ * not read yet (`profiles-unread`).
+ * *OB-3d:* or its helper is named and its birth has not written a record yet (`entering`). A helper starts its MCP
+ * servers inside puppeteer's spawn, before fieldd's record exists, and a harness that lists once would otherwise hold
+ * nothing for its whole session. So `entering` alone is LISTED its rows, and its calls still answer `unavailable`: a
+ * list is a courtesy, and the record is what serves (MT-L2). This is the one case where a first list precedes the
+ * record, so MT-D4's stable list holds only once a caller has settled: a birth that fails or never verifies is listed
+ * nothing more, and its calls go on answering `unavailable`. */
+export type DoorUnsettled =
+  | "record-unverified"
+  | "spark-unverified"
+  | "profiles-unread"
+  | "entering";
 
 /** Who opened a door, as fieldd knows it. `profiles` are the Agent Profiles its calls are held to: a spark's record's,
  * or the one the placement rule puts a plain run in (`profileSetOfRun`), none for a run it puts in none. */
@@ -53,6 +66,9 @@ export type DoorCaller =
       readonly unsettled?: DoorUnsettled;
     }
   | { readonly kind: "pane"; readonly terminalSessionId: string }
+  /** OB-3d — a helper root fieldd cannot place, or whose run has not verified (`unsettled` says why), or a spark's birth,
+   * which holds nothing until it verifies. Listed nothing, and its calls answer `unavailable`, whatever it was listed. */
+  | { readonly kind: "root"; readonly rootId: string; readonly unsettled?: DoorUnsettled }
   | { readonly kind: "outside" };
 
 /** A settled caller's answer is final for its door; an unsettled one is asked again. */
@@ -83,9 +99,10 @@ export interface DoorLanes {
 export interface DoorServiceOptions {
   readonly native: DoorNative;
   readonly lanes: DoorLanes;
-  /** The pane's run, and whether that run is a spark's own session. Asked again, at most once per REASK_MS, until the
-   * answer is settled, so a door that opens a moment before fieldd records its run or its spark is served once it is. */
-  identify(pane: NativeDoorPane | undefined): DoorCaller;
+  /** The pane's or the helper root's run, and whether that run is a spark's own session. Asked again, at most once per
+   * REASK_MS, until the answer is settled, so a door that opens a moment before fieldd records its run or its spark is
+   * served once it is. A row carries at most one of the two; a pane wins at the floor. */
+  identify(pane: NativeDoorPane | undefined, root: NativeDoorRoot | undefined): DoorCaller;
   /** The server a caller is served (index.ts: its rows by audience). */
   serve(caller: () => DoorCaller, door: { readonly connId: string }): McpServerOptions;
   /** Whether a caller is served any row. */
@@ -196,11 +213,11 @@ export class DoorService {
     if (known && known.open.laneId === open.laneId) return;
     if (known) this.#release(open.connId);
     const now = this.opts.now ?? Date.now;
-    let seen = this.opts.identify(open.pane);
+    let seen = this.opts.identify(open.pane, open.root);
     let askedAt = now();
     const caller = (): DoorCaller => {
       if (!isSettled(seen) && now() - askedAt >= REASK_MS) {
-        seen = this.opts.identify(open.pane);
+        seen = this.opts.identify(open.pane, open.root);
         askedAt = now();
       }
       return seen;

@@ -98,7 +98,8 @@ export function canBeSpark(provider: AgentProviderSummary): boolean {
     briefing?.mcpServers === true &&
     briefing.allowTools === true &&
     briefing.instructions === true &&
-    briefing.mcpServerProcess === "terminal"
+    // a helper of the run's own is named to the door as a pane's process is (OB-3d)
+    (briefing.mcpServerProcess === "terminal" || briefing.mcpServerProcess === "run-helper")
   );
 }
 

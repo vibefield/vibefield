@@ -5,8 +5,8 @@ import { createDeskVerbs, type DeskVerbs } from "../src/tool-plane/rooms/desk/ve
 import {
   type Answer,
   cleanupWorlds,
-  DOC,
   type DeskWorld,
+  DOC,
   NOTE,
   ordinaryWindow,
   PAGE,

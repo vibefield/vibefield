@@ -247,7 +247,7 @@ describe("the hand's lab door: a smoke's hands (R-T 2)", () => {
       rect: () => ground.getBoundingClientRect(),
       element: () => ground,
       answer: () => ({ ok: true, label: "Place as a note" }),
-      play: async (card, at) => {
+      play: async (card, _face, at) => {
         placed.push([cardType(card), at]);
         return { ok: true, note: "Placed as a note" };
       },

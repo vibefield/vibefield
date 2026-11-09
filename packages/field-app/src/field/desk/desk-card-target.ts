@@ -9,12 +9,20 @@ import {
 } from "@vibecook/ice/desk/objects";
 import { clientToScreen, screenToWorld } from "@vibecook/ice/kernel";
 import {
+  bloomOf,
+  type Destination,
+  dragLabelOf,
+  faceOf,
+  LANDING_WORDS,
+  landing,
+} from "../../frame/cards/card-landing";
+import {
   type CardPlayed,
   type CardTarget,
   cardTargets,
   TARGET_LAYER,
 } from "../../frame/cards/card-targets";
-import type { Card, ImageFace } from "../../frame/cards/cards-model";
+import type { ImageFace, LinkFace } from "../../frame/cards/cards-model";
 import { OUTCOME_WORDS, TARGET_WORDS } from "../../frame/cards/cards-words";
 import { getActiveView, subscribeActiveView } from "../../frame/view-state";
 import { type FieldHost, peekHost } from "../../host";
@@ -45,6 +53,9 @@ export interface DeskCardTargetDeps {
 
 const log = () => getRendererLogger().child({ component: "cards.desk" });
 
+/** The browser pane's durable type, when the desk holds it (a dev run since FL-1). */
+const BROWSER_PANE_TYPE = "vibefield.browser-pane";
+
 /** The desk's own element (the layer's canvas lies in it): its box is the place's, and a client
  * point maps to the world through it (SelectionBar's and the desk's Copy's reading). */
 function containerOf(desk: MountedDesk): HTMLElement | null {
@@ -66,23 +77,22 @@ function worldPoint(
   return screenToWorld(screen.x, screen.y, camera);
 }
 
-/** Why the desk cannot take this card now, in the desk's words; null when it can. */
-function refusalOf(desk: MountedDesk, card: Card, still: StillBytes | undefined): string | null {
-  const face = card.faces[0];
-  if (face.type !== "text" && face.type !== "image") return TARGET_WORDS.deskRefuses(card);
+/** The desk as a place a card lands (`card-landing.ts`, §4.4), what it can hold now. PURE. */
+function destinationOf(desk: MountedDesk, still: StillBytes | undefined): Destination {
+  return {
+    at: "desk",
+    browser: desk.engine.catalog.widget(BROWSER_PANE_TYPE) !== undefined,
+    stills: still !== undefined,
+  };
+}
+
+/** Why the desk cannot take anything now, in the desk's words; null when it can. */
+function refusalOf(desk: MountedDesk): string | null {
   const tray = trayOf(desk)?.anchor();
   if (tray?.held === true) return TARGET_WORDS.deskHeld;
   if (tray?.open === true) return TARGET_WORDS.deskBoardOut;
   const session = desk.engine.docs.current();
   if (session === undefined || session.readOnly) return TARGET_WORDS.deskReadOnly;
-  // a picture is printed from its pixels: its own bytes, or a snapshot's through the still door
-  if (
-    face.type === "image" &&
-    face.bytes === undefined &&
-    (face.path === undefined || still === undefined)
-  ) {
-    return TARGET_WORDS.deskNoPicture;
-  }
   return null;
 }
 
@@ -124,7 +134,6 @@ async function pictureBytes(
 /** A print of the picture, centred on the point, falling in as a paste's does (`Prints.arrive`). */
 async function printOnto(
   desk: MountedDesk,
-  card: Card,
   picture: ImageFace,
   at: { readonly x: number; readonly y: number },
   deps: DeskCardTargetDeps,
@@ -146,7 +155,7 @@ async function printOnto(
   // the answer refused, asked again, in its words; or another view, under whose cover the desk is
   // a frozen still that takes nothing
   if (engine.docs.current() !== session) return { ok: false, note: OUTCOME_WORDS.notPlaced };
-  const refused = refusalOf(desk, card, still);
+  const refused = refusalOf(desk);
   if (refused !== null) return { ok: false, note: refused };
   if (getActiveView() !== "canvas") return { ok: false, note: OUTCOME_WORDS.notPlaced };
   try {
@@ -168,6 +177,30 @@ async function printOnto(
   }
 }
 
+/** A browser pane open at an address, centred on the point (§4.4: "a link: a browser pane at it"). */
+function pageOnto(
+  desk: MountedDesk,
+  link: LinkFace,
+  at: { readonly x: number; readonly y: number },
+): CardPlayed {
+  const size = desk.engine.catalog.widget(BROWSER_PANE_TYPE)?.defaultSize;
+  if (size === undefined) return { ok: false, note: LANDING_WORDS.deskNoPage };
+  try {
+    const pane = desk.engine.ops.spawnWidget(BROWSER_PANE_TYPE, {
+      x: at.x - size.w / 2,
+      y: at.y - size.h / 2,
+      w: size.w,
+      h: size.h,
+      props: { url: link.url },
+    });
+    desk.engine.ops.setSelection([pane]);
+    return { ok: true, note: OUTCOME_WORDS.placedPage };
+  } catch (cause) {
+    log().error("renderer.cards.desk_page_refused", "The desk refused a card's page", cause);
+    return { ok: false, note: OUTCOME_WORDS.notPlaced };
+  }
+}
+
 /** The desk mounted now as a place a card plays onto (HN-D7). */
 export function deskCardTarget(desk: MountedDesk, deps: DeskCardTargetDeps = {}): CardTarget {
   const still = (): StillBytes | undefined =>
@@ -178,25 +211,36 @@ export function deskCardTarget(desk: MountedDesk, deps: DeskCardTargetDeps = {})
     layer: TARGET_LAYER.desk,
     rect: () => containerOf(desk)?.getBoundingClientRect() ?? null,
     element: () => containerOf(desk),
+    destination: () => destinationOf(desk, still()),
     answer: (card) => {
-      const refused = refusalOf(desk, card, still());
+      const said = dragLabelOf(bloomOf(card, destinationOf(desk, still())), "The desk");
+      if (!said.ok) return { ok: false, label: said.label };
+      const refused = refusalOf(desk);
       if (refused !== null) return { ok: false, label: refused };
-      return {
-        ok: true,
-        label: card.faces[0].type === "image" ? TARGET_WORDS.deskPrint : TARGET_WORDS.deskNote,
-      };
+      return { ok: true, label: said.label };
     },
-    play: async (card, at) => {
+    play: async (card, faceId, at) => {
       const door = still();
-      const refused = refusalOf(desk, card, door);
+      const face = faceOf(card, faceId);
+      const verdict = landing(face, destinationOf(desk, door));
+      if (!verdict.lands) return { ok: false, note: verdict.reason };
+      const refused = refusalOf(desk);
       if (refused !== null) return { ok: false, note: refused };
       const point = worldPoint(desk, at);
       if (point === null) return { ok: false, note: OUTCOME_WORDS.notPlaced };
-      const face = card.faces[0];
-      if (face.type === "image") return printOnto(desk, card, face, point, deps, door);
-      return face.type === "text"
-        ? noteOnto(desk, face.text, point)
-        : { ok: false, note: OUTCOME_WORDS.notPlaced };
+      switch (face.type) {
+        case "image":
+          return printOnto(desk, face, point, deps, door);
+        case "text":
+          return noteOnto(desk, face.text, point);
+        case "link":
+          return pageOnto(desk, face, point);
+        case "ref":
+          // OB-3: a desk that can find its object by its ref moves the camera to it; until then, just where it is
+          return { ok: true, note: OUTCOME_WORDS.onTheDesk };
+        default:
+          return { ok: false, note: OUTCOME_WORDS.notPlaced };
+      }
     },
   };
 }

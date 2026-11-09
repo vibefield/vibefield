@@ -1,3 +1,5 @@
+import { catalogEntry } from "@vibefield/contracts";
+import { refWords } from "./card-landing";
 import type { Card, Face } from "./cards-model";
 import { OUTSIDE_WORDS, TARGET_WORDS } from "./cards-words";
 
@@ -27,12 +29,23 @@ function givenBy(face: Face): string | null {
     case "image":
       return face.path === undefined ? null : shellPath(face.path);
     case "session":
-      return face.handle;
+      return sessionWords(face);
     case "link":
       return face.url;
     case "ref":
-      return null;
+      return refWords(face);
   }
+}
+
+/** A session as words (§4.4): "Claude Code in vibe-field (session ‹run›)", the session chip's own pattern; only its
+ * handle while it names no run. PURE. */
+function sessionWords(face: Extract<Face, { type: "session" }>): string {
+  if (face.run === undefined) return face.handle;
+  const label =
+    (face.agent === undefined ? undefined : catalogEntry(face.agent)?.label) ?? face.handle;
+  return face.project === undefined
+    ? `${label} (session ${face.run})`
+    : `${label} in ${face.project} (session ${face.run})`;
 }
 
 /** HN-L5 — what a card puts into a pane. Return is never pressed for you (DESIGN.md §8 "The hand",

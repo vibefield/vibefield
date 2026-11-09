@@ -1549,8 +1549,12 @@ export function GodviewDeck({
   // was placed. Published on change only; the deck going away takes the door
   // with it.
   const linePanesKey = JSON.stringify(
-    linePanesOf(workspace?.panes ?? [], paneAgents.agents, workspace?.activePaneId, (id) =>
-      bornCwd.current.get(id),
+    linePanesOf(
+      workspace?.panes ?? [],
+      paneAgents.agents,
+      workspace?.activePaneId,
+      (id) => bornCwd.current.get(id),
+      paneAgents.runs,
     ),
   );
   useEffect(() => {

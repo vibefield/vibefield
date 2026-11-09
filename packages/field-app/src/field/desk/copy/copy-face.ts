@@ -1,4 +1,10 @@
 import { NOTE_TYPE } from "@vibecook/ice/desk/objects";
+import {
+  type CardStub,
+  type Face,
+  type ImageFace,
+  textCardOf,
+} from "../../../frame/cards/cards-model";
 import type { ObjectWords } from "../desk-object-words";
 
 // THE DESK'S COPY — WHAT A SELECTION IS CALLED, AND THE WORDS IT KEEPS (HN-D3; DESIGN.md §8 "Make a card", "The
@@ -57,6 +63,22 @@ export function copiedWords(objects: readonly CopiedObject[]): string | null {
     return text === null ? [] : [text];
   });
   return texts.length === 0 ? null : texts.join("\n\n");
+}
+
+/** OB-2's seam: every face a copy offers, in the kind's order (OB-D2), until a kind's agent half can offer more. A kind
+ * that declares an agent half will put its `ref` first and add its exports here; every kind gets the host's Picture when one
+ * could be taken. For now that is exactly what can be honest: a lone note's words, and the Picture. */
+export function kindFacesOf(
+  objects: readonly CopiedObject[],
+  picture: ImageFace | null,
+  stub: CardStub,
+): readonly Face[] {
+  const writing = noteWords(objects);
+  const words: readonly Face[] =
+    writing === null
+      ? []
+      : [{ ...textCardOf(writing, stub).faces[0], label: "Its words", id: "words" }];
+  return picture === null ? words : [...words, picture];
 }
 
 /** What a copy is called — its picture card's title (§8, R15's names, above). */

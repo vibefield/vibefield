@@ -1,4 +1,4 @@
-import type { AgentModelSelection } from "@vibefield/contracts";
+import type { AgentModelSelection, ObjectsHandResult } from "@vibefield/contracts";
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -13,10 +13,19 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  bloomOf,
+  type Destination,
+  dragLabelOf,
+  faceOf,
+  landing,
+} from "../frame/cards/card-landing";
 import { type CardTargets, cardTargets, cornerOf, TARGET_LAYER } from "../frame/cards/card-targets";
-import { nothingToGive, paneTextOf } from "../frame/cards/card-text";
+import { paneTextOf } from "../frame/cards/card-text";
 import type { Card } from "../frame/cards/cards-model";
-import { OUTCOME_WORDS, TARGET_WORDS } from "../frame/cards/cards-words";
+import { OUTCOME_WORDS } from "../frame/cards/cards-words";
+import { HAND_OVER_WORDS, handOver } from "../frame/cards/hand-over";
+import { withPictureFile } from "../frame/cards/picture-file";
 import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { sayOnLine } from "../frame/line-door";
 import { agentChipMenuOf, menuRowId, modelsOf } from "./agent-chip-menu";
@@ -31,6 +40,7 @@ import {
   draftAfterSend,
   draftBlank,
   draftMessage,
+  draftRefs,
   draftSendable,
   draftStills,
   insertChipAt,
@@ -468,6 +478,19 @@ export function ChatComposer({
     setBusy(true);
     let outcome: ThreadSendOutcome | null;
     try {
+      // the Live chips' grants go first (§4.3, OB-L1): a refused one stops the send, and says why
+      const refs = draftRefs(sent);
+      const run = entry.ownRuns[0];
+      for (const ref of refs) {
+        const handed: ObjectsHandResult =
+          run === undefined
+            ? { handed: false, reason: HAND_OVER_WORDS.noRun }
+            : await handOver(ref, run);
+        if (!handed.handed) {
+          say(handed.reason);
+          return;
+        }
+      }
       outcome = await send(draftMessage(sent), draftStills(sent));
     } finally {
       sending.current = false;
@@ -483,7 +506,7 @@ export function ChatComposer({
     // meanwhile stays (changed within what was sent, it stays whole). The editor standing follows.
     if (live.current) park(partsRef.current);
     onParkRef.current((now) => draftAfterSend(sent, now));
-  }, [park, parts, name, say, send, threadSending]);
+  }, [entry.ownRuns, park, parts, name, say, send, threadSending]);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
@@ -633,10 +656,24 @@ export function ChatComposer({
   // chip at the caret, or at the draft's end, carrying the whole card; it stays in the hand (HN-D4) ──
   const nameRef = useRef(name);
   nameRef.current = name;
-  const playRef = useRef<(card: Card, text: string) => void>(() => undefined);
-  playRef.current = (card, text) => placeChip({ id: nextChipId(), kind: "card", card, text });
+  const entryRef = useRef(entry);
+  entryRef.current = entry;
+  const playRef = useRef<(card: Card, face: string, text: string) => void>(() => undefined);
+  playRef.current = (card, face, text) =>
+    placeChip({
+      id: nextChipId(),
+      kind: "card",
+      card,
+      text,
+      ...(face === card.faces[0].id ? {} : { face }),
+    });
   useEffect(() => {
     if (!active) return;
+    const chatDestination = (): Destination => ({
+      at: "chat",
+      spark: entryRef.current.spark.id,
+      handle: nameRef.current,
+    });
     return targets.register({
       id: "chat-composer",
       kind: "prompt",
@@ -647,19 +684,26 @@ export function ChatComposer({
         return box === null || box.closest("[inert]") !== null ? null : box.getBoundingClientRect();
       },
       element: () => boxRef.current,
+      destination: chatDestination,
       // a card from another app says what it holds only once it is let go; a yes rings the composer at its own
       // corners, as its stylesheet draws them
       answer: (card) => {
-        if (card.waiting !== true && paneTextOf(card) === null)
-          return { ok: false, label: nothingToGive(card.faces[0]) };
+        const said = dragLabelOf(bloomOf(card, chatDestination()), nameRef.current);
+        if (!said.ok) return { ok: false, label: said.label };
         const corner = cornerOf(boxRef.current);
-        const label = TARGET_WORDS.prompt(nameRef.current);
-        return corner === null ? { ok: true, label } : { ok: true, label, corner };
+        return corner === null
+          ? { ok: true, label: said.label }
+          : { ok: true, label: said.label, corner };
       },
-      play: async (card) => {
-        const text = paneTextOf(card);
-        if (text === null) return { ok: false, note: nothingToGive(card.faces[0]) };
-        playRef.current(card, text);
+      play: async (card, faceId) => {
+        const chosen = faceOf(card, faceId);
+        const verdict = landing(chosen, chatDestination());
+        if (!verdict.lands) return { ok: false, note: verdict.reason };
+        const written = await withPictureFile(chosen);
+        if (written === null) return { ok: false, note: OUTCOME_WORDS.pictureNotWritten };
+        const text = paneTextOf(card, written);
+        if (text === null) return { ok: false, note: OUTCOME_WORDS.pictureNotWritten };
+        playRef.current(card, faceId, text);
         return { ok: true, note: OUTCOME_WORDS.added(nameRef.current) };
       },
     });

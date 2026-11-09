@@ -2743,6 +2743,10 @@ export const IPC_CHANNELS = {
    * ring has let go (HN-4). The still-bytes door's retained-file check, and no
    * bytes. */
   screenshotStillKept: "vibefield:screenshot:still-kept",
+  /** renderer → main invoke: HandPictureWriteRequest → string | null — a card's PNG (a desk object's picture, held only as
+   * bytes) written to the hand's folder at the play, twelve kept as the stills are, its path answered (OB-D10 A). A
+   * registered window only; null when main could not write it. */
+  handPictureWrite: "vibefield:screenshot:hand-picture-write",
   /** renderer → main invoke: RendererReplaceRequest → RendererReplaceResult — the
    * window's renderer REPLACED at its own asking (DK-9, the runtime with kinds: a
    * plugin update whose kinds this realm defined otherwise — ICE's catalog cannot

@@ -282,6 +282,14 @@ describe("the tool plane in fieldd (MT-0)", () => {
       "history_search",
       "history_read",
       "projects_list",
+      "canvas_kinds",
+      "canvas_list",
+      "canvas_place",
+      "canvas_remove",
+      "object_open",
+      "object_read",
+      "object_act",
+      "object_release",
       "ask_user",
       "notify",
     ]);
@@ -296,6 +304,14 @@ describe("the tool plane in fieldd (MT-0)", () => {
       "history_search",
       "history_read",
       "projects_list",
+      "canvas_kinds",
+      "canvas_list",
+      "canvas_place",
+      "canvas_remove",
+      "object_open",
+      "object_read",
+      "object_act",
+      "object_release",
       "notify",
     ]);
     for (const lane of [1003, 1004, 1005, 1006]) {
@@ -413,7 +429,9 @@ describe("the tool plane in fieldd (MT-0)", () => {
     const pane = h.answers(1005)[0].result.instructions as string;
     expect(spark).toContain("see which agents you can start");
     expect(spark).toContain("Every call is recorded.");
-    expect(run).toContain("search and read History, list the user's projects and reach the user");
+    expect(run).toContain(
+      "search and read History, list the user's projects, see and place objects on the user's desk, work the objects you placed or the user handed you and reach the user",
+    );
     expect(run).not.toContain("agents you can start");
     expect(run).toContain("never as the user's words");
     expect(pane).toBe(
@@ -422,24 +440,6 @@ describe("the tool plane in fieldd (MT-0)", () => {
   });
 });
 
-describe("the door places a plain run by the one rule (TU-1, Q3; critique 6)", () => {
-  const PERSONA_DOORS = [
-    door("c-persona", 1007, "sess-persona"),
-    door("c-orphan", 1008, "sess-orphan"),
-  ];
-  /** Each door's caller, as fieldd named it: its kind, the profiles it holds, and whether it is settled. */
-  const callers = (h: ReturnType<typeof harness>) =>
-    Object.fromEntries(
-      [...h.plane.doors()]
-        .filter(([id]) => id === "c-persona" || id === "c-orphan" || id === "c-plain")
-        .map(([id, c]) => [
-          id,
-          c.kind === "run" ? { profiles: c.profiles, unsettled: c.unsettled } : c.kind,
-        ]),
-    );
-
-  it("holds a run filed under none to the profile listing its persona, as the rooms place it; a persona no profile lists holds none, settled", async () => {
-    const h = harness({ doors: PERSONA_DOORS });
 // OB-3d — Codex and Grok run their MCP servers from a helper outside the terminal, so a door names them by the helper
 // root fieldd told the floor. The helper dials while puppeteer's spawn is still running, before fieldd has written the
 // run's record, so a harness that lists once must not be told the session holds nothing. The settle rule is unchanged.
@@ -449,7 +449,6 @@ describe("a run's helper root at the door (OB-3d)", () => {
     root: { rootId, depth: 1 },
   });
   const LIST = { id: 1, method: "tools/list", params: { _meta: META } };
-  const AGENT_ROWS = ["history_search", "history_read", "projects_list", "notify"];
   const RUN_7 = { runtimeRunId: "run-7", verified: true, profileSet: "work" };
 
   it("maps a root to the run it became, which settles as a pane's run does", async () => {
@@ -459,8 +458,10 @@ describe("a run's helper root at the door (OB-3d)", () => {
     });
     await h.plane.ensureStarted();
     h.ask(1101, LIST);
+    h.ask(1002, LIST); // a plain run in a pane: what the audience holds
     await h.settle();
-    expect(names(h.answers(1101)[0])).toEqual(AGENT_ROWS);
+    expect(names(h.answers(1101)[0])).toEqual(names(h.answers(1002)[0]));
+    expect(names(h.answers(1101)[0])).toContain("projects_list");
     expect(h.answers(1101)[0].result.ttlMs).toBeGreaterThan(0);
     expect(h.plane.doors().get("c-root")).toMatchObject({ kind: "run", runtimeRunId: "run-7" });
   });
@@ -473,8 +474,10 @@ describe("a run's helper root at the door (OB-3d)", () => {
     });
     await h.plane.ensureStarted();
     h.ask(1102, LIST);
+    h.ask(1002, LIST); // a plain run in a pane: what the audience holds
     await h.settle();
-    expect(names(h.answers(1102)[0])).toEqual(AGENT_ROWS);
+    expect(names(h.answers(1102)[0])).toEqual(names(h.answers(1002)[0]));
+    expect(names(h.answers(1102)[0])).toContain("projects_list");
     expect(h.answers(1102)[0].result.ttlMs, "unsettled: never cached").toBe(0);
     expect(h.audited, "a caller about to hold rows is not a plain caller").toEqual([]);
 
@@ -490,6 +493,71 @@ describe("a run's helper root at the door (OB-3d)", () => {
     await h.settle();
     expect(h.answers(1102)[2].result.isError).toBeUndefined();
     expect(h.audited.map((a) => a.target.id)).toEqual(["run-7"]);
+  });
+
+  it("stops serving a birth that failed: its first list is no claim, and a call keeps answering unavailable", async () => {
+    let failed = false;
+    const h = harness({
+      doors: [rooted("c-failed", 1106, "attempt-6")],
+      runForRoot: () => (failed ? undefined : { entering: true }),
+    });
+    await h.plane.ensureStarted();
+    h.ask(1106, LIST);
+    await h.settle();
+    expect(names(h.answers(1106)[0])).toContain("projects_list");
+
+    failed = true;
+    h.clock.t += REASK_MS;
+    h.call(1106, 2, "projects_list");
+    await h.settle();
+    expect(h.answers(1106)[1].result.isError).toBe(true);
+    expect(h.answers(1106)[1].result.structuredContent).toEqual({ fact: "unavailable" });
+    expect(h.audited.map((a) => a.action)).not.toContain("tools.projects_list");
+
+    h.ask(1106, { ...LIST, id: 3 });
+    await h.settle();
+    expect(names(h.answers(1106)[2])).toEqual([]);
+    expect(h.answers(1106)[2].result.ttlMs).toBe(0);
+    h.call(1106, 4, "projects_list");
+    await h.settle();
+    expect(h.answers(1106)[3].result.structuredContent).toEqual({ fact: "unavailable" });
+  });
+
+  it("answers unavailable while a run's record is unreadable, and serves a retried call once it verifies", async () => {
+    let verified = false;
+    const h = harness({
+      doors: [rooted("c-unread-root", 1107, "attempt-7")],
+      runForRoot: () => ({ ...RUN_7, verified }),
+    });
+    await h.plane.ensureStarted();
+    h.call(1107, 1, "projects_list");
+    await h.settle();
+    expect(h.answers(1107)[0].result.structuredContent).toEqual({ fact: "unavailable" });
+    expect(h.plane.doors().get("c-unread-root")).toEqual({
+      kind: "root",
+      rootId: "attempt-7",
+      unsettled: "record-unverified",
+    });
+    expect(h.audited.map((a) => `${a.action} ${String(a.reason)}`)).toEqual([
+      "tools.door.plain record-unverified",
+    ]);
+
+    verified = true;
+    h.clock.t += REASK_MS;
+    h.call(1107, 2, "projects_list");
+    await h.settle();
+    expect(h.answers(1107)[1].result.isError).toBeUndefined();
+    expect(h.audited.map((a) => a.target.id)).toContain("run-7");
+  });
+
+  it("leaves a door with no root and a pane with no run as they were: refused, never unavailable", async () => {
+    const h = harness();
+    await h.plane.ensureStarted();
+    h.call(1005, 1, "projects_list"); // a pane with no run
+    h.call(1006, 1, "projects_list"); // a caller outside every pane and root
+    await h.settle();
+    expect(h.answers(1005)[0].result.structuredContent).toEqual({ fact: "forbidden" });
+    expect(h.answers(1006)[0].result.structuredContent).toEqual({ fact: "forbidden" });
   });
 
   it("names a spark's birth nothing while it enters: no helper agent is offered as a spark", async () => {
@@ -530,6 +598,24 @@ describe("a run's helper root at the door (OB-3d)", () => {
   });
 });
 
+describe("the door places a plain run by the one rule (TU-1, Q3; critique 6)", () => {
+  const PERSONA_DOORS = [
+    door("c-persona", 1007, "sess-persona"),
+    door("c-orphan", 1008, "sess-orphan"),
+  ];
+  /** Each door's caller, as fieldd named it: its kind, the profiles it holds, and whether it is settled. */
+  const callers = (h: ReturnType<typeof harness>) =>
+    Object.fromEntries(
+      [...h.plane.doors()]
+        .filter(([id]) => id === "c-persona" || id === "c-orphan" || id === "c-plain")
+        .map(([id, c]) => [
+          id,
+          c.kind === "run" ? { profiles: c.profiles, unsettled: c.unsettled } : c.kind,
+        ]),
+    );
+
+  it("holds a run filed under none to the profile listing its persona, as the rooms place it; a persona no profile lists holds none, settled", async () => {
+    const h = harness({ doors: PERSONA_DOORS });
     await h.plane.ensureStarted();
     expect(callers(h)).toEqual({
       "c-plain": { profiles: ["work"], unsettled: undefined },
@@ -574,6 +660,14 @@ describe("a run's helper root at the door (OB-3d)", () => {
       "history_search",
       "history_read",
       "projects_list",
+      "canvas_kinds",
+      "canvas_list",
+      "canvas_place",
+      "canvas_remove",
+      "object_open",
+      "object_read",
+      "object_act",
+      "object_release",
       "notify",
     ]);
   });

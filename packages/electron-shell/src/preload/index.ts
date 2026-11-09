@@ -15,6 +15,7 @@ import {
   type FrameZoomAct,
   GodviewDeckSetRequest,
   type GodviewDeckState,
+  HandPictureWriteRequest,
   IPC_CHANNELS,
   LIVE_SURFACE_PORT_BRIDGE_MESSAGE_V1,
   type RendererReplaceReason,
@@ -647,6 +648,16 @@ contextBridge.exposeInMainWorld("vibefield", {
       );
       if (typeof answer === "boolean") return answer;
       throw new Error("screenshot still: main answered something other than kept or not");
+    },
+    /** OB-D10 A — a card's picture written to the hand's folder at the play: its path, or null when main could not.
+     * The answer is a path or null and nothing else, checked here like every answer. */
+    writeHandPicture: async (png: Uint8Array<ArrayBuffer>): Promise<string | null> => {
+      const answer: unknown = await ipcRenderer.invoke(
+        IPC_CHANNELS.handPictureWrite,
+        HandPictureWriteRequest.parse({ png }),
+      );
+      if (answer === null || typeof answer === "string") return answer;
+      throw new Error("hand picture: main answered something other than a path");
     },
     capture: async (): Promise<ScreenshotCaptureResult> =>
       ScreenshotCaptureResultSchema.parse(

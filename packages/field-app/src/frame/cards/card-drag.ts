@@ -3,7 +3,9 @@ import { useSyncExternalStore } from "react";
 import { getRendererLogger } from "../../logging";
 import { sayOnLine } from "../line-door";
 import { VIEW_CELL_SELECTOR } from "../ViewsTrack";
-import { getActiveView, requestView } from "../view-state";
+import { getActiveView, requestView, subscribeActiveView } from "../view-state";
+import { openBloom } from "./bloom/open-bloom";
+import { type BloomModel, bloomOf, type Destination } from "./card-landing";
 import { type CardAnswer, type CardPlayed, type CardTarget, cardTargets } from "./card-targets";
 import type { Card } from "./cards-model";
 import { TARGET_WORDS } from "./cards-words";
@@ -105,6 +107,8 @@ const TWO_FRAMES_MS = 34;
 /** The lean (the page's): the pointer's smoothed speed, px/ms, times this, ±10° at most. */
 const TILT_PER_SPEED = 16;
 const TILT_MAX = 10;
+/** How often a standing bloom checks that the place it opened on is still there. */
+const BLOOM_WATCH_MS = 250;
 /** The carried card's own layer (CarriedCardLayer.tsx). It is inert, so a browser never finds it
  * under a point; it is passed over here all the same — the card is never what it is held over. */
 export const CARRIED_LAYER_CLASS = "vf-cards-carried-layer";
@@ -152,6 +156,8 @@ interface LiveDrag {
   home: CardBox | null;
   timer: ReturnType<typeof setTimeout> | null;
   detach: () => void;
+  /** The drop's bloom, standing (§4.3): the card is held where it landed until a face is chosen. */
+  bloom: { close(): void } | null;
 }
 
 let live: LiveDrag | null = null;
@@ -363,7 +369,7 @@ export function fieldTakesDrop(x: number, y: number, card: Card): boolean {
 }
 
 function moveTo(drag: LiveDrag, x: number, y: number): void {
-  if (drag.phase !== "carry") return;
+  if (drag.phase !== "carry" || drag.bloom !== null) return;
   const now = Date.now();
   const speed = (x - drag.lastX) / Math.max(8, now - drag.lastT);
   drag.speed = drag.speed * 0.72 + speed * 0.28;
@@ -386,6 +392,7 @@ function homeOf(start: CardDragStart): CardBox | null {
 
 /** Gone: the layer draws nothing, the fan shows the slot again. */
 function finish(drag: LiveDrag): void {
+  drag.bloom?.close();
   drag.detach();
   stopSpring(drag);
   if (drag.timer !== null) clearTimeout(drag.timer);
@@ -411,10 +418,11 @@ function turnHome(drag: LiveDrag): void {
 async function playOf(
   target: CardTarget,
   card: Card,
+  face: string,
   at: { readonly x: number; readonly y: number },
 ): Promise<CardPlayed> {
   try {
-    return await target.play(card, at);
+    return await target.play(card, face, at);
   } catch (cause) {
     log().error("renderer.cards.play_failed", "A place threw while a card played", cause, {
       target: target.id,
@@ -509,6 +517,7 @@ export function startCardDrag(start: CardDragStart): void {
     home: null,
     timer: null,
     detach: () => undefined,
+    bloom: null,
   };
   live = drag;
   drag.detach = listen(drag);
@@ -530,7 +539,7 @@ export function moveCardDrag(x: number, y: number): void {
  * refuses before the play or in it. Resolves once the outcome is said. */
 export async function endCardDrag(x: number, y: number, filled?: Card): Promise<CardLetGo> {
   const drag = live;
-  if (drag === null || drag.phase !== "carry") return "none";
+  if (drag === null || drag.phase !== "carry" || drag.bloom !== null) return "none";
   if (filled !== undefined) drag.card = filled;
   moveTo(drag, x, y);
   const { target, answer } = drag;
@@ -543,11 +552,47 @@ export async function endCardDrag(x: number, y: number, filled?: Card): Promise<
     finish(drag);
     return "hand";
   }
+  // THE DROP (§4.3): the place says where it landed and the face it takes follows from that one model
+  const at = { x: drag.x, y: drag.y };
+  const destination = destinationAt(target, at);
+  if (destination === null) return playFace(drag, target, drag.card.faces[0].id);
+  const model = bloomOf(drag.card, destination);
+  if (model.hub === null) {
+    const refusal = model.buds[0]?.reason;
+    if (refusal !== undefined) sayOnLine(refusal);
+    if (drag.start.source === "hand") {
+      turnHome(drag);
+      return "home";
+    }
+    finish(drag);
+    return "hand";
+  }
+  if (model.onlyFit !== null) return playFace(drag, target, model.onlyFit);
+  return bloomFor(drag, target, model, at);
+}
+
+/** Where a place says a card let go here lands; absent, or thrown, the card's first face plays. */
+function destinationAt(
+  target: CardTarget,
+  at: { readonly x: number; readonly y: number },
+): Destination | null {
+  try {
+    return target.destination?.(at) ?? null;
+  } catch (cause) {
+    log().error("renderer.cards.destination_failed", "A place could not say what it is", cause, {
+      target: target.id,
+    });
+    return null;
+  }
+}
+
+/** A face chosen: a copy plays in, the outcome is said once on the line, and the card springs back (HN-D4). */
+async function playFace(drag: LiveDrag, target: CardTarget, face: string): Promise<CardLetGo> {
   drag.detach();
   stopSpring(drag);
   drag.phase = "play";
   publish(snapshot(drag));
-  const played = playOf(target, drag.card, { x: drag.x, y: drag.y });
+  const played = playOf(target, drag.card, face, { x: drag.x, y: drag.y });
   await wait(playTimings().shrinkMs);
   if (live === drag) turnHome(drag);
   const outcome = await played;
@@ -559,9 +604,62 @@ export async function endCardDrag(x: number, y: number, filled?: Card): Promise<
   return "refused";
 }
 
+/** Is the place the bloom opened on still there at that point? A view change or a closed pane takes it down. */
+function bloomPlaceGone(
+  target: CardTarget,
+  card: Card,
+  at: { readonly x: number; readonly y: number },
+): boolean {
+  return target.rect() === null || answerOf(target, card, at) === null;
+}
+
+/** §4.3: more than one face fits, so the card stays where it landed and the bloom asks which. `close()` takes the bloom down
+ * with nothing chosen; the promise settles as the drop does. */
+function bloomFor(
+  drag: LiveDrag,
+  target: CardTarget,
+  model: BloomModel,
+  at: { readonly x: number; readonly y: number },
+): Promise<CardLetGo> {
+  drag.detach();
+  stopSpring(drag);
+  drag.answer = null;
+  publish(snapshot(drag));
+  return new Promise((resolve) => {
+    let shown: { close(): void } | null = null;
+    let settled = false;
+    const settle = (face: string | null, fromBloom: boolean): void => {
+      if (settled) return;
+      settled = true;
+      offView();
+      clearInterval(watch);
+      drag.bloom = null;
+      if (!fromBloom) shown?.close();
+      if (live !== drag) {
+        resolve("none");
+        return;
+      }
+      if (face === null) {
+        turnHome(drag);
+        resolve("home");
+        return;
+      }
+      resolve(playFace(drag, target, face));
+    };
+    const offView = subscribeActiveView(() => settle(null, false));
+    const watch = setInterval(() => {
+      if (bloomPlaceGone(target, drag.card, at)) settle(null, false);
+    }, BLOOM_WATCH_MS);
+    shown = openBloom(drag.card, model, at, (face) => settle(face, true));
+    if (!settled) drag.bloom = { close: () => settle(null, false) };
+  });
+}
+
 /** Esc, a lost pointer, the window's blur: home at once, nothing played. */
 export function cancelCardDrag(): void {
-  if (live !== null && live.phase === "carry") turnHome(live);
+  if (live === null || live.phase !== "carry") return;
+  if (live.bloom !== null) live.bloom.close();
+  else turnHome(live);
 }
 
 export function subscribeCarriedCard(fn: () => void): () => void {

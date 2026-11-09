@@ -34,6 +34,7 @@ import {
   SPRING_LOAD_MS,
   startCardDrag,
 } from "../src/frame/cards/card-drag";
+import type { BloomModel, Destination } from "../src/frame/cards/card-landing";
 import {
   type CardAnswer,
   type CardPlayed,
@@ -45,8 +46,10 @@ import { paneTextOf, shellPath, stillOf } from "../src/frame/cards/card-text";
 import {
   type Card,
   fileCardOf,
+  type ImageFace,
   messageCardOf,
   pictureCardOf,
+  type RefFace,
   sessionCardOf,
   type TextFace,
   termCardOf,
@@ -54,13 +57,44 @@ import {
 } from "../src/frame/cards/cards-model";
 import { CardStore } from "../src/frame/cards/cards-store";
 import { OUTCOME_WORDS, TARGET_WORDS } from "../src/frame/cards/cards-words";
+import { resetHandOverForTest, setHandOverDoor } from "../src/frame/cards/hand-over";
 import { hearLineSays, type LineViewDoor, refusalClaimed } from "../src/frame/line-door";
 import { ViewsTrackView } from "../src/frame/ViewsTrack";
 import { resetActiveViewForTest, subscribeActiveView } from "../src/frame/view-state";
-import { PANE_INPUT_WAIT_MS, paneCardTarget } from "../src/godview/pane-card-target";
+import {
+  PANE_INPUT_WAIT_MS,
+  paneCardTarget,
+  paneDestination,
+} from "../src/godview/pane-card-target";
 import { type FieldHost, setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import type { RoutedInputRefusal } from "../src/terminal/pool";
+
+// The bloom is ow-design's (`bloom/open-bloom.ts`): the drop is held to what it asks of it.
+const bloomDoor = vi.hoisted(() => ({
+  opened: [] as Array<{
+    model: BloomModel;
+    at: { readonly x: number; readonly y: number };
+    choose: (face: string | null) => void;
+    closed: boolean;
+  }>,
+}));
+vi.mock("../src/frame/cards/bloom/open-bloom", () => ({
+  openBloom: (
+    _card: Card,
+    model: BloomModel,
+    at: { readonly x: number; readonly y: number },
+    choose: (face: string | null) => void,
+  ) => {
+    const entry = { model, at, choose, closed: false };
+    bloomDoor.opened.push(entry);
+    return {
+      close: () => {
+        entry.closed = true;
+      },
+    };
+  },
+}));
 
 // The card's face is W-hand's (CardFace.tsx, HN-1): the layer is held to handing it the card.
 vi.mock("../src/frame/cards/CardFace", () => ({
@@ -153,10 +187,16 @@ function place(options: {
   readonly element?: Element;
   readonly answer?: CardAnswer | null;
   readonly played?: CardPlayed;
-}): { readonly played: Array<{ card: Card; at: { x: number; y: number } }> } {
+  readonly destination?: () => Destination | null;
+  readonly answerNow?: () => CardAnswer | null;
+}): {
+  readonly played: Array<{ card: Card; at: { x: number; y: number } }>;
+  readonly faces: string[];
+} {
   places += 1;
   const kind = options.kind ?? "pane";
   const played: Array<{ card: Card; at: { x: number; y: number } }> = [];
+  const faces: string[] = [];
   const target: CardTarget = {
     id: `place-${places}`,
     kind,
@@ -164,14 +204,20 @@ function place(options: {
     rect: () => options.box,
     ...(options.element === undefined ? {} : { element: () => options.element ?? null }),
     answer: () =>
-      options.answer === undefined ? { ok: true, label: "Paste into vibe-field" } : options.answer,
-    play: async (card, at) => {
+      options.answerNow !== undefined
+        ? options.answerNow()
+        : options.answer === undefined
+          ? { ok: true, label: "Paste into vibe-field" }
+          : options.answer,
+    ...(options.destination === undefined ? {} : { destination: options.destination }),
+    play: async (card, face, at) => {
       played.push({ card, at: { x: at.x, y: at.y } });
+      faces.push(face);
       return options.played ?? { ok: true, note: "Pasted into vibe-field" };
     },
   };
   offs.push(cardTargets.register(target));
-  return { played };
+  return { played, faces };
 }
 
 /** The carried layer, and what else the case draws beside it (the line's shipping track). */
@@ -845,18 +891,18 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
     const door = doorOf({ whenInputOpen });
     const target = paneCardTarget({ root: () => root, door: () => door });
 
-    await expect(target.play(FILE, { x: 900, y: 300 })).resolves.toEqual({
+    await expect(target.play(FILE, FILE.faces[0].id, { x: 900, y: 300 })).resolves.toEqual({
       ok: true,
       note: OUTCOME_WORDS.pasted("rosetta"),
     });
     expect(door.pasted).toEqual([["pane-2", "/Users/me/vibe-field/src/files/routes.ts"]]);
     expect(whenInputOpen).toHaveBeenCalledWith("pane-2", PANE_INPUT_WAIT_MS);
-    await expect(target.play(FILE, { x: 300, y: 20 })).resolves.toEqual({
+    await expect(target.play(FILE, FILE.faces[0].id, { x: 300, y: 20 })).resolves.toEqual({
       ok: false,
       note: OUTCOME_WORDS.paneGone,
     });
     // a note ending in a line break goes in without it: nothing runs the line for you
-    await target.play(text("echo hello\n"), { x: 300, y: 300 });
+    await target.play(text("echo hello\n"), "text", { x: 300, y: 300 });
     expect(door.pasted.at(-1)).toEqual(["pane-1", "echo hello"]);
   });
 
@@ -877,7 +923,7 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
       },
     });
 
-    await expect(target.play(SNAPSHOT, { x: 900, y: 300 })).resolves.toEqual({
+    await expect(target.play(SNAPSHOT, SNAPSHOT.faces[0].id, { x: 900, y: 300 })).resolves.toEqual({
       ok: false,
       note: "Not pasted — that snapshot is no longer kept",
     });
@@ -886,13 +932,14 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
     expect(whenInputOpen, "a still let go waited on the pane's input").not.toHaveBeenCalled();
 
     kept = true;
-    await expect(target.play(SNAPSHOT, { x: 900, y: 300 })).resolves.toEqual({
+    await expect(target.play(SNAPSHOT, SNAPSHOT.faces[0].id, { x: 900, y: 300 })).resolves.toEqual({
       ok: true,
       note: OUTCOME_WORDS.pasted("rosetta"),
     });
     expect(door.pasted).toEqual([["pane-2", "/tmp/vibefield-screenshot-1.png"]]);
     // only a snapshot's still is asked about: words, a file and an agent are pasted as they are
-    for (const card of [text("Run it."), FILE, AGENT]) await target.play(card, { x: 900, y: 300 });
+    for (const card of [text("Run it."), FILE, AGENT])
+      await target.play(card, card.faces[0].id, { x: 900, y: 300 });
     expect(asked).toHaveLength(2);
   });
 
@@ -900,7 +947,7 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
     const { root } = deckOf();
     const door = doorOf({ whenInputOpen: async () => false });
     const target = paneCardTarget({ root: () => root, door: () => door });
-    await expect(target.play(text("Too soon."), { x: 300, y: 300 })).resolves.toEqual({
+    await expect(target.play(text("Too soon."), "text", { x: 300, y: 300 })).resolves.toEqual({
       ok: false,
       note: "Not pasted — vibe-field's pane is not taking input",
     });
@@ -936,7 +983,7 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
       },
     });
 
-    await expect(target.play(text("A long paste."), { x: 900, y: 300 })).resolves.toEqual({
+    await expect(target.play(text("A long paste."), "text", { x: 900, y: 300 })).resolves.toEqual({
       ok: false,
       note: "Not pasted into rosetta — 300 KB, and one paste carries 261 KB of it; save it to a file and use its path",
       stand: "read",
@@ -949,7 +996,7 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
     // refusal names the new session, and it is still this paste's — said once, as the play's
     // outcome, never "Pasted into rosetta" after the line had said it was not
     refusal = { ...refusal, sessionId: "s-new" };
-    await expect(target.play(text("A long paste."), { x: 900, y: 300 })).resolves.toEqual({
+    await expect(target.play(text("A long paste."), "text", { x: 900, y: 300 })).resolves.toEqual({
       ok: false,
       note: "Not pasted into rosetta — 300 KB, and one paste carries 261 KB of it; save it to a file and use its path",
       stand: "read",
@@ -971,7 +1018,7 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
       ok: false,
       label: "A file with no path can't be pasted yet",
     });
-    await expect(target.play(loose, { x: 300, y: 300 })).resolves.toEqual({
+    await expect(target.play(loose, loose.faces[0].id, { x: 300, y: 300 })).resolves.toEqual({
       ok: false,
       note: "A file with no path can't be pasted yet",
     });
@@ -996,7 +1043,7 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
       { ...SNAPSHOT_STILL, title: "photo.jpg", path: "/Users/me/My Pictures/photo.jpg" },
       { id: "card-pict-photo", origin: { view: "outside", how: "drag" }, at: 0 },
     );
-    await expect(target.play(photo, { x: 300, y: 300 })).resolves.toEqual({
+    await expect(target.play(photo, photo.faces[0].id, { x: 300, y: 300 })).resolves.toEqual({
       ok: true,
       note: OUTCOME_WORDS.pasted("vibe-field"),
     });
@@ -1068,7 +1115,7 @@ describe("the desk takes a card (HN-D7)", () => {
         ok: true,
         label: "Place as a note",
       });
-      await expect(target.play(card, { x: 400, y: 300 })).resolves.toEqual({
+      await expect(target.play(card, card.faces[0].id, { x: 400, y: 300 })).resolves.toEqual({
         ok: true,
         note: OUTCOME_WORDS.placedNote,
       });
@@ -1095,7 +1142,9 @@ describe("the desk takes a card (HN-D7)", () => {
       label: "Place as a print",
     });
 
-    await expect(target.play(ofTheDesk, { x: 400, y: 300 })).resolves.toEqual({
+    await expect(
+      target.play(ofTheDesk, ofTheDesk.faces[0].id, { x: 400, y: 300 }),
+    ).resolves.toEqual({
       ok: true,
       note: OUTCOME_WORDS.placedPrint,
     });
@@ -1126,7 +1175,7 @@ describe("the desk takes a card (HN-D7)", () => {
       host: { screenshotStillBytes: stillBytes },
       blobs: { put },
     });
-    await expect(target.play(SNAPSHOT, { x: 400, y: 300 })).resolves.toEqual({
+    await expect(target.play(SNAPSHOT, SNAPSHOT.faces[0].id, { x: 400, y: 300 })).resolves.toEqual({
       ok: true,
       note: OUTCOME_WORDS.placedPrint,
     });
@@ -1139,7 +1188,7 @@ describe("the desk takes a card (HN-D7)", () => {
       host: { screenshotStillBytes: async () => null },
       blobs: { put },
     });
-    await expect(lost.play(SNAPSHOT, { x: 400, y: 300 })).resolves.toEqual({
+    await expect(lost.play(SNAPSHOT, SNAPSHOT.faces[0].id, { x: 400, y: 300 })).resolves.toEqual({
       ok: false,
       note: "Not placed — that snapshot is no longer kept",
     });
@@ -1167,7 +1216,7 @@ describe("the desk takes a card (HN-D7)", () => {
         },
         blobs: { put: async () => "hash-3" },
       });
-      const played = target.play(SNAPSHOT, { x: 400, y: 300 });
+      const played = target.play(SNAPSHOT, SNAPSHOT.faces[0].id, { x: 400, y: 300 });
       await advance(0);
       meanwhile(f);
       send(new Uint8Array([1, 2, 3]));
@@ -1191,7 +1240,7 @@ describe("the desk takes a card (HN-D7)", () => {
     for (const [{ desk, spawned }, card, words] of cases) {
       const target = deskCardTarget(desk, { host: {} });
       expect(target.answer(card, { x: 400, y: 300 })).toEqual({ ok: false, label: words });
-      await expect(target.play(card, { x: 400, y: 300 })).resolves.toEqual({
+      await expect(target.play(card, card.faces[0].id, { x: 400, y: 300 })).resolves.toEqual({
         ok: false,
         note: words,
       });
@@ -1219,5 +1268,342 @@ describe("the desk takes a card (HN-D7)", () => {
     expect(desks()).toEqual(["desk"]);
     unpublish();
     expect(desks()).toEqual([]);
+  });
+});
+
+// ── The drop (OB-1b, §4.3, §4.4) ────────────────────────────────────────────
+
+const LIVE: RefFace = {
+  id: "ref",
+  type: "ref",
+  label: "Live",
+  ref: "vf:obj/7hk2qx4m",
+  kindName: "Mind map",
+  title: "Q3 plan",
+  still: { src: "", width: 40, height: 20 },
+};
+const OUTLINE: TextFace = {
+  id: "outline",
+  type: "text",
+  label: "Outline",
+  format: "markdown",
+  text: "- one\n- two\n",
+  show: { as: "words", title: "one", body: "two", bare: true },
+};
+const PNG_FACE: ImageFace = {
+  id: "picture",
+  type: "image",
+  label: "Picture",
+  width: 40,
+  height: 20,
+  src: "blob:pic",
+  bytes: new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }),
+};
+const MAP: Card = {
+  id: "card-map",
+  at: 0,
+  origin: { view: "canvas", how: "copy" },
+  title: "Q3 plan",
+  about: "Mind map",
+  faces: [LIVE, OUTLINE, PNG_FACE],
+};
+
+const AGENT_PANE: Destination = {
+  at: "agent-pane",
+  run: "run-1",
+  handle: "claude·2",
+  agentLabel: "Claude Code",
+  can: true,
+};
+const SHELL_PANE: Destination = { at: "shell-pane", name: "zsh" };
+const BOX = new DOMRect(100, 100, 400, 300);
+
+/** Carry a card over the place and let it go. */
+function dropOn(card: Card): Promise<unknown> {
+  act(() => startCardDrag(dragOf(card)));
+  act(() => pointer("pointermove", 7, 300, 250));
+  return act(async () => {
+    pointer("pointerup", 7, 300, 250);
+  });
+}
+
+describe("the drop (OB-1b, §4.3)", () => {
+  beforeEach(() => {
+    bloomDoor.opened.length = 0;
+    vi.useFakeTimers();
+  });
+
+  it("opens the bloom when more than one face fits: the card stays carried and nothing plays until one is chosen", async () => {
+    const { played, faces } = place({ box: BOX, destination: () => AGENT_PANE });
+    mountLayer();
+    await dropOn(MAP);
+    expect(bloomDoor.opened).toHaveLength(1);
+    const [bloom] = bloomDoor.opened;
+    expect(bloom?.model.hub).toBe("ref");
+    expect(bloom?.model.onlyFit).toBeNull();
+    expect(bloom?.at).toEqual({ x: 300, y: 250 });
+    expect(getCarriedCard()?.phase).toBe("carry");
+    expect(played).toEqual([]);
+
+    await act(async () => bloom?.choose("outline"));
+    await advance(PLAY_SHRINK_MS);
+    expect(faces).toEqual(["outline"]);
+    expect(played[0]?.at).toEqual({ x: 300, y: 250 });
+    expect(said).toEqual(["Pasted into vibe-field"]);
+  });
+
+  it("puts the card back on a bloom that chooses nothing: nothing lands", async () => {
+    const { played } = place({ box: BOX, destination: () => AGENT_PANE });
+    mountLayer();
+    await dropOn(MAP);
+    await act(async () => bloomDoor.opened[0]?.choose(null));
+    expect(played).toEqual([]);
+    expect(getCarriedCard()?.phase).toBe("home");
+  });
+
+  it("takes the bloom down when the view changes: the card goes home", async () => {
+    const { played } = place({ box: BOX, destination: () => AGENT_PANE });
+    mountLayer();
+    await dropOn(MAP);
+    const [bloom] = bloomDoor.opened;
+    await act(async () => viewHeard?.({ view: "godview" } as FrameViewState));
+    expect(bloom?.closed).toBe(true);
+    expect(getCarriedCard()?.phase).toBe("home");
+    expect(played).toEqual([]);
+  });
+
+  it("takes the bloom down when the pane under it closes", async () => {
+    let open = true;
+    const { played } = place({
+      box: BOX,
+      destination: () => AGENT_PANE,
+      answerNow: () => (open ? { ok: true, label: "x" } : null),
+    });
+    mountLayer();
+    await dropOn(MAP);
+    const [bloom] = bloomDoor.opened;
+    expect(bloom?.closed).toBe(false);
+    open = false;
+    await advance(300);
+    expect(bloom?.closed).toBe(true);
+    expect(getCarriedCard()?.phase).toBe("home");
+    expect(played).toEqual([]);
+  });
+
+  it("closes a standing bloom when a new drag starts", async () => {
+    place({ box: BOX, destination: () => AGENT_PANE });
+    mountLayer();
+    await dropOn(MAP);
+    const [bloom] = bloomDoor.opened;
+    act(() => startCardDrag(dragOf(text("Next."))));
+    expect(bloom?.closed).toBe(true);
+  });
+
+  it("plays the one face that fits at once, with no bloom", async () => {
+    const { faces } = place({ box: BOX, destination: () => SHELL_PANE });
+    mountLayer();
+    const onlyLive: Card = { ...MAP, faces: [LIVE, OUTLINE] };
+    await dropOn(onlyLive);
+    await advance(PLAY_SHRINK_MS);
+    expect(bloomDoor.opened).toEqual([]);
+    expect(faces).toEqual(["outline"]);
+  });
+
+  it("refuses with the first reason when nothing fits, and the card goes home", async () => {
+    const { played } = place({
+      box: BOX,
+      destination: () => SHELL_PANE,
+      answer: { ok: true, label: "x" },
+    });
+    mountLayer();
+    await dropOn({ ...MAP, faces: [LIVE] });
+    expect(bloomDoor.opened).toEqual([]);
+    expect(played).toEqual([]);
+    expect(said).toEqual(["Nothing in this pane can work on it"]);
+    expect(getCarriedCard()?.phase).toBe("home");
+  });
+
+  it("a place that names no destination takes the card's first face, as a place always has", async () => {
+    const { faces } = place({ box: BOX });
+    mountLayer();
+    await dropOn(MAP);
+    await advance(PLAY_SHRINK_MS);
+    expect(bloomDoor.opened).toEqual([]);
+    expect(faces).toEqual(["ref"]);
+  });
+});
+
+describe("a pane plays the chosen face (OB-1b, §4.4)", () => {
+  afterEach(() => resetHandOverForTest());
+  const agentDoor = (): ReturnType<typeof doorOf> => {
+    const door = doorOf();
+    return {
+      ...door,
+      pasted: door.pasted,
+      panes: [{ ...(door.panes[0] as (typeof door.panes)[number]), agent: "claude", run: "run-1" }],
+    };
+  };
+  const onePane = (): HTMLElement => deckOf().root;
+
+  it("names the pane's destination: an agent by its run, anything else a plain pane", () => {
+    const [agentPane, shell] = doorOf().panes;
+    expect(
+      paneDestination({
+        ...(agentPane as NonNullable<typeof agentPane>),
+        agent: "claude",
+        run: "r1",
+      }),
+    ).toMatchObject({
+      at: "agent-pane",
+      run: "r1",
+      agentLabel: "Claude Code",
+    });
+    expect(paneDestination(agentPane as NonNullable<typeof agentPane>)).toMatchObject({
+      at: "shell-pane",
+    });
+    expect(paneDestination(shell as NonNullable<typeof shell>)).toMatchObject({
+      at: "shell-pane",
+      name: "rosetta",
+    });
+  });
+
+  it("hands the object to the pane's run FIRST, and pastes the ref's words only once it is handed (OB-L1)", async () => {
+    const root = onePane();
+    const door = agentDoor();
+    const asked: Array<[string, string]> = [];
+    setHandOverDoor(async (ref, run) => {
+      asked.push([ref, run]);
+      return { handed: true };
+    });
+    const target = paneCardTarget({ root: () => root, door: () => door });
+    await expect(target.play(MAP, "ref", { x: 300, y: 300 })).resolves.toEqual({
+      ok: true,
+      note: OUTCOME_WORDS.pasted("vibe-field"),
+    });
+    expect(asked).toEqual([["vf:obj/7hk2qx4m", "run-1"]]);
+    expect(door.pasted).toEqual([
+      [
+        "pane-1",
+        "the mind map \u201cQ3 plan\u201d (desk object vf:obj/7hk2qx4m): call object_open on it",
+      ],
+    ]);
+  });
+
+  it("pastes nothing when fieldd does not hand it over, and says why", async () => {
+    const root = onePane();
+    const door = agentDoor();
+    setHandOverDoor(async () => ({ handed: false, reason: "That object has closed" }));
+    const target = paneCardTarget({ root: () => root, door: () => door });
+    await expect(target.play(MAP, "ref", { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: "That object has closed",
+      stand: "read",
+    });
+    expect(door.pasted).toEqual([]);
+  });
+
+  it("with no door at all to hand it through, says so and pastes nothing", async () => {
+    const root = onePane();
+    const door = agentDoor();
+    const target = paneCardTarget({ root: () => root, door: () => door });
+    const played = await target.play(MAP, "ref", { x: 300, y: 300 });
+    expect(played.ok).toBe(false);
+    expect(door.pasted).toEqual([]);
+  });
+
+  it("writes a desk picture to the hand's folder at the play and pastes its path (OB-D10 A)", async () => {
+    const root = onePane();
+    const door = agentDoor();
+    const wrote: Uint8Array[] = [];
+    const target = paneCardTarget({
+      root: () => root,
+      door: () => door,
+      host: {
+        writeHandPicture: async (png) => {
+          wrote.push(png);
+          return "/tmp/hand/vibefield-hand-1.png";
+        },
+      },
+    });
+    await expect(target.play(MAP, "picture", { x: 300, y: 300 })).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(wrote).toHaveLength(1);
+    expect(door.pasted).toEqual([["pane-1", "/tmp/hand/vibefield-hand-1.png"]]);
+  });
+
+  it("says so when the picture could not be written, and pastes nothing", async () => {
+    const root = onePane();
+    const door = agentDoor();
+    const target = paneCardTarget({
+      root: () => root,
+      door: () => door,
+      host: { writeHandPicture: async () => null },
+    });
+    await expect(target.play(MAP, "picture", { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: OUTCOME_WORDS.pictureNotWritten,
+    });
+    expect(door.pasted).toEqual([]);
+  });
+
+  it("refuses the live object on a plain pane, in words", async () => {
+    const root = onePane();
+    const door = doorOf();
+    const target = paneCardTarget({ root: () => root, door: () => door });
+    await expect(target.play(MAP, "ref", { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: "Nothing in this pane can work on it",
+    });
+  });
+});
+
+describe("the desk plays the chosen face (OB-1b, §4.4)", () => {
+  const LINK: Card = {
+    ...MAP,
+    faces: [
+      { id: "address", type: "link", label: "Address", url: "https://a.example/", title: "A" },
+    ],
+  };
+
+  it("refuses a link where the desk holds no browser pane, in words", async () => {
+    const { desk, spawned } = deskOf();
+    const target = deskCardTarget(desk, { host: {} });
+    expect(target.answer(LINK, { x: 400, y: 300 })).toEqual({
+      ok: false,
+      label: "The desk can't open a page yet",
+    });
+    await expect(target.play(LINK, "address", { x: 400, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: "The desk can't open a page yet",
+    });
+    expect(spawned).toEqual([]);
+  });
+
+  it("says a ref is on the desk already", async () => {
+    const { desk } = deskOf();
+    const target = deskCardTarget(desk, { host: {} });
+    await expect(target.play(MAP, "ref", { x: 400, y: 300 })).resolves.toEqual({
+      ok: true,
+      note: OUTCOME_WORDS.onTheDesk,
+    });
+  });
+
+  it("places the chosen text face as a note, whichever face comes first", async () => {
+    const { desk, spawned } = deskOf();
+    const target = deskCardTarget(desk, { host: {} });
+    await target.play(MAP, "outline", { x: 400, y: 300 });
+    expect(spawned).toEqual([
+      { type: NOTE_TYPE, at: { x: 190, y: 90, w: 220, h: 220, props: { text: "- one\n- two\n" } } },
+    ]);
+  });
+
+  it("offers every face that fits by the destination's model", () => {
+    const { desk } = deskOf();
+    const target = deskCardTarget(desk, { host: {} });
+    expect(target.answer(MAP, { x: 400, y: 300 })).toEqual({
+      ok: true,
+      label: "Let go: 3 ways into The desk",
+    });
   });
 });

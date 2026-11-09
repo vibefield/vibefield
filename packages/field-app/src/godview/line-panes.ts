@@ -25,6 +25,7 @@ export function linePanesOf(
   agents: ReadonlyMap<string, PaneFrameAgent>,
   activePaneId: string | undefined,
   rememberedCwd: (sessionId: string) => string | undefined = () => undefined,
+  runs: ReadonlyMap<string, string> = new Map(),
 ): LinePane[] {
   return panes.map((pane) => {
     const agent = agents.get(pane.session.id);
@@ -34,6 +35,8 @@ export function linePanesOf(
       sessionId: pane.session.id,
       name: agent?.project ?? folderName(cwd, "terminal"),
       runs: agent?.providerLabel ?? "shell",
+      ...(agent === undefined ? {} : { agent: agent.providerId }),
+      ...(runs.has(pane.session.id) ? { run: runs.get(pane.session.id) as string } : {}),
       state: agent === undefined ? null : agent.status,
       active: pane.id === activePaneId,
     };

@@ -390,6 +390,10 @@ import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
 import { ProfileDraftsStore } from "./profile-drafts";
 import { createProjectIdentityStore } from "./project-identity";
+import { DeskObjects } from "./objects/desk-objects";
+import { registerObjectDoors } from "./objects/doors";
+import { type DeskKind, deskKinds, pluginDeskKinds } from "./objects/kinds";
+import { ObjectsStore } from "./objects/store";
 import { atFloor, wholeValueDoor } from "./projection";
 import { KeyJournal } from "./projects/key-journal";
 import { PlaceScanner } from "./projects/place-scanner";
@@ -1438,6 +1442,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     supervisor: rosettad,
     sparkBriefing: (spark, provider) => briefings.prepare(spark, provider),
     runBriefing: (provider) => briefings.forRun(provider),
+    helperRoots: {
+      set: (rootId, pid) => native.request("native.door.roots.set", { rootId, pid }),
+      clear: (rootId) => native.request("native.door.roots.clear", { rootId }),
+    },
     terminals: () => terminalsRef,
     deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
     onProfileSignedIn: async (profileId): Promise<void> => {
@@ -3689,10 +3697,38 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       holds: needs,
       crews,
     };
+    // OB-3, OB-4 — the desk's room: the registry and grants (signed records under LAYOUT.OBJECTS_DIR, kept across a
+    // restart), the intent table the window answers, presence and the agents' undo. Its doors are registered below,
+    // beside the needs-you queue's; the window's token is what they hold to.
+    let pluginKinds: readonly DeskKind[] | undefined;
+    plugins.on("changed", () => {
+      pluginKinds = undefined;
+    });
+    const deskObjects = new DeskObjects({
+      store: new ObjectsStore({
+        dir: join(config.dataDir, ...LAYOUT.OBJECTS_DIR),
+        keyPath: join(config.dataDir, ...LAYOUT.OBJECTS_KEY_FILE),
+        logger: logger.child({ component: "objects" }),
+      }),
+      runState: (runtimeRunId) => {
+        const row = runRow(runtimeRunId);
+        if (row === undefined) return "unknown";
+        return row.continuation?.exited === true ? "ended" : "live";
+      },
+      label: runLabel,
+      agentOf: (runtimeRunId) => String(runRow(runtimeRunId)?.provider ?? "agent"),
+      kinds: () => {
+        pluginKinds ??= pluginDeskKinds(plugins.snapshot().plugins, (id) => plugins.rootPath(id));
+        return deskKinds(pluginKinds);
+      },
+    });
+    deskObjects.boot();
+    agents.onRunEnded((runtimeRunId) => deskObjects.runEnded(runtimeRunId));
     toolPlane = new ToolPlaneService({
       native,
       lanes: laneLink,
       runForTerminal: (terminalSessionId) => agents.runForTerminal(terminalSessionId),
+      runForRoot: (rootId) => agents.runForRoot(rootId),
       personaSets,
       spark: (id) => sparks.get(id),
       verbs: {
@@ -3728,6 +3764,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           index.search({ q, runtime, limit, ...(afterMs !== undefined ? { afterMs } : {}) }),
       },
       talk,
+      desk: { objects: deskObjects },
       you: {
         queue: needs,
         label: runLabel,
@@ -7963,6 +8000,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         { onError: streamFrameFailed("compose.sparks.crews.subscribe") },
       );
       return { snapshot: door.snapshot, dispose: door.dispose };
+    });
+    registerObjectDoors(api, {
+      objects: deskObjects,
+      audit,
+      isWindowToken: (tokenId) => windowTokenIds.has(tokenId),
     });
     api.register("needs.answer", async (ctx, params) => {
       admitSparkActor(ctx, "needs.answer");

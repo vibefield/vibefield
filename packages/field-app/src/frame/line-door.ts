@@ -32,6 +32,10 @@ export interface LinePane {
   readonly name: string;
   /** What runs there: the agent's provider, or "shell". */
   readonly runs: string;
+  /** The catalog's id for the agent there (undefined for a shell): `Destination`'s, and only that. */
+  readonly agent?: string;
+  /** The agent's run, when the deck knows it: the run a card's Live face is handed to (OB-L1). */
+  readonly run?: string;
   /** The agent's state; null for a shell, which has none to say. */
   readonly state: "working" | "idle" | "blocked" | null;
   /** The deck's active pane — the one the person was in. */

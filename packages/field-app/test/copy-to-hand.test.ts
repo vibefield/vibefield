@@ -250,7 +250,7 @@ const seams = () => ({
 });
 
 describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
-  it("deals a lone NOTE as a TEXT card of its writing from its own box, once its words are on the system clipboard — no still taken", async () => {
+  it("deals a lone NOTE as ONE card of its writing from its own box, words first and its picture beside (OB-D2), once its words are on the system clipboard", async () => {
     write(noteE, WRITING);
     ce.ops.setSelection([noteE]);
     calls = [];
@@ -264,7 +264,15 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     expect(cards).toHaveLength(1);
     expect(cards[0]).toMatchObject({
       title: "Ship the desk by Friday.",
-      faces: [{ type: "text", text: WRITING, show: { body: "Then the covers.", bare: false } }],
+      faces: [
+        {
+          type: "text",
+          label: "Its words",
+          text: WRITING,
+          show: { body: "Then the covers.", bare: false },
+        },
+        { type: "image", width: 376, height: 276 },
+      ],
       origin: { view: "canvas", how: "copy" },
       at: 5_000,
     });
@@ -272,7 +280,7 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     const from = arriving.get(cards[0]?.id ?? "");
     expect(from).toEqual({ left: 406, top: 306, width: 188, height: 138 });
     await flush();
-    expect(calls).toEqual([]);
+    expect(calls).toEqual(["capture", "close"]);
     expect(clipboard).toEqual([WRITING]);
     expect(pictures).toEqual([]);
     expect(lastCopy()).toMatchObject({
@@ -280,7 +288,7 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
       words: WRITING,
       wrote: true,
       kept: true,
-      still: null,
+      still: { width: 376, height: 276, bytes: 321 },
       card: { kind: "text", title: "Ship the desk by Friday." },
       refused: null,
     });
@@ -335,13 +343,21 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     });
   });
 
-  it("records the marks as the capture door was HANDED them — and none for a text card, which asks no still", async () => {
+  it("keeps a note whose picture can't be taken a card of its words alone, and asks no second still", async () => {
     write(noteE, WRITING);
     ce.ops.setSelection([noteE]);
+    vi.mocked(desk.handle.capture as unknown as () => Promise<undefined>).mockResolvedValueOnce(
+      undefined,
+    );
     expect(copySelection(desk, "bar", seams())).toBe(true);
     await flush();
-    expect(captured).toEqual([]);
-    expect(lastCopy()?.marks).toBeNull();
+    const { cards } = store.snapshot();
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.faces).toHaveLength(1);
+    expect(cards[0]?.faces[0]).toMatchObject({ type: "text", label: "Its words", text: WRITING });
+  });
+
+  it("records the marks as the capture door was HANDED them", async () => {
     // a picture: the record reads the option off the door's own call, never a constant of the act
     ce.ops.setSelection([padE]);
     expect(copySelection(desk, "bar", seams())).toBe(true);

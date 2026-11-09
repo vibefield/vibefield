@@ -1,11 +1,23 @@
+import { catalogEntry } from "@vibefield/contracts";
 import { GHOSTTEA_PANE_SELECTOR } from "@vibefield/puppeteer-views";
+import {
+  bloomOf,
+  type Destination,
+  doorCanNameRun,
+  dragLabelOf,
+  faceOf,
+  landing,
+} from "../frame/cards/card-landing";
 import { type CardTarget, TARGET_LAYER } from "../frame/cards/card-targets";
-import { nothingToGive, paneTextOf, stillOf } from "../frame/cards/card-text";
-import { OUTCOME_WORDS, TARGET_WORDS } from "../frame/cards/cards-words";
+import { paneTextOf, stillOf } from "../frame/cards/card-text";
+import { OUTCOME_WORDS } from "../frame/cards/cards-words";
+import { handOver } from "../frame/cards/hand-over";
+import { withPictureFile } from "../frame/cards/picture-file";
 import {
   claimingRefusals,
   getGodviewLineDoor,
   inputRefusalNote,
+  type LinePane,
   type LineViewDoor,
 } from "../frame/line-door";
 import { type FieldHost, stillKept } from "../host";
@@ -28,9 +40,24 @@ export interface PaneCardTargetDeps {
   readonly door?: () => LineViewDoor | null;
   /** D6 — where a paste the terminal refused is heard (undefined: the window's terminal pool). */
   readonly inputRefusals?: (hear: (refusal: RoutedInputRefusal) => void) => () => void;
-  /** The shell's still door, asked whether a snapshot's still is kept (undefined: the window's
-   * host). */
-  readonly host?: Pick<FieldHost, "screenshotStillKept">;
+  /** The shell's doors: whether a snapshot's still is kept, and the hand's folder a desk picture is written to (undefined:
+   * the window's host). */
+  readonly host?: Pick<FieldHost, "screenshotStillKept" | "writeHandPicture">;
+}
+
+/** A pane as a place a card lands (§4.4): an agent's by its run, the catalog's label for it and whether the door can
+ * name that run; everything else (a shell, an agent whose run the deck does not know) a plain pane. */
+export function paneDestination(pane: LinePane): Destination {
+  if (pane.agent === undefined || pane.run === undefined) {
+    return { at: "shell-pane", name: pane.name };
+  }
+  return {
+    at: "agent-pane",
+    run: pane.run,
+    handle: pane.name,
+    agentLabel: catalogEntry(pane.agent)?.label ?? pane.runs,
+    can: doorCanNameRun(pane.run, pane.agent),
+  };
 }
 
 /** The pane under a window point: the deck's panes as ghosttea lays them out (their chrome is
@@ -74,27 +101,43 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
         : root.getBoundingClientRect();
     },
     element: deps.root,
+    destination: (at) => {
+      const under = paneUnder(at);
+      return under === null ? null : paneDestination(under.pane);
+    },
     answer: (card, at) => {
       const under = paneUnder(at);
       if (under === null) return null;
       const ring = under.element.getBoundingClientRect();
-      // a card from another app says what it holds only once it is let go (B2)
-      return card.waiting !== true && paneTextOf(card) === null
-        ? { ok: false, label: nothingToGive(card.faces[0]), ring }
-        : { ok: true, label: TARGET_WORDS.pane(under.pane.name), ring };
+      const said = dragLabelOf(bloomOf(card, paneDestination(under.pane)), under.pane.name);
+      return said.ok
+        ? { ok: true, label: said.label, ring }
+        : { ok: false, label: said.label, ring };
     },
-    play: async (card, at) => {
+    play: async (card, faceId, at) => {
       const door = doorOf();
       const under = paneUnder(at);
       if (door === null || under === null) return { ok: false, note: OUTCOME_WORDS.paneGone };
       const { pane } = under;
-      const text = paneTextOf(card);
-      if (text === null) return { ok: false, note: nothingToGive(card.faces[0]) };
+      const destination = paneDestination(pane);
+      const chosen = faceOf(card, faceId);
+      const verdict = landing(chosen, destination);
+      if (!verdict.lands) return { ok: false, note: verdict.reason };
+      // a desk picture becomes a file at the play (OB-D10 A)
+      const written = await withPictureFile(chosen, deps.host);
+      if (written === null) return { ok: false, note: OUTCOME_WORDS.pictureNotWritten };
+      const text = paneTextOf(card, written);
+      if (text === null) return { ok: false, note: OUTCOME_WORDS.pictureNotWritten };
       // a snapshot's path names its still only while main keeps it (`stillOf`): a pane is never
       // handed a path to nothing
-      const still = stillOf(card);
+      const still = stillOf(card, written);
       if (still !== null && !(await stillKept(still, deps.host))) {
         return { ok: false, note: OUTCOME_WORDS.pasteGone };
+      }
+      // playing Live is the grant (OB-L1): fieldd is asked first, and the words go in only if handed
+      if (written.type === "ref" && destination.at === "agent-pane") {
+        const handed = await handOver(written.ref, destination.run);
+        if (!handed.handed) return { ok: false, note: handed.reason, stand: "read" };
       }
       if (!(await door.whenInputOpen(pane.paneId, PANE_INPUT_WAIT_MS))) {
         return { ok: false, note: OUTCOME_WORDS.notTaking(pane.name) };

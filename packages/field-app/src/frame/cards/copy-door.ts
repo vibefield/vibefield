@@ -49,8 +49,9 @@ export type ClipboardContent =
 
 /** A copy: what the clipboard is given, the card the hand gets, and the box it leaves from. */
 export type CopyRequest = ClipboardContent & {
-  /** what the hand gets, dealt through `dealCard` */
-  readonly card: Card;
+  /** what the hand gets, dealt through `dealCard`; a Promise when a face of it is still being made (a note's picture,
+   * taken at the press): the clipboard is written first either way (HN-5), and nothing is dealt until it took */
+  readonly card: Card | Promise<Card>;
   /** the box it leaves from (window px); null rises into its place */
   readonly from: DealFrom | null;
 };
@@ -145,15 +146,16 @@ export async function writeClipboard(
  * what the door was told. */
 export async function copyToHand(request: CopyRequest, deps: CopyDeps = {}): Promise<CopyOutcome> {
   const written = await writeClipboard(request, deps);
+  const card = await request.card;
   if (!written.ok) {
     log().warn("renderer.cards.copy_refused", "A copy did not reach the clipboard; no card", {
-      kind: cardType(request.card),
+      kind: cardType(card),
       reason: written.reason,
       error: written.error,
     });
     return written;
   }
-  dealCard(request.card, request.from, deps.store ?? cardsStore);
+  dealCard(card, request.from, deps.store ?? cardsStore);
   return written;
 }
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SCREENSHOT_STILL } from "./registries";
 
 // SNAP-D2 — the native screenshot helper's one-line stdout protocol, and the
 // shell's answer to a caller. Wire-only: nothing here names Electron, Node, a
@@ -298,4 +299,15 @@ export type ScreenshotStillBytesRequest = z.infer<typeof ScreenshotStillBytesReq
  * and a path the ring has let go names nothing. The answer is a boolean; no
  * bytes cross. */
 export const ScreenshotStillKeptRequest = z.object({ name: ScreenshotStillName }).passthrough();
+
+/** OB-D10 A — a card's picture made a file at the play: the PNG's bytes, by the renderer↔main IPC door (EL2 keeps bytes off
+ * the daemons' planes; the still bytes door's road). Bounded as a still is. */
+export const HandPictureWriteRequest = z
+  .object({
+    png: z
+      .instanceof(Uint8Array)
+      .refine((bytes) => bytes.byteLength <= SCREENSHOT_STILL.MAX_BYTES, "picture too large"),
+  })
+  .passthrough();
+export type HandPictureWriteRequest = z.infer<typeof HandPictureWriteRequest>;
 export type ScreenshotStillKeptRequest = z.infer<typeof ScreenshotStillKeptRequest>;

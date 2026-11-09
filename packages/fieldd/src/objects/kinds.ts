@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  DESK_KINDS,
   type DeskKind as BuiltInKind,
+  DESK_KINDS,
   OBJECT_LIMITS,
   type ObjectConcurrency,
   type ObjectContribution,

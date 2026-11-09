@@ -539,7 +539,7 @@ function judgePuppeteer(rows, facts) {
             refused
               ? `the catalog claims \`personas\` for \`${row.id}\`; the pin's \`profiles\` port declares support.supported: false (puppeteer refuses to create a profile for it)`
               : c === "spark"
-                ? `the catalog claims \`spark\` for \`${row.id}\`; the pin's \`descriptor.briefing\` does not declare mcpServers, allowTools and instructions with mcpServerProcess \`terminal\` (a process the door can name)`
+                ? `the catalog claims \`spark\` for \`${row.id}\`; the pin's \`descriptor.briefing\` does not declare mcpServers, allowTools and instructions with mcpServerProcess \`terminal\` or \`run-helper\` (a process the door can name)`
                 : `the catalog claims \`${c}\` for \`${row.id}\`; the pin implements no \`${PORT_FOR[c]}\``,
           ),
         );
@@ -741,9 +741,10 @@ function tilde(path, home, separator = sep) {
  * elsewhere apart from a session, and those run as typed.
  * `spark` (CP-5a) is the descriptor's briefing declaration WHOLE on a terminal:
  * the facts fieldd's hatch gate reads (`sparkFactsRefusal`, agent-briefing.ts),
- * clause for clause — all three fields true, and `mcpServerProcess: "terminal"`,
- * the one topology the door can name today. A helper's process is not spark
- * until CP-5c widens this to a host-spawned helper, one per run. */
+ * clause for clause — all three fields true, and `mcpServerProcess` `terminal`
+ * or `run-helper`, the topologies the door can name (OB-3d: a helper of the
+ * run's own, named to the host before anything can start a server). A shared
+ * helper's process is not spark. */
 function portsOf(provider) {
   const profilesPort = provider.profiles !== undefined && provider.profiles !== null;
   const briefing = provider.descriptor?.briefing;
@@ -762,7 +763,8 @@ function portsOf(provider) {
         briefing?.mcpServers === true &&
         briefing.allowTools === true &&
         briefing.instructions === true &&
-        briefing.mcpServerProcess === "terminal",
+        // compared to the strings: the pin's enum need not have `run-helper` yet (OB-3d)
+        (briefing.mcpServerProcess === "terminal" || briefing.mcpServerProcess === "run-helper"),
     },
     profilesPort,
   };
@@ -2010,9 +2012,9 @@ function selfTestVerdicts(check) {
   // half is the briefing it declares (`descriptor.briefing`: all three fields, and a process the door can name,
   // `mcpServerProcess: "terminal"`), read here through the port reader itself so the shapes are the pin's own; the
   // table's half is the status (claimed on a supported row, after a live spark is witnessed here; kept by a
-  // deprecated one, whose sparks still wake, AC-D3). Four rotten shapes: no fields, a helper's process (until CP-5c
-  // widens the rule to a host-spawned helper, one per run), a supported row leaving it unclaimed, a preview row
-  // claiming it.
+  // deprecated one, whose sparks still wake, AC-D3). Four rotten shapes: no fields, a shared helper's process (a helper
+  // of the run's own, `run-helper`, is a process the door can name since OB-3d), a supported row leaving it unclaimed,
+  // a preview row claiming it.
   const briefed = (id, briefing) => ({
     ...portsOf({
       descriptor: { id, label: id, ...(briefing === undefined ? {} : { briefing }) },

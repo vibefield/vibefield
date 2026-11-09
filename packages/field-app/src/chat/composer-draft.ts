@@ -2,7 +2,9 @@ import {
   type AgentModelSelection,
   COMPOSE_SAY_CHIPS_MAX,
   type ComposeSayChip,
+  type ObjectRef,
 } from "@vibefield/contracts";
+import { faceOf } from "../frame/cards/card-landing";
 import { stillOf } from "../frame/cards/card-text";
 import type { Card } from "../frame/cards/cards-model";
 import { cardName } from "../frame/cards/cards-words";
@@ -56,6 +58,8 @@ export interface CardChip {
   readonly kind: "card";
   readonly card: Card;
   readonly text: string;
+  /** the face played (`card-landing.ts`, §4.3), when it is not the card's first; absent, its first */
+  readonly face?: string;
 }
 
 export type DraftChip = AgentChip | SessionChip | CardChip;
@@ -195,8 +199,19 @@ export function draftText(parts: readonly DraftPart[]): string {
 export function draftStills(parts: readonly DraftPart[]): string[] {
   return parts.flatMap((part) => {
     if (part.kind !== "chip" || part.chip.kind !== "card") return [];
-    const still = stillOf(part.chip.card);
+    const { card, face } = part.chip;
+    const still = stillOf(card, face === undefined ? card.faces[0] : faceOf(card, face));
     return still === null ? [] : [still];
+  });
+}
+
+/** The desk objects a draft's Live chips name: sending the draft is the person's grant of each (§4.3, OB-L1). */
+export function draftRefs(parts: readonly DraftPart[]): readonly ObjectRef[] {
+  return parts.flatMap((part) => {
+    if (part.kind !== "chip" || part.chip.kind !== "card") return [];
+    const { card, face } = part.chip;
+    const chosen = face === undefined ? card.faces[0] : faceOf(card, face);
+    return chosen.type === "ref" ? [chosen.ref, ...(chosen.more ?? [])] : [];
   });
 }
 

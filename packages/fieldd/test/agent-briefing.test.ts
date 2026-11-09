@@ -7,6 +7,7 @@ import {
   type NativeDoorInfoResult,
   type SparkRecord,
 } from "@vibefield/contracts";
+import { SERVED_TOOLS } from "@vibefield/contracts/tools";
 import type { AgentBriefingCapabilities } from "@vibefield/puppeteer-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentBriefings, sparkFactsRefusal, sparkHatchRefusal } from "../src/agent-briefing";
@@ -23,6 +24,11 @@ const supported: AgentBriefingCapabilities = {
   instructions: true,
   mcpServerProcess: "terminal",
 };
+
+/** A plain run's allowance: the served `agent` rows that only read, as the catalog says them. */
+const ALLOWANCE = SERVED_TOOLS.filter(
+  (t) => t.audience === "agent" && t.annotations.readOnlyHint,
+).map((t) => `vibefield/${t.name}`);
 
 /** OB-3d — a helper puppeteer names to the host. The installed puppeteer-core's enum predates it, so the test casts. */
 const RUN_HELPER = "run-helper" as unknown as AgentBriefingCapabilities["mcpServerProcess"];
@@ -162,25 +168,32 @@ describe("MT-0: a plain run's briefing, which degrades and never refuses", () =>
     const h = harness();
     expect(await h.service.forRun("scripted")).toEqual({
       mcpServers: { vibefield: { command: h.info.command, args: [...h.info.args] } },
-      allowTools: ["vibefield/history_search", "vibefield/history_read", "vibefield/projects_list"],
+      allowTools: ALLOWANCE,
     });
+    expect(ALLOWANCE).toContain("vibefield/history_search");
+    expect(ALLOWANCE).not.toContain("vibefield/notify");
   });
 
   it("needs no instructions capability: an agent that takes servers and allowances is briefed", async () => {
     const h = harness({ ...supported, instructions: false });
-    expect((await h.service.forRun("scripted")).allowTools).toHaveLength(3);
+    expect((await h.service.forRun("scripted")).allowTools).toEqual(ALLOWANCE);
   });
 
   it("names a run's helper process as it names a pane's (OB-3d)", async () => {
     const h = harness({ ...supported, mcpServerProcess: RUN_HELPER });
     expect(await h.service.forRun("scripted")).toEqual({
       mcpServers: { vibefield: { command: h.info.command, args: [...h.info.args] } },
-      allowTools: ["vibefield/history_search", "vibefield/history_read", "vibefield/projects_list"],
+      allowTools: ALLOWANCE,
     });
   });
 
   it("gives a harness with no allowance field the door and no allowance, so it asks before each tool (OB-3d, Grok)", async () => {
-    const h = harness({ mcpServers: true, allowTools: false, mcpServerProcess: RUN_HELPER });
+    const h = harness({
+      mcpServers: true,
+      allowTools: false,
+      instructions: false,
+      mcpServerProcess: RUN_HELPER,
+    });
     const briefing = await h.service.forRun("scripted");
     expect(briefing.mcpServers?.vibefield).toEqual({
       command: h.info.command,
@@ -263,7 +276,7 @@ describe("CP-5a: the catalog's spark claim, read before the facts", () => {
 
   it("leaves a plain run's briefing to the facts alone (MT-D9): an unclaimed agent's run is still briefed", async () => {
     const h = harness(supported, false, unclaimed);
-    expect((await h.service.forRun("scripted")).allowTools).toHaveLength(3);
+    expect((await h.service.forRun("scripted")).allowTools).toEqual(ALLOWANCE);
   });
 
   it("exports the one predicate: the hatch's verdict is the claim, then the facts", () => {

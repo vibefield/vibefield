@@ -1,19 +1,27 @@
 import { type CanvasEngine, type Entity, PrefabId, selectedEntities } from "@vibecook/ice";
 import type { DeskLayerHandle } from "@vibecook/ice/desk";
-import { type CardOrigin, pictureCardOf, textCardOf } from "../../../frame/cards/cards-model";
+import {
+  blobUrlsOf,
+  type Card,
+  type CardOrigin,
+  type ImageFace,
+  pictureCardOf,
+  pictureFaceOf,
+  textCardOf,
+} from "../../../frame/cards/cards-model";
 import { type CardStore, cardsStore, type DealFrom } from "../../../frame/cards/cards-store";
 import { COPY_DOOR_WORDS, COPY_WORDS } from "../../../frame/cards/cards-words";
 import { type CopyDeps, type CopyHost, copyToHand } from "../../../frame/cards/copy-door";
 import { sayOnLine } from "../../../frame/line-door";
 import { heldNow, type MountedDesk, plainWords } from "../desk-door";
 import { encodePng, type PngEncoder } from "../desk-stills";
-import { type CopiedObject, copiedWords, copyName, noteWords } from "./copy-face";
+import { type CopiedObject, copiedWords, copyName, kindFacesOf, noteWords } from "./copy-face";
 import { beginCopyRecord, type CopyFrom, noteCopy, type ViewBox } from "./copy-record";
 
 // THE DESK'S COPY — THE ACT (HN-D3, HN-D2; DESIGN.md §8 "Make a card"; R15, DK-D26; plan addendum (50); ICE I23,
 // I40). Pressed on the bar, in the bar grown into its menu, on the tools in hand, or by ⌘C over the desk, the selection —
 // or the object in hand — is dealt into the hand as ONE card, flying from the objects' own box, through the one copy
-// door (`copyToHand`, HN-5): a lone NOTE is a TEXT card of its writing; anything else a PICTURE card titled by its name
+// door (`copyToHand`, HN-5): a lone NOTE is a TEXT card of its writing with its Picture beside (OB-D2); anything else a PICTURE card titled by its name
 // (copy-face.ts), its still taken through the desk's capture door of the OBJECTS — drawn WITHOUT the selection's marks
 // (`capture({ rect, marks: false })`, ICE I40, desk.6). The selection is never touched: no clear, no restore, no blink a
 // peer could see (DK-17b):
@@ -199,36 +207,13 @@ export function copySelection(desk: MountedDesk, from: CopyFrom, seams: CopySeam
     sayOnLine(refused);
   };
 
-  // a lone note: its writing, a text card once the clipboard holds its words
-  const writing = noteWords(objects);
-  if (writing !== null) {
-    const card = textCardOf(writing, {
-      id: store.nextId("text"),
-      origin: cardOrigin,
-      at: store.now(),
-    });
-    void copyToHand({ card, from: fromBox, text: writing }, deps).then((copied) => {
-      if (!copied.ok) {
-        refuse(copied.reason);
-        return;
-      }
-      noteCopy(record.seq, {
-        wrote: true,
-        kept: sameEntities(selectedEntities(engine.world), before),
-        card: { id: card.id, kind: "text", title: card.title },
-        at: { dealt: performance.now() },
-      });
-    });
-    return true;
-  }
-
-  // anything else: its picture, taken behind the press
-  void (async () => {
+  // THE PICTURE, TAKEN BEHIND THE PRESS (the object must be on view for it; DK-17b, never a blink): a note's Picture face,
+  // and anything else's whole card. `kept` is what the record OBSERVES of the selection across the capture — the act
+  // never writes it.
+  let kept = sameEntities(selectedEntities(engine.world), before);
+  let refused: string = COPY_WORDS.offScreen;
+  const taken: Promise<DeskPicture | null> = (async () => {
     let picture: DeskPicture | null = null;
-    let refused: string = COPY_WORDS.offScreen;
-    // the record OBSERVES the selection standing as it stood at the press — when the still is asked and after it
-    // answered — never the act's word (the act writes no selection at all)
-    let kept = sameEntities(selectedEntities(engine.world), before);
     try {
       if (rect !== null) {
         refused = COPY_WORDS.notDrawn;
@@ -248,24 +233,63 @@ export function copySelection(desk: MountedDesk, from: CopyFrom, seams: CopySeam
       kept = kept && sameEntities(selectedEntities(engine.world), before);
       noteCopy(record.seq, { kept, at: { captured: performance.now() } });
     }
+    if (picture !== null) {
+      noteCopy(record.seq, {
+        still: { width: picture.width, height: picture.height, bytes: picture.png.size },
+      });
+    }
+    return picture;
+  })();
+  const pictureFields = (picture: DeskPicture): Omit<ImageFace, "id" | "type" | "label"> => ({
+    width: picture.width,
+    height: picture.height,
+    src: URL.createObjectURL(picture.png),
+    bytes: picture.png,
+  });
+
+  // a lone note: its writing is the card's first face and is what the clipboard holds (HN-5, OB-D13); its picture follows
+  // it when one could be taken, and a note off the view is still the note
+  const writing = noteWords(objects);
+  if (writing !== null) {
+    const stub = { id: store.nextId("text"), origin: cardOrigin, at: store.now() };
+    const card: Promise<Card> = taken.then((picture) => {
+      const faces = kindFacesOf(
+        objects,
+        picture === null ? null : pictureFaceOf(pictureFields(picture)),
+        stub,
+      );
+      const [first, ...rest] = faces;
+      const note = textCardOf(writing, stub);
+      return first === undefined ? note : { ...note, faces: [first, ...rest] };
+    });
+    void copyToHand({ card, from: fromBox, text: writing }, deps).then(async (copied) => {
+      const dealt = await card;
+      if (!copied.ok) {
+        for (const url of blobUrlsOf(dealt)) URL.revokeObjectURL(url);
+        refuse(copied.reason);
+        return;
+      }
+      noteCopy(record.seq, {
+        wrote: true,
+        card: { id: dealt.id, kind: "text", title: dealt.title },
+        at: { dealt: performance.now() },
+      });
+    });
+    return true;
+  }
+
+  // anything else: its picture, taken behind the press
+  void (async () => {
+    const picture = await taken;
     if (picture === null) {
       noteCopy(record.seq, { refused });
       sayOnLine(refused);
       return;
     }
-    noteCopy(record.seq, {
-      still: { width: picture.width, height: picture.height, bytes: picture.png.size },
-    });
-    const src = URL.createObjectURL(picture.png);
-    // no file on disk to paste, nor words of its own: a pane says a picture with no file can't be pasted yet
+    const fields = pictureFields(picture);
+    // no file on disk to paste yet, nor words of its own: it becomes a file at the play (OB-D10 A)
     const card = pictureCardOf(
-      {
-        title: copyName(objects),
-        width: picture.width,
-        height: picture.height,
-        src,
-        bytes: picture.png,
-      },
+      { title: copyName(objects), ...fields },
       { id: store.nextId("image"), origin: cardOrigin, at: store.now() },
     );
     // its PNG on the system clipboard first, the words the objects keep beside it in the one write, then the card
@@ -274,7 +298,7 @@ export function copySelection(desk: MountedDesk, from: CopyFrom, seams: CopySeam
       deps,
     );
     if (!copied.ok) {
-      URL.revokeObjectURL(src); // never dealt: its face is shown nowhere
+      URL.revokeObjectURL(fields.src); // never dealt: its face is shown nowhere
       refuse(copied.reason);
       return;
     }

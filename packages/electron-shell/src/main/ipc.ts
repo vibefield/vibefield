@@ -43,6 +43,7 @@ import {
   createClipboardImageDoor,
 } from "./clipboard-door";
 import type { FielddEnsure } from "./fieldd-handle-coordinator";
+import { createHandPictureDoor } from "./hand-pictures";
 import { shellIdentity } from "./login-shell";
 import { createScreenshotDoor } from "./screenshot-door";
 import { createScreenshotPreviewDoor } from "./screenshot-preview";
@@ -558,6 +559,24 @@ export function registerScreenshotStillKept(
   ipcMain.handle(IPC_CHANNELS.screenshotStillKept, (event, raw: unknown) =>
     door(event.sender, raw),
   );
+}
+
+/** OB-D10 A — a card's picture written to the hand's folder at the play (policy in hand-pictures.ts). */
+export function registerHandPicture(
+  registry: WindowRegistry,
+  write: (png: Uint8Array) => Promise<string>,
+  logger?: Logger,
+): void {
+  const door = createHandPictureDoor({
+    owns: (sender: WebContents) => registry.owns(sender),
+    write,
+    onRefused: (reason) => {
+      logger?.warn("desktop.ipc.hand_picture_refused", "A hand picture was not written", {
+        reason,
+      });
+    },
+  });
+  ipcMain.handle(IPC_CHANNELS.handPictureWrite, (event, raw: unknown) => door(event.sender, raw));
 }
 
 /** Fire-and-forget feedback has no arguments, return channel, or native handle. */

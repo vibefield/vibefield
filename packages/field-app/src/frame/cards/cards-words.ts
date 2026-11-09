@@ -105,10 +105,6 @@ export const TARGET_WORDS = {
   prompt: (name: string) => `Add to your message to ${name}`,
   deskNote: "Place as a note",
   deskPrint: "Place as a print",
-  deskRefuses: (card: Card) =>
-    card.faces[0].type === "session"
-      ? "The desk can't hold an agent yet"
-      : "The desk can't hold a file yet",
   hand: "Into your hand",
   opening: (view: FrameView) => `Opening ${viewName(view)}`,
   /** HN-L5: a picture plays into a pane as its file's path, as a Finder drop
@@ -129,6 +125,7 @@ export const OUTCOME_WORDS = {
   added: (name: string) => `Added to your message to ${name}`,
   placedNote: "Placed as a note",
   placedPrint: "Placed as a print",
+  placedPage: "Opened a browser pane at it",
   already: "Already in your hand",
   /** the pane's input did not open in time (a spring-loaded drop), or closed */
   notTaking: (name: string) => `Not pasted — ${name}'s pane is not taking input`,
@@ -140,6 +137,10 @@ export const OUTCOME_WORDS = {
   pasteGone: "Not pasted — that snapshot is no longer kept",
   /** the desk refused the object (the reason is in the log) */
   notPlaced: "Not placed — the desk could not take it",
+  /** main could not write a desk picture to the hand's folder (OB-D10 A) */
+  pictureNotWritten: "Not pasted — the picture could not be written to a file",
+  /** a ref played on the desk: where it already is (§4.4) */
+  onTheDesk: "It's on the desk",
 } as const;
 
 /** A drag from another app is a card before the system says what it holds

@@ -85,11 +85,13 @@ import {
   type FielddRecoveryState,
 } from "./fieldd-handle-coordinator";
 import { FielddLink } from "./fieldd-link";
+import { HandPictures } from "./hand-pictures";
 import {
   registerBrowserDataClear,
   registerClipboardRead,
   registerClipboardWriteImage,
   registerDeckSet,
+  registerHandPicture,
   registerRendererReplace,
   registerScreenshotCapture,
   registerScreenshotPreview,
@@ -2107,6 +2109,14 @@ async function main(
     checkStill,
     logger.child({ component: "ipc.screenshot" }),
   );
+  // OB-D10 A — a desk picture becomes a file at the play, in a private temp folder of this run, gone when the app quits
+  const handPictures = new HandPictures();
+  registerHandPicture(
+    registry,
+    (png) => handPictures.write(png),
+    logger.child({ component: "ipc.screenshot" }),
+  );
+  app.once("will-quit", () => handPictures.disposeSync());
   // A global capture can finish with every product window closed. Keep the
   // latest result for the next field, without revealing it before the freeze.
   let pendingScreenshotResult: ScreenshotCaptureResult | null = null;

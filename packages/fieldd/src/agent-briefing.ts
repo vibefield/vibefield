@@ -28,11 +28,13 @@ const RUN_ALLOWANCE: readonly string[] = SERVED_TOOLS.filter(
  * - A spark's (prepare): the door, the whole server's allowance and the spark's brief. It refuses, before anything is
  *   written or ended, when it cannot be delivered (CP-1d), and first when the catalog does not let the agent be a
  *   spark (CP-5a: `spark-not-offered`, before any fact is read).
- * - A plain run's (forRun): the door and the allowance of its read-only `agent` rows, with no instructions; the
- *   server's own paragraph says the rest (the MT lead's ruling 7, provisional on the history room's sentinel eval). It
- *   DEGRADES: an agent that cannot take it, or a door that does not answer, means the run starts with no briefing,
- *   never a refused spawn. Its check comes first, because the runtime refuses the whole launch
- *   (UNSUPPORTED_LAUNCH_FIELD) when a field the agent does not declare is present. It reads no catalog claim. */
+ * - A plain run's (forRun): the door and, for an agent that declares an allowance, the allowance of its read-only
+ *   `agent` rows, with no instructions; the server's own paragraph says the rest (the MT lead's ruling 7, provisional on
+ *   the history room's sentinel eval). It DEGRADES: an agent that cannot take the door, or a door that does not answer,
+ *   means the run starts with no briefing, never a refused spawn. Its check comes first, because the runtime refuses the
+ *   whole launch (UNSUPPORTED_LAUNCH_FIELD) when a field the agent does not declare is present. It reads no catalog
+ *   claim. *OB-3d:* it asks only what it needs: an agent with no `allowTools` (Grok) gets the door and no allowance, and
+ *   asks before each tool. */
 export class AgentBriefings {
   constructor(
     private readonly opts: {
@@ -89,7 +91,8 @@ export class AgentBriefings {
 
   /** A plain run's briefing, or nothing. Never throws: a plain launch is never refused for the door's sake. */
   async forRun(provider: string): Promise<AgentRunBriefing> {
-    if (sparkFactsRefusal(this.opts.capabilities(provider), false) !== undefined) return {};
+    const capability = this.opts.capabilities(provider);
+    if (!capability?.mcpServers || !doorCanName(capability.mcpServerProcess)) return {};
     let door: NativeDoorInfoResult;
     try {
       door = await this.opts.door();
@@ -98,7 +101,7 @@ export class AgentBriefings {
     }
     const briefing = AgentRunBriefingSchema.safeParse({
       ...doorOf(door),
-      allowTools: [...RUN_ALLOWANCE],
+      ...(capability.allowTools ? { allowTools: [...RUN_ALLOWANCE] } : {}),
     });
     return briefing.success ? briefing.data : {};
   }
@@ -143,23 +146,24 @@ function sparkClaimed(
   return catalog.isVisible(provider) && catalog.entry(provider)?.offers.spark === true;
 }
 
-/** The facts a spark's briefing needs (CP-1d): the fields it carries, and a process the door can name. A plain run's
- * (`instructions` false) needs no instructions. fieldd's one copy of the rule; R23 reads the same clauses from the pin
- * (`portsOf`'s spark). */
+/** The facts a spark's briefing needs (CP-1d): the fields it carries, and a process the door can name. fieldd's one copy
+ * of the rule; R23 reads the same clauses from the pin (`portsOf`'s spark). */
 export function sparkFactsRefusal(
   capability: AgentBriefingCapabilities | undefined,
-  instructions = true,
 ): SparkRefusal | undefined {
-  if (
-    !capability?.mcpServers ||
-    !capability.allowTools ||
-    (instructions && !capability.instructions)
-  )
+  if (!capability?.mcpServers || !capability.allowTools || !capability.instructions)
     return "spark-briefing-unsupported";
-  // The door proves the caller by a pane's PID and birth time. A helper or external agent is outside that
-  // ancestry: declaring a server is not evidence that its process belongs to this run. No vendor branches.
-  if (capability.mcpServerProcess !== "terminal") return "spark-door-identity-unsupported";
+  // The door proves the caller by kernel ancestry. A shared helper or external agent is outside it: declaring a server
+  // is not evidence that its process belongs to this run. No vendor branches.
+  if (!doorCanName(capability.mcpServerProcess)) return "spark-door-identity-unsupported";
   return undefined;
+}
+
+/** Whether the door can name the process that runs an agent's MCP servers: a pane's own, or a helper of the run's own
+ * that puppeteer names to the host before anything can start a server (OB-3d). Compared as a string: the installed
+ * puppeteer-core's enum does not have `run-helper` yet, and against that union the comparison does not compile. */
+function doorCanName(process: string | undefined): boolean {
+  return process === "terminal" || process === "run-helper";
 }
 
 /** CP-5a — the hatch's verdict on an agent, a reason or none: the catalog's claim first (`spark-not-offered`, and then
