@@ -16,7 +16,7 @@ Every run the door can name is an agent (MT-D3), and the tool plane serves it th
 the projects list at MT-0; `draft/thinking-tool-plane.md`, ruled 2026-10-30). `AgentRuntimeService` asks for a plain
 run's briefing at the same four births (`briefingFor`, with no spark). `AgentBriefings.forRun` answers
 `mcpServers.vibefield` (the same `native.door.info` bridge) and `allowTools` naming the run's read-only `agent` rows
-exactly (`vibefield/history_search`, `vibefield/history_read`, `vibefield/projects_list`), with no `instructions`: the
+exactly (`vibefield/history_search`, `vibefield/history_read`, `vibefield/projects_list`, and the desk's read-only rows `vibefield/canvas_kinds`, `vibefield/canvas_list`, `vibefield/object_open` and `vibefield/object_read`, OB-3), with no `instructions`: the
 server's own `instructions` say which rooms the caller holds (provisional, until the history room's eval shows the
 harness puts a server's instructions in front of the model). It degrades rather than refuses: an agent that does not
 declare `mcpServers` and `allowTools`, a process topology other than `terminal`, or a door that does not answer means
