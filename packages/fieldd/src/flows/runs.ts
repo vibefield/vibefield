@@ -531,7 +531,10 @@ interface Closing {
  * kept-`end` road reads no agents and matches nothing: it hands endSteps an empty `agentOf` and an
  * empty `refused`. Never a handed session: `ofRun` reads by origin.
  * *Words (2026-11-07; ruled 2026-11-07, orders §K): it named every road, and it covers these two; the
- * kept-`end` road's gap is the fold 3 skeptic's LOW #1 (#finishStop's doc).* */
+ * kept-`end` road's gap is the fold 3 skeptic's LOW #1 (#finishStop's doc).*
+ * *Corrected 2026-11-09 (the fold's P13; the skeptic's #11, LOW): "reads no agents and matches nothing" is the one-life
+ * Stop's (BB6's) alone. At the boot that road reads the run's agents once (#settleKept, `#agentsOf`, Q2 (c)(ii)) and hands
+ * endSteps every live one as `refused`, with its `agentOf`, so a step whose agent works on stays open.* */
 interface EndAgents {
   readonly agents: readonly string[];
   readonly agentOf: ReadonlyMap<number, string>;
@@ -1371,8 +1374,10 @@ export class FlowRuns {
 
   /** Slice 13 (Q12 (b), Q14 (b)) — the Stop of a run no LiveRun drives, read from its journal: a fresh FlowRuns' (the
    * boot's half of D4; slice 14 hands each `stopping` run here), and in one life a run whose end the disk refused (BB6).
-   * - A journal that does not read `kept` is slice 14's forged road: until then it is answered as its record stands,
-   *   and said in fieldd's log.
+   * - A journal that does not read `kept` is answered as its record stands, and said in fieldd's log; one read `lost`
+   *   raises its item first (#forged, Q12 (a)).
+   *   *Corrected 2026-11-09 (the fold's P13; the skeptic's #11, LOW): it said "is slice 14's forged road: until then it is
+   *   answered as its record stands". Slice 14 built that road.*
    * - A kept `end` line: the record alone takes its state, `ended` and `host` from it (D4's reason for the record), its
    *   open steps ended, every one its journal does not answer, a refused agent's step among them
    *   (the `end` names no refusal), and `calls` from the journal; no second `end`, nothing ended,
@@ -2410,8 +2415,9 @@ export class FlowRuns {
     });
   }
 
-  /** Q3 (b), Q8 — THE ONE RAISE ROAD: a run held on you, for every kind of hold (a gate, a step's second miss; a lost
-   * step is slice 14's). In order:
+  /** Q3 (b), Q8 — THE ONE RAISE ROAD: a run held on you, for every kind of hold (a gate, a step's second miss, a lost
+   * step: `#lost`). *Corrected 2026-11-09 (the fold's P13; the skeptic's #11, LOW): it said "a lost step is slice 14's";
+   * slice 14 built it.* In order:
    * 1. its item, raised by the needs queue (`flowItem`), named from the run's head as its LiveRun keeps it (MED-1), so
    *    nothing is read before it. The queue answers whether this raise MINTED it: a call already held, made again at a
    *    wake, is re-bound to its item, never minted again (D2, Q5);

@@ -10454,7 +10454,12 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     // ── the pins: green at red-a, each with its mutation ──
 
     it("R13e `in:` (a pin; D's Q6 CC2, D867): a journal call line for a step handed your session by `in:`, with no record entry, re-hands it from its args at the wake", async () => {
-      // the pin's mutation: `#entered` reading the record's `handed` alone (not `handedOf(args)`), so the step spawns
+      // What the row bites: the re-made call's args reaching the one start road (m02 drops them: the step spawns, and is
+      // handed nothing).
+      // *Corrected 2026-11-09 (the fold's P13; m01 survived at 852b04096, no row): it said the pin's mutation was
+      // `#entered` reading the record's `handed` alone, not `handedOf(args)`, "so the step spawns". `#entered` reads that
+      // only for `waits`, and the hand is `startStep`'s from `handedOf(args)`, so that mutation bites only with the
+      // run's slots full (LIVE_STEPS_MAX); this row leaves them open.*
       const SEQ_IN = [
         'export const meta = { name: "Seq in" };',
         "export default async function () {",

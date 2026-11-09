@@ -613,7 +613,9 @@ export class FlowRecords {
   }
 
   /** CP-4a2b slice 14 (Q19, C15; §G 5) — whether a newer VibeField keeps this run's record: the record's own read alone,
-   * never its journal's, so an act's check sets nothing aside and reads no 32 MiB. */
+   * never its journal's, so an act's check sets no journal aside and reads no 32 MiB.
+   * *Corrected 2026-11-09 (the fold's P13; the skeptic's #11, LOW): it said "sets nothing aside". `#readRecord` sets a
+   * forged, unparseable or mis-signed record aside on this read as on every other (:671, :680, :685 at 852b04096).* */
   recordIsNewer(run: string): boolean {
     if (!FlowRunId.safeParse(run).success) return false;
     return this.#readRecord(run).kind === "newer";
