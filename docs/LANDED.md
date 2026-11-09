@@ -44925,3 +44925,107 @@ at 21:54Z: the step's name rides the fix, and the falsified prose is corrected h
 **Owed.**
 - The first beta built through the fix: `v0.9.0-beta.1`, cut on a commit that carries `f93650d1e`.
 - `build-wp12-updater.md` §2's D6 row, in `draft/`, owes this amendment at its source.
+
+## SP-7b's 7b-2b — the phone can read a session from rosettad directly: rosetta's Swift client on the grant, fieldd's projection in Swift held by the pairs, four roads back to the door; built and dark until the home hands the reader its plane (track SP; the kit and `scripts/check-ios-fixtures.mjs`; one pin-class file, `Package.swift`'s test-only product row)
+(2026-11-09; four commits, fd's (vibe-field-7d), in `/Volumes/SamsungRed/lanes/item190`, on main `156e5e21f`:
+`a2a13edc8` (red) → `706635871` → `65afe951f` (red) → `870edfa9e`, branch `sp7b-2b-156e5e2`.
+They were cut on `0b98488bf` as `b0e5f7251` → `20f711452` → `3036542ca` → `f2e298ff6` (branch `sp7b-2b`; packet
+`lanes/sp7/b2b-2/`, SUMS `f8bbc16a`) and replayed with their messages unchanged: each commit's tree equals
+`git merge-tree --write-tree 156e5e21f <the original>`. M253 is `870edfa9e`, landed at 2026-11-09T07:19:29Z
+by the fixer, a fast-forward of main, on VF-PM's GO.)
+- VF-PM placed the whole slice at 02:53Z and ruled: the run at the tip, the land through `f2e298ff6`, and the fifth
+  commit, THE INJECTION (`9f89cd68b`, `HomeScreen` hands the reader the plane), HELD for W1.
+- 21 files, +7,286 −5. The plan is §2 of `lanes/sp7/SP-7b-2-delta.md`, on D-2a (a), D-2b (a), D-2c (a) as corrected at
+  its source, D3 (A) and D4 (B′) (DECISIONS "SP-7b").
+- **The class:** 19 paths under the kit's `Sources` and `Tests` (8 of them byte-identical fixture copies); one
+  `scripts/check-*` file, `scripts/check-ios-fixtures.mjs`; and **one pin-class file**,
+  `apps/ios/VibeFieldKit/Package.swift`, +5 −1 at `65afe951f`. It gives the `FieldHistoryTests` target the
+  `RosettaClient` product, test-only, to script the socket seam. No `let <name>Release` line moves, and
+  `Package.resolved` read unchanged after every build of run247. No contract, fieldd, generated, `.github` or `.rs`
+  file moves.
+
+**What.** The phone read History only through its home's door. The kit can now read a session as the desktop's window
+does: over the ticket's grant, from rosettad, with no page riding fieldd. **Nothing shipped takes that path yet.**
+- **FieldProduct** (`IndexHistoryShapes.swift`): `IndexOpenTicket`, a tolerant reader of both endpoint sets. An
+  undialable `sessionUrl` or an out-of-bounds grant or expiry is no ticket; a missing or undialable `restUrl` is a
+  ticket with no pages. `IndexTicketRefusal`, the four refusals, and D4 (B′)'s `direct-plane-unbuilt` still reads, as
+  an older owner's answer.
+- **FieldHistory, the projection:** `HistoryProjection` ports `index-timeline.ts` over `FieldProduct.JSONValue`, with
+  JavaScript's rules written out where a Swift `String` differs. `HistoryProjectionCache` is D-2c (a): an entry is
+  re-projected only when it compares unequal to the one cached.
+- **FieldHistory, the reader:** `HistoryDirectRead` asks its ticket of the home, then reads rosetta's client over the
+  injected `URLSession`, into the same rows the door fills. The grant renews at four fifths of `INDEX_TICKET.TTL_MS`,
+  30 s after a failed renewal, and a 401 `expired` on a page renews once.
+- **The four roads back to the door's pages,** each said in `failure` and the log (`HistoryDirectFallback`): no ticket,
+  no `restUrl`, a refusal, and a socket that does not answer inside 8 s. A plane switched off or an older owner's
+  unbuilt stops asking that desktop; a road's refusal asks again next session.
+- **The seam:** `HistoryDesktopReader` takes `direct: HistoryDirectPlane?`, and with none the door reads as before.
+  `FieldLink.openIndexTicket` is the ask at the home, with `{device}` for another desktop's session.
+- **`scripts/check-ios-fixtures.mjs`:** the pairs' mirror and 8 pins (`INDEX_TICKET`'s five words and TTL,
+  `INDEX_TIMELINE`'s two clips). 418 → 426 copies and 93 → 101 pins.
+
+**The lights.** No Swift runs on the Mac, so the whole slice was written with no compiler. It compiled at all five
+commits on its first run.
+- **run247 on vf-m2** (a9's; runner `m2-247.sh`; armed by VF-PM 03:36:11Z, started 03:51:49Z, done 04:08:05Z;
+  `lanes/vf-m2/run247-a9-results`, SHA256SUMS-a9-run247 `d8c8ac1a`, 46/46). Item 260's host split: every build on
+  Xcode 26.3 (17C529), every test under the beta (27.3), on the iPhone 17 Pro simulator, 0 lockdown lines.
+  - **Each of the five builds:** `** TEST BUILD SUCCEEDED **`, 0 errors, 16 test bundles linked, 91–95 s.
+  - **Red 1, `b0e5f7251`:** exit 65, 35 ran, 2 passed, 33 failed. The two are the by-design rows,
+    `theClipsAreThePairsOwn` and `theWordsAreTheContractsOwn`. 0 `Caught error` lines, 0 crash lines.
+  - **Green 1, `20f711452`:** exit 0, 35 of 35.
+  - **Red 2, `3036542ca`:** exit 65, 23 ran, 2 passed, 21 failed. The two are `theLifeOfARenewalIsWithinTheGrants` and
+    `aReaderWithNoPlaneReadsThroughTheDoorAndSaysNothing`. 0 `Caught error` lines, 0 crash lines.
+  - **Green 2, `f2e298ff6`:** exit 0, 23 of 23.
+  - **Control, `9f89cd68b`:** exit 0. Three run lines, each ✔ passed: FieldHistoryTests 128 tests in 11 suites,
+    FieldProductTests 321 in 53, FieldMeshTests 327 in 59. 775 passed, 1 skipped, 0 failed of 776: the skip is
+    `SparkTranscriptLiveTests`'s real-worker row, not this slice's. The runner's `passed 767` counts neither it nor
+    the 8 parameterized rows.
+  - **Scripts, at `9f89cd68b`:** `ios fixtures: 426 copies`, `ios pins: 101`; preflight OK with its one standing R23
+    `acp` warning; biome clean on `scripts/check-ios-fixtures.mjs`. The fifth commit touches only `HomeScreen`, so
+    these stand for the land.
+  - **Compile warnings:** four at every stage, none in this slice's paths (`FreewayDesktopLink.swift:211`,
+    `SwarmMetalView.swift:58`, `RoutedTerminalFrameSinkTests.swift:285`, `WorkspaceTests.swift:111`).
+- **The witness's limit (a9's):** the control compiles `FieldHome` with the injection, but no row exercises `HomeScreen`
+  handing the reader the plane.
+- **The replay onto the EL8's main.** run247 ran on `0b98488bf`. Every edit main made since to the kit and to
+  `scripts/check-ios-fixtures.mjs` is a comment, and three of those paths are also the slice's (`Package.swift`,
+  `FieldLink.swift`, the script). Each patch-id equals its original's, so the reds and greens are carried on them, by
+  VF-PM's ruling. The mint is the first compiler on this tree.
+- **M253, run253 on vf-m2** (a9's; runner `m2-fd253`; packet `lanes/sp7/b2b-3/`; done 07:09:29Z;
+  `lanes/vf-m2/run253-a9-results`, SHA256SUMS-a9-run253 `a34359b9e150bf24`, 43 of 43 OK by `shasum -c` at 07:20:37Z),
+  at `1d5735874` on `92c9ab38d`. Its rows are VF-PM's ruled shape: the reds, greens and the kit's whole suite are not
+  among them.
+  - **The build, on 26.3:** `** TEST BUILD SUCCEEDED **`, 0 errors, 16 bundles, 94 s, the same four warnings.
+    `Package.resolved` did not move.
+  - **The three bundles, under the beta:** exit 0. FieldHistoryTests 128 in 11, FieldProductTests 321 in 53,
+    FieldMeshTests 327 in 59: 775 passed, 1 skipped, 0 failed of 776, the passed names equal to run247's control. This
+    slice's rows by name: `HistoryProjectionTests` 20, `IndexOpenTicketTests` 15, `HistoryDirectReadTests` 22, and
+    `FieldLinkOwnerDoorTests/aHistoryTicketRidesTheHomesDoor()`.
+  - **`pnpm verify`:** exit 0, 5 min 52 s. `ios fixtures: 426 copies`, `ios pins: 101`; every other count line equal to
+    run249's. vitest 14,438 passed, 0 failed, 21 skipped over 990 files; dev-runner 482 of 482; KEPT births 0.
+- **The land is over the mint's base.** M253's `pnpm verify` ran on `92c9ab38d`; the four landed over `156e5e21f`, two
+  commits further. V stands over them, by VF-PM's ruling (07:17:52Z). `f93650d1e` (item 266) moves
+  `.github/workflows/release.yml`, which `verify` does not run (its one test reads the build job, whose bytes did not
+  change), and `scripts/release-plan.mjs` in comments only; `156e5e21f` is its records. Neither shares a path with the
+  slice, and neither touches `apps/ios`.
+- **The replay's proofs.** `git range-diff` reads `=` for all four against the mint's and against the originals; the
+  patch-ids are `1be032e52f7a`, `0d106cdbe964`, `079ad97cd8ac` and `695ad16e3cb3`; the four `apps/ios` trees equal
+  M253's.
+
+**Found.**
+- **The brief's filter (a9's, in run247).** The sealed brief (`lanes/sp7/b2b-2/a9-brief-sp7b-2b-2.md`) named the link
+  row `FieldMeshTests/FieldLinkHomeTests/aHistoryTicketRidesTheHomesDoor`. `FieldLinkHomeTests` is the file; the suite
+  is `FieldLinkOwnerDoorTests`, and a function filter with no `()` selects nothing and exits 0. a9 ran the real
+  filter, and the rows were held to their counts (35, 35, 23, 23), so no empty pass could read green. The correction
+  is in the row itself in the mint's brief (`lanes/sp7/b2b-3/a9-brief-sp7b-2b-3.md`); the sealed brief stays as a9 read
+  it.
+- **Two modules, one `JSONValue`.** A file importing FieldProduct and RosettaClient cannot name rosetta's value:
+  `RosettaClient.JSONValue` reads as a member of the module's class of that name. `RosettaJSON.swift` imports rosetta
+  alone and gives the value one name.
+
+**Owed.**
+- **The injection and W1**, on the old mini (James's disk). `9f89cd68b` stays held until then. W1 is the first real
+  rosettad under this reader: F-5's WebSocket over the netstack, and D-2b (a)'s bytes and time to first row.
+- **A known limit, for IOS's eye at the device round** (the source is `870edfa9e`'s body): a resume re-opens the
+  subscription, so its snapshot replaces the rows and older pages a person had scrolled to are read again on the way
+  back up. The door kept them. Not merged now, by VF-PM's ruling.
