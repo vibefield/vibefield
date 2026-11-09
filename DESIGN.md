@@ -1264,7 +1264,8 @@ James on the ES page *The night that becomes the window*, 2026-11-08 04:27:25–
 - **At rest** (ES-D7 A): Chat's empty night is the engine's own — its stars twinkle and its haze drifts — while you are
   here, and it keeps M5's ambient rule at ES-D7's own 20 s (the desk's is 8 s since 2026-11-09, Q4): still 20 s after the last pointer, easing out over 2 s, woken by the
   pointer. Still, it draws no frame. It is the field's idle, not a loop, so the loop law above does not bind it.
-  Reduced motion draws it once.
+  Reduced motion draws it once. On the phone, which has no pointer (ES-5c, VF-PM 2026-11-09): still 20 s after the last
+  touch on the page, easing out over 2 s, woken by a touch, drawing no frame while still; reduced motion draws it once.
 - **The lean** (the ES page's film, frame 2, and its motion table; no mark of its own): under the pointer, or the
   keyboard's focus, New spark, a starter or the line's ✦ draws the night's edge in 6 from every side, its corners from
   22 to 16 so the band stays even: 240ms on the island curve, and back in 240ms on the retract curve once nothing holds
@@ -6579,8 +6580,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     tall in the night look's fill (no key printed), "Or give it a first job" 13 in t3, and the hello's starters in night
     glass (§5) at touch pitch, capsules 48 tall and 10 apart that wrap as the hello's do. New spark closes the night onto
     the sheet's sky as the system sheet rises under it — §6's portal at touch pitch, the night riding the window the face
-    already flies in (`HatchSkyHero`) and handing its canvas to the sheet's `HatchSkyView`. *Not drawn yet: ES-5, in the
-    IOS lane.*
+    already flies in (`HatchSkyHero`) and handing its canvas to the sheet's `HatchSkyView`. Where no agent at the home
+    can be a spark, New spark is Off (§7) and the sentence under it names the ones that can (§9); no job is offered, and
+    no settings button stands, for the phone has no such door. *The page is ES-5c; the close onto the sky is not drawn
+    yet (ES-5e): until then the system sheet rises over the night.*
   - **Needs you** heads the list while anything waits (PC-D4 A; CP-D12, one queue). One card stands for each item of
     CP-3's queue that is a spark's, on a pale fill with a 1.5 orange ring while it waits, its choices as 36 capsules
     with the first inverted. VibeField's own items are answered on the card, and the record says you did. An agent's
@@ -7535,7 +7538,7 @@ the message: the refusal's kind, whether it may be asked again, and its details 
 ‹name› is a spark's and ‹desktop› the field's name for a desktop. The tab is **Chat**. The list's subtitle counts
 what is true: "4 sparks on studio · 2 need you". Its groups are **Needs you** and **Sparks**; empty, it says "No
 sparks yet." · "A spark is an agent VibeField starts to run your other agents." *(Amended 2026-11-08, track ES, ES-D6
-A: empty, the page will say the Mac's words, "Chat's words" below; "No sparks yet." retires there at ES-5.)* The
+A: empty, the page says the Mac's words, "Chat's words" below; "No sparks yet." retired there at ES-5c.)* The
 draft's placeholder is "Message ‹name›…". A send's receipt (PC-D3 A; CP2-D2) is **Queued**, "Queued · ‹name› is
 busy; it lands when it’s done", "Queued · it lands after you answer ‹name›", **Delivered** or "Waking ‹name›…". Not sent, it says why: "Not
 delivered: ‹name›’s session ended", or, when the send is uncertain and is never resent, "‹name› may not have it: look
@@ -7810,7 +7813,9 @@ field gives them, and “q” what was typed.
   job", then the hello's starters, filled from this Mac. With no agent here that can be a spark: "A spark thinks with
   Claude Code, which isn't on this Mac yet." (with two, "Claude Code or Codex, which aren't on this Mac yet.") ·
   **Open Agents settings**. The sheet carrying a job (ES-D2 A): "Its first job" · "Remove its first job" (the ×'s
-  name). "No sparks yet" retires on the Mac.
+  name). "No sparks yet" retires on the Mac. On the phone (ES-5c), with no agent at the home that can be a spark: "A
+  spark thinks with Claude Code, which isn't on studio yet." (interim, James's eye), by the home's name, in the same
+  forms, with no settings button.
 - The thread (TH-1): "Reading Vela's conversation…" · "Couldn't read Vela's conversation: …" · "Earlier
   conversations (3)" · "A new conversation · Nov 3" · its day lines, "Today" · "Yesterday" · "Mon, Nov 2" · and
   "Thinking…".

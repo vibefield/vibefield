@@ -151,7 +151,7 @@ enum NewSpark {
 
   /// Whether the catalog lets the agent be a spark here: fieldd's word (`offers.spark`, CP-5a); from a daemon older
   /// than the claim, the facts its own hatch reads (all three briefing fields, and a process the door can name).
-  private static func canBeSpark(_ provider: AgentProviderSummary) -> Bool {
+  static func canBeSpark(_ provider: AgentProviderSummary) -> Bool {
     if let claim = provider.spark { return claim }
     guard let briefing = provider.briefing else { return false }
     return briefing.mcpServers == true && briefing.allowTools == true && briefing.instructions == true

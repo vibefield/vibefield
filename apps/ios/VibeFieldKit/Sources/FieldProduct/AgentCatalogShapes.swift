@@ -59,6 +59,8 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
   public let phone: Bool?
   /// A launch choice exists only when THIS desktop explicitly offers it.
   public let canSpawn: Bool
+  /// ES-5c — `offers.spark`, whether the catalog lets the agent be a spark: the names the night says when none is here.
+  public let canSpark: Bool
   /// PJ-7 — History's Resume exists only when this desktop offers it for the
   /// agent (`offers.resume`); absent otherwise (D-i6).
   public let canResume: Bool
@@ -80,6 +82,7 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
     phone = surfaces.bool("phone")
     var offers = object.object("offers")
     canSpawn = offers.bool("spawn") == true
+    canSpark = offers.bool("spark") == true
     canResume = offers.bool("resume") == true
     offersUsage = offers.bool("usage") == true
     starter = object.string("starter").flatMap { $0.isEmpty ? nil : $0 }
