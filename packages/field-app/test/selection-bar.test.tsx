@@ -195,7 +195,7 @@ describe("the selection bar over the desk's anchor (DK-11)", () => {
     mount();
     expect(bar().dataset.shown).toBe("true");
     expect(cellActs()).toEqual(["copy", "|", "duplicate", "tape", "more", "|", "delete"]);
-    expect(cell("copy").textContent).toBe("Copy");
+    expect(cell("copy").textContent).toBe("Make a card");
     expect(cell("tape").getAttribute("title")).toBe("Tape it down  ⇧⌘L");
     expect(cell("duplicate").getAttribute("title")).toBe("Duplicate  ⌘D");
     expect(cell("delete").getAttribute("title")).toBe("Delete  ⌫");
@@ -232,7 +232,7 @@ describe("the selection bar over the desk's anchor (DK-11)", () => {
       ce.ops.setSelection([note, pad]);
       selection.publish({ count: 2 });
     });
-    expect(cell("copy").textContent).toBe("Copy");
+    expect(cell("copy").textContent).toBe("Make a card");
     act(() => selection.publish({ count: 1, locked: true }));
     expect(cellActs()).toEqual(["copy", "|", "tape", "more", "|", "delete"]);
     expect(cell("tape").getAttribute("aria-label")).toBe("Lift the tape");
@@ -690,7 +690,7 @@ describe("the tools in hand (DK-12)", () => {
     const done = handRow().querySelector<HTMLElement>('[data-act="done"]');
     expect(done?.textContent).toBe("Done");
     expect(done?.getAttribute("title")).toBe("Put it down  Esc");
-    expect(handRow().querySelector('[data-act="copy"]')?.getAttribute("title")).toBe("Copy  ⌘C");
+    expect(handRow().querySelector('[data-act="copy"]')?.getAttribute("title")).toBe("Make a card  ⌘C");
     // the mode in hand moved: the ring and the press follow it
     act(() => selection.publish({ held: held({ active: "pen:red" }) }));
     expect(tool("pen:red").getAttribute("aria-pressed")).toBe("true");
@@ -935,8 +935,12 @@ describe("Copy — four doors deal ONE card (HN-D3)", () => {
   it("the BAR's pill — Copy, clipboard 16, its key said — deals the selection as ONE card, and the bar stays", async () => {
     mount();
     const pill = cell("copy");
-    expect(pill.textContent).toBe("Copy");
-    expect(pill.getAttribute("title")).toBe("Copy  ⌘C");
+    expect(pill.textContent).toBe("Make a card");
+    // CS-D12 E (§13): it wears the paper card, a card in the hand's stock — and no clipboard
+    expect(pill.querySelector(".vf-paper-card")).not.toBeNull();
+    expect(pill.querySelector(".vf-paper-card svg")).not.toBeNull();
+    expect(pill.querySelector('[data-glyph="clipboard"]')).toBeNull();
+    expect(pill.getAttribute("title")).toBe("Make a card  ⌘C");
     expect(pill.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("clipboard");
     act(() => pill.click());
     await dealt();
@@ -1033,7 +1037,7 @@ describe("Copy — four doors deal ONE card (HN-D3)", () => {
     );
     act(() => vi.advanceTimersByTime(660));
     const pill = bar().querySelector<HTMLElement>('[data-face-row="hand"] [data-act="copy"]');
-    expect(pill?.getAttribute("title")).toBe("Copy  ⌘C");
+    expect(pill?.getAttribute("title")).toBe("Make a card  ⌘C");
     const putDown = vi.spyOn(ce.ops, "putDown");
     act(() => pill?.click());
     expect(lastCopy()).toMatchObject({

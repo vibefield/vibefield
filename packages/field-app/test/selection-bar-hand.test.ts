@@ -82,7 +82,7 @@ describe("the tools in hand — the four specimens, from the real kinds' held to
   it("the notebook: ‹ › · felt, ball, fountain, red · undo, reading “Page 1” — the pens dots in their own inks, the fountain in hand", () => {
     const cells = cellsOnMac({ tools: NOTEBOOK, active: "pen:fountain", readout: "Page 1" });
     expect(said(cells)).toEqual([
-      "Copy",
+      "Make a card",
       "|",
       "turn:-1",
       "turn:1",
@@ -125,7 +125,7 @@ describe("the tools in hand — the four specimens, from the real kinds' held to
   it("the whiteboard: black, blue, red, green · eraser · undo · redo — the eraser a cell, inverted while in hand; no word", () => {
     const cells = cellsOnMac({ tools: WHITEBOARD, active: "eraser" });
     expect(said(cells)).toEqual([
-      "Copy",
+      "Make a card",
       "|",
       "marker:black",
       "marker:blue",
@@ -154,7 +154,7 @@ describe("the tools in hand — the four specimens, from the real kinds' held to
   it("the calendar: ‹ › · today · pen, reading its month — the pen a mode without a swatch", () => {
     const cells = cellsOnMac({ tools: CALENDAR, active: "pen", readout: "September" });
     expect(said(cells)).toEqual([
-      "Copy",
+      "Make a card",
       "|",
       "month:-1",
       "month:1",
@@ -178,7 +178,7 @@ describe("the tools in hand — the four specimens, from the real kinds' held to
   it("the clock: seconds · the 24-hour ring · an hour back · an hour ahead · the next dial — its own five drawings, reading its time", () => {
     const cells = cellsOnMac({ tools: CLOCK, active: "", readout: "10:08:42" });
     expect(said(cells)).toEqual([
-      "Copy",
+      "Make a card",
       "|",
       "seconds",
       "ring24",
@@ -229,7 +229,7 @@ describe("what a slot looks like, and where the runs change (§8, R13)", () => {
       ],
       active: "ink-2",
     });
-    expect(said(cells)).toEqual(["Copy", "|", "ink-1", "+next", "+ink-2", "+wait", "|", "Done"]);
+    expect(said(cells)).toEqual(["Make a card", "|", "ink-1", "+next", "+ink-2", "+wait", "|", "Done"]);
     // a mode's `on` is the anchor's mode in hand; never an action's, never a slot that only waits — even named by it
     expect(tools(cells).map((c) => c.on)).toEqual([false, false, true, false]);
     for (const active of ["next", "wait"]) {
@@ -263,16 +263,16 @@ describe("what a slot looks like, and where the runs change (§8, R13)", () => {
 
   it("says no word for a kind that says none — or an empty one — and Done's tip the frame's way", () => {
     const none = cellsOnMac({ tools: [], active: "" });
-    expect(said(none)).toEqual(["Copy", "|", "|", "Done"]);
+    expect(said(none)).toEqual(["Make a card", "|", "|", "Done"]);
     expect(said(cellsOnMac({ tools: [], active: "", readout: "" }))).toEqual(said(none));
     expect(none.at(-1)).toEqual({ kind: "done", label: "Done", tip: "Put it down  Esc" });
     expect(DONE_TIP).toBe("Put it down  Esc");
     // Copy leads it, as on the bar over a selection (HN-D3) — its key the desk's, the platform's way
-    expect(none[0]).toEqual({ kind: "copy", label: "Copy", tip: "Copy  ⌘C" });
+    expect(none[0]).toEqual({ kind: "copy", label: "Make a card", tip: "Make a card  ⌘C" });
     expect(handCells({ tools: [], active: "" }, "other")[0]).toEqual({
       kind: "copy",
-      label: "Copy",
-      tip: "Copy  Ctrl+C",
+      label: "Make a card",
+      tip: "Make a card  Ctrl+C",
     });
   });
 

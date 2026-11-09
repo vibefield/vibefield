@@ -62,7 +62,7 @@ describe("the selection bar's cells", () => {
       "mac",
     );
     expect(said(cells)).toEqual([
-      "copy:Copy",
+      "copy:Make a card",
       "|",
       "act:seconds",
       "duplicate:duplicate",
@@ -74,13 +74,13 @@ describe("the selection bar's cells", () => {
   });
 
   it("says Copy for several as for one — the count is the menu's eyebrow's, and the card's title", () => {
-    expect(said(barCells(facts({ count: 2 }), "mac"))[0]).toBe("copy:Copy");
+    expect(said(barCells(facts({ count: 2 }), "mac"))[0]).toBe("copy:Make a card");
   });
 
   it('taped: no Duplicate, and the tape act becomes "Lift the tape" wearing `lift` — an act whose name changes (R10)', () => {
     const cells = barCells(facts({ locked: true }), "mac");
     expect(said(cells)).toEqual([
-      "copy:Copy",
+      "copy:Make a card",
       "|",
       "tape:lift",
       "more:ellipsis",
@@ -97,7 +97,7 @@ describe("the selection bar's cells", () => {
       "mac",
     );
     expect(said(cells)).toEqual([
-      "copy:Copy",
+      "copy:Make a card",
       "|",
       "words:Clock · plugin off",
       "duplicate:duplicate",
@@ -135,12 +135,12 @@ describe("the selection bar's cells", () => {
     expect(tipOf("More")).toBe("More");
   });
 
-  it('Copy leads the bar where Send to… stood (HN-D3): "Copy  ⌘C" — Ctrl+C off the Mac', () => {
-    expect(barCells(facts(), "mac")[0]).toEqual({ kind: "copy", label: "Copy", tip: "Copy  ⌘C" });
+  it('Copy leads the bar where Send to… stood (HN-D3): "Make a card  ⌘C" — Ctrl+C off the Mac', () => {
+    expect(barCells(facts(), "mac")[0]).toEqual({ kind: "copy", label: "Make a card", tip: "Make a card  ⌘C" });
     expect(barCells(facts({ count: 3 }), "other")[0]).toEqual({
       kind: "copy",
-      label: "Copy",
-      tip: "Copy  Ctrl+C",
+      label: "Make a card",
+      tip: "Make a card  Ctrl+C",
     });
   });
 });
@@ -200,7 +200,7 @@ describe("the bar grown — its rows, nearest first", () => {
       delete: "⌫",
     });
     // HN-D3: Copy is a row taken like any other — it waits for nothing, and says Copy for two
-    expect(rows.find((r) => r.id === "copy")).toEqual({ id: "copy", label: "Copy", key: "⌘C" });
+    expect(rows.find((r) => r.id === "copy")).toEqual({ id: "copy", label: "Make a card", key: "⌘C" });
     expect(rows.find((r) => r.id === "delete")).toMatchObject({ danger: true });
   });
 

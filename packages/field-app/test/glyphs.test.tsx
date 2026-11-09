@@ -46,10 +46,17 @@ const COLOUR_LITERAL = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch)\(|\b(?:black|whi
 
 describe("the glyph set", () => {
   it("has every name drawn, in one box, in currentColor and nothing else", () => {
-    // SD-2 (DESIGN.md §13): `sound`, Settings → Sound's rail, is the 65th
-    expect(GLYPH_NAMES.length).toBe(65);
+    // SD-2 (DESIGN.md §13): `sound`, Settings → Sound's rail, was the 65th; CS-D10 A's three made 68
+    expect(GLYPH_NAMES.length).toBe(68);
     expect(GLYPH_NAMES).toContain("sound");
     expect(GLYPHS.sound.kind).toBe("instrument");
+    for (const name of ["type-text", "type-image", "type-ref"] as const) {
+      expect(GLYPH_NAMES).toContain(name);
+      expect(GLYPHS[name].kind, name).toBe("instrument");
+      expect(GLYPH_META[name].group, name).toBe("objects");
+    }
+    // `document` left Studio only with them: it says a card's file
+    expect(GLYPH_META.document.group).toBe("objects");
     for (const name of GLYPH_NAMES) {
       const svg = glyphSvg(name);
       expect(svg, name).toMatch(
