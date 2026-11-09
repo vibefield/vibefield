@@ -158,6 +158,8 @@ public struct SparkSummary: Sendable, Equatable, Identifiable {
   /// The desktop it lives on, the one that hatched it; nil from a daemon before IOS-12a (the desktop asked).
   public let device: String?
   public let session: SparkSession?
+  /// IOS-12f's M-f2 — the Agent Profiles it works in, as @ reads them (NS-D5). SKELETON at f7c: never read yet.
+  public let profiles: [String] = []
   public let createdAt: String
   public let updatedAt: String
   public let turned: SparkTurned

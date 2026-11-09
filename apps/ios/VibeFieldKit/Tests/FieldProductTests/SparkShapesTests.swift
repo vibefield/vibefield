@@ -24,6 +24,7 @@ struct SparkShapesTests {
     #expect(vela.seed == 2_846_113_027)
     #expect(vela.agent == "claude")
     #expect(vela.device == "dev-01HQ9S7UD1")
+    #expect(vela.profiles == ["work", "native"])
     #expect(vela.updatedAt == "2026-10-29T11:02:10.118Z")
     #expect(vela.turned == .unknown)
     #expect(vela.unknownFields.isEmpty)
