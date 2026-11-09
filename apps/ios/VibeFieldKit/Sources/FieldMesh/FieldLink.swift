@@ -795,6 +795,9 @@ public final class FieldLink {
       refusal: Self.noTerminalDoor)
   }
 
+  /// The RED's stub: asks nothing.
+  public func openIndexTicket(on deviceId: String, sessionId: String) async throws -> JSONValue { .null }
+
   /// PG-3f (design v2 §4.1) — what the open card shows, by the body it follows: its VISUAL id (`FieldBubble.id`). nil:
   /// the card is closed. The link resolves the row under it at every refold and reports that row's MODEL id to its
   /// owner, routed through the home.

@@ -546,6 +546,35 @@ private func desktopLive(_ key: String, in link: FieldLink) -> Bool? {
     #expect(await door.dials(to: studioDoorHost) == 1, "the home's own door: no second dial")
   }
 
+  /// SP-7b's 7b-2b — a session's read ticket rides the HOME, `{device}` added for another desktop's session, as the
+  /// terminal's does; the owner mints it, and the home's own session is asked with nothing more.
+  @Test func aHistoryTicketRidesTheHomesDoor() async throws {
+    let door = LinkDoor(script: selfDoor)
+    await door.route(studioDoorHost) { method, id, params in
+      if method == "index.openTicket" { return [frame(id: id, .object(["from": .string("studio")]))] }
+      return homeDoor(studioBoard)(method, id, params)
+    }
+    await door.route(laptopDoorHost) { method, id, _ in
+      if method == "system.hello" { return [frame(id: id, ack)] }
+      return [frame(id: id, .object(["from": .string("laptop")]))]
+    }
+    let (link, _) = try await homedLink(door: door)
+    defer { link.stop() }
+    try await waitUntil("the field through the studio") { link.rows.count == 2 }
+
+    let ticket = try await link.openIndexTicket(on: "dev-laptop", sessionId: "s-l")
+    #expect(ticket["from"]?.stringValue == "studio")
+    let home = try #require(await door.latest(to: studioDoorHost))
+    let asked = await home.requests.last { $0.method == "index.openTicket" }
+    #expect(asked?.params == .object(["sessionId": .string("s-l"), "device": .string("dev-laptop")]))
+    #expect(await door.dials(to: laptopDoorHost) == 0, "the owner's door is not dialled for it")
+
+    let own = try await link.openIndexTicket(on: "dev-studio", sessionId: "s-s")
+    #expect(own["from"]?.stringValue == "studio")
+    let ownAsk = await home.requests.last { $0.method == "index.openTicket" }
+    #expect(ownAsk?.params == .object(["sessionId": .string("s-s")]))
+  }
+
   /// The owner's door counts against the phone's budget — one door per desktop
   /// (`PHONE_BUDGET`, SP-D12): a second ask to the same owner WAITS for the
   /// first's slot, and is dialled the moment it frees. (7c-2, 2026-11-06: a

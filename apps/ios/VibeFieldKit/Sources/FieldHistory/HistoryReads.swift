@@ -50,6 +50,12 @@ public enum HistoryReads {
   /// SE-P1 — the most live runs one Live now ask names: the contract's own bound on `nativeSessionIds`
   /// (`IndexSearchParams`, `.max(256)`); a field past it is asked for its first runs, in the field's order.
   public static let liveRuns = 256
+  /// SP-7b's 7b-2b — how long a direct read holds a ticket before it asks a fresh one: four fifths of the grant's life
+  /// (`IndexTicketLimits.ttlMs`), so a reconnect always has a grant in date.
+  public static let directRenewMs: Int64 = IndexTicketLimits.ttlMs * 4 / 5
+  /// SP-7b's 7b-2b — how long a direct socket may go without answering (a hello, or a reconnect's) before the session
+  /// is read through the door: rosetta's client redials four times inside it, and a phone reader is waiting.
+  public static let directOpenSeconds: Int64 = 8
 
   static let logger = Logger(subsystem: "com.jamesyong.vibefield.kit", category: "history")
 
@@ -172,7 +178,7 @@ public final class HistoryDesktopReader: Identifiable {
   public init(
     deviceId: String, name: String, isHome: Bool = false, door: (any HistoryDoor)?, ownsDoor: Bool = false,
     cache: HistoryCache? = nil, agentLabel: @escaping @MainActor (String) -> String = { $0 },
-    now: @escaping @MainActor () -> Date = { Date() },
+    now: @escaping @MainActor () -> Date = { Date() }, direct: HistoryDirectPlane? = nil,
     log: @escaping @MainActor (String) -> Void = { HistoryReads.log($0) }
   ) {
     self.deviceId = deviceId

@@ -477,7 +477,11 @@ let package = Package(
     // matching and counts, where a hit lands, the stepper's ring.
     .testTarget(
       name: "FieldHistoryTests",
-      dependencies: ["FieldHistory", "FieldProduct"],
+      dependencies: [
+        "FieldHistory", "FieldProduct",
+        // SP-7b's 7b-2b — the direct reader's tests script rosetta's socket seam
+        .product(name: "RosettaClient", package: "rosetta"),
+      ],
       // SP-6 — the contracts' OWN goldens, copied in (EL9 on the third side):
       // the fold reads the same bytes the TypeScript tests parse.
       resources: [.copy("Fixtures")]
