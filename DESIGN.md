@@ -3376,8 +3376,25 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       The other way, a contracts change that stamps a profile's label and glyph on a peer's rows, is his to ask.
   - **The popover** opens beside a circle while the pointer is on it, and a click pins it. It is a menu's solid in
     Godview's mode, with its ring and shadow (§2.7), corners **20**, about **566** wide and padded 12 14 11. It
-    stands **16** right of the column with its top 6 above the circle's (the pill's edge), lifted as far as it must
-    be to stay inside the stage.
+    stands **16** right of the pill with its top 6 above the circle's (the pill's edge), held between the pill's top
+    and the panes' foot, over the terminals. *(Corrected 2026-11-09, UM-R, the card James could not reach and the
+    terminals covered: this said "16 right of the column" and "lifted as far as it must be to stay inside the
+    stage". The built card stood 10 from the pill (the 16 was measured from the 40 circle's item), and inside the
+    stage no z-index could raise it over the terminals, since the stage's head mask is a stacking context the deck
+    paints over.)*
+    - **Where the cards stand.** The popover and the add's card stand in **the cards layer** (`.vf-monitor-cards`),
+      a root-level sibling after the stage at **z 13**: over the deck (10), its veil (11) and its readout (12), under
+      the curtain (20), the CRT layers (30) and the head. Its box is the room a card may have: from the pill's top
+      (64, the head's reserve plus 8) to the panes' foot, the window's width. It takes no pointer; a card does. A
+      card taller than the room is held at the room's height and scrolls. While a card stands the deck composites
+      at 0.999, as it does for the tuning panel, so a promoted WebGPU canvas keeps below it. In the catalog, which
+      has no terminals, a card stands in place beside its circle at the same 16 (*added 2026-11-09, UM-R*).
+    - **The reach.** A pointer can cross to its card. A bridge 22 wide joins the circle's edge to the card, so a
+      level crossing never leaves the hover. Leaving arms a **320ms** grace, and entering the card or the circle
+      again in it cancels it; entering another circle or the add while a card shows waits a **120ms** dwell, and
+      reaching the shown card first cancels that. The first open, with nothing showing, is at once. A pinned card
+      can still be peeked over this way, as before (*added 2026-11-09, UM-R; the two numbers are those the file
+      tree's hover contract records, "opened after 120ms and closed after a 320ms grace"*).
     - **The head:** the profile's glyph (15) and its name at 14/600; a **default** tag when there are several
       profiles (10/600, padded 3 6, a capsule ringed by the strong hairline, in the secondary ink); the reading's
       age at 11.5 in the tertiary ink; and × at the end, a 24 round on the ink at 6% holding `close` 11 in the
@@ -3403,16 +3420,24 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       `aria-pressed`); partner lighting (a plan lighting the bodies that spend it, and a body its plan) waits for
       UM-5, which brings the session-to-plan join.
     - **Pinned**, it holds Godview's keys, so **Esc** closes it before a pane hears it; a click outside closes it
-      too.
+      too. **Closing is one act**, on one profile too: Esc, ×, a click on the chosen circle, the second click on a
+      lone profile's circle, opening Settings from the column and the terminals maximizing all hand the keyboard home
+      (to the circle, if the card held it), drop the pin and let go of the pointer, so the card stays closed until the
+      pointer leaves and returns. **Tab** from the open circle enters the card, on its first control that can act;
+      **Shift+Tab** from there returns to the circle. Forward out of the card's last control follows the window's
+      order into the deck (*added 2026-11-09, UM-R: Esc, the chosen circle and the lone unpin cleared only the pin, so
+      a card under the pointer stood where it was*).
   - **The add** (UM-D21, UM-D22) is a 40 round at the column's foot in the ready fill: the ink at 8%, and 14% under
     the pointer, the ready fill's own step (the drawing's 12% is not one). It holds `plus` 17 in the tertiary ink
     (the primary under the pointer). A click opens Settings → Agent Profiles on **New profile…** (`openNewProfile`,
     the door Godview already has, AO-6b3). While Settings is open there is nothing for it to open, so the add draws
     disabled: `plus` in t4, and no fill step.
-    - Pointing at it shows **the add's card** 16 right of the column, its top 6 above the add's. It is a menu's
+    - While the add can act, pointing at it shows **the add's card** 16 right of the pill, its top 6 above the add's,
+      in the cards layer as the popover is. It is a menu's
       solid, 270 wide, corners 16, padded 12 14, with 6 between its lines: **Add a profile…** at 13.5/600; AO-5's
       offer and fact at 12/1.45 in the secondary ink; and its foot, `gear` 11 and "Opens Settings → Agent Profiles
-      on New profile…" at 11/500 in the tertiary ink.
+      on New profile…" at 11/500 in the tertiary ink. *(Corrected 2026-11-09, UM-R: this said "Pointing at it shows",
+      and the card stood while the add was disabled, offering an act it could not take, "16 right of the column".)*
     - While the limit moment is due, its card stands in the add's card's place (§8 "The moments").
   - **The stage around it.** The claims strip moves to x **79** (13 + 52 + 14), its top where it was. The swarm
     steers around the pill, as around every chrome rectangle, and a view in flow keeps its width clear through the
@@ -3421,7 +3446,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Said** as a group, "Agent profiles". Each circle is a button, "‹profile›, tightest 42%". With one profile it is
     a plain button that opens its popover, not pressable. With several each circle is a toggle (`aria-pressed`,
     true on the chosen profile's), said with ", click to show only its sessions" or, pressed, ", showing only its
-    sessions". The add is "Add a profile…".
+    sessions". Every circle says whether its popover is open (`aria-expanded`, and while it is, `aria-controls` names
+    it; *added 2026-11-09, UM-R*). The add is "Add a profile…".
   - **Reduced motion** (M6), and Godview's animations off: the first read stands still at 60%; the ring and the
     hover change at once; and the limit card enters with no fade (§8 "The moments"). *(Corrected 2026-11-06,
     PLAN §4 (a): this said the first read "does not breathe", with no still state named.)*
@@ -3822,7 +3848,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     card's left edge and 28 down, ringed on its two outer sides). Its acts are 26 tall, corners 13,
     padded 0 11, at 11.5/600. It enters with the profile notice's 300ms fade, a transition never a
     keyframe, and none under Reduce Motion. It is said as a group, "Another subscription?". It stands
-    over the stage, so it moves no view in flow and widens no strip. ‹for James: a deck raised to the
+    over the stage, so it moves no view in flow and widens no strip; the swarm steers around it, as around every
+    chrome rectangle (*corrected 2026-11-09, UM-R: this sentence stopped at "strip", and the swarm's bodies ran under
+    the card*). ‹for James: a deck raised to the
     fill line (104) covers it, as it covers the column; that is the card under a raised deck that
     AO-6b3 moved onto the strip, and the lead reads the add's place as worth it›. Under the Last
     Run curtain it waits: the curtain is the window's one question. It reads the stage's own feeds
