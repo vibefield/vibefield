@@ -226,7 +226,7 @@ describe("the selection bar over the desk's anchor (DK-11)", () => {
     expect(after.placements).toBeLessThanOrEqual(after.publishes);
   });
 
-  it('says Copy for two as for one, and "Lift the tape" with no Duplicate for a taped selection', () => {
+  it('says Make a card for two as for one, and "Lift the tape" with no Duplicate for a taped selection', () => {
     mount();
     act(() => {
       ce.ops.setSelection([note, pad]);
@@ -690,7 +690,9 @@ describe("the tools in hand (DK-12)", () => {
     const done = handRow().querySelector<HTMLElement>('[data-act="done"]');
     expect(done?.textContent).toBe("Done");
     expect(done?.getAttribute("title")).toBe("Put it down  Esc");
-    expect(handRow().querySelector('[data-act="copy"]')?.getAttribute("title")).toBe("Make a card  ⌘C");
+    expect(handRow().querySelector('[data-act="copy"]')?.getAttribute("title")).toBe(
+      "Make a card  ⌘C",
+    );
     // the mode in hand moved: the ring and the press follow it
     act(() => selection.publish({ held: held({ active: "pen:red" }) }));
     expect(tool("pen:red").getAttribute("aria-pressed")).toBe("true");
@@ -900,11 +902,11 @@ describe("the tools in hand (DK-12)", () => {
   });
 });
 
-// ── HN-D3 — COPY's FOUR DOORS (DESIGN.md §8 "The desk's Copy"; R25; plan addendum (50)) ─────────────────────────────
+// ── HN-D3 — COPY's FOUR DOORS (DESIGN.md §8 "Make a card"; R25; plan addendum (50)) ─────────────────────────────
 // The bar's pill, the grown menu's row, the pill in hand and ⌘C over the desk each run ONE act: the selection — or the
 // object in hand — dealt into the window's hand as ONE card. Nothing waits on the line, so the bar never steps aside
 // for it; in hand the tools stay under the head and the object stays in hand.
-describe("Copy — four doors deal ONE card (HN-D3)", () => {
+describe("Make a card — four doors deal ONE card (HN-D3)", () => {
   const WRITING = "Ship the desk by Friday. Then the covers.";
   beforeEach(() => {
     // the note holds a line of writing: its copy is a text card, dealt at once (a picture needs the desk's GPU)
@@ -923,7 +925,7 @@ describe("Copy — four doors deal ONE card (HN-D3)", () => {
   };
 
   /** The card is dealt once the clipboard took the words — a copy the clipboard refuses deals nothing (HN-5, DESIGN.md
-   * §8 "Copy") — so a press is followed by the clipboard's turn before the hand holds ONE card. */
+   * §8 "Make a card") — so a press is followed by the clipboard's turn before the hand holds ONE card. */
   const dealt = async (): Promise<void> => {
     await act(async () => {
       await vi.waitFor(() => expect(cardsStore.snapshot().cards).toHaveLength(1), {
@@ -932,7 +934,7 @@ describe("Copy — four doors deal ONE card (HN-D3)", () => {
     });
   };
 
-  it("the BAR's pill — Copy, clipboard 16, its key said — deals the selection as ONE card, and the bar stays", async () => {
+  it("the BAR's pill — Make a card, the paper card, its key said — deals the selection as ONE card, and the bar stays", async () => {
     mount();
     const pill = cell("copy");
     expect(pill.textContent).toBe("Make a card");
@@ -941,7 +943,7 @@ describe("Copy — four doors deal ONE card (HN-D3)", () => {
     expect(pill.querySelector(".vf-paper-card svg")).not.toBeNull();
     expect(pill.querySelector('[data-glyph="clipboard"]')).toBeNull();
     expect(pill.getAttribute("title")).toBe("Make a card  ⌘C");
-    expect(pill.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("clipboard");
+    expect(pill.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("type-ref");
     act(() => pill.click());
     await dealt();
     const cards = cardsStore.snapshot().cards;
@@ -957,7 +959,7 @@ describe("Copy — four doors deal ONE card (HN-D3)", () => {
     expect(bar().getAttribute("data-shown")).toBe("true");
   });
 
-  it("the GROWN MENU's row — Copy ⌘C — is taken like any other: the menu folds and the same act runs", async () => {
+  it("the GROWN MENU's row — Make a card ⌘C — is taken like any other: the menu folds and the same act runs", async () => {
     mount();
     act(() => cell("more").click());
     expect(surfaceNow).toBe("selection");

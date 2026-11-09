@@ -33,6 +33,7 @@ import {
 } from "./bar-motion";
 import { barStats } from "./bar-stats";
 import { KindGlyph } from "./KindGlyph";
+import { PaperCard } from "./PaperCard";
 import "./selection-bar.css";
 
 // THE SELECTION BAR (DK-11; DESIGN.md §8 "The selection bar", "The bar grown — More, and right-click"; MC-1, MC-2,
@@ -616,7 +617,7 @@ export function SelectionBarView({
             onClick={() => press(cell, false)}
             {...stop}
           >
-            <FieldGlyph name="clipboard" size={16} />
+            <PaperCard />
             <span>{cell.label}</span>
           </button>
         );
@@ -682,7 +683,7 @@ export function SelectionBarView({
             onClick={() => runHand(cell)}
             {...stop}
           >
-            <FieldGlyph name="clipboard" size={16} />
+            <PaperCard />
             <span>{cell.label}</span>
           </button>
         );

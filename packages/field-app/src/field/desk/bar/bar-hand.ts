@@ -1,6 +1,6 @@
 import type { HeldGlyph } from "@vibecook/ice";
 import type { HeldAnchor, HeldSlot } from "@vibecook/ice/desk";
-import { COPY_LABEL, copyTip, type DeskKeys, tipOf } from "./bar-model";
+import { type DeskKeys, MAKE_CARD_LABEL, makeCardTip, tipOf } from "./bar-model";
 
 /** The hand as the anchor carries it (`SelectionAnchor["held"]`) and one of its slots — id, label, kind, hint, glyph,
  * swatch, plain data: ICE's own `HeldAnchor` and `HeldSlot`, exported from `@vibecook/ice/desk` since desk.5 (I36), handed
@@ -9,7 +9,7 @@ export type { HeldAnchor, HeldSlot };
 
 // THE TOOLS IN HAND (DK-12; DESIGN.md §8 "Tools in hand"; MC-D4, MC-D9; R2, R13; ICE I20, I22). Pure: what the bar
 // says while an object is IN HAND — the anchor's `held` (`HeldAnchor`: the kind's slots, the mode in hand, its word)
-// — in the canon's order: Copy · rule · the kind's tools · the readout · rule · Done. The tools are the anchor's
+// — in the canon's order: Make a card · rule · the kind's tools · the readout · rule · Done. The tools are the anchor's
 // slots IN THEIR DECLARED ORDER, never regrouped (R13), a 6 gap where the run changes between PAGES, INKS and TOOLS;
 // each is used through `ops.useHeldTool(id)`. What a slot looks like is read off its data alone:
 //   a MODE WITH A SWATCH (ICE's pens, the whiteboard's markers) is a DOT in the slot's own ink;
@@ -78,7 +78,7 @@ export function lookOf(slot: HeldSlot): HandLook {
 export const DONE_TIP = tipOf("Put it down", "Esc");
 
 /**
- * The bar's cells in hand, in the canon's order: Copy · rule · the kind's tools (declared order, a gap where the
+ * The bar's cells in hand, in the canon's order: Make a card · rule · the kind's tools (declared order, a gap where the
  * run changes) · the readout (when the kind says one) · rule · Done.
  */
 export function handCells(
@@ -86,7 +86,7 @@ export function handCells(
   keys: DeskKeys,
 ): HandCell[] {
   const cells: HandCell[] = [
-    { kind: "copy", label: COPY_LABEL, tip: copyTip(keys) },
+    { kind: "copy", label: MAKE_CARD_LABEL, tip: makeCardTip(keys) },
     { kind: "rule", at: "lead" },
   ];
   let last: HandRun | undefined;

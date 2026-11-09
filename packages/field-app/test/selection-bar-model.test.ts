@@ -54,7 +54,7 @@ const said = (cells: readonly BarCell[]): string[] =>
   });
 
 describe("the selection bar's cells", () => {
-  it("in the canon's order: Copy · rule · the kind's acts · Duplicate · Tape it down · More · rule · Delete", () => {
+  it("in the canon's order: Make a card · rule · the kind's acts · Duplicate · Tape it down · More · rule · Delete", () => {
     const cells = barCells(
       facts({
         menu: [{ id: "seconds", label: "Seconds hand", glyph: { path: "M0 0" }, keys: "S" }],
@@ -73,7 +73,7 @@ describe("the selection bar's cells", () => {
     ]);
   });
 
-  it("says Copy for several as for one — the count is the menu's eyebrow's, and the card's title", () => {
+  it("says Make a card for several as for one — the count is the menu's eyebrow's, and the card's title", () => {
     expect(said(barCells(facts({ count: 2 }), "mac"))[0]).toBe("copy:Make a card");
   });
 
@@ -135,8 +135,12 @@ describe("the selection bar's cells", () => {
     expect(tipOf("More")).toBe("More");
   });
 
-  it('Copy leads the bar where Send to… stood (HN-D3): "Make a card  ⌘C" — Ctrl+C off the Mac', () => {
-    expect(barCells(facts(), "mac")[0]).toEqual({ kind: "copy", label: "Make a card", tip: "Make a card  ⌘C" });
+  it('Make a card leads the bar where Send to… stood (CS-D11): "Make a card  ⌘C" — Ctrl+C off the Mac', () => {
+    expect(barCells(facts(), "mac")[0]).toEqual({
+      kind: "copy",
+      label: "Make a card",
+      tip: "Make a card  ⌘C",
+    });
     expect(barCells(facts({ count: 3 }), "other")[0]).toEqual({
       kind: "copy",
       label: "Make a card",
@@ -200,7 +204,11 @@ describe("the bar grown — its rows, nearest first", () => {
       delete: "⌫",
     });
     // HN-D3: Copy is a row taken like any other — it waits for nothing, and says Copy for two
-    expect(rows.find((r) => r.id === "copy")).toEqual({ id: "copy", label: "Make a card", key: "⌘C" });
+    expect(rows.find((r) => r.id === "copy")).toEqual({
+      id: "copy",
+      label: "Make a card",
+      key: "⌘C",
+    });
     expect(rows.find((r) => r.id === "delete")).toMatchObject({ danger: true });
   });
 

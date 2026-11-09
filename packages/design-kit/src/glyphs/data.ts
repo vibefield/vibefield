@@ -20,7 +20,7 @@ export interface GlyphMeta {
   readonly role: string;
 }
 
-export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","start","resume","jump","duplicate","tape","lift","trash","pen","eraser","today","minimize","maximize","restore","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","sound","message","key","question","exclaim","flame","missing","importing","document","layers","sparkle"] as const;
+export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","start","resume","jump","duplicate","tape","lift","trash","pen","eraser","today","minimize","maximize","restore","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","sound","type-text","type-image","type-ref","message","key","question","exclaim","flame","missing","importing","document","layers","sparkle"] as const;
 export type GlyphName = (typeof GLYPH_NAMES)[number];
 
 export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
@@ -64,7 +64,7 @@ export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
   code: {"label":"Developer","group":"objects","role":"Developer settings"},
   sun: {"label":"Sun","group":"objects","role":"Theme toggle, shown while dark; the Appearance page"},
   moon: {"label":"Moon","group":"objects","role":"Theme toggle, shown while light"},
-  clipboard: {"label":"Clipboard","group":"objects","role":"Copy on the selection bar and its menu; Clipboard history in the phone's plus menu"},
+  clipboard: {"label":"Clipboard","group":"objects","role":"Clipboard history in the phone's plus menu"},
   package: {"label":"Artifacts","group":"objects","role":"Artifacts: the pill's package button and the covered views' circle, folded into the terminals' title bar with search"},
   capture: {"label":"Capture","group":"objects","role":"The line's snapshot; a picture card's index, and its face while it is on its way in"},
   panes: {"label":"Godview","group":"objects","role":"The Godview toggle: the deck's own silhouette; Chat's second starter"},
@@ -79,6 +79,9 @@ export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
   snippets: {"label":"Snippets","group":"objects","role":"Snippets in the plus menu"},
   prompt: {"label":"Prompt","group":"objects","role":"A peer's bare shell on the phone's field; the rail's terminal key"},
   sound: {"label":"Sound","group":"objects","role":"Settings → Sound's rail: a speaker and the field's answer (SD-2; desktop only)"},
+  "type-text": {"label":"Text","group":"objects","role":"A card's type, text (CS-D10 A; desktop only): ragged lines, words and not a menu"},
+  "type-image": {"label":"Image","group":"objects","role":"A card's type, an image (CS-D10 A; desktop only): a picture in its frame"},
+  "type-ref": {"label":"Live object","group":"objects","role":"A card's type, a ref (CS-D10 A; desktop only): a ◇ with its heart, the object itself"},
   message: {"label":"Message","group":"signals","role":"The swarm's said-something mark"},
   key: {"label":"Permission","group":"signals","role":"The swarm's waiting-on-a-permission mark"},
   question: {"label":"Question","group":"signals","role":"The swarm's asked-you-something mark"},
@@ -86,7 +89,7 @@ export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
   flame: {"label":"Burn","group":"signals","role":"The burn ladder's flame: filled when lit, outlined where there is no price"},
   missing: {"label":"Missing","group":"signals","role":"A glyph name the set does not hold — a kind's act or tool drawn as missing, and said once"},
   importing: {"label":"Importing","group":"signals","role":"History's arc while it imports: a fifth of the dial `history` draws, turned over the History cell by the host"},
-  document: {"label":"Document","group":"studio","role":"Studio catalog tile"},
+  document: {"label":"Document","group":"objects","role":"A card's type, a file (CS-D10 A); Studio catalog tile"},
   layers: {"label":"Layers","group":"studio","role":"Studio catalog tile"},
   sparkle: {"label":"Sparkle","group":"actions","role":"New spark, Chat's create on the line (⌘N, SP-1c); the catalog's callout"},
 };
@@ -147,6 +150,9 @@ export const GLYPHS: Readonly<Record<GlyphName, GlyphDrawing>> = {
   snippets: {"kind":"instrument","strokes":[["path",{"d":"M4 7h16M4 12h10M4 17h6M17 14v6M14 17h6"}]],"fills":[]},
   prompt: {"kind":"instrument","strokes":[["path",{"d":"M5 6.5l6.5 5.5L5 17.5M13.5 17.5h6"}]],"fills":[]},
   sound: {"kind":"instrument","strokes":[["path",{"d":"M4 9.5h3l5-4v13l-5-4H4ZM15 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"}]],"fills":[]},
+  "type-text": {"kind":"instrument","strokes":[["path",{"d":"M4 6h13M4 12h16M4 18h10"}]],"fills":[]},
+  "type-image": {"kind":"instrument","strokes":[["rect",{"x":"3","y":"4.5","width":"18","height":"15","rx":"3"}],["path",{"d":"M3.5 16.5 8.5 11.5l5 5 2.5-2.5 4.5 4.5"}],["circle",{"cx":"15.5","cy":"9","r":"1.5"}]],"fills":[]},
+  "type-ref": {"kind":"instrument","strokes":[["path",{"d":"M13.13 3.93 20.07 10.87Q21.2 12 20.07 13.13L13.13 20.07Q12 21.2 10.87 20.07L3.93 13.13Q2.8 12 3.93 10.87L10.87 3.93Q12 2.8 13.13 3.93Z"}]],"fills":[["circle",{"cx":"12","cy":"12","r":"2.3"}]]},
   message: {"kind":"instrument","strokes":[["path",{"d":"M20 14a2 2 0 0 1-2 2H9l-4.5 3.5V6a2 2 0 0 1 2-2h11.5a2 2 0 0 1 2 2Z"}]],"fills":[]},
   key: {"kind":"instrument","strokes":[["circle",{"cx":"8","cy":"8","r":"3.5"}],["path",{"d":"M10.5 10.5 19 19M15.5 15.5l2-2M13 13l2-2"}]],"fills":[]},
   question: {"kind":"instrument","strokes":[["path",{"d":"M9 9.5a3 3 0 1 1 4.2 2.7c-.8.4-1.2 1-1.2 1.8v.5"}]],"fills":[["circle",{"cx":"12","cy":"17.75","r":"1.35"}]]},

@@ -229,7 +229,16 @@ describe("what a slot looks like, and where the runs change (§8, R13)", () => {
       ],
       active: "ink-2",
     });
-    expect(said(cells)).toEqual(["Make a card", "|", "ink-1", "+next", "+ink-2", "+wait", "|", "Done"]);
+    expect(said(cells)).toEqual([
+      "Make a card",
+      "|",
+      "ink-1",
+      "+next",
+      "+ink-2",
+      "+wait",
+      "|",
+      "Done",
+    ]);
     // a mode's `on` is the anchor's mode in hand; never an action's, never a slot that only waits — even named by it
     expect(tools(cells).map((c) => c.on)).toEqual([false, false, true, false]);
     for (const active of ["next", "wait"]) {

@@ -191,7 +191,7 @@
   background: color-mix(in srgb, var(--vf-red) 12%, transparent);
 }
 
-/* Copy — the bar's one word (HN-D3, where Send to… stood): clipboard 16 and the word at 13/500 on the ready
+/* Make a card — the bar's one word (CS-D11 A, where Copy stood): the paper card and the word at 13/500 on the ready
    fill, a 32 pill padded 0 12 0 10, gap 7; under the pointer 14%, pressed 0.97 (R25). */
 .vf-bar-copy {
   gap: 7px;
@@ -206,6 +206,35 @@
 
 .vf-bar-copy:active {
   transform: scale(0.97);
+}
+
+/* The paper card (CS-D12 E; §13): a card 13.5 × 19 in the hand's stock, turned −7°; under the pointer −11° and up 1.5. */
+.vf-paper-card {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 13.5px;
+  height: 19px;
+  border-radius: 2.4px;
+  color: var(--vf-card-stock-ink);
+  background: var(--vf-card-stock);
+  box-shadow: var(--vf-paper-card-shadow);
+  transform: rotate(-7deg);
+  transition: transform 180ms var(--vf-ease-pop);
+}
+
+.vf-bar-copy:hover .vf-paper-card {
+  transform: rotate(-11deg) translateY(-1.5px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-paper-card {
+    transition: none;
+  }
+
+  .vf-bar-copy:hover .vf-paper-card {
+    transform: rotate(-7deg);
+  }
 }
 
 .vf-bar-cell:focus-visible,

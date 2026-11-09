@@ -523,7 +523,7 @@ export const DRAWINGS = {
   clipboard: {
     label: "Clipboard",
     group: "objects",
-    role: "Copy on the selection bar and its menu; Clipboard history in the phone's plus menu",
+    role: "Clipboard history in the phone's plus menu",
     instrument: {
       s: `${R(8, 3, 8, 4, 1.2)}${P("M16 5h1.5A2.5 2.5 0 0 1 20 7.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-11A2.5 2.5 0 0 1 6.5 5H8M8.5 12h7M8.5 16h4.5")}`,
     },
@@ -682,6 +682,38 @@ export const DRAWINGS = {
       d: `M3.5 9H7l5.5-4.5v15L7 15H3.5Z${answerArc(15, 9, 15, 15, 4, 1.1)}${answerArc(18, 6.5, 18, 17.5, 7.5, 1.1)}`,
     },
   },
+  "type-text": {
+    label: "Text",
+    group: "objects",
+    role: "A card's type, text (CS-D10 A; desktop only): ragged lines, words and not a menu",
+    instrument: { s: P("M4 6h13M4 12h16M4 18h10") },
+    hardware: {
+      d: `${capsule(4, 6, 17, 6, 1.2)}${capsule(4, 12, 20, 12, 1.2)}${capsule(4, 18, 14, 18, 1.2)}`,
+    },
+  },
+  "type-image": {
+    label: "Image",
+    group: "objects",
+    role: "A card's type, an image (CS-D10 A; desktop only): a picture in its frame",
+    instrument: {
+      s: `${R(3, 4.5, 18, 15, 3)}${P("M3.5 16.5 8.5 11.5l5 5 2.5-2.5 4.5 4.5")}${C(15.5, 9, 1.5)}`,
+    },
+    hardware: {
+      d: `${rectPath(3, 4.5, 18, 15, 3)}${circlePath(15.5, 9, 1.5)}M5 17.5l3.5-3.5 3.5 3.5ZM13.5 17.5l2.5-2.5 2.5 2.5Z`,
+    },
+  },
+  "type-ref": {
+    label: "Live object",
+    group: "objects",
+    role: "A card's type, a ref (CS-D10 A; desktop only): a ◇ with its heart, the object itself",
+    instrument: {
+      s: P(
+        "M13.13 3.93 20.07 10.87Q21.2 12 20.07 13.13L13.13 20.07Q12 21.2 10.87 20.07L3.93 13.13Q2.8 12 3.93 10.87L10.87 3.93Q12 2.8 13.13 3.93Z",
+      ),
+      f: C(12, 12, 2.3),
+    },
+    hardware: { d: `M12 2.8 21.2 12 12 21.2 2.8 12Z${circlePath(12, 12, 2.3)}` },
+  },
   message: {
     label: "Message",
     group: "signals",
@@ -754,8 +786,8 @@ export const DRAWINGS = {
   },
   document: {
     label: "Document",
-    group: "studio",
-    role: "Studio catalog tile",
+    group: "objects",
+    role: "A card's type, a file (CS-D10 A); Studio catalog tile",
     instrument: { s: `${P(PAGE)}${P("M14 3v5h5M9 12h6M9 16h6")}` },
     hardware: {
       d: `M5 2.5h9l5 5v14H5Z${rectPath(13.3, 3.5, 1.4, 4.9, 0.7)}${rectPath(13.3, 7, 5.9, 1.4, 0.7)}${capsule(8, 12, 16, 12, 0.7)}${capsule(8, 15.5, 16, 15.5, 0.7)}${capsule(8, 19, 13, 19, 0.7)}`,

@@ -31,6 +31,9 @@ function shapes(markup) {
   return out;
 }
 
+/** A name as an object key in data.ts: bare, or quoted when it is not an identifier (`type-text`). */
+const keyOf = (name) => (/^[A-Za-z_$][\w$]*$/.test(name) ? name : JSON.stringify(name));
+
 function pickOf(name) {
   return PICKS.hardware.includes(name) ? "hardware" : "instrument";
 }
@@ -70,7 +73,9 @@ function dataTs() {
   lines.push("export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {");
   for (const name of GLYPH_NAMES) {
     const g = DRAWINGS[name];
-    lines.push(`  ${name}: ${JSON.stringify({ label: g.label, group: g.group, role: g.role })},`);
+    lines.push(
+      `  ${keyOf(name)}: ${JSON.stringify({ label: g.label, group: g.group, role: g.role })},`,
+    );
   }
   lines.push("};");
   lines.push("");
@@ -78,7 +83,7 @@ function dataTs() {
   for (const name of GLYPH_NAMES) {
     const g = DRAWINGS[name];
     if (pickOf(name) === "hardware") {
-      lines.push(`  ${name}: { kind: "hardware", d: ${JSON.stringify(g.hardware.d)} },`);
+      lines.push(`  ${keyOf(name)}: { kind: "hardware", d: ${JSON.stringify(g.hardware.d)} },`);
     } else {
       const i = g.instrument;
       const entry = {
@@ -87,7 +92,7 @@ function dataTs() {
         fills: shapes(i.f ?? ""),
         ...(i.tf ? { transform: i.tf } : {}),
       };
-      lines.push(`  ${name}: ${JSON.stringify(entry)},`);
+      lines.push(`  ${keyOf(name)}: ${JSON.stringify(entry)},`);
     }
   }
   lines.push("};");
