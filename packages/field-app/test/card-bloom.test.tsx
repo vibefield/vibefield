@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { placeBuds } from "../src/frame/cards/bloom/bloom-geometry";
 import type { BloomModel } from "../src/frame/cards/bloom/bloom-model";
 import { CardBloomView } from "../src/frame/cards/bloom/CardBloomView";
+import { carriedLabel, carriedTransforms } from "../src/frame/cards/CarriedCardLayer";
+import type { CarriedCard } from "../src/frame/cards/card-drag";
 
 // THE CARD'S BLOOM, DRAWN (OB-D2, OB-D12 A; DESIGN.md §8 "The hand"): it renders the landing table's model and authors
 // no rule or reason of its own.
@@ -202,5 +204,31 @@ describe("the card's bloom", () => {
       expect(Number.parseFloat(b.style.left)).toBeCloseTo(placed[i]?.x ?? 0, 3);
       expect(Number.parseFloat(b.style.top)).toBeCloseTo(placed[i]?.y ?? 0, 3);
     });
+  });
+});
+
+describe("the hub (OB-D12 A; §8)", () => {
+  const hub = {
+    x: 590,
+    y: 400,
+    grab: { x: 12, y: 20 },
+    phase: "hub",
+    tilt: 6,
+    ducked: false,
+    home: null,
+    answer: { kind: "pane", ok: true, label: "Let go: 3 ways into claude·2" },
+    cell: null,
+  } as unknown as CarriedCard;
+
+  it("stands the card straight where it was let go, centred on the point, at 0.42", () => {
+    expect(carriedTransforms(hub)).toEqual({
+      anchor: "translate3d(590px, 400px, 0)",
+      card: "rotate(0deg) translate(-60px, -84px)",
+      scale: 0.42,
+    });
+  });
+
+  it("says nothing over the card: the bloom's words have taken over", () => {
+    expect(carriedLabel(hub, { width: 1180 })).toBeNull();
   });
 });
