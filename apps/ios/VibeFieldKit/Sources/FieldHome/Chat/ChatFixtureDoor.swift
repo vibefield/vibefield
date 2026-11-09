@@ -63,11 +63,19 @@
       switch method {
       case "compose.sparks.list":
         if Self.needsCase == "away" { return withHatched(try Self.awaySparks(awake: miniAwake)) }
+        if Self.emptyNight { return withHatched(Self.emptied(try answer("compose-sparks-list.merged"))) }
         return withHatched(try answer("compose-sparks-list.merged"))
-      case "needs.list": return try needsList()
+      case "needs.list":
+        if Self.emptyNight, case .object(var fields) = try answer("needs-list.merged") {
+          fields["items"] = .array([])
+          return .object(fields)
+        }
+        return try needsList()
       case NeedsAnswerParams.method: return try await answerNeeds(params)
       case "agent.catalog": return try answer("agent-catalog.valid")
-      case "agent.providers": return try answer("agent-providers.valid")
+      case "agent.providers":
+        let providers = try answer("agent-providers.valid")
+        return Self.nightOff ? Self.notInstalled(providers) : providers
       case "agents.profileSets.list": return try answer("agents-profile-sets.meters")
       case "agent.models": return try models(params)
       case SparkHatch.method: return try hatch(params)
@@ -254,6 +262,35 @@
     /// IOS-12f — the stills' New spark: `-vf-open-new-spark` opens the sheet once Chat's list is heard, and
     /// `-vf-new-spark-create` presses Create once its reads are in (no OS input on the stills' host).
     static var openNewSpark: Bool { ProcessInfo.processInfo.arguments.contains("-vf-open-new-spark") }
+    /// ES-5c — `-vf-chat-empty`: no spark, nothing waiting and every desktop answered, so the page is the night.
+    static var emptyNight: Bool { ProcessInfo.processInfo.arguments.contains("-vf-chat-empty") }
+    /// ES-5c — `-vf-chat-off`: no agent at the home can be a spark, so the night is Off.
+    static var nightOff: Bool { ProcessInfo.processInfo.arguments.contains("-vf-chat-off") }
+
+    /// The merged list with no spark and every desktop answered.
+    static func emptied(_ list: JSONValue) -> JSONValue {
+      guard case .object(var fields) = list else { return list }
+      fields["sparks"] = .array([])
+      fields["desktops"] = .array(
+        (fields["desktops"]?.arrayValue ?? []).map { desktop in
+          guard case .object(var one) = desktop else { return desktop }
+          one["state"] = .string("answered")
+          return .object(one)
+        })
+      return .object(fields)
+    }
+
+    /// `agent.providers` with every agent not installed at the home.
+    static func notInstalled(_ answer: JSONValue) -> JSONValue {
+      guard case .object(var fields) = answer else { return answer }
+      fields["providers"] = .array(
+        (fields["providers"]?.arrayValue ?? []).map { provider in
+          guard case .object(var one) = provider else { return provider }
+          one["available"] = .bool(false)
+          return .object(one)
+        })
+      return .object(fields)
+    }
     static var pressCreate: Bool { ProcessInfo.processInfo.arguments.contains("-vf-new-spark-create") }
     /// IOS-12f's f6 — the stills' row after the flight: `-vf-new-spark-hold` holds Chat's list once the face has
     /// landed, its thread unopened (no OS input on the stills' host).

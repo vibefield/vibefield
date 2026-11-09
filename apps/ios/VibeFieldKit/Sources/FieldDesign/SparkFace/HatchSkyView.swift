@@ -82,6 +82,54 @@ public struct HatchSkyView: View {
   }
 }
 
+/// ES-5c — what the night's page holds to wake it: a touch on the page.
+@MainActor
+public final class HatchNightHandle {
+  weak var layer: HatchSkyLayer?
+
+  public init() {}
+
+  /// A touch: the night is live again, for §6's 20 s.
+  public func wake() { layer?.wake() }
+}
+
+/// ES-5c (DESIGN.md §2.10, §6 "At rest"; §8 "The phone's Chat", Empty: the night) — the hatch's night alone, at the size
+/// of what holds it, with no face dealt. It keeps §6's rest. Where Metal cannot draw it, its ground stands: never a blank.
+public struct HatchNightView: View {
+  let handle: HatchNightHandle?
+  /// Made once the view appears, never per re-render: it owns two Metal views.
+  @State private var holder: HatchSkyHolder?
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.scenePhase) private var phase
+
+  public init(handle: HatchNightHandle? = nil) {
+    self.handle = handle
+  }
+
+  public var body: some View {
+    ZStack {
+      ChromePalette.sparkNight
+      if let holder {
+        HatchSkyLayerView(layer: holder.layer)
+      }
+    }
+    .accessibilityHidden(true)
+    .onAppear {
+      if holder == nil { holder = HatchSkyHolder.make(faceSize: HatchSky.faceSize) }
+      holder?.reducedMotion = reduceMotion
+      holder?.active = phase == .active
+      holder?.layer.standNight()
+      handle?.layer = holder?.layer
+    }
+    .onChange(of: reduceMotion) {
+      holder?.reducedMotion = reduceMotion
+      holder?.layer.standNight()
+    }
+    .onChange(of: phase) { holder?.active = phase == .active }
+    .onDisappear { holder?.active = false }
+  }
+}
+
 /// The sky's state and its two layers, made once a sky appears; nil where Metal cannot build the sky or the star.
 @MainActor
 final class HatchSkyHolder {
@@ -150,6 +198,13 @@ final class HatchSkyLayer: UIView, MTKViewDelegate {
   var active = true {
     didSet { run() }
   }
+  /// ES-5c — this sky is the night alone: no face dealt, and §6's rest (`NightRest`) drives its clock.
+  private var night = false
+  /// The rate the night's clock runs at, 1 live and 0 still.
+  private var rate = 1.0
+  private var lastTouch: CFTimeInterval = 0
+  /// Drawn once rather than run: the held clock of a still, or reduced motion.
+  private var drawsOnce: Bool { night && (held != nil || reducedMotion) }
 
   init(sky skyRenderer: HatchSkyRenderer, stars: SparkStarRenderer, faceSize: Double, held: Double?) throws {
     self.skyRenderer = skyRenderer
@@ -199,7 +254,7 @@ final class HatchSkyLayer: UIView, MTKViewDelegate {
     if let pending, bounds.width > 0, bounds.height > 0 {
       self.pending = nil
       deal(pending)
-    } else if held != nil, dealt != nil {
+    } else if (held != nil && dealt != nil) || drawsOnce {
       drawBoth()
     }
   }
@@ -214,7 +269,7 @@ final class HatchSkyLayer: UIView, MTKViewDelegate {
     // the sky at the star engine's own cap, the faces at the screen's
     sky.contentScaleFactor = min(scale, CGFloat(HatchSky.dprCap))
     faces.contentScaleFactor = scale
-    if held != nil, dealt != nil { drawBoth() }
+    if (held != nil && dealt != nil) || drawsOnce { drawBoth() }
     run()
   }
 
@@ -241,6 +296,26 @@ final class HatchSkyLayer: UIView, MTKViewDelegate {
     run()
   }
 
+  /// ES-5c — the night alone, standing from any moment of its clock (the Mac's night starts at 3.1 s), or the held one.
+  /// Standing again wakes it.
+  func standNight() {
+    if !night {
+      night = true
+      clock = held ?? 3.1
+      rate = reducedMotion ? 0 : 1
+    }
+    lastTouch = CACurrentMediaTime()
+    if drawsOnce { drawBoth() }
+    run()
+  }
+
+  /// ES-5c — a touch: the night is live again, for §6's 20 s.
+  func wake() {
+    guard night else { return }
+    lastTouch = CACurrentMediaTime()
+    run()
+  }
+
   /// The hero leaves the sky for its flight (`HatchSky.Live.takeHero`): its place in the window, its star's radius. Nil
   /// out of a window, or with no hero.
   func takeHero() -> SparkFlight.Start? {
@@ -252,7 +327,8 @@ final class HatchSkyLayer: UIView, MTKViewDelegate {
 
   /// Runs while the sky is in a window, the app is active and the clock is not held.
   private func run() {
-    let running = window != nil && active && held == nil && dealt != nil
+    let moving = dealt != nil || (night && !reducedMotion)
+    let running = window != nil && active && held == nil && moving
     if running == !sky.isPaused { return }
     sky.isPaused = !running
     last = nil
@@ -270,7 +346,8 @@ final class HatchSkyLayer: UIView, MTKViewDelegate {
   /// Both layers, at the clock's time, the sky first.
   private func drawBoth() {
     sky.draw()
-    faces.draw()
+    // the night has no faces: its layer stays clear
+    if !night { faces.draw() }
   }
 
   // MARK: - MTKViewDelegate
@@ -284,13 +361,27 @@ final class HatchSkyLayer: UIView, MTKViewDelegate {
       // the hatch's clock: the time since the last frame, clamped to 0.05 s, and both engines step to it
       if held == nil && !sky.isPaused {
         let now = CACurrentMediaTime()
-        if let last { clock += min(max(now - last, 0), 0.05) }
+        if let last {
+          let step = min(max(now - last, 0), 0.05)
+          if night {
+            // ES-5c — §6's rest: the clock eases to still, and a still night draws no frame
+            let target = NightRest.target(sinceTouch: now - lastTouch, reduced: reducedMotion)
+            rate = NightRest.rate(rate, target: target, dt: step)
+            clock += step * rate
+          } else {
+            clock += step
+          }
+        }
         last = now
-        live.frame(at: clock)
+        if !night { live.frame(at: clock) }
       }
       drawSky()
       // the faces' layer after the sky's, on the same tick
-      if !sky.isPaused { faces.draw() }
+      if !night && !sky.isPaused { faces.draw() }
+      if night && rate == 0 && !sky.isPaused {
+        sky.isPaused = true
+        last = nil
+      }
     } else {
       drawFaces()
     }

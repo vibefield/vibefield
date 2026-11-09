@@ -206,6 +206,11 @@ final class ChatFeed {
     try AgentProvidersResult(json: try await homeDoor().call("agent.providers", params: .object([:]))).providers
   }
 
+  /// ES-5c — the home's catalog, for the night's starters and the names Off says (`agent.catalog`).
+  func catalog() async throws -> AgentCatalogResult {
+    try AgentCatalogResult(json: try await homeDoor().call("agent.catalog", params: AgentCatalogParams.phone.json))
+  }
+
   /// The home's Agent Profiles (`agents.profileSets.list`).
   func profileSets() async throws -> [AgentProfileSet] {
     try AgentProfileSetsResult(json: try await homeDoor().call("agents.profileSets.list", params: .object([:]))).sets

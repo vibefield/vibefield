@@ -10,13 +10,13 @@ import SwiftUI
 // heads the list while anything waits, one card per spark's item of the home's merged queue, answered in place.
 // IOS-12f (PC-D8 A, Q1): New spark's door, `sparkle` at the title's right, opens its sheet (`NewSparkSheetView`).
 // Created (f6), the face flies to the new row, whose own face waits for it, and then the row's thread opens.
+// ES-5c (ES-D1…D7 A): with no spark, once the home has answered and every desktop has, the page is the night
+// (`ChatNightView`), its title and ✦ in the night's ink.
 
 /// Chat's words (§9 "Chat on the phone"), pure.
 enum ChatWords {
   static let title = "Chat"
   static let sparks = "Sparks"
-  static let emptyTitle = "No sparks yet."
-  static let emptyText = "A spark is an agent VibeField starts to run your other agents."
   static let wake = "Wake"
 
   /// The note over the bar (§9): "Vela needs you".
@@ -129,7 +129,7 @@ struct ChatPage: View {
   /// The names of the desktops the sparks live on, in the list's order.
   let desktops: [String]
   let away: [ChatAway]
-  /// The home has answered the list at least once (else nothing is claimed, not even "No sparks yet.").
+  /// The home has answered the list at least once (else nothing is claimed, not even the night).
   let heard: Bool
   /// IOS-12f — the home's name, for New spark's "Runs on studio, your home".
   let homeName: String
@@ -144,9 +144,16 @@ struct ChatPage: View {
   let onOpenPane: (AgentRemoteRow) -> Void
   /// IOS-12d — the field has a pane for this run key (HomeScreen's session cards, d5); until it says, every run has.
   var paneOpens: (String) -> Bool = { _ in true }
+  /// ES-5c — the home's live runs, for the night's starters; out until the board is read.
+  var nightRuns: ChatStarters.Read<ChatStarters.Run> = .out
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.scenePhase) private var phase
   /// IOS-12f — the New spark sheet stands.
   @State private var newSpark = false
+  /// ES-5c — the home's agents and catalog, as the night last read them: a reading stands until the next one lands, so
+  /// the night never flickers back to reading.
+  @State private var nightAgents: ChatNight.Agents = .reading
+  @State private var nightCatalog: AgentCatalogResult?
   /// IOS-12f's f6 — Create's order: the flight to the new row, and its row's face meanwhile.
   @State private var landing = NewSparkLanding(flying: SparkFlightWindow.make())
   /// A new spark's thread to open, once the list holds its spark.
@@ -165,14 +172,24 @@ struct ChatPage: View {
     Binding(get: { thread.map { [$0] } ?? [] }, set: { thread = $0.last })
   }
 
+  /// ES-5c — no spark, and the home and every desktop have answered: the page is the night.
+  private var nightStands: Bool { entries.isEmpty && heard && away.isEmpty }
+
   var body: some View {
     NavigationStack(path: path) {
       // IOS-12e (§2.10): Chat's list is one stage; a row's face moves on it while its spark works
       SparkStageHost {
-        list
-          .background(ChromePalette.paper.ignoresSafeArea())
+        if nightStands {
+          night
+        } else {
+          list
+            .background(ChromePalette.paper.ignoresSafeArea())
+        }
       }
       .navigationTitle(ChatWords.title)
+      // ES-5c (§8): the status bar, "Chat" and its ✦ wear the night's ink, and the bar floats clear on it
+      .toolbarColorScheme(nightStands ? .dark : nil, for: .navigationBar)
+      .toolbarBackground(nightStands ? .hidden : .automatic, for: .navigationBar)
       // IOS-12f (Q1) — New spark's door at the title's right, as the Mac's create stands in Chat's line
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
@@ -180,6 +197,7 @@ struct ChatPage: View {
             newSpark = true
           } label: {
             FieldGlyph(.sparkle, size: 22)
+              .foregroundStyle(nightStands ? ChromePalette.nightInkPrimary : ChromePalette.ink)
               .frame(width: 44, height: 44)
               .contentShape(Rectangle())
           }
@@ -199,6 +217,13 @@ struct ChatPage: View {
       }
     }
     .tint(ChromePalette.ink)
+    // ES-5c — the night's agents, read each time the night stands, and again when the app comes back while it is Off: an
+    // agent installed meanwhile turns New spark on
+    .task(id: nightStands) { await readNight() }
+    .onChange(of: phase) {
+      guard phase == .active, ChatNight.offNames(nightAgents) != nil else { return }
+      Task { await readNight() }
+    }
     // IOS-12f — the sheet: a spark made on the home, its words §9's (Cancel or pulled down, nothing is made)
     .sheet(isPresented: $newSpark) {
       NewSparkSheetView(
@@ -242,26 +267,32 @@ struct ChatPage: View {
     #endif
   }
 
+  /// ES-5c — the night. A starter opens the sheet as New spark does, until 5d carries its job in.
+  private var night: some View {
+    ChatNightView(
+      agents: nightAgents,
+      starters: ChatNight.starters(agents: nightAgents, runs: nightRuns, catalog: nightCatalog),
+      homeName: homeName,
+      onNewSpark: { newSpark = true },
+      onJob: { _ in newSpark = true })
+  }
+
+  /// ES-5c — the home's agents and catalog for the night, while it stands.
+  private func readNight() async {
+    guard nightStands else { return }
+    async let providers = try? feed.providers()
+    async let catalog = try? feed.catalog()
+    let (read, known) = await (providers, catalog)
+    nightCatalog = known
+    nightAgents = read.map { ChatNight.agents($0, catalog: known) } ?? .unread
+  }
+
   private var list: some View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 0) {
         head
         group
-        if entries.isEmpty {
-          if heard, away.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-              Text(ChatWords.emptyTitle)
-                .font(ChromeType.sans(15, .semibold))
-                .foregroundStyle(ChromePalette.ink)
-              Text(ChatWords.emptyText)
-                .font(ChromeType.sans(13.5))
-                .foregroundStyle(ChromePalette.inkTertiary)
-                .lineSpacing(3)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 24)
-          }
-        } else {
+        if !entries.isEmpty {
           HStack(spacing: 4) {
             Text(ChatWords.sparks)
             Text("·")

@@ -366,8 +366,6 @@ struct ChatFeedTests {
     #expect(
       ChatWords.away("mini", .incompatible, carried: false, device: .iPad)
         == "mini runs a build this iPad can't read. Its sparks show here when it's updated.")
-    #expect(ChatWords.emptyTitle == "No sparks yet.")
-    #expect(ChatWords.emptyText == "A spark is an agent VibeField starts to run your other agents.")
   }
 
   /// The merged list's own desktops (`compose-sparks-list.merged`): studio and the loft answered, mini is asleep and
