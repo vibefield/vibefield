@@ -370,8 +370,9 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     // (`inputRefusalNote` over a fixture refusal)
     const refused = plate("refused")?.querySelector(".vf-line-note");
     expect(refused?.getAttribute("data-at")).toBe("line");
+    expect(refused?.getAttribute("data-stand")).toBe("read");
     expect(refused?.textContent).toBe(
-      "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it",
+      "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it; save it to a file and use its path",
     );
     // HN-7 — History's plate: its create is New terminal, named for the project the room shows,
     // and the caption under the plates says what they draw (the design lens's 14: it said

@@ -1,6 +1,7 @@
 import type { FrameView } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { type ReactElement, type ReactNode, type Ref, useRef } from "react";
+import type { NoteStand } from "./line-door";
 import { ariaKeys, type CreateAct, createActOf, SNAPSHOT, snapshotKey } from "./line-model";
 import type { ViewKeys } from "./views";
 import "./composer.css";
@@ -18,11 +19,13 @@ import "./composer.css";
  * own outcome, and what History's acts came to (PJ-4); `line`: its left edge on
  * the line's, growing rightward — everything else the frame says on the line (a
  * pane's refused input, D6; the Peek's refused pick, P2; Godview's ⌘W; a
- * snapshot the tool could not take). */
+ * snapshot the tool could not take). `stand`: `read` is a sentence with advice,
+ * which stands longer and may wrap; absent, the line's 2.4 s. */
 export interface LineNote {
   readonly seq: number;
   readonly text: string;
   readonly at: "create" | "line";
+  readonly stand?: NoteStand;
 }
 
 export interface ComposerLineViewProps {
@@ -171,7 +174,13 @@ export function ComposerLineView({
         ))}
       </button>
       {note === null ? null : (
-        <div key={note.seq} className="vf-line-note" data-at={note.at} role="status">
+        <div
+          key={note.seq}
+          className="vf-line-note"
+          data-at={note.at}
+          data-stand={note.stand === "read" ? "read" : undefined}
+          role="status"
+        >
           {note.text}
         </div>
       )}

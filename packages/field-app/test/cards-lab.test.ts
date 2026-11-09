@@ -216,6 +216,31 @@ describe("the hand's lab door: a smoke's hands (R-T 2)", () => {
     expect(door.pasted).toEqual([]);
   });
 
+  it("says a refused play for as long as its outcome asks (HK Q5)", async () => {
+    const store = new CardStore(() => 7_000);
+    const targets = new CardTargets();
+    const ground = boxed(document.createElement("div"), new DOMRect(0, 52, 1180, 640));
+    document.body.append(ground);
+    stage.push(ground);
+    targets.register({
+      id: "desk",
+      kind: "desk",
+      layer: 10,
+      rect: () => ground.getBoundingClientRect(),
+      element: () => ground,
+      answer: () => ({ ok: true, label: "Place as a note" }),
+      play: async () => ({ ok: false, note: "Not placed", stand: "read" }),
+    });
+    const lab = cardsLab({ store, targets });
+    const heard: Array<readonly [string, string]> = [];
+    const stop = hearLineSays((note, stand) => heard.push([note, stand]));
+    lab.deal(LINE);
+    onTop(ground);
+    await lab.playAt(400, 300);
+    stop();
+    expect(heard).toEqual([["Not placed", "read"]]);
+  });
+
   it("plays the newest card let go at a window point, through whatever place a drop finds there (LC-17)", async () => {
     const store = new CardStore(() => 7_000);
     const targets = new CardTargets();

@@ -31,6 +31,8 @@ import {
   hearLineSays,
   inputRefusalNote,
   type LineViewDoor,
+  NOTE_READ_MS,
+  type NoteStand,
   newTerminalNote,
   refusalClaimed,
   sayLineCreateOver,
@@ -131,9 +133,9 @@ export function Composer({
    * Screen Recording off — the snapshot waits, or says why in its tooltip. */
   const captureState = useCaptureState();
 
-  const say = useCallback((text: string, where: LineNote["at"]) => {
+  const say = useCallback((text: string, where: LineNote["at"], stand: NoteStand = "said") => {
     notes.current += 1;
-    setNote({ seq: notes.current, text, at: where });
+    setNote({ seq: notes.current, text, at: where, stand });
   }, []);
   // PJ-4 — what History's own acts came to (a row's Resume, New agent, a
   // project's act) is said where the create's outcome is
@@ -146,13 +148,16 @@ export function Composer({
   }, [historySaid, say]);
   useEffect(() => {
     if (note === null) return;
-    const timer = window.setTimeout(() => setNote(null), NOTE_MS);
+    const timer = window.setTimeout(
+      () => setNote(null),
+      note.stand === "read" ? NOTE_READ_MS : NOTE_MS,
+    );
     return () => window.clearTimeout(timer);
   }, [note]);
   // what the frame says on the line — a live row the Peek opened that could not
   // be shown (P2), the last pane's ⌘W, an act waiting on Godview's question —
   // from the line's left edge, where a long sentence has the window to grow into
-  useEffect(() => hearLineSays((text) => say(text, "line")), [say]);
+  useEffect(() => hearLineSays((text, stand) => say(text, "line", stand)), [say]);
   // D6 — a paste (or typed text) a terminal refused for its size: said on the
   // line, the pane named as the deck names it — except a card's play, which
   // claims its own refusal and says it as its outcome (HN-L5: said once)
@@ -162,7 +167,7 @@ export function Composer({
     return inputRefusals((refusal) => {
       if (refusalClaimed()) return;
       const pane = doorRef.current?.panes.find((entry) => entry.sessionId === refusal.sessionId);
-      say(inputRefusalNote(refusal, pane?.name), "line");
+      say(inputRefusalNote(refusal, pane?.name), "line", "read");
     });
   }, [inputRefusals, say]);
 

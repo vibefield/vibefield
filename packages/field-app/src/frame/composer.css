@@ -175,6 +175,18 @@
   left: 0;
 }
 
+/* A sentence with advice to read (a size refusal; DESIGN.md §8 "The note"): it
+   stands NOTE_READ_MS (line-door.ts), and may wrap, 92 clear of the window (the
+   line's 76 from its left, 16 of margin); 26 tall on one line, as a plain note. */
+.vf-line-note[data-stand="read"] {
+  width: max-content;
+  max-width: calc(100vw - 92px);
+  padding: 5px 10px;
+  line-height: 16px;
+  white-space: normal;
+  animation: vf-line-note-read 6600ms ease both;
+}
+
 @keyframes vf-line-note {
   0% {
     opacity: 0;
@@ -187,6 +199,27 @@
   }
 
   85% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+/* A plain note's own 192ms rise and 360ms fade, at the longer stand. */
+@keyframes vf-line-note-read {
+  0% {
+    opacity: 0;
+    translate: 0 4px;
+  }
+
+  2.91% {
+    opacity: 1;
+    translate: 0 0;
+  }
+
+  94.55% {
     opacity: 1;
   }
 
@@ -221,6 +254,21 @@
 
     8%,
     85% {
+      opacity: 1;
+    }
+
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes vf-line-note-read {
+    0% {
+      opacity: 0;
+    }
+
+    2.91%,
+    94.55% {
       opacity: 1;
     }
 

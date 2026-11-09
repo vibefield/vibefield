@@ -1,3 +1,4 @@
+import type { NoteStand } from "../line-door";
 import type { Card } from "./cards-model";
 
 /**
@@ -41,6 +42,8 @@ export interface CardPlayed {
   readonly ok: boolean;
   /** the outcome as the status line says it, once: "Pasted into claude·2" */
   readonly note: string;
+  /** how long it stands; absent, the line's 2.4 s */
+  readonly stand?: NoteStand;
 }
 
 export interface CardTarget {

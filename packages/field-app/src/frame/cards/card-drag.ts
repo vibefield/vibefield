@@ -551,7 +551,7 @@ export async function endCardDrag(x: number, y: number, filled?: Card): Promise<
   await wait(playTimings().shrinkMs);
   if (live === drag) turnHome(drag);
   const outcome = await played;
-  if (outcome.note !== "") sayOnLine(outcome.note);
+  if (outcome.note !== "") sayOnLine(outcome.note, outcome.stand);
   if (outcome.ok) return "played";
   // refused in the play: a card from another app is never lost (HN-L5) — the fade it began where
   // it went in ends here, for its source deals it into the hand from where it hung

@@ -22,7 +22,7 @@ import {
   LINE_WIDTH_PX,
 } from "../src/frame/frame-geometry";
 import { foldSurface } from "../src/frame/frame-surface";
-import { inputRefusalNote, inputRefusalWhy } from "../src/frame/line-door";
+import { inputRefusalNote, inputRefusalWhy, NOTE_READ_MS } from "../src/frame/line-door";
 import {
   ariaKeys,
   createActOf,
@@ -239,6 +239,37 @@ describe("what a terminal could not take (D6)", () => {
     ]) {
       expect(design).toContain(`"${words}"`);
     }
+  });
+
+  it("stands a refusal as long as its longest sentence takes to read (DESIGN.md §8, HK Q5)", () => {
+    const refusal = (kind: "paste" | "text") =>
+      ({ sessionId: "s", kind, bytes: 300_000, limitBytes: 261_958 }) as const;
+    const words = (kind: "paste" | "text", name?: string) =>
+      inputRefusalNote(refusal(kind), name)
+        .split(" ")
+        .filter((word) => word !== "—").length;
+    // "the terminal" is the longest name: a pane's own name is one word
+    const longest = Math.max(
+      words("paste", "vibe-field"),
+      words("text", "vibe-field"),
+      words("paste"),
+      words("text"),
+    );
+    expect(longest).toBe(24);
+    // silent reading of non-fiction, 238 words a minute (Brysbaert 2019), and the note's own rise
+    // and fade, which a plain note's keyframes make 192 and 360 ms; to the tenth of a second
+    const readMs = (longest * 60_000) / 238 + 192 + 360;
+    expect(Math.round(readMs / 100) * 100).toBe(NOTE_READ_MS);
+  });
+
+  it("is spelled the same in its stylesheet: the longer stand, and a wrap the window's edge bounds", () => {
+    const css = readFileSync(join(here, "../src/frame/composer.css"), "utf8");
+    const rule = /^\.vf-line-note\[data-stand="read"\] \{([^}]*)\}/mu.exec(css)?.[1] ?? "";
+    expect(rule).toContain(`animation: vf-line-note-read ${NOTE_READ_MS}ms ease both;`);
+    expect(rule).toContain("white-space: normal;");
+    expect(rule).toContain("width: max-content;");
+    // the line's left, and the window's 16 of margin: the sentence never reaches the far edge
+    expect(rule).toContain(`max-width: calc(100vw - ${LINE_LEFT_PX + 16}px);`);
   });
 });
 

@@ -23,6 +23,7 @@ import {
   type HistoryLineDoor,
   hearLineCreateOver,
   type LineViewDoor,
+  NOTE_READ_MS,
   resetHistoryLineDoorForTest,
   runChosenSession,
   sayOnHistoryLine,
@@ -542,7 +543,7 @@ describe("what a terminal could not take (D6)", () => {
       hearRefusal?.({ sessionId: "s-vibe", kind: "paste", bytes: 300_000, limitBytes: 261_958 });
     });
     expect(q(".vf-line-note").textContent).toBe(
-      "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it",
+      "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it; save it to a file and use its path",
     );
     expect(q(".vf-line-note").getAttribute("data-at")).toBe("line");
   });
@@ -571,7 +572,7 @@ describe("what a terminal could not take (D6)", () => {
       hearRefusal?.(refused("s-vibe"));
     });
     expect(q(".vf-line-note").textContent).toBe(
-      "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it",
+      "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it; save it to a file and use its path",
     );
   });
 
@@ -582,7 +583,7 @@ describe("what a terminal could not take (D6)", () => {
     });
     // 299,001 bytes is said as 300 KB: a size is rounded up, what fits down, never equal
     expect(q(".vf-line-note").textContent).toBe(
-      "Not typed into the terminal — 300 KB, and typed text carries 261 KB of it",
+      "Not typed into the terminal — 300 KB, and typed text carries 261 KB of it; save it to a file and use its path",
     );
   });
 
@@ -592,13 +593,13 @@ describe("what a terminal could not take (D6)", () => {
       hearRefusal?.({ sessionId: "s-ros", kind: "paste", bytes: 4_194_306, limitBytes: 4_194_304 });
     });
     expect(q(".vf-line-note").textContent).toBe(
-      "Not pasted into rosetta — 4.2 MB, and one paste carries 4.1 MB of it",
+      "Not pasted into rosetta — 4.2 MB, and one paste carries 4.1 MB of it; save it to a file and use its path",
     );
   });
 
-  it("keeps each refusal under 70 characters beside the pane's name, to be read before it fades", () => {
-    // The note lives 2.4s (DESIGN.md §8) as one nowrap line from the line's
-    // left edge (composer.css) — a longer sentence is gone before it is read.
+  it("keeps what happened under 70 characters beside the pane's name, to be read before its advice", () => {
+    // The note says what happened, then what to do (DESIGN.md §8): the first half is the part that
+    // cannot wait, so it stays as short as a 2.4 s note's whole sentence.
     const name = "vibe-field";
     const said: number[] = [];
     mount("godview");
@@ -611,11 +612,59 @@ describe("what a terminal could not take (D6)", () => {
           act(() => {
             hearRefusal?.({ sessionId: "s-vibe", kind, bytes, limitBytes });
           });
-          said.push((q(".vf-line-note").textContent ?? "").length - name.length);
+          said.push(
+            (q(".vf-line-note").textContent ?? "").split(";", 1).join("").length - name.length,
+          );
         }
       }
     }
     expect(Math.max(...said)).toBeLessThan(70);
+  });
+
+  it("stands a size refusal past the 2.4 s, with its advice, until it has been read (HK Q5)", () => {
+    vi.useFakeTimers();
+    mount("godview");
+    act(() => {
+      hearRefusal?.({ sessionId: "s-vibe", kind: "paste", bytes: 300_000, limitBytes: 261_958 });
+    });
+    const note = q(".vf-line-note");
+    expect(note.textContent).toContain("save it to a file and use its path");
+    expect(note.getAttribute("data-stand")).toBe("read");
+    act(() => vi.advanceTimersByTime(2_400));
+    expect(q(".vf-line-note"), "gone at a plain note's 2.4 s").toBe(note);
+    act(() => vi.advanceTimersByTime(NOTE_READ_MS - 2_401));
+    expect(host?.querySelector(".vf-line-note"), "gone before it was read").not.toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(host?.querySelector(".vf-line-note")).toBeNull();
+  });
+
+  it("gives every other note its 2.4 s, the one said over a standing refusal included", () => {
+    vi.useFakeTimers();
+    mount("godview");
+    act(() => {
+      hearRefusal?.({ sessionId: "s-vibe", kind: "paste", bytes: 300_000, limitBytes: 261_958 });
+    });
+    act(() => {
+      sayOnLine("Could not jump — its pane is gone from the deck");
+    });
+    expect(q(".vf-line-note").getAttribute("data-stand")).toBeNull();
+    act(() => vi.advanceTimersByTime(2_399));
+    expect(host?.querySelector(".vf-line-note")).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(host?.querySelector(".vf-line-note")).toBeNull();
+  });
+
+  it("stands what the frame asks to be read, through the words-only door too", () => {
+    vi.useFakeTimers();
+    mount("godview");
+    act(() => {
+      sayOnLine("Not pasted — a card's refused play", "read");
+    });
+    expect(q(".vf-line-note").getAttribute("data-stand")).toBe("read");
+    act(() => vi.advanceTimersByTime(NOTE_READ_MS - 1));
+    expect(host?.querySelector(".vf-line-note")).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(host?.querySelector(".vf-line-note")).toBeNull();
   });
 
   it("stops hearing when the line goes", () => {

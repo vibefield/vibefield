@@ -248,6 +248,25 @@ afterEach(() => {
 });
 
 describe("the one drag machine (HN-4)", () => {
+  it("says a refused play for as long as its outcome asks: a refusal with its advice stands to be read (HK Q5)", async () => {
+    const store = new CardStore(() => 0);
+    const card = text("A long paste.");
+    store.deal(card);
+    const heard: Array<readonly [string, string]> = [];
+    offs.push(hearLineSays((note, stand) => heard.push([note, stand])));
+    place({
+      box: new DOMRect(100, 100, 400, 300),
+      played: { ok: false, note: "Not pasted into vibe-field", stand: "read" },
+    });
+    mountLayer();
+
+    act(() => startCardDrag(dragOf(card)));
+    act(() => pointer("pointermove", 7, 300, 250));
+    act(() => pointer("pointerup", 7, 300, 250));
+    await advance(PLAY_SHRINK_MS);
+    expect(heard).toEqual([["Not pasted into vibe-field", "read"]]);
+  });
+
   it("over a place, shows its label and its ring; let go, one copy plays in, its outcome is said once, and the card flies home, still in the hand (HN-D4)", async () => {
     const store = new CardStore(() => 0);
     const card = text("Move the route table. Into the files worker before the cut.");
@@ -937,7 +956,8 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
 
     await expect(target.play(text("A long paste."), { x: 900, y: 300 })).resolves.toEqual({
       ok: false,
-      note: "Not pasted into rosetta — 300 KB, and one paste carries 261 KB of it",
+      note: "Not pasted into rosetta — 300 KB, and one paste carries 261 KB of it; save it to a file and use its path",
+      stand: "read",
     });
     expect(claimed, "the line's hearer would have said it too").toEqual([true]);
     expect(refusalClaimed(), "claimed past the paste").toBe(false);
@@ -949,7 +969,8 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
     refusal = { ...refusal, sessionId: "s-new" };
     await expect(target.play(text("A long paste."), { x: 900, y: 300 })).resolves.toEqual({
       ok: false,
-      note: "Not pasted into rosetta — 300 KB, and one paste carries 261 KB of it",
+      note: "Not pasted into rosetta — 300 KB, and one paste carries 261 KB of it; save it to a file and use its path",
+      stand: "read",
     });
     expect(claimed).toEqual([true, true]);
     expect(refusalClaimed()).toBe(false);

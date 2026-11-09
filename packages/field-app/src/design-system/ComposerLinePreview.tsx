@@ -6,6 +6,7 @@ import {
   inputRefusalNote,
   type LinePane,
   type LineViewDoor,
+  NOTE_READ_MS,
   newTerminalNote,
 } from "../frame/line-door";
 import { SNAPSHOT_NO_DOOR } from "../frame/line-model";
@@ -129,7 +130,12 @@ function noteOf(state: LineState, seq: number): LineNote | null {
     return { seq, text: newTerminalNote({ state: "opened" }), at: "create" };
   }
   if (state === "refused") {
-    return { seq, text: inputRefusalNote(FIXTURE_REFUSAL, FIXTURE_PANES[0]?.name), at: "line" };
+    return {
+      seq,
+      text: inputRefusalNote(FIXTURE_REFUSAL, FIXTURE_PANES[0]?.name),
+      at: "line",
+      stand: "read",
+    };
   }
   return null;
 }
@@ -143,12 +149,15 @@ export function ComposerLinePlate({
   keys?: ViewKeys;
 }): ReactElement {
   const view = VIEW_OF[state];
-  // A note lives 2.4s and goes, as in the product; on its plate it is said
-  // again every 2.6s, so the state can be looked at rather than caught.
+  // A note lives its stand and goes, as in the product; on its plate it is said
+  // again just after, so the state can be looked at rather than caught.
   const [said, setSaid] = useState(1);
   useEffect(() => {
     if (state !== "opened" && state !== "refused") return;
-    const timer = window.setInterval(() => setSaid((count) => count + 1), 2_600);
+    const timer = window.setInterval(
+      () => setSaid((count) => count + 1),
+      state === "refused" ? NOTE_READ_MS + 200 : 2_600,
+    );
     return () => window.clearInterval(timer);
   }, [state]);
   return (

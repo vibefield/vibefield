@@ -413,16 +413,25 @@ export function useHistorySaid(): { readonly seq: number; readonly text: string 
 // a run that could not be shown is never only a log line (the honest-states
 // rule). The line's controller hears; anyone in the frame may speak.
 
-const lineHearers = new Set<(text: string) => void>();
+/** How long a note stands: `said`, the line's 2.4 s; `read`, `NOTE_READ_MS`, for a sentence that
+ * carries advice. */
+export type NoteStand = "said" | "read";
+
+/** A note with advice to read (DESIGN.md §8 "The note", HK Q5): a size refusal's longest sentence,
+ * 24 words at 238 a minute (silent reading of non-fiction, Brysbaert 2019), and the note's own rise
+ * and fade, to the tenth of a second. composer.css spells it too. */
+export const NOTE_READ_MS = 6_600;
+
+const lineHearers = new Set<(text: string, stand: NoteStand) => void>();
 
 /** Say `text` in the line's note. False when no line is mounted to hear it. */
-export function sayOnLine(text: string): boolean {
-  for (const hear of lineHearers) hear(text);
+export function sayOnLine(text: string, stand: NoteStand = "said"): boolean {
+  for (const hear of lineHearers) hear(text, stand);
   return lineHearers.size > 0;
 }
 
-/** The line's side: hear what the frame says. */
-export function hearLineSays(hear: (text: string) => void): () => void {
+/** The line's side: hear what the frame says, and how long it stands. */
+export function hearLineSays(hear: (text: string, stand: NoteStand) => void): () => void {
   lineHearers.add(hear);
   return () => {
     lineHearers.delete(hear);
@@ -454,8 +463,8 @@ export function hearLineCreateOver(hear: (over: boolean) => void): () => void {
 // larger than the link to it carries (`terminal/routed/encode-input.ts`). The
 // runtime says nothing of an input it was never handed, so the line does, in
 // the note an act's outcome is said in (DESIGN.md §8 "The line"): what
-// happened, with its numbers — which are what to do instead — in under 70
-// characters beside the pane's name, so it is read before the note fades.
+// happened, with its numbers, in under 70 characters beside the pane's name,
+// then what to do (HK Q5), on a note that stands until all of it is read.
 
 /** Why a terminal refused an input, in numbers: its size, and how much of it
  * one paste (or typed text) carries — both the text's own bytes, so "of it":
@@ -472,7 +481,7 @@ export function inputRefusalWhy(refusal: RoutedInputRefusal): string {
 export function inputRefusalNote(refusal: RoutedInputRefusal, name?: string): string {
   const into = name ?? "the terminal";
   const verb = refusal.kind === "text" ? "typed" : "pasted";
-  return `Not ${verb} into ${into} — ${inputRefusalWhy(refusal)}`;
+  return `Not ${verb} into ${into} — ${inputRefusalWhy(refusal)}; save it to a file and use its path`;
 }
 
 // A paste the frame makes ITSELF into a pane — a card played from the hand

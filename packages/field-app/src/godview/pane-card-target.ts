@@ -114,7 +114,7 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
         stop();
       }
       if (heard.refusal !== null) {
-        return { ok: false, note: inputRefusalNote(heard.refusal, pane.name) };
+        return { ok: false, note: inputRefusalNote(heard.refusal, pane.name), stand: "read" };
       }
       return took
         ? { ok: true, note: OUTCOME_WORDS.pasted(pane.name) }

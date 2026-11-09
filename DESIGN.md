@@ -1690,7 +1690,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     *Was 32 round, 6 clear of the track, until HN-2. History's create was Resume (AR-8c), and Jump
     to while the chosen session ran here (P3, 2026-10-08), until HN-7.*
   **The note** — the frame's voice at the foot: solid chrome, 12/500 in secondary ink, rising 4px as
-  it fades in, for 2.4s. Create's outcomes and what History's acts say stand **centred over create**
+  it fades in, for 2.4s (a size refusal, below, for 6.6 s). Create's outcomes and what History's acts say stand **centred over create**
   ("Terminal opened in the active pane": it takes the focused pane, GV-D4 — "… in a new pane"
   retired with the re-ruling of 2026-10-18); everything else stands with **its left edge on the
   line's**, growing rightward, so a long sentence never leaves the window by its left edge — a
@@ -1700,13 +1700,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   pane, or a card played into one — is never dropped unsaid: the note says its size and how much of
   it one paste carries, both as Finder counts the text (§9 — its own bytes, in thousands; its tabs,
   quotes and control characters cost the link more, so the second figure is this paste's, "of it",
-  not a fixed one), the size rounded up and what fits down so the two never read as equal — "Not
-  pasted into vibe-field — 300 KB, and one paste carries 261 KB of it". Typed text that large says
-  "Not typed into vibe-field — 300 KB, and typed text carries 261 KB of it"; a session no pane of the
-  deck shows is "the terminal". The phone's terminal card says the same sentence, with "the terminal"
-  for the name and the limit its leg negotiated, so one paste reads alike on every device. Each is
-  under 70 characters beside the pane's name, to be read in the note's 2.4s; what to do next is in
-  its numbers. *Corrected 2026-10-11:* "Pasted into" was said while the pane's input was closed, and
+  not a fixed one), the size rounded up and what fits down so the two never read as equal, then what
+  to do — "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it; save it to a file
+  and use its path". Typed text that large says "Not typed into vibe-field — 300 KB, and typed text
+  carries 261 KB of it; save it to a file and use its path"; a session no pane of the deck shows is
+  "the terminal". What happened comes first and stays under 70 characters beside the pane's name.
+  **This note alone stands 6.6 s,** because it carries advice: its longest sentence is 24 words (a
+  name is one word, and "the terminal" two), 6.05 s at 238 words a minute (silent reading of
+  non-fiction, Brysbaert 2019), and its own rise and fade, 192 and 360 ms as a plain note's, make
+  6.6. Only this sentence wraps, 92 clear of the window's width (the line's 76 from the left and 16
+  of margin), so it can never run off a narrow window; in a wide one it is one line. The phone's
+  terminal card says the sentence without its advice, with "the terminal" for the name and the limit
+  its leg negotiated: the advice there is owed. *Corrected 2026-11-09 (HK Q5, James on the
+  housekeeping page, 2026-10-28, "Show the advice again"; "held" read as stands longer, VF-PM
+  02:24Z):* the sentence dropped "save it to a file and use its path" on 2026-10-17, because 24
+  words cannot be read in 2.4 s and 118 characters ran off the window; this note stood 2.4 s and
+  said only "what to do next is in its numbers" until now. *Corrected 2026-10-11:* "Pasted into" was said while the pane's input was closed, and
   the paste was lost; it is never said for a paste the pane did not take.
   **Where the typing went** (LN-D3; HN-2, 2026-10-29): the rule, the draft and @'s list, the mic and
   send left the line, and with them the interim send (thinking-four-views §11: a draft aimed at a
