@@ -3393,8 +3393,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       level crossing never leaves the hover. Leaving arms a **320ms** grace, and entering the card or the circle
       again in it cancels it; entering another circle or the add while a card shows waits a **120ms** dwell, and
       reaching the shown card first cancels that. The first open, with nothing showing, is at once. A pinned card
-      can still be peeked over this way, as before (*added 2026-11-09, UM-R; the two numbers are those the file
-      tree's hover contract records, "opened after 120ms and closed after a 320ms grace"*).
+      can still be peeked over this way, as before (*added 2026-11-09, UM-R; the two numbers are the edge drawer's,
+      retired HN-8, "opened after 120ms and closed after a 320ms grace" §8 "Edge trays", the only hover contract
+      recorded*).
     - **The head:** the profile's glyph (15) and its name at 14/600; a **default** tag when there are several
       profiles (10/600, padded 3 6, a capsule ringed by the strong hairline, in the secondary ink); the reading's
       age at 11.5 in the tertiary ink; and × at the end, a 24 round on the ink at 6% holding `close` 11 in the
