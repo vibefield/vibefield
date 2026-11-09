@@ -102,16 +102,20 @@ const card = (...faces: readonly [Face, ...Face[]]): Card => ({
 
 describe("landing: §4.4's table", () => {
   it("pastes words, paths and addresses into any pane, Return never pressed", () => {
-    expect(landing(OUTLINE, AGENT)).toEqual({ lands: true, verb: "Paste its outline" });
-    expect(landing(OUTLINE, SHELL)).toEqual({ lands: true, verb: "Paste its outline" });
-    expect(landing(OPML, AGENT)).toEqual({ lands: true, verb: "Paste the OPML's path" });
-    expect(landing(PICTURE, SHELL)).toEqual({ lands: true, verb: "Paste the picture's path" });
-    expect(landing(ADDRESS, AGENT)).toEqual({ lands: true, verb: "Paste the address" });
-    expect(landing(SESSION, AGENT)).toEqual({ lands: true, verb: "Paste the session" });
+    expect(landing(OUTLINE, AGENT)).toEqual({ lands: true, verb: "Paste", noun: "its outline" });
+    expect(landing(OUTLINE, SHELL)).toEqual({ lands: true, verb: "Paste", noun: "its outline" });
+    expect(landing(OPML, AGENT)).toEqual({ lands: true, verb: "Paste", noun: "the OPML's path" });
+    expect(landing(PICTURE, SHELL)).toEqual({
+      lands: true,
+      verb: "Paste",
+      noun: "the picture's path",
+    });
+    expect(landing(ADDRESS, AGENT)).toEqual({ lands: true, verb: "Paste", noun: "the address" });
+    expect(landing(SESSION, AGENT)).toEqual({ lands: true, verb: "Paste", noun: "the session" });
   });
 
   it("hands a live object only to an agent the door can name, and refuses the rest in words", () => {
-    expect(landing(LIVE, AGENT)).toEqual({ lands: true, verb: "Hand over the live map" });
+    expect(landing(LIVE, AGENT)).toEqual({ lands: true, verb: "Hand over", noun: "the live map" });
     expect(landing(LIVE, SHELL)).toEqual({
       lands: false,
       reason: "Nothing in this pane can work on it",
@@ -121,19 +125,23 @@ describe("landing: §4.4's table", () => {
       reason: "Copilot can't work on desk objects yet",
     });
     const page: RefFace = { ...LIVE, label: "Live page", kindName: "Browser pane" };
-    expect(landing(page, AGENT)).toEqual({ lands: true, verb: "Hand over the live page" });
+    expect(landing(page, AGENT)).toEqual({ lands: true, verb: "Hand over", noun: "the live page" });
   });
 
   it("makes a chip of every face in Chat, a ref's grant waiting for the send", () => {
-    expect(landing(OUTLINE, CHAT)).toEqual({ lands: true, verb: "Add its outline" });
-    expect(landing(PICTURE, CHAT)).toEqual({ lands: true, verb: "Add the picture's path" });
-    expect(landing(LIVE, CHAT)).toEqual({ lands: true, verb: "Add the live map" });
+    expect(landing(OUTLINE, CHAT)).toEqual({ lands: true, verb: "Add", noun: "its outline" });
+    expect(landing(PICTURE, CHAT)).toEqual({
+      lands: true,
+      verb: "Add",
+      noun: "the picture's path",
+    });
+    expect(landing(LIVE, CHAT)).toEqual({ lands: true, verb: "Add", noun: "the live map" });
   });
 
   it("gives the desk a note, a print, the object it already holds, and says why not for the rest", () => {
-    expect(landing(OUTLINE, DESK)).toEqual({ lands: true, verb: "Place as a note" });
-    expect(landing(PICTURE, DESK)).toEqual({ lands: true, verb: "Place as a print" });
-    expect(landing(LIVE, DESK)).toEqual({ lands: true, verb: "Go to it" });
+    expect(landing(OUTLINE, DESK)).toEqual({ lands: true, verb: "Place as", noun: "a note" });
+    expect(landing(PICTURE, DESK)).toEqual({ lands: true, verb: "Place as", noun: "a print" });
+    expect(landing(LIVE, DESK)).toEqual({ lands: true, verb: "Go to", noun: "it" });
     expect(landing(OPML, DESK)).toEqual({ lands: false, reason: "The desk can't hold a file yet" });
     expect(landing(SESSION, DESK)).toEqual({
       lands: false,
@@ -148,7 +156,8 @@ describe("landing: §4.4's table", () => {
     });
     expect(landing(ADDRESS, { at: "desk", browser: true })).toEqual({
       lands: true,
-      verb: "Open a browser pane at it",
+      verb: "Open",
+      noun: "a browser pane at it",
     });
   });
 
@@ -184,6 +193,16 @@ describe("bloomOf and dragLabelOf (the drop's model)", () => {
     ]);
     expect(model.buds[0]?.reason).toBe("Nothing in this pane can work on it");
     expect(dragLabelOf(model, "zsh")).toEqual({ ok: true, label: "Let go: 3 ways into zsh" });
+  });
+
+  it("splits a bud's words, so the noun can stand at full ink and the verb at 40% (DESIGN.md §8)", () => {
+    const [live, outline] = bloomOf(card(LIVE, OUTLINE), AGENT).buds;
+    expect([live?.verb, live?.noun]).toEqual(["Hand over", "the live map"]);
+    expect([outline?.verb, outline?.noun]).toEqual(["Paste", "its outline"]);
+    const [lone] = bloomOf(textCardOf("Ship it.", BASE), AGENT).buds;
+    expect([lone?.verb, lone?.noun]).toEqual(["Paste into", "claude·2"]);
+    const [refused] = bloomOf(card(LIVE), SHELL).buds;
+    expect([refused?.verb, refused?.noun]).toEqual(["", ""]);
   });
 
   it("plays one that fits alone at once, under its own verb", () => {

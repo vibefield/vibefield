@@ -1342,10 +1342,14 @@ describe("the drop (OB-1b, §4.3)", () => {
     expect(bloom?.model.hub).toBe("ref");
     expect(bloom?.model.onlyFit).toBeNull();
     expect(bloom?.at).toEqual({ x: 300, y: 250 });
-    expect(getCarriedCard()?.phase).toBe("carry");
+    // the hub: where it was let go, and no longer following the pointer
+    expect(getCarriedCard()).toMatchObject({ phase: "hub", x: 300, y: 250, answer: null });
+    act(() => pointer("pointermove", 7, 40, 40));
+    expect(getCarriedCard()).toMatchObject({ phase: "hub", x: 300, y: 250 });
     expect(played).toEqual([]);
 
     await act(async () => bloom?.choose("outline"));
+    expect(getCarriedCard()?.phase).toBe("play");
     await advance(PLAY_SHRINK_MS);
     expect(faces).toEqual(["outline"]);
     expect(played[0]?.at).toEqual({ x: 300, y: 250 });
