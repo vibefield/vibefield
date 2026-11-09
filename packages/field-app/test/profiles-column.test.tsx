@@ -1092,6 +1092,47 @@ describe("closing is one act (UM-R3): the pin, the pointer's hold and the keyboa
   });
 });
 
+/* ── the card's details (UM-R5) ──────────────────────────────────────────── */
+
+describe("the card's details (UM-R5): §7 'Off', the truncations, the rings, the motion-off lists", () => {
+  const block = (selector: string): string => {
+    const escaped = selector.replace(/[.:*+?^${}()|[\]\\]/gu, "\\$&");
+    return new RegExp(`\\n${escaped} \\{[^}]*\\}`, "u").exec(CSS)?.[0] ?? "";
+  };
+
+  it("draws the limit card's off act as §7's off pill: no fade, the quiet fill and t4 (§7 'Off')", () => {
+    const off = block(".vf-profiles-limit-act:disabled");
+    expect(off).not.toContain("opacity: 0.4");
+    expect(off).toContain("color: var(--vf-text-faint);");
+    expect(off).toContain("background: color-mix(in srgb, var(--vf-foreground) 5%, transparent);");
+  });
+
+  it("truncates the popover's name and its foot rather than wrapping them", () => {
+    for (const truncating of [".vf-profiles-pop-name", ".vf-profiles-pop-lens"]) {
+      const rule = block(truncating);
+      expect(rule, truncating).toContain("overflow: hidden;");
+      expect(rule, truncating).toContain("text-overflow: ellipsis;");
+      expect(rule, truncating).toContain("white-space: nowrap;");
+    }
+  });
+
+  it("rings ×, Retry/Sign in and Agent Profiles… on keyboard focus", () => {
+    const ring = /\n\.vf-profiles-pop-close:focus-visible,[^{]*\{[^}]*\}/u.exec(CSS)?.[0] ?? "";
+    expect(ring).toContain(".vf-profiles-pop-row-act:focus-visible");
+    expect(ring).toContain(".vf-profiles-pop-open:focus-visible");
+    expect(ring).toContain("outline: 2px solid var(--vf-select);");
+  });
+
+  it("names the limit card's acts in both motion-off lists", () => {
+    const reduced =
+      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\n\}/u.exec(CSS)?.[0] ?? "";
+    expect(reduced).toMatch(/\.vf-profiles-limit-act,[^{]*\{\s*transition: none;/u);
+    expect(CSS).toMatch(
+      /\.vf-godview\[data-godview-animations="off"\] \.vf-profiles-limit-act,[^{]*\{\s*transition: none;/u,
+    );
+  });
+});
+
 /* ── names (the column's sheet stands beside Settings') ─────────────────── */
 
 describe("the column's names stand apart from Settings' own", () => {

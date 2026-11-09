@@ -285,6 +285,14 @@ describe("the card's stylesheet, held to DESIGN.md §8 and §2.7 (AO-6b3; beside
     );
   });
 
+  it("draws the strip's off act as §7's off: no fade, the strip's own t4 (UM-R5; ApprovalWaitMoment's disabled act)", () => {
+    const off = rule(".vf-monitor-moment-act:disabled");
+    expect(off).not.toContain("opacity: 0.4");
+    expect(off).toContain("color: var(--text-faint)");
+    expect(off).toContain("background: transparent");
+    expect(off).toContain("border-color: var(--panel-border)");
+  });
+
   it("keeps the card's primary label on hover, beside the add: its ink comes with the hover's ground (UM-D23)", () => {
     // the review: the card's hover (0,3,0) set only the ground, so Add a profile… kept the primary's label — the
     // card's own solid — on the pale hover fill, AO-6b3's fixed bug come back at the new anchor
