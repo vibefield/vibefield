@@ -363,8 +363,9 @@ interface CanvasFacts {
  * a registry census on its own, so without this number a renderer that quietly
  * fell back would look exactly like one that staged correctly — the field must
  * be filled the real way. Since PT-1 the staged renderer modules are FIVE: the
- * product's three (`plugins/browser` — its Artifacts panel — VibeField's own comment
- * pad, `plugins/comment-pad`, and the browser pane, `plugins/browser-pane`, bundled,
+ * repo's three (`plugins/browser` — its Artifacts panel — VibeField's own comment
+ * pad, `plugins/comment-pad`, and the browser pane, `plugins/browser-pane`, in a dev run's `plugins/` root (no
+ * packaged app carries the pane since 2026-11-09),
  * built by build:all through field-app's dependencies) and two dev-linked examples — the behavior-conformance carrier and
  * the desk clock (DK-6: `examples/plugins/desk-clock`), built by build:all through
  * field-app's dev dependencies (the carrier since DK-8 — before that it staged
@@ -402,7 +403,7 @@ const CANVAS_CENSUS = {
   // DK-8: 7 → 6 → 5 → 4 — `vibefield.note`, `vibefield.field-tools` and `examples/plugins/widgetlab` retired
   // (ICE's note and mini mat, the comment pad; widgetlab's demos go): the browser's Artifacts panel, the comment
   // pad, the behavior-conformance carrier and the example desk clock stay. PT-1: 4 → 5 — the browser pane
-  // (`plugins/browser-pane`, objects-only, bundled and built through field-app's dependencies as the pad is).
+  // (`plugins/browser-pane`, objects-only, in a dev run's root, built through field-app's dependencies as the pad is).
   minStagedPlugins: 5,
   // THE CSS CENSUS RETIRED (DK-8; the plan's retire table — "the CSS census in `smoke:canvas` and
   // `smoke:plugin-restart`", DK-5 kept it for here): it counted the scoped stylesheets of the plugins that

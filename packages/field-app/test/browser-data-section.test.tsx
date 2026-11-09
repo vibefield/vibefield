@@ -8,6 +8,7 @@ import { type FieldBrowserDataHost, type FieldHost, setHost } from "../src/host"
 import {
   BrowserDataSection,
   clearedWords,
+  hasBrowserPane,
   SIGN_INS_UNTIL_QUIT,
 } from "../src/panels/BrowserDataSection";
 
@@ -158,5 +159,13 @@ describe("Settings › General › Browsing data (BP-D4)", () => {
     expect(clearedWords({ profiles: 1, pages: 1 })).toBe(
       "Cleared: every site on your desk is signed out · 1 open page reloaded.",
     );
+  });
+});
+
+describe("where the section stands", () => {
+  it("is only where a browser pane is: a packaged app carries none (the first launch's lineup)", () => {
+    expect(hasBrowserPane(null)).toBe(false);
+    expect(hasBrowserPane({ plugins: [{ id: "vibefield.browser" }] } as never)).toBe(false);
+    expect(hasBrowserPane({ plugins: [{ id: "vibefield.browser-pane" }] } as never)).toBe(true);
   });
 });

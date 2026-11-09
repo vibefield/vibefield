@@ -1,4 +1,8 @@
-import type { BrowserDataClearResult, DesktopBrowserSignIns } from "@vibefield/contracts";
+import type {
+  BrowserDataClearResult,
+  DesktopBrowserSignIns,
+  PluginRegistrySnapshot,
+} from "@vibefield/contracts";
 import { InlineNotice, UiButton, UnavailableState } from "@vibefield/design-kit";
 import { type ReactElement, useCallback, useState } from "react";
 import { getHost } from "../host";
@@ -32,6 +36,12 @@ export type BrowserDataFlow =
   | { readonly kind: "failed"; readonly message: string };
 
 const IDLE: BrowserDataFlow = { kind: "idle" };
+
+/** The section is the browser pane's, so it stands only where a pane is: a packaged app has none since the first
+ * launch's lineup (James, 2026-11-09), and nothing else uses the profile this clears. */
+export function hasBrowserPane(snapshot: PluginRegistrySnapshot | null): boolean {
+  return snapshot?.plugins.some((plugin) => plugin.id === "vibefield.browser-pane") ?? false;
+}
 
 /** What a clear's answer is said in: main's counts, never more than they say. */
 export function clearedWords(result: BrowserDataClearResult): string {

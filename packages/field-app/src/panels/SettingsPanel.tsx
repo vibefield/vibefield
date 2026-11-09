@@ -20,6 +20,7 @@ import { hasLink, linkFace, type UserLinkStatus } from "../account/link";
 import { refusalSentence, useAccountSnapshot } from "../account/use-account";
 import { leaveFor } from "../boot/switch";
 import { getHost } from "../host";
+import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
 import { finishSetupRows, useSetupLedger } from "../setup/ledger";
 import { SetupSheet } from "../setup/SetupSheet";
 import { useHistoryCensus } from "../setup/use-history-census";
@@ -29,7 +30,7 @@ import { AgentsSection } from "./agents/AgentsSection";
 import { type ProfilesRoute, ProfilesSection } from "./agents/ProfilesSection";
 import { ProfileMark } from "./agents/ProfilesView";
 import { profileNavItems } from "./agents/profiles-model";
-import { BrowserDataSection } from "./BrowserDataSection";
+import { BrowserDataSection, hasBrowserPane } from "./BrowserDataSection";
 import { DeskReadout } from "./DeskReadout";
 import { DesktopSection } from "./DesktopSection";
 import { DevicesSection } from "./DevicesSection";
@@ -259,6 +260,7 @@ export function SettingsPanel({
           },
         };
   const handledDiagnosticsRequest = useRef(diagnosticsRequest);
+  const pluginSnapshot = usePluginRegistrySnapshot();
   const [activePage, setActivePage] = useState<SettingsPage>(
     diagnosticsInitiallyOpen ? "diagnostics" : initialPage,
   );
@@ -497,7 +499,9 @@ export function SettingsPanel({
           onSettingsChanged={markSettingsChanged}
         />
         {/* BP-D4 — the desk browser's data: Clear browsing data; BP-1c — and whether it keeps sign-ins here */}
-        <BrowserDataSection signIns={desktopState?.browser?.signIns} />
+        {hasBrowserPane(pluginSnapshot) ? (
+          <BrowserDataSection signIns={desktopState?.browser?.signIns} />
+        ) : null}
         <SettingsSection
           title="Settings history"
           description="User preferences are stored in the synced Loro settings document."
