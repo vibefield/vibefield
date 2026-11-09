@@ -1484,8 +1484,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
 ## 8. Component canon
 
 - **Artifacts — the Artifacts shelf's contents** (AH-3/4; amended 2026-08-03; the Artifact Hub side
-  panel until One Frame FR-4, the right edge's drawer until HN-8): a `vibefield.browser`
-  contribution in the spine-owned `hud.side-panel` slot.
+  panel until One Frame FR-4, the right edge's drawer until HN-8): field-app's own (`frame/apps/LiveApps.tsx`).
+  *Amended 2026-11-09 (FL-2; James: "i want it to be fully refactored now"):* until now this was a
+  `vibefield.browser` plugin's contribution to the spine-owned `hud.side-panel` slot. The plugin and the slot are
+  gone and **Live apps have no off**: the four states the shelf said with no plugin bound, and the plugin's Off
+  that hid the tiles while the apps went on serving, went with them. "The Hub", below and in the entries that cite
+  this one, names only this panel.
   *Retired into the right edge 2026-10-03 (One Frame FR-4, FC-D10 — closes D-7; F10):* the panel's
   40px round toggle (the top-right cluster's outermost, then the head's right slot at FR-3) and its
   26rem stage are gone. Until HN-8 the right notch (`package`) was Artifacts' only door and its
@@ -1497,10 +1501,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *Moved into the head 2026-10-30 (PL-D1…PL-D3 ruled by James 2026-10-29, Cards in Hand —
   "Artifacts are what your desks make, so they sit with your fields"; built at HN-8):* **its doors
   are the pill's package button and, under a cover, the package circle** (§8 "The head"), and **its
-  host is the pill's sheet, on its Artifacts shelf** — the SAME `hud.side-panel` contribution,
+  host is the pill's sheet, on its Artifacts shelf** — the SAME panel,
   mounted in the shelf at the open sheet's width (504 inside the sheet's padding at 544), a width
   it keeps while the sheet grows and folds, clipped by the sheet, so the Hub never reflows
-  mid-morph. There the plugin's own stylesheet answers the shelf with **its tile form** (PL-D3,
+  mid-morph. There its own stylesheet answers the shelf with **its tile form** (PL-D3,
   "Tiles, like your fields"): a container query at the shelf's width lays the catalog out three
   across, as the fields' tiles are (16 between rows, 14 between columns) — each tile the preview
   (16:10, corners 10, the hairline ring), the name (12/500 in primary ink), where it runs (the fact
@@ -1520,22 +1524,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   lone Publish… tile, so one Publish… is on screen.
   Above the tiles the header stays the Hub's: “Artifacts” and its quiet count ("4 shared"). It keeps
   its words and its acts — open, Copy URL, and for the owner Refresh preview, Rename and Remove —
-  its copy waiting on an SDK copy door (item 111, the fixer's; B3 keeps the button as it is). In the
+  its copy a copy like any other since FL-2: a card dealt into the hand, and the row says "Copied" (§8 "Copy"). In the
   shelf it draws no close of its own ("Close panel" was the side panel's and the drawer's): Escape,
   the dim and the button that is on close the sheet, and Escape gives the keyboard back to the
-  button that opened it. **With no Hub bound the shelf is never blank** — it says why, in one of
-  four states. **Off** (the Browser plugin present and `enabled: false`, its state `disabled`):
-  **"Artifacts are off"** over "Turn on the Browser plugin in Settings › Plugins." **Can't run**
-  (its state `invalid` or `incompatible`, on or off — turning it on would not help — or the plugin
-  absent from the registry): **"Artifacts can't run"** over "The Browser plugin can't run in this
-  VibeField — see Settings › Plugins." **Opening** (the plugin enabled and its Hub not yet bound,
-  or the registry not yet answered): **"Opening Artifacts…"**, late as History's opening words are
-  (nothing for 120ms, then a 180ms `ease` fade), so a quick restart never flashes them. **Not
-  starting** (still opening after **10 s**): **"Artifacts aren't starting"** over "Turn the Browser
-  plugin off and on in Settings › Plugins." Whichever it says, the Hub takes the shelf the moment
-  it binds, and an open shelf stays open through a restart. *(Until HN-8 no Hub meant no notch
-  — a door to nothing would lie — and an open drawer folded with it; the package is the head's own
-  now, and its shelf says why it is empty.)* The narrow form retires with the 152 column it
+  button that opened it. **The shelf is never blank:** the panel says what it is doing in its own
+  states (§9 "Apps" words them). While it reads the catalog it says so, a catalog it cannot read or
+  reach says it is unavailable with **Try again**, and an empty one its quiet state above. Across a
+  restart of the daemons an open shelf stays open, the tiles stand and the window's client replays a
+  fresh catalog; an act in that gap says so in the panel's inline error. A panel that throws is held
+  to its own group, as the dashed unavailable face (§2.3), and From your agents stands under it.
+  *(From HN-8 until FL-2, with no plugin bound, the shelf said why in one of four states: off, can't
+  run, opening, and not starting after 10 s. Until HN-8 no Hub meant no notch — a door to nothing
+  would lie — and an open drawer folded with it.)* The narrow form retires with the 152 column it
   answered; the spine's arbitration is the frame's one owner (§10), and M6 stands.
   *Corrected 2026-10-28 (the housekeeping pass):* this entry still described the retired panel —
   fixed `top-16 right-0 bottom-0 w-[min(92vw,26rem)]`, `rounded-l-[2.5rem]`, sheet material, the
@@ -1560,19 +1560,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *Amended 2026-11-05 (track MA; MA-D9 and MA-D13 (a), MA-D10 (b), ruled by James on the page Apps in
   a Pocket; `draft/thinking-mini-apps.md` §4.8):* **the shelf is Apps.** This entry keeps its name, so
   the code and the lines that cite it still find it, and the internal names stay as they are: the
-  `artifacts` surface, `.vf-artifact-*`, `vibefield.browser.artifacts`, `data-shelf`. "Artifact" stays
+  `artifacts` surface, `.vf-artifact-*`, `data-shelf`. "Artifact" stays
   the inside word. Every screen word above, and in "The head", that names the shelf reads Apps
   (§9 "Apps"), except the Hub's header above the tiles, which reads "Live" (below); the code changes
   at MA-4, after this line. The package keeps its glyph (§13). The shelf holds two groups:
   - **Live** comes first, as the shelf is today, under the Hub's header, which now reads "Live":
-    Publish… first, then the Proxy and Folder tiles. The Hub's states above (its four with no Hub
-    bound, and its empty catalog's) now speak for Live alone, in §9's words.
+    Publish… first, then the Proxy and Folder tiles. The Hub's states above (its reading, its
+    unavailable and its empty catalog's) speak for Live alone, in §9's words.
   - **From your agents** follows: the pages your agents made, newest first, by day, with a search
     field in the group's head that searches them (the frame's Peek, ⌘F, does not find apps yet). field-app
-    draws it beside the hosted Hub, since its doors are no plugin's, so it stands whether a Hub is
-    bound or not. It stands **24 under Live** (the lead, 2026-11-06, at MA-4c), whether Live shows
-    its tiles or one of its states, and Live's states fill the shelf's height only when no made group
-    follows them.
+    draws it under Live, whatever Live shows. It stands **24 under Live** (the lead, 2026-11-06, at MA-4c).
   - **A made tile keeps the tile form.** Its 16:10 well (corners 10, the hairline ring) holds the
     app's preview, AH-4's still. Until it has one, the fallback squircle (§2.9's one exception; §8
     "The phone's Apps", the icon) stands centred in the well at 60, the phone's Recent size. Under the
@@ -2814,10 +2811,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     into a pane, onto the desk and through a view's cell, and another app's paste and drag. ⌘C in a
     pane waits on ghosttea's routed selection text (petition G30: its routed `copySelection` answers
     nothing at 0.13.7, and its clipboard write carries no reason to tell ⌘C from a program's); Copy
-    in History's room on a copy port in rosetta's room (petition RO-31); the Artifacts shelf's copy
-    of a URL (the right edge's drawer's until HN-8; the shelf keeps the Hub's button as it is) on an
-    SDK copy door (item 111: a plugin cannot reach the host's, R10, and the page's own write is denied
-    by the empty grant set).
+    in History's room on a copy port in rosetta's room (petition RO-31). *Corrected 2026-11-09 (FL-2,
+    item 111):* this also said the Artifacts shelf's copy of a URL waited on an SDK copy door, because a
+    plugin could not reach the host's (R10) and the page's own write is denied by the empty grant set.
+    The panel is the app's now, and its Copy URL deals a card as Settings' Copy link does.
 - **Pills** (`UiPill`; the settings rows' `SettingsPill`): full-round, padded 2 × 8, 10px
   medium in tertiary ink on the foreground at 5% — a label, never a control: a plugin's source
   (below), a fact beside a name.
@@ -2922,7 +2919,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     state is the shelf's to say. With the dot on, the tooltip and the name say which —
     **"Artifacts — vibe-field's source is unavailable"** — or, past one, how many — **"Artifacts — 2
     sources unavailable"**. The head reads the catalog itself, over the window's fieldd client, so
-    the dot stands while the sheet is shut and whether the Hub is running or not.
+    the dot stands while the sheet is shut.
   - **The pill's sheet** — the fields explorer, grown to two shelves (PL-D1; built at HN-8) — grows
     FROM the pill (M1): one element, 600ms on the island curve, still at `top-2`, to **544 × 420** —
     `min(56%, 34rem)` wide, as before, and 420 tall, never ending nearer the line than 8 on a
@@ -2939,7 +2936,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     in place (§6); pressing the one that is on, Esc or the dim closes it. **Fields** is the explorer
     as it was: the doc tiles (the fields explorer, above) in three columns, **New field** first, in
     words, the current field ringed, under the explorer's fade at the shelf's foot. **Artifacts**
-    is the Hub's, hosted there (§8 "Artifacts — the Artifacts shelf's contents"): its tiles three
+    is the Hub's, drawn there (§8 "Artifacts — the Artifacts shelf's contents"): its tiles three
     across, as the fields' are, **Publish…** first, in words, and Publish… changing the shelf in
     place to its step, "Publish" — Proxy and Folder, two cards side by side. It has **no fade at
     its foot**, so the Hub's buttons are never faded. *(Until HN-8 it was the fields explorer
@@ -7612,15 +7609,11 @@ him and are not invented here.
   (until DS-9)›.
 - **The desktop's shelf.** The package's name and tooltip are **Apps** ("Close the apps" while its shelf shows), and
   its dot says "Apps — vibe-field's source is unavailable" or "Apps — 2 sources unavailable". The Hub's states speak
-  for **Live** alone, since **From your agents** is drawn whether a Hub is bound or not (§8). With no Hub bound, Live
-  says why in one of §8's four states, over §8's second lines ‹for James: their headings; renamed as they stand,
-  "Apps are off", "Apps can't run", "Opening Apps…" and "Apps aren't starting" would say the whole shelf is down
-  while your agents' apps still open›. An empty Live says **"No apps yet"** with its one **Publish…** ‹for James:
+  for **Live** alone, since **From your agents** stands under whatever Live says (§8). *(Live's four waits, and the
+  ‹for James› on their headings, retired at FL-2, 2026-11-09: Live has no off.)* An empty Live says **"No apps yet"** with its one **Publish…** ‹for James:
   that heading, false while your agents' pages stand below it, and its second line›. ‹for James: the Live header's
   quiet count ("4 shared"), and whether the made group has one›.
-  *Interim words (the lead, 2026-11-06, at MA-4c; each is owed to James, and his replace it):* Live's four states
-  read **"Live apps are off"**, **"Live apps can't run"**, **"Opening live apps…"** and **"Live apps aren't
-  starting"**, over §8's second lines as they stand. Live's reading says "Loading live apps", and its unreadable
+  *Interim words (the lead, 2026-11-06, at MA-4c; each is owed to James, and his replace it):* Live's reading says "Loading live apps", and its unreadable
   catalog says "Live apps unavailable" over "The app catalog could not be read." A build without it says "Live
   apps are unavailable in this build." Its errors say app where they said artifact ("That app no longer exists.",
   "The app limit has been reached."). Its list form's plus is "Add app", a tile's menu "App actions", its

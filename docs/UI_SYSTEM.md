@@ -65,13 +65,13 @@ glyph specimens mount §13's `FieldGlyph`.
 The catalog currently mounts these shipping views directly:
 
 - Artifact Hub and all empty/loading/populated/unavailable states — at the width the pill's sheet
-  gives its Artifacts shelf since HN-8, a container its plugin's own tile form answers (PL-D3); the
+  gives its Artifacts shelf since HN-8, a container its own tile form answers (PL-D3); the
   side panel's contents, which the right edge's drawer held from One Frame FR-4 until then
 - *added 2026-11-05 (MA-4a; the lead's C18):* From your agents, the shelf's second group (DESIGN.md
   §8 "Artifacts — the Artifacts shelf's contents", as amended; MA-D13 (a): on screen the shelf is
   Apps, and "artifact" stays the code's word) — the shipping `MadeApps` on its own fixture adapter,
-  `frame/apps/design-system.tsx` (the Hub's `/design-system` door's shape, beside the shipping
-  group), in the Hub's 504 stage: populated with its days and a desktop asleep, the fallback
+  `frame/apps/design-system.tsx` (beside the shipping groups, Live's adapter with it since FL-2),
+  in the Hub's 504 stage: populated with its days and a desktop asleep, the fallback
   squircles before a preview (§2.9's one exception), a library still reading, the apps a desktop
   cannot write out yet with Open in ‹host› (until MA-3f, MA-4's witness; *2026-11-07:*
   it said rosetta 0.1.3), and empty. Only the
@@ -206,12 +206,11 @@ The catalog currently mounts these shipping views directly:
   package after the chevron's rule and, in a plate of its own, its standing dot, the crumbs folded
   in inside a folder, FitPath in a narrow window, renaming in place, the pill's sheet on its Fields
   shelf (the fields explorer, and the sync question in place of its tiles, TS-6) and on its
-  Artifacts shelf — holding the Hub's own fixture adapter (`ArtifactPanelPreview`, the plugin's
-  design-system door) or, with no Hub bound, the words the shelf waits in — the same sheet under a
+  Artifacts shelf — holding Live on its fixture adapter (`LiveAppsPreview`) — the same sheet under a
   cover, grown from the package circle, the zoom readout's menu (and Windows' keys), the palette
   under the head — and the live head on its real controller (`Head`) in the playground, over a
-  fixture document manager and a fixture canvas door (the path, the zoom); the playground hosts no
-  plugin, so its shelf says it waits, as a window's does at boot. It replaced the file pill, the
+  fixture document manager and a fixture canvas door (the path, the zoom); the playground has no
+  daemon to ask, so its shelf holds neither group. It replaced the file pill, the
   navigation breadcrumbs and the − % + zoom pill
 - the package circle (PL-D2, HN-8): the shipping `PackageCircleView` at its place over each covered
   view's own ground (`PackageCirclePreview`) — over Godview's stage, its Stories keeping one head
@@ -326,8 +325,9 @@ Agent/profile glyphs and shared mark data come from the SDK's `/react` and `/too
 
 When a staged view or content token lives in another workspace package, the catalog composes it
 through that package's `./design-system` export — a fixture-adapter door beside the shipping code
-(`@vibefield/plugin-browser/design-system` is the template; the widgetlab plugin's content-token door
-retired with the plugin at DK-8, and the catalog's weather card carries DESIGN.md §2.2's gradient as its
+(`@vibefield/plugin-browser/design-system` was the template until FL-2 moved that panel into field-app,
+2026-11-09, and no package exports one today; the widgetlab plugin's content-token door retired with the
+plugin at DK-8, and the catalog's weather card carries DESIGN.md §2.2's gradient as its
 own content). Catalog code imports another workspace package only through
 that door, the design-kit foundation, or `@vibefield/contracts` types; any other internal path is
 rejected by the ownership test. A future package that owns a whole viewport — a History or
