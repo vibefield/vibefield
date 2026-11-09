@@ -3418,15 +3418,36 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       its mark at 12. *(Added 2026-11-06, UM-3's review, as ruling 6 draws the add: while Settings is open, Sign in
       and the foot's Agent Profiles… draw disabled, their words in t4 (§2.4 "Off"); Retry is offered only where the
       usage door can read again.)*
-    - **A plan's row** shows only that plan's sessions when clicked (UM-D14, carried A). That is the next wave's,
-      after the desktop's and the phone's slices land (UM-5); until then a row takes no click.
-    - **The foot**, over a hairline, at 11/400 in the tertiary ink: the lens's words (§9 "The meters' words"), and
-      **Agent Profiles…** at its end (600, the secondary ink, the primary under the pointer, *added 2026-11-09, UM-R's
-      review*), which opens Settings → Agent Profiles on that profile's page.
-    - *Wave 1, until UM-5 (2026-11-06, UM-D14's interim, the lead's ruling 23; ‹for James›):* the one-profile
-      popover's foot says only **Agent Profiles…**; a plan's row takes no click and is not pressable (no
-      `aria-pressed`); partner lighting (a plan lighting the bodies that spend it, and a body its plan) waits for
-      UM-5, which brings the session-to-plan join.
+    - **A plan's row** shows only that plan's sessions when clicked (UM-D14, carried A), for everyone, with one
+      profile too: the filter is not the lens, and one profile has no lens. It is a toggle, and a click on a pressed
+      row shows every session again. *Built 2026-11-09, UM-5a.* *(Corrected the same day, UM-5a: this said "That is
+      the next wave's, after the desktop's and the phone's slices land (UM-5); until then a row takes no click.")*
+      A row that needs you is not pressable and keeps its act (Sign in, Retry); a reading and a first read are.
+      - **Its control** is a button stretched over the row, first in it, with no chrome but the file's focus ring
+        (2 solid `--vf-select`), so the row keeps its C1 line's list and the pointer's light on its arc. It is
+        `aria-pressed`, and said "Show only ‹plan›'s sessions" (‹for James›, 2026-11-09).
+      - **Pressed:** the ready fill (the ink at 8%) and a 1.5 inset ring in the ink, a checked chip's, so it adds no
+        fill of its own (the drawing's 9% is not a step). **Every other row draws at 50%** while a plan is chosen, the
+        one new number, an opacity recipe with no token (2026-11-09, UM-5a; ‹for James›).
+      - **The arc** in the open circle chooses as its row does, and a plan that needs you chooses nothing there. It
+        is pointer only: the circle is one image to VoiceOver, and the row's button is the keyboard's and VoiceOver's
+        door to the same act.
+      - **The twin rule** (2026-11-09, UM-5a; ‹for James›, not drawn): a plan two profiles share is one plan (the
+        union's rule, UM-D12), so filtering it keeps both profiles' sessions, and its row draws pressed in either
+        profile's popover, where a click clears it.
+      - **A lens and a plan** (2026-11-09): choosing a profile clears a plan that is not in it (the drawing's rule),
+        and choosing a plan clears a lens it is not in (‹for James›, not drawn), so the stage never says a false
+        "No sessions". A session recedes unless the lens, the plan and the desktop all keep it. Under a plan a
+        peer's session and a terminal recede too: they spend no plan of this home's.
+    - **The foot**, over a hairline, at 11/400 in the tertiary ink: the lens's words with several profiles, the
+      plan's words with one (§9 "The meters' words"), and **Agent Profiles…** at its end (600, the secondary ink,
+      the primary under the pointer, *added 2026-11-09, UM-R's review*), which opens Settings → Agent Profiles on that
+      profile's page.
+    - *Wave 1 (2026-11-06, UM-D14's interim, the lead's ruling 23; ‹for James›) ended on the desktop 2026-11-09, at
+      UM-5a:* the one-profile popover's foot said only **Agent Profiles…**, and a plan's row took no click.
+      **Partner lighting** (a plan lighting the bodies that spend it, and a body its plan) stays owed: UM-5 brought
+      the session-to-plan join, and it does not light the bodies (‹for James›, 2026-11-09). *(Corrected 2026-11-09,
+      UM-5a: this said partner lighting "waits for UM-5, which brings the session-to-plan join".)*
     - **Pinned**, it holds Godview's keys, so **Esc** closes it before a pane hears it; a click outside closes it
       too. **Closing is one act**, on one profile too: Esc, ×, a click on the chosen circle, the second click on a
       lone profile's circle, Settings opening (from the column or any other way) and the terminals maximizing all hand
@@ -6005,6 +6026,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     **With a filter on** (Godview's, GV-D3) the glass grows a token after the circle naming it —
     the desktop's OS mark and name, a hairline, the profile's glyph and name ("studio · Work"), at
     13/500 in primary ink — and a 26 × that clears both: a filtered view never looks unfiltered.
+    A plan's filter (UM-5a, 2026-11-09) is one more part after the profile's, the agent's mark and the plan's title
+    ("studio · Work · Claude Max", the drawing's `p4f-frames.js`), and this × clears it too.
     **It is one state with the field's tokens and the profiles column's ring** (SE-D2 A, 2026-11-06): the
     button's token, the field's and the ring are Godview's own filter (GV-D3's), so a filter set in any one shows
     in all three, and clearing any one clears it everywhere — this × clears the field's desktop and profile tokens
@@ -6067,14 +6090,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       profile's glyph (filled for the default), `folder`, `message`, or the agent's mark — then its
       name, then its × — an 18 round (corners 9), `close` 8 in tertiary ink, primary on a 10% fill
       under the pointer (the step the bar's controls take), said "Remove ‹name›". Live now's tokens
-      are the desktop's and the profile's, in that order; Everything's the project's, what was said
+      are the desktop's, the profile's and the plan's, in that order (the plan's added 2026-11-09, UM-5a: its
+      agent's mark, then its title; its × clears the plan alone); Everything's the project's, what was said
       (only when it is not every kind: "Prompts only", "Replies only") and the agent's. A scope shows
       only its own: Everything shows no profile or desktop, since it looks through every profile
       (UM-D28). A token stands only for a filter that was chosen, so This Mac alone (TS-4's unconnected
       state) draws none. Its × clears that one filter and puts the caret back in the field, the hot
-      row back to the first; a desktop's or a profile's clears it from the stage, the button and the
-      column's ring too (SE-D2). In a narrow popup the tokens ellipsize, and a long query scrolls under
-      them.
+      row back to the first; a desktop's, a profile's or a plan's clears it from the stage, the button and the
+      column's ring (a plan's, its pressed row) too (SE-D2). In a narrow popup the tokens ellipsize, and a long
+      query scrolls under them.
     - **The field's end** holds **+ Filter**, then the small switch, 8 apart, and is not drawn while it holds
       nothing. **+ Filter** is 28 tall, padded 0 10 0 8, corners 14, `plus` 11 and "Filter" 5 apart at 12.5/500 in
       secondary ink; primary on the ready fill under the pointer and while its menu is open. It is not drawn when the
@@ -6189,13 +6213,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     (PF6). Until it answers the foot says "Asking what runs…"; refused, "What runs could not be
     read — ‹fieldd's words›". (K9's "searched in Godview" retired with it.) **Everything looks through
     every profile** (UM-D28 A, 2026-11-06): while Godview's profile filter is on, Everything's foot adds
-    " · every profile; Work comes back on Live now".
+    " · every profile; Work comes back on Live now". It looks through every plan as well, and says so while a plan
+    is chosen (2026-11-09, UM-5a; ‹for James›, UM-D28's honesty extended): " · every plan; Claude Max comes back on
+    Live now", and with a profile chosen too " · every profile; Work and Claude Max come back on Live now".
   - **Keys** (the kit's): ⌘F opens the popup or refocuses its field, on the view's own scope —
     **Live now in Godview, Everything in History** (GV-D9); **Esc** closes an open menu, then the
     popup, before anything else hears it; **↑ ↓** move the hot row; **↵** opens it, or applies the
     offered filter; **⇥** applies the offered filter while it is hot; **⌫** with the caret at the
     field's start and nothing selected removes the last token (SE-D1 A: in Everything the agent's,
-    then what was said, then the project's; in Live now the profile's, then the desktop's); a click
+    then what was said, then the project's; in Live now the plan's (UM-5a, 2026-11-09), then the profile's, then
+    the desktop's); a click
     opens a row. **One surface at a time**: the popup is one of the frame's open surfaces, `search`
     (§10) — the palette, the pill's sheet (a drawer until HN-8), the Me menu, Settings or a change
     of view fold it, and it folds them; ⌘K over it opens the palette, ⌘F over the palette opens it.
@@ -7752,9 +7779,10 @@ here.
   the default profile's name while there are several. The bands key says "5 hours · 7 days · a model's week" (said
   "Inside, the next five hours; outside, the week; a hairline, a model's own week"). Its foot, with several
   profiles: "Click it to show only ‹profile›'s sessions", or "Showing only ‹profile›'s sessions · click it again for
-  all". Then **Agent Profiles…**. With one profile, until UM-5, the foot says only **Agent Profiles…** (§8
-  "Godview's profiles column", wave 1; ‹for James›). *With UM-5* (UM-D14's plan filter) it says "Click a plan to
-  show only its sessions", and "Showing one plan's sessions · click it again for all". *(Added 2026-11-06, UM-3's
+  all". With one profile (UM-D14's plan filter): "Click a plan to show only its sessions", and "Showing one plan's
+  sessions · click it again for all". Then **Agent Profiles…**. *(Corrected 2026-11-09, UM-5a: this said that until
+  UM-5 the one-profile foot says only **Agent Profiles…**.)* A plan's row is said "Show only ‹plan›'s sessions"
+  (‹for James›, 2026-11-09). *(Added 2026-11-06, UM-3's
   review; ‹for James›: the head's other ages as built, "Read just now", "Read 5 minutes ago", "Read an hour ago",
   "Read 3 hours ago"; and while the usage cannot be read the popover says the profile's one line, "‹profile›: usage
   unavailable", in place of a line per agent, an agent with no meter keeping its own.)*
@@ -7768,7 +7796,8 @@ here.
   sessions on ‹profile›**, over "Only its sessions show. Click it again, or the × on search, to show them all.", the
   drawing's words. *Built 2026-11-06, UM-3c.* *(Corrected the same day, UM-3's review: this said "The code moves at
   UM-3", and until then it said **No sessions under ‹profile›**, over "Only this profile's sessions show — the search
-  button's × shows them all again.")*
+  button's × shows them all again.")* A plan chosen with no sessions says the same, **No sessions on ‹plan›**, over
+  the same line (UM-5a, 2026-11-09; the drawing's `emptyNote`), the plan's agent's mark in the ring.
 - **The phone's hold.** With one profile, **Usage** over "3 read · none need you" ("· 1 needs you", "· 2 need
   you"). With several, **Show all** over "8 sessions · every profile"; **Show ‹profile›** over its sessions ("3
   sessions · 1 working · 1 waiting for you", or "No sessions"); and **Cancel** over "let go here to leave the field
@@ -7822,7 +7851,9 @@ field gives them, and “q” what was typed.
   `thisDeviceWord` alone.)*
 - **Everything looks through every profile** (UM-D28): while Godview's profile filter is on, Everything's foot adds
   " · every profile; ‹profile› comes back on Live now" on the desktop, and " · every profile; ‹profile› comes back on
-  Field" on the phone.
+  Field" on the phone. While a plan is chosen on the desktop (2026-11-09, UM-5a; ‹for James›, not drawn) it adds
+  " · every plan; ‹plan› comes back on Live now", and with a profile chosen too " · every profile; ‹profile› and
+  ‹plan› come back on Live now".
 - **The phone's feet.** Live now: "2 sessions · 3 lines matched" with words; "3 of 8 live sessions, waiting first"
   while a filter narrows it; else "8 live sessions, waiting first". Everything: "4 sessions matched" with words, else
   "Your latest sessions" (each desktop corpus's sessions, merged by recency), then " in ‹folder›" while a
