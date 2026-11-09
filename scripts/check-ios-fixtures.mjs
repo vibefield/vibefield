@@ -994,6 +994,8 @@ const OS_MARKS_IOS = join(
     ["red", "red"],
     ["info", "cyan"],
     ["sparkNight", "spark-night"],
+    // MA-6b — a made app's fallback icon by night (DESIGN.md §2.9's one exception)
+    ["appFallbackTile", "app-fallback-tile"],
   ]) {
     checked += 1;
     const hex = (pattern, text) => pattern.exec(text)?.[1]?.toLowerCase() ?? null;

@@ -221,6 +221,8 @@ public enum ChromePalette {
   /// `--vf-cyan`: info. On the bar, Chat's unread dot while no spark needs you (IOS-12b; DESIGN.md §8 "The phone's
   /// Chat", PC-D5 A).
   public static let info = solid(0x5AC8FA)
+  /// `--vf-app-fallback-tile`: a made app's fallback icon by night (§2.9's one exception, MA-D10 (b)). MA-6b RED.
+  public static let appFallbackTile = solid(0x000000)
 
   // MARK: - Paper (the History tab, IOS-9b)
 
