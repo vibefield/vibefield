@@ -117,6 +117,14 @@ struct ChatNightTests {
       ])
   }
 
+  @Test("the night stands only with no spark, once the home has answered and every desktop has")
+  func theNightStands() {
+    #expect(ChatPage.nightStands(sparks: 0, heard: true, away: 0))
+    #expect(!ChatPage.nightStands(sparks: 1, heard: true, away: 0))
+    #expect(!ChatPage.nightStands(sparks: 0, heard: false, away: 0))
+    #expect(!ChatPage.nightStands(sparks: 0, heard: true, away: 1))
+  }
+
   @Test("the night's words are the Mac's")
   func words() {
     #expect(ChatNightWords.headline == "Make your first spark")

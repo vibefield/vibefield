@@ -969,7 +969,8 @@ public struct HomeScreen: View {
       onWake: { spark in Task { try? await chat.wake(spark) } },
       feed: chat, thread: $chatThread, onOpenPane: openSparkPane,
       // IOS-12d (Q5) — Answer in its pane opens only a run with a session card on the field, else the card says so
-      paneOpens: { key in bubbles.contains { $0.runKey == key } }
+      paneOpens: { key in bubbles.contains { $0.runKey == key } },
+      nightRuns: chatNightRuns
     )
     .safeAreaInset(edge: .bottom, spacing: 0) {
       // a thread's composer takes the bar's place: no clearance under it
@@ -997,6 +998,18 @@ public struct HomeScreen: View {
   private var chatSessions: [RunProfileFacts]? {
     guard let link, link.fieldIsLive else { return nil }
     return NewSpark.sessions(link.rows.map(\.board), home: linkHome)
+  }
+
+  /// ES-5c (E2) — the home's runs for the night's starters: held until a live home answers for the board.
+  private var chatNightRuns: ChatStarters.Read<ChatStarters.Run> {
+    guard let link, link.fieldIsLive else { return .out }
+    return .rows(ChatStarters.runs(link.rows.map(\.board), home: linkHome))
+  }
+
+  /// ES-5c — Chat's empty night stands on the screen, so the bar floats on it in its night look (§8).
+  private var chatNight: Bool {
+    selectedTab == .chat && chatThread == nil
+      && ChatPage.nightStands(sparks: chatEntries.count, heard: chat.reading.heard, away: chatAway.count)
   }
 
   /// Chat's mark on the bar (PC-D5 A): the sparks that need you, else the
@@ -1487,6 +1500,7 @@ public struct HomeScreen: View {
         .padding(.bottom, LensToken.menuBottom(homeInset: homeInset))
       if !barAside {
         barRow
+          .environment(\.colorScheme, chatNight ? .dark : colorScheme)
           .padding(.bottom, barTyping ? AppBar.gapAboveKeyboard : AppBar.bottomGap(homeInset: homeInset))
           .transition(.move(edge: .bottom).combined(with: .opacity))
       }

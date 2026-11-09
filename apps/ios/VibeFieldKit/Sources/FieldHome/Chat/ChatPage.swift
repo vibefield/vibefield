@@ -173,7 +173,10 @@ struct ChatPage: View {
   }
 
   /// ES-5c — no spark, and the home and every desktop have answered: the page is the night.
-  private var nightStands: Bool { entries.isEmpty && heard && away.isEmpty }
+  private var nightStands: Bool { Self.nightStands(sparks: entries.count, heard: heard, away: away.count) }
+
+  /// Whether the night stands, for the page and for the bar (`HomeScreen`) to read one rule.
+  static func nightStands(sparks: Int, heard: Bool, away: Int) -> Bool { sparks == 0 && heard && away == 0 }
 
   var body: some View {
     NavigationStack(path: path) {
