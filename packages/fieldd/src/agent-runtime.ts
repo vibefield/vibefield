@@ -4629,7 +4629,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // end while it is still in the fold (named as fieldd names it, CO-Q4 (b)) and before its successor is born. A
       // resume that fails past here has still ended it, and tells nothing more.
       if (oldId !== undefined) this.byTerminal.delete(oldId);
-      this.ended(record.runtimeRunId);
+      this.ended(record.runtimeRunId, record.creationRequestId);
       this.pending.delete(record.runtimeRunId);
       const at = this.now().toISOString();
       this.records.write({
@@ -4726,7 +4726,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.records.stampExit(runtimeRunId, { at: this.now().toISOString(), ...exit });
     // Item 201 (RV #17, gap2-6) — told while the run is still in the fold, so it is named as fieldd names it
     // (CO-Q4 (b)); then it leaves
-    this.ended(runtimeRunId);
+    this.ended(runtimeRunId, entry.record.creationRequestId);
     this.pending.delete(runtimeRunId);
     // MF-1f — the pane is kept (MF-1g), so the row stays over it, exited: the floor's own
     // listing is the evidence, as `holdExited` reads it for an attached run
@@ -4988,11 +4988,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** CP-2, item 201 — a run left this daemon's fold for good: a managed run's exit, a held run's exit, withdrawal or
    * supersession (`closePending`), or a held run ended by its replacement. Each listener hears it once. A G5 retry
    * handing a held row to its own run (`releasePending`) and fieldd's own stop (`dispose`) end nothing. */
-  private ended(runtimeRunId: string): void {
-    // OB-3d — told while the run is still in the fold, so its attempt can be read
-    const attempt =
-      this.managed.get(runtimeRunId)?.creationRequestId ??
-      this.pending.get(runtimeRunId)?.record.creationRequestId;
+  private ended(runtimeRunId: string, attempt: string | undefined): void {
+    // OB-3d — the caller names the attempt: `closeRun`, the main way out, has already taken the run from the fold
     if (attempt !== undefined) this.helperRoots.end(attempt);
     for (const listener of this.runEndedListeners) {
       try {
@@ -5251,7 +5248,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.managed.delete(runtimeRunId);
     this.byTerminal.delete(entry.info.terminalSessionId);
     this.terminalHost?.forget(entry.info.terminalSessionId);
-    this.ended(runtimeRunId);
+    this.ended(runtimeRunId, entry.creationRequestId);
     // MF-1f — the process is over, but the PANE may not be: while the floor
     // still lists this PTY the deck is showing it, so the row stays (carrying
     // the mirror's last state and the resume verb) until the pane goes.
