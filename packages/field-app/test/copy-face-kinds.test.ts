@@ -7,12 +7,7 @@ import { OBJECT_LIMITS, type ObjectRef } from "@vibefield/contracts";
 import type { AgentHalf } from "@vibefield/plugin-sdk/desk";
 import { describe, expect, it } from "vitest";
 import { type CopiedObject, kindFacesOf } from "../src/field/desk/copy/copy-face";
-import type {
-  FileFace,
-  ImageFace,
-  RefFace,
-  TextFace,
-} from "../src/frame/cards/cards-model";
+import type { FileFace, ImageFace, RefFace, TextFace } from "../src/frame/cards/cards-model";
 import { pictureFaceOf } from "../src/frame/cards/cards-model";
 
 const REF = "vf:obj/7hk2qx4m" as ObjectRef;
@@ -82,6 +77,18 @@ describe("kindFacesOf: a card's faces, from the kind's agent half", () => {
     };
     const faces = kindFacesOf(inputs({ objects: [plain] }));
     expect(faces.map((face) => face.type)).toEqual(["image"]);
+  });
+
+  it("adds the host's Picture, last, to a kind that does not declare one (§4.2)", () => {
+    const pad: CopiedObject = {
+      ...NOTE,
+      agent: { faces: (NOTE.agent?.faces ?? []).slice(0, 2), half: NOTE_HALF },
+    };
+    expect(kindFacesOf(inputs({ objects: [pad] })).map((face) => face.type)).toEqual([
+      "ref",
+      "text",
+      "image",
+    ]);
   });
 
   it("offers several selected as one Live naming every ref, and one Picture", () => {

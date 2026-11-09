@@ -2,7 +2,11 @@ import { rmSync } from "node:fs";
 import { mkdtemp, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { HandPictureWriteRequest, SCREENSHOT_LIMITS } from "@vibefield/contracts";
+import {
+  HandFileWriteRequest,
+  HandPictureWriteRequest,
+  SCREENSHOT_LIMITS,
+} from "@vibefield/contracts";
 
 // A PICTURE BECOMES A FILE AT THE PLAY (OB-D10 A; `draft/thinking-objects-at-work.md` §4.4). A desk object's picture
 // lives in the window as bytes, and what an agent's pane takes is a path, so when such a card is played main writes it
@@ -15,6 +19,14 @@ const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
 /** Do these bytes open as a PNG? The door takes pictures, nothing else. PURE. */
 export function isPng(bytes: Uint8Array): boolean {
   return PNG_MAGIC.every((byte, index) => bytes[index] === byte);
+}
+
+/** A name that stays in the folder it is written to: its last path segment, no control characters, no leading dots. PURE. */
+export function safeHandName(name: string): string {
+  const last = name.split(/[\\/]/u).at(-1) ?? "";
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what this strips
+  const clean = last.replace(/[\u0000-\u001f\u007f]/gu, "").replace(/^\.+/u, "");
+  return clean === "" ? "file" : clean;
 }
 
 export interface HandPicturesOptions {
@@ -45,12 +57,21 @@ export class HandPictures {
   }
 
   /** Write a PNG to the hand's folder and answer its path. The oldest past the limit goes. */
-  async write(png: Uint8Array): Promise<string> {
+  write(png: Uint8Array): Promise<string> {
+    return this.#put(`vibefield-hand-${this.#seq + 1}.png`, png);
+  }
+
+  /** Write a file a card makes at the play, under a safe form of its name, in the same twelve. */
+  writeFile(name: string, text: string): Promise<string> {
+    return this.#put(`${this.#seq + 1}-${safeHandName(name)}`, text);
+  }
+
+  async #put(name: string, body: Uint8Array | string): Promise<string> {
     const dir = await this.#folder();
     this.#seq += 1;
-    const path = join(dir, `vibefield-hand-${this.#seq}.png`);
+    const path = join(dir, name);
     // `wx`: never over something already there, and only this process's user can read it
-    await writeFile(path, png, { flag: "wx", mode: 0o600 });
+    await writeFile(path, body, { flag: "wx", mode: 0o600 });
     this.#kept.push(path);
     while (this.#kept.length > this.#limit) {
       const oldest = this.#kept.shift();
@@ -91,6 +112,27 @@ export function createHandPictureDoor<Sender>(options: {
     }
     try {
       return await options.write(png);
+    } catch {
+      options.onRefused?.("write-failed");
+      return null;
+    }
+  };
+}
+
+/** A card's file face at the play, the picture door's policy: a registered window only, within the still's cap. */
+export function createHandFileDoor<Sender>(options: {
+  readonly owns: (sender: Sender) => boolean;
+  readonly write: (name: string, text: string) => Promise<string>;
+  readonly onRefused?: (reason: HandPictureRefusal) => void;
+}): (sender: Sender, raw: unknown) => Promise<string | null> {
+  return async (sender, raw) => {
+    if (!options.owns(sender)) {
+      options.onRefused?.("unregistered-sender");
+      throw new Error("hand file refused: unregistered sender");
+    }
+    const { name, text } = HandFileWriteRequest.parse(raw);
+    try {
+      return await options.write(name, text);
     } catch {
       options.onRefused?.("write-failed");
       return null;

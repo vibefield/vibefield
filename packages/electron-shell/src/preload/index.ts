@@ -15,6 +15,7 @@ import {
   type FrameZoomAct,
   GodviewDeckSetRequest,
   type GodviewDeckState,
+  HandFileWriteRequest,
   HandPictureWriteRequest,
   IPC_CHANNELS,
   LIVE_SURFACE_PORT_BRIDGE_MESSAGE_V1,
@@ -658,6 +659,15 @@ contextBridge.exposeInMainWorld("vibefield", {
       );
       if (answer === null || typeof answer === "string") return answer;
       throw new Error("hand picture: main answered something other than a path");
+    },
+    /** A card's file face written to the hand's folder at the play: its path, or null when main could not. */
+    writeHandFile: async (name: string, text: string): Promise<string | null> => {
+      const answer: unknown = await ipcRenderer.invoke(
+        IPC_CHANNELS.handFileWrite,
+        HandFileWriteRequest.parse({ name, text }),
+      );
+      if (answer === null || typeof answer === "string") return answer;
+      throw new Error("hand file: main answered something other than a path");
     },
     capture: async (): Promise<ScreenshotCaptureResult> =>
       ScreenshotCaptureResultSchema.parse(

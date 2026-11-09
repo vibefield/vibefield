@@ -352,6 +352,8 @@ export interface FieldHost {
    * or a draft that takes a path: a desk object's picture has no file until it is played. Null when main could not.
    * Optional like its neighbours: a harness without the shell has no disk to write to, and the play says so. */
   readonly writeHandPicture?: (png: Uint8Array<ArrayBuffer>) => Promise<string | null>;
+  /** A card's file face written to the hand's folder at the play, under a safe form of its name; null when main could not. */
+  readonly writeHandFile?: (name: string, text: string) => Promise<string | null>;
   /** HN-6 — a file another app handed over (a paste's, a drop's) as its path on disk, which a
    * pane is given for it (HN-L5); null for one not on disk. The preload's own read, no IPC.
    * Optional like its neighbours: a harness without the shell (the catalog) has no paths, and a

@@ -310,4 +310,13 @@ export const HandPictureWriteRequest = z
   })
   .passthrough();
 export type HandPictureWriteRequest = z.infer<typeof HandPictureWriteRequest>;
+
+/** A card's file face made at the play: its name (main makes a safe one of it) and its body, bounded as a still is. */
+export const HandFileWriteRequest = z
+  .object({
+    name: z.string().min(1).max(255),
+    text: z.string().max(SCREENSHOT_STILL.MAX_BYTES),
+  })
+  .passthrough();
+export type HandFileWriteRequest = z.infer<typeof HandFileWriteRequest>;
 export type ScreenshotStillKeptRequest = z.infer<typeof ScreenshotStillKeptRequest>;

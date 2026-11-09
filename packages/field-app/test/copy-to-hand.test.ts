@@ -332,13 +332,22 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     expect(store.snapshot().cards[0]?.faces.map((face) => face.type)).toEqual(["text", "image"]);
   });
 
-  it("asks no ref of a kind with no agent half: Picture only", async () => {
+  it("asks no ref on a board with no id, and deals no Live", async () => {
+    const refFor = vi.fn(async () => "vf:obj/7hk2qx4m" as const);
+    expect(copySelection(desk, "bar", { ...seams(), refFor })).toBe(true);
+    await flush();
+    expect(refFor).not.toHaveBeenCalled();
+    expect(store.snapshot().cards[0]?.faces.map((face) => face.type)).toEqual(["image"]);
+  });
+
+  it("offers a plugin's kind what its manifest declares: Live and its Picture for a pad with nothing written", async () => {
     const docDesk: MountedDesk = { ...desk, docId: "doc-1" };
     const refFor = vi.fn(async () => "vf:obj/7hk2qx4m" as const);
     expect(copySelection(docDesk, "bar", { ...seams(), refFor })).toBe(true);
     await flush();
-    expect(refFor).not.toHaveBeenCalled();
-    expect(store.snapshot().cards[0]?.faces.map((face) => face.type)).toEqual(["image"]);
+    expect(refFor).toHaveBeenCalledTimes(1);
+    expect(store.snapshot().cards[0]?.faces.map((face) => face.type)).toEqual(["ref", "image"]);
+    expect(store.snapshot().cards[0]?.about).toBe("Comment pad");
   });
 
   it("deals anything else as a PICTURE card titled by its name, its still the objects' own box WITHOUT the marks — the selection never touched", async () => {

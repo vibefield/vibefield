@@ -1,9 +1,11 @@
 import { type CanvasEngine, type Entity, PrefabId, selectedEntities } from "@vibecook/ice";
 import type { DeskLayerHandle } from "@vibecook/ice/desk";
+import { deskKind, type ObjectRef } from "@vibefield/contracts";
 import {
   blobUrlsOf,
   type Card,
   type CardOrigin,
+  type Face,
   type ImageFace,
   pictureCardOf,
   pictureFaceOf,
@@ -12,10 +14,20 @@ import {
 import { type CardStore, cardsStore, type DealFrom } from "../../../frame/cards/cards-store";
 import { COPY_DOOR_WORDS, COPY_WORDS } from "../../../frame/cards/cards-words";
 import { type CopyDeps, type CopyHost, copyToHand } from "../../../frame/cards/copy-door";
+import { type RefAsk, refFor } from "../../../frame/cards/hand-over";
 import { sayOnLine } from "../../../frame/line-door";
+import { typeDefinition } from "../../../plugin-host/build-widget";
+import { agentHalfOf } from "../agent-kinds";
 import { heldNow, type MountedDesk, plainWords } from "../desk-door";
 import { encodePng, type PngEncoder } from "../desk-stills";
-import { type CopiedObject, copiedWords, copyName, kindFacesOf, noteWords } from "./copy-face";
+import {
+  type CopiedAgent,
+  type CopiedObject,
+  copiedWords,
+  copyName,
+  kindFacesOf,
+  noteWords,
+} from "./copy-face";
 import { beginCopyRecord, type CopyFrom, noteCopy, type ViewBox } from "./copy-record";
 
 // THE DESK'S COPY — THE ACT (HN-D3, HN-D2; DESIGN.md §8 "Make a card"; R15, DK-D26; plan addendum (50); ICE I23,
@@ -70,6 +82,13 @@ export function objectProps(engine: CanvasEngine, entity: Entity): Record<string
   return props;
 }
 
+/** What a kind offers an agent: a built-in's declaration or its plugin's, and its handlers. Absent without both. */
+function agentOf(type: string): CopiedAgent | undefined {
+  const faces = deskKind(type)?.agent.faces ?? typeDefinition(type)?.agent?.faces;
+  const half = agentHalfOf(type);
+  return faces === undefined || half === undefined ? undefined : { faces, half };
+}
+
 /** The selected objects as the host reads them (§8 "The doors"): type, words, durable props — in selection order — and,
  * for one showing a live page (PT-4), what the mount's LIVE service calls that page, by the object's durable key. */
 export function copiedObjects(desk: MountedDesk, entities: readonly Entity[]): CopiedObject[] {
@@ -81,11 +100,14 @@ export function copiedObjects(desk: MountedDesk, entities: readonly Entity[]): C
     if (typeof type !== "string") continue;
     const key = store?.keyOf(e) as string | undefined;
     const live = key === undefined ? undefined : desk.live?.label(key);
+    const agent = agentOf(type);
     out.push({
       type,
       words: words(type),
       props: objectProps(desk.engine, e),
       ...(live === undefined ? {} : { live }),
+      ...(key === undefined ? {} : { key }),
+      ...(agent === undefined ? {} : { agent }),
     });
   }
   return out;
@@ -147,6 +169,8 @@ export interface CopySeams {
   readonly store?: CardStore;
   /** The clipboard's doors the copy writes through (left out: the window's host; null: none — the page's own). */
   readonly host?: CopyHost | null;
+  /** fieldd's name for an object (left out: `objects.ref`, through the window's door). */
+  readonly refFor?: (ask: RefAsk) => Promise<ObjectRef | null>;
 }
 
 /**
@@ -207,6 +231,36 @@ export function copySelection(desk: MountedDesk, from: CopyFrom, seams: CopySeam
     sayOnLine(refused);
   };
 
+  // THE OBJECTS' NAMES, asked at the press beside the picture: fieldd unreachable, the card deals with no Live, honestly
+  const docId = desk.docId;
+  const ask = seams.refFor ?? refFor;
+  const named = objects.flatMap((o) =>
+    o.agent === undefined || o.key === undefined || docId === undefined
+      ? []
+      : [ask({ docId, key: o.key, kind: o.type })],
+  );
+  const refs: Promise<readonly ObjectRef[]> = Promise.all(named).then((names) =>
+    names.filter((name): name is ObjectRef => name !== null),
+  );
+  /** An object's props as they are at the play; null once it has gone. */
+  const readNow = (object: CopiedObject): Readonly<Record<string, unknown>> | null => {
+    const entity =
+      object.key === undefined
+        ? undefined
+        : (engine.docs.current()?.store.resolve(object.key as never) as Entity | undefined);
+    return entity === undefined ? null : objectProps(engine, entity);
+  };
+  /** The card with every face its kind offers; a Live first says the kind's word on the held bar. */
+  const withFaces = (card: Card, faces: readonly Face[]): Card => {
+    const [first, ...rest] = faces;
+    if (first === undefined) return card;
+    return {
+      ...card,
+      faces: [first, ...rest],
+      about: first.type === "ref" ? first.kindName : card.about,
+    };
+  };
+
   // THE PICTURE, TAKEN BEHIND THE PRESS (the object must be on view for it; DK-17b, never a blink): a note's Picture face,
   // and anything else's whole card. `kept` is what the record OBSERVES of the selection across the capture — the act
   // never writes it.
@@ -252,15 +306,13 @@ export function copySelection(desk: MountedDesk, from: CopyFrom, seams: CopySeam
   const writing = noteWords(objects);
   if (writing !== null) {
     const stub = { id: store.nextId("text"), origin: cardOrigin, at: store.now() };
-    const card: Promise<Card> = taken.then((picture) => {
-      const faces = kindFacesOf(
-        objects,
-        picture === null ? null : pictureFaceOf(pictureFields(picture)),
-        stub,
-      );
-      const [first, ...rest] = faces;
+    const card: Promise<Card> = Promise.all([taken, refs]).then(([picture, names]) => {
       const note = textCardOf(writing, stub);
-      return first === undefined ? note : { ...note, faces: [first, ...rest] };
+      const shot = picture === null ? null : pictureFaceOf(pictureFields(picture));
+      return withFaces(
+        note,
+        kindFacesOf({ objects, picture: shot, refs: names, title: note.title, readNow }),
+      );
     });
     void copyToHand({ card, from: fromBox, text: writing }, deps).then(async (copied) => {
       const dealt = await card;
@@ -280,17 +332,21 @@ export function copySelection(desk: MountedDesk, from: CopyFrom, seams: CopySeam
 
   // anything else: its picture, taken behind the press
   void (async () => {
-    const picture = await taken;
+    const [picture, names] = await Promise.all([taken, refs]);
     if (picture === null) {
       noteCopy(record.seq, { refused });
       sayOnLine(refused);
       return;
     }
     const fields = pictureFields(picture);
-    // no file on disk to paste yet, nor words of its own: it becomes a file at the play (OB-D10 A)
-    const card = pictureCardOf(
-      { title: copyName(objects), ...fields },
-      { id: store.nextId("image"), origin: cardOrigin, at: store.now() },
+    const title = copyName(objects);
+    // no file on disk to paste yet: it becomes a file at the play (OB-D10 A)
+    const card = withFaces(
+      pictureCardOf(
+        { title, ...fields },
+        { id: store.nextId("image"), origin: cardOrigin, at: store.now() },
+      ),
+      kindFacesOf({ objects, picture: pictureFaceOf(fields), refs: names, title, readNow }),
     );
     // its PNG on the system clipboard first, the words the objects keep beside it in the one write, then the card
     const copied = await copyToHand(

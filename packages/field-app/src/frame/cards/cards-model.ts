@@ -70,9 +70,11 @@ export interface TextFace extends FaceBase {
   readonly type: "text";
   readonly format: "plain" | "markdown" | "code";
   readonly language?: string;
-  /** What a play puts in, as it was copied. Empty while the card is `waiting`. */
+  /** What a play puts in, as it was copied. Empty while the card is `waiting`, or until `atPlay` gives it. */
   readonly text: string;
   readonly show: TextShow;
+  /** Words over the press's budget, read from the object at the play; null: it has gone. */
+  readonly atPlay?: () => string | null;
 }
 
 export interface ImageFace extends FaceBase {
@@ -102,6 +104,8 @@ export interface FileFace extends FaceBase {
   /** a file's facts when it has no lines: its size, its kind */
   readonly facts?: string;
   readonly mime?: string;
+  /** Its body, produced at the play and written to the hand's folder; null: its object has gone. */
+  readonly atPlay?: () => string | null;
 }
 
 export interface LinkFace extends FaceBase {
@@ -212,18 +216,19 @@ function wordsCard(
   };
 }
 
-/** A text card from words: the first sentence (80 characters at most) is its
- * title, run in bold; with none, the first line is, `bare`. PURE. */
-export function textCardOf(text: string, base: CardStub): Card {
+/** How words print on a card: the first sentence (80 characters at most) is the title, run in bold; with none, the first
+ * line is, `bare`. PURE. */
+export function wordsShowOf(text: string): Extract<TextShow, { as: "words" }> {
   const trimmed = text.trim();
   const sentence = SENTENCE.exec(trimmed);
   const firstLine = trimmed.split(/\r?\n/u)[0] ?? "";
   const title = sentence?.[1] ?? firstLine;
-  return wordsCard(
-    text,
-    { title, body: trimmed.slice(title.length).trim(), bare: sentence === null },
-    base,
-  );
+  return { as: "words", title, body: trimmed.slice(title.length).trim(), bare: sentence === null };
+}
+
+/** A text card from words, titled as `wordsShowOf` prints them. PURE. */
+export function textCardOf(text: string, base: CardStub): Card {
+  return wordsCard(text, wordsShowOf(text), base);
 }
 
 /** A text card of words that are no prose, under a name of their own: titled by it as a line,

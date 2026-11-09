@@ -13,6 +13,7 @@ import {
 import { type ChromeFacts, type ChromeRun, NO_RUNS } from "./chrome-facts";
 import { type GodviewMonitorFeed, useMonitorReplica } from "./model-replica";
 import {
+  noteDoorsOfRuns,
   paneFrameAgents,
   paneFrameFactsKey,
   runIdsBySession,
@@ -94,6 +95,7 @@ function useDeckFacts(chrome: ChromeFacts | null): DeckAgentFacts {
     const cache = held.current;
     if (runs === cache.runs) return cache.facts;
     const byTerminal = runsByTerminal(runs);
+    noteDoorsOfRuns(byTerminal);
     const agents = paneFrameAgents(byTerminal);
     const sessions = runIdsBySession(byTerminal);
     const stops = stopsBySession(byTerminal);

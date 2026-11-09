@@ -91,6 +91,7 @@ import {
   registerClipboardRead,
   registerClipboardWriteImage,
   registerDeckSet,
+  registerHandFile,
   registerHandPicture,
   registerRendererReplace,
   registerScreenshotCapture,
@@ -2114,6 +2115,11 @@ async function main(
   registerHandPicture(
     registry,
     (png) => handPictures.write(png),
+    logger.child({ component: "ipc.screenshot" }),
+  );
+  registerHandFile(
+    registry,
+    (name, text) => handPictures.writeFile(name, text),
     logger.child({ component: "ipc.screenshot" }),
   );
   app.once("will-quit", () => handPictures.disposeSync());

@@ -24,8 +24,8 @@ import { type CardTargets, cardTargets, cornerOf, TARGET_LAYER } from "../frame/
 import { paneTextOf } from "../frame/cards/card-text";
 import type { Card } from "../frame/cards/cards-model";
 import { OUTCOME_WORDS } from "../frame/cards/cards-words";
+import { readyFace } from "../frame/cards/face-ready";
 import { HAND_OVER_WORDS, handOver } from "../frame/cards/hand-over";
-import { withPictureFile } from "../frame/cards/picture-file";
 import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { sayOnLine } from "../frame/line-door";
 import { agentChipMenuOf, menuRowId, modelsOf } from "./agent-chip-menu";
@@ -699,9 +699,9 @@ export function ChatComposer({
         const chosen = faceOf(card, faceId);
         const verdict = landing(chosen, chatDestination());
         if (!verdict.lands) return { ok: false, note: verdict.reason };
-        const written = await withPictureFile(chosen);
-        if (written === null) return { ok: false, note: OUTCOME_WORDS.pictureNotWritten };
-        const text = paneTextOf(card, written);
+        const ready = await readyFace(chosen);
+        if (!ready.ok) return { ok: false, note: ready.note };
+        const text = paneTextOf(card, ready.face);
         if (text === null) return { ok: false, note: OUTCOME_WORDS.pictureNotWritten };
         playRef.current(card, faceId, text);
         return { ok: true, note: OUTCOME_WORDS.added(nameRef.current) };

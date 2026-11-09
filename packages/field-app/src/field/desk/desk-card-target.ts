@@ -1,4 +1,4 @@
-import { Camera } from "@vibecook/ice";
+import { Camera, type Entity, Position, Size, Viewport } from "@vibecook/ice";
 import type { DeskLayerHandle } from "@vibecook/ice/desk";
 import {
   NOTE_TYPE,
@@ -8,6 +8,7 @@ import {
   printRect,
 } from "@vibecook/ice/desk/objects";
 import { clientToScreen, screenToWorld } from "@vibecook/ice/kernel";
+import type { ObjectRef } from "@vibefield/contracts";
 import {
   bloomOf,
   type Destination,
@@ -22,8 +23,10 @@ import {
   cardTargets,
   TARGET_LAYER,
 } from "../../frame/cards/card-targets";
-import type { ImageFace, LinkFace } from "../../frame/cards/cards-model";
+import type { ImageFace, LinkFace, RefFace } from "../../frame/cards/cards-model";
 import { OUTCOME_WORDS, TARGET_WORDS } from "../../frame/cards/cards-words";
+import { readyFace } from "../../frame/cards/face-ready";
+import { type RefPlace, resolveRef } from "../../frame/cards/hand-over";
 import { getActiveView, subscribeActiveView } from "../../frame/view-state";
 import { type FieldHost, peekHost } from "../../host";
 import { getRendererLogger } from "../../logging";
@@ -47,6 +50,8 @@ type StillBytes = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>;
 export interface DeskCardTargetDeps {
   /** The shell's still door (undefined: the window's host). */
   readonly host?: Pick<FieldHost, "screenshotStillBytes">;
+  /** Where a ref's object lies (undefined: `objects.resolve`, through the window's door). */
+  readonly resolve?: (ref: ObjectRef) => Promise<RefPlace | null>;
   /** Where a print's picture is kept (undefined: the page's one byte store). */
   readonly blobs?: { put(bytes: Uint8Array<ArrayBuffer>, type: string): Promise<string> };
 }
@@ -177,6 +182,39 @@ async function printOnto(
   }
 }
 
+/** §4.4: a ref on the desk is where it already is, so the camera goes to it and it is selected. */
+async function goToObject(
+  desk: MountedDesk,
+  face: RefFace,
+  deps: DeskCardTargetDeps,
+): Promise<CardPlayed> {
+  const place = await (deps.resolve ?? resolveRef)(face.ref);
+  if (place === null) return { ok: false, note: OUTCOME_WORDS.objectGone };
+  if (place.docId !== desk.docId) return { ok: false, note: OUTCOME_WORDS.onAnotherBoard };
+  const { engine } = desk;
+  const entity = engine.docs.current()?.store.resolve(place.key as never) as Entity | undefined;
+  const at = entity === undefined ? undefined : engine.world.get(entity, Position);
+  const size = entity === undefined ? undefined : engine.world.get(entity, Size);
+  const view = engine.world.getResource(Viewport);
+  const camera = engine.world.getResource(Camera);
+  if (
+    entity === undefined ||
+    at === undefined ||
+    size === undefined ||
+    view === undefined ||
+    camera === undefined
+  ) {
+    return { ok: false, note: OUTCOME_WORDS.objectGone };
+  }
+  // its centre at the view's centre, at the zoom the person is at
+  engine.ops.panTo(
+    at.x + size.w / 2 - view.w / (2 * camera.zoom),
+    at.y + size.h / 2 - view.h / (2 * camera.zoom),
+  );
+  engine.ops.setSelection([entity]);
+  return { ok: true, note: OUTCOME_WORDS.onTheDesk };
+}
+
 /** A browser pane open at an address, centred on the point (§4.4: "a link: a browser pane at it"). */
 function pageOnto(
   desk: MountedDesk,
@@ -231,13 +269,17 @@ export function deskCardTarget(desk: MountedDesk, deps: DeskCardTargetDeps = {})
       switch (face.type) {
         case "image":
           return printOnto(desk, face, point, deps, door);
-        case "text":
-          return noteOnto(desk, face.text, point);
+        case "text": {
+          const ready = await readyFace(face, null);
+          if (!ready.ok) return { ok: false, note: ready.note };
+          return ready.face.type === "text"
+            ? noteOnto(desk, ready.face.text, point)
+            : { ok: false, note: OUTCOME_WORDS.notPlaced };
+        }
         case "link":
           return pageOnto(desk, face, point);
         case "ref":
-          // OB-3: a desk that can find its object by its ref moves the camera to it; until then, just where it is
-          return { ok: true, note: OUTCOME_WORDS.onTheDesk };
+          return goToObject(desk, face, deps);
         default:
           return { ok: false, note: OUTCOME_WORDS.notPlaced };
       }

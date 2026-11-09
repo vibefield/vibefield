@@ -714,6 +714,9 @@ export const AgentModelLocalFacts = z
      * `stopKey`): the pane frame's stop title names it. Absent: the stop
      * presses no key, and the title names none */
     stopKey: z.string().optional(),
+    /** OB — the session's `door` (`off`: this process holds no tool plane): whether a card's Live face can land on it. Absent:
+     * the door as briefed */
+    door: z.string().optional(),
     /** The mirror's own words the chrome reads, present exactly when fieldd
      * holds a monitor mirror for the run — the provider has spoken. Absent is
      * the run before its first state: the pane frame's bare badge, the

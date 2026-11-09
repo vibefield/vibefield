@@ -2747,6 +2747,9 @@ export const IPC_CHANNELS = {
    * bytes) written to the hand's folder at the play, twelve kept as the stills are, its path answered (OB-D10 A). A
    * registered window only; null when main could not write it. */
   handPictureWrite: "vibefield:screenshot:hand-picture-write",
+  /** renderer → main invoke: HandFileWriteRequest → string | null — a card's file face (an export a kind produces at the play)
+   * written to the hand's folder under a safe form of its name, in the same twelve, its path answered. A registered window only. */
+  handFileWrite: "vibefield:screenshot:hand-file-write",
   /** renderer → main invoke: RendererReplaceRequest → RendererReplaceResult — the
    * window's renderer REPLACED at its own asking (DK-9, the runtime with kinds: a
    * plugin update whose kinds this realm defined otherwise — ICE's catalog cannot

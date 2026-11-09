@@ -1,6 +1,6 @@
 import { type AnyBehaviorDef, defineWidget, p, type WidgetType } from "@vibecook/ice";
 import { defineObject, isObjectKind } from "@vibecook/ice/desk";
-import type { ObjectContribution, PropSpec } from "@vibefield/contracts";
+import type { ObjectAgentHalf, ObjectContribution, PropSpec } from "@vibefield/contracts";
 import type { ObjectBinding } from "@vibefield/plugin-sdk";
 
 // §12.2 — the HOST builds every prefab from manifest data; plugins never call
@@ -62,6 +62,8 @@ export interface TypeDefinition {
   readonly schemaVersion: number;
   /** The binding the kind came from (`kind` only) — an update's is another object. */
   readonly binding?: ObjectBinding;
+  /** What its manifest says it offers an agent (OB-2): the faces a card of it carries. */
+  readonly agent?: ObjectAgentHalf;
 }
 const definitions = new Map<string, TypeDefinition>();
 
@@ -179,7 +181,12 @@ export function buildObjectType(
   // the kind and `defineObject`/`defineWidget` validate the rest at definition.
   const object = defineObject(def as Parameters<typeof defineObject>[0]);
   built.set(o.type, object);
-  definitions.set(o.type, { face: "kind", schemaVersion: o.schemaVersion, binding });
+  definitions.set(o.type, {
+    face: "kind",
+    schemaVersion: o.schemaVersion,
+    binding,
+    ...(o.agent === undefined ? {} : { agent: o.agent }),
+  });
   return object;
 }
 

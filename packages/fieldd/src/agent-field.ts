@@ -754,6 +754,8 @@ export function localFactsOf(summary: AgentSessionSummary): AgentModelLocalFacts
     ...(summary.continuation?.exited === true ? { exited: true } : {}),
     // Q08 — the key the pane frame's stop title names
     ...(summary.stopKey !== undefined ? { stopKey: summary.stopKey } : {}),
+    // OB — the door is off for this process: a card's Live face cannot land on it
+    ...(summary.door !== undefined ? { door: summary.door } : {}),
     ...(monitor !== undefined
       ? {
           mirror: {

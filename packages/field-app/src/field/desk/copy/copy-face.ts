@@ -1,9 +1,16 @@
 import { NOTE_TYPE } from "@vibecook/ice/desk/objects";
 import {
-  type CardStub,
+  OBJECT_LIMITS,
+  type ObjectAgentFace,
+  type ObjectRef,
+  utf8ByteLength,
+} from "@vibefield/contracts";
+import { type AgentHalf, agentReadApi } from "@vibefield/plugin-sdk/desk";
+import {
   type Face,
   type ImageFace,
-  textCardOf,
+  type RefFace,
+  wordsShowOf,
 } from "../../../frame/cards/cards-model";
 import type { ObjectWords } from "../desk-object-words";
 
@@ -29,6 +36,10 @@ export interface CopiedObject {
   readonly props: Readonly<Record<string, unknown>>;
   /** PT-4: what the live page it shows is called — its title, else its address as printed; absent: it shows none. */
   readonly live?: string;
+  /** Its durable key on the board, when the board has one. */
+  readonly key?: string;
+  /** What its kind offers an agent (OB-2); absent: no agent half, so Picture only. */
+  readonly agent?: CopiedAgent;
 }
 
 /** A writing's first `n` characters — its runs of white space one space, cut with "…" when there is more; null when
@@ -65,20 +76,131 @@ export function copiedWords(objects: readonly CopiedObject[]): string | null {
   return texts.length === 0 ? null : texts.join("\n\n");
 }
 
-/** OB-2's seam: every face a copy offers, in the kind's order (OB-D2), until a kind's agent half can offer more. A kind
- * that declares an agent half will put its `ref` first and add its exports here; every kind gets the host's Picture when one
- * could be taken. For now that is exactly what can be honest: a lone note's words, and the Picture. */
-export function kindFacesOf(
-  objects: readonly CopiedObject[],
-  picture: ImageFace | null,
-  stub: CardStub,
-): readonly Face[] {
-  const writing = noteWords(objects);
-  const words: readonly Face[] =
-    writing === null
-      ? []
-      : [{ ...textCardOf(writing, stub).faces[0], label: "Its words", id: "words" }];
-  return picture === null ? words : [...words, picture];
+/** What one kind offers: its declared faces and its handlers (OB-2). */
+export interface CopiedAgent {
+  readonly faces: readonly ObjectAgentFace[];
+  readonly half: AgentHalf;
+}
+
+/** How large words may be and still ride the card from the press: the most one tool answers. Past it they wait for the play. */
+export const FACE_TEXT_PRESS_BYTES = OBJECT_LIMITS.TOOL_BYTES;
+
+export interface FacesAsked {
+  readonly objects: readonly CopiedObject[];
+  /** the host's capture, when one could be taken */
+  readonly picture: ImageFace | null;
+  /** fieldd's names for the objects with an agent half, in order; empty: no Live */
+  readonly refs: readonly ObjectRef[];
+  /** what the card is called */
+  readonly title: string;
+  /** an object's props as they are at the play; null: it has gone */
+  readonly readNow: (object: CopiedObject) => Readonly<Record<string, unknown>> | null;
+}
+
+type Handler = (api: ReturnType<typeof agentReadApi>) => string;
+
+/** Run a face's handler; null when it throws. */
+function run(handler: Handler, props: Readonly<Record<string, unknown>>): string | null {
+  try {
+    return handler(agentReadApi(props));
+  } catch {
+    return null;
+  }
+}
+
+/** A handler that reads the object as it is at the play. */
+function readerAtPlay(
+  object: CopiedObject,
+  handler: Handler,
+  readNow: FacesAsked["readNow"],
+): () => string | null {
+  return () => {
+    const props = readNow(object);
+    return props === null ? null : run(handler, props);
+  };
+}
+
+/** One declared face of one object, at the press (`studies/kit.md`): null when it has nothing to give. */
+function handledFace(
+  object: CopiedObject,
+  half: AgentHalf,
+  face: ObjectAgentFace,
+  asked: FacesAsked,
+): Face | null {
+  const id = face.id;
+  const handler = id === undefined ? undefined : half.faces?.[id];
+  if (id === undefined || handler === undefined) return null;
+  const base = { id, label: face.label ?? id };
+  if (face.type === "file") {
+    return {
+      ...base,
+      type: "file",
+      name: `${asked.title}.${id}`,
+      ...(face.mime === undefined ? {} : { mime: face.mime }),
+      atPlay: readerAtPlay(object, handler, asked.readNow),
+    };
+  }
+  const given = run(handler, object.props);
+  if (given === null || given.trim() === "") return null;
+  if (face.type === "link") return { ...base, type: "link", url: given, title: asked.title };
+  if (face.type !== "text") return null;
+  const late = utf8ByteLength(given) > FACE_TEXT_PRESS_BYTES;
+  const text = late ? "" : given;
+  return {
+    ...base,
+    type: "text",
+    format: face.format ?? "plain",
+    ...(face.language === undefined ? {} : { language: face.language }),
+    text,
+    show: wordsShowOf(text),
+    ...(late ? { atPlay: readerAtPlay(object, handler, asked.readNow) } : {}),
+  };
+}
+
+/** The Live face: fieldd's name for the object and the same capture as its Picture. No name or no picture, no Live. */
+function liveFace(asked: FacesAsked, face?: ObjectAgentFace): RefFace | null {
+  const [ref, ...more] = asked.refs;
+  const { picture, objects } = asked;
+  if (ref === undefined || picture === null) return null;
+  return {
+    id: face?.id ?? "live",
+    type: "ref",
+    label: face?.label ?? "Live",
+    ref,
+    kindName: objects.length > 1 ? `${objects.length} objects` : (objects[0]?.words.title ?? ""),
+    title: asked.title,
+    still: { src: picture.src, width: picture.width, height: picture.height },
+    ...(more.length === 0 ? {} : { more }),
+  };
+}
+
+/** Every face a copy offers, in the kind's order (OB-D2), from its agent half. A kind with none gets its Picture and no Live; several
+ * selected get one Live naming each and one Picture. PURE, save what a handler does. */
+export function kindFacesOf(asked: FacesAsked): readonly Face[] {
+  const { objects, picture } = asked;
+  const shot: readonly Face[] = picture === null ? [] : [picture];
+  const [one, ...others] = objects;
+  const agent = one?.agent;
+  if (others.length > 0) {
+    const live = liveFace(asked);
+    return live === null ? shot : [live, ...shot];
+  }
+  if (one === undefined || agent === undefined) return shot;
+  const declared = agent.faces.flatMap((face): readonly Face[] => {
+    if (face.type === "ref") {
+      const live = liveFace(asked, face);
+      return live === null ? [] : [live];
+    }
+    if (face.type === "image") {
+      return picture === null
+        ? []
+        : [{ ...picture, id: face.id ?? picture.id, label: face.label ?? picture.label }];
+    }
+    const made = handledFace(one, agent.half, face, asked);
+    return made === null ? [] : [made];
+  });
+  // the host adds the Picture to every kind (§4.2), last, where the kind did not say where it goes
+  return agent.faces.some((face) => face.type === "image") ? declared : [...declared, ...shot];
 }
 
 /** What a copy is called — its picture card's title (§8, R15's names, above). */

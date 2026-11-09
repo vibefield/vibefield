@@ -43,7 +43,7 @@ import {
   createClipboardImageDoor,
 } from "./clipboard-door";
 import type { FielddEnsure } from "./fieldd-handle-coordinator";
-import { createHandPictureDoor } from "./hand-pictures";
+import { createHandFileDoor, createHandPictureDoor } from "./hand-pictures";
 import { shellIdentity } from "./login-shell";
 import { createScreenshotDoor } from "./screenshot-door";
 import { createScreenshotPreviewDoor } from "./screenshot-preview";
@@ -577,6 +577,22 @@ export function registerHandPicture(
     },
   });
   ipcMain.handle(IPC_CHANNELS.handPictureWrite, (event, raw: unknown) => door(event.sender, raw));
+}
+
+/** A card's file face written to the hand's folder at the play (policy in hand-pictures.ts). */
+export function registerHandFile(
+  registry: WindowRegistry,
+  write: (name: string, text: string) => Promise<string>,
+  logger?: Logger,
+): void {
+  const door = createHandFileDoor({
+    owns: (sender: WebContents) => registry.owns(sender),
+    write,
+    onRefused: (reason) => {
+      logger?.warn("desktop.ipc.hand_file_refused", "A hand file was not written", { reason });
+    },
+  });
+  ipcMain.handle(IPC_CHANNELS.handFileWrite, (event, raw: unknown) => door(event.sender, raw));
 }
 
 /** Fire-and-forget feedback has no arguments, return channel, or native handle. */

@@ -11,8 +11,8 @@ import {
 import { type CardTarget, TARGET_LAYER } from "../frame/cards/card-targets";
 import { paneTextOf, stillOf } from "../frame/cards/card-text";
 import { OUTCOME_WORDS } from "../frame/cards/cards-words";
+import { readyFace } from "../frame/cards/face-ready";
 import { handOver } from "../frame/cards/hand-over";
-import { withPictureFile } from "../frame/cards/picture-file";
 import {
   claimingRefusals,
   getGodviewLineDoor,
@@ -42,7 +42,7 @@ export interface PaneCardTargetDeps {
   readonly inputRefusals?: (hear: (refusal: RoutedInputRefusal) => void) => () => void;
   /** The shell's doors: whether a snapshot's still is kept, and the hand's folder a desk picture is written to (undefined:
    * the window's host). */
-  readonly host?: Pick<FieldHost, "screenshotStillKept" | "writeHandPicture">;
+  readonly host?: Pick<FieldHost, "screenshotStillKept" | "writeHandPicture" | "writeHandFile">;
 }
 
 /** A pane as a place a card lands (§4.4): an agent's by its run, the catalog's label for it and whether the door can
@@ -123,9 +123,10 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
       const chosen = faceOf(card, faceId);
       const verdict = landing(chosen, destination);
       if (!verdict.lands) return { ok: false, note: verdict.reason };
-      // a desk picture becomes a file at the play (OB-D10 A)
-      const written = await withPictureFile(chosen, deps.host);
-      if (written === null) return { ok: false, note: OUTCOME_WORDS.pictureNotWritten };
+      // what is made at the play is made now: a desk picture's or a file's path, words over the press's budget (OB-D10 A)
+      const ready = await readyFace(chosen, deps.host);
+      if (!ready.ok) return { ok: false, note: ready.note };
+      const written = ready.face;
       const text = paneTextOf(card, written);
       if (text === null) return { ok: false, note: OUTCOME_WORDS.pictureNotWritten };
       // a snapshot's path names its still only while main keeps it (`stillOf`): a pane is never
@@ -134,10 +135,12 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
       if (still !== null && !(await stillKept(still, deps.host))) {
         return { ok: false, note: OUTCOME_WORDS.pasteGone };
       }
-      // playing Live is the grant (OB-L1): fieldd is asked first, and the words go in only if handed
+      // playing Live is the grant (OB-L1): fieldd is asked first, for every object named, and the words go in only if handed
       if (written.type === "ref" && destination.at === "agent-pane") {
-        const handed = await handOver(written.ref, destination.run);
-        if (!handed.handed) return { ok: false, note: handed.reason, stand: "read" };
+        for (const ref of [written.ref, ...(written.more ?? [])]) {
+          const handed = await handOver(ref, destination.run);
+          if (!handed.handed) return { ok: false, note: handed.reason, stand: "read" };
+        }
       }
       if (!(await door.whenInputOpen(pane.paneId, PANE_INPUT_WAIT_MS))) {
         return { ok: false, note: OUTCOME_WORDS.notTaking(pane.name) };

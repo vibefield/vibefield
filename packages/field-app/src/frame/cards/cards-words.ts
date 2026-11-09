@@ -146,6 +146,14 @@ export const OUTCOME_WORDS = {
   pasteGone: "Not pasted — that snapshot is no longer kept",
   /** the desk refused the object (the reason is in the log) */
   notPlaced: "Not placed — the desk could not take it",
+  /** a face made at the play whose object has gone since the card was made */
+  faceGone: "Not pasted — that object is no longer on the desk",
+  /** main could not write a file face to the hand's folder */
+  fileNotWritten: "Not pasted — the file could not be written",
+  /** a ref played on the desk whose object has gone, or cannot be found */
+  objectGone: "That object is no longer on the desk",
+  /** a ref played on the desk whose object lies on another board */
+  onAnotherBoard: "That object is on another board",
   /** main could not write a desk picture to the hand's folder (OB-D10 A) */
   pictureNotWritten: "Not pasted — the picture could not be written to a file",
   /** a ref played on the desk: where it already is (§4.4) */

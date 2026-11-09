@@ -27,6 +27,7 @@ import { transcriptDoorOver } from "../chat/transcript-port";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import type { LineActs } from "../frame/Composer";
 import { Cards } from "../frame/cards/Cards";
+import { installObjectsDoor } from "../frame/cards/hand-over";
 import { fieldServiceTeller } from "../frame/field-service-notice";
 import { type FrameSurface, foldSurface, type SheetShelf } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
@@ -162,6 +163,8 @@ export function ChromeLayer({
   useEffect(() => startNeedsNotices(needsNoticesPortOver(fieldd)), [fieldd]);
   // An agent's work on the desk (OB-3c): the window that has the board carries out what fieldd asks of it.
   useEffect(() => followDeskAgent(deskAgentDoorOver(fieldd)), [fieldd]);
+  // The hand's doors to the desk's objects (OB-L1): the grant, a card's ref, and finding an object again
+  useEffect(() => installObjectsDoor(fieldd), [fieldd]);
   // Chat's create (SP-1c): the New spark sheet asks fieldd through the same client — and so do @'s rows in Chat's
   // composer (SP-1d), whose list is one of the frame's open surfaces (`at`), so Chat is handed the one owner's value.
   const newSparkPort = useMemo(() => newSparkPortOver(fieldd), [fieldd]);

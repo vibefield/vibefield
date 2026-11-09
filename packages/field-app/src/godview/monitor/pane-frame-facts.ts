@@ -4,6 +4,7 @@ import {
   folderName,
   type PaneFrameAgent,
 } from "@vibefield/puppeteer-views";
+import { noteRunNameable } from "../../frame/cards/card-landing";
 import type { ChromeRun } from "./chrome-facts";
 import type { AgentStatus } from "./facet-types";
 
@@ -156,6 +157,14 @@ export function runsByTerminal(runs: readonly ChromeRun[]): ReadonlyMap<string, 
     byTerminal.set(sessionId, run);
   }
   return byTerminal;
+}
+
+/** OB — what the window's board says of each run's door, for the landing table's synchronous read: `off` is the run's own no,
+ * and no word clears any it gave before. */
+export function noteDoorsOfRuns(byTerminal: ReadonlyMap<string, ChromeRun>): void {
+  for (const row of byTerminal.values()) {
+    noteRunNameable(row.runtimeRunId, row.local?.door === "off" ? false : null);
+  }
 }
 
 /**

@@ -135,6 +135,7 @@ export function mountProductHost(
       screenshotStillKept: (path) =>
         window.vibefield.screenshot.stillKept(screenshotStillBasename(path)),
       writeHandPicture: (png) => window.vibefield.screenshot.writeHandPicture(png),
+      writeHandFile: (name, text) => window.vibefield.screenshot.writeHandFile(name, text),
       // HN-6 — a file brought in from another app, by its path: the preload's own read
       pathForFile: (file) => window.vibefield.pathForFile(file),
       onPrepareClose: (handler) => window.vibefield.onPrepareClose(handler),

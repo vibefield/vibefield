@@ -102,7 +102,9 @@ function asWords(face: Face): string | null {
         ? null
         : `the ${spoken(face.label)}'s path`;
     case "file":
-      return face.path === undefined ? null : `the ${spoken(face.label)}'s path`;
+      return face.path === undefined && face.atPlay === undefined
+        ? null
+        : `the ${spoken(face.label)}'s path`;
     case "link":
       return "the address";
     case "session":
@@ -240,22 +242,46 @@ export function needsPictureFile(face: Face): face is ImageFace {
   return face.type === "image" && face.path === undefined && face.bytes !== undefined;
 }
 
-// ── The door's naming of runs (seam for OB-3) ───────────────────────────────────────────────────
+// ── The door's naming of runs ───────────────────────────────────────────────────────────────
 
+const namedAgents = new Map<string, boolean>();
 const namedRuns = new Map<string, boolean>();
 
-/** OB-3's seam: fieldd's answer for whether the door can name this run, cached for `Destination.can`. */
-export function noteRunNameable(run: string, can: boolean): void {
-  namedRuns.set(run, can);
+/** Whether the door can name the process that runs an agent's MCP servers: a pane's own, or a helper of the run's own (fieldd's
+ * `doorCanName`, agent-briefing.ts, is the same rule). PURE. */
+export function agentDoorCanName(
+  briefing:
+    | {
+        readonly mcpServers?: boolean | undefined;
+        readonly mcpServerProcess?: string | undefined;
+      }
+    | undefined,
+): boolean {
+  const process = briefing?.mcpServerProcess;
+  return briefing?.mcpServers === true && (process === "terminal" || process === "run-helper");
 }
 
-/** Whether the door can name a run: fieldd's cached answer, or until it comes the catalog's word for that agent (a
- * process the door can name, `offers.spark`). Synchronous: the bloom opens with no wait. */
+/** What fieldd declared of an agent (`agent.providers`). */
+export function noteAgentNameable(agentId: string, can: boolean): void {
+  namedAgents.set(agentId, can);
+}
+
+/** What the window's board says of one run: false, its door is off for this process; null, it says nothing of its own. */
+export function noteRunNameable(run: string, can: boolean | null): void {
+  if (can === null) namedRuns.delete(run);
+  else namedRuns.set(run, can);
+}
+
+/** Whether the door can name a run: the run's own word, else its agent's as fieldd declared it, else until fieldd has answered
+ * the catalog's (`offers.spark`). Synchronous: the bloom opens with no wait. */
 export function doorCanNameRun(run: string, agentId: string): boolean {
-  return namedRuns.get(run) ?? catalogEntry(agentId)?.offers.spark === true;
+  return (
+    namedRuns.get(run) ?? namedAgents.get(agentId) ?? catalogEntry(agentId)?.offers.spark === true
+  );
 }
 
 /** Test seam. */
 export function resetRunNameCacheForTest(): void {
   namedRuns.clear();
+  namedAgents.clear();
 }
