@@ -2125,6 +2125,39 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(daemon.agents.isLive(runId)).toBe(false);
   }, 60_000);
 
+  it("slice 14's fold, P14 (ruled 2026-11-09; its first real read is the test Mac's mint): two `endRun`s a microtask apart on a real run: neither rejects, the run's end is told once, and the second call's time is printed, never asserted", async () => {
+    // `endRun` reads `exiting` (agent-runtime.ts:2180), which only the exit handler sets (:4799), so both calls reach
+    // the floor. A second `terminated: false` on a session no longer listed retries for up to STOP_PLACEMENT_WAIT_MS
+    // (:309, :2631): the printed number is what the records read. A ceiling is a later rider, on evidence (item 213's class)
+    const box = await setup({ floor: "real" });
+    const { daemon } = box;
+    const win = await window(daemon, DECK, "p14");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+      title: "a double end",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    await joinedRow(win, runId);
+    expect(daemon.agents.isLive(runId)).toBe(true);
+    const told: string[] = [];
+    const off = daemon.agents.onRunEnded((id) => {
+      told.push(id);
+    });
+    const first = daemon.agents.endRun(runId);
+    await Promise.resolve();
+    const at = performance.now();
+    const second = daemon.agents.endRun(runId).then(() => performance.now() - at);
+    const [, secondMs] = await Promise.all([first, second]);
+    console.log(`P14_DOUBLE_END ${JSON.stringify({ secondMs: Math.round(secondMs) })}`);
+    await poll(async () => (told.includes(runId) ? true : undefined), 15_000, "the run's end told");
+    // a second tell, if there were one, lands after the first
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    off();
+    expect(told.filter((id) => id === runId)).toEqual([runId]);
+    expect(daemon.agents.isLive(runId)).toBe(false);
+  }, 60_000);
+
   it("spawn: a PTY on the agent cell with a CLEAN environment; the fold's row, the record (0600), the ticket, the audit; automation through the host; exit withdraws the row and stamps the record; resume continues from the record; a live run refuses to be resumed", async () => {
     const { daemon, dataDir, envOut, sessions } = await setup({ floor: "real" });
     const win = await window(daemon, DECK, "r1");
