@@ -44878,3 +44878,50 @@ births kept 0.
 - The clean canvas witness: the EL8's own `gate:landing` canvas row, hands off. A red there counts against this land.
 - MV's: the cd row's failure dump still lacks the active pane's last rows, which need a test door in the product or
   ghosttea (ROADMAP's owed line).
+
+## Item 266 — release.yml stamps a beta's version as it stamps a nightly's: a beta built unstamped called itself X.Y.Z, and its own sign job would have refused it (track LP, release-class)
+
+(2026-11-09; two commits on main `92c9ab38d`: the fix `f93650d1e` (release.yml +2 −2) and this records
+commit, cut by the LAUNCH lead (vibe-field-af) with git plumbing, so no checkout was touched; the packet is
+`lanes/launch/item266/`. Release-class: landed on James's typed word, after his eye on the two-line diff.)
+Filed 2026-11-08 21:48Z by VF-PM on the LAUNCH lead's read of what the `release/0.9` cut needs from main. VF-PM ruled
+at 21:54Z: the step's name rides the fix, and the falsified prose is corrected here.
+
+**The finding** (read in code; no beta has run here).
+- A beta commits its bare version. `release-plan.mjs:40` takes only X.Y.Z, and :94 holds a `v*` tag's core to
+  `apps/desktop/package.json`. So `v0.9.0-beta.1` needs the committed "0.9.0".
+- release.yml stamped the plan's version into the checkout for nightlies alone (:230, `channel == 'nightly'`).
+- electron-builder writes the feed's `version:` from the app's (`packager.appInfo.version`, app-builder-lib 26.15.7,
+  `out/publish/updateInfoBuilder.js:79`). `nightly-20261108` shows the stamp flowing through:
+  latest-mac.yml says `version: 0.1.0-nightly.20261108`, and so does its manifest.
+- So beta.1's app, feed and file names would have said 0.9.0, while its plan, tag, title and manifest said
+  0.9.0-beta.1 (the manifest's version is the plan's, release.yml:422).
+- `verify-chain.ts:411` (step 6b) refuses a manifest whose version is not the feed's. release-verify runs that chain
+  in the sign job and again in converge, so beta.1 would have gone red at sign, after both of James's clicks, with
+  nothing published. Its tag could not have been reused at a fixed commit (`tagAction`, D7), and a rerun runs the
+  tagged commit's own workflow.
+- Had it shipped, the app would have read its own channel as stable (`releaseChannelOf`, update-policy.ts:931–935),
+  and beta.2's feed would have said 0.9.0 too: no beta-to-beta update, the soak's exit.
+
+**What landed.**
+- `f93650d1e`: release.yml:229–230. The condition is `channel != 'stable'`, so a beta is packaged as `X.Y.Z-beta.N` and
+  a stable, never stamped, as the committed X.Y.Z. The step's name says "the prerelease's version (D6 as amended,
+  item 266 — a nightly or a beta; this checkout only)".
+- This commit: `release-plan.mjs`'s header (:4–12) says so, with a dated correction of "the one version a tool stamps";
+  DECISIONS' WP12 row gains D6's amendment. ROADMAP's release posture never said nightlies alone, so it is untouched.
+
+**Validation** (the packet's `dryrun/` and `logs/`).
+- The plan, dry-run in a lane clone with its remote removed, on scratch tags that exist there alone:
+  `v0.9.0-beta.1` at `4db42a816` is refused ("names 0.9.0, but apps/desktop/package.json says 0.1.0"). On a scratch
+  0.9.0 commit, `v0.9.0-beta.2` plans beta `0.9.0-beta.2`, `v0.9.0` plans stable `0.9.0`, the stamp writes
+  `0.9.0-beta.2` to that checkout alone, and the tag job's action is `present`.
+- `dryrun/model.mjs` (the contracts' own version patterns): as it was, a beta's app and feed say 0.9.0, 6b refuses,
+  and the app's channel reads stable. As fixed, every channel passes 6b, and a stable is never stamped.
+- No test pins the step. `release-scripts.test.ts` drives `planRelease` and never reads release.yml;
+  `build-paths.test.mjs` reads the build job's `env:` and its stage lines. It passed 18 of 18 at the fix, in a scratch
+  worktree under the HOLD door.
+- The fixed release.yml parses (yaml 2.9.0): 20 build steps, the stamp's condition as above.
+
+**Owed.**
+- The first beta built through the fix: `v0.9.0-beta.1`, cut on a commit that carries `f93650d1e`.
+- `build-wp12-updater.md` §2's D6 row, in `draft/`, owes this amendment at its source.

@@ -2,11 +2,14 @@
 // WP12 (build-wp12-updater.md D6, D7, D14; L3a) — the release workflow's PLAN: which release this run is, before
 // anything is built. One answer, as JSON (and as `key=value` lines for `$GITHUB_OUTPUT` with `--github-output`):
 //   - a `schedule` or `workflow_dispatch` run is a NIGHTLY: tag `nightly-YYYYMMDD[.N]` (UTC), version
-//     `<product>-nightly.YYYYMMDD[.N]` — the one version a tool stamps (D6, RM-D7's stated exception) — and it is SKIPPED
+//     `<product>-nightly.YYYYMMDD[.N]`, stamped into the build by release.yml (D6) — and it is SKIPPED
 //     when main is red or unchanged since the last PUBLISHED nightly (RL4 (a)). Schedules run once per UTC day;
 //     manual dispatches can append .N to the tag and version for another release that day. Tags are never reused (D7).
-//   - a pushed `v*` tag is a BETA (`vX.Y.Z-beta.N`) or a STABLE (`vX.Y.Z`), whose version must already be the committed
-//     product version (betas and stables are commit-bumped, RM-D7); a mismatch refuses the run.
+//   - a pushed `v*` tag is a BETA (`vX.Y.Z-beta.N`) or a STABLE (`vX.Y.Z`), whose X.Y.Z must already be the
+//     committed product version (commit-bumped, RM-D7); a mismatch refuses the run. A beta's `X.Y.Z-beta.N` is
+//     stamped into the build as a nightly's is (D6 as amended, item 266); a stable is never stamped.
+//     (Corrected 2026-11-09, item 266: this said a nightly's is "the one version a tool stamps". release.yml
+//     stamped nightlies alone, so a beta built as its bare X.Y.Z, and its sign job's verify-chain 6b refused it.)
 // Nightlies and betas are GitHub prereleases; only a stable is `latest` (`releases/latest/download/` reaches stable, D4).
 //
 // THE TAG IS MADE AT PLAN TIME (2026-10-26, VF-PM's ruling A): GitHub refuses GITHUB_TOKEN a tag, and so a release that
