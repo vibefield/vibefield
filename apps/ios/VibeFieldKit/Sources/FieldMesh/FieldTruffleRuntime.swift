@@ -5,8 +5,10 @@ import TruffleTailscale
 /// This phone's node on the tailnet.
 ///
 /// It exists because a node sees only peers in its OWN application namespace:
-/// `MeshNode.upsertFromLayer3` admits a peer into the registry only when its
-/// Tailscale hostname starts with `truffle-{appId}-` (RFC 017 §4). Ghosttea's
+/// `MeshNode.upsertFromLayer3` admits a peer into the registry by its
+/// `Hostinfo.App` tag, or, on a row with no tag, when its Tailscale hostname
+/// starts with `truffle-{appId}-` (RFC 017 §4; corrected 2026-11-07, at
+/// `FieldMeshContract`). Ghosttea's
 /// Swift runtime hardcoded its own app id and kept its `init(node:)` private,
 /// so the phone joined `ghosttea-terminal` while every desktop floor joins
 /// `vibefield`, and a signed-in phone beside a serving desktop read

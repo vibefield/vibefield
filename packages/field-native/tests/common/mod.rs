@@ -13,7 +13,9 @@
 //! COURTESY TO THE TAILNET THEY JOIN: nodes register EPHEMERAL, so they vanish
 //! ~30–60 min after the process dies rather than accumulating as dead devices
 //! on the account. The app_id is unique per run — truffle's RFC 017 namespacing
-//! filters discovery by `truffle-{app_id}-*`, so a shared id would make each run
+//! filters discovery by app id (the tag `truffle:{app_id}`, or the prefix
+//! `truffle-{app_id}-*` on an untagged row; corrected 2026-11-07, EL8-TRUFFLE), so
+//! a shared id would make each run
 //! chase the previous runs' lingering ghosts, which is exactly how these tests
 //! turn flaky. It also keeps them out of `vibefield`, the product's own
 //! namespace: a test must not appear on the tailnet as the product.

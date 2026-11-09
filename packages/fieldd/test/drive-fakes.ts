@@ -19,7 +19,9 @@ const UNSUPPORTED_FIXTURE = new URL(
   import.meta.url,
 );
 
-/** The floor at the `=0.7.24` pin's answer to every file-transfer verb, as the contract's golden holds it
+/** A floor's answer to every file-transfer verb until the substrate slice, at `=0.7.24` and `=0.7.27` alike
+ * (*corrected 2026-11-08 (EL8-TRUFFLE, truffle 0.7.27): it said "The floor at the `=0.7.24` pin's answer"*),
+ * as the contract's golden holds it
  * (`error-data.file-transfer-unsupported.json`), parsed through `ErrorData` (EL9). */
 export const UNSUPPORTED_GOLDEN = ErrorData.parse(
   JSON.parse(readFileSync(UNSUPPORTED_FIXTURE, "utf8")),
@@ -256,7 +258,8 @@ export function refusingFloor(error: RpcCallError): DrivePullsFloor & { asked: s
   };
 }
 
-/** The floor at the `=0.7.24` pin: every verb answers UNSUPPORTED_GOLDEN. */
+/** A floor before the substrate slice, at `=0.7.24` or `=0.7.27`: every verb answers UNSUPPORTED_GOLDEN.
+ * *Corrected 2026-11-08 (EL8-TRUFFLE, truffle 0.7.27): it said "The floor at the `=0.7.24` pin".* */
 export function unsupportedFloor(): DrivePullsFloor & { asked: string[] } {
   const { kind, retryable, details } = UNSUPPORTED_GOLDEN;
   const code = RPC_ERROR_CODES[kind];

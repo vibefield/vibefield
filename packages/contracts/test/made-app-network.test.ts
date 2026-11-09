@@ -259,6 +259,9 @@ describe("a serve's header list: truffle T-1's rules as a belt, and a superset o
   });
 
   it("holds every name T-1's table refuses (a looser contract fails at the serve's add)", () => {
+    // truffle 0.7.27's `REFUSED_RESPONSE_HEADERS` (truffle-core src/proxy/mod.rs, #254), all
+    // fourteen, read at the EL8 that adopts it (EL8-TRUFFLE, 2026-11-07); it held the early nine
+    // until then.
     const t1 = [
       "connection",
       "keep-alive",
@@ -269,6 +272,11 @@ describe("a serve's header list: truffle T-1's rules as a belt, and a superset o
       "set-cookie",
       "content-length",
       "host",
+      "content-type",
+      "content-encoding",
+      "content-range",
+      "etag",
+      "last-modified",
     ];
     for (const name of t1) expect(SERVE_HEADER_FORBIDDEN.NAMES).toContain(name);
     expect(SERVE_HEADER_FORBIDDEN.PREFIXES).toContain("proxy-");

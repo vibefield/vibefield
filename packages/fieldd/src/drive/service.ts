@@ -21,8 +21,10 @@ import {
 //
 // The two UNAVAILABLEs that ARE the drive's states are answered in DRIVE_SERVICE's words (DR-L8), their details
 // `DriveUnavailableDetails`:
-//  - a floor that cannot pull by a named root is STATE_UNBUILT, retryable false (W3's rider D: truffle T-3 is not
-//    adopted, and nothing a retry changes until VibeField moves);
+//  - a floor that cannot pull by a named root is STATE_UNBUILT, retryable false (W3's rider D: truffle T-3 is
+//    adopted at the `=0.7.27` pin, but the floor pulls by it only from the substrate slice on, and nothing a retry
+//    changes until VibeField moves. *Corrected 2026-11-08 (EL8-TRUFFLE, truffle 0.7.27): it said "truffle T-3 is
+//    not adopted".*);
 //  - the mesh facade's node gate (`MeshNotUpDetails`, a pull's or a lane's) is STATE_MESH_DOWN, its retryable flag
 //    the floor's: what this desktop holds still serves here, and nothing moves between desktops. egress.ts:291-292
 //    reads the node gate the same way.

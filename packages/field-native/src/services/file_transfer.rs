@@ -9,8 +9,9 @@
 //!
 //! TWO ARMS, one trait:
 //!
-//!   [`UnsupportedFileTransfer`] — PRODUCTION at the `=0.7.24` pin (the root
-//!       `Cargo.toml`). That release has no named-root pull: `add_pull_root`
+//!   [`UnsupportedFileTransfer`] — PRODUCTION (`default_backend`) until the
+//!       substrate slice below. It was written at the `=0.7.24` pin, a release
+//!       with no named-root pull: `add_pull_root`
 //!       registers a canonicalized ABSOLUTE root, and `pull_file(peer_id,
 //!       remote_path, local_path)` names the file by the holder's own path
 //!       (truffle-core-0.7.24 `src/file_transfer/mod.rs:185-189, 330-335`), which
@@ -18,19 +19,28 @@
 //!       file-transfer API at all. Every verb answers `file-transfer-unsupported`,
 //!       a capability fact that holds for the floor's life, as egress's
 //!       `UnsupportedEgress` does (`services/mesh_egress.rs:158-161`).
+//!       *Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): it said
+//!       "PRODUCTION at the `=0.7.24` pin (the root `Cargo.toml`). That release
+//!       has no named-root pull". The root `Cargo.toml` pins `=0.7.27`, which
+//!       has it (#255, RFC 032: `add_named_pull_root` and `pull_named_file`,
+//!       truffle-core-0.7.27 `src/file_transfer/mod.rs:254, 465`). Production
+//!       still builds this arm, and the floor still calls no truffle
+//!       file-transfer API, until the substrate slice wires that pull.*
 //!   [`NamedRootsFileTransfer`] — the named-root arm (W3's stack B), over a
 //!       VibeField [`PullSubstrate`]. UNREACHABLE IN PRODUCTION: nothing but the
 //!       test seam installs it (`MeshHandle::install_file_transfer_for_tests`),
 //!       and nothing but [`ScriptedPulls`] implements the substrate. The truffle
 //!       substrate (`impl PullSubstrate for MeshNode`) and the default flip (a
 //!       `truffle-named-pull` default feature, egress's `Cargo.toml` shape) are
-//!       EL8-TRUFFLE's, when truffle releases T-3.
+//!       the substrate slice's.
 //!
 //! The substrate speaks VibeField types only, so no truffle type is named here
-//! before the release that defines it: T-3's `TransferError` is
-//! `#[non_exhaustive]` and adds `Unsupported` (truffle-t3 `e429c43`
-//! `crates/truffle-core/src/file_transfer/types.rs:198-215`), and an adapter
-//! written now would fold it into `io` through a `_` arm.
+//! before that slice: 0.7.27's `TransferError` is `#[non_exhaustive]` and has
+//! `Unsupported` (truffle-core-0.7.27 `src/file_transfer/types.rs:198-215`), and
+//! an adapter must name it rather than fold it into `io` through a `_` arm.
+//! *Corrected 2026-11-07 (EL8-TRUFFLE): it said this work is EL8-TRUFFLE's, "when
+//! truffle releases T-3", and cited a branch commit that is not in the release.
+//! T-3 released as 0.7.27 (#255), and the work is the substrate slice's.*
 
 use crate::config::{FileTransferRootDirs, NativeConfig};
 use crate::contracts::{
@@ -138,15 +148,22 @@ pub enum PullEvent {
     },
 }
 
-/// The arm production builds: [`UnsupportedFileTransfer`] at the `=0.7.24` pin,
-/// whose truffle cannot pull by a named root.
+/// The arm production builds: [`UnsupportedFileTransfer`], until the substrate
+/// slice (`impl PullSubstrate for MeshNode`, the `truffle-named-pull` default)
+/// builds [`NamedRootsFileTransfer`] over truffle's named pull.
+/// *Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): it said "at the
+/// `=0.7.24` pin, whose truffle cannot pull by a named root". The pinned
+/// truffle can (#255); this floor does not wire it yet.*
 pub fn default_backend() -> Arc<dyn FileTransferBackend> {
     Arc::new(UnsupportedFileTransfer)
 }
 
-/// The arm of a floor whose truffle cannot pull by a named root: every verb
-/// answers `file-transfer-unsupported` for the floor's life, which is what lets
-/// fieldd cache the answer per floor boot rather than retry it.
+/// The arm of a floor that does not pull by a named root: every verb answers
+/// `file-transfer-unsupported` for the floor's life, which is what lets fieldd
+/// cache the answer per floor boot rather than retry it.
+/// *Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): it said "a floor whose
+/// truffle cannot pull by a named root". At 0.7.27 the truffle can, and it is
+/// the floor that does not, until the substrate slice.*
 pub struct UnsupportedFileTransfer;
 
 #[async_trait::async_trait]
@@ -184,8 +201,8 @@ impl FileTransferBackend for UnsupportedFileTransfer {
 /// node: the arm is handed it when a node is installed
 /// (`MeshHandle::on_node_installed`) and forgets it when the node is torn down.
 ///
-/// At EL8-TRUFFLE, `impl PullSubstrate for MeshNode` maps each method onto
-/// truffle T-3: `set_cap` → `set_max_transfer_size`, `refuse_pushes` →
+/// At the substrate slice, `impl PullSubstrate for MeshNode` maps each method
+/// onto truffle T-3: `set_cap` → `set_max_transfer_size`, `refuse_pushes` →
 /// `auto_reject`, `serve_root`/`unserve_root` → `add_named_pull_root`/
 /// `remove_named_pull_root`, `pull` → `pull_named_file`, `progress` → the file
 /// transfer's events filtered to Receive.
@@ -207,7 +224,7 @@ pub trait PullSubstrate: Send + Sync {
     /// `message`, which the contract calls the floor's own (contracts mgmt.ts
     /// `NativeFileTransferDelta`). So an implementation writes it in the
     /// floor's words and names no path, the holder's or this desktop's (EL7):
-    /// EL8-TRUFFLE's adapter maps each truffle error to a fixed sentence of
+    /// the substrate slice's adapter maps each truffle error to a fixed sentence of
     /// its word, and logs truffle's own text locally, never on the wire.
     async fn pull(
         &self,
@@ -747,7 +764,7 @@ impl Core {
                 // The contract's reason list names FAILED_IO for a folder that
                 // could not be made (mgmt.ts `NativeFileTransferRoot`); the
                 // node's refusal shares the word, and no word of its own is in
-                // the registry. Only EL8-TRUFFLE's substrate can refuse.
+                // the registry. Only the substrate slice's adapter can refuse.
                 return refused(name, mesh_file_transfer::FAILED_IO);
             }
             if let Some(attached) = lock(&self.inner)
@@ -1184,7 +1201,7 @@ enum ScriptEntry {
 /// scripted is refused, RFC 032's one word. It records what the arm asked of it
 /// (the cap, the push refusal, the roots it serves, each pull) for a test to
 /// read. Scripted from the facts read at 0.7.24 (`mod.rs:378-650`); the
-/// EL8-TRUFFLE probe is the first live evidence.
+/// substrate slice's probe is the first live evidence.
 #[doc(hidden)]
 pub struct ScriptedPulls {
     scripts: Mutex<HashMap<String, ScriptEntry>>,

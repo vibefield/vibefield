@@ -66,7 +66,9 @@ export interface MockFileTransferRow {
 }
 
 /** DR-3b — a scripted file-transfer floor for `MockMgmtServer.fileTransfer`: a floor whose truffle pulls by a named
- * root (truffle T-3, which EL8-TRUFFLE adopts). The floor at the `=0.7.24` pin is the `"unsupported"` default. */
+ * root (truffle T-3, adopted at the `=0.7.27` pin; the floor pulls by it from the substrate slice on). A floor
+ * before that slice, at either pin, is the `"unsupported"` default. *Corrected 2026-11-08 (EL8-TRUFFLE, truffle
+ * 0.7.27): it said "which EL8-TRUFFLE adopts" and "The floor at the `=0.7.24` pin is the … default".* */
 export interface MockFileTransfer {
   /** the node was built GATED (`loginAllow` non-empty): a declared root registers. Ungated, each root answers
    * `registered: false` with MESH_FILE_TRANSFER.ROOT_UNGATED, and the floor holds it. */
@@ -205,7 +207,9 @@ export class MockMgmtServer {
   egress: "unsupported" | "mesh-down" | MockEgress = "unsupported";
   /** DR-3b — the floor's FILE TRANSFER (`native.mesh.fileTransfer.*`), answered ahead of every mesh gate in the
    * floor's refusal order (C1's contracts mgmt.ts, W3-1). `"unsupported"` — the default — refuses every declared
-   * verb `file-transfer-unsupported`, retryable false, as the floor at the `=0.7.24` pin answers
+   * verb `file-transfer-unsupported`, retryable false, as a floor answers until the substrate slice, at `=0.7.24`
+   * and at `=0.7.27` alike (*corrected 2026-11-08 (EL8-TRUFFLE, truffle 0.7.27): it said "as the floor at the
+   * `=0.7.24` pin answers"*)
    * (`error-data.file-transfer-unsupported.json`; drive-pulls.test.ts holds it to that golden). A `MockFileTransfer`
    * answers as a floor whose truffle pulls by a named root. On either, a name the contract does not declare answers
    * NOT_FOUND first. `pushFileTransferDelta()` / `pushFileTransferSnapshot()` / `endFileTransfers()` drive its

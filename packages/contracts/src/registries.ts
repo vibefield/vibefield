@@ -726,8 +726,11 @@ export const MADE_APP_OPEN = {
  *    directive's CSP name (`script-src`), which only an environment's reader takes. HOSTS_OVER_CAP: past
  *    UNION_HOSTS. HEADERS: a composed list SERVE_HEADER_LIMITS or SERVE_HEADER_FORBIDDEN refuses, which the two bounds
  *    above keep from happening; it is the belt, so truffle is never handed a list it refuses.
- * TS-only: no native reader. field-native carries the composed headers to truffle (DR-1 (B), at T-1's EL8) and reads
- * none of this. */
+ * TS-only: no native reader. field-native carries the composed headers to truffle (DR-1 (B), after T-1's EL8) and
+ * reads none of this.
+ * *Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): it said "(DR-1 (B), at T-1's EL8)". T-1's EL8 hands truffle
+ * every serve's and route's `headers` empty (field-native `mgmt/mesh.rs`); DR-1 (B) follows it, as
+ * made-app-network.ts says.* */
 export const MADE_APP_SERVE_POLICY = {
   CSP_HEADER: "Content-Security-Policy",
   DEFAULT_SRC: "'self'",
@@ -792,14 +795,23 @@ export const MADE_APP_SERVE_POLICY = {
 /** DR-1a — the response header names a serve's headers never carry, compared ASCII case-insensitively (`ServeHeader`,
  * made-app-network.ts). It is truffle T-1's table as a BELT, and a SUPERSET of it, so a header the contract admits is
  * never one truffle refuses at the serve's add (the wave-0 critic, 2026-11-06: a looser contract would fail a legal
- * policy at runtime). Re-read against T-1's final table at the truffle EL8 that adopts it.
+ * policy at runtime). T-1's table is truffle 0.7.27's `REFUSED_RESPONSE_HEADERS` (#254, RFC 030; truffle-core
+ * `src/proxy/mod.rs`, fourteen names) and its `proxy-` prefix; truffle's sidecar holds the same list, and its
+ * `response_headers_vectors.json` pins both.
  *  - NAMES: the connection's own (hop-by-hop: Connection, Keep-Alive, TE, Trailer, and `trailers` beside it,
  *    Transfer-Encoding, Upgrade), a cookie's (Set-Cookie: AH-D12 keeps an app's cookies its own), the body's and the
- *    request's (Content-Length, Host), the three T-1 may add (Content-Type, Content-Encoding, Content-Range), and
- *    Link, VibeField's own: Firefox applies a stylesheet a `Link` header names, so a serve never sends one (the
- *    critic's erratum on the record's §10.6).
+ *    request's (Content-Length, Host), the five that describe one body, which a serve would give every file it serves
+ *    (Content-Type, Content-Encoding, Content-Range, ETag, Last-Modified), and Link, VibeField's own: Firefox applies
+ *    a stylesheet a `Link` header names, so a serve never sends one (the critic's erratum on the record's §10.6).
+ *    `trailers` and `link` are VibeField's beyond T-1's table; the other fourteen are its table.
  *  - PREFIXES: every `Proxy-*` name (Proxy-Connection, Proxy-Authenticate, Proxy-Authorization, …).
- * The value grammar is code beside it: VCHAR, SP and HTAB, no space or tab at either edge, never empty. TS-only. */
+ * The value grammar is code beside it: VCHAR, SP and HTAB, no space or tab at either edge, never empty. TS-only.
+ * *Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): it said "Re-read against T-1's final table at the truffle EL8
+ * that adopts it", and named "the three T-1 may add (Content-Type, Content-Encoding, Content-Range)". The re-read is
+ * this EL8's: the released table refuses five body names, ETag and Last-Modified beside those three, so both joined
+ * NAMES, and the contract stays the superset.*
+ * Re-read against truffle's `REFUSED_RESPONSE_HEADERS` at every truffle EL8: a name it adds joins NAMES, the vector's
+ * forbiddenNames and the T-1 row in the same commit. */
 export const SERVE_HEADER_FORBIDDEN = {
   NAMES: [
     "connection",
@@ -815,15 +827,22 @@ export const SERVE_HEADER_FORBIDDEN = {
     "content-type",
     "content-encoding",
     "content-range",
+    "etag",
+    "last-modified",
     "link",
   ],
   PREFIXES: ["proxy-"],
 } as const;
 
-/** DR-1a — the bounds on one serve's response headers, as truffle T-1 proposes them, and every one counted in BYTES
+/** DR-1a — the bounds on one serve's response headers, as truffle T-1 proposed them, and every one counted in BYTES
  * (a header's grammar is ASCII, so its length is its bytes): COUNT headers in one list, a name of at most NAME_BYTES, a
- * value of at most VALUE_BYTES, and LIST_BYTES for the list's names and values together. Re-read against T-1's RFC at
- * its EL8; a T-1 bound tighter than one of these makes this row tighter with it. TS-only. */
+ * value of at most VALUE_BYTES, and LIST_BYTES for the list's names and values together. Re-read at every truffle EL8;
+ * a truffle bound tighter than one of these makes this row tighter with it. TS-only.
+ * *Re-read 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): the released bounds are these four, truffle-core
+ * `src/proxy/mod.rs`'s MAX_RESPONSE_HEADERS (32), MAX_RESPONSE_HEADER_NAME_BYTES (64),
+ * MAX_RESPONSE_HEADER_VALUE_BYTES (8192) and MAX_RESPONSE_HEADERS_BYTES (16 KiB, each name plus its value), so the
+ * row is unchanged. truffle bounds each EFFECTIVE list (a route's merged over its serve's, `validate_effective_headers`
+ * ) and these bound one list, so DR-1 (B) keeps a made app's headers on its serve alone, or bounds the merge.* */
 export const SERVE_HEADER_LIMITS = {
   COUNT: 32,
   NAME_BYTES: 64,
@@ -862,9 +881,11 @@ export const MADE_APP_VIEW = {
  * (`DriveUnavailableDetails`, drive.ts): `UnavailableDetails.service` on every refusal, and the states a reader
  * branches on, each a contract string, never a sentence.
  *  - STATE_UNBUILT: this desktop cannot keep a drive yet: it carries no drive engine (mille-drive's release is not
- *    adopted; DR-2 waits on its EL8), or its floor cannot move an object by a named root (truffle T-3 is not adopted,
- *    and the floor answers MESH_FILE_TRANSFER.STATE_UNSUPPORTED). Retryable false: nothing a retry changes until
- *    VibeField moves. *Widened 2026-11-06 (W3's rider D, ruled W3-5).*
+ *    adopted; DR-2 waits on its EL8), or its floor cannot move an object by a named root (the floor wires no arm over
+ *    truffle T-3's pull until the substrate slice, and answers MESH_FILE_TRANSFER.STATE_UNSUPPORTED). Retryable false:
+ *    nothing a retry changes until VibeField moves. *Widened 2026-11-06 (W3's rider D, ruled W3-5).*
+ *    *Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): it said "truffle T-3 is not adopted". This EL8 adopts it
+ *    (truffle 0.7.27, #255); the floor's arm over it is the substrate slice's.*
  *  - STATE_STARTING: the files worker is opening the drive. Retryable true.
  *  - STATE_NOT_LINKED: the desktop has no linked login, so it holds no account to keep a drive for (DR-L1).
  *    MADE_APP_OPEN's word for the same fact. Retryable true: a link can come.

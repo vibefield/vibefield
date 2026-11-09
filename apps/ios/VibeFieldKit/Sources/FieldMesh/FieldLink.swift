@@ -215,8 +215,10 @@ public struct FieldResumeTiming: Sendable {
 /// is not an account, and until truffle can gate a store by login nothing
 /// content-bearing rides the bus. So the shape now is:
 ///
-///   the mesh node is up → truffle's peer list names every `truffle-vibefield-`
-///   node → the phone BUILDS each peer's door address from the peer's own
+///   the mesh node is up → truffle's peer list names every node of this app
+///   (its tag, or the `truffle-vibefield-` prefix on an untagged row; corrected
+///   2026-11-07, at `FieldMeshContract`) → the
+///   phone BUILDS each peer's door address from the peer's own
 ///   MagicDNS name and the registry port → one plain request asks whether that
 ///   door admits this login → the doors that do are this account's desktops.
 ///

@@ -6,8 +6,9 @@ import Foundation
 // identity, and until truffle can gate by login NOTHING CONTENT-BEARING RIDES
 // THE BUS. `field.devices.v1` stops being published, so the phone stops
 // learning desktops from it. What it has instead is truffle's peer list — every
-// node whose Tailscale hostname carries the `truffle-vibefield-` prefix — and
-// one question to ask each of them: is this desktop mine?
+// node of this app, by its tag or on an untagged row by the `truffle-vibefield-`
+// prefix (corrected 2026-11-07, at `FieldMeshContract`) — and one question to
+// ask each of them: is this desktop mine?
 //
 // The desktop answers that question at the door, and it answers it TWICE over,
 // which is the property this file exists to keep straight:

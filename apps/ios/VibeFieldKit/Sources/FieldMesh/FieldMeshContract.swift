@@ -11,10 +11,13 @@ import Foundation
 /// registry's and a drift fails the gate rather than a QA run.
 ///
 /// It is load-bearing and not a label. A truffle node admits a peer into its
-/// registry only when the peer's Tailscale hostname starts with
-/// `truffle-{appId}-` (`MeshNode.upsertFromLayer3`, RFC 017 §4), so two nodes
+/// registry only when the peer's `Hostinfo.App` tag is `truffle:{appId}`, or, on
+/// a row with no tag, when its Tailscale hostname starts with `truffle-{appId}-`
+/// (`MeshNode.upsertFromLayer3`, `Hostname.isAppRow`, RFC 017 §4), so two nodes
 /// with different app ids are invisible to each other however healthy both
-/// are. That is exactly what James's QA of 2026-09-13 found: a signed-in phone
+/// are. *Corrected 2026-11-07 (EL8-TRUFFLE): it said the hostname alone decides.
+/// Desktops announce the tag from this EL8; the phone's truffle announces none,
+/// so a desktop reads the phone's row by the prefix.* That is exactly what James's QA of 2026-09-13 found: a signed-in phone
 /// reading `online · 0 peers in reach` beside a desktop whose mesh was up.
 public enum FieldMeshContract {
   /// = `APP_ID` in `packages/contracts/src/registries.ts`.

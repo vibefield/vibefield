@@ -439,7 +439,7 @@ describe("DR-2a — the drive's refusals say which state it is in (DR-L8)", () =
     expect(DriveUnavailableDetails.parse(refusal.details).state).toBe(DRIVE_SERVICE.STATE_UNBUILT);
   });
 
-  it("parses the floor's refusal from a truffle before named roots", () => {
+  it("parses the floor's refusal when it cannot pull by a named root", () => {
     const refusal = ErrorData.parse(fixture("error-data.file-transfer-unsupported.json"));
     expect(refusal).toMatchObject({
       kind: "UNAVAILABLE",

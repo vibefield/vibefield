@@ -93,20 +93,20 @@ importers:
         version: 1.0.0-alpha.6
     optionalDependencies:
       '@vibecook/truffle-sidecar-darwin-arm64':
-        specifier: 0.7.24
-        version: 0.7.24
+        specifier: 0.7.27
+        version: 0.7.27
       '@vibecook/truffle-sidecar-darwin-x64':
-        specifier: 0.7.24
-        version: 0.7.24
+        specifier: 0.7.27
+        version: 0.7.27
       '@vibecook/truffle-sidecar-linux-arm64':
-        specifier: 0.7.24
-        version: 0.7.24
+        specifier: 0.7.27
+        version: 0.7.27
       '@vibecook/truffle-sidecar-linux-x64':
-        specifier: 0.7.24
-        version: 0.7.24
+        specifier: 0.7.27
+        version: 0.7.27
       '@vibecook/truffle-sidecar-win32-x64':
-        specifier: 0.7.24
-        version: 0.7.24
+        specifier: 0.7.27
+        version: 0.7.27
 
   apps/plugin-playground:
     dependencies:
@@ -2405,32 +2405,32 @@ packages:
       react:
         optional: true
 
-  '@vibecook/truffle-sidecar-darwin-arm64@0.7.24':
-    resolution: {integrity: sha512-xMUjSmZHwiyKON/o0u1JNPDlAe1fWH9bXfLKZISvw3hZOFXefN4cjz35A5ny0WpWel4lEkalPlA4jHWYWhq+6g==}
+  '@vibecook/truffle-sidecar-darwin-arm64@0.7.27':
+    resolution: {integrity: sha512-AM1d7JWv07gfTivHqVOfV9MhUc/vuajKJuEeK6cLBuHlkO/CFqnC8tWgW93cfjUhdlQmmCuotRLQaxNYcVgbAA==}
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [darwin]
 
-  '@vibecook/truffle-sidecar-darwin-x64@0.7.24':
-    resolution: {integrity: sha512-RO80l/yizHyHbIYpfYqA/Pi3py5SPPcow+F/Eb3SB0RgzCFImgA/XT+UMJaMV2rqUDMRpl9Sw8QQgk/gCIYvDg==}
+  '@vibecook/truffle-sidecar-darwin-x64@0.7.27':
+    resolution: {integrity: sha512-KKGwnwuQ/+44J3rLoLNQsHoqgYAPFdEyceeIWBInfAEjEeKF7YZ9aqlgCpdW15pvciOjwtys8TcrkbyYSwQzFg==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [darwin]
 
-  '@vibecook/truffle-sidecar-linux-arm64@0.7.24':
-    resolution: {integrity: sha512-znkdJUI2KH8pCAXqKavrllyDgrYRJwn9nTY2HVdlMojoBP6S4PNQOz5+IOMvNOtRZwcfn86Mw+vN+fQT86gdKQ==}
+  '@vibecook/truffle-sidecar-linux-arm64@0.7.27':
+    resolution: {integrity: sha512-GRP+1Tqjw1NTC+heOpYwUj1cZOIFAEVO+bClQR4HK2VHEufOgiT9vn2/XhdZSAa6H4ZBs/lln7dmV+CARZeCdQ==}
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [linux]
 
-  '@vibecook/truffle-sidecar-linux-x64@0.7.24':
-    resolution: {integrity: sha512-B8+/iCTf6goe3aFSSxuFN3N57V1nvoOYobyIa3Qro/cxRV5Jz0qNSel87Ouzu7EqVHYOMD+5DpEB5BGW2y1Xnw==}
+  '@vibecook/truffle-sidecar-linux-x64@0.7.27':
+    resolution: {integrity: sha512-K3A0/4rbM3l95L3e2Rsw44/ezcEffAm6chfRN0ZbIAPBapm/HI23B0sycAzzNvEvNIycZ7XaggtDjdm1rLPeqA==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [linux]
 
-  '@vibecook/truffle-sidecar-win32-x64@0.7.24':
-    resolution: {integrity: sha512-9m8vyjkmbWBfgZk9H9jeyppbxj+ZMxQs4ThMPEJ9bEX7MNikQ8Ru99h1tYgnGlefEkD5qlZud1nfTD2ALULi7Q==}
+  '@vibecook/truffle-sidecar-win32-x64@0.7.27':
+    resolution: {integrity: sha512-i7tKoDJasVxcTi0b/2NYH8RZkbxMAYpzTzVk0+gIj2yZ/JOoLCOqXGC+9AzpIqXoWn3OlU3vfN2aqFvUH+/P5A==}
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
@@ -5336,19 +5336,19 @@ snapshots:
       loro-crdt: 1.13.8
       react: 19.2.7
 
-  '@vibecook/truffle-sidecar-darwin-arm64@0.7.24':
+  '@vibecook/truffle-sidecar-darwin-arm64@0.7.27':
     optional: true
 
-  '@vibecook/truffle-sidecar-darwin-x64@0.7.24':
+  '@vibecook/truffle-sidecar-darwin-x64@0.7.27':
     optional: true
 
-  '@vibecook/truffle-sidecar-linux-arm64@0.7.24':
+  '@vibecook/truffle-sidecar-linux-arm64@0.7.27':
     optional: true
 
-  '@vibecook/truffle-sidecar-linux-x64@0.7.24':
+  '@vibecook/truffle-sidecar-linux-x64@0.7.27':
     optional: true
 
-  '@vibecook/truffle-sidecar-win32-x64@0.7.24':
+  '@vibecook/truffle-sidecar-win32-x64@0.7.27':
     optional: true
 
   '@vibefield/puppeteer-adapter-acp@0.3.3(zod@4.6.7)':

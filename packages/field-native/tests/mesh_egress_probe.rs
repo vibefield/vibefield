@@ -341,6 +341,10 @@ async fn a_peer_door_is_reached_through_the_floors_egress_and_names_the_floors_n
             allow: vec![],
             routes: vec![],
             accept_app_capabilities: vec![],
+            // No response header (EL8-TRUFFLE, the EL8 to truffle 0.7.27, 2026-11-07): truffle
+            // #254's per-serve `headers` stay empty until DR-1 (B) asks, as production's
+            // literals name them (mgmt/mesh.rs `parse_cell_routes`).
+            headers: vec![],
         })
         .await
         .expect("B serves its door");

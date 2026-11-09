@@ -205,7 +205,22 @@ opt-level = 3
 # node-to-node wire reads unchanged (transport/quic.rs gains only that config field), and truffle-core's own
 # dependencies did not move (its Cargo.toml changed only its version). Pins only: VibeField's use of the new
 # commands is TS's code (d0's TS-2/TS-3); the build is the check.
-truffle-core = "=0.7.24"
+#
+# 0.7.24 -> 0.7.27 (2026-11-07, the Drive's EL8-TRUFFLE, track DR; VF-PM's T1): the cargo plane and the five
+# npm sidecars move TOGETHER across three releases (sidecar protocols 12 and 13); the kit's Swift plane STAYS
+# 0.7.26, which ghosttea 0.14.0 declares exact. `truffle-v0.7.27` = 47b4435. What they carry: 0.7.25 #243 (an
+# app-chosen hostname prefix and app membership from Hostinfo.App, protocol 12) and #245 (apple); 0.7.26 #247
+# (apple: canonical DNS names in peer snapshots, already on the Swift plane); 0.7.27 #254 (response headers
+# per serve and per route, protocol 13), #255 (named pull roots, RFC 032: the floor's named-root arm, which
+# W3 built over a seam and EL8-TRUFFLE's code wires) and #256 (the sidecar's klauspost/compress 1.20.2,
+# GO-2026-6865). truffle-core's own dependencies did not move (its Cargo.toml changed only its version), so
+# Cargo.lock moves by truffle-core alone. 0.7.27's apple/ diff is libtailscale's compress bump (2 files), which
+# the phone takes with the first ghosttea that declares 0.7.27. The sidecar's Go licence snapshot
+# (apps/desktop/packaging/notices/go-modules.json) is refreshed in this event (TB's LP-5 rider).
+# field-native builds truffle's two proxy structs (ProxyConfig, ProxyRoute) literally, so 0.7.27's new `headers`
+# field is supplied empty at each of the fifteen sites: no response header rides a serve or a route until DR-1 (B)
+# asks for one.
+truffle-core = "=0.7.27"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
 # 0.6.0 → 0.7.0 for the G7/G8/G9 petition landings (shutdown drain, silent serve,
@@ -327,6 +342,7 @@ truffle-core = "=0.7.24"
 # input evidence and correlated creation. All npm and Swift consumers move with this crate.
 # EL8 (2026-11-02): 0.14.0 adopts Ghostty 1.4 and routed recovery/copy. All Ghosttea planes
 # move together; the matching Swift Truffle pin is 0.7.26, with desktop core/sidecars still 0.7.24.
+# (*2026-11-07:* the desktop core and sidecars moved to 0.7.27, the truffle-core note above; Swift stays 0.7.26.)
 ghosttea = "=0.14.0"
 # RETIRED 2026-09-14 (TM-1): `ghosttea-truffle = "=0.11.1"`, GT-4's mesh half of
 # the terminal floor. It served TSP1 against an IN-PROCESS session registry

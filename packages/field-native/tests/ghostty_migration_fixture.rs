@@ -155,8 +155,13 @@ done
                 fallback: None,
                 strip_prefix: false,
                 allow: vec![],
+                // No response header (EL8-TRUFFLE, the EL8 to truffle 0.7.27, 2026-11-07):
+                // truffle #254's per-route and per-serve `headers` stay empty until DR-1 (B)
+                // asks, as production's literals name them (mgmt/mesh.rs `parse_cell_routes`).
+                headers: vec![],
             }],
             accept_app_capabilities: vec![],
+            headers: vec![],
         })
         .await
         .unwrap();

@@ -482,8 +482,8 @@ async fn serve_subscribe_refused_honestly_when_mesh_down() {
 }
 
 /// D36 (W3, DR-3a) — the three `native.mesh.fileTransfer.*` verbs are ANSWERED
-/// on the real default floor, and ahead of its node gate: the floor's truffle
-/// cannot pull by a named root, so each answers `file-transfer-unsupported`, a
+/// on the real default floor, and ahead of its node gate: the floor does not
+/// pull by a named root, so each answers `file-transfer-unsupported`, a
 /// capability fact for the floor's life (contracts mgmt.ts, the file transfer's
 /// refusal order, step 1). The answer IS the golden, key for key, and parses as
 /// the generated `ErrorData` (EL9). Each call carries its golden params, so the
@@ -491,6 +491,9 @@ async fn serve_subscribe_refused_honestly_when_mesh_down() {
 /// `MeshNotUpDetails` is what every verb answered before the facade. The arm
 /// that answers is production's default, by its word; and `offer`, reserved and
 /// undeclared, is no verb, so it answers NOT_FOUND.
+/// *Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): it said "the floor's
+/// truffle cannot pull by a named root". The pinned truffle can (#255); the
+/// default floor builds no arm over it until the substrate slice.*
 #[tokio::test]
 async fn the_file_transfer_verbs_answer_unsupported_ahead_of_the_node_gate() {
     use field_native::contracts::{ErrorData, ErrorKind};

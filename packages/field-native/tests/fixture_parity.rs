@@ -448,7 +448,9 @@ fn mesh_file_transfer_fixtures() {
     for kind in ["progress", "completed", "failed"] {
         roundtrip::<NativeFileTransferDelta>(&file(&format!("delta.{kind}")), true);
     }
-    // a floor whose truffle cannot pull by a named root answers in ErrorData, whose details are opaque here
+    // a floor that does not pull by a named root answers in ErrorData, whose details are opaque here
+    // (*Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): it said "a floor whose truffle cannot pull by a named
+    // root"; the pinned truffle can, and the floor wires no arm over it until the substrate slice.*)
     roundtrip::<ErrorData>("error-data.file-transfer-unsupported.json", true);
     // DR-2a's review nit 9 (W3 C1) — a second pull under a live transferId, or of a digest a running pull holds, is
     // refused CONFLICT: no details, retryable false

@@ -5,11 +5,11 @@
 //!
 //! What these rows witness, stated plainly because it bounds them: no node can
 //! be built headlessly (`MeshHandle::force_node_presence_for_tests`), and the
-//! named-root arm is unreachable in production until EL8-TRUFFLE. So each row
+//! named-root arm is unreachable in production until the substrate slice. So each row
 //! installs the arm through its test seam, and each node's substrate is a
 //! `ScriptedPulls` handed over by the one install hook
 //! (`MeshHandle::attach_file_transfer_for_tests` → `on_node_installed`), with
-//! REAL files under a temp root. truffle's own named pull is EL8-TRUFFLE's
+//! REAL files under a temp root. truffle's own named pull is the substrate slice's
 //! `drive_pull_probe.rs`.
 //!
 //! Every answer, delta and snapshot a row reads is parsed through the generated

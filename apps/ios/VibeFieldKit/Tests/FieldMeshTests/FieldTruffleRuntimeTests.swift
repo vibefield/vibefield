@@ -53,8 +53,9 @@ import Truffle
 
   /// The defect itself, as truffle's own function answers it.
   ///
-  /// `MeshNode.upsertFromLayer3` admits a Layer 3 peer only when
-  /// `Hostname.isAppPeer` says yes. A desktop floor publishes itself as
+  /// On an untagged row, `MeshNode.upsertFromLayer3` admits a Layer 3 peer only
+  /// when `Hostname.isAppPeer` says yes (corrected 2026-11-07: a tagged row goes
+  /// by its tag, at `FieldMeshContract`). A desktop floor publishes itself as
   /// `truffle-vibefield-…` (`field-native/src/services/mesh.rs` starts its node
   /// with the same registry `APP_ID`), so under ghosttea's namespace the
   /// answer was no — for every desktop, forever, however healthy the mesh.

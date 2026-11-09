@@ -1398,8 +1398,9 @@ export type MeshEgressUnavailableDetails = z.infer<typeof MeshEgressUnavailableD
 //  0. a name under `native.mesh.fileTransfer.` that this contract does not declare (`offer`, which stays reserved, or a
 //     typo) is no verb: it answers NOT_FOUND on every arm, before step 1, as any unknown method does (W3-14, VF-PM
 //     2026-11-06; field-native `tests/mgmt_server.rs`'s D36 row asserts it for `offer`);
-//  1. a floor whose truffle cannot pull by a named root answers MESH_FILE_TRANSFER.STATE_UNSUPPORTED to EVERY verb,
-//     first, node or no node: a capability fact for the floor's life, as `egress-unsupported` is;
+//  1. a floor that cannot pull by a named root (its truffle predates T-3, or the floor builds no arm over T-3's pull)
+//     answers MESH_FILE_TRANSFER.STATE_UNSUPPORTED to EVERY verb, first, node or no node: a capability fact for the
+//     floor's life, as `egress-unsupported` is;
 //  2. `subscribe` is answered with no node up (below);
 //  3. `roots` and `pull` with no node answer the node gate's UNAVAILABLE (`MeshNotUpDetails`);
 //  4. in capture mode they are refused MESH_CAPTURING, as `serve.add` is;
@@ -1414,15 +1415,23 @@ export type MeshEgressUnavailableDetails = z.infer<typeof MeshEgressUnavailableD
 // reader that re-subscribes for a fresh snapshot (W3-16) leaves one stream behind it, never two.
 // *Rewritten 2026-11-06 (W3-1, W3-2): it said that with no node every verb answers the node gate.*
 // *Added 2026-11-06 (W3-14): step 0. Rider A named none; both lanes answered it so before it was ruled.*
-// The floor's facade is its own slice (the critic's wave 3, VF-FLOOR). Every verb is answered: at the truffle-core
-// `=0.7.24` pin the floor builds only the arm that cannot pull by a named root, so each answers
-// MESH_FILE_TRANSFER.STATE_UNSUPPORTED (step 1; field-native `mgmt/file_transfer.rs`). fieldd calls none of them.
+// The floor's facade is its own slice (the critic's wave 3, VF-FLOOR). Every verb is answered: until the substrate
+// slice wires truffle's named pull (field-native `services/file_transfer.rs`, `impl PullSubstrate for MeshNode`), the
+// floor builds only the arm that cannot pull by a named root, so each answers MESH_FILE_TRANSFER.STATE_UNSUPPORTED
+// (step 1; field-native `mgmt/file_transfer.rs`). fieldd calls none of them.
 // *Corrected 2026-11-06 (W3 rider C, DR-3a): it said that until the facade lands a node answers these verbs NOT_FOUND.*
+// *Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): step 1 said "a floor whose truffle cannot pull by a named
+// root", and this paragraph "at the truffle-core `=0.7.24` pin the floor builds only the arm that cannot pull by a
+// named root". The pin is `=0.7.27`, whose truffle pulls by a named root (#255, RFC 032); the floor still builds only
+// that arm until the substrate slice.*
 
 /** The file transfer's registry. Generated into Rust (`registries::mesh_file_transfer`), so the floor's writer and
  * fieldd's reader share one vocabulary.
- *  - SERVICE, STATE_UNSUPPORTED: `UNAVAILABLE {service, state}` from a floor whose truffle cannot pull by a named root
- *    (before truffle T-3's release, which its EL8 adopts). A capability fact for the floor's life, as egress's is.
+ *  - SERVICE, STATE_UNSUPPORTED: `UNAVAILABLE {service, state}` from a floor that cannot pull by a named root: its
+ *    truffle predates T-3's release, or the floor builds no arm over T-3's pull (production's, until the substrate
+ *    slice). A capability fact for the floor's life, as egress's is. *Corrected 2026-11-07 (EL8-TRUFFLE, truffle
+ *    0.7.27): it said "a floor whose truffle cannot pull by a named root (before truffle T-3's release, which its EL8
+ *    adopts)". This EL8 adopts T-3 (truffle 0.7.27, #255); the floor's arm over it is the substrate slice's.*
  *  - ROOT_UNGATED: a declared root's `reason` (`registered: false`) while the node was built UNGATED: the floor holds
  *    the declaration and serves the root from the next node it builds gated for the login it was declared under
  *    (`NativeFileTransferRootsParams`).

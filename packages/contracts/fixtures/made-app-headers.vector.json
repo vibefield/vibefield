@@ -240,6 +240,8 @@
       "Hostname",
       "Linker",
       "Proxied",
+      "X-ETag",
+      "Last-Modified-By",
       "Cross-Origin-Opener-Policy",
       "X-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     ],
@@ -257,6 +259,8 @@
       "Content-Type",
       "Content-Encoding",
       "Content-Range",
+      "ETag",
+      "Last-Modified",
       "Link",
       "Proxy-Connection",
       "proxy-authenticate",

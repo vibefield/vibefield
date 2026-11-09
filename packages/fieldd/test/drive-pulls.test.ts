@@ -1,7 +1,9 @@
 // DR-3b (W3, VF-RELAY) — fieldd's half of the floor's file transfer (src/drive/pulls.ts; contracts mgmt.ts
 // `NativeFileTransfer*`), and the service's refusals over it (src/drive/service.ts). Against the scripted floor over
-// a real NativeLink (src/testing/mock-mgmt.ts: `"unsupported"` is the floor at the =0.7.24 pin, `mockFileTransfer()`
-// a floor whose truffle pulls by a named root, in C1's refusal order), with a real `lands` folder under a temp root.
+// a real NativeLink (src/testing/mock-mgmt.ts: `"unsupported"` is a floor before the substrate slice, at =0.7.24 or
+// =0.7.27, `mockFileTransfer()` a floor whose truffle pulls by a named root, in C1's refusal order), with a real
+// `lands` folder under a temp root. *Corrected 2026-11-08 (EL8-TRUFFLE, truffle 0.7.27): it said "the floor at the
+// =0.7.24 pin".*
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";

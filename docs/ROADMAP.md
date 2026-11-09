@@ -988,7 +988,7 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 
 **EL8 — the pins** · vibe-field-5c (template lane `hl-el8-0724`) · law DECISIONS TB, the manifests
 - Landed: ghosttea 0.13.7 + truffle 0.7.23 (`5ba36785b`); truffle 0.7.24, the split (`af3f3078f`, DECISIONS TB (a)).
-- Watch: the kit's Swift plane rejoins truffle 0.7.24 at the first ghosttea that declares it. Next events: a later
+- Watch: the kit's Swift plane (0.7.26) rejoins the desktop's truffle 0.7.27 at the first ghosttea that declares it. Next events: a later
   puppeteer release (§3 item 3; 0.3.0 pinned 10-28, `1469639a6`), mille's first release. The next event's kit pre-boots the
   simulator (`/Volumes/SamsungRed/lanes/hl-k1/kit-template.sh`, item 77's k1). CLAUDE.md names no pin since its dated pass (2026-10-28), so an EL8 event leaves it alone.
 
@@ -1475,10 +1475,10 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 
 | Plane | Pin (the manifests) | Note |
 |---|---|---|
-| truffle | `truffle-core = "=0.7.24"` (Cargo.toml) + the five npm sidecars 0.7.24 (protocol 11) · Swift exact 0.7.23 (Package.swift's `truffleRelease`; lock `release.swift`) | the split, DECISIONS TB (a), `af3f3078f`; Swift rejoins at the first ghosttea declaring 0.7.24 |
-| ghosttea | 0.13.7 on cargo (`=0.13.7`), npm and Swift | `5ba36785b`; no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
-| ICE | `@vibecook/ice` 0.16.0 exact (overrides row) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | EL8 |
-| puppeteer | `@vibefield/puppeteer-*` 0.3.0 exact (tag v0.3.0 = `d0aa1224`) | the EL8 `1469639a6` (10-28; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate |
+| truffle | `truffle-core = "=0.7.27"` (Cargo.toml) + the five npm sidecars 0.7.27 (protocol 13) · Swift exact 0.7.26 (Package.swift's `truffleRelease`; lock `release.swift`), which ghosttea 0.14.0 declares | the split, DECISIONS TB (a), `af3f3078f`; EL8-TRUFFLE (track DR, 2026-11-07) moved cargo and npm to 0.7.27; Swift rejoins at the first ghosttea declaring 0.7.27 |
+| ghosttea | 0.14.0 on cargo (`=0.14.0`), npm and Swift | the EL8 of 11-02 (LANDED "EL8 — Ghostty 1.4"); no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
+| ICE | `@vibecook/ice` 0.17.0 exact (overrides row) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | EL8 |
+| puppeteer | `@vibefield/puppeteer-*` 0.3.3 exact (the lock's `52d09c8e8`) | the EL8 of 11-02 (LANDED "GV"; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate |
 | rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.5 exact · the kit's `RosettaClient` 0.1.5 exact (`let rosettaRelease`) · rosettad built from `../rosetta-pin` at `811e554c6` (protocol and store schema 30) | EL8 11-08 (`68b80fb95`, M230; 0.1.4 at `a8ab1f13f`, 11-07); npm, Swift and the daemon archives released (v0.1.5); adopting the archives remains RD-D7; the Swift row is PAID on vf-m2 by item 257 (M233 `b3a5930b2`); its exact-tree witness stays the old mini's |
 | mille | `link:../mille-pin` at `c8160d5` (`@vibecook/mille`, `mille-ui`) | FS-1b; no release past v0.3.4; exit RD-6 |
 | rustc | 1.99.1 (`rust-toolchain.toml`) | EL8 |

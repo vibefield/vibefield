@@ -160,18 +160,20 @@ const PIN_EXPECTATIONS = [
   // move, the kit's Swift plane stays 0.7.23 because ghosttea 0.13.7 declares it exact (0.7.24 changes no Swift).
   // EL8 2026-11-02: Ghosttea 0.14.0 pins Swift Truffle 0.7.26, publishing the canonical DNS metadata fix.
   // Desktop Rust and sidecars stay together at 0.7.24; the Swift plane has no sidecar. Both rows remain exact.
+  // 0.7.24 → 0.7.27 on 2026-11-07 (the Drive's EL8-TRUFFLE): the crate and the five npm sidecars (protocols 12
+  // and 13) move together; the Swift row stays 0.7.26, which ghosttea 0.14.0 declares exact.
   // The Swift row stands aside while the dev overlay links truffle and renders it nil (RD-3).
   // Cargo.toml's closure note carries every event and every place they touched.
   {
     file: "Cargo.toml",
-    re: /^truffle-core\s*=\s*"=0\.7\.24"$/m,
-    label: 'truffle-core = "=0.7.24"',
+    re: /^truffle-core\s*=\s*"=0\.7\.27"$/m,
+    label: 'truffle-core = "=0.7.27"',
   },
   {
     file: "apps/ios/VibeFieldKit/Package.swift",
     re: /^let truffleRelease: Version\? = "0\.7\.26"$/m,
     label:
-      'let truffleRelease: Version? = "0.7.26" (matches Ghosttea 0.14.0; desktop Rust/sidecar stays 0.7.24)',
+      'let truffleRelease: Version? = "0.7.26" (matches Ghosttea 0.14.0; desktop Rust/sidecar at 0.7.27)',
     overlay: "truffle",
   },
   // The FINAL 0.16.0 on `latest` since PORTALS PT-6b (M24 LT1–LT5; LT5 — I52 — the reference

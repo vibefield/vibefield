@@ -98,7 +98,10 @@ pub async fn handle(
     }
     // DR-3a (W3) — the file transfer answers BEFORE the node gate too, in
     // egress's refusal order (`file_transfer.rs`): `file-transfer-unsupported`
-    // is a fact about this floor's truffle that holds with or without a node.
+    // is a fact about this floor's build that holds with or without a node.
+    // (*Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): it said "this
+    // floor's truffle"; the pinned truffle pulls by a named root, and the
+    // floor wires no arm over it until the substrate slice.*)
     // A name under the prefix that the contract does not declare answers
     // NOT_FOUND there, as this facade's own unknown names do. It is handed the
     // connection: a `subscribe` replaces the stream that connection holds
@@ -1311,6 +1314,17 @@ fn parse_cell_routes(routes: &Value) -> Result<Vec<ProxyRoute>, String> {
             fallback: None,
             strip_prefix: true, // LOAD-BEARING — see fn doc (the cell's exact paths)
             allow: vec![],
+            // Explicit EMPTY (EL8-TRUFFLE, the EL8 to truffle 0.7.27, 2026-11-07), so nothing
+            // rides in on an EL8 bump (`announce: false`'s reason, in `build_serve_config`):
+            // truffle 0.7.27 (#254, RFC 030, sidecar protocol 13) sets the
+            // response headers a route names here (`ProxyRoute.headers`) and a serve names
+            // (`ProxyConfig.headers`) on every response it writes. No route or serve of ours
+            // sets one until DR-1 (B) asks for them per serve and per route: fieldd composing a
+            // made app's headers at an open (contracts made-app-network.ts), which field-native
+            // carries to truffle. Every `ProxyRoute` and `ProxyConfig` literal in this file
+            // names the field so, and the next one truffle adds stays a build failure rather
+            // than a silent default.
+            headers: vec![],
         });
     }
     Ok(out)
@@ -1356,6 +1370,7 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
             fallback: None,
             strip_prefix: false,
             allow: vec![],
+            headers: vec![],
         });
     }
     match target.get("kind").and_then(Value::as_str) {
@@ -1389,6 +1404,7 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                     fallback: None,
                     strip_prefix: false, // LOAD-BEARING — see fn doc (EL7 provenance proof)
                     allow: vec![],
+                    headers: vec![],
                 }),
                 None if explicit_listen_port || !routes.is_empty() => routes.push(ProxyRoute {
                     prefix: "/".into(),
@@ -1397,6 +1413,7 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                     fallback: None,
                     strip_prefix: false,
                     allow: vec![],
+                    headers: vec![],
                 }),
                 None => {}
             }
@@ -1434,6 +1451,7 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                 // asks for one, and naming the field keeps the next one truffle adds
                 // a build failure rather than a silent default.
                 accept_app_capabilities: vec![],
+                headers: vec![],
             })
         }
         // TM-2 (TM-D2) — a serve whose ENTIRE surface is its declared routes:
@@ -1511,6 +1529,7 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                 allow,
                 routes,
                 accept_app_capabilities: vec![], // the port arm's law: no grant forwarded
+                headers: vec![],
             })
         }
         Some("dir") => {
@@ -1537,6 +1556,7 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                 fallback: fallback.map(str::to_string),
                 strip_prefix: false,
                 allow: vec![],
+                headers: vec![],
             });
             Ok(ProxyConfig {
                 id: serve_id.into(),
@@ -1549,6 +1569,7 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                 allow,
                 routes,
                 accept_app_capabilities: vec![], // the port arm's law: no grant forwarded
+                headers: vec![],
             })
         }
         _ => Err("target.kind must be port|dir|routes".into()),

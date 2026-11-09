@@ -157,10 +157,13 @@ struct Shared {
     egress_changes: watch::Sender<u64>,
     /// DR-3a (W3) — the file transfer's substrate
     /// (`services/file_transfer.rs`): `UnsupportedFileTransfer` in production
-    /// at the `=0.7.24` pin, whose truffle cannot pull by a named root. Behind
+    /// until the substrate slice wires truffle's named pull. Behind
     /// a mutex, as egress's is, for one writer: the test seam that installs
     /// another arm (`MeshHandle::install_file_transfer_for_tests`, egress's
     /// `install_egress_for_tests` shape). Production never swaps it.
+    /// *Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): it said "at the
+    /// `=0.7.24` pin, whose truffle cannot pull by a named root". The pin is
+    /// `=0.7.27`, whose truffle can (#255); the floor does not wire it yet.*
     file_transfer: Mutex<Arc<dyn FileTransferBackend>>,
     /// TS-1 (track TS) — the sign-in facts of the current bring-up and its
     /// node ([`LinkFacts`]): what a person needs to act on a link that waits on
@@ -442,13 +445,16 @@ impl MeshHandle {
     /// DR-3a (W3) TEST SEAM — install a file-transfer arm, for tests only.
     ///
     /// Production builds `file_transfer::default_backend()` at construction
-    /// and never swaps it: at the `=0.7.24` pin that is the unsupported arm. A
+    /// and never swaps it: that is the unsupported arm until the substrate slice. A
     /// test installs `NamedRootsFileTransfer` here, the arm that is unreachable
-    /// in production until EL8-TRUFFLE, and pairs it with
+    /// in production until the substrate slice, and pairs it with
     /// [`Self::force_node_presence_for_tests`] and
     /// [`Self::attach_file_transfer_for_tests`], because the same wall stands:
     /// no node can be built headlessly. What such a test witnesses is the
     /// FACADE and the arm over `ScriptedPulls`, never truffle's pull.
+    /// *Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): it said "at the
+    /// `=0.7.24` pin that is the unsupported arm". The pin is `=0.7.27`, and
+    /// the unsupported arm stays production's until the substrate slice.*
     #[doc(hidden)]
     pub fn install_file_transfer_for_tests(&self, backend: Arc<dyn FileTransferBackend>) {
         *self.shared.file_transfer.lock().unwrap() = backend;
@@ -476,7 +482,7 @@ impl MeshHandle {
 
     /// DR-3a (W3) TEST SEAM — hand the file-transfer arm a node's substrate
     /// through the one install hook, [`Self::on_node_installed`], as a
-    /// bring-up that installs a node will at EL8-TRUFFLE. Nothing in the
+    /// bring-up that installs a node will at the substrate slice. Nothing in the
     /// product calls it.
     #[doc(hidden)]
     pub async fn attach_file_transfer_for_tests(&self, substrate: Arc<dyn PullSubstrate>) {
@@ -492,7 +498,7 @@ impl MeshHandle {
     /// (`services/file_transfer.rs`).
     ///
     /// ONE hook, so the product's path and the tests' cannot drift: in W3 only
-    /// [`Self::attach_file_transfer_for_tests`] reaches it; at EL8-TRUFFLE
+    /// [`Self::attach_file_transfer_for_tests`] reaches it; at the substrate slice
     /// `spawn_bring_up`'s `Ok(node)` branch (before its `send_replace`) and
     /// [`Self::install_node_for_tests`] call it with the node itself.
     pub(crate) async fn on_node_installed(&self, substrate: Arc<dyn PullSubstrate>) {

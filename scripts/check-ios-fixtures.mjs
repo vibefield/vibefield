@@ -1005,10 +1005,12 @@ const OS_MARKS_IOS = join(
 // pointed at it, so every registry value it needs is a hand-written string
 // that can drift. One did, silently: the phone started its truffle node in
 // ghosttea's `ghosttea-terminal` namespace while every desktop floor joined
-// `vibefield`, and since a node admits a peer only by the `truffle-{appId}-`
-// hostname prefix, a signed-in phone read `0 peers in reach` beside a serving
-// desktop. Nothing in the tree could have noticed. This is the thing that
-// notices.
+// `vibefield`, and since a node then admitted a peer only by the
+// `truffle-{appId}-` hostname prefix, a signed-in phone read `0 peers in reach`
+// beside a serving desktop. Nothing in the tree could have noticed. This is
+// the thing that notices. (Corrected 2026-11-07, EL8-TRUFFLE: it said "admits";
+// a tagged row now goes by `truffle:{appId}`, and the prefix decides an untagged
+// one. The app id is still what both compare, so the drift reads the same.)
 const REGISTRIES = "packages/contracts/src/registries.ts";
 const ROUTED_CONTRACT = "apps/ios/VibeFieldKit/Sources/FieldRoutedTerminal/RoutedContract.swift";
 

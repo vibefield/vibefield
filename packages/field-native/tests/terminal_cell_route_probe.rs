@@ -145,8 +145,14 @@ fn cell_route_config(
             fallback: None,
             strip_prefix: true,
             allow: vec![],
+            // No response header (EL8-TRUFFLE, the EL8 to truffle 0.7.27, 2026-11-07): truffle
+            // #254's per-route and per-serve `headers` stay empty until DR-1 (B) asks, as the
+            // routes arm names them (mgmt/mesh.rs `parse_cell_routes`), and
+            // `assert_matches_production` compares both serialized.
+            headers: vec![],
         }],
         accept_app_capabilities: vec![],
+        headers: vec![],
     }
 }
 
@@ -770,6 +776,7 @@ async fn a_peer_reaches_a_real_cell_door_through_the_sidecars_cell_route() {
             fallback: None,
             strip_prefix: true,
             allow: vec![],
+            headers: vec![],
         },
         ProxyRoute {
             // the same target with a TRAILING SLASH: the shape that does not
@@ -780,6 +787,7 @@ async fn a_peer_reaches_a_real_cell_door_through_the_sidecars_cell_route() {
             fallback: None,
             strip_prefix: true,
             allow: vec![],
+            headers: vec![],
         },
     ];
     node_a

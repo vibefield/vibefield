@@ -1280,6 +1280,40 @@ async fn the_node_sends_no_client_logs_unless_asked() {
     }
 }
 
+/// EL8-TRUFFLE (2026-11-07) — the node announces the tag a phone admits it by.
+/// A row that carries a tag is decided by it alone, with no hostname fallback
+/// (truffle's `is_app_row`; the Swift plane's `Hostname.isAppRow`, whose
+/// `appTag` is `"truffle:" + appId`). The two planes may sit on different truffle
+/// versions (DECISIONS TB's split), so this holds the literal: a cargo-plane
+/// bump that changes the tag goes red here, rather than dropping every desktop
+/// from every phone with a healthy mesh and a green verify. truffle's own rows
+/// hold `is_app_row`; this is the one fact only this repo can pin.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_node_announces_the_tag_a_phone_admits_it_by() {
+    use field_native::contracts::MeshMode;
+    use field_native::services::mesh::StartOptions;
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("commands.log");
+    let config = NativeConfig {
+        sidecar_override: Some(v11_stub(dir.path(), &log, LOGGED_OUT)),
+        ..NativeConfig::for_data_dir(dir.path().to_path_buf())
+    };
+    let daemon = bootstrap(config).await.unwrap();
+    let mesh = &daemon.state.mesh;
+    mesh.start_with(MeshMode::Capture, None, StartOptions::default())
+        .await
+        .unwrap();
+    let _node = await_node(mesh).await;
+    let commands = std::fs::read_to_string(&log).unwrap();
+    let start = commands
+        .lines()
+        .find(|line| line.contains(r#""tsnet:start""#))
+        .expect("a start command");
+    assert!(start.contains(r#""app":"truffle:vibefield""#), "{start}");
+    daemon.shutdown().await;
+}
+
 /// TS-D16 — a tailnet that requires client logs refuses an opted-out node at
 /// its start: no node, and the failure named `logging_required`, whether the
 /// status hook heard the event or only the start error said it.

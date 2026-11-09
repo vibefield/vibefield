@@ -7,9 +7,14 @@
 //! 2026-11-06), which is the contract's:
 //!
 //!  1. an arm that cannot pull by a named root (`UnsupportedFileTransfer`, the
-//!     only arm production builds at the `=0.7.24` pin) answers EVERY verb
-//!     `file-transfer-unsupported`: a capability fact that holds whether or not
-//!     a node is up, which the node gate's generic UNAVAILABLE would hide;
+//!     only arm production builds until the substrate slice wires truffle's
+//!     named pull) answers EVERY verb `file-transfer-unsupported`: a capability
+//!     fact that holds whether or not a node is up, which the node gate's
+//!     generic UNAVAILABLE would hide;
+//!     *Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): it said "the only
+//!     arm production builds at the `=0.7.24` pin". The pin is `=0.7.27`, whose
+//!     truffle pulls by a named root (#255, RFC 032); production still builds
+//!     this arm, because the floor wires no substrate over that pull yet.*
 //!  2. `subscribe` is answered with no node up: its stream is the arm's, held
 //!     on the mesh unit across node rebuilds (W3-2), because fieldd's
 //!     NativeLink keeps a refused subscription's replay silent until its next
@@ -221,8 +226,9 @@ async fn subscribe(
     // still list, never a miss. On a replace, an event the old forwarder had
     // not received when it stopped (it returns at its stop without draining
     // its receiver), or one the arm sent between that return and the
-    // `arm.subscribe()` below, reaches neither stream. The answer's snapshot
-    // then settles that pull by the contract's resync rule (contracts mgmt.ts
+    // `arm.subscribe()` below, reaches neither stream. A lost progress line
+    // leaves its pull listed. For a lost end, the answer's snapshot then
+    // settles that pull by the contract's resync rule (contracts mgmt.ts
     // `NativeFileTransferSnapshot`: completed when its landed name is in
     // `lands`, FAILED_IO otherwise), so a failed pull's own word can read
     // FAILED_IO, as after a lag ("its own word was in the delta the lag
@@ -296,6 +302,15 @@ impl Stream {
     /// forwarder waits on nothing the mesh worker holds, and between two
     /// awaits it runs a `try_recv`, a `try_send` or a `write_snapshot`, so the
     /// wait is bounded.
+    ///
+    /// *Added 2026-11-07 (the relay's closing check, W3-21):* that plain
+    /// subscribe can itself be refused, or read TIMEOUT, under the same
+    /// backlog. The relay then holds every pull and retries (W3-21), so the
+    /// line's pull is settled by the first attempt that is answered, or ends
+    /// FAILED_TIMEOUT (contracts mgmt.ts `MESH_FILE_TRANSFER`) at its held
+    /// bound. And "settles the line's pull" holds only when the line was the
+    /// pull's end (a `completed` or `failed` delta): after a progress line the
+    /// pull is still running, and the snapshot lists it.
     async fn end(self) {
         let Stream { stop, ended, .. } = self;
         drop(stop);
@@ -402,12 +417,16 @@ fn answer_subscribe(
 /// key (`tests/mgmt_server.rs` holds the floor's own answer to it): retryable
 /// false, because it is a fact for the floor's life, and its words are the
 /// generated registry's.
+/// *Corrected 2026-11-07 (EL8-TRUFFLE, truffle 0.7.27): the message said "this
+/// floor's truffle cannot pull by a named root", false since the pinned truffle
+/// can (#255). The floor is what does not, until the substrate slice. No golden
+/// or reader holds the message: the golden carries `data` alone.*
 fn unsupported(id: Option<Value>) -> Value {
     err(
         id,
         "UNAVAILABLE",
         -32006,
-        "file transfer is unsupported: this floor's truffle cannot pull by a named root",
+        "file transfer is unsupported: this floor does not pull by a named root yet",
         false,
         Some(json!({
             "service": mesh_file_transfer::SERVICE,

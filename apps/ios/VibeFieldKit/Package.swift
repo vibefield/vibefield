@@ -20,6 +20,8 @@ import PackageDescription
 // nothing until the cache misses, and Xcode's GUI evaluates with a fixed environment (§3, measured 2026-10-15).
 // EL8 2026-11-02: Ghosttea 0.14.0 and Swift Truffle 0.7.26 publish canonical DNS metadata.
 // Desktop Rust/core and npm sidecars retain 0.7.24; this Swift dependency has no sidecar.
+// *2026-11-07 (the Drive's EL8-TRUFFLE):* the desktop core and sidecars moved to 0.7.27; this line stays 0.7.26,
+// which ghosttea 0.14.0 declares exact, until a ghosttea declares 0.7.27.
 let truffleRelease: Version? = "0.7.26"
 let truffleDependency: Package.Dependency =
   if let release = truffleRelease {
