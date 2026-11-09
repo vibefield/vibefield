@@ -1116,6 +1116,7 @@ describe("item 172 — fieldd's signed stores when the disk does not answer (REC
       SERVICE_AGENTS: "agents",
       SERVICE_COMPOSE: "compose",
       SERVICE_NEEDS: "needs",
+      SERVICE_OBJECTS: "objects",
       SERVICE_FLOWS: "flows",
       STATE_UNREADABLE: "records-unreadable",
     });

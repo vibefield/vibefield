@@ -1388,8 +1388,18 @@ export const RECORD_STORES = {
   SERVICE_AGENTS: "agents",
   SERVICE_COMPOSE: "compose",
   SERVICE_NEEDS: "needs",
+  /** OB-3a — the desk's registry and grants, read once at boot, so not until fieldd restarts */
+  SERVICE_OBJECTS: "objects",
   SERVICE_FLOWS: "flows",
   STATE_UNREADABLE: "records-unreadable",
+} as const;
+
+/** OB-3b, OB-4 — fieldd's own bounds on the desk room (the wire's are `OBJECT_LIMITS`). RELEASED_SHOWN_MS: how long a
+ * released agent stays on an object's presence, so the desk can show it leaving. PENDING_INTENTS: intents one board may
+ * have unanswered at once; a further call answers the fact `limit`, never a queue that acts later. TS-only. */
+export const OBJECT_ROOM = {
+  RELEASED_SHOWN_MS: 4_000,
+  PENDING_INTENTS: 64,
 } as const;
 
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
@@ -1748,6 +1758,11 @@ export const SCOPES = [
   "mcp.consume",
   "mcp.contribute",
   "shell.windows",
+  // OB-3a (thinking-objects-at-work.md §5.5; OB-L1) — the desk's door between fieldd and the one window holding a board:
+  // intents and their answers, a ref named, an object handed or taken back. Electron main mints it into the window's
+  // token and nowhere else, and fieldd holds every row to that token as well (a scope alone is not "the person's window").
+  // Local-only forever: in no TAILNET preset and absent from every plugin eligibility table.
+  "objects.window",
   "shell.dialog",
   "shell.clipboard",
   "shell.open",
@@ -2369,6 +2384,13 @@ export const LAYOUT = {
    * That holds against an edit; the key is 0600 to the same uid, as the sparks' is (EL7). */
   NEEDS_DIR: ["fieldd", "needs"],
   NEEDS_KEY_FILE: ["fieldd", "needs.key"],
+  /** OB-3a (thinking-objects-at-work.md §5.6; OB-L1, EY-D9 B) — the desk's registry and grants: one record per object,
+   * its file named by its ref's eight characters, 0600 in a 0700 directory, each signed with OBJECTS_KEY_FILE's secret
+   * (0600, made once, never overwritten). A grant is what lets a run work an object, so an agent that edits one must not
+   * hand itself the user's work: an unsigned or forged record is set aside, never served. That holds against an edit;
+   * the key is 0600 to the same uid, as the sparks' is (EL7). */
+  OBJECTS_DIR: ["fieldd", "objects"],
+  OBJECTS_KEY_FILE: ["fieldd", "objects.key"],
   /** Item 159 (TH0-Q11 (b), ruled 2026-11-04) — fieldd's own files for each spark: one 0700 folder per spark, named by
    * its id (`spark-files/<sparkId>/`), holding its kept record (`SparkKeptRecord`, compose.ts's SPARK_KEPT_FILE, 0600)
    * and, with TH-1, its runs' transcript files beside it. One key for the folder: SPARK_FILES_KEY_FILE's secret (0600,

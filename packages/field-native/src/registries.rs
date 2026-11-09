@@ -325,6 +325,8 @@ pub mod layout {
     pub const AGENT_INPUTS_KEY_FILE: &[&str] = &["fieldd", "inputs.key"];
     pub const NEEDS_DIR: &[&str] = &["fieldd", "needs"];
     pub const NEEDS_KEY_FILE: &[&str] = &["fieldd", "needs.key"];
+    pub const OBJECTS_DIR: &[&str] = &["fieldd", "objects"];
+    pub const OBJECTS_KEY_FILE: &[&str] = &["fieldd", "objects.key"];
     pub const SPARK_FILES_DIR: &[&str] = &["fieldd", "spark-files"];
     pub const SPARK_FILES_KEY_FILE: &[&str] = &["fieldd", "spark-files.key"];
     pub const FLOWS_LIBRARY_DIR: &[&str] = &["flows"];
@@ -420,6 +422,8 @@ pub mod layout {
         ("AGENT_INPUTS_KEY_FILE", AGENT_INPUTS_KEY_FILE),
         ("NEEDS_DIR", NEEDS_DIR),
         ("NEEDS_KEY_FILE", NEEDS_KEY_FILE),
+        ("OBJECTS_DIR", OBJECTS_DIR),
+        ("OBJECTS_KEY_FILE", OBJECTS_KEY_FILE),
         ("SPARK_FILES_DIR", SPARK_FILES_DIR),
         ("SPARK_FILES_KEY_FILE", SPARK_FILES_KEY_FILE),
         ("FLOWS_LIBRARY_DIR", FLOWS_LIBRARY_DIR),

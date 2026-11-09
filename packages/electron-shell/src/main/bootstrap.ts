@@ -421,6 +421,8 @@ async function mint(
       "apps.use",
       "artifact.publish",
       "shell.dialog",
+      // OB-3a — the desk's door: only a window token holds it, and fieldd holds each row to one
+      "objects.window",
     ],
     label: `window-${senderId}`,
     rendererParticipant,

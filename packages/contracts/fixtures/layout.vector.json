@@ -37,6 +37,8 @@
   "AGENT_INPUTS_KEY_FILE": ["fieldd", "inputs.key"],
   "NEEDS_DIR": ["fieldd", "needs"],
   "NEEDS_KEY_FILE": ["fieldd", "needs.key"],
+  "OBJECTS_DIR": ["fieldd", "objects"],
+  "OBJECTS_KEY_FILE": ["fieldd", "objects.key"],
   "SPARK_FILES_DIR": ["fieldd", "spark-files"],
   "SPARK_FILES_KEY_FILE": ["fieldd", "spark-files.key"],
   "FLOWS_LIBRARY_DIR": ["flows"],

@@ -3298,6 +3298,77 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "federate",
   }),
+  // OB-3, OB-4 (thinking-objects-at-work.md §5.5, §7; objects.ts) — the window's door to the desk's room. Every row is
+  // `objects.window` and local, and fieldd holds each to a window's own token (a scope alone is not the person's window).
+  // Each subscribed board gets its intents one at a time; the presence feed is whole lists, as needs.subscribe's are.
+  defineMethod({
+    surface: "product",
+    method: "objects.intents.subscribe",
+    scope: "objects.window",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  // Declarative: the first answer settles an intent, and any other answers `taken: false`.
+  defineMethod({
+    surface: "product",
+    method: "objects.intent.answer",
+    scope: "objects.window",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "objects.ref",
+    scope: "objects.window",
+    idempotent: true,
+    locality: "local",
+  }),
+  // OB-L1: the grant, on the person's play.
+  defineMethod({
+    surface: "product",
+    method: "objects.hand",
+    scope: "objects.window",
+    idempotent: true,
+    locality: "local",
+  }),
+  // Not idempotent: each call undoes the next change back.
+  defineMethod({
+    surface: "product",
+    method: "objects.undoAgent",
+    scope: "objects.window",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "objects.takeBack",
+    scope: "objects.window",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "objects.resolve",
+    scope: "objects.window",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "objects.held",
+    scope: "objects.window",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "objects.presence.subscribe",
+    scope: "objects.window",
+    idempotent: true,
+    locality: "local",
+    subscription: { shape: "stream", cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS },
+  }),
   // notify's carrier (CP3-D5 A): an event, never kept, heard by every window's status line and by main's OS notice.
   defineMethod({
     surface: "product",

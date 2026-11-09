@@ -296,11 +296,74 @@ export const ObjectIntentAnswer = z.discriminatedUnion("ok", [
 ]);
 export type ObjectIntentAnswer = z.infer<typeof ObjectIntentAnswer>;
 
+// What the window's `value` is for each op that fieldd reads (OB-3b); a tool's `read` or `act` value is its result, whole.
+
+export const IntentListValue = z
+  .object({
+    objects: z.array(
+      z
+        .object({ key: DeskObjectKey, kind: KindId, title: Title, place: ObjectPlace.optional() })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+export type IntentListValue = z.infer<typeof IntentListValue>;
+
+export const IntentOpenValue = z
+  .object({
+    kind: KindId,
+    title: Title,
+    /** the object's bounded summary: its content, never the user's words */
+    now: z.unknown(),
+    heldByUser: z.boolean(),
+    onScreen: z.boolean(),
+  })
+  .passthrough();
+export type IntentOpenValue = z.infer<typeof IntentOpenValue>;
+
+export const IntentPlaceValue = IntentOpenValue.extend({ key: DeskObjectKey });
+export type IntentPlaceValue = z.infer<typeof IntentPlaceValue>;
+
+/** A remove's undo re-spawns the object under a new key, and fieldd moves its ref there. */
+export const IntentUndoValue = z.object({ key: DeskObjectKey.optional() }).passthrough();
+export type IntentUndoValue = z.infer<typeof IntentUndoValue>;
+
 export const ObjectsIntentsSubscribeParams = z.object({ docId: DeskDocId }).passthrough();
 export const ObjectsIntentAnswerResult = z.object({ taken: z.boolean() }).passthrough();
 
+// ── What fieldd keeps per object (§5.6; OB-L1, EY-D9 B) ────────────────────────────────────────
+
+export const OBJECT_RECORD_FORMAT = 1;
+
+export const ObjectGrant = z
+  .object({ run: z.string().min(1), how: ObjectYours, at: z.number().int().min(0) })
+  .passthrough();
+export type ObjectGrant = z.infer<typeof ObjectGrant>;
+
+/** One object's name and who may work it: a file per object under LAYOUT.OBJECTS_DIR, signed with OBJECTS_KEY_FILE's
+ * secret. A grant lets a run work the person's object, so an unsigned or forged record is set aside, never served. */
+export const ObjectRecord = z
+  .object({
+    format: z.literal(OBJECT_RECORD_FORMAT),
+    ref: ObjectRef,
+    docId: DeskDocId,
+    key: DeskObjectKey,
+    /** absent until the window has told fieldd what it is */
+    kind: KindId.optional(),
+    grants: z.array(ObjectGrant),
+  })
+  .passthrough();
+export type ObjectRecord = z.infer<typeof ObjectRecord>;
+
 /** The window names an object it is making a card of, and is told its ref. */
-export const ObjectsRefParams = z.object({ docId: DeskDocId, key: DeskObjectKey }).passthrough();
+export const ObjectsRefParams = z
+  .object({
+    docId: DeskDocId,
+    key: DeskObjectKey,
+    /** the object's kind, when the window knows it: a `one` kind's hand moves it only once fieldd knows it is one */
+    kind: KindId.optional(),
+  })
+  .passthrough();
 export const ObjectsRefResult = z.object({ ref: ObjectRef }).passthrough();
 
 /** OB-L1 — the grant: only VibeField's own window may call this, on the person's play. */

@@ -152,6 +152,14 @@
     "fieldd",
     "needs.key"
   ],
+  "OBJECTS_DIR": [
+    "fieldd",
+    "objects"
+  ],
+  "OBJECTS_KEY_FILE": [
+    "fieldd",
+    "objects.key"
+  ],
   "SPARK_FILES_DIR": [
     "fieldd",
     "spark-files"
