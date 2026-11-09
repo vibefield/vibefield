@@ -275,6 +275,8 @@ async function harness(
     readonly spawnFails?: Promise<string>;
     /** slice 14, red-b (R46b, W4): the runtime's refusal of every Resume (`agents.resume`), in its words */
     readonly resumeRefuses?: string;
+    /** the fold's P2 (S14-34f, as `endHeld`): every Resume held, once asked and counted (`resumes`), until this settles */
+    readonly resumeHeld?: Promise<unknown>;
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "vf-flow-runs-"));
@@ -414,6 +416,7 @@ async function harness(
   const bootAgents = {
     resume: async (runtimeRunId: string): Promise<void> => {
       resumes.push(runtimeRunId);
+      if (opts.resumeHeld !== undefined) await opts.resumeHeld;
       if (opts.resumeRefuses !== undefined) throw new Error(opts.resumeRefuses);
       // red-b: a Resume the row arranged, on main's road: the successor enters and is told before `agents.resume`
       // returns (agent-runtime.ts:3468, :3203, :3209@a08b28f5d)
@@ -574,9 +577,10 @@ async function harness(
               call,
               live: !exited.has(runtimeRunId),
             })),
-          ...(ofRunRows.get(run) ?? []).filter(
-            ({ runtimeRunId }) => !goneFromFold.has(runtimeRunId),
-          ),
+          // the fold's P2 (S14-34f): a row's own session reads as the started ones do, live until it is ended
+          ...(ofRunRows.get(run) ?? [])
+            .filter(({ runtimeRunId }) => !goneFromFold.has(runtimeRunId))
+            .map((row) => ({ ...row, live: row.live && !exited.has(row.runtimeRunId) })),
         ];
       },
     },
@@ -9582,6 +9586,32 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       };
       release();
       expect(read).toEqual({ control: 1, tail: true, unheard: 0 });
+    });
+
+    it("S14-34f (slice 14's fold, P2, the skeptic's #2; Q34, Q8 (a)): a lost step's Resume in flight, no host up, a Stop, then the spawn lands: the end waited for it, as for a start, and the successor is ended", async () => {
+      // 852b04096: `#lostAnswered` kept the resume out of `live.starts`, so the end closed at once and the successor,
+      // landing on a run long ended, ran on with nothing to end it
+      // Kills: the resume left out of `live.starts`
+      let release: () => void = () => {};
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const h = await harness({ needsQueue: true, resumeHeld: held, hostIdleMs: HOLD_IDLE_MS });
+      const run = await lostStep(h);
+      await within(PARK_MS, () => left(h, 0));
+      h.resumeAs("rt-step1", "rt-succ", { run, call: 1 });
+      const item = lostItemOf(h, run);
+      const acting = item !== undefined ? needsOf(h).answer(item.id, 0, PRINCIPAL) : undefined;
+      await within(HOLD_IDLE_MS, () => h.resumes.length > 0);
+      const stopping = h.runs.stop(run);
+      await within(HOLD_IDLE_MS, () => stateOf(h, run) === "stopped");
+      release();
+      await Promise.allSettled([acting, stopping]);
+      await within(HOLD_IDLE_MS, () => h.ends.length > 0);
+      expect({ ends: h.ends, state: stateOf(h, run) }).toEqual({
+        ends: ["rt-succ"],
+        state: "stopped",
+      });
     });
 
     it("S14-35 (slice 14, Q35, §G 11): a Stop between restore() and settled() is refused retryably as fieldd's own UNAVAILABLE, writing no `end` and ending no agent", async () => {

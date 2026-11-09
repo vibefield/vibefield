@@ -3424,8 +3424,17 @@ export class FlowRuns {
     const { session } = step;
     if (step.state !== "lost" || session === undefined) return { outcome: "done" };
     live.acting.add(step.call);
+    // the fold's P2 (the skeptic's #2): a Resume in flight is a start in flight, its rejection caught, so an end waits for
+    // it and its tail reads what lands (#launch's three lines)
+    const resuming = asked(() => this.ports.agents.resume(session));
+    const start = resuming.then(
+      () => undefined,
+      () => undefined,
+    );
+    live.starts.add(start);
+    void start.finally(() => live.starts.delete(start));
     try {
-      await asked(() => this.ports.agents.resume(session));
+      await resuming;
     } catch (error) {
       throw refused(
         "resume-refused",
