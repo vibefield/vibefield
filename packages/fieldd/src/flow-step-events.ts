@@ -42,6 +42,15 @@ export interface FlowStepTurnEnd {
   readonly text?: string;
 }
 
+/** CP-4a2b slice 14 (Q8 (a), Q17) — a flow's step whose session was resumed: a run entered with `begun: "resume"` and
+ * a flow origin, its run, its call, and its NEW session. Whoever resumed it, the item's act, Godview's verb or the
+ * runtime's own, the runs bind it here. */
+export interface FlowStepResumed {
+  readonly run: string;
+  readonly call: number;
+  readonly runtimeRunId: string;
+}
+
 /** Words a result may be: some text, never blanks. */
 const worded = (text: string | undefined): text is string =>
   typeof text === "string" && text.trim() !== "";
@@ -56,6 +65,7 @@ interface StepAt {
 /** The step listener: one per fieldd, told every run as it enters, and telling the runs each step's turn end. */
 export class FlowStepEvents {
   readonly #listeners = new Set<(end: FlowStepTurnEnd) => void>();
+  readonly #resumedListeners = new Set<(step: FlowStepResumed) => void>();
   /** each step's run listened to, by its runtime run: how to stop listening */
   readonly #runs = new Map<string, readonly (() => void)[]>();
   /** every run's agent as it entered, until its end, listened to by nothing until a hand (9b) */
@@ -71,16 +81,26 @@ export class FlowStepEvents {
     return () => this.#listeners.delete(listener);
   }
 
+  /** CP-4a2b slice 14 (Q8 (a), Q17): hear each flow step's session resumed. */
+  onResumed(listener: (step: FlowStepResumed) => void): () => void {
+    this.#resumedListeners.add(listener);
+    return () => this.#resumedListeners.delete(listener);
+  }
+
   /** CP-4a2b (§13a slice 9b): a session an `in:` hands a flow's step (D9), listened to as that step's until the answer
    * is called or the session ends. The step's turn is the first whose turn:started this listener hears after the hand:
    * a turn whose turn:started was heard before the hand is never the step's, but one begun before the hand whose
    * turn:started arrives after it is (review F2), until slice 15 arms the hand at its line's paste. The same step
    * handed again is listened to once (CL-H6). A session this fieldd never heard enter (or heard end) is not heard: it
    * answers none and holds nothing, and fieldd's warn says why, so the runs refuse the step before its line is queued
-   * (review F3). */
+   * (review F3).
+   * CP-4a2b slice 14 (Q18 (a)): `inTurn` seeds the hand as if a turn had started, for a boot's re-hand of a session in
+   * mid-turn: that turn's end is the step's, whatever the session's id for it. Its cost, stated: your own turn at the
+   * restart reads as the step's, for one turn. */
   hand(
     runtimeRunId: string,
     step: { readonly run: string; readonly call: number },
+    options?: { readonly inTurn?: boolean },
   ): (() => void) | undefined {
     const key = `${step.run} ${step.call}`;
     const hands = this.#hands.get(runtimeRunId) ?? new Map<string, () => void>();
@@ -95,7 +115,12 @@ export class FlowStepEvents {
       );
       return undefined;
     }
-    const offs = this.#listen(agent, { run: step.run, call: step.call, runtimeRunId }, true);
+    const offs = this.#listen(
+      agent,
+      { run: step.run, call: step.call, runtimeRunId },
+      true,
+      options?.inTurn === true,
+    );
     let gone = false;
     const off = () => {
       if (gone) return;
@@ -122,6 +147,20 @@ export class FlowStepEvents {
       runtimeRunId,
       this.#listen(agent, { run: origin.run, call: origin.call, runtimeRunId }, false),
     );
+    // slice 14 (Q8 (a), Q17): told once its turns are listened to, so a resumed step's next end is heard. A resume
+    // with no flow origin returned above (a handed session's replacement carries none)
+    if (entered.begun !== "resume") return;
+    for (const listener of this.#resumedListeners) {
+      try {
+        listener({ run: origin.run, call: origin.call, runtimeRunId });
+      } catch (err) {
+        this.logger.warn(
+          "fieldd.flows.step_listener_failed",
+          "A flow step's resume listener threw",
+          { runtimeRunId, reason: (err as Error).message },
+        );
+      }
+    }
   }
 
   /** A run ended: its listeners go, the hands on it among them, and its handle with them. */
@@ -135,15 +174,18 @@ export class FlowStepEvents {
 
   /** One step's listening on its session (CP4-S2's road): each turn's end told once (CL-H6). `fromHand`: only a turn
    * whose turn:started was HEARD after the listening began is told (9b), so a turn heard starting before the hand never
-   * is; one whose turn:started arrives late is (review F2; slice 15 arms at the paste). */
-  #listen(agent: RunEnteredAgent, step: StepAt, fromHand: boolean): (() => void)[] {
+   * is; one whose turn:started arrives late is (review F2; slice 15 arms at the paste). `inTurn` (slice 14, Q18 (a)):
+   * as if a turn had started when the listening began. */
+  #listen(agent: RunEnteredAgent, step: StepAt, fromHand: boolean, inTurn = false): (() => void)[] {
     const { runtimeRunId } = step;
     /** the turn's last final message, not displayOnly, so far */
     let last: string | undefined;
     /** the turns already told */
     const told = new Set<string>();
     /** for a hand: the turn that started since it, by its id when it said one; none while none has */
-    let started: { readonly turn: string | undefined } | undefined;
+    let started: { readonly turn: string | undefined } | undefined = inTurn
+      ? { turn: undefined }
+      : undefined;
     /** F3 (slices 7–9 review): an end was told, and nothing of the run's own has been heard since (no turn:started, no
      * assistant message) */
     let quiet = false;

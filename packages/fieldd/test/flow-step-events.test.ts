@@ -369,7 +369,7 @@ describe("CP-4a2b — a session an `in:` hands a step (§13a slice 9b)", () => {
     expect(held()).toBe(0);
   });
 
-  it("RH1 (slice 14, Q18 (a); D869): a re-hand `inTurn` hears the turn begun before it: that turn's end is the step's, with turn ids and with none, and SH2's hand without it still hears none", () => {
+  it("RH1 (slice 14, Q18 (a); D869): a re-hand `inTurn` hears the turn begun before it: that turn's end is the step's, with turn ids and with none, and SH2's hand without it still hears none (SH2 :287 pins it)", () => {
     // red-a: `hand` takes no third argument, so a turn begun before the hand is never the step's (SH2's rule)
     // Kills: `inTurn` unread (the turn in flight dropped, so a boot's re-hand waits on R45's ask)
     /** `hand`, with slice 14's third argument (Q18 (a)): red-a's signature has none, so it is reached through a cast */

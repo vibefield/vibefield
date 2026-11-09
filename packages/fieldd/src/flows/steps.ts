@@ -57,6 +57,12 @@ export interface FlowStepSession {
   readonly origin?: { readonly by: string; readonly run?: string | undefined } | undefined;
   readonly spark?: string | undefined;
   readonly onPermission: boolean;
+  /** CP-4a2b slice 14 (Q9): the session's own turn is idle now, from the first monitor row; false or none says nothing
+   * of a turn that may yet end, so `sessionIdle` asks too */
+  readonly idle?: boolean;
+  /** CP-4a2b slice 14 (Q17; "pending", never "held", which is the person's hold on a record): the runtime holds it in
+   * its fold, not live, until it attaches or is replaced: a step on it waits (`#bind`) */
+  readonly pending?: true;
 }
 
 /** A flow run's step, as the step listener tells its turn ends (FlowStepTurnEnd's `run` and `call`). */
@@ -69,7 +75,13 @@ export interface FlowStepOf {
  * run, so its turn ends are told as that step's only once the runs hand it. The answer is how to let it go, or none
  * when the listener never heard the session enter (review F3), which nothing would then answer. */
 export interface FlowStepHand {
-  hand(runtimeRunId: string, step: FlowStepOf): (() => void) | undefined;
+  /** CP-4a2b slice 14 (Q18 (a)): `inTurn`, a boot's re-hand of a session in mid-turn, so that turn's end is the step's
+   * (flow-step-events.ts); its cost, stated: your own turn at the restart reads as the step's, for one turn. */
+  hand(
+    runtimeRunId: string,
+    step: FlowStepOf,
+    options?: { readonly inTurn?: boolean },
+  ): (() => void) | undefined;
 }
 
 /** fieldd's own interface to a run's steps (R32): the runtime's spawn, each session's input queue, the sessions an
@@ -188,6 +200,42 @@ export function formWords(label: string | undefined, refusal: FormRefusal): stri
 export const repairLine = (check: string): string =>
   `your last message did not match this step's form (${check}). Answer once more in that form.`;
 
+/** CP-4a2b slice 14 (Q9; §9 "An answer VibeField did not hear") — the line to a step found idle after a fieldd restart.
+ * The queue's mark says "VibeField: ". §9's form rule: a step with no form ends at "Answer once more". */
+export const unheardLine = (label: string, form: boolean): string =>
+  `VibeField restarted and did not hear your answer to ${label}. Answer once more${form ? " in its form" : ""}.`;
+
+/** CP-4a2b slice 14 (Q8 (a); W2, §9 "A step lost, resumed", the docs commit) — the line to a step's successor once its
+ * session is resumed; the form rule as `unheardLine`'s. */
+export const resumeLine = (label: string, form: boolean): string =>
+  `your session ended while you were working on ${label}. Finish it, then answer${form ? " in its form" : ""}.`;
+
+/** CP-4a2b slice 14 (Q6 item 1) — a step's form from its call's own args, for a call bound at its re-make, never
+ * started: its form, none for a step with none, or §9's words for one that no longer checks. */
+export function formOf(
+  args: readonly unknown[],
+): { readonly form?: FlowForm } | { readonly refused: string } {
+  const options = optionsOf(args);
+  if (options["schema"] === undefined) return {};
+  const checked = checkForm(options["schema"]);
+  return checked.ok
+    ? { form: checked.form }
+    : { refused: formWords(said(options["label"]), checked.refusal) };
+}
+
+/** The sender of a run's own words to its step (Q-B1 (a)): `startStep`'s, and a re-queued `prompt`'s at a boot (Q10). */
+export const fromOf = (
+  run: Pick<FlowStepRun, "run" | "flow" | "name" | "ran">,
+  call: number,
+): AgentInputSender => ({
+  kind: "flow",
+  flow: run.flow,
+  name: run.name,
+  run: run.run,
+  call,
+  ...(run.ran !== undefined ? { ran: run.ran } : {}),
+});
+
 /** The options an `agent()` call passed, plain. */
 type StepOptions = Readonly<Record<string, unknown>>;
 
@@ -293,14 +341,7 @@ export async function startStep(
     if (!checked.ok) return { ok: false, refused: formWords(label, checked.refusal) };
     form = checked.form;
   }
-  const from: AgentInputSender = {
-    kind: "flow",
-    flow: run.flow,
-    name: run.name,
-    run: run.run,
-    call,
-    ...(run.ran !== undefined ? { ran: run.ran } : {}),
-  };
+  const from = fromOf(run, call);
   const handed = handedOf(args);
   if (handed !== undefined) {
     // A3: a handed session is no spawn, so it sets none of a spawn's keys
@@ -429,6 +470,34 @@ export async function startStep(
   }
 }
 
+/** CP-4a2b slice 14 (Q6 item 3) — a step a boot finds its agent for, by its origin (`sessions.ofRun`), its record naming
+ * no session: a kill landed between the spawn and that write. D5 4–7 as `startStep`'s, with no reservation (it was
+ * reserved before the spawn) and no spawn. `gone()` is read as `startStep` reads it, so an agent bound past its run's
+ * end is named (`landed`) for the end to end. */
+export function boundStep(
+  ports: FlowStepPorts,
+  run: FlowStepRun,
+  write: FlowStepWrite,
+  call: number,
+  args: readonly unknown[],
+  session: string,
+): FlowStepStarted {
+  const label = labelOf(args);
+  const prompt = args[0];
+  if (typeof prompt !== "string") return didntStart(label, "its prompt isn't words.");
+  const formed = formOf(args);
+  if ("refused" in formed) return { ok: false, refused: formed.refused };
+  if (run.gone()) return { ok: false, refused: stepFailed(label), landed: session };
+  try {
+    return {
+      ...sent(ports, write, call, session, "prompt", prompt, fromOf(run, call)),
+      form: formed.form,
+    };
+  } catch (error) {
+    throw new FlowStepOrphaned(session, error);
+  }
+}
+
 /** D5 4–7 for a step's first line, `prompt` to the session it started or `in` to the one it was handed: the session
  * (`handed` for an `in:`, never ended, CP4-Q10), `working` and the line's intent on the record before the queue takes
  * it, then `queued` in the same tick. */
@@ -480,9 +549,56 @@ function queuedMark(
   }
 }
 
+/** CP-4a2b slice 14 (D's `sendLine`; sendRepair's road, general) — VibeField's own line to a step, D5's way: its intent
+ * on the record, the step in `state`, `patch` over it in the same write; the queue as `fieldd` with its `flow`; then
+ * `queued` in the tick the queue took it. */
+export function sendLine(
+  ports: Pick<FlowStepPorts, "inputs" | "logger">,
+  write: FlowStepWrite,
+  run: string,
+  call: number,
+  session: string,
+  line: {
+    readonly line: string;
+    readonly n: number;
+    readonly text: string;
+    readonly state: string;
+  },
+  patch?: Partial<FlowRunRecordStep>,
+): void {
+  write(call, (step) => ({
+    ...step,
+    ...patch,
+    state: line.state,
+    lines: [...(step.lines ?? []), { line: line.line, n: line.n, sent: "sending" }],
+  }));
+  ports.inputs.enqueue(session, line.text, {
+    kind: "fieldd",
+    flow: { run, call, line: line.line, n: line.n },
+  });
+  // 1c review Y2: as `sent`'s: the line is queued, so the step works and its answer settles it
+  queuedMark(ports, write, call, session, line.line, line.n);
+}
+
+/** CP-4a2b slice 14 (Q10, D5's first row) — a line kept `sending` that no queue holds, queued at the re-make, which
+ * holds its text: no new record line, then `queued`. */
+export function requeueLine(
+  ports: Pick<FlowStepPorts, "inputs" | "logger">,
+  write: FlowStepWrite,
+  call: number,
+  session: string,
+  line: { readonly line: string; readonly n: number; readonly text: string },
+  from: AgentInputSender,
+): void {
+  ports.inputs.enqueue(session, line.text, from);
+  queuedMark(ports, write, call, session, line.line, line.n);
+}
+
 /** VibeField's repair line (D5's way, as a step's first line): its intent on the record, `repairing`, the queue as
  * VibeField's own line to the step (`fieldd` with its `flow`, never joined by a wake, W1), then `queued` in the tick
- * the queue took it. `n` counts the step's repair lines: Ask once more's is the 2nd. */
+ * the queue took it. `n` counts the step's repair lines: Ask once more's is the 2nd.
+ * *Added 2026-11-09 (slice 14's green; Q11 (a), §I 2): the step keeps its latest `miss` in the line's own intent write,
+ * so a `repair` line a boot queues again (D5), and Ask once more after a restart, have its words.* */
 export function sendRepair(
   ports: Pick<FlowStepPorts, "inputs" | "logger">,
   write: FlowStepWrite,
@@ -492,15 +608,13 @@ export function sendRepair(
   n: number,
   check: string,
 ): void {
-  write(call, (step) => ({
-    ...step,
-    state: "repairing",
-    lines: [...(step.lines ?? []), { line: "repair", n, sent: "sending" }],
-  }));
-  ports.inputs.enqueue(session, repairLine(check), {
-    kind: "fieldd",
-    flow: { run, call, line: "repair", n },
-  });
-  // 1c review Y2: as `sent`'s: the repair line is queued, so the step repairs and its answer settles it
-  queuedMark(ports, write, call, session, "repair", n);
+  sendLine(
+    ports,
+    write,
+    run,
+    call,
+    session,
+    { line: "repair", n, text: repairLine(check), state: "repairing" },
+    { miss: check },
+  );
 }

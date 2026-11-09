@@ -86,6 +86,22 @@ const HOST_ENDED: Readonly<Record<FlowHostEnding, string>> = {
 export const hostEnded = (flow: string, why: FlowHostEnding): string =>
   `VibeField ended ${flow}: ${HOST_ENDED[why]}.`;
 
+/** CP-4a2b slice 14 (Q12 (a), Q13) — a run whose journal, or its record, reads as none VibeField kept: its `flow-lost`
+ * item, Stop its one act (DESIGN.md §9 "A run that can't go on"); and a run whose bytes are gone by its wake, on its
+ * record. Named from what its head kept, never from what was edited. */
+export const cantTrust = (flow: string): string =>
+  `VibeField can't trust what ${flow} kept, so it set the run aside.`;
+
+/** CP-4a2b slice 14 (Q7; W1, §9 "A run that can't go on", the docs commit a0b31214e) — a lost step's `flow-lost` item,
+ * cause-free: fieldd can't tell a Quit from a crash, and the same card serves an End run. */
+export const stepLost = (flow: string, label: string): string =>
+  `${flow} lost ${label}: its agent stopped before it answered.`;
+
+/** CP-4a2b slice 14 (Q8 (a); W4, §9, the docs commit) — Resume the step, when the runtime refuses it: said whole, its
+ * item waiting on. */
+export const resumeRefused = (label: string, why: string): string =>
+  `VibeField couldn't resume ${label}: ${why}`;
+
 /** No run fieldd keeps under that id. */
 export const noSuchRun = (run: string): string => `VibeField has no run ${run}.`;
 

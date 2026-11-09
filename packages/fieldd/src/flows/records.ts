@@ -177,7 +177,12 @@ function refuseTooBig(size: number): never {
 /** A run's journal read back: what its lines say (journal.ts), or nothing kept under its id. A journal the disk did not
  * answer is refused in the store's words, never read as nothing (item 172). */
 export type FlowRunRead =
-  | JournalVerdict
+  | Exclude<JournalVerdict, { readonly kind: "lost" }>
+  | (Extract<JournalVerdict, { readonly kind: "lost" }> & {
+      /** slice 14 (Q12 (a), §G 5): the journal's head, where the verdict in hand read one: a run with no record, or one
+       * whose record it breaks, is named from it */
+      readonly head?: FlowJournalHead;
+    })
   | { readonly kind: "absent" }
   | { readonly kind: "unbegun"; readonly record: FlowRunRecord };
 
@@ -488,7 +493,7 @@ export class FlowRecords {
     const cut = read.kind === "kept" ? this.#cutAgainst(verdict, read.record) : 1;
     if (cut !== undefined) {
       this.#lost(run, path, "forged");
-      return { kind: "lost", why: "forged", line: cut };
+      return { kind: "lost", why: "forged", line: cut, head: verdict.head };
     }
     this.#tails.set(run, { ...verdict.tail, bytes: verdict.bytes });
     this.#synced.set(run, verdict.tail);
@@ -572,6 +577,43 @@ export class FlowRecords {
       .filter((run) => FlowRunId.safeParse(run).success)
       .sort()
       .filter((run) => this.readRun(run).kind === "kept");
+  }
+
+  /** CP-4a2b slice 14 (Q12 (a), §G 5; D543–544) — the journals with no record, by their runs' ids, sorted: a record
+   * deleted, or one `runRecords()` set aside as edited. `readRun` reads each once, `lost` by its record's absence, and
+   * names it from its head. Orphans only: the boot's cost never reaches an ended run's journal. Read past
+   * RESTORE_READ_MAX_BYTES's count: a forged run's journal, once. A folder the disk cannot list is refused. */
+  unrecorded(): FlowRunId[] {
+    const recorded = new Set(this.#names(RUN_RECORDS_DIR, FlowRunId));
+    return this.#guard
+      .entries(join(this.opts.dir, RUNS_DIR))
+      .map((entry) => entry.name)
+      .filter((file) => file.endsWith(JOURNAL_SUFFIX))
+      .map((file) => file.slice(0, -JOURNAL_SUFFIX.length))
+      .filter((run) => FlowRunId.safeParse(run).success && !recorded.has(run))
+      .sort();
+  }
+
+  /** CP-4a2b slice 14 (Q33 (b), §K; §G 10) — a run's journal's size, read before its whole read so the boot's walk can
+   * keep within FLOW_LIMITS.RESTORE_READ_MAX_BYTES: its bytes, or none for a journal not there. A disk that does not
+   * answer is refused in the store's words. */
+  journalBytes(run: string): number | undefined {
+    if (!FlowRunId.safeParse(run).success) return undefined;
+    const path = this.#journalPath(run);
+    try {
+      return statSync(path).size;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? "unreadable";
+      if (code === "ENOENT") return undefined;
+      return this.#guard.unavailable(path, code);
+    }
+  }
+
+  /** CP-4a2b slice 14 (Q19, C15; §G 5) — whether a newer VibeField keeps this run's record: the record's own read alone,
+   * never its journal's, so an act's check sets nothing aside and reads no 32 MiB. */
+  recordIsNewer(run: string): boolean {
+    if (!FlowRunId.safeParse(run).success) return false;
+    return this.#readRecord(run).kind === "newer";
   }
 
   #journalPath(run: string): string {

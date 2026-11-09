@@ -20,18 +20,20 @@ import {
   FLOW_LIMITS,
   FLOW_RECORD_FORMAT,
   FLOW_RUNS_LISTED_MAX,
-  type FlowRunRecordStep,
+  FlowRunRecordStep,
   type FlowStarter,
   NEEDS_CHOICE_WORDS,
   type NeedsItem,
   type NeedsItemId,
   RECORD_STORES,
   RunSummary,
+  SPARK_TRANSCRIPT_SERVICE,
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentInputQueues } from "../src/agent-input-queue";
 import { FlowStepEvents, type FlowStepTurnEnd } from "../src/flow-step-events";
+import { FORM_WORDS_MAX } from "../src/flows/form-check";
 import {
   type FlowJournalEntry,
   type FlowJournalHeadEntry,
@@ -375,7 +377,8 @@ async function harness(
     for (const listener of turnListeners) listener(end);
   };
   const openOf = (run: string): readonly FlowRunRecordStep[] => records.runRecord(run)?.open ?? [];
-  /** slice 14's ports, beside the built ones: spread in, since red-a's FlowRunPorts names none of them */
+  /** slice 14's ports, beside the built ones: spread in, since red-a's FlowRunPorts names none of them. *Dated
+   * 2026-11-09 (slice 14's green): it names them now, and the rows read them under the same names.* */
   const bootNeeds = {
     flowItems: (): readonly NeedsItem[] =>
       needs !== undefined
@@ -911,7 +914,8 @@ function seeded(h: Harness, i: number, state: string, starter: FlowStarter = { b
 /** CP-4a2b slice 14 (Q5, Q9) — the boot's two phases and its idle read: `restore()`, sync, before the API listens;
  * `settled()`, once, after the agents' re-attach; `sessionIdle(id)`, slice 15's from the monitor. Red-a's FlowRuns has
  * none of them, so a row reaches each through this shim, a no-op there: it reds on the value it reads, never on a
- * TypeError (orders §D 2). The green builds them on the class. */
+ * TypeError (orders §D 2). The green builds them on the class. *Dated 2026-11-09 (slice 14's green): it has; the shim
+ * stays, so a row's text is what its red read.* */
 interface FlowRunsBoot {
   restore?(): void;
   settled?(): Promise<void> | void;
@@ -8701,12 +8705,15 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     it("R13j (slice 14, Q6 item 4): a step kept `waiting` for a slot, with slots free at the boot, starts at its re-make", async () => {
       // red-a: nothing wakes, so the step waits for ever
       // Kills: `#unslot` after the push dropped (a permanent wait)
+      // *Corrected 2026-11-09 (slice 14's green): the seed gains the `scope` every kept run holds: with RUN_START's []
+      // the step's start refuses `profile: "work"` before its spawn, a road red-a never reached. The expected value is
+      // unchanged.*
       const h = await harness();
       const approval = h.approved("review", ANSWERED);
       seededRun(h, RUN, {
         head: { flow: "review", name: "Review", hash: approval.hash },
         lines: [reviewCall()],
-        fields: { calls: 1, open: [keptStep(undefined, "waiting")] },
+        fields: { scope: ["work"], calls: 1, open: [keptStep(undefined, "waiting")] },
       });
       await booted(h);
       await within(PARK_MS, () => h.spawned.length === 1);
@@ -8888,12 +8895,15 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     it("R45c (slice 14, Q9 (i)): a miss after the unheard line gets the repair line, and a second miss holds the run on you", async () => {
       // red-a: nothing wakes, so nothing is asked
       // Kills: `#missed` branching on `repairing` (the first miss after the unheard line holds at once)
+      // *Corrected 2026-11-09 (slice 14's green): this row reads `holding`, and a held run reads `running` while its host
+      // is up (UU2; `#replace`'s rest words are the park's): red-a never reached that read. So it now boots with D1's idle
+      // lowered, and waits for the park below. The expected value is unchanged.*
       const h = await harness();
       h.approved("review", FORMED);
       const run = startedRun(await h.start({ flow: "review" })).run;
       await waitFor(() => expect(h.enqueued).toHaveLength(1));
       h.sessionRows.set("rt-step1", { live: true, idle: true, onPermission: false });
-      await booted(h);
+      await booted(h, { hostIdleMs: IDLE_MS });
       await within(PARK_MS, () => linesOf(h, "rt-step1", "unheard").length > 0);
       expect(linesOf(h, "rt-step1", "unheard").map(({ text }) => text)).toEqual([
         unheardWords("Diff", true),
@@ -8906,6 +8916,7 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       const first = { repairs: linesOf(h, "rt-step1", "repair").length, items: h.items.length };
       missOf(h, run, 1, "m2", "still none");
       await within(PARK_MS, () => h.items.length > 0);
+      await within(PARK_MS, () => stateOf(h, run) === "holding");
       expect({ first, items: h.items.map(({ kind }) => kind), state: stateOf(h, run) }).toEqual({
         first: { repairs: 1, items: 0 },
         items: ["flow-repair"],
@@ -9510,11 +9521,25 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
           kind: "UNAVAILABLE",
           retryable: true,
           message: "the flow service is starting",
-          details: { service: RECORD_STORES.SERVICE_FLOWS, state: "starting" },
+          details: {
+            service: RECORD_STORES.SERVICE_FLOWS,
+            state: SPARK_TRANSCRIPT_SERVICE.STATE_STARTING,
+          },
         },
         lines: [],
         ends: [],
       });
+    });
+
+    it("S14-11b (slice 14, Q11, §L #11; a green leg, ruled there): fieldd's FORM_WORDS_MAX is the contract's bound on a record step's `miss`, 120 characters, so a `miss` fieldd's check says is one the record keeps", () => {
+      // Kills: FORM_WORDS_MAX moved without the contract (a miss the record's parse refuses), or the contract's 120
+      const missAs = (miss: string) =>
+        FlowRunRecordStep.safeParse({ call: 1, state: "holding", miss }).success;
+      expect({
+        max: FORM_WORDS_MAX,
+        at: missAs("x".repeat(FORM_WORDS_MAX)),
+        past: missAs("x".repeat(FORM_WORDS_MAX + 1)),
+      }).toEqual({ max: 120, at: true, past: false });
     });
 
     // ── red-b: the lost step, its item's words and Resume (orders §D 4, as §H, §I and §J amend it; W1–W4 as the docs

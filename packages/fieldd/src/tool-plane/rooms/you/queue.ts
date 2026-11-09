@@ -594,7 +594,12 @@ export class NeedsQueue implements TalkHolds {
 
   /** The runs end one item alone: an open flow item whose call their journal already answered (the boot case of
    * R13d/R36: the run's record's `held.item` names it, and the queue's record of the answer was not kept). Answers
-   * whether it ended one: an item no longer open, one that holds no flow run, or an id never held ends nothing. */
+   * whether it ended one: an item no longer open, one that holds no flow run, or an id never held ends nothing.
+   * *Corrected 2026-11-09 (CP-4a2b slice 14's green, Q3, §I 5): "the run's record's `held.item` names it" is one case of
+   * the boot's sweep. `held` names only a run's first hold (EE3): the queue's own open items name the rest, through the
+   * runs' `needs.flowItems()`. The sweep ends each whose call the run's journal answers, each of a run whose record
+   * reads ended, and each whose run reads absent, but a gone run's whole-run `flow-lost`; `#lost` and the failure road
+   * end a held repair's item as a call's one item (Q20). */
   endFlowItem(id: NeedsItemId): boolean {
     const record = this.#records.get(id);
     if (record?.item.run === undefined || needsStateOf(record.item) !== "open") return false;

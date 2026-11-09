@@ -643,7 +643,9 @@ export const AGENT_STOP = {
  *    (FLOW_HOST_ENDINGS) in DESIGN.md §9's words, and nobody is asked anything (no hold, no card,
  *    no Allow). The bound never refuses an `end` line, so a journal never passes JOURNAL_MAX_BYTES
  *    plus its end lines (one, once slice 14's
- *    settle lands). Why 32 MiB: it holds one full-width fan-out at full answers (about 16.1–16.6 MiB) with about
+ *    settle lands). *Dated 2026-11-09 (CP-4a2b slice 14's green, §L #12; the re-key's #5): the settle has landed: at a
+ *    boot `#finishStop`'s kept-`end` road settles a record from its journal's `end` line and appends none, so a journal
+ *    holds one.* Why 32 MiB: it holds one full-width fan-out at full answers (about 16.1–16.6 MiB) with about
  *    15.4–15.9 MiB to spare (est.), and it bounds the read a parked loop's wake makes of its whole journal at every
  *    turn (about 3.3 s near 32 MiB, est.; its measurement is owed). *Measured 2026-11-08 (Q33 (a), the older test Mac, a
  *    builder's read, warm cache; cold boot not measured):* a near-full small-line journal's wake holds fieldd 3.04 s
