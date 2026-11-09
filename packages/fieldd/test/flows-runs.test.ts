@@ -9571,6 +9571,99 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       }).toEqual({ reads: 2, most: 1 });
     });
 
+    it("S14-33c (slice 14's fold, P5, the skeptic's #7; ruling 2, §P): a journal with no record counts in the budget like any other: one past it is read by settled() alone, and its open item waits for that read", async () => {
+      // 852b04096: restore() read every journal with no record, outside `total`
+      // Kills: an orphan's size not counted (read in restore()); one past the budget never read (no card); the sweep
+      // reading it first, which sets it aside and leaves settled() nothing to name
+      const h = await harness({ needsQueue: true });
+      const approval = h.approved("hello", HELLO);
+      const small = seededRun(h, "fr-boot0001h", {
+        head: { hash: approval.hash },
+        lines: [reviewCall()],
+        fields: { calls: 1 },
+      });
+      // S14-33's `big`: answers as large as the journal keeps one, enough to pass the budget alone
+      const part = "x".repeat(FLOW_LIMITS.RESULT_MAX_BYTES - 64);
+      const parts = Math.ceil(FLOW_LIMITS.RESTORE_READ_MAX_BYTES / part.length) + 1;
+      const orphan = seededRun(h, "fr-boot0002h", {
+        head: { hash: approval.hash },
+        lines: Array.from({ length: parts }, (_, i): FlowJournalEntry[] => [
+          {
+            kind: "call",
+            call: i + 1,
+            what: "agent",
+            key: flowCallKey("agent", [`part ${i + 1}`]),
+            n: 1,
+          },
+          { kind: "answer", call: i + 1, value: part },
+        ]).flat(),
+        fields: { calls: parts },
+      });
+      renameSync(recordFile(h, orphan), `${recordFile(h, orphan)}.aside`);
+      const gate = needsOf(h).flowItem(gateRaise(orphan, "hello")).id;
+      await h.reopen();
+      // the row's calibration: the orphan alone passes the budget (read before its read sets it aside)
+      const past = statSync(journalFile(h, orphan)).size > FLOW_LIMITS.RESTORE_READ_MAX_BYTES;
+      const reads: { phase: string; run: string }[] = [];
+      let phase = "restore";
+      const read = h.records.readRun.bind(h.records);
+      vi.spyOn(h.records, "readRun").mockImplementation((run) => {
+        reads.push({ phase, run });
+        return read(run);
+      });
+      restored(h.runs);
+      const waited = openItems(h).includes(gate);
+      phase = "settled";
+      await settledBoot(h.runs);
+      phase = "row";
+      const readIn = (at: string) => [
+        ...new Set(
+          reads.filter((r) => r.phase === at && [small, orphan].includes(r.run)).map((r) => r.run),
+        ),
+      ];
+      expect({
+        past,
+        restore: readIn("restore"),
+        settled: readIn("settled").includes(orphan),
+        waited,
+        items: needsOf(h)
+          .list()
+          .filter((item) => item.run?.run === orphan)
+          .map((item) => item.kind),
+      }).toEqual({
+        past: true,
+        restore: [small],
+        settled: true,
+        waited: true,
+        items: ["flow-lost"],
+      });
+    });
+
+    it("S14-33d (slice 14's fold, P5, the skeptic's #7): a refused listing of the journals with no record rejects no adoption: restore() goes on to its sweep", async () => {
+      // 852b04096: `records.unrecorded()` sat outside any try, so restore() threw past a finished adoption, unswept
+      // Kills: the try around the listing dropped; the sweep skipped when the listing is refused
+      const h = await harness({ needsQueue: true });
+      const ended = seededRun(h, "fr-boot0001i", {
+        lines: [{ kind: "end", state: "done" }],
+        fields: { state: "done", endedAt: "2026-11-07T00:00:00.000Z" },
+      });
+      const item = needsOf(h).flowItem(gateRaise(ended, "hello")).id;
+      await h.reopen();
+      vi.spyOn(h.records, "unrecorded").mockImplementation(() => {
+        throw new Error("the disk refused the listing");
+      });
+      let threw = "no throw";
+      try {
+        restored(h.runs);
+      } catch (error) {
+        threw = (error as Error).message;
+      }
+      expect({ threw, swept: !openItems(h).includes(item) }).toEqual({
+        threw: "no throw",
+        swept: true,
+      });
+    });
+
     it('S14-34a (slice 14, Q34): a step resumed in a Stop\'s leave (`begun: "resume"` told while the host leaves) is sent no line, and its successor is ended', async () => {
       // red-a: nothing hears the resume, so the successor works on after the run's end
       // Kills: Q34's condition on `#resumed` dropped (a line sent into an ending run); the successor never ended

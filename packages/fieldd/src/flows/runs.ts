@@ -914,10 +914,14 @@ export class FlowRuns {
   /** Slice 14 (Q33 (b), §K) — the runs restore() did not read within RESTORE_READ_MAX_BYTES, with their lines read */
   readonly #pastBudget = new Map<FlowRunId, LinesRead>();
   /** Slice 14 (Q19, Q33) — the runs this life has not read: a read that threw or a newer VibeField's (for good), and
-   * those past the budget until adopted. An act on one is refused retryably, ahead of its Stop (#answered) */
+   * those past the budget until adopted or, with no record, read. An act on one is refused retryably, ahead of its Stop
+   * (#answered), and the sweep leaves its items: its read sets a journal aside, and `settled()` names the run from it */
   readonly #unread = new Set<FlowRunId>();
   /** Slice 14 (Q5, Q33 (c)) — the runs `settled()` wakes, in `startedAt` order, each by a macrotask */
   readonly #adopting: FlowRunId[] = [];
+  /** The fold's P5 (the skeptic's #7; ruling 2, §P) — the journals with no record restore() did not read within
+   * RESTORE_READ_MAX_BYTES: `settled()` reads each, and `#unread` holds them till then */
+  readonly #unrecordedOwed: FlowRunId[] = [];
 
   constructor(readonly ports: FlowRunPorts) {
     this.#logger = ports.logger ?? createNoopLogger();
@@ -934,7 +938,10 @@ export class FlowRuns {
    * and the walk goes on (Q33 (b), §K, ruled 2026-11-08: a near-full journal, about 32 MiB, never rides here); else it is
    * read whole, and adopted (#adoptRead's table), each in its own try. A `runRecords()` that throws is a whole-store
    * failure and throws: a boot that rejects binds nothing, and its items wait on `flows-unbound`, nothing spent (Q2).
-   * Then the journals with no record, each read once (Q12), then the sweep (Q3). */
+   * Then the journals with no record, each read once (Q12) and counted in the same budget, then the sweep (Q3).
+   * *Corrected 2026-11-09 (the fold's P5, the skeptic's #7; ruling 2, §P):* the journals with no record were read
+   * outside `total`, so the budget's "IN ALL" (§K) did not hold of them. One past the budget now waits for `settled()`,
+   * and a listing the disk refuses is said and rejects nothing. */
   restore(): void {
     if (this.#restored) return;
     this.#restored = true;
@@ -972,25 +979,18 @@ export class FlowRuns {
         );
       }
     }
-    for (const run of records.unrecorded()) {
-      try {
-        const read = records.readRun(run);
-        if (read.kind === "lost" && read.head !== undefined)
-          this.#forged({ run, head: headOf(read.head) });
-        else
-          this.#logger.warn(
-            "fieldd.flows.run.restore",
-            "A flow journal with no record names no flow; nothing can be raised for it",
-            { run, read: read.kind },
-          );
-      } catch (error) {
-        this.#logger.warn(
-          "fieldd.flows.run.restore",
-          "A flow journal with no record could not be read at the boot",
-          { run, error: messageOf(error) },
-        );
-      }
+    let unrecorded: FlowRunId[] = [];
+    try {
+      unrecorded = records.unrecorded();
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.restore",
+        "The flow journals with no record could not be listed at the boot; the next boot lists them",
+        { error: messageOf(error) },
+      );
     }
+    for (const run of unrecorded)
+      total += this.#readUnrecorded(run, FLOW_LIMITS.RESTORE_READ_MAX_BYTES - total);
     this.#sweep(items);
   }
 
@@ -999,7 +999,8 @@ export class FlowRuns {
    * its rejection logged, so a hung `agents.end` holds no wake (Q5); then every adopted run, oldest first (R32c): a run
    * past the budget is read and adopted now (Q33); NN5's newer read comes first and a run it refuses ends through the
    * one setter, then the wake (Q30), each by one macrotask, `#closing` re-read before each (§H's (c)): so a stall is
-   * one read. A step is lost only at its re-make (Q7 (a)): no walk here, so a run NN5 ends mints no card. */
+   * one read. Last, the journals with no record past the budget, one read to a macrotask (the fold's P5). A step is
+   * lost only at its re-make (Q7 (a)): no walk here, so a run NN5 ends mints no card. */
   async settled(): Promise<void> {
     if (this.#settledOnce) return;
     this.#settledOnce = true;
@@ -1016,6 +1017,11 @@ export class FlowRuns {
       if (this.#adoptLate(run) && !(await this.#paced())) return;
       if (this.#stopsOwed.has(run)) this.#handOver(run);
       else this.#wakeBooted(run);
+    }
+    for (const run of this.#unrecordedOwed) {
+      if (!(await this.#paced())) return;
+      this.#unread.delete(run);
+      this.#readUnrecorded(run);
     }
   }
 
@@ -1904,6 +1910,38 @@ export class FlowRuns {
         error: messageOf(error),
       });
     }
+  }
+
+  /** Slice 14 (Q12 (a)) — a journal with no record, read once, which sets it aside, and its run raised by its head
+   * (#forged). The fold's P5: its size is read first, and a journal past `left`, the budget restore() has left, waits
+   * for `settled()`, which passes none. The bytes to count, none for one left waiting. Each in its own try. */
+  #readUnrecorded(run: FlowRunId, left = Number.POSITIVE_INFINITY): number {
+    const { records } = this.ports;
+    let bytes = 0;
+    try {
+      bytes = records.journalBytes(run) ?? 0;
+      if (bytes > left) {
+        this.#unrecordedOwed.push(run);
+        this.#unread.add(run);
+        return 0;
+      }
+      const read = records.readRun(run);
+      if (read.kind === "lost" && read.head !== undefined)
+        this.#forged({ run, head: headOf(read.head) });
+      else
+        this.#logger.warn(
+          "fieldd.flows.run.restore",
+          "A flow journal with no record names no flow; nothing can be raised for it",
+          { run, read: read.kind },
+        );
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.restore",
+        "A flow journal with no record could not be read at the boot",
+        { run, error: messageOf(error) },
+      );
+    }
+    return bytes;
   }
 
   /** One macrotask between the boot's steps (Q33 (c)): false once fieldd is closing. */

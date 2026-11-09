@@ -581,8 +581,11 @@ export class FlowRecords {
 
   /** CP-4a2b slice 14 (Q12 (a), §G 5; D543–544) — the journals with no record, by their runs' ids, sorted: a record
    * deleted, or one `runRecords()` set aside as edited. `readRun` reads each once, `lost` by its record's absence, and
-   * names it from its head. Orphans only: the boot's cost never reaches an ended run's journal. Read past
-   * RESTORE_READ_MAX_BYTES's count: a forged run's journal, once. A folder the disk cannot list is refused. */
+   * names it from its head. A folder the disk cannot list is refused.
+   * *Corrected 2026-11-09 (the fold's P5, the skeptic's #7; ruling 2, §P):* this said "Orphans only: the boot's cost
+   * never reaches an ended run's journal" and "Read past RESTORE_READ_MAX_BYTES's count". A store whose records folder
+   * is lost makes every journal an orphan, ended ones too; and a journal read is a read: `restore()` counts each of
+   * these in that budget, and one past it waits for `settled()`. */
   unrecorded(): FlowRunId[] {
     const recorded = new Set(this.#names(RUN_RECORDS_DIR, FlowRunId));
     return this.#guard
