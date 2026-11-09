@@ -939,6 +939,33 @@ its day (`--vf-card-dim`, a brightness on the whole card — the reading light a
 its shadow deepens (`--vf-card-shade` 1.7). A thin gloss crosses its face as it turns (white 9%,
 screen).
 
+**The stock is printed, once — the press** (CS-D5 A linen and CS-D6 C the pressed back, ruled by James 2026-11-09 on
+*Card Stock*; the renderer on his word of 21:30Z, "choose the most performant way possible and should introduce the least
+overheads to our app"). Every card wears the same stock, so the stock is printed, never drawn per frame. **The press** is one
+WebGL2 context on an OffscreenCanvas. It prints the **front** and the **back** at a card's size, at the window's pixel
+density, by day and by night, into images every card then wears under its face, and then it lets its context go. **At rest
+and in motion the hand asks nothing of the GPU**: the browser moves the printed cards as layers, so a reach, a deal, a carry
+and a flip are transforms. It prints again only when the theme, the pixel density or a printed size changes (a card picked
+up wears a print at 2.4×). Until it has printed, and wherever WebGL2 is refused, a card wears the flat stock above.
+- **The front:** the paper `#f4efe5` and its ink `#1c1611` (the stock's inks, above, move to them with the round 5 face).
+  The desk's own paper (ICE's `paperTexture`, the notebook's pages') gives its mottle and fibres over 64 units and its
+  tooth over 9.6. Under it, **linen**: a fine embossed weave 1.35 apart, its tip 0.11, under a satin varnish (shininess 34,
+  at 0.22). It is lit as the round lit it: the mat's lamp up and to the right and low (toward 0.78, −0.475, 0.41), the
+  room's soft light above you (0.18, −0.55, 0.82), ambient 0.68 by day and 0.55 by night, a lamp of warm white by day
+  and 0.87 grey by night. Its cut edge is a hair darker, 0.82 over its outer 1.15.
+- **The back, Pressed:** the field is sage `#2d4824` inside 5.5 from the edge (corners 3.6) on the paper's margin, with
+  one cream rule `#eee4c8` 2.6 inside the field's edge. VibeField's mark at rest (the design kit's living mark), 60 wide
+  in the middle, is pressed into the stock with no ink, a deboss whose band is a little darker where it is pressed. Only
+  its three lights are printed (`#FF0054`, `#00F59B`, `#083CFF`, at 473.28, 157 and 795.69 of 1000 along its one edge), in
+  a bright ink that holds its colour in shadow and glows a little by night.
+- **Why WebGL2 and not WebGPU:** the desk's WebGPU device is the desk's own, made and dropped with each desk. Its cover's
+  witness counts every `queue.submit`, whoever makes it, so cards drawn on it would break "a cover costs nothing". A device
+  of the hand's own would be the fourth in Godview, beside the desk's, the swarm's and the terminals'. WebGL2 needs no
+  device, prints in a frame's time and is gone, and is where Chat's faces already draw (§2.10). No canvas stands over the
+  window (the faces' rule, §2.10).
+- **What it costs:** a carried card does not bend with its speed, and the lamp's light does not run across a card as it
+  turns. The thin gloss above stands in.
+
 ### 5.1 The material book — what the desk's materials mean (DK-D5; a stub)
 
 **Ruled 2026-09-25 (DK-D5; thinking-the-desk §6): §5 is the material book.** The desk's materials
@@ -2852,7 +2879,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Picking one up** (HN-D5): a click picks a card up the way the desk opens its whiteboard — it flies
     to the window's centre and grows to reading size, **2.4×** (288 × 403), in 560ms on the island curve, while
     the window behind it blurs 14 and dims 8% (the desk's held object, §8); the bar under the head,
-    at the tools in hand's place (y 64), says where it came from and holds **Remove** and **Done**.
+    at the tools in hand's place (y 64), says where it came from and holds **Remove**, **Flip it** and **Done**.
+    **Flip it**, or a double-click on the card, turns it over about its upright to show its printed back (§5 "the
+    press"), and again to show its face: 480ms on the island curve, the back drawn from its own print and never through
+    the face; reduced motion (M6), a 90ms cross-fade. A card put back goes home face up.
     Esc, Done ("Done  Esc") or a click on the blur puts it back: 140ms, then 440ms home. A card picked up
     is a modal (the Peek's rule): nothing under the scrim gets a key — ⌫ removes the card, Esc puts it back,
     Tab stays in its bar — and the keyboard's focus goes to Done and comes back when the card goes home.
