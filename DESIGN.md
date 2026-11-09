@@ -10612,7 +10612,8 @@ ways, and only the first is served:
   list, under "Chat can't read your sparks", and the phone's) · "VibeField can't read what waits on you; nothing was
   changed" (the needs-you doors) · "VibeField can't keep words for its sessions; nothing was sent" (your words to a
   spark, and a spark's send to a session) · "VibeField can't read the flows it keeps; nothing was changed" (what
-  reads a flow's approval or a spark's proposal: the flows doors, from CP-4a2).
+  reads a flow's approval or a spark's proposal: the flows doors, from CP-4a2) · "VibeField can't read the desk objects
+  it keeps; nothing was changed" (the desk's tools and the window's `objects.*` doors, OB-3).
 - **A newer VibeField wrote it** (its format is above this one's): kept where it is for that VibeField, never served
   and never written over, and said in fieldd's log as kept for a newer VibeField.
 
