@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { AgentAccountUsageEntry, AgentProfileSet } from "@vibefield/contracts";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FIXTURE_DEMO,
   FIXTURE_NATIVE,
@@ -137,6 +137,19 @@ function column(over: Partial<ProfilesColumnViewProps> = {}): ProfilesColumnView
     onAdd: vi.fn(),
     onOpenProfile: vi.fn(),
     onRetry: vi.fn(),
+    ...over,
+  };
+}
+
+/** The stage controller as the monitor mounts it, its clock pinned so no interval starts. */
+function controller(over: Partial<ProfilesColumnProps> = {}): ProfilesColumnProps {
+  return {
+    sets: [FIXTURE_NATIVE, FIXTURE_WORK],
+    rows: READINGS,
+    usageUnavailable: false,
+    chosen: null,
+    onChoose: vi.fn(),
+    now: NOW,
     ...over,
   };
 }
@@ -679,19 +692,6 @@ describe("the cards layer (UM-R1): a card stands above the terminals, in the col
   const cards = (props: Partial<ProfilesColumnViewProps>): ProfilesColumnViewProps =>
     column({ circles: [thisMac(), work()], lens: true, open: "work", ...props });
 
-  /** The stage controller as the monitor mounts it, its clock pinned so no interval starts. */
-  function controller(over: Partial<ProfilesColumnProps> = {}): ProfilesColumnProps {
-    return {
-      sets: [FIXTURE_NATIVE, FIXTURE_WORK],
-      rows: READINGS,
-      usageUnavailable: false,
-      chosen: null,
-      onChoose: vi.fn(),
-      now: NOW,
-      ...over,
-    };
-  }
-
   it("stands an open card in the given layer, not in the item", () => {
     const target = cardLayer();
     const page = mount(<ProfilesColumnView {...cards({ cardLayer: target })} />);
@@ -831,6 +831,100 @@ describe("the cards layer (UM-R1): a card stands above the terminals, in the col
     expect(GODVIEW_CSS).toMatch(
       /\.vf-godview:has\(\.vf-monitor-cards > \*\) \.vf-godview-terminal-deck \{\s*opacity: 0\.999;/u,
     );
+  });
+});
+
+/* ── the reach (UM-R2; DESIGN.md §8 "The reach") ─────────────────────────── */
+
+describe("the reach (UM-R2): the pointer can cross to its card", () => {
+  beforeEach(() => {
+    // the setTimeout pair alone: `now` is pinned, so the clock's interval never starts
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const over = (node: Element | null | undefined): void => {
+    act(() => {
+      node?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    });
+  };
+  const out = (node: Element | null | undefined): void => {
+    act(() => {
+      node?.dispatchEvent(new PointerEvent("pointerout", { bubbles: true }));
+    });
+  };
+  const wait = (ms: number): void => {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  };
+  const setup = (): {
+    target: HTMLElement;
+    item: (id: string) => HTMLElement | null;
+    stand: (id: string) => Element | null;
+  } => {
+    const target = cardLayer();
+    const page = mount(<ProfilesColumn {...controller({ cardLayer: target })} />);
+    return {
+      target,
+      item: (id) => page.querySelector<HTMLElement>(`.vf-profiles-item[data-profile="${id}"]`),
+      stand: (id) => target.querySelector(`.vf-profiles-stand[data-profile="${id}"]`),
+    };
+  };
+
+  it("keeps the card through the grace and closes after it", () => {
+    const { item, stand } = setup();
+    over(item("work"));
+    expect(stand("work")).not.toBeNull();
+    out(item("work"));
+    wait(319);
+    expect(stand("work")).not.toBeNull();
+    wait(1);
+    expect(stand("work")).toBeNull();
+  });
+
+  it("a card reached within the grace stays", () => {
+    const { item, stand } = setup();
+    over(item("work"));
+    out(item("work"));
+    wait(100);
+    over(stand("work"));
+    wait(1000);
+    expect(stand("work")).not.toBeNull();
+  });
+
+  it("a move to another circle waits out the dwell, and reaching the card cancels it", () => {
+    const { item, stand } = setup();
+    over(item("native"));
+    out(item("native"));
+    over(item("work"));
+    wait(119);
+    expect(stand("native")).not.toBeNull();
+    expect(stand("work")).toBeNull();
+    wait(1);
+    expect(stand("work")).not.toBeNull();
+    expect(stand("native")).toBeNull();
+    // back toward This Mac, then onto the shown card first
+    out(item("work"));
+    over(item("native"));
+    wait(100);
+    over(stand("work"));
+    wait(1000);
+    expect(stand("work")).not.toBeNull();
+    expect(stand("native")).toBeNull();
+  });
+
+  it("opens at once with nothing showing, and bridges the gap to the card (§8: 22 wide, from the item's edge)", () => {
+    const { item, stand } = setup();
+    over(item("work"));
+    expect(stand("work")).not.toBeNull();
+    const bridge = /\n\.vf-profiles-stand::before \{[^}]*\}/u.exec(CSS)?.[0] ?? "";
+    expect(bridge).toContain("position: absolute;");
+    expect(bridge).toContain("right: 100%;");
+    expect(bridge).toContain("width: 22px;");
+    expect(bridge).toMatch(/top: 0;[^}]*bottom: 0;/u);
   });
 });
 
