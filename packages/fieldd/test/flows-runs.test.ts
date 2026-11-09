@@ -210,6 +210,8 @@ interface ResumedStep {
   readonly call: number;
   readonly runtimeRunId: string;
 }
+/** Red-b — the step a resumed session answers for: a `ResumedStep` before its new session is known. */
+type ResumedAt = Omit<ResumedStep, "runtimeRunId">;
 
 async function harness(
   opts: {
@@ -269,6 +271,8 @@ async function harness(
     /** slice 14 (S14-31b, slice 15's CL3): every spawn held, once asked and counted, until this settles, then refused
      * in the words it settles with */
     readonly spawnFails?: Promise<string>;
+    /** slice 14, red-b (R46b, W4): the runtime's refusal of every Resume (`agents.resume`), in its words */
+    readonly resumeRefuses?: string;
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "vf-flow-runs-"));
@@ -344,6 +348,14 @@ async function harness(
   const resumes: string[] = [];
   const replacingNow = new Set<string>();
   let fielddStopping = false;
+  /** CP-4a2b slice 14, red-b (Q29 (i), ruled 2026-11-08; step 0's F3) — the fake runtime's fold across a session's end: the
+   * sessions listed nowhere (no `agents.list()` row, so `sessions.of` reads none and `ofRun` omits them); whether an end
+   * is being told right now; each read of `replacing`, at the tell or later ("read synchronously"); and each Resume the
+   * runtime will take, by the session it replaces */
+  const goneFromFold = new Set<string>();
+  let tellingEnd = false;
+  const replacingReads: ("at-tell" | "later")[] = [];
+  const resumesAs = new Map<string, { readonly next: string; readonly step: ResumedAt }>();
   /** what fieldd's log was told at warn, in order */
   const warned: { event: string; fields: LogFields | undefined }[] = [];
   /** what fieldd's log was told at error, in order, its third argument as given */
@@ -374,15 +386,42 @@ async function harness(
       return needs !== undefined ? needs.endFlowItem(id) : fakeItems.delete(id);
     },
   };
+  /** Red-b — a successor listed live in the fold, as `enter` lists it (agent-runtime.ts:3203@a08b28f5d), by its step's
+   * flow origin; and its `begun: "resume"` told, as FlowStepEvents tells `onResumed` (:3209, Q8 (a)). */
+  const listSuccessor = (next: string, step: ResumedAt) => {
+    sessionRows.set(next, {
+      live: true,
+      onPermission: false,
+      origin: { by: "flow", run: step.run },
+    });
+    ofRunRows.set(step.run, [
+      ...(ofRunRows.get(step.run) ?? []),
+      { runtimeRunId: next, call: step.call, live: true },
+    ]);
+  };
+  const tellResumed = (next: string, step: ResumedAt) => {
+    for (const listener of [...resumedListeners]) listener({ ...step, runtimeRunId: next });
+  };
   const bootAgents = {
     resume: async (runtimeRunId: string): Promise<void> => {
       resumes.push(runtimeRunId);
+      if (opts.resumeRefuses !== undefined) throw new Error(opts.resumeRefuses);
+      // red-b: a Resume the row arranged, on main's road: the successor enters and is told before `agents.resume`
+      // returns (agent-runtime.ts:3468, :3203, :3209@a08b28f5d)
+      const resumed = resumesAs.get(runtimeRunId);
+      if (resumed !== undefined) {
+        listSuccessor(resumed.next, resumed.step);
+        tellResumed(resumed.next, resumed.step);
+      }
     },
     onRunEnded: (listener: (runtimeRunId: string) => void): (() => void) => {
       runEndedListeners.add(listener);
       return () => runEndedListeners.delete(listener);
     },
-    replacing: (runtimeRunId: string): boolean => replacingNow.has(runtimeRunId),
+    replacing: (runtimeRunId: string): boolean => {
+      replacingReads.push(tellingEnd ? "at-tell" : "later");
+      return replacingNow.has(runtimeRunId);
+    },
   };
   const bootStepEnds = {
     onResumed: (listener: (step: ResumedStep) => void): (() => void) => {
@@ -500,25 +539,35 @@ async function harness(
     sessions: {
       // a step's session the runtime spawned is live until a row ends it (D2's lookup reads it at a wake); slice 14:
       // a row's own row for a session comes first (`sessionRows`: idle, pending, a prior life's agent)
+      // red-b: a session gone from the fold (`goneFromFold`) reads no row, whatever else is kept for it
       of: (runtimeRunId) =>
-        sessionRows.get(runtimeRunId) ??
-        opts.sessions?.[runtimeRunId] ??
-        (spawned.some((_, i) => `rt-step${i + 1}` === runtimeRunId)
-          ? { live: !exited.has(runtimeRunId), onPermission: false }
-          : undefined),
+        goneFromFold.has(runtimeRunId)
+          ? undefined
+          : (sessionRows.get(runtimeRunId) ??
+            opts.sessions?.[runtimeRunId] ??
+            (spawned.some((_, i) => `rt-step${i + 1}` === runtimeRunId)
+              ? { live: !exited.has(runtimeRunId), onPermission: false }
+              : undefined)),
       // slice 13 (Q4 (a)): the sessions the run's spawns started, by origin, live until ended; never a handed one.
       // Slice 14 (Q22): each read counted, and a row's own rows for the run (`ofRunRows`) listed after them
       ofRun: (run) => {
         ofRunReads += 1;
         return [
           ...started
-            .filter((at) => at.run === run && opts.ofRunOmits?.includes(at.runtimeRunId) !== true)
+            .filter(
+              (at) =>
+                at.run === run &&
+                opts.ofRunOmits?.includes(at.runtimeRunId) !== true &&
+                !goneFromFold.has(at.runtimeRunId),
+            )
             .map(({ runtimeRunId, call }) => ({
               runtimeRunId,
               call,
               live: !exited.has(runtimeRunId),
             })),
-          ...(ofRunRows.get(run) ?? []),
+          ...(ofRunRows.get(run) ?? []).filter(
+            ({ runtimeRunId }) => !goneFromFold.has(runtimeRunId),
+          ),
         ];
       },
     },
@@ -579,16 +628,95 @@ async function harness(
     needs?.bindFlowActs(runs.acts);
     return runs;
   };
-  /** Q29 (i), the fake runtime's replacement of `old` by `next`, in main's order (agent-runtime.ts@a08b28f5d):
-   * `replacing(old)` true from the resume's entry (:4460); the old run's end told past its point of no return
-   * (:4559–4565, closeRun's `onRunEnded`); the successor entered (`managed.set`, :3203), which ends the span; then its
-   * `begun: "resume"` heard, as FlowStepEvents tells `onResumed` (Q8 (a)) */
-  const replaceSession = (old: string, next: string, step: { run: string; call: number }) => {
+  /** Red-b — every `agents.onRunEnded` listener told, as the runtime's `ended()` tells an end (agent-runtime.ts:4920–
+   * 4934@a08b28f5d): one synchronous loop, a listener's throw caught so the next still hears it. A `replacing` read
+   * inside the loop is marked `at-tell`. */
+  const tellEnded = (runtimeRunId: string) => {
+    tellingEnd = true;
+    try {
+      for (const listener of [...runEndedListeners]) {
+        try {
+          listener(runtimeRunId);
+        } catch {
+          // `ended()` logs a listener's throw and tells the next; a row reads what each one did
+        }
+      }
+    } finally {
+      tellingEnd = false;
+    }
+  };
+  /** Red-b — `runtimeRunId` shown as an exited row from now on (`holdExited`, `keepExitedRow`): listed, not live. */
+  const toExitedRow = (runtimeRunId: string) => {
+    goneFromFold.delete(runtimeRunId);
+    exited.add(runtimeRunId);
+    const row = sessionRows.get(runtimeRunId) ?? opts.sessions?.[runtimeRunId];
+    if (row !== undefined) sessionRows.set(runtimeRunId, { ...row, live: false });
+  };
+  /** Red-b (Q29 (i), R49's contrasts) — closeRun's order (agent-runtime.ts:5178, then :5181@a08b28f5d): the run is gone
+   * from the fold BEFORE its end is told, and is listed again as an exited row after (:5185). */
+  const closeRun = (runtimeRunId: string) => {
+    goneFromFold.add(runtimeRunId);
+    tellEnded(runtimeRunId);
+    toExitedRow(runtimeRunId);
+  };
+  /** Red-b (Q29 (i), R49's contrasts; step 0's F3) — closePending's order (:4649–4670@a08b28f5d): told while still
+   * listed as `pending` with `replacing` false; removed from `pending` after the tell; on the `exit` road with its pane
+   * listed, put back in the same turn as an exited row (`keepExitedRow`), and otherwise out of the fold. */
+  const closePending = (
+    runtimeRunId: string,
+    run: string,
+    as: { readonly paneListed: boolean },
+  ) => {
+    const row = sessionRows.get(runtimeRunId) ?? opts.sessions?.[runtimeRunId];
+    sessionRows.set(runtimeRunId, {
+      ...row,
+      live: false,
+      pending: true,
+      onPermission: false,
+      origin: { by: "flow", run },
+    });
+    tellEnded(runtimeRunId);
+    sessionRows.delete(runtimeRunId);
+    if (as.paneListed) toExitedRow(runtimeRunId);
+    else goneFromFold.add(runtimeRunId);
+  };
+  /** Q29 (i), the fake runtime's replacement of `old` by `next`, ordered as main's is (the Q29 read's §5 (c);
+   * agent-runtime.ts@a08b28f5d). At the call: `replacing(old)` true from the resume's entry (:4460), `old` listed
+   * `pending`, its run's own by origin unless `own` is false (a handed session, §J 2's law). `tell()`: past the point of
+   * no return (:4559–4565), one synchronous tell of every listener with `old` still listed and `replacing` true, then,
+   * in the same turn, `old` gone from the fold (:4565). Between `tell()` and `enter()` is the spawn gap (a row waits a
+   * macrotask, or wakes the run there): no row for `old` or `next`, `replacing(old)` still true. `enter()`: `next`
+   * listed live (`managed.set`, :3203), which ends the span, then its `begun: "resume"` told, FlowStepEvents's
+   * `onResumed` (:3209, Q8 (a); never for a handed session, whose successor carries no flow origin, fse.ts:118–119). */
+  const replaceSession = (
+    old: string,
+    next: string,
+    step: ResumedAt,
+    as: { readonly own?: boolean } = {},
+  ) => {
+    const own = as.own !== false;
+    const row = sessionRows.get(old) ?? opts.sessions?.[old];
     replacingNow.add(old);
-    for (const listener of [...runEndedListeners]) listener(old);
-    sessionRows.set(next, { live: true, onPermission: false });
-    replacingNow.delete(old);
-    for (const listener of [...resumedListeners]) listener({ ...step, runtimeRunId: next });
+    replacingReads.splice(0);
+    sessionRows.set(old, {
+      ...row,
+      live: false,
+      pending: true,
+      onPermission: false,
+      ...(own ? { origin: { by: "flow", run: step.run } } : {}),
+    });
+    return {
+      tell: () => {
+        tellEnded(old);
+        sessionRows.delete(old);
+        goneFromFold.add(old);
+      },
+      enter: () => {
+        listSuccessor(next, step);
+        replacingNow.delete(old);
+        if (own) tellResumed(next, step);
+      },
+    };
   };
   /** a flow's file in the person's library, as they saved it */
   const write = (flow: string, text: string): Uint8Array => {
@@ -657,6 +785,15 @@ async function harness(
       for (const listener of [...resumedListeners]) listener(step);
     },
     replaceSession,
+    /** red-b: the runtime's two other ends (Q29 (i), R49's contrasts), and the reads of `replacing` since the last
+     * `replaceSession` */
+    closeRun,
+    closePending,
+    replacingReads,
+    /** red-b: the next Resume of `old` enters `next` for `step`, as main's does before `agents.resume` returns */
+    resumeAs: (old: string, next: string, step: ResumedAt) => {
+      resumesAs.set(old, { next, step });
+    },
     /** slice 14 (Q31): fieldd's stop flag, as slice 15 sets it at the point of no return */
     setStopping: (stopping: boolean) => {
       fielddStopping = stopping;
@@ -4912,7 +5049,7 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     });
   });
 
-  it("R13 (D2): at a wake, a call made again whose step's session lives binds to it, never spawned again; one whose start is in flight spawns once, and the next wake binds it; one whose session exited fails the step in §9's words, nothing spawned", async () => {
+  it("R13 (D2; Q7, Q20 at slice 14's red-b): at a wake, a call made again whose step's session lives binds to it, never spawned again; one whose start is in flight spawns once, and the next wake binds it; one whose session exited raises one `flow-lost` in §9's words (W1), its step `lost`, nothing refused and nothing spawned", async () => {
     // a live session binds: B's answer wakes the run, and A, made again, is bound to its session
     const live = await harness({ hostIdleMs: IDLE_MS });
     live.approved("two", TWO);
@@ -4956,8 +5093,9 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       spawned: starting.spawned.map(({ origin }) => origin.call),
       hosts: starting.hosts.length,
     }).toEqual({ state: "done", spawned: [2, 1], hosts: 3 });
-    // an exited one (ruled 2026-11-06, its item slice 14's): A's session ends while the run is parked, so A made again
-    // fails in "‹label› failed.", and nothing spawns and no item is raised
+    // an exited one (slice 14, Q7's red-b move of this leg; §9's W1, the docs commit a0b31214e): A's session ends while
+    // the run is parked, so A made again raises one `flow-lost` item in W1's words, Resume the step its act (Stop the
+    // run is every such item's last), its step reads `lost`, nothing spawns and nothing is refused
     const gone = await harness({ hostIdleMs: IDLE_MS });
     gone.approved("two", TWO);
     const lost = startedRun(await gone.start({ flow: "two" })).run;
@@ -4965,13 +5103,37 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     expect(await parkedAt(gone, lost)).toEqual(PARKED);
     gone.exit(sessionOf(gone, lost, 1));
     answerStep(gone, lost, 2, "b");
-    await within(PARK_MS, () => refusalsOf(gone, lost).length > 0);
+    await within(PARK_MS, () => gone.items.length > 0 || refusalsOf(gone, lost).length > 0);
     expect({
       refused: refusalsOf(gone, lost),
       spawned: gone.spawned.length,
-      items: gone.items,
+      items: gone.items.map(({ kind, run: at, words: said, acts }) => ({
+        kind,
+        call: at.call,
+        label: at.label,
+        said,
+        acts,
+      })),
+      steps: stepsOf(gone, lost),
       hosts: gone.hosts.length,
-    }).toEqual({ refused: [stepFailed("A")], spawned: 2, items: [], hosts: 2 });
+    }).toEqual({
+      refused: [],
+      spawned: 2,
+      items: [
+        {
+          kind: "flow-lost",
+          call: 1,
+          label: "A",
+          said: "Two lost A: its agent stopped before it answered.",
+          acts: [NEEDS_CHOICE_WORDS.resumeStep],
+        },
+      ],
+      steps: [
+        [1, "lost"],
+        [2, "answered"],
+      ],
+      hosts: 2,
+    });
   });
 
   it("R13b (D2): a wake while a step waits for a slot makes its 9 sessions in all, never more than LIVE_STEPS_MAX live, and the waiting step's prompt is queued once", async () => {
@@ -9325,6 +9487,415 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
         lines: [],
         ends: [],
       });
+    });
+
+    // ── red-b: the lost step, its item's words and Resume (orders §D 4, as §H, §I and §J amend it; W1–W4 as the docs
+    // commit a0b31214e placed them). Every a-row and pin in this describe is red-a's, unchanged ──
+
+    /** W1 (DESIGN.md §9, "A run that can't go on"): a lost step's `flow-lost` item, cause-free. */
+    const stepLostWords = (flow: string, label: string) =>
+      `${flow} lost ${label}: its agent stopped before it answered.`;
+    /** W2 (§9, "A step lost, resumed"), as the runs queue it: the queue's mark says "VibeField: "; a step with no form
+     * ends at "answer" (§9's form rule). */
+    const resumedWords = (label: string, form = false) =>
+      `your session ended while you were working on ${label}. Finish it, then answer${form ? " in its form" : ""}.`;
+    /** W4 (§9): Resume the step, when the runtime refuses it. */
+    const resumeRefusedWords = (label: string, why: string) =>
+      `VibeField couldn't resume ${label}: ${why}`;
+    /** Each item the runs raised, as the needs port was asked for it. */
+    const raisesOf = (h: Harness) =>
+      h.items.map(({ kind, run: at, words: said, acts }) => ({
+        kind,
+        call: at.call,
+        label: at.label,
+        said,
+        acts,
+      }));
+    /** W1's raise for a lost step: Resume the step its act (Stop the run is every such item's last). */
+    const lostRaise = (flow: string, label: string, call = 1) => ({
+      kind: "flow-lost",
+      call,
+      label,
+      said: stepLostWords(flow, label),
+      acts: [NEEDS_CHOICE_WORDS.resumeStep],
+    });
+    /** ANSWERED's run, started as `start` asks, its step's agent at work. */
+    const working = async (h: Harness, start: Partial<FlowRunStartParams> = {}) => {
+      h.approved("review", ANSWERED);
+      const run = startedRun(await h.start({ flow: "review", ...start })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      return run;
+    };
+    /** ANSWERED's run, its step's agent ended in this life (closeRun's order), and the raise waited for. */
+    const lostStep = async (h: Harness, start: Partial<FlowRunStartParams> = {}) => {
+      const run = await working(h, start);
+      h.closeRun("rt-step1");
+      await within(HOLD_IDLE_MS, () => h.items.length > 0);
+      return run;
+    };
+    /** `run`'s open `flow-lost` item on the row's real needs queue, or none. */
+    const lostItemOf = (h: Harness, run: string) =>
+      needsOf(h)
+        .list()
+        .find((item) => item.kind === "flow-lost" && item.run?.run === run);
+
+    it("R13 exited, Q20 (slice 14, one item a call): a repair held on an agent that is gone, at a wake: the hold's item is ended first, one `flow-lost` in W1's words stands on the same call, nothing is refused and nothing spawned", async () => {
+      // red-b: #bind's exited road answers the call and drops the hold, and no road ends its item
+      // Kills: the hold's item not ended first (two items on one call, `live.holds` overwritten); a failure over a held
+      // repair
+      const h = await harness({ hostIdleMs: HOLD_IDLE_MS });
+      h.approved("held", HELD_TWO);
+      const run = startedRun(await h.start({ flow: "held" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(2));
+      const a = sessionOf(h, run, 1);
+      const missed = { run, call: 1, runtimeRunId: a, outcome: "completed" } as const;
+      h.endTurn({ ...missed, turn: "t1", text: "no json here" });
+      await within(PARK_MS, () => h.enqueued.length === 3);
+      h.endTurn({ ...missed, turn: "t2", text: "still none" });
+      await within(PARK_MS, () => h.items.length === 1 && left(h, 0));
+      const repair = h.raisedAs.map(({ id }) => id);
+      h.exit(a);
+      answerStep(h, run, 2, "b");
+      await within(PARK_MS, () => h.items.length > 1 || refusalsOf(h, run).length > 0);
+      expect({
+        raises: raisesOf(h).slice(1),
+        ended: h.itemsEndedById,
+        refused: refusalsOf(h, run),
+        spawned: h.spawned.length,
+        step: stepsOf(h, run).find(([call]) => call === 1),
+      }).toEqual({
+        raises: [lostRaise("Held", "A")],
+        ended: repair,
+        refused: [],
+        spawned: 2,
+        step: [1, "lost"],
+      });
+    });
+
+    it("R49 (i) (slice 14, Q7; Q29 (i)'s closeRun contrast; W1): a step's agent ended in one life, closeRun's order (gone from the fold before its end is told), with no wake: one `flow-lost` in W1's words, the step `lost`, nothing refused, no new host", async () => {
+      // red-b: nothing listens to `agents.onRunEnded`, so the step reads `working` and nothing is raised
+      // Kills: the `onRunEnded` listener dropped; the raise at `#bind` alone (this road has no wake); W1's words
+      const h = await harness();
+      const run = await lostStep(h);
+      expect({
+        raises: raisesOf(h),
+        steps: stepsOf(h, run),
+        refused: refusalsOf(h, run),
+        hosts: h.hosts.length,
+      }).toEqual({
+        raises: [lostRaise("Review", "Diff")],
+        steps: [[1, "lost"]],
+        refused: [],
+        hosts: 1,
+      });
+    });
+
+    it("R49 (ii) (slice 14, Q7; Q29 (i)'s closePending contrast, step 0's F3): a `pending` session's real end, `replacing` false at the tell: one `flow-lost` in W1's words, whether the run comes back in the same turn as an exited row (the `exit` road, its pane listed) or leaves the fold", async () => {
+      // red-b: nothing hears the end, so nothing is raised
+      // Kills: "skip every pending" (§J's second mutant): a real pending end read as a replacement's
+      const read = async (paneListed: boolean) => {
+        const h = await harness();
+        const run = await working(h);
+        h.closePending("rt-step1", run, { paneListed });
+        await within(HOLD_IDLE_MS, () => h.items.length > 0);
+        return { raises: raisesOf(h), steps: stepsOf(h, run), hosts: h.hosts.length };
+      };
+      const both = { listed: await read(true), gone: await read(false) };
+      const lost = { raises: [lostRaise("Review", "Diff")], steps: [[1, "lost"]], hosts: 1 };
+      expect(both).toEqual({ listed: lost, gone: lost });
+    });
+
+    it("R49 (iii) (slice 14, Q7, D343): your session, handed a step by `in:`, ended in one life with no wake: the step fails in 10a's words, and no item is raised", async () => {
+      // red-b: nothing hears the end, so the step waits on
+      // Kills: a handed session sent to `#lost` (a Resume with no origin to bind)
+      const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+      h.approved("handed", handedTo());
+      const run = startedRun(await h.start({ flow: "handed" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      h.closeRun("run-yours");
+      await within(HOLD_IDLE_MS, () => refusalsOf(h, run).length > 0);
+      expect({
+        refused: refusalsOf(h, run),
+        items: h.items,
+        hosts: h.hosts.length,
+      }).toEqual({ refused: [stepFailed("Yours")], items: [], hosts: 1 });
+    });
+
+    it("R46 (slice 14, Q8 (a), W2): Resume the step on a lost step's item: the runtime is asked once, its `begun: \"resume\"` binds the successor, `agents` unchanged, §9's resumed line goes to it once, the item is answered, and the run goes on", async () => {
+      // red-b: no `flow-lost` is raised, so no act is asked and no line goes
+      // Kills: `#answered`'s `flow-lost` branch dropped; `#resumed`'s bind dropped; the line sent twice; the successor
+      // counted as a new agent
+      const h = await harness({ needsQueue: true });
+      const run = await lostStep(h);
+      const agents = h.records.runRecord(run)?.agents;
+      h.resumeAs("rt-step1", "rt-resumed1", { run, call: 1 });
+      const item = lostItemOf(h, run);
+      const acted =
+        item !== undefined
+          ? (await needsOf(h).answer(item.id, 0, PRINCIPAL)).item.answer?.outcome
+          : "no item";
+      expect({
+        acted,
+        resumes: h.resumes,
+        session: sessionOf(h, run, 1),
+        steps: stepsOf(h, run),
+        agents: h.records.runRecord(run)?.agents,
+        lines: linesOf(h, "rt-resumed1", "resume").map(({ text, from }) => ({ text, from })),
+        open: openItems(h),
+      }).toEqual({
+        acted: "done",
+        resumes: ["rt-step1"],
+        session: "rt-resumed1",
+        steps: [[1, "working"]],
+        agents,
+        lines: [
+          {
+            text: resumedWords("Diff"),
+            from: { kind: "fieldd", flow: { run, call: 1, line: "resume", n: 1 } },
+          },
+        ],
+        open: [],
+      });
+      await answerWhenBound(h, run, 1, "all clean");
+      await within(PARK_MS, () => stateOf(h, run) === "done");
+      expect(h.runs.read(run)?.summary.log).toBe("all clean");
+    });
+
+    it("S14-21 (i) (slice 14, Q21, C8; R46's leg): a Stop after a Resume ends the successor, once, and never the session that ended", async () => {
+      // red-b: no Resume binds, so no successor is listed and the Stop ends nothing
+      // Kills: the successor ended twice (by `step.session` and by its live row); the successor left running
+      const h = await harness({ needsQueue: true });
+      const run = await lostStep(h);
+      h.resumeAs("rt-step1", "rt-resumed1", { run, call: 1 });
+      const item = lostItemOf(h, run);
+      if (item !== undefined) await needsOf(h).answer(item.id, 0, PRINCIPAL);
+      await h.runs.stop(run);
+      expect({ ends: h.ends, state: stateOf(h, run) }).toEqual({
+        ends: ["rt-resumed1"],
+        state: "stopped",
+      });
+    });
+
+    it("S14-21 (ii) (slice 14, Q21, C8): a Stop whose end of the call's live successor is refused, the step's record still naming the session that ended (a refused `#resumed` write): the step stays `working`", async () => {
+      // red-b: endSteps matches `step.session` alone, so a refused live row leaves the step `ended` while it works
+      // Kills: endSteps's second condition dropped (the call's live row, refused)
+      const h = await harness({ endRejects: "rt-succ1" });
+      const run = await working(h);
+      h.exit("rt-step1");
+      h.ofRunRows.set(run, [{ runtimeRunId: "rt-succ1", call: 1, live: true }]);
+      await h.runs.stop(run);
+      expect({ ends: h.ends, steps: stepsOf(h, run) }).toEqual({
+        ends: ["rt-succ1"],
+        steps: [[1, "working"]],
+      });
+    });
+
+    it("R46b (slice 14, Q8 (a), W4): a Resume the runtime refuses is refused in W4's words and acts on nothing: the item stays open and the step stays `lost`", async () => {
+      // red-b: no `flow-lost` is raised, so no act is asked
+      // Kills: the refusal returned `failed` (the item spent, the only act that can move the run); W4's words
+      const why = "the agent service is stopping";
+      const h = await harness({ needsQueue: true, resumeRefuses: why });
+      const run = await lostStep(h);
+      const item = lostItemOf(h, run);
+      const outcome =
+        item !== undefined ? await outcomeOf(needsOf(h).answer(item.id, 0, PRINCIPAL)) : "no item";
+      expect({
+        said: typeof outcome === "object" && "message" in outcome ? outcome.message : outcome,
+        open: openItems(h).length,
+        resumes: h.resumes,
+        steps: stepsOf(h, run),
+      }).toEqual({
+        said: resumeRefusedWords("Diff", why),
+        open: 1,
+        resumes: ["rt-step1"],
+        steps: [[1, "lost"]],
+      });
+    });
+
+    it("R46c (slice 14, Q7, Q15, W3): a spark's run tells that spark once, `is asking you`, when its lost step's item is minted; the item raised again at the next boot is re-bound and tells nothing", async () => {
+      // red-b: nothing is raised, so nothing is told
+      // Kills: the raise not telling (`#hold`'s road bypassed); a re-raise that tells again
+      const h = await harness({ needsQueue: true });
+      const run = await lostStep(h, VELAS);
+      const atMint = factsOf(h);
+      await booted(h);
+      await within(PARK_MS, () => h.items.length > 1);
+      expect({
+        atMint,
+        raises: raisesOf(h),
+        minted: h.raisedAs.map(({ minted }) => minted),
+        after: factsOf(h, atMint.length),
+      }).toEqual({
+        atMint: [toVela(words.factAsking, "Review", "review", run)],
+        raises: [lostRaise("Review", "Diff"), lostRaise("Review", "Diff")],
+        minted: [true, false],
+        after: [],
+      });
+    });
+
+    it("R46d (slice 14, Q8 (a), W2): a lost step resumed from Godview, no act of its item's: its `begun: \"resume\"` binds it, §9's resumed line goes once, `in its form` for a step with one, and its item ends", async () => {
+      // red-b: nothing is raised and nothing hears the resume
+      // Kills: `#resumed` not ending the item (the card stands over a bound step); §9's form rule on the line
+      const h = await harness();
+      h.approved("review", FORMED);
+      const run = startedRun(await h.start({ flow: "review" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      h.closeRun("rt-step1");
+      await within(HOLD_IDLE_MS, () => h.items.length > 0);
+      h.sessionRows.set("rt-god1", { live: true, onPermission: false });
+      h.resumed({ run, call: 1, runtimeRunId: "rt-god1" });
+      await within(HOLD_IDLE_MS, () => linesOf(h, "rt-god1", "resume").length > 0);
+      const minted = h.raisedAs.map(({ id }) => id);
+      expect({
+        raises: minted.length,
+        ended: h.itemsEndedById,
+        session: sessionOf(h, run, 1),
+        lines: linesOf(h, "rt-god1", "resume").map(({ text }) => text),
+      }).toEqual({
+        raises: 1,
+        ended: minted,
+        session: "rt-god1",
+        lines: [resumedWords("Diff", true)],
+      });
+    });
+
+    it("S14-29 (slice 14, Q29 (i), ruled 2026-11-08; §J's fake): a session replaced as main replaces one, `replacing` true from the resume's entry, its end told, the spawn gap, then the successor told: no item, no fact, the step bound to the successor, `working`, one line in all, and `replacing` read at the tell and never later", async () => {
+      // red-b: nothing hears the end or the resume, and `replacing` is never read
+      // Kills: the skip dropped (a false card and a false fact at every replacement); the read made after a deferral
+      // (a read past the tell, `later`)
+      const h = await harness();
+      const run = await working(h, VELAS);
+      const agents = h.records.runRecord(run)?.agents;
+      const replaced = h.replaceSession("rt-step1", "rt-repl1", { run, call: 1 });
+      replaced.tell();
+      await new Promise((resolve) => setImmediate(resolve));
+      replaced.enter();
+      await within(HOLD_IDLE_MS, () => sessionOf(h, run, 1) === "rt-repl1");
+      expect({
+        items: h.items,
+        facts: h.facts,
+        session: sessionOf(h, run, 1),
+        steps: stepsOf(h, run),
+        lines: h.enqueued.length,
+        agents: h.records.runRecord(run)?.agents,
+        atTell: h.replacingReads.includes("at-tell"),
+        later: h.replacingReads.filter((read) => read === "later").length,
+      }).toEqual({
+        items: [],
+        facts: [],
+        session: "rt-repl1",
+        steps: [[1, "working"]],
+        lines: 1,
+        agents,
+        atTell: true,
+        later: 0,
+      });
+      await answerWhenBound(h, run, 1, "all clean");
+      await within(PARK_MS, () => stateOf(h, run) === "done");
+      expect(h.runs.read(run)?.summary.log).toBe("all clean");
+    });
+
+    it("S14-29c (slice 14, Q29 (i), §J, the spawn-gap leg): a wake in a replacement's spawn gap, `replacing` still true and the old session in no row: its step made again mints nothing, tells nothing and refuses nothing, and the successor binds when it enters", async () => {
+      // red-b: #bind reads the gone session as exited and fails the step
+      // Kills: `#bind` not reading `replacing` (the gap's false card, or its false failure)
+      const h = await harness({ hostIdleMs: IDLE_MS });
+      h.approved("two", TWO);
+      const run = startedRun(await h.start({ flow: "two", ...VELAS })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(2));
+      expect(await parkedAt(h, run)).toEqual(PARKED);
+      const replaced = h.replaceSession(sessionOf(h, run, 1), "rt-repl1", { run, call: 1 });
+      replaced.tell();
+      answerStep(h, run, 2, "b");
+      await within(PARK_MS, () => h.hosts.length === 2);
+      await within(HOLD_IDLE_MS, () => refusalsOf(h, run).length > 0 || h.items.length > 0);
+      expect({
+        refused: refusalsOf(h, run),
+        items: h.items,
+        facts: h.facts,
+        spawned: h.spawned.length,
+        steps: stepsOf(h, run),
+      }).toEqual({
+        refused: [],
+        items: [],
+        facts: [],
+        spawned: 2,
+        steps: [
+          [1, "working"],
+          [2, "answered"],
+        ],
+      });
+      replaced.enter();
+      await within(HOLD_IDLE_MS, () => sessionOf(h, run, 1) === "rt-repl1");
+      await answerWhenBound(h, run, 1, "a");
+      await within(PARK_MS, () => stateOf(h, run) === "done");
+      expect(h.runs.read(run)?.summary.log).toBe("ab");
+    });
+
+    it("S14-29d (slice 14, Q29 (i), §J 2's origin law, the handed-session leg): a session handed a step, replaced with `replacing` true at the tell: no skip, the step still takes 10a's words, and no item is raised", async () => {
+      // red-b: nothing hears the end, so the step waits on
+      // Kills: no origin check (§J's fourth mutant): a handed session's replacement skipped, its step waiting on
+      const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+      h.approved("handed", handedTo());
+      const run = startedRun(await h.start({ flow: "handed" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      const replaced = h.replaceSession("run-yours", "rt-next", { run, call: 1 }, { own: false });
+      replaced.tell();
+      await within(HOLD_IDLE_MS, () => refusalsOf(h, run).length > 0);
+      replaced.enter();
+      expect({
+        refused: refusalsOf(h, run),
+        items: h.items,
+        spawned: h.spawned.length,
+      }).toEqual({ refused: [stepFailed("Yours")], items: [], spawned: 0 });
+    });
+
+    it("S14-30 (slice 14, Q30): a live run whose bytes a newer read rule refuses, an exited session on its open step: no item is minted, its spark is told once, `failed`, and no host starts", async () => {
+      // red-b: settled() reads nothing, so the run reads running and nothing is told
+      // Kills: a raise before NN5's read (an item, and `is asking you` before `failed`)
+      const h = await harness();
+      const approval = h.approved("evals", EVALS);
+      seededRun(h, RUN, {
+        head: {
+          flow: "evals",
+          name: "Evals",
+          hash: approval.hash,
+          starter: { by: "spark", spark: VELA },
+        },
+        lines: [reviewCall()],
+        fields: { calls: 1, open: [keptStep("rt-gone")] },
+      });
+      await booted(h);
+      expect({
+        items: h.items,
+        facts: factsOf(h),
+        state: h.records.runRecord(RUN)?.state,
+        hosts: h.hosts.length,
+      }).toEqual({
+        items: [],
+        facts: [toVela(words.factFailed, "Evals", "evals", RUN)],
+        state: "failed",
+        hosts: 0,
+      });
+    });
+
+    it("S14-32 (slice 14, Q32, C11): past close(), Resume the step is refused as closingRefused's retryable UNAVAILABLE before the runtime is asked", async () => {
+      // red-b: #answered throws its "later slice's" error for a `flow-lost` act
+      // Kills: Q32's line dropped (the Resume reaches the runtime past close())
+      const h = await harness();
+      const run = await working(h);
+      h.closeRun("rt-step1");
+      await h.runs.close();
+      const outcome = await outcomeOf(
+        h.runs.acts.answer({
+          id: "ny-item1aaaaaa" as NeedsItemId,
+          kind: "flow-lost",
+          run: { run, flow: "review", call: 1, label: "Diff" },
+          choice: 0,
+          stop: false,
+          act: NEEDS_CHOICE_WORDS.resumeStep,
+        }),
+      );
+      expect({ outcome, resumes: h.resumes }).toEqual({ outcome: STOPPING, resumes: [] });
     });
 
     // ── the pins: green at red-a, each with its mutation ──

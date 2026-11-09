@@ -404,4 +404,28 @@ describe("CP-4a2b — a session an `in:` hands a step (§13a slice 9b)", () => {
       bare: [[STEP.call, "completed", "the step's words"]],
     });
   });
+
+  it("R46d, the listener's half (slice 14, Q8 (a), Q17; D930): a flow's step entered with `begun: \"resume\"` tells `onResumed` its run, call and new session; a spawn, a re-attach, an adoption, and a resume with no flow origin tell nothing", () => {
+    // red-b: FlowStepEvents has no `onResumed`, reached through a cast, so nothing is told
+    // Kills: `entered` not telling `onResumed` (every resumed step waits on a dead session); told for any `begun`; told
+    // for a resume whose origin is no flow's
+    const events = new FlowStepEvents();
+    const told: unknown[] = [];
+    (
+      events as unknown as { onResumed?(listener: (step: unknown) => void): () => void }
+    ).onResumed?.((step) => told.push(step));
+    const enter = (runtimeRunId: string, begun: RunEntered["begun"], origin?: typeof FLOW) =>
+      events.entered({
+        agent: fakeAgent().agent,
+        runtimeRunId,
+        begun,
+        ...(origin !== undefined ? { origin } : {}),
+      });
+    enter("run-spawned", "spawn", FLOW);
+    enter("run-reattached", "reattach", FLOW);
+    enter("run-adopted", "adopt", FLOW);
+    enter("run-yours-resumed", "resume");
+    enter("run-resumed", "resume", FLOW);
+    expect(told).toEqual([{ run: FLOW.run, call: FLOW.call, runtimeRunId: "run-resumed" }]);
+  });
 });
