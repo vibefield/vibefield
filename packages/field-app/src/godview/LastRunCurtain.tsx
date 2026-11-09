@@ -82,6 +82,7 @@ export function LastRunCurtain({
                 className="vf-last-run-act"
                 onClick={onRestore}
                 disabled={restoring}
+                {...(restoring ? { "data-running": "" } : {})}
                 // the curtain is modal: its first answer takes the keys
                 autoFocus
               >

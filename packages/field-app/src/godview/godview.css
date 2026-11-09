@@ -1382,9 +1382,14 @@
   outline-offset: 2px;
 }
 
+/* §7 "Off", held while it restores: no whole-pill fade. The pill whose word says its own press is running keeps its
+   look (`data-running`, "Restoring…"); the other is off, its words in the stage's t4 at full opacity. */
 .vf-last-run-act:disabled {
-  opacity: 0.55;
   cursor: default;
+}
+
+.vf-last-run-act:disabled:not([data-running]) {
+  color: var(--text-faint);
 }
 
 @media (prefers-reduced-motion: reduce) {
