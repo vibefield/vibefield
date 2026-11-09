@@ -1,8 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { constants } from "node:fs";
 import { type FileHandle, lstat, mkdir, open, realpath, rename, rm } from "node:fs/promises";
-import { isAbsolute, join, relative, sep } from "node:path";
-import { MADE_APP_VIEW_TAIL, madeAppViewHead } from "@vibefield/contracts";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
+import { blake3 } from "@noble/hashes/blake3.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
+import { Blake3Hex, MADE_APP_VIEW_TAIL, madeAppViewHead } from "@vibefield/contracts";
 import { MADE_APP_VIEW } from "@vibefield/contracts/registries";
 import { isWithin } from "../paths";
 import type { BuildMadeViewArgs, BuildMadeViewValue, MadeViewRoots } from "../protocol";
@@ -39,10 +41,12 @@ import { WorkerFailure } from "./engine";
 //
 // THE FOLDER: an absolute path below the served root, made here one folder at
 // a time (0700) when it is not there, with no symlink on the way. The view is
-// streamed into a 0600 temp beside it (created exclusive and no-follow),
-// fsynced, the folder's real path checked again, renamed over
-// MADE_APP_VIEW.FILE, and the folder fsynced. Anything that fails before the
-// rename leaves the previous view whole and no temp.
+// streamed into a 0600 temp beside the folder (created exclusive and
+// no-follow), in the app's folder that nothing serves, so a worker killed
+// mid-build leaves nothing an origin can answer; fsynced, the folder's real
+// path checked again, renamed over MADE_APP_VIEW.FILE, and the folder fsynced.
+// Anything that fails before the rename leaves the previous view whole and no
+// temp.
 //
 // What is refused, and how: a theme `madeAppViewHead` cannot read is `invalid`
 // before anything is touched; a path outside its root, a root itself, or a
@@ -50,19 +54,19 @@ import { WorkerFailure } from "./engine";
 // FS-D7); a root that is not there is `root-missing`; a page or folder behind
 // a symlink, or a page gone, unreadable or not a regular file, is `not-found`
 // (one answer, never a map of what lies outside); a folder that is a file is
-// `not-a-directory`; a page past the bound is `too-large`; a worker started
+// `not-a-directory`; a page past the bound is `too-large`; a digest that is
+// not lowercase blake3 hex is `invalid`, and a page that is not the digest
+// named is `mismatch`; a worker started
 // without roots, with roots that are not absolute or with roots that overlap
 // answers `internal` (its own configuration, never the ask), as does anything
 // else the disk says (a full descriptor table, an I/O error): the worker's
 // trouble, never a page that is not there.
 //
 // EL2 (DR-L4): the bytes stay in this process. The answer is the view's size.
-// DR-L3: the page is not re-hashed here. The worker holds no blake3 before
-// mille-drive (DR-2), so until then the view trusts rosetta's verified
-// placement (R-1) — the wave-0 critic's missing_work 16, owed James's ruling
-// BEFORE DR-1 (B) wires a caller: (a) R-1's placement suffices until DR-2,
-// recorded at DR-L3, or (b) a blake3 dependency, and `BuildMadeViewArgs`
-// carries R-1's `page.blake3`, checked while the page is copied.
+// DR-L3 (James's mark `dr-l3-blake3-recheck`, 2026-11-06: "[b] @noble/hashes
+// in fieldd now"): the page is hashed as it is copied and held to the digest
+// rosetta's export named (`BuildMadeViewArgs.blake3`), here and never in
+// fieldd's control process.
 // Windows has no O_NOFOLLOW or O_NONBLOCK (the walk and the post-open check
 // stand alone there), and the rename is plain: `durableRename`, the cure for a
 // reader holding the view at that instant, lives in @vibefield/logging, whose
@@ -102,6 +106,8 @@ export async function buildMadeView(
     throw new WorkerFailure("internal", "this files worker's made-view roots are not absolute");
   if (typeof args?.source !== "string" || typeof args.folder !== "string")
     throw new WorkerFailure("invalid", "a view names its page and its folder by their paths");
+  if (!Blake3Hex.safeParse(args.blake3).success)
+    throw new WorkerFailure("invalid", "a view names its page's digest in lowercase blake3 hex");
   // the theme first: a theme the view cannot carry touches nothing
   const head = madeAppViewHead(args.theme);
   if (!head.ok)
@@ -115,7 +121,7 @@ export async function buildMadeView(
   const page = await openPage(sourceRoot, pageSegments);
   try {
     const folder = await viewFolder(servedRoot, folderSegments);
-    return { bytes: await writeView(servedRoot, folder, head.head, page) };
+    return { bytes: await writeView(servedRoot, folder, head.head, page, args.blake3) };
   } finally {
     await page.close();
   }
@@ -211,23 +217,24 @@ async function viewFolder(root: string, segments: readonly string[]): Promise<st
   return at;
 }
 
-/** Stream the view into a 0600 temp beside it, fsync, hold the folder's real
- * path inside the served root again, rename the temp over the view and fsync
- * the folder; anything before the rename leaves the old view whole. Answers
- * the view's size. */
+/** Stream the view into a 0600 temp beside the folder, fsync, hold the folder's
+ * real path inside the served root again, rename the temp over the view and
+ * fsync the folder; anything before the rename leaves the old view whole.
+ * Answers the view's size. */
 async function writeView(
   root: string,
   folder: string,
   head: string,
   page: FileHandle,
+  digest: string,
 ): Promise<number> {
-  const temp = join(folder, `.${MADE_APP_VIEW.FILE}.${randomBytes(8).toString("hex")}.tmp`);
+  const temp = join(dirname(folder), `.${basename(folder)}.${randomBytes(8).toString("hex")}.tmp`);
   const create = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW;
   let out: FileHandle | null = await open(temp, create, 0o600);
   let written = 0;
   try {
     written += await writeAll(out, Buffer.from(head, "utf8"));
-    written += await copyPage(page, out);
+    written += await copyPage(page, out, digest);
     written += await writeAll(out, Buffer.from(MADE_APP_VIEW_TAIL, "utf8"));
     await out.sync();
     await out.close();
@@ -247,16 +254,25 @@ async function writeView(
 }
 
 /** Copy the page in pieces, never past MADE_APP_VIEW.PAGE_MAX_BYTES: a page
- * that grew after its stat is refused, never cut. Answers the bytes copied. */
-async function copyPage(page: FileHandle, out: FileHandle): Promise<number> {
+ * that grew after its stat is refused, never cut. Each piece is hashed as it
+ * is written, and a page that is not `digest` is refused (DR-L3). Answers the
+ * bytes copied. */
+async function copyPage(page: FileHandle, out: FileHandle, digest: string): Promise<number> {
   const chunk = Buffer.allocUnsafe(CHUNK_BYTES);
+  const hash = blake3.create();
   let copied = 0;
   for (;;) {
     const { bytesRead } = await page.read(chunk, 0, CHUNK_BYTES, copied);
-    if (bytesRead === 0) return copied;
+    if (bytesRead === 0) {
+      if (bytesToHex(hash.digest()) !== digest)
+        throw new WorkerFailure("mismatch", "the page is not the one its digest names");
+      return copied;
+    }
     copied += bytesRead;
     if (copied > MADE_APP_VIEW.PAGE_MAX_BYTES) throw tooLarge();
-    await writeAll(out, chunk.subarray(0, bytesRead));
+    const piece = chunk.subarray(0, bytesRead);
+    hash.update(piece);
+    await writeAll(out, piece);
   }
 }
 

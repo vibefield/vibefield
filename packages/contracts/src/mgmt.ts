@@ -2,6 +2,7 @@ import { z } from "zod";
 import { Blake3Hex, Sha256Hex } from "./artifacts";
 import { TerminalCellRole, TerminalRouteCell, TerminalWorkloadClass } from "./envelope";
 import { UnavailableDetails } from "./errors";
+import { ServeHeaders } from "./made-app-network";
 import { CELL_SUPERVISION, FILE_TRANSFER_ROOTS, NATIVE_FLOOR_TICK, PORTS } from "./registries";
 
 // Management channel (design-01 §5.2, M2 subset): native.lifecycle.* + the mesh
@@ -897,6 +898,11 @@ export const ServeConfig = z
     routes: z.array(ServeRoute).optional(),
     /** Optional app-owned static preview root mounted ahead of the source route. */
     previewDir: z.string().min(1).optional(),
+    /** MA-3f (DR-D11 (a)) — response headers set on every response of this serve, the page and its
+     * preview route alike: a made app's policy, composed by fieldd (`madeAppServeHeaders`) and carried
+     * here, and validated again by truffle. Only a `dir` target may name them: the floor refuses them
+     * on any other, rather than dropping a policy its caller meant to be served under. */
+    headers: ServeHeaders.optional(),
     /** C3 provenance proof: when set, the serve is ONE route — the bare root `/` → the target with
      * `/<door>/<pathSecret>` as the TARGET's path, strip_prefix OFF — so the sidecar adds the secret
      * on forward, the caller dials the root knowing nothing, and the backend sees the secret on every

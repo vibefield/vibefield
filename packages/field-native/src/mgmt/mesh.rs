@@ -21,7 +21,9 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use truffle_core::proxy::{ProxyConfig, ProxyEvent, ProxyRoute, ProxyStatus, ProxyTarget};
+use truffle_core::proxy::{
+    ProxyConfig, ProxyEvent, ProxyHeader, ProxyRoute, ProxyStatus, ProxyTarget,
+};
 use truffle_core::session::PeerEvent;
 use truffle_core::synced_store::StoreEvent;
 
@@ -1042,6 +1044,10 @@ async fn serve_add(
         Ok(door) => door,
         Err(msg) => return err(id, "PRECONDITION_FAILED", -32005, &msg, false, None),
     };
+    let headers = match parse_serve_headers(params.get("headers")) {
+        Ok(headers) => headers,
+        Err(msg) => return err(id, "PRECONDITION_FAILED", -32005, &msg, false, None),
+    };
     let routes = params.get("routes").cloned().unwrap_or(Value::Null);
     let allow_globs: Vec<String> = allow
         .as_array()
@@ -1062,6 +1068,7 @@ async fn serve_add(
         path_secret,
         secret_door,
         routes: &routes,
+        headers,
     }) {
         Ok(c) => c,
         Err(msg) => return err(id, "PRECONDITION_FAILED", -32005, &msg, false, None),
@@ -1234,6 +1241,34 @@ pub struct ServeConfigInput<'a> {
     /// every other target kind, so the product and artifact shapes are
     /// byte-for-byte what they were.
     pub routes: &'a Value,
+    /// MA-3f (DR-D11 (a)) — response headers on every response of a folder serve: a made app's
+    /// policy, composed by fieldd and validated again by truffle. Any other arm refuses them.
+    pub headers: Vec<ProxyHeader>,
+}
+
+/// MA-3f — `headers`, read strictly: absent is none, and anything but a list of `{name, value}`
+/// strings refuses the add, rather than serving a page without the policy its caller named.
+fn parse_serve_headers(raw: Option<&Value>) -> Result<Vec<ProxyHeader>, String> {
+    let Some(raw) = raw else {
+        return Ok(vec![]);
+    };
+    let entries = raw.as_array().ok_or("headers must be a list")?;
+    entries
+        .iter()
+        .map(|entry| {
+            let field = |key: &str| {
+                entry
+                    .get(key)
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .ok_or_else(|| format!("headers entries need a string {key}"))
+            };
+            Ok(ProxyHeader {
+                name: field("name")?,
+                value: field("value")?,
+            })
+        })
+        .collect()
 }
 
 /// TM-2 (thinking-terminal-mesh-cells.md §3 T) — the declared route list of a
@@ -1342,7 +1377,11 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
         path_secret,
         secret_door,
         routes: declared_routes,
+        headers,
     } = input;
+    if !headers.is_empty() && target.get("kind").and_then(Value::as_str) != Some("dir") {
+        return Err("headers are only supported for dir serves".into());
+    }
     let tls = tls.unwrap_or(true); // upstream default; the product serve passes false
     if secret_door != SecretDoor::Product && path_secret.is_none() {
         return Err("secretDoor is only meaningful with pathSecret".into());
@@ -1569,7 +1608,8 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                 allow,
                 routes,
                 accept_app_capabilities: vec![], // the port arm's law: no grant forwarded
-                headers: vec![],
+                // on the serve, so the page and the preview route carry one policy (DR-D11 (a))
+                headers,
             })
         }
         _ => Err("target.kind must be port|dir|routes".into()),

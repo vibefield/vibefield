@@ -11068,6 +11068,32 @@ impl<'de> ::serde::Deserialize<'de> for SemverString {
 #[doc = "        \"type\": \"string\""]
 #[doc = "      }"]
 #[doc = "    },"]
+#[doc = "    \"headers\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"type\": \"object\","]
+#[doc = "        \"required\": ["]
+#[doc = "          \"name\","]
+#[doc = "          \"value\""]
+#[doc = "        ],"]
+#[doc = "        \"properties\": {"]
+#[doc = "          \"name\": {"]
+#[doc = "            \"type\": \"string\","]
+#[doc = "            \"maxLength\": 64,"]
+#[doc = "            \"minLength\": 1,"]
+#[doc = "            \"pattern\": \"^[A-Za-z0-9-]+$\""]
+#[doc = "          },"]
+#[doc = "          \"value\": {"]
+#[doc = "            \"type\": \"string\","]
+#[doc = "            \"maxLength\": 8192,"]
+#[doc = "            \"minLength\": 1,"]
+#[doc = "            \"pattern\": \"^[\\\\x21-\\\\x7e](?:[\\\\x21-\\\\x7e \\\\t]*[\\\\x21-\\\\x7e])?$\""]
+#[doc = "          }"]
+#[doc = "        },"]
+#[doc = "        \"additionalProperties\": true"]
+#[doc = "      },"]
+#[doc = "      \"maxItems\": 32"]
+#[doc = "    },"]
 #[doc = "    \"listenPort\": {"]
 #[doc = "      \"type\": \"integer\","]
 #[doc = "      \"maximum\": 65535.0,"]
@@ -11115,6 +11141,8 @@ impl<'de> ::serde::Deserialize<'de> for SemverString {
 pub struct ServeConfig {
     #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
     pub allow: ::std::vec::Vec<::std::string::String>,
+    #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
+    pub headers: ::std::vec::Vec<ServeConfigHeadersItem>,
     #[serde(
         rename = "listenPort",
         default,
@@ -11155,6 +11183,207 @@ pub struct ServeConfig {
 impl ServeConfig {
     pub fn builder() -> builder::ServeConfig {
         Default::default()
+    }
+}
+#[doc = "`ServeConfigHeadersItem`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"name\","]
+#[doc = "    \"value\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"name\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 64,"]
+#[doc = "      \"minLength\": 1,"]
+#[doc = "      \"pattern\": \"^[A-Za-z0-9-]+$\""]
+#[doc = "    },"]
+#[doc = "    \"value\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 8192,"]
+#[doc = "      \"minLength\": 1,"]
+#[doc = "      \"pattern\": \"^[\\\\x21-\\\\x7e](?:[\\\\x21-\\\\x7e \\\\t]*[\\\\x21-\\\\x7e])?$\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct ServeConfigHeadersItem {
+    pub name: ServeConfigHeadersItemName,
+    pub value: ServeConfigHeadersItemValue,
+}
+impl ServeConfigHeadersItem {
+    pub fn builder() -> builder::ServeConfigHeadersItem {
+        Default::default()
+    }
+}
+#[doc = "`ServeConfigHeadersItemName`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 64,"]
+#[doc = "  \"minLength\": 1,"]
+#[doc = "  \"pattern\": \"^[A-Za-z0-9-]+$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ServeConfigHeadersItemName(::std::string::String);
+impl ::std::ops::Deref for ServeConfigHeadersItemName {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ServeConfigHeadersItemName> for ::std::string::String {
+    fn from(value: ServeConfigHeadersItemName) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ServeConfigHeadersItemName {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 64usize {
+            return Err("longer than 64 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| ::regress::Regex::new("^[A-Za-z0-9-]+$").unwrap());
+        if PATTERN.find(value).is_none() {
+            return Err("doesn't match pattern \"^[A-Za-z0-9-]+$\"".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ServeConfigHeadersItemName {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for ServeConfigHeadersItemName {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ServeConfigHeadersItemName {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ServeConfigHeadersItemName {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`ServeConfigHeadersItemValue`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 8192,"]
+#[doc = "  \"minLength\": 1,"]
+#[doc = "  \"pattern\": \"^[\\\\x21-\\\\x7e](?:[\\\\x21-\\\\x7e \\\\t]*[\\\\x21-\\\\x7e])?$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ServeConfigHeadersItemValue(::std::string::String);
+impl ::std::ops::Deref for ServeConfigHeadersItemValue {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ServeConfigHeadersItemValue> for ::std::string::String {
+    fn from(value: ServeConfigHeadersItemValue) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ServeConfigHeadersItemValue {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 8192usize {
+            return Err("longer than 8192 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| {
+                ::regress::Regex::new("^[\\x21-\\x7e](?:[\\x21-\\x7e \\t]*[\\x21-\\x7e])?$")
+                    .unwrap()
+            });
+        if PATTERN.find(value).is_none() {
+            return Err(
+                "doesn't match pattern \"^[\\x21-\\x7e](?:[\\x21-\\x7e \\t]*[\\x21-\\x7e])?$\""
+                    .into(),
+            );
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ServeConfigHeadersItemValue {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for ServeConfigHeadersItemValue {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ServeConfigHeadersItemValue {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ServeConfigHeadersItemValue {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
     }
 }
 #[doc = "`ServeConfigPreviewDir`"]
@@ -20001,6 +20230,10 @@ pub mod builder {
     #[derive(Clone, Debug)]
     pub struct ServeConfig {
         allow: ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
+        headers: ::std::result::Result<
+            ::std::vec::Vec<super::ServeConfigHeadersItem>,
+            ::std::string::String,
+        >,
         listen_port: ::std::result::Result<
             ::std::option::Option<::std::num::NonZeroU64>,
             ::std::string::String,
@@ -20030,6 +20263,7 @@ pub mod builder {
         fn default() -> Self {
             Self {
                 allow: Ok(Default::default()),
+                headers: Ok(Default::default()),
                 listen_port: Ok(Default::default()),
                 name: Err("no value supplied for name".to_string()),
                 path_secret: Ok(Default::default()),
@@ -20051,6 +20285,16 @@ pub mod builder {
             self.allow = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for allow: {e}"));
+            self
+        }
+        pub fn headers<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::ServeConfigHeadersItem>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.headers = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for headers: {e}"));
             self
         }
         pub fn listen_port<T>(mut self, value: T) -> Self
@@ -20151,6 +20395,7 @@ pub mod builder {
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
                 allow: value.allow?,
+                headers: value.headers?,
                 listen_port: value.listen_port?,
                 name: value.name?,
                 path_secret: value.path_secret?,
@@ -20167,6 +20412,7 @@ pub mod builder {
         fn from(value: super::ServeConfig) -> Self {
             Self {
                 allow: Ok(value.allow),
+                headers: Ok(value.headers),
                 listen_port: Ok(value.listen_port),
                 name: Ok(value.name),
                 path_secret: Ok(value.path_secret),
@@ -20176,6 +20422,60 @@ pub mod builder {
                 serve_id: Ok(value.serve_id),
                 target: Ok(value.target),
                 tls: Ok(value.tls),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct ServeConfigHeadersItem {
+        name: ::std::result::Result<super::ServeConfigHeadersItemName, ::std::string::String>,
+        value: ::std::result::Result<super::ServeConfigHeadersItemValue, ::std::string::String>,
+    }
+    impl ::std::default::Default for ServeConfigHeadersItem {
+        fn default() -> Self {
+            Self {
+                name: Err("no value supplied for name".to_string()),
+                value: Err("no value supplied for value".to_string()),
+            }
+        }
+    }
+    impl ServeConfigHeadersItem {
+        pub fn name<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::ServeConfigHeadersItemName>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.name = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for name: {e}"));
+            self
+        }
+        pub fn value<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::ServeConfigHeadersItemValue>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.value = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for value: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<ServeConfigHeadersItem> for super::ServeConfigHeadersItem {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: ServeConfigHeadersItem,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                name: value.name?,
+                value: value.value?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::ServeConfigHeadersItem> for ServeConfigHeadersItem {
+        fn from(value: super::ServeConfigHeadersItem) -> Self {
+            Self {
+                name: Ok(value.name),
+                value: Ok(value.value),
             }
         }
     }

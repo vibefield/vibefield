@@ -56,6 +56,8 @@ export type WorkerErrorCode =
   /** a file is larger than the op admits (DR-1b: a made app's page over
    * `MADE_APP_VIEW.PAGE_MAX_BYTES`) */
   | "too-large"
+  /** MA-3f (DR-L3): a file is not the digest its ask named */
+  | "mismatch"
   | "internal";
 
 export interface WorkerError {
@@ -317,12 +319,19 @@ export interface MadeViewRoots {
 
 export interface BuildMadeViewArgs {
   /** the stored page: an absolute path below `MadeViewRoots.sourceRoot`
-   * (`<appId>/<digest>/index.html`, where rosetta places it) */
+   * (`<appId>/<digest>/index.html`, where rosetta places it). Spelled under
+   * the root exactly as fieldd named it at `init`: the ask is read lexically
+   * against that spelling, and the walk then holds it to the real root. */
   source: string;
   /** the view's folder: an absolute path below `MadeViewRoots.servedRoot`
-   * (`<appId>/<digest>`); the worker makes it when it is not there */
+   * (`<appId>/<digest>`), spelled as `source` is; the worker makes it when it
+   * is not there */
   folder: string;
   theme: MadeAppViewTheme;
+  /** MA-3f (DR-L3, James's mark `dr-l3-blake3-recheck`) — the page's BLAKE3,
+   * lowercase hex, as rosetta's export named it: checked while the page is
+   * copied, and a page that is not this digest writes no view (`mismatch`) */
+  blake3: string;
 }
 
 export interface BuildMadeViewValue {

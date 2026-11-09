@@ -625,8 +625,8 @@ export const FLOW_HOST = {
  *    PROVISIONAL: probe P4 measures a first add's latency.
  *  - DESCRIPTION_CHARS: an app's description (RO-A2, which is RO-33 in rosetta 0.1.4 by the lead's ruling on L19). A
  *    longer one costs the field, never the row.
- *  - REACH_HOSTS: the hosts a served shell names (RO-A1's answer, as data, MA-L9): the open answer's `reach` and the
- *    capture's `allowHosts` (shell.ts).
+ *  - REACH_HOSTS: the hosts a made app names (the export's `environment.hosts`, as data, MA-L9): the open answer's
+ *    `reach` and the capture's `allowHosts` (shell.ts).
  *  - INTENTS: the apps one person's keep-and-hide rows hold (`MadeAppIntentRow`, artifacts.ts; slice 3h) and the serve
  *    records one desktop keeps (`MadeAppRegistry`). A port reservation lasts for the app's life, so this bounds the
  *    reservations too.
@@ -652,9 +652,9 @@ export const MADE_APP_LIMITS = {
  * and the states a reader branches on (`MadeAppOpenRefusal`, artifacts.ts). Each is a contract string, never a
  * sentence, and names the desktop it is about (`device`) when the open was forwarded there.
  * STATE_EXPORT_UNBUILT: the app's desktop runs a rosetta with no export door (0.1.3; RO-A1 is RO-32, in 0.1.4).
- *   *Corrected 2026-11-07 (the EL8 to rosetta 0.1.4):* the pinned rosetta has the door; until MA-3f calls it, this
- *   state also means a desktop whose fieldd does not call it yet.
- *   Retryable false: nothing a retry changes until that desktop's rosetta moves.
+ *   *Corrected 2026-11-09 (MA-3f):* the pinned rosetta has the door and fieldd calls it, so this state now means a
+ *   desktop on an older build, which still answers it to a newer home.
+ *   Retryable false: nothing a retry changes until that desktop's build moves.
  * STATE_NOT_KEPT: rosetta keeps no verified bytes for the presentation (its availability is `not_captured`, `missing`
  *   or `changed_during_read`). Retryable false.
  * STATE_TOO_LARGE: rosetta did not keep the page, which is past its size bound (`too_large`). Retryable false.
@@ -2219,7 +2219,9 @@ export const LAYOUT = {
   /** MA-1a (MA §4.4; the build plan's L7 and L20) — the made apps' folders: under `artifacts/made/<appId>/`, the
    * runnable document rosetta's export writes for an app's serve (RO-A1), one folder per page digest (the serve
    * re-points, and fieldd removes the old folder). A cache VibeField can rebuild at any time (MA-L4): rosetta's copy is
-   * the truth, and fieldd names the folder and never opens a file in it. */
+   * the truth, and fieldd names the folder and never opens a file in it.
+   * *Corrected 2026-11-09 (MA-3f):* the folder holds the VIEW the files worker built (DR-1b), not rosetta's document:
+   * the export lands in DRIVE_IMPORT_DIR. fieldd's control process still opens no file in either (EL2, DR-L4). */
   ARTIFACT_MADE_DIR: ["artifacts", "made"],
   /** MA-1a (the lead's ruling on L12 and C6) — what the previews serve serves: made apps' previews ONLY, never AH's
    * live-artifact previews. After each capture fieldd hard-links the JPEG from ARTIFACT_PREVIEWS_DIR into

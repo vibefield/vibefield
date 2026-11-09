@@ -347,8 +347,8 @@ function isHostedLink(raw: string): boolean {
   return url.username === "" && url.password === "";
 }
 
-/** A host a served shell's page loads from besides its own origin (RO-A1's `hosts`, as data, MA-L9): the open
- * answer's `reach` and the capture's `allowHosts` (shell.ts). A BARE DNS name in canonical form, so no scheme, no
+/** A host a made app's page loads from besides its own origin (the export's `environment.hosts`, as data, MA-L9): the
+ * open answer's `reach` and the capture's `allowHosts` (shell.ts). A BARE DNS name in canonical form, so no scheme, no
  * port, no path and no wildcard. Its last label is not all digits, so it is never an IPv4 literal (an IPv6 one cannot
  * be spelled in the grammar). It is never a tailnet name either: the app's own origin is admitted on its own, and no
  * other `*.ts.net` host is a page's to reach (MA-L7). */
@@ -365,7 +365,7 @@ function isReachHost(host: string): boolean {
   return !/^[0-9]+$/.test(last) && host !== "ts.net" && !host.endsWith(".ts.net");
 }
 
-/** The hosts of a served shell, at most MADE_APP_LIMITS.REACH_HOSTS. */
+/** A made app's hosts, the union of its export's directives (`madeAppReachOf`), at most MADE_APP_LIMITS.REACH_HOSTS. */
 export const MadeAppReach = z.array(MadeAppReachHost).max(MADE_APP_LIMITS.REACH_HOSTS);
 export type MadeAppReach = z.infer<typeof MadeAppReach>;
 
@@ -454,7 +454,7 @@ function isNonEmpty(value: string | undefined): value is string {
   return value !== undefined && value.length > 0;
 }
 
-/** `artifact.open`: open a made app. Its desktop exports the page (RO-A1), serves it at the app's own origin and
+/** `artifact.open`: open a made app. Its desktop exports the page (RO-32), serves its view at the app's own origin and
  * answers the URL. It creates no intent; it acts inside the standing rule that an app made here opens when you open
  * it (MA §4.4, MA-L3).
  *  - appId names the app on `device`. With no `device` it is this desktop's; a foreign one forwards the call WHOLE
@@ -481,8 +481,8 @@ export const MADE_APP_OPEN_STATES = ["serving", "starting"] as const;
  *  - url: the URL the app's own listener reported, never a synthesized address (AH §6). A daemon that forwarded the
  *    open checks it again against the origin's MagicDNS name and strips it on a mismatch (validate or strip, never
  *    rewrite). A url this build cannot read is no url.
- *  - reach: the shell's hosts from RO-A1's answer, as data (MA-L9): what the page loads from besides its own origin,
- *    which a host's web view admits and nothing more (MA-L7). One this build cannot read is no reach. */
+ *  - reach: the hosts from the export's `environment.hosts`, as data (MA-L9): what the page loads besides its own
+ *    origin, which a host's web view admits and nothing more (MA-L7). One this build cannot read is no reach. */
 export const ArtifactOpenResult = z
   .object({
     state: z.enum(MADE_APP_OPEN_STATES).catch("starting"),
@@ -601,7 +601,11 @@ const MadeAppListenPort = z
  *  - lastOpenedAt: the last `artifact.open`, which is what "used" means for the idle close (L7). Durable.
  *  - retiringServeIds: serves being removed, as AH's are.
  *  - lastServedUrl: the URL its listener last reported, checked again before it is answered.
- *  - preview: the newest capture. reach: the shell's hosts from the last export. */
+ *  - preview: the newest capture. reach: the hosts the page's export named (MA-3f, `madeAppReachOf`).
+ *  - network: MA-3f — those hosts by fetch directive, `MadeAppNetworkHosts`' shape (its strict reader is
+ *    `madeAppServeHeaders`, at use: made-app-network.ts imports this file). `reach` is flat, so it cannot respell the
+ *    serve's headers, and a restart must spell the same serve.
+ *  - viewVersion: MA-3f — the MADE_APP_VIEW.VERSION the served folder was built at; another one rebuilds it. */
 export const MadeAppServeRecord = z
   .object({
     appId: MadeAppId,
@@ -615,6 +619,8 @@ export const MadeAppServeRecord = z
     lastServedUrl: z.string().max(ARTIFACT_LIMITS.URL_CHARS).optional(),
     preview: MadeAppPreview.optional(),
     reach: MadeAppReach.optional(),
+    network: z.record(z.string(), z.array(MadeAppReachHost)).optional(),
+    viewVersion: z.number().int().positive().optional(),
     createdAt: z.number().int().nonnegative(),
     updatedAt: z.number().int().nonnegative(),
   })

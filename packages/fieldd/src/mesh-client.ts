@@ -50,6 +50,9 @@ export interface ServeSpec {
   routes?: Array<{ prefix: string; targetPort: number }>;
   /** App-owned static route mounted ahead of the source root. */
   previewDir?: string;
+  /** MA-3f (DR-D11 (a)) — response headers on every response of a `dir` serve: a made app's policy.
+   * Forwarded verbatim to native.mesh.serve.add. */
+  headers?: Array<{ name: string; value: string }>;
   allow?: string[];
   /** false = plain HTTP inside WireGuard (the product serve's choice; no
    * MagicDNS-cert dependency). Forwarded verbatim to native.mesh.serve.add. */

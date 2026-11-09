@@ -187,6 +187,7 @@ fn production_cell_route_config(
         path_secret: None,
         secret_door: SecretDoor::Product,
         routes: &routes,
+        headers: vec![],
     })
     .expect("the production routes arm accepts the shape fieldd sends")
 }

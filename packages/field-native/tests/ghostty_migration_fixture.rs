@@ -128,6 +128,7 @@ done
         path_secret: up["pathSecret"].as_str(),
         secret_door: SecretDoor::Freeway,
         routes: &json!([]),
+        headers: vec![],
     })
     .unwrap();
     node.proxy().add(cfg).await.unwrap();

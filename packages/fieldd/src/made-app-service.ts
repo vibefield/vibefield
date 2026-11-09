@@ -67,6 +67,7 @@ import {
   MadeAppRegistry,
   MadeAppServeRecord,
   madeAppFoldKey,
+  type ServeHeader,
   ShellWebContentsCaptureArtifactPreviewParams,
   type ShellWebContentsCaptureArtifactPreviewResult,
 } from "@vibefield/contracts";
@@ -134,11 +135,19 @@ export interface MadeAppServeInput {
   previewDir: string;
   /** `artifacts/made/<appId>/<digest>`: the runnable document rosetta's export wrote (the `/` route). */
   folder: string;
+  /** MA-3f (DR-D11 (a)): the app's policy, set on every response of its serve. A policy change is a serve change
+   * (DR-L7), so the headers are part of the config its id carries. None is the config every older row pins. */
+  headers?: readonly ServeHeader[];
 }
+
+/** A made app's serving config: AH's, and its headers when it has any. */
+export type CanonicalMadeAppServingConfig = CanonicalServingConfigV1 & { headers?: ServeHeader[] };
 
 /** An app's complete serving config, whose digest its serve id carries: AH's routes form (preview route, then the
  * folder), key-sorted by `canonicalJson`, route order kept. Pinned by `made-app-serving.vector.json`. */
-export function canonicalMadeAppServingConfig(input: MadeAppServeInput): CanonicalServingConfigV1 {
+export function canonicalMadeAppServingConfig(
+  input: MadeAppServeInput,
+): CanonicalMadeAppServingConfig {
   return {
     v: 1,
     listenPort: input.listenPort,
@@ -148,6 +157,9 @@ export function canonicalMadeAppServingConfig(input: MadeAppServeInput): Canonic
       { allow: [], dir: input.previewDir, prefix: PREVIEW_ROUTE_PREFIX, stripPrefix: false },
       { allow: [], dir: input.folder, prefix: "/", stripPrefix: false },
     ],
+    ...(input.headers !== undefined && input.headers.length > 0
+      ? { headers: [...input.headers] }
+      : {}),
   };
 }
 
@@ -1625,6 +1637,9 @@ function appSpec(input: MadeAppServeInput): ServeSpec {
     listenPort: input.listenPort,
     target: { kind: "dir", path: input.folder },
     previewDir: input.previewDir,
+    ...(input.headers !== undefined && input.headers.length > 0
+      ? { headers: [...input.headers] }
+      : {}),
     allow: canonicalAllow(input.allow),
     tls: true,
   };
