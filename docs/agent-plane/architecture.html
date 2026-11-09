@@ -1785,9 +1785,14 @@
                         Where a spark's agent reaches VibeField. The agent runs the floor's bridge as an MCP stdio
                         server, and the bridge connects to <code>door.sock</code>. The kernel names the caller (its real
                         pid, uid and start), and the floor walks it to the pane that holds it: identity from the
-                        process, with no token (CP-L3, CP-D1). Control crosses on mgmt
-                        (<code>native.door.subscribe</code>'s snapshot then deltas, <code>native.door.close</code>,
-                        <code>native.door.info</code>). Bytes cross on a meshdata lane of the door's own, and the floor
+                        process, with no token (CP-L3, CP-D1). A helper outside every pane (a
+                        <code>run-helper</code>: Codex's app-server, a Grok leader of a run's own) is walked instead to
+                        the root fieldd named to the floor for that launch attempt, and a pane on the chain wins
+                        (OB-3d). Claude Code holds the door by its pane on the pin; Codex and Grok need puppeteer's
+                        <code>run-helper</code> declaration, not yet pinned, and hold it as plain runs only. Control
+                        crosses on mgmt (<code>native.door.subscribe</code>'s snapshot then deltas,
+                        <code>native.door.close</code>, <code>native.door.info</code>,
+                        <code>native.door.roots.set</code> and <code>.clear</code>). Bytes cross on a meshdata lane of the door's own, and the floor
                         parses no message (EL2). A door outlives fieldd, its inbound bytes held to
                         <code>NATIVE_DOOR</code>'s bounds, and the bridge outlives a floor restart for one budget.
                       </p>

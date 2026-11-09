@@ -87,7 +87,8 @@ export const AGENT_VISIBLE_STATUSES = ["supported", "preview", "deprecated"] as 
  * on a `supported` row, after a live spark of that agent is witnessed here, and
  * a `deprecated` row may keep it, because its sparks still wake (AC-D3). R23
  * holds it to the pin's `descriptor.briefing`: all three fields, and a process
- * the door can name (`mcpServerProcess: "terminal"`). The hatch's gate reads
+ * the door can name (`mcpServerProcess` `terminal` or `run-helper`, a helper of
+ * the run's own that fieldd names to the floor). The hatch's gate reads
  * it before those facts (fieldd's `spark-not-offered`), and the New spark
  * sheet reads it through `agent.providers` (`offers.spark`), never the facts. */
 export const AgentOffers = z.object({

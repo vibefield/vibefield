@@ -2486,14 +2486,18 @@
 
             <h3 id="cat-door">native.door.* — the floor's door (mgmt)</h3>
             <p class="section-note">
-              These are not product doors. They are three verbs on the management channel, fieldd's own link to the
+              These are not product doors. They are five verbs on the management channel, fieldd's own link to the
               floor, which no other caller reaches (scope <code>null</code>, <code>local</code>). field-native hosts
               the door, <code>door.sock</code> (<code>SOCKETS.DOOR</code>), 0600 in its 0700 run dir. The kernel names
               each caller: its real pid (macOS <code>LOCAL_PEERPID</code>, never the effective pid a delegated socket
               reports; Linux <code>SO_PEERCRED</code>), its uid, which must be the floor's own, and its start. The floor
               walks the caller's parents, at most <code>NATIVE_DOOR.WALK_MAX_STEPS</code> (32), to the first live
               pane's own root process that started within <code>ROOT_BIRTH_TOLERANCE_MS</code> (60 s) of the pane's
-              <code>createdAt</code>. The bytes ride a meshdata lane of their own (<code>protocol: "mcp"</code>,
+              <code>createdAt</code>. A helper outside every pane (<code>mcpServerProcess: "run-helper"</code>: Codex's
+              app-server, a Grok leader of a run's own) is named by a root instead: fieldd names its pid before its first
+              MCP-bearing request, the floor reads its start from the kernel, and a walk matches pid and start at
+              <code>START_RESOLUTION_MS</code>. A pane anywhere on the chain wins. Nothing a caller does at the door
+              reaches these verbs (EL7). The bytes ride a meshdata lane of their own (<code>protocol: "mcp"</code>,
               <code>peer: "door:&lt;connId&gt;"</code>), never mgmt (EL2), and the floor parses no message. A door
               refused at accept (<code>refused-uid</code>, <code>delegated</code>, <code>peer-gone</code>,
               <code>limit</code>) opened no lane, so the floor logs it and never announces it. A door outlives fieldd.
@@ -2505,9 +2509,11 @@
               <table class="reference-table">
                 <thead><tr><th>Verb</th><th>Params → result</th><th>Idem</th><th>What it is for</th></tr></thead>
                 <tbody>
-                  <tr><td><span class="route">native.door.subscribe</span></td><td><p><code>{}</code> → <code>NativeDoorSubscribeResult {subId, snapshot}</code>, then <code>native.door.snapshot</code> and <code>native.door.delta</code></p></td><td><p>yes</p></td><td><p>The door's one announcement, snapshot then delta. Each open door has the floor's <code>connId</code> (unique for its boot), its <code>laneId</code>, its <code>caller {pid, startedAtMs}</code>, and the <code>pane {terminalSessionId, depth}</code> the floor walked to. The pane is absent for a caller outside every pane, whose door still opens. A close says its <code>reason</code> (<code>eof</code>, <code>held-too-long</code>, <code>closed-by-fieldd</code>, an open vocabulary). <code>native.mesh.lane.subscribe</code> never announces a door's lane. A backlog coalesces into one snapshot, because the mgmt outbox closes on overflow and a same-uid caller looping on connect must not reach it (EL7).</p></td></tr>
+                  <tr><td><span class="route">native.door.subscribe</span></td><td><p><code>{}</code> → <code>NativeDoorSubscribeResult {subId, snapshot}</code>, then <code>native.door.snapshot</code> and <code>native.door.delta</code></p></td><td><p>yes</p></td><td><p>The door's one announcement, snapshot then delta. Each open door has the floor's <code>connId</code> (unique for its boot), its <code>laneId</code>, its <code>caller {pid, startedAtMs}</code>, and the <code>pane {terminalSessionId, depth}</code> the floor walked to, or, with no pane on the chain, the helper <code>root {rootId, depth}</code> (OB-3d). A row carries at most one, and both are absent for a caller outside every pane and root, whose door still opens. A close says its <code>reason</code> (<code>eof</code>, <code>held-too-long</code>, <code>closed-by-fieldd</code>, an open vocabulary). <code>native.mesh.lane.subscribe</code> never announces a door's lane. A backlog coalesces into one snapshot, because the mgmt outbox closes on overflow and a same-uid caller looping on connect must not reach it (EL7).</p></td></tr>
                   <tr><td><span class="route">native.door.close</span></td><td><p><code>NativeDoorCloseParams {connId, reason?}</code> → <code>{closed}</code></p></td><td><p>yes</p></td><td><p>fieldd closes a door, and its delta then says <code>closed-by-fieldd</code> or the reason given. A door already gone answers <code>closed: false</code>, never an error.</p></td></tr>
                   <tr><td><span class="route">native.door.info</span></td><td><p><code>{}</code> → <code>NativeDoorInfoResult {endpoint, command, args}</code></p></td><td><p>yes</p></td><td><p>The bridge a spark's agent runs: the door's absolute path, the floor's own executable, and <code>["door", "--endpoint", &lt;endpoint&gt;]</code>. It is asked at every launch, so an app update or a dev target never leaves a stale path. A platform with no door answers <code>UNAVAILABLE {service: "door"}</code>; on Windows, a named pipe's client pid is outside CP-1a.</p></td></tr>
+                  <tr><td><span class="route">native.door.roots.set</span></td><td><p><code>NativeDoorRootsSetParams {rootId, pid}</code> → <code>{startedAtMs}</code></p></td><td><p>yes</p></td><td><p>OB-3d: this process is the root of a launch attempt's helper tree (<code>rootId</code> is the attempt's). The floor reads the start itself. Refused <code>PRECONDITION_FAILED</code> with <code>details.reason</code>: <code>pid-unreadable</code>, or <code>pid-held</code> when another root holds the pid. Another pid under the same id replaces the root (a helper reborn). A floor that refuses never costs a run its start: fieldd logs it and the run holds nothing at the door.</p></td></tr>
+                  <tr><td><span class="route">native.door.roots.clear</span></td><td><p><code>NativeDoorRootsClearParams {rootId}</code> → <code>{cleared}</code></p></td><td><p>yes</p></td><td><p>The run ended or the attempt failed. A root already gone answers <code>cleared: false</code>. The floor also drops a root when its process is gone or its pid is a later process's.</p></td></tr>
                 </tbody>
               </table>
             </div>
