@@ -1,0 +1,9 @@
+{
+  "kind": "UNAVAILABLE",
+  "retryable": true,
+  "details": {
+    "service": "apps",
+    "state": "library-reading",
+    "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9"
+  }
+}

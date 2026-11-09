@@ -125,6 +125,10 @@ public struct HomeScreen: View {
   /// UM-4 — the meters, through the home (its one door, UM-D8 A), and the Agent Profiles page's sheet. The one lens
   /// on the home's profiles stands with search's state (SE-2): the page, the hold and the token set that one value.
   @State private var meters = MetersFeed()
+  /// MA-6c — the apps your agents made, through the home (the same door as the meters), for the strip and the group.
+  @State private var apps = AppsFeed()
+  /// The word for the home when the roster names none (interim, ‹for James›).
+  private static let appsHere = "Your desktop"
   @State private var agentProfilesOpen = false
   /// UM-4 (UM-D24 A) — the held face's standing (a let-go or a hold taken away closes it), and where the corner's
   /// face stands in the window.
@@ -1163,15 +1167,18 @@ public struct HomeScreen: View {
       if let mock {
         meters.clock = { MetersFixtureDoor.now }
         meters.attach(scenePhase == .active ? mock.metersDoor : nil, home: mock.home)
+        apps.attach(scenePhase == .active ? mock.appsDoor : nil, home: mock.home)
         return
       }
     #endif
     guard scenePhase == .active, let link, let home = link.home, link.fieldIsLive, let client = link.client(for: home)
     else {
       meters.attach(nil, home: linkHome)
+      apps.attach(nil, home: linkHome)
       return
     }
     meters.attach(client, home: home)
+    apps.attach(client, home: home)
   }
 
   /// The home's name in the meters' words (§9: "Read a minute ago, from studio").
@@ -1310,8 +1317,19 @@ public struct HomeScreen: View {
       },
       onLive: openLiveRow, onPast: openPastRow,
       onAct: { act in PhoneSearchWorld.act(act, state: &search, lens: &lens) },
-      // MA-6's seams (MA-D7): the Apps strip and Everything's Apps group, empty until MA-6 fills them
-      appsStrip: { EmptyView() }, appsGroup: { EmptyView() }
+      // MA-6's seams (MA-D7): the Apps strip and Everything's Apps group. An icon's open and All apps arrive with the
+      // shelf (6e).
+      appsStrip: {
+        if let strip = AppsStripContent.of(reading: apps.reading, opened: [], here: Self.appsHere) {
+          AppsStripView(content: strip, onOpen: { _ in }, onAll: {})
+        }
+      },
+      appsGroup: {
+        let words = searchQuery.trimmingCharacters(in: .whitespaces)
+        if let group = AppsSearchGroup.of(reading: apps.reading, words: words, here: Self.appsHere) {
+          AppsSearchGroupView(group: group, terms: content.terms, onOpen: { _ in })
+        }
+      }
     )
     .padding(.horizontal, SearchSheet.side)
     .padding(.bottom, (barTyping ? AppBar.fieldHeightTyping : AppBar.height) + SearchSheet.gapAboveField)
@@ -1327,12 +1345,19 @@ public struct HomeScreen: View {
   private func askSearch() async {
     let words = searchQuery.trimmingCharacters(in: .whitespaces)
     searchAsking = !words.isEmpty
-    guard !words.isEmpty else { return }
+    guard !words.isEmpty else {
+      await apps.ask("")
+      return
+    }
     try? await Task.sleep(for: SearchSheet.askAfter)
     guard !Task.isCancelled else { return }
     switch search.scope {
     case .live: await historyDesktops.searchLive(words, runs: PhoneSearchWorld.runs(searchLive))
-    case .everything: await historyDesktops.search(words, kind: search.kind)
+    case .everything:
+      let feed = apps
+      async let appsAsked: Void = feed.ask(words)
+      await historyDesktops.search(words, kind: search.kind)
+      await appsAsked
     }
     guard !Task.isCancelled else { return }
     searchAsking = false

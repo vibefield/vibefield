@@ -467,6 +467,13 @@ const requiredMirrors = [
     ["Tests/FieldProductTests"],
   ],
   ["made-apps", madeAppGoldens.map((name) => `made-apps/${name}`), ["Tests/FieldHomeTests"]],
+  // MA-6c — what the apps' demo door answers under `-vf-mock-apps=` (AppsFixtureDoor), and the names the feed's rows read
+  [
+    "apps",
+    ["index-apps.valid.json", "error-data.apps-reading.json", "project-list.valid.json"],
+    ["Sources/FieldHome"],
+  ],
+  ["apps", ["project-list.valid.json"], ["Tests/FieldHomeTests"]],
   // IOS-12d — the needs-you card's goldens (in their own folder), and the items and the catalog Chat's demo door
   // answers its cards with under `-vf-mock` (ChatFixtureDoor's `-vf-needs-case=`)
   ["needs-card", needsCardGoldens.map((name) => `needs-card/${name}`), ["Tests/FieldProductTests"]],

@@ -146,6 +146,9 @@
     /// its usage state), only while studio answers. One door for the mock's life, so the feed is not re-attached.
     var metersDoor: MetersFixtureDoor? { standing == .up ? metersFixture : nil }
     private let metersFixture = MetersFixtureDoor.launched()
+    /// MA-6c — the home's door for the apps (`-vf-mock-apps=` picks the state; `off` hands the feed no door).
+    var appsDoor: AppsFixtureDoor? { standing == .up && appsFixture.state != .off ? appsFixture : nil }
+    private let appsFixture = AppsFixtureDoor.launched()
 
     func signIn() { standing = .up }
 
