@@ -336,8 +336,11 @@
   color: var(--vf-profiles-solid);
 }
 
+/* §7 "Off": a pill that is off gives up its own look for the quiet pill's, the quiet fill (the kit's 5%), so a primary
+   loses its inversion and its words wear t4 at full opacity; a whole pill faded to 0.4 is not an off pill */
 .vf-profiles-limit-act:disabled {
-  opacity: 0.4;
+  background: color-mix(in srgb, var(--vf-foreground) 5%, transparent);
+  color: var(--vf-text-faint);
   cursor: default;
 }
 
@@ -361,9 +364,13 @@
 }
 
 .vf-profiles-pop-name {
+  min-width: 0;
+  overflow: hidden;
   font-size: 14px;
   font-weight: 600;
   line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .vf-profiles-pop-tag {
@@ -373,12 +380,15 @@
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
+  white-space: nowrap;
   color: var(--vf-text-secondary);
 }
 
 .vf-profiles-pop-age {
+  flex: none;
   font-size: 11.5px;
   line-height: 1.2;
+  white-space: nowrap;
   color: var(--vf-text-tertiary);
 }
 
@@ -394,6 +404,12 @@
   background: color-mix(in srgb, var(--vf-foreground) 6%, transparent);
   color: var(--vf-text-secondary);
   cursor: pointer;
+}
+
+/* the fill's step under the pointer (§7), the ready fill's own 14%, its ink the primary; no transition */
+.vf-profiles-pop-close:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
+  color: var(--vf-text-primary);
 }
 
 .vf-profiles-pop-body {
@@ -541,6 +557,10 @@
   cursor: pointer;
 }
 
+.vf-profiles-pop-row-act:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
+}
+
 /* Sign in while Settings is open: there is no page to open, so it is off — its word in t4 (§2.4 "Off"), as the add */
 .vf-profiles-pop-row-act:disabled {
   color: var(--vf-text-faint);
@@ -572,7 +592,15 @@
   color: var(--vf-text-tertiary);
 }
 
+.vf-profiles-pop-lens {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .vf-profiles-pop-open {
+  flex: none;
   margin-left: auto;
   padding: 0;
   border: 0;
@@ -580,7 +608,20 @@
   color: var(--vf-text-secondary);
   font: inherit;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
+}
+
+.vf-profiles-pop-open:hover:not(:disabled) {
+  color: var(--vf-text-primary);
+}
+
+/* the keyboard's ring, always (§7): ×, a row's act and Agent Profiles… */
+.vf-profiles-pop-close:focus-visible,
+.vf-profiles-pop-row-act:focus-visible,
+.vf-profiles-pop-open:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
 }
 
 /* …and Agent Profiles… the same way */
@@ -644,6 +685,7 @@
 }
 
 /* …and the ring and the hover change at once, as under Reduce Motion */
+.vf-godview[data-godview-animations="off"] .vf-profiles-limit-act,
 .vf-godview[data-godview-animations="off"] .vf-profiles-circle,
 .vf-godview[data-godview-animations="off"] .vf-profiles-add {
   transition: none;
@@ -656,6 +698,7 @@
     opacity: 0.6;
   }
 
+  .vf-profiles-limit-act,
   .vf-profiles-circle,
   .vf-profiles-add {
     transition: none;

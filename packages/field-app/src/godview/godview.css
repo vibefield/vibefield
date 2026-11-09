@@ -690,8 +690,12 @@
   background: var(--text-main);
 }
 
+/* §7 "Off", in the strip's own skin: its hairline and its t4 at full opacity (UM-R5; a whole pill faded to 0.4 is not
+   an off pill). `--text-faint` is the strip's t4, the stage's own ink, so no T4_USES row counts it. */
 .vf-monitor-moment-act:disabled {
-  opacity: 0.4;
+  border-color: var(--panel-border);
+  color: var(--text-faint);
+  background: transparent;
   cursor: default;
 }
 

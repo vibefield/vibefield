@@ -1096,7 +1096,7 @@ describe("closing is one act (UM-R3): the pin, the pointer's hold and the keyboa
 
 describe("the card's details (UM-R5): §7 'Off', the truncations, the rings, the motion-off lists", () => {
   const block = (selector: string): string => {
-    const escaped = selector.replace(/[.:*+?^${}()|[\]\\]/gu, "\\$&");
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
     return new RegExp(`\\n${escaped} \\{[^}]*\\}`, "u").exec(CSS)?.[0] ?? "";
   };
 

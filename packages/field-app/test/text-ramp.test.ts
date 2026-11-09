@@ -139,6 +139,7 @@ const T4_USES: Readonly<Record<string, number>> = {
   // UM-3 (§8 "Godview's profiles column"): the add while Settings is open, a control that is off — and, since the
   // review, a popover's Agent Profiles… and Sign in the same way (§8 "No act is inert")
   "packages/field-app/src/godview/profiles-column/profiles-column.css · .vf-profiles-add:disabled": 1,
+  "packages/field-app/src/godview/profiles-column/profiles-column.css · .vf-profiles-limit-act:disabled": 1,
   "packages/field-app/src/godview/profiles-column/profiles-column.css · .vf-profiles-pop-open:disabled": 1,
   "packages/field-app/src/godview/profiles-column/profiles-column.css · .vf-profiles-pop-row-act:disabled": 1,
   "packages/field-app/src/panels/agents/agents-settings.css · .vf-agents-chevron": 1,
