@@ -639,6 +639,10 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 - Landed 11-07: **item 216, item 192's census row** (`system-shutdown-census.test.ts:519`; M204 `339d0a26e`; LANDED
   "Item 216"): the row awaits the replaced PTY's leaving fieldd's inventory, which comes over a socket the successor's
   birth does not; test-only, the probe P1 its proof (run 200's red at the parent, every time).
+- Landed 11-09: **item 213 (2)**, design-system.test.tsx's restructure (audited `a6c189ed6`, landed `f31871864`, M243,
+  run 243, an ff of `0b98488bf`; LANDED "Item 213 (2)"): two rows keep the whole catalog, four mount their one preview
+  and the Studio's two run over the page with its sections stubbed; test-only. The theme row's split waits on the
+  20-verify watch and a new ruling after beta.1.
 - In flight:
   - item 203's VF-W3a (the closed agent-forwarder role), built and reviewed, landing in EL8-1's chain;
   - the sibling lanes, filed by James on 11-06: puppeteer #64 rv/pup-monitor (#84, #81, #9) and #65

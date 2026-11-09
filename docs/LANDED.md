@@ -44576,3 +44576,75 @@ product defect (item 213's class).
     slice's: item 200's class by a9, a recurrence after run223, run235 and run240 (a9's verdict note to VF-PM, 01:13Z).
 
 **Owed.** gate:landing, landing-only. The slice touches none of its rows' code.
+
+## Item 213 (2) — design-system.test.tsx stops rendering the whole catalog in every row: two rows keep the page, four mount their one preview, and the Studio's two run over the shipping page with its sections stubbed (test-only)
+
+(2026-11-09; one commit, prod-builder's, in `/Volumes/SamsungRed/lanes/item213/vibe-field`, branch
+`fix/item213-2-on-0b98488bf`: `f31871864` (tree `c2f0971c023c`) on main `0b98488bf`.
+- **The cuts.** The first cut `d66f584e3` on main `75adb9a06` was superseded. The amended tip `a6c189ed6` on `75adb9a06`
+  was audited clean by VF-PM at 2026-11-07 13:43:15Z (`lanes/item213/packet-2/superseded-a6c189ed6/`).
+  `git replay` re-cut it onto main `c27ab9b2d` as `779ab4456` (VF-PM 02:22:19Z; verified, then overtaken when main moved
+  at 02:34:23Z), and onto main `0b98488bf` as `f31871864` (VF-PM 02:35:49Z). Each re-cut held the two patch-ids of
+  `a6c189ed6` (-U0 `a8117d6b07ad`, default `bb8f6615f35e`) and its message byte for byte.
+- **The mint and the land.** Minted as M243 (run 243, vf-m2, a9; V GREEN 02:41:08Z → 02:46:55Z, verdict `m2-pb243.done`,
+  sha256 `41f8ea43…`). Landed `f31871864` (2026-11-09T02:53:33Z), a fast-forward of one onto main `0b98488bf`, as M243.
+  The packet is `lanes/item213/packet-2/`, SUMS `c8c81696…`.)
+
+**Why.** Item 213 (1) stopped the late ack from redding a run. It left the rows as slow as they were. Every row's
+beforeEach rendered the whole 13-section catalog, and on CI that render was most of each row's time.
+- Over the scan's 200 CI logs (`lanes/item213/plan-2/per-row.txt`) the file's median was 147.6 s and its worst 525.7 s,
+  and 41 row-runs reached 60 s or more.
+- The launcher's row is one read with no click, yet it reached 107.8 s. Its preview mounted alone, in
+  godview-pane-launcher-preview.test.tsx, had a median of 0.4 s and a worst of 2.2 s over the same logs.
+- VF-PM ruled the plan (`lanes/item213/plan-2/plan.md`) at 2026-11-07 13:16:40Z, with every lean as written.
+
+**What is real** (lines at `f31871864`, in `packages/field-app/test/`):
+- `design-system.test.tsx`:
+  - The two rows whose subject is the page keep a page beforeEach (`:77`): the inventory (`:83`) and the theme and
+    component-state controls (`:844`).
+  - Rows 5–8 (`:1004`, `:1145`, `:1198`, `:1213`) each mount their one exported preview. They sit in a second describe
+    of the same name (`:1003`), so each row's full name and its CI history carry on.
+- `design-system-shell.test.tsx` (new): the Studio's two rows (`:101`, `:135`) run over the SHIPPING `DesignSystemPage`,
+  its twelve other sections `vi.mock`'d to a bare `<section id>` (`:29`–`:49`). A third row (`:166`) holds the stubs
+  bare: twelve sections in page order, each with its id alone and no child, beside the real Overview.
+- `late-ack-runner.ts`, comments only: a dated correction of "renders the whole catalog" (`:12`), and the retire
+  condition (`:22`) amended and dated (`:25`, VF-PM's Q7). The shim stays.
+- **ONE assertion change**, the independent read's F1 (VF-PM, 2026-11-07 13:38:20Z): three checks at the end of the
+  inventory row (`:834`–`:841`). They hold that the page mounts the spawn bloom's two catalog wrappers and the
+  launcher's four Under Work captions, which old rows 6 and 7 had held by their lookups and their page-wide count.
+  - At this base the inventory row is 230 → 233 `expect(`, and the total over the rows is 365 → 372 with the stub row's
+    4. Every other row's count is equal (`packet-2/expect-count-old.txt`, `expect-count-new.txt`).
+  - **The commit's message states 228 → 231 and 363 → 370.** Those are its build base's numbers (`75adb9a06`). HG-2's
+    two checks (`987cca00e`) reached the inventory row on main in between, and a proof-form re-cut keeps the message.
+  - Rows 1, 2 and 4 are byte-identical to their old bodies; rows 5–8 differ only by their mounts
+    (`packet-2/row-diffs.txt`).
+
+**What is not.**
+- The inventory and theme rows still render the whole page, and this slice changes neither part of the theme row. Their
+  worst on CI over the scan's logs were 90.3 s and 121.5 s, 22 of the 41 row-runs at 60 s or more.
+- Push 119's verify `42393671496` (main `e588849d9`, the old shape) had the theme row at 118,282 ms
+  (`lanes/item213/push119-read/rows.txt`). That is the whole row: vitest 3.2.7's clock spans the beforeEach, the body
+  and the afterEach, and each of the three has its own 120 s budget. The log cannot split it.
+- CI has not run the new shapes. Run 243 is one quiet mini's time, and no CI time here is measured.
+- No src/, CSS, lock, package.json, vitest config or digest path moves. VF-PM's path check prints nothing.
+
+**Verified** (run 243, `f31871864`; `lanes/vf-m2/run243-a9-results/run243/verify.clean.log`, SUMS `42251506…`):
+- `pnpm verify` exit 0; vitest 14,427 / 0 failed / 21 skipped over 988 files; field-app 326 files and 4,526 tests.
+- Against run 242 (M242, `519132f1a`): +1 vitest file and +1 test; biome "Checked 3536 files" (`:751`) is +1;
+  check-test-temp-roots "267 of 1134" (`:197`) is +1. VF-PM read the other count lines as set-equal.
+- `test/design-system.test.tsx (6 tests)` took 8,786 ms (`:10928`). In run 242 the file was 8 tests at 61,536 ms
+  (`run242/verify.clean.log:14330`, the same host).
+- `test/design-system-shell.test.tsx (3 tests)` took 59 ms (`:12328`).
+- The only rows of the two files above vitest's 300 ms print threshold are the slow pair: the inventory at 3,648 ms
+  (`:10929`) and the theme controls at 4,719 ms (`:10930`).
+- `Timeout calling "onTaskUpdate"` printed 0 times, and `Errors` is 0 (a9's verdict).
+- The Mac door rows and mutations Ma–Me ran at the build base `75adb9a06`; the commit's message and `packet-2/` hold
+  them. Md and Me are F1's own reds. No Mac row ran at the re-cuts (VF-PM 02:22:19Z), so run 243 is this tree's first
+  run.
+
+**Owed.**
+- The 20-verify watch: `lanes/item213/plan-2/per-row-v2.py --main --last 20`, over CI verifies of main from this land
+  on. It is the shim's retire measure (`late-ack-runner.ts:22`) and the trigger for the split below.
+- The theme row's split (Q4): a new plan for VF-PM's ruling after beta.1, not a fold into this commit (VF-PM,
+  2026-11-07 17:45:15Z).
+- gate:landing, landing-only. The slice touches none of its rows' code.
