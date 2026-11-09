@@ -387,8 +387,14 @@ async function harness(
     },
   };
   /** Red-b — a successor listed live in the fold, as `enter` lists it (agent-runtime.ts:3203@a08b28f5d), by its step's
-   * flow origin; and its `begun: "resume"` told, as FlowStepEvents tells `onResumed` (:3209, Q8 (a)). */
-  const listSuccessor = (next: string, step: ResumedAt) => {
+   * flow origin; and its `begun: "resume"` told, as FlowStepEvents tells `onResumed` (:3209, Q8 (a)). The red-b fold
+   * (red-b-check #3, 2026-11-09): a handed session's successor is `own: false`: it carries no flow origin and no
+   * `ofRunRows` row, as `replaceSession`'s doc says (the record's own origin, agent-runtime.ts:3468@a08b28f5d). */
+  const listSuccessor = (next: string, step: ResumedAt, own = true) => {
+    if (!own) {
+      sessionRows.set(next, { live: true, onPermission: false });
+      return;
+    }
     sessionRows.set(next, {
       live: true,
       onPermission: false,
@@ -712,7 +718,7 @@ async function harness(
         goneFromFold.add(old);
       },
       enter: () => {
-        listSuccessor(next, step);
+        listSuccessor(next, step, own);
         replacingNow.delete(old);
         if (own) tellResumed(next, step);
       },
@@ -7875,9 +7881,12 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
   });
   /** SLOT_WAKE's run in `h` to its wake (F9's road, the re-read's Q8): its first life journals the
    * gate, the parts and E (S's and N's call lines refused by the disk, each logged in `refused`),
-   * all LIVE_STEPS_MAX slots taken, parked holding; then S's line is kept with no entry, E's
-   * session exits, and your gate act wakes it. Each state S's entry takes on the record's `open`,
-   * in order, is kept in `states`. */
+   * all LIVE_STEPS_MAX slots taken, parked holding; then S's line is kept with no entry, and your
+   * gate act wakes it. E's session stays live, and its answer reaches the wake: its turn's end is
+   * told at the read of E's session in #bind, inside E's own hand-on, the one instant N is still
+   * held. Each state S's entry takes on the record's `open`, in order, is kept in `states`.
+   * *Moved 2026-11-09 (slice 14's red-b fold, orders §N): E's session exited here, so #bind
+   * answered E at once; under Q7 an exited spawned step takes `#lost` and answers nothing.* */
   const slotWake = async (h: Harness, refused: string[], states: string[]) => {
     let firstLife = true;
     const write = h.records.writeRunRecord.bind(h.records);
@@ -7906,27 +7915,45 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     const parked = { state: stateOf(h, run), left: left(h, 0), kinds: h.kinds(run) };
     firstLife = false;
     h.records.appendRun(run, slotS(FLOW_LIMITS.LIVE_STEPS_MAX + 2));
-    h.exit(sessionOf(h, run, FLOW_LIMITS.LIVE_STEPS_MAX + 1));
+    const e = sessionOf(h, run, FLOW_LIMITS.LIVE_STEPS_MAX + 1);
+    const { sessions } = h.runs.ports;
+    const sessionRow = sessions.of.bind(sessions);
+    let told = false;
+    vi.spyOn(sessions, "of").mockImplementation((runtimeRunId) => {
+      const row = sessionRow(runtimeRunId);
+      // past S's entry, written `waiting` at its re-make: this read is E's own #bind
+      if (runtimeRunId === e && !told && states.includes("waiting")) {
+        told = true;
+        answerStep(h, run, FLOW_LIMITS.LIVE_STEPS_MAX + 1, "e");
+      }
+      return row;
+    });
     const acted = await gateActed(h, run, "slots", "Go");
     return { run, parked, acted };
   };
   /** SLOT_WAKE's journal through E's answer at the wake: head, 10 calls, your answer, E's. */
   const THROUGH_E = 1 + (FLOW_LIMITS.LIVE_STEPS_MAX + 2) + 2;
 
-  it("JB8 (J1; F9, the re-read's Q8; ruled 2026-11-08 (b)): an ending set inside an answer's own turn starts no slotted step: at a wake, E's session exited, so #bind answers E made again at once; that answer releases N, held, whose call line crosses, so the run ends `flood` in E's turn, and S, waiting for the slot E's answer freed, is never started", async () => {
+  it("JB8 (J1; F9, the re-read's Q8; ruled 2026-11-08 (b); moved at slice 14's red-b fold, §N): an ending set inside an answer's own turn starts no slotted step: at a wake, E's session live and its turn's end told as #bind reads it, that answer releases N, held, whose call line crosses, so the run ends `flood` in E's turn, and S, waiting for the slot E's answer freed, is never started", async () => {
     // red at the cut: no bound is read, so N's line is kept and the run goes on: S starts in the
     // slot E freed (its entry `waiting`, `starting`, then `working`; `spawned` gains call 10; the
     // record's `agents` reads 9), and the run never ends `flood`. Kills (the mutant pass's
     // Finding 2): `#unslot` without its return on `live.ending` (m27): E's answer settles its step,
     // a slot frees, and #unslot starts S for a run that is leaving: its entry written `starting`,
     // one more of the run's `agents` reserved and its agent spawned (`spawned` gains call 10), and
-    // the end's tail ends that agent too (`ended` 8, by read). The road, by read at b3a6c6435: S,
+    // the end's tail ends that agent too (`ended` 9, by read). The road, moved 2026-11-09 (slice
+    // 14's red-b fold, orders §N, the third moved assertion after §L #7; red-b-check #2): it was E's
+    // session exited, so #bind answered E made again at once, and under Q7 that step takes `#lost`,
+    // which answers nothing and drains nothing. E's session now stays live. By read at 3594b3111: S,
     // made again, is entered `waiting` (#entered: every slot taken);
     // N, new, is held (D7: E's line not yet made again); E, made again last, is handed on
-    // (replay.ts's call), and #bind answers it (runs.ts's #bind); #answer keeps E's line, and its
+    // (replay.ts's call) and #bind reads its session; the turn end told at that read is
+    // #turnEnded's, an answer in the hand-on's own turn; #answer keeps E's line, and its
     // `replay.answered` drains N (#unhold): N's line refused full, #full ends the run; #lagging's
-    // #unslot then reads the ending (its first line). No src hook: the run's own roads, its store
-    // and its sessions are the harness's
+    // #unslot then reads the ending (its first line). A turn end told after the hand-on would come
+    // too late: replay.ts's `call` releases N as the hand-on returns, so N's line would cross with
+    // no answer in that turn, and #unslot would never run on this ending. No src hook: the run's own
+    // roads, its store and its sessions are the harness's (slotWake's `sessions.of` spy tells it)
     // the calibration, as JB4's: a first run at the default bound, its journal's bytes through E's
     // answer
     const first = await harness({ hostIdleMs: IDLE_MS });
@@ -7967,8 +7994,9 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       host: "flood",
       spawned: Array.from({ length: FLOW_LIMITS.LIVE_STEPS_MAX }, (_, i) => i + 2),
       agents: FLOW_LIMITS.LIVE_STEPS_MAX,
-      // the flood's end takes the parts' agents alone: E's exited, and S's never started
-      ended: FLOW_LIMITS.LIVE_STEPS_MAX - 1,
+      // the flood's end takes the parts' agents and E's, live to the end (red-b fold, §N: 7 + 1,
+      // where E exited it read 7); S's never started
+      ended: FLOW_LIMITS.LIVE_STEPS_MAX,
       states: ["waiting"],
       said: { full: 1, host: 0 },
       hosts: 2,
@@ -9833,7 +9861,8 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
 
     it("S14-29d (slice 14, Q29 (i), §J 2's origin law, the handed-session leg): a session handed a step, replaced with `replacing` true at the tell: no skip, the step still takes 10a's words, and no item is raised", async () => {
       // red-b: nothing hears the end, so the step waits on
-      // Kills: no origin check (§J's fourth mutant): a handed session's replacement skipped, its step waiting on
+      // Kills: no origin check on the `onRunEnded` listener's half (§J's fourth mutant; `#bind`'s half is S14-29e's): a
+      // handed session's replacement skipped, its step waiting on
       const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
       h.approved("handed", handedTo());
       const run = startedRun(await h.start({ flow: "handed" })).run;
@@ -9841,6 +9870,28 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       const replaced = h.replaceSession("run-yours", "rt-next", { run, call: 1 }, { own: false });
       replaced.tell();
       await within(HOLD_IDLE_MS, () => refusalsOf(h, run).length > 0);
+      replaced.enter();
+      expect({
+        refused: refusalsOf(h, run),
+        items: h.items,
+        spawned: h.spawned.length,
+      }).toEqual({ refused: [stepFailed("Yours")], items: [], spawned: 0 });
+    });
+
+    it("S14-29e (slice 14, Q29 (i), §J 2's origin law, §N; `#bind`'s half): a session handed a step, replaced with `replacing` true, its end told between restore() and settled(), then the wake: no skip and no wait, the step takes 10a's words, and no item is raised", async () => {
+      // red-b's fold: settled() is the shim's no-op, so nothing wakes and nothing is refused
+      // Kills: no origin check on `#bind`'s half (§J's fourth mutant; S14-29d kills the listener's): a handed session's
+      // step, its session gone and `replacing` true at the wake, left waiting
+      const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+      h.approved("handed", handedTo());
+      const run = startedRun(await h.start({ flow: "handed" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      await h.reopen();
+      restored(h.runs);
+      const replaced = h.replaceSession("run-yours", "rt-next", { run, call: 1 }, { own: false });
+      replaced.tell();
+      await settledBoot(h.runs);
+      await within(PARK_MS, () => refusalsOf(h, run).length > 0);
       replaced.enter();
       expect({
         refused: refusalsOf(h, run),
