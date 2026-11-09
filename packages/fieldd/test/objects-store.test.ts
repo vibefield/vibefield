@@ -72,7 +72,7 @@ describe("the registry (OB-3a, OB-L1)", () => {
     h.desk.hand(edited, "run-a");
     // an agent gives itself the object
     const body = JSON.parse(readFileSync(fileOf(h.root, edited), "utf8"));
-    body.grants.push({ run: "run-evil", how: "handed", at: 1 });
+    body.grants.push({ holder: "run-evil", how: "handed", at: 1 });
     writeFileSync(fileOf(h.root, edited), JSON.stringify(body));
     const bare = JSON.parse(readFileSync(fileOf(h.root, unsigned), "utf8"));
     delete bare.signature;
@@ -176,7 +176,7 @@ describe("the person's acts on who holds what (OB-L1, OB-D9)", () => {
     expect(
       h.desk.registry
         .get(note)
-        ?.grants.map((g) => g.run)
+        ?.grants.map((g) => g.holder)
         .sort(),
     ).toEqual(["run-a", "run-b"]);
   });

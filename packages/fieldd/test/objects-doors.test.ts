@@ -5,13 +5,13 @@ import { type ObjectDoorsApi, registerObjectDoors } from "../src/objects/doors";
 import type { ToolPlaneAudit } from "../src/tool-plane";
 import { cleanupWorlds, DOC, world } from "./desk-fixtures";
 
-// OB-3a — the window's door: nine `objects.*` rows, local-only, each held to a window's own token (a scope alone is not
+// OB-3a — the window's door: ten `objects.*` rows, local-only, each held to a window's own token (a scope alone is not
 // the person's window), and the person's acts audited. Rows are called through a fake API, as registerObjectDoors hands
 // them to the real one.
 
 afterEach(cleanupWorlds);
 
-const NINE = [
+const TEN = [
   "objects.intents.subscribe",
   "objects.intent.answer",
   "objects.ref",
@@ -20,6 +20,7 @@ const NINE = [
   "objects.takeBack",
   "objects.resolve",
   "objects.held",
+  "objects.grants",
   "objects.presence.subscribe",
 ];
 
@@ -75,9 +76,9 @@ const ctxOf = (principal: CallerContext["principal"]): CallerContext => ({
 const WINDOW = ctxOf({ kind: "local-token", tokenId: "tok-window", scopes: ["objects.window"] });
 
 describe("the window's door (OB-3a)", () => {
-  it("is nine rows, every one `objects.window` and local, and the scope is never on the tailnet", () => {
+  it("is ten rows, every one `objects.window` and local, and the scope is never on the tailnet", () => {
     const rows = METHODS.filter((m) => m.method.startsWith("objects."));
-    expect(rows.map((m) => m.method).sort()).toEqual([...NINE].sort());
+    expect(rows.map((m) => m.method).sort()).toEqual([...TEN].sort());
     for (const row of rows) {
       expect(row.scope, row.method).toBe("objects.window");
       expect(row.locality, row.method).toBe("local");
@@ -85,10 +86,10 @@ describe("the window's door (OB-3a)", () => {
     expect(TAILNET_SCOPES).not.toContain("objects.window");
   });
 
-  it("registers exactly those nine", () => {
+  it("registers exactly those ten", () => {
     const h = world();
     const { rows, subs } = doors(h);
-    expect([...rows.keys(), ...subs.keys()].sort()).toEqual([...NINE].sort());
+    expect([...rows.keys(), ...subs.keys()].sort()).toEqual([...TEN].sort());
   });
 
   it("refuses every row to anything but a window's own token, whatever scope it holds", async () => {
@@ -153,6 +154,32 @@ describe("the window's door (OB-3a)", () => {
       expect.objectContaining({ action: "objects.takeBack", attrs: { run: "run-a" } }),
     ]);
     expect(h.desk.registry.grantOf(ref, "run-a")).toBeUndefined();
+  });
+
+  it("lists who holds what, so a forgotten grant can be found and taken back (§11)", async () => {
+    const h = world();
+    const { ask } = doors(h);
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    await expect(ask("objects.grants", WINDOW, {})).resolves.toEqual({
+      grants: [
+        expect.objectContaining({
+          ref,
+          docId: DOC,
+          key: "k1",
+          kind: "desk.note",
+          holder: "run-a",
+          name: "claude·a",
+          how: "handed",
+        }),
+      ],
+    });
+    await expect(ask("objects.grants", WINDOW, { ref: "vf:obj/zzzzzzzz" })).resolves.toEqual({
+      grants: [],
+    });
+    await expect(
+      (async () => ask("objects.grants", WINDOW, { ref: "nope" }))(),
+    ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
   });
 
   it("refuses malformed params rather than guessing", async () => {

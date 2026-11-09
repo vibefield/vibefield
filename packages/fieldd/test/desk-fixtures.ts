@@ -70,6 +70,10 @@ export interface DeskWorld {
     tokenId?: string,
   ): { readonly seen: ObjectIntent[]; dispose(): void };
   readonly runs: Map<string, RunState>;
+  /** which spark a run belongs to: a spark's run id changes each time it sleeps and wakes */
+  readonly sparkRuns: Map<string, string>;
+  /** the sparks fieldd holds, by id, to their names */
+  readonly sparks: Map<string, string>;
   /** every ref a world minted, by minting one for a key on `DOC` */
   refOf(key: string, kind?: string): ObjectRef;
 }
@@ -96,6 +100,8 @@ export function world(
     ["run-a", "live"],
     ["run-b", "live"],
   ]);
+  const sparkRuns = new Map<string, string>();
+  const sparks = new Map<string, string>();
   const make = (): DeskObjects => {
     const options: DeskObjectsOptions = {
       store: new ObjectsStore({
@@ -107,6 +113,8 @@ export function world(
       runState: (run) => runs.get(run) ?? "unknown",
       label: (run) => `claude·${run.slice(-1)}`,
       agentOf: () => "claude",
+      sparkOf: (run) => sparkRuns.get(run),
+      sparkName: (id) => sparks.get(id),
       kinds: () => opts.kinds ?? [NOTE, PAGE],
       ...(opts.answerMs !== undefined ? { intents: { answerMs: opts.answerMs } } : {}),
       ...(opts.releasedShownMs !== undefined ? { releasedShownMs: opts.releasedShownMs } : {}),
@@ -121,6 +129,8 @@ export function world(
     desk,
     root,
     runs,
+    sparkRuns,
+    sparks,
     reopen: make,
     refOf: (key, kind) => desk.registry.refFor(DOC, key, kind),
     window: (respond, docId = DOC, tokenId = "tok-window") => {
