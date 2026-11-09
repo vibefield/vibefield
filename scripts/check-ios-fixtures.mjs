@@ -1026,6 +1026,91 @@ const OS_MARKS_IOS = join(
   }
 }
 
+// ES-5b — what stands on the night (DESIGN.md §2.4 "On the night, the night's ink"; §5 "Night glass"; §8 "The phone's
+// Chat", Empty: the night): the night's ink is `.vf-on-night`'s own values, and night glass and the hush are
+// tokens.css's, each read from both files and compared, as hex and alpha.
+{
+  const TOKENS = "packages/design-kit/src/tokens.css";
+  const PALETTE_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldDesign/ChromePalette.swift";
+  const read = (file) => {
+    try {
+      return readFileSync(join(root, file), "utf8");
+    } catch {
+      return "";
+    }
+  };
+  const tokens = read(TOKENS);
+  const palette = read(PALETTE_SWIFT);
+  const scope = /^\.vf-on-night \{([\s\S]*?)^\}/m.exec(tokens)?.[1] ?? "";
+  const hexOf = (...channels) =>
+    channels.map((channel) => Number(channel).toString(16).padStart(2, "0")).join("");
+  const rgba = (text, token) => {
+    const found = new RegExp(`--vf-${token}: rgb\\((\\d+) (\\d+) (\\d+) / (\\d+)%\\);`).exec(text);
+    if (found === null) return null;
+    return `${hexOf(found[1], found[2], found[3])}/${(Number(found[4]) / 100).toFixed(2)}`;
+  };
+  const solidOf = (text, token) => {
+    const found = new RegExp(`--vf-${token}: #([0-9a-fA-F]{6});`).exec(text)?.[1];
+    return found === undefined ? null : `${found.toLowerCase()}/1.00`;
+  };
+  const night = /--vf-spark-night: #([0-9a-fA-F]{6});/.exec(tokens)?.[1]?.toLowerCase();
+  const hush =
+    /--vf-night-hush: color-mix\(in srgb, var\(--vf-spark-night\) (\d+)%, transparent\);/.exec(
+      tokens,
+    )?.[1];
+  const copyOf = (name) => {
+    const found = new RegExp(
+      `^ {2}public static let ${name} = (?:solid\\(0x([0-9A-Fa-f]{6})\\)|tint\\(0x([0-9A-Fa-f]{6}), alpha: ([0-9.]+)\\))$`,
+      "m",
+    ).exec(palette);
+    if (found === null) return null;
+    return found[1] !== undefined
+      ? `${found[1].toLowerCase()}/1.00`
+      : `${found[2].toLowerCase()}/${found[3]}`;
+  };
+  for (const [name, origin, token] of [
+    ["nightInkPrimary", rgba(scope, "text-primary"), ".vf-on-night --vf-text-primary"],
+    ["nightInkSecondary", rgba(scope, "text-secondary"), ".vf-on-night --vf-text-secondary"],
+    ["nightInkTertiary", rgba(scope, "text-tertiary"), ".vf-on-night --vf-text-tertiary"],
+    ["nightInkFaint", rgba(scope, "text-faint"), ".vf-on-night --vf-text-faint"],
+    ["nightForeground", solidOf(scope, "foreground"), ".vf-on-night --vf-foreground"],
+    [
+      "nightForegroundInverse",
+      solidOf(scope, "foreground-inverse"),
+      ".vf-on-night --vf-foreground-inverse",
+    ],
+    ["nightGlass", rgba(tokens, "night-glass"), "--vf-night-glass"],
+    ["nightGlassPressed", rgba(tokens, "night-glass-hover"), "--vf-night-glass-hover"],
+    ["nightGlassRing", rgba(tokens, "night-glass-ring"), "--vf-night-glass-ring"],
+    [
+      "nightHush",
+      night === undefined || hush === undefined
+        ? null
+        : `${night}/${(Number(hush) / 100).toFixed(2)}`,
+      "--vf-night-hush",
+    ],
+  ]) {
+    checked += 1;
+    const copy = copyOf(name);
+    if (origin === null || copy === null || origin !== copy) {
+      problems.push(
+        `${PALETTE_SWIFT}'s ${name} is ${copy ?? "unreadable"} but ${TOKENS}'s ${token} is ${origin ?? "unreadable"}\n` +
+          "  fix: copy the token's value exactly (or move this script's pattern with the declaration)",
+      );
+    }
+  }
+  checked += 1;
+  const blur = /--vf-night-glass-blur: (\d+)px;/.exec(tokens)?.[1] ?? null;
+  const blurCopy =
+    /^ {2}public static let nightGlassBlur: CGFloat = (\d+)$/m.exec(palette)?.[1] ?? null;
+  if (blur === null || blurCopy === null || blur !== blurCopy) {
+    problems.push(
+      `${PALETTE_SWIFT}'s nightGlassBlur is ${blurCopy ?? "unreadable"} but ${TOKENS}'s --vf-night-glass-blur is ${blur ?? "unreadable"}\n` +
+        "  fix: copy the token's value exactly (or move this script's pattern with the declaration)",
+    );
+  }
+}
+
 // PG-4t — the phone's monitor skin (DESIGN.md §2.7; §8 "The monitor view owns
 // its drawing"): the nine colours of puppeteer-view-sdk's MONITOR_SKIN, which
 // `GodviewSkin.swift` carries one line each as `(.key, 0xLIGHT, 0xDARK)`. Each
