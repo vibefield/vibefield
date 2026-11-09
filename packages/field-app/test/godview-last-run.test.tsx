@@ -331,6 +331,27 @@ describe("LR — the curtain", () => {
     expect(container?.textContent).toContain("Resuming 1 agent…");
   });
 
+  it("draws its held answers as §7 says: the running press keeps its look, the other is off, neither fades whole", async () => {
+    // the review: UM-R5 took this fade off the strip's acts and left it here, so "Restoring…" and "Start clean" both
+    // dimmed whole at 0.55, where §7 keeps the look of a pill naming its own press and draws the other one off
+    await draw({ phase: "restoring", question });
+    const [restore, clean] = [...(container?.querySelectorAll("button") ?? [])];
+    expect(restore?.textContent).toBe("Restoring…");
+    expect(restore?.hasAttribute("data-running")).toBe(true);
+    expect(clean?.hasAttribute("data-running")).toBe(false);
+    const sheet = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "..", "src", "godview", "godview.css"),
+      "utf8",
+    );
+    const off = /\n\.vf-last-run-act:disabled \{[^}]*\}/u.exec(sheet)?.[0] ?? "";
+    expect(off).toContain("cursor: default;");
+    expect(off).not.toContain("opacity");
+    const quiet = /\n\.vf-last-run-act:disabled:not\(\[data-running\]\) \{[^}]*\}/u.exec(
+      sheet,
+    )?.[0];
+    expect(quiet).toContain("color: var(--text-faint);");
+  });
+
   it("names each agent it could not resume, then lets the person continue", async () => {
     const handlers = await draw({
       phase: "restored",
