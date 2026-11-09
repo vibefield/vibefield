@@ -56,8 +56,14 @@ describe("the catalog's names (MT-L1, ruling 1)", () => {
       "history_search",
       "history_read",
       "projects_list",
+      "canvas_kinds",
+      "canvas_list",
       "canvas_place",
-      "canvas_update",
+      "canvas_remove",
+      "object_open",
+      "object_read",
+      "object_act",
+      "object_release",
       "ask_user",
       "notify",
     ]);
@@ -123,7 +129,7 @@ describe("served and planned (ruling 2)", () => {
   // spark's alone, with its destructive and idempotent hints said. CP-3's two act too (the person;
   // `draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31): asking is a spark's, telling every agent's (MT-D11).
   it("serves exactly the rows whose slice has landed: CP-1's read, CP-2's and CP-3's act", () => {
-    const landed = ["CP-1", "CP-2", "CP-3"];
+    const landed = ["CP-1", "CP-2", "CP-3", "OB-3"];
     for (const t of TOOLS.filter((x) => served.has(x.name))) {
       expect(landed, t.name).toContain(t.slice);
       if (t.slice === "CP-1") expect(t.readOnly, t.name).toBe(true);
@@ -132,6 +138,11 @@ describe("served and planned (ruling 2)", () => {
         expect(t.readOnly, t.name).toBe(false);
         expect(typeof t.destructive, t.name).toBe("boolean");
         expect(typeof t.idempotent, t.name).toBe("boolean");
+      }
+      if (t.slice === "OB-3") {
+        expect(t.category, t.name).toBe("desk");
+        expect(t.audience, t.name).toBe("agent");
+        if (!t.readOnly) expect(typeof t.destructive, t.name).toBe("boolean");
       }
     }
     for (const t of TOOLS.filter((x) => landed.includes(x.slice)))

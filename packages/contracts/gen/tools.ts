@@ -886,6 +886,710 @@ export const SERVED_TOOLS = [
     }
   },
   {
+    "name": "canvas_kinds",
+    "family": "canvas",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "device",
+    "slice": "OB-3",
+    "description": "List what you can place on the user's desk: each kind's name, what it is for, and whether it gives you tools once placed.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "kinds": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "summary": {
+                "type": "string"
+              },
+              "tools": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "title",
+              "tools"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "kinds"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "canvas_list",
+    "family": "canvas",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "device",
+    "slice": "OB-3",
+    "description": "List the objects on the user's desk: each one's ref, kind, title and place, which agents are working on it, and whether it is yours to work (you placed it, or the user handed it to you). The contents of objects that are not yours stay closed.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "objects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "kind": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 200
+              },
+              "place": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "width": {
+                    "type": "number"
+                  },
+                  "height": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ],
+                "additionalProperties": true
+              },
+              "agents": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "handle": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "reading",
+                        "acting",
+                        "needs-you",
+                        "paused",
+                        "failed",
+                        "released"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "state"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "yours": {
+                "type": "string",
+                "enum": [
+                  "placed",
+                  "handed"
+                ]
+              }
+            },
+            "required": [
+              "ref",
+              "kind",
+              "title",
+              "agents"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "objects"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "canvas_place",
+    "family": "canvas",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "device",
+    "slice": "OB-3",
+    "description": "Place a new object on the user's desk, only when the user asked for one. It is yours to work at once: the answer carries its ref and its tools, as object_open's does. The user sees it arrive and can undo it.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "props": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "object": {
+          "type": "object",
+          "properties": {
+            "ref": {
+              "type": "string",
+              "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+            },
+            "kind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "yours": {
+              "type": "string",
+              "enum": [
+                "placed",
+                "handed"
+              ]
+            },
+            "agents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "reading",
+                      "acting",
+                      "needs-you",
+                      "paused",
+                      "failed",
+                      "released"
+                    ]
+                  }
+                },
+                "required": [
+                  "handle",
+                  "state"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "heldByUser": {
+              "type": "boolean"
+            },
+            "onScreen": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "ref",
+            "kind",
+            "title",
+            "yours",
+            "agents",
+            "heldByUser",
+            "onScreen"
+          ],
+          "additionalProperties": true
+        },
+        "now": {},
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,31}$"
+              },
+              "readOnly": {
+                "type": "boolean"
+              },
+              "destructive": {
+                "type": "boolean"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              },
+              "input": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "name",
+              "readOnly",
+              "description",
+              "input"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 24
+        },
+        "guide": {
+          "type": "string",
+          "maxLength": 6000
+        },
+        "manual": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "version"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "object",
+        "manual"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "canvas_remove",
+    "family": "canvas",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "OB-3",
+    "description": "Remove an object you placed. The user can undo it. Objects the user made or handed you stay theirs to remove.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "removed": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "removed"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "object_open",
+    "family": "object",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "OB-3",
+    "description": "Start working on an object you placed or the user handed you. Returns what it is, what it holds now (bounded), and its tools with their inputs. Call it before its tools, and again if you no longer have them in front of you (tools: false leaves them out). The user sees you have it open.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "tools": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "object": {
+          "type": "object",
+          "properties": {
+            "ref": {
+              "type": "string",
+              "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+            },
+            "kind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "yours": {
+              "type": "string",
+              "enum": [
+                "placed",
+                "handed"
+              ]
+            },
+            "agents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "reading",
+                      "acting",
+                      "needs-you",
+                      "paused",
+                      "failed",
+                      "released"
+                    ]
+                  }
+                },
+                "required": [
+                  "handle",
+                  "state"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "heldByUser": {
+              "type": "boolean"
+            },
+            "onScreen": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "ref",
+            "kind",
+            "title",
+            "yours",
+            "agents",
+            "heldByUser",
+            "onScreen"
+          ],
+          "additionalProperties": true
+        },
+        "now": {},
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,31}$"
+              },
+              "readOnly": {
+                "type": "boolean"
+              },
+              "destructive": {
+                "type": "boolean"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              },
+              "input": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "name",
+              "readOnly",
+              "description",
+              "input"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 24
+        },
+        "guide": {
+          "type": "string",
+          "maxLength": 6000
+        },
+        "manual": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "version"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "object",
+        "manual"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "object_read",
+    "family": "object",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "OB-3",
+    "description": "Run one of an object's read tools, as object_open lists them, with its input. It changes nothing.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "tool": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,31}$"
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "ref",
+        "tool"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "result": {},
+        "changed": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "object_act",
+    "family": "object",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "OB-3",
+    "description": "Run one of an object's acting tools, as object_open lists them, with its input. Say in doing, in a few words the user will read, what this act changes. Each act is one change the user can undo, marked with your name. While the user is holding the object it answers held; try again later.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "doing": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "tool": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,31}$"
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "doing",
+        "ref",
+        "tool"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "result": {},
+        "changed": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "object_release",
+    "family": "object",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "OB-3",
+    "description": "Stop working on an object. One the user handed you goes back to them; one you placed stays yours.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "released": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "released"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
     "name": "ask_user",
     "family": "you",
     "category": "you",

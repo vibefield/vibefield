@@ -29,6 +29,21 @@ import {
   NEEDS_OPEN_PER_SPARK,
   NOTIFY_PER_MINUTE,
 } from "./compose";
+import {
+  CanvasKindsInput,
+  CanvasKindsOutput,
+  CanvasListInput,
+  CanvasListOutput,
+  CanvasPlaceInput,
+  CanvasRemoveOutput,
+  ObjectActInput,
+  ObjectManual,
+  ObjectOnlyInput,
+  ObjectOpenInput,
+  ObjectReadInput,
+  ObjectReleaseOutput,
+  ObjectToolOutput,
+} from "./objects";
 
 // The tool plane (track MT; `draft/thinking-tool-plane.md`, ruled by James on its page 2026-10-30 21:19–21:20Z; the
 // plan is `draft/tool-plane/IMPLEMENTATION.md` §3). Every tool VibeField offers an agent is ONE ROW here, served by the
@@ -52,6 +67,7 @@ export const TOOL_FAMILIES = [
   "history",
   "projects",
   "canvas",
+  "object",
   "you",
 ] as const;
 export type ToolFamily = (typeof TOOL_FAMILIES)[number];
@@ -67,7 +83,7 @@ export const TOOL_SCOPES = ["profiles", "device", "object", "self"] as const;
 export type ToolScope = (typeof TOOL_SCOPES)[number];
 
 /** The slice that builds a row (the compose plane's order; MT-1 onward adds its own). */
-export const TOOL_SLICES = ["CP-1", "CP-2", "CP-3", "CP-4"] as const;
+export const TOOL_SLICES = ["CP-1", "CP-2", "CP-3", "CP-4", "OB-3"] as const;
 export type ToolSlice = (typeof TOOL_SLICES)[number];
 
 export interface ToolDef {
@@ -95,6 +111,9 @@ export interface ToolDef {
 
 // The compose rooms (TL-D1 A, narrowed by MT-D2): every spark is served every row that has landed, and a plain run none.
 const SPARK_AGENTS = { category: "agents", audience: "spark", scope: "profiles" } as const;
+
+const DESK_DEVICE = { category: "desk", audience: "agent", scope: "device" } as const;
+const DESK_OBJECT = { category: "desk", audience: "agent", scope: "object" } as const;
 
 /** Every row, in the version 2 page's order with the new rooms after it. History and the projects list are the `agent`
  * rows; projects_list reads no profile and answers this desktop's projects, so its scope is the device (the MT lead's
@@ -263,30 +282,87 @@ export const TOOLS: readonly ToolDef[] = [
     slice: "CP-1",
     description: "List the user's projects, each with its name and folders.",
   },
+  // The desk's eight (track OB; `draft/thinking-objects-at-work.md` §5.2, OB-D5 A): every agent holds these whatever is
+  // installed, and a kind's own tools arrive in its manual (OB-L3). The read/act split keeps the harness's gate (MT-D7).
+  {
+    name: "canvas_kinds",
+    family: "canvas",
+    ...DESK_DEVICE,
+    readOnly: true,
+    slice: "OB-3",
+    description:
+      "List what you can place on the user's desk: each kind's name, what it is for, and whether it gives you tools once placed.",
+  },
+  {
+    name: "canvas_list",
+    family: "canvas",
+    ...DESK_DEVICE,
+    readOnly: true,
+    slice: "OB-3",
+    description:
+      "List the objects on the user's desk: each one's ref, kind, title and place, which agents are working on it, and whether it is yours to work (you placed it, or the user handed it to you). The contents of objects that are not yours stay closed.",
+  },
   {
     name: "canvas_place",
     family: "canvas",
-    category: "desk",
-    audience: "agent",
-    scope: "device",
+    ...DESK_DEVICE,
     readOnly: false,
     destructive: false,
     idempotent: false,
-    slice: "CP-4",
+    slice: "OB-3",
     description:
-      "Put a board or a note on the user's canvas, only when the user asked for it. The window places it, signed and undoable.",
+      "Place a new object on the user's desk, only when the user asked for one. It is yours to work at once: the answer carries its ref and its tools, as object_open's does. The user sees it arrive and can undo it.",
   },
   {
-    name: "canvas_update",
+    name: "canvas_remove",
     family: "canvas",
-    category: "desk",
-    audience: "agent",
-    scope: "object",
+    ...DESK_OBJECT,
     readOnly: false,
     destructive: true,
     idempotent: true,
-    slice: "CP-4",
-    description: "Change a board or a note you placed, on the user's word.",
+    slice: "OB-3",
+    description:
+      "Remove an object you placed. The user can undo it. Objects the user made or handed you stay theirs to remove.",
+  },
+  {
+    name: "object_open",
+    family: "object",
+    ...DESK_OBJECT,
+    readOnly: true,
+    slice: "OB-3",
+    description:
+      "Start working on an object you placed or the user handed you. Returns what it is, what it holds now (bounded), and its tools with their inputs. Call it before its tools, and again if you no longer have them in front of you (tools: false leaves them out). The user sees you have it open.",
+  },
+  {
+    name: "object_read",
+    family: "object",
+    ...DESK_OBJECT,
+    readOnly: true,
+    slice: "OB-3",
+    description:
+      "Run one of an object's read tools, as object_open lists them, with its input. It changes nothing.",
+  },
+  {
+    name: "object_act",
+    family: "object",
+    ...DESK_OBJECT,
+    readOnly: false,
+    destructive: false,
+    idempotent: false,
+    slice: "OB-3",
+    description:
+      "Run one of an object's acting tools, as object_open lists them, with its input. Say in doing, in a few words the user will read, what this act changes. Each act is one change the user can undo, marked with your name. While the user is holding the object it answers held; try again later.",
+  },
+  {
+    name: "object_release",
+    family: "object",
+    ...DESK_OBJECT,
+    readOnly: false,
+    destructive: false,
+    idempotent: true,
+    slice: "OB-3",
+    description:
+      "Stop working on an object. One the user handed you goes back to them; one you placed stays yours.",
   },
   {
     name: "ask_user",
@@ -332,6 +408,15 @@ export const TOOL_SCHEMAS = {
   // CP-3 (the person; `draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31)
   ask_user: { input: ComposeAskUserInput, output: ComposeAskUserOutput },
   notify: { input: ComposeNotifyInput, output: ComposeNotifyOutput },
+  // OB-3 (the desk's eight; `draft/thinking-objects-at-work.md` §5.2)
+  canvas_kinds: { input: CanvasKindsInput, output: CanvasKindsOutput },
+  canvas_list: { input: CanvasListInput, output: CanvasListOutput },
+  canvas_place: { input: CanvasPlaceInput, output: ObjectManual },
+  canvas_remove: { input: ObjectOnlyInput, output: CanvasRemoveOutput },
+  object_open: { input: ObjectOpenInput, output: ObjectManual },
+  object_read: { input: ObjectReadInput, output: ObjectToolOutput },
+  object_act: { input: ObjectActInput, output: ObjectToolOutput },
+  object_release: { input: ObjectOnlyInput, output: ObjectReleaseOutput },
 } as const satisfies Record<string, { input: z.ZodTypeAny; output: z.ZodTypeAny }>;
 
 export type ServedToolName = keyof typeof TOOL_SCHEMAS;
