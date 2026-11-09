@@ -156,10 +156,8 @@ function ProfilesColumnController({
   const [focus, setFocus] = useState<string | null>(null);
   const [addPresses, setAddPresses] = useState(0);
   const pointedProfile = pointed !== null && pointed !== ADD_TARGET ? pointed : null;
-  // §8 "Pinned": behind full-window terminals no card opens; the deck only fades the stage, so a circle stays reachable
-  const open = covered
-    ? null
-    : (circles.find((circle) => circle.set.id === (pointedProfile ?? pinned))?.set.id ?? null);
+  const open =
+    circles.find((circle) => circle.set.id === (pointedProfile ?? pinned))?.set.id ?? null;
   // §8 "The reach": the pointer's own hold, its grace and its dwell; the card shows as it always did from `pointed`
   const showing = pointed === ADD_TARGET && openNewProfile !== undefined ? ADD_TARGET : open;
   const { point, clear } = useColumnPointer(showing, setPointed);
@@ -172,8 +170,10 @@ function ProfilesColumnController({
     setPinned(null);
     clear();
   }, [clear]);
-  // what the pointer may reach: nothing behind the terminals, and, while the limit card stands in the add's card's
-  // place (§8 "The add"), not the add, so no hidden stand counts as a card standing (`.vf-monitor-cards > *`, `showing`)
+  // what the pointer and a press may reach. Behind full-window terminals, nothing (§8 "Pinned": the deck only fades
+  // the stage, so a circle stays reachable). `open` itself is not gated, so the card still stands in the commit where
+  // `covered` turns true and the effect below can hand the keyboard home. While the limit card stands in the add's
+  // card's place (§8 "The add"), not the add, so no hidden stand counts as a card standing (`showing`, `:has`).
   const columnPoint = useCallback(
     (target: string | null): void => {
       if (covered) return;
@@ -244,7 +244,7 @@ function ProfilesColumnController({
       pinned={open !== null && open === pinned}
       focus={focus}
       read={openCircle === undefined ? "" : readWords(openCircle.meters, clock)}
-      addOpen={!covered && pointed === ADD_TARGET}
+      addOpen={pointed === ADD_TARGET}
       cardLayer={cardLayer}
       columnRef={columnRef}
       canAdd={openNewProfile !== undefined}
