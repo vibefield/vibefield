@@ -1,0 +1,27 @@
+{
+  "profileGlyphs": [
+    "briefcase",
+    "house",
+    "flask",
+    "leaf",
+    "bolt",
+    "star",
+    "moon",
+    "cup",
+    "rocket",
+    "book",
+    "gamepad"
+  ],
+  "serviceProducts": {
+    "anthropic": "Claude",
+    "github": "Copilot",
+    "google": "Google AI",
+    "kimi": "Kimi",
+    "meta": "Meta AI",
+    "nous": "Nous Portal",
+    "openai": "ChatGPT",
+    "opencode": "OpenCode",
+    "openrouter": "OpenRouter",
+    "xai": "Grok"
+  }
+}

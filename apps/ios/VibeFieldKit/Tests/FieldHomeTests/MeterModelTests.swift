@@ -86,6 +86,19 @@ struct MeterModelTests {
     #expect(PlanTitles.title(service: unknown, plan: "team") == "Acme Team")
   }
 
+  private struct Tables: Decodable { let serviceProducts: [String: String] }
+
+  @Test("the plans' products are puppeteer-views' at the pin, as the generated fixture says them")
+  func planProductsAreThePins() throws {
+    let found = Bundle.module.url(
+      forResource: "presentation-tables.golden", withExtension: "json", subdirectory: "Fixtures")
+    let url = try #require(found)
+    let data = try Data(contentsOf: url)
+    let pinned = try JSONDecoder().decode(Tables.self, from: data).serviceProducts
+    let products = PlanTitles.products
+    #expect(products == pinned)
+  }
+
   @Test("a draft profile no agent has signed in to stands on no circle (ruling 7)")
   func draftsHaveNoCircle() throws {
     let sets = try AgentProfileSetsResult(json: try HomeFixture.json("agents-profile-sets.meters")).sets

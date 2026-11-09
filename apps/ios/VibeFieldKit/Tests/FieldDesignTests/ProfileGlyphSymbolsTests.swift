@@ -3,22 +3,30 @@ import Testing
 import UIKit
 
 // UM-4 (DESIGN.md §13; the lead's ruling 20) — a profile's glyph on the phone is ONE table: puppeteer's `ProfileGlyph`
-// vocabulary as SF Symbols. The vocabulary below is puppeteer-view-sdk 0.3.3's `PROFILE_GLYPHS` (`toolkit/marks.js`),
-// transcribed: it is read from the pinned package at this pin, not generated, so an EL8 that changes the vocabulary
-// changes this list by hand (said at M-phone).
+// vocabulary as SF Symbols. The vocabulary is `Fixtures/presentation-tables.golden.json`, which field-app's generator
+// writes from puppeteer-view-sdk's `PROFILE_GLYPHS` at the pin, so an EL8 that changes the vocabulary reddens this row
+// once the fixture is re-blessed (`pnpm check:ios-fixtures` holds the copy).
 //
 // No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 
 @Suite("UM-4 — a profile's glyph is puppeteer's vocabulary as SF Symbols, through one table")
 struct ProfileGlyphSymbolsTests {
-  static let vocabulary = [
-    "briefcase", "house", "flask", "leaf", "bolt", "star", "moon", "cup", "rocket", "book", "gamepad",
-  ]
+  private struct Tables: Decodable { let profileGlyphs: [String] }
+
+  /// puppeteer-view-sdk's `PROFILE_GLYPHS` at the pin, as field-app's generator wrote them.
+  static func pinnedVocabulary() throws -> [String] {
+    let found = Bundle.module.url(
+      forResource: "presentation-tables.golden", withExtension: "json", subdirectory: "Fixtures")
+    let url = try #require(found)
+    let data = try Data(contentsOf: url)
+    return try JSONDecoder().decode(Tables.self, from: data).profileGlyphs
+  }
 
   @Test("the table holds the vocabulary, each token outline and filled, and nothing else")
-  func vocabulary() {
+  func vocabulary() throws {
+    let pinned = try Self.pinnedVocabulary()
     let tokens = ProfileGlyphSymbols.symbols.keys.sorted()
-    #expect(tokens == Self.vocabulary.sorted())
+    #expect(tokens == pinned.sorted())
   }
 
   @Test("every symbol the table names is one the system draws")

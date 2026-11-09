@@ -161,6 +161,13 @@ const OTHER_ORIGINS = new Map([
     "usage-bands.golden.json",
     join(root, "packages/field-app/test/fixtures/usage/usage-bands.golden.json"),
   ],
+  // UM-4 (2026-11-09, M-phone's Owed) — the phone's two presentation tables from the pinned packages (written by
+  // perf/presentation-tables.generate.perf.ts), which ProfileGlyphSymbolsTests and MeterModelTests hold the kit's
+  // hand copies to.
+  [
+    "presentation-tables.golden.json",
+    join(root, "packages/field-app/test/fixtures/usage/presentation-tables.golden.json"),
+  ],
   ...phoneViewGoldens.map((name) => [name, join(PHONE_GODVIEW, name)]),
   ...chatFlowGoldens.map((name) => [name, join(CHAT_FLOW, name)]),
   ...needsCardGoldens.map((name) => [name, join(NEEDS_CARD, name)]),
@@ -392,6 +399,8 @@ const requiredMirrors = [
   ["phone-code", ["phone-code.vector.json"], ["Tests/FieldMeshTests"]],
   // IOS-8f — the face deal's vector: the phone deals from the desktop's own deck and hash
   ["face", ["face-deal.vector.json"], ["Tests/FieldDesignTests"]],
+  // UM-4 — the pinned packages' presentation tables, which ProfileGlyphSymbolsTests holds the glyph table to
+  ["usage", ["presentation-tables.golden.json"], ["Tests/FieldDesignTests"]],
   // IOS-12a (PC-D6 A) — the spark face's DNA golden: the phone deals a spark's face from the desktop's own engine
   [
     "spark-face",
@@ -450,6 +459,7 @@ const requiredMirrors = [
     "usage",
     [
       "usage-bands.golden.json",
+      "presentation-tables.golden.json",
       "agents-profile-sets.valid.json",
       "agents-profile-sets.meters.json",
       "agent-usage.valid.json",

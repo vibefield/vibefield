@@ -8373,6 +8373,11 @@ vocabulary drawn as SF Symbols, through one presentation table that is tested ag
 the same way from puppeteer-views' `SERVICE_PRODUCTS`, held by a few hand-written titles in `MeterModelTests`. An
 EL8 that moves either is caught by review alone. Owed: a generator that writes both from the pinned packages into a
 VibeField-origin fixture, mirrored and named in `scripts/check-ios-fixtures.mjs`, which the two tests read.)*
+*(2026-11-09, M-phone's Owed paid: `packages/field-app/perf/presentation-tables.generate.perf.ts` writes both from the
+pinned packages into `test/fixtures/usage/presentation-tables.golden.json`, which `test/presentation-tables.test.ts`
+holds byte for byte, `scripts/check-ios-fixtures.mjs` mirrors into FieldDesignTests and FieldHomeTests, and
+`ProfileGlyphSymbolsTests` and `MeterModelTests` read. The phone's two tables stay hand copies. An EL8 that moves either
+now fails field-app's row until the golden is re-blessed, and the kit's once it is.)*
 
 **`missing`** (2026-10-03, R2) is the desk's missing face as a mark — a card with two of its 45°
 hatches — for a name the set does not hold; an act that declares no glyph at all shows its label
