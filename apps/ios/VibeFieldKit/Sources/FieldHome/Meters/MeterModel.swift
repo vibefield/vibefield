@@ -710,7 +710,7 @@ enum MeterModel {
   }
 
   /// Which plan of another profile is this one: the same company and account, or the same borrowed sign-in.
-  private static func sharedKey(_ plan: AgentPlan) -> String? {
+  static func sharedKey(_ plan: AgentPlan) -> String? {
     let who = (plan.account?.account ?? plan.account?.email)?
       .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     if let who, !who.isEmpty { return "named\u{0}\(plan.service.id)\u{0}\(who)" }

@@ -9,6 +9,7 @@ import {
   type ProfileMeters,
   planMeters,
 } from "./meters";
+import { planFamily, planKeyOfRun, planRuns } from "./plan-sessions";
 import { type ForecastInput, forecastOf, resetForm } from "./rules";
 
 // UM-1 (PLAN §4 v0.2, U1 c3) — THE USAGE BANDS GOLDEN, COMPUTED: what the meter model (`meters.ts`) and the Bands
@@ -107,6 +108,28 @@ function dayWords(meters: ProfileMeters): string[] {
 const metersKey = (meters: UsageBandsMeters): string =>
   [meters.sets, meters.batch, meters.of, meters.usage ?? "", meters.at ?? ""].join("\u0000");
 
+/** UM-5b — the plan filter's join, for the phone's `PlanSessions` to be held to: each persona's run, the plan key it
+ * spends (null: none), and each plan's family and runs. */
+function planSessionsRecord(file: string, sets: readonly AgentProfileSet[]) {
+  const runs = sets.flatMap((set) =>
+    set.personas.map((persona) => ({
+      profileSet: set.id,
+      provider: persona.provider,
+      key: planKeyOfRun(sets, { profileSet: set.id, provider: persona.provider }) ?? null,
+    })),
+  );
+  const keys = [...new Set(runs.flatMap((run) => (run.key === null ? [] : [run.key])))].sort();
+  return {
+    sets: file,
+    runs,
+    plans: keys.map((key) => ({
+      key,
+      family: planFamily(sets, key),
+      runs: planRuns(sets, key),
+    })),
+  };
+}
+
 /**
  * The golden: every distinct meters the cases draw (each profile's entries in UM-D15's order, its tightest plan, its
  * hot rule), each case's circle, and UM-D4's forecast over a fixed vector. Each batch is read at its own now
@@ -173,6 +196,9 @@ export function usageBandsGolden(input: {
       ...bandsGeometry(size, metersOf(of).entries, options),
     };
   });
+  const planSessions = Object.entries(input.inputs.sets).map(([file, sets]) =>
+    planSessionsRecord(file, sets),
+  );
   const golden = hundredths({
     "//": input.note,
     inputs: {
@@ -191,6 +217,7 @@ export function usageBandsGolden(input: {
     calls: {
       forecast: input.forecasts.map((each) => ({ in: each, out: forecastOf(each) ?? null })),
     },
+    planSessions,
   }) as Record<string, unknown>;
   const written = JSON.stringify(golden);
   for (const { meters } of computed.values()) {

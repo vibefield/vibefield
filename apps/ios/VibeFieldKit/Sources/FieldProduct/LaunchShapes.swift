@@ -244,6 +244,9 @@ public struct AgentPersona: Sendable, Equatable {
   public let identity: AgentPersonaIdentity?
   /// its login pane is open
   public let signingIn: Bool
+  /// UM-5b — the sign-ins it holds, placed on its profile's plans (`holds`), as the plan filter's join reads them; nil
+  /// from a fieldd that names none (the tolerant reader), where the plans' `holders` decide
+  public let holds: [AgentHolding]?
 
   public init(json: JSONValue) throws {
     var object = try WireObject(shape: "AgentPersona", value: json)
@@ -261,6 +264,24 @@ public struct AgentPersona: Sendable, Equatable {
       identity = nil
     }
     signingIn = object.value("signingIn")?.objectValue != nil
+    holds = object.array("holds")?.map(AgentHolding.init(json:))
+  }
+}
+
+/// One sign-in a persona holds (`AgentHolding`), narrowed to what the plan filter's join reads: whether the agent runs
+/// on it, whether it is a pay-per-use key, and the plan it is on.
+public struct AgentHolding: Sendable, Equatable {
+  /// the one the agent runs on
+  public let runsOn: Bool
+  /// a pay-per-use key, on no plan
+  public let key: Bool
+  /// the set's plan it is on; nil for a key
+  public let planId: String?
+
+  public init(json: JSONValue) {
+    runsOn = json["runsOn"]?.boolValue ?? false
+    key = json["key"]?.boolValue ?? false
+    planId = json["planId"]?.stringValue
   }
 }
 
