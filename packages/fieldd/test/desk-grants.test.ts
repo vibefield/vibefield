@@ -362,3 +362,27 @@ describe("a run replaced by a resume of its session hands on what it had (§7, E
     ).toEqual({ label: "Replaced the note" });
   });
 });
+
+describe("a hand says when the holder already held the object", () => {
+  it("is plain the first time, and says already after, so a failed play takes back nothing earlier", () => {
+    const h = world();
+    const ref = h.refOf("k1", "desk.note");
+    expect(h.desk.hand(ref, "run-a")).toEqual({ handed: true });
+    expect(h.desk.hand(ref, "run-a")).toEqual({ handed: true, already: true });
+    expect(h.desk.hand(ref, "run-b")).toEqual({ handed: true });
+  });
+
+  it("says already for what the agent placed, a `one` kind it holds, and any run of a spark", () => {
+    const h = sparkWorld();
+    const placed = h.refOf("k1", "desk.note");
+    h.desk.grant(placed, "run-a", "placed");
+    expect(h.desk.hand(placed, "run-a")).toEqual({ handed: true, already: true });
+    const page = h.refOf("page", "vibefield.page");
+    h.desk.hand(page, "run-a");
+    expect(h.desk.hand(page, "run-a")).toEqual({ handed: true, already: true });
+    const note = h.refOf("k2", "desk.note");
+    h.desk.hand(note, "run-1");
+    h.sparkRuns.set("run-2", SPARK);
+    expect(h.desk.hand(note, "run-2")).toEqual({ handed: true, already: true });
+  });
+});
