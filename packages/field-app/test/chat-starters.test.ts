@@ -11,7 +11,8 @@ import { STARTERS } from "../src/chat/thread-items";
 // reads fill them: the agents this Mac has, and the field board's runs. The crew is an agent the Mac has that can be
 // started, the ruled one first. The project is the busiest folder. The handle is the live run, no spark's own, worked in
 // last, named by its agent and its place among that agent's live runs. Its reviewer is an agent the Mac has, the ruled
-// one first, another than the run's own where there is one. A slot with nothing to fill keeps its ruled word. Pure.
+// one first, another than the run's own where there is one. An agent slot with nothing to fill keeps its ruled word; a
+// project or a run with nothing to fill drops out and the starter reads bare (ES-Q1, James 2026-11-09). Pure.
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const AT = "2026-11-08T08:00:00.000Z";
@@ -115,11 +116,35 @@ describe('the starters, filled from this Mac (DESIGN.md §8 "Chat\'s list", the 
     );
   });
 
-  it("keeps a slot's ruled word where nothing fills it: an empty board, and Claude Code alone here", () => {
+  it("reads bare where no project or run fills a slot: an empty board, and Claude Code alone here (ES-Q1)", () => {
     expect(wordsOf(startersOf({ agents: [agent("claude")], rows: [] }))).toEqual([
       "Spawn 4 Claude Code agents to research a topic each",
-      "Keep track of my agents in vibe-field",
-      "Have Claude Code review claude·2's work until it's clean",
+      "Keep track of my agents",
+      "Have Claude Code review my agents' work until it's clean",
+    ]);
+  });
+
+  it("drops the project alone where the runs name no folder, and still names the run (ES-Q1)", () => {
+    const reading = startersOf({
+      agents: [agent("claude"), agent("codex"), agent("grok")],
+      rows: [
+        run({ runtimeRunId: "n-1", lastActivityAt: at(3) }),
+        run({ runtimeRunId: "n-2", lastActivityAt: at(4), project: { name: "" } }),
+      ],
+    });
+    expect(wordsOf(reading)).toEqual([
+      "Spawn 4 Grok agents to research a topic each",
+      "Keep track of my agents",
+      "Have Codex review claude·2's work until it's clean",
+    ]);
+  });
+
+  it("keeps an agent slot's ruled word where no agent fills it (ES-D4 A; ES-Q1 leaves the agents ruled)", () => {
+    const reading = startersOf({ agents: [], rows: [] });
+    expect(wordsOf(reading)).toEqual([
+      "Spawn 4 Grok agents to research a topic each",
+      "Keep track of my agents",
+      "Have Codex review my agents' work until it's clean",
     ]);
   });
 
@@ -133,7 +158,7 @@ describe('the starters, filled from this Mac (DESIGN.md §8 "Chat\'s list", the 
       rows: [],
     });
     expect(wordsOf(reading)[0]).toBe("Spawn 4 Claude Code agents to research a topic each");
-    expect(wordsOf(reading)[2]).toBe("Have Claude Code review claude·2's work until it's clean");
+    expect(wordsOf(reading)[2]).toBe("Have Claude Code review my agents' work until it's clean");
   });
 
   it("never takes a spark's own run, nor one that has ended, for the project or the handle", () => {
@@ -176,8 +201,12 @@ describe('the starters, filled from this Mac (DESIGN.md §8 "Chat\'s list", the 
     expect(wordsOf(reading)[1]).toBe("Keep track of my agents in beta");
   });
 
-  it("keeps the ruled words where a read cannot be had: the agents', the board's, or both", () => {
-    expect(startersOf({ agents: "failed", rows: "failed" }).starters).toEqual(STARTERS);
+  it("treats a read it cannot have as nothing to fill: the agents' stay ruled, the board's drop out (ES-Q1)", () => {
+    expect(wordsOf(startersOf({ agents: "failed", rows: "failed" }))).toEqual([
+      "Spawn 4 Grok agents to research a topic each",
+      "Keep track of my agents",
+      "Have Codex review my agents' work until it's clean",
+    ]);
     const boardOnly = startersOf({
       agents: "failed",
       rows: [run({ runtimeRunId: "x-1", project: { name: "web" } })],
@@ -190,8 +219,8 @@ describe('the starters, filled from this Mac (DESIGN.md §8 "Chat\'s list", the 
     const agentsOnly = startersOf({ agents: [agent("claude")], rows: "failed" });
     expect(wordsOf(agentsOnly)).toEqual([
       "Spawn 4 Claude Code agents to research a topic each",
-      "Keep track of my agents in vibe-field",
-      "Have Claude Code review claude·2's work until it's clean",
+      "Keep track of my agents",
+      "Have Claude Code review my agents' work until it's clean",
     ]);
   });
 

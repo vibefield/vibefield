@@ -1662,12 +1662,12 @@ describe('Chat, empty: the night, live (track ES; DESIGN.md §8 "Chat\'s list", 
     act(() => ($(".vf-chat-empty-new") as HTMLButtonElement | null)?.click());
     act(() => host?.querySelectorAll<HTMLElement>(".vf-chat-empty .vf-chat-starter")[2]?.click());
     // ES-4: filled from this Mac, as the night shows it: Claude Code alone here and nothing on the board, so the
-    // reviewer is Claude Code and the run keeps its ruled word
+    // reviewer is Claude Code and, with no run to name, the starter reads bare (ES-Q1)
     expect(carried).toEqual([
       null,
       {
         glyph: STARTERS[2]?.glyph,
-        words: "Have Claude Code review claude·2's work until it's clean",
+        words: "Have Claude Code review my agents' work until it's clean",
       },
     ]);
     expect(surfaces).toEqual(["new-spark", "new-spark"]);
