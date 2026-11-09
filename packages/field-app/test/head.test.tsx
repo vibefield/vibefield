@@ -1467,6 +1467,18 @@ describe("the sheet's two shelves (PL-D1) — one surface, the button pressed sh
 });
 
 describe('the Apps shelf hosts the Hub, Live, and From your agents (DESIGN.md §8 "Artifacts — the Artifacts shelf\'s contents", as amended)', () => {
+  it("draws Live with no plugin registered: Live is the app's own, and it says no wait (FL-2)", async () => {
+    const door = appsDoor();
+    act(() => setHeadAppsClient(door.client));
+    registry.snapshot = { generation: 1, problems: [], plugins: [] };
+    mount({ open: "artifacts" });
+    await settle();
+    const box = shelf("artifacts")?.querySelector<HTMLElement>(".vf-head-hub");
+    expect(box?.querySelector(".vf-artifact-panel")?.getAttribute("aria-label")).toBe("Live");
+    expect(box?.querySelector(".vf-head-waits")).toBeNull();
+    expect(door.methods()).toContain("artifact.subscribe");
+  });
+
   it("mounts the side panel's one contribution there, in its plugin's scope; the Hub's own close shuts the sheet", () => {
     bindHub();
     mount();

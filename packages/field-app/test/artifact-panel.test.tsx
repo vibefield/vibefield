@@ -6,6 +6,8 @@ import type { PluginProductClient } from "@vibefield/plugin-sdk";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { cardsStore } from "../src/frame/cards/cards-store";
+import { type FieldHost, setHost } from "../src/host";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -287,6 +289,43 @@ describe("ArtifactPanel", () => {
     expect(request).toHaveBeenCalledWith("artifact.refreshPreview", {
       artifactId: ARTIFACT.artifactId,
     });
+  });
+});
+
+describe("FL-2: the panel is the window's", () => {
+  afterEach(() => {
+    setHost(null as unknown as FieldHost);
+    Reflect.deleteProperty(navigator, "clipboard");
+  });
+
+  it("opens a row by asking its desktop, `artifact.reveal` by the row's key: the window holds no shell.open", async () => {
+    const request = vi.fn(async () => ({ opened: true }));
+    await mount(client([ARTIFACT], request));
+    await act(async () => {
+      button(`Open ${ARTIFACT.title}`).click();
+      await Promise.resolve();
+    });
+    expect(request).toHaveBeenCalledWith("artifact.reveal", {
+      artifactKey: ARTIFACT.artifactKey,
+    });
+    expect(request).not.toHaveBeenCalledWith("shell.openExternal", expect.anything());
+  });
+
+  it("copies a URL through the window's copy door: a card dealt, the row says Copied, the page's clipboard untouched (item 111)", async () => {
+    const copyText = vi.fn(async (_text: string) => undefined);
+    setHost({ logger: {}, diagnostics: { copyText } } as unknown as FieldHost);
+    const writeText = vi.fn(async (_text: string) => undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    await mount(client([ARTIFACT]));
+    await act(async () => {
+      button("Copy URL").click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(copyText).toHaveBeenCalledWith(ARTIFACT.url);
+    expect(writeText).not.toHaveBeenCalled();
+    const dealt = cardsStore.snapshot().cards.filter((card) => card.origin.place === "Apps");
+    expect(dealt, "one card, from the Apps shelf").toHaveLength(1);
+    expect(button("Copied").textContent).toBe("Copied");
   });
 });
 
