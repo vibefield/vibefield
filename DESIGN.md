@@ -2773,10 +2773,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     ("⌘V · just now", "Ctrl+V" off the Mac — where it was copied is not known: a pane's ⌘C or copy-on-select, a field's own
     copy and a program's OSC 52 reach the clipboard with no card until G30; LC-21), a drag by where it
     came from ("Another app · dragged in · just now") — on solid chrome at
-    12/500 in secondary ink — and shows its **×** inside its top right corner, across from the index:
-    18 round on the card's ink at 8%, `--vf-red` with a white × under the pointer, "Remove  ⌫". Above
+    12/500 in secondary ink — and wears its **chip** (CS-D7 B, ruled by James 2026-11-06, the only way
+    a card leaves but ⌫; it replaced HN's 18-round × inside the corner): **30** round, centred on its
+    top right corner so half stands off the card, **44** to hit, a white × at 13 on `--vf-card-dark-stock`
+    ringed and shadowed by `--vf-card-chip-shadow`, popping in 280ms on the pop curve; under the pointer
+    `--vf-red` and 1.12× (`--vf-ease-lift`, 180ms); "Remove  ⌫". Above
     the fan's rest line the card the pointer is on holds the reach while the pointer moves across it,
-    so its corner can be reached (a middle card's × otherwise lies nearer its neighbour's centre). ⌫
+    and across its chip's outer half, so its corner can be reached (a middle card's × otherwise lies
+    nearer its neighbour's centre). A card let go below the hand goes home. ⌫
     removes the card the pointer is on — only that card, and never while a field holds the caret, Settings
     is open or a card is being carried; a held ⌫ removes one card, not the hand.
   - **Raised** (⇧⌘V, "Your hand"): every card up by the full lift and straight, no more than 14 between them; ←
