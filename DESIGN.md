@@ -6682,6 +6682,40 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       line under it (§9): "Waits here until ‹desktop› wakes", "… answers" or "… is updated". Send is not offered.
       Nothing is queued on the phone and sent later on its own: a send nobody pressed is not yours. When the desktop
       answers, the line goes and Send returns, with the draft as typed.
+    *Amended 2026-11-09 (IOS-12f's M-f2; plan-12f's Q8 A, and VF-PM's rulings of its Q1–Q4, 02:24:16Z):* @ comes to the
+    phone, the Mac's "Chat's composer" at touch pitch, one rule read twice (PC-L1). This ends "Words alone until
+    IOS-12f" above.
+    - **@ opens @'s list.** An @ typed at the start of a word, in the thread of a spark on the home, opens @'s list:
+      a solid menu from the composer up, as wide as the field, its foot 8 above the composer, read bottom-up,
+      the nearest row drawn hot. Its two groups, their rows and order, its words and the handles are the Mac's (§8
+      "Chat's composer", @'s rows in Chat), an agent's row 48 tall and a session's 56. Typing after the @ filters every
+      group. A row is a tap, and the phone has no ↑ ↓ walk (Q4). Moving off the @, or a tap outside the list, folds it
+      and keeps what was typed.
+    - **A spark on another desktop** (Q2): the phone reads Agent Profiles from its home, and another desktop's are not
+      read through it. So an @ in that spark's thread types as an @ and opens no list. Nothing says it failed, because
+      nothing did, and the spark still takes your words.
+    - **Which sessions @ offers** (Q3): the rows of the spark's own desktop, by the Mac's whole rule, each placed by
+      the profile the board says, as New spark's reach is. A remote row carries the monitor's resolved set and no
+      persona, so a retired sign-in reads as Default here, where the Mac offers it nowhere. @ can then offer a session
+      the spark's `agent_send` refuses, and the refusal is the spark's own, in its words. The reach's count has the
+      same residual.
+    - **The chip** (Q1) stands in the sentence, as on the Mac: the draft holds words and chips together, Backspace
+      takes a chip as one character, and a chip never splits a word. At the draft's 17 it is 26 tall, corners 8, 15
+      medium, its mark at 16, padded 0 8 0 6, on the menu's surface ringed 1 in the menu's hairline. An agent says its
+      label, its model and effort once chosen, and " · ‹profile›" when the spark has more than one; a session says its
+      handle in mono.
+    - **An agent's model and effort** (Q4): taking an agent's row puts its chip in the draft and turns @'s list into
+      that agent's menu, in the list's own box. It is New spark's agent menu (below) for the one agent: **Its own
+      model** first, then its models as `agent.models` lists them, the chosen one ticked, and Effort under a model that
+      has one, its values side by side. A tap on an agent's chip opens it again, and a tap outside folds it with the
+      chip as it stands. Untouched, the agent starts at its own model and effort.
+    - **What a send carries** is the Mac's (§8 "Chat's composer", what a send carries): your words, each chip as its
+      words, a session's with the id the spark's tools take, and the chips as spans of those words. Send is offered
+      while the draft holds a chip, or a word beyond the @ still being typed. Your bubble draws its chips from the
+      record, as it does those you sent from the Mac.
+    - **The handle in the card** (12d's Owed): the card that waits on you names a session @ offers in this thread by
+      its handle, in its eyebrow, its question and its failed line, as the Mac's does (§8 "Chat's thread"). Until
+      M-f2 the phone said fieldd's name.
   - **New spark** (PC-D8 A): the sheet at touch pitch makes the spark on your home desktop, said and not asked; its
     sky is the hatch, free, at 120 (§2.10).
     *Amended 2026-11-07 (IOS-12f; VF-PM's rulings on its Q1–Q10, 12:35:44Z; its words are §9's, for James's eye):*
