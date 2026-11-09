@@ -50,7 +50,11 @@ const persona = (
   createdAt: AT,
   ...(holds === undefined ? {} : { holds: [...holds] }),
 });
-const plan = (id: string, holders: readonly string[], extra: Partial<AgentPlan> = {}): AgentPlan => ({
+const plan = (
+  id: string,
+  holders: readonly string[],
+  extra: Partial<AgentPlan> = {},
+): AgentPlan => ({
   id,
   service: SERVICE,
   holders: [...holders],
@@ -94,9 +98,7 @@ describe("which plan a run spends (`planKeyOfRun`)", () => {
     const row = AGENT_CATALOG.find((entry) => entry.id === "kimi");
     const provider = row?.seams.puppeteer?.provider;
     expect(provider).toBeDefined();
-    expect(planKeyOfRun(SETS, { profileSet: "work", provider })).toBe(
-      `work/agent:${KIMI_PERSONA}`,
-    );
+    expect(planKeyOfRun(SETS, { profileSet: "work", provider })).toBe(`work/agent:${KIMI_PERSONA}`);
   });
 
   it("joins nothing for a set with no such agent, an unknown set, or a run with no agent (a terminal)", () => {
@@ -121,12 +123,7 @@ describe("which plan a run spends (`planKeyOfRun`)", () => {
     const sets = [
       setOf(
         "s",
-        [
-          persona("p", "claude", [
-            holding({ key: true }),
-            holding({ planId: "a", runsOn: false }),
-          ]),
-        ],
+        [persona("p", "claude", [holding({ key: true }), holding({ planId: "a", runsOn: false })])],
         [plan("a", ["p"])],
       ),
     ];

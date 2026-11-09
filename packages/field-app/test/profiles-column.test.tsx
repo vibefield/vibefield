@@ -153,6 +153,8 @@ function controller(over: Partial<ProfilesColumnProps> = {}): ProfilesColumnProp
     usageUnavailable: false,
     chosen: null,
     onChoose: vi.fn(),
+    chosenPlanFamily: null,
+    onChoosePlan: vi.fn(),
     now: NOW,
     ...over,
   };
@@ -1080,6 +1082,34 @@ describe("the cards layer (UM-R1): a card stands above the terminals, in the col
       pop?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
     });
     expect(target.querySelector(".vf-profiles-pop")).not.toBeNull();
+  });
+
+  it("a plan's row in a portaled card chooses through the layer, and closing the card keeps the plan (UM-5a over UM-R)", () => {
+    const target = cardLayer();
+    const onChoosePlan = vi.fn();
+    const page = mount(<ProfilesColumn {...controller({ cardLayer: target, onChoosePlan })} />);
+    const circle = page.querySelector<HTMLButtonElement>(
+      '[data-profile="work"] .vf-profiles-circle',
+    );
+    act(() => circle?.click());
+    const choose = target.querySelector<HTMLButtonElement>("button.vf-profiles-pop-row-choose");
+    expect(choose).not.toBeNull();
+    act(() => {
+      choose?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
+      choose?.click();
+    });
+    expect(onChoosePlan).toHaveBeenCalledTimes(1);
+    expect(onChoosePlan.mock.calls[0]?.[0]).toMatch(/^work\//u);
+    expect(target.querySelector(".vf-profiles-pop")).not.toBeNull();
+    act(() => {
+      choose?.focus();
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
+    });
+    expect(target.querySelector(".vf-profiles-pop")).toBeNull();
+    expect(document.activeElement).toBe(circle);
+    expect(onChoosePlan).toHaveBeenCalledTimes(1);
   });
 
   it("names the layer: z 13, no pointer of its own, the stand takes the pointer, and both themes point its tokens", () => {
