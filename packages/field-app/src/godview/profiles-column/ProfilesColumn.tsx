@@ -85,6 +85,10 @@ export interface ProfilesColumnProps {
   moment?: ReactNode;
   /** the time the meters are read at; the clock's, by the minute, unless pinned (the catalog, tests) */
   now?: Date | undefined;
+  /** the stage's cards layer (§8 "Where the cards stand"), over the terminals; absent, the cards stand in place */
+  cardLayer?: HTMLElement | null | undefined;
+  /** the terminals fill the window: no card floats over them */
+  covered?: boolean | undefined;
 }
 
 function ProfilesColumnController({
@@ -98,6 +102,8 @@ function ProfilesColumnController({
   openProfile,
   moment,
   now,
+  cardLayer,
+  covered = false,
 }: ProfilesColumnProps): ReactElement {
   // ruling 8: This Mac's circle lists the agents Settings lists there; until the door answers, every agent
   const [installed, setInstalled] = useState<ReadonlySet<string> | undefined>(undefined);
@@ -155,7 +161,10 @@ function ProfilesColumnController({
     };
     const onPointer = (event: PointerEvent): void => {
       const target = event.target;
-      if (target instanceof Element && target.closest(".vf-profiles-column") !== null) return;
+      // the cards stand in their own layer now, so "inside" is the pill or a stand
+      if (target instanceof Element && target.closest(".vf-profiles-column, .vf-profiles-stand")) {
+        return;
+      }
       setPinned(null);
     };
     window.addEventListener("keydown", onKey, true);
@@ -166,6 +175,12 @@ function ProfilesColumnController({
       document.removeEventListener("pointerdown", onPointer, true);
     };
   }, [pinned]);
+  // GV-D11's other half: the terminals fill the window, so no card floats over them (`covered`, the deck's own door)
+  useEffect(() => {
+    if (!covered) return;
+    setPinned(null);
+    setPointed(null);
+  }, [covered]);
   const openCircle = circles.find((circle) => circle.set.id === open);
   return (
     <ProfilesColumnView
@@ -177,6 +192,7 @@ function ProfilesColumnController({
       focus={focus}
       read={openCircle === undefined ? "" : readWords(openCircle.meters, clock)}
       addOpen={pointed === ADD_TARGET}
+      cardLayer={cardLayer}
       canAdd={openNewProfile !== undefined}
       canOpen={openProfile !== undefined}
       canRetry={port?.refresh !== undefined}

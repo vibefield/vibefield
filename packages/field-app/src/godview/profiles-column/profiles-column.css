@@ -22,14 +22,20 @@
     0 0 0 1px var(--vf-profiles-line-ring),
     var(--vf-profiles-line-shadow);
   color: var(--vf-foreground);
+}
+
+/* the sans the column reads and the Bands circle's tones (§8 "Its paints are tones": the ink, the hot dot's ring, the
+   attention ink), on the pill and in the cards layer beyond it, which stands outside the column's DOM */
+.vf-monitor-cards,
+.vf-profiles-column {
   font-family: var(--vf-font-sans);
-  /* the Bands circle's tones on the pill (§8 "Its paints are tones"): the ink, the hot dot's ring, the attention ink */
   --vf-bands-ink: var(--vf-foreground);
   --vf-bands-ground: var(--vf-profiles-solid);
   --vf-bands-attention: var(--vf-monitor-ink-attention);
 }
 
-.vf-godview.theme-light .vf-profiles-column {
+.vf-godview.theme-light .vf-profiles-column,
+.vf-godview.theme-light .vf-monitor-cards {
   --vf-profiles-line: var(--vf-godview-light-chrome-line);
   --vf-profiles-line-ring: var(--vf-godview-light-chrome-line-ring);
   --vf-profiles-line-shadow: var(--vf-godview-light-chrome-line-shadow);
@@ -43,7 +49,8 @@
   --vf-text-faint: var(--vf-godview-light-chrome-text-faint);
 }
 
-.vf-godview.theme-dark .vf-profiles-column {
+.vf-godview.theme-dark .vf-profiles-column,
+.vf-godview.theme-dark .vf-monitor-cards {
   --vf-profiles-line: var(--vf-godview-dark-chrome-line);
   --vf-profiles-line-ring: var(--vf-godview-dark-chrome-line-ring);
   --vf-profiles-line-shadow: var(--vf-godview-dark-chrome-line-shadow);
@@ -124,13 +131,33 @@
   cursor: default;
 }
 
-/* ── the cards beside the column: a menu's solid in Godview's mode, 16 right of the pill ── */
+/* ── the cards beside the column: a menu's solid in Godview's mode, 16 right of the pill (UM-R1, §8 "Where the cards
+   stand"). They stand in the cards layer the stage keeps beside itself, over the deck (10), its veil (11) and its
+   readout (12), under the curtain (20), the CRT layers (30) and the head; the layer's box is exactly the room a card
+   may have, from the pill's top to the panes' foot. ── */
+.vf-monitor-cards {
+  position: absolute;
+  z-index: 13;
+  inset: calc(var(--vf-godview-head-reserve) + 8px) 0 var(--vf-godview-panes-foot) 0;
+  pointer-events: none;
+}
+
+/* A card's stand: placed in the layer by `CardStand`'s inline style, or, with no layer (the catalog), here in place:
+   the pill's padding 6 plus §8's 16, its top 6 above its item's, over the circles beneath it. */
+.vf-profiles-stand {
+  position: absolute;
+  left: calc(100% + 22px);
+  top: -6px;
+  z-index: 2;
+  pointer-events: auto;
+}
+
 .vf-profiles-pop,
 .vf-profiles-addcard {
-  position: absolute;
-  left: calc(100% + 16px);
-  z-index: 2;
   box-sizing: border-box;
+  max-width: inherit;
+  max-height: inherit;
+  overflow-y: auto;
   display: grid;
   background: var(--vf-profiles-solid);
   box-shadow:
@@ -142,9 +169,8 @@
   --vf-bands-ground: var(--vf-profiles-solid);
 }
 
-/* the add's card: 270 wide, corners 16, padded 12 14, its lines 6 apart, its top 6 above the add's */
+/* the add's card: 270 wide, corners 16, padded 12 14, its lines 6 apart */
 .vf-profiles-addcard {
-  top: -6px;
   width: 270px;
   padding: 12px 14px;
   gap: 6px;
@@ -177,12 +203,13 @@
 /* the limit moment stands in the add's card's place while it is due (§8 "The moments") */
 .vf-profiles-moment {
   position: absolute;
-  left: calc(100% + 16px);
+  left: calc(100% + 22px);
   top: -14px;
   z-index: 2;
 }
 
-.vf-profiles-add-item:has(> .vf-profiles-moment > *) > .vf-profiles-addcard {
+.vf-godview:has(.vf-profiles-add-item > .vf-profiles-moment > *)
+  .vf-profiles-stand[data-card="add"] {
   display: none;
 }
 
@@ -303,9 +330,8 @@
   outline-offset: 2px;
 }
 
-/* ── the popover: about 566 wide, corners 20, padded 12 14 11, its top 6 above the circle's, lifted to stay in ── */
+/* ── the popover: about 566 wide, corners 20, padded 12 14 11 (its stand holds it in the layer's room) ── */
 .vf-profiles-pop {
-  top: calc(-6px - var(--vf-profiles-pop-lift, 0px));
   width: 566px;
   padding: 12px 14px 11px;
   gap: 10px;

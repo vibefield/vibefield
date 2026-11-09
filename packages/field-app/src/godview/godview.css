@@ -510,7 +510,11 @@
    head and the cards beside the add, and its Retry and approval row took their
    clicks; the drawing raises the rail over the strip (round4.css `.prail`).
    Both stay inside the stage's own stacking context (its head mask,
-   `godview-head.css`), so the deck, its veil and its readout still cover them. */
+   `godview-head.css`), so the deck, its veil and its readout still cover them.
+   *Corrected 2026-11-09 (UM-R1; DESIGN.md §8 "Where the cards stand"):* the
+   cards themselves left this context for `.vf-monitor-cards` beside the stage,
+   z 13, so the deck no longer covers a card; the pill and the limit card it
+   holds stay under a raised deck, as stated here. */
 .vf-monitor-chrome {
   position: absolute;
   z-index: 8;
@@ -1389,6 +1393,12 @@
    Compositing the deck while the lab is open keeps the body-level panel on top
    without changing the visible terminal alpha. */
 .vf-godview[data-godview-tuning-open="true"] .vf-godview-terminal-deck {
+  opacity: 0.999;
+}
+
+/* …and while a profile card stands in the cards layer, for the same reason
+   (UM-R1): a card that wins in CSS must not lose to a promoted canvas. */
+.vf-godview:has(.vf-monitor-cards > *) .vf-godview-terminal-deck {
   opacity: 0.999;
 }
 

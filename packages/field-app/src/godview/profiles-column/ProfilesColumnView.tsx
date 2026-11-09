@@ -1,10 +1,11 @@
 import type { AgentProfileSet } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import type { ReactElement, ReactNode } from "react";
+import type { KeyboardEvent, ReactElement, ReactNode } from "react";
 import { PROFILES_WORDS } from "../../setup/profiles-words";
 import { bandsGeometry, bandsLabel } from "../../usage/bands";
 import type { ProfileMeters } from "../../usage/meters";
 import { BandsCircle } from "./BandsCircle";
+import { CardStand } from "./CardStand";
 import { ProfilePopoverView } from "./ProfilePopoverView";
 import "./profiles-column.css";
 
@@ -49,6 +50,8 @@ export interface ProfilesColumnViewProps {
   canRetry: boolean;
   /** the limit moment (UM-D23), beside the add while it is due; it says nothing when it is not */
   moment?: ReactNode;
+  /** the stage's cards layer (§8 "Where the cards stand"), over the terminals; absent, the cards stand in place */
+  cardLayer?: HTMLElement | null | undefined;
   /** the pointer came onto a circle (its profile's id) or the add (`ADD_TARGET`), or left them (null) */
   onPoint: (target: string | null) => void;
   onCircle: (setId: string) => void;
@@ -85,6 +88,26 @@ export function circleWords(circle: ColumnCircle, lens: boolean, chosen: boolean
   return `${circleState(circle)}${toggle}`;
 }
 
+/** Tab across the portal (§8 "Pinned"): the card leaves the circle's DOM once it stands in the layer, so its Tab order
+ * is carried by hand, forward from the circle onto the card's first control that can act, and back from that control.
+ * Key events bubble through the portal to the circle's item, which holds this. No layer, the DOM's own order holds. */
+function tabAcrossPortal(
+  event: KeyboardEvent<HTMLElement>,
+  layer: HTMLElement | null | undefined,
+): void {
+  if (event.key !== "Tab" || !layer) return;
+  const first = layer.querySelector<HTMLElement>(".vf-profiles-stand button:not(:disabled)");
+  const circle = event.currentTarget.querySelector<HTMLElement>(".vf-profiles-circle");
+  if (!first || !circle) return;
+  if (!event.shiftKey && event.target === circle) {
+    event.preventDefault();
+    first.focus();
+  } else if (event.shiftKey && event.target === first) {
+    event.preventDefault();
+    circle.focus();
+  }
+}
+
 export function ProfilesColumnView({
   circles,
   lens,
@@ -98,6 +121,7 @@ export function ProfilesColumnView({
   canOpen,
   canRetry,
   moment,
+  cardLayer,
   onPoint,
   onCircle,
   onClose,
@@ -122,6 +146,7 @@ export function ProfilesColumnView({
             {...(isOpen && pinned ? { "data-pinned": "" } : {})}
             onPointerEnter={() => onPoint(id)}
             onPointerLeave={() => onPoint(null)}
+            onKeyDown={isOpen ? (event) => tabAcrossPortal(event, cardLayer) : undefined}
           >
             <button
               type="button"
@@ -140,19 +165,21 @@ export function ProfilesColumnView({
               />
             </button>
             {isOpen ? (
-              <ProfilePopoverView
-                circle={circle}
-                lens={lens}
-                chosen={isChosen}
-                focus={focus}
-                read={read}
-                canOpen={canOpen}
-                canRetry={canRetry}
-                onClose={onClose}
-                onFocusPlan={onFocusPlan}
-                onOpenProfile={onOpenProfile}
-                onRetry={onRetry}
-              />
+              <CardStand layer={cardLayer} profile={id}>
+                <ProfilePopoverView
+                  circle={circle}
+                  lens={lens}
+                  chosen={isChosen}
+                  focus={focus}
+                  read={read}
+                  canOpen={canOpen}
+                  canRetry={canRetry}
+                  onClose={onClose}
+                  onFocusPlan={onFocusPlan}
+                  onOpenProfile={onOpenProfile}
+                  onRetry={onRetry}
+                />
+              </CardStand>
             ) : null}
           </div>
         );
@@ -173,14 +200,16 @@ export function ProfilesColumnView({
           <FieldGlyph name="plus" size={17} />
         </button>
         {addOpen ? (
-          <div className="vf-profiles-addcard" role="tooltip">
-            <b>{PROFILES_WORDS.add}</b>
-            <p>{`${PROFILES_WORDS.offer} ${PROFILES_WORDS.fact}`}</p>
-            <span className="vf-profiles-addcard-foot">
-              <FieldGlyph name="gear" size={11} />
-              Opens Settings → Agent Profiles on New profile…
-            </span>
-          </div>
+          <CardStand layer={cardLayer} card="add">
+            <div className="vf-profiles-addcard" role="tooltip">
+              <b>{PROFILES_WORDS.add}</b>
+              <p>{`${PROFILES_WORDS.offer} ${PROFILES_WORDS.fact}`}</p>
+              <span className="vf-profiles-addcard-foot">
+                <FieldGlyph name="gear" size={11} />
+                Opens Settings → Agent Profiles on New profile…
+              </span>
+            </div>
+          </CardStand>
         ) : null}
         <div className="vf-profiles-moment">{moment}</div>
       </div>

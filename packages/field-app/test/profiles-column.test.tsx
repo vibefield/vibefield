@@ -343,9 +343,10 @@ describe("the profiles column (UM-D21, UM-D19, UM-D22): said as DESIGN.md §9 sa
     );
     const slot = page.querySelector(".vf-profiles-add-item > .vf-profiles-moment");
     expect(slot?.querySelector("[data-moment]")).toBeTruthy();
-    // the moment's card hides the add's card while it stands (it says nothing when it is not due)
+    // the moment's card hides the add's card while it stands (it says nothing when it is not due). UM-R1 moved the
+    // card to a portaled stand, so the rule reads the moment from the root and hides the stand wherever it stands
     expect(CSS).toMatch(
-      /\.vf-profiles-add-item:has\(> \.vf-profiles-moment > \*\) > \.vf-profiles-addcard \{\s*display: none;/u,
+      /\.vf-godview:has\(\.vf-profiles-add-item > \.vf-profiles-moment > \*\)\s+\.vf-profiles-stand\[data-card="add"\] \{\s*display: none;/u,
     );
   });
 

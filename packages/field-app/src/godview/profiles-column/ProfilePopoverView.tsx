@@ -1,7 +1,6 @@
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { AgentIcon, ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
-import { MONITOR_STAGE_CLASS } from "@vibefield/puppeteer-views";
-import { type CSSProperties, type ReactElement, useLayoutEffect, useRef, useState } from "react";
+import type { ReactElement } from "react";
 import { type UsageResetForm, UsageTimeline } from "../../panels/agents/ProfilesView";
 import { bandsGeometry, bandsLabel } from "../../usage/bands";
 import type { MeterWindow, PlanMeter, ProfileMeters } from "../../usage/meters";
@@ -200,17 +199,6 @@ export function ProfilePopoverView({
     hit: true,
     ...(focus !== null ? { focus } : {}),
   });
-  // lifted as far as it must be to stay inside the stage (§8), measured once it stands
-  const ref = useRef<HTMLDivElement>(null);
-  const [lift, setLift] = useState(0);
-  useLayoutEffect(() => {
-    const pop = ref.current;
-    const stage = pop?.closest(`.${MONITOR_STAGE_CLASS}`);
-    if (!pop || !stage) return;
-    const over = pop.getBoundingClientRect().bottom + lift - stage.getBoundingClientRect().bottom;
-    const next = Math.max(0, Math.ceil(over));
-    if (next !== lift) setLift(next);
-  });
   const rows = meters.entries.filter(
     (entry): entry is Exclude<PlanMeter, { kind: "no-meter" }> => entry.kind !== "no-meter",
   );
@@ -222,13 +210,7 @@ export function ProfilePopoverView({
   const unread = none.filter((entry) => entry.why === "unavailable");
   const quiet = none.filter((entry) => entry.why !== "unavailable");
   return (
-    <div
-      ref={ref}
-      className="vf-profiles-pop"
-      role="dialog"
-      aria-label={set.label}
-      style={{ "--vf-profiles-pop-lift": `${lift}px` } as CSSProperties}
-    >
+    <div className="vf-profiles-pop" role="dialog" aria-label={set.label}>
       <div className="vf-profiles-pop-head">
         <ProfileGlyph glyph={set.glyph} kind={set.kind} filled={set.default} size={15} />
         <b className="vf-profiles-pop-name">{set.label}</b>

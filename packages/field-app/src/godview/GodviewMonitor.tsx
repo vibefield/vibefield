@@ -908,6 +908,8 @@ export function GodviewMonitor({
   // row's right end (DESIGN.md §8 "Search — the Peek").
   const selectView = useCallback((viewId: string) => onSelectView?.(viewId), [onSelectView]);
   const deckMaximized = useGodviewDeckMaximized();
+  // UM-R1 — the cards layer, the stage's sibling, handed to the column as an element
+  const [cardLayer, setCardLayer] = useState<HTMLDivElement | null>(null);
 
   return (
     <>
@@ -989,6 +991,8 @@ export function GodviewMonitor({
               openNewProfile={openNewProfile}
               openProfile={openProfile}
               moment={columnMoment}
+              cardLayer={cardLayer}
+              covered={deckMaximized}
             />
           </ChromeBoundary>
         </div>
@@ -1045,6 +1049,9 @@ export function GodviewMonitor({
           )}
         </div>
       </section>
+      {/* The column's cards (UM-R1, DESIGN.md §8 "Where the cards stand"): the stage's sibling, over the terminals
+          as nothing inside the stage can be. Its own `inert`: a stage-wide attribute no longer reaches a card. */}
+      <div ref={setCardLayer} className="vf-monitor-cards" inert={still} />
     </>
   );
 }
