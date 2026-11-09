@@ -3,7 +3,16 @@
 // half of the frozen-desk answer: under a held freeze a place commits, projects and answers real, with no frame stepped.
 // What a real window must still prove is the desk's half (see the head of applier.ts).
 import type { Entity } from "@vibecook/ice";
-import { ChildOf, Editing, guardedTransaction, setWidgetProps } from "@vibecook/ice";
+import {
+  Camera,
+  ChildOf,
+  Editing,
+  guardedTransaction,
+  Position,
+  Size,
+  setWidgetProps,
+  Viewport,
+} from "@vibecook/ice";
 import { NOTE_TYPE, PHOTO_TYPE } from "@vibecook/ice/desk/objects";
 import type { ObjectIntent, ObjectIntentAnswer } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -17,7 +26,7 @@ import { buildRegistry, createFieldEngine } from "../src/field-engine";
 
 type Ok = Extract<ObjectIntentAnswer, { ok: true }>;
 
-const BASE = { run: "run-1", handle: "claude·2" };
+const BASE = { run: "run-1", handle: "claude·2", expiresAt: Number.MAX_SAFE_INTEGER };
 let serial = 0;
 const intent = (rest: Record<string, unknown>): ObjectIntent => {
   serial += 1;
@@ -346,7 +355,9 @@ describe("an intent past its deadline", () => {
     expect(
       applier.apply(intent({ op: "place", kind: NOTE_TYPE, props: {}, expiresAt: 1_001 })).ok,
     ).toBe(true);
-    expect(applier.apply(intent({ op: "place", kind: NOTE_TYPE, props: {} })).ok).toBe(true);
+    expect(
+      applier.apply(intent({ op: "place", kind: NOTE_TYPE, props: {}, expiresAt: undefined })).ok,
+    ).toBe(true);
     expect(countOf(NOTE_TYPE)).toBe(2);
   });
 });
@@ -380,6 +391,43 @@ describe("a title on a place", () => {
 });
 
 describe("placing", () => {
+  describe("on the board, wherever the person is looking", () => {
+    /** A view so wide that anything near the origin lies in it: only being in another frame can keep an object off screen. */
+    const wideView = (ce: ReturnType<typeof mount>["ce"]) => {
+      ce.world.setResource(Viewport, { w: 1200, h: 800, dpr: 1 });
+      ce.world.setResource(Camera, { x: -60_000, y: -40_000, zoom: 0.01, gesturing: false });
+    };
+
+    it("goes on the board and beside the mat, never into the mat the person is inside", () => {
+      const { ce, ok, place } = mount();
+      const mat = place({}, "desk.minimat");
+      const board = parentOf(ce, place({ text: "already here" }).key);
+      ce.step(20); // the mat becomes a container at a frame
+      ce.nav.enterContainer(mat.entity, { transition: "none" });
+      ce.step(36);
+      wideView(ce);
+      const value = ok({ op: "place", kind: NOTE_TYPE, props: {} }).value as {
+        key: string;
+        onScreen: boolean;
+      };
+      expect(parentOf(ce, value.key)).toBe(board);
+      expect(value.onScreen).toBe(false);
+      const e = ce.docs.current()?.store.resolve(value.key as never) as Entity;
+      const matAt = ce.world.get(mat.entity, Position);
+      const matSize = ce.world.get(mat.entity, Size);
+      expect(ce.world.get(e, Position)?.x).toBeGreaterThanOrEqual(
+        (matAt?.x ?? 0) + (matSize?.w ?? 0),
+      );
+    });
+
+    it("says it is on screen when it lands in view on the board", () => {
+      const { ce, ok } = mount();
+      wideView(ce);
+      const value = ok({ op: "place", kind: NOTE_TYPE, props: {} }).value as { onScreen: boolean };
+      expect(value.onScreen).toBe(true);
+    });
+  });
+
   it("refuses a print an agent has no picture for, in words", () => {
     const { factOf } = mount();
     expect(factOf({ op: "place", kind: PHOTO_TYPE, props: {} })).toBe("needs-you");
