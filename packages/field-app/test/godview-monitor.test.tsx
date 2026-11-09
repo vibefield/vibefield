@@ -35,6 +35,7 @@ import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import {
   type AgentAccountUsageEntry,
   type AgentPersona,
+  type AgentPlan,
   type AgentProfileSet,
   AgentRecordedLanesResult,
   type TerminalInfo,
@@ -2252,8 +2253,11 @@ interface TabDoor extends FakeDoor {
   pushSets(sets: readonly AgentProfileSet[]): void;
 }
 
-function tabDoor(sets: readonly AgentProfileSet[] = TAB_SETS): TabDoor {
-  const door = fakeDoor(TAB_ROWS);
+function tabDoor(
+  sets: readonly AgentProfileSet[] = TAB_SETS,
+  rows: readonly AgentSessionSummary[] = TAB_ROWS,
+): TabDoor {
+  const door = fakeDoor(rows);
   // the backend reads the same feed (a row's `profileSet` is its word)
   board?.profiles(sets);
   let listener: ((next: readonly AgentProfileSet[]) => void) | null = null;
@@ -2506,6 +2510,242 @@ describe("the profile filter (AR-S5; in search's Live now since P2, GV-D3)", () 
     expect(chosenTab(host)).toBe("all");
     expect(host.querySelector(".vf-monitor-profile-empty")).toBeNull();
     expect(listRows(host).some((row) => row.receded)).toBe(false);
+  });
+});
+
+// ---- UM-5a (UM-D14) — the plan filter on the stage -------------------------------
+//
+// A plan is chosen through the door the Peek and the column both reach (`setPlan`), for everyone, with one profile
+// too. It is its own filter: the rows off the plan recede in place, a peer's and a terminal's too, and `shown` loses
+// them, while the profile filter (`profileTab`) stays as it was.
+
+const planOf = (
+  id: string,
+  serviceId: string,
+  holders: readonly string[],
+  alsoIn: readonly string[] = [],
+): AgentPlan => ({
+  id,
+  service: { id: serviceId, label: serviceId },
+  account: { email: "kim@example.com", plan: "max" },
+  namedBy: holders[0] as string,
+  holders: [...holders],
+  alsoIn: [...alsoIn],
+});
+const ONE_PROFILE_SET = tabSet(
+  "native",
+  "This Mac",
+  [tabPersona("n-claude", "claude"), tabPersona("n-codex", "codex")],
+  {
+    default: true,
+    plans: [planOf("anthropic", "anthropic", ["n-claude"]), planOf("openai", "openai", ["n-codex"])],
+  },
+);
+const SHARED_WORK = tabSet(
+  "work",
+  "Work",
+  [tabPersona("w-claude", "claude"), tabPersona("w-codex", "codex")],
+  {
+    glyph: "briefcase",
+    plans: [
+      planOf("anthropic", "anthropic", ["w-claude"], ["native"]),
+      planOf("openai", "openai", ["w-codex"]),
+    ],
+  },
+);
+const SHARED_NATIVE = tabSet(
+  "native",
+  "This Mac",
+  [tabPersona("n-claude", "claude"), tabPersona("n-codex", "codex")],
+  {
+    default: true,
+    plans: [
+      planOf("anthropic", "anthropic", ["n-claude"], ["work"]),
+      planOf("openai", "openai", ["n-codex"]),
+    ],
+  },
+);
+const planRow = (run: string, kind: string, profileSet: string, project: string) =>
+  managedSummary({ runtimeRunId: run, kind, label: kind, profileSet, cwd: `/project/${project}` });
+const ONE_ROWS = [
+  planRow("run-claude", "claude", "native", "vibe-field"),
+  planRow("run-codex", "codex", "native", "voyager"),
+];
+const SHARED_ROWS = [
+  planRow("run-native", "claude", "native", "vibe-field"),
+  planRow("run-work", "claude", "work", "jabali"),
+  planRow("run-codex", "codex", "work", "voyager"),
+];
+const choosePlan = async (key: string | null): Promise<void> => {
+  await act(async () => getGodviewFindDoor()?.setPlan(key));
+};
+const chosenPlan = (): string | undefined => getGodviewFindDoor()?.filters.plan?.key;
+
+describe("the plan filter on the stage (UM-5a, UM-D14)", () => {
+  it("with one profile: rows off the plan recede, a peer's and a terminal's too, and `shown` loses them", async () => {
+    const door = tabDoor([ONE_PROFILE_SET], ONE_ROWS);
+    board?.peer({
+      device: "studio",
+      name: "Studio",
+      platform: "darwin",
+      rows: [managedSummary({ runtimeRunId: "run-peer", kind: "claude", label: "Claude", cwd: "/x" })],
+    });
+    const host = await mountMonitor("list", door);
+    const everything = latest().shownAgents;
+    await choosePlan("native/plan:anthropic");
+    expect(chosenPlan()).toBe("native/plan:anthropic");
+    const rows = listRows(host);
+    expect(rows.filter((row) => !row.receded).map((row) => row.project)).toEqual(["vibe-field"]);
+    // the codex run, the peer's run and the unclaimed pane stay on the stage, receded
+    expect(rows.filter((row) => row.receded).length).toBe(rows.length - 1);
+    expect(rows.find((row) => row.project === "voyager")?.receded).toBe(true);
+    expect(latest().shownAgents).toBe(1);
+    expect(latest().profileTab).toBe("all");
+
+    await choosePlan(null);
+    expect(listRows(host).some((row) => row.receded)).toBe(false);
+    expect(latest().shownAgents).toBe(everything);
+  });
+
+  it("keeps a twin's rows: a plan two profiles share is one plan", async () => {
+    const host = await mountMonitor(
+      "list",
+      tabDoor([SHARED_NATIVE, SHARED_WORK], SHARED_ROWS),
+    );
+    await choosePlan("work/plan:anthropic");
+    const kept = listRows(host)
+      .filter((row) => !row.receded)
+      .map((row) => row.project)
+      .sort();
+    expect(kept).toEqual(["jabali", "vibe-field"]);
+    expect(latest().shownAgents).toBe(2);
+  });
+
+  it("says so over the stage for a plan with no sessions", async () => {
+    const door = tabDoor([ONE_PROFILE_SET], [planRow("run-claude", "claude", "native", "vibe-field")]);
+    const host = await mountMonitor("list", door);
+    await choosePlan("native/plan:openai");
+    const label = getGodviewFindDoor()?.filters.plan?.label;
+    expect(typeof label).toBe("string");
+    const empty = host.querySelector(".vf-monitor-profile-empty");
+    expect(empty?.textContent).toContain(`No sessions on ${label}`);
+    expect(empty?.textContent).toContain(
+      "Only its sessions show. Click it again, or the × on search, to show them all.",
+    );
+    expect(empty?.querySelector("[data-profile-glyph]")).toBeNull();
+    expect(latest().shownAgents).toBe(0);
+  });
+
+  it("a lens clears a plan not in it, and choosing a plan clears a lens it is not in; a twin keeps both", async () => {
+    await mountMonitor("list", tabDoor([SHARED_NATIVE, SHARED_WORK], SHARED_ROWS));
+    await choosePlan("native/plan:openai");
+    await chooseProfile("work");
+    expect(chosenPlan()).toBeUndefined();
+    expect(chosenTab()).toBe("work");
+
+    await chooseProfile("native");
+    await choosePlan("work/plan:openai");
+    expect(chosenPlan()).toBe("work/plan:openai");
+    expect(chosenTab()).toBe("all");
+
+    await chooseProfile("native");
+    await choosePlan("work/plan:anthropic");
+    expect(chosenPlan()).toBe("work/plan:anthropic");
+    expect(chosenTab()).toBe("native");
+  });
+
+  it("names a kept key the feed no longer has nowhere: no token and no filter", async () => {
+    sessionStorage.setItem(
+      GODVIEW_FILTERS_STORAGE_KEY,
+      JSON.stringify({ desk: null, profile: null, plan: "native/plan:gone" }),
+    );
+    const host = await mountMonitor("list", tabDoor([ONE_PROFILE_SET], ONE_ROWS));
+    expect(chosenPlan()).toBeUndefined();
+    expect(listRows(host).some((row) => row.receded)).toBe(false);
+  });
+
+  it("a plan alone survives Godview closing, with one profile", async () => {
+    const door = tabDoor([ONE_PROFILE_SET], ONE_ROWS);
+    await mountMonitor("list", door);
+    await choosePlan("native/plan:anthropic");
+    closeGodview();
+    expect(keptFilters()).toEqual({ desk: null, profile: null, plan: "native/plan:anthropic" });
+    await mountMonitor("list", door);
+    expect(chosenPlan()).toBe("native/plan:anthropic");
+    expect(latest().shownAgents).toBe(1);
+  });
+
+  it("a stage rerender with cloned sets hands the replica no new local facts", async () => {
+    const seen: unknown[] = [];
+    function LocalSpy(): null {
+      const feed = useMonitorFeed();
+      if (feed !== null && !vi.isMockFunction(feed.replica.setLocal)) {
+        const setLocal = feed.replica.setLocal.bind(feed.replica);
+        vi.spyOn(feed.replica, "setLocal").mockImplementation((local) => {
+          seen.push(local);
+          setLocal(local);
+        });
+      }
+      return null;
+    }
+    const door = tabDoor([ONE_PROFILE_SET], ONE_ROWS);
+    const view = monitorViewFor("list");
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <LocalSpy />
+          <GodviewMonitor
+            view={view}
+            parameters={monitorParameterDefaults(view.parameterGroups)}
+            door={door}
+            panes={PANES}
+            publishesFind
+          />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    await choosePlan("native/plan:anthropic");
+    await settle();
+    const before = seen.length;
+    await act(async () => door.pushSets(structuredClone([ONE_PROFILE_SET])));
+    await settle();
+    expect(seen.length).toBe(before);
+  });
+
+  it("a Timeline's ended lanes recede under a plan, with one profile too", async () => {
+    const onPlan = {
+      ...pastLane("past:claude:nat-on", 2),
+      provider: { id: "claude", label: "Claude Code" },
+      profileSet: "native",
+    };
+    const offPlan = {
+      ...pastLane("past:codex:nat-off", 1),
+      provider: { id: "codex", label: "Codex" },
+      profileSet: "native",
+    };
+    const answer = AgentRecordedLanesResult.parse({ ...PAST, ended: [onPlan, offPlan] });
+    const port = pastPort(async () => answer);
+    const door = Object.assign(tabDoor([ONE_PROFILE_SET], ONE_ROWS), { pastLanes: port });
+    await mountPastProbe(door, true);
+    const ended = (): [string, boolean | undefined][] =>
+      (pastProbeView.lastInput?.capabilities.history?.ended ?? []).map((lane) => [
+        lane.id,
+        lane.receded,
+      ]);
+    expect(ended().every(([, receded]) => receded !== true)).toBe(true);
+    await choosePlan("native/plan:anthropic");
+    await settle();
+    expect(new Map(ended())).toEqual(
+      new Map([
+        ["past:claude:nat-on", false],
+        ["past:codex:nat-off", true],
+      ]),
+    );
   });
 });
 
@@ -3099,7 +3339,7 @@ function pastPort(
   return port;
 }
 
-async function mountPastProbe(door: MonitorDoor): Promise<HTMLElement> {
+async function mountPastProbe(door: MonitorDoor, publishesFind = false): Promise<HTMLElement> {
   syncBoard(PANES);
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -3107,7 +3347,13 @@ async function mountPastProbe(door: MonitorDoor): Promise<HTMLElement> {
   await act(async () => {
     root?.render(
       <GodviewAgentsProvider door={door}>
-        <GodviewMonitor view={PAST_PROBE} parameters={{}} door={door} panes={PANES} />
+        <GodviewMonitor
+          view={PAST_PROBE}
+          parameters={{}}
+          door={door}
+          panes={PANES}
+          publishesFind={publishesFind}
+        />
       </GodviewAgentsProvider>,
     );
   });
