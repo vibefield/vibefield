@@ -6572,9 +6572,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **The words follow the reach:** **Show all** over "8 sessions · every profile" on the hub, **Show Work** over
       Work's sessions on a bud, and **Cancel** over "let go here to leave the field as it is" on open ground, the
       verb at 40%. The reached profile's circle stands at 206 under them, or every plan's on the hub.
-      *Wave 1, until UM-5 (2026-11-06, U3's repair; ‹for James›):* the phone's rows carry no run's profile yet, so
-      the line under **Show all** and **Show ‹profile›** counts the plans' reads where sessions are ruled, "5 read · 2
-      need you · every profile" on the hub and "1 read · 2 need you" on Work's bud (§9 "The phone's hold").
+      *Built 2026-11-09, UM-5b:* while the field is live the line says sessions, as ruled; while it is not (no run to
+      count) it keeps the plans' reads, the one honest fallback, "5 read · 2 need you · every profile" on the hub and
+      "1 read · 2 need you" on Work's bud (§9 "The phone's hold"). *(Corrected 2026-11-09, UM-5b: this said wave 1's
+      "the phone's rows carry no run's profile yet", which stopped being true at SE-2: the rows carry
+      `monitor.profileSet`, `PhoneSearch.LiveSession.profileSet`.)*
     - **Let go** on a bud and the field shows that profile (the lens, §8 "The phone's profile token"); on the face,
       every profile; on open ground, the field as it was.
   - **Reduced motion** (M6), as the spawn bloom's: the buds stand at their size behind its 90ms fade, with no pop
@@ -6606,15 +6608,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **Plans**, or **Every plan** with several profiles, or **Plans in Work** while the lens is on. Per plan: its
       agent's mark (18), its title, the age of a kept reading ("as of 5m ago") or of one taken before a window's
       reset that has since come (§8 "The Bands circle"; added 2026-11-06, ‹for James›), every window as Settings'
-      C1 line, and "Runs out in ~35m at this pace" while it would (UM-D4). A plan's sessions line ("3 sessions ·
-      1 working · 1 waiting for you") and its **Show** and **Showing** are UM-D14's, the next wave's (UM-5). A plan
-      that needs you says where it is fixed, "Not signed in · sign in on studio" or "Couldn't read · retry", and the
+      C1 line, and "Runs out in ~35m at this pace" while it would (UM-D4). While the field is live a plan's row adds
+      its sessions line ("3 sessions · 1 working · 1 waiting for you", or "no sessions"); a plan with sessions draws
+      **Show**, **Showing** while it is the one chosen, for everyone, with one profile too (UM-D14, built 2026-11-09,
+      UM-5b), and either closes the page. A plan that needs you says where it is fixed, "Not signed in · sign in on
+      studio" or "Couldn't read · retry", and the
       phone draws no act for either: it signs in on no desktop, and a phone's refresh spends no call (UM-D8). An
       agent with no meter is a line of its own, "Codex shows no meter";
     - **the foot:** "Manage profiles in Settings → Agent Profiles. New profiles are made on a desktop."
-    - *Wave 1, until UM-5 (2026-11-06, UM-D14's interim, the lead's ruling 23; ‹for James›):* the page draws no
-      **Show** or **Showing** and no per-plan sessions line, and a plan's row takes no tap (it is not a button);
-      partner lighting waits for UM-5.
+    - *Wave 1 (2026-11-06, UM-D14's interim, the lead's ruling 23) ended 2026-11-09 at UM-5b:* the page draws
+      **Show** and **Showing** and the sessions line. The row itself still takes no tap (it is not a button; **Show**
+      is the act). Partner lighting (§8 "Godview's profiles column") stays owed, ‹for James›. *(Corrected the same
+      day: this said the page draws neither and that partner lighting waits for UM-5.)*
   - The drawing's first-use hint, "Hold your face for your agents' usage", is not drawn: it was not a ruled mark
     ‹for James›.
   - The desktop's half is §8 "Godview's profiles column".
@@ -7079,7 +7084,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     at 15/600, ellipsised. It opens the token's menu.
   - **Its ×** is a 26 round on the ink at 8% holding `xmark` at 10 in the secondary ink (§13). It clears the lens,
     said "Show every profile".
+  - **A plan chosen** (2026-11-09, UM-5b; ‹for James›, never drawn): the token also stands for the plan filter, for
+    everyone, with one profile too. Its name reads the plan's agent's mark at 15 and the plan's title; a tap opens the
+    Agent Profiles page, where the plan's **Showing** stands. Its × clears only the plan, said "Show every plan". With
+    a lens and a plan both, it names the plan, and its × brings back the profile's form.
   - It grows out of the search circle's middle, from 0.35, on the bar's spring. It shows on Field at rest only, and
+    (2026-11-09, UM-5b) whichever filter is on, the lens or a plan; and
     hides while the face is held, while a menu or a page is open, and while search is open. Chat's note stacks
     above it.
   - **The token's menu** wears the Me menu's solid chrome and rows (§8 "The phone's corner"): 262 wide, corners 26,
@@ -7807,19 +7817,20 @@ here.
   it neither read nor needing you; a profile with a first read out beside a sign-in under way says "0 read · none
   need you". ‹for James›: the line of a profile whose every plan waits, a first read or a sign-in under way, said
   so as the rule counts it; and the word of a bud whose one plan is signing in, "NO METER" as built.)*
-  *Wave 1, until UM-5 (2026-11-06, U3's repair; ‹for James›):* with several profiles the line counts the plans'
-  reads where sessions are ruled, "5 read · 2 need you · every profile" under **Show all** and "1 read · 2 need
-  you" under **Show Work**, since the phone's rows carry no run's profile until UM-5 (§8 "The phone's corner", the
-  words follow the reach).
+  *Wave 1 (2026-11-06, U3's repair; ‹for James›) ended 2026-11-09, UM-5b:* while the field is live the line says
+  sessions; while it is not, the line keeps the plans' reads, "5 read · 2 need you · every profile" under **Show
+  all** and "1 read · 2 need you" under **Show Work** (§8 "The phone's corner", the words follow the reach). *(Corrected
+  the same day: this said the phone's rows carry no run's profile until UM-5; they have since SE-2.)*
 - **The Me menu's row** is **Agent Profiles**, its word the tightest percent ("42%") or "reading…".
 - **The page** is **Agent Profiles**: "Read a minute ago, from ‹home›" or "Reading usage…"; **Profiles**, with **All
   profiles** ("3 profiles · 5 plans") and each profile's line ("default · the agents' own sign-ins · 2 plans");
   **Plans**, **Every plan** or **Plans in ‹profile›**; and its foot, "Manage profiles in Settings → Agent Profiles.
-  New profiles are made on a desktop." *With UM-5* each plan adds its sessions as the hold says them, or "no
-  sessions", with **Show** and **Showing** (wave 1 draws neither; ‹for James›). A
+  New profiles are made on a desktop." *Since UM-5b (2026-11-09)* each plan adds its sessions as the hold says them,
+  or "no sessions", with **Show** and **Showing** while the field is live and it has sessions (‹for James›). A
   home that does not share usage yet says "‹home› doesn't share usage yet" on the page and the hold (the lead's
   words; never a blank), and the Me menu row's word then is ‹for James›.
-- **The token** is said "Showing only ‹profile›", its × "Show every profile". Its menu says **Agent Profiles…**,
+- **The token** is said "Showing only ‹profile›", its × "Show every profile"; a plan's form (‹for James›, 2026-11-09,
+  UM-5b) "Showing only ‹plan›", its × "Show every plan". Its menu says **Agent Profiles…**,
   **Show**, each profile with its sessions ("1 session", "4 sessions"), and **Every profile**. *(Added 2026-11-06,
   the M-phone stack, as SE-2d built it; ‹for James›: VoiceOver says the token's hint after its name, "Opens the
   profiles to show", and "menu open" as its value while the menu stands, as the corner's face says it.)*
@@ -7853,7 +7864,8 @@ field gives them, and “q” what was typed.
   " · every profile; ‹profile› comes back on Live now" on the desktop, and " · every profile; ‹profile› comes back on
   Field" on the phone. While a plan is chosen on the desktop (2026-11-09, UM-5a; ‹for James›, not drawn) it adds
   " · every plan; ‹plan› comes back on Live now", and with a profile chosen too " · every profile; ‹profile› and
-  ‹plan› come back on Live now".
+  ‹plan› come back on Live now"; on the phone (UM-5b) the same on Field: " · every plan; ‹plan› comes back on Field",
+  " · every profile; ‹profile› and ‹plan› come back on Field".
 - **The phone's feet.** Live now: "2 sessions · 3 lines matched" with words; "3 of 8 live sessions, waiting first"
   while a filter narrows it; else "8 live sessions, waiting first". Everything: "4 sessions matched" with words, else
   "Your latest sessions" (each desktop corpus's sessions, merged by recency), then " in ‹folder›" while a
