@@ -44727,6 +44727,58 @@ own witness commit. None of its 15 landing rows starts the new sidecar. A node c
 `scripts/stage-package.mjs` carries the 0.7.27 binary into the package rows without running it. **So this EL8 landed
 with the new sidecar unrun on any automated row.**
 
+> **Paid (2026-11-09, 06:04:54Z → 07:13:45Z; the fixer on this Mac, on James's word that VF-PM relayed at 05:55:36Z):**
+> this land's whole `gate:landing`, at main `156e5e21f`, with `4f4c9038d` its ancestor. Item 266 (`f93650d1e`) and the
+> docs since M249 landed before the gate's first row, so `4f4c9038d..156e5e21f` moves `release.yml`,
+> `scripts/release-plan.mjs` and four docs: the gated code tree is M249's. M253 (SP-7b's four commits: the iOS kit and
+> one script, no docs path) landed over `156e5e21f` at 07:19:29Z, and its records after it, past the gate's last row,
+> so no row ran on them.
+> The pre-steps, both found stale by the fixer and run in the main checkout at `92c9ab38d`: one frozen install,
+> 06:04:54Z → 06:04:57Z, exit 0, sidecar 0.7.27; `cargo build -p field-native --locked`, 06:04:57Z → 06:08:35Z, exit 0,
+> binary `d56e774f5958312d` → `bb20c85e5cd9570b`, naming `truffle-core-0.7.27` 39 times and 0.7.24 none.
+> **14 of the 15 landing gates green on their first run, each by its own verdict line; row 11 red, closed by row 17.**
+> Rows 16 and 17 are re-runs, and 17 ran before 16. Seconds are the gate's own; idle is `HIDIdleTime` at arm → end.
+>
+> | Row | Gate | Verdict | s | Arm → end (Z) | Idle, s | Input |
+> | --- | --- | --- | --- | --- | --- | --- |
+> | 1 | `still` | green | 170 | 06:09:17 → 06:12:07 | 635.9 → 806.2 | none |
+> | 2 | `smoke` | green | 14 | 06:12:08 → 06:12:22 | 806.9 → 821.2 | none |
+> | 3 | `smoke:canvas` | green | 838 | 06:12:23 → 06:26:22 | 821.9 → 506.6 | **landed**, last ≈ 06:17:55Z |
+> | 4 | `smoke:canvas:no-gpu` | green | 6 | 06:26:23 → 06:26:30 | 507.4 → 514.3 | none |
+> | 5 | `smoke:canvas:no-webgpu` | green | 5 | 06:26:30 → 06:26:35 | 515.0 → 519.9 | none |
+> | 6 | `smoke:kind-faults` | green | 48 | 06:26:36 → 06:27:25 | 520.6 → 569.2 | none |
+> | 7 | `smoke:plugin-restart` | green | 43 | 06:27:25 → 06:28:09 | 570.0 → 613.6 | none |
+> | 8 | `smoke:plugin` | green | 22 | 06:28:50 → 06:29:12 | 654.6 → 677.0 | none |
+> | 9 | `smoke:godview` | green | 137 | 06:30:33 → 06:32:50 | 758.0 → 895.0 | none |
+> | 10 | `smoke:godview:no-record` | green | 113 | 06:32:51 → 06:34:44 | 895.7 → 1008.7 | none |
+> | 11 | `smoke:first-run` | **RED**, exit 1 | 208 | 06:34:45 → 06:38:14 | 1009.4 → 1218.2 | none; locked |
+> | 12 | `smoke:terminal-door` | green | 14 | 06:41:55 → 06:42:11 | 189.2 → 203.5 | none |
+> | 13 | `smoke:terminal-direct` | green | 18 | 06:42:11 → 06:42:31 | 205.0 → 223.0 | none |
+> | 14 | `smoke:studio` | green | 178 | 06:43:16 → 06:46:16 | 270.2 → 96.0 | **landed**, last ≈ 06:44:40Z |
+> | 15 | `smoke:bundled` | green | 23 | 06:47:47 → 06:48:11 | 188.7 → 211.9 | none |
+> | 16 | `smoke:canvas`, again | green | 847 | 06:59:36 → 07:13:45 | 71.5 → 368.1 | **landed**, last ≈ 07:07:37Z |
+> | 17 | `smoke:first-run`, again | green | 205 | 06:49:12 → 06:52:39 | 273.7 → 479.4 | none |
+>
+> - **Row 11, closed by row 17 alone (VF-PM, 07:15:00Z).** The Mac auto-locked during the row: locked at 06:37:55.8Z
+>   and unlocked at 06:38:15.8Z (the fixer's read of loginwindow's log, 06:40Z; the lead read the same two times from
+>   that log at 07:22:38Z). The row's end read `screen locked 1`, and the catalog walk's last ≈ 18 s ran locked. The
+>   red is three contrast fails on night A2 welcome-back, 1.2:1, 1.3:1 and 1.2:1. The fixer read the sampled pixels as
+>   dark blue-grey where the text should be and suspected host state: a reading, unproven, and the closure does not
+>   rest on it. It rests on row 17, on the same tree, unlocked, with no input: exit 0, all four walks.
+> - **Input landed on rows 3, 14 and 16, all green.** An end read shorter than the row's seconds says input landed
+>   (`docs/desk-gates.md`'s arming rule). It dates only the LAST input, and earlier input is not ruled out.
+> - **The canvas rows.** `SMOKE_CANVAS_REST` wind 10,057 ms (row 3) and 10,038 ms (row 16), both inside 8,000–11,500;
+>   no PEERS ARRIVE problem line in either; `SMOKE_CANVAS_ISOLATION` `times` 0 over 3 windows in both. Neither row was
+>   hands off, so **M246's clean canvas witness stays OWED** (its Owed line, corrected there). One `smoke:canvas` with
+>   James away from the keyboard from arm to end, about 15 minutes, pays it. There was no third run tonight.
+> - **The binaries.** `bb20c85e5cd9570b` through row 13. Row 14's `smoke:studio` rebuilt it to `a0e2555dff0fadbb` from
+>   the same tree (item 256), and rows 15, 17 and 16 ran on that. Porcelain 0 at every end.
+> - **The host.** 1-min load at most 7.71 at any arm and 13.65 at any end, swap 0, dev-stack 0/0 at each arm, the
+>   display awake, the screen unlocked at each arm.
+> - None of these rows starts the 0.7.27 sidecar (this entry's paragraph above). R1's live witness stays owed.
+> - Logs `lanes/dr/el8/gate-landing/` (`row16-canvas/`, `row17-first-run/`, `reads.txt`), SHA256SUMS `fb74b2d61e29b0aa`,
+>   read by `shasum -c` from that folder at 07:16:42Z: 39 OK, 0 FAILED.
+
 **R1's live witness: OWED, the v0.9.0 tag's precondition.** One phone and one floor on 0.7.27 on James's tailnet, the
 phone's reach showing the desktop admitted by tag, the desktop's announce read in the log; or row 28, the two-desktop
 check. Neither had run at this entry.
@@ -44876,6 +44928,9 @@ births kept 0.
 
 **Owed.**
 - The clean canvas witness: the EL8's own `gate:landing` canvas row, hands off. A red there counts against this land.
+  *Corrected 2026-11-09 (VF-PM, 07:15:00Z):* the EL8's `gate:landing` ran this row twice, rows 3 and 16 at main
+  `156e5e21f`, and input landed on both. Both are green, so nothing counts against this land, and neither is the
+  clean witness. Still owed: one `smoke:canvas` with James away from the keyboard from arm to end, about 15 minutes.
 - MV's: the cd row's failure dump still lacks the active pane's last rows, which need a test door in the product or
   ghosttea (ROADMAP's owed line).
 
