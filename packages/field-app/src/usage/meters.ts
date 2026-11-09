@@ -470,7 +470,7 @@ export function hasCircle(set: AgentProfileSet): boolean {
 
 /** Which plan of another profile is this one: the same company and the same account (its handle before its email,
  * as puppeteer's `profileSetPlans` keys it), or the same borrowed sign-in when it names no account. */
-function sharedKey(plan: AgentPlan): string | undefined {
+export function sharedKey(plan: AgentPlan): string | undefined {
   const who = (plan.account?.account ?? plan.account?.email)?.trim().toLowerCase();
   if (who !== undefined && who.length > 0) return `named\u0000${plan.service.id}\u0000${who}`;
   if (plan.borrowedFrom !== undefined) {
