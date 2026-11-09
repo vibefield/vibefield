@@ -84,6 +84,16 @@ interface ServingVector {
     sha256: string;
     serveId: string;
   };
+  appWithHeaders: {
+    listenPort: number;
+    allow: string[];
+    previewDir: string;
+    folder: string;
+    headers: Array<{ name: string; value: string }>;
+    canonicalJson: string;
+    sha256: string;
+    serveId: string;
+  };
   previews: {
     listenPort: number;
     allow: string[];
@@ -554,6 +564,19 @@ describe("MadeAppService (MA-3b unit)", () => {
     );
     expect(sha256(previewsCanonical)).toBe(VECTOR.previews.sha256);
     expect(madePreviewsServeId(previews), "the previews serve's id").toBe(VECTOR.previews.serveId);
+  });
+
+  it("MA-3f: a serve's headers are part of its config, so a policy change is a serve change (DR-L7)", () => {
+    const { canonicalJson: wanted, sha256: digest, serveId, ...fields } = VECTOR.appWithHeaders;
+    const input = { appId: VECTOR.appId, ...fields };
+    const canonical = canonicalJson(canonicalMadeAppServingConfig(input));
+    expect(canonical).toBe(wanted);
+    expect(sha256(canonical)).toBe(digest);
+    expect(madeAppServeId(input)).toBe(serveId);
+    // one serve, two policies, two ids; and no headers is the row every older vector pins
+    const { headers: _none, ...bare } = input;
+    expect(madeAppServeId(bare)).toBe(VECTOR.app.serveId);
+    expect(madeAppServeId({ ...input, headers: [] })).toBe(VECTOR.app.serveId);
   });
 
   it("PIN: the vector's domains are the contract's, apart from AH's, and its candidates follow the rule", () => {

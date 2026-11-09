@@ -529,6 +529,22 @@ describe("the origin's private serve registry", () => {
     expect(parses(MadeAppServeRecord, { ...record, listenPort: 20000 })).toBe(false);
   });
 
+  it("MA-3f: keeps the policy's hosts by directive and the view's version, so a restart spells the same serve", () => {
+    const record = MadeAppRegistry.parse(fixture("made-app-registry.valid")).apps[0]!;
+    const served = { ...record, network: { script: ["cdn.example.com"] }, viewVersion: 1 };
+    expect(MadeAppServeRecord.parse(served)).toMatchObject({
+      network: { script: ["cdn.example.com"] },
+      viewVersion: 1,
+    });
+    // a record from before the fields still reads
+    expect(parses(MadeAppServeRecord, record)).toBe(true);
+    expect(parses(MadeAppServeRecord, { ...served, viewVersion: -1 })).toBe(false);
+    expect(parses(MadeAppServeRecord, { ...served, viewVersion: 1.5 })).toBe(false);
+    expect(parses(MadeAppServeRecord, { ...served, network: { script: "cdn.example.com" } })).toBe(
+      false,
+    );
+  });
+
   it("names the port rule's two domains, apart from AH's", () => {
     expect(MADE_APP_PORT_DOMAIN).toBe("made-app-port-v1\0");
     expect(MADE_APP_PREVIEWS_PORT_DOMAIN).toBe("made-app-previews-v1\0");

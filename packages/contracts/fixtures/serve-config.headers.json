@@ -1,0 +1,26 @@
+{
+  "serveId": "artifact-made-cdc9b5a0f9dddc65-vwxhl5czz7rpnalw",
+  "name": "made-app:cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c",
+  "listenPort": 17055,
+  "target": {
+    "kind": "dir",
+    "path": "/var/lib/vibefield/artifacts/made/cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c/b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e"
+  },
+  "previewDir": "/var/lib/vibefield/artifacts/previews/01JC4MA0PV0000000000000001",
+  "allow": ["*@corp.example"],
+  "tls": true,
+  "headers": [
+    {
+      "name": "Content-Security-Policy",
+      "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+    },
+    {
+      "name": "Referrer-Policy",
+      "value": "no-referrer"
+    },
+    {
+      "name": "X-Content-Type-Options",
+      "value": "nosniff"
+    }
+  ]
+}

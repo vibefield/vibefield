@@ -290,6 +290,7 @@ import {
   ProjectSummary,
 } from "../src/project-doors";
 import { PlaceFacts, PlaceRef } from "../src/project-places";
+import { SERVE_HEADER_LIMITS } from "../src/registries";
 import { StagedReleaseIdentity } from "../src/release-identity";
 import { RemoteEndpointSet } from "../src/remote-endpoints";
 import {
@@ -1097,6 +1098,26 @@ describe("golden fixtures parse (the fixture is the contract)", () => {
       expect(parsed.success, JSON.stringify(parsed.success ? "" : parsed.error.issues)).toBe(true);
     });
   }
+});
+
+describe("MA-3f — a serve's response headers ride ServeConfig (DR-D11 (a))", () => {
+  const base = { name: "made-app:x", target: { kind: "dir" as const, path: "/made/x" } };
+  const csp = { name: "Content-Security-Policy", value: "default-src 'self'" };
+
+  it("takes a bounded list, and a serve with none is the shape every other serve sends", () => {
+    const parsed = ServeConfig.safeParse({ ...base, headers: [csp] });
+    expect(parsed.success && parsed.data.headers).toEqual([csp]);
+    const bare = ServeConfig.safeParse(base);
+    expect(bare.success && bare.data.headers).toBeUndefined();
+  });
+
+  it("refuses a name a serve may never set and a list past its bound, before the floor sees it", () => {
+    const one = (name: string) => ({ name, value: "1" });
+    expect(ServeConfig.safeParse({ ...base, headers: [one("Set-Cookie")] }).success).toBe(false);
+    expect(ServeConfig.safeParse({ ...base, headers: [one("X\r\nY")] }).success).toBe(false);
+    const past = Array.from({ length: SERVE_HEADER_LIMITS.COUNT + 1 }, (_, i) => one(`X-H${i}`));
+    expect(ServeConfig.safeParse({ ...base, headers: past }).success).toBe(false);
+  });
 });
 
 describe("GT-2d — the hello ack wears a provenance label", () => {

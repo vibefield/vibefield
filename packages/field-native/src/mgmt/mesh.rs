@@ -1899,6 +1899,78 @@ mod tests {
             path_secret: None,
             secret_door: SecretDoor::Product,
             routes: &NO_ROUTES,
+            headers: vec![],
+        }
+    }
+
+    fn header(name: &str, value: &str) -> ProxyHeader {
+        ProxyHeader {
+            name: name.into(),
+            value: value.into(),
+        }
+    }
+
+    /// MA-3f (DR-D11 (a)) — a made app's policy is the SERVE's, so it covers the page and the
+    /// preview route alike, and no route carries a list of its own.
+    #[test]
+    fn a_folder_serve_carries_its_response_headers_on_the_serve() {
+        let target = json!({"kind": "dir", "path": PUB_DIR});
+        let cfg = build_serve_config(ServeConfigInput {
+            listen_port: Some(17_055),
+            preview_dir: Some(PREVIEW_2_DIR),
+            tls: Some(true),
+            headers: vec![
+                header("Content-Security-Policy", "default-src 'self'"),
+                header("Referrer-Policy", "no-referrer"),
+            ],
+            ..serve_input("artifact-made-fingerprint", &target)
+        })
+        .expect("a made app's folder config builds");
+        let names: Vec<_> = cfg.headers.iter().map(|h| h.name.as_str()).collect();
+        assert_eq!(names, ["Content-Security-Policy", "Referrer-Policy"]);
+        assert_eq!(cfg.headers[1].value, "no-referrer");
+        assert_eq!(cfg.routes.len(), 2);
+        assert!(cfg.routes.iter().all(|route| route.headers.is_empty()));
+    }
+
+    #[test]
+    fn a_serve_with_no_headers_builds_as_it_did() {
+        let target = json!({"kind": "dir", "path": PUB_DIR});
+        let cfg = build_serve_config(ServeConfigInput {
+            listen_port: Some(17_055),
+            ..serve_input("artifact-folder-fingerprint", &target)
+        })
+        .expect("a folder config builds");
+        assert!(cfg.headers.is_empty());
+    }
+
+    /// Only a made app's folder sets a policy. Any other arm refuses, rather than dropping a
+    /// policy its caller meant to be served under.
+    #[test]
+    fn response_headers_are_refused_on_every_arm_but_a_folder() {
+        let target = json!({"kind": "port", "port": 3000});
+        let err = build_serve_config(ServeConfigInput {
+            headers: vec![header("Referrer-Policy", "no-referrer")],
+            ..serve_input("product", &target)
+        })
+        .expect_err("a port serve takes no headers");
+        assert!(err.contains("headers"), "{err}");
+    }
+
+    #[test]
+    fn serve_headers_are_read_strictly() {
+        assert!(parse_serve_headers(None).expect("absent").is_empty());
+        let read =
+            parse_serve_headers(Some(&json!([{"name": "A", "value": "1"}]))).expect("a list");
+        assert_eq!((read[0].name.as_str(), read[0].value.as_str()), ("A", "1"));
+        for bad in [
+            json!("A: 1"),
+            json!([{"name": "A"}]),
+            json!([{"value": "1"}]),
+            json!([{"name": 1, "value": "1"}]),
+        ] {
+            let err = parse_serve_headers(Some(&bad)).expect_err("malformed");
+            assert!(err.contains("headers"), "{err}");
         }
     }
 

@@ -16,6 +16,30 @@
     "fingerprint": "t5k5xkqavw4eihco",
     "serveId": "artifact-made-cdc9b5a0f9dddc65-t5k5xkqavw4eihco"
   },
+  "appWithHeaders": {
+    "listenPort": 17055,
+    "allow": ["me@jamesyong42.com"],
+    "previewDir": "/var/lib/vibefield/artifacts/previews/01JC4MA0PV0000000000000001",
+    "folder": "/var/lib/vibefield/artifacts/made/cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c/b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e",
+    "headers": [
+      {
+        "name": "Content-Security-Policy",
+        "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+      },
+      {
+        "name": "Referrer-Policy",
+        "value": "no-referrer"
+      },
+      {
+        "name": "X-Content-Type-Options",
+        "value": "nosniff"
+      }
+    ],
+    "canonicalJson": "{\"allow\":[\"me@jamesyong42.com\"],\"headers\":[{\"name\":\"Content-Security-Policy\",\"value\":\"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'\"},{\"name\":\"Referrer-Policy\",\"value\":\"no-referrer\"},{\"name\":\"X-Content-Type-Options\",\"value\":\"nosniff\"}],\"listenPort\":17055,\"routes\":[{\"allow\":[],\"dir\":\"/var/lib/vibefield/artifacts/previews/01JC4MA0PV0000000000000001\",\"prefix\":\"/.vibefield/preview\",\"stripPrefix\":false},{\"allow\":[],\"dir\":\"/var/lib/vibefield/artifacts/made/cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c/b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e\",\"prefix\":\"/\",\"stripPrefix\":false}],\"tls\":true,\"v\":1}",
+    "sha256": "adae75f459cfe2f68176a88f7ebed32a1ec3c93d3cec296a4d4ce8cfa34bc1e3",
+    "fingerprint": "vwxhl5czz7rpnalw",
+    "serveId": "artifact-made-cdc9b5a0f9dddc65-vwxhl5czz7rpnalw"
+  },
   "previews": {
     "listenPort": 15587,
     "allow": ["me@jamesyong42.com"],

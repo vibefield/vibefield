@@ -19,6 +19,7 @@ import { execFileSync } from "node:child_process";
 import {
   existsSync,
   linkSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -32,6 +33,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { blake3 } from "@noble/hashes/blake3.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import {
   MADE_APP_VIEW,
   MADE_APP_VIEW_TAIL,
@@ -107,13 +110,33 @@ async function ready(made?: MadeViewRoots): Promise<FilesHostSupervisor> {
   return supervisor;
 }
 
+/** The digest rosetta's export would answer for what stands at `source`. Only a regular file is
+ * read (a FIFO would block this test): anything else is a row about the walk, and any digest does. */
+function digestOf(source: string): string {
+  try {
+    return lstatSync(source).isFile() ? bytesToHex(blake3(readFileSync(source))) : DIGEST;
+  } catch {
+    return DIGEST;
+  }
+}
+
+function buildAs(
+  supervisor: FilesHostSupervisor,
+  source: string,
+  folder: string,
+  theme: MadeAppViewTheme,
+  digest: string,
+): Promise<{ bytes: number }> {
+  return supervisor.request("buildMadeView", { source, folder, theme, blake3: digest });
+}
+
 function build(
   supervisor: FilesHostSupervisor,
   source: string,
   folder: string,
   theme: MadeAppViewTheme,
 ): Promise<{ bytes: number }> {
-  return supervisor.request("buildMadeView", { source, folder, theme });
+  return buildAs(supervisor, source, folder, theme, digestOf(source));
 }
 
 async function refusal(promise: Promise<unknown>): Promise<FilesHostRefusal> {
@@ -154,7 +177,9 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
     // the page's own CSP meta sits in the view's body, where a browser ignores it: the serve's
     // header is the page's one policy (the wave-0 critic)
     const meta = view.indexOf('http-equiv="Content-Security-Policy"');
-    expect(meta).toBeGreaterThan(view.indexOf("</head><body>"));
+    const body = view.indexOf("</head><body>");
+    expect(body, "the view's head ends where the vector says").toBeGreaterThan(0);
+    expect(meta).toBeGreaterThan(body);
     // the export's folder holds its page alone, untouched
     expect(readdirSync(dirname(source))).toEqual(["index.html"]);
     expect(readFileSync(source, "utf8")).toBe(VECTOR.embed.page);
@@ -280,18 +305,23 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
     expect(readdirSync(roots.servedRoot)).toEqual([]);
   });
 
-  it.skipIf(process.platform === "win32")("refuses a FIFO without opening it", async () => {
-    const { roots, source, folder } = layout();
-    const fifo = join(roots.sourceRoot, APP, "pipe.html");
-    execFileSync("mkfifo", [fifo]);
-    const supervisor = await ready(roots);
-    const error = await refusal(build(supervisor, fifo, folder, VECTOR.embed.theme));
-    expect(error.error.code).toBe("not-found");
-    // no read is left waiting on a writer: the next view is answered
-    expect(await build(supervisor, source, folder, VECTOR.embed.theme)).toEqual({
-      bytes: Buffer.byteLength(VECTOR.embed.view),
-    });
-  });
+  // the walk's lstat refuses it, so the open's no-block flag is a belt no row here can reach: it
+  // covers a FIFO swapped in between the walk and the open
+  it.skipIf(process.platform === "win32")(
+    "refuses a FIFO at the walk, never opening it",
+    async () => {
+      const { roots, source, folder } = layout();
+      const fifo = join(roots.sourceRoot, APP, "pipe.html");
+      execFileSync("mkfifo", [fifo]);
+      const supervisor = await ready(roots);
+      const error = await refusal(build(supervisor, fifo, folder, VECTOR.embed.theme));
+      expect(error.error.code).toBe("not-found");
+      // no read is left waiting on a writer: the next view is answered
+      expect(await build(supervisor, source, folder, VECTOR.embed.theme)).toEqual({
+        bytes: Buffer.byteLength(VECTOR.embed.view),
+      });
+    },
+  );
 
   it("refuses a page outside the export-source root, or the root itself, as a malformed ask", async () => {
     const { base, roots, folder } = layout();
@@ -449,4 +479,68 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
     });
     expect(readdirSync(roots.servedRoot)).toEqual([]);
   });
+
+  // MA-3f, DR-L3 (James's board mark `dr-l3-blake3-recheck`, 2026-11-06: "[b] @noble/hashes in fieldd
+  // now"): the page is checked against the digest rosetta named, while it is copied, in this process.
+  it("MA-3f: checks the page against rosetta's blake3 while copying it, a known answer first", async () => {
+    const { roots, source, folder } = layout();
+    writeFileSync(source, "abc");
+    const known = "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85";
+    const supervisor = await ready(roots);
+    await buildAs(supervisor, source, folder, VECTOR.embed.theme, known);
+    expect(readFileSync(join(folder, VIEW), "utf8")).toContain("abc");
+  });
+
+  it("MA-3f: a page that is not the digest named writes no view, leaves no temp, keeps the old view", async () => {
+    const { roots, source, folder } = layout();
+    const supervisor = await ready(roots);
+    await build(supervisor, source, folder, VECTOR.embed.theme);
+    const wrong = `${DIGEST.slice(0, 63)}b`;
+    const error = await refusal(buildAs(supervisor, source, folder, VECTOR.embed.theme, wrong));
+    expect(error.error.code).toBe("mismatch");
+    expect(readFileSync(join(folder, VIEW), "utf8")).toBe(VECTOR.embed.view);
+    expect(readdirSync(folder)).toEqual([VIEW]);
+    expect(readdirSync(dirname(folder))).toEqual([DIGEST]);
+  });
+
+  it("MA-3f: refuses a digest that is not lowercase blake3 hex as a malformed ask, touching nothing", async () => {
+    const { roots, source, folder } = layout();
+    const supervisor = await ready(roots);
+    for (const bad of ["", "abc", DIGEST.toUpperCase(), `${DIGEST.slice(0, 63)}g`]) {
+      const error = await refusal(buildAs(supervisor, source, folder, VECTOR.embed.theme, bad));
+      expect(error.error.code, bad).toBe("invalid");
+    }
+    expect(readdirSync(roots.servedRoot)).toEqual([]);
+  });
+
+  it("MA-3f: stages its temp beside the served folder, never in it (DR-1b's nit 5)", async () => {
+    const { roots, source, folder } = layout();
+    // many pieces, so the listing below sees the build in flight
+    writeFileSync(source, Buffer.alloc(8 * 1024 * 1024, 0x61));
+    const supervisor = await ready(roots);
+    let done = false;
+    const building = build(supervisor, source, folder, VECTOR.embed.theme).finally(() => {
+      done = true;
+    });
+    const seen = new Set<string>();
+    while (!done) {
+      if (existsSync(folder)) for (const name of readdirSync(folder)) seen.add(name);
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    await building;
+    expect([...seen].filter((name) => name !== VIEW)).toEqual([]);
+    expect(readdirSync(dirname(folder))).toEqual([DIGEST]);
+  });
+
+  it("MA-3f: records how long a page at the bound takes (a number, not an assertion)", async () => {
+    const { roots, source, folder } = layout();
+    writeFileSync(source, Buffer.alloc(MADE_APP_VIEW.PAGE_MAX_BYTES, 0x61));
+    const digest = digestOf(source);
+    const supervisor = await ready(roots);
+    const started = performance.now();
+    await buildAs(supervisor, source, folder, VECTOR.embed.theme, digest);
+    console.log(
+      `MA-3f: a ${MADE_APP_VIEW.PAGE_MAX_BYTES}-byte page: ${performance.now() - started} ms`,
+    );
+  }, 60_000);
 });
