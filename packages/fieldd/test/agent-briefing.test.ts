@@ -111,7 +111,7 @@ describe("CP-1d: a fresh briefing for each spark process", () => {
     },
   );
 
-  it.each(["helper", "external", undefined] as const)(
+  it.each(["helper", RUN_HELPER, "external", undefined] as const)(
     "refuses %s process ancestry even when all briefing fields are supported",
     async (mcpServerProcess) => {
       const { mcpServerProcess: _terminal, ...fields } = supported;
@@ -294,7 +294,16 @@ describe("CP-5a: the catalog's spark claim, read before the facts", () => {
       sparkHatchRefusal(claimed, "scripted", () => ({ ...supported, mcpServerProcess: "helper" })),
     ).toBe("spark-door-identity-unsupported");
     expect(sparkFactsRefusal(undefined)).toBe("spark-briefing-unsupported");
-    // OB-3d: a run's own helper the floor was told of is a process the door can name
-    expect(sparkFactsRefusal({ ...supported, mcpServerProcess: RUN_HELPER })).toBeUndefined();
+    // OB-3d: a run's own helper holds a plain run's door and is no spark, even under a row that claims one: sparks stay
+    // as the catalog claims them, a pane's process
+    expect(sparkFactsRefusal({ ...supported, mcpServerProcess: RUN_HELPER })).toBe(
+      "spark-door-identity-unsupported",
+    );
+    expect(
+      sparkHatchRefusal(claimed, "scripted", () => ({
+        ...supported,
+        mcpServerProcess: RUN_HELPER,
+      })),
+    ).toBe("spark-door-identity-unsupported");
   });
 });

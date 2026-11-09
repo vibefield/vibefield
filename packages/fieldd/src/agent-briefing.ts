@@ -154,9 +154,10 @@ export function sparkFactsRefusal(
 ): SparkRefusal | undefined {
   if (!capability?.mcpServers || !capability.allowTools || !capability.instructions)
     return "spark-briefing-unsupported";
-  // The door proves the caller by kernel ancestry. A shared helper or external agent is outside it: declaring a server
-  // is not evidence that its process belongs to this run. No vendor branches.
-  if (!doorCanName(capability.mcpServerProcess)) return "spark-door-identity-unsupported";
+  // A spark's process is a pane's, as the catalog claims it. A helper or external agent is outside that ancestry:
+  // declaring a server is not evidence that its process belongs to this run. A run's own helper (`run-helper`) holds a
+  // plain run's door (`forRun`, `doorCanName`) and no more, whatever a row claims. No vendor branches.
+  if (capability.mcpServerProcess !== "terminal") return "spark-door-identity-unsupported";
   return undefined;
 }
 

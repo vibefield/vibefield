@@ -145,11 +145,11 @@ describe("the agents a spark can think with", () => {
     ).toBe(false);
   });
 
-  it("reads a run's own helper, named to the door, as a process the door can name (OB-3d)", () => {
+  it("reads a run's own helper as no spark: it holds a plain run's door and no more (OB-3d)", () => {
     const [agent] = sparkAgentsOf([
       provider(FIRST, { ...BRIEFED, mcpServerProcess: "run-helper" }, { spawn: true }),
     ]);
-    expect(agent?.takes).toBe(true);
+    expect(agent?.takes).toBe(false);
   });
 
   it("says the agent alone until a model is chosen, then the model and its effort", () => {
