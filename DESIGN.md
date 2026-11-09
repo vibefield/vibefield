@@ -1476,7 +1476,7 @@ unsmoothed, leaning with its speed (the page's 90ms); over the line the carried 
 shrinks into the place it was let go over (to 0.12, 200ms on the retract curve) and flies home straight in
 440ms on the island curve, the fan's tilt settling once it lands; the place's ring stays through the play
 and fades over 120ms. **Spring-loading:** the cell's ring fills over 520ms, linear, then the view switches
-as its key would. **The pick-up:** 560ms on the island curve to the window's centre at 2.6×, the scrim's
+as its key would. **The pick-up:** 560ms on the island curve to the window's centre at 2.4×, the scrim's
 blur and dim fading in over 240ms plain `ease`; putting it back waits 140ms (the scrim leaves first) and
 flies home in 440ms on the island curve. **Raised:** every card to its raised place in 240ms on the island
 curve. **A twin paste** (HN-D10): the card rises 12 on the pop curve (280ms), holds 1.2s under its words,
@@ -2735,7 +2735,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   hand you hold. The hand comes with you through every view, so you copy in History and play in
   Godview (HN-L1). It stands with the frame, above the cover (§10), in the middle of the foot beside
   the line.
-  - **A card** (HN-D1, one stock and six faces): poker size and proportion, **104 × 146**, corners 6.
+  - **A card** (HN-D1, one stock and six faces; CS-D8 A, ruled by James 2026-11-09, a fifth wider than HN's 104 × 146): poker size and proportion, **120 × 168**, corners 6.
     Every card is the same card — one white stock (§5 "The hand's cards are paper"), its kind's glyph
     printed in two corners as playing cards print their index (the top left, the one corner a fanned
     hand shows, and the bottom right turned 180°, in the card's index ink) — and one thing on its
@@ -2751,11 +2751,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     (`message`): the speaker and the time, then the words. No rules, holes, stamps or bands — round
     1's six desk materials (HN-D1 B) were not taken.
   - **Holding them**: at rest the hand shows the top **68** of every card — their tips on y 712,
-    level with the line's top — fanned about a point below the window: up to **66** apart, never
+    level with the line's top — fanned about a point below the window: up to **76** apart, never
     steeper than **±6.5°** at its ends, the ends a little lower; centred on the window and pushed
     right to stay **28** clear of the line and 24 from the window's right edge. Within the foot's band
     (the window's bottom 214, the fan's ends ± 70) the cards near the pointer rise by a smoothstep on
-    their distance — up to **86** within **120** of it, 240ms on the island curve — and straighten as
+    their distance — up to **108** within **138** of it, 240ms on the island curve — and straighten as
     they come, the nearest in front. **While Chat shows** (SP-1d; Q5, ruled by VF-PM 2026-10-31
     16:35Z: the band ends at the foot's top, so no card lifts over or under the composer), the band
     begins at the panel's foot, the window's bottom 88 (the cover's reserve, FC-D15), in place of its
@@ -2846,7 +2846,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     cell for 520ms** (HN-D6) that view opens under it, the cell saying "Opening Godview" with its
     progress — copy in History and play in Godview in one drag.
   - **Picking one up** (HN-D5): a click picks a card up the way the desk opens its whiteboard — it flies
-    to the window's centre and grows to reading size, **2.6×**, in 560ms on the island curve, while
+    to the window's centre and grows to reading size, **2.4×** (288 × 403), in 560ms on the island curve, while
     the window behind it blurs 14 and dims 8% (the desk's held object, §8); the bar under the head,
     at the tools in hand's place (y 64), says where it came from and holds **Remove** and **Done**.
     Esc, Done ("Done  Esc") or a click on the blur puts it back: 140ms, then 440ms home. A card picked up
