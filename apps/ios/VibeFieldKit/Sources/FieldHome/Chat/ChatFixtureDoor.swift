@@ -262,6 +262,8 @@
     /// IOS-12f — the stills' New spark: `-vf-open-new-spark` opens the sheet once Chat's list is heard, and
     /// `-vf-new-spark-create` presses Create once its reads are in (no OS input on the stills' host).
     static var openNewSpark: Bool { ProcessInfo.processInfo.arguments.contains("-vf-open-new-spark") }
+    /// ES-5d — `-vf-new-spark-job`: that opening carries the hello's first starter, as a press on the night does.
+    static var newSparkJob: Bool { ProcessInfo.processInfo.arguments.contains("-vf-new-spark-job") }
     /// ES-5c — `-vf-chat-empty`: no spark, nothing waiting and every desktop answered, so the page is the night.
     static var emptyNight: Bool { ProcessInfo.processInfo.arguments.contains("-vf-chat-empty") }
     /// ES-5c — `-vf-chat-off`: no agent at the home can be a spark, so the night is Off.

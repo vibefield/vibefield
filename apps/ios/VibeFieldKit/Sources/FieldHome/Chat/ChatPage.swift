@@ -154,6 +154,8 @@ struct ChatPage: View {
   /// the night never flickers back to reading.
   @State private var nightAgents: ChatNight.Agents = .reading
   @State private var nightCatalog: AgentCatalogResult?
+  /// ES-5d (ES-D2 A) — the first job the sheet opens carrying: a starter's on the night, none from New spark or ✦.
+  @State private var carried: ChatStarter?
   /// IOS-12f's f6 — Create's order: the flight to the new row, and its row's face meanwhile.
   @State private var landing = NewSparkLanding(flying: SparkFlightWindow.make())
   /// A new spark's thread to open, once the list holds its spark.
@@ -197,6 +199,7 @@ struct ChatPage: View {
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
           Button {
+            carried = nil
             newSpark = true
           } label: {
             FieldGlyph(.sparkle, size: 22)
@@ -228,11 +231,11 @@ struct ChatPage: View {
       Task { await readNight() }
     }
     // IOS-12f — the sheet: a spark made on the home, its words §9's (Cancel or pulled down, nothing is made)
-    .sheet(isPresented: $newSpark) {
+    .sheet(isPresented: $newSpark, onDismiss: { carried = nil }) {
       NewSparkSheetView(
         feed: feed, taken: feed.reading.sparks.map(\.name), homeName: homeName,
-        away: feed.reading.connected ? nil : away.first, sessions: sessions, landing: landing,
-        onOpen: { open(made: $0) })
+        away: feed.reading.connected ? nil : away.first, sessions: sessions, carried: carried, landing: landing,
+        onOpen: { open(made: $0, job: $1) })
     }
     // the new spark's thread opens once the list holds it: at once when its face lands on its row, or once the list
     // reads it where no row stood within the wait. Both read the page as it stands now, never as the sheet's press did
@@ -243,6 +246,7 @@ struct ChatPage: View {
       .onChange(of: heard, initial: true) { _, heard in
         guard heard, !newSparkForStills, ChatFixtureDoor.openNewSpark else { return }
         newSparkForStills = true
+        if ChatFixtureDoor.newSparkJob { carried = ChatFlows.starters.first }
         newSpark = true
       }
       // the stills, under `-vf-mock`: the named thread opens once the list holds its spark (set before then, the
@@ -270,14 +274,20 @@ struct ChatPage: View {
     #endif
   }
 
-  /// ES-5c — the night. A starter opens the sheet as New spark does, until 5d carries its job in.
+  /// ES-5c — the night. ES-5d: a starter opens the sheet carrying itself as its first job (ES-D2 A).
   private var night: some View {
     ChatNightView(
       agents: nightAgents,
       starters: ChatNight.starters(agents: nightAgents, runs: nightRuns, catalog: nightCatalog),
       homeName: homeName,
-      onNewSpark: { newSpark = true },
-      onJob: { _ in newSpark = true })
+      onNewSpark: {
+        carried = nil
+        newSpark = true
+      },
+      onJob: { job in
+        carried = job
+        newSpark = true
+      })
   }
 
   /// ES-5c — the home's agents and catalog for the night, while it stands.
@@ -363,7 +373,9 @@ struct ChatPage: View {
   }
 
   /// IOS-12f's f6 — the new spark's thread, asked for once its face has landed (or where nothing flew).
-  private func open(made spark: String) {
+  private func open(made spark: String, job: String?) {
+    // ES-5d — the job reaches the feed only now the spark has hatched; its thread sends it, once
+    if let job { feed.carry(job, to: spark) }
     #if DEBUG
       // the stills' row after the flight: the list holds, the thread unopened (`ChatFixtureDoor.holdLanding`)
       if ChatFixtureDoor.holdLanding { return }

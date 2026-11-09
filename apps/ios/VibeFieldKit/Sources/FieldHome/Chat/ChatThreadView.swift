@@ -63,6 +63,12 @@ struct ChatThreadView: View {
 
   private var name: String { entry.spark.name }
 
+  /// ES-5d — left waiting where this send could not go, so the thread's next opening still sends it.
+  private func sendFirstJob() async {
+    guard away == nil, !model.busy, let job = feed.takeFirstJob(of: entry.spark.id) else { return }
+    await model.send(entry, away: away, words: job)
+  }
+
   /// IOS-12f's M-f2 — @'s box, while an agent's menu or an @ stands.
   private func atSurface(_ place: ChatAtPlace?) -> ChatAtView? {
     let content: ChatAtContent
@@ -127,6 +133,8 @@ struct ChatThreadView: View {
       }
       .animation(reduceMotion ? .easeInOut(duration: 0.12) : .easeOut(duration: 0.24), value: card?.id)
     }
+    // ES-5d (ES-D2 A): a job the night carried is sent as Send sends it, once, and only now the spark has hatched
+    .task(id: entry.spark.id) { await sendFirstJob() }
     .navigationBarTitleDisplayMode(.inline)
     .toolbar { head }
     .onAppear {

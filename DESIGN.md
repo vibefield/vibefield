@@ -6582,8 +6582,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the sheet's sky as the system sheet rises under it — §6's portal at touch pitch, the night riding the window the face
     already flies in (`HatchSkyHero`) and handing its canvas to the sheet's `HatchSkyView`. Where no agent at the home
     can be a spark, New spark is Off (§7) and the sentence under it names the ones that can (§9); no job is offered, and
-    no settings button stands, for the phone has no such door. *The page is ES-5c; the close onto the sky is not drawn
-    yet (ES-5e): until then the system sheet rises over the night.*
+    no settings button stands, for the phone has no such door. A starter opens the sheet carrying itself as its first
+    job, at touch pitch (ES-5d; §8 "The New spark sheet", Its first job). *The page is ES-5c; the close onto the sky is
+    not drawn yet (ES-5e): until then the system sheet rises over the night.*
   - **Needs you** heads the list while anything waits (PC-D4 A; CP-D12, one queue). One card stands for each item of
     CP-3's queue that is a spark's, on a pale fill with a 1.5 orange ring while it waits, its choices as 36 capsules
     with the first inverted. VibeField's own items are answered on the card, and the record says you did. An agent's

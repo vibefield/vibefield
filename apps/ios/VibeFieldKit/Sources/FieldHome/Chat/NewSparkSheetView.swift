@@ -330,8 +330,11 @@ struct NewSparkSheetView: View {
   let sessions: [RunProfileFacts]?
   /// IOS-12f's f6 — Create's order, and where Chat opens the thread once the spark has landed.
   let landing: NewSparkLanding
-  let onOpen: @MainActor (String) -> Void
+  /// Chat opens the spark's thread, with the first job this opening still carries (ES-5d), handed over only now.
+  let onOpen: @MainActor (String, String?) -> Void
   @State private var sheet: NewSparkSheet
+  /// ES-5d (ES-D2 A) — the first job this opening carries from the night; × drops it.
+  @State private var job: ChatStarter?
   @State private var hero = HatchSkyHero()
   @State private var nameSelection: TextSelection?
   @FocusState private var naming: Bool
@@ -353,7 +356,7 @@ struct NewSparkSheetView: View {
 
   init(
     feed: ChatFeed, taken: [String], homeName: String, away: ChatAway?, sessions: [RunProfileFacts]?,
-    landing: NewSparkLanding, onOpen: @escaping @MainActor (String) -> Void
+    carried: ChatStarter? = nil, landing: NewSparkLanding, onOpen: @escaping @MainActor (String, String?) -> Void
   ) {
     self.feed = feed
     self.homeName = homeName
@@ -361,6 +364,7 @@ struct NewSparkSheetView: View {
     self.sessions = sessions
     self.landing = landing
     self.onOpen = onOpen
+    _job = State(initialValue: carried)
     _sheet = State(initialValue: Self.sheet(taken: taken))
   }
 
@@ -389,6 +393,11 @@ struct NewSparkSheetView: View {
           agentPill
             .padding(.top, 12)
           refusal(at: .agent)
+          if let job {
+            jobRow(job)
+              .padding(.top, 14)
+              .transition(.opacity)
+          }
           Text(NewSparkWords.runsOn(homeName))
             .font(ChromeType.sans(13))
             .foregroundStyle(ChromePalette.inkTertiary)
@@ -566,6 +575,46 @@ struct NewSparkSheetView: View {
     .accessibilityElement(children: .combine)
   }
 
+  // MARK: - Its first job (ES-5d)
+
+  /// §8 "Its first job": under the agent, centred, its label 6 over the starter, which stands still in the hello's look
+  /// at touch pitch; then its ×. × drops it, and the sheet settles (240ms).
+  private func jobRow(_ job: ChatStarter) -> some View {
+    VStack(spacing: 6) {
+      Text(NewSparkWords.firstJob)
+        .font(ChromeType.sans(12, .medium))
+        .foregroundStyle(ChromePalette.inkTertiary)
+      HStack(spacing: 2) {
+        HStack(spacing: 8) {
+          FieldGlyph(ChatThreadView.glyph(job.glyph), size: 16)
+            .foregroundStyle(ChromePalette.inkSecondary)
+          Text(job.words)
+            .font(ChromeType.sans(15, .medium))
+            .foregroundStyle(ChromePalette.ink)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 48)
+        .background(Capsule().fill(ChromePalette.menuSurface))
+        .overlay(Capsule().strokeBorder(ChromePalette.cardHairline, lineWidth: 1))
+        Button {
+          withAnimation(FieldMotion.ease(0.24)) { self.job = nil }
+        } label: {
+          Image(systemName: "xmark")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(ChromePalette.inkTertiary)
+            .frame(width: Self.touch, height: Self.touch)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(sheet.creating)
+        .accessibilityLabel(NewSparkWords.removeFirstJob)
+      }
+    }
+    .padding(.horizontal, Self.side)
+  }
+
   // MARK: - The profiles (NS-D5)
 
   @ViewBuilder
@@ -653,7 +702,9 @@ struct NewSparkSheetView: View {
     naming = false
     let resolved = ground.resolve(in: environment)
     let cut = SIMD3(Double(resolved.red), Double(resolved.green), Double(resolved.blue))
-    let steps = NewSparkLanding.Steps(hero: { hero.take() }, fold: { dismiss() }, open: onOpen)
+    // the job as Create was pressed, handed to Chat only once the spark has hatched
+    let words = job?.words
+    let steps = NewSparkLanding.Steps(hero: { hero.take() }, fold: { dismiss() }, open: { onOpen($0, words) })
     Task {
       await landing.create(sheet, on: feed, reducedMotion: reduceMotion, cut: cut, steps: steps)
     }

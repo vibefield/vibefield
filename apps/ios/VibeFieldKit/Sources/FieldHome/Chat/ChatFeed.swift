@@ -206,16 +206,19 @@ final class ChatFeed {
     try AgentProvidersResult(json: try await homeDoor().call("agent.providers", params: .object([:]))).providers
   }
 
+  /// ES-5d — the first jobs waiting for their threads, by spark: the app's life, written nowhere.
+  @ObservationIgnored private var firstJobs: [String: String] = [:]
+
   /// ES-5c — the home's catalog, for the night's starters and the names Off says (`agent.catalog`).
   func catalog() async throws -> AgentCatalogResult {
     try AgentCatalogResult(json: try await homeDoor().call("agent.catalog", params: AgentCatalogParams.phone.json))
   }
 
-  /// ES-5d — a first job carried from the night to the spark just hatched. RED: a stub.
-  func carry(_ words: String, to spark: String) {}
+  /// ES-5d (ES-D2 A) — a first job carried from the night, handed over only once its spark has hatched.
+  func carry(_ words: String, to spark: String) { firstJobs[spark] = words }
 
-  /// ES-5d — the spark's first job, once. RED: a stub.
-  func takeFirstJob(of spark: String) -> String? { nil }
+  /// ES-5d — the spark's first job, once: its thread takes it to send it, as Send sends.
+  func takeFirstJob(of spark: String) -> String? { firstJobs.removeValue(forKey: spark) }
 
   /// The home's Agent Profiles (`agents.profileSets.list`).
   func profileSets() async throws -> [AgentProfileSet] {
