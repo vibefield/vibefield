@@ -10597,7 +10597,7 @@ field gives them, and “q” what was typed.
   screen, in the pane, as part of what you send". Chat puts it on screen nowhere now: your bubble draws the chip by its
   words, and the id stays in the record.
 
-**What VibeField keeps, when it cannot read it** (track CO, items 172 and 177; 2026-11-05). VibeField keeps seven kinds
+**What VibeField keeps, when it cannot read it** (track CO, items 172 and 177; 2026-11-05). VibeField keeps eight kinds
 of record in signed files of its own: a spark's record, what waits on you (CP-3), the words that wait for a session,
 each spark's kept record, a flow's records (CP-4a1: the version of a flow you approved, and a spark's proposed flow),
 each spark's transcript (TH-1), and the record of each session it manages (AR-3). Reading one comes out one of four
