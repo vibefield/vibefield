@@ -8,6 +8,11 @@
 //   SHOWN INACTIVE (`showInactive`), and never focused by a row (`win.focus()` makes the app active and the window key, and
 //   the person's keys follow) — the smoke's keys go in by `sendInputEvent`, which needs no key window: the page takes them
 //   into its focused element, text included (the probe), and KEYS witnesses exactly that event-less focus path (plan (94)).
+// *2026-11-09 (item 47), a correction: "Chromium sends its page nothing" is not always so. In the squeeze gate of
+// 2026-10-19, smoke:canvas's B published a fractional point and then a leave eight minutes after James unlocked the Mac, and
+// PEERS ARRIVE went red; run 3, with the Mac unattended, passed. How a real pointer reached a click-through window is not
+// known. So this keeps a person's pointer from most of a run, not all of it: `judgePersonsPointer` (smoke-peers.ts) names
+// the crossing when it reddens that row, and docs/desk-gates.md arms the desk rows on an unattended Mac.*
 // The godview smoke keeps its own windows' focus: its typed rows need `document.hasFocus()` (a pane takes input focus only
 // then) — the pointer half holds there too.
 

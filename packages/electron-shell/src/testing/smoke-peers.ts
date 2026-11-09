@@ -219,6 +219,22 @@ export function expectedBox(
   return { x: (world.x - a.x) * a.zoom - PEERS.tip.x, y: (world.y - a.y) * a.zoom - PEERS.tip.y };
 }
 
+/**
+ * Item 47: a peer that vanished because a person's pointer crossed its window is named, so the row's red says what met it.
+ * DK-17b's signature: this row moves B only to integer points, so a fractional published point, then away, is not its own.
+ * It only adds a line to a row already red; it can never turn one green.
+ */
+export function judgePersonsPointer(peers: readonly PeerSeen[]): string[] {
+  const crossed = peers.find(
+    (p) => p.cursor?.away && (!Number.isInteger(p.cursor.x) || !Number.isInteger(p.cursor.y)),
+  )?.cursor;
+  return crossed === undefined || crossed === null
+    ? []
+    : [
+        `a person's pointer crossed B's window (B published (${crossed.x}, ${crossed.y}), away; this row moves it only to integer points): host state, re-run alone with no one at the Mac`,
+      ];
+}
+
 /** AT THE RIGHT PLACE: one peer drawn, its record's box and its element's rect within a pixel of where B's pointer is. */
 export function judgePeerPlace(
   peers: readonly PeerSeen[],
@@ -546,11 +562,9 @@ export async function peersRows(d: PeersRowsDriver): Promise<string[]> {
       problems.push(`PEERS ARRIVE: no camera to place by (${JSON.stringify({ camA, camB })})`);
     else {
       const expected = expectedBox(point, camB, camA);
-      problems.push(
-        ...judgePeerPlace(doorA.record?.peers ?? [], expected, seen.rect).map(
-          (p) => `PEERS ARRIVE: ${p}`,
-        ),
-      );
+      const place = judgePeerPlace(doorA.record?.peers ?? [], expected, seen.rect);
+      if (place.length > 0) place.push(...judgePersonsPointer(doorA.record?.peers ?? []));
+      problems.push(...place.map((p) => `PEERS ARRIVE: ${p}`));
       say(
         `SMOKE_CANVAS_PEERS_ARRIVE ${JSON.stringify({ pointer: point, camB, camA, expected, first: firstB, record: doorA.record?.peers, rect: seen.rect, chip: seen.chip, label: seen.label, relayed })}`,
       );

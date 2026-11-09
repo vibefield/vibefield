@@ -20,6 +20,7 @@ import {
   judgeIdle,
   judgeLostCard,
   judgePeerPlace,
+  judgePersonsPointer,
   LOST_CARD,
   type PeerSeen,
   pointKey,
@@ -354,5 +355,21 @@ describe("PEERS IDLE's move (DK-18, plan (81)) — it ends on a point B's pointe
       visited.add(pointKey(at));
     }
     expect(visited.size).toBe(40);
+  });
+});
+
+describe("a person's pointer over B's window (item 47)", () => {
+  const at = (x: number, y: number, away: boolean) => ({ cursor: { x, y, away, canvas: "c" } });
+
+  it("a fractional point said away is named", () => {
+    expect(judgePersonsPointer([peer(at(649.09765625, 192.234375, true))])[0]).toMatch(
+      /a person's pointer crossed B's window \(B published \(649\.09765625, 192\.234375\), away/,
+    );
+  });
+
+  it("the row's own integer points, a pointer not away, and no cursor are not", () => {
+    expect(judgePersonsPointer([peer(at(520, 340, true))])).toEqual([]);
+    expect(judgePersonsPointer([peer(at(649.5, 192.5, false))])).toEqual([]);
+    expect(judgePersonsPointer([peer({ cursor: null })])).toEqual([]);
   });
 });
