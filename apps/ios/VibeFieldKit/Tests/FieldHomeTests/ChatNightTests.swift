@@ -113,7 +113,7 @@ struct ChatNightTests {
     let reading = ChatNight.starters(agents: .unread, runs: .rows([]), catalog: nil)
     #expect(
       reading.starters.map(\.words) == [
-        ChatFlows.starters[0].words, "Keep track of my agents", ChatFlows.starters[2].words,
+        ChatFlowWords.starters[0].words, "Keep track of my agents", ChatFlowWords.starters[2].words,
       ])
   }
 

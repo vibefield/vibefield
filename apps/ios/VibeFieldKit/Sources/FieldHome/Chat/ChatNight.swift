@@ -56,7 +56,7 @@ enum ChatNight {
   static func starters(
     agents: Agents, runs: ChatStarters.Read<ChatStarters.Run>, catalog: AgentCatalogResult?
   ) -> ChatStarters.Reading {
-    guard let known = catalog ?? noCatalog else { return .read(ChatFlows.starters) }
+    guard let known = catalog ?? noCatalog else { return .read(ChatFlowWords.starters) }
     let read: ChatStarters.Read<ChatStarters.Agent>
     switch agents {
     case .reading: read = .out

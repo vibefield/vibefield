@@ -178,23 +178,33 @@ struct ChatPage: View {
   private var nightStands: Bool { Self.nightStands(sparks: entries.count, heard: heard, away: away.count) }
 
   /// Whether the night stands, for the page and for the bar (`HomeScreen`) to read one rule.
-  static func nightStands(sparks: Int, heard: Bool, away: Int) -> Bool { sparks == 0 && heard && away == 0 }
+  nonisolated static func nightStands(sparks: Int, heard: Bool, away: Int) -> Bool {
+    sparks == 0 && heard && away == 0
+  }
+
+  // ES-5c — typed apart, so `body`'s long chain has no conditional of implicit members to solve
+  private var barScheme: ColorScheme? { nightStands ? .dark : nil }
+  private var barBackground: Visibility { nightStands ? .hidden : .automatic }
+  private var sparkleInk: Color { nightStands ? ChromePalette.nightInkPrimary : ChromePalette.ink }
+
+  /// ES-5c — what stands on the stage: the night, or the list on its paper.
+  @ViewBuilder private var nightOrList: some View {
+    if nightStands {
+      night
+    } else {
+      list
+        .background(ChromePalette.paper.ignoresSafeArea())
+    }
+  }
 
   var body: some View {
     NavigationStack(path: path) {
       // IOS-12e (§2.10): Chat's list is one stage; a row's face moves on it while its spark works
-      SparkStageHost {
-        if nightStands {
-          night
-        } else {
-          list
-            .background(ChromePalette.paper.ignoresSafeArea())
-        }
-      }
+      SparkStageHost { nightOrList }
       .navigationTitle(ChatWords.title)
       // ES-5c (§8): the status bar, "Chat" and its ✦ wear the night's ink, and the bar floats clear on it
-      .toolbarColorScheme(nightStands ? .dark : nil, for: .navigationBar)
-      .toolbarBackground(nightStands ? .hidden : .automatic, for: .navigationBar)
+      .toolbarColorScheme(barScheme, for: .navigationBar)
+      .toolbarBackground(barBackground, for: .navigationBar)
       // IOS-12f (Q1) — New spark's door at the title's right, as the Mac's create stands in Chat's line
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
@@ -203,7 +213,7 @@ struct ChatPage: View {
             newSpark = true
           } label: {
             FieldGlyph(.sparkle, size: 22)
-              .foregroundStyle(nightStands ? ChromePalette.nightInkPrimary : ChromePalette.ink)
+              .foregroundStyle(sparkleInk)
               .frame(width: 44, height: 44)
               .contentShape(Rectangle())
           }
@@ -246,7 +256,7 @@ struct ChatPage: View {
       .onChange(of: heard, initial: true) { _, heard in
         guard heard, !newSparkForStills, ChatFixtureDoor.openNewSpark else { return }
         newSparkForStills = true
-        if ChatFixtureDoor.newSparkJob { carried = ChatFlows.starters.first }
+        if ChatFixtureDoor.newSparkJob { carried = ChatFlowWords.starters.first }
         newSpark = true
       }
       // the stills, under `-vf-mock`: the named thread opens once the list holds its spark (set before then, the

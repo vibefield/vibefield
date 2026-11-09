@@ -86,14 +86,14 @@ public enum ChatStarters {
     // the agents the home has that can be started, in the catalog's order; nil where they could not be read
     let here: [Agent]?
     switch agents {
-    case .out: return .reading(ChatFlows.starters)
+    case .out: return .reading(ChatFlowWords.starters)
     case .failed: here = nil
     case .rows(let rows): here = startable(rows, catalog: catalog)
     }
     // the person's live runs: never a spark's own, never one that has ended
     let live: [Run]
     switch runs {
-    case .out: return .reading(ChatFlows.starters)
+    case .out: return .reading(ChatFlowWords.starters)
     case .failed: live = []
     case .rows(let rows): live = rows.filter { $0.alive && $0.spark == nil }
     }
@@ -123,7 +123,7 @@ public enum ChatStarters {
     }
 
     // a role no catalog row holds keeps the hello's whole ruled sentence
-    let ruled = ChatFlows.starters
+    let ruled = ChatFlowWords.starters
     return .read([
       ChatStarter(glyph: .agents, words: crew.map(crewWords) ?? ruled[0].words),
       ChatStarter(glyph: .panes, words: folderWords(busiestFolder(live))),
