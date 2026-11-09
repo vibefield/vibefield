@@ -9475,6 +9475,52 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       }).toEqual({ past: true, under: true, restore: [small], settled: true });
     });
 
+    it("S14-33b (slice 14's fold, P3, the skeptic's #3; Q33 (c), §H): a run past the budget is read once to a macrotask: `settled()`'s late read and its wake's own read are a macrotask apart, so a stall is one read", async () => {
+      // 852b04096: `#adoptLate`'s read and `#wake`'s ran in one macrotask, two whole reads of the fullest journals
+      // Kills: `settled()`'s `#paced` between `#adoptLate` and the wake dropped
+      const h = await harness();
+      const approval = h.approved("hello", HELLO);
+      // S14-33's `big`: answers as large as the journal keeps one, enough to pass the budget alone
+      const part = "x".repeat(FLOW_LIMITS.RESULT_MAX_BYTES - 64);
+      const parts = Math.ceil(FLOW_LIMITS.RESTORE_READ_MAX_BYTES / part.length) + 1;
+      const big = seededRun(h, "fr-boot0001g", {
+        head: { hash: approval.hash },
+        lines: Array.from({ length: parts }, (_, i): FlowJournalEntry[] => [
+          {
+            kind: "call",
+            call: i + 1,
+            what: "agent",
+            key: flowCallKey("agent", [`part ${i + 1}`]),
+            n: 1,
+          },
+          { kind: "answer", call: i + 1, value: part },
+        ]).flat(),
+        fields: { calls: parts },
+      });
+      await h.reopen();
+      // the macrotask's number, moved by a `setImmediate` of the row's own, and each read of `big` by the number it fell in
+      let tick = 0;
+      let ticking = true;
+      const turn = () => {
+        tick += 1;
+        if (ticking) setImmediate(turn);
+      };
+      const readsIn = new Map<number, number>();
+      const read = h.records.readRun.bind(h.records);
+      vi.spyOn(h.records, "readRun").mockImplementation((run) => {
+        if (run === big) readsIn.set(tick, (readsIn.get(tick) ?? 0) + 1);
+        return read(run);
+      });
+      restored(h.runs);
+      setImmediate(turn);
+      await settledBoot(h.runs);
+      ticking = false;
+      expect({
+        reads: [...readsIn.values()].reduce((sum, n) => sum + n, 0),
+        most: Math.max(...readsIn.values()),
+      }).toEqual({ reads: 2, most: 1 });
+    });
+
     it('S14-34a (slice 14, Q34): a step resumed in a Stop\'s leave (`begun: "resume"` told while the host leaves) is sent no line, and its successor is ended', async () => {
       // red-a: nothing hears the resume, so the successor works on after the run's end
       // Kills: Q34's condition on `#resumed` dropped (a line sent into an ending run); the successor never ended

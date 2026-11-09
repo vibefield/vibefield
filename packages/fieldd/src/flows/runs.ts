@@ -1010,7 +1010,9 @@ export class FlowRuns {
     }
     for (const run of this.#adopting) {
       if (!(await this.#paced())) return;
-      this.#adoptLate(run);
+      // the fold's P3 (the skeptic's #3): a journal past the budget is read whole here and again by its wake, one to a
+      // macrotask (Q33 (c)); these are the fullest journals fieldd keeps
+      if (this.#adoptLate(run) && !(await this.#paced())) return;
       if (this.#stopsOwed.has(run)) this.#handOver(run);
       else this.#wakeBooted(run);
     }
@@ -1936,17 +1938,20 @@ export class FlowRuns {
   }
 
   /** Slice 14 (Q33 (b), §K) — a run past the budget, adopted by `settled()` alone, its lines as `restore()` read them:
-   * unless a Stop reached it, or a read throws (it stays unread, its items waiting). */
-  #adoptLate(run: FlowRunId): void {
+   * unless a Stop reached it, or a read throws (it stays unread, its items waiting). True when it read and adopted the
+   * run, so `settled()` takes a macrotask before the wake reads the journal again (the fold's P3). */
+  #adoptLate(run: FlowRunId): boolean {
     const lines = this.#pastBudget.get(run);
-    if (lines === undefined) return;
+    if (lines === undefined) return false;
     this.#pastBudget.delete(run);
     this.#unread.delete(run);
     try {
       const { records } = this.ports;
       const record = records.runRecord(run);
-      if (record !== undefined && this.#isLive(record) && !this.#ends.has(run))
+      if (record !== undefined && this.#isLive(record) && !this.#ends.has(run)) {
         this.#adoptRead(record, records.readRun(run), lines, this.#openItems());
+        return true;
+      }
     } catch (error) {
       this.#unread.add(run);
       this.#logger.warn(
@@ -1955,6 +1960,7 @@ export class FlowRuns {
         { run, error: messageOf(error) },
       );
     }
+    return false;
   }
 
   /** Slice 14 (Q5, Q13, Q30) — NN5's newer read, then the wake. Bytes a read rule newer than their approval refuses end
