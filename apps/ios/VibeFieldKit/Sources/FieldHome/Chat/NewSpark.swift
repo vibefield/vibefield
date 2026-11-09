@@ -97,6 +97,9 @@ enum NewSparkWords {
   static let nameLabel = "Name"
   static let anotherFace = "Another face"
   static let cancel = "Cancel"
+  /// ES-5d — the sheet carrying a job from the night (§9): its label, and its ×'s name.
+  static let firstJob = "Its first job"
+  static let removeFirstJob = "Remove its first job"
 
   /// "Runs on studio, your home" (§9, PC-D8 A).
   static func runsOn(_ desktop: String) -> String { "Runs on \(desktop), your home" }

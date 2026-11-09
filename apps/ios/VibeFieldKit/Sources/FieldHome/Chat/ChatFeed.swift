@@ -211,6 +211,12 @@ final class ChatFeed {
     try AgentCatalogResult(json: try await homeDoor().call("agent.catalog", params: AgentCatalogParams.phone.json))
   }
 
+  /// ES-5d — a first job carried from the night to the spark just hatched. RED: a stub.
+  func carry(_ words: String, to spark: String) {}
+
+  /// ES-5d — the spark's first job, once. RED: a stub.
+  func takeFirstJob(of spark: String) -> String? { nil }
+
   /// The home's Agent Profiles (`agents.profileSets.list`).
   func profileSets() async throws -> [AgentProfileSet] {
     try AgentProfileSetsResult(json: try await homeDoor().call("agents.profileSets.list", params: .object([:]))).sets
