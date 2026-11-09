@@ -242,6 +242,27 @@ public enum ChromePalette {
   // RETIRED 2026-11-06 (SE-2): `markWash`, the select hue's wash under search's page's marks. A match is marked as the
   // Peek marks it now, on the ink at 11% (`searchMark`).
 
+  // MARK: - On the night (track ES, ES-5b)
+
+  /// DESIGN.md §2.4 "On the night, the night's ink": what stands on the hatch's night wears the night theme's ramp, by
+  /// day as by night. These are `.vf-on-night`'s own values, one per tier, held to `tokens.css` by
+  /// `pnpm check:ios-fixtures`, so none varies with the phone's theme.
+  public static let nightInkPrimary = tint(0xF5F5F7, alpha: 0.85)
+  public static let nightInkSecondary = tint(0xF5F5F7, alpha: 0.70)
+  public static let nightInkTertiary = tint(0xF5F5F7, alpha: 0.54)
+  public static let nightInkFaint = tint(0xF5F5F7, alpha: 0.38)
+  /// The kit's primary in its night look: the foreground's fill under the inverse ink (§2.4).
+  public static let nightForeground = solid(0xF5F5F7)
+  public static let nightForegroundInverse = solid(0x1C1C1E)
+  /// §5 "Night glass": white at 7% over a 16 blur, ringed inset by white at 14%, the same in both themes. 12% where the
+  /// Mac's pointer would lean on it, which on the phone is a press.
+  public static let nightGlass = tint(0xFFFFFF, alpha: 0.07)
+  public static let nightGlassPressed = tint(0xFFFFFF, alpha: 0.12)
+  public static let nightGlassRing = tint(0xFFFFFF, alpha: 0.14)
+  public static let nightGlassBlur: CGFloat = 16
+  /// §5: behind the night's words, the night at 58%, so no star crosses a word.
+  public static let nightHush = tint(0x060716, alpha: 0.58)
+
   // MARK: - The switch (IOS-10a)
 
   /// The design kit's switch (`.vf-ui-switch`, `primitives.css`) at iOS's
@@ -314,6 +335,11 @@ public enum ChromePalette {
 
   private static func solid(_ rgb: UInt32) -> Color {
     Color(UIColor(chromeRGB: rgb, alpha: 1))
+  }
+
+  /// One value with its alpha, the same in both themes.
+  private static func tint(_ rgb: UInt32, alpha: CGFloat) -> Color {
+    Color(UIColor(chromeRGB: rgb, alpha: alpha))
   }
 }
 
