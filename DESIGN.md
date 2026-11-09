@@ -2954,6 +2954,30 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Esc, Done ("Done  Esc") or a click on the blur puts it back: 140ms, then 440ms home. A card picked up
     is a modal (the Peek's rule): nothing under the scrim gets a key — ⌫ removes the card, Esc puts it back,
     Tab stays in its bar — and the keyboard's focus goes to Done and comes back when the card goes home.
+  - **The bloom — choosing a face where the card lands** (OB-D2, OB-D3, settled by James 2026-11-06; OB-D12 A, ruled
+    2026-11-09: it opens on the drop and stays open; drawn on *Card Stock* round 5; the spawn bloom's grammar, §8 "Hold, reach,
+    let go", whose `views/swarm/bloom` numbers are the numbers, held to them by a test). Let a card go on a place where **two
+    or more** of its faces can land and it stands there as the **hub**, at **0.42** of its size, while its faces bloom
+    around it. One face that fits lands at once, no bloom; none says the first reason and the card goes home. **Geometry:**
+    the ring **92** from the hub, buds **48**, **42°** apart (narrowed to fit 220°), the arc opening UP and turning in 15° steps
+    only as far as the window's edges force it (a bud's centre 70 in from the sides, 44 from the top and 30 from the foot),
+    never moving the centre. **Every face keeps its place**, in the card's order. **A bud** is a clear disc in
+    `--vf-bloom-bud` with a 1.25px ring of its ink at 22%, wearing its type's glyph at 22 (§13); the one pointed at inverts to
+    ink and lifts to 1.16× (`--vf-ease-lift`, 180ms). A face that can't land stands faint and dashed. **Its label**, 34 from
+    the hub's side of the bud's centre, above it or to its side: the face's name, mono 9.5/700 in capitals at 78% ink, over
+    its reason when it can't land, mono 7.5/800, 72%. **Choosing:** by direction past a 22 dead zone (sectors at most
+    ±26°), then a click, the ring ignoring the pointer for its first 90ms; inside the dead zone is the hub, the first face
+    that fits; past the ring by 64 is open ground. Keys: ← → walk the buds, Return takes, 1–9 take that bud, ⎋ puts the
+    card back. Open ground or ⎋ puts it back and nothing lands; a faint bud lands nothing and stands open. **The words** say
+    what choosing does, verb and noun, 800 at −0.04em, 6.6% of the window's longer side between 22 and 72, the noun at
+    full ink and the verb at 40% — *Hand over the live map*, *Paste its outline*, *Not here* for a faint bud, *Cancel* on open
+    ground — over one mono line, 13/500 at 60%, naming where it lands ("claude·2 · Godview"); 40 clear of the bloom,
+    above it, or below it where it doesn't fit; they change as a new slate in 150ms and are the live region. **The
+    window goes quiet:** `--vf-bloom-veil` over everything but the carried card, above the hand (z 65) with the card at
+    its own 66, and a clearing of `--vf-bloom-ground` under the bloom and the words. **Motion:** buds pop out
+    centre-first on the pop curve (280ms, 26ms apart), labels 140ms behind; on leaving, back along their spokes on the
+    retract curve (180ms) with their labels. Reduced motion (M6): 90ms fades, no travel and no lift. A change of view or
+    the place going away folds it, and the card goes home.
   - **One owner** (§10; HN-L7): the hand raised and a card picked up are the frame's open surface
     `cards` — raising the hand folds the others, and another opening lowers it. The hand stands above the
     line (z 63; the line 62), a card picked up above it (64), a carried card above both (66). The label
