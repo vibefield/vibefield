@@ -45638,6 +45638,8 @@ sites; the gate's three rows hold what `inSheet` answers.
 - **Item 269:** `listener_accept_pressure` pass, red, pass on the mini (runs 270, 271, 272) on identical Rust; the mgmt
   leg: connect succeeded, the ping call failed fast, `accept_recovered 0` at ~1.2 s; 272's pass clears nothing. The row
   prints the floor's log only on a fail. This stack moves no path under `packages/field-native`.
+  *Corrected 2026-11-09 (MA-6e): "~1.2 s" is the whole row's time, 1.23 s, not the leg's. "Failed fast" is read from
+  `fresh()` and that row's time; a9's README kept it as a reading.*
 - **Item 270:** run 272's two KEPT births on vf-m2, `/private/tmp/vf-seam-W5bBcV` and `/private/tmp/vf-seam-WkN2WK`,
   each only `custody-admission.v1.json`: `terminal-seam.test.ts` removes its root before it SIGKILLs its floors
   (:41–:56, :60–:61). Owner: the terminal seam's track. Run 271's two: `/private/tmp/vflaszc8bu` (item 269's row root)
@@ -45815,3 +45817,83 @@ merged three-way with no conflict, their closest hunks 217 and 2337 lines apart
 - Any still golden holding the column's plates: the catalog's cards moved 6 right.
 - His calls, on the page `https://claude.ai/artifact/3j2GazGj9nCidGpZxqztoR`: keyboard focus, a pinned card's tell,
   the limit card under a raised deck, many profiles.
+
+## MA-6e — the phone's Apps, drawn: the door's model, the shelf and the zoom, and the gate turned (track MA)
+
+**MA-6e (nine commits `76e4423dc` → `9873b1ef8`, M272, 2026-11-09 19:17:16Z).** The rest of MA-6, one land by VF-PM's
+ruling of 15:05Z. The gate turns in the commit that wires the door, because a pull that ticks and opens nothing is a
+blank with a gesture. James ruled MA-D7…D9 and D11…D13 A and MA-D10 B on the page (2026-11-05).
+
+**What changed.**
+- The door: pull down from Field, History or Chat, the first peek, the drop out of the island, and search's dot. A pull
+  let go at 132 opens the shelf. The drop's tap zooms to its app, and a burst opens the shelf.
+- The shelf: "Search apps", Recent, Kept (empty until 3h), Projects as folders that open in place, the no-project group
+  and the foot, behind the tab receded to a card. The bar steps aside.
+- The strip, All apps and Everything's Apps group now mount: `AppsShelfGate.drawn` is true.
+- The zoom: an app zooms to its honest screen, its icon at 92 over its state's words and its one act, under the glass
+  row at rest. **The phone runs no app before MA-5.** It asks `artifact.open` nothing (VF-PM's Q1, 04:46Z).
+- Previews: fetched through the node's URL session by digest, kept on the phone, gone at sign-out.
+- An empty Chat has no list, because ES-5c stands its night in the list's place. So the night has its own drag beside
+  `night.wake()`, a hunk in ES's `ChatNightView.swift`. `AppsNightDrag` is its seam.
+- `AppsCues.unopened` is §8's cyan mark, read narrowly: **news not yet opened**, so the first reading's apps wear no
+  mark. The capped opens ledger cannot say "an app you have not opened", and `unseen` clears when the shelf opens.
+- Not drawn, by ruling: Keep, Hide and Versions (the long press is Open and About this app), live apps, Warm, Reload,
+  Copy link and the row's fold (MA-5, or 3h and DR-2 for Keep and Hide). The desk's Keep and Hide are MA-4's buttons
+  with refusal words; the phone has none until 3h. About's link to the session in History waits for MA-5's open.
+- Petition status: none moved.
+
+**Verified** (vf-m2, built on Xcode 26.3, tested under the beta).
+- Run 276 (`lanes/vf-m2/ma6e-a9-results/`, `SHA256SUMS` `ef17ed203d40c095`), at `74736d181` on `3ce5dc66e`. Rows 1–4 red
+  first, names exact, crash lines 0: 0 passed and 19 failed, 19 and 18, 37 and 12, 49 and 4. V green. S red at the tip
+  (Found).
+- Run 278 (`lanes/vf-m2/ma6e2-a9-results/`, `SHA256SUMS` `f9a3adabed225fc9`, 75 files), the tip alone, at `9873b1ef8` on
+  `35516e586`. S green, 16 of 16 linked, 0 warnings in this stack's Swift. V: `pnpm verify` exit 0, count lines and
+  singles byte-identical to run 277's (`singles-judged.txt` `88d445a7`, `singles.txt` `776854c3`;
+  `lanes/vf-m2/um-r-v-a9-results/run277/`). K GREEN-BUT-167: 2393 tests in 368 suites, passed 2389, skipped 3, failed 1
+  (item 167), FieldHomeTests 659 in 81, the 6 new suites and the renamed gate suite each passed once. R: row 4's four
+  reds read Passed.
+- **Rows 1–4 are carried by identity.** The stack was re-cut twice after they ran (onto M271, then its records).
+  Patch-ids equal, range-diff 9 of 9 `=`, each commit's kit tree equal to its counterpart:
+  `lanes/ma-6/packet-6e-9873b1ef8/PROOF-recut-m271.txt`, `PROOF-hop-m271-records.txt`.
+- **The stills, ten, for James's look:** `lanes/vf-m2/ma6e2-a9-results/lw/stills/`, `<look>-shelf-<state>.png`, light
+  and dark over `empty`, `one`, `many`, `reading`, `off`. sha256, in the order light then dark, each state in that
+  order: `64a4dbd352bb1efa`, `45c41be2081b1eb7`, `396095a13760c6d6`, `2b2e1e3664cdf28f`, `d43900b5aedfa58f`;
+  `23823bd2dc96e34e`, `573b1634876537dd`, `595701c185e90cd4`, `bc786009bd019ff2`, `e52db49e1cd83fa6`. No verdict was
+  read from them on the host.
+- Mac rows through the door: `swiftc -parse` over the stack's Swift and over `HomeScreen.swift` after the rider,
+  check-ios-fixtures 454 and 112, biome `Checked 3545`. The rider's parse ran through item 271's amended swap gate (swap
+  used 1839.81M, a 30 s swap delta of 0). A parse does not type-check.
+- KEPT births on vf-m2: run 276 none; run 278 one, `/private/tmp/.tmpw0H0V2`, left on the host, on James's list.
+- Not run: a phone. No row here is a device row.
+
+**Found.**
+- **Run 276's S red, and the rider.** `HomeScreen.swift:903:5` at `74736d181`: "the compiler is unable to type-check
+  this expression in reasonable time", on the `ZStack` of `tabs`, a chain D's green had taken past what the checker
+  would solve. Each red commit built clean. VF-PM ruled one rider, never a rewrite: `tabs` stands as four named views,
+  modifiers in their order (the commit's subject says three). Nothing here had been compiled before run 276, and a parse
+  could not have caught it.
+- `HomeScreen.swift` across the range is +321 −49 (the per-commit sum is +331 −59); the brief's +132 was the wiring
+  before D mounted the shelf, the card, the zoom and About.
+- A script over all of `HomeScreen.swift` found no second chain of that shape. `searchSheet`, one call with closures,
+  type-checked and is the next most likely to time out.
+- **Item 273: the shelf starts about 62 pt low.** Measured in `light-shelf-many`: the search field's top is near 138 pt,
+  where about 76 was meant. `AppsShelfViews.swift:212` adds `safeTop` to its top padding, and the `ScrollView` already
+  insets for the safe area, so it counts twice. No test sees it. VF-PM ruled it lands as it is, nothing functional lost;
+  the fix is `.padding(.top, Self.headGap)`, red first, in the follow-up with James's notes on the stills.
+- **The brief's stills table was wrong, not the shelf.** It promised a no-project group in `many`. The mock clones
+  `index-apps.valid`'s first row for every title, so every app has the one project. `AppsShelfTests/noProject()` holds
+  the group as a model, and it stays unwitnessed in any still.
+
+**Owed.**
+- James's device rows (P6): a real pull (on History and Chat, 132 reads the list's own rubber-banded overscroll, about
+  283 pt of finger, an estimate), a real preview fetch, the zoom. On Chat's night the page does not follow the finger,
+  because only Field's follows by offset; the icons and the line still pour. The dot on Chat's night was not stilled: no
+  mock state makes an app news.
+- The ten stills, for his look.
+- The words ‹for James›, nine, each interim: "‹n› new apps"; "Your desktop"; "All apps" in the secondary ink, since
+  `--vf-select` is "selection ring only"; "This app can't run here yet"; "No project"; "Your agents haven't made an app
+  yet"; a folder's name in the primary ink, since §8 asks him; "Reading your apps"; "Not every app is shown here".
+- For James, a §8 wording question: whether "an app you have not opened" stands as `unopened`'s narrower reading.
+- James's to reverse: the ten-page walk, and the re-walk on every ping (LANDED "MA-6 (6a–6d + the gate)").
+- Named follow-ups: Keep, Hide and Versions at 3h, and live apps on the phone.
+- `gate:landing` at this land, on James's word. The stack moves no code a desktop smoke runs.

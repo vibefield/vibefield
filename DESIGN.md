@@ -6843,7 +6843,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
 - **The phone's Apps** (track MA, ruled 2026-11-05 from the design page *Apps in a Pocket*: MA-D7…D9 and MA-D11…D13
   A, MA-D10 B, James; MA-D1…D6 carried A under his "all ruled"; the laws MA-L1…L10). Nothing is drawn yet: MA-6
   draws the door, the cues and the shelf, and MA-5 the open app on SP-4's web view. Until MA-5 a hosted app opens its
-  link in Safari and any other opens its About (§9 "Apps"). The phone holds every app the person's agents made, and
+  link in Safari and any other opens its About (§9 "Apps"). *Corrected 2026-11-09 (MA-6e, M272): MA-6 drew the door,
+  the cues and the shelf. Before MA-5 an app zooms to its honest screen from the row, with Open in ‹host› when it has a
+  hosted link and About under the glass row's ···, by VF-PM's ruling of 04:46Z; the sentences above are the plan that
+  ruling replaced.* The phone holds every app the person's agents made, and
   every live one they published, from any of their desktops, read through the phone's home. The numbers are the
   page's (an iPhone 17 Pro, 402 × 874) and the record's (`draft/thinking-mini-apps.md` §5); where the two differ, the
   record's stand. Its words are §9 "Apps".
@@ -6950,7 +6953,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   runs now first, and your past under it. Search stops being a page (the bar's `search` tab retires), so the page
   you were on stays under it. *Drawn 2026-11-06, SE-2 (the M-phone stack): the sheet in its own glass, Live now and
   Everything, the chips, the field's tokens, a typed name's offer, the feet and the honest words, and the dim; the
-  bar's `search` tab is no page any more. MA-6's Apps strip is still owed.* *(Corrected the same day, the M-phone
+  bar's `search` tab is no page any more. MA-6's Apps strip is still owed.*
+  *(Corrected 2026-11-09, MA-6e, M272: drawn.)* *(Corrected the same day, the M-phone
   stack: this said "Nothing is drawn yet: SE-2 draws the sheet, and MA-6 its Apps strip.")*
   - **Opening is unchanged.** The search circle morphs into the bar's search field and its close circle, as built
     (`SearchBarRow`): 62 at rest, 21 from the sides and the foot; with the keyboard up, 48, 10 from the sides and 8
