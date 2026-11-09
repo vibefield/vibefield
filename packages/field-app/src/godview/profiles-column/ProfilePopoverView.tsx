@@ -251,6 +251,13 @@ export function ProfilePopoverView({
   const unread = none.filter((entry) => entry.why === "unavailable");
   const quiet = none.filter((entry) => entry.why !== "unavailable");
   const choosable = new Set(rows.filter((row) => row.kind !== "needs-you").map((row) => row.key));
+  // a row that needs you is not pressable, even while its plan is chosen (§8): the filter stands, its × is search's
+  const drawnPressed = (key: string): boolean => choosable.has(key) && isPressed(key);
+  const footWords = lens
+    ? lensWords(set.label, chosen)
+    : choosable.size > 0
+      ? planWords(rows.some((row) => drawnPressed(row.key)))
+      : null;
   return (
     <div id={id} className="vf-profiles-pop" role="dialog" aria-label={set.label}>
       <div className="vf-profiles-pop-head">
@@ -287,7 +294,7 @@ export function ProfilePopoverView({
               focused={focus === entry.key}
               onFocusPlan={onFocusPlan}
               acts={acts}
-              pressed={isPressed(entry.key)}
+              pressed={drawnPressed(entry.key)}
               dim={chosenPlanFamily !== null && !isPressed(entry.key) && choosable.has(entry.key)}
               onToggle={() => toggle(entry.key)}
             />
@@ -304,9 +311,7 @@ export function ProfilePopoverView({
         </div>
       </div>
       <div className="vf-profiles-pop-foot">
-        <span className="vf-profiles-pop-lens">
-          {lens ? lensWords(set.label, chosen) : planWords(chosenPlanFamily !== null)}
-        </span>
+        {footWords !== null ? <span className="vf-profiles-pop-lens">{footWords}</span> : null}
         <button
           type="button"
           className="vf-profiles-pop-open"

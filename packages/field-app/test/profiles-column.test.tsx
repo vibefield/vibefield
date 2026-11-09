@@ -557,7 +557,8 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     const circle = { set: FIXTURE_WORK, meters };
     const need = meters.entries.find((entry) => entry.kind === "needs-you");
     const [other] = readingRows(circle);
-    if (need === undefined || other === undefined) throw new Error("fixture: no need or no reading");
+    if (need === undefined || other === undefined)
+      throw new Error("fixture: no need or no reading");
     return { circle, need, other };
   }
 
