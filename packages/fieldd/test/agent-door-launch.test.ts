@@ -1,12 +1,15 @@
 // Item 124 — a birth whose executable takes no door (`agent-door-launch.ts`): refused for the door, the birth is made
 // once more with no briefing, its facts written; a second refusal surfaces as the launch's own, and nothing loops.
+import { createNoopLogger } from "@vibefield/logging";
 import type { AgentRunBriefing } from "@vibefield/puppeteer-core";
 import { describe, expect, it } from "vitest";
 import {
   birthWithDoor,
   carriesDoor,
   refusedTheDoor,
+  RunHelperRoots,
   UNSUPPORTED_LAUNCH_FIELD,
+  withHelperProcess,
 } from "../src/agent-door-launch";
 import { type SummarizeInput, summarizeManaged } from "../src/agent-sessions";
 
@@ -37,6 +40,101 @@ function launcher(...answers: unknown[]) {
     },
   };
 }
+
+describe("a run's helper process, named to the floor (OB-3d)", () => {
+  function floor(answer: () => Promise<unknown> = async () => ({ startedAtMs: 1 })) {
+    const calls: unknown[] = [];
+    return {
+      calls,
+      set: async (rootId: string, pid: number) => {
+        calls.push(["set", rootId, pid]);
+        return answer();
+      },
+      clear: async (rootId: string) => {
+        calls.push(["clear", rootId]);
+        return { cleared: true };
+      },
+    };
+  }
+  const logged = () => {
+    const warned: string[] = [];
+    const logger = {
+      ...createNoopLogger(),
+      warn: (event: string) => void warned.push(event),
+      child: () => logger,
+    };
+    return { logger: logger as ReturnType<typeof createNoopLogger>, warned };
+  };
+
+  it("adds the hook beside what the ingress already says, and an adapter that never calls it holds no root", () => {
+    const onBound = () => undefined;
+    const hook = async () => undefined;
+    const ingress = withHelperProcess({ onBound }, hook) as { onBound: unknown; onHelperProcess: unknown };
+    expect(ingress.onBound).toBe(onBound);
+    expect(ingress.onHelperProcess).toBe(hook);
+    const roots = new RunHelperRoots({ floor: floor(), logger: createNoopLogger() });
+    roots.announce("attempt-1");
+    expect(roots.birth("attempt-1")).toBeUndefined();
+  });
+
+  it("names each attempt's helper to the floor before it answers, keyed to the attempt", async () => {
+    const f = floor();
+    const roots = new RunHelperRoots({ floor: f, logger: createNoopLogger() });
+    await roots.announce("attempt-1")({ pid: 4242, startedAtMs: 7 });
+    await roots.announce("attempt-2", "sp-7k2m9q4x")({ pid: 4243, startedAtMs: 8 });
+    expect(f.calls).toEqual([
+      ["set", "attempt-1", 4242],
+      ["set", "attempt-2", 4243],
+    ]);
+    expect(roots.birth("attempt-1")).toEqual({ entering: true });
+    expect(roots.birth("attempt-2")).toEqual({ entering: true, spark: "sp-7k2m9q4x" });
+  });
+
+  it("never fails the launch: a floor that refuses or is down leaves a run with no root, and says so", async () => {
+    const { logger, warned } = logged();
+    const refusing = new RunHelperRoots({
+      floor: floor(() => Promise.reject(new Error("pid-held"))),
+      logger,
+    });
+    await expect(refusing.announce("attempt-1")({ pid: 1, startedAtMs: 0 })).resolves.toBeUndefined();
+    expect(refusing.birth("attempt-1")).toBeUndefined();
+    expect(warned).toEqual(["fieldd.agents.helper_root_refused"]);
+
+    const noFloor = new RunHelperRoots({ logger });
+    await expect(noFloor.announce("attempt-2")({ pid: 1, startedAtMs: 0 })).resolves.toBeUndefined();
+    expect(warned).toEqual([
+      "fieldd.agents.helper_root_refused",
+      "fieldd.agents.helper_root_refused",
+    ]);
+  });
+
+  it("clears a root the floor holds when its run ends, once, and asks nothing of a run that has none", async () => {
+    const f = floor();
+    const roots = new RunHelperRoots({ floor: f, logger: createNoopLogger() });
+    await roots.announce("attempt-1")({ pid: 4242, startedAtMs: 7 });
+    roots.end("attempt-1");
+    roots.end("attempt-1");
+    roots.end("attempt-never-named");
+    expect(f.calls).toEqual([
+      ["set", "attempt-1", 4242],
+      ["clear", "attempt-1"],
+    ]);
+    expect(roots.birth("attempt-1")).toBeUndefined();
+  });
+
+  it("logs a clear the floor did not hear, and the run's end goes on", async () => {
+    const { logger, warned } = logged();
+    const f = {
+      ...floor(),
+      clear: () => Promise.reject(new Error("the floor is down")),
+    };
+    const roots = new RunHelperRoots({ floor: f, logger });
+    await roots.announce("attempt-1")({ pid: 4242, startedAtMs: 7 });
+    expect(() => roots.end("attempt-1")).not.toThrow();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(warned).toEqual(["fieldd.agents.helper_root_clear_failed"]);
+  });
+});
 
 describe("a birth whose executable takes no door (item 124)", () => {
   it("is made once more with no briefing, its refusal heard and the second attempt wrapped", async () => {

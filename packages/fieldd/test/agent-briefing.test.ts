@@ -24,6 +24,9 @@ const supported: AgentBriefingCapabilities = {
   mcpServerProcess: "terminal",
 };
 
+/** OB-3d — a helper puppeteer names to the host. The installed puppeteer-core's enum predates it, so the test casts. */
+const RUN_HELPER = "run-helper" as unknown as AgentBriefingCapabilities["mcpServerProcess"];
+
 // `null` is an agent that declares no briefing at all (a default parameter would read `undefined` as `supported`).
 // The catalog is the test seam's table, whose scripted row claims `spark` (CP-5a), unless a test composes another.
 function harness(
@@ -168,9 +171,26 @@ describe("MT-0: a plain run's briefing, which degrades and never refuses", () =>
     expect((await h.service.forRun("scripted")).allowTools).toHaveLength(3);
   });
 
+  it("names a run's helper process as it names a pane's (OB-3d)", async () => {
+    const h = harness({ ...supported, mcpServerProcess: RUN_HELPER });
+    expect(await h.service.forRun("scripted")).toEqual({
+      mcpServers: { vibefield: { command: h.info.command, args: [...h.info.args] } },
+      allowTools: ["vibefield/history_search", "vibefield/history_read", "vibefield/projects_list"],
+    });
+  });
+
+  it("gives a harness with no allowance field the door and no allowance, so it asks before each tool (OB-3d, Grok)", async () => {
+    const h = harness({ mcpServers: true, allowTools: false, mcpServerProcess: RUN_HELPER });
+    const briefing = await h.service.forRun("scripted");
+    expect(briefing.mcpServers?.vibefield).toEqual({
+      command: h.info.command,
+      args: [...h.info.args],
+    });
+    expect("allowTools" in briefing, "the field is omitted, never empty").toBe(false);
+  });
+
   it.each([
     ["no servers", { ...supported, mcpServers: false }],
-    ["no allowances", { ...supported, allowTools: false }],
     ["a helper's process", { ...supported, mcpServerProcess: "helper" as const }],
     ["no capabilities at all", null],
   ])("starts an agent with %s bare, before asking for a door", async (_label, capability) => {
@@ -261,7 +281,7 @@ describe("CP-5a: the catalog's spark claim, read before the facts", () => {
       sparkHatchRefusal(claimed, "scripted", () => ({ ...supported, mcpServerProcess: "helper" })),
     ).toBe("spark-door-identity-unsupported");
     expect(sparkFactsRefusal(undefined)).toBe("spark-briefing-unsupported");
-    // a plain run's facts need no instructions
-    expect(sparkFactsRefusal({ ...supported, instructions: false }, false)).toBeUndefined();
+    // OB-3d: a run's own helper the floor was told of is a process the door can name
+    expect(sparkFactsRefusal({ ...supported, mcpServerProcess: RUN_HELPER })).toBeUndefined();
   });
 });

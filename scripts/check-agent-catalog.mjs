@@ -2028,6 +2028,7 @@ function selfTestVerdicts(check) {
       briefed("sig", { ...whole, mcpServerProcess: "terminal" }),
       briefed("omi", { mcpServers: true, allowTools: false, instructions: false }),
       briefed("hel", { ...whole, mcpServerProcess: "helper" }),
+      briefed("rh", { ...whole, mcpServerProcess: "run-helper" }),
       briefed("ups", { ...whole, mcpServerProcess: "terminal" }),
       briefed("pre", { ...whole, mcpServerProcess: "terminal" }),
       briefed("lat", { ...whole, mcpServerProcess: "terminal" }),
@@ -2039,6 +2040,7 @@ function selfTestVerdicts(check) {
       row("sig", { status: "supported", offers: { spawn: true, spark: true } }),
       row("omi", { status: "supported", offers: { spawn: true, spark: true } }),
       row("hel", { status: "supported", offers: { spawn: true, spark: true } }),
+      row("rh", { status: "supported", offers: { spawn: true, spark: true } }),
       row("ups", { status: "supported", offers: { spawn: true } }),
       row("pre", { offers: { spawn: true, spark: true } }),
       row("lat", { offers: { spawn: true } }),
@@ -2204,6 +2206,7 @@ async function selfTestReaders(check) {
   const fields = { mcpServers: true, allowTools: true, instructions: true };
   const sparkShapes = [
     briefing("terminal", { ...fields, mcpServerProcess: "terminal" }),
+    briefing("run-helper", { ...fields, mcpServerProcess: "run-helper" }),
     briefing("helper", { ...fields, mcpServerProcess: "helper" }),
     briefing("external", { ...fields, mcpServerProcess: "external" }),
     briefing("unsaid", fields),
@@ -2212,9 +2215,18 @@ async function selfTestReaders(check) {
     bare,
   ].map(ports);
   check(
-    "spark needs the whole briefing on a terminal: a helper, an external or an undeclared process, a missing or false field, or no declaration is not spark",
+    "spark needs the whole briefing on a terminal or a run's own helper: a shared helper, an external or an undeclared process, a missing or false field, or no declaration is not spark",
     JSON.stringify(sparkShapes) ===
-      JSON.stringify(["spawn spark", "spawn", "spawn", "spawn", "spawn", "spawn", "spawn"]),
+      JSON.stringify([
+        "spawn spark",
+        "spawn spark",
+        "spawn",
+        "spawn",
+        "spawn",
+        "spawn",
+        "spawn",
+        "spawn",
+      ]),
     JSON.stringify(sparkShapes),
   );
 

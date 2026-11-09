@@ -1,4 +1,4 @@
-import type { NativeDoorOpen, NativeDoorPane } from "@vibefield/contracts";
+import type { NativeDoorOpen, NativeDoorPane, NativeDoorRoot } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { type DoorCaller, DoorService, isSettled, REASK_MS } from "../src/tool-plane/door";
 import { MCP_MODERN } from "../src/tool-plane/mcp";
@@ -24,7 +24,9 @@ const toolsOf = (caller: DoorCaller) =>
       ? ["history_search"]
       : [];
 
-function harness(identify: (pane: NativeDoorPane | undefined) => DoorCaller) {
+function harness(
+  identify: (pane: NativeDoorPane | undefined, root: NativeDoorRoot | undefined) => DoorCaller,
+) {
   let onEvent: ((payload: unknown, kind: "snapshot" | "delta") => void) | undefined;
   const handlers = new Map<number, (payload: Uint8Array) => void>();
   const sent = new Map<number, string>();
@@ -54,9 +56,9 @@ function harness(identify: (pane: NativeDoorPane | undefined) => DoorCaller) {
       },
       flush: async () => undefined,
     },
-    identify: (pane) => {
+    identify: (pane, root) => {
       asked++;
-      return identify(pane);
+      return identify(pane, root);
     },
     serve: (caller) => ({
       serverInfo: { name: "vibefield", version: "0.1.0" },
@@ -77,12 +79,18 @@ function harness(identify: (pane: NativeDoorPane | undefined) => DoorCaller) {
     now: () => clock.t,
     maxLineBytes: 1024,
   });
-  const open = (connId: string, laneId: number, pane?: NativeDoorPane): NativeDoorOpen => ({
+  const open = (
+    connId: string,
+    laneId: number,
+    pane?: NativeDoorPane,
+    root?: NativeDoorRoot,
+  ): NativeDoorOpen => ({
     connId,
     laneId,
     state: "open",
     caller: { pid: 4242, startedAtMs: 1793270000000 },
     ...(pane ? { pane } : {}),
+    ...(root ? { root } : {}),
   });
   const bytes = (laneId: number, text: string) => handlers.get(laneId)?.(enc.encode(text));
   const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -153,6 +161,28 @@ describe("the door, fieldd's half (CP-1b; MT-0's settle rule)", () => {
     expect(h.answers(101).map(names)).toEqual([["history_search"], ["history_search"]]);
     for (const lane of [102, 103]) expect(h.answers(lane).map(names)).toEqual([[], []]);
     expect(h.plain.sort()).toEqual(["p2:pane", "p3:outside"]);
+  });
+
+  // OB-3d — a helper outside every pane is named by the root the floor walked it to, and a root settles as a run does
+  it("hands identify the door's helper root, and asks again while its caller is unsettled", async () => {
+    const root: NativeDoorRoot = { rootId: "attempt-1", depth: 1 };
+    const seen: unknown[][] = [];
+    let settled = false;
+    const h = harness((pane, r) => {
+      seen.push([pane, r]);
+      return settled ? RUN : { kind: "root", rootId: r?.rootId ?? "" };
+    });
+    await h.door.ensureStarted();
+    h.event(h.open("r1", 111, undefined, root), "delta");
+    expect(seen).toEqual([[undefined, root]]);
+    expect(h.door.doors().get("r1")).toEqual({ kind: "root", rootId: "attempt-1" });
+    settled = true;
+    h.clock.t += REASK_MS;
+    expect(h.door.doors().get("r1")).toEqual(RUN);
+    expect(seen).toEqual([
+      [undefined, root],
+      [undefined, root],
+    ]);
   });
 
   it("splits the floor's raw chunks on newlines, whatever their cut, and answers each line in order", async () => {

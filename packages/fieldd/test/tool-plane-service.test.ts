@@ -9,7 +9,11 @@ import {
   type SparkRecord,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import { type ToolPlaneAudit, ToolPlaneService } from "../src/tool-plane";
+import {
+  type ToolPlaneAudit,
+  ToolPlaneService,
+  type ToolPlaneServiceOptions,
+} from "../src/tool-plane";
 import { REASK_MS } from "../src/tool-plane/door";
 import { MCP_MODERN } from "../src/tool-plane/mcp";
 import { NeedsQueue } from "../src/tool-plane/rooms/you/queue";
@@ -89,6 +93,8 @@ function harness(
     doors?: readonly NativeDoorOpen[];
     /** the monitor's persona map; null before its first frame */
     personaSets?: ReadonlyMap<string, string> | null;
+    /** OB-3d — the run a helper root names */
+    runForRoot?: ToolPlaneServiceOptions["runForRoot"];
   } = {},
 ) {
   let personaSets = opts.personaSets === undefined ? personaSetsOf(SETS) : opts.personaSets;
@@ -172,6 +178,7 @@ function harness(
                 : tid === "sess-orphan"
                   ? { runtimeRunId: "run-5", verified: true, profileId: "claude:gone" }
                   : undefined,
+    runForRoot: opts.runForRoot ?? (() => undefined),
     personaSets: () => personaSets,
     spark: (id) => (id === SPARK.id ? SPARK : undefined),
     verbs: {
@@ -433,6 +440,96 @@ describe("the door places a plain run by the one rule (TU-1, Q3; critique 6)", (
 
   it("holds a run filed under none to the profile listing its persona, as the rooms place it; a persona no profile lists holds none, settled", async () => {
     const h = harness({ doors: PERSONA_DOORS });
+// OB-3d — Codex and Grok run their MCP servers from a helper outside the terminal, so a door names them by the helper
+// root fieldd told the floor. The helper dials while puppeteer's spawn is still running, before fieldd has written the
+// run's record, so a harness that lists once must not be told the session holds nothing. The settle rule is unchanged.
+describe("a run's helper root at the door (OB-3d)", () => {
+  const rooted = (connId: string, laneId: number, rootId: string): NativeDoorOpen => ({
+    ...door(connId, laneId),
+    root: { rootId, depth: 1 },
+  });
+  const LIST = { id: 1, method: "tools/list", params: { _meta: META } };
+  const AGENT_ROWS = ["history_search", "history_read", "projects_list", "notify"];
+  const RUN_7 = { runtimeRunId: "run-7", verified: true, profileSet: "work" };
+
+  it("maps a root to the run it became, which settles as a pane's run does", async () => {
+    const h = harness({
+      doors: [rooted("c-root", 1101, "attempt-1")],
+      runForRoot: (id) => (id === "attempt-1" ? RUN_7 : undefined),
+    });
+    await h.plane.ensureStarted();
+    h.ask(1101, LIST);
+    await h.settle();
+    expect(names(h.answers(1101)[0])).toEqual(AGENT_ROWS);
+    expect(h.answers(1101)[0].result.ttlMs).toBeGreaterThan(0);
+    expect(h.plane.doors().get("c-root")).toMatchObject({ kind: "run", runtimeRunId: "run-7" });
+  });
+
+  it("lists a birth still entering the rows it will hold, and answers its calls unavailable until the record verifies", async () => {
+    let entered = false;
+    const h = harness({
+      doors: [rooted("c-birth", 1102, "attempt-2")],
+      runForRoot: () => (entered ? RUN_7 : { entering: true }),
+    });
+    await h.plane.ensureStarted();
+    h.ask(1102, LIST);
+    await h.settle();
+    expect(names(h.answers(1102)[0])).toEqual(AGENT_ROWS);
+    expect(h.answers(1102)[0].result.ttlMs, "unsettled: never cached").toBe(0);
+    expect(h.audited, "a caller about to hold rows is not a plain caller").toEqual([]);
+
+    h.call(1102, 2, "projects_list");
+    await h.settle();
+    expect(h.answers(1102)[1].result.isError).toBe(true);
+    expect(h.answers(1102)[1].result.structuredContent).toEqual({ fact: "unavailable" });
+    expect(h.audited, "nothing is served before the record verifies").toEqual([]);
+
+    entered = true;
+    h.clock.t += REASK_MS;
+    h.call(1102, 3, "projects_list");
+    await h.settle();
+    expect(h.answers(1102)[2].result.isError).toBeUndefined();
+    expect(h.audited.map((a) => a.target.id)).toEqual(["run-7"]);
+  });
+
+  it("names a spark's birth nothing while it enters: no helper agent is offered as a spark", async () => {
+    const h = harness({
+      doors: [rooted("c-spark-birth", 1103, "attempt-3")],
+      runForRoot: () => ({ entering: true, spark: SPARK.id }),
+    });
+    await h.plane.ensureStarted();
+    h.ask(1103, LIST);
+    await h.settle();
+    expect(names(h.answers(1103)[0])).toEqual([]);
+    expect(h.plane.doors().get("c-spark-birth")).toEqual({ kind: "root", rootId: "attempt-3" });
+  });
+
+  it("serves a root it cannot place nothing, recorded once under the root", async () => {
+    const h = harness({ doors: [rooted("c-unknown", 1104, "attempt-4")] });
+    await h.plane.ensureStarted();
+    h.ask(1104, LIST);
+    await h.settle();
+    expect(names(h.answers(1104)[0])).toEqual([]);
+    expect(h.audited.map((a) => `${a.action} ${a.target.id} ${String(a.reason)}`)).toEqual([
+      "tools.door.plain c-unknown root",
+    ]);
+  });
+
+  it("keeps the pane's answer when a row names a pane: a pane wins and the root is never asked", async () => {
+    const asked: string[] = [];
+    const h = harness({
+      doors: [{ ...door("c-both", 1105, "sess-plain"), root: { rootId: "attempt-5", depth: 0 } }],
+      runForRoot: (id) => {
+        asked.push(id);
+        return undefined;
+      },
+    });
+    await h.plane.ensureStarted();
+    expect(h.plane.doors().get("c-both")).toMatchObject({ kind: "run", runtimeRunId: "run-7" });
+    expect(asked).toEqual([]);
+  });
+});
+
     await h.plane.ensureStarted();
     expect(callers(h)).toEqual({
       "c-plain": { profiles: ["work"], unsettled: undefined },

@@ -145,6 +145,13 @@ describe("the agents a spark can think with", () => {
     ).toBe(false);
   });
 
+  it("reads a run's own helper, named to the door, as a process the door can name (OB-3d)", () => {
+    const [agent] = sparkAgentsOf([
+      provider(FIRST, { ...BRIEFED, mcpServerProcess: "run-helper" }, { spawn: true }),
+    ]);
+    expect(agent?.takes).toBe(true);
+  });
+
   it("says the agent alone until a model is chosen, then the model and its effort", () => {
     const [agent] = sparkAgentsOf([provider(FIRST, { ...BRIEFED, mcpServerProcess: "terminal" })]);
     expect(agentLine(agent, undefined, undefined)).toBe(FIRST.label);
