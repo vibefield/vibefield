@@ -902,6 +902,17 @@ export const ObjectAgentTool = z
   .passthrough();
 export type ObjectAgentTool = z.infer<typeof ObjectAgentTool>;
 
+/** How an agent tool's JSON Schema is compiled: by the desk room, before a call reaches the window, and by `vibefield-plugin
+ * check`, so a schema `check` passes is one the room can hold a call to. `strictSchema`: a keyword or a `format` Ajv has no
+ * checker for is an error, never quietly unchecked. `addUsedSchema: false`: tools may share an `$id`. Options rather than a
+ * compiler, because contracts depends on no Ajv. */
+export const AGENT_TOOL_SCHEMA_AJV = {
+  allErrors: false,
+  strict: false,
+  strictSchema: true,
+  addUsedSchema: false,
+} as const;
+
 /** The most faces a kind offers (the mind map, the longest in §4.2, has four). */
 const AGENT_FACES_MAX = 8;
 

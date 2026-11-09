@@ -2,9 +2,10 @@
 // JSON Schema a manifest carries — settings properties, dynamic service method
 // input/output/snapshot/delta, command args — is compiled with the SAME ajv
 // settings the daemon uses (`service-registry.ts`: allErrors off, strict off),
-// so a schema that compiles here compiles there.
+// so a schema that compiles here compiles there. An agent tool's schema is held to the desk room's own rule, stricter than
+// the registry's: the room would answer every call to a schema it cannot fully check `failed`.
 
-import type { PluginManifestV1 } from "@vibefield/contracts";
+import { AGENT_TOOL_SCHEMA_AJV, type PluginManifestV1 } from "@vibefield/contracts";
 import { Ajv } from "ajv";
 import { jsonPointer, pass, refuse, type Verdict } from "./verdict";
 
@@ -13,6 +14,8 @@ interface DeclaredSchema {
   readonly schema: unknown;
   /** how the verdict names it to a human */
   readonly label: string;
+  /** an agent tool's: compiled under the desk room's rule */
+  readonly agentTool?: true;
 }
 
 export function collectDeclaredSchemas(manifest: PluginManifestV1): DeclaredSchema[] {
@@ -67,12 +70,14 @@ export function collectDeclaredSchemas(manifest: PluginManifestV1): DeclaredSche
         path: [...base, "input"],
         schema: tool.input,
         label: `${object.type} tool ${tool.name} input`,
+        agentTool: true,
       });
       if (tool.output !== undefined)
         out.push({
           path: [...base, "output"],
           schema: tool.output,
           label: `${object.type} tool ${tool.name} output`,
+          agentTool: true,
         });
     });
   });
@@ -89,10 +94,11 @@ export function checkSchemas(manifest: PluginManifestV1): Verdict[] {
   // One Ajv per run: a fresh instance per schema would lose $ref sharing and
   // cost nothing here, but reusing one mirrors the daemon's single registry.
   const ajv = new Ajv({ allErrors: false, strict: false });
+  const toolAjv = new Ajv({ ...AGENT_TOOL_SCHEMA_AJV });
   let compiled = 0;
   for (const entry of declared) {
     try {
-      ajv.compile(entry.schema as object);
+      (entry.agentTool === true ? toolAjv : ajv).compile(entry.schema as object);
       compiled++;
     } catch (error) {
       verdicts.push(

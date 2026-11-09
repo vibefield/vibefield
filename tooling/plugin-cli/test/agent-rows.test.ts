@@ -104,6 +104,7 @@ describe("check: the agent half", () => {
       const verdicts = await checkPlugin({
         dir: makePlugin({
           manifest: {
+            capabilities: ["storage.self"],
             contributes: {
               ...(baseManifest()["contributes"] as object),
               settings: {

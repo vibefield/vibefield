@@ -1,4 +1,4 @@
-import { OBJECT_LIMITS } from "@vibefield/contracts";
+import { AGENT_TOOL_SCHEMA_AJV, OBJECT_LIMITS } from "@vibefield/contracts";
 import { Ajv, type ErrorObject, type ValidateFunction } from "ajv";
 import { RpcCallError } from "../../../native-link";
 import type { DeskKindTool } from "../../../objects/kinds";
@@ -13,16 +13,9 @@ const refuse = (fact: string, text: string, more: Record<string, unknown> = {}):
 /** Expected shapes past this length are named by their keyword instead: the refusal is for reading. */
 const EXPECTED_CHARS = 600;
 
-// `strictSchema`: a keyword or a `format` Ajv has no checker for is an error when the schema compiles, never quietly
-// unchecked, so nothing a kind's schema says it would refuse reaches the window. `addUsedSchema: false`: tools may share
-// an $id, and a rebuilt list compiles the same one again.
-const ajv = new Ajv({
-  allErrors: false,
-  strict: false,
-  strictSchema: true,
-  verbose: true,
-  addUsedSchema: false,
-});
+// The rule `vibefield-plugin check` compiles with, so nothing a kind's schema says it would refuse reaches the window and
+// a schema that would answer `failed` here is refused before it ships. `verbose` is the room's own: `expectedOf` reads it.
+const ajv = new Ajv({ ...AGENT_TOOL_SCHEMA_AJV, verbose: true });
 const compiled = new WeakMap<DeskKindTool, ValidateFunction>();
 
 const compile = (tool: DeskKindTool): ValidateFunction => {
