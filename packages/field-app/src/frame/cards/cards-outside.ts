@@ -12,11 +12,14 @@ import {
   subscribeCarriedCard,
 } from "./card-drag";
 import {
+  blobUrlsOf,
   CARD_H,
   CARD_W,
   CARDS_CAP,
   type Card,
   type CardOrigin,
+  fileCardOf,
+  pictureCardOf,
   sameAs,
   textCardOf,
 } from "./cards-model";
@@ -197,25 +200,19 @@ export function waitingCardOf(
   const waiting = {
     origin: { view: "outside", how: "drag" },
     at: store.now(),
-    paste: "",
     waiting: true,
   } as const;
   if (files.length === 1 && only?.type.startsWith("image/") === true) {
-    return {
-      ...waiting,
-      id: store.nextId("pict"),
-      kind: "pict",
-      title: "",
-      width: 0,
-      height: 0,
-      src: "",
-    };
+    return pictureCardOf(
+      { title: "", width: 0, height: 0, src: "" },
+      { ...waiting, id: store.nextId("image") },
+    );
   }
   if (files.length > 0 || transfer.types.includes("Files")) {
     const name = files.length > 1 ? WAITING_WORDS.files(files.length) : "";
-    return { ...waiting, id: store.nextId("file"), kind: "file", name };
+    return fileCardOf({ name }, { ...waiting, id: store.nextId("file") });
   }
-  return { ...waiting, id: store.nextId("text"), kind: "text", title: "", body: "", bare: true };
+  return textCardOf("", { ...waiting, id: store.nextId("text") });
 }
 
 /** A file's kind as its name says it ("PDF"); null with none — a dot file has none. PURE. */
@@ -295,41 +292,38 @@ async function cardOf(thing: Brought, bringing: Bringing): Promise<Card> {
   if (isPicture(file, folder)) {
     const size = await bringing.measure(file).catch(() => null);
     if (size !== null) {
-      return {
-        id: store.nextId("pict"),
-        kind: "pict",
-        origin,
-        at: store.now(),
-        title: file.name === "" ? OUTSIDE_WORDS.picture : file.name,
-        width: size.width,
-        height: size.height,
-        src: URL.createObjectURL(file),
-        bytes: file,
-        paste: path ?? "",
-        ...(path === null ? {} : { path }),
-      };
+      return pictureCardOf(
+        {
+          title: file.name === "" ? OUTSIDE_WORDS.picture : file.name,
+          width: size.width,
+          height: size.height,
+          src: URL.createObjectURL(file),
+          bytes: file,
+          ...(path === null ? {} : { path }),
+        },
+        { id: store.nextId("image"), origin, at: store.now() },
+      );
     }
   }
   const lines = folder || !readsAsWords(file) ? null : await firstLinesOf(file);
   const facts = folder || lines !== null ? null : factsOf(file);
   const where = path === null ? null : folderOf(path);
-  return {
-    id: store.nextId("file"),
-    kind: "file",
-    origin,
-    at: store.now(),
-    name: file.name === "" ? OUTSIDE_WORDS.file : file.name,
-    paste: path ?? "",
-    ...(where === null ? {} : { folder: where }),
-    ...(lines === null ? {} : { lines }),
-    ...(facts === null ? {} : { facts }),
-  };
+  return fileCardOf(
+    {
+      name: file.name === "" ? OUTSIDE_WORDS.file : file.name,
+      ...(path === null ? {} : { path }),
+      ...(where === null ? {} : { folder: where }),
+      ...(lines === null ? {} : { lines }),
+      ...(facts === null ? {} : { facts }),
+    },
+    { id: store.nextId("file"), origin, at: store.now() },
+  );
 }
 
 /** A card that never reached the hand takes its picture's object URL with it (HN-D9: nothing of
  * the hand outlives it). */
 function release(card: Card): void {
-  if (card.kind === "pict" && card.src.startsWith("blob:")) URL.revokeObjectURL(card.src);
+  for (const url of blobUrlsOf(card)) URL.revokeObjectURL(url);
 }
 
 /** Run once the drag machine draws no card: one played straight in shrinks into its place and

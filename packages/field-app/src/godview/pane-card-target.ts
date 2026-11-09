@@ -80,7 +80,7 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
       const ring = under.element.getBoundingClientRect();
       // a card from another app says what it holds only once it is let go (B2)
       return card.waiting !== true && paneTextOf(card) === null
-        ? { ok: false, label: nothingToGive(card), ring }
+        ? { ok: false, label: nothingToGive(card.faces[0]), ring }
         : { ok: true, label: TARGET_WORDS.pane(under.pane.name), ring };
     },
     play: async (card, at) => {
@@ -89,7 +89,7 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
       if (door === null || under === null) return { ok: false, note: OUTCOME_WORDS.paneGone };
       const { pane } = under;
       const text = paneTextOf(card);
-      if (text === null) return { ok: false, note: nothingToGive(card) };
+      if (text === null) return { ok: false, note: nothingToGive(card.faces[0]) };
       // a snapshot's path names its still only while main keeps it (`stillOf`): a pane is never
       // handed a path to nothing
       const still = stillOf(card);

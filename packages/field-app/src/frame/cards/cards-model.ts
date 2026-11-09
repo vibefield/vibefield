@@ -1,5 +1,11 @@
-import { type FrameView, SCREENSHOT_LIMITS } from "@vibefield/contracts";
+import {
+  type ChipType,
+  type FrameView,
+  type ObjectRef,
+  SCREENSHOT_LIMITS,
+} from "@vibefield/contracts";
 import { COVER_RESERVE_PX } from "../frame-geometry";
+import { ABOUT_WORDS } from "./cards-words";
 
 /**
  * The hand (track HN, *Cards in Hand*; DESIGN.md §8 "The hand"): every copy made
@@ -9,10 +15,12 @@ import { COVER_RESERVE_PX } from "../frame-geometry";
  * lifts it, and the twelve (HN-D8). No DOM, no clock of its own: the suite pins
  * the numbers. The design's own words call it "the hand"; the code says
  * `cards`, because the desk's tools in hand already own `hand*`.
+ *
+ * What a card is (OB-D1, OB-D2; `draft/thinking-objects-at-work.md` §4): one value
+ * with every FACE of what it was made from, in the kind's order, never empty. Its
+ * type IS its first face's, and nothing is chosen until the card lands (§4.3).
+ * What a play puts in comes from the face (`card-text.ts`, `card-landing.ts`).
  */
-
-/** HN-D1, one stock and six faces: what a card can be. */
-export type CardKind = "text" | "file" | "agent" | "term" | "msg" | "pict";
 
 /** Where a card came from — the line its provenance label reads ("Godview ·
  * claude·2 · 2m ago"). `outside` is another app (HN-D2: brought in by a paste
@@ -24,83 +32,135 @@ export interface CardOrigin {
   readonly how: "copy" | "snapshot" | "paste" | "drag";
 }
 
-interface CardBase {
+interface FaceBase {
+  /** unique on the card: "ref", "outline", "opml", "picture" */
   readonly id: string;
-  readonly kind: CardKind;
-  readonly origin: CardOrigin;
-  /** epoch ms, when the card was dealt */
-  readonly at: number;
-  /** What a play puts in: a pane's paste, a prompt's text. Empty while the card
-   * is `waiting` — a drag from another app, before the system says what it holds. */
-  readonly paste: string;
-  readonly waiting?: true;
+  readonly type: ChipType;
+  /** the word on its bud only: "Live" · "Outline" · "OPML" · "Picture". A card marks its faces by icon. */
+  readonly label: string;
 }
 
-export interface TextCard extends CardBase {
-  readonly kind: "text";
-  /** the first sentence, run in bold — or the first line when there is none */
-  readonly title: string;
-  readonly body: string;
-  /** the title is a line, not a sentence: no full stop is added after it */
-  readonly bare: boolean;
+/** How a text face prints on the card: words with their first sentence bold, a terminal's lines,
+ * or a message with who said it. */
+export type TextShow =
+  | {
+      readonly as: "words";
+      /** the first sentence, run in bold — or the first line when there is none */
+      readonly title: string;
+      readonly body: string;
+      /** the title is a line, not a sentence: no full stop is added after it */
+      readonly bare: boolean;
+    }
+  | {
+      readonly as: "term";
+      /** the selection's first line, mono 500: a command when it is one */
+      readonly first: string;
+      /** the rest, cut by the face's right fade */
+      readonly rest: string;
+    }
+  | {
+      readonly as: "msg";
+      readonly speaker: string;
+      /** "13:58", as the thread says it */
+      readonly time: string;
+      readonly words: string;
+    };
+
+export interface TextFace extends FaceBase {
+  readonly type: "text";
+  readonly format: "plain" | "markdown" | "code";
+  readonly language?: string;
+  /** What a play puts in, as it was copied. Empty while the card is `waiting`. */
+  readonly text: string;
+  readonly show: TextShow;
 }
 
-export interface FileCard extends CardBase {
-  readonly kind: "file";
+export interface ImageFace extends FaceBase {
+  readonly type: "image";
+  /** the picture's own pixels, for its proportion and its size line */
+  readonly width: number;
+  readonly height: number;
+  /** what the face draws: a still's `vibefield-still:` URL, or an object URL */
+  readonly src: string;
+  /** its file on disk: a snapshot's at once, the desk's own at the play (OB-D10 A) */
+  readonly path?: string;
+  /** its PNG bytes, when the window made them (the desk's Copy, a paste): what the desk prints
+   * (HN-D7). A still on disk has none here; its bytes come through the shell's still door when
+   * the desk asks. In memory only (HN-D9). */
+  readonly bytes?: Blob;
+}
+
+export interface FileFace extends FaceBase {
+  readonly type: "file";
   readonly name: string;
+  /** its path on disk, what a play gives; absent for a file a page made */
+  readonly path?: string;
   /** the folder it lives in, as the face prints it (mono) */
   readonly folder?: string;
   /** its first lines, read only for a text file the person brought in */
   readonly lines?: string;
   /** a file's facts when it has no lines: its size, its kind */
   readonly facts?: string;
+  readonly mime?: string;
 }
 
-export interface AgentCard extends CardBase {
-  readonly kind: "agent";
+export interface LinkFace extends FaceBase {
+  readonly type: "link";
+  readonly url: string;
+  readonly title: string;
+}
+
+export interface SessionFace extends FaceBase {
+  readonly type: "session";
   /** the handle the swarm and History name it by ("claude·2") */
   readonly handle: string;
+  readonly run?: string;
   /** the catalog's agent id — presentation only (its mark) */
   readonly agent?: string;
   readonly project?: string;
   /** the project's dealt ink (DESIGN.md §2.9): its dot, printed before the project's name */
   readonly projectInk?: number;
   readonly state?: "working" | "waiting" | "idle" | "ended";
+  /** about four lines of its last reply; absent, the window is an empty pane with the live dot */
+  readonly lastWords?: string;
 }
 
-export interface TermCard extends CardBase {
-  readonly kind: "term";
-  /** the selection's first line, mono 500: a command when it is one */
-  readonly first: string;
-  /** the rest, cut by the face's right fade */
-  readonly rest: string;
-}
-
-export interface MsgCard extends CardBase {
-  readonly kind: "msg";
-  readonly speaker: string;
-  /** "13:58", as the thread says it */
-  readonly time: string;
-  readonly words: string;
-}
-
-export interface PictCard extends CardBase {
-  readonly kind: "pict";
+export interface RefFace extends FaceBase {
+  readonly type: "ref";
+  readonly ref: ObjectRef;
+  /** "Mind map": the kind's word, for the card and for the model */
+  readonly kindName: string;
   readonly title: string;
-  /** the picture's own pixels, for its proportion and its size line */
-  readonly width: number;
-  readonly height: number;
-  /** what the face draws: a still's `vibefield-still:` URL, or an object URL */
-  readonly src: string;
-  /** the picture's file on disk, when it has one — what a pane takes (HN-L5) */
-  readonly path?: string;
-  /** its PNG bytes, when the window made them (the desk's Copy, a paste): what
-   * the desk prints (HN-D7). A still on disk has none here; its bytes come
-   * through the shell's still door when the desk asks. In memory only (HN-D9). */
-  readonly bytes?: Blob;
+  /** the object as drawn at the press: the same capture as its Picture face */
+  readonly still: { readonly src: string; readonly width: number; readonly height: number };
+  /** several selected: the stack's other refs ("N objects") */
+  readonly more?: readonly ObjectRef[];
 }
 
-export type Card = TextCard | FileCard | AgentCard | TermCard | MsgCard | PictCard;
+export type Face = TextFace | ImageFace | FileFace | LinkFace | SessionFace | RefFace;
+
+export interface Card {
+  readonly id: string;
+  /** epoch ms, when the card was dealt */
+  readonly at: number;
+  readonly origin: CardOrigin;
+  /** a drag from another app, before the system says what it holds */
+  readonly waiting?: true;
+  /** what the card is called in the hand's words: the head's one line */
+  readonly title: string;
+  /** the held bar's bold half: "Mind map" · "TypeScript · 343 lines · 13 KB" · "PNG · 1440 × 900 · 412 KB" */
+  readonly about: string;
+  /** every face, in the kind's order, never empty (OB-D2). A card's type is the first's. */
+  readonly faces: readonly [Face, ...Face[]];
+}
+
+/** What every card is made with, before its faces. */
+export type CardStub = Pick<Card, "id" | "at" | "origin" | "waiting">;
+
+/** A card's type: its first face's (OB-D1). PURE. */
+export function cardType(card: Card): ChipType {
+  return card.faces[0].type;
+}
 
 /** HN-D8 — twelve: as many as main keeps stills, so every picture card keeps its
  * still. The thirteenth pushes the oldest off the left end. */
@@ -113,6 +173,181 @@ export function addCard(cards: readonly Card[], card: Card): readonly Card[] {
   if (cards.some((c) => c.id === card.id)) return cards;
   const next = [...cards, card];
   return next.length > CARDS_CAP ? next.slice(next.length - CARDS_CAP) : next;
+}
+
+/** Every object URL a card's faces draw from, once each: what leaves with the card. PURE. */
+export function blobUrlsOf(card: Card): readonly string[] {
+  const urls = new Set<string>();
+  for (const face of card.faces) {
+    const src = face.type === "image" ? face.src : face.type === "ref" ? face.still.src : "";
+    if (src.startsWith("blob:")) urls.add(src);
+  }
+  return [...urls];
+}
+
+// ── What a copy becomes ─────────────────────────────────────────────────────
+
+/** a sentence on the first line, ending in its own . ! or ? */
+const SENTENCE = /^(.{1,80}?[.!?])(\s|$)/u;
+
+function wordsCard(
+  text: string,
+  show: { readonly title: string; readonly body: string; readonly bare: boolean },
+  base: CardStub,
+): Card {
+  return {
+    ...base,
+    title: show.title,
+    about: ABOUT_WORDS.text(text),
+    faces: [
+      {
+        id: "text",
+        type: "text",
+        label: "Text",
+        format: "plain",
+        text,
+        show: { as: "words", ...show },
+      },
+    ],
+  };
+}
+
+/** A text card from words: the first sentence (80 characters at most) is its
+ * title, run in bold; with none, the first line is, `bare`. PURE. */
+export function textCardOf(text: string, base: CardStub): Card {
+  const trimmed = text.trim();
+  const sentence = SENTENCE.exec(trimmed);
+  const firstLine = trimmed.split(/\r?\n/u)[0] ?? "";
+  const title = sentence?.[1] ?? firstLine;
+  return wordsCard(
+    text,
+    { title, body: trimmed.slice(title.length).trim(), bare: sentence === null },
+    base,
+  );
+}
+
+/** A text card of words that are no prose, under a name of their own: titled by it as a line,
+ * with a line of its own beside. What a play gives is the words. PURE. */
+export function namedTextCardOf(
+  text: string,
+  name: { readonly title: string; readonly body: string },
+  base: CardStub,
+): Card {
+  return wordsCard(text, { ...name, bare: true }, base);
+}
+
+/** A terminal card from a pane's selection: its first line over the rest. PURE. */
+export function termCardOf(text: string, base: CardStub): Card {
+  const lines = text.replace(/\s+$/u, "").split(/\r?\n/u);
+  const first = lines[0] ?? "";
+  return {
+    ...base,
+    title: first,
+    about: ABOUT_WORDS.terminal(text),
+    faces: [
+      {
+        id: "text",
+        type: "text",
+        label: "Terminal",
+        format: "code",
+        text,
+        show: { as: "term", first, rest: lines.slice(1).join("\n") },
+      },
+    ],
+  };
+}
+
+/** A message card: who said it, when, and the words. PURE. */
+export function messageCardOf(
+  message: { readonly speaker: string; readonly time: string; readonly words: string },
+  base: CardStub,
+): Card {
+  return {
+    ...base,
+    title: `${message.speaker}: ${message.words}`,
+    about: ABOUT_WORDS.message,
+    faces: [
+      {
+        id: "text",
+        type: "text",
+        label: "Message",
+        format: "plain",
+        text: message.words,
+        show: { as: "msg", ...message },
+      },
+    ],
+  };
+}
+
+/** A picture's face, for a card of it or a card that offers it among others. PURE. */
+export function pictureFaceOf(picture: Omit<ImageFace, "id" | "type" | "label">): ImageFace {
+  return { id: "picture", type: "image", label: "Picture", ...picture };
+}
+
+/** A picture card, titled as the place that made it calls it. PURE. */
+export function pictureCardOf(
+  picture: Omit<ImageFace, "id" | "type" | "label"> & { readonly title: string },
+  base: CardStub,
+): Card {
+  const { title, ...rest } = picture;
+  return {
+    ...base,
+    title,
+    about: ABOUT_WORDS.picture(rest),
+    faces: [pictureFaceOf(rest)],
+  };
+}
+
+/** A file card; one with no path (a file a page made, a drag not yet let go) has nothing to give. PURE. */
+export function fileCardOf(file: Omit<FileFace, "id" | "type" | "label">, base: CardStub): Card {
+  return {
+    ...base,
+    title: file.name,
+    about: ABOUT_WORDS.file(file),
+    faces: [{ id: "file", type: "file", label: "File", ...file }],
+  };
+}
+
+/** An agent's card: its session. PURE. */
+export function sessionCardOf(
+  session: Omit<SessionFace, "id" | "type" | "label">,
+  base: CardStub,
+): Card {
+  return {
+    ...base,
+    title: session.handle,
+    about: ABOUT_WORDS.session,
+    faces: [{ id: "session", type: "session", label: "Session", ...session }],
+  };
+}
+
+/** HN-D10: is what is being brought in already the newest card? It is asked of the newest card's
+ * face of the same type: text by its words (trimmed) and how they print, a file by its path — one
+ * with none (a file a page made) is never a twin, nothing tells two such apart — a picture by its
+ * file — or, for a picture pasted with no file, by its pixels' size: the snapshot tool puts its
+ * still on the clipboard as well, so the paste right after a snapshot is that picture without its
+ * path. PURE. */
+export function sameAs(card: Card | undefined, incoming: Card): boolean {
+  if (card === undefined) return false;
+  const brought = incoming.faces[0];
+  const held = card.faces.find((face) => face.type === brought.type);
+  if (held === undefined) return false;
+  if (held.type === "image" && brought.type === "image") {
+    if (held.path !== undefined && held.path === brought.path) return true;
+    return (
+      brought.path === undefined && held.width === brought.width && held.height === brought.height
+    );
+  }
+  if (held.type === "file" && brought.type === "file") {
+    return held.path !== undefined && held.path === brought.path;
+  }
+  if (held.type === "text" && brought.type === "text") {
+    const words = held.text.trim();
+    return held.show.as === brought.show.as && words !== "" && words === brought.text.trim();
+  }
+  if (held.type === "session" && brought.type === "session") return held.handle === brought.handle;
+  if (held.type === "link" && brought.type === "link") return held.url === brought.url;
+  return held.type === "ref" && brought.type === "ref" && held.ref === brought.ref;
 }
 
 // ── The fan (DESIGN.md §8 "The hand", Holding them) ─────────────────────────
@@ -279,66 +514,4 @@ export function reachedIndex(lifts: readonly number[]): number {
     if (v > 0.75 && (best < 0 || v > (lifts[best] ?? 0))) best = i;
   });
   return best;
-}
-
-// ── What a copy becomes ─────────────────────────────────────────────────────
-
-/** a sentence on the first line, ending in its own . ! or ? */
-const SENTENCE = /^(.{1,80}?[.!?])(\s|$)/u;
-
-/** A text card from words: the first sentence (80 characters at most) is its
- * title, run in bold; with none, the first line is, `bare`. PURE. */
-export function textCardOf(
-  text: string,
-  base: { readonly id: string; readonly origin: CardOrigin; readonly at: number },
-): TextCard {
-  const trimmed = text.trim();
-  const sentence = SENTENCE.exec(trimmed);
-  const firstLine = trimmed.split(/\r?\n/u)[0] ?? "";
-  const title = sentence?.[1] ?? firstLine;
-  return {
-    ...base,
-    kind: "text",
-    title,
-    body: trimmed.slice(title.length).trim(),
-    bare: sentence === null,
-    paste: text,
-  };
-}
-
-/** A terminal card from a pane's selection: its first line over the rest. PURE. */
-export function termCardOf(
-  text: string,
-  base: { readonly id: string; readonly origin: CardOrigin; readonly at: number },
-): TermCard {
-  const lines = text.replace(/\s+$/u, "").split(/\r?\n/u);
-  return {
-    ...base,
-    kind: "term",
-    first: lines[0] ?? "",
-    rest: lines.slice(1).join("\n"),
-    paste: text,
-  };
-}
-
-/** HN-D10: is what is being brought in already the newest card? Text by its
- * words (trimmed), a file by its path — one with none (a file a page made) is
- * never a twin, nothing tells two such apart — a picture by its file — or, for a
- * picture pasted with no file, by its pixels' size: the snapshot tool puts its
- * still on the clipboard as well, so the paste right after a snapshot is that
- * picture without its path. PURE. */
-export function sameAs(card: Card | undefined, incoming: Card): boolean {
-  if (card === undefined || card.kind !== incoming.kind) return false;
-  if (card.kind === "pict" && incoming.kind === "pict") {
-    if (card.path !== undefined && card.path === incoming.path) return true;
-    return (
-      incoming.path === undefined &&
-      card.width === incoming.width &&
-      card.height === incoming.height
-    );
-  }
-  if (card.kind === "file" && incoming.kind === "file") {
-    return card.paste !== "" && card.paste === incoming.paste;
-  }
-  return card.paste.trim() !== "" && card.paste.trim() === incoming.paste.trim();
 }

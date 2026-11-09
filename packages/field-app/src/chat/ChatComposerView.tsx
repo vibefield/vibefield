@@ -14,7 +14,7 @@ import {
   type Ref,
   useId,
 } from "react";
-import { CARD_INDEX } from "../frame/cards/CardFace";
+import { CARD_INDEX, cardLook } from "../frame/cards/CardFace";
 import { menuRowId } from "./agent-chip-menu";
 import { AT_WORDS, type AtAgentRow, type AtList, type AtRow, type AtSessionRow } from "./at-rows";
 import { chipLabel, type DraftChip, type DraftPart, draftPlaceholder } from "./composer-draft";
@@ -95,7 +95,7 @@ function menuLabel(rows: readonly AgentMenuRow[]): string {
 
 /** A chip's mark: an agent's or a session's, its agent's at 15; a card's, its kind's index glyph at 13. */
 function ChipMark({ chip }: { chip: DraftChip }): ReactElement {
-  if (chip.kind === "card") return <FieldGlyph name={CARD_INDEX[chip.card.kind]} size={13} />;
+  if (chip.kind === "card") return <FieldGlyph name={CARD_INDEX[cardLook(chip.card)]} size={13} />;
   return (
     <span className="vf-chat-chip-mark" aria-hidden="true">
       <AgentIcon providerId={chip.agent} />
@@ -106,7 +106,7 @@ function ChipMark({ chip }: { chip: DraftChip }): ReactElement {
 /** The data a chip's element says of itself: its kind, and a card's kind. */
 function chipData(chip: DraftChip): Record<string, string> {
   return chip.kind === "card"
-    ? { "data-chip": "card", "data-card": chip.card.kind }
+    ? { "data-chip": "card", "data-card": cardLook(chip.card) }
     : { "data-chip": chip.kind };
 }
 

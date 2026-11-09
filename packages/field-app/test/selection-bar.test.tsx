@@ -948,7 +948,7 @@ describe("Make a card — four doors deal ONE card (HN-D3)", () => {
     await dealt();
     const cards = cardsStore.snapshot().cards;
     expect(cards[0]).toMatchObject({
-      kind: "text",
+      faces: [{ type: "text" }],
       title: "Ship the desk by Friday.",
       origin: { view: "canvas", how: "copy" },
     });

@@ -14,7 +14,7 @@ import {
   cardTargets,
   TARGET_LAYER,
 } from "../../frame/cards/card-targets";
-import type { Card, PictCard } from "../../frame/cards/cards-model";
+import type { Card, ImageFace } from "../../frame/cards/cards-model";
 import { OUTCOME_WORDS, TARGET_WORDS } from "../../frame/cards/cards-words";
 import { getActiveView, subscribeActiveView } from "../../frame/view-state";
 import { type FieldHost, peekHost } from "../../host";
@@ -68,7 +68,8 @@ function worldPoint(
 
 /** Why the desk cannot take this card now, in the desk's words; null when it can. */
 function refusalOf(desk: MountedDesk, card: Card, still: StillBytes | undefined): string | null {
-  if (card.kind === "file" || card.kind === "agent") return TARGET_WORDS.deskRefuses(card);
+  const face = card.faces[0];
+  if (face.type !== "text" && face.type !== "image") return TARGET_WORDS.deskRefuses(card);
   const tray = trayOf(desk)?.anchor();
   if (tray?.held === true) return TARGET_WORDS.deskHeld;
   if (tray?.open === true) return TARGET_WORDS.deskBoardOut;
@@ -76,9 +77,9 @@ function refusalOf(desk: MountedDesk, card: Card, still: StillBytes | undefined)
   if (session === undefined || session.readOnly) return TARGET_WORDS.deskReadOnly;
   // a picture is printed from its pixels: its own bytes, or a snapshot's through the still door
   if (
-    card.kind === "pict" &&
-    card.bytes === undefined &&
-    (card.path === undefined || still === undefined)
+    face.type === "image" &&
+    face.bytes === undefined &&
+    (face.path === undefined || still === undefined)
   ) {
     return TARGET_WORDS.deskNoPicture;
   }
@@ -112,18 +113,19 @@ function noteOnto(
 /** The picture's own bytes: the card's, or a snapshot's still through the shell; null when the
  * still is no longer kept. */
 async function pictureBytes(
-  card: PictCard,
+  picture: ImageFace,
   still: StillBytes | undefined,
 ): Promise<Uint8Array<ArrayBuffer> | null> {
-  if (card.bytes !== undefined) return new Uint8Array(await card.bytes.arrayBuffer());
-  if (card.path === undefined || still === undefined) return null;
-  return still(card.path);
+  if (picture.bytes !== undefined) return new Uint8Array(await picture.bytes.arrayBuffer());
+  if (picture.path === undefined || still === undefined) return null;
+  return still(picture.path);
 }
 
 /** A print of the picture, centred on the point, falling in as a paste's does (`Prints.arrive`). */
 async function printOnto(
   desk: MountedDesk,
-  card: PictCard,
+  card: Card,
+  picture: ImageFace,
   at: { readonly x: number; readonly y: number },
   deps: DeskCardTargetDeps,
   still: StillBytes | undefined,
@@ -132,9 +134,9 @@ async function printOnto(
   const session = engine.docs.current();
   let hash: string;
   try {
-    const bytes = await pictureBytes(card, still);
+    const bytes = await pictureBytes(picture, still);
     if (bytes === null) return { ok: false, note: OUTCOME_WORDS.printGone };
-    hash = await (deps.blobs ?? deskBlobs()).put(bytes, card.bytes?.type || "image/png");
+    hash = await (deps.blobs ?? deskBlobs()).put(bytes, picture.bytes?.type || "image/png");
   } catch (cause) {
     log().error("renderer.cards.desk_print_bytes", "A card's picture could not be kept", cause);
     return { ok: false, note: OUTCOME_WORDS.notPlaced };
@@ -148,13 +150,13 @@ async function printOnto(
   if (refused !== null) return { ok: false, note: refused };
   if (getActiveView() !== "canvas") return { ok: false, note: OUTCOME_WORDS.notPlaced };
   try {
-    const r = printRect(at.x, at.y, card.width, card.height);
+    const r = printRect(at.x, at.y, picture.width, picture.height);
     const print = engine.ops.spawnWidget(PHOTO_TYPE, {
       x: r.x,
       y: r.y,
       w: r.w,
       h: r.h,
-      props: { blob: hash, width: card.width, height: card.height, angle: 0 },
+      props: { blob: hash, width: picture.width, height: picture.height, angle: 0 },
     });
     const prints = (desk.handle as Partial<DeskLayerHandle>).local?.(PHOTO_KIND);
     (prints as Prints | undefined)?.arrive(print);
@@ -181,7 +183,7 @@ export function deskCardTarget(desk: MountedDesk, deps: DeskCardTargetDeps = {})
       if (refused !== null) return { ok: false, label: refused };
       return {
         ok: true,
-        label: card.kind === "pict" ? TARGET_WORDS.deskPrint : TARGET_WORDS.deskNote,
+        label: card.faces[0].type === "image" ? TARGET_WORDS.deskPrint : TARGET_WORDS.deskNote,
       };
     },
     play: async (card, at) => {
@@ -190,9 +192,11 @@ export function deskCardTarget(desk: MountedDesk, deps: DeskCardTargetDeps = {})
       if (refused !== null) return { ok: false, note: refused };
       const point = worldPoint(desk, at);
       if (point === null) return { ok: false, note: OUTCOME_WORDS.notPlaced };
-      return card.kind === "pict"
-        ? printOnto(desk, card, point, deps, door)
-        : noteOnto(desk, card.paste, point);
+      const face = card.faces[0];
+      if (face.type === "image") return printOnto(desk, card, face, point, deps, door);
+      return face.type === "text"
+        ? noteOnto(desk, face.text, point)
+        : { ok: false, note: OUTCOME_WORDS.notPlaced };
     },
   };
 }

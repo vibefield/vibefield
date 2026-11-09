@@ -12,14 +12,21 @@ import { AGENT_MARK_PROVIDERS } from "@vibefield/puppeteer-view-sdk/toolkit";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CARD_INDEX, CardFace, cardTitle, pictureRatio } from "../src/frame/cards/CardFace";
 import {
-  type AgentCard,
+  CARD_INDEX,
+  CardFace,
+  cardLook,
+  cardTitle,
+  pictureRatio,
+} from "../src/frame/cards/CardFace";
+import {
   type Card,
-  type FileCard,
-  type MsgCard,
-  type PictCard,
-  type TextCard,
+  type CardStub,
+  fileCardOf,
+  messageCardOf,
+  pictureCardOf,
+  sessionCardOf,
+  type TextFace,
   termCardOf,
   textCardOf,
 } from "../src/frame/cards/cards-model";
@@ -60,44 +67,36 @@ function rule(selector: string): string {
   return from < 0 ? "" : CARDS_CSS.slice(from, CARDS_CSS.indexOf("}", from));
 }
 
-const base = (id: string) => ({ id, origin: { view: "godview", how: "copy" } as const, at: 0 });
+const base = (id: string): CardStub => ({ id, origin: { view: "godview", how: "copy" }, at: 0 });
+/** The words a text card prints: its first face's show. */
+const showOf = (card: Card) => {
+  const { show } = card.faces[0] as TextFace;
+  if (show.as !== "words") throw new Error("not a words card");
+  return show;
+};
 
 const TEXT = textCardOf("Never drop a paste unsaid. Say its size.", base("text"));
-const FILE: FileCard = {
-  ...base("file"),
-  kind: "file",
-  paste: "packages/fieldd/src/files/routes.ts",
-  name: "routes.ts",
-  folder: "packages/fieldd/src/files/",
-  lines: "export const ROUTES = {};",
-};
-const AGENT: AgentCard = {
-  ...base("agent"),
-  kind: "agent",
-  paste: "claude·2",
-  handle: "claude·2",
-  project: "vibe-field",
-  state: "working",
-};
+const FILE = fileCardOf(
+  {
+    name: "routes.ts",
+    path: "packages/fieldd/src/files/routes.ts",
+    folder: "packages/fieldd/src/files/",
+    lines: "export const ROUTES = {};",
+  },
+  base("file"),
+);
+const SESSION = { handle: "claude·2", project: "vibe-field", state: "working" } as const;
+const AGENT = sessionCardOf(SESSION, base("agent"));
 const TERM = termCardOf("$ pnpm test\n ✓ a.test.ts (3)\n      Tests  3 passed (3)\n", base("term"));
-const MSG: MsgCard = {
-  ...base("msg"),
-  kind: "msg",
-  paste: "Hold the push.",
-  speaker: "Vela",
-  time: "14:09",
-  words: "Hold the push.",
-};
-const PICT: PictCard = {
-  ...base("pict"),
-  kind: "pict",
+const MSG = messageCardOf({ speaker: "Vela", time: "14:09", words: "Hold the push." }, base("msg"));
+const PICT_STILL = {
   title: "Snapshot",
   width: 1440,
   height: 900,
   src: "vibefield-still://stills/vibefield-still-0007.png",
   path: "/tmp/vibefield-still-0007.png",
-  paste: "/tmp/vibefield-still-0007.png",
-};
+} as const;
+const PICT = pictureCardOf(PICT_STILL, base("pict"));
 
 describe("one stock, six faces (HN-D1)", () => {
   it("prints each kind's index twice — the top left a fanned hand shows, and the bottom right turned", () => {
@@ -112,12 +111,12 @@ describe("one stock, six faces (HN-D1)", () => {
     for (const card of [TEXT, FILE, AGENT, TERM, MSG, PICT]) {
       const el = mount(<CardFace card={card} />);
       const face = el.querySelector<HTMLElement>(".vf-card");
-      expect(face?.dataset.kind).toBe(card.kind);
+      expect(face?.dataset.kind).toBe(cardLook(card));
       expect(face?.dataset.card).toBe(card.id);
       const index = [...(face?.querySelectorAll(".vf-card-ix") ?? [])];
       expect(index.map((glyph) => glyph.getAttribute("data-glyph"))).toEqual([
-        CARD_INDEX[card.kind],
-        CARD_INDEX[card.kind],
+        CARD_INDEX[cardLook(card)],
+        CARD_INDEX[cardLook(card)],
       ]);
       expect(index[1]?.getAttribute("class")).toContain("vf-card-ix-tail");
       // the stock and its gloss, around the face
@@ -154,11 +153,10 @@ describe("one stock, six faces (HN-D1)", () => {
   });
 
   it("titles a text card: a sentence keeps its own stop, a title that is one gets one, a bare line none", () => {
-    expect(cardTitle(TEXT)).toBe("Never drop a paste unsaid.");
-    const titled: TextCard = { ...TEXT, title: "Release notes", bare: false };
-    expect(cardTitle(titled)).toBe("Release notes.");
+    expect(cardTitle(showOf(TEXT))).toBe("Never drop a paste unsaid.");
+    expect(cardTitle({ title: "Release notes", bare: false })).toBe("Release notes.");
     const bare = textCardOf("TypeError: x is undefined\n  at f (a.js:1)", base("bare"));
-    expect(cardTitle(bare)).toBe("TypeError: x is undefined");
+    expect(cardTitle(showOf(bare))).toBe("TypeError: x is undefined");
   });
 
   it("names a terminal copy by its command and inks its passes; a copy from no prompt is all output", () => {
@@ -177,14 +175,20 @@ describe("one stock, six faces (HN-D1)", () => {
   it("draws the agent's card on the dark stock, its mark the SDK's when it has one, else the agents glyph", () => {
     const marked = AGENT_MARK_PROVIDERS[0];
     expect(marked).toBeDefined();
-    const withMark = mount(<CardFace card={{ ...AGENT, agent: marked ?? "" }} />);
+    const withMark = mount(
+      <CardFace card={sessionCardOf({ ...SESSION, agent: marked ?? "" }, base("agent"))} />,
+    );
     const mark = withMark.querySelector(".vf-card-mark");
     expect(mark?.querySelector("svg path")).not.toBeNull();
     expect(mark?.querySelector("[data-glyph]")).toBeNull();
     const without = mount(<CardFace card={AGENT} />).querySelector(".vf-card-mark");
     expect(without?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("agents");
     // an agent the toolkit has only a letter for takes the glyph, never a letter
-    const lettered = mount(<CardFace card={{ ...AGENT, agent: "an-agent-with-no-mark" }} />);
+    const lettered = mount(
+      <CardFace
+        card={sessionCardOf({ ...SESSION, agent: "an-agent-with-no-mark" }, base("agent"))}
+      />,
+    );
     expect(lettered.querySelector(".vf-card-mark [data-glyph]")).not.toBeNull();
     // its project, and its state at its foot
     expect(without?.parentElement?.querySelector(".vf-card-project")?.textContent).toBe(
@@ -193,7 +197,9 @@ describe("one stock, six faces (HN-D1)", () => {
     const working = mount(<CardFace card={AGENT} />).querySelector<HTMLElement>(".vf-card-state");
     expect(working?.dataset.tone).toBe("working");
     expect(working?.textContent).toBe("Working");
-    const waiting = mount(<CardFace card={{ ...AGENT, state: "waiting" }} />);
+    const waiting = mount(
+      <CardFace card={sessionCardOf({ ...SESSION, state: "waiting" }, base("agent"))} />,
+    );
     expect(waiting.querySelector<HTMLElement>(".vf-card-state")?.dataset.tone).toBe("attention");
     expect(waiting.querySelector(".vf-card-state")?.textContent).toBe("Waiting for you");
     const dark = rule('.vf-card[data-kind="agent"]');
@@ -205,7 +211,9 @@ describe("one stock, six faces (HN-D1)", () => {
   });
 
   it("prints the project's dot in its dealt ink before the project's name, high enough to show at rest (R-D 6)", () => {
-    const inked = mount(<CardFace card={{ ...AGENT, projectInk: 3 }} />);
+    const inked = mount(
+      <CardFace card={sessionCardOf({ ...SESSION, projectInk: 3 }, base("agent"))} />,
+    );
     const project = inked.querySelector(".vf-card-project");
     expect(project?.textContent).toBe("vibe-field");
     const dot = project?.firstElementChild as HTMLElement | null | undefined;
@@ -225,11 +233,15 @@ describe("one stock, six faces (HN-D1)", () => {
   });
 
   it("names its × by the card's name, one line and cut at 60 code points, never a whole message (R-D 19)", () => {
-    const long: MsgCard = {
-      ...MSG,
-      words:
-        "codex·2 wants to push to main.\nclaude·2 is still writing the LANDED entry, so I'd hold.",
-    };
+    const long = messageCardOf(
+      {
+        speaker: "Vela",
+        time: "14:09",
+        words:
+          "codex·2 wants to push to main.\nclaude·2 is still writing the LANDED entry, so I'd hold.",
+      },
+      base("msg"),
+    );
     const name = cardName(long);
     expect(name).toBe("Vela: codex·2 wants to push to main. claude·2 is still writi…");
     expect(Array.from(name)).toHaveLength(61);
@@ -268,12 +280,12 @@ describe("one stock, six faces (HN-D1)", () => {
   });
 
   it("says only its kind while a drag from another app is on its way (HN-D2)", () => {
-    const wait = { ...base("w"), paste: "", waiting: true } as const;
-    const text: TextCard = { ...wait, kind: "text", title: "", body: "", bare: true };
+    const wait: CardStub = { ...base("w"), waiting: true };
+    const text = textCardOf("", wait);
     const textFace = mount(<CardFace card={text} />);
     expect(textFace.querySelector(".vf-card")?.hasAttribute("data-waiting")).toBe(true);
     expect(textFace.querySelector(".vf-card-words")?.textContent).toBe(WAITING_WORDS.text);
-    const pict: PictCard = { ...wait, kind: "pict", title: "", width: 0, height: 0, src: "" };
+    const pict = pictureCardOf({ title: "", width: 0, height: 0, src: "" }, wait);
     const pictFace = mount(<CardFace card={pict} />);
     const photo = pictFace.querySelector(".vf-card-photo[data-waiting]");
     expect(photo?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("capture");
@@ -287,33 +299,37 @@ describe("one stock, six faces (HN-D1)", () => {
       "box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--card-ink) 12%, transparent);",
     );
     expect(waiting).not.toContain("dashed");
-    const one: FileCard = { ...wait, kind: "file", name: "" };
+    const one = fileCardOf({ name: "" }, wait);
     const oneFace = mount(<CardFace card={one} />);
     expect(oneFace.querySelector(".vf-card-name")?.textContent).toBe("A file");
     expect(oneFace.querySelector(".vf-card-path")?.textContent).toBe("Let go to see it");
-    const three: FileCard = { ...one, name: WAITING_WORDS.files(3) };
+    const three = fileCardOf({ name: WAITING_WORDS.files(3) }, wait);
     expect(mount(<CardFace card={three} />).querySelector(".vf-card-name")?.textContent).toBe(
       "3 files",
     );
   });
 
   it("prints a picture at its own proportion, clamped to the face's column, and its ground with no still", () => {
-    expect(pictureRatio(PICT)).toBe(1.6);
-    expect(pictureRatio({ ...PICT, width: 3000, height: 500 })).toBe(2.2);
-    expect(pictureRatio({ ...PICT, width: 500, height: 3000 })).toBe(1);
-    expect(pictureRatio({ ...PICT, width: 0, height: 0 })).toBe(1.4);
+    expect(pictureRatio(PICT_STILL)).toBe(1.6);
+    expect(pictureRatio({ width: 3000, height: 500 })).toBe(2.2);
+    expect(pictureRatio({ width: 500, height: 3000 })).toBe(1);
+    expect(pictureRatio({ width: 0, height: 0 })).toBe(1.4);
     const el = mount(<CardFace card={PICT} />);
     const photo = el.querySelector<HTMLElement>(".vf-card-photo");
     expect(photo?.style.getPropertyValue("--card-ar")).toBe("1.6");
     const img = photo?.querySelector("img");
-    expect(img?.getAttribute("src")).toBe(PICT.src);
+    expect(img?.getAttribute("src")).toBe(PICT_STILL.src);
     expect(img?.getAttribute("draggable")).toBe("false");
     // a still the ring no longer keeps: the picture's ground, never a broken image
     act(() => {
       img?.dispatchEvent(new Event("error"));
     });
     expect(photo?.querySelector("img")).toBeNull();
-    expect(mount(<CardFace card={{ ...PICT, src: "" }} />).querySelector("img")).toBeNull();
+    expect(
+      mount(
+        <CardFace card={pictureCardOf({ ...PICT_STILL, src: "" }, base("pict"))} />,
+      ).querySelector("img"),
+    ).toBeNull();
     expect(rule(".vf-card-photo")).toContain("background: var(--vf-card-photo);");
     expect(rule(".vf-card-photo")).toContain("aspect-ratio: var(--card-ar, 1.4);");
   });

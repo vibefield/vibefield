@@ -14,10 +14,11 @@ import {
   FAN_MAX_PITCH,
   FAN_MAX_TILT,
   HAND_REACH,
+  type ImageFace,
   inReach,
   layoutCards,
   layoutRaised,
-  type PictCard,
+  pictureCardOf,
   REACH_BAND,
   reachedIndex,
   reachIn,
@@ -44,17 +45,18 @@ const base = (id: string, at = 0) => ({
   at,
 });
 const text = (id: string, words = `Words of ${id}.`): Card => textCardOf(words, base(id));
-const pict = (id: string, extra: Partial<PictCard> = {}): PictCard => ({
-  ...base(id),
-  kind: "pict",
-  title: "Snapshot",
-  width: 640,
-  height: 400,
-  src: `vibefield-still://stills/${id}.png`,
-  paste: `/tmp/${id}.png`,
-  path: `/tmp/${id}.png`,
-  ...extra,
-});
+const pict = (id: string, extra: Partial<Omit<ImageFace, "id" | "type" | "label">> = {}): Card =>
+  pictureCardOf(
+    {
+      title: "Snapshot",
+      width: 640,
+      height: 400,
+      src: `vibefield-still://stills/${id}.png`,
+      path: `/tmp/${id}.png`,
+      ...extra,
+    },
+    base(id),
+  );
 
 describe("the fan (HN: Holding them)", () => {
   it("shows the top 68 of a lone card, centred on the window and level", () => {
@@ -160,17 +162,20 @@ describe("what a copy becomes", () => {
     const a = textCardOf("Never drop a paste unsaid. Say its size.", base("a"));
     expect(a).toMatchObject({
       title: "Never drop a paste unsaid.",
-      body: "Say its size.",
-      bare: false,
+      faces: [{ show: { as: "words", body: "Say its size.", bare: false } }],
     });
     const b = textCardOf("TypeError: x is undefined\n    at f (a.js:1)", base("b"));
-    expect(b).toMatchObject({ title: "TypeError: x is undefined", bare: true });
-    expect(b.paste).toBe("TypeError: x is undefined\n    at f (a.js:1)");
+    expect(b).toMatchObject({
+      title: "TypeError: x is undefined",
+      faces: [{ text: "TypeError: x is undefined\n    at f (a.js:1)", show: { bare: true } }],
+    });
   });
 
   it("splits a pane's selection into its first line and the rest", () => {
     const t = termCardOf("$ pnpm test\n✓ a.test.ts (3)\n", base("t"));
-    expect(t).toMatchObject({ first: "$ pnpm test", rest: "✓ a.test.ts (3)" });
+    expect(t).toMatchObject({
+      faces: [{ show: { as: "term", first: "$ pnpm test", rest: "✓ a.test.ts (3)" } }],
+    });
   });
 
   it("knows a twin of the newest card (HN-D10)", () => {
@@ -178,9 +183,10 @@ describe("what a copy becomes", () => {
     expect(sameAs(text("x", "Same words."), text("y", "Other words."))).toBe(false);
     expect(sameAs(undefined, text("y"))).toBe(false);
     // the snapshot's still comes back through ⌘V without its path: the same pixels
-    const { path: _still, ...pasted } = pict("p", { src: "blob:1", paste: "" });
-    expect(sameAs(pict("s"), pasted)).toBe(true);
-    expect(sameAs(pict("s"), { ...pasted, width: 641 })).toBe(false);
+    const pasted = (width: number): Card =>
+      pictureCardOf({ title: "Snapshot", width, height: 400, src: "blob:1" }, base("p"));
+    expect(sameAs(pict("s"), pasted(640))).toBe(true);
+    expect(sameAs(pict("s"), pasted(641))).toBe(false);
   });
 });
 

@@ -34,7 +34,7 @@ import { ThreadLedger, type ThreadMark, threadMarksOf } from "../chat/thread-mar
 import type { PendingSay } from "../chat/transcript-items";
 import { type TranscriptReading, transcriptReadingOf } from "../chat/transcript-port";
 import { paneTextOf } from "../frame/cards/card-text";
-import type { Card } from "../frame/cards/cards-model";
+import { type Card, termCardOf } from "../frame/cards/cards-model";
 import { FIXTURE_NATIVE, FIXTURE_WORK } from "./profiles-fixtures";
 import { FIXTURE_HATCHED, FIXTURE_SPARKS } from "./spark-fixtures";
 
@@ -653,15 +653,11 @@ const SESSION_CHIP: SessionChip = {
 };
 
 /** A terminal selection copied in Godview, played from the hand onto the composer. */
-const TERM_CARD: Card = {
+const TERM_CARD: Card = termCardOf("pnpm test --filter field-app\nFAIL test/chat-view.test.tsx\n", {
   id: "card-term",
-  kind: "term",
   origin: { view: "godview", place: "vibe-field", how: "copy" },
   at: FIXTURE_NOW - 60_000,
-  first: "pnpm test --filter field-app",
-  rest: "FAIL test/chat-view.test.tsx",
-  paste: "pnpm test --filter field-app\nFAIL test/chat-view.test.tsx\n",
-};
+});
 const CARD_CHIP: CardChip = {
   id: "chip-card",
   kind: "card",

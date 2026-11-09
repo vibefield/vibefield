@@ -310,8 +310,7 @@ describe("the link's copies deal cards (HN-5)", () => {
     expect(copied).toEqual(["https://login.tailscale.com/a/copy"]);
     const card = cardsStore.snapshot().cards.at(-1);
     expect(card).toMatchObject({
-      kind: "text",
-      paste: "https://login.tailscale.com/a/copy",
+      faces: [{ type: "text", text: "https://login.tailscale.com/a/copy" }],
       origin: { view: "canvas", place: COPY_PLACES.settings, how: "copy" },
     });
     expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toEqual(from);
@@ -340,7 +339,7 @@ describe("the link's copies deal cards (HN-5)", () => {
     await expect(copied).resolves.toBe(true);
     const card = cardsStore.snapshot().cards.at(-1);
     expect(card).toMatchObject({
-      paste: "truffle-vibefield-studio",
+      faces: [{ type: "text", text: "truffle-vibefield-studio" }],
       origin: { place: "Setup Assistant", how: "copy" },
     });
     expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toEqual(from);

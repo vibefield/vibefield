@@ -329,11 +329,8 @@ describe("a diagnostics record's copy (HN-5)", () => {
     expect(copyText.mock.calls).toEqual([[words]]);
     const dealt = cardsStore.snapshot().cards.at(-1);
     expect(dealt).toMatchObject({
-      kind: "text",
       title: "desktop.viewer.local",
-      body: "record 1",
-      bare: true,
-      paste: words,
+      faces: [{ type: "text", text: words, show: { body: "record 1", bare: true } }],
       origin: { view: "canvas", place: "Settings", how: "copy" },
     });
     expect(cardsStore.snapshot().arriving.get(dealt?.id ?? "")).toEqual(BOX);

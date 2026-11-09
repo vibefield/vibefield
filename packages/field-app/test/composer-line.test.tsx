@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BoardLineDoor } from "../src/field/desk/pegboard/board-door";
 import { Composer, type ComposerHost } from "../src/frame/Composer";
 import { noteCapture, resetCaptureStateForTest } from "../src/frame/capture-state";
+import { paneTextOf } from "../src/frame/cards/card-text";
 import { CardStore } from "../src/frame/cards/cards-store";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import {
@@ -337,15 +338,18 @@ describe("the snapshot (HN-D2; SNAP's door on the line)", () => {
     const { cards, arriving } = used.cards.snapshot();
     expect(cards).toHaveLength(1);
     expect(cards[0]).toMatchObject({
-      kind: "pict",
       origin: { view: "canvas", how: "snapshot" },
       at: 1_000,
       title: "Snapshot",
-      width: 600,
-      height: 400,
-      src: "still:///stills/region.png",
-      path: "/stills/region.png",
-      paste: "/stills/region.png",
+      faces: [
+        {
+          type: "image",
+          width: 600,
+          height: 400,
+          src: "still:///stills/region.png",
+          path: "/stills/region.png",
+        },
+      ],
     });
     // it leaves the region it was taken of (window px: the region less the window's screen origin)
     const from = arriving.get(cards[0]?.id ?? "");
@@ -475,7 +479,7 @@ describe("the hand's lab door (cards-lab.ts; R-T 2)", () => {
     act(() => {
       lab.deal("echo hn4 > /tmp/hn4.txt");
     });
-    expect(used.cards.snapshot().cards.map((card) => card.paste)).toEqual([
+    expect(used.cards.snapshot().cards.map((card) => paneTextOf(card))).toEqual([
       "echo hn4 > /tmp/hn4.txt",
     ]);
     act(() => root?.unmount());

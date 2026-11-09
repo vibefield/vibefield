@@ -943,8 +943,7 @@ describe("Settings → Devices: a copy deals a card from its button (HN-5)", () 
     expect(copied).toEqual(["truffle-vibefield-studio"]);
     const card = cardsStore.snapshot().cards.at(-1);
     expect(card).toMatchObject({
-      kind: "text",
-      paste: "truffle-vibefield-studio",
+      faces: [{ type: "text", text: "truffle-vibefield-studio" }],
       origin: { view: "canvas", place: "Settings", how: "copy" },
     });
     expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toEqual({
@@ -966,7 +965,10 @@ describe("Settings → Devices: a copy deals a card from its button (HN-5)", () 
     await act(settle);
     expect(copied).toEqual([authUrl]);
     const card = cardsStore.snapshot().cards.at(-1);
-    expect(card).toMatchObject({ kind: "text", paste: authUrl, origin: { place: "Settings" } });
+    expect(card).toMatchObject({
+      faces: [{ type: "text", text: authUrl }],
+      origin: { place: "Settings" },
+    });
     expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toMatchObject({
       left: 610,
       top: 180,

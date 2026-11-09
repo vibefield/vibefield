@@ -1,6 +1,6 @@
 import { type CanvasEngine, type Entity, PrefabId, selectedEntities } from "@vibecook/ice";
 import type { DeskLayerHandle } from "@vibecook/ice/desk";
-import { type CardOrigin, type PictCard, textCardOf } from "../../../frame/cards/cards-model";
+import { type CardOrigin, pictureCardOf, textCardOf } from "../../../frame/cards/cards-model";
 import { type CardStore, cardsStore, type DealFrom } from "../../../frame/cards/cards-store";
 import { COPY_DOOR_WORDS, COPY_WORDS } from "../../../frame/cards/cards-words";
 import { type CopyDeps, type CopyHost, copyToHand } from "../../../frame/cards/copy-door";
@@ -256,26 +256,25 @@ export function copySelection(desk: MountedDesk, from: CopyFrom, seams: CopySeam
     noteCopy(record.seq, {
       still: { width: picture.width, height: picture.height, bytes: picture.png.size },
     });
-    const card: PictCard = {
-      id: store.nextId("pict"),
-      kind: "pict",
-      origin: cardOrigin,
-      at: store.now(),
-      title: copyName(objects),
-      width: picture.width,
-      height: picture.height,
-      src: URL.createObjectURL(picture.png),
-      bytes: picture.png,
-      // no file on disk to paste, nor words of its own: a pane says a picture with no file can't be pasted yet
-      paste: "",
-    };
+    const src = URL.createObjectURL(picture.png);
+    // no file on disk to paste, nor words of its own: a pane says a picture with no file can't be pasted yet
+    const card = pictureCardOf(
+      {
+        title: copyName(objects),
+        width: picture.width,
+        height: picture.height,
+        src,
+        bytes: picture.png,
+      },
+      { id: store.nextId("image"), origin: cardOrigin, at: store.now() },
+    );
     // its PNG on the system clipboard first, the words the objects keep beside it in the one write, then the card
     const copied = await copyToHand(
       { card, from: fromBox, png: picture.bytes, ...(words === null ? {} : { text: words }) },
       deps,
     );
     if (!copied.ok) {
-      URL.revokeObjectURL(card.src); // never dealt: its face is shown nowhere
+      URL.revokeObjectURL(src); // never dealt: its face is shown nowhere
       refuse(copied.reason);
       return;
     }

@@ -32,8 +32,11 @@ import {
 } from "../src/frame/cards/card-targets";
 import {
   type Card,
-  type FileCard,
-  type PictCard,
+  cardType,
+  type FileFace,
+  type ImageFace,
+  pictureCardOf,
+  type TextFace,
   textCardOf,
 } from "../src/frame/cards/cards-model";
 import {
@@ -160,9 +163,16 @@ function weighing(file: File, bytes: number): File {
   return file;
 }
 
+/** The words a text card gives. */
+const pastedWords = (card: Card): string => (card.faces[0] as TextFace).text;
+/** A card's first face as the old kind's word. */
+const legacyKind = (card: Card): string => {
+  const type = cardType(card);
+  return type === "image" ? "pict" : type;
+};
 /** A file card's name, any other card's kind: what came in, in its order. */
 const namesOf = (cards: readonly Card[]): string[] =>
-  cards.map((card) => (card.kind === "file" ? card.name : card.kind));
+  cards.map((card) => (card.faces[0].type === "file" ? card.faces[0].name : legacyKind(card)));
 
 /** Hear another app as the mounted hand does: the shell's door and the decoder, unless told. */
 function listen(options: OtherAppsOptions = {}): void {
@@ -236,10 +246,10 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     await settled();
     const [text] = store.snapshot().cards;
     expect(text).toMatchObject({
-      kind: "text",
       title: "Ship it.",
-      body: "The tests pass.",
-      paste: "Ship it. The tests pass.",
+      faces: [
+        { type: "text", text: "Ship it. The tests pass.", show: { body: "The tests pass." } },
+      ],
       origin: { view: "outside", how: "paste" },
     });
     // it leaves from the point itself, the smallest box: the deal's smallest, growing on its way
@@ -262,31 +272,28 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     const [, picture, file, other] = store.snapshot().cards;
     expect(store.snapshot().cards).toHaveLength(4);
     expect(picture).toMatchObject({
-      kind: "pict",
       title: "image.png",
-      width: 1440,
-      height: 900,
-      bytes: shot,
-      paste: "",
+      faces: [{ type: "image", width: 1440, height: 900, bytes: shot }],
       origin: { view: "outside", how: "paste" },
     });
-    expect((picture as PictCard).src).toMatch(/^blob:/u);
-    expect(picture, "a picture with no file has none to give").not.toHaveProperty("path");
-    expect(file).toMatchObject({
-      kind: "file",
+    const pictureFace = picture?.faces[0] as ImageFace;
+    expect(pictureFace.src).toMatch(/^blob:/u);
+    expect(pictureFace, "a picture with no file has none to give").not.toHaveProperty("path");
+    expect(file?.faces[0]).toMatchObject({
+      type: "file",
       name: "plan.md",
       folder: "vibe-field/docs",
       lines: "# Plan\nShip it.",
-      paste: "/Users/me/vibe-field/docs/plan.md",
+      path: "/Users/me/vibe-field/docs/plan.md",
     });
-    expect(other).toMatchObject({
-      kind: "file",
+    expect(other?.faces[0]).toMatchObject({
+      type: "file",
       name: "report.pdf",
       folder: "me/Desktop",
       facts: "PDF · 12 KB",
-      paste: "/Users/me/Desktop/report.pdf",
+      path: "/Users/me/Desktop/report.pdf",
     });
-    expect(other).not.toHaveProperty("lines");
+    expect(other?.faces[0]).not.toHaveProperty("lines");
     // several leave a step apart, so they fan on their way in
     const from = [...store.snapshot().arriving.values()].slice(1);
     expect(from.map((box) => box?.left)).toEqual([300, 314, 328]);
@@ -334,18 +341,16 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
 
     // the snapshot tool puts its still on the clipboard too: ⌘V right after brings it back with
     // no path, and the same pixels are that card
-    const still: PictCard = {
-      id: "card-pict-still",
-      kind: "pict",
-      origin: { view: "canvas", how: "snapshot" },
-      at: 0,
-      title: "Snapshot",
-      width: 640,
-      height: 400,
-      src: "vibefield-still://stills/vibefield-screenshot-1.png",
-      path: "/tmp/vibefield-screenshot-1.png",
-      paste: "/tmp/vibefield-screenshot-1.png",
-    };
+    const still = pictureCardOf(
+      {
+        title: "Snapshot",
+        width: 640,
+        height: 400,
+        src: "vibefield-still://stills/vibefield-screenshot-1.png",
+        path: "/tmp/vibefield-screenshot-1.png",
+      },
+      { id: "card-pict-still", origin: { view: "canvas", how: "snapshot" }, at: 0 },
+    );
     store.deal(still);
     const pixels = new File([PNG], "image.png", { type: "image/png" });
     sizes.set(pixels, { width: 640, height: 400 });
@@ -366,11 +371,11 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     paste(document.body, transfer({ files: [b] }));
     await settled();
     const cards = store.snapshot().cards;
-    expect(cards.map((card) => [card.kind, card.paste])).toEqual([
-      ["file", ""],
-      ["file", ""],
+    expect(cards.map((card) => [cardType(card), (card.faces[0] as FileFace).path])).toEqual([
+      ["file", undefined],
+      ["file", undefined],
     ]);
-    expect(cards[0]).not.toHaveProperty("folder");
+    expect(cards[0]?.faces[0]).not.toHaveProperty("folder");
     expect(store.snapshot().nudged, "two files with no path read as one").toBeNull();
   });
 
@@ -387,20 +392,24 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     await settled();
     const [a, b, c, d] = store.snapshot().cards;
     expect(FIRST_LINES_BYTES).toBe(640);
-    expect((a as FileCard).lines).toBe("a".repeat(600));
+    expect(a?.faces[0]).toMatchObject({ lines: "a".repeat(600) });
     // words by its name, but a NUL among its bytes: not words
-    expect(b).toMatchObject({ kind: "file", name: "tool.sh", facts: "SH · 5 bytes" });
-    expect(b).not.toHaveProperty("lines");
+    expect(b?.faces[0]).toMatchObject({ type: "file", name: "tool.sh", facts: "SH · 5 bytes" });
+    expect(b?.faces[0]).not.toHaveProperty("lines");
     // no decoder here draws it: a file, never a picture of nothing
-    expect(c).toMatchObject({ kind: "file", name: "IMG_0001.HEIC", facts: "HEIC · 4 bytes" });
+    expect(c?.faces[0]).toMatchObject({
+      type: "file",
+      name: "IMG_0001.HEIC",
+      facts: "HEIC · 4 bytes",
+    });
     // a folder is its path, and no size of its own
-    expect(d).toMatchObject({
-      kind: "file",
+    expect(d?.faces[0]).toMatchObject({
+      type: "file",
       name: "vibe-field",
       folder: "me/Projects",
-      paste: "/Users/me/Projects/vibe-field",
+      path: "/Users/me/Projects/vibe-field",
     });
-    expect(d).not.toHaveProperty("facts");
+    expect(d?.faces[0]).not.toHaveProperty("facts");
   });
 
   it("prints a file's folder by its last two names, on either platform's separator", () => {
@@ -415,7 +424,7 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     const deck = weighing(new File(["%PDF"], "deck.pdf", { type: "application/pdf" }), 999_600);
     paste(document.body, transfer({ files: [flag, deck] }));
     await settled();
-    expect(store.snapshot().cards.map((card) => (card as FileCard).facts)).toEqual([
+    expect(store.snapshot().cards.map((card) => (card.faces[0] as FileFace).facts)).toEqual([
       "BIN · 1 byte",
       "PDF · 1 MB",
     ]);
@@ -433,7 +442,7 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     expect(paste(box, transfer({ text: "Ticked." })).defaultPrevented).toBe(true);
     expect(paste(menu, transfer({ text: "Chosen." })).defaultPrevented).toBe(true);
     await settled();
-    expect(store.snapshot().cards.map((card) => card.paste)).toEqual(["Ticked.", "Chosen."]);
+    expect(store.snapshot().cards.map(pastedWords)).toEqual(["Ticked.", "Chosen."]);
   });
 
   it("deals nothing while a card is picked up or Settings stands over the window — its card would land unseen — and leaves that paste alone", async () => {
@@ -454,7 +463,7 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     settings = false;
     expect(paste(document.body, transfer({ text: "In view." })).defaultPrevented).toBe(true);
     await settled();
-    expect(store.snapshot().cards.map((card) => card.paste)).toEqual(["Held.", "In view."]);
+    expect(store.snapshot().cards.map(pastedWords)).toEqual(["Held.", "In view."]);
   });
 
   it("brings in no words past one paste's read (LC-24), said in sizes; a picture past the still's cap with a path comes in as its file — its path and its facts, never its pixels, and never decoded", async () => {
@@ -490,15 +499,24 @@ describe("⌘V with no caret (HN-6, HN-L3)", () => {
     expect(decoded[0]).toBe(shot);
     const [file, picture] = store.snapshot().cards;
     expect(file).toMatchObject({
-      kind: "file",
-      name: "scan.png",
-      folder: "me/Desktop",
-      facts: "PNG · 67.1 MB",
-      paste: "/Users/me/Desktop/scan.png",
+      faces: [
+        {
+          type: "file",
+          name: "scan.png",
+          folder: "me/Desktop",
+          facts: "PNG · 67.1 MB",
+          path: "/Users/me/Desktop/scan.png",
+        },
+      ],
       origin: { view: "outside", how: "paste" },
     });
-    expect(file, "its path, never its bytes").not.toHaveProperty("bytes");
-    expect(picture).toMatchObject({ kind: "pict", width: 800, height: 600, bytes: shot });
+    expect(file?.faces[0], "its path, never its bytes").not.toHaveProperty("bytes");
+    expect(picture?.faces[0]).toMatchObject({
+      type: "image",
+      width: 800,
+      height: 600,
+      bytes: shot,
+    });
     expect(said, "nothing was left out, so nothing more is said").toHaveLength(1);
   });
 
@@ -566,14 +584,23 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     const waiting = (contents: Contents): Card =>
       waitingCardOf(transfer({ ...contents, kindsOnly: true }), store);
     expect(waiting({ files: [png] })).toMatchObject({
-      kind: "pict",
+      faces: [{ type: "image" }],
       waiting: true,
-      paste: "",
       origin: DRAGGED,
     });
-    expect(waiting({ files: [pdf] })).toMatchObject({ kind: "file", name: "", waiting: true });
-    expect(waiting({ files: [png, pdf, png] })).toMatchObject({ kind: "file", name: "3 files" });
-    expect(waiting({ text: "words" })).toMatchObject({ kind: "text", title: "", waiting: true });
+    expect(waiting({ files: [png] }).faces[0]).not.toHaveProperty("path");
+    expect(waiting({ files: [pdf] })).toMatchObject({
+      faces: [{ type: "file", name: "" }],
+      waiting: true,
+    });
+    expect(waiting({ files: [png, pdf, png] })).toMatchObject({
+      faces: [{ type: "file", name: "3 files" }],
+    });
+    expect(waiting({ text: "words" })).toMatchObject({
+      faces: [{ type: "text" }],
+      title: "",
+      waiting: true,
+    });
     expect(WAITING_WORDS.files(3)).toBe("3 files");
   });
 
@@ -590,7 +617,7 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
       x: 400,
       y: 300,
       phase: "carry",
-      card: { kind: "pict", waiting: true, origin: DRAGGED },
+      card: { faces: [{ type: "image" }], waiting: true, origin: DRAGGED },
       answer: { kind: "hand", ok: true, label: TARGET_WORDS.hand },
     });
     expect(store.snapshot().held, "the carry has the window").toBeNull();
@@ -663,13 +690,15 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     expect(own, "the pane's own drop would paste it a second time").not.toHaveBeenCalled();
     await settled();
     expect(asked.at(-1), "the place is asked again of what the drop held").toMatchObject({
-      kind: "text",
-      paste: "git status",
+      faces: [{ type: "text", text: "git status" }],
     });
     await vi.advanceTimersByTimeAsync(PLAY_SHRINK_MS);
     await settled();
     expect(played).toHaveLength(1);
-    expect(played[0]).toMatchObject({ kind: "text", paste: "git status", origin: DRAGGED });
+    expect(played[0]).toMatchObject({
+      faces: [{ type: "text", text: "git status" }],
+      origin: DRAGGED,
+    });
     expect(played[0]?.waiting, "the waiting card was played").toBeUndefined();
     expect(said).toEqual(["Pasted into vibe-field"]);
     expect(store.snapshot().cards, "played straight in, it stays nowhere").toEqual([]);
@@ -738,7 +767,10 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     await vi.advanceTimersByTimeAsync(PLAY_SHRINK_MS);
     await settled();
     expect(played).toHaveLength(1);
-    expect(played[0]).toMatchObject({ kind: "text", paste: "make test", origin: DRAGGED });
+    expect(played[0]).toMatchObject({
+      faces: [{ type: "text", text: "make test" }],
+      origin: DRAGGED,
+    });
     expect(said).toEqual(["Pasted into vibe-field"]);
     expect(store.snapshot().cards).toEqual([]);
   });
@@ -783,7 +815,10 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     sizes.set(shot, { width: 800, height: 600 });
     paths.set(shot, "/Users/me/Desktop/shot.png");
     drag("dragenter", transfer({ files: [notes, shot], kindsOnly: true }), { x: 500, y: 300 });
-    expect(getCarriedCard()?.card).toMatchObject({ kind: "file", name: "2 files", waiting: true });
+    expect(getCarriedCard()?.card).toMatchObject({
+      faces: [{ type: "file", name: "2 files" }],
+      waiting: true,
+    });
     expect(getCarriedCard()?.answer).toEqual({ kind: "hand", ok: true, label: TARGET_WORDS.hand });
 
     drag("drop", transfer({ files: [notes, shot] }), { x: 500, y: 300 });
@@ -791,19 +826,19 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     expect(getCarriedCard(), "its carry is over: the hand deals it").toBeNull();
     const [note, picture] = store.snapshot().cards;
     expect(note).toMatchObject({
-      kind: "file",
-      name: "notes.txt",
-      folder: "me/Desktop",
-      lines: "one\ntwo",
-      paste: "/Users/me/Desktop/notes.txt",
+      faces: [
+        {
+          type: "file",
+          name: "notes.txt",
+          folder: "me/Desktop",
+          lines: "one\ntwo",
+          path: "/Users/me/Desktop/notes.txt",
+        },
+      ],
       origin: DRAGGED,
     });
     expect(picture).toMatchObject({
-      kind: "pict",
-      width: 800,
-      height: 600,
-      path: "/Users/me/Desktop/shot.png",
-      paste: "/Users/me/Desktop/shot.png",
+      faces: [{ type: "image", width: 800, height: 600, path: "/Users/me/Desktop/shot.png" }],
     });
     // from where the carried card hung by its top edge, the second a step to the right
     expect([...store.snapshot().arriving.values()]).toEqual([
@@ -831,7 +866,10 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     expect(said).toEqual([refusal]);
     expect(getCarriedCard(), "the hand deals it: no fade beside its deal").toBeNull();
     const [card] = store.snapshot().cards;
-    expect(card).toMatchObject({ kind: "text", paste: "git status", origin: DRAGGED });
+    expect(card).toMatchObject({
+      faces: [{ type: "text", text: "git status" }],
+      origin: DRAGGED,
+    });
     expect(store.snapshot().arriving.get(card?.id ?? "")).toEqual({
       left: 240,
       top: 188,
@@ -865,7 +903,9 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     expect(drop.defaultPrevented, "the hand's, not the field's").toBe(true);
     await settled();
     expect(store.snapshot().cards).toHaveLength(1);
-    expect(store.snapshot().cards[0]).toMatchObject({ kind: "text", paste: "git status" });
+    expect(store.snapshot().cards[0]).toMatchObject({
+      faces: [{ type: "text", text: "git status" }],
+    });
   });
 
   it("brings in a drop's first twelve and says what was left out last; a drop of words past what a card holds is gone, said in sizes (LC-23, LC-24)", async () => {
@@ -904,7 +944,7 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     drag("dragenter", kinds, { x: 300, y: 200 });
     drag("dragover", kinds, { x: 300, y: 200 });
     expect(getCarriedCard()?.card, "carried, only its kind is known").toMatchObject({
-      kind: "pict",
+      faces: [{ type: "image" }],
       waiting: true,
     });
 
@@ -915,11 +955,15 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     expect(decoded, "a path holds no pixels: none are read").toEqual([]);
     expect(played).toHaveLength(1);
     expect(played[0]).toMatchObject({
-      kind: "file",
-      name: "poster.psd",
-      folder: "me/Desktop",
-      facts: "PSD · 200 MB",
-      paste: "/Users/me/Desktop/poster.psd",
+      faces: [
+        {
+          type: "file",
+          name: "poster.psd",
+          folder: "me/Desktop",
+          facts: "PSD · 200 MB",
+          path: "/Users/me/Desktop/poster.psd",
+        },
+      ],
       origin: DRAGGED,
     });
     expect(said).toEqual(["Pasted into vibe-field"]);
@@ -974,7 +1018,7 @@ describe("the drag machine's filled card (HN-6, B2)", () => {
       kind: "pane",
       box: new DOMRect(0, 0, 600, 400),
       answer: (card) =>
-        card.kind === "pict"
+        cardType(card) === "image"
           ? { ok: false, label: TARGET_WORDS.pictureNoFile }
           : { ok: true, label: "Paste into vibe-field" },
     });
@@ -1002,17 +1046,10 @@ describe("the drag machine's filled card (HN-6, B2)", () => {
     // a picture with no file let go on that pane: under the pointer the pane answered the waiting
     // card, so its refusal is said now — and the card is the hand's, its carry over
     carry();
-    const loose: PictCard = {
-      id: "card-pict-loose",
-      kind: "pict",
-      origin: DRAGGED,
-      at: 0,
-      title: "image.png",
-      width: 10,
-      height: 10,
-      src: "",
-      paste: "",
-    };
+    const loose = pictureCardOf(
+      { title: "image.png", width: 10, height: 10, src: "" },
+      { id: "card-pict-loose", origin: DRAGGED, at: 0 },
+    );
     await expect(endCardDrag(100, 100, loose)).resolves.toBe("hand");
     expect(said.at(-1)).toBe("A picture with no file can't be pasted yet");
     expect(getCarriedCard()).toBeNull();

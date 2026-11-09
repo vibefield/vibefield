@@ -26,7 +26,7 @@ import {
   startCardDrag,
 } from "../src/frame/cards/card-drag";
 import { type CardTarget, CardTargets, cardTargets } from "../src/frame/cards/card-targets";
-import type { Card } from "../src/frame/cards/cards-model";
+import { type Card, namedTextCardOf, pictureCardOf } from "../src/frame/cards/cards-model";
 import { waitingCardOf } from "../src/frame/cards/cards-outside";
 import { cardsStore } from "../src/frame/cards/cards-store";
 import type { FrameSurface } from "../src/frame/frame-surface";
@@ -55,29 +55,24 @@ const port: ComposerPort = {
   },
 };
 
-const text = (paste: string): Card => ({
-  id: "t1",
-  kind: "text",
-  origin: { view: "history", place: "rosetta", how: "copy" },
-  at: 0,
-  title: "Ship it",
-  body: paste,
-  bare: true,
-  paste,
-});
+const text = (paste: string): Card =>
+  namedTextCardOf(
+    paste,
+    { title: "Ship it", body: paste },
+    { id: "t1", origin: { view: "history", place: "rosetta", how: "copy" }, at: 0 },
+  );
 
-const picture = (path?: string): Card => ({
-  id: "p1",
-  kind: "pict",
-  origin: { view: "canvas", how: "snapshot" },
-  at: 0,
-  paste: "",
-  title: "Snapshot",
-  width: 1440,
-  height: 900,
-  src: "vibefield-still:one",
-  ...(path === undefined ? {} : { path }),
-});
+const picture = (path?: string): Card =>
+  pictureCardOf(
+    {
+      title: "Snapshot",
+      width: 1440,
+      height: 900,
+      src: "vibefield-still:one",
+      ...(path === undefined ? {} : { path }),
+    },
+    { id: "p1", origin: { view: "canvas", how: "snapshot" }, at: 0 },
+  );
 
 let root: Root | null = null;
 let host: HTMLElement | null = null;

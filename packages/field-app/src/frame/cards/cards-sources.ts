@@ -1,5 +1,5 @@
 import type { FrameView, ScreenshotCaptureOk } from "@vibefield/contracts";
-import type { Card, PictCard } from "./cards-model";
+import { type Card, pictureCardOf } from "./cards-model";
 import { type CardStore, cardsStore, type DealFrom } from "./cards-store";
 
 /**
@@ -59,20 +59,18 @@ export function dealCapture(
   host: CaptureHost,
   view: FrameView,
   options: { readonly store?: CardStore; readonly win?: WindowPlace } = {},
-): PictCard {
+): Card {
   const store = options.store ?? cardsStore;
-  const card: PictCard = {
-    id: store.nextId("pict"),
-    kind: "pict",
-    origin: { view, how: "snapshot" },
-    at: store.now(),
-    title: "Snapshot",
-    width: ok.width,
-    height: ok.height,
-    src: host.screenshotStillUrl?.(ok.path) ?? "",
-    path: ok.path,
-    paste: ok.path,
-  };
+  const card = pictureCardOf(
+    {
+      title: "Snapshot",
+      width: ok.width,
+      height: ok.height,
+      src: host.screenshotStillUrl?.(ok.path) ?? "",
+      path: ok.path,
+    },
+    { id: store.nextId("image"), origin: { view, how: "snapshot" }, at: store.now() },
+  );
   const win = options.win ?? (typeof window === "undefined" ? undefined : window);
   store.deal(card, win === undefined ? null : captureFrom(ok.screenBounds, win));
   return card;

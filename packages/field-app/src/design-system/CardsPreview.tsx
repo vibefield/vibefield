@@ -6,21 +6,21 @@ import { CardsView, type HeldCard } from "../frame/cards/CardsView";
 import { CarriedCardView } from "../frame/cards/CarriedCardLayer";
 import type { CardBox, CarriedCard } from "../frame/cards/card-drag";
 import {
-  type AgentCard,
   CARD_W,
   CARDS_LINE_RIGHT,
   type Card,
   type CardOrigin,
   type CardWindow,
   CHAT_REACH,
-  type FileCard,
+  fileCardOf,
   HAND_REACH,
   layoutCards,
   layoutRaised,
-  type MsgCard,
-  type PictCard,
+  messageCardOf,
+  pictureCardOf,
   reachedIndex,
   reachLift,
+  sessionCardOf,
   termCardOf,
   textCardOf,
 } from "../frame/cards/cards-model";
@@ -71,61 +71,53 @@ const TEXT = textCardOf(
   { id: "fx-text", origin: origin("history", "claude·2"), at: minutesAgo(18) },
 );
 
-const FILE: FileCard = {
-  id: "fx-file",
-  kind: "file",
-  origin: origin("history", "files"),
-  at: minutesAgo(8),
-  paste: "packages/fieldd/src/files/routes.ts",
-  name: "routes.ts",
-  folder: "packages/fieldd/src/files/",
-  lines:
-    'export const ROUTES = {\n  list: "files.list",\n  read: "files.read",\n  watch: "files.watch",\n} as const;',
-};
+const FILE = fileCardOf(
+  {
+    name: "routes.ts",
+    path: "packages/fieldd/src/files/routes.ts",
+    folder: "packages/fieldd/src/files/",
+    lines:
+      'export const ROUTES = {\n  list: "files.list",\n  read: "files.read",\n  watch: "files.watch",\n} as const;',
+  },
+  { id: "fx-file", origin: origin("history", "files"), at: minutesAgo(8) },
+);
 
-const AGENT: AgentCard = {
-  id: "fx-agent",
-  kind: "agent",
-  origin: origin("godview", "swarm"),
-  at: minutesAgo(5),
-  paste: "claude·2",
-  handle: "claude·2",
-  ...(MARKED === undefined ? {} : { agent: MARKED }),
-  project: "vibe-field",
-  projectInk: 3,
-  state: "working",
-};
+const AGENT = sessionCardOf(
+  {
+    handle: "claude·2",
+    ...(MARKED === undefined ? {} : { agent: MARKED }),
+    project: "vibe-field",
+    projectInk: 3,
+    state: "working",
+  },
+  { id: "fx-agent", origin: origin("godview", "swarm"), at: minutesAgo(5) },
+);
 
 const TERM = termCardOf(
   "$ pnpm --filter @vibefield/fieldd test files\n ✓ files-worker.test.ts (14)\n ✓ route-table.test.ts (9)\n Test Files  2 passed (2)\n      Tests  23 passed (23)",
   { id: "fx-term", origin: origin("godview", "claude·2"), at: minutesAgo(4) },
 );
 
-const MSG: MsgCard = {
-  id: "fx-msg",
-  kind: "msg",
-  origin: origin("assistant", "Vela"),
-  at: minutesAgo(1),
-  paste:
-    "codex·2 wants to push to main. claude·2 is still writing the LANDED entry, so I'd hold the push until that lands.",
-  speaker: "Vela",
-  time: "14:09",
-  words:
-    "codex·2 wants to push to main. claude·2 is still writing the LANDED entry, so I'd hold the push until that lands.",
-};
+const MSG = messageCardOf(
+  {
+    speaker: "Vela",
+    time: "14:09",
+    words:
+      "codex·2 wants to push to main. claude·2 is still writing the LANDED entry, so I'd hold the push until that lands.",
+  },
+  { id: "fx-msg", origin: origin("assistant", "Vela"), at: minutesAgo(1) },
+);
 
-const PICT: PictCard = {
-  id: "fx-pict",
-  kind: "pict",
-  origin: { view: "canvas", how: "snapshot" },
-  at: NOW - 20_000,
-  title: "Snapshot",
-  width: 1440,
-  height: 900,
-  src: fixtureStill("Godview · swarm", 214),
-  path: "/var/folders/T/vibefield-still-0007.png",
-  paste: "/var/folders/T/vibefield-still-0007.png",
-};
+const PICT = pictureCardOf(
+  {
+    title: "Snapshot",
+    width: 1440,
+    height: 900,
+    src: fixtureStill("Godview · swarm", 214),
+    path: "/var/folders/T/vibefield-still-0007.png",
+  },
+  { id: "fx-pict", origin: { view: "canvas", how: "snapshot" }, at: NOW - 20_000 },
+);
 
 /** One card of each kind, oldest first, as a hand holds them. */
 export const CARD_FIXTURES: readonly Card[] = [TEXT, FILE, AGENT, TERM, MSG, PICT];
@@ -143,42 +135,27 @@ export const COPY_FIXTURES: readonly Card[] = [
     "Ship the hand on Thursday. The deal, the fan and the play are in; the drag in waits for B2.",
     { id: "fx-copy-note", origin: { view: "canvas", how: "copy" }, at: minutesAgo(2) },
   ),
-  {
-    id: "fx-copy-pict",
-    kind: "pict",
-    origin: { view: "canvas", how: "copy" },
-    at: NOW - 30_000,
-    title: copyName([copied("desk.note", "Note"), copied("desk.clock", "Clock")]),
-    width: 1280,
-    height: 720,
-    src: fixtureStill("Studio desk", 32),
-    paste: "",
-  },
+  pictureCardOf(
+    {
+      title: copyName([copied("desk.note", "Note"), copied("desk.clock", "Clock")]),
+      width: 1280,
+      height: 720,
+      src: fixtureStill("Studio desk", 32),
+    },
+    { id: "fx-copy-pict", origin: { view: "canvas", how: "copy" }, at: NOW - 30_000 },
+  ),
 ];
 
 /** What a drag from another app shows before it is let go: only its kind. */
 export const WAITING_FIXTURES: readonly Card[] = [
-  {
-    id: "fx-wait-pict",
-    kind: "pict",
-    origin: { view: "outside", how: "drag" },
-    at: NOW,
-    title: "",
-    width: 0,
-    height: 0,
-    src: "",
-    paste: "",
-    waiting: true,
-  },
-  {
-    id: "fx-wait-file",
-    kind: "file",
-    origin: { view: "outside", how: "drag" },
-    at: NOW,
-    name: WAITING_WORDS.files(3),
-    paste: "",
-    waiting: true,
-  },
+  pictureCardOf(
+    { title: "", width: 0, height: 0, src: "" },
+    { id: "fx-wait-pict", origin: { view: "outside", how: "drag" }, at: NOW, waiting: true },
+  ),
+  fileCardOf(
+    { name: WAITING_WORDS.files(3) },
+    { id: "fx-wait-file", origin: { view: "outside", how: "drag" }, at: NOW, waiting: true },
+  ),
 ];
 
 /** What another app, Settings and History deal (HN-5, HN-6; DESIGN.md §8 "The hand"): a file
@@ -186,16 +163,15 @@ export const WAITING_FIXTURES: readonly Card[] = [
  * words ⌘V brought in with no caret, a device's name copied in Settings over Canvas, and a path
  * History's room copied. */
 export const FROM_FIXTURES: readonly Card[] = [
-  {
-    id: "fx-from-file",
-    kind: "file",
-    origin: { view: "outside", how: "drag" },
-    at: minutesAgo(3),
-    paste: "/Users/james/Desktop/report.pdf",
-    name: "report.pdf",
-    folder: "james/Desktop",
-    facts: OUTSIDE_WORDS.facts("PDF", 2_400_000),
-  },
+  fileCardOf(
+    {
+      name: "report.pdf",
+      path: "/Users/james/Desktop/report.pdf",
+      folder: "james/Desktop",
+      facts: OUTSIDE_WORDS.facts("PDF", 2_400_000),
+    },
+    { id: "fx-from-file", origin: { view: "outside", how: "drag" }, at: minutesAgo(3) },
+  ),
   textCardOf("Can you check the routes table before the cut? The files worker moved.", {
     id: "fx-from-paste",
     origin: { view: "outside", how: "paste" },

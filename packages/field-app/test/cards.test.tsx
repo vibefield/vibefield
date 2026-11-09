@@ -28,7 +28,7 @@ import {
   type Card,
   type CardSlot,
   layoutCards,
-  type PictCard,
+  pictureCardOf,
   textCardOf,
 } from "../src/frame/cards/cards-model";
 import { CardStore } from "../src/frame/cards/cards-store";
@@ -250,17 +250,11 @@ function paneHears(): { readonly keys: string[]; readonly el: HTMLElement } {
 }
 
 /** A picture brought in from another app: its own object URL, which goes with it. */
-const pasted = (id: string): PictCard => ({
-  id,
-  kind: "pict",
-  origin: { view: "outside", how: "paste" },
-  at: NOW,
-  title: "Pasted",
-  width: 640,
-  height: 400,
-  src: `blob:${id}`,
-  paste: "",
-});
+const pasted = (id: string): Card =>
+  pictureCardOf(
+    { title: "Pasted", width: 640, height: 400, src: `blob:${id}` },
+    { id, origin: { view: "outside", how: "paste" }, at: NOW },
+  );
 
 /** A full hand — the picture `p1` oldest, then c2…c12 — landed. */
 function fullHand(): CardStore {
@@ -281,13 +275,16 @@ describe("the shell's screenshots (the ONE subscription, moved from the clipboar
     act(() => host.emit(OK));
     const [dealt] = store.snapshot().cards;
     expect(dealt).toMatchObject({
-      kind: "pict",
       title: "Snapshot",
-      width: 1200,
-      height: 750,
-      path: OK.path,
-      paste: OK.path,
-      src: "vibefield-still://stills/vibefield-still-0007.png",
+      faces: [
+        {
+          type: "image",
+          width: 1200,
+          height: 750,
+          path: OK.path,
+          src: "vibefield-still://stills/vibefield-still-0007.png",
+        },
+      ],
       origin: { view: "canvas", how: "snapshot" },
     });
     const box = { left: 300, top: 200, width: 600, height: 375 };
@@ -891,17 +888,10 @@ describe("the twelve (HN-D8) and the mount", () => {
     vi.useFakeTimers();
     const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
     const store = new CardStore(() => NOW);
-    const pasted: PictCard = {
-      id: "p1",
-      kind: "pict",
-      origin: { view: "outside", how: "paste" },
-      at: NOW,
-      title: "Pasted",
-      width: 640,
-      height: 400,
-      src: "blob:pasted-picture",
-      paste: "",
-    };
+    const pasted = pictureCardOf(
+      { title: "Pasted", width: 640, height: 400, src: "blob:pasted-picture" },
+      { id: "p1", origin: { view: "outside", how: "paste" }, at: NOW },
+    );
     store.deal(pasted);
     store.landed("p1");
     for (let n = 2; n <= 12; n += 1) {
@@ -1078,9 +1068,7 @@ describe("the twelve (HN-D8) and the mount", () => {
       await vi.waitFor(() => expect(ids(store)).toHaveLength(1));
     });
     expect(store.snapshot().cards[0]).toMatchObject({
-      kind: "file",
-      name: "notes.md",
-      paste: "/Users/me/notes.md",
+      faces: [{ type: "file", name: "notes.md", path: "/Users/me/notes.md" }],
       origin: { view: "outside", how: "paste" },
     });
     act(() => root?.unmount());
@@ -1115,6 +1103,8 @@ describe("the twelve (HN-D8) and the mount", () => {
       expect(paste().defaultPrevented).toBe(true);
       await vi.waitFor(() => expect(ids(store)).toHaveLength(1));
     });
-    expect(store.snapshot().cards[0]).toMatchObject({ kind: "text", paste: "From Notes." });
+    expect(store.snapshot().cards[0]).toMatchObject({
+      faces: [{ type: "text", text: "From Notes." }],
+    });
   });
 });

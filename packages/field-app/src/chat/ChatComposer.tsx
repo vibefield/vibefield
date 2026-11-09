@@ -651,14 +651,14 @@ export function ChatComposer({
       // corners, as its stylesheet draws them
       answer: (card) => {
         if (card.waiting !== true && paneTextOf(card) === null)
-          return { ok: false, label: nothingToGive(card) };
+          return { ok: false, label: nothingToGive(card.faces[0]) };
         const corner = cornerOf(boxRef.current);
         const label = TARGET_WORDS.prompt(nameRef.current);
         return corner === null ? { ok: true, label } : { ok: true, label, corner };
       },
       play: async (card) => {
         const text = paneTextOf(card);
-        if (text === null) return { ok: false, note: nothingToGive(card) };
+        if (text === null) return { ok: false, note: nothingToGive(card.faces[0]) };
         playRef.current(card, text);
         return { ok: true, note: OUTCOME_WORDS.added(nameRef.current) };
       },

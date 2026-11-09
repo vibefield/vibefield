@@ -24,7 +24,7 @@ import {
   type SessionChip,
   spliceDraft,
 } from "../src/chat/composer-draft";
-import type { Card } from "../src/frame/cards/cards-model";
+import { type Card, pictureCardOf, termCardOf } from "../src/frame/cards/cards-model";
 
 const AGENT = AGENT_CATALOG[0];
 
@@ -50,15 +50,11 @@ const session = (over: Partial<SessionChip> = {}): SessionChip => ({
   ...over,
 });
 
-const termCard: Card = {
+const termCard: Card = termCardOf("pnpm test\n  ✓ 41 passed\n", {
   id: "k1",
-  kind: "term",
   origin: { view: "godview", place: "vibe-field", how: "copy" },
   at: 0,
-  first: "pnpm test",
-  rest: "  ✓ 41 passed",
-  paste: "pnpm test\n  ✓ 41 passed\n",
-};
+});
 
 const cardChip = (card: Card, text: string): CardChip => ({ id: "c1", kind: "card", card, text });
 
@@ -188,18 +184,16 @@ describe('what a send carries (DESIGN.md §8 "Chat\'s composer")', () => {
   });
 
   it("names the snapshot stills its card chips cite, for Send to check before the paste", () => {
-    const snap: Card = {
-      id: "p1",
-      kind: "pict",
-      origin: { view: "canvas", how: "snapshot" },
-      at: 0,
-      paste: "",
-      title: "Snapshot",
-      width: 1440,
-      height: 900,
-      src: "vibefield-still:one",
-      path: "/stills/one.png",
-    };
+    const snap: Card = pictureCardOf(
+      {
+        title: "Snapshot",
+        width: 1440,
+        height: 900,
+        src: "vibefield-still:one",
+        path: "/stills/one.png",
+      },
+      { id: "p1", origin: { view: "canvas", how: "snapshot" }, at: 0 },
+    );
     expect(draftStills([chipPart(cardChip(snap, "/stills/one.png")), chipPart(agent())])).toEqual([
       "/stills/one.png",
     ]);

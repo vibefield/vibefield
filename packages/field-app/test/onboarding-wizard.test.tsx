@@ -1218,8 +1218,7 @@ describe("Setup Assistant", () => {
     ]);
     const card = cardsStore.snapshot().cards.at(-1);
     expect(card).toMatchObject({
-      kind: "text",
-      paste: copied[0],
+      faces: [{ type: "text", text: copied[0] }],
       origin: { place: "Setup Assistant", how: "copy" },
     });
     expect(cardsStore.snapshot().arriving.get(card?.id ?? "")).toEqual(box);

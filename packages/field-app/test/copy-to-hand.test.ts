@@ -263,11 +263,8 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     const { cards, arriving } = store.snapshot();
     expect(cards).toHaveLength(1);
     expect(cards[0]).toMatchObject({
-      kind: "text",
       title: "Ship the desk by Friday.",
-      body: "Then the covers.",
-      bare: false,
-      paste: WRITING,
+      faces: [{ type: "text", text: WRITING, show: { body: "Then the covers.", bare: false } }],
       origin: { view: "canvas", how: "copy" },
       at: 5_000,
     });
@@ -308,19 +305,17 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     expect(cards).toHaveLength(1);
     const card = cards[0];
     expect(card).toMatchObject({
-      kind: "pict",
       title: "Comment pad",
-      width: 376,
-      height: 276,
+      faces: [{ type: "image", width: 376, height: 276 }],
       origin: { view: "canvas", how: "copy" },
-      paste: "",
     });
     // the PNG is the card's own — no file on disk, so no path
-    if (card?.kind !== "pict") throw new Error("not a picture card");
-    expect(card.bytes?.size).toBe(321);
-    expect(card.bytes?.type).toBe("image/png");
-    expect(card.src).toMatch(/^blob:/u);
-    expect(card.path).toBeUndefined();
+    const face = card?.faces[0];
+    if (card === undefined || face?.type !== "image") throw new Error("not a picture card");
+    expect(face.bytes?.size).toBe(321);
+    expect(face.bytes?.type).toBe("image/png");
+    expect(face.src).toMatch(/^blob:/u);
+    expect(face.path).toBeUndefined();
     expect(arriving.get(card.id)).toEqual({ left: 406, top: 306, width: 188, height: 138 });
     // its picture went on the system clipboard first, through the picture door — the same PNG the card keeps
     // (HN-5, LC-9) — and a pad that keeps no words gives none beside it
@@ -371,7 +366,10 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     });
     expect(ce.ops.setSelection).not.toHaveBeenCalled();
     expect(store.snapshot().cards).toHaveLength(1);
-    expect(store.snapshot().cards[0]).toMatchObject({ kind: "pict", title: "2 objects" });
+    expect(store.snapshot().cards[0]).toMatchObject({
+      title: "2 objects",
+      faces: [{ type: "image" }],
+    });
     // the note's writing is the words they keep (the pad keeps none): on the system clipboard beside their picture, in
     // the picture door's ONE write (LC-19) — never a second write through the copy door, which would replace the first
     expect(pictures).toHaveLength(1);
@@ -399,7 +397,7 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
       marks: false,
     });
     const [card] = store.snapshot().cards;
-    expect(card).toMatchObject({ kind: "pict", title: "Note" });
+    expect(card).toMatchObject({ title: "Note", faces: [{ type: "image" }] });
     expect(store.snapshot().arriving.get(card?.id ?? "")).toEqual({
       left: 470,
       top: 222,
@@ -416,10 +414,16 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     });
     expect(copySelection(desk, "key", { ...seams(), held: holding })).toBe(true);
     await flush();
-    expect(store.snapshot().cards.at(-1)).toMatchObject({ kind: "pict", title: "Note" });
+    expect(store.snapshot().cards.at(-1)).toMatchObject({
+      title: "Note",
+      faces: [{ type: "image" }],
+    });
     expect(copySelection(desk, "key", { ...seams(), held: () => null })).toBe(true);
     await flush();
-    expect(store.snapshot().cards.at(-1)).toMatchObject({ kind: "pict", title: "Comment pad" });
+    expect(store.snapshot().cards.at(-1)).toMatchObject({
+      title: "Comment pad",
+      faces: [{ type: "image" }],
+    });
     expect(lastCopy()?.from).toBe("key");
   });
 

@@ -44,8 +44,11 @@ import {
 import { paneTextOf, shellPath, stillOf } from "../src/frame/cards/card-text";
 import {
   type Card,
-  type PictCard,
-  type TextCard,
+  fileCardOf,
+  messageCardOf,
+  pictureCardOf,
+  sessionCardOf,
+  type TextFace,
   termCardOf,
   textCardOf,
 } from "../src/frame/cards/cards-model";
@@ -62,7 +65,7 @@ import type { RoutedInputRefusal } from "../src/terminal/pool";
 // The card's face is W-hand's (CardFace.tsx, HN-1): the layer is held to handing it the card.
 vi.mock("../src/frame/cards/CardFace", () => ({
   CardFace: ({ card }: { readonly card: Card }) => (
-    <div className="vf-card" data-kind={card.kind} data-card={card.id} />
+    <div className="vf-card" data-kind={card.faces[0].type} data-card={card.id} />
   ),
 }));
 
@@ -77,47 +80,31 @@ let viewHeard: ((state: FrameViewState) => void) | null = null;
 let places = 0;
 
 const ORIGIN = { view: "history", how: "copy" } as const;
-const text = (words: string): TextCard =>
+const text = (words: string): Card =>
   textCardOf(words, { id: `card-text-${words.length}`, origin: ORIGIN, at: 0 });
-const SNAPSHOT: PictCard = {
-  id: "card-pict-1",
-  kind: "pict",
-  origin: { view: "canvas", how: "snapshot" },
-  at: 0,
+const SNAPSHOT_STILL = {
   title: "Snapshot",
   width: 1440,
   height: 900,
   src: "vibefield-still://stills/vibefield-screenshot-1.png",
   path: "/tmp/vibefield-screenshot-1.png",
-  paste: "/tmp/vibefield-screenshot-1.png",
-};
-const FILE: Card = {
-  id: "card-file-1",
-  kind: "file",
-  origin: ORIGIN,
+} as const;
+const SNAPSHOT_STUB = {
+  id: "card-pict-1",
+  origin: { view: "canvas", how: "snapshot" },
   at: 0,
-  name: "routes.ts",
-  folder: "src/files",
-  paste: "/Users/me/vibe-field/src/files/routes.ts",
-};
-const AGENT: Card = {
-  id: "card-agent-1",
-  kind: "agent",
-  origin: ORIGIN,
-  at: 0,
-  handle: "claude·2",
-  paste: "claude·2",
-};
-const MESSAGE: Card = {
-  id: "card-msg-1",
-  kind: "msg",
-  origin: ORIGIN,
-  at: 0,
-  speaker: "claude",
-  time: "13:58",
-  words: "The routes moved into the files worker.",
-  paste: "The routes moved into the files worker.",
-};
+} as const;
+const SNAPSHOT = pictureCardOf(SNAPSHOT_STILL, SNAPSHOT_STUB);
+const { path: _stillPath, ...NO_FILE } = SNAPSHOT_STILL;
+const FILE = fileCardOf(
+  { name: "routes.ts", folder: "src/files", path: "/Users/me/vibe-field/src/files/routes.ts" },
+  { id: "card-file-1", origin: ORIGIN, at: 0 },
+);
+const AGENT = sessionCardOf({ handle: "claude·2" }, { id: "card-agent-1", origin: ORIGIN, at: 0 });
+const MESSAGE = messageCardOf(
+  { speaker: "claude", time: "13:58", words: "The routes moved into the files worker." },
+  { id: "card-msg-1", origin: ORIGIN, at: 0 },
+);
 
 /** Its slot in the fan, at rest, as the hand's `home()` answers it: untilted — a flight carries
  * no turn, and the fan settles the card into its tilt once it is back. */
@@ -823,19 +810,15 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
     const ran = termCardOf("pnpm test\n✓ 12 passed\n", { id: "t2", origin: ORIGIN, at: 0 });
     expect(paneTextOf(ran)).toBe("pnpm test\n✓ 12 passed");
     // …for every kind, in the one place: whatever a card gives, it gives without a final break
-    const hung: Card = {
-      id: "card-agent-2",
-      kind: "agent",
-      origin: ORIGIN,
-      at: 0,
-      handle: "claude·2\r\n",
-      paste: "claude·2",
-    };
+    const hung = sessionCardOf(
+      { handle: "claude·2\r\n" },
+      { id: "card-agent-2", origin: ORIGIN, at: 0 },
+    );
     expect(paneTextOf(hung)).toBe("claude·2");
     expect(paneTextOf(FILE)).toBe("/Users/me/vibe-field/src/files/routes.ts");
     expect(paneTextOf(SNAPSHOT)).toBe("/tmp/vibefield-screenshot-1.png");
     expect(paneTextOf(AGENT)).toBe("claude·2");
-    const { path: _path, ...noFile } = SNAPSHOT;
+    const noFile = pictureCardOf(NO_FILE, SNAPSHOT_STUB);
     expect(paneTextOf(noFile)).toBeNull();
     expect(shellPath("/Users/me/My Files/a.png")).toBe("'/Users/me/My Files/a.png'");
     expect(shellPath("/Users/me/don't stop.txt")).toBe("'/Users/me/don'\\''t stop.txt'");
@@ -852,8 +835,7 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
     expect(stillOf(SNAPSHOT)).toBe("/tmp/vibefield-screenshot-1.png");
     const brought: Card = { ...SNAPSHOT, origin: { view: "outside", how: "paste" } };
     expect(stillOf(brought)).toBeNull();
-    const { path: _path, ...noFile } = SNAPSHOT;
-    expect(stillOf(noFile)).toBeNull();
+    expect(stillOf(pictureCardOf(NO_FILE, SNAPSHOT_STUB))).toBeNull();
     for (const card of [text("Run it."), FILE, AGENT, MESSAGE]) expect(stillOf(card)).toBeNull();
   });
 
@@ -980,7 +962,10 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
     const { root } = deckOf();
     const door = doorOf();
     const target = paneCardTarget({ root: () => root, door: () => door });
-    const loose: Card = { ...FILE, origin: { view: "outside", how: "drag" }, paste: "" };
+    const loose = fileCardOf(
+      { name: "routes.ts", folder: "src/files" },
+      { id: "card-file-loose", origin: { view: "outside", how: "drag" }, at: 0 },
+    );
     expect(paneTextOf(loose)).toBeNull();
     expect(target.answer(loose, { x: 300, y: 300 })).toMatchObject({
       ok: false,
@@ -1007,14 +992,10 @@ describe("Godview's panes take a card (HN-4, HN-L5)", () => {
         },
       },
     });
-    const photo: PictCard = {
-      ...SNAPSHOT,
-      id: "card-pict-photo",
-      origin: { view: "outside", how: "drag" },
-      title: "photo.jpg",
-      path: "/Users/me/My Pictures/photo.jpg",
-      paste: "/Users/me/My Pictures/photo.jpg",
-    };
+    const photo = pictureCardOf(
+      { ...SNAPSHOT_STILL, title: "photo.jpg", path: "/Users/me/My Pictures/photo.jpg" },
+      { id: "card-pict-photo", origin: { view: "outside", how: "drag" }, at: 0 },
+    );
     await expect(target.play(photo, { x: 300, y: 300 })).resolves.toEqual({
       ok: true,
       note: OUTCOME_WORDS.pasted("vibe-field"),
@@ -1093,7 +1074,10 @@ describe("the desk takes a card (HN-D7)", () => {
       });
       // client (400, 300) → world (100 + 400 / 2, 50 + 300 / 2) = (300, 200); 220 centred on it
       expect(spawned).toEqual([
-        { type: NOTE_TYPE, at: { x: 190, y: 90, w: 220, h: 220, props: { text: card.paste } } },
+        {
+          type: NOTE_TYPE,
+          at: { x: 190, y: 90, w: 220, h: 220, props: { text: (card.faces[0] as TextFace).text } },
+        },
       ]);
       expect(selected).toEqual([[1]]);
       document.body.innerHTML = "";
@@ -1103,11 +1087,8 @@ describe("the desk takes a card (HN-D7)", () => {
   it("a picture lands as a print from its own bytes, kept in the byte store first, falling in", async () => {
     const { desk, spawned, selected, arrived } = deskOf();
     const put = vi.fn(async (_bytes: Uint8Array<ArrayBuffer>, _type: string) => "hash-1");
-    const copied: PictCard = {
-      ...SNAPSHOT,
-      bytes: new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }),
-    };
-    const { path: _path, ...ofTheDesk } = copied;
+    const bytes = new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" });
+    const ofTheDesk = pictureCardOf({ ...NO_FILE, bytes }, SNAPSHOT_STUB);
     const target = deskCardTarget(desk, { host: {}, blobs: { put } });
     expect(target.answer(ofTheDesk, { x: 400, y: 300 })).toEqual({
       ok: true,

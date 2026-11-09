@@ -55,8 +55,7 @@ describe("History's workspace copy port (HN-5)", () => {
     expect(copied).toEqual(["/Users/ada/vibe-field/src/main.ts"]);
     const card = cardsStore.snapshot().cards.at(-1);
     expect(card).toMatchObject({
-      kind: "text",
-      paste: "/Users/ada/vibe-field/src/main.ts",
+      faces: [{ type: "text", text: "/Users/ada/vibe-field/src/main.ts" }],
       origin: { view: "history", how: "copy" },
     });
     expect(card?.origin.place).toBeUndefined();

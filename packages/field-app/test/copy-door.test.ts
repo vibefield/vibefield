@@ -11,7 +11,12 @@
  */
 import { IPC_CHANNELS, SHELL_CLIPBOARD } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CardOrigin, PictCard } from "../src/frame/cards/cards-model";
+import {
+  type Card,
+  type CardOrigin,
+  cardType,
+  pictureCardOf,
+} from "../src/frame/cards/cards-model";
 import { CardStore, cardsStore, type DealFrom } from "../src/frame/cards/cards-store";
 import { COPY_DOOR_WORDS } from "../src/frame/cards/cards-words";
 import {
@@ -63,19 +68,17 @@ function doors(over: { words?: () => Promise<void>; picture?: () => Promise<void
   return { host, copied, pictures };
 }
 
-function pictCard(store: CardStore): PictCard {
-  return {
-    id: store.nextId("pict"),
-    kind: "pict",
-    origin: { view: "canvas", how: "copy" },
-    at: store.now(),
-    title: "Clock",
-    width: 376,
-    height: 276,
-    src: "blob:clock",
-    bytes: new Blob([PNG], { type: "image/png" }),
-    paste: "",
-  };
+function pictCard(store: CardStore): Card {
+  return pictureCardOf(
+    {
+      title: "Clock",
+      width: 376,
+      height: 276,
+      src: "blob:clock",
+      bytes: new Blob([PNG], { type: "image/png" }),
+    },
+    { id: store.nextId("image"), origin: { view: "canvas", how: "copy" }, at: store.now() },
+  );
 }
 
 /** The page's own clipboard (no host), recording its writes. */
@@ -126,10 +129,8 @@ describe("the copy door (HN-5)", () => {
     await expect(copy).resolves.toEqual({ ok: true });
     const [card] = store.snapshot().cards;
     expect(card).toMatchObject({
-      kind: "text",
       title: "Ship it.",
-      body: "Then the covers.",
-      paste: "Ship it. Then the covers.",
+      faces: [{ text: "Ship it. Then the covers.", show: { body: "Then the covers." } }],
       origin: ORIGIN,
       at: 7_000,
     });
@@ -241,7 +242,7 @@ describe("the copy door (HN-5)", () => {
       },
       {
         event: "renderer.cards.copy_refused",
-        attrs: { kind: "pict", reason: COPY_DOOR_WORDS.picture, error: REMOTE },
+        attrs: { kind: "image", reason: COPY_DOOR_WORDS.picture, error: REMOTE },
       },
     ]);
     expect(COPY_DOOR_WORDS.refused(COPY_DOOR_WORDS.words)).toBe(
@@ -259,7 +260,10 @@ describe("the copy door (HN-5)", () => {
     });
     expect(copied).toEqual([record]);
     const [card] = store.snapshot().cards;
-    expect(card).toMatchObject({ kind: "text", ...name, bare: true, paste: record });
+    expect(card).toMatchObject({
+      title: name.title,
+      faces: [{ type: "text", text: record, show: { ...name, bare: true } }],
+    });
     expect(store.snapshot().arriving.get(card?.id ?? "")).toEqual(FROM);
   });
 
@@ -279,7 +283,7 @@ describe("the copy door (HN-5)", () => {
     expect(web.write.mock.calls[0]?.[0]).toEqual([
       { items: { "image/png": expect.any(Blob), "text/plain": "two objects" } },
     ]);
-    expect(store.snapshot().cards.map((c) => c.kind)).toEqual(["text", "pict"]);
+    expect(store.snapshot().cards.map(cardType)).toEqual(["text", "image"]);
     // no box to leave from: it rises into its place
     expect(store.snapshot().arriving.get(card.id)).toBeNull();
     webClipboard(false);

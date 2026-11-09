@@ -2,7 +2,7 @@ import { ClipboardCopyRefusal, SHELL_CLIPBOARD, utf8ByteLength } from "@vibefiel
 import { type FieldClipboardHost, type FieldDiagnosticsHost, peekHost } from "../../host";
 import { getRendererLogger } from "../../logging";
 import { getActiveView } from "../view-state";
-import { type Card, type CardOrigin, type TextCard, textCardOf } from "./cards-model";
+import { type Card, type CardOrigin, cardType, namedTextCardOf, textCardOf } from "./cards-model";
 import { dealCard } from "./cards-sources";
 import { type CardStore, cardsStore, type DealFrom } from "./cards-store";
 import { COPY_DOOR_WORDS } from "./cards-words";
@@ -147,7 +147,7 @@ export async function copyToHand(request: CopyRequest, deps: CopyDeps = {}): Pro
   const written = await writeClipboard(request, deps);
   if (!written.ok) {
     log().warn("renderer.cards.copy_refused", "A copy did not reach the clipboard; no card", {
-      kind: request.card.kind,
+      kind: cardType(request.card),
       reason: written.reason,
       error: written.error,
     });
@@ -181,16 +181,7 @@ export function copyNamedWords(
   deps: CopyDeps = {},
 ): Promise<CopyOutcome> {
   const store = deps.store ?? cardsStore;
-  const card: TextCard = {
-    id: store.nextId("text"),
-    kind: "text",
-    origin,
-    at: store.now(),
-    title: name.title,
-    body: name.body,
-    bare: true,
-    paste: text,
-  };
+  const card = namedTextCardOf(text, name, { id: store.nextId("text"), origin, at: store.now() });
   return copyToHand({ card, from, text }, { ...deps, store });
 }
 

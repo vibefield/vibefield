@@ -3,16 +3,7 @@ import { projectInk } from "@vibefield/design-kit/project-ink";
 import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 import { agentMark } from "@vibefield/puppeteer-view-sdk/toolkit";
 import { type CSSProperties, type ReactElement, type ReactNode, useState } from "react";
-import type {
-  AgentCard,
-  Card,
-  CardKind,
-  FileCard,
-  MsgCard,
-  PictCard,
-  TermCard,
-  TextCard,
-} from "./cards-model";
+import type { Card, FileFace as FileFaceData, SessionFace, TextShow } from "./cards-model";
 import { AGENT_STATE_WORDS, cardName, HAND_WORDS, WAITING_WORDS } from "./cards-words";
 import "./cards.css";
 
@@ -26,8 +17,29 @@ import "./cards.css";
  * reads).
  */
 
+/** How a card's first face prints today (OB-1a: this face's look, unchanged; §7's marks replace it). */
+export type CardLook = "text" | "file" | "agent" | "term" | "msg" | "pict";
+
+/** The look a card's first face prints with. PURE. */
+export function cardLook(card: Card): CardLook {
+  const face = card.faces[0];
+  switch (face.type) {
+    case "text":
+      return face.show.as === "words" ? "text" : face.show.as;
+    case "file":
+      return "file";
+    case "session":
+      return "agent";
+    case "image":
+    case "ref":
+      return "pict";
+    case "link":
+      return "text";
+  }
+}
+
 /** The index each kind prints in its corners: a fanned hand is read by them. */
-export const CARD_INDEX: Readonly<Record<CardKind, GlyphName>> = {
+export const CARD_INDEX: Readonly<Record<CardLook, GlyphName>> = {
   text: "snippets",
   file: "code",
   agent: "agents",
@@ -51,11 +63,12 @@ export function CardFace({
   reached = false,
   onRemove,
 }: CardFaceProps): ReactElement {
-  const index = CARD_INDEX[card.kind];
+  const look = cardLook(card);
+  const index = CARD_INDEX[look];
   return (
     <div
       className="vf-card"
-      data-kind={card.kind}
+      data-kind={look}
       data-card={card.id}
       {...(held ? { "data-held": "" } : {})}
       {...(card.waiting === true ? { "data-waiting": "" } : {})}
@@ -89,32 +102,53 @@ export function CardFace({
 }
 
 function faceOf(card: Card): ReactElement {
-  switch (card.kind) {
+  const face = card.faces[0];
+  const waiting = card.waiting === true;
+  switch (face.type) {
     case "text":
-      return <TextFace card={card} />;
+      return textFaceOf(face.show, waiting);
     case "file":
-      return <FileFace card={card} />;
-    case "agent":
-      return <AgentFace card={card} />;
+      return <FileFace face={face} waiting={waiting} />;
+    case "session":
+      return <AgentFace face={face} />;
+    case "image":
+      return <PictFace picture={face} title={card.title} waiting={waiting} />;
+    case "link":
+      return (
+        <TextFace show={{ title: face.title, body: face.url, bare: true }} waiting={waiting} />
+      );
+    case "ref":
+      return <PictFace picture={face.still} title={card.title} waiting={waiting} />;
+  }
+}
+
+function textFaceOf(show: TextShow, waiting: boolean): ReactElement {
+  switch (show.as) {
+    case "words":
+      return <TextFace show={show} waiting={waiting} />;
     case "term":
-      return <TermFace card={card} />;
+      return <TermFace show={show} />;
     case "msg":
-      return <MsgFace card={card} />;
-    case "pict":
-      return <PictFace card={card} />;
+      return <MsgFace show={show} />;
   }
 }
 
 /** A text card's name as its face prints it: a sentence keeps its own stop and a title that is
  * one gets a full stop; a bare line (an error, a command, a list) gets none. PURE. */
-export function cardTitle(card: TextCard): string {
-  return card.bare || /[.!?…:]$/u.test(card.title) ? card.title : `${card.title}.`;
+export function cardTitle(show: { readonly title: string; readonly bare: boolean }): string {
+  return show.bare || /[.!?…:]$/u.test(show.title) ? show.title : `${show.title}.`;
 }
 
 /** TEXT — the words themselves; the first sentence is their name, run in bold. A drag from
  * another app says only its kind until it is let go (HN-D2). */
-function TextFace({ card }: { readonly card: TextCard }): ReactElement {
-  if (card.waiting === true) {
+function TextFace({
+  show,
+  waiting,
+}: {
+  readonly show: { readonly title: string; readonly body: string; readonly bare: boolean };
+  readonly waiting: boolean;
+}): ReactElement {
+  if (waiting) {
     return (
       <div className="vf-card-body">
         <p className="vf-card-words">
@@ -126,7 +160,7 @@ function TextFace({ card }: { readonly card: TextCard }): ReactElement {
   return (
     <div className="vf-card-body">
       <p className="vf-card-words">
-        <b>{cardTitle(card)}</b> {card.body}
+        <b>{cardTitle(show)}</b> {show.body}
       </p>
     </div>
   );
@@ -134,24 +168,30 @@ function TextFace({ card }: { readonly card: TextCard }): ReactElement {
 
 /** FILE — its name, where it lives, and its first lines fading into the stock (or its facts when
  * it has no lines). Waiting, it says how many and that letting go shows them. */
-function FileFace({ card }: { readonly card: FileCard }): ReactElement {
-  if (card.waiting === true) {
+function FileFace({
+  face,
+  waiting,
+}: {
+  readonly face: FileFaceData;
+  readonly waiting: boolean;
+}): ReactElement {
+  if (waiting) {
     return (
       <div className="vf-card-body">
-        <div className="vf-card-name">{card.name === "" ? WAITING_WORDS.file : card.name}</div>
+        <div className="vf-card-name">{face.name === "" ? WAITING_WORDS.file : face.name}</div>
         <div className="vf-card-path">{WAITING_WORDS.letGo}</div>
       </div>
     );
   }
   return (
     <div className="vf-card-body">
-      <div className="vf-card-name">{card.name}</div>
-      {card.folder !== undefined && <div className="vf-card-path">{card.folder}</div>}
-      {card.lines !== undefined && card.lines !== "" ? (
-        <pre className="vf-card-lines">{card.lines}</pre>
-      ) : card.facts !== undefined ? (
+      <div className="vf-card-name">{face.name}</div>
+      {face.folder !== undefined && <div className="vf-card-path">{face.folder}</div>}
+      {face.lines !== undefined && face.lines !== "" ? (
+        <pre className="vf-card-lines">{face.lines}</pre>
+      ) : face.facts !== undefined ? (
         <div className="vf-card-path" data-facts="">
-          {card.facts}
+          {face.facts}
         </div>
       ) : null}
     </div>
@@ -169,33 +209,33 @@ function CardMark({ agent }: { readonly agent: string | undefined }): ReactEleme
 
 /** AGENT — the one dark card: its handle, its project behind the project's dot (high on the card,
  * so it shows at rest), its mark, and its state at its foot. */
-function AgentFace({ card }: { readonly card: AgentCard }): ReactElement {
+function AgentFace({ face }: { readonly face: SessionFace }): ReactElement {
   return (
     <>
       <div className="vf-card-body">
-        <div className="vf-card-handle">{card.handle}</div>
-        {card.project !== undefined && (
+        <div className="vf-card-handle">{face.handle}</div>
+        {face.project !== undefined && (
           <div className="vf-card-project">
-            {card.projectInk !== undefined && (
+            {face.projectInk !== undefined && (
               <i
                 aria-hidden="true"
-                style={{ "--card-project": projectInk(card.projectInk) } as CSSProperties}
+                style={{ "--card-project": projectInk(face.projectInk) } as CSSProperties}
               />
             )}
-            {card.project}
+            {face.project}
           </div>
         )}
         <div className="vf-card-mark">
-          <CardMark agent={card.agent} />
+          <CardMark agent={face.agent} />
         </div>
       </div>
-      {card.state !== undefined && (
+      {face.state !== undefined && (
         <div
           className="vf-card-state"
-          data-tone={card.state === "waiting" ? "attention" : card.state}
+          data-tone={face.state === "waiting" ? "attention" : face.state}
         >
           <i aria-hidden="true" />
-          {AGENT_STATE_WORDS[card.state]}
+          {AGENT_STATE_WORDS[face.state]}
         </div>
       )}
     </>
@@ -240,9 +280,9 @@ function inked(out: string): ReactNode[] {
 
 /** TERMINAL — the command is its name; what it printed runs under it, cut by the card's edge as a
  * pane cuts it. A copy that does not start at a prompt is all output. */
-function TermFace({ card }: { readonly card: TermCard }): ReactElement {
-  const command = PROMPT.test(card.first) ? card.first.replace(PROMPT, "") : null;
-  const parts = command === null ? [card.first, card.rest] : [card.rest];
+function TermFace({ show }: { readonly show: Extract<TextShow, { as: "term" }> }): ReactElement {
+  const command = PROMPT.test(show.first) ? show.first.replace(PROMPT, "") : null;
+  const parts = command === null ? [show.first, show.rest] : [show.rest];
   const out = parts.filter((part) => part !== "").join("\n");
   return (
     <div className="vf-card-body">
@@ -257,48 +297,55 @@ function TermFace({ card }: { readonly card: TermCard }): ReactElement {
 }
 
 /** MESSAGE — who said it, then what they said. */
-function MsgFace({ card }: { readonly card: MsgCard }): ReactElement {
+function MsgFace({ show }: { readonly show: Extract<TextShow, { as: "msg" }> }): ReactElement {
   return (
     <div className="vf-card-body">
       <div className="vf-card-who">
-        <b>{card.speaker}</b>
-        <span>{card.time}</span>
+        <b>{show.speaker}</b>
+        <span>{show.time}</span>
       </div>
-      <p className="vf-card-words">{card.words}</p>
+      <p className="vf-card-words">{show.words}</p>
     </div>
   );
 }
 
 /** A picture's own proportion as its face mounts it: never taller than square, never wider than
  * 2.2, so the face's column always holds it; 1.4 while its size is unknown. PURE. */
-export function pictureRatio(card: PictCard): number {
-  if (card.width <= 0 || card.height <= 0) return 1.4;
-  return Math.round(Math.min(2.2, Math.max(1, card.width / card.height)) * 1000) / 1000;
+export function pictureRatio(size: { readonly width: number; readonly height: number }): number {
+  if (size.width <= 0 || size.height <= 0) return 1.4;
+  return Math.round(Math.min(2.2, Math.max(1, size.width / size.height)) * 1000) / 1000;
 }
 
 /** PICTURE — the picture, printed in the face's column, named under it with its size. Waiting,
  * the capture glyph on a faint ground inside a hairline, and its kind. */
-function PictFace({ card }: { readonly card: PictCard }): ReactElement {
+function PictFace({
+  picture,
+  title,
+  waiting,
+}: {
+  readonly picture: { readonly src: string; readonly width: number; readonly height: number };
+  readonly title: string;
+  readonly waiting: boolean;
+}): ReactElement {
   // A still main no longer keeps (its ring moved on under another window's captures) shows the
   // picture's ground, never a broken image.
   const [broken, setBroken] = useState<string | null>(null);
-  const waiting = card.waiting === true;
-  const shown = !waiting && card.src !== "" && broken !== card.src;
+  const shown = !waiting && picture.src !== "" && broken !== picture.src;
   return (
     <div className="vf-card-body">
       <div
         className="vf-card-photo"
-        style={{ "--card-ar": pictureRatio(card) } as CSSProperties}
+        style={{ "--card-ar": pictureRatio(picture) } as CSSProperties}
         {...(waiting ? { "data-waiting": "" } : {})}
       >
         {waiting && <FieldGlyph name="capture" size={20} />}
         {shown && (
-          <img src={card.src} alt="" draggable={false} onError={() => setBroken(card.src)} />
+          <img src={picture.src} alt="" draggable={false} onError={() => setBroken(picture.src)} />
         )}
       </div>
-      <div className="vf-card-name">{waiting ? WAITING_WORDS.image : card.title}</div>
-      {!waiting && card.width > 0 && card.height > 0 && (
-        <div className="vf-card-size">{`${card.width} × ${card.height}`}</div>
+      <div className="vf-card-name">{waiting ? WAITING_WORDS.image : title}</div>
+      {!waiting && picture.width > 0 && picture.height > 0 && (
+        <div className="vf-card-size">{`${picture.width} × ${picture.height}`}</div>
       )}
     </div>
   );

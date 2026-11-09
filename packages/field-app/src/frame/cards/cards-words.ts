@@ -1,12 +1,13 @@
-import type {
-  ClipboardCopyTooLarge,
-  FrameView,
-  ScreenshotCaptureError,
+import {
+  type ClipboardCopyTooLarge,
+  type FrameView,
+  type ScreenshotCaptureError,
+  utf8ByteLength,
 } from "@vibefield/contracts";
 import { sizeWords } from "../../format/bytes";
 import { relativeTime } from "../../format/relative-time";
 import type { ViewKeys } from "../views";
-import type { AgentCard, Card, CardOrigin } from "./cards-model";
+import type { Card, CardOrigin, FileFace, ImageFace, SessionFace } from "./cards-model";
 
 /**
  * Every word the hand says (DESIGN.md §8 "The hand", §9's voice): the line of
@@ -64,28 +65,39 @@ const NAME_POINTS = 60;
  * one space), cut at 60 code points with "…" so a character is never split — "Remove Vela: codex·2
  * wants to push…", never a whole message. */
 export function cardName(card: Card): string {
-  const flat = fullName(card).replace(/\s+/gu, " ").trim();
+  const flat = card.title.replace(/\s+/gu, " ").trim();
   const points = Array.from(flat);
   if (points.length <= NAME_POINTS) return flat;
   return `${points.slice(0, NAME_POINTS).join("").trimEnd()}…`;
 }
 
-function fullName(card: Card): string {
-  switch (card.kind) {
-    case "text":
-      return card.title;
-    case "file":
-      return card.name;
-    case "agent":
-      return card.handle;
-    case "term":
-      return card.first;
-    case "msg":
-      return `${card.speaker}: ${card.words}`;
-    case "pict":
-      return card.title;
-  }
+/** Lines and size of some words, as a card's held bar counts them. */
+function lineFacts(text: string): readonly string[] {
+  const lines = text.trimEnd() === "" ? 0 : text.trimEnd().split(/\r?\n/u).length;
+  if (lines === 0) return [];
+  return [`${lines} ${lines === 1 ? "line" : "lines"}`, sizeWords(utf8ByteLength(text))];
 }
+
+/** A kind as a path's or file's name says it ("PDF"); null with none. PURE. */
+function extension(name: string): string | null {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1).toUpperCase() : null;
+}
+
+/** The held bar's bold half (OB-1a): what a card is, from what its first face holds. */
+export const ABOUT_WORDS = {
+  text: (text: string) => ["Text", ...lineFacts(text)].join(" · "),
+  terminal: (text: string) => ["Terminal", ...lineFacts(text)].join(" · "),
+  message: "Message",
+  picture: (face: Pick<ImageFace, "width" | "height" | "bytes" | "path">) => {
+    const kind = face.bytes?.type.replace("image/", "").toUpperCase() || extension(face.path ?? "");
+    const size = face.width > 0 && face.height > 0 ? `${face.width} × ${face.height}` : null;
+    const weight = face.bytes === undefined ? null : sizeWords(face.bytes.size);
+    return [kind || "Picture", size, weight].filter((part) => part !== null).join(" · ");
+  },
+  file: (face: Pick<FileFace, "name" | "facts">) => face.facts ?? extension(face.name) ?? "File",
+  session: "Agent session",
+} as const;
 
 /** What a carried card's target says under the pointer, before it is let go. */
 export const TARGET_WORDS = {
@@ -94,7 +106,9 @@ export const TARGET_WORDS = {
   deskNote: "Place as a note",
   deskPrint: "Place as a print",
   deskRefuses: (card: Card) =>
-    card.kind === "agent" ? "The desk can't hold an agent yet" : "The desk can't hold a file yet",
+    card.faces[0].type === "session"
+      ? "The desk can't hold an agent yet"
+      : "The desk can't hold a file yet",
   hand: "Into your hand",
   opening: (view: FrameView) => `Opening ${viewName(view)}`,
   /** HN-L5: a picture plays into a pane as its file's path, as a Finder drop
@@ -191,7 +205,7 @@ export const HAND_WORDS = {
 } as const;
 
 /** An agent's card says its state at its foot (the swarm's states, in the card's words). */
-export const AGENT_STATE_WORDS: Readonly<Record<NonNullable<AgentCard["state"]>, string>> = {
+export const AGENT_STATE_WORDS: Readonly<Record<NonNullable<SessionFace["state"]>, string>> = {
   working: "Working",
   waiting: "Waiting for you",
   idle: "Idle",

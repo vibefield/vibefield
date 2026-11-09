@@ -1,3 +1,4 @@
+import type { ChipType } from "@vibefield/contracts";
 import { useSyncExternalStore } from "react";
 import { addCard, type Card } from "./cards-model";
 
@@ -57,9 +58,9 @@ export class CardStore {
   }
 
   /** A fresh card id, unique in this window. */
-  nextId(kind: Card["kind"]): string {
+  nextId(type: ChipType): string {
     this.#seq += 1;
-    return `card-${kind}-${this.#seq}`;
+    return `card-${type}-${this.#seq}`;
   }
 
   /** Deal a card into the hand (HN-D2): it lands at the right end, the oldest

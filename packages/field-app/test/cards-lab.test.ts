@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { CardTargets } from "../src/frame/cards/card-targets";
 import { cardsLab, installCardsLab } from "../src/frame/cards/cards-lab";
-import type { PictCard } from "../src/frame/cards/cards-model";
+import { cardType, pictureCardOf } from "../src/frame/cards/cards-model";
 import { CardStore } from "../src/frame/cards/cards-store";
 import { hearLineSays, type LineViewDoor } from "../src/frame/line-door";
 import { paneCardTarget } from "../src/godview/pane-card-target";
@@ -109,11 +109,10 @@ describe("the hand's lab door: a smoke's hands (R-T 2)", () => {
     expect(cards).toHaveLength(1);
     expect(cards[0]).toMatchObject({
       id,
-      kind: "text",
       origin: { view: "outside", how: "paste" },
       at: 7_000,
       title: LINE,
-      paste: LINE,
+      faces: [{ type: "text", text: LINE }],
     });
     // no box to leave from: it rises into its place
     expect(arriving.get(id ?? "")).toBeNull();
@@ -194,17 +193,10 @@ describe("the hand's lab door: a smoke's hands (R-T 2)", () => {
     const [, aimed] = inputs;
     if (aimed === undefined) throw new Error("the deck drew two panes");
     onTop(aimed);
-    const picture: PictCard = {
-      id: store.nextId("pict"),
-      kind: "pict",
-      origin: { view: "canvas", how: "copy" },
-      at: 7_000,
-      title: "Clock",
-      width: 376,
-      height: 276,
-      src: "",
-      paste: "",
-    };
+    const picture = pictureCardOf(
+      { title: "Clock", width: 376, height: 276, src: "" },
+      { id: store.nextId("image"), origin: { view: "canvas", how: "copy" }, at: 7_000 },
+    );
     store.deal(picture);
     const refused = await lab.playInto("s-vibe");
     expect([refused.target, refused.answer?.ok, refused.played, refused.refused]).toEqual([
@@ -256,7 +248,7 @@ describe("the hand's lab door: a smoke's hands (R-T 2)", () => {
       element: () => ground,
       answer: () => ({ ok: true, label: "Place as a note" }),
       play: async (card, at) => {
-        placed.push([card.kind, at]);
+        placed.push([cardType(card), at]);
         return { ok: true, note: "Placed as a note" };
       },
     });
@@ -276,7 +268,7 @@ describe("the hand's lab door: a smoke's hands (R-T 2)", () => {
     expect(placed).toEqual([["text", { x: 400, y: 300 }]]);
     expect(said).toEqual(["Placed as a note"]);
     // a card is never spent (HN-L2): it is still the hand's newest
-    expect(store.newest()?.kind).toBe("text");
+    expect(store.newest()?.faces[0].type).toBe("text");
     // under the line's glass, nothing of the desk is on top: no place takes it
     const glass = document.createElement("div");
     glass.className = "vf-line";
