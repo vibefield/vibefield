@@ -124,6 +124,8 @@ import {
   ArtifactOpenParams,
   ArtifactOpenResult,
   ArtifactPublishV2Params,
+  ArtifactRevealParams,
+  ArtifactRevealResult,
   ArtifactStatus,
   ArtifactView,
   LocalArtifactIntent,
@@ -468,6 +470,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "artifact-open": ArtifactOpenResult,
   "artifact-mark-params": ArtifactMarkParams,
   "artifact-mark": ArtifactMarkResult,
+  // FL-2a — the window opening a Live app: the row it names, and the answer once the shell has it.
+  "artifact-reveal-params": ArtifactRevealParams,
+  "artifact-reveal": ArtifactRevealResult,
   "made-app-registry": MadeAppRegistry,
   "made-app-intent": MadeAppIntentRow,
   // DR-1a — a built app's own `vibefield.app.json` (DR-D3 (a)); its hostile reads, the serve's

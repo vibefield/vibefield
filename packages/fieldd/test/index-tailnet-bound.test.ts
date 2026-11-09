@@ -789,6 +789,14 @@ describe("MA-3e — the made apps' doors are bounded at the door, as the history
       (await auditActions()).filter((action) => action.startsWith("artifact.made.")),
       "nothing opened, so nothing was audited",
     ).toEqual([]);
+    // FL-2a — the same for a Live app: `artifact.reveal` is a desktop window's ask of its own desktop
+    const artifactKey = `${world.mock.meshDeviceId}:01J9ZZZZZZZZZZZZZZZZZZZZZZ`;
+    const liveReveal = await world.phone.attempt("artifact.reveal", { artifactKey });
+    expect(liveReveal.ok, "the phone's reveal of a Live app is refused").toBe(false);
+    if (!liveReveal.ok) {
+      expect(liveReveal.error.data?.kind).toBe("PRECONDITION_FAILED");
+      expect(liveReveal.error.data?.details).toEqual({ method: "artifact.reveal" });
+    }
 
     // PIN — a peer daemon copies the table; it never follows another desktop's fold (DS-L4)
     const pings = await world.peer.attempt("index.apps.subscribe", {});
@@ -804,6 +812,16 @@ describe("MA-3e — the made apps' doors are bounded at the door, as the history
     if (!mark.ok) {
       expect(mark.error.data?.kind).toBe("FORBIDDEN_SCOPE");
       expect(mark.error.data?.details).toEqual({ method: "artifact.mark", locality: "local" });
+    }
+    // FL-2a — `artifact.reveal` is `local` too: a peer daemon opens nothing on this desktop
+    const peerReveal = await world.peer.attempt("artifact.reveal", { artifactKey });
+    expect(peerReveal.ok, "a peer daemon reveals nothing").toBe(false);
+    if (!peerReveal.ok) {
+      expect(peerReveal.error.data?.kind).toBe("FORBIDDEN_SCOPE");
+      expect(peerReveal.error.data?.details).toEqual({
+        method: "artifact.reveal",
+        locality: "local",
+      });
     }
 
     // PIN — a guest passes only `guestOk` methods (UA-4's choke, before the scope gate and any

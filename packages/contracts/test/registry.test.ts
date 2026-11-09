@@ -11,7 +11,12 @@ import {
   IndexCatalogSubscribeParams,
   IndexOpenTicketParams,
 } from "../src/agent-index";
-import { ARTIFACT_LIMITS, ArtifactMarkParams, ArtifactOpenParams } from "../src/artifacts";
+import {
+  ARTIFACT_LIMITS,
+  ArtifactMarkParams,
+  ArtifactOpenParams,
+  ArtifactRevealParams,
+} from "../src/artifacts";
 import { DEVICE_LIMITS } from "../src/devices";
 import { RpcNotification } from "../src/envelope";
 import { ErrorData, UnavailableDetails } from "../src/errors";
@@ -951,6 +956,21 @@ describe("MA-1a — the six made-app doors, declared", () => {
     expect(ArtifactOpenParams.safeParse({ appId, device: "" }).success).toBe(false);
   });
 
+  it("artifact.reveal is apps.use and LOCAL: a window's ask of its own desktop, by a catalog key alone", () => {
+    expect(row("artifact.reveal")).toEqual({
+      surface: "product",
+      method: "artifact.reveal",
+      scope: "apps.use",
+      idempotent: false,
+      locality: "local",
+    });
+    const artifactKey = "dev-a:01J3QH5XX6M8QPK7R2B4F9C1TZ";
+    expect(ArtifactRevealParams.parse({ artifactKey })).toEqual({ artifactKey });
+    expect(ArtifactRevealParams.safeParse({}).success).toBe(false);
+    expect(ArtifactRevealParams.safeParse({ artifactKey: "" }).success).toBe(false);
+    expect(ArtifactRevealParams.safeParse({ artifactKey: "x".repeat(300) }).success).toBe(false);
+  });
+
   it("artifact.mark is apps.use and LOCAL: the home answers it, the D36 wall refuses a peer", () => {
     expect(row("artifact.mark")).toEqual({
       surface: "product",
@@ -980,9 +1000,9 @@ describe("MA-1a — the six made-app doors, declared", () => {
       expect(grants.granted, source).toEqual([]);
       expect(grants.denied, source).toEqual([{ capability: "apps.use", reason: "entry-kind" }]);
     }
-    // the two acts are the scope's only doors
+    // the made apps' two acts and the Live apps' open are the scope's only doors
     const acts = METHODS.filter((m) => m.scope === "apps.use").map((m) => m.method);
-    expect(acts.sort()).toEqual(["artifact.mark", "artifact.open"]);
+    expect(acts.sort()).toEqual(["artifact.mark", "artifact.open", "artifact.reveal"]);
   });
 
   it("leaves the live artifacts' doors as they were: local mutations, sync reads", () => {
