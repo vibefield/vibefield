@@ -104,7 +104,7 @@ export interface ProfilesColumnProps {
   now?: Date | undefined;
   /** the stage's cards layer (§8 "Where the cards stand"), over the terminals; absent, the cards stand in place */
   cardLayer?: HTMLElement | null | undefined;
-  /** the terminals fill the window: no card floats over them */
+  /** the terminals fill the window: no card opens or stands over them */
   covered?: boolean | undefined;
 }
 
@@ -156,8 +156,10 @@ function ProfilesColumnController({
   const [focus, setFocus] = useState<string | null>(null);
   const [addPresses, setAddPresses] = useState(0);
   const pointedProfile = pointed !== null && pointed !== ADD_TARGET ? pointed : null;
-  const open =
-    circles.find((circle) => circle.set.id === (pointedProfile ?? pinned))?.set.id ?? null;
+  // §8 "Pinned": behind full-window terminals no card opens; the deck only fades the stage, so a circle stays reachable
+  const open = covered
+    ? null
+    : (circles.find((circle) => circle.set.id === (pointedProfile ?? pinned))?.set.id ?? null);
   // §8 "The reach": the pointer's own hold, its grace and its dwell; the card shows as it always did from `pointed`
   const showing = pointed === ADD_TARGET && openNewProfile !== undefined ? ADD_TARGET : open;
   const { point, clear } = useColumnPointer(showing, setPointed);
@@ -170,6 +172,21 @@ function ProfilesColumnController({
     setPinned(null);
     clear();
   }, [clear]);
+  // what the pointer may reach: nothing behind the terminals, and, while the limit card stands in the add's card's
+  // place (§8 "The add"), not the add, so no hidden stand counts as a card standing (`.vf-monitor-cards > *`, `showing`)
+  const columnPoint = useCallback(
+    (target: string | null): void => {
+      if (covered) return;
+      if (target === ADD_TARGET && columnRef.current?.querySelector(".vf-profiles-moment > *")) {
+        return;
+      }
+      point(target);
+    },
+    [covered, point],
+  );
+  const pin = (setId: string): void => {
+    if (!covered) setPinned(setId);
+  };
   // a plan is pointed at inside one popover: another popover starts with none
   useEffect(() => {
     if (open === null) setFocus(null);
@@ -227,7 +244,7 @@ function ProfilesColumnController({
       pinned={open !== null && open === pinned}
       focus={focus}
       read={openCircle === undefined ? "" : readWords(openCircle.meters, clock)}
-      addOpen={pointed === ADD_TARGET}
+      addOpen={!covered && pointed === ADD_TARGET}
       cardLayer={cardLayer}
       columnRef={columnRef}
       canAdd={openNewProfile !== undefined}
@@ -238,18 +255,18 @@ function ProfilesColumnController({
           <ColumnAddPresses.Provider value={addPresses}>{moment}</ColumnAddPresses.Provider>
         )
       }
-      onPoint={point}
+      onPoint={columnPoint}
       onCircle={(setId) => {
         if (!lens) {
           if (pinned === setId) closeCard();
-          else setPinned(setId);
+          else pin(setId);
           return;
         }
         // the lens: a click shows only its sessions and pins its popover; on the chosen one, all again, closed
         const clears = chosen === setId;
         onChoose(clears ? null : setId);
         if (clears) closeCard();
-        else setPinned(setId);
+        else pin(setId);
       }}
       onClose={closeCard}
       onFocusPlan={setFocus}
