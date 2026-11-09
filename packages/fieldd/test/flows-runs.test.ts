@@ -277,6 +277,8 @@ async function harness(
     readonly resumeRefuses?: string;
     /** the fold's P2 (S14-34f, as `endHeld`): every Resume held, once asked and counted (`resumes`), until this settles */
     readonly resumeHeld?: Promise<unknown>;
+    /** the fold's P15 (R13l (iii-c), item 272): while this reads true, `needs.flowItems` throws, a boot's failed queue read */
+    readonly flowItemsRefused?: () => boolean;
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "vf-flow-runs-"));
@@ -382,10 +384,12 @@ async function harness(
   /** slice 14's ports, beside the built ones: spread in, since red-a's FlowRunPorts names none of them. *Dated
    * 2026-11-09 (slice 14's green): it names them now, and the rows read them under the same names.* */
   const bootNeeds = {
-    flowItems: (): readonly NeedsItem[] =>
-      needs !== undefined
+    flowItems: (): readonly NeedsItem[] => {
+      if (opts.flowItemsRefused?.() === true) throw new Error("the needs queue could not be read");
+      return needs !== undefined
         ? needs.list().filter((item) => item.run !== undefined)
-        : [...fakeItems.values()],
+        : [...fakeItems.values()];
+    },
     endFlowItem: (id: NeedsItemId): boolean => {
       itemsEndedById.push(id);
       return needs !== undefined ? needs.endFlowItem(id) : fakeItems.delete(id);
@@ -8899,6 +8903,34 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
         steps: [[1, "holding"]],
         held: "flow-repair",
         ended: [],
+      });
+    });
+
+    it("R13l (iii-c) (slice 14's fold, P15, item 272; ruled 2026-11-09, (a): today's road pinned, a LOW in the records): a step `holding` on its repair at a boot whose `needs.flowItems()` threw has no hold to keep, so replaced through `#resumed` it is asked as if unheard", async () => {
+      // the road: `#openItems()` catches the throw and returns [], so `live.holds` seeds nothing and `#boundTo` has no
+      // `flow-repair` hold to keep. The person's two misses are passed over; the agent is still asked, so nothing waits
+      let refused = false;
+      const h = await harness({ frames: true, flowItemsRefused: () => refused });
+      const run = await heldOnRepair(h);
+      h.sessionRows.set("rt-step1", { live: false, pending: true, onPermission: false });
+      refused = true;
+      await booted(h);
+      await within(PARK_MS, () => (h.hosts[1]?.calls.length ?? 0) > 0);
+      h.sessionRows.set("rt-repl1", { live: true, idle: true, onPermission: false });
+      h.resumed({ run, call: 1, runtimeRunId: "rt-repl1" });
+      await within(HOLD_IDLE_MS, () => linesOf(h, "rt-repl1", "unheard").length > 0);
+      expect({
+        session: sessionOf(h, run, 1),
+        steps: stepsOf(h, run),
+        unheard: linesOf(h, "rt-repl1", "unheard").length,
+        ended: h.itemsEndedById,
+        items: h.items.length,
+      }).toEqual({
+        session: "rt-repl1",
+        steps: [[1, "repairing"]],
+        unheard: 1,
+        ended: [],
+        items: 1,
       });
     });
 
