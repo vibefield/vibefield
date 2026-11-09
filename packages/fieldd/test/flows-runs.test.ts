@@ -5499,13 +5499,19 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
   });
 
   /** N1's road, P12's (D7): a woken run set aside lost, its woken host frozen once it has made its call again, so the
-   * set-aside's leave lasts its grace (KILL_GRACE_MS); answered once the set-aside is said, inside that leave. */
-  const asideInItsLeave = async (h: Harness): Promise<string> => {
-    h.approved("review", ANSWERED);
+   * set-aside's leave lasts its grace (KILL_GRACE_MS); answered once the set-aside is said, inside that leave.
+   * `script`'s first step is answered; the fold's P7 (S14-26) passes a FAN, so its later `steps` stay open on their
+   * live sessions in that leave. */
+  const asideInItsLeave = async (
+    h: Harness,
+    script: string = ANSWERED,
+    steps = 1,
+  ): Promise<string> => {
+    h.approved("review", script);
     const run = startedRun(await h.start({ flow: "review" })).run;
-    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    await waitFor(() => expect(h.enqueued).toHaveLength(steps));
     expect(await parkedAt(h, run)).toEqual(PARKED);
-    h.records.appendRun(run, unmade(2));
+    h.records.appendRun(run, unmade(steps + 1));
     const made = vi.spyOn(FlowReplay.prototype, "call");
     try {
       answerStep(h, run, 1, "all clean");
@@ -10383,11 +10389,14 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
 
     it("S14-26 (a pin; Q26, C10): an agent's end told in D7's leave, the run's ending already set, mints nothing and tells nothing", async () => {
       // the pin's mutation: drop `#lost`'s return on a set ending (D349–350), so the end mints a `flow-lost` item
+      // *Corrected 2026-11-09 (the fold's P7; ruled 2026-11-09; m04 survived at 852b04096): the row told the end of step 1's
+      // session, and that step was answered, so `open` was empty and `#lost` was never reached. It now tells the end of
+      // step 2's session, which the leave keeps open.*
       const h = await harness({ hostIdleMs: IDLE_MS, timings: { stopGraceMs: KILL_GRACE_MS } });
-      const run = await asideInItsLeave(h);
+      const run = await asideInItsLeave(h, fanOut(2), 2);
       const items = h.items.length;
       const facts = h.facts.length;
-      h.runEnded("rt-step1");
+      h.runEnded(sessionOf(h, run, 2));
       await within(PARK_MS + KILL_GRACE_MS, () => endedOf(h, run));
       expect({
         state: stateOf(h, run),
