@@ -40799,6 +40799,14 @@ mints), and no manifest or lock.
   >   is live (to the gates doc through VF-PM).
   > - Logs: `lanes/dr/gate/gate-e60d8add6/` (summary.txt, one `.out` per row, gate-landing's `logs/`), SHA256SUMS
   >   `57ef8346…` (44 files).
+  >   *Erratum (2026-11-08, the fixer's label note at the land):* that SHA256SUMS file is not in the logs folder. It
+  >   is `lanes/dr/gate/SHA256SUMS-dr-gate-e60d8add6`, one level above it, and it hashes `57ef8346…`. Its 44 entries:
+  >   30 under `gate-e60d8add6/`, and 14 beside it (`gate-dr3.sh`, the door's `hold-dr.sh` and its inner
+  >   script v1 to v5, `stack.py` v1 and v2, `run-e60d8add6.out`, `door-events.log`, `PAUSE.lifted-1119Z`,
+  >   `ios-done-count`, `gate.pid`). All 44 matched when it was written, 2026-11-08 11:33Z. Later rows reused the folder
+  >   and rewrote three run-state files: `hold-dr-inner.sh` (19:26:20Z; its original bytes are `hold-dr-inner.v5.sh`),
+  >   `ios-done-count` (19:26:21Z) and `gate.pid` (23:02:30Z). `shasum -c` from `lanes/dr/gate` reads 41 OK, 3 FAILED
+  >   at 2026-11-09 05:27Z.
   >   *Erratum (2026-11-08, the fixer's label note at this witness's land, main → `8897de277` at 11:44:03Z by main's
   >   reflog):* that SHA256SUMS file is not in the logs folder. It is `lanes/dr/gate/SHA256SUMS-dr-gate-e60d8add6`,
   >   one level above it, and `57ef8346…` is its own sha256. Its 44 entries are 30 under `gate-e60d8add6/` and 14
@@ -40810,7 +40818,9 @@ mints), and no manifest or lock.
   own verify (W3-18: A, then B, then the relay). It brings the relay's half of the audit's finding 1, with the
   drive-pulls row that W3-16's sentence at `NativeFileTransferSnapshot` already names (no fieldd file holds it yet),
   the mock's `"unsupported"` default, and the CONFLICT golden on the relay's side.
-- EL8-TRUFFLE, the pin event, now that truffle 0.7.27 is released (11-06 23:04Z), cut on this tip behind EL8-rosetta
+- EL8-TRUFFLE, the pin event, now that truffle 0.7.27 is released (11-06 23:04Z; *erratum 2026-11-09:* that is truffle's
+  sidecar checksum pin, `4dd979196`, 23:03:51Z, a bot commit on its main after the tag; `truffle-v0.7.27`'s release was
+  published at 23:19:40Z; both re-read from GitHub 2026-11-09 04:34Z), cut on this tip behind EL8-rosetta
   (rosetta → truffle → mille). As VF-PM ruled it (T1, 11-07 00:36Z), the one commit carries the pin, the fifteen
   `headers: vec![]` literals 0.7.27's proxy structs require, `SERVE_HEADER_FORBIDDEN`'s `etag` and `last-modified`,
   the LP-5 notices refresh, and the dated corrections of the prose the release falsifies: among them the floor's
@@ -44648,3 +44658,95 @@ beforeEach rendered the whole 13-section catalog, and on CI that render was most
 - The theme row's split (Q4): a new plan for VF-PM's ruling after beta.1, not a fold into this commit (VF-PM,
   2026-11-07 17:45:15Z).
 - gate:landing, landing-only. The slice touches none of its rows' code.
+
+## EL8 — truffle 0.7.27: truffle-core and the five sidecars move together, the fifteen proxy literals name their new `headers` empty, the forbidden-header list gains `etag` and `last-modified`, and the Swift plane stays 0.7.26 (2026-11-09; track DR)
+
+(2026-11-09; ONE commit, DR's (vibe-field-c4), made by plumbing with no worktree: `4f4c9038d` (tree `e2a10cf6cd1f`), on
+main `5efa48d52`, branch `dr/el8-truffle-record-5efa48d52`. Packet `lanes/dr/el8/replay-5efa48d52/`, SHA256SUMS
+`9ccc0d84`, bundle `778305bb`.
+- **The cuts before it.** `3ad77b8c6` on `ab7c850f7` (frozen 11-07, never minted); `1f50003a1` on `3264c54f1` (the
+  text-only fold, 11-08); then the re-cuts `ccd4f7741` on `c27ab9b2d`, `8825064c5` on `7146f87d6` and `a66ec9bd4` on
+  `5efa48d52`, each with -U0 patch-id `4e05f03f8350`, a clean merge, and 39 of 40 files equal to the fold's by per-file
+  -U0. The one that differs is `pnpm-workspace.yaml`, which kept the five 0.7.24 exclude rows for the one install.
+- **The commit of record** is `a66ec9bd4`'s tree + run 248's lock patch (sha256 `a6a0bd2fb906`) − those five rows
+  (VF-PM's two-step shape, 2026-11-09 02:28:00Z). It differs from `a66ec9bd4` in exactly `pnpm-lock.yaml` and
+  `pnpm-workspace.yaml`.
+- **The mint and the land.** Minted as M249 (run 249, vf-m2, a9: V alone); landed `4f4c9038d` (2026-11-09T05:15:38Z) by
+  the fixer, a fast-forward of one over `5efa48d52`.)
+
+**Why now.** The ruling of 2026-11-07 07:35Z held this land to after the v0.9.0 tag, so that 0.9 would ship on 0.7.24,
+and LAUNCH's digest rule bound its native-digest paths. James lifted it on 2026-11-09 at 03:04:05Z ("Lift the hold."),
+so 0.9 ships on truffle 0.7.27. DR's notes had called the wait "truffle's tag". That was wrong: `truffle-v0.7.27`
+existed from 2026-11-06, and the wait was VibeField's v0.9.0 tag (VF-PM's correction, 2026-11-09 02:28:00Z).
+
+**What landed.** 41 files, +448 −231, none added, removed or renamed; 182 hunks at -U0. `truffle-v0.7.27` is `47b4435`.
+- **The pin class, one event:** `Cargo.toml` 17/1 (`truffle-core = "=0.7.27"`) · `Cargo.lock` 2/2 ·
+  `apps/desktop/package.json` 5/5 (the five sidecars) · `pnpm-lock.yaml` 25/25 · `pnpm-workspace.yaml` 11/6 (the exclude
+  rows and their note) · `scripts/preflight.mjs` 5/3 (`PIN_EXPECTATIONS`) · `siblings.lock.json` 1/1 (the "//" prose) ·
+  `apps/ios/VibeFieldKit/Package.swift` 2/0 (a comment). `Package.resolved` did not move. Beside them,
+  `apps/desktop/packaging/notices/go-modules.json` 97/97, the sidecar's Go licence snapshot.
+- **The Swift plane stays 0.7.26.** ghosttea 0.14.0's own `Package.swift` declares it exact
+  (`let truffleVersion: Version = "0.7.26"`, :77; `exact: truffleVersion`, :111). Six Swift files change comments alone:
+  0 changed lines that are not comments.
+- **The code.** Sidecar protocols 12 and 13. truffle-core adds a required `headers` to `ProxyConfig` and `ProxyRoute`,
+  named empty at all fifteen sites. `SERVE_HEADER_FORBIDDEN` gains `etag` and `last-modified`. The file-transfer
+  refusal's wire message no longer says truffle cannot pull by a named root. The desktop now announces
+  `truffle:vibefield`, and `tests/mesh_unit.rs`'s `the_node_announces_the_tag_a_phone_admits_it_by` holds that literal.
+- The message names the review (20 distinct findings, 18 applied, 2 carried) and the dated corrections at their sources.
+
+**pnpm's release age and the exclude rows.** pnpm 11.13.1's default, read at its source (`dist/pnpm.mjs:148949`, sha256
+`6da3feb471c9ad3b`), is `"minimum-release-age": 24 * 60`, in minutes. The workspace sets none, so the 0.7.27 packages,
+published 2026-11-06 23:06–23:09Z, were past it. The rows followed the ICE pattern all the same (VF-PM 19:43:30Z and
+02:21:17Z).
+
+**The lock and its five hashes, both facts together.**
+- run 248 (`lanes/vf-m2/run248-a9-results/`, SHA256SUMS-a9-run248 `a408fbe9`), at `a66ec9bd4`, wrote `el8-lock.patch`,
+  sha256 `a6a0bd2fb906`, 25/25. On that arm64 Mac the install reported "downloaded 1", a count that names no package; by
+  platform that one is darwin-arm64's, so **four of the five 0.7.27 tarballs were never fetched on vf-m2**: darwin-x64,
+  linux-arm64, linux-x64 and win32-x64. For those four the lock holds the registry's values.
+- All five integrity values equal the ones in the lock of `3ad77b8c6` (blob `cff9a30f6277`), which the filler's own
+  install wrote (authored 2026-11-07 01:48:27Z, before vf-m2 had a toolchain, so on another host). Two resolves, two
+  days and two hosts apart, agree. What that verifies is the five hashes; it hashes no tarball beyond the darwin-arm64
+  one vf-m2 fetched.
+
+**The mint of record, M249** (run 249, a9, vf-m2; `lanes/vf-m2/run249-a9-results/`): `pnpm verify` at `4f4c9038d`, V
+GREEN (exit 0, 5 min 42 s, ended 04:36:10Z; vitest over the count lines: 14,438 passed, 0 failed, 21 skipped over 990
+files). Before it, the frozen install changed nothing and fetched nothing, `cargo build -p field-native` compiled
+truffle-core 0.7.27 with `Cargo.lock` unmoved, and the tag row alone read 1 passed. Against run 246, compared as sets:
+the 56 count lines missing [] / extra []; cargo `test result: ok` ×37, with the one named move, `tests/mesh_unit.rs` 24
+→ 25 passed, by the tag row. The bundle assert's History chunk has a new name with its sizes equal, the one single that
+differs. Peak 1-min load 45.74, past item 217's about 40, and `listener_accept_pressure` was not red. Births KEPT 0.
+Results: SHA256SUMS-a9-run249-r2 `b4a3e3559809`, 28 of 28.
+
+**The landing rows.** The mint is V alone. `gate:landing` on the Mac runs whole, after the land, on James's words, as
+M246's two rows were: the fixer's, and a red blocks the push (VF-PM 2026-11-09 04:24:44Z). At this entry: owed. This
+land's whole `gate:landing` has not run; it waits on James's words for the display, and its result lands later as its
+own witness commit. None of its 15 landing rows starts the new sidecar. A node comes up only for a linked desktop
+(`link-service.ts`), every smoke runs on a fresh, unlinked profile, and the floor cannot join a tailnet headlessly
+(`docs/desk-gates.md`). The rows that boot the pair prove the rebuilt `field-native` boots, and
+`scripts/stage-package.mjs` carries the 0.7.27 binary into the package rows without running it. **So this EL8 landed
+with the new sidecar unrun on any automated row.**
+
+**R1's live witness: OWED, the v0.9.0 tag's precondition.** One phone and one floor on 0.7.27 on James's tailnet, the
+phone's reach showing the desktop admitted by tag, the desktop's announce read in the log; or row 28, the two-desktop
+check. Neither had run at this entry.
+- *Correction, 2026-11-09:* VF-PM's ruling of 2026-11-07 07:35Z made this witness the land's precondition, and this
+  EL8's own commit message and the mint's brief say so. VF-PM's ruling of 2026-11-09 04:24:44Z moved it, because the
+  witness needs a signed nightly and a nightly needs the push.
+- **Which nightly (VF-PM 2026-11-09 04:47:21Z):** R1 is witnessed on the FIRST signed nightly that carries this EL8
+  (push 129), the early signal, which needs no MA-3f. Item 192's pair and MA-3f's own two-device witness run on the
+  nightly carrying the last native move before the tag, MA-3f's. If MA-3f lands before the first nightly builds, one
+  session covers both.
+- It is the precondition of the v0.9.0 tag and of beta.1, and of DR-1 (B)'s "at the sibling EL8s" claim reading closed.
+
+**Found at this land (the fixer, 2026-11-09), both corrected at their source in this records commit.**
+- DECISIONS' GM row pointed `registries.ts:71` at the TM-1 deletion. That line is the UA-P-0e TAILNET listener's
+  comment; the store's retirement note is at `:144`.
+- ROADMAP's Watch line in the EL8 block went from 114 to 137 characters in this EL8's commit. It is rewrapped; the
+  file's older wide lines are left.
+
+**Not this entry.**
+- The substrate slice (`impl PullSubstrate for MeshNode`, the `truffle-named-pull` default), its own review and rows.
+- The integration lane, and NR's S3 with it (LANDED "NR S0 + S1 + S2").
+- The EL8 to mille 0.3.5, and DR-1 (B).
+- The Swift plane rejoins at the first ghosttea that declares 0.7.27, and the phone takes klauspost v1.20.2 then.

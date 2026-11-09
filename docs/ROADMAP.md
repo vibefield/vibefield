@@ -53,7 +53,8 @@
   posture pane retired).
 - Landed 10-30: TS-7 (`59d0ada65`, landed as the merge `648719bb2`, the mini's run 4: the phone's door, the code from
   the Mac, and the door's scrim, TS-D22 A).
-- Next: TS-8c (T8, after its live probe) → TS-9. The slice names are the doc's: the board's "TS-6" was TS-8a.
+- Next: TS-8c (T8 taken at truffle 0.7.27, M249; the prefix stays OFF until every shipped plane reads the tag) → TS-9.
+  The slice names are the doc's: the board's "TS-6" was TS-8a.
 - James ruled TS-D19, TS-D20b and TS-D21 A (10-29 03:57:49Z). The UM lead's ruling 5 (11-06, ‹for James›; DESIGN.md
   §8 "Asking again", amended) makes the approval line and the limit moment independent: the moment left the strip
   for the profiles column's add at UM-3 (M-desk, `48e54f49b`), the strip holds the line alone, and TS-4b's two "one
@@ -532,15 +533,19 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
   - T-1 and T-3, truffle;
   - M-D1 and M-D2, mille;
   - RDST, rosetta's transcript day key across daylight saving.
+- Landed 11-09: **the EL8 to truffle 0.7.27** (`4f4c9038d`, one commit, M249, run 249; LANDED "EL8 — truffle
+  0.7.27"), before the v0.9.0 tag on James's word: cargo and the five sidecars move together, and the Swift plane
+  stays 0.7.26. The new sidecar has run on no automated row: its live witness (R1's or row 28's) is owed, and is the
+  precondition of the v0.9.0 tag and beta.1.
 - Next:
-  - The other two EL8s, each one commit with its own filler: truffle 0.7.27 (the pin, the proxy `headers` literals and
-    `SERVE_HEADER_FORBIDDEN`'s two names; VF-PM's T1), then mille 0.3.5 in its dev shape (`siblings:pin` to the
+  - The EL8 to mille 0.3.5 in its dev shape, one commit with its own filler (`siblings:pin` to the
     tag; VF-PM's M1: the npm exit waits on a mille 0.3.6 that remaps its release builds and ships its notices).
   - The substrate slice after EL8-TRUFFLE: `impl PullSubstrate for MeshNode`, the install hook in bring-up, the
     `truffle-named-pull` default feature and the `#[ignore]` probe, the first live named pull.
   - The integration lane after EL8-TRUFFLE: the daemon constructs `DriveService` and wires NativeLink's
     "reconnecting" and "connected" and MeshClient's "node-up" to it (`w3-plan.md` §5.8).
-  - DR-1 (B), the open wired at R-1's and T-1's EL8s: the two roots made and named, the view's caller, and
+  - DR-1 (B), the open wired now R-1's and T-1's EL8s have landed (T-1's live witness owed): the two roots made and
+    named, the view's caller, and
     `ServeConfig.headers`.
   - Then DR-2 (the drive in the files worker, at mille's release), DR-3 (the sync, over T-3), DR-4 (one address,
     T-2) and DR-5 (a folder or a build published as a version).
@@ -988,7 +993,8 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 
 **EL8 — the pins** · vibe-field-5c (template lane `hl-el8-0724`) · law DECISIONS TB, the manifests
 - Landed: ghosttea 0.13.7 + truffle 0.7.23 (`5ba36785b`); truffle 0.7.24, the split (`af3f3078f`, DECISIONS TB (a)).
-- Watch: the kit's Swift plane (0.7.26) rejoins the desktop's truffle 0.7.27 at the first ghosttea that declares it. Next events: a later
+- Watch: the kit's Swift plane (0.7.26) rejoins the desktop's truffle 0.7.27 at the first ghosttea that declares it.
+  Next events: a later
   puppeteer release (§3 item 3; 0.3.0 pinned 10-28, `1469639a6`), mille's first release. The next event's kit pre-boots the
   simulator (`/Volumes/SamsungRed/lanes/hl-k1/kit-template.sh`, item 77's k1). CLAUDE.md names no pin since its dated pass (2026-10-28), so an EL8 event leaves it alone.
 
@@ -1085,8 +1091,9 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   XPC; stalled 2/20 booted, 0/20 cold): it stays the fixer's, and a quiet-window kit run is owed.
 
 **Upstream** · focus-session · law `draft/petitions/README.md`
-- truffle #242 (the pnpm-audit job) merged `5a8f88b5` on James's click, 10-27 21:14Z. Next: T8 (an app-chosen hostname
-  prefix) after its live probe, as TS-8c; T12 (a typed start refusal) held as a candidate; T13, the one T row for T7's
+- truffle #242 (the pnpm-audit job) merged `5a8f88b5` on James's click, 10-27 21:14Z. T8 (an app-chosen hostname
+  prefix) released in 0.7.25 and taken at the EL8 to 0.7.27 (M249), TS-8c's to turn on;
+  T12 (a typed start refusal) held as a candidate; T13, the one T row for T7's
   route-name pinning (Q22, §7; owed, not drafted).
 - ghosttea: the ShapePlan cache `b834919be` is pushed with no PR; its mini row (replication-bench) was staged for after
   W11, which passed: give it a slot or park it.
@@ -1489,7 +1496,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
   D6's `encodeInput` seam, D5's renewal, browse-handler injection (absent at 0.13.7), a real `prepare()` (the
   first-frame half MET by `session-drawn`, 09-29), whether `paste()`/`sendKey()`/`sendText()` say they sent, the "last
   pane closed" hook (AL), K-D5's `customInputView` · G27 parked (a second Swift consumer).
-- **truffle:** T8 (the app-chosen hostname prefix; TS-8c, probe first) · T12 (a typed start refusal; held; a PR when
+- **truffle:** T8 (the app-chosen hostname prefix; taken at 0.7.27; TS-8c) · T12 (a typed start refusal; held; a PR when
   James says) · T13, the one T row for T7's route-name pinning (Q22; owed, not drafted); T7's other follow-ups (the per-direction idle reap, a held
   route id's refusal, loopback pages) are recorded as accepted.
 - **rosetta:** RO-24…RO-27 (#23–#26) shipped in 0.1.2; VibeField RPC/UI adoption remains follow-on work. RO-28 (#27,
@@ -1512,7 +1519,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 
 | Track | State | Law lives in | Next |
 |---|---|---|---|
-| TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 7, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §5/§6/§8/§9/§13 | TS-8c (T8, after its live probe) |
+| TS — the Tailscale door | ACTIVE; TS-0…3b, 4a, 4b, 5, 6, 7, 8a, 8b landed | `thinking-tailscale-onboarding.md`; DESIGN.md §5/§6/§8/§9/§13 | TS-8c (T8 taken at truffle 0.7.27; the prefix OFF until every shipped plane reads the tag) |
 | AO — Bring Your Agents | ACTIVE; AO-0…6b3 landed | `thinking-agent-onboarding.md` | AO-7 on a puppeteer release after 0.3.0 (`installRecipe`) |
 | FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b, FG-6, FG-5, FG-6c, FG-O2, FG-O2's judge and its fix, FG-6's catalog, FG-6's frozen frame 10-31, FG-6's follow-up 3, the catalog judged and its follow-up 1 11-01 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | the glass's literals (item 136) → James's product question |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 landed | `thinking-app-lifecycle.md`; ESR §7.3 | AL-6, Last exit, relaunch cap |
@@ -1534,7 +1541,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
 | MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving, which is the Drive's DR-1 (DR-D1 ruled (b): rosetta 0.1.4's export), then MA-3h; MA-6 the phone's shelf (unblocked: UM's M-phone landed 11-06, its sheet naming the strip's slots) |
-| DR — the Drive | ACTIVE since 11-06 (DR-D1…D13 ruled; D14, D15 open); DR-1a, DR-2a, DR-1b, DR-3a (W3's VF-FLOOR), the EL8 to rosetta and DR-3b (W3's VF-RELAY) landed (M183, M188, M190, M203, M205, M217); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D14, D15 and DR-L3 (James); the EL8s (truffle → mille) and the substrate slice; DR-1 (B) |
+| DR — the Drive | ACTIVE since 11-06 (DR-D1…D13 ruled; D14, D15 open); DR-1a, DR-2a, DR-1b, DR-3a (W3's VF-FLOOR), the EL8s to rosetta and truffle and DR-3b (W3's VF-RELAY) landed (M183, M188, M190, M203, M205, M217, M249); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D14, D15 and DR-L3 (James); the EL8 to mille and the substrate slice; DR-1 (B) |
 | RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196), 211 (RV #97, #96, #93, #116, #95, #47, M199), 212 (RV #30, #29, #67, M201) and 216 (item 192's census row, M204) landed; W1–W2 building, the sibling lanes local | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | puppeteer R1 → EL8-1 with item 203; ghosttea 0.15.0 → EL8-g |
 | UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180); UM-3 and SE-1 landed 11-06 (M-desk `ed8099c1e`, run187, M187); UM-4 and SE-2 landed 11-06 (M-phone `d6d76d079`, run198, M198) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | UM-5 (UM-D14, the plan filter) in wave 2 |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
