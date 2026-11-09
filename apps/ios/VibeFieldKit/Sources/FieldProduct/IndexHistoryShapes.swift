@@ -440,17 +440,31 @@ public struct IndexStatusResult: Sendable, Equatable, Decodable {
 
 // MARK: - The ticket (SP-7b's 7b-2b)
 
-/// The RED's stubs: the shapes the tests compile against, answering nothing true.
+/// `INDEX_TICKET` (registries.ts), each held by a pin in `pnpm check:ios-fixtures`: the refusal
+/// vocabulary a reader branches on, and how long a minted grant opens its session.
 public enum IndexTicketLimits {
   public static let service = "index"
   public static let stateUnbuilt = "direct-plane-unbuilt"
   public static let stateOff = "direct-plane-off"
   public static let stateEgressUnavailable = "egress_unavailable"
   public static let stateDoorsNotPublished = "doors_not_published"
+  /// An ESTABLISHMENT deadline: an open socket outlives it, a reconnect asks for a fresh ticket.
   public static let ttlMs: Int64 = 10 * 60 * 1000
+  /// rosetta's verifier's bound (`IndexOpenTicket.grant`, agent-index.ts).
+  public static let grantMaxUnits = 4096
 }
 
+/// `IndexOpenTicket` — what `index.openTicket` answers: the desktop whose rosettad holds the
+/// session, its endpoints, and the one grant rosetta verifies, opaque here. The grant rides
+/// `Authorization: Rosetta-Grant` or the subprotocol pair, never a URL.
+///
+/// `restUrl` is nil for an owner before the serve's origin (optional on read) and for an origin
+/// nothing could dial: a ticket with no pages, which the reader answers with the door's. A
+/// `sessionUrl` that fails the contract's shape is no ticket at all, and throws.
 public struct IndexOpenTicket: Sendable, Equatable {
+  private static let shape = "IndexOpenTicket"
+  private static let sessionPrefix = "/ws/sessions/"
+
   public let device: String
   public let sessionUrl: URL
   public let restUrl: URL?
@@ -459,24 +473,89 @@ public struct IndexOpenTicket: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    device = ""
-    sessionUrl = URL(fileURLWithPath: "/")
-    restUrl = URL(fileURLWithPath: "/")
-    grant = ""
-    expiresAt = -1
-    unknownFields = ["stub"]
+    var object = try WireObject(shape: Self.shape, value: json)
+    device = try object.requiredString("device")
+    var endpoints = object.object("endpoints")
+    sessionUrl = try Self.sessionURL(try endpoints.requiredString("sessionUrl"))
+    restUrl = endpoints.string("restUrl").flatMap(Self.originURL)
+    let grant = try object.requiredString("grant")
+    guard grant.utf16.count <= IndexTicketLimits.grantMaxUnits else {
+      throw WireDecodeError(shape: Self.shape, reason: "`grant` is past its bound")
+    }
+    self.grant = grant
+    let expiresAt = try object.requiredInt("expiresAt")
+    guard expiresAt >= 0 else {
+      throw WireDecodeError(shape: Self.shape, reason: "`expiresAt` is negative")
+    }
+    self.expiresAt = expiresAt
+    unknownFields = object.unknownFields + endpoints.unknownFields.map { "endpoints.\($0)" }
   }
 
-  public static func params(sessionId: String, device: String?) -> JSONValue { .null }
+  /// The ask's params. `device` names the desktop that holds the session; the home forwards.
+  public static func params(sessionId: String, device: String?) -> JSONValue {
+    var fields: [String: JSONValue] = ["sessionId": .string(sessionId)]
+    if let device { fields["device"] = .string(device) }
+    return .object(fields)
+  }
+
+  /// A socket URL by the contract's shape: `ws(s)`, a host, one session segment, nothing else.
+  private static func sessionURL(_ text: String) throws -> URL {
+    guard let parts = URLComponents(string: text), let url = URL(string: text),
+      parts.scheme == "ws" || parts.scheme == "wss", isBareAuthority(parts)
+    else {
+      throw WireDecodeError(shape: shape, reason: "`sessionUrl` is not a rosetta session URL")
+    }
+    let path = parts.percentEncodedPath
+    guard path.hasPrefix(sessionPrefix) else {
+      throw WireDecodeError(shape: shape, reason: "`sessionUrl` is not a session path")
+    }
+    let segment = path.dropFirst(sessionPrefix.count)
+    guard !segment.isEmpty, !segment.contains("/") else {
+      throw WireDecodeError(shape: shape, reason: "`sessionUrl` is not one session segment")
+    }
+    return url
+  }
+
+  /// An `http(s)` origin with no path; nil for anything else.
+  private static func originURL(_ text: String) -> URL? {
+    guard let parts = URLComponents(string: text), let url = URL(string: text) else { return nil }
+    guard parts.scheme == "http" || parts.scheme == "https" else { return nil }
+    return isBareAuthority(parts) && parts.percentEncodedPath.isEmpty ? url : nil
+  }
+
+  private static func isBareAuthority(_ parts: URLComponents) -> Bool {
+    guard let host = parts.host, !host.isEmpty else { return false }
+    guard parts.user == nil, parts.password == nil else { return false }
+    return parts.query == nil && parts.fragment == nil
+  }
 }
 
+/// The four ways `index.openTicket` says no that a reader answers with the door's pages. Any other
+/// refusal is not one of these: the index's own phase, or a peer link's.
 public enum IndexTicketRefusal: Sendable, Equatable {
+  /// An older owner's answer: no daemon of this build sends it (SP-7b D4 (B')).
   case directPlaneUnbuilt
   case directPlaneOff
   case egressUnavailable(device: String)
   case doorsNotPublished(device: String)
 
-  public init?(error: FieldProductError) { self = .egressUnavailable(device: "stub") }
+  public init?(error: FieldProductError) {
+    guard let unavailable = error.unavailable, unavailable.service == IndexTicketLimits.service
+    else { return nil }
+    let device = error.details?["device"]?.stringValue ?? ""
+    switch unavailable.state {
+    case IndexTicketLimits.stateUnbuilt:
+      self = .directPlaneUnbuilt
+    case IndexTicketLimits.stateOff:
+      self = .directPlaneOff
+    case IndexTicketLimits.stateEgressUnavailable where !device.isEmpty:
+      self = .egressUnavailable(device: device)
+    case IndexTicketLimits.stateDoorsNotPublished where !device.isEmpty:
+      self = .doorsNotPublished(device: device)
+    default:
+      return nil
+    }
+  }
 }
 
 // MARK: - The transcript (SP-6)
