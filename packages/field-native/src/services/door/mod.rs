@@ -259,7 +259,10 @@ impl Shared {
 
     fn walk_now(&self, pid: u32) -> Option<walk::Found> {
         let panes = walk::pane_roots(&self.observed.get()?.borrow());
-        walk::walk(&peer::Kernel, pid, &panes)
+        match walk::walk(&peer::Kernel, pid, &panes, &[])? {
+            walk::Reached::Pane(found) => Some(found),
+            walk::Reached::Root(_) => None,
+        }
     }
 
     /// The caller's pane. A miss may be a pane born a moment ago that the inventory has not reached yet: a quiet cell
@@ -403,6 +406,7 @@ impl Shared {
                     state: "open".into(),
                     caller,
                     pane,
+                    root: None,
                 },
                 io: Mutex::new(DoorIo::default()),
                 out,
