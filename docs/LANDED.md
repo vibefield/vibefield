@@ -38704,6 +38704,8 @@ no body: its 25 are pre-light #1–#25 before the restack, and `um/2-desk` (`59f
 - **UM-5**, UM-D14's plan filter, in wave 2: a popover's rows take no click until then.
 - **The Settings catalog plate for a window read before its reset** (UI_SYSTEM.md's meaningful states): Settings says
   it since `ed8099c1e`, and no plate shows it.
+  > *Answered 2026-11-09:* the plate landed (`a1d9ba729`, red `4004f3811`; run260, M260): Agent Profiles' catalog state
+  > "read before reset", over the shipping page and a fixture. The catalog stills in the next bullet stay owed.
 - **The catalog stills** the bodies owe to the catalog walk: the popover's 12-tall C1 line, the limit card's hover,
   Settings' rows the stray `.vf-profiles-row` rule had re-laid, and the strip under the column.
 - **To James:**
@@ -45084,3 +45086,152 @@ commits on its first run.
 - **A known limit, for IOS's eye at the device round** (the source is `870edfa9e`'s body): a resume re-opens the
   subscription, so its snapshot replaces the rows and older pages a person had scrolled to are read again on the way
   back up. The door kept them. Not merged now, by VF-PM's ruling.
+
+## UM-3's plate, Q20, Q5 and ES-6 (M260) — Settings loads when it is opened; a size refusal stands until it is read
+
+(2026-11-09; eight commits from four hands, landed together as the field-app chain: `4004f3811` to `2a164e8cb` on
+`68f489ac2`. 39 files, +1893 −100. UM's two, HK's Q20 red and green, AL's Q5, ES's two, and HK's census baseline at the
+tip. Cut and sealed by AL in `/Volumes/SamsungRed/lanes/al-q5/vibe-field`, branch `al/chain-on-68f489ac2`.
+- **The replays.** From their sources (`0d56ece58`, `2208981a7`, `fff2f35ad`, `ed8174f13`, `dbec04dfe`, `849b11c92`,
+  `10cd9b75b`, then `8d96f1e3e`) onto `4f4c9038d`, `7bf6131cd`, `92c9ab38d` and `68f489ac2` in turn. Each pick held its
+  plain and -U0 patch-id, author and message, with no conflict. The plain ids in order: `c489e52fc64f`, `051876af6708`,
+  `9d1a71138fc5`, `204c3065079b`, `7675d83ba26c`, `8bff784560ec`, `14f621da54cf`, `a8c8c3ab812d`.
+- **run245, the first stack, on `7146f87d6`.** RED at `census:assert`, before any test row, so UM-3 and Q5 were
+  unmeasured there, not red. Q20's block below says why, and the chain waited for the EL8 to land (M249).
+- **The census row.** run255 on vf-m2 (a9, at the tip before commit 8, `14ee8137d`): `bundle:assert` 0, `census:assert`
+  exit 1 as briefed, `--update`, `--assert --strict` "no drift", biome on the manifest. Results
+  `lanes/vf-m2/run255-a9-results`, SHA256SUMS `40ec92a7f83857e6`. The manifest's sha256 `3b51353d1c83e333`.
+- **The mint and the land.** Minted as M260 (run 260, vf-m2, a9: V alone, and HK's P rows): `pnpm verify` exit 0, 5 min
+  48 s, verdict `lanes/vf-m2/run260-a9-results/verdict/m2-al260.done` 09:06:38Z, sha256 `730708cf278f`; results
+  SHA256SUMS `beff4432ed1c779f` (49 files); `verify.log` `255be89d62ff3d7b`. Packet `lanes/al-q5/mint-packet-r2`,
+  SHA256SUMS `38b7a594e37753a6`. Landed `2a164e8cb` (2026-11-09T09:14:50Z) by the fixer, a fast-forward of eight onto
+  `68f489ac2`, the mint's own base.
+- **The Mac's rows come after the land** (VF-PM 09:13:05Z): `smoke:chat-night` is not in `gate-landing.mjs` until the
+  chain is main. They are owed below.)
+
+**The counts, V at the tip against run253's lines.** field-app 329 files, 4545 tests (+2, +17); electron-shell 183
+files, 2825 passed, 2 skipped (+1, +46); biome 3543 (+5); temp roots 267 of 1139; cargo 37 unchanged; dev-runner 482
+of 482. Each slice's file read its own count: the plate 2, `settings-chunk` 7, `ui-system-boundaries` 50,
+`composer-line` 44, `line-model` 20, `card-drag` 32, `cards-lab` 8, `smoke-chat-night` 44, `modes` 95. `bundle:assert`
+OK with "Settings lazy"; `census:assert --strict` OK, "no drift". Failing rows: none.
+
+**UM-3, M-desk's owed Settings plate** (`4004f3811` red, `a1d9ba729` green; the chain's first two commits, on
+`68f489ac2`). Agent Profiles' catalog shows a window read before its reset.
+
+- **What is real.** The catalog gains the state "read before reset": Work's Claude read three hours ago, its five hours
+  spent and reset ten minutes ago, its week still running. `ProfilesSettingsPreview` hands the shipping page a fixture
+  context (`FIXTURE_PROFILES_CONTEXT_READ_BEFORE_RESET`), with no copy of its markup or CSS (docs/UI_SYSTEM.md). Three
+  files, +80 −1, all catalog and test: `src/design-system/ProfilesSettingsPreview.tsx`,
+  `src/design-system/profiles-fixtures.ts` and `test/profiles-read-before-reset-plate.test.tsx`. No shipping view moved.
+- **What the page is held to.** The 5H line says "5H: 100% used, as of 3h ago", the age stands where the reset stood, no
+  reset mark comes before it and the line is unlit; the 7D line keeps "38% used, resets".
+- **The red and the green.** The red fails for the right reason: "Tests  1 failed | 1 passed (2)", "expected '5H: 91%
+  used, resets in 1h, ahead of …' to be '5H: 100% used, as of 3h ago'", for the state still drew the ordinary reading.
+  The green: "Tests  2 passed (2)". Both were Mac witnesses through the door; run260 is the V of record.
+- **The cut.** Re-cut by plumbing to the stack's base and carried to the land with its diffs unchanged: red plain
+  `c489e52fc64f97b4`, -U0 `88c21e5b6b0d725a`; green plain `051876af6708634c`, -U0 `da04ad82f2507554`; the two commits'
+  range full-index `9fb54099a759edad`, each read against the landed `4004f3811` and `a1d9ba729`.
+- **In run260's counts**: "✓ test/profiles-read-before-reset-plate.test.tsx (2 tests)", which is +1 file and +2 tests of
+  field-app's +2 and +17, "Checked" +1 of +5 and the temp-root denominator +1 of +3.
+- **Not done.** No still of the plate was taken, and M-desk's catalog stills stay owed.
+
+**Q20, Settings on demand (HK).** James's ruling of 2026-10-28 (ROADMAP §3 item 6). In M260's chain on `68f489ac2`:
+red `e479ffbf2`, green `f4f8337c7`, and the census baseline `2a164e8cb` at the tip.
+
+- **What is real.** `SettingsPanel` is its own chunk, behind one dynamic import in `panels/settings-chunk.tsx`
+  (`SettingsPanelMount`), asked for at the first open and not before. Nothing is drawn while it is on the way and
+  nothing prefetches it. `bundle:assert` holds the split, and a row of `ui-system-boundaries.test.ts` refuses a static
+  import of the panel.
+- **New product words.** A refused chunk or a panel that throws stands as the `UnavailableState` card, titled
+  "Settings could not open", described "The rest of VibeField is still running.", with a Retry button. The window
+  stands, and a press outside closes it.
+- **The reds, at `e479ffbf2`.** P3 exit 1 with exactly two problems
+  (`workspace-1uXnFIWm.js: the Settings panel rides another chunk (SettingsPanel's alone)`;
+  `no lazy SettingsPanel chunk carries the panel — the split did not happen`).
+  P4 exit 1, "1 failed | 49 skipped (50)", `panels/index.ts: reaches the Settings panel statically`.
+- **The greens.** `bundle:assert` OK with "Settings lazy (SettingsPanel-Bu4dAR7M.js 334.6 KB raw / 92.3 KB gz)";
+  `settings-chunk.test.tsx` 7, `ui-system-boundaries.test.ts` 50; `census:assert --strict` "no drift". Seven mutants of
+  the slice all read red, on the Mac before the re-cuts (at `940cabda6`, two re-read at `6dca4eefc`).
+- **The census commit.** `apps/desktop/packaging/package-manifest.json` alone, +96 −44, RELEASE-ADJACENT, from run255's
+  `package-census.mjs --update` on vf-m2 at the chain's tip, never by hand. It takes the same 2 missing and 15
+  unexpected rows run245 read. Totals 110 → 123 files, 44,562,160 → 44,639,866 B.
+
+**The measurement (run260's P6, `lanes/vf-m2/run260-a9-results/lw/P/P6-q20.txt`, `4ad666750ff71a01`).** HK recomputed
+the closure from `before.json` (`e862290b32693e97`) and `after.json` (`e37b094cf5ab3986`), independently of the tool;
+the figures are equal.
+- **The boot closure** (the initial graph, `workspace-*.js`, and every chunk they reach by static import), JS only:
+  8569.5 → 8235.5 KB raw (−334.0), 2904.9 → 2816.3 KB gz (−88.7). The panel's own chunk, 334.6 raw / 92.3 gz, is in
+  neither the initial graph nor the closure.
+- **The scale, said plainly:** −3.9% raw and −3.1% gz. One chunk is half the closure: `base64-*.js`, 4,179 KB, marked
+  `wasm-base64`, imported statically by `singleton-loro-crdt`. Without it the saving is 7.6% raw.
+- **The initial graph:** +889 B raw, +1,573 B gz, five new files (27 → 32) and none gone: `FacePicker.js`,
+  `FacePicker.css`, `first-reading.js`, `theme-constants.js`, `use-account.js`. Code already initial moved between
+  files: `renderer.js` −38,248 against `FacePicker.js` +37,008, `renderer.css` −6,237 against `FacePicker.css` +6,238,
+  `profiles-words.js` −3,257 against `use-account.js` +3,265, `wizard-ui.js` −743 against `theme-constants.js` +789.
+  That pairing is from sizes alone.
+- **Files at boot:** the closure's JS files go 43 → 50, net +7 (9 new stems, 2 gone), all local files.
+- **What P6 did not measure.** Contents: no dist is kept in the results, so which code sits in which chunk is not read
+  here. Time: P6 is bytes, and neither boot nor the first open was timed. Sheets: they carry no import edge in the
+  report, so the closure's sums and file count are JS alone.
+- **Retired.** HK's run245 "boot JS sum 2163.0 → 1829.1" was a narrower sum whose definition was not kept. Its delta
+  (−333.9) agrees with the closure's; its absolutes are not this slice's numbers.
+
+**Found.**
+- **The panel rode `workspace-*.js`, not the initial graph**, so the initial graph was never what this split could
+  move. `workspace-*.js` fell 711.9 KB raw, but that is not the saving: most of it became shared chunks a window still
+  loads at boot (`pool`, `update-flow`).
+- **A bundle-shape change moves the census (HK's miss).** Q20's first brief named no `census:assert`, and run245 went
+  red there. A chunk split renames renderer chunks, and the manifest holds their shapes, so a brief for any such change
+  must name that row.
+- **Two claims of HK's were false and were corrected at their source by a re-cut before the land:** "JS only" (a sheet
+  a module imports moves with its chunk) and the workspace's fall offered as the saving.
+
+**Owed.**
+- **Esc does not close the failed state, or the wait before the panel arrives** (a known gap). The loaded panel keeps
+  its own Esc. A press outside closes the failed state.
+- **The real window.** `smoke:canvas` and `smoke:godview` are not in the mint; Godview's `chordSettings` row on a real
+  window is the Mac's landing row by the fixer, on James's words (VF-PM 07:40:56Z).
+
+**Q5, a size refusal stands (AL).** James's ruling of 2026-10-28, the housekeeping page, "A note held longer than
+2.4 s": "Show the advice again". `285330c61`, 15 files, +261 −42.
+- **The reading.** "Held" means the note stands longer, not a pointer gesture (VF-PM, 02:24Z). No note could be held
+  before this, and no gesture is added. If James meant a gesture, this is the wrong shape.
+- **What is real.** The size refusal says "; save it to a file and use its path" again, the words `ed359bf92` dropped
+  on 2026-10-17, and stands 6.6 s. Every other note keeps its 2.4 s. It holds on both Mac paths, the line's own
+  refusal and a card's refused play (`CardPlayed.stand`).
+- **The 6.6 s is derived.** The longest sentence is 24 words; at 238 words a minute (silent reading of non-fiction,
+  Brysbaert 2019) that is 6.05 s; plus the note's own 192 ms rise and 360 ms fade, 6.602 s, to the tenth of a second.
+  `line-model.test.ts` recomputes it from the real sentences.
+- **Only this note wraps,** 92 clear of the window's width, so it cannot run off a narrow window; in a wide one it is
+  one line. DESIGN.md §8 "The note" carries the sentence, the derivation, the wrap and a dated correction at the source.
+- **The rows.** Red on the source's base: `composer-line` 6 of 44, `line-model` 2 of 20, `card-drag` 2 of 32,
+  `cards-lab` 1 of 8, `design-system` 1. "Every other note" is green on both sides, the control. Thirteen mutants, one
+  line of the fix each, all read red on the Mac.
+
+**ES-6, `smoke:chat-night` (ES).** James ranked it first (2026-11-09 03:04:05Z, through VF-PM). Red `828d3075a`, green
+`f3cbbc469`, 12 files, +1021 −7 over its base.
+- **What is real.** Desk-gates row 36, on Godview's launcher under `--chat-night`, which keeps the GPU the launcher
+  otherwise drops. Five rows judge Chat's empty night: it stands, the lean, the close, Cancel's fold, the hand-off.
+  Input goes to its own window by `sendInputEvent`, never OS input. No product view moves.
+- **The rows.** `smoke-chat-night.test.ts` 44 and `modes.test.ts` 95 in V; `gate-landing.test.mjs` 17 of 17.
+- **Pin-class, each named:** `apps/desktop/package.json` 2/0 and `package.json` 1/0, the script and one comment key.
+
+**Found (the chain).**
+- **A census `--update` reads built output.** VF-PM's first shape for the row was install, `--update` and the diff. On
+  an unbuilt tree that writes the wrong baseline, so run255 built first, in the order of CP-4a2a's row (`d2bdbb6bc`).
+- **The mint's smokes (VF-PM 07:40:56Z):** vf-m2's mints are V and their P rows alone. An earlier note that this mint
+  would gain `smoke:canvas` and `smoke:godview` was superseded by that line.
+
+**Owed.**
+- **The Mac's three landing rows,** owed until they run: `smoke:canvas`, `smoke:godview` and `smoke:chat-night`, each
+  from the landed main, by the fixer, on James's words. A red blocks the push, not the land, and is fixed forward.
+- **`smoke:chat-night` has never driven a real window.** Its hand-off's bar has no measured run behind it: that run's
+  `SMOKE_CHAT_NIGHT_HANDOFF` is VF-PM's V3, and comes back as printed. A red is read against the walk first.
+- **Q5, the phone.** `apps/ios/VibeFieldKit/Sources/FieldTerminal/TerminalAttachment.swift:1313` says the sentence
+  without its advice; DESIGN.md says so. The phone's half is owed.
+- **Q5, a real window.** jsdom does not lay out, so the wrap's proof is the stylesheet's spelling. James's eyeball of a
+  real refused paste is owed.
+- **UM-3:** M-desk's catalog stills remain owed (ROADMAP's UM block).
+- **ES:** James's eye on how the night's motion feels stays as ROADMAP's ES block has it.
+
+One insert into an older entry: M-desk's Owed, the Settings plate, answered.
