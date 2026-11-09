@@ -2760,7 +2760,9 @@ export class FlowRuns {
    * *Corrected 2026-11-09 (slice 14's fold, P4; the skeptic's #4, MEDIUM; CP4-Q7 (a)): a step held on you (`heldOnYou`)
    * is bound and asked nothing, neither an unsent line nor the unheard asker. `#boundTo` keeps its `flow-repair` hold
    * and item; it was released, and the successor told "did not hear your answer" of two answers VibeField heard and
-   * held. The person's Ask once more is what speaks to the successor (`step.session`).* */
+   * held. The person's Ask once more is what speaks to the successor (`step.session`).*
+   * *Corrected 2026-11-09 (the fold's P6; the skeptic's #5, LOW; Q9): the one line sent here ends the call's `unheard`, as
+   * `#bindLive`'s does: `sessionIdle` asked "did not hear your answer" over it, a line after the prompt just sent.* */
   #resumed({ run: runId, call, runtimeRunId }: FlowStepResumed): void {
     const run = runId as FlowRunId;
     const live = this.#live.get(run);
@@ -2781,9 +2783,14 @@ export class FlowRuns {
       const bound = this.#boundTo(run, live, step, runtimeRunId);
       if (heldOnYou(live, bound)) return;
       const args = live.made.get(call);
-      if (args !== undefined && this.#queueUnsent(run, live, bound, args)) return;
-      if (step.state === "lost") this.#sendResumed(run, live, bound);
-      else this.#askUnheard(run, live, bound);
+      if (args !== undefined && this.#queueUnsent(run, live, bound, args)) {
+        live.unheard.delete(call);
+        return;
+      }
+      if (step.state === "lost") {
+        this.#sendResumed(run, live, bound);
+        live.unheard.delete(call);
+      } else this.#askUnheard(run, live, bound);
     } catch (error) {
       this.#logger.warn("fieldd.flows.step.resumed", "A resumed flow step could not be bound", {
         run,

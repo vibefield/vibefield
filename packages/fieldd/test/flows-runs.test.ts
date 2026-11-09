@@ -8923,6 +8923,41 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       }).toEqual({ answers: [], repairs: 1 });
     });
 
+    it("R13l (vii) (slice 14's fold, P6, the skeptic's #5; Q9, Q10): a step whose unsent prompt `#resumed` queues has had its one line: a monitor idle row before its turn starts asks no unheard line over it", async () => {
+      // 852b04096: `#resumed` left the call in `unheard` once it had queued the line, so `sessionIdle` passed every gate
+      // once the queue had taken it, and §9's "did not hear your answer" followed the prompt the session was just sent
+      // Kills: `#resumed`'s `unheard` delete after `#queueUnsent` dropped
+      const h = await harness({ frames: true });
+      h.approved("review", ANSWERED);
+      const run = startedRun(await h.start({ flow: "review" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      h.sessionRows.set("rt-step1", { live: false, pending: true, onPermission: false });
+      await booted(h, {
+        between: () =>
+          rewriteRecord(h, run, (record) => ({
+            open: record.open.map((step) => ({
+              ...step,
+              lines: [{ line: "prompt", n: 1, sent: "sending" }],
+            })),
+          })),
+      });
+      await within(PARK_MS, () => (h.hosts[1]?.calls.length ?? 0) > 0);
+      h.sessionRows.set("rt-repl1", { live: true, onPermission: false });
+      h.resumed({ run, call: 1, runtimeRunId: "rt-repl1" });
+      await within(PARK_MS, () => h.enqueued.length === 2);
+      // the kept queue reads empty here (the fake's `pendingLines`): the input queue has taken the line, and its turn
+      // has not started
+      idleNow(h.runs, "rt-repl1");
+      await within(HOLD_IDLE_MS, () => linesOf(h, "rt-repl1", "unheard").length > 0);
+      expect({
+        session: sessionOf(h, run, 1),
+        prompts: h.enqueued
+          .filter(({ runtimeRunId }) => runtimeRunId === "rt-repl1")
+          .map(({ text }) => text),
+        unheard: linesOf(h, "rt-repl1", "unheard").length,
+      }).toEqual({ session: "rt-repl1", prompts: ["Review the diff"], unheard: 0 });
+    });
+
     it("R45 (slice 14, Q9): a step found idle at the boot's bind is asked once in §9's words, from `fieldd`, and reads `repairing`; a second boot asks nothing", async () => {
       // red-a: nothing wakes, so nothing is asked
       // Kills: the bind's idle read dropped; asked again at the second boot (§9's "asked once")
