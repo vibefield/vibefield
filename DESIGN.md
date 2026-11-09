@@ -1246,20 +1246,23 @@ than a pixel. It stops when the row's state changes, and stands still under redu
   physical — and the world keeps stepping behind it, so undo and collab land visibly behind a
   partial overlay. *Rewritten 2026-10-07 (DK-17 — the policy as built):* two gates, no third. **A
   sheet takes none**: the desk keeps its own idle — zero frames and zero submits while nothing moves
-  (ICE design-015 §2) — its ambient wind blowing for 20 s after the last touch and easing out over
-  2 s (`deskLayer({ ambient })`, its default `idle`); the stage hold the sheets and the loading veil took
+  (ICE design-015 §2) — its ambient wind blowing for 8 s after the last touch and easing out over
+  2 s (`deskLayer({ ambient, ambientIdleMs })`: `idle`, ICE's default, for `DESK_WIND_IDLE_MS`); the stage hold the sheets and the loading veil took
   until DK-17 wrote a resource the desk never reads, so it left. **A cover freezes**:
   `engine.frame.freeze("cover")` over a still of the desk, zero frames and zero submits while it
   stands (§8, the covers over the desk), and the user switch freezes the field it leaves the same
   way. (Until 2026-09-26 a stage hold froze the GL islands' repaints and parked the compositor's
   demand loop; ICE retired both with its planes at design-015 D5b.)
+  *Corrected 2026-11-09 (Q4; James, 2026-10-28, the housekeeping page): the wind read 20 s, ICE's default, and the explorer's
+  still, which waits for the desk's rest, followed an edit by ≈ 22 s. 8 s is §8's peer idle, the time the desk already takes a
+  pointer to have stopped, so the desk rests ≈ 10 s after the last touch. The night's own 20 s (below) stands.*
 - **M6 — Respect `prefers-reduced-motion`**: morphs become fades, springs become ease-out,
   durations halve. Non-negotiable quality floor.
 
 **The night, at rest, under the pointer, and through the portal** (track ES; ES-D3 A, ES-D5 A and ES-D7 A, ruled by
 James on the ES page *The night that becomes the window*, 2026-11-08 04:27:25–04:27:26Z; §8 "Chat's list", empty):
 - **At rest** (ES-D7 A): Chat's empty night is the engine's own — its stars twinkle and its haze drifts — while you are
-  here, and it keeps the desk's ambient rule (M5): still 20 s after the last pointer, easing out over 2 s, woken by the
+  here, and it keeps M5's ambient rule at ES-D7's own 20 s (the desk's is 8 s since 2026-11-09, Q4): still 20 s after the last pointer, easing out over 2 s, woken by the
   pointer. Still, it draws no frame. It is the field's idle, not a loop, so the loop law above does not bind it.
   Reduced motion draws it once.
 - **The lean** (the ES page's film, frame 2, and its motion table; no mark of its own): under the pointer, or the

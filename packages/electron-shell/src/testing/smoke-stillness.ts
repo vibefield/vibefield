@@ -4,7 +4,7 @@
 // pointer, wheel and key events. A smoke sends none inside a window; a person at a shared machine does — DK-10b's recorder
 // caught 7 and 31 `input` wakes in two smoke:canvas runs that sent none (the second kept the desk awake past the idle row's
 // 45 s), and the window's OS focus moving in two more. The wind restarts on a touch (ICE's ambient: a pointer move is a touch,
-// twenty seconds more of it), so one stray move inside the idle row's two seconds is a red row with nothing wrong in the desk.
+// the wind's whole window over again), so one stray move inside the idle row's two seconds is a red row with nothing wrong in the desk.
 //
 // So a window the desk moved in NAMES what moved it, and one moved while outside input reached the desk is sampled again —
 // a bounded number of times. Anything else that moves a resting desk (a kind's wake, a write, a still taken at rest) fails at

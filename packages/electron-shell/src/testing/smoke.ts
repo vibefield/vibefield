@@ -1508,9 +1508,9 @@ export async function runSmokeCanvas(opts: {
         } catch (error) {
           problems.push(`DK-17b THUMB: ${error instanceof Error ? error.message : String(error)}`);
         }
-        // DK-18 (plan (24)): the desk's long wake after an act named — the ambient wind, the canon's 20 s and its 2 s ease,
+        // DK-18 (plan (24)): the desk's long wake after an act named — the ambient wind, the layer's 8 s and its 2 s ease,
         // and nothing else (testing/smoke-rest.ts): with the wind stilled the desk rests at once after a move, with it by
-        // the canon; a cover lowered over a still wind rests at once
+        // that wind; a cover lowered over a still wind rests at once
         try {
           problems.push(...(await restRows({ win, say: (line) => console.log(line) })));
         } catch (error) {

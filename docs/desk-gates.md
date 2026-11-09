@@ -370,7 +370,10 @@ Report each step's result beside its number.
   a cover lowered over a still wind rests at once; a cover lowered INSIDE the wind rests by the touch's 22 s (2,277 frames
   after the lowering — DK-9's ≈ 2,370). The explorer's owed still waits for that rest (DK-4's policy), so a thumbnail follows
   an edit by ≈ 22 s: James's call whether it should. *(Ruled 2026-10-28 — James, the housekeeping page (Q4): shorten the
-  wait, `deskLayer({ ambientIdleMs })`; an owed code item.)*
+  wait, `deskLayer({ ambientIdleMs })`; an owed code item.)* *(Corrected 2026-11-09, Q4 built: the layer asks 8 s
+  (`DESK_WIND_IDLE_MS`, field-app's `desk-layer.ts`, §8's peer idle), so the desk rests ≈ 10 s after the last touch and a
+  thumbnail follows an edit by that. The 20 s, the 22 s and the 2,277 frames above are the desk before it; REST's budgets moved
+  with it (`smoke-rest.ts`: 8,000 + 2,000 + 1,500 ms).)*
 - **Timing rows met under load** (each re-run at a quiet moment, said where it happened): SEND_BAR's 40 ms step-aside bound
   read +40.x ms once (load 23–44); THUMB's undo still (30 s for a still the wind delays to ≈ 22 s after the last touch) once;
   fieldd's `service-drain-deadline` (PRC-2) "expected 209 to be less than 175" in the final run's test stage (load 94) —

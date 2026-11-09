@@ -17,6 +17,7 @@ import {
 } from "@vibefield/plugin-sdk/desk";
 import { deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
+import { PEERS } from "./peers/peers-model";
 
 // THE DESK'S LAYER, as VibeField mounts it (DK-3; ICE `docs/api-reference.md` "@ice/desk", the worked
 // example `apps/desk/src/App.tsx`): one factory per mount — `<Desk>` re-boots on a new identity, so
@@ -43,6 +44,15 @@ export const DESK_HOLD = { top: 116, band: 100, travelMs: 560 } as const;
  * at the bottom of the board; the controls float above it.
  */
 export const DESK_TRAY = { foot: 4, footFade: 16 } as const;
+
+/**
+ * THE WIND'S WINDOW (DESIGN.md §6 M5; Q4, James 2026-10-28, the housekeeping page): how long after the last touch the mat's wind
+ * blows before its 2 s ease (ICE's `ambientIdleMs`, 20 000 by default). The explorer's owed still waits for the desk's rest
+ * (`desk-stills.ts`), so a thumbnail follows an edit by this and the ease. It is the time the desk already takes a pointer to have
+ * stopped (`PEERS.idleMs`, §8 "Peers on the mat"): the desk rests ≈ 10 s after the last touch, where ICE's default read
+ * 22,033–22,085 ms on smoke:canvas's REST row.
+ */
+export const DESK_WIND_IDLE_MS = PEERS.idleMs;
 
 export const DESK_GRID: GridConfig = {
   fadeIn: GRID.fadeIn,
@@ -90,7 +100,7 @@ export interface FieldDeskLayerOptions {
  * adds none), the shipped hand (`text`), the document a note's typing commits into (`docs` — the
  * facade's, the one VibeField opens, autosaves and attaches presence to), the renderer-local byte
  * store (`blobs`, DK-D21), the grid, the hand's reserves (`hold`, DK-12 — the tools in hand under the head), the
- * pegboard's bottom fade (`tray`, DK-13), and the desk's LIVE pages when the stage lends them (PT-2:
+ * pegboard's bottom fade (`tray`, DK-13), the wind's window (`ambientIdleMs`, Q4), and the desk's LIVE pages when the stage lends them (PT-2:
  * `services` — a portal kind's face; PT-S2, this Mac's Simulator devices beside them — a phone's attach; the kv service
  * rides later). The room's other people are VibeField's to draw (DK-16, DESIGN.md §8
  * "Peers on the mat"; ICE I26): `cursors: false`, so the host mounts no remote cursors of ICE's and nobody is drawn twice —
@@ -107,6 +117,7 @@ export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
     grid: DESK_GRID,
     hold: DESK_HOLD,
     tray: DESK_TRAY,
+    ambientIdleMs: DESK_WIND_IDLE_MS,
     cursors: false,
     ...(opts.gpuLedger === true ? { gpuLedger: true } : {}),
     ...(opts.gpu === undefined ? {} : { gpu: opts.gpu }),

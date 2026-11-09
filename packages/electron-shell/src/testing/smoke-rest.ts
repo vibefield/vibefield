@@ -1,13 +1,14 @@
 // DK-18 (plan (24)) — THE DESK'S LONG WAKE AFTER AN ACT, NAMED AND HELD (smoke:canvas). DK-9 saw window 1's seed board draw
 // ≈ 2,370 frames (≈ 20 s at 120 Hz) after a cover lowered, every cycle, before it rested, while window 2 rested at once; DK-17b
 // met its twin: after a MOVE the desk stayed awake ≈ 21.8 s, so the explorer's owed still waited that long. Both are the
-// AMBIENT WIND — the canon's (DESIGN.md §6 M5; ICE design-015 §4.6, D-D9): in ICE's `idle` mode (the desk layer's default,
-// which VibeField keeps) the mat's wind, grain and tilt run while the desk was TOUCHED within 20 s — a pointer move, a camera
+// AMBIENT WIND — DESIGN.md §6 M5; ICE design-015 §4.6, D-D9: in ICE's `idle` mode (the desk layer's default, which VibeField
+// keeps) the mat's wind, grain and tilt run while the desk was TOUCHED within the layer's window (8 s since Q4, field-app's
+// `DESK_WIND_IDLE_MS`; ICE's default, 20 s, until then — the 2,370 frames and the 21.8 s above) — a pointer move, a camera
 // move or gesture, a nav, a re-dress (ICE `compose/reflector.ts`: every one calls `ambient.touch`) — then ease to still over
 // 2 s; a window nobody touched rests at once. Nothing else holds the desk, and the rows hold exactly that by its own counters:
 //   ACT     — an object moved by the pointer (a press, a drag, the button let go — the durable act THUMB takes): with the wind
 //             STILLED (`ambient("still")`) the desk rests within `stillMs` — so nothing but the wind may keep it awake; with
-//             the wind (`idle`, the product's) it rests by the canon's 20 s + 2 s and `slackMs` — and not before 20 s (the wind
+//             the wind (`idle`, the product's) it rests by the window + 2 s and `slackMs` — and not before the window (the wind
 //             blew; an idle mode that never touched would read as a desk that rests at once);
 //   COVER   — the desk at rest and its wind long still, a cover over it and back (Godview → Canvas): it rests within `stillMs`
 //             of the cover lowering — the lowering touches nothing (DK-9's 2,370 frames were a cover lowered INSIDE window 1's
@@ -19,12 +20,12 @@ import { loadavg } from "node:os";
 import type { BrowserWindow } from "electron";
 import { POINT_IN } from "./smoke-selection-bar";
 
-/** The canon's numbers (ICE `AMBIENT_DEFAULTS`: idleMs 20 000, settleMs 2 000) and the rows' budgets. */
+/** The wind's numbers (the layer's `ambientIdleMs`, 8 000 since Q4; ICE `AMBIENT_DEFAULTS`' settleMs, 2 000) and the rows' budgets. */
 export const REST = {
   /** the kind moved: a static one (a clock's minute turns its face) */
   type: "desk.photo",
-  /** the wind's window after the last touch, then its ease to still (ICE's `idle` defaults) */
-  windMs: 20_000,
+  /** the wind's window after the last touch (field-app's `DESK_WIND_IDLE_MS`: the row holds the product to it), then its ease to still (ICE's default) */
+  windMs: 8_000,
   settleMs: 2_000,
   /** past the wind and its ease: a frame, the look's 50 ms, the loop's own sleep */
   slackMs: 1_500,
@@ -40,7 +41,7 @@ export interface RestSeen {
   readonly wakes: Readonly<Record<string, number>>;
 }
 
-/** ACT with the wind: rests by the canon's wind and its ease (and a slack), and not before the wind's 20 s — the wind blew. */
+/** ACT with the wind: rests by the layer's wind and its ease (and a slack), and not before the wind's window — the wind blew. */
 export function judgeWindRest(seen: RestSeen): string[] {
   if (seen.ms === null) return ["with the wind the desk never rested after the act"];
   const most = REST.windMs + REST.settleMs + REST.slackMs;
@@ -156,7 +157,7 @@ export async function restRows(d: RestRowsDriver): Promise<string[]> {
     problems.push(...judgePromptRest("REST ACT (the wind stilled)", still));
     await undo();
     await restFrom(Date.now(), 10_000);
-    // ACT, with the wind (the product's `idle`): the canon's 20 s and its 2 s ease
+    // ACT, with the wind (the product's `idle`): the layer's window and its 2 s ease
     await js(`globalThis.__vfDesk.ambient("idle")`);
     const wind = await restFrom(await move(40), REST.windMs + REST.settleMs + 10_000);
     problems.push(...judgeWindRest(wind).map((p) => `REST ACT: ${p}`));
