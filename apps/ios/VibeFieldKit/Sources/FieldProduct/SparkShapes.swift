@@ -158,8 +158,8 @@ public struct SparkSummary: Sendable, Equatable, Identifiable {
   /// The desktop it lives on, the one that hatched it; nil from a daemon before IOS-12a (the desktop asked).
   public let device: String?
   public let session: SparkSession?
-  /// IOS-12f's M-f2 — the Agent Profiles it works in, as @ reads them (NS-D5). SKELETON at f7c: never read yet.
-  public let profiles: [String] = []
+  /// IOS-12f's M-f2 — the Agent Profiles it works in, as @ reads them (NS-D5).
+  public let profiles: [String]
   public let createdAt: String
   public let updatedAt: String
   public let turned: SparkTurned
@@ -191,6 +191,7 @@ public struct SparkSummary: Sendable, Equatable, Identifiable {
     guard (1...32).contains(profiles.count),
       profiles.allSatisfy({ $0.stringValue.map(SparkWire.isProfileSetId) ?? false })
     else { throw WireDecodeError(shape: shape, reason: "`profiles` is not 1 to 32 profile ids") }
+    self.profiles = profiles.compactMap { $0.stringValue }
     let thinksUnder = try object.text("thinksUnder")
     guard SparkWire.isProfileSetId(thinksUnder) else {
       throw WireDecodeError(shape: shape, reason: "`thinksUnder` is not a profile id")
