@@ -1118,8 +1118,8 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 4. TS-8c → TS-9.
 5. AL-6, "Last exit", the relaunch cap; the Behavior words.
 6. **The ruled small slices** (James, 2026-10-28, the housekeeping page), each a lane when one is free:
-   - Q4: the explorer thumbnail follows an edit by ≈22 s (ICE's ambient wind, design-015 D-D9): pass a shorter
-     `deskLayer({ ambientIdleMs })` (ICE 0.16.0's option; VibeField passes none today).
+   - Q4: landed 2026-11-09 as M246 (`5efa48d52`; LANDED, "Q4 + MV's gate fixes"): the desk's wind is 8 s, a
+     thumbnail ≈ 10 s.
    - Q5: a note held longer than 2.4 s shows its advice again.
    - Q13 (`costRatePerMin` on the desk row, the phone reading `desk`, D-i18) is superseded by PG-D1 (a), 2026-10-29:
      the phone reads the model's remote cut (PG-3), and `desk` retired into it at PG-2 (10-31). D-i18's status flipped
@@ -1399,7 +1399,7 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 - `s3eInstrumentDebt` (`smoke.ts:7772`): does keystroke-echo move onto the routed path, and is the flip-witness still meaningful for panes born keep-until-exit? The perf lab no longer throws (`2cb776f27`) — Godview owner.
 - Godview smoke reload rows still wait on `CANVAS_READY` for 60 s (`smoke.ts:7992`, `:10079`); wait on `DESK_READY` (`smoke.ts:999`); no red since August — low.
 - The perf lab leaves its fieldd data root (`/tmp/vf-smoke-*`); `teardownLab` should call `removeSmokeRoot` — DK-18 follow-up (c).
-- MV's owed: the squeeze gate's test fixes at their cause (items 45, 47, 48, the cd row's harness note) and `docs/desk-gates.md`'s arming rule; the after-MV list — LANDED §MV "Known, not fixed", §SWF.
+- MV's owed: the cd row's failure dump still lacks the active pane's last rows, which need a test door in the product or ghosttea (LANDED, M246); the after-MV list — LANDED §MV "Known, not fixed", §SWF.
 - RA-D6's own item; AGENT_PLANE.md gains entries for `thinking-ar-reattach.md` and `thinking-agent-onboarding.md` — `thinking-ar-reattach.md` §6.
 
 **History (AR-8)**

@@ -44750,3 +44750,131 @@ check. Neither had run at this entry.
 - The integration lane, and NR's S3 with it (LANDED "NR S0 + S1 + S2").
 - The EL8 to mille 0.3.5, and DR-1 (B).
 - The Swift plane rejoins at the first ghosttea that declares 0.7.27, and the phone takes klauspost v1.20.2 then.
+
+## Q4 + MV's gate fixes (M246) — the thumbnail follows an edit by ≈ 10 s, not ≈ 22: the desk's wind blows 8 s after the last touch; and the squeeze gate's owed test fixes, at their causes
+
+(2026-11-09; seven commits from two hands, landed together: MV's five (vibe-field-5a) and Q4's red and green (bb), in
+`/Volumes/SamsungRed/lanes/q4-wind/vibe-field`: `7994116bb` to `5efa48d52` on `7146f87d6`. 15 files, +343 −62.
+- **The cuts.** Q4: `ad0dd8658` + `9dc839cc3` on main `c27ab9b2d`; `574bfa50c` + `c4fed9668` on MV's stack `2160c2934`;
+  `671656fde` + `5efa48d52` over `7146f87d6`, item 213 (2)'s records. Each re-cut held both commits' plain patch-ids
+  (`23889a764a49`, `d43a912bdb16`) with no conflict.
+- **The parked re-stack.** `415821eda` + `64bdc6d51` over AL's `dbec04dfe` waited on run 245, which went red at
+  `census:assert` (HK's Q20). It stays parked at `lanes/q4-wind/stack-packet/`; the field-app stack re-stacks later.
+- **The mint and the land.** Minted as M246 (run 246, vf-m2, a9: V alone; GREEN 03:34:26Z, verdict
+  `lanes/vf-m2/run246-a9-results/verdict/m2-bb246.done`, sha256 `6187507a8d32`). Landed `5efa48d52`
+  (2026-11-09T03:38:03Z) by the fixer, a fast-forward of seven onto `7146f87d6`. The packet is
+  `lanes/q4-wind/stack-packet.superseded-5efa48d52/`, SHA256SUMS `c6fdd699cb6b`.
+- **The push.** In push 128 (James, 04:37:03Z; 04:38:34Z), so the landing rows below ran after it, on his word. CI's
+  `verify` (run 42562959692, head `5efa48d52`): success, `completed_at` 05:26:06Z.)
+
+**Why (Q4).** James ruled on 2026-10-28, the housekeeping page (Q4) "B": shorten the wait. The explorer's owed still
+is taken at the desk's first rest (`desk-stills.ts`), and the desk rests when ICE's ambient wind has blown out: the
+idle after the last touch, then the ease. At ICE's default that was 20 s + 2 s, so a thumbnail followed an edit by
+≈ 22 s.
+
+**What landed (Q4).**
+- `fieldDeskLayer` asks `deskLayer({ ambientIdleMs })` for `DESK_WIND_IDLE_MS` (field-app's `desk-layer.ts`), which is
+  `PEERS.idleMs`, 8,000 ms: the time the desk already takes a pointer to have stopped (DESIGN.md §8 "Peers on the
+  mat", R17). The same event touches both. ICE's `idle` mode, its 2 s ease and reduced motion are unchanged.
+- The value is tied to a ruled product number. It is not a measured optimum, and nothing technical stops a smaller one.
+- The desk rests ≈ 10 s after the last touch. The cost a person sees: the mat's moving light goes still ≈ 12 s sooner,
+  on every desk.
+- The landing's smoke moved with it: `REST.windMs` is 8,000 (`smoke-rest.ts`), its floor 8,000 and its ceiling 11,500
+  (+ 2,000 ease, + 1,500 slack). The row held 20,000 as both, so the option alone would have reddened REST ACT.
+- The night stays at ES-D7's 20 s, so the desk and the night no longer share a number. James's word, typed 03:04:05Z
+  and relayed by VF-PM, was "lean": two rules stand, and DESIGN.md records both.
+- Corrected at their sources: DESIGN.md §6 M5, the night's "At rest" line, and `docs/desk-gates.md`'s long-wake note.
+
+**The pin note.** ROADMAP's row called this ICE 0.16.0's option. The pin is 0.17.0 and the option is unchanged there:
+`AMBIENT_DEFAULTS` (`dist/chunk-M2HUDENL.js:3682`), passed through at `:7627`, typed at
+`packages/desk/src/host/layer.d.ts:46`. No pin moved.
+
+**The red (Q4).** On `c27ab9b2d`, nice 19, through the HOLD's door (`lanes/q4-wind/logs/red/`). Field-app's new
+`desk-layer-wind.test.ts`, which watches ICE's `deskLayer` and reads the option passed: "expected undefined to be
+8000", 1 of 2 red. Electron-shell's `smoke-rest.test.ts`: 4 of 6 red on `windMs` 20000. Those are the mutations of
+the fix's two functional lines.
+
+**What landed (MV's five).**
+- **Item 45, the bar's way back (`7994116bb`).** `judgeReturn` held the landing-to-fade-in gap to 200 ± 40 ms by the
+  wall clock, and smoke:canvas went red at 242 ms in the squeeze gate (load 10 → 61). The recorder now wraps the page's
+  `setTimeout` for `SelectionBarView`'s 200 ms, and the judge holds four things: never early (the old lower bound), one
+  200 ms timer set at the landing, that timer fired, and the fade-in following it. Both links around the timer are
+  bounded in the page's own frames, so the host's frame clock sets them and the 40 ms slack is not widened. A return
+  nobody scheduled, or one of another length, is red at any load. Real: the judge over recorded arrays
+  (`test/smoke-tools-in-hand.test.ts`, 7 → 10 rows); the `setTimeout` wrap was driven on stubs before smoke:canvas ran
+  it. Limits: `RETURN_LINK_FRAMES` = 4 is reasoned from the chain (commit, effect; timer, commit, style, transition
+  start), not measured. A timer stamped up to `SLACK_MS` (40 ms) before the landing still counts.
+- **Item 48, the held edge's readout (`85e3e6a69`).** deckEdgeRung read the readout once, after the last move, and in
+  the squeeze gate's run 1 it saw "false" though, by the code's arithmetic, `say("minimize")` had run at least 160 ms
+  earlier. The page now keeps the watch: a `MutationObserver` on the stage stamps the readout's first `data-on="true"`,
+  and a capture-phase `pointerup` closes it, so a say after the let-go never counts. `holdLip` loses its callback and
+  the hold is no longer than it was. A readout already "true" before the hold makes no mutation, so it reds, where one
+  read would have passed it. Real: `judgeHeldReadout` (`test/deck-away-rungs.test.ts`, new, 3 rows); the two page
+  scripts were driven on stubs, a say after the let-go among them, before smoke:godview ran them. Limits: a late React
+  commit stays the candidate cause, unproven. Nothing in that log dates it, and a green says the readout spoke during
+  the hold, not why it once did not.
+- **The cd row's harness note, half of it (`cb67567f5`).** `untilFloor`'s `terminal.list` carried no `timeoutMs` and
+  its 20 s deadline was checked only between calls. Each round, and `listTerminalsWhenObserved`'s, is now bounded by
+  what is left of the deadline; a round past it answers `UNAVAILABLE {state:"timeout"}`, which the existing refusal
+  path counts and names. The failure line says how many rounds answered and the slowest, which tells a slow floor from
+  one that stopped answering. The row's dump bounds its own list at 5 s and survives that list failing. No unit row
+  reads these paths: tsc and biome, then smoke:godview. NOT built: the active pane's last rows. No contract method
+  returns a pane's rows and the pane draws on the GPU, so a parked cell is still not separated from a quiet one, and
+  the squeeze gate's red keeps its two suspects, unseparated. That takes a test door in the product or in ghosttea.
+- **Item 47, a person's pointer named (`c61af77b7`).** PEERS ARRIVE went red with B's published cursor fractional and
+  away, eight minutes after the Mac was unlocked; the row moves B only to integer points. `judgePersonsPointer` adds
+  one line naming that signature to a row already red, and can never turn a row green. `smoke-window.ts`'s "Chromium
+  sends its page nothing" (DK-18's claim) gets its dated correction at its source. Real: the judge's rows
+  (`test/smoke-peers.test.ts`, 22 → 24). The line speaks only on a red, so it has never printed on a real run. Limits:
+  the hazard is named, not removed. Moving the windows was not taken: whether a smoke window off the display keeps its
+  GPU is unmeasured, and the fix could not be witnessed without a person's pointer, which no agent may inject on a live
+  Mac. How a real pointer reaches a click-through window is still not known.
+- **`docs/desk-gates.md`'s arming rule (`2db887ac9`).** The desk rows now arm on a 1-min load < 10, an unlocked screen
+  AND an unattended Mac: the squeeze gate's four reds after the unlock all passed alone with the Mac unattended.
+  "Unattended" is a read, `ioreg -c IOHIDSystem`'s `HIDIdleTime`, and an end read shorter than the row's own seconds
+  says input landed during it. A mini with no one at it has no such hazard. Docs only, its own commit, as LANDED's owed
+  list asked. Limits: `scripts/gate-landing.mjs` does not read it, so the operator keeps the rule, and a read at the
+  arm cannot keep a person away for the whole row.
+- **How the five were built.** On another lane's `node_modules` by link, not of record: tsc and biome clean, vitest 37
+  passed across the three judge files, the page scripts on stubs. None of the five was red-first: each judge's rows
+  were written with its fix. Of record, run246: `lanes/vf-m2/run246-a9-results/run246/verify.clean.log`,
+  `smoke-peers.test.ts` 24 (`:1862`), `smoke-tools-in-hand.test.ts` 10 (`:1879`), `deck-away-rungs.test.ts` 3 (`:1952`).
+
+**The mint's counts (run 246, every line as its brief predicted).** vitest 14,438 passed, 0 failed, 21 skipped over
+990 files (run 243 + 11 rows, + 2 files); electron-shell 182 files, 2,779 passed, 2 skipped; field-app 327 files,
+4,528 passed; biome "Checked 3538 files", 73 warnings, 21 infos; `check-test-temp-roots` "267 of 1136"; census OK;
+births kept 0.
+
+**GATE.** Paid: `smoke:canvas` GREEN WITH INPUT LANDED, `smoke:godview` GREEN.
+
+> **Paid (2026-11-09, the fixer, on this Mac):** M246's two owed landing rows at `5efa48d52`, one gate per run, each
+> green by its own verdict line. Logs `lanes/q4-wind/gate-m246/`, SHA256SUMS `cb4b1a561227` (5 files).
+> - `smoke:canvas`: **GREEN WITH INPUT LANDED** (VF-PM, ruled 05:14:35Z; no re-run). Exit 0, 843 s, 04:55:56Z →
+>   05:10:00Z, load 7/6/6→6/6/6. HIDIdleTime read 60.1 s at the arm and 70.3 s at the end, so the last input was
+>   ≈ 05:08:50Z. That read dates only the LAST input: earlier input is not ruled out, and the log cannot say whether
+>   input overlapped any one row. `SMOKE_CANVAS_ISOLATION` read `times` 0 over 3 windows. The EL8's own
+>   `gate:landing` canvas row, hands off, is the clean witness, and a red there counts against both landings.
+> - Q4's rows, their first live read: `SMOKE_CANVAS_REST` wind 10,064 ms, inside 8,000–11,500 (budgets `windMs` 8000,
+>   `settleMs` 2000, `slackMs` 1500), still 310 ms, cover 100 ms. `SMOKE_CANVAS_THUMB` `fresh` true, `waitedMs` 9,732:
+>   the move's save acknowledged and the desk at rest. Before Q4, at the 20 s budget, REST's wind read 22,026–22,116 ms
+>   in the 79 rows of the 76 log files under `lanes/` that parse (copies of one run counted apart; 5 more files read
+>   `null`). The list: `lanes/q4-wind/witness-m246/rest-wind-logs.txt`.
+> - MV's rows on the canvas: `SMOKE_CANVAS_HAND_BACK`, one 200 ms timer per specimen, fired → back 22.0 / 22.2 /
+>   21.1 ms (notebook, whiteboard, clock). That row prints no frame count and the log no display rate, so
+>   `RETURN_LINK_FRAMES` = 4 is witnessed by the pass alone. `SMOKE_CANVAS_PEERS_ARRIVE` present, no PEERS ARRIVE
+>   problem line, the published cursor `away` false at the pointer (520, 340).
+> - `smoke:godview`: GREEN, exit 0, 139 s, 05:10:01Z → 05:12:20Z, load 6/6/6→3/5/6, HIDIdleTime 71.1 → 210.7 s, no
+>   input. `SMOKE_GODVIEW` `ok` true, chordHand passed, `deckEdge` `outcomes` true. Item 48's watch, its first real
+>   run: `readoutWhileHeld` said 237 ms before the let-go (78,067.8 / 78,305.1).
+> - The cd row has no name in the log: covered by `ok` true, the owed harness-note half. Its keys are written only
+>   after their waits resolve: `recordedCwd` and `rehydratedCwd` (one work dir, the `/tmp/…` and `/private/tmp/…`
+>   spellings the row expects), `paneMetaPersisted` true, `killedPaneFace` "exited". NOT witnessed: MV's change to
+>   the row. Its per-round deadline leaves no trace on a green and its round figures print only on a red. The pane's
+>   last rows stay unbuilt.
+> - The host: display awake and unlocked at both ends of both rows, swap 0, dev-stack 0/0 at each arm, field-native
+>   `d56e774f` before and after, porcelain 0; `SMOKE_DAEMONS` `left`, `reaped` and `unreaped` empty on both.
+
+**Owed.**
+- The clean canvas witness: the EL8's own `gate:landing` canvas row, hands off. A red there counts against this land.
+- MV's: the cd row's failure dump still lacks the active pane's last rows, which need a test door in the product or
+  ghosttea (ROADMAP's owed line).
