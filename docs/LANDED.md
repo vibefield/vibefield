@@ -44483,3 +44483,71 @@ started, and the handle's has a puppeteer seam. No product file names an agent i
 - ES-Q1, James's wording on a slot with nothing to fill (ROADMAP §9), and James's eye on the built app.
 - ES-6, `smoke:chat-night`, a candidate for James to rank.
 - gate:landing after the land: landing-only, as VF-PM places it.
+
+## Item 267 — history-glass's leave is timed by the DOM's own times: a MutationObserver stamps the layer's flip to its leave and its removal, so a late look cannot move the length, under the red's made load (2026-11-09)
+
+(2026-11-09; two commits, HG's (vibe-field-7c), in `/Volumes/SamsungRed/lanes/hg/vibe-field`, branch
+`hg/item267-758e6f6da`: red `efba34925` (tree `ff53afaf80fb`) → green `519132f1a` (tree `c9bd66e7c147`), on main
+`758e6f6da`.
+- **The cut.** On main `70eb8a3cf`: red `1de502e4e` → green `e24f0b88b`. Re-cut onto `758e6f6da` (VF-PM's "main
+  open", 00:50:32Z) by one cherry-pick of the two, in order: the -U0 patch-ids `d091df5c348c` and `f51e06568192`
+  held, and the plain ones too; range-diff `=`.
+- **The mint and the land.** Minted as M242 (run 242, vf-m2, a9: V alone). Landed `519132f1a` (2026-11-09T01:56:01Z),
+  a fast-forward of TWO onto main `758e6f6da` (`efba34925` → `519132f1a`), by the fixer as M242 (run 242).)
+
+**Why.** Push 126's verify 42536110838 at `70eb8a3cf` failed one test of 4524, at
+`packages/field-app/test/history-glass.test.tsx:268` in that tree: "expected 390 to be greater than or equal to
+400". VF-PM filed it for HG at 00:17:59Z and ruled it "cut now" at 00:21:10Z. The row timed the leave from its own
+looks: its start when its 10 ms `until` poll first saw `data-phase="leave"`, its end when the poll first saw the
+layer gone. A loaded runner looks late, so the row measured the look, not the leave (480 − 90 = 390). The
+reduced-motion row was the same class the other way: a late look at the removal inflates its `< 400`. There is no
+product defect (item 213's class).
+
+**What moved.** 1 file, +46 −7 over `758e6f6da`: `packages/field-app/test/history-glass.test.tsx`, test code alone.
+- `HistoryGlass.tsx`, DESIGN.md, the locks and the manifests do not move. Every class but field-app reads 0,
+  pin-class, release-class and release-adjacent among them (`lanes/hg/i267-run242/classes.txt`).
+
+**What is real.**
+- **The measure** (VF-PM's ruling, 00:21:10Z) comes from the DOM's own times. `leaveLength()` is a MutationObserver
+  over the host. It stamps (`performance.now()`) the layer's flip to `data-phase="leave"` and the layer's removal, as
+  each change is handed to it. `until` only waits for the length; it never times.
+  - The leave row asserts the length ≥ 400, and the reduced-motion row < 400, from the same stamps.
+  - What the stamps still see: the flip's stamp follows the timer's arming by the act's own synchronous work (0.1 ms
+    here), so only a stall inside that work could shorten it. The act's tail, its macrotask hops and the row's 10 ms
+    poll no longer reach the measure.
+- **The made load** is in both commits, byte for byte (rule 8). `busy(LOAD_MS)` is 200 ms of busy work on the
+  runner's one thread, right after the act that commits the leave and arms its 480 ms timer, before the row's first
+  look.
+  - Its size is the probe's: three scratch runs on `70eb8a3cf`'s tree with an untracked probe file, 00:22:59Z, never
+    committed. The timer arms 0.1 ms before a MutationObserver is handed the flip, both inside `act(refreshStatus)`.
+    Unloaded, the polled measure read 491–500 ms, because the gone poll's own lag, 11–27 ms, adds back. So the lean's
+    100 ms would have been a coin toss; VF-PM took 200 ms at 00:38:13Z.
+  - It is synchronous: a `setTimeout(0)` load races React act's own macrotask hop, and can fire after the row has
+    looked.
+
+**The proof.**
+- **The rows** (this Mac, each alone through `door.lock`, nice 19; `lanes/hg/i267-run242/rows/`):
+  - At the red `efba34925`: biome clean; field-app tsc clean; vitest `history-glass.test.tsx` alone "Tests  1
+    failed | 14 passed (15)", the leave row "expected 289 to be greater than or equal to 400" at
+    `test/history-glass.test.tsx:282:31` in `efba34925`'s tree; history-consent 15/15.
+  - At the green `519132f1a`: biome clean; field-app tsc clean; history-glass 15/15; history-consent 15/15.
+  - At the first cut on `70eb8a3cf`, the same rows at the red `1de502e4e` and the green `e24f0b88b`: the red read
+    303 at `test/history-glass.test.tsx:282:31` in `1de502e4e`'s tree, and the green 15/15. Its two commits ran
+    their hook (the sibling-shape check alone, about 1 s) outside the door. VF-PM recorded it as a light form breach
+    with no re-do (00:38:13Z), and the re-cut's commits went through the door.
+- **A scratch read** (a copy of the green's test, never committed; in the lane on the green's working tree before
+  its last comment word, 00:34:43Z; five runs of each leave row): under the 200 ms load the stamps read 487.1–507.5
+  ms while the row's looks read 287–308; under reduced motion the stamps read 134.1–135.8 ms.
+- **The mint of record, M242** (run 242, vf-m2, a9; armed on VF-PM's word at 01:04:51Z, placed 01:05:35Z, done
+  01:11:39Z; its verdict `m2-hg242.done`, "V GREEN"; `lanes/vf-m2/run242-a9-results/`, its SHA256SUMS-a9-run242 file's
+  sha256 `8ed7e316`, 22 of 22).
+  - V GREEN: `pnpm verify` exit 0 at `519132f1a`, 01:05:40Z → 01:11:32Z, 5 min 52 s (its verify.log's sha256
+    `ba26d84d`). Its count lines are SET-equal to `run242-expected` (its SHA256SUMS file's sha256 `133d0439`), run 241's
+    own with no move, and its judged singles and cargo table are run 241's byte for byte. field-app read "Test Files 325
+    passed (325)" and "Tests 4525 passed (4525)"; `history-glass.test.tsx` and `history-consent.test.tsx` "(15 tests)"
+    each (`run242/verify.clean.log:5769` and `:12339`, the same file); biome "Checked 3535 files"; check-test-temp-roots
+    "267 of 1133"; the bundle assert run 241's line.
+  - One /private/tmp birth was KEPT after verify's end, `.tmpQwyUp1` with two termcell crumbs. A reading, not this
+    slice's: item 200's class by a9, a recurrence after run223, run235 and run240 (a9's verdict note to VF-PM, 01:13Z).
+
+**Owed.** gate:landing, landing-only. The slice touches none of its rows' code.
