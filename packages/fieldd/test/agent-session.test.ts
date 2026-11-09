@@ -73,6 +73,7 @@ import {
   type TerminalInfo,
   type TerminalRouteSnapshot,
 } from "@vibefield/contracts";
+import { SERVED_TOOLS } from "@vibefield/contracts/tools";
 import {
   type AccountUsageService,
   type AgentAdapterBinding,
@@ -479,6 +480,8 @@ function scriptedProvider(
     doorCalls?: readonly DoorCall[];
     /** RV #1 (item 203) — every launch is refused, as the adapter refuses it (its code and its sentence) */
     launchRefusal?: { code: string; message: string };
+    /** OB-3d — the adapter names this process as the run's helper, awaited, before anything launches */
+    helperProcess?: boolean;
   } = {},
 ): AgentProvider {
   let counter = 0;
@@ -520,6 +523,13 @@ function scriptedProvider(
       // listener is ever really bound, and nothing here assumes uniqueness.)
       const ingress: BoundIngress = { port: 40_000 + n, token: `bearer-${n}` };
       options.ingress?.onBound?.(ingress);
+      if (extra.helperProcess === true) {
+        // the installed pin's HostIngress predates the hook (agent-door-launch.ts `withHelperProcess`)
+        const named = options.ingress as
+          | { onHelperProcess?: (h: { pid: number; startedAtMs: number }) => Promise<void> }
+          | undefined;
+        await named?.onHelperProcess?.({ pid: process.pid, startedAtMs: Date.now() });
+      }
       if (extra.facts === true) {
         options.ingress?.onAttachRecord?.({
           version: 1,
@@ -668,6 +678,7 @@ interface SetupConfig {
   briefing?: AgentBriefingCapabilities;
   exerciseDoor?: boolean;
   doorCalls?: readonly DoorCall[];
+  helperProcess?: boolean;
   /** AR-S4d — the keychain fieldd keeps server values in (default: a map; never the machine's) */
   secretStore?: SecretStore;
   realAgent?: boolean;
@@ -833,6 +844,7 @@ async function setup(config: SetupConfig): Promise<Box> {
             ...(config.briefing === undefined ? {} : { briefing: config.briefing }),
             ...(config.exerciseDoor === undefined ? {} : { exerciseDoor: config.exerciseDoor }),
             ...(config.doorCalls === undefined ? {} : { doorCalls: config.doorCalls }),
+            ...(config.helperProcess === undefined ? {} : { helperProcess: config.helperProcess }),
             seen,
             ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
             models,
@@ -1685,11 +1697,11 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       cwd: box.envOut,
     })) as AgentSpawnResult;
     // MT-0 (MT-D7, MT-D9): a plain run carries the door and its read-only `agent` rows by name, and no instructions.
-    expect(sessions[2]?.briefing.allowTools).toEqual([
-      "vibefield/history_search",
-      "vibefield/history_read",
-      "vibefield/projects_list",
-    ]);
+    expect(sessions[2]?.briefing.allowTools).toEqual(
+      SERVED_TOOLS.filter((t) => t.audience === "agent" && t.annotations.readOnlyHint).map(
+        (t) => `vibefield/${t.name}`,
+      ),
+    );
     expect(sessions[2]?.briefing.instructions).toBeUndefined();
     expect(sessions[2]?.briefing.mcpServers?.vibefield?.command).toBe(BIN);
     // TH-1 — a plain run keeps no transcript: only a spark's own runs are recorded
@@ -1702,12 +1714,9 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     }, 25_000);
     expect(plainProof.error).toBeUndefined();
     // CP-3 (MT-D11): telling the person is every agent's, under its harness's own ask (MT-D7: not in its allowance)
-    expect(plainProof.listed.tools.map((tool: { name: string }) => tool.name)).toEqual([
-      "history_search",
-      "history_read",
-      "projects_list",
-      "notify",
-    ]);
+    expect(plainProof.listed.tools.map((tool: { name: string }) => tool.name)).toEqual(
+      SERVED_TOOLS.filter((t) => t.audience === "agent").map((t) => t.name),
+    );
     // MT-L2: a call is held to its row again, so a spark's row answers a plain run as the fact `forbidden`.
     expect(plainProof.called.isError).toBe(true);
     expect(plainProof.called.structuredContent?.fact).toBe("forbidden");
@@ -1941,6 +1950,38 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     ).toEqual([run]);
     await win.call("terminal.terminate", { sessionId: box.sessions[1]!.runtimeSessionId });
   }, 120_000);
+
+  // OB-3d — fieldd and the floor meeting: the attempt's helper is named over the real management channel, the run maps
+  // back from its root, and the floor forgets the root when the run ends. The floor's own answer is the witness: while
+  // the root stands, this pid is held against any other root.
+  it("OB-3d — a run's helper is held by the real floor from its birth to its end, and its root names the run", async () => {
+    const box = await setup({ floor: "real", helperProcess: true });
+    const { daemon } = box;
+    const win = await window(daemon, DECK, "ob3d");
+    const probe = () =>
+      daemon.native.request("native.door.roots.set", { rootId: "probe", pid: process.pid });
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    await joinedRow(win, runId);
+    await catReady(box, spawned.terminal.sessionId);
+    await expect(probe()).rejects.toThrow();
+    const attempt = readRecord(box.dataDir, runId).creationRequestId as string;
+    expect(daemon.agents.runForRoot(attempt)).toMatchObject({
+      runtimeRunId: runId,
+      verified: true,
+    });
+    await daemon.agents.endRun(runId);
+    await poll(
+      async () => (daemon.agents.runForRoot(attempt) === undefined ? true : undefined),
+      15_000,
+      "the ended run leaving the door",
+    );
+    await poll(async () => probe().catch(() => undefined), 10_000, "the floor forgetting the root");
+    await daemon.native.request("native.door.roots.clear", { rootId: "probe" });
+  }, 60_000);
 
   // CP-2 — the talk room's two ports on the real floor. The queue's idle gate is agent-input-queue.test.ts's: the
   // scripted agent observes only its terminal, so its monitor never says idle on cue, and this row witnesses what the
