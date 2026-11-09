@@ -1609,6 +1609,22 @@ describe("a pane plays the chosen face (OB-1b, §4.4)", () => {
     expect(door.pasted).toEqual([]);
   });
 
+  it("leaves an earlier grant alone: a take-back ends only what this play granted", async () => {
+    const root = onePane();
+    const closed = { ...agentDoor(), pasteInto: () => false };
+    const { taken } = grants();
+    // the run already held the first; this play made the second
+    setHandOverDoor(async (ref) =>
+      ref === "vf:obj/7hk2qx4m" ? { handed: true, already: true } : { handed: true },
+    );
+    const target = paneCardTarget({ root: () => root, door: () => closed });
+    await expect(target.play(STACK, "ref", { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: OUTCOME_WORDS.notTaking("vibe-field"),
+    });
+    expect(taken).toEqual([["vf:obj/aaaaaaaa", "run-1"]]);
+  });
+
   it("takes the grant back when the pane moved during it, or its paste was not taken", async () => {
     const root = onePane();
     const first = agentDoor();
