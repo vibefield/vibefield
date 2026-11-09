@@ -1,5 +1,6 @@
-// THE FILTERS FOR THE RUN (docket N4 (a), 2026-10-12). Godview's two filters —
-// the desktop and the profile chosen in search's Live now (GV-D3) — are kept
+// THE FILTERS FOR THE RUN (docket N4 (a), 2026-10-12). Godview's filters — the
+// desktop and the profile chosen in search's Live now (GV-D3), and the plan
+// chosen on a meter (UM-5a, UM-D14: the only one a single profile can have) — are kept
 // while the app runs and cleared at launch, as the terminals' state is
 // (`deck-state.ts`, L3): the window's session storage, so closing Godview (which
 // unmounts its monitor) or a renderer reload keeps what was chosen, and a new
@@ -17,9 +18,11 @@ export const GODVIEW_FILTERS_STORAGE_KEY = "vf-godview-filters-v1";
 export interface GodviewFilters {
   desk: string | null;
   profile: string | null;
+  /** UM-5a — the plan's key (`usage/plan-sessions.ts`): kept as chosen, read back only while the feed holds it */
+  plan: string | null;
 }
 
-const NONE: GodviewFilters = { desk: null, profile: null };
+const NONE: GodviewFilters = { desk: null, profile: null, plan: null };
 
 const idOrNone = (value: unknown): string | null => (typeof value === "string" ? value : null);
 
@@ -30,8 +33,8 @@ export function storedGodviewFilters(): GodviewFilters {
     if (raw === null) return NONE;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return NONE;
-    const { desk, profile } = parsed as Record<string, unknown>;
-    return { desk: idOrNone(desk), profile: idOrNone(profile) };
+    const { desk, profile, plan } = parsed as Record<string, unknown>;
+    return { desk: idOrNone(desk), profile: idOrNone(profile), plan: idOrNone(plan) };
   } catch {
     return NONE;
   }
@@ -39,12 +42,16 @@ export function storedGodviewFilters(): GodviewFilters {
 
 export function storeGodviewFilters(filters: GodviewFilters): void {
   try {
-    if (filters.desk === null && filters.profile === null) {
+    if (filters.desk === null && filters.profile === null && filters.plan === null) {
       sessionStorage.removeItem(GODVIEW_FILTERS_STORAGE_KEY);
     } else {
       sessionStorage.setItem(
         GODVIEW_FILTERS_STORAGE_KEY,
-        JSON.stringify({ desk: filters.desk, profile: filters.profile }),
+        JSON.stringify({
+          desk: filters.desk,
+          profile: filters.profile,
+          ...(filters.plan !== null ? { plan: filters.plan } : {}),
+        }),
       );
     }
   } catch {

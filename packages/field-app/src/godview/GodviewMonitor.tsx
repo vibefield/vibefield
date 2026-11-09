@@ -395,9 +395,11 @@ export function GodviewMonitor({
   // (which unmounts this stage) wears the same filter. A catalog's stage reads
   // only its own `initialProfile`.
   const [opened] = useState<GodviewFilters>(() =>
-    publishesFind ? storedGodviewFilters() : { desk: null, profile: initialProfile },
+    publishesFind ? storedGodviewFilters() : { desk: null, profile: initialProfile, plan: null },
   );
   const [profileTab, setProfileTab] = useState<string | null>(opened.profile);
+  // UM-5a (UM-D14) — the plan chosen on a meter, with one profile too; kept as chosen, read where it stands
+  const [planTab, setPlanTab] = useState<string | null>(opened.plan);
   const profilesPort = door?.profiles;
   useEffect(() => {
     setProfileSetsRead(false);
@@ -424,8 +426,8 @@ export function GodviewMonitor({
   // again — as it was before the choice outlived the stage.
   useEffect(() => {
     if (!publishesFind) return;
-    storeGodviewFilters({ desk: deviceChoice, profile: profileTab });
-  }, [publishesFind, deviceChoice, profileTab]);
+    storeGodviewFilters({ desk: deviceChoice, profile: profileTab, plan: planTab });
+  }, [publishesFind, deviceChoice, profileTab, planTab]);
   /** P2 — whether the Peek listens for Live now's rows (the find door's
    * `subscribeRows`): the find join is made only while it does. */
   const [findWanted, setFindWanted] = useState(false);
@@ -893,6 +895,7 @@ export function GodviewMonitor({
       filters: liveFilters,
       setDesk: setDeviceChoice,
       setProfile: setProfileTab,
+      setPlan: setPlanTab,
       holdKeys,
       viewHoldsKeys: readViewHoldsKeys,
     }),

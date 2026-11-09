@@ -66,6 +66,15 @@ export interface LiveProfileChoice {
   readonly sessions: number;
 }
 
+/** UM-5a (UM-D14) — the plan chosen on a meter, as the Peek says it: its key,
+ * its title as the meters title it, and whose agent's mark it leads with. */
+export interface LivePlanChoice {
+  /** `‹set›/plan:‹id›` or `‹set›/agent:‹profileId›` (`usage/plan-sessions.ts`) */
+  readonly key: string;
+  readonly label: string;
+  readonly provider: string;
+}
+
 /** GV-D3 — the view's filters, which search's Live now carries (they filter
  * the view too). Each list is empty when there is no choice to make: one
  * desktop, or This Mac as the only profile. */
@@ -76,6 +85,8 @@ export interface LiveFilters {
   readonly profiles: readonly LiveProfileChoice[];
   /** the chosen profile's id; null is every profile */
   readonly profile: string | null;
+  /** UM-5a — the plan chosen on a meter, with one profile too; absent while none stands */
+  readonly plan?: LivePlanChoice;
   /** TS-4 (TS-D7) — this Mac is not connected: the desktop filter ends on a
    * ghost row, Your other devices · Connect…; absent or false, no row */
   readonly connect?: boolean;
@@ -114,6 +125,8 @@ export interface GodviewFindDoor {
   readonly filters: LiveFilters;
   setDesk(id: string | null): void;
   setProfile(id: string | null): void;
+  /** UM-5a — a plan's key (`LivePlanChoice.key`), or null for every plan. */
+  setPlan(key: string | null): void;
   /** QL-D2: while the Peek is open over Godview the stage holds the keys —
    * its Escape is the Peek's, never a fresh pane's launcher's. Answers the
    * release (idempotent). */
@@ -217,9 +230,11 @@ export type OpenLiveFeed = (client: LiveFeedClient) => LiveFeed;
 /** GV-D3 — the words the search button wears while a filter is on (the kit's
  * token: "studio · Work"), or null for none. A filtered view never looks
  * unfiltered. */
-export function filterToken(
-  filters: LiveFilters,
-): { desk: LiveDeskChoice | null; profile: LiveProfileChoice | null } | null {
+export function filterToken(filters: LiveFilters): {
+  desk: LiveDeskChoice | null;
+  profile: LiveProfileChoice | null;
+  plan?: LivePlanChoice;
+} | null {
   const desk =
     filters.desk === null
       ? null
@@ -228,5 +243,7 @@ export function filterToken(
     filters.profile === null
       ? null
       : (filters.profiles.find((entry) => entry.id === filters.profile) ?? null);
-  return desk === null && profile === null ? null : { desk, profile };
+  const { plan } = filters;
+  if (desk === null && profile === null && plan === undefined) return null;
+  return { desk, profile, ...(plan !== undefined ? { plan } : {}) };
 }

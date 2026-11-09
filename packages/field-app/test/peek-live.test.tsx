@@ -110,6 +110,7 @@ describe("the find door (`find-door.ts`)", () => {
     filters,
     setDesk: vi.fn(),
     setProfile: vi.fn(),
+    setPlan: vi.fn(),
   });
 
   it("publishes, reads, and waits — bounded — for the monitor to publish", async () => {

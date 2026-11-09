@@ -1190,6 +1190,7 @@ function godviewDoor(patch: Partial<LiveFilters> = {}): {
         filters = { ...filters, profile: id };
         act(() => republish());
       },
+      setPlan: () => undefined,
     };
     publishGodviewFindDoor(current);
   };

@@ -24,14 +24,17 @@ export const KIND_WORDS: Readonly<Record<PeekKind, string>> = {
   agent: "Replies only",
 };
 
-/** A filter of the Peek's: Live now's desktop and profile (Godview's), and
- * Everything's project, what was said and agent (the popup's). */
-export type PeekFilterName = "desk" | "profile" | "project" | "kind" | "agent";
+/** A filter of the Peek's: Live now's desktop, profile and plan (Godview's),
+ * and Everything's project, what was said and agent (the popup's). */
+export type PeekFilterName = "desk" | "profile" | "plan" | "project" | "kind" | "agent";
 
 /** What a pick sets: one filter to one value — null, or `any` for what was
  * said, is every one. */
 export type PeekPick =
-  | { readonly filter: "desk" | "profile" | "project" | "agent"; readonly value: string | null }
+  | {
+      readonly filter: "desk" | "profile" | "plan" | "project" | "agent";
+      readonly value: string | null;
+    }
   | { readonly filter: "kind"; readonly value: PeekKind };
 
 /** The mark a token, a menu row or an offer leads with (§8): the desktop's OS
@@ -82,7 +85,8 @@ const profileMark = (profile: LiveProfileChoice): PeekMark => ({
 });
 
 /** The field's tokens, in the order they read (§8 "A token"): Live now's the
- * desktop's then the profile's — the button's token, the same state (SE-D2) —
+ * desktop's, the profile's, then the plan's (UM-5a) — the button's token, the
+ * same state (SE-D2) —
  * and Everything's the project's, what was said (only when it is not every
  * kind) and the agent's. A scope shows only its own: Everything shows no
  * profile or desktop, as it looks through every profile (UM-D28). A filter
@@ -94,6 +98,13 @@ export function peekFieldTokens(state: PeekFilterState): readonly PeekFieldToken
     if (on?.desk) tokens.push({ filter: "desk", label: on.desk.name, mark: deskMark(on.desk) });
     if (on?.profile) {
       tokens.push({ filter: "profile", label: on.profile.label, mark: profileMark(on.profile) });
+    }
+    if (on?.plan) {
+      tokens.push({
+        filter: "plan",
+        label: on.plan.label,
+        mark: { kind: "agent", id: on.plan.provider },
+      });
     }
     return tokens;
   }
@@ -427,9 +438,16 @@ export function liveHeadWords(
     .join(" · ");
 }
 
-/** UM-D28 A — Everything looks through every profile: while Godview's profile
- * filter is on, its foot says so and where the filter comes back. */
+/** UM-D28 A — Everything looks through every profile, and every plan (UM-5a; ‹for
+ * James›): while Godview's profile or plan filter is on, its foot says so and
+ * where the filter comes back. */
 export function everythingLensWords(live: LiveFilters | null): string {
-  const profile = live === null ? null : (filterToken(live)?.profile ?? null);
+  const on = live === null ? null : filterToken(live);
+  const profile = on?.profile ?? null;
+  const plan = on?.plan ?? null;
+  if (profile !== null && plan !== null) {
+    return ` · every profile; ${profile.label} and ${plan.label} come back on Live now`;
+  }
+  if (plan !== null) return ` · every plan; ${plan.label} comes back on Live now`;
   return profile === null ? "" : ` · every profile; ${profile.label} comes back on Live now`;
 }

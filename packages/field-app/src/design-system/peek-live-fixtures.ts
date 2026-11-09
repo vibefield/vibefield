@@ -187,6 +187,8 @@ export function peekLiveFixtureDoor(
     filters,
     setDesk: (desk) => onFilters({ ...filters, desk }),
     setProfile: (profile) => onFilters({ ...filters, profile }),
+    // the catalog's filters offer no plan: a plan is chosen on its meter
+    setPlan: () => undefined,
     holdKeys: () => () => undefined,
     viewHoldsKeys: () => false,
   };

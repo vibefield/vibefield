@@ -13,7 +13,7 @@ import {
   useId,
 } from "react";
 import { OS_LABEL, OsMark } from "../godview/os-marks";
-import type { LiveDeskChoice, LiveFilters, LiveProfileChoice } from "./find-door";
+import type { LiveDeskChoice, LiveFilters, LivePlanChoice, LiveProfileChoice } from "./find-door";
 import {
   isOffer,
   liveHeadWords,
@@ -53,6 +53,8 @@ import "./peek.css";
 export interface PeekToken {
   readonly desk: LiveDeskChoice | null;
   readonly profile: LiveProfileChoice | null;
+  /** UM-5a — the plan chosen on a meter: after the profile's, its agent's mark */
+  readonly plan?: LivePlanChoice;
 }
 
 /** GV-D11 — the button's step between the terminals' bar and the head: the
@@ -96,7 +98,9 @@ export function PeekButtonView({
   const words =
     token === null
       ? null
-      : [token.desk?.name, token.profile?.label].filter((part) => part !== undefined).join(" · ");
+      : [token.desk?.name, token.profile?.label, token.plan?.label]
+          .filter((part) => part !== undefined)
+          .join(" · ");
   return (
     <div
       ref={findRef}
@@ -143,6 +147,17 @@ export function PeekButtonView({
                 size={12}
               />
               {token.profile.label}
+            </span>
+          )}
+          {token.plan !== undefined && (token.desk !== null || token.profile !== null) && (
+            <i className="vf-peek-token-sep" aria-hidden="true" />
+          )}
+          {token.plan !== undefined && (
+            <span className="vf-peek-token-part">
+              <span className="vf-peek-agent-mark" aria-hidden="true">
+                <AgentIcon providerId={token.plan.provider} />
+              </span>
+              {token.plan.label}
             </span>
           )}
           <button

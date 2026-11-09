@@ -1,5 +1,5 @@
 import type { ProfileTab } from "@vibefield/puppeteer-views";
-import type { LiveFilters } from "../../frame/find-door";
+import type { LiveFilters, LivePlanChoice } from "../../frame/find-door";
 import { choiceNote, type DeviceChoice } from "./device-filter";
 import { agentProfileSet } from "./profile-tabs";
 import type { MonitorAgent } from "./types";
@@ -22,6 +22,8 @@ export interface LiveFiltersInput {
   readonly tabs: readonly ProfileTab[] | null;
   /** the chosen profile as the feed still has it (null = every one) */
   readonly profile: string | null;
+  /** UM-5a — the chosen plan as the feed still has it; absent while none stands */
+  readonly plan?: LivePlanChoice | undefined;
   /** TS-4 (TS-D7) — this Mac is not connected: This Mac alone is offered, for its ghost row */
   readonly connect: boolean;
   /** every row the window holds, no filter applied: what each choice counts —
@@ -73,6 +75,7 @@ export function liveFiltersOf(input: LiveFiltersInput): LiveFilters {
       sessions: underProfile.get(tab.id) ?? 0,
     })),
     profile: input.profile,
+    ...(input.plan !== undefined ? { plan: input.plan } : {}),
     connect: input.connect,
     sessions: input.agents.length,
   };

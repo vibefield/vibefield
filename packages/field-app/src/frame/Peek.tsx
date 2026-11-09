@@ -531,6 +531,7 @@ export function Peek({
         const { filter, value } = pick;
         if (filter === "desk") godview?.setDesk(value);
         else if (filter === "profile") godview?.setProfile(value);
+        else if (filter === "plan") godview?.setPlan(value);
         else if (filter === "project") setFilters((at) => ({ ...at, project: value }));
         else setFilters((at) => ({ ...at, agent: value }));
       }
@@ -752,6 +753,7 @@ export function Peek({
   const clearToken = useCallback(() => {
     godview?.setDesk(null);
     godview?.setProfile(null);
+    godview?.setPlan(null);
   }, [godview]);
 
   const target = container === undefined ? document.body : container;
