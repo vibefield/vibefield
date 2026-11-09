@@ -1,6 +1,7 @@
 import {
   type CallerContext,
   ObjectIntentAnswer,
+  ObjectsGrantsParams,
   ObjectsHandParams,
   ObjectsHeldParams,
   ObjectsIntentsSubscribeParams,
@@ -13,7 +14,7 @@ import { wholeValueDoor } from "../projection";
 import type { ToolPlaneAudit } from "../tool-plane";
 import type { DeskObjects } from "./desk-objects";
 
-// OB-3, OB-4 (thinking-objects-at-work.md §5.5) — the window's door to the desk's state, the nine `objects.*` rows.
+// OB-3, OB-4 (thinking-objects-at-work.md §5.5) — the window's door to the desk's state, the ten `objects.*` rows.
 // Every one is held to a window's own token: `objects.window` is minted only into window tokens, and this holds it
 // again, because a scope is not "the person's window" (EL7) and `clientKind` is only self-declared. The person's acts
 // (a hand, an undo, a take-back) are audited; what objects hold never enters a line.
@@ -133,6 +134,13 @@ export function registerObjectDoors(api: ObjectDoorsApi, deps: ObjectDoorsDeps):
     if (!parsed.success) throw bad("{ ref }");
     const at = objects.resolve(parsed.data.ref);
     return at === undefined ? { found: false } : { found: true, ...at };
+  });
+
+  api.register("objects.grants", (ctx, params) => {
+    windowToken(ctx, "objects.grants");
+    const parsed = ObjectsGrantsParams.safeParse(params ?? {});
+    if (!parsed.success) throw bad("{ ref? }");
+    return { grants: objects.grants(parsed.data.ref) };
   });
 
   api.register("objects.held", (ctx, params) => {

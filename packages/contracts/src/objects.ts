@@ -335,8 +335,10 @@ export const ObjectsIntentAnswerResult = z.object({ taken: z.boolean() }).passth
 
 export const OBJECT_RECORD_FORMAT = 1;
 
+/** Who holds a grant: a plain run by its id, or a spark, whose run id changes each time it sleeps and wakes, as
+ * `spark:<id>`. A person's hand is meant to outlast that (§5.6, EY-D9 B). */
 export const ObjectGrant = z
-  .object({ run: z.string().min(1), how: ObjectYours, at: z.number().int().min(0) })
+  .object({ holder: z.string().min(1), how: ObjectYours, at: z.number().int().min(0) })
   .passthrough();
 export type ObjectGrant = z.infer<typeof ObjectGrant>;
 
@@ -374,6 +376,7 @@ export const ObjectsHandResult = z.discriminatedUnion("handed", [
 ]);
 export type ObjectsHandResult = z.infer<typeof ObjectsHandResult>;
 
+/** `run`: a run's id, or a holder as `objects.grants` names it, for a spark with no run now. */
 export const ObjectsRunParams = z.object({ ref: ObjectRef, run: z.string().min(1) }).passthrough();
 export const ObjectsUndoResult = z.discriminatedUnion("undone", [
   z.object({ undone: z.literal(true), changed: z.string().optional() }).passthrough(),
@@ -386,6 +389,25 @@ export const ObjectsResolveResult = z.discriminatedUnion("found", [
   z.object({ found: z.literal(true), docId: DeskDocId, key: DeskObjectKey }).passthrough(),
   z.object({ found: z.literal(false) }).passthrough(),
 ]);
+
+/** §11 — every grant still standing, or one object's: a grant outlives the app, so a forgotten one must be findable. */
+export const ObjectsGrantsParams = z.object({ ref: ObjectRef.optional() }).passthrough();
+export const ObjectGrantRow = z
+  .object({
+    ref: ObjectRef,
+    docId: DeskDocId,
+    key: DeskObjectKey,
+    kind: KindId.optional(),
+    /** what `objects.takeBack` takes as `run` */
+    holder: z.string().min(1),
+    /** how the desk names the holder */
+    name: z.string().min(1),
+    how: ObjectYours,
+    at: z.number().int().min(0),
+  })
+  .passthrough();
+export type ObjectGrantRow = z.infer<typeof ObjectGrantRow>;
+export const ObjectsGrantsResult = z.object({ grants: z.array(ObjectGrantRow) }).passthrough();
 
 /** The window says the person's hand came onto or left an object (OB-L5): every agent on it reads `paused`. */
 export const ObjectsHeldParams = z

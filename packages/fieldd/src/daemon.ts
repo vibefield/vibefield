@@ -3717,6 +3717,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
       label: runLabel,
       agentOf: (runtimeRunId) => String(runRow(runtimeRunId)?.provider ?? "agent"),
+      // a spark's last run may be gone from the fold after a restart; its record still says which session it thinks in
+      sparkOf: (runtimeRunId) =>
+        runRow(runtimeRunId)?.spark ??
+        sparkStore.list().find((spark) => spark.session?.runtimeRunId === runtimeRunId)?.id,
+      sparkName: (id) => sparks.get(id)?.name,
       kinds: () => {
         pluginKinds ??= pluginDeskKinds(plugins.snapshot().plugins, (id) => plugins.rootPath(id));
         return deskKinds(pluginKinds);
@@ -3724,6 +3729,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     deskObjects.boot();
     agents.onRunEnded((runtimeRunId) => deskObjects.runEnded(runtimeRunId));
+    // what ended while fieldd was down holds nothing now, judged once the re-attach has settled
+    needs.joinSettle("objects", () => deskObjects.reconcile());
     toolPlane = new ToolPlaneService({
       native,
       lanes: laneLink,

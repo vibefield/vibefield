@@ -87,6 +87,11 @@ export class ObjectPresenceBoard {
       .map(({ handle, state }) => ({ handle, state }));
   }
 
+  /** Every run on an object now, released or not. */
+  runsOn(ref: ObjectRef): string[] {
+    return [...(this.#boards.get(ref)?.rows.keys() ?? [])];
+  }
+
   /** The agent now has the object open, or is otherwise on it. */
   opened(ref: ObjectRef, agent: AtWorkAgent): void {
     this.#set(ref, agent, "open");

@@ -232,7 +232,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
   const held = (ref: ObjectRef, run: string): { record: ObjectRecord; grant: ObjectGrant } => {
     registry.readable();
     const record = registry.get(ref);
-    const grant = record && registry.grantOf(ref, run);
+    const grant = record && objects.grantOf(ref, run);
     if (record === undefined || grant === undefined) throw notHanded(ref);
     return { record, grant };
   };
@@ -293,7 +293,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
       return {
         objects: shown.map((object) => {
           const ref = registry.refFor(docId, object.key, object.kind);
-          const grant = registry.grantOf(ref, run);
+          const grant = objects.grantOf(ref, run);
           return {
             ref,
             kind: object.kind,
@@ -339,7 +339,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
       });
       const value = parseValue(IntentPlaceValue, answered.value);
       const ref = registry.refFor(docId, value.key, input.kind);
-      registry.grant(ref, run, "placed");
+      objects.grant(ref, run, "placed");
       presence.opened(ref, agent);
       if (answered.inverse !== undefined)
         objects.keepChange(docId, {
@@ -490,8 +490,8 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
     async object_release(caller, input) {
       const run = caller.runtimeRunId;
       registry.readable();
-      const grant = registry.grantOf(input.ref, run);
-      if (grant?.how === "handed") registry.revoke(input.ref, run);
+      const grant = objects.grantOf(input.ref, run);
+      if (grant?.how === "handed") objects.revoke(input.ref, run);
       presence.released(input.ref, run);
       return { released: true };
     },

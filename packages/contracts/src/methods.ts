@@ -3361,6 +3361,14 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // §11: a grant outlives the app, so a forgotten one can be found.
+  defineMethod({
+    surface: "product",
+    method: "objects.grants",
+    scope: "objects.window",
+    idempotent: true,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "objects.presence.subscribe",

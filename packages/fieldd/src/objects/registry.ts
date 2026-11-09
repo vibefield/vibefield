@@ -89,36 +89,44 @@ export class ObjectsRegistry {
     return [...this.#records.values()].filter((r) => r.docId === docId).map((r) => r.ref);
   }
 
-  grantOf(ref: ObjectRef, run: string): ObjectGrant | undefined {
-    return this.#records.get(ref)?.grants.find((g) => g.run === run);
+  grantOf(ref: ObjectRef, holder: string): ObjectGrant | undefined {
+    return this.#records.get(ref)?.grants.find((g) => g.holder === holder);
   }
 
-  /** Give `run` this object. What it placed stays placed: a later hand never weakens that. */
-  grant(ref: ObjectRef, run: string, how: ObjectYours): void {
+  /** Every record, for a walk over who holds what. */
+  all(): ObjectRecord[] {
+    return [...this.#records.values()];
+  }
+
+  /** Give `holder` this object. What it placed stays placed: a later hand never weakens that. */
+  grant(ref: ObjectRef, holder: string, how: ObjectYours): void {
     const record = this.#required(ref);
-    const held = record.grants.find((g) => g.run === run);
+    const held = record.grants.find((g) => g.holder === holder);
     if (held !== undefined && (held.how === "placed" || held.how === how)) return;
     this.#keep({
       ...record,
-      grants: [...record.grants.filter((g) => g.run !== run), { run, how, at: this.#now() }],
+      grants: [
+        ...record.grants.filter((g) => g.holder !== holder),
+        { holder, how, at: this.#now() },
+      ],
     });
   }
 
-  /** End `run`'s grant. False when it held none. */
-  revoke(ref: ObjectRef, run: string): boolean {
+  /** End `holder`'s grant. False when it held none. */
+  revoke(ref: ObjectRef, holder: string): boolean {
     const record = this.#records.get(ref);
-    if (record === undefined || !record.grants.some((g) => g.run === run)) return false;
-    this.#keep({ ...record, grants: record.grants.filter((g) => g.run !== run) });
+    if (record === undefined || !record.grants.some((g) => g.holder === holder)) return false;
+    this.#keep({ ...record, grants: record.grants.filter((g) => g.holder !== holder) });
     return true;
   }
 
-  /** OB-D9 — a `one` kind's hand: every other run's grant ends and `run` is handed it. Returns the runs it left. */
-  moveTo(ref: ObjectRef, run: string): string[] {
+  /** OB-D9 — a `one` kind's hand: every other holder's grant ends and `holder` is handed it. Returns those it left. */
+  moveTo(ref: ObjectRef, holder: string): string[] {
     const record = this.#required(ref);
-    const left = record.grants.filter((g) => g.run !== run).map((g) => g.run);
-    const own = record.grants.find((g) => g.run === run);
+    const left = record.grants.filter((g) => g.holder !== holder).map((g) => g.holder);
+    const own = record.grants.find((g) => g.holder === holder);
     if (left.length === 0 && own !== undefined) return [];
-    this.#keep({ ...record, grants: [own ?? { run, how: "handed", at: this.#now() }] });
+    this.#keep({ ...record, grants: [own ?? { holder, how: "handed", at: this.#now() }] });
     return left;
   }
 

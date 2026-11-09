@@ -1,4 +1,11 @@
-import type { ObjectIntent, ObjectRef, ObjectsHandResult } from "@vibefield/contracts";
+import type {
+  ObjectGrant,
+  ObjectGrantRow,
+  ObjectIntent,
+  ObjectRef,
+  ObjectsHandResult,
+  ObjectYours,
+} from "@vibefield/contracts";
 import { IntentUndoValue } from "@vibefield/contracts";
 import { RpcCallError } from "../native-link";
 import { DeskIntents, type DeskIntentsOptions } from "./intents";
@@ -21,6 +28,10 @@ export interface DeskObjectsOptions {
   runState(run: string): RunState;
   /** how the desk names a run */
   label(run: string): string;
+  /** the spark a run is the session of, if it is one */
+  sparkOf(run: string): string | undefined;
+  /** a spark's name; undefined when fieldd no longer holds it */
+  sparkName(id: string): string | undefined;
   /** the agent a run is, by its catalog id */
   agentOf(run: string): string;
   /** the kinds table (OB-2); the one seam */
@@ -29,6 +40,9 @@ export interface DeskObjectsOptions {
   readonly now?: () => number;
   readonly releasedShownMs?: number;
 }
+
+/** A spark's grants are the spark's: its run id changes each time it sleeps and wakes. */
+const SPARK_HOLDER = "spark:";
 
 const NO_SUCH_AGENT = "VibeField doesn't know that agent.";
 const ENDED_AGENT = "That agent has ended. Start it again, or hand this to another.";
@@ -83,26 +97,95 @@ export class DeskObjects {
     };
   }
 
-  /** OB-L1 — the grant, on the person's play. A run that does not exist or has ended holds nothing: said, never kept. */
+  /** Who a run's grants belong to: its spark's, or a plain run's own. A holder as `grants` names it is taken as itself. */
+  holder(run: string): string {
+    if (run.startsWith(SPARK_HOLDER)) return run;
+    const spark = this.opts.sparkOf(run);
+    return spark === undefined ? run : `${SPARK_HOLDER}${spark}`;
+  }
+
+  grantOf(ref: ObjectRef, run: string): ObjectGrant | undefined {
+    return this.registry.grantOf(ref, this.holder(run));
+  }
+
+  grant(ref: ObjectRef, run: string, how: ObjectYours): void {
+    this.registry.grant(ref, this.holder(run), how);
+  }
+
+  /** The run's grant ends; a spark's for every run of it. */
+  revoke(ref: ObjectRef, run: string): void {
+    this.registry.revoke(ref, this.holder(run));
+  }
+
+  /** OB-L1 — the grant, on the person's play. A run that does not exist or has ended holds nothing: said, never kept. A
+   * spark has not ended when its last run has: it sleeps, and what it is handed waits for it. */
   hand(ref: ObjectRef, run: string): ObjectsHandResult {
     const record = this.registry.get(ref);
     if (record === undefined) return { handed: false, reason: NO_SUCH_OBJECT };
-    const state = this.opts.runState(run);
-    if (state === "unknown") return { handed: false, reason: NO_SUCH_AGENT };
-    if (state === "ended") return { handed: false, reason: ENDED_AGENT };
+    if (this.opts.sparkOf(run) === undefined) {
+      const state = this.opts.runState(run);
+      if (state === "unknown") return { handed: false, reason: NO_SUCH_AGENT };
+      if (state === "ended") return { handed: false, reason: ENDED_AGENT };
+    }
+    const holder = this.holder(run);
     if (this.kind(record.kind)?.concurrency === "one") {
-      for (const left of this.registry.moveTo(ref, run)) this.presence.released(ref, left);
+      for (const left of this.registry.moveTo(ref, holder)) this.#releaseHolder(ref, left);
       this.presence.moveHolder(ref, run);
     } else {
-      this.registry.grant(ref, run, "handed");
+      this.registry.grant(ref, holder, "handed");
     }
     return { handed: true };
   }
 
-  /** The person takes an object back: the grant ends, and the agent's next call answers `not-handed`. */
+  /** The person takes an object back: the grant ends, and the agent's next call answers `not-handed`. `run` is a run, or
+   * a holder as `grants` names it. */
   takeBack(ref: ObjectRef, run: string): void {
-    this.registry.revoke(ref, run);
-    this.presence.released(ref, run);
+    const holder = this.holder(run);
+    this.registry.revoke(ref, holder);
+    this.#releaseHolder(ref, holder);
+  }
+
+  /** §11 — every grant still standing, or one object's, with whose it is: it outlives the app, so it can be forgotten. */
+  grants(ref?: ObjectRef): ObjectGrantRow[] {
+    return this.registry.all().flatMap((record) =>
+      ref !== undefined && record.ref !== ref
+        ? []
+        : record.grants.map((grant) => ({
+            ref: record.ref,
+            docId: record.docId,
+            key: record.key,
+            ...(record.kind !== undefined ? { kind: record.kind } : {}),
+            holder: grant.holder,
+            name: this.#nameOf(grant.holder),
+            how: grant.how,
+            at: grant.at,
+          })),
+    );
+  }
+
+  #nameOf(holder: string): string {
+    if (!holder.startsWith(SPARK_HOLDER)) return this.opts.label(holder);
+    return this.opts.sparkName(holder.slice(SPARK_HOLDER.length)) ?? holder;
+  }
+
+  /** Every run of this holder on this object reads released. */
+  #releaseHolder(ref: ObjectRef, holder: string): void {
+    for (const run of this.presence.runsOn(ref))
+      if (this.holder(run) === holder) this.presence.released(ref, run);
+  }
+
+  /** Once the boot's re-attach has settled: what ended while fieldd was down holds nothing now. A plain run that did not
+   * come back, a spark fieldd no longer holds. */
+  reconcile(): void {
+    for (const record of this.registry.all())
+      for (const { holder } of record.grants)
+        if (this.#gone(holder)) this.registry.revoke(record.ref, holder);
+  }
+
+  #gone(holder: string): boolean {
+    if (holder.startsWith(SPARK_HOLDER))
+      return this.opts.sparkName(holder.slice(SPARK_HOLDER.length)) === undefined;
+    return this.opts.runState(holder) !== "live";
   }
 
   resolve(ref: ObjectRef): { docId: string; key: string } | undefined {
@@ -117,8 +200,12 @@ export class DeskObjects {
     if (ref !== undefined) this.presence.hold(ref, held);
   }
 
+  /** A run has left for good. A plain run's grants end with it, so nothing goes on claiming an object for it; a spark's
+   * are the spark's, and wait for its next run. */
   runEnded(run: string): void {
     this.presence.runEnded(run);
+    if (this.opts.sparkOf(run) !== undefined) return;
+    for (const record of this.registry.all()) this.registry.revoke(record.ref, run);
   }
 
   /** Keep what an act's undo needs, and say on the desk what it would undo. */
