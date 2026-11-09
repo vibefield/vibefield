@@ -216,3 +216,149 @@ describe("a forgotten grant can be found and taken back (§11)", () => {
     expect(h.desk.grantOf(ref, "run-a")?.how).toBe("handed");
   });
 });
+
+describe("a run replaced by a resume of its session hands on what it had (§7, EY-D9 B)", () => {
+  /** run-a's session is resumed into run-c: told in the order the runtime tells it, the end first. */
+  const replaceA = (h: DeskWorld, desk = h.desk) => {
+    h.runs.set("run-a", "ended");
+    desk.runEnded("run-a");
+    h.runs.set("run-c", "live");
+    desk.runReplaced("run-a", "run-c");
+  };
+
+  it("carries a plain run's grant to the run that continues it, and a restart keeps it", async () => {
+    const h = world();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    const at = h.desk.grantOf(ref, "run-a")?.at;
+    replaceA(h);
+    expect(h.desk.grantOf(ref, "run-c")).toMatchObject({ how: "handed", at });
+    expect(h.desk.grantOf(ref, "run-a")).toBeUndefined();
+    const verbs = createDeskVerbs({ objects: h.desk });
+    h.window(ordinaryWindow);
+    await expect(verbs.object_open(asRun("run-c"), { ref })).resolves.toMatchObject({
+      object: { yours: "handed" },
+    });
+    await expect(verbs.object_open(asRun("run-a"), { ref })).rejects.toMatchObject({
+      details: { fact: "not-handed" },
+    });
+    const again = h.reopen();
+    again.reconcile();
+    expect(again.grantOf(ref, "run-c")?.how).toBe("handed");
+  });
+
+  it("keeps what it placed as placed", () => {
+    const h = world();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.grant(ref, "run-a", "placed");
+    replaceA(h);
+    expect(h.desk.grantOf(ref, "run-c")?.how).toBe("placed");
+  });
+
+  it("ends a run's grants when no replacement comes", () => {
+    const h = world();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    h.desk.runEnded("run-a");
+    expect(h.desk.grants(ref)).toEqual([]);
+    h.desk.runReplaced("run-other", "run-c");
+    expect(h.desk.grants(ref)).toEqual([]);
+  });
+
+  it("keeps a `one` kind with whoever was handed it after the run ended", () => {
+    const h = world();
+    const ref = h.refOf("page", "vibefield.page");
+    h.desk.hand(ref, "run-a");
+    h.desk.runEnded("run-a");
+    h.desk.hand(ref, "run-b");
+    h.runs.set("run-c", "live");
+    h.desk.runReplaced("run-a", "run-c");
+    expect(h.desk.grantOf(ref, "run-c")).toBeUndefined();
+    expect(h.desk.grantOf(ref, "run-b")?.how).toBe("handed");
+  });
+
+  it("shows the new run on the object in the old one's place", async () => {
+    const h = world();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    h.window(ordinaryWindow);
+    await createDeskVerbs({ objects: h.desk }).object_open(asRun("run-a"), { ref });
+    replaceA(h);
+    expect(h.desk.presence.snapshot().objects[0]?.agents).toEqual([
+      expect.objectContaining({ run: "run-c", handle: "claude·c", state: "open" }),
+    ]);
+  });
+
+  it("does not put an agent on an object it had already released", async () => {
+    const h = world();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.grant(ref, "run-a", "placed");
+    h.window(ordinaryWindow);
+    const verbs = createDeskVerbs({ objects: h.desk });
+    await verbs.object_open(asRun("run-a"), { ref });
+    await verbs.object_release(asRun("run-a"), { ref });
+    replaceA(h);
+    expect(h.desk.presence.snapshot().objects[0]?.agents.map((a) => a.run)).not.toContain("run-c");
+    expect(h.desk.grantOf(ref, "run-c")?.how).toBe("placed");
+  });
+
+  it("carries a plain run's undo offer, and undoes its change from the new run", async () => {
+    const h = world();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    const win = h.window(ordinaryWindow);
+    const verbs = createDeskVerbs({ objects: h.desk });
+    await verbs.object_act(asRun("run-a"), {
+      doing: "Replace it",
+      ref,
+      tool: "write_text",
+      input: { text: "milk" },
+    });
+    replaceA(h);
+    expect(h.desk.presence.snapshot().objects[0]?.agents[0]?.lastChange).toEqual({
+      label: "Replaced the note",
+    });
+    await expect(h.desk.undoAgent(ref, "run-c")).resolves.toMatchObject({ undone: true });
+    expect(win.seen.at(-1)).toMatchObject({ op: "undo", inverse: { text: "eggs" } });
+    expect(h.desk.presence.snapshot().objects[0]?.agents[0]?.lastChange).toBeUndefined();
+  });
+
+  it("carries a spark's undo offer across a wake", async () => {
+    const h = sparkWorld();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-1");
+    h.window(ordinaryWindow);
+    const verbs = createDeskVerbs({ objects: h.desk });
+    await verbs.object_act(asRun("run-1"), {
+      doing: "Replace it",
+      ref,
+      tool: "write_text",
+      input: { text: "milk" },
+    });
+    sleepAndWake(h);
+    h.desk.runReplaced("run-1", "run-2");
+    expect(h.desk.presence.snapshot().objects[0]?.agents).toEqual([
+      expect.objectContaining({ run: "run-2", lastChange: { label: "Replaced the note" } }),
+    ]);
+    await expect(h.desk.undoAgent(ref, "run-2")).resolves.toMatchObject({ undone: true });
+  });
+
+  it("offers a spark's undo again when a relaunch, which names no successor, comes back to the object", async () => {
+    const h = sparkWorld();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-1");
+    h.window(ordinaryWindow);
+    const verbs = createDeskVerbs({ objects: h.desk });
+    await verbs.object_act(asRun("run-1"), {
+      doing: "Replace it",
+      ref,
+      tool: "write_text",
+      input: { text: "milk" },
+    });
+    sleepAndWake(h);
+    await verbs.object_open(asRun("run-2"), { ref });
+    expect(
+      h.desk.presence.snapshot().objects[0]?.agents.find((a) => a.run === "run-2")?.lastChange,
+    ).toEqual({ label: "Replaced the note" });
+  });
+});
