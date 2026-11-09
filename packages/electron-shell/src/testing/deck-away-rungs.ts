@@ -334,7 +334,6 @@ async function holdLip(
   toY: number,
   steps: number,
   every: number,
-  held?: () => Promise<void>,
 ): Promise<void> {
   const input = win.webContents;
   input.sendInputEvent({ type: "mouseMove", x: from.x, y: from.y });
@@ -351,10 +350,52 @@ async function holdLip(
     });
     await sleep(every);
   }
-  if (held !== undefined) await held();
   await sleep(every);
   input.sendInputEvent({ type: "mouseUp", x: from.x, y: toY, button: "left", clickCount: 1 });
   await sleep(120);
+}
+
+/** What the page saw of the readout across one hold: when it first said so, and when the pointer let go. */
+export interface HeldReadoutSeen {
+  readonly said: number | null;
+  readonly letGo: number | null;
+}
+
+/**
+ * Item 48: the page keeps the watch, so the hold itself is the bound. The rung read the readout once, after the last
+ * move, and a commit later than that one read went red (`smoke:godview`, the squeeze gate of 2026-10-19). A read of the
+ * DOM from here takes its own round trip under load; the observer sees the commit whenever it comes, a say after the
+ * let-go does not count, and the hold is as long as it was.
+ */
+const WATCH_HELD_READOUT = `(() => {
+  const stage = document.querySelector(".vf-cover .vf-godview");
+  globalThis.__vfHeldReadout?.stop?.();
+  const seen = { said: null, letGo: null };
+  const look = () => {
+    if (seen.said !== null || seen.letGo !== null) return;
+    if (stage?.querySelector(".vf-godview-deck-readout")?.getAttribute("data-on") === "true") seen.said = performance.now();
+  };
+  const watch = new MutationObserver(look);
+  if (stage) watch.observe(stage, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-on"] });
+  const letGo = () => { look(); if (seen.letGo === null) seen.letGo = performance.now(); };
+  window.addEventListener("pointerup", letGo, { capture: true });
+  globalThis.__vfHeldReadout = { seen, stop: () => { watch.disconnect(); window.removeEventListener("pointerup", letGo, { capture: true }); } };
+  return stage !== null;
+})()`;
+
+const READ_HELD_READOUT = `(() => {
+  const held = globalThis.__vfHeldReadout;
+  held?.stop?.();
+  return held === undefined ? null : held.seen;
+})()`;
+
+/** Held past the line, the stage said so before the pointer let go. */
+export function judgeHeldReadout(seen: HeldReadoutSeen | null): string[] {
+  if (seen === null) return ["the readout's watch was never armed"];
+  if (seen.letGo === null) return ["the let-go never reached the page"];
+  return seen.said === null
+    ? [`held past the line, the stage said nothing (${JSON.stringify(seen)})`]
+    : [];
 }
 
 /** The rung. */
@@ -440,14 +481,14 @@ async function deckEdgeSteps(
 
   // AWAY — held past the line (70 left above the panes' foot), let go slowly
   const line = there.windowFoot - COVER_RESERVE - 70;
-  let saidWhileHeld: string | null = null;
-  await holdLip(win, there, line, 8, 80, async () => {
-    saidWhileHeld = (await lipNow(win)).readout;
-  });
+  await win.webContents.executeJavaScript(WATCH_HELD_READOUT);
+  await holdLip(win, there, line, 8, 80);
+  const saidWhileHeld = (await win.webContents.executeJavaScript(
+    READ_HELD_READOUT,
+  )) as HeldReadoutSeen | null;
   verdict["readoutWhileHeld"] = saidWhileHeld;
-  if (saidWhileHeld !== "true") {
-    throw new Error(`held past the line, the stage said nothing (readout ${saidWhileHeld})`);
-  }
+  const unsaid = judgeHeldReadout(saidWhileHeld);
+  if (unsaid.length > 0) throw new Error(unsaid.join("; "));
   await opts.deck.until(
     (facts) => !facts.active && facts.wrapper?.state === "away",
     "a let-go with less than 120 left to put the terminals away",
