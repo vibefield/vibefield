@@ -136,6 +136,12 @@ const OTHER_ORIGINS = new Map([
     "spark-hatch-frames.manifest.json",
     join(root, "packages/design-kit/fixtures/spark-hatch-frames.manifest.json"),
   ],
+  // SP-7b's 7b-2b — the projection's golden pairs (fieldd's index-timeline-pairs.test.ts writes them), which the kit's
+  // Swift port (HistoryProjection) is held to
+  [
+    "index-timeline-pairs.golden.json",
+    join(root, "packages/fieldd/test/fixtures/index-timeline-pairs.golden.json"),
+  ],
   [
     "phone-fold.golden.json",
     join(root, "packages/field-app/test/fixtures/phone-godview/phone-fold.golden.json"),
@@ -1362,6 +1368,60 @@ function sparkTranscriptPin(key, swiftName, type = ": Int64") {
     },
   };
 }
+
+// SP-7b's 7b-2b — the direct read's words and bounds, each from its own block of registries.ts: the refusals the kit's
+// ticket reader branches on and the grant's life (IndexTicketLimits), and the two clips of the Swift projection.
+const INDEX_HISTORY_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldProduct/IndexHistoryShapes.swift";
+const HISTORY_PROJECTION_SWIFT =
+  "apps/ios/VibeFieldKit/Sources/FieldHistory/HistoryProjection.swift";
+function registryPin(table, key, value, swift, swiftEnum, swiftName, type = "") {
+  return {
+    name: `${table}.${key}`,
+    origin: {
+      file: REGISTRIES,
+      pattern: new RegExp(
+        `export const ${table} = \\{(?:(?!\\n\\} as const;)[\\s\\S])*?\\n {2}${key}: ${value},\\n`,
+      ),
+      label: `${table}.${key}`,
+    },
+    copy: {
+      file: swift,
+      pattern: new RegExp(`^ {2}public static let ${swiftName}${type} = ${value}$`, "m"),
+      label: `${swiftEnum}.${swiftName}`,
+    },
+  };
+}
+const TICKET_WORD = '"([^"]+)"';
+const indexTicketPin = (key, value, swiftName, type) =>
+  registryPin(
+    "INDEX_TICKET",
+    key,
+    value,
+    INDEX_HISTORY_SWIFT,
+    "IndexTicketLimits",
+    swiftName,
+    type,
+  );
+const indexTimelinePin = (key, swiftName) =>
+  registryPin(
+    "INDEX_TIMELINE",
+    key,
+    `(${NUMBER})`,
+    HISTORY_PROJECTION_SWIFT,
+    "HistoryProjection",
+    swiftName,
+  );
+pins.push(
+  indexTicketPin("SERVICE", TICKET_WORD, "service"),
+  indexTicketPin("STATE_UNBUILT", TICKET_WORD, "stateUnbuilt"),
+  indexTicketPin("STATE_OFF", TICKET_WORD, "stateOff"),
+  indexTicketPin("STATE_EGRESS_UNAVAILABLE", TICKET_WORD, "stateEgressUnavailable"),
+  indexTicketPin("STATE_DOORS_NOT_PUBLISHED", TICKET_WORD, "stateDoorsNotPublished"),
+  indexTicketPin("TTL_MS", `(${NUMBER})`, "ttlMs", ": Int64"),
+  indexTimelinePin("TEXT_CHARS", "textChars"),
+  indexTimelinePin("OBJECT_CHARS", "objectChars"),
+);
+
 pins.push(
   sparkTranscriptPin("TICKET_TTL_MS", "ticketTTLMs"),
   sparkTranscriptPin("RUNS_MAX", "runsMax", ""),

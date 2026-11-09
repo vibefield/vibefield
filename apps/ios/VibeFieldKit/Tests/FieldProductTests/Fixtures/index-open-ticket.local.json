@@ -1,0 +1,9 @@
+{
+  "device": "dev-01HQ8ZK4M7",
+  "endpoints": {
+    "sessionUrl": "ws://127.0.0.1:52811/ws/sessions/s1",
+    "restUrl": "http://127.0.0.1:52811"
+  },
+  "grant": "eyJjaWQiOiJmaWVsZGQvd2luZG93LTEiLCJleHAiOjE3OTAwMDAwNjAwMDAsInNjb3BlIjpbInJlYWQiXSwic2lkIjoiczEiLCJ2IjoxfQ.KhNxqADtPdBGQ6BLRua1sYTUpb6xXmxub2iYQ4mwjzQ",
+  "expiresAt": 1790000060000
+}

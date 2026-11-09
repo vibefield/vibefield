@@ -1,0 +1,8 @@
+{
+  "kind": "UNAVAILABLE",
+  "retryable": false,
+  "details": {
+    "service": "index",
+    "state": "direct-plane-off"
+  }
+}

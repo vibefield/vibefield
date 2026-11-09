@@ -438,6 +438,47 @@ public struct IndexStatusResult: Sendable, Equatable, Decodable {
   }
 }
 
+// MARK: - The ticket (SP-7b's 7b-2b)
+
+/// The RED's stubs: the shapes the tests compile against, answering nothing true.
+public enum IndexTicketLimits {
+  public static let service = "index"
+  public static let stateUnbuilt = "direct-plane-unbuilt"
+  public static let stateOff = "direct-plane-off"
+  public static let stateEgressUnavailable = "egress_unavailable"
+  public static let stateDoorsNotPublished = "doors_not_published"
+  public static let ttlMs: Int64 = 10 * 60 * 1000
+}
+
+public struct IndexOpenTicket: Sendable, Equatable {
+  public let device: String
+  public let sessionUrl: URL
+  public let restUrl: URL?
+  public let grant: String
+  public let expiresAt: Int64
+  public let unknownFields: [String]
+
+  public init(json: JSONValue) throws {
+    device = ""
+    sessionUrl = URL(fileURLWithPath: "/")
+    restUrl = URL(fileURLWithPath: "/")
+    grant = ""
+    expiresAt = -1
+    unknownFields = ["stub"]
+  }
+
+  public static func params(sessionId: String, device: String?) -> JSONValue { .null }
+}
+
+public enum IndexTicketRefusal: Sendable, Equatable {
+  case directPlaneUnbuilt
+  case directPlaneOff
+  case egressUnavailable(device: String)
+  case doorsNotPublished(device: String)
+
+  public init?(error: FieldProductError) { self = .egressUnavailable(device: "stub") }
+}
+
 // MARK: - The transcript (SP-6)
 
 /// An attachment as a REF: what was attached, and whether rosetta recorded

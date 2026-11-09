@@ -1,0 +1,4828 @@
+{
+  "//": "SP-7b's 7b-2a: rosetta's TimelineEntry beside fieldd's IndexTimelineRow (src/index-timeline.ts). `cases` pair one entry with its row; `steps` are one session as rosetta's client hands it, and re-projecting a step's `upserts` over the step before lands on its `rows`. Written by `VF_WRITE_GOLDENS=1 pnpm --filter @vibefield/fieldd exec vitest run test/index-timeline-pairs.test.ts`; never by hand.",
+  "limits": {
+    "textChars": 2000,
+    "objectChars": 200
+  },
+  "cases": [
+    {
+      "name": "user: inline words; an asset, an unrecorded doc, a reference; an unreadable one gone",
+      "entry": {
+        "timeline_id": "c01",
+        "session_id": "s-pairs",
+        "ordinal": 1,
+        "group": {
+          "id": "turn-0",
+          "kind": "human_turn",
+          "derivation": "native"
+        },
+        "response": null,
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000001000,
+        "model": null,
+        "effort": null,
+        "body": {
+          "type": "user",
+          "text": {
+            "type": "inline",
+            "text": "fix the build"
+          },
+          "attachments": [
+            {
+              "id": "img-1",
+              "kind": "image",
+              "label": null,
+              "name": "shot.png",
+              "media_type": "image/png",
+              "byte_len": 1234,
+              "source": {
+                "type": "asset",
+                "asset": {
+                  "url": "/api/assets/abc.png",
+                  "digest": "abc",
+                  "media_type": "image/png",
+                  "byte_len": 1234
+                }
+              },
+              "dimensions": null,
+              "message_ranges": []
+            },
+            {
+              "id": "doc-1",
+              "kind": "document",
+              "label": "notes",
+              "name": null,
+              "media_type": null,
+              "byte_len": null,
+              "source": {
+                "type": "unavailable",
+                "reason": "not_recorded"
+              },
+              "dimensions": null,
+              "message_ranges": []
+            },
+            {
+              "id": "file-1",
+              "kind": "file",
+              "label": null,
+              "name": "README.md",
+              "media_type": "text/markdown",
+              "byte_len": null,
+              "source": {
+                "type": "reference",
+                "path": "/Users/someone/repo/README.md"
+              },
+              "dimensions": null,
+              "message_ranges": []
+            },
+            {
+              "kind": "file",
+              "source": {
+                "type": "asset"
+              }
+            }
+          ]
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 1
+        }
+      },
+      "row": {
+        "timelineId": "c01",
+        "sessionId": "s-pairs",
+        "ordinal": 1,
+        "kind": "user",
+        "at": 1790000001000,
+        "group": {
+          "id": "turn-0",
+          "kind": "human_turn"
+        },
+        "text": "fix the build",
+        "attachments": [
+          {
+            "id": "img-1",
+            "kind": "image",
+            "name": "shot.png",
+            "mediaType": "image/png",
+            "byteLen": 1234,
+            "available": true
+          },
+          {
+            "id": "doc-1",
+            "kind": "document",
+            "name": "notes",
+            "available": false,
+            "reason": "not_recorded"
+          },
+          {
+            "id": "file-1",
+            "kind": "file",
+            "name": "README.md",
+            "mediaType": "text/markdown",
+            "available": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "agent: a member text is its preview with the whole's size; no attachments is none",
+      "entry": {
+        "timeline_id": "c02",
+        "session_id": "s-pairs",
+        "ordinal": 2,
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-0",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000002000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "agent",
+          "text": {
+            "type": "member",
+            "preview": "The first lines of a long reply",
+            "byte_len": 48213
+          },
+          "attachments": [],
+          "citations": []
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 2
+        }
+      },
+      "row": {
+        "timelineId": "c02",
+        "sessionId": "s-pairs",
+        "ordinal": 2,
+        "kind": "agent",
+        "at": 1790000002000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-0",
+        "text": "The first lines of a long reply",
+        "textByteLen": 48213
+      }
+    },
+    {
+      "name": "agent: a member text with no preview carries no words",
+      "entry": {
+        "timeline_id": "c03",
+        "session_id": "s-pairs",
+        "ordinal": 3,
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-0",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000003000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "agent",
+          "text": {
+            "type": "member",
+            "byte_len": 9000
+          },
+          "attachments": []
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 3
+        }
+      },
+      "row": {
+        "timelineId": "c03",
+        "sessionId": "s-pairs",
+        "ordinal": 3,
+        "kind": "agent",
+        "at": 1790000003000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-0"
+      }
+    },
+    {
+      "name": "agent: words past TEXT_CHARS are cut there, and textClipped says so",
+      "entry": {
+        "timeline_id": "c04",
+        "session_id": "s-pairs",
+        "ordinal": 4,
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-0",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000004000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "agent",
+          "text": {
+            "type": "inline",
+            "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 4
+        }
+      },
+      "row": {
+        "timelineId": "c04",
+        "sessionId": "s-pairs",
+        "ordinal": 4,
+        "kind": "agent",
+        "at": 1790000004000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-0",
+        "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "textClipped": true
+      }
+    },
+    {
+      "name": "agent: a cut that would split a surrogate pair drops its high half",
+      "entry": {
+        "timeline_id": "c05",
+        "session_id": "s-pairs",
+        "ordinal": 5,
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-0",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000005000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "agent",
+          "text": {
+            "type": "inline",
+            "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀 and after"
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 5
+        }
+      },
+      "row": {
+        "timelineId": "c05",
+        "sessionId": "s-pairs",
+        "ordinal": 5,
+        "kind": "agent",
+        "at": 1790000005000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-0",
+        "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "textClipped": true
+      }
+    },
+    {
+      "name": "agent: a text of a shape this build never heard of carries no words",
+      "entry": {
+        "timeline_id": "c06",
+        "session_id": "s-pairs",
+        "ordinal": 6,
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-0",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000006000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "agent",
+          "text": {
+            "type": "hologram",
+            "text": "unseen"
+          },
+          "attachments": []
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 6
+        }
+      },
+      "row": {
+        "timelineId": "c06",
+        "sessionId": "s-pairs",
+        "ordinal": 6,
+        "kind": "agent",
+        "at": 1790000006000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-0"
+      }
+    },
+    {
+      "name": "thinking: inline words",
+      "entry": {
+        "timeline_id": "c07",
+        "session_id": "s-pairs",
+        "ordinal": 7,
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-0",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000007000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "thinking",
+          "text": {
+            "type": "inline",
+            "text": "the lean"
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 7
+        }
+      },
+      "row": {
+        "timelineId": "c07",
+        "sessionId": "s-pairs",
+        "ordinal": 7,
+        "kind": "thinking",
+        "at": 1790000007000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-0",
+        "text": "the lean"
+      }
+    },
+    {
+      "name": "summary: its purpose and its words",
+      "entry": {
+        "timeline_id": "c08",
+        "session_id": "s-pairs",
+        "ordinal": 8,
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-0",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000008000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "summary",
+          "purpose": "compaction",
+          "text": {
+            "type": "inline",
+            "text": "the story so far"
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 8
+        }
+      },
+      "row": {
+        "timelineId": "c08",
+        "sessionId": "s-pairs",
+        "ordinal": 8,
+        "kind": "summary",
+        "at": 1790000008000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-0",
+        "text": "the story so far",
+        "summaryPurpose": "compaction"
+      }
+    },
+    {
+      "name": "notice: a command's output is its words",
+      "entry": {
+        "timeline_id": "c09",
+        "session_id": "s-pairs",
+        "ordinal": 9,
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-0",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000009000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "notice",
+          "notice": {
+            "type": "command_output",
+            "command": "/cost",
+            "output": {
+              "type": "inline",
+              "text": "$0.42 so far"
+            }
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 9
+        }
+      },
+      "row": {
+        "timelineId": "c09",
+        "sessionId": "s-pairs",
+        "ordinal": 9,
+        "kind": "notice",
+        "at": 1790000009000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-0",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-0",
+        "text": "$0.42 so far",
+        "notice": "command_output"
+      }
+    },
+    {
+      "name": "notice: a runtime error's summary",
+      "entry": {
+        "timeline_id": "c10",
+        "session_id": "s-pairs",
+        "ordinal": 10,
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-1",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000010000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "notice",
+          "notice": {
+            "type": "runtime_error",
+            "summary": "the socket closed"
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 10
+        }
+      },
+      "row": {
+        "timelineId": "c10",
+        "sessionId": "s-pairs",
+        "ordinal": 10,
+        "kind": "notice",
+        "at": 1790000010000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-1",
+        "text": "the socket closed",
+        "notice": "runtime_error"
+      }
+    },
+    {
+      "name": "notice: an async task's summary",
+      "entry": {
+        "timeline_id": "c11",
+        "session_id": "s-pairs",
+        "ordinal": 11,
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-1",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000011000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "notice",
+          "notice": {
+            "type": "async_task",
+            "summary": "the build finished"
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 11
+        }
+      },
+      "row": {
+        "timelineId": "c11",
+        "sessionId": "s-pairs",
+        "ordinal": 11,
+        "kind": "notice",
+        "at": 1790000011000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-1",
+        "text": "the build finished",
+        "notice": "async_task"
+      }
+    },
+    {
+      "name": "notice: a compaction's reason",
+      "entry": {
+        "timeline_id": "c12",
+        "session_id": "s-pairs",
+        "ordinal": 12,
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-1",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000012000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "notice",
+          "notice": {
+            "type": "compaction",
+            "reason": "the context was full"
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 12
+        }
+      },
+      "row": {
+        "timelineId": "c12",
+        "sessionId": "s-pairs",
+        "ordinal": 12,
+        "kind": "notice",
+        "at": 1790000012000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-1",
+        "text": "the context was full",
+        "notice": "compaction"
+      }
+    },
+    {
+      "name": "notice: a kind this build never heard of carries its kind alone",
+      "entry": {
+        "timeline_id": "c13",
+        "session_id": "s-pairs",
+        "ordinal": 13,
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-1",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000013000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "notice",
+          "notice": {
+            "type": "model_changed",
+            "from": null,
+            "to": "claude-opus-5"
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 13
+        }
+      },
+      "row": {
+        "timelineId": "c13",
+        "sessionId": "s-pairs",
+        "ordinal": 13,
+        "kind": "notice",
+        "at": 1790000013000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-1",
+        "notice": "model_changed"
+      }
+    },
+    {
+      "name": "collaboration: the event's summary",
+      "entry": {
+        "timeline_id": "c14",
+        "session_id": "s-pairs",
+        "ordinal": 14,
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-1",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000014000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "collaboration",
+          "event": {
+            "type": "message",
+            "summary": "a teammate's note"
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 14
+        }
+      },
+      "row": {
+        "timelineId": "c14",
+        "sessionId": "s-pairs",
+        "ordinal": 14,
+        "kind": "collaboration",
+        "at": 1790000014000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-1",
+        "text": "a teammate's note"
+      }
+    },
+    {
+      "name": "collaboration: no summary is the event's body, with its attachments",
+      "entry": {
+        "timeline_id": "c15",
+        "session_id": "s-pairs",
+        "ordinal": 15,
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-1",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000015000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "collaboration",
+          "event": {
+            "type": "message",
+            "body": {
+              "type": "inline",
+              "text": "see the shot"
+            },
+            "attachments": [
+              {
+                "id": "img-1",
+                "kind": "image",
+                "label": null,
+                "name": "shot.png",
+                "media_type": "image/png",
+                "byte_len": 1234,
+                "source": {
+                  "type": "asset",
+                  "asset": {
+                    "url": "/api/assets/abc.png",
+                    "digest": "abc",
+                    "media_type": "image/png",
+                    "byte_len": 1234
+                  }
+                },
+                "dimensions": null,
+                "message_ranges": []
+              }
+            ]
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 15
+        }
+      },
+      "row": {
+        "timelineId": "c15",
+        "sessionId": "s-pairs",
+        "ordinal": 15,
+        "kind": "collaboration",
+        "at": 1790000015000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-1",
+        "text": "see the shot",
+        "attachments": [
+          {
+            "id": "img-1",
+            "kind": "image",
+            "name": "shot.png",
+            "mediaType": "image/png",
+            "byteLen": 1234,
+            "available": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "a body kind this build never heard of: its kind, no words",
+      "entry": {
+        "timeline_id": "c16",
+        "session_id": "s-pairs",
+        "ordinal": 16,
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-1",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000016000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "aurora"
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 16
+        }
+      },
+      "row": {
+        "timelineId": "c16",
+        "sessionId": "s-pairs",
+        "ordinal": 16,
+        "kind": "aurora",
+        "at": 1790000016000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-1"
+      }
+    },
+    {
+      "name": "the row's facts: its usage read, a priced cost, its effort and response",
+      "entry": {
+        "timeline_id": "c17",
+        "session_id": "s-pairs",
+        "ordinal": 17,
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-1",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000017000,
+        "model": "claude-opus-5",
+        "effort": "high",
+        "body": {
+          "type": "agent",
+          "text": {
+            "type": "inline",
+            "text": "done"
+          },
+          "attachments": []
+        },
+        "parent_tool_native_id": null,
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cache_read": 3,
+          "cache_write": null,
+          "thinking": 2
+        },
+        "cost": {
+          "status": "priced",
+          "micro_usd": 175,
+          "long_context": false
+        },
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 17
+        }
+      },
+      "row": {
+        "timelineId": "c17",
+        "sessionId": "s-pairs",
+        "ordinal": 17,
+        "kind": "agent",
+        "at": 1790000017000,
+        "model": "claude-opus-5",
+        "effort": "high",
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-1",
+        "text": "done",
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 3,
+          "thinking": 2
+        },
+        "costMicroUsd": 175
+      }
+    },
+    {
+      "name": "the row's facts: an unread usage, an unpriced cost: neither; no time, no model",
+      "entry": {
+        "timeline_id": "c18",
+        "session_id": "s-pairs",
+        "ordinal": 18,
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": null,
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": null,
+        "model": null,
+        "effort": null,
+        "body": {
+          "type": "agent",
+          "text": {
+            "type": "inline",
+            "text": "done"
+          },
+          "attachments": []
+        },
+        "parent_tool_native_id": null,
+        "usage": {
+          "input": null,
+          "output": null,
+          "cache_read": null,
+          "cache_write": null,
+          "thinking": null
+        },
+        "cost": {
+          "status": "unpriced",
+          "reason": "unknown_model"
+        },
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 18
+        }
+      },
+      "row": {
+        "timelineId": "c18",
+        "sessionId": "s-pairs",
+        "ordinal": 18,
+        "kind": "agent",
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle"
+        },
+        "text": "done"
+      }
+    },
+    {
+      "name": "tool shell: the command's first line and its exit; a duration from start and end",
+      "entry": {
+        "timeline_id": "c19",
+        "session_id": "s-pairs",
+        "ordinal": 19,
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-1",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000019000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Bash",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Bash",
+              "name": "Bash",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "shell",
+              "command": {
+                "type": "inline",
+                "text": "pnpm test\nsecond line"
+              },
+              "cwd": null,
+              "timeout_ms": null,
+              "background": false,
+              "outcome": {
+                "exit_code": 0,
+                "signal": null
+              }
+            },
+            "failure": null,
+            "timing": {
+              "started_at": 1000,
+              "completed_at": 3500,
+              "duration_ms": null
+            }
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 19
+        }
+      },
+      "row": {
+        "timelineId": "c19",
+        "sessionId": "s-pairs",
+        "ordinal": 19,
+        "kind": "tool_use",
+        "at": 1790000019000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-1",
+        "tool": {
+          "name": "Bash",
+          "family": "shell",
+          "status": "succeeded",
+          "failed": false,
+          "object": "pnpm test",
+          "result": "exit 0",
+          "durationMs": 2500
+        }
+      }
+    },
+    {
+      "name": "tool shell: a signal when there is no exit; interrupted is failed",
+      "entry": {
+        "timeline_id": "c20",
+        "session_id": "s-pairs",
+        "ordinal": 20,
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-2",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000020000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Bash",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Bash",
+              "name": "Bash",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "interrupted",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "shell",
+              "command": {
+                "type": "inline",
+                "text": "sleep 100"
+              },
+              "cwd": null,
+              "timeout_ms": null,
+              "background": false,
+              "outcome": {
+                "exit_code": null,
+                "signal": "SIGTERM"
+              }
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 20
+        }
+      },
+      "row": {
+        "timelineId": "c20",
+        "sessionId": "s-pairs",
+        "ordinal": 20,
+        "kind": "tool_use",
+        "at": 1790000020000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-2",
+        "tool": {
+          "name": "Bash",
+          "family": "shell",
+          "status": "interrupted",
+          "failed": true,
+          "object": "sleep 100",
+          "result": "SIGTERM"
+        }
+      }
+    },
+    {
+      "name": "tool shell: an object past OBJECT_CHARS is cut, and objectClipped says so",
+      "entry": {
+        "timeline_id": "c21",
+        "session_id": "s-pairs",
+        "ordinal": 21,
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-2",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000021000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Bash",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Bash",
+              "name": "Bash",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "shell",
+              "command": {
+                "type": "inline",
+                "text": "echo yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+              },
+              "cwd": null,
+              "timeout_ms": null,
+              "background": false,
+              "outcome": null
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 21
+        }
+      },
+      "row": {
+        "timelineId": "c21",
+        "sessionId": "s-pairs",
+        "ordinal": 21,
+        "kind": "tool_use",
+        "at": 1790000021000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-2",
+        "tool": {
+          "name": "Bash",
+          "family": "shell",
+          "status": "succeeded",
+          "failed": false,
+          "object": "echo yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+          "objectClipped": true
+        }
+      }
+    },
+    {
+      "name": "tool code_execute: its code; a failure's summary; the stated duration wins",
+      "entry": {
+        "timeline_id": "c22",
+        "session_id": "s-pairs",
+        "ordinal": 22,
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-2",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000022000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_python",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_python",
+              "name": "python",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "failed",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "code_execute",
+              "code": {
+                "type": "inline",
+                "text": "print(1/0)"
+              },
+              "outcome": {
+                "exit_code": 1
+              }
+            },
+            "failure": {
+              "kind": "nonzero_exit",
+              "summary": "ZeroDivisionError"
+            },
+            "timing": {
+              "started_at": 1000,
+              "completed_at": 9000,
+              "duration_ms": 420
+            }
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 22
+        }
+      },
+      "row": {
+        "timelineId": "c22",
+        "sessionId": "s-pairs",
+        "ordinal": 22,
+        "kind": "tool_use",
+        "at": 1790000022000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-2",
+        "tool": {
+          "name": "python",
+          "family": "code_execute",
+          "status": "failed",
+          "failed": true,
+          "failure": "ZeroDivisionError",
+          "object": "print(1/0)",
+          "result": "exit 1",
+          "durationMs": 420
+        }
+      }
+    },
+    {
+      "name": "tool denied: a failure with no summary is its kind",
+      "entry": {
+        "timeline_id": "c23",
+        "session_id": "s-pairs",
+        "ordinal": 23,
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-2",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000023000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Write",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Write",
+              "name": "Write",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "denied",
+              "basis": "permission"
+            },
+            "action": {
+              "type": "file_change",
+              "changes": []
+            },
+            "failure": {
+              "kind": "permission_denied",
+              "summary": null
+            },
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 23
+        }
+      },
+      "row": {
+        "timelineId": "c23",
+        "sessionId": "s-pairs",
+        "ordinal": 23,
+        "kind": "tool_use",
+        "at": 1790000023000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-2",
+        "tool": {
+          "name": "Write",
+          "family": "file_change",
+          "status": "denied",
+          "failed": true,
+          "failure": "permission_denied"
+        }
+      }
+    },
+    {
+      "name": "tool file_read: the first target, and how many when more than one",
+      "entry": {
+        "timeline_id": "c24",
+        "session_id": "s-pairs",
+        "ordinal": 24,
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-2",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000024000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Read",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Read",
+              "name": "Read",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "file_read",
+              "targets": [
+                {
+                  "resource": {
+                    "type": "file",
+                    "path": "src/a.ts"
+                  }
+                },
+                {
+                  "resource": {
+                    "type": "file",
+                    "path": "src/b.ts"
+                  }
+                }
+              ]
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 24
+        }
+      },
+      "row": {
+        "timelineId": "c24",
+        "sessionId": "s-pairs",
+        "ordinal": 24,
+        "kind": "tool_use",
+        "at": 1790000024000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-2",
+        "tool": {
+          "name": "Read",
+          "family": "file_read",
+          "status": "succeeded",
+          "failed": false,
+          "object": "src/a.ts",
+          "result": "2 files"
+        }
+      }
+    },
+    {
+      "name": "tool file_list: its directory and one entry",
+      "entry": {
+        "timeline_id": "c25",
+        "session_id": "s-pairs",
+        "ordinal": 25,
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-2",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000025000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_LS",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_LS",
+              "name": "LS",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "file_list",
+              "directory": {
+                "type": "directory",
+                "path": "src"
+              },
+              "outcome": {
+                "entry_count": 1
+              }
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 25
+        }
+      },
+      "row": {
+        "timelineId": "c25",
+        "sessionId": "s-pairs",
+        "ordinal": 25,
+        "kind": "tool_use",
+        "at": 1790000025000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-2",
+        "tool": {
+          "name": "LS",
+          "family": "file_list",
+          "status": "succeeded",
+          "failed": false,
+          "object": "src",
+          "result": "1 entry"
+        }
+      }
+    },
+    {
+      "name": "tool file_search: its query and its matches",
+      "entry": {
+        "timeline_id": "c26",
+        "session_id": "s-pairs",
+        "ordinal": 26,
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-2",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000026000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Grep",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Grep",
+              "name": "Grep",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "file_search",
+              "query": "restUrl",
+              "outcome": {
+                "match_count": 12
+              }
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 26
+        }
+      },
+      "row": {
+        "timelineId": "c26",
+        "sessionId": "s-pairs",
+        "ordinal": 26,
+        "kind": "tool_use",
+        "at": 1790000026000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-2",
+        "tool": {
+          "name": "Grep",
+          "family": "file_search",
+          "status": "succeeded",
+          "failed": false,
+          "object": "restUrl",
+          "result": "12 matches"
+        }
+      }
+    },
+    {
+      "name": "tool code_lookup: its query and its locations",
+      "entry": {
+        "timeline_id": "c27",
+        "session_id": "s-pairs",
+        "ordinal": 27,
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-2",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000027000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_LSP",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_LSP",
+              "name": "LSP",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "code_lookup",
+              "query": "projectTool",
+              "outcome": {
+                "total_count": 3
+              }
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 27
+        }
+      },
+      "row": {
+        "timelineId": "c27",
+        "sessionId": "s-pairs",
+        "ordinal": 27,
+        "kind": "tool_use",
+        "at": 1790000027000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-2",
+        "tool": {
+          "name": "LSP",
+          "family": "code_lookup",
+          "status": "succeeded",
+          "failed": false,
+          "object": "projectTool",
+          "result": "3 locations"
+        }
+      }
+    },
+    {
+      "name": "tool web_search: its query and one source",
+      "entry": {
+        "timeline_id": "c28",
+        "session_id": "s-pairs",
+        "ordinal": 28,
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-2",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000028000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_WebSearch",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_WebSearch",
+              "name": "WebSearch",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "web_search",
+              "query": "rosetta swift",
+              "outcome": {
+                "total_count": 1
+              }
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 28
+        }
+      },
+      "row": {
+        "timelineId": "c28",
+        "sessionId": "s-pairs",
+        "ordinal": 28,
+        "kind": "tool_use",
+        "at": 1790000028000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-2",
+        "tool": {
+          "name": "WebSearch",
+          "family": "web_search",
+          "status": "succeeded",
+          "failed": false,
+          "object": "rosetta swift",
+          "result": "1 source"
+        }
+      }
+    },
+    {
+      "name": "tool tool_discovery: its query and the action's own count",
+      "entry": {
+        "timeline_id": "c29",
+        "session_id": "s-pairs",
+        "ordinal": 29,
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-2",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000029000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_ToolSearch",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_ToolSearch",
+              "name": "ToolSearch",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "tool_discovery",
+              "query": "docs",
+              "total_count": 4
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 29
+        }
+      },
+      "row": {
+        "timelineId": "c29",
+        "sessionId": "s-pairs",
+        "ordinal": 29,
+        "kind": "tool_use",
+        "at": 1790000029000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-2",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-2",
+        "tool": {
+          "name": "ToolSearch",
+          "family": "tool_discovery",
+          "status": "succeeded",
+          "failed": false,
+          "object": "docs",
+          "result": "4 tools"
+        }
+      }
+    },
+    {
+      "name": "tool file_change: one file counted is its lines added and removed",
+      "entry": {
+        "timeline_id": "c30",
+        "session_id": "s-pairs",
+        "ordinal": 30,
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-3",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000030000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Edit",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Edit",
+              "name": "Edit",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": {
+                    "type": "file",
+                    "path": "src/x.ts"
+                  },
+                  "lines_added": 3,
+                  "lines_removed": 1
+                }
+              ]
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 30
+        }
+      },
+      "row": {
+        "timelineId": "c30",
+        "sessionId": "s-pairs",
+        "ordinal": 30,
+        "kind": "tool_use",
+        "at": 1790000030000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-3",
+        "tool": {
+          "name": "Edit",
+          "family": "file_change",
+          "status": "succeeded",
+          "failed": false,
+          "object": "src/x.ts",
+          "result": "+3 −1"
+        }
+      }
+    },
+    {
+      "name": "tool file_change: more than one file is how many",
+      "entry": {
+        "timeline_id": "c31",
+        "session_id": "s-pairs",
+        "ordinal": 31,
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-3",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000031000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_MultiEdit",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_MultiEdit",
+              "name": "MultiEdit",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": {
+                    "type": "file",
+                    "path": "src/x.ts"
+                  },
+                  "lines_added": 3,
+                  "lines_removed": 0
+                },
+                {
+                  "path": {
+                    "type": "file",
+                    "path": "src/y.ts"
+                  },
+                  "lines_added": 0,
+                  "lines_removed": 2
+                }
+              ]
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 31
+        }
+      },
+      "row": {
+        "timelineId": "c31",
+        "sessionId": "s-pairs",
+        "ordinal": 31,
+        "kind": "tool_use",
+        "at": 1790000031000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-3",
+        "tool": {
+          "name": "MultiEdit",
+          "family": "file_change",
+          "status": "succeeded",
+          "failed": false,
+          "object": "src/x.ts",
+          "result": "2 files"
+        }
+      }
+    },
+    {
+      "name": "tool file_change: an uncounted change is its path alone",
+      "entry": {
+        "timeline_id": "c32",
+        "session_id": "s-pairs",
+        "ordinal": 32,
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-3",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000032000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Write",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Write",
+              "name": "Write",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "file_change",
+              "changes": [
+                {
+                  "path": {
+                    "type": "file",
+                    "path": "src/new.ts"
+                  },
+                  "lines_added": null,
+                  "lines_removed": null
+                }
+              ]
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 32
+        }
+      },
+      "row": {
+        "timelineId": "c32",
+        "sessionId": "s-pairs",
+        "ordinal": 32,
+        "kind": "tool_use",
+        "at": 1790000032000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-3",
+        "tool": {
+          "name": "Write",
+          "family": "file_change",
+          "status": "succeeded",
+          "failed": false,
+          "object": "src/new.ts"
+        }
+      }
+    },
+    {
+      "name": "tool web_fetch: its URL and its HTTP status",
+      "entry": {
+        "timeline_id": "c33",
+        "session_id": "s-pairs",
+        "ordinal": 33,
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-3",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000033000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_WebFetch",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_WebFetch",
+              "name": "WebFetch",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "web_fetch",
+              "url": {
+                "type": "url",
+                "url": "https://example.com/a"
+              },
+              "outcome": {
+                "http_status": 200
+              }
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 33
+        }
+      },
+      "row": {
+        "timelineId": "c33",
+        "sessionId": "s-pairs",
+        "ordinal": 33,
+        "kind": "tool_use",
+        "at": 1790000033000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-3",
+        "tool": {
+          "name": "WebFetch",
+          "family": "web_fetch",
+          "status": "succeeded",
+          "failed": false,
+          "object": "https://example.com/a",
+          "result": "200"
+        }
+      }
+    },
+    {
+      "name": "tool web_navigate: a pattern when there is no URL",
+      "entry": {
+        "timeline_id": "c34",
+        "session_id": "s-pairs",
+        "ordinal": 34,
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-3",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000034000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Navigate",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Navigate",
+              "name": "Navigate",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "web_navigate",
+              "url": null,
+              "pattern": "*.example.com"
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 34
+        }
+      },
+      "row": {
+        "timelineId": "c34",
+        "sessionId": "s-pairs",
+        "ordinal": 34,
+        "kind": "tool_use",
+        "at": 1790000034000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-3",
+        "tool": {
+          "name": "Navigate",
+          "family": "web_navigate",
+          "status": "succeeded",
+          "failed": false,
+          "object": "*.example.com"
+        }
+      }
+    },
+    {
+      "name": "tool delegate: its name",
+      "entry": {
+        "timeline_id": "c35",
+        "session_id": "s-pairs",
+        "ordinal": 35,
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-3",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000035000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Agent",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Agent",
+              "name": "Agent",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "delegate",
+              "name": "reviewer",
+              "objective": {
+                "type": "inline",
+                "text": "review it"
+              }
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 35
+        }
+      },
+      "row": {
+        "timelineId": "c35",
+        "sessionId": "s-pairs",
+        "ordinal": 35,
+        "kind": "tool_use",
+        "at": 1790000035000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-3",
+        "tool": {
+          "name": "Agent",
+          "family": "delegate",
+          "status": "succeeded",
+          "failed": false,
+          "object": "reviewer"
+        }
+      }
+    },
+    {
+      "name": "tool workflow: its objective's first line when there is no name",
+      "entry": {
+        "timeline_id": "c36",
+        "session_id": "s-pairs",
+        "ordinal": 36,
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-3",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000036000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Workflow",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Workflow",
+              "name": "Workflow",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "workflow",
+              "objective": {
+                "type": "inline",
+                "text": "Ship it\nthen the records"
+              }
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 36
+        }
+      },
+      "row": {
+        "timelineId": "c36",
+        "sessionId": "s-pairs",
+        "ordinal": 36,
+        "kind": "tool_use",
+        "at": 1790000036000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-3",
+        "tool": {
+          "name": "Workflow",
+          "family": "workflow",
+          "status": "succeeded",
+          "failed": false,
+          "object": "Ship it"
+        }
+      }
+    },
+    {
+      "name": "tool schedule: its reason when there is neither name nor objective",
+      "entry": {
+        "timeline_id": "c37",
+        "session_id": "s-pairs",
+        "ordinal": 37,
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-3",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000037000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Cron",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Cron",
+              "name": "Cron",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "schedule",
+              "reason": "nightly"
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 37
+        }
+      },
+      "row": {
+        "timelineId": "c37",
+        "sessionId": "s-pairs",
+        "ordinal": 37,
+        "kind": "tool_use",
+        "at": 1790000037000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-3",
+        "tool": {
+          "name": "Cron",
+          "family": "schedule",
+          "status": "succeeded",
+          "failed": false,
+          "object": "nightly"
+        }
+      }
+    },
+    {
+      "name": "tool task: its subject and its status",
+      "entry": {
+        "timeline_id": "c38",
+        "session_id": "s-pairs",
+        "ordinal": 38,
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-3",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000038000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Task",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Task",
+              "name": "Task",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "task",
+              "subject": "Write the pairs",
+              "status": "in_progress"
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 38
+        }
+      },
+      "row": {
+        "timelineId": "c38",
+        "sessionId": "s-pairs",
+        "ordinal": 38,
+        "kind": "tool_use",
+        "at": 1790000038000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-3",
+        "tool": {
+          "name": "Task",
+          "family": "task",
+          "status": "succeeded",
+          "failed": false,
+          "object": "Write the pairs",
+          "result": "in_progress"
+        }
+      }
+    },
+    {
+      "name": "tool task: its description's first line when there is no subject",
+      "entry": {
+        "timeline_id": "c39",
+        "session_id": "s-pairs",
+        "ordinal": 39,
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-3",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000039000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Task",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Task",
+              "name": "Task",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "task",
+              "description": {
+                "type": "inline",
+                "text": "Port the projection\nin Swift"
+              }
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 39
+        }
+      },
+      "row": {
+        "timelineId": "c39",
+        "sessionId": "s-pairs",
+        "ordinal": 39,
+        "kind": "tool_use",
+        "at": 1790000039000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-3",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-3",
+        "tool": {
+          "name": "Task",
+          "family": "task",
+          "status": "succeeded",
+          "failed": false,
+          "object": "Port the projection"
+        }
+      }
+    },
+    {
+      "name": "tool plan: its title",
+      "entry": {
+        "timeline_id": "c40",
+        "session_id": "s-pairs",
+        "ordinal": 40,
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-4",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000040000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Plan",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Plan",
+              "name": "Plan",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "plan",
+              "title": "The plan"
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 40
+        }
+      },
+      "row": {
+        "timelineId": "c40",
+        "sessionId": "s-pairs",
+        "ordinal": 40,
+        "kind": "tool_use",
+        "at": 1790000040000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-4",
+        "tool": {
+          "name": "Plan",
+          "family": "plan",
+          "status": "succeeded",
+          "failed": false,
+          "object": "The plan"
+        }
+      }
+    },
+    {
+      "name": "tool artifact: its name when there is no title",
+      "entry": {
+        "timeline_id": "c41",
+        "session_id": "s-pairs",
+        "ordinal": 41,
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-4",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000041000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Artifact",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Artifact",
+              "name": "Artifact",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "artifact",
+              "name": "page.html"
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 41
+        }
+      },
+      "row": {
+        "timelineId": "c41",
+        "sessionId": "s-pairs",
+        "ordinal": 41,
+        "kind": "tool_use",
+        "at": 1790000041000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-4",
+        "tool": {
+          "name": "Artifact",
+          "family": "artifact",
+          "status": "succeeded",
+          "failed": false,
+          "object": "page.html"
+        }
+      }
+    },
+    {
+      "name": "tool skill: its name",
+      "entry": {
+        "timeline_id": "c42",
+        "session_id": "s-pairs",
+        "ordinal": 42,
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-4",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000042000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Skill",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Skill",
+              "name": "Skill",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "skill",
+              "name": "pdf"
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 42
+        }
+      },
+      "row": {
+        "timelineId": "c42",
+        "sessionId": "s-pairs",
+        "ordinal": 42,
+        "kind": "tool_use",
+        "at": 1790000042000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-4",
+        "tool": {
+          "name": "Skill",
+          "family": "skill",
+          "status": "succeeded",
+          "failed": false,
+          "object": "pdf"
+        }
+      }
+    },
+    {
+      "name": "tool question: the first question's first line",
+      "entry": {
+        "timeline_id": "c43",
+        "session_id": "s-pairs",
+        "ordinal": 43,
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-4",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000043000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Ask",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Ask",
+              "name": "Ask",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "question",
+              "questions": [
+                {
+                  "prompt": {
+                    "type": "inline",
+                    "text": "Which lean?\n(a) or (b)"
+                  }
+                },
+                {
+                  "prompt": {
+                    "type": "inline",
+                    "text": "And?"
+                  }
+                }
+              ]
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 43
+        }
+      },
+      "row": {
+        "timelineId": "c43",
+        "sessionId": "s-pairs",
+        "ordinal": 43,
+        "kind": "tool_use",
+        "at": 1790000043000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-4",
+        "tool": {
+          "name": "Ask",
+          "family": "question",
+          "status": "succeeded",
+          "failed": false,
+          "object": "Which lean?"
+        }
+      }
+    },
+    {
+      "name": "tool notification: its summary",
+      "entry": {
+        "timeline_id": "c44",
+        "session_id": "s-pairs",
+        "ordinal": 44,
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-4",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000044000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Notify",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Notify",
+              "name": "Notify",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "notification",
+              "summary": {
+                "type": "inline",
+                "text": "Build done"
+              }
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 44
+        }
+      },
+      "row": {
+        "timelineId": "c44",
+        "sessionId": "s-pairs",
+        "ordinal": 44,
+        "kind": "tool_use",
+        "at": 1790000044000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-4",
+        "tool": {
+          "name": "Notify",
+          "family": "notification",
+          "status": "succeeded",
+          "failed": false,
+          "object": "Build done"
+        }
+      }
+    },
+    {
+      "name": "tool external: its operation and its subject",
+      "entry": {
+        "timeline_id": "c45",
+        "session_id": "s-pairs",
+        "ordinal": 45,
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-4",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000045000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_mcp__gh__issue",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_mcp__gh__issue",
+              "name": "mcp__gh__issue",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "external",
+              "operation": "create_issue",
+              "subject": "#1"
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 45
+        }
+      },
+      "row": {
+        "timelineId": "c45",
+        "sessionId": "s-pairs",
+        "ordinal": 45,
+        "kind": "tool_use",
+        "at": 1790000045000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-4",
+        "tool": {
+          "name": "mcp__gh__issue",
+          "family": "external",
+          "status": "succeeded",
+          "failed": false,
+          "object": "create_issue #1"
+        }
+      }
+    },
+    {
+      "name": "tool external: an operation alone",
+      "entry": {
+        "timeline_id": "c46",
+        "session_id": "s-pairs",
+        "ordinal": 46,
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-4",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000046000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_mcp__gh__list",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_mcp__gh__list",
+              "name": "mcp__gh__list",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "external",
+              "operation": "list_issues"
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 46
+        }
+      },
+      "row": {
+        "timelineId": "c46",
+        "sessionId": "s-pairs",
+        "ordinal": 46,
+        "kind": "tool_use",
+        "at": 1790000046000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-4",
+        "tool": {
+          "name": "mcp__gh__list",
+          "family": "external",
+          "status": "succeeded",
+          "failed": false,
+          "object": "list_issues"
+        }
+      }
+    },
+    {
+      "name": "tool process: its process and its state",
+      "entry": {
+        "timeline_id": "c47",
+        "session_id": "s-pairs",
+        "ordinal": 47,
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-4",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000047000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Output",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Output",
+              "name": "Output",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "process",
+              "process_id": "p-7",
+              "outcome": {
+                "state": "running"
+              }
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 47
+        }
+      },
+      "row": {
+        "timelineId": "c47",
+        "sessionId": "s-pairs",
+        "ordinal": 47,
+        "kind": "tool_use",
+        "at": 1790000047000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-4",
+        "tool": {
+          "name": "Output",
+          "family": "process",
+          "status": "succeeded",
+          "failed": false,
+          "object": "p-7",
+          "result": "running"
+        }
+      }
+    },
+    {
+      "name": "tool mode: the mode",
+      "entry": {
+        "timeline_id": "c48",
+        "session_id": "s-pairs",
+        "ordinal": 48,
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-4",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000048000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_ExitPlanMode",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_ExitPlanMode",
+              "name": "ExitPlanMode",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "mode",
+              "mode": "default"
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 48
+        }
+      },
+      "row": {
+        "timelineId": "c48",
+        "sessionId": "s-pairs",
+        "ordinal": 48,
+        "kind": "tool_use",
+        "at": 1790000048000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-4",
+        "tool": {
+          "name": "ExitPlanMode",
+          "family": "mode",
+          "status": "succeeded",
+          "failed": false,
+          "object": "default"
+        }
+      }
+    },
+    {
+      "name": "tool finding: how many findings",
+      "entry": {
+        "timeline_id": "c49",
+        "session_id": "s-pairs",
+        "ordinal": 49,
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-4",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000049000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Review",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Review",
+              "name": "Review",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "finding",
+              "total_count": 2
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 49
+        }
+      },
+      "row": {
+        "timelineId": "c49",
+        "sessionId": "s-pairs",
+        "ordinal": 49,
+        "kind": "tool_use",
+        "at": 1790000049000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-4",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-4",
+        "tool": {
+          "name": "Review",
+          "family": "finding",
+          "status": "succeeded",
+          "failed": false,
+          "result": "2 findings"
+        }
+      }
+    },
+    {
+      "name": "tool orchestration: one child",
+      "entry": {
+        "timeline_id": "c50",
+        "session_id": "s-pairs",
+        "ordinal": 50,
+        "group": {
+          "id": "turn-5",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-5",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000050000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Fleet",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Fleet",
+              "name": "Fleet",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "orchestration",
+              "executed_child_count": 1
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 50
+        }
+      },
+      "row": {
+        "timelineId": "c50",
+        "sessionId": "s-pairs",
+        "ordinal": 50,
+        "kind": "tool_use",
+        "at": 1790000050000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-5",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-5",
+        "tool": {
+          "name": "Fleet",
+          "family": "orchestration",
+          "status": "succeeded",
+          "failed": false,
+          "result": "1 child"
+        }
+      }
+    },
+    {
+      "name": "tool: a family this build never heard of carries neither object nor result",
+      "entry": {
+        "timeline_id": "c51",
+        "session_id": "s-pairs",
+        "ordinal": 51,
+        "group": {
+          "id": "turn-5",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-5",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000051000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Telepathy",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Telepathy",
+              "name": "Telepathy",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "telepathy",
+              "thought": "unseen"
+            },
+            "failure": null,
+            "timing": null
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 51
+        }
+      },
+      "row": {
+        "timelineId": "c51",
+        "sessionId": "s-pairs",
+        "ordinal": 51,
+        "kind": "tool_use",
+        "at": 1790000051000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-5",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-5",
+        "tool": {
+          "name": "Telepathy",
+          "family": "telepathy",
+          "status": "succeeded",
+          "failed": false
+        }
+      }
+    },
+    {
+      "name": "tool: its own attachments, as refs",
+      "entry": {
+        "timeline_id": "c52",
+        "session_id": "s-pairs",
+        "ordinal": 52,
+        "group": {
+          "id": "turn-5",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-5",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000052000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "correlation": {
+              "key": "toolu_Capture",
+              "derivation": "native_id"
+            },
+            "native": {
+              "id": "toolu_Capture",
+              "name": "Capture",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "value": "succeeded",
+              "basis": "native_terminal_record"
+            },
+            "action": {
+              "type": "external",
+              "operation": "capture"
+            },
+            "failure": null,
+            "timing": null,
+            "attachments": [
+              {
+                "id": "img-1",
+                "kind": "image",
+                "label": null,
+                "name": "shot.png",
+                "media_type": "image/png",
+                "byte_len": 1234,
+                "source": {
+                  "type": "asset",
+                  "asset": {
+                    "url": "/api/assets/abc.png",
+                    "digest": "abc",
+                    "media_type": "image/png",
+                    "byte_len": 1234
+                  }
+                },
+                "dimensions": null,
+                "message_ranges": []
+              }
+            ]
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 52
+        }
+      },
+      "row": {
+        "timelineId": "c52",
+        "sessionId": "s-pairs",
+        "ordinal": 52,
+        "kind": "tool_use",
+        "at": 1790000052000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-5",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-5",
+        "tool": {
+          "name": "Capture",
+          "family": "external",
+          "status": "succeeded",
+          "failed": false,
+          "object": "capture",
+          "attachments": [
+            {
+              "id": "img-1",
+              "kind": "image",
+              "name": "shot.png",
+              "mediaType": "image/png",
+              "byteLen": 1234,
+              "available": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "tool: one rosetta's reader refuses is a tool_use row with no line",
+      "refused": true,
+      "entry": {
+        "timeline_id": "c53",
+        "session_id": "s-pairs",
+        "ordinal": 53,
+        "group": {
+          "id": "turn-5",
+          "kind": "agent_cycle",
+          "derivation": "native"
+        },
+        "response": {
+          "id": "response-5",
+          "derivation": "native"
+        },
+        "block_index": null,
+        "native_id": null,
+        "parent_native_id": null,
+        "at": 1790000053000,
+        "model": "claude-opus-5",
+        "effort": null,
+        "body": {
+          "type": "tool_use",
+          "tool": {
+            "status": {
+              "value": "running"
+            },
+            "action": {
+              "type": "shell"
+            }
+          }
+        },
+        "parent_tool_native_id": null,
+        "usage": null,
+        "cost": null,
+        "provenance": {
+          "agent_version": "2.1.241",
+          "src_cursor": 1,
+          "src_offset": 53
+        }
+      },
+      "row": {
+        "timelineId": "c53",
+        "sessionId": "s-pairs",
+        "ordinal": 53,
+        "kind": "tool_use",
+        "at": 1790000053000,
+        "model": "claude-opus-5",
+        "group": {
+          "id": "turn-5",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-5"
+      }
+    },
+    {
+      "name": "rosetta's page golden (rosetta-26): t1",
+      "entry": {
+        "at": 3600000,
+        "block_index": 0,
+        "body": {
+          "tool": {
+            "action": {
+              "background": false,
+              "command": {
+                "text": "one",
+                "type": "inline"
+              },
+              "cwd": null,
+              "outcome": {
+                "exit_code": 0,
+                "process_id": null,
+                "signal": null
+              },
+              "source_truncated": true,
+              "timeout_ms": null,
+              "type": "shell"
+            },
+            "attachments": [
+              {
+                "byte_len": null,
+                "dimensions": null,
+                "id": "tool-image-1",
+                "kind": "image",
+                "label": null,
+                "media_type": null,
+                "message_ranges": [],
+                "name": null,
+                "source": {
+                  "asset": {
+                    "byte_len": 17,
+                    "digest": "09aab85791343d3f141e31e18f5a98b981114f9b2babb2437b5747d98b8502cc",
+                    "image_variants": {
+                      "preview": {
+                        "byte_len": 19,
+                        "digest": "b52df5cf0e656a83a86bc2ff13bb1c9eb6226da58a8e65b83d18fefdcb285af9",
+                        "media_type": "image/webp",
+                        "url": "/api/assets/b52df5cf0e656a83a86bc2ff13bb1c9eb6226da58a8e65b83d18fefdcb285af9.webp"
+                      },
+                      "rail": {
+                        "byte_len": 16,
+                        "digest": "519d98f459836c14839edca49654dbeb4d698380f38e80bc37c23725817fc762",
+                        "media_type": "image/webp",
+                        "url": "/api/assets/519d98f459836c14839edca49654dbeb4d698380f38e80bc37c23725817fc762.webp"
+                      },
+                      "tile": {
+                        "byte_len": 16,
+                        "digest": "72eb3b938fb710cae106aa3e7805002363c6df4d63a1d175a07d816dad47211d",
+                        "media_type": "image/webp",
+                        "url": "/api/assets/72eb3b938fb710cae106aa3e7805002363c6df4d63a1d175a07d816dad47211d.webp"
+                      },
+                      "tile2x": {
+                        "byte_len": 18,
+                        "digest": "18c7bfef4056353384174f2edda6228c7cb0d02d1781ae4a0e078dd1f438d732",
+                        "media_type": "image/webp",
+                        "url": "/api/assets/18c7bfef4056353384174f2edda6228c7cb0d02d1781ae4a0e078dd1f438d732.webp"
+                      }
+                    },
+                    "media_type": "image/webp",
+                    "url": "/api/assets/09aab85791343d3f141e31e18f5a98b981114f9b2babb2437b5747d98b8502cc.webp"
+                  },
+                  "type": "asset"
+                }
+              }
+            ],
+            "correlation": {
+              "derivation": "native_id",
+              "key": "toolu_1"
+            },
+            "failure": null,
+            "native": {
+              "id": "toolu_1",
+              "name": "Bash",
+              "namespace": null,
+              "provider": null
+            },
+            "status": {
+              "basis": "native_terminal_record",
+              "value": "succeeded"
+            },
+            "timing": null
+          },
+          "type": "tool_use"
+        },
+        "cost": {
+          "reason": "unknown_model",
+          "status": "unpriced"
+        },
+        "effort": "high",
+        "group": {
+          "derivation": "native",
+          "id": "turn-1",
+          "kind": "human_turn"
+        },
+        "model": "claude-opus-5",
+        "native_id": "u1",
+        "ordinal": 7,
+        "parent_native_id": "u0",
+        "parent_tool_native_id": "toolu_0",
+        "provenance": {
+          "agent_version": "2.1.240",
+          "src_cursor": 4,
+          "src_offset": 1024
+        },
+        "response": {
+          "derivation": "native",
+          "id": "response-1"
+        },
+        "session_id": "s1",
+        "timeline_id": "t1",
+        "usage": {
+          "billed_pico_usd": 1250000,
+          "cache_read": 3,
+          "cache_write": 2,
+          "cache_write_1h": 4,
+          "input": 10,
+          "output": 5,
+          "requests": null,
+          "route": "openrouter",
+          "scope": "request",
+          "service_tier": "standard",
+          "thinking": 1,
+          "web_searches": 1
+        }
+      },
+      "row": {
+        "timelineId": "t1",
+        "sessionId": "s1",
+        "ordinal": 7,
+        "kind": "tool_use",
+        "at": 3600000,
+        "model": "claude-opus-5",
+        "effort": "high",
+        "group": {
+          "id": "turn-1",
+          "kind": "human_turn"
+        },
+        "responseId": "response-1",
+        "tool": {
+          "name": "Bash",
+          "family": "shell",
+          "status": "succeeded",
+          "failed": false,
+          "object": "one",
+          "result": "exit 0",
+          "attachments": [
+            {
+              "id": "tool-image-1",
+              "kind": "image",
+              "available": true
+            }
+          ]
+        },
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 3,
+          "cacheWrite": 2,
+          "thinking": 1
+        }
+      }
+    },
+    {
+      "name": "rosetta's page golden (rosetta-26): team-report-1",
+      "entry": {
+        "at": 3800000,
+        "block_index": null,
+        "body": {
+          "event": {
+            "authored_at": 3799000,
+            "body": {
+              "text": "All design deltas landed.",
+              "type": "inline"
+            },
+            "channel": "team",
+            "color": "green",
+            "delivery_id": "delivery-2",
+            "kind": "report",
+            "recipient": "coordinator",
+            "sender": "w2-docs",
+            "source_response_id": "team-response-2",
+            "source_session_id": "team-member-s2",
+            "status": "completed",
+            "summary": "design docs updated",
+            "task_id": "task-2",
+            "team": "refinement",
+            "work_end_timeline_id": "team-work-end",
+            "work_start_timeline_id": "team-work-start"
+          },
+          "type": "collaboration"
+        },
+        "effort": null,
+        "group": {
+          "derivation": "native",
+          "id": "team-delivery-1",
+          "kind": "system_cycle"
+        },
+        "model": null,
+        "native_id": "team-native-1",
+        "ordinal": 9,
+        "parent_native_id": "team-parent-1",
+        "parent_tool_native_id": null,
+        "provenance": {
+          "agent_version": "2.1.240",
+          "src_cursor": 4,
+          "src_offset": 3072
+        },
+        "response": null,
+        "session_id": "s1",
+        "timeline_id": "team-report-1",
+        "usage": {
+          "billed_pico_usd": null,
+          "cache_read": null,
+          "cache_write": null,
+          "cache_write_1h": null,
+          "input": null,
+          "output": null,
+          "requests": null,
+          "route": null,
+          "scope": "request",
+          "service_tier": null,
+          "thinking": null,
+          "web_searches": null
+        }
+      },
+      "row": {
+        "timelineId": "team-report-1",
+        "sessionId": "s1",
+        "ordinal": 9,
+        "kind": "collaboration",
+        "at": 3800000,
+        "group": {
+          "id": "team-delivery-1",
+          "kind": "system_cycle"
+        },
+        "text": "design docs updated"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "at": "open",
+      "upserts": [
+        {
+          "timeline_id": "l1",
+          "session_id": "s-live",
+          "ordinal": 1,
+          "group": {
+            "id": "turn-0",
+            "kind": "human_turn",
+            "derivation": "native"
+          },
+          "response": null,
+          "block_index": null,
+          "native_id": null,
+          "parent_native_id": null,
+          "at": 1790000001000,
+          "model": null,
+          "effort": null,
+          "body": {
+            "type": "user",
+            "text": {
+              "type": "inline",
+              "text": "fix the build"
+            },
+            "attachments": []
+          },
+          "parent_tool_native_id": null,
+          "usage": null,
+          "cost": null,
+          "provenance": {
+            "agent_version": "2.1.241",
+            "src_cursor": 1,
+            "src_offset": 1
+          }
+        },
+        {
+          "timeline_id": "l2",
+          "session_id": "s-live",
+          "ordinal": 2,
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle",
+            "derivation": "native"
+          },
+          "response": {
+            "id": "response-0",
+            "derivation": "native"
+          },
+          "block_index": null,
+          "native_id": null,
+          "parent_native_id": null,
+          "at": 1790000002000,
+          "model": "claude-opus-5",
+          "effort": null,
+          "body": {
+            "type": "thinking",
+            "text": {
+              "type": "inline",
+              "text": "the build first"
+            }
+          },
+          "parent_tool_native_id": null,
+          "usage": null,
+          "cost": null,
+          "provenance": {
+            "agent_version": "2.1.241",
+            "src_cursor": 1,
+            "src_offset": 2
+          }
+        },
+        {
+          "timeline_id": "l3",
+          "session_id": "s-live",
+          "ordinal": 3,
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle",
+            "derivation": "native"
+          },
+          "response": {
+            "id": "response-0",
+            "derivation": "native"
+          },
+          "block_index": null,
+          "native_id": null,
+          "parent_native_id": null,
+          "at": 1790000003000,
+          "model": "claude-opus-5",
+          "effort": null,
+          "body": {
+            "type": "tool_use",
+            "tool": {
+              "correlation": {
+                "key": "toolu_Bash",
+                "derivation": "native_id"
+              },
+              "native": {
+                "id": "toolu_Bash",
+                "name": "Bash",
+                "namespace": null,
+                "provider": null
+              },
+              "status": {
+                "value": "running",
+                "basis": "native_progress"
+              },
+              "action": {
+                "type": "shell",
+                "command": {
+                  "type": "inline",
+                  "text": "pnpm build"
+                },
+                "outcome": null
+              },
+              "failure": null,
+              "timing": {
+                "started_at": 1790000003000,
+                "completed_at": null,
+                "duration_ms": null
+              }
+            }
+          },
+          "parent_tool_native_id": null,
+          "usage": null,
+          "cost": null,
+          "provenance": {
+            "agent_version": "2.1.241",
+            "src_cursor": 1,
+            "src_offset": 3
+          }
+        },
+        {
+          "timeline_id": "l4",
+          "session_id": "s-live",
+          "ordinal": 4,
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle",
+            "derivation": "native"
+          },
+          "response": {
+            "id": "response-0",
+            "derivation": "native"
+          },
+          "block_index": null,
+          "native_id": null,
+          "parent_native_id": null,
+          "at": 1790000004000,
+          "model": "claude-opus-5",
+          "effort": null,
+          "body": {
+            "type": "agent",
+            "text": {
+              "type": "inline",
+              "text": "Looking"
+            },
+            "attachments": []
+          },
+          "parent_tool_native_id": null,
+          "usage": null,
+          "cost": null,
+          "provenance": {
+            "agent_version": "2.1.241",
+            "src_cursor": 1,
+            "src_offset": 4
+          }
+        }
+      ],
+      "rows": [
+        {
+          "timelineId": "l1",
+          "sessionId": "s-live",
+          "ordinal": 1,
+          "kind": "user",
+          "at": 1790000001000,
+          "group": {
+            "id": "turn-0",
+            "kind": "human_turn"
+          },
+          "text": "fix the build"
+        },
+        {
+          "timelineId": "l2",
+          "sessionId": "s-live",
+          "ordinal": 2,
+          "kind": "thinking",
+          "at": 1790000002000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "text": "the build first"
+        },
+        {
+          "timelineId": "l3",
+          "sessionId": "s-live",
+          "ordinal": 3,
+          "kind": "tool_use",
+          "at": 1790000003000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "tool": {
+            "name": "Bash",
+            "family": "shell",
+            "status": "running",
+            "failed": false,
+            "object": "pnpm build"
+          }
+        },
+        {
+          "timelineId": "l4",
+          "sessionId": "s-live",
+          "ordinal": 4,
+          "kind": "agent",
+          "at": 1790000004000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "text": "Looking"
+        }
+      ]
+    },
+    {
+      "at": "tool_updated: the build finished",
+      "upserts": [
+        {
+          "timeline_id": "l3",
+          "session_id": "s-live",
+          "ordinal": 3,
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle",
+            "derivation": "native"
+          },
+          "response": {
+            "id": "response-0",
+            "derivation": "native"
+          },
+          "block_index": null,
+          "native_id": null,
+          "parent_native_id": null,
+          "at": 1790000003000,
+          "model": "claude-opus-5",
+          "effort": null,
+          "body": {
+            "type": "tool_use",
+            "tool": {
+              "correlation": {
+                "key": "toolu_Bash",
+                "derivation": "native_id"
+              },
+              "native": {
+                "id": "toolu_Bash",
+                "name": "Bash",
+                "namespace": null,
+                "provider": null
+              },
+              "status": {
+                "value": "succeeded",
+                "basis": "native_terminal_record"
+              },
+              "action": {
+                "type": "shell",
+                "command": {
+                  "type": "inline",
+                  "text": "pnpm build"
+                },
+                "outcome": {
+                  "exit_code": 0,
+                  "signal": null
+                }
+              },
+              "failure": null,
+              "timing": {
+                "started_at": 1790000003000,
+                "completed_at": 1790000007500
+              }
+            }
+          },
+          "parent_tool_native_id": null,
+          "usage": null,
+          "cost": null,
+          "provenance": {
+            "agent_version": "2.1.241",
+            "src_cursor": 1,
+            "src_offset": 3
+          }
+        }
+      ],
+      "rows": [
+        {
+          "timelineId": "l1",
+          "sessionId": "s-live",
+          "ordinal": 1,
+          "kind": "user",
+          "at": 1790000001000,
+          "group": {
+            "id": "turn-0",
+            "kind": "human_turn"
+          },
+          "text": "fix the build"
+        },
+        {
+          "timelineId": "l2",
+          "sessionId": "s-live",
+          "ordinal": 2,
+          "kind": "thinking",
+          "at": 1790000002000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "text": "the build first"
+        },
+        {
+          "timelineId": "l3",
+          "sessionId": "s-live",
+          "ordinal": 3,
+          "kind": "tool_use",
+          "at": 1790000003000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "tool": {
+            "name": "Bash",
+            "family": "shell",
+            "status": "succeeded",
+            "failed": false,
+            "object": "pnpm build",
+            "result": "exit 0",
+            "durationMs": 4500
+          }
+        },
+        {
+          "timelineId": "l4",
+          "sessionId": "s-live",
+          "ordinal": 4,
+          "kind": "agent",
+          "at": 1790000004000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "text": "Looking"
+        }
+      ]
+    },
+    {
+      "at": "usage: the reply's usage and its cost",
+      "upserts": [
+        {
+          "timeline_id": "l4",
+          "session_id": "s-live",
+          "ordinal": 4,
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle",
+            "derivation": "native"
+          },
+          "response": {
+            "id": "response-0",
+            "derivation": "native"
+          },
+          "block_index": null,
+          "native_id": null,
+          "parent_native_id": null,
+          "at": 1790000004000,
+          "model": "claude-opus-5",
+          "effort": null,
+          "body": {
+            "type": "agent",
+            "text": {
+              "type": "inline",
+              "text": "Looking"
+            },
+            "attachments": []
+          },
+          "parent_tool_native_id": null,
+          "usage": {
+            "input": 1200,
+            "output": 80,
+            "cache_read": 900,
+            "cache_write": null,
+            "thinking": null,
+            "scope": "request"
+          },
+          "cost": {
+            "status": "priced",
+            "micro_usd": 3150,
+            "long_context": false
+          },
+          "provenance": {
+            "agent_version": "2.1.241",
+            "src_cursor": 1,
+            "src_offset": 4
+          }
+        }
+      ],
+      "rows": [
+        {
+          "timelineId": "l1",
+          "sessionId": "s-live",
+          "ordinal": 1,
+          "kind": "user",
+          "at": 1790000001000,
+          "group": {
+            "id": "turn-0",
+            "kind": "human_turn"
+          },
+          "text": "fix the build"
+        },
+        {
+          "timelineId": "l2",
+          "sessionId": "s-live",
+          "ordinal": 2,
+          "kind": "thinking",
+          "at": 1790000002000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "text": "the build first"
+        },
+        {
+          "timelineId": "l3",
+          "sessionId": "s-live",
+          "ordinal": 3,
+          "kind": "tool_use",
+          "at": 1790000003000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "tool": {
+            "name": "Bash",
+            "family": "shell",
+            "status": "succeeded",
+            "failed": false,
+            "object": "pnpm build",
+            "result": "exit 0",
+            "durationMs": 4500
+          }
+        },
+        {
+          "timelineId": "l4",
+          "sessionId": "s-live",
+          "ordinal": 4,
+          "kind": "agent",
+          "at": 1790000004000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "text": "Looking",
+          "usage": {
+            "input": 1200,
+            "output": 80,
+            "cacheRead": 900
+          },
+          "costMicroUsd": 3150
+        }
+      ]
+    },
+    {
+      "at": "message: the reply whole, and a new row after it",
+      "upserts": [
+        {
+          "timeline_id": "l4",
+          "session_id": "s-live",
+          "ordinal": 4,
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle",
+            "derivation": "native"
+          },
+          "response": {
+            "id": "response-0",
+            "derivation": "native"
+          },
+          "block_index": null,
+          "native_id": null,
+          "parent_native_id": null,
+          "at": 1790000004000,
+          "model": "claude-opus-5",
+          "effort": null,
+          "body": {
+            "type": "agent",
+            "text": {
+              "type": "inline",
+              "text": "Looking. The build is green."
+            },
+            "attachments": []
+          },
+          "parent_tool_native_id": null,
+          "usage": {
+            "input": 1200,
+            "output": 80,
+            "cache_read": 900,
+            "cache_write": null,
+            "thinking": null,
+            "scope": "request"
+          },
+          "cost": {
+            "status": "priced",
+            "micro_usd": 3150,
+            "long_context": false
+          },
+          "provenance": {
+            "agent_version": "2.1.241",
+            "src_cursor": 1,
+            "src_offset": 4
+          }
+        },
+        {
+          "timeline_id": "l5",
+          "session_id": "s-live",
+          "ordinal": 5,
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle",
+            "derivation": "native"
+          },
+          "response": {
+            "id": "response-0",
+            "derivation": "native"
+          },
+          "block_index": null,
+          "native_id": null,
+          "parent_native_id": null,
+          "at": 1790000005000,
+          "model": "claude-opus-5",
+          "effort": null,
+          "body": {
+            "type": "agent",
+            "text": {
+              "type": "inline",
+              "text": "Anything else?"
+            },
+            "attachments": []
+          },
+          "parent_tool_native_id": null,
+          "usage": null,
+          "cost": null,
+          "provenance": {
+            "agent_version": "2.1.241",
+            "src_cursor": 1,
+            "src_offset": 5
+          }
+        }
+      ],
+      "rows": [
+        {
+          "timelineId": "l1",
+          "sessionId": "s-live",
+          "ordinal": 1,
+          "kind": "user",
+          "at": 1790000001000,
+          "group": {
+            "id": "turn-0",
+            "kind": "human_turn"
+          },
+          "text": "fix the build"
+        },
+        {
+          "timelineId": "l2",
+          "sessionId": "s-live",
+          "ordinal": 2,
+          "kind": "thinking",
+          "at": 1790000002000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "text": "the build first"
+        },
+        {
+          "timelineId": "l3",
+          "sessionId": "s-live",
+          "ordinal": 3,
+          "kind": "tool_use",
+          "at": 1790000003000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "tool": {
+            "name": "Bash",
+            "family": "shell",
+            "status": "succeeded",
+            "failed": false,
+            "object": "pnpm build",
+            "result": "exit 0",
+            "durationMs": 4500
+          }
+        },
+        {
+          "timelineId": "l4",
+          "sessionId": "s-live",
+          "ordinal": 4,
+          "kind": "agent",
+          "at": 1790000004000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "text": "Looking. The build is green.",
+          "usage": {
+            "input": 1200,
+            "output": 80,
+            "cacheRead": 900
+          },
+          "costMicroUsd": 3150
+        },
+        {
+          "timelineId": "l5",
+          "sessionId": "s-live",
+          "ordinal": 5,
+          "kind": "agent",
+          "at": 1790000005000,
+          "model": "claude-opus-5",
+          "group": {
+            "id": "turn-0",
+            "kind": "agent_cycle"
+          },
+          "responseId": "response-0",
+          "text": "Anything else?"
+        }
+      ]
+    }
+  ]
+}
