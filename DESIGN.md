@@ -10220,9 +10220,12 @@ below), and the spark's next session hears it; a line VibeField cannot confirm i
   changed flow you run yourself tells no spark;
 - *Proposed 2026-11-06 (CP-4a2b slice 11; CP4-Q22 (a), L5b; ruled 2026-11-06; open until James reads it, as the rest are):*
   a run a spark started tells that spark when it holds on you, and when it ends: "VibeField: Vela's run of ‹flow›
-  (‹run›) is asking you" (a gate, or a step whose answer missed twice); "VibeField: Vela's run of ‹flow› (‹run›) is
+  (‹run›) is asking you" (a gate, a step whose answer missed twice, or a step lost);
+  "VibeField: Vela's run of ‹flow› (‹run›) is
   done"; "VibeField: Vela's run of ‹flow› (‹run›) failed"; "VibeField: Vela's run of ‹flow› (‹run›) was set aside";
   *Proposed 2026-11-07 (CP-4a2b slice 13, W1; ruled 2026-11-07):* "VibeField: Vela's run of ‹flow› (‹run›) was stopped".
+  *Proposed 2026-11-08 (CP-4a2b slice 14, W3; ruled 2026-11-08 at the lean; open until James reads it, as the rest are):*
+  "or a step lost" is slice 14's (the lost step's item, in "A run that can't go on"): told when that item is made.
   Each is said at most once: a hold made again after a wake or a restart is the same hold, your answer to it tells
   nothing (the run goes on), and a fact waiting for a sleeping spark is lost if VibeField restarts first. They are facts
   only, never the gate's question, a step's answer, a log line or what the script threw. No act lists a spark's flows
@@ -10325,6 +10328,10 @@ name is above; a step with no label is "this step". "In its form" is said only t
   run and asks the person (`flow-repair`); their Ask once more sends this same line again.
 - **A step lost to a Quit, resumed** (CP4-Q11 (a)): Resume the step resumes its session from fieldd's own record and
   sends: "VibeField: VibeField quit while you were working on ‹label›. Finish it, then answer in its form."
+  *Corrected 2026-11-08 (CP-4a2b slice 14, W2; ruled 2026-11-08 at the lean; Proposed, open until James reads it, as the
+  rest are):* "VibeField quit" is false of a step whose agent you ended in Godview (End run), and at its next boot
+  fieldd can't tell a Quit from a crash. **A step lost, resumed:** "VibeField: your session ended while you were
+  working on ‹label›. Finish it, then answer in its form."
 - **An answer VibeField did not hear** (CP4-S17 (a), until puppeteer replays what a session said while fieldd was
   down): a step found idle after a fieldd restart, with no answer heard since its last words from the run, is asked
   once: "VibeField: VibeField restarted and did not hear your answer to ‹label›. Answer once more in its form." Its
@@ -10441,6 +10448,9 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
   - "VibeField didn't send ‹label›: that session is outside this run's Agent Profiles, isn't running, is a spark's or
     another flow's, or is waiting on a permission."
   - "VibeField couldn't start ‹label›: ‹the runtime's words›"
+  - *Proposed 2026-11-08 (CP-4a2b slice 14, W4; ruled 2026-11-08 at the lean; open until James reads it, as the rest
+    are):* Resume the step, when the runtime refuses it. It is the person's act and no script's `await`, so the item
+    stays open and the act is refused in these words: "VibeField couldn't resume ‹label›: ‹the runtime's words›"
   - "‹label› failed."
 - *Proposed 2026-11-06 (CP-4a2b slice 11, 13a's R34 and D22; ruled 2026-11-06; open until James reads
   them, as the rest are):* **An ask refused.** As a step's call is: the script's `await` throws with these words, and
@@ -10496,6 +10506,11 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
     ask what it asked before." A script that asks something new instead is said in the line above.
   - a run whose journal or record is forged or gone: its `flow-lost` item says "VibeField can't trust what ‹flow›
     kept, so it set the run aside." Its one act is Stop the run.
+  - *Proposed 2026-11-08 (CP-4a2b slice 14, W1; ruled 2026-11-08 at the lean; open until James reads it, as the rest
+    are):* a step whose agent the run started stopped before it answered (VibeField quit or crashed, you ended it in
+    Godview, or it failed; at its next boot fieldd can't tell a Quit from a crash, so the words name no cause): its
+    `flow-lost` item says "‹flow› lost ‹label›: its agent stopped before it answered." Its acts are Resume the step
+    and Stop the run.
 - **The acts** (NEEDS_CHOICE_WORDS): Stop the run · Ask once more · Resume the step · See the change · Run this
   version · Run the one you approved. *Corrected 2026-11-07 (CP-4a2b slice 12, the cap out; James 08:28:07Z, C):* the
   call cap's act is out.
