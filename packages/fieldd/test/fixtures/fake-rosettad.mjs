@@ -82,7 +82,8 @@
 // same way: `{"resync": n}` sends `{frame:"resync"}` + a fresh snapshot each
 // time n changes (the barrier a subscriber 1,024 items behind gets), and
 // `{"drop": n}` closes every meta socket each time n changes (a daemon that
-// dropped the stream). The upgrade answers with the protocol header, and a
+// dropped the stream), and `{"artifactsChanged": n}` sends rosetta's
+// `artifacts_changed` mutation, revision n, each time n changes. The upgrade answers with the protocol header, and a
 // browser Origin that is not loopback is refused 403, as the real guard does.
 // Bare `/api/sessions` answers the ROOTS (no parent) newest first, 100 by
 // default, and every list clamps its limit to rosetta's 1..1,000.
@@ -1338,7 +1339,7 @@ if (mode === "silent") {
     }
     return out;
   };
-  let control = { resync: undefined, drop: undefined };
+  let control = { resync: undefined, drop: undefined, artifactsChanged: undefined };
   const readControl = () => {
     const next = scripted("FAKE_ROSETTAD_META_CONTROL", {});
     return next !== null && typeof next === "object" ? next : {};
@@ -1365,6 +1366,14 @@ if (mode === "silent") {
         ws.send(JSON.stringify({ frame: "resync" }));
         ws.send(JSON.stringify(metaSnapshot()));
       }
+    }
+    if (next.artifactsChanged !== undefined && next.artifactsChanged !== control.artifactsChanged) {
+      const frame = JSON.stringify({
+        frame: "mutation",
+        stamp: null,
+        mutation: { type: "artifacts_changed", revision: next.artifactsChanged },
+      });
+      for (const ws of metaSockets) ws.send(frame);
     }
     if (next.drop !== undefined && next.drop !== control.drop) {
       for (const ws of metaSockets) ws.close(1011, "scripted drop");

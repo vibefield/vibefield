@@ -353,6 +353,24 @@ describe("IndexCatalog — following rosetta's /ws/meta (DS-6)", () => {
     await until(() => !catalog.sessions.has("s1"), 5_000, "the resync's diff");
   });
 
+  it("MA-3f: rosetta's artifacts_changed is a signal with no row of its own, and a session's mutation is no such signal", async () => {
+    const world = await startFake({ sessions: [session("s1")] });
+    const { catalog } = follower(world.origin);
+    await until(() => catalog.ready, 5_000, "the first snapshot");
+    let moved = 0;
+    catalog.on("library-changed", () => {
+      moved += 1;
+    });
+    world.write("sessions", [session("s1", { title: "renamed" })]);
+    await until(() => catalog.sessions.get("s1")?.title === "renamed", 5_000, "the rename");
+    expect(moved).toBe(0);
+    const renamedAt = catalog.sessions.revision;
+    world.write("control", { artifactsChanged: 7 });
+    await until(() => moved === 1, 5_000, "the library's signal");
+    expect(catalog.sessions.revision).toBe(renamedAt);
+    expect(catalog.phase).toBe("live");
+  });
+
   it("keeps its tables when the stream drops, reads stale, and re-dials to live", async () => {
     const world = await startFake({ sessions: [session("s1")] });
     const { catalog } = follower(world.origin);

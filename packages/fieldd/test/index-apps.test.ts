@@ -472,6 +472,21 @@ describe("IndexApps — the walk (MA-3a, L13)", () => {
     expect(apps.table.get(id("plain"))?.droppedFiles, "unknown stays absent").toBeUndefined();
   });
 
+  it("MA-3f: re-reads on rosetta's artifacts_changed as it does on a sessions change, by the same delay and floor", async () => {
+    const lib = library([app("a", 20)]);
+    const { apps, catalog } = appsOver(lib);
+    catalog.land();
+    await advance(0);
+    const walked = lib.calls.length;
+    lib.apps = [app("n", 30), app("a", 20)];
+    catalog.emit("library-changed");
+    await advance(MADE_APP_LIMITS.REREAD_DELAY_MS - 1);
+    expect(lib.calls, "nothing before the delay").toHaveLength(walked);
+    await advance(1);
+    expect(lib.calls, "one re-read").toHaveLength(walked + 1);
+    expect(apps.table.has(id("n"))).toBe(true);
+  });
+
   it("re-reads the newest REREAD_PAGE REREAD_DELAY_MS after a sessions change, at most once per REREAD_MIN_INTERVAL_MS, and only upserts", async () => {
     const lib = library([app("a", 20), app("b", 10)]);
     const { apps, catalog } = appsOver(lib);
