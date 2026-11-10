@@ -1,23 +1,25 @@
-// OB custody (C2; CUSTODY-SPEC §2.3) — fieldd's copy of the shell pairing's recipe (`src/shell-pairing.ts`), and the
-// verifier the door asks.
+// OB custody (C2; CUSTODY-SPEC §2.3, §2.6) — the shell pairing's recipe as fieldd takes it, and the verifier the
+// door asks (`src/shell-pairing.ts`).
 //
-// The recipe is pinned across packages by `contracts/fixtures/shell-pairing.vector.json`: this row is the VERIFIER's
-// reading of it, and `packages/trust` holds the maker's. No builder may run code, so the vector's two outputs say
-// TO-BE-COMPUTED and the vector row FAILS on that word, by the spec's own sentence, until the first admitted row
-// computes them. Until then the second row is what holds this copy: the recipe spelled a second time, apart, in the
-// test harness.
+// The recipe has ONE home, `@vibefield/trust` (the supervisor makes the MAC there, fieldd checks it there), so the
+// maker and the verifier cannot spell the message two ways; a row here reads fieldd's source and holds it to that.
+// The recipe is pinned across packages by `contracts/fixtures/shell-pairing.vector.json`: the vector row is the
+// VERIFIER's reading of it (the door's own verifier is handed the vector's hello), and trust's suite holds the
+// maker's. No builder may run code, so the vector's two outputs say TO-BE-COMPUTED and the vector row FAILS on that
+// word, by the spec's own sentence, until the first admitted row computes them. Until then the second row is what
+// holds the recipe from this side: it spelled a second time, apart, in the test harness.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CUSTODY } from "@vibefield/contracts";
-import { describe, expect, it } from "vitest";
 import {
-  computeShellAckMac,
-  computeShellPairingMac,
-  newShellPairingNonce,
-  ShellPairingVerifier,
-} from "../src/shell-pairing";
-import { type PairingFacts, shellAckMac, shellMac } from "./custody-harness";
+  newNonce,
+  shellAckMac as trustAckMac,
+  shellPairingMac as trustPairingMac,
+} from "@vibefield/trust";
+import { describe, expect, it } from "vitest";
+import { ShellPairingVerifier } from "../src/shell-pairing";
+import { freshNonce, type PairingFacts, shellAckMac, shellMac } from "./custody-harness";
 
 interface VectorCase extends PairingFacts {
   secretHex: string;
@@ -25,19 +27,33 @@ interface VectorCase extends PairingFacts {
   ackMac: string;
 }
 
+const HERE = dirname(fileURLToPath(import.meta.url));
 const UNCOMPUTED = "TO-BE-COMPUTED";
+
+/** What trust's two recipes are asked, from a case's facts. */
+function asked(facts: PairingFacts & { secretHex: string }): {
+  secret: string;
+  port: number;
+  bootId: string;
+  userId: string;
+  nonce: string;
+  ts: number;
+} {
+  return {
+    secret: facts.secretHex,
+    port: facts.port,
+    bootId: facts.bootId,
+    userId: facts.userId,
+    nonce: facts.nonce,
+    ts: facts.ts,
+  };
+}
 
 /** The vector's cases, in either shape it has had: one case at the file's top (slice K), or several under `cases`,
  * each over whatever the top states for all of them (K2 adds a daemon with no user). */
 function vectorCases(): VectorCase[] {
   const file = JSON.parse(
-    readFileSync(
-      join(
-        dirname(fileURLToPath(import.meta.url)),
-        "../../contracts/fixtures/shell-pairing.vector.json",
-      ),
-      "utf8",
-    ),
+    readFileSync(join(HERE, "../../contracts/fixtures/shell-pairing.vector.json"), "utf8"),
   ) as Record<string, unknown>;
   const { cases, ...top } = file;
   const found: Record<string, unknown>[] = [];
@@ -48,12 +64,23 @@ function vectorCases(): VectorCase[] {
 }
 
 describe("fieldd's shell pairing recipe", () => {
+  // CUSTODY-SPEC §2.6: trust is the one home of the recipes. Red while `src/shell-pairing.ts` makes an HMAC of its
+  // own: a second spelling is how a maker and a verifier come to disagree about one message.
+  it("fieldd spells the recipe nowhere of its own: its verifier takes trust's", () => {
+    const source = readFileSync(join(HERE, "../src/shell-pairing.ts"), "utf8");
+    const found = [...source.matchAll(/ from "([^"]+)";$/gm)];
+    const modules = found.map((line) => line[1]);
+    expect(modules).toContain("@vibefield/trust");
+    expect(modules).not.toContain("node:crypto");
+    expect(source).not.toContain("createHmac");
+  });
+
   it("matches the cross-package vector", () => {
     const all = vectorCases();
     expect(all.length, "the vector holds a case").toBeGreaterThan(0);
     for (const c of all) {
-      const mac = computeShellPairingMac(c.secretHex, c);
-      const ackMac = computeShellAckMac(c.secretHex, c);
+      const mac = trustPairingMac(asked(c));
+      const ackMac = trustAckMac(asked(c));
       if (c.mac === UNCOMPUTED || c.ackMac === UNCOMPUTED) {
         // the secret is the fixture's repeated byte, so what this side computes may be said: the lead fills the
         // vector from a run, and holds it to the maker's side saying the same
@@ -63,6 +90,15 @@ describe("fieldd's shell pairing recipe", () => {
       }
       expect(mac).toBe(c.mac);
       expect(ackMac).toBe(c.ackMac);
+      // the verifier's reading: the door's own verifier, handed the vector's hello, pairs and answers its proof
+      const door = new ShellPairingVerifier({
+        secretHex: c.secretHex,
+        bootId: c.bootId,
+        userId: c.userId,
+        now: () => c.ts * 1_000,
+      });
+      const hello = { bootId: c.bootId, ts: c.ts, nonce: c.nonce, mac: c.mac };
+      expect(door.verify(hello, c.port)).toEqual({ ok: true, serverMac: c.ackMac });
     }
   });
 
@@ -89,20 +125,18 @@ describe("fieldd's shell pairing recipe", () => {
       },
     ];
     for (const facts of inputs) {
-      expect(computeShellPairingMac(facts.secretHex, facts)).toBe(shellMac(facts.secretHex, facts));
-      expect(computeShellAckMac(facts.secretHex, facts)).toBe(shellAckMac(facts.secretHex, facts));
+      expect(trustPairingMac(asked(facts))).toBe(shellMac(facts.secretHex, facts));
+      expect(trustAckMac(asked(facts))).toBe(shellAckMac(facts.secretHex, facts));
     }
     // the two directions never answer one another
     const [first] = inputs;
     if (first === undefined) throw new Error("no input");
-    expect(computeShellAckMac(first.secretHex, first)).not.toBe(
-      computeShellPairingMac(first.secretHex, first),
-    );
+    expect(trustAckMac(asked(first))).not.toBe(trustPairingMac(asked(first)));
   });
 
   it("a nonce is CUSTODY.NONCE_HEX lowercase hex characters, fresh each time", () => {
-    const a = newShellPairingNonce();
-    const b = newShellPairingNonce();
+    const a = newNonce();
+    const b = newNonce();
     expect(a).toMatch(new RegExp(`^[0-9a-f]{${CUSTODY.NONCE_HEX}}$`));
     expect(b).not.toBe(a);
   });
@@ -134,7 +168,7 @@ describe("the shell pairing's verifier", () => {
       port: PORT,
       bootId: BOOT,
       userId: "",
-      nonce: newShellPairingNonce(),
+      nonce: freshNonce(),
       ts: clock,
       ...said,
     };
@@ -217,9 +251,19 @@ describe("the shell pairing's verifier", () => {
     expect(door.verify(credential({ userId: "01J9USERAAAAAAAAAAAAAAAAAA" }), PORT).ok).toBe(true);
   });
 
+  // trust's recipe throws on a key that is not one, rather than MAC under what `Buffer.from(x, "hex")` makes of it
+  // (the empty key). The door's verifier never throws on a hello, so the refusal is here, where the daemon boots.
+  it("a verifier made with a secret that is not one is refused when it is made", () => {
+    for (const secretHex of ["", "a3".repeat(31), "A3".repeat(32), "zz".repeat(32)]) {
+      const make = (): ShellPairingVerifier =>
+        new ShellPairingVerifier({ secretHex, bootId: BOOT, userId: "" });
+      expect(make, `"${secretHex}"`).toThrow(TypeError);
+    }
+  });
+
   it("a nonce is spent by the hello that paired, and by no other", () => {
     const door = verifier();
-    const nonce = newShellPairingNonce();
+    const nonce = freshNonce();
     // a hello nobody holding the secret made spends nothing
     expect(door.verify(credential({ nonce, secretHex: "00".repeat(32) }), PORT)).toEqual({
       ok: false,
