@@ -57,6 +57,12 @@ export interface BootOptions {
   before?: (dataDir: string) => void;
   /** the mock floor, before it starts */
   floor?: (mock: MockMgmtServer) => void;
+  /** more of `FielddConfig`, for the rows that need runs in the daemon (a scripted agent, a keychain in a map). The
+   * data root, the port and the level stay this harness's. */
+  config?: Partial<Omit<FielddConfig, "dataDir" | "controlPort" | "custody">>;
+  /** boot on the data root and the floor a daemon before this one used (a RESTART of fieldd: the floor outlives it).
+   * Nothing is made, written or staged again: `floorFile`, `before` and `floor` are not read. */
+  on?: { dataDir: string; mock: MockMgmtServer };
 }
 
 async function floorFor(
@@ -90,8 +96,9 @@ export async function bootSealed(
   opts: BootOptions & { custody?: FielddCustody } = {},
 ): Promise<SealedWorld> {
   const custody = opts.custody ?? HANDED;
-  const { dataDir, mock } = await floorFor(cleanup, custody.pairing, opts);
+  const { dataDir, mock } = opts.on ?? (await floorFor(cleanup, custody.pairing, opts));
   const daemon = await bootstrap({
+    ...opts.config,
     dataDir,
     controlPort: 0,
     custody,
@@ -110,8 +117,9 @@ export interface FilesWorld {
 
 /** Today's daemon: handed nothing, its secrets in files. */
 export async function bootFiles(cleanup: Cleanup, opts: BootOptions = {}): Promise<FilesWorld> {
-  const { dataDir, mock } = await floorFor(cleanup, "ab".repeat(32), opts);
+  const { dataDir, mock } = opts.on ?? (await floorFor(cleanup, "ab".repeat(32), opts));
   const daemon = await bootstrap({
+    ...opts.config,
     dataDir,
     controlPort: 0,
     ...(opts.userId !== undefined ? { userId: opts.userId } : {}),

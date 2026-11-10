@@ -62,6 +62,7 @@ import {
   type ComposeSparksHatchResult,
   type ComposeSparksListResult,
   ComposeSparksOpenResult,
+  CUSTODY,
   LAYOUT,
   NeedsAnswerResult,
   NeedsListResult,
@@ -108,7 +109,7 @@ import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
 import { FORWARDER_MISSING_REASON } from "../src/roles";
 import type { RunEntered } from "../src/run-entry";
-import { UNREADABLE_WORDS } from "../src/signed-record";
+import { RecordSigner, UNREADABLE_WORDS } from "../src/signed-record";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { SparkStore } from "../src/tool-plane/sparks";
 import { RootsRegistry } from "../src/workspace/roots";
@@ -7468,4 +7469,70 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
     );
     expect(logged(box, mismatch)).toBe(1);
   }, 240_000);
+
+  // ── THE DESK (CUSTODY-SPEC §10, rows 2 to 4; §8.1.0's `daemon.ts` lines). `daemon.ts` alone hands the objects store
+  // its key and the marks, and hands the desk the runtime's launch memory. Here the runs are ones the runtime really
+  // LAUNCHED, on the real floor, and the real floor keeps the count: nothing is injected, and the link's `setMark` is
+  // WATCHED. The mock-floor rows (a re-attached run with and without an entry on the ack, an older grants file put
+  // back, the `files` twin) are custody-boot.test.ts's "the desk's store as the real daemon binds it".
+  it("sealed, through the real daemon: the desk hands an object to a run the runtime launched, to a plain run as itself and to a spark's run as its spark; the grants are signed under the handed key and the real floor keeps their count; a run this process never launched is handed nothing", async () => {
+    const box = await setup({ ...SEALED, ...WITH_SPARKS, startedForRetryMs: NO_RETRY_MS });
+    const scopes = [...SPARK_WINDOW, "objects.window"];
+    const win = await sealedWindow(box.daemon, HANDED, scopes, "ob1");
+    // WATCHED, never replaced: this is the link daemon.ts put behind the marks, and every answer is the floor's own
+    const told = vi.spyOn(box.daemon.native, "setMark");
+    const named = async (key: string): Promise<string> => {
+      const asked = await win.call("objects.ref", { docId: "doc-desk", key });
+      return (asked as { ref: string }).ref;
+    };
+    const plain = await spawnPlain(win, box);
+    const plainRun = plain.session.runtimeRunId;
+    const s = await hatched(win, box);
+
+    const forPlain = await named("k1");
+    const forSpark = await named("k2");
+    const toPlain = await win.call("objects.hand", { ref: forPlain, run: plainRun });
+    const toSpark = await win.call("objects.hand", { ref: forSpark, run: s.runId });
+    expect([toPlain, toSpark]).toEqual([{ handed: true }, { handed: true }]);
+    // whose each grant is comes from what THIS fieldd launched the run as: the run itself, or its spark
+    const listed = (await win.call("objects.grants", {})) as {
+      grants: Array<{ ref: string; holder: string }>;
+    };
+    const holderOf = (ref: string) => listed.grants.find((grant) => grant.ref === ref)?.holder;
+    expect(listed.grants).toHaveLength(2);
+    expect(holderOf(forPlain)).toBe(plainRun);
+    expect(holderOf(forSpark)).toBe(`spark:${s.spark.id}`);
+
+    // nothing vouches for a run this process never launched: it is handed nothing, in words VibeField already had
+    const nobody = { ref: forPlain, run: "run-nobody-launched" };
+    const toNobody = await win.call("objects.hand", nobody);
+    expect(toNobody).toEqual({ handed: false, reason: "VibeField doesn't know that agent." });
+
+    // the grants file says it is sealed, and verifies under the key the spawner handed; no key file is made, by
+    // fieldd or by this row's own signer
+    const grantsFile = join(box.dataDir, ...LAYOUT.OBJECTS_GRANTS_FILE);
+    const onDisk = JSON.parse(readFileSync(grantsFile, "utf8")) as {
+      sealed: boolean;
+      generation: number;
+      signature: string;
+    };
+    const { signature, ...body } = onDisk;
+    expect(body.sealed).toBe(true);
+    const noKeyFile = join(box.dataDir, "no-such", "objects.key");
+    const key = Buffer.from(HANDED.records, "hex");
+    expect(new RecordSigner({ keyPath: noKeyFile, key }).verifies(body, signature)).toBe(true);
+    expect(existsSync(join(box.dataDir, ...LAYOUT.OBJECTS_KEY_FILE))).toBe(false);
+    expect(existsSync(noKeyFile)).toBe(false);
+
+    // the count: each hand told the real floor, and what the floor says it keeps is the file's count
+    const mark = CUSTODY.MARK_OBJECT_GRANTS;
+    expect(told.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(told.mock.calls.map(([name]) => name))).toEqual(new Set([mark]));
+    const kept = await Promise.all(told.mock.results.map((result) => result.value));
+    expect(kept.at(-1)).toBe(body.generation);
+    expect(box.daemon.custodyMarks.get(mark)).toBe(body.generation);
+
+    await win.call("terminal.terminate", { sessionId: plain.terminal.sessionId });
+    await win.call("terminal.terminate", { sessionId: s.paneId });
+  }, 150_000);
 });

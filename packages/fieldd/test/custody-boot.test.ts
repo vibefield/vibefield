@@ -25,11 +25,17 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { CUSTODY, LAYOUT, ProductInfo, SOCKETS } from "@vibefield/contracts";
+import type { AgentProvider } from "@vibefield/puppeteer-runtime";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { type FielddDaemon, type SealedFielddDaemon, SessionRecordStore } from "../src/index";
+import type { SecretStore } from "../src/plugin-settings";
+import { RecordSigner } from "../src/signed-record";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { SCRIPTED_CATALOG } from "./agent-catalog-fixture";
 import {
+  type BootOptions,
   bootFiles,
   bootSealed,
   type Cleanup,
@@ -41,7 +47,9 @@ import {
   shellAckMac,
 } from "./custody-harness";
 import { bundleFielddBin } from "./fieldd-bin-bundle";
+import { CLAUDE, fixtureRoutes, freshFloor } from "./inventory-age-fixture";
 import { nativeEndpoint, removeTempRoot, shortTmpRoot } from "./native-harness";
+import type { WsRpc } from "./ws-rpc";
 
 const cleanup: Cleanup = [];
 afterEach(() => runCleanup(cleanup));
@@ -162,6 +170,311 @@ describe("a fieldd handed nothing (files)", () => {
     await daemon.stop();
     expect(existsSync(tokenPath(dataDir))).toBe(false);
     expect(existsSync(productPath(dataDir))).toBe(false);
+  });
+});
+
+// ---- the desk's store, as the real daemon binds it (C4, C5, rule 6; CUSTODY-SPEC §10, rows 2 to 4) ----
+//
+// Three things the desk's grants rest on are handed to the store and the desk by `daemon.ts` and by nothing else:
+//   · the KEY the grants are signed under (`ObjectsStoreOptions.key`: the spawner's `records`, on no disk);
+//   · the MARKS that remember the grants' count past this fieldd (`marks`: `custodyMarks`, the floor behind it);
+//   · WHO a run is (`DeskObjectsOptions.bornFor`: the runtime's launch memory, never a record read back).
+// Every objects row elsewhere hands the store and the desk its own (desk-fixtures.ts), so a daemon that bound none of
+// the three would pass them all. THE ROWS BELOW INJECT NOTHING AT THOSE SEAMS: each boots the real `bootstrap` at
+// its level, goes in through the window's own door (`objects.*`, with a window's token minted by a shell that paired
+// or bore its token), and reads what the daemon left on disk and what reached the floor.
+//
+// What IS scripted: the FLOOR's side of the wire (`MockMgmtServer`: its marks, its inventory, the started-for table
+// on its ack) and the agent (a scripted provider never asked to start anything, a keychain in a map). The mock floor
+// makes no terminal, so nothing is LAUNCHED here: the run the desk is asked about is re-attached at boot from a record
+// staged through the product's own store, and at `sealed` it is vouched by the ack's entry for its terminal, or by
+// nothing. A hand to a run the runtime really launched, on the real floor, is agent-session.test.ts's "the desk hands
+// an object to a run the runtime launched".
+//
+// These rows load only on the JOINED tree: `LAYOUT.OBJECTS_GRANTS_FILE` (ob-k's K2), the store's `grantsPath`, `key`
+// and `marks`, the signer's `key` and the desk's `bornFor` (ob-o, `ob/custody-objects`) are not on
+// `ob/custody-fieldd` alone.
+
+/** The run the desk is asked about: the scripted agent's, on the fixture's agent PTY. */
+const RUN = "run-desk";
+const DOC = "doc-desk";
+const MARK = CUSTODY.MARK_OBJECT_GRANTS;
+/** `NO_SUCH_AGENT` (objects/desk-objects.ts): the words VibeField already had for a run it cannot name. */
+const NO_SUCH_AGENT = "VibeField doesn't know that agent.";
+
+const grantsPath = (dataDir: string): string => join(dataDir, ...LAYOUT.OBJECTS_GRANTS_FILE);
+const objectsKey = (dataDir: string): string => join(dataDir, ...LAYOUT.OBJECTS_KEY_FILE);
+/** A key path nothing is at: for a signer that was handed its key, and must make no file. */
+const noKeyFile = (dataDir: string): string => join(dataDir, "no-such", "objects.key");
+
+/** The grants file as it stands on disk (contracts `ObjectGrantsFile`), read on its own terms. */
+interface GrantsOnDisk {
+  sealed: boolean;
+  generation: number;
+  grants: Array<{ ref: string; holder: string; how: string }>;
+  signature: string;
+}
+const grantsOnDisk = (dataDir: string): GrantsOnDisk =>
+  JSON.parse(readFileSync(grantsPath(dataDir), "utf8")) as GrantsOnDisk;
+
+/** The product's own signer, holding the key `keyHex` (handed: `keyPath` is never read or made), or `keyPath`'s. */
+const signerOf = (keyPath: string, keyHex?: string): RecordSigner =>
+  new RecordSigner({
+    keyPath,
+    ...(keyHex !== undefined ? { key: Buffer.from(keyHex, "hex") } : {}),
+  });
+
+/** Whether the grants file's signature is that signer's. */
+function signedBy(file: GrantsOnDisk, signer: RecordSigner): boolean {
+  const { signature, ...body } = file;
+  return signer.verifies(body, signature);
+}
+
+/** The scripted agent: composed so the staged record's agent has a row, and never asked to start anything. */
+const SCRIPTED: AgentProvider = {
+  descriptor: { id: "scripted", label: "Scripted" },
+  async createSession(): Promise<never> {
+    throw new Error("nothing is born in these rows");
+  },
+};
+
+/** A keychain in a map: no row here reads or writes the machine's. */
+function keychainInMemory(): SecretStore {
+  const entries = new Map<string, string>();
+  return {
+    get: async (service, account) => entries.get(`${service}/${account}`) ?? null,
+    set: async (service, account, value) => {
+      entries.set(`${service}/${account}`, value);
+    },
+    delete: async (service, account) => {
+      entries.delete(`${service}/${account}`);
+    },
+  };
+}
+
+/** What a daemon needs for a run to be in it and nothing of this machine's to be read: the scripted agent alone (no
+ * built-in agent's readers run), a keychain in a map, no gateway, and a held run's idle poll never firing in a row. */
+const withAgents = (logRoot: string): NonNullable<BootOptions["config"]> => ({
+  logRoot,
+  dataPort: 0,
+  secretStore: keychainInMemory(),
+  agentCatalog: SCRIPTED_CATALOG,
+  agentProviders: () => [SCRIPTED],
+  agentGateway: { enabled: false },
+  agentResumeWhenIdle: { afterMs: 600_000, pollMs: 600_000 },
+});
+
+/** The run's record as the runtime writes one, staged through the product's own store so that it verifies: born on
+ * the fixture's agent PTY, no exit stamped, and no creation request, so the boot HOLDS it (in the fold, and live). */
+function stageRun(dataDir: string): void {
+  const at = new Date().toISOString();
+  const records = new SessionRecordStore({
+    dir: join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR),
+    keyPath: join(dataDir, ...LAYOUT.AGENT_SESSIONS_KEY_FILE),
+    now: () => new Date(),
+  });
+  records.write({
+    format: 1,
+    runtimeRunId: RUN,
+    runtimeEpoch: 1,
+    provider: "scripted",
+    cwd: dataDir,
+    terminalSessionId: CLAUDE,
+    continuation: { providerId: "scripted", nativeSessionId: `native-${RUN}` },
+    createdAt: at,
+    updatedAt: at,
+  });
+}
+
+/** A window of the person's, as a shell makes one at either level: the shell pairs (`sealed`) or bears its token
+ * (`files`), mints the window's token, and the window says hello with it. `objects.*` answers such a token alone. */
+async function deskWindow(daemon: SealedFielddDaemon | FielddDaemon): Promise<WsRpc> {
+  const { controlPort: port, bootId } = daemon;
+  const shell = await openDoor(cleanup, port);
+  await hello(shell, daemon.shellToken ?? pairingCredential({ port, bootId }));
+  const minted = (await shell.call("system.mintWindowToken", {
+    scopes: ["objects.window"],
+    label: "window-desk",
+    rendererParticipant: {
+      participantId: "renderer:desktop-test:window-desk",
+      incarnation: "renderer:desktop-test:window-desk:document-1",
+    },
+  })) as { token: string };
+  const win = await openDoor(cleanup, port);
+  await hello(win, minted.token, "renderer");
+  return win;
+}
+
+interface Desk {
+  dataDir: string;
+  mock: MockMgmtServer;
+  daemon: SealedFielddDaemon | FielddDaemon;
+  /** a window of the person's: the only caller `objects.*` answers */
+  win: WsRpc;
+  logRoot: string;
+}
+
+interface DeskOptions {
+  /** `sealed` only: the floor's ack names the staged run for its terminal, as a plain run. Absent: no table. */
+  vouched?: boolean;
+  /** a RESTART: the next fieldd on this desk's data root, floor and log */
+  after?: Desk;
+}
+
+/** The real daemon at `level` over the mock floor, the staged run held in its fold, and the person's window. */
+async function desk(level: "sealed" | "files", opts: DeskOptions = {}): Promise<Desk> {
+  const logRoot = opts.after?.logRoot ?? shortTmpRoot("vf-cust-log-");
+  if (opts.after === undefined) cleanup.push(() => removeTempRoot(logRoot));
+  const table = [{ sessionId: CLAUDE, run: RUN }];
+  const boot: BootOptions = {
+    config: withAgents(logRoot),
+    before: stageRun,
+    floor: (mock) => {
+      mock.observedState = freshFloor();
+      mock.terminalRoutes = fixtureRoutes();
+      if (opts.vouched === true) mock.helloStartedFor = { said: table };
+    },
+    ...(opts.after !== undefined ? { on: opts.after } : {}),
+  };
+  const boots = level === "sealed" ? bootSealed : bootFiles;
+  const { dataDir, mock, daemon } = await boots(cleanup, boot);
+  // the boot's re-attach holds the staged run: it is in the fold, and live, before anything is asked of the desk
+  await until(
+    () => (daemon.agents.list().sessions.some((row) => row.runtimeRunId === RUN) ? true : null),
+    "the staged run in the fold",
+    8_000,
+  );
+  return { dataDir, mock, daemon, win: await deskWindow(daemon), logRoot };
+}
+
+/** The window names an object on its board, and is told its ref. */
+async function named(win: WsRpc, key: string): Promise<string> {
+  const { ref } = (await win.call("objects.ref", { docId: DOC, key })) as { ref: string };
+  return ref;
+}
+
+describe("the desk's store as the real daemon binds it (C4, C5, rule 6)", () => {
+  it("sealed: a hand leaves a grants file that says `sealed: true` and verifies under the key that was HANDED and under no other; the object's name verifies under it too; and no `objects.key` is ever made", async () => {
+    const { dataDir, daemon, win } = await desk("sealed", { vouched: true });
+    // a sealed store never leaves the path empty: its file is there before anything is named or handed
+    expect(grantsOnDisk(dataDir)).toMatchObject({ sealed: true, grants: [] });
+
+    const ref = await named(win, "k1");
+    const hand = await win.call("objects.hand", { ref, run: RUN });
+    expect(hand).toEqual({ handed: true });
+    const file = grantsOnDisk(dataDir);
+    expect(file).toMatchObject({ sealed: true, grants: [{ ref, holder: RUN, how: "handed" }] });
+
+    // signed under what the spawner handed as `records`, and under nothing else it handed
+    const handed = signerOf(noKeyFile(dataDir), HANDED.records);
+    expect(signedBy(file, handed)).toBe(true);
+    for (const other of [HANDED.shell, HANDED.pairing, "00".repeat(32)])
+      expect(signedBy(file, signerOf(noKeyFile(dataDir), other))).toBe(false);
+    // the object's NAME is the same signer's
+    const nameFile = join(dataDir, ...LAYOUT.OBJECTS_DIR, `${ref.slice("vf:obj/".length)}.json`);
+    expect(handed.read(nameFile)).toMatchObject({ body: { ref } });
+
+    // the key is on no disk: no key file where a `files` store keeps one, at work or after the stop; and the
+    // signers above, handed theirs, made none either
+    expect(existsSync(objectsKey(dataDir))).toBe(false);
+    await daemon.stop();
+    expect(existsSync(objectsKey(dataDir))).toBe(false);
+    expect(existsSync(noKeyFile(dataDir))).toBe(false);
+  });
+
+  it("sealed: each change of a grant reaches the floor as `native.marks.set` for `objects.grants` before the door answers; and the next fieldd on the same floor sets aside an OLDER grants file put back, and grants nothing in it", async () => {
+    const first = await desk("sealed", { vouched: true });
+    const ref = await named(first.win, "k1");
+    const hand = await first.win.call("objects.hand", { ref, run: RUN });
+    expect(hand).toEqual({ handed: true });
+    // the file as it stands with the grant in it: what is put back below
+    const earlier = readFileSync(grantsPath(first.dataDir), "utf8");
+    const held = grantsOnDisk(first.dataDir);
+    expect(held.grants).toHaveLength(1);
+    // the floor was told the count, over the real link, by the time the door answered
+    expect(first.mock.markSets).toEqual([{ name: MARK, value: held.generation }]);
+
+    const back = await first.win.call("objects.takeBack", { ref, run: RUN });
+    expect(back).toEqual({ taken: true });
+    const taken = grantsOnDisk(first.dataDir);
+    expect(taken.grants).toEqual([]);
+    expect(taken.generation).toBeGreaterThan(held.generation);
+    expect(first.mock.markSets.at(-1)).toEqual({ name: MARK, value: taken.generation });
+    expect(first.mock.marks.get(MARK)).toBe(taken.generation);
+    // and fieldd's own view, the one the shell's stream reads, is the same count
+    expect(first.daemon.custodyMarks.get(MARK)).toBe(taken.generation);
+
+    // fieldd stops. What any process of the same user can then do: put the earlier file back, grant and signature
+    // whole. It verifies under the handed key; only its count is behind
+    await first.daemon.stop();
+    writeFileSync(grantsPath(first.dataDir), earlier, { mode: 0o600 });
+
+    // the next fieldd, handed the same custody, on the same floor. The floor's ack says the count it kept, and the
+    // store reads that before its boot's one read of the file
+    const second = await desk("sealed", { vouched: true, after: first });
+    expect(grantsOnDisk(first.dataDir)).toMatchObject({ sealed: true, grants: [] });
+    await expect(second.win.call("objects.grants", {})).resolves.toEqual({ grants: [] });
+    // set aside whole, beside itself, for a human
+    const folder = dirname(grantsPath(first.dataDir));
+    const aside = `${basename(grantsPath(first.dataDir))}.stale-`;
+    const stale = readdirSync(folder).filter((name) => name.startsWith(aside));
+    expect(stale).toHaveLength(1);
+    expect(readFileSync(join(folder, stale[0] ?? ""), "utf8")).toBe(earlier);
+    // and said once, by its count and the mark it fell below
+    await second.daemon.stop();
+    const said = logged(first.logRoot).events.filter(
+      (row) => row.event === "fieldd.objects.grants_stale",
+    );
+    expect(said).toHaveLength(1);
+    const counts = { generation: held.generation, mark: taken.generation };
+    expect(said[0]?.attrs).toMatchObject(counts);
+  }, 60_000);
+
+  it("sealed: a hand to a re-attached run the floor's table vouches for is granted; a hand to the same run with NO entry on the ack is refused in words VibeField already had, and nothing is written or told for it", async () => {
+    // THE CONTROL: on a floor whose ack names the run for its terminal, the hand is granted
+    const vouched = await desk("sealed", { vouched: true });
+    expect(vouched.daemon.agents.bornFor(RUN)).toEqual({});
+    const mine = await named(vouched.win, "k1");
+    const granted = await vouched.win.call("objects.hand", { ref: mine, run: RUN });
+    expect(granted).toEqual({ handed: true });
+    await expect(vouched.win.call("objects.grants", {})).resolves.toMatchObject({
+      grants: [{ ref: mine, holder: RUN, how: "handed" }],
+    });
+
+    // the same record, the same terminal, and an ack with no table: the run is in the fold and live (`desk` waited
+    // for it), and nothing vouches for it. Its record's word is not taken
+    const bare = await desk("sealed");
+    expect(bare.daemon.agents.bornFor(RUN)).toBeUndefined();
+    const ref = await named(bare.win, "k1");
+    const refused = await bare.win.call("objects.hand", { ref, run: RUN });
+    expect(refused).toEqual({ handed: false, reason: NO_SUCH_AGENT });
+    await expect(bare.win.call("objects.grants", {})).resolves.toEqual({ grants: [] });
+    expect(grantsOnDisk(bare.dataDir).grants).toEqual([]);
+    expect(bare.mock.markSets).toEqual([]);
+  }, 60_000);
+
+  it("files: the same hand leaves a grants file that says `sealed: false`, signed under the key FILE (0600, where it always was); the record names the run, as it always did; and the floor is told no mark", async () => {
+    const { dataDir, mock, daemon, win } = await desk("files");
+    // at `files` the record's word stands: no table on the ack, and the staged run is this fieldd's to name
+    expect(daemon.agents.bornFor(RUN)).toEqual({});
+    const ref = await named(win, "k1");
+    const hand = await win.call("objects.hand", { ref, run: RUN });
+    expect(hand).toEqual({ handed: true });
+    const file = grantsOnDisk(dataDir);
+    expect(file).toMatchObject({ sealed: false, grants: [{ ref, holder: RUN, how: "handed" }] });
+
+    // the key is the file's, and not what a spawner would have handed
+    expect(existsSync(objectsKey(dataDir))).toBe(true);
+    const keyMode = statSync(objectsKey(dataDir)).mode & 0o777;
+    if (process.platform !== "win32") expect(keyMode).toBe(0o600);
+    expect(signedBy(file, signerOf(objectsKey(dataDir)))).toBe(true);
+    expect(signedBy(file, signerOf(noKeyFile(dataDir), HANDED.records))).toBe(false);
+
+    // nothing new is asked of the floor at `files`: no mark, by any name. fieldd's own view still counts (the store
+    // has one code path), and dies with it
+    expect(mock.markSets).toEqual([]);
+    expect(mock.requestLog.map((request) => request.method)).not.toContain("native.marks.set");
+    expect(daemon.custodyMarks.get(MARK)).toBe(file.generation);
   });
 });
 
