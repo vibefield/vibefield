@@ -68,15 +68,32 @@ interface TokenRecord {
 export class TokenService {
   private byToken = new Map<string, TokenRecord>();
   private byId = new Map<string, string>(); // tokenId -> token
+  /** OB custody (C2) — ids held by connections that proved themselves WITHOUT a bearer: the shell's pairing at a
+   * `sealed` fieldd (shell-pairing.ts). Such a connection's principal still carries a `tokenId` (every audit line
+   * names its actor by one, and a drop closes connections by one), so it holds an id of this space. No token is
+   * minted under a held id and none verifies as one: there is nothing behind it to steal or replay. */
+  private readonly held = new Set<string>();
 
   constructor(private readonly onEvent?: (e: TokenEvent) => void) {}
 
   reserveTokenId(): string {
     for (let attempt = 0; attempt < 1_000; attempt += 1) {
       const tokenId = `tk_${randomBytes(6).toString("hex")}`;
-      if (!this.byId.has(tokenId)) return tokenId;
+      if (!this.byId.has(tokenId) && !this.held.has(tokenId)) return tokenId;
     }
     throw new Error("could not reserve a unique token id");
+  }
+
+  /** OB custody (C2) — an id for a connection that carries no bearer, held until `releaseId`. */
+  holdId(): string {
+    const tokenId = this.reserveTokenId();
+    this.held.add(tokenId);
+    return tokenId;
+  }
+
+  /** The connection that held this id is gone: it is an id like any other again. */
+  releaseId(tokenId: string): void {
+    this.held.delete(tokenId);
   }
 
   mint(scopes: Scope[], label: string, opts?: TokenMintOptions): TokenGrant {
@@ -92,7 +109,7 @@ export class TokenService {
       if (!(SCOPES as readonly string[]).includes(s)) throw new Error(`unknown scope: ${s}`);
     }
     const tokenId = opts?.tokenId ?? this.reserveTokenId();
-    if (!/^tk_[0-9a-f]{12}$/.test(tokenId) || this.byId.has(tokenId)) {
+    if (!/^tk_[0-9a-f]{12}$/.test(tokenId) || this.byId.has(tokenId) || this.held.has(tokenId)) {
       throw new Error("invalid or already-used reserved token id");
     }
     const token = `tok_${randomBytes(24).toString("hex")}`;

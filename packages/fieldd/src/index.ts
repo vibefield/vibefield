@@ -71,7 +71,15 @@ export {
   type AuditWriterTestHooks,
   verifyAuditSegment,
 } from "./audit-service";
-export { bootstrap, type FielddConfig, type FielddDaemon, type FielddHealth } from "./daemon";
+export type { FielddCustody } from "./custody-handoff";
+export {
+  bootstrap,
+  type FielddConfig,
+  type FielddDaemon,
+  type FielddHealth,
+  type SealedFielddConfig,
+  type SealedFielddDaemon,
+} from "./daemon";
 export { DeviceService, type DeviceServiceOptions } from "./device-service";
 export {
   DiagnosticsService,
@@ -150,7 +158,7 @@ export {
   PresenceRoomRouter,
   type PresenceRoomRouterOptions,
 } from "./presence-room";
-export { ProductApi } from "./product-api";
+export { ProductApi, type ShellPairingDoor } from "./product-api";
 export {
   ROSETTAD_UNCONFIGURED,
   type RosettadHealth,
@@ -171,6 +179,7 @@ export {
   type ServiceProviderHandlers,
   ServiceRegistry,
 } from "./service-registry";
+export { computeShellAckMac, computeShellPairingMac } from "./shell-pairing";
 export { renderTerminalText } from "./terminal-text";
 export {
   type TokenGrant,

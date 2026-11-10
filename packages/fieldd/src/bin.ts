@@ -18,6 +18,8 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+// a type alone: nothing of the daemon's is imported here at run time (the header's rule; `import type` is erased)
+import type { FielddConfig } from "./daemon";
 import {
   AGENT_FORWARDER_BUNDLE,
   AGENT_SHIM_BUNDLE,
@@ -52,6 +54,14 @@ async function main(): Promise<void> {
   } = await import("./boot-env");
   // AL-1 — before anything writes: this process outlives the shell that reads its stdio (boot-env.ts).
   outliveStdioReaders();
+  // OB custody (C2; custody-handoff.ts) — a spawner that hands custody says so in the environment and writes ONE line
+  // to this process's stdin. Read here, before a root is written and before the daemon's module graph loads: the
+  // flag set and no valid line is a refusal to boot (the throw is `main`'s one line on stderr, exit 1), never a fall
+  // back to the files. Only the daemon reads its stdin: every role below left before `main` was called.
+  const { custodyAsked, custodyOf, readCustodyHandoff } = await import("./custody-handoff");
+  const custody = custodyAsked(process.env)
+    ? custodyOf(await readCustodyHandoff(process.stdin))
+    : undefined;
   // PG-9 S4c — DEBUG, development only: a recorded synthetic swarm for this desktop's boards. A
   // packaged fieldd handed one fails its boot here, by name, before it writes a root or loads the
   // daemon — never a silent ignore (debug/swarm-replay.ts; the shell blanks it for a package too)
@@ -215,7 +225,7 @@ async function main(): Promise<void> {
     nativePid = spawnNative();
   }
 
-  const daemon = await bootstrap({
+  const config: FielddConfig = {
     dataDir,
     ...(vibefieldRoot !== undefined ? { vibefieldRoot } : {}),
     logRoot,
@@ -243,7 +253,11 @@ async function main(): Promise<void> {
       process.stderr.write(`fieldd fatal: ${reason}\n`);
       process.exit(1);
     },
-  });
+  };
+  // OB custody (C2) — a config that carries what was handed boots sealed (daemon.ts `bootstrap`); one that carries
+  // nothing is today's boot
+  const sealed = custody === undefined ? undefined : { ...config, custody };
+  const daemon = sealed === undefined ? await bootstrap(config) : await bootstrap(sealed);
   process.stdout.write(
     `${JSON.stringify({ ready: true, port: daemon.controlPort, bootId: daemon.bootId })}\n`,
   );

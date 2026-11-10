@@ -285,6 +285,7 @@ import {
   noteSocketAliasParent,
   splitPathList,
 } from "./boot-env";
+import type { FielddCustody } from "./custody-handoff";
 import { runStopSteps, type StopStep, stopFailure } from "./daemon-stop";
 import { openSwarmReplay } from "./debug/swarm-replay";
 import { DeviceRemoval } from "./device-removal";
@@ -489,6 +490,11 @@ import { workspaceError } from "./workspace/tickets";
 // root that mints narrower per-window tokens via system.mintWindowToken) and
 // product.json (port/pid/bootId discovery metadata for adopt-or-spawn, and the
 // floor this fieldd is linked to, rewritten whenever that floor changes).
+//
+// OB custody (contracts custody.ts; custody-handoff.ts) — that paragraph is the `files` level, and it stands for every
+// fieldd handed nothing. A fieldd its spawner handed custody (`SealedFielddConfig`) is `sealed`: it writes no
+// shell.token and mints no shell bearer, its shell pairs by MAC at the door (shell-pairing.ts), and product.json says
+// which level this is. Nothing reads the level back from a file: it is what this process was handed, or was not.
 
 /** DS-5d — how long a stopping fieldd waits for the holders ledger's last
  * write before it goes on without it (M176 item 7): the supervisor's default
@@ -767,6 +773,18 @@ export interface FielddConfig {
     browse?: () => BrowseFacts;
     rootsPollMs?: number;
   };
+  /** OB custody — never set on THIS shape: a fieldd booted from it is handed nothing and runs at `files`. The seam
+   * a spawner fills is `SealedFielddConfig.custody`. It is spelled here, as nothing, so that a sealed config is not
+   * also a `FielddConfig`: `bootstrap` then answers a `files` caller a `FielddDaemon`, whose `shellToken` is a string,
+   * and a sealed one a `SealedFielddDaemon`, which has none. */
+  custody?: undefined;
+}
+
+/** OB custody — the config of a fieldd its spawner handed custody (`FielddCustody`, custody-handoff.ts): `bin.ts`
+ * fills `custody` from the hand-off on its stdin, and a test fills it by hand to boot a sealed daemon in its own
+ * process. Everything else is `FielddConfig`'s. */
+export interface SealedFielddConfig extends Omit<FielddConfig, "custody"> {
+  custody: FielddCustody;
 }
 
 export interface FielddHealth {
@@ -888,7 +906,8 @@ export interface FielddDaemon {
   pluginLogging: NodeLogging | null;
   audit: AuditService;
   diagnostics: DiagnosticsService;
-  /** the all-scopes token written to run/shell.token (tests read it here) */
+  /** the all-scopes token written to run/shell.token (tests read it here). A fieldd handed custody has none
+   * (`SealedFielddDaemon`). */
   shellToken: string;
   health(): FielddHealth;
   nativeHealth(): NativeHealth | null;
@@ -951,6 +970,10 @@ export interface FielddDaemon {
   onShutdownRequest(callback: () => void): void;
 }
 
+/** OB custody (C2) — a fieldd handed custody: no shell token exists, in a file or in memory. Its shell pairs
+ * (shell-pairing.ts), so there is nothing here for a test, or anything else, to read. */
+export type SealedFielddDaemon = Omit<FielddDaemon, "shellToken"> & { shellToken: undefined };
+
 /** The daemon's own version, published in the device slice (package version). */
 const FIELDD_VERSION = "0.1.0";
 
@@ -986,9 +1009,19 @@ const PEER_REPLICATION_DOORS: ReadonlySet<string> = new Set([
 // durable key. Nothing regresses: the ticket path's posture on a claiming
 // caller is the one it already had before this slice.
 
-export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
+// OB custody — two signatures over one boot. A config with `custody` boots `sealed` and answers a daemon with no
+// shell token; every other config boots `files` and answers today's `FielddDaemon`. The `files` signature is the
+// LAST one on purpose: `Parameters<typeof bootstrap>` reads the last, and every caller from before custody means it.
+export function bootstrap(config: SealedFielddConfig): Promise<SealedFielddDaemon>;
+export function bootstrap(config: FielddConfig): Promise<FielddDaemon>;
+export async function bootstrap(
+  config: FielddConfig | SealedFielddConfig,
+): Promise<Omit<FielddDaemon, "shellToken"> & { shellToken: string | undefined }> {
   const bootId = `fieldd-${randomBytes(8).toString("hex")}`;
   const startedAt = Date.now();
+  // OB custody — the level is what this process was handed, read once and never from the disk
+  const custody = config.custody;
+  const custodyLevel = custody === undefined ? "files" : "sealed";
   const [logging, pluginLogging] =
     config.logRoot === undefined
       ? [null, null]
@@ -1036,6 +1069,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     return loggingClosePromise;
   };
   logger.info("fieldd.lifecycle.boot_started", "fieldd boot started");
+  // OB custody — each level says which it is, once per boot (and never what it was handed)
+  logger.info(
+    "fieldd.custody.level",
+    custody === undefined
+      ? "fieldd was handed no custody: its shell token and its pairing are files"
+      : "fieldd was handed custody: it writes no shell token, and its shell pairs",
+    { level: custodyLevel },
+  );
   // Item 345 — the alias's parent, read once before anything dials: a bad value ends the boot (its logging closed
   // first), and a set one is said in one line.
   try {
@@ -2546,6 +2587,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       refusalsStand: () => devicesRef?.hasRefusals() ?? false,
       isRefusedDevice: (deviceId) => devicesRef?.isRefused(deviceId) ?? false,
       confirmNode: async (nodeId) => (await devicesRef?.confirmNode(nodeId)) ?? "unseen",
+      // OB custody (C2) — sealed: the shell pairs under the secret it handed, for this boot and this port, and is
+      // granted what the bearer's grant was. A paired connection's principal carries an id of the token id space
+      // with no bearer behind it (`TokenService.holdId`).
+      ...(custody !== undefined
+        ? {
+            shellPairing: {
+              secretHex: custody.shell,
+              bootId,
+              scopes: [...SCOPES],
+              holdId: () => tokens.holdId(),
+              releaseId: (tokenId: string) => tokens.releaseId(tokenId),
+            },
+          }
+        : {}),
     });
     diagnosticsService.register(api);
     shellApi = api;
@@ -9686,34 +9741,47 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // leave at the umask's mercy.
     const runDir = join(config.dataDir, ...LAYOUT.FIELDD_RUN_DIR);
     await createPrivateDir(runDir);
-    const shellTokenId = tokens.reserveTokenId();
-    const shellGrant = await audit.requiredSystem(
-      {
-        action: "token.shell.mint",
-        target: { kind: "token", id: shellTokenId },
-        attrs: { scopeCount: SCOPES.length },
-      },
-      () =>
-        tokens.mint([...SCOPES], "shell", {
-          tokenId: shellTokenId,
-          shellMain: true,
-        }),
-      (grant) => ({
-        attrs: {
-          grantId: grant.tokenId,
-          scopeCount: grant.scopes.length,
+    // OB custody (C2) — the shell's bearer is the `files` level's alone. A fieldd handed custody mints none: its
+    // shell pairs at the door, and a bearer that does not exist cannot be read from this directory or replayed.
+    const mintShellToken = async () => {
+      const shellTokenId = tokens.reserveTokenId();
+      return await audit.requiredSystem(
+        {
+          action: "token.shell.mint",
+          target: { kind: "token", id: shellTokenId },
+          attrs: { scopeCount: SCOPES.length },
         },
-      }),
-      (grant) => {
-        tokens.revoke(grant.tokenId);
-      },
-    );
+        () =>
+          tokens.mint([...SCOPES], "shell", {
+            tokenId: shellTokenId,
+            shellMain: true,
+          }),
+        (grant) => ({
+          attrs: {
+            grantId: grant.tokenId,
+            scopeCount: grant.scopes.length,
+          },
+        }),
+        (grant) => {
+          tokens.revoke(grant.tokenId);
+        },
+      );
+    };
+    const shellGrant = custody === undefined ? await mintShellToken() : null;
     const tokenPath = join(config.dataDir, ...LAYOUT.SHELL_TOKEN);
     const productPath = join(config.dataDir, ...LAYOUT.PRODUCT_JSON);
-    // POSIX keeps its own true statement of the same law; on win32 both lines
-    // are inert and the private run dir above is what is actually holding.
-    writeFileSync(tokenPath, shellGrant.token, { mode: 0o600 });
-    chmodSync(tokenPath, 0o600); // umask-proof
+    if (shellGrant !== null) {
+      // POSIX keeps its own true statement of the same law; on win32 both lines
+      // are inert and the private run dir above is what is actually holding.
+      writeFileSync(tokenPath, shellGrant.token, { mode: 0o600 });
+      chmodSync(tokenPath, 0o600); // umask-proof
+    } else if (!native.superseded) {
+      // OB custody (C2) — a token file found here was written by a fieldd that ran this root at `files` and is gone
+      // (this boot holds the floor's one client slot). Its bearer died with that process; the file goes, so that
+      // nothing reads this root as a `files` fieldd's. Never once another fieldd has superseded this one: the run
+      // files are the successor's then.
+      rmSync(tokenPath, { force: true });
+    }
     // No per-FILE ACL edit on top: `restrictToCurrentUser` grants
     // `<account>:(OI)(CI)F`, which are CONTAINER inheritance flags. Applied to a
     // file, icacls reports success and leaves an EMPTY DACL — measured on
@@ -9748,6 +9816,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         nativePid,
         buildId: config.buildId ?? null,
         userId: config.userId ?? null,
+        // OB custody — discovery only, as the rest of the record is: a reader proves the level by the pairing
+        custody: custodyLevel,
       } satisfies ProductInfo; // the shell/supervisor adoption contract (shell.ts)
       // atomic: a reader finds the record before or after, never a torn one
       const tmp = `${productPath}.${process.pid}.tmp`;
@@ -10079,7 +10149,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       pluginLogging,
       audit,
       diagnostics: diagnosticsService,
-      shellToken: shellGrant.token,
+      // OB custody (C2) — a sealed fieldd minted none
+      shellToken: shellGrant?.token,
       health,
       nativeHealth: () => latestHealth,
       nativeSupervisor: supervisor,

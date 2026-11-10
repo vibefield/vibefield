@@ -39,6 +39,7 @@ import {
 } from "./forward-envelope";
 import { forwardDigest, mintForwardKey, OwnerForwardJournal } from "./forward-receipts";
 import { RpcCallError } from "./native-link";
+import { type ShellPairingVerdict, ShellPairingVerifier } from "./shell-pairing";
 import { ShellProviderBroker, type ShellProviderTransport } from "./shell-provider";
 
 // ProductAPI — the fabric's control binding (design-02 §3.3, D27): loopback WS
@@ -189,6 +190,9 @@ export interface ProductApiOptions {
    * after (`DeviceService.confirmNode`): "seen" goes on, "refused" hears the removed word, "unseen"
    * hears UNAVAILABLE {devices, confirming}, retryable. Unset: no node waits. */
   confirmNode?: (nodeId: string) => Promise<"seen" | "refused" | "unseen">;
+  /** OB custody (C2) — set by a `sealed` daemon: the shell PAIRS at this door and no bearer makes a `shell-main`
+   * (`ShellPairingDoor`). Unset is `files`: the door is today's in every byte. */
+  shellPairing?: ShellPairingDoor;
 }
 
 /** Item 406 (S3) — why the tailnet door refuses a caller of this account outright: the two words
@@ -201,6 +205,26 @@ const DOOR_REFUSAL_MESSAGES: Record<DoorRefusal, string> = {
   [DEVICE_REFUSALS.REASON_UNIDENTIFIED]:
     "the calling device is not named, and this account has a removed device",
 };
+
+/** OB custody (C2; contracts custody.ts, shell-pairing.ts) — the door of a daemon handed custody. A hello that says
+ * `clientKind: "shell-main"` is admitted on loopback by the pairing's MAC and by nothing else: a string credential is
+ * refused whatever it is (no shell bearer exists under `sealed`), and so is every failure of the pairing, each in
+ * the words a bad token gets. Every other client kind, and every window's token, is as it was. */
+export interface ShellPairingDoor {
+  /** the shell's pairing secret for this user root (`CustodyHandoff.shell`), 64 hex characters; never sent */
+  secretHex: string;
+  /** this daemon's boot, as `product.json` and the ready line state it */
+  bootId: string;
+  /** what a paired shell is granted: every scope, as the bearer's grant was */
+  scopes: Scope[];
+  /** An id for a paired connection's principal, in the token id space and with no bearer behind it
+   * (`TokenService.holdId`): the audit names its actor by it, and a drop closes connections by it. */
+  holdId(): string;
+  /** The connection that held the id closed. */
+  releaseId(tokenId: string): void;
+  /** Test seam: the verifier's clock, unix milliseconds. */
+  now?: () => number;
+}
 
 /** DS-L7/DS-D15 — `envelope` is what the forwarding hop adds beside the
  * method's params: `onBehalfOf`, built from the CALLING context (never from
@@ -341,6 +365,9 @@ interface ConnState {
   /** Item 406 (S3) — the upgrade's mark (`classifyDoor`): this caller's hello is answered this
    * word and the door closes, before any credential is read. null: none. */
   refused: DoorRefusal | null;
+  /** OB custody (C2) — the id this connection's paired `shell-main` principal carries (`ShellPairingDoor.holdId`),
+   * held from its first pairing until it closes; null for a connection that never paired. */
+  pairedTokenId: string | null;
 }
 
 /** Item 476 (2026-11-16) — the admission's answer: the key whose slot it
@@ -714,10 +741,28 @@ export class ProductApi extends EventEmitter {
   /** SP-1 — the keepalive's interval, and every live keepalive timer */
   readonly tickIntervalMs: number;
   private readonly ticks = new Set<ReturnType<typeof setInterval>>();
+  /** OB custody (C2) — a `sealed` door's pairing (what the daemon handed it, and its verifier); null at `files` */
+  private readonly sealed: { door: ShellPairingDoor; verifier: ShellPairingVerifier } | null;
+  /** OB custody (C2) — the port this door is bound to, which a pairing's MAC is made over; null until `listen` */
+  private boundPort: number | null = null;
 
   constructor(private readonly opts: ProductApiOptions) {
     super();
     this.logger = opts.logger ?? createNoopLogger();
+    const door = opts.shellPairing;
+    this.sealed =
+      door === undefined
+        ? null
+        : {
+            door,
+            verifier: new ShellPairingVerifier({
+              secretHex: door.secretHex,
+              bootId: door.bootId,
+              // the daemon's configured user, or the empty string when it has none (the recipe's own rule)
+              userId: opts.userId ?? "",
+              ...(door.now !== undefined ? { now: door.now } : {}),
+            }),
+          };
     this.tickIntervalMs = opts.tickIntervalMs ?? PRODUCT_API_LIMITS.TICK_INTERVAL_MS;
     this.ownerReceipts =
       opts.forwardReceipts ??
@@ -850,6 +895,7 @@ export class ProductApi extends EventEmitter {
     const addr = wss.address();
     if (typeof addr !== "object" || !addr)
       throw new Error("Product API closed before startup completed");
+    this.boundPort = addr.port;
     return addr.port;
   }
 
@@ -889,6 +935,7 @@ export class ProductApi extends EventEmitter {
       shellTransport,
       tick: null,
       refused: door?.refused ?? null,
+      pairedTokenId: null,
     };
     const conn = { ws, state };
     this.liveConns.add(conn);
@@ -903,6 +950,11 @@ export class ProductApi extends EventEmitter {
       this.closeSubscriptions(state);
       this.holds.delete(ws);
       this.opts.onConnectionClosed?.(state.connectionId);
+      // OB custody (C2) — a paired connection's id goes with it
+      if (state.pairedTokenId !== null) {
+        this.sealed?.door.releaseId(state.pairedTokenId);
+        state.pairedTokenId = null;
+      }
     });
   }
 
@@ -1036,8 +1088,46 @@ export class ProductApi extends EventEmitter {
         helloClientKind: parsed.data.clientKind,
       };
       const token = parsed.data.credential;
-      const grant = typeof token === "string" ? this.opts.tokens.verify(token) : null;
-      if (grant) {
+      // OB custody (C2) — at a `sealed` door a hello that says `shell-main` PAIRS (`ShellPairingDoor`), and is
+      // never looked up as a bearer: no token makes a shell there, whatever it would verify as.
+      const sealed = this.sealed;
+      const pairs = sealed !== null && parsed.data.clientKind === "shell-main";
+      const grant = !pairs && typeof token === "string" ? this.opts.tokens.verify(token) : null;
+      /** the ack's proof that this daemon holds the pairing secret; a paired hello's alone */
+      let serverMac: string | undefined;
+      if (sealed !== null && parsed.data.clientKind === "shell-main") {
+        // On loopback alone, as the bearer made a shell on loopback alone: the shell never comes through the
+        // sidecar's door, and the port under its MAC is this listener's own. The verifier checks in the spec's order
+        // (the shape, this boot, the clock's window, the nonce, the MAC in constant time). Every failure, a string
+        // credential and a missing one among them, is answered as a bad token is: the same words, no detail, 1008.
+        let verdict: ShellPairingVerdict | null = null;
+        if (state.tailnetLogin === null && this.boundPort !== null)
+          verdict = sealed.verifier.verify(token, this.boundPort);
+        if (verdict === null || !verdict.ok) {
+          this.logger.debug(
+            "fieldd.product_api.shell_pairing_refused",
+            "A shell-main hello did not pair at this sealed door",
+            { reason: verdict === null ? "door" : verdict.reason },
+          );
+          reply(this.err(id, "UNAUTHORIZED", "invalid token", false));
+          ws.close(1008, "unauthorized");
+          return;
+        }
+        serverMac = verdict.serverMac;
+        // the principal's id: held in the token id space with no bearer behind it, until this connection closes
+        const tokenId = state.pairedTokenId ?? sealed.door.holdId();
+        state.pairedTokenId = tokenId;
+        state.authed = true;
+        state.scopes = [...sealed.door.scopes];
+        state.ctx = {
+          principal: { kind: "shell-main", tokenId, scopes: [...sealed.door.scopes] },
+          transport: "ws-loopback",
+          receivedAt: Date.now(),
+          clientKind: parsed.data.clientKind,
+          signal: state.abortController.signal,
+          connection,
+        };
+      } else if (grant) {
         // a verified token is a real local grant — it wins on either door.
         // P4: a plugin-bound grant derives the {kind:"plugin"} principal (D20
         // — identity comes from the mint, never from the caller's claims).
@@ -1249,6 +1339,8 @@ export class ProductApi extends EventEmitter {
           // client can tell a call routed to its own daemon from one carried
           // to another desktop; a guest is told nothing
           ...(ackDevice !== undefined && ackDevice.length > 0 ? { deviceId: ackDevice } : {}),
+          // OB custody (C2) — a paired shell is shown that the answerer holds the secret too
+          ...(serverMac !== undefined ? { serverMac } : {}),
         },
       });
       this.armTick(ws, state);
