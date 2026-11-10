@@ -2557,6 +2557,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // ladder later: the idle poll holds off meanwhile, and so does G5's attach retry (`retryAttach` defers while
     // `ending`), so nothing of the daemon's own re-attaches the PTY or undoes the Stop. A typed run is never armed.
     // An end that placed nothing, or threw, arms the poll again, and the deferred retry's next tick proceeds.
+    // Item 312 (2026-11-10) — never beside G5's armed retry: the retry's own attach arms the poll as it settles.
     if (run.typed === undefined) {
       // an attach in flight comes first (G5), as it does for a replacement: it may bind the PTY this would end
       if (held.attaching) {
@@ -2579,7 +2580,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     } finally {
       if (run.typed === undefined && !placed && this.pending.get(runtimeRunId) === held) {
         held.ending = false;
-        this.armPending(held);
+        if (held.retry === undefined) this.armPending(held);
       }
     }
   }
