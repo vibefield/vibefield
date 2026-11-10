@@ -73,6 +73,11 @@ describe("fieldd's shell pairing recipe", () => {
     expect(modules).toContain("@vibefield/trust");
     expect(modules).not.toContain("node:crypto");
     expect(source).not.toContain("createHmac");
+    // and the three it takes, by name: the hello's MAC, the answer's, and the constant-time compare
+    const taken = /^import \{([^}]+)\} from "@vibefield\/trust";$/m.exec(source)?.[1] ?? "";
+    const names = taken.split(",").map((name) => name.trim());
+    const named = names.filter((name) => name.length > 0);
+    expect(named.sort()).toEqual(["macMatches", "shellAckMac", "shellPairingMac"]);
   });
 
   it("matches the cross-package vector", () => {
