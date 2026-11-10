@@ -35,8 +35,13 @@ import {
   SOCKETS,
   TerminalInventoryStaleDetails,
 } from "@vibefield/contracts";
-import type { AgentAdapterBinding } from "@vibefield/puppeteer-core";
-import type { AgentProvider, AgentProviderSessionOptions } from "@vibefield/puppeteer-runtime";
+import { type AgentAdapterBinding, AgentAttachRefusedError } from "@vibefield/puppeteer-core";
+import {
+  type AgentProvider,
+  type AgentProviderSessionOptions,
+  type AttachProviderSessionOptions,
+  createFileCreationRequestRegistry,
+} from "@vibefield/puppeteer-runtime";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import WebSocket from "ws";
 import { LAST_RUN_SETTLE_MS } from "../src/agent-last-run";
@@ -152,13 +157,15 @@ interface AgentDaemonSeams {
   /** the process table a typed run is proven against (default: the kit's one `ps` read) */
   processTable?: NonNullable<FielddConfig["agentGateway"]>["processTable"];
   /** the root as the disk holds it when fieldd starts, made after the staged records are written */
-  beforeBoot?: (dataDir: string) => void;
+  beforeBoot?: (dataDir: string) => void | Promise<void>;
   /** Q17's seam: the signal a typed run's end sends, recorded by the row instead of sent */
   kill?: NonNullable<FielddConfig["agentGateway"]>["kill"];
   /** fieldd's own log under `<dataDir>/logs` (none by default: the runtime's logger is a no-op) */
   logs?: boolean;
   /** item 306: the idle poll a row drives itself (default: it never fires inside a row) */
   resumeWhenIdle?: { afterMs: number; pollMs: number };
+  /** item 306: the scripted agent a row composes instead (default: `countingAgent`, which cannot attach) */
+  provider?: (births: string[]) => AgentProvider;
 }
 
 /** A daemon over the mock floor answering `observedState` on the fixtures'
@@ -172,7 +179,7 @@ async function agentDaemonOn(
   staged: (dataDir: string) => AgentSessionRecord[],
   seams: AgentDaemonSeams = {},
 ): Promise<AgentFloor> {
-  const { lastBoard, processTable, beforeBoot, kill, logs, resumeWhenIdle } = seams;
+  const { lastBoard, processTable, beforeBoot, kill, logs, resumeWhenIdle, provider } = seams;
   const dataDir = mkdtempSync(join(tmpdir(), "vf-agent-age-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -193,7 +200,7 @@ async function agentDaemonOn(
     };
     writeFileSync(path, `${JSON.stringify(picture)}\n`);
   }
-  beforeBoot?.(dataDir);
+  await beforeBoot?.(dataDir);
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   mock.observedState = observedState;
   mock.terminalRoutes = fixtureRoutes();
@@ -208,7 +215,7 @@ async function agentDaemonOn(
     secretStore: keychainInMemory(),
     agentCatalog: SCRIPTED_CATALOG,
     // the scripted agent alone: no built-in agent's readers run on this machine
-    agentProviders: () => [countingAgent(births)],
+    agentProviders: () => [(provider ?? countingAgent)(births)],
     // no gateway; a typed run's record is proven against the row's process table, when it hands one
     agentGateway: {
       enabled: false,
@@ -1287,6 +1294,122 @@ describe("item 306 — a Stop of a held run is not undone by the idle poll (the 
       "application-terminated",
     );
     expect(births, "nothing born: the Stop stands").toEqual([]);
+    expect(realSignals(), "the net: no real signal was asked").toEqual([]);
+  }, 30_000);
+});
+
+// Item 306, its second road (2026-11-10) — G5's attach retry. A held run whose adapter called its attach failure
+// transient (`next: "retry"`) is asked again after `ATTACH_RETRY_MS` (1 s, doubled per attempt). That road, too,
+// must not act on a run whose Stop is owed: an attach that lands re-attaches the PTY the Stop is ending, and one that
+// fails again re-holds the run with the idle poll armed, so the race comes back. These rows stage the durable claim
+// (`agents/runs`, puppeteer's registry) so its attach reaches a scripted adapter the row composes. Its first attach
+// is refused `retry`; each later one answers as the row says. The retry's 1 s is the product's constant, waited
+// (no seam). No pid is touched and no process is signalled, under the same net.
+describe("item 306 — a Stop of a held run and G5's attach retry (the mock floor)", () => {
+  const realKill = process.kill.bind(process);
+  let net: MockInstance<typeof process.kill> | undefined;
+  beforeEach(() => {
+    net = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (signal === 0) return realKill(pid, 0);
+      throw new Error("Q17: a real signal was about to be sent");
+    });
+  });
+  afterEach(() => {
+    net?.mockRestore();
+    net = undefined;
+  });
+  /** every signal but 0 asked of `process.kill` while the row ran (the net threw for each) */
+  const realSignals = () => (net?.mock.calls ?? []).filter(([, signal]) => signal !== 0);
+
+  const CREATION = "q306-retry-creation";
+  /** A held run whose boot attach was refused `retry`: its claim staged, its adapter the row's. `later` answers
+   * every attach after the first. */
+  async function heldWithRetry(later: () => Promise<AgentAdapterBinding>) {
+    const attaches: string[] = [];
+    const box = await agentDaemonOn(
+      freshFloor(),
+      (dataDir) => [runRecord(RUN, CLAUDE, dataDir, { creationRequestId: CREATION })],
+      {
+        beforeBoot: async (dataDir) => {
+          await createFileCreationRequestRegistry({
+            directory: join(dataDir, ...LAYOUT.AGENT_RUNS_DIR),
+          }).claim({
+            creationRequestId: CREATION,
+            canonicalFingerprint: "q306-retry",
+            proposedRuntimeRunId: RUN,
+            operation: "create",
+          });
+        },
+        provider: (births) => ({
+          ...countingAgent(births),
+          async attachSession(options: AttachProviderSessionOptions): Promise<AgentAdapterBinding> {
+            attaches.push(options.runtimeSessionId);
+            if (attaches.length === 1) {
+              throw new AgentAttachRefusedError("retry", "scripted: retry");
+            }
+            return later();
+          },
+        }),
+      },
+    );
+    await until(
+      () => box.records.read(RUN)?.reattach?.next === "retry",
+      10_000,
+      "the boot's attach refused `retry`: the run held, its retry armed",
+    );
+    const terminate = vi
+      .spyOn(box.daemon.terminals, "terminate")
+      .mockResolvedValue({ terminated: true });
+    return { ...box, attaches, terminate };
+  }
+
+  it("a Stop while the retry's attach is in flight is refused retryably, and nothing is ended", async () => {
+    let fail: (error: Error) => void = () => undefined;
+    const box = await heldWithRetry(
+      () =>
+        new Promise<AgentAdapterBinding>((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+    await until(() => box.attaches.length === 2, 5_000, "the retry's attach, in flight");
+    // the held attach is released before the daemon stops, however the row ends (the stop waits on it)
+    cleanup.push(() => fail(new Error("scripted: released at the row's end")));
+    // before 306's second road the Stop went ahead: the floor's terminate on the PTY the attach may bind
+    const stop = box.daemon.agents.endRun(RUN);
+    await expect(stop, "the attach's outcome comes first").rejects.toMatchObject({
+      kind: "PRECONDITION_FAILED",
+      retryable: true,
+      details: { state: "attaching" },
+    });
+    expect(box.terminate, "nothing ended").not.toHaveBeenCalled();
+    // the attach fails for good: the run is held again, as it was, with no Stop standing
+    fail(new Error("scripted: the attach did not land"));
+    await until(
+      () => box.records.read(RUN)?.reattach?.next === undefined,
+      5_000,
+      "held again after the failed attach",
+    );
+    expect(box.records.read(RUN)?.exited, "the run stands").toBeUndefined();
+    expect(box.terminate, "still nothing ended").not.toHaveBeenCalled();
+    expect(realSignals(), "the net: no real signal was asked").toEqual([]);
+  }, 30_000);
+
+  it("a Stop placed while the retry is armed: the retry asks no attach while the floor's exit is owed", async () => {
+    const box = await heldWithRetry(() =>
+      Promise.reject(new Error("scripted: the attach did not land")),
+    );
+    await box.daemon.agents.endRun(RUN);
+    expect(box.terminate, "the Stop: its own PTY").toHaveBeenCalledTimes(1);
+    // past the retry's first delay (1 s): before 306's second road it attached again (calls: 2)
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    expect(box.attaches, "the boot's attach alone").toHaveLength(1);
+    // the floor's exit for the Stop's own terminate
+    await box.daemon.agents.handleTerminalExit(exited());
+    await until(() => box.records.read(RUN)?.exited !== undefined, 5_000, "the run closed");
+    expect(box.records.read(RUN)?.exited?.reason, "closed by the Stop's own exit").toBe(
+      "application-terminated",
+    );
+    expect(box.births, "nothing born").toEqual([]);
     expect(realSignals(), "the net: no real signal was asked").toEqual([]);
   }, 30_000);
 });
