@@ -991,6 +991,29 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(readWords(meters, new Date(newest + 5 * 60_000))).toBe("Read 5 minutes ago");
     expect(readWords(metersOf(FIXTURE_NATIVE, []), NOW)).toBe("Reading usage…");
   });
+
+  // A GUARD, green on arrival (item 274, UM-274-D4 A, James 2026-11-10): the head says the batch's
+  // newest read, so a meter kept from an older reading (its own `fetchedAt`) never ages it. It
+  // reddens only if the head ever reads a meter's own read.
+  it("P1: the head says the newest read whatever a kept meter's own read", () => {
+    const twoHoursBefore = (at: string) => new Date(Date.parse(at) - 2 * 3_600_000).toISOString();
+    const kept = READINGS.map((row) => ({
+      ...row,
+      metrics: row.metrics.map((metric, index) =>
+        index === 0 ? metric : { ...metric, fetchedAt: twoHoursBefore(row.fetchedAt) },
+      ),
+    }));
+    expect(kept.some((row) => row.metrics.some((metric) => metric.fetchedAt !== undefined))).toBe(
+      true,
+    );
+    const meters = metersOf(FIXTURE_NATIVE, kept);
+    const newest = Math.max(
+      ...meters.entries.flatMap((entry) =>
+        entry.kind === "reading" ? [Date.parse(entry.fetchedAt)] : [],
+      ),
+    );
+    expect(readWords(meters, new Date(newest + 60_000))).toBe("Read a minute ago");
+  });
 });
 
 /* ── the cards layer (UM-R1; DESIGN.md §8 "Where the cards stand") ──────────── */

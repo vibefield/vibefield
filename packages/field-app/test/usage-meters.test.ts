@@ -726,6 +726,77 @@ describe('the assembled review — a window read before its reset (DESIGN.md §8
     expect(codex.tightest.passed).toBe(true);
     expect(codex.right).toEqual({ kind: "kept", words: "as of 32m ago", hot: false, icon: false });
   });
+
+  // Item 274 (UM-274-D2 A, James 2026-11-10; DESIGN.md §8 "A meter a later reading did not
+  // carry"): at puppeteer 0.4.0 a push carries only the meters it reads, so a plan holds meters of
+  // two readings, each kept meter with its own `fetchedAt`. Every age said is the age of the
+  // numbers beside it.
+  it("U1: a kept reading says its tightest window's own age, not the push's", () => {
+    // the push a minute ago carried the five hours; the week, the tightest, was kept from a read
+    // two hours ago
+    const meters = planMeters(
+      profile([own("claude")], [ownPlan("anthropic", "claude")]),
+      [
+        row(
+          "claude",
+          [paced("5h", 30, 50), window("7d", 96, 10_080, 600, { fetchedAt: from(-120) })],
+          { state: "unavailable", stale: true },
+        ),
+      ],
+      NOW,
+    );
+    const claude = reading(entryOf(meters, "plan:anthropic"));
+    expect(claude.tightest.line.id).toBe("7d");
+    expect(claude.right).toEqual({ kind: "kept", words: "as of 2h ago", hot: false, icon: false });
+  });
+
+  it("U2: a model week kept from before its reset leaves a pushed tightest its reset", () => {
+    // the five hours, pushed a minute ago, runs; the model week was read 40 minutes ago and its
+    // reset came since
+    const meters = planMeters(
+      profile([own("claude")], [ownPlan("anthropic", "claude")]),
+      [
+        row("claude", [
+          window("5h", 50, 300, 120),
+          window("week", 70, 10_080, -15, { fetchedAt: from(-40) }),
+        ]),
+      ],
+      NOW,
+    );
+    const claude = reading(entryOf(meters, "plan:anthropic"));
+    expect(claude.tightest.line.id).toBe("5h");
+    expect(claude.windows.find((each) => each.line.id === "week")?.passed).toBe(true);
+    // the tightest was read after the passed week, so the week ages nothing but its own line
+    expect(claude.right).toEqual({
+      kind: "reset",
+      words: claude.tightest.line.reset,
+      hot: false,
+      icon: true,
+    });
+  });
+
+  it("U3: a tightest kept from an earlier read than a passed window is aged by it, with its own age", () => {
+    // the five hours, pushed a minute ago, had already reset; the week, the tightest, was kept from
+    // 90 minutes ago
+    const meters = planMeters(
+      profile([own("claude")], [ownPlan("anthropic", "claude")]),
+      [
+        row("claude", [
+          window("5h", 100, 300, -5),
+          window("7d", 70, 10_080, 600, { fetchedAt: from(-90) }),
+        ]),
+      ],
+      NOW,
+    );
+    const claude = reading(entryOf(meters, "plan:anthropic"));
+    expect(claude.tightest.line.id).toBe("7d");
+    expect(claude.right).toEqual({
+      kind: "passed",
+      words: "as of 1h 30m ago",
+      hot: false,
+      icon: false,
+    });
+  });
 });
 
 describe("UM-1 — the words' lengths and the reset's form", () => {

@@ -343,6 +343,20 @@ describe("the history port over fieldd's index doors", () => {
 describe("the usage port over fieldd's account-usage door", () => {
   const VALID = fixture("agent-usage.valid.json") as { entries: Record<string, unknown>[] };
 
+  it("item 274: a meter a later reading did not carry keeps its own read in Core's entry", () => {
+    // Core 0.4.0 has the slot (`AccountUsageMetric.fetchedAt`); the door's row names it since item 274
+    const batch = toAccountUsageBatch(fixture("agent-usage.kept-meters.json"));
+    const [mine] = batch.entries;
+    const snapshot = mine?.result.status === "available" ? mine.result.snapshot : undefined;
+    expect(snapshot?.fetchedAt).toBe("2026-09-16T11:59:30.000Z");
+    expect(snapshot?.metrics.map((metric) => [metric.id, metric.fetchedAt])).toEqual([
+      ["five-hour", undefined],
+      ["seven-day", undefined],
+      ["fable", "2026-09-16T11:20:00.000Z"],
+      ["credit", "2026-09-16T11:20:00.000Z"],
+    ]);
+  });
+
   it("rebuilds Core's two-part entry from the door's flattened row", () => {
     const batch = toAccountUsageBatch(VALID);
     expect(batch.refreshedAt).toBe("2026-09-13T12:00:01.000Z");

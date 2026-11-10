@@ -2230,6 +2230,44 @@ describe("the plans a profile runs on (pass 19)", () => {
     );
   });
 
+  it("S1 (item 274, UM-274-D2 A): a passed window kept from an older reading says its own read's age, not the push's", async () => {
+    // pushed a minute ago (the week); the five hours, spent and reset ten minutes ago, was kept from
+    // a read three hours ago, so its line says ITS age (DESIGN.md §8 "A meter a later reading did
+    // not carry")
+    const pushed = new Date(NOW.getTime() - 60_000).toISOString();
+    const read = new Date(NOW.getTime() - 3 * 60 * 60_000).toISOString();
+    const kept: AgentAccountUsageEntry = {
+      ...USAGE[0]!,
+      fetchedAt: pushed,
+      metrics: [
+        {
+          ...USAGE[0]!.metrics[0]!,
+          usedPercent: 100,
+          resetsAt: new Date(NOW.getTime() - 10 * 60_000).toISOString(),
+          fetchedAt: read,
+        },
+        USAGE[0]!.metrics[1]!,
+      ],
+    };
+    const batch: AgentAccountUsageBatch = { entries: [kept, PLAN_USAGE[1]!], generatedAt: pushed };
+    const f = fake(
+      doors({
+        "agent.providers": () => ({ providers: PLAN_PROVIDERS }),
+        "agents.installs": () => ({ installs: PLAN_INSTALLS, machineScope: true }),
+        "agents.usage": () => batch,
+      }),
+      batch,
+    );
+    await mountSection(f.client, { feed: plannedFeed(), route: { kind: "profile", set: "work" } });
+    const card = container?.querySelector<HTMLElement>('.vf-profiles-plan[data-plan="anthropic"]');
+    const lines = [...(card?.querySelectorAll<HTMLElement>(".vf-profiles-usage-line") ?? [])];
+    expect(lines.map((line) => line.getAttribute("aria-label"))).toEqual([
+      "5H: 100% used, as of 3h ago",
+      `7D: 12% used, resets ${resetWords(new Date(NOW.getTime() + 3 * 24 * 60 * 60_000), NOW)}`,
+    ]);
+    expect(lines[0]?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe("as of 3h ago");
+  });
+
   it("adds a sign-in to a harness by one of its own routes", async () => {
     const hermes = persona({
       ...P_HERMES,

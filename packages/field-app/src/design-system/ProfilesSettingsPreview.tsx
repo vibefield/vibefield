@@ -45,6 +45,7 @@ import {
   FIXTURE_INSTALL_PANE_OUTPUT,
   FIXTURE_NATIVE,
   FIXTURE_PROFILES_CONTEXT,
+  FIXTURE_PROFILES_CONTEXT_KEPT_METERS,
   FIXTURE_PROFILES_CONTEXT_READ_BEFORE_RESET,
   FIXTURE_PROFILES_NOW,
   FIXTURE_SERVER_SIGN_IN_OUTPUT,
@@ -200,7 +201,9 @@ export function ProfilesSettingsPreview({
         ? { ...FIXTURE_PROFILES_CONTEXT, usage: [] }
         : state === "read before reset"
           ? FIXTURE_PROFILES_CONTEXT_READ_BEFORE_RESET
-          : FIXTURE_PROFILES_CONTEXT,
+          : state === "kept meters"
+            ? FIXTURE_PROFILES_CONTEXT_KEPT_METERS
+            : FIXTURE_PROFILES_CONTEXT,
     [state],
   );
   // "agent": a vendor agent in Work (one subscription); "sign-ins": OpenCode,

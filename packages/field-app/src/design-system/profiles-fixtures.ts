@@ -36,6 +36,8 @@ export type ProfilesFixtureState =
   | "refreshing usage"
   /** UM-3 — a window read before its reset says the reading's age where its reset stood, unlit */
   | "read before reset"
+  /** item 274 (UM-274-D7 A) — a push over a meter kept from an older read: each line says its own read */
+  | "kept meters"
   | "empty"
   | "signing in"
   | "agent"
@@ -78,6 +80,7 @@ export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
   "loading usage",
   "refreshing usage",
   "read before reset",
+  "kept meters",
   "empty",
   "signing in",
   "agent",
@@ -512,6 +515,26 @@ export const FIXTURE_PROFILES_CONTEXT_READ_BEFORE_RESET: ProfilesContext = {
           metrics: entry.metrics.map((metric) =>
             metric.id === "5h"
               ? { ...metric, usedPercent: 100, resetsAt: inHours(-1 / 6) }
+              : metric,
+          ),
+        }
+      : entry,
+  ),
+};
+
+/** Item 274 (UM-274-D7 A; DESIGN.md §8 "A meter a later reading did not carry") — Work's Claude pushed a minute ago,
+ * carrying its week; its five hours, spent, reset ten minutes ago and was kept from a read three hours ago, so its line
+ * says its own read, "as of 3h ago", where the push alone would say a minute. */
+export const FIXTURE_PROFILES_CONTEXT_KEPT_METERS: ProfilesContext = {
+  ...FIXTURE_PROFILES_CONTEXT,
+  usage: USAGE.map((entry) =>
+    entry.profileId === "work-claude"
+      ? {
+          ...entry,
+          fetchedAt: inHours(-1 / 60),
+          metrics: entry.metrics.map((metric) =>
+            metric.id === "5h"
+              ? { ...metric, usedPercent: 100, resetsAt: inHours(-1 / 6), fetchedAt: inHours(-3) }
               : metric,
           ),
         }

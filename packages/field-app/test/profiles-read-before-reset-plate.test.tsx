@@ -53,3 +53,31 @@ describe("Agent Profiles' catalog plate: a window read before its reset", () => 
     expect(said("7D:")?.getAttribute("aria-label")).toContain("38% used, resets");
   });
 });
+
+// Item 274 (UM-274-D7 A, James 2026-11-10; DESIGN.md §8 "A meter a later reading did not carry"): the SHIPPING page over
+// a push a minute old whose five hours was kept from a read three hours ago. Each line says its own read.
+describe("Agent Profiles' catalog plate: a meter a later reading did not carry (item 274)", () => {
+  it("is a state the catalog offers", () => {
+    expect(PROFILES_FIXTURE_STATES).toContain("kept meters");
+  });
+
+  it("says the kept five hours' own read, not the push's, and the pushed week keeps its reset", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    const mounted = createRoot(host);
+    root = mounted;
+    await act(async () => {
+      mounted.render(<ProfilesSettingsPreview state="kept meters" onSubpage={() => undefined} />);
+    });
+
+    const card = host.querySelector<HTMLElement>('.vf-profiles-plan[data-plan="anthropic"]');
+    const lines = [...(card?.querySelectorAll<HTMLElement>(".vf-profiles-usage-line") ?? [])];
+    const said = (lead: string) =>
+      lines.find((line) => line.getAttribute("aria-label")?.startsWith(lead));
+
+    const fiveHours = said("5H:");
+    expect(fiveHours?.getAttribute("aria-label")).toBe("5H: 100% used, as of 3h ago");
+    expect(fiveHours?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe("as of 3h ago");
+    expect(said("7D:")?.getAttribute("aria-label")).toContain("38% used, resets");
+  });
+});

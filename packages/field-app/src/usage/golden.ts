@@ -76,6 +76,9 @@ function windowRecord(window: MeterWindow): Record<string, unknown> {
     passed: window.passed,
     pressure: window.pressure,
     forecast: window.forecast,
+    // item 274: a meter a later reading did not carry names its own read; written only when it has one, so every
+    // record of a one-reading batch stays byte for byte
+    ...(window.metric.fetchedAt !== undefined ? { fetchedAt: window.metric.fetchedAt } : {}),
   };
 }
 

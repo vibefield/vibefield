@@ -32,7 +32,11 @@ export const USAGE_BANDS_SETS = [
   "agents-profile-sets.valid.json",
   "agents-profile-sets.meters.json",
 ] as const;
-export const USAGE_BANDS_BATCHES = ["agent-usage.valid.json", "agent-usage.budget.json"] as const;
+export const USAGE_BANDS_BATCHES = [
+  "agent-usage.valid.json",
+  "agent-usage.budget.json",
+  "agent-usage.kept-meters.json",
+] as const;
 
 /** Each batch's now, as a live view reads it: the AR-5 golden five minutes after its reading, UM-1's budget batch
  * half a minute after its last row (so its kept Codex reading is 32 minutes old). A reset a day or more off is
@@ -40,6 +44,9 @@ export const USAGE_BANDS_BATCHES = ["agent-usage.valid.json", "agent-usage.budge
 export const USAGE_BANDS_NOWS: Readonly<Record<(typeof USAGE_BANDS_BATCHES)[number], string>> = {
   "agent-usage.valid.json": "2026-09-13T12:05:00.000Z",
   "agent-usage.budget.json": "2026-09-16T12:00:00.000Z",
+  // item 274: a push half a minute old over meters kept from earlier reads (its model week from 11:20Z, Side's week
+  // from 10:00Z), read at the budget batch's now, as the phone's mock door reads it
+  "agent-usage.kept-meters.json": "2026-09-16T12:00:00.000Z",
 };
 
 /** UM-1's budget batch read three hours on, at 15:00Z: past its Claude five hours' reset (14:30Z) and its kept Codex
@@ -49,6 +56,8 @@ export const USAGE_BANDS_AFTER_RESET = "2026-09-16T15:00:00.000Z";
 
 const VALID = { sets: USAGE_BANDS_SETS[0], batch: USAGE_BANDS_BATCHES[0] } as const;
 const METERS = { sets: USAGE_BANDS_SETS[1], batch: USAGE_BANDS_BATCHES[1] } as const;
+/** item 274: a plan holding meters of two readings, each kept meter with its own read (`fetchedAt`) */
+const KEPT = { sets: USAGE_BANDS_SETS[1], batch: USAGE_BANDS_BATCHES[2] } as const;
 /** the sizes the ruled drawing draws a circle at, with its options there (draft/profile-meters/round4/src
  * p4f-frames.js, p3f-frames.js) */
 const COLUMN = { size: 40, options: { centre: "glyph", hotDot: true } } as const;
@@ -175,6 +184,29 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     of: "native",
     at: USAGE_BANDS_AFTER_RESET,
     ...PAGE_ROW,
+  },
+  {
+    name: "a push over kept meters: each window its own read, the plan's words its tightest's",
+    where: "the desktop's popover (item 274, UM-274-D2 A)",
+    ...KEPT,
+    of: "native",
+    size: 212,
+    options: { hit: true },
+  },
+  {
+    name: "a push over kept meters as a bud",
+    where: "a profile's bud in the held face's bloom (item 274)",
+    ...KEPT,
+    of: "native",
+    ...BUD,
+  },
+  {
+    name: "a kept reading whose tightest was kept from an older read: its age, the week's own",
+    where: "the desktop's popover, Side (item 274, UM-274-D2 A)",
+    ...KEPT,
+    of: "side",
+    size: 212,
+    options: { hit: true },
   },
   {
     name: "needs you: a sign-in and a retry beside a shared plan's reading",
@@ -311,7 +343,7 @@ export const USAGE_BANDS_FORECASTS: readonly ForecastInput[] = [
 ];
 
 const NOTE =
-  "UM-1 (UM-D16 E, Bands; UM-D3, D4, D12, D13, D15; PLAN §4 v0.2) — the usage bands golden: the desktop's meter model (packages/field-app/src/usage/meters.ts: planMeters for one profile, everyPlan for every profile at once — a plan two profiles share is one entry with both profiles; each plan read through Settings' join, namedBy, usageOf, usageLines, signInState; UM-D15's order by the agent catalog; UM-D13's tightest window by pressure, src/usage/rules.ts; the pace rule isHot, a budget pace-less) and its Bands geometry (src/usage/bands.ts bandsGeometry, the ruled drawing's drawBands) over contracts fixtures (inputs), each batch read at its own now (nows), minutes after its reading, or at a case's own now (at), hours later, after a reset. meters: each profile (or every) the circles draw, its entries in order (a reading's windows as Settings' C1 lines with resetForm, budget, lengthWords, durationMinutes, resetIn, passed, pressure and forecast — a window read before its reset, passed, its resetsAt at or before now, is never hot and has no forecast, its pressure 0, its fill at half, and its plan's right says the reading's age, kind passed — a reset a day or more off is recorded by its form, resetForm day, and its minutes, its words left out, because Settings says it by its day and clock in the reader's own zone and locale; tightest by window id; profiles, the glyphs a crowded agent wears), its tightest plan and its hot rule. circles: per case, where the product draws it, whose meters, the size and options, the level, the centre and its items, each plan's arcs (band, part, r, from, to, width, cap, paint as a tone, opacity, dash), notches, mark (its badge, its profile glyph), hit arc and words, the empty ring or the hot dot, and the label. calls.forecast: UM-D4's forecast over a fixed vector, each {in, out}. planSessions (UM-5b): per set file, each persona's run with the plan key it spends (null: none, usage/plan-sessions.ts) and each plan's family and runs, the phone's PlanSessions held to it. A plan is titled by its company's label in the fixture (title), never a product name, and nothing here is puppeteer's: no release moves it. Angles in degrees from three o'clock, clockwise; every number to 0.01. GENERATED by packages/field-app/perf/usage-bands.generate.perf.ts (src/usage/golden.ts computes it), pinned byte for byte by test/usage-bands.test.ts; the phone's copy (UM's U3 lane) by pnpm check:ios-fixtures. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.";
+  "UM-1 (UM-D16 E, Bands; UM-D3, D4, D12, D13, D15; PLAN §4 v0.2) — the usage bands golden: the desktop's meter model (packages/field-app/src/usage/meters.ts: planMeters for one profile, everyPlan for every profile at once — a plan two profiles share is one entry with both profiles; each plan read through Settings' join, namedBy, usageOf, usageLines, signInState; UM-D15's order by the agent catalog; UM-D13's tightest window by pressure, src/usage/rules.ts; the pace rule isHot, a budget pace-less) and its Bands geometry (src/usage/bands.ts bandsGeometry, the ruled drawing's drawBands) over contracts fixtures (inputs), each batch read at its own now (nows), minutes after its reading, or at a case's own now (at), hours later, after a reset. meters: each profile (or every) the circles draw, its entries in order (a reading's windows as Settings' C1 lines with resetForm, budget, lengthWords, durationMinutes, resetIn, passed, pressure and forecast, and a meter's own read, fetchedAt, only where a later reading did not carry it (item 274) — a window read before its reset, passed, its resetsAt at or before now, is never hot and has no forecast, its pressure 0, its fill at half, and its plan's right says the reading's age, kind passed — a reset a day or more off is recorded by its form, resetForm day, and its minutes, its words left out, because Settings says it by its day and clock in the reader's own zone and locale; tightest by window id; profiles, the glyphs a crowded agent wears), its tightest plan and its hot rule. circles: per case, where the product draws it, whose meters, the size and options, the level, the centre and its items, each plan's arcs (band, part, r, from, to, width, cap, paint as a tone, opacity, dash), notches, mark (its badge, its profile glyph), hit arc and words, the empty ring or the hot dot, and the label. calls.forecast: UM-D4's forecast over a fixed vector, each {in, out}. planSessions (UM-5b): per set file, each persona's run with the plan key it spends (null: none, usage/plan-sessions.ts) and each plan's family and runs, the phone's PlanSessions held to it. A plan is titled by its company's label in the fixture (title), never a product name, and nothing here is puppeteer's: no release moves it. Angles in degrees from three o'clock, clockwise; every number to 0.01. GENERATED by packages/field-app/perf/usage-bands.generate.perf.ts (src/usage/golden.ts computes it), pinned byte for byte by test/usage-bands.test.ts; the phone's copy (UM's U3 lane) by pnpm check:ios-fixtures. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.";
 
 const contractsFixture = (name: string): unknown =>
   JSON.parse(readFileSync(join(FIELD_APP, "..", "contracts", "fixtures", name), "utf8"));
