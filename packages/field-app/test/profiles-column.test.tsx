@@ -1541,6 +1541,66 @@ describe("closing is one act (UM-R3): the pin, the pointer's hold and the keyboa
   });
 });
 
+/* ── the pinned tell (UM-R-F, c3; DESIGN.md §8 "A circle") ─────────────────── */
+
+describe("the pinned tell (UM-R-F, c3): a pinned card's circle wears the ready fill, a pointed one does not", () => {
+  // the UM-R5 rows' helper, copied: one rule's block of the column's sheet
+  const block = (selector: string): string => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    return new RegExp(`\\n${escaped} \\{[^}]*\\}`, "u").exec(CSS)?.[0] ?? "";
+  };
+  const circleOf = (page: HTMLElement, id: string): HTMLButtonElement | null =>
+    page.querySelector<HTMLButtonElement>(`[data-profile="${id}"] .vf-profiles-circle`);
+
+  it("wears the ready fill on a pinned card's circle, after the hover, so it wins under the pointer (§8 'A circle')", () => {
+    expect(block(".vf-profiles-circle[data-pinned]")).toContain(
+      "background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);",
+    );
+    const hover = CSS.indexOf("\n.vf-profiles-circle:hover,\n.vf-profiles-circle[data-open] {");
+    expect(hover).toBeGreaterThan(-1);
+    expect(CSS.indexOf("\n.vf-profiles-circle[data-pinned] {")).toBeGreaterThan(hover);
+  });
+
+  it("the tell is the pin's: on the pinned circle while another circle peeks, and gone with the pin (c2 kept)", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const target = cardLayer();
+      const page = mount(<ProfilesColumn {...controller({ cardLayer: target })} />);
+      act(() => circleOf(page, "work")?.click());
+      expect(circleOf(page, "work")?.hasAttribute("data-pinned")).toBe(true);
+      expect(circleOf(page, "native")?.hasAttribute("data-pinned")).toBe(false);
+      // the peek: This Mac's card stands over Work's, and the pin's tell stays on Work's circle
+      act(() => {
+        page
+          .querySelector('.vf-profiles-item[data-profile="native"]')
+          ?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+      });
+      act(() => {
+        vi.advanceTimersByTime(120);
+      });
+      expect(target.querySelector('.vf-profiles-stand[data-profile="native"]')).not.toBeNull();
+      expect(circleOf(page, "work")?.hasAttribute("data-pinned")).toBe(true);
+      expect(circleOf(page, "native")?.hasAttribute("data-pinned")).toBe(false);
+      // closing is one act: the pin goes, and its tell with it
+      act(() => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+        );
+      });
+      expect(circleOf(page, "work")?.hasAttribute("data-pinned")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a pointed card's circle wears no tell; a pinned one does (the view)", () => {
+    const page = mount(<ProfilesColumnView {...column({ open: "native", pinned: true })} />);
+    expect(circleOf(page, "native")?.hasAttribute("data-pinned")).toBe(true);
+    act(() => root?.render(<ProfilesColumnView {...column({ open: "native", pinned: false })} />));
+    expect(circleOf(page, "native")?.hasAttribute("data-pinned")).toBe(false);
+  });
+});
+
 /* ── the card's details (UM-R5) ──────────────────────────────────────────── */
 
 describe("the card's details (UM-R5): §7 'Off', the truncations, the rings, the motion-off lists", () => {

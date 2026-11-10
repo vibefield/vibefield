@@ -189,6 +189,8 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     // the popover, pinned by a click on the lens: This Mac's sessions only, its plans in rows
     const pinned = columnPlate("popover")?.querySelector('.vf-profiles-item[data-pinned=""]');
     expect(pinned?.getAttribute("data-profile")).toBe("native");
+    // UM-R-F (c3): the pinned card's circle wears the quiet tell
+    expect(pinned?.querySelector(".vf-profiles-circle")?.hasAttribute("data-pinned")).toBe(true);
     expect(pinned?.querySelector(".vf-profiles-circle")?.getAttribute("aria-pressed")).toBe("true");
     const pop = pinned?.querySelector('.vf-profiles-pop[role="dialog"]');
     expect(pop?.getAttribute("aria-label")).toBe("This Mac");
