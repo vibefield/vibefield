@@ -44,6 +44,11 @@ async fn main() -> anyhow::Result<()> {
         }
         return Ok(());
     }
+    // OB custody (C3, EL7) — THE BOOTSTRAP LINE IS THIS PATH'S ALONE. `from_env` is the one reader of
+    // `FIELD_NATIVE_CUSTODY`, and the boot it feeds is the one reader of a bootstrap line on stdin (`custody.rs`).
+    // Every role above has returned or exited by here and read neither: `door` above all, which any agent runs in its
+    // pane with the stdin and the environment of its choosing, and whose stdin is the door's bytes and nothing else. A
+    // role added above this line keeps that (`tests/custody_bootstrap.rs`, the other roles' rows).
     let config = NativeConfig::from_env()?;
     let boot_id = new_boot_id();
     let logging = NativeLogging::install(&config, &boot_id)?;
