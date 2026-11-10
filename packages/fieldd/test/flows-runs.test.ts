@@ -704,7 +704,8 @@ async function harness(
    * in the same turn, `old` gone from the fold (:4565). Between `tell()` and `enter()` is the spawn gap (a row waits a
    * macrotask, or wakes the run there): no row for `old` or `next`, `replacing(old)` still true. `enter()`: `next`
    * listed live (`managed.set`, :3203), which ends the span, then its `begun: "resume"` told, FlowStepEvents's
-   * `onResumed` (:3209, Q8 (a); never for a handed session, whose successor carries no flow origin, fse.ts:118–119). */
+   * `onResumed` (:3209, Q8 (a); never for a handed session, whose successor carries no flow origin: `entered`'s
+   * origin check in flow-step-events.ts). */
   const replaceSession = (
     old: string,
     next: string,
@@ -7544,7 +7545,7 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
   it("JB5 (J1; F6, Q4, Q15): with no host up, an answer that would cross ends the run: no host is started for it, its crossed step reads `ended`, and its agent is ended once", async () => {
     // red: no bound is read, so the 40 KiB answer is kept and wakes the run (a 2nd host), which ends `done`. Kills
     // (Q15, D320 as corrected): `#full` sets `live.ending` itself, and stops only a host that is up, so with none up
-    // the run waits on for ever; `#endWith`'s own line (runs.ts:912) is shared with R40b
+    // the run waits on for ever; `#endWith`'s own line (its `#finish` when no host is up) is shared with R40b
     const h = await harness({ hostIdleMs: IDLE_MS, journalMaxBytes: 32_768 });
     h.approved("review", ANSWERED);
     const run = startedRun(await h.start({ flow: "review" })).run;
@@ -7577,8 +7578,8 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
 
   it("JB5b (J1; §B, Q13): the gate's leg: your act whose answer would cross ends the run `flood`, and the act answers `failed` in §9's flood sentence, never the store's retryable refusal", async () => {
     // red: no bound is read, so your answer is kept, the act is done and the run wakes and ends `done`. Kills: a
-    // `"full"` read as `"refused"` (the retryable "can't read the flows it keeps", runs.ts:2259–2260, false here: the
-    // disk did answer), and any other words for it than §9's flood sentence (Q13's one helper)
+    // `"full"` read as `"refused"` (the retryable "can't read the flows it keeps", `#gateAnswered`'s `refused` case,
+    // false here: the disk did answer), and any other words for it than §9's flood sentence (Q13's one helper)
     // the calibration: a first run of the same flow, at the default bound, parked on its gate; its journal's bytes
     const first = await harness({ hostIdleMs: IDLE_MS });
     first.approved("gate", GATE);
@@ -7643,8 +7644,8 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
 
   it("Q9's J1 leg (J1; ruled 2026-11-08 (i), #10): in J1's leave, a step held on its repair is answered `failed` in §9's flood sentence by its Ask once more, and no repair line is sent into the session of a run that is leaving", async () => {
     // red: no bound is read, so B's answer is kept, no ending is set, and the Ask once more sends A's repair line
-    // again and answers `done`. At the base, `#answered`'s repair road reads no ending (runs.ts:2203–2220): the fix
-    // reads `live.ending` right after `live`, for both kinds (Q9's hoist)
+    // again and answers `done`. At the base, `#answered`'s repair road reads no ending: the fix reads `live.ending`
+    // right after `live`, for both kinds (Q9's hoist)
     const max = 8_192;
     const h = await harness({ timings: { stopGraceMs: KILL_GRACE_MS }, journalMaxBytes: max });
     h.approved("held", HELD_TWO);

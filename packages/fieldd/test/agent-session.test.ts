@@ -2126,9 +2126,10 @@ describe("managed sessions over the REAL floor (field-native)", () => {
   }, 60_000);
 
   it("slice 14's fold, P14 (ruled 2026-11-09; its first real read is the test Mac's mint): two `endRun`s a microtask apart on a real run: neither rejects, the run's end is told once, and the second call's time is printed, never asserted", async () => {
-    // `endRun` reads `exiting` (agent-runtime.ts:2180), which only the exit handler sets (:4799), so both calls reach
-    // the floor. A second `terminated: false` on a session no longer listed retries for up to STOP_PLACEMENT_WAIT_MS
-    // (:309, :2631): the printed number is what the records read. A ceiling is a later rider, on evidence (item 213's class)
+    // `endRun` reads `exiting` (its managed leg), which only the exit's `closeRun` sets, so both calls reach the
+    // floor. A second `terminated: false` on a session no longer listed retries for up to STOP_PLACEMENT_WAIT_MS
+    // (`terminateLive`): the printed number is what the records read. A ceiling is a later rider, on evidence
+    // (item 213's class)
     const box = await setup({ floor: "real" });
     const { daemon } = box;
     const win = await window(daemon, DECK, "p14");

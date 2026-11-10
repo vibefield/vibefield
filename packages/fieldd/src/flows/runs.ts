@@ -227,7 +227,7 @@ export interface FlowRunPorts {
      * *Corrected 2026-11-10 (Q17):* the leg is carried. `endRun` now ends a session the boot holds
      * pending by what its record proves (`pendingRunOf`: its PTY, or a typed run's process), so a resolve over a
      * pending session placed its end. It still skips one being replaced, and a held record that proves nothing to
-     * end (warned). The cite above was stale: `endRun`'s managed read had moved from :2179–2180 to :2292–2294. */
+     * end (warned). The cite above was stale: `endRun`'s managed read had moved; it is the method's first read. */
     end(runtimeRunId: string): Promise<void>;
     /** slice 13 (Q11 (a′), D19): a handed session's working turn the run began, paused at Stop alone:
      * AgentRuntimeService.pause, NEVER `interrupt`, which escalates to an end (ruled 2026-11-07) */
@@ -239,11 +239,12 @@ export interface FlowRunPorts {
      * session's end and a replacement's too (Q29) */
     onRunEnded(listener: (runtimeRunId: string) => void): () => void;
     /** slice 14 (Q29 (i), ruled 2026-11-08) — whether a replacement of this session is in flight now, read
-     * synchronously at the end's tell: from the resume's entry (agent-runtime.ts:4460@a08b28f5d) until the successor
-     * has entered (`managed.set`, :3203) or the replacement failed. A step whose session a replacement took waits,
-     * for `begun: "resume"`: no false card, no false fact. It is NEVER `plainStopCensus()`'s unkeyed `replacements`
-     * count (agent-runtime.ts:1120@a08b28f5d; F4), which says how many and of whom not. Slice 15 binds it; main's read
-     * is the re-cut's, a second hunk beside Q17's leg. A session handed a step never reads it (§J 2's origin law). */
+     * synchronously at the end's tell: from the replacement's opening (`replacePendingClaimed`, as `resuming` is set)
+     * until the successor has entered (`enter`'s `managed.set`) or the replacement failed; the runtime's `replacing`
+     * names each end. A step whose session a replacement took waits, for `begun: "resume"`: no false card, no false
+     * fact. It is NEVER `plainStopCensus()`'s unkeyed `replacements` count (F4), which says how many and of whom not.
+     * Slice 15 binds it; main's read is the re-cut's, a second hunk beside Q17's leg. A session handed a step never
+     * reads it (§J 2's origin law). */
     replacing(runtimeRunId: string): boolean;
   };
   /** each session's input queue, for a step's prompt (D5) */
@@ -3461,7 +3462,7 @@ export class FlowRuns {
   }
 
   /** Slice 13 (Q9) — Stop the run, through any of its items: the run's Stop, awaited, answered `done`; a retryable
-   * refusal (its `stopping` refused) is thrown, so the item waits on (queue.ts:868). A run no record keeps (a forged
+   * refusal (its `stopping` refused) is thrown, so the item waits on (`#flowAct`). A run no record keeps (a forged
    * run's item, whose one act is Stop, s14 Q12) is `done` too, never noSuchRun: its items ended, and the agents its
    * steps started, by their origin, ended; past fieldd's own stop it acts on nothing and is refused retryably
    * (closingRefused, fold 1). Re-entrance, read and safe: the Stop's turn ends this item while the queue answers it, and
