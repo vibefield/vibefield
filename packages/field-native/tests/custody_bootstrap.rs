@@ -80,17 +80,11 @@ impl Mgmt {
         }
     }
 
-    /// One hello under `secret`, and the floor's answer to it.
-    async fn hello(&mut self, secret: &[u8]) -> Value {
-        let hello = json!({
-            "jsonrpc": "2.0", "id": 1, "method": "native.lifecycle.hello",
-            "params": {
-                "contractsVersion": "0.1.0", "minCompatible": "0.1.0", "clientKind": "fieldd",
-                "credential": credential(secret),
-            },
-        });
+    /// One request, and the line that answers it (the floor's ticks aside).
+    async fn call(&mut self, id: u64, method: &str, params: Value) -> Value {
+        let request = json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params});
         self.writer
-            .write_all(format!("{hello}\n").as_bytes())
+            .write_all(format!("{request}\n").as_bytes())
             .await
             .expect("write mgmt");
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -101,10 +95,28 @@ impl Mgmt {
                 .expect("mgmt response read")
                 .expect("mgmt connection closed");
             let value: Value = serde_json::from_str(&line).expect("mgmt response json");
-            if value["id"] == json!(1) {
+            if value["id"] == json!(id) {
                 return value;
             }
         }
+    }
+
+    /// One hello under `secret`, and the floor's answer to it.
+    async fn hello(&mut self, secret: &[u8]) -> Value {
+        let params = json!({
+            "contractsVersion": "0.1.0", "minCompatible": "0.1.0", "clientKind": "fieldd",
+            "credential": credential(secret),
+        });
+        self.call(1, "native.lifecycle.hello", params).await
+    }
+
+    /// The paired client's planned stop (`native.lifecycle.shutdown`): the floor answers, then runs the drain SIGTERM
+    /// runs and exits 0. The verb and not the signal, because the floor keeps the request until main waits for it:
+    /// a SIGTERM sent in the instant between the listener's bind and main's handler would end the floor undrained.
+    async fn stop(&mut self) {
+        let params = json!({"reason": "quit"});
+        let answer = self.call(2, "native.lifecycle.shutdown", params).await;
+        assert_eq!(answer["result"]["stopping"], true, "{answer}");
     }
 }
 
@@ -220,14 +232,6 @@ impl Floor {
         }
         self.output()
     }
-
-    /// SIGTERM, which runs the production drain as fieldd's stop does.
-    async fn terminate(mut self) -> Output {
-        let pid = self.child.as_ref().expect("child available").id();
-        // SAFETY: this pid is the child this fixture still holds.
-        unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
-        self.exits_within(Duration::from_secs(10)).await
-    }
 }
 
 impl Drop for Floor {
@@ -310,11 +314,16 @@ async fn handed_its_pairing_on_stdin_the_floor_writes_no_pairing_file() {
     let (_fixture, data_dir, log_root) = roots();
     let mut floor = Floor::spawn(&data_dir, &log_root, Some(registry::STDIN));
     floor.hand(bootstrap_line(1, &handed_hex()));
-    floor.ready(&data_dir).await;
+    let socket = floor.ready(&data_dir).await;
     let pairing_file = data_dir.join("native/pairing");
     assert!(!pairing_file.exists(), "a sealed floor made its file");
 
-    let output = floor.terminate().await;
+    // its fieldd pairs and stops it, as a planned stop does
+    let mut fieldd = Mgmt::connect(&socket).await;
+    let ack = fieldd.hello(&secret_bytes(&handed_hex())).await;
+    assert!(ack["result"].is_object(), "{ack}");
+    fieldd.stop().await;
+    let output = floor.exits_within(Duration::from_secs(15)).await;
     assert!(output.status.success(), "{:?}", output.status);
     assert!(!pairing_file.exists(), "and none by the time it stopped");
     let (raw, records) = log(&log_root);
@@ -348,9 +357,9 @@ async fn it_pairs_a_hello_under_that_secret_and_refuses_one_under_any_other() {
     let proof = pairing::compute_ack_mac(&handed, NONCE, BOOT);
     assert_eq!(ack["result"]["serverMac"], json!(proof), "{ack}");
 
-    drop(fieldd);
     drop(stranger);
-    let output = floor.terminate().await;
+    fieldd.stop().await;
+    let output = floor.exits_within(Duration::from_secs(15)).await;
     assert!(output.status.success(), "{:?}", output.status);
 }
 
@@ -431,9 +440,9 @@ async fn with_no_flag_it_makes_and_reads_the_file_as_before() {
     let mut fieldd = Mgmt::connect(&socket).await;
     let ack = fieldd.hello(&own).await;
     assert!(ack["result"].is_object(), "{ack}");
-    drop(fieldd);
     drop(stranger);
-    let output = floor.terminate().await;
+    fieldd.stop().await;
+    let output = floor.exits_within(Duration::from_secs(15)).await;
     assert!(output.status.success(), "{:?}", output.status);
 
     // the next boot reads the file it finds, and pairs under it
@@ -444,8 +453,8 @@ async fn with_no_flag_it_makes_and_reads_the_file_as_before() {
     let mut fieldd = Mgmt::connect(&socket).await;
     let ack = fieldd.hello(&own).await;
     assert!(ack["result"].is_object(), "{ack}");
-    drop(fieldd);
-    let output = next.terminate().await;
+    fieldd.stop().await;
+    let output = next.exits_within(Duration::from_secs(15)).await;
     assert!(output.status.success(), "{:?}", output.status);
 }
 
