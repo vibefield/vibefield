@@ -8259,7 +8259,12 @@ Every place that says what a terminal's life is says those two facts, and no pla
   top-level rows do; elsewhere they are dimmed), and the people under **Switch User** and its **New User…** are
   dimmed. No new words. A switch or a new user asked for anyway while VibeField quits is refused in one sentence, the
   reason kept for the log: the Me menu says "Couldn't switch to Lee — VibeField is quitting." or "Couldn't add a user —
-  VibeField is quitting.", and Settings → Account says "VibeField is quitting".
+  VibeField is quitting.", the Settings head says the first of them, the chooser says "Couldn't open Lee's field —
+  VibeField is quitting.", and Settings → Account says "VibeField is quitting" (*corrected 2026-11-10, item 314: this
+  named the Me menu and Settings → Account alone, though a refused switch is said wherever §8's "The switch" says a
+  refusal is: the Me menu, the Settings head, the Account page, the chooser*). Settings → Devices' **New user…**
+  pressed while VibeField quits: James ruled at 2026-11-10 19:13:21Z, "it should not do anything, ignore the press".
+  *Not built at this tip: item 315 (2026-11-10)*: today the press plays the leaving and its return and says nothing.
 - **The unknown box**, when a pair's sessions can't be read, says that nothing it can't name will end: "VibeField
   couldn't check for running sessions" · "It ends no session it can't name, so quitting now leaves the terminal service
   running. Open VibeField again and quit to stop it." · **Cancel** · **Quit and leave it running**.
