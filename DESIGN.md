@@ -4525,6 +4525,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   remote method 'vibefield:shell:window-bootstrap': SupervisorError: fieldd exited before readiness (code 1, signal
   null) …"), which named the daemon, its exit code and its signal; the Setup Assistant's desk line and the switch read
   the same.
+  *Amended 2026-11-10 (item 281; §9, VibeField's insides; IS-281 A, James, 02:34:58Z):* while a start goes well the
+  bar alone speaks, its progress real, and no line stands under it. The line named each step in the code's own words
+  ("waking the daemon" … "settling"), which are VibeField's insides; they go to the log, one line a step
+  (`renderer.boot.stage`, `system/renderer`), and the boot's marks are unchanged. A start that failed puts 280's
+  sentence and its Retry where the line stood.
   *As built (2026-09-22, the switch):* its first frame is painted synchronously, with the
   theme stamped before it and the product entry render-blocking, so no bare or wrong-theme
   ground ever shows ahead of it. In the switch's dress (below) the wordmark gives way to the
@@ -4545,6 +4550,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the field's ground keeps them readable over the field: 400 × 120, centred 54 under the mark's centre, the
   ground at 55% at its heart, 30% at 55% of the way out and gone at its edge. Without WebGPU the field is its
   still (`splash-still`, cover-fitted) and the opening is a fade.
+  *Corrected 2026-11-10 (item 281):* on a good start nothing stands 55 under the bar; the place holds only a failed
+  start's sentence (280). So FG-O2 measures no splash word on a good start, and that sentence's contrast over the
+  field is owed to a row that stages a failed start (item 295).
 - **The Setup Assistant's glass** (track FG, FG-D1…FG-D24 ruled by James 2026-10-29; the record is
   `draft/thinking-first-run-glass.md`, the page *First run on the field*). The Setup Assistant stands on
   the field as one glass, **880 × 640 on every step** (FG-D3 A): centred, never scrolling, and below a
@@ -4662,8 +4670,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   until then — and the logo: in over 400ms once the last words are out, out over 280ms before the next come, which
   wait for it (160 and 120 reduced). The welcome is a title card under the logo, its words 30 under it: Welcome.
   (32px, light), AO's line 10 under it (420 at most), Get started 28 under that. Setting up is one line (FG-D21 B),
-  the work's own words: "Opening your field…" over the boot's stage, then History's first pass ("Finding your
-  history…", then "Discovering conversations…" over its files checked), and at the end the welcome on the same line,
+  the work's own words: "Opening your field…" with nothing under it (*amended 2026-11-10, item 281: it stood over
+  the boot's stage, the code's word for each step*), then History's first pass ("Finding your history…", then
+  "Discovering conversations…" over its files checked), and at the end the welcome on the same line,
   in ink, over "Open Settings from your face in the bottom-left corner, or press ⌘,.". Start now and its reason (360 at
   most, 8 above it) stand under the line when AO-D4's 8s give them, fading in over 240ms. What went wrong stays a
   pane: the answers not saved, and the desk that could not open, in the boot's words with its Retry. The band's
@@ -4869,8 +4878,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   rises over it
   in 360ms `ease` until the field is gone. The words follow 200ms behind the face (240ms
   `ease`, rising 6px): the eyebrow "Switching to", the name in the Setup headline's type (28px
-  light), and the splash's bar and stage line as the splash begins them — "waking the daemon",
-  the bar at rest — because waking that user's pair is what main does next. The face is set
+  light), and the splash's bar as the splash begins it, at rest, with no words under it — because waking that user's
+  pair is what main does next (*amended 2026-11-10, item 281: a stage line stood under the bar, "waking the daemon";
+  with it gone the centred column stands lower by half that line and its gap, measured at the build and said in
+  item 281's notes for James*). The face is set
   down before the frame converges at 600ms, and only then is main asked. **The seam.** The
   window you leave converges on exactly the frame the window you enter paints first, so the
   reload happens under an identical picture. *Measured 2026-09-22:* Chromium holds the old
@@ -7275,8 +7286,9 @@ the code. A failure inside is the app's own: it runs, or it says it couldn't. **
 sentence, whatever failed: **"VibeField couldn't start."**, with the splash's **Retry** (§8 "The boot splash"), and
 never a second, however many Retries fail. What failed is logged whole: main logs a refused bootstrap
 (`desktop.ipc.window_bootstrap_rejected`, its `system/desktop` stream) and the boot logs every failure
-(`renderer.boot.failed`, `system/renderer`), under `~/Library/Logs/VibeField/` on a Mac. *Known deviation, owed:* the
-splash's stage words name its insides ("waking the daemon", "staging plugins"); item 281, James's.
+(`renderer.boot.failed`, `system/renderer`), under `~/Library/Logs/VibeField/` on a Mac. *Known deviation, closed
+2026-11-10 (item 281, IS-281 A):* the splash's stage words named its insides ("waking the daemon", "staging plugins");
+while a start goes well the bar alone speaks, and the steps' words go to the log (`renderer.boot.stage`).
 
 **Sizes are said as Finder counts them**, in thousands — bytes, KB, MB, GB (the terminal settings
 page, the line's notes) — and a size a person did not make, such as a link's message, is never
