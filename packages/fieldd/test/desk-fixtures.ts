@@ -11,11 +11,13 @@ import { RecordSigner, type SignedRead } from "../src/signed-record";
 // A real DeskObjects over a real signed store in a temp root, and a scripted window: an intent handed to `respond` gets
 // the answer it returns, and an intent for which it returns nothing stays pending, as a window that has gone quiet.
 //
-// OB custody (C4, C5). Who a run is, for a grant, is what THIS fieldd launched (`bornFor`): every run named in `runs`
-// or `sparkRuns` was launched by the fieldd that is running when it is named, and a `reopen` is a restart, after which
-// every run named before it came back re-attached. What a run's RECORD says is another thing, a file an agent can
-// rewrite (`forgeRecord`), and nothing in objects reads it: a world hands its desk no reader of one. A world also has a
-// survivor (`marks`): who outlives fieldd and remembers the grants' count.
+// OB custody (C4, C5). Who a run is, for a grant, is what THIS fieldd launched or vouches for (`bornFor`): every run
+// named in `runs` or `sparkRuns` was launched by the fieldd that is running when it is named, and a `reopen` is a
+// restart, after which every run named before it came back re-attached and unvouched, unless the restart names it
+// (`vouched`: the new fieldd's launch memory, rebuilt, says again what the run was launched as). What a run's RECORD
+// says is another thing, a file an agent can rewrite (`forgeRecord`), and nothing in objects reads it: a world hands
+// its desk no reader of one. A world also has a survivor (`marks`): who outlives fieldd and remembers the grants'
+// count.
 
 export const DOC = "doc-main";
 export const NOTE: DeskKind = {
@@ -106,10 +108,14 @@ export function survivor(expect: Record<string, number> = {}): Survivor {
   };
 }
 
-/** What a restart may change about the store: the key it is handed (none: the `files` level), and who remembers. */
+/** What a restart may change: the key the store is handed (none: the `files` level), who remembers, and which of the
+ * runs from before it the new fieldd vouches for. */
 export interface Restart {
   key?: Buffer | undefined;
   marks?: Survivor;
+  /** runs named before the restart that the new fieldd's launch memory names again, each as what it was launched as
+   * (the spec's §8.1: rebuilt at the re-attach). Every other run from before it comes back unvouched. */
+  vouched?: readonly string[];
 }
 
 export interface DeskWorld {
@@ -119,7 +125,8 @@ export interface DeskWorld {
   readonly grantsPath: string;
   /** who outlives this world's fieldd, across every `reopen` that names no other */
   readonly marks: Survivor;
-  /** a new DeskObjects on the same root, as a restart of fieldd: every run named before it is re-attached */
+  /** a new DeskObjects on the same root, as a restart of fieldd: every run named before it is re-attached, and
+   * unvouched unless `over.vouched` names it */
   reopen(over?: Restart): DeskObjects;
   /** a window that answers by `respond`; the intents it was sent */
   window(
@@ -191,8 +198,9 @@ export function world(
     return signer.read(recordOf(run));
   };
   const make = (restart?: Restart): DeskObjects => {
-    // a restart: fieldd launched none of the runs that were there before it
+    // a restart: fieldd launched none of the runs that were there before it, and vouches only for those it names
     const before = new Set(restart === undefined ? [] : [...runs.keys(), ...sparkRuns.keys()]);
+    for (const run of restart?.vouched ?? []) before.delete(run);
     const key = restart !== undefined && "key" in restart ? restart.key : opts.key;
     const options: DeskObjectsOptions = {
       store: new ObjectsStore({

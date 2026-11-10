@@ -6,12 +6,11 @@ import { cleanupWorlds, type DeskWorld, DOC, world } from "./desk-fixtures";
 
 // OB custody, C4 (OB-D18 A; rev-custody B3) — who a run is, for a grant, is fieldd's own memory of what it launched
 // (`bornFor`), never a record read back from disk: the sessions' key is a file an agent can read, so a run's record can
-// be rewritten to name any spark. Nothing in objects reads a session's record, to give or to take. A run this fieldd
-// did not launch (re-attached at boot) holds nothing; a plain run's grant ends with the fieldd that launched it; a
-// spark's stands (EY-D9 B) and is held by the runs fieldd starts for it from then on.
-//
-// What a HAND to a live run fieldd did not launch should do is open (the spec's §8.1): today nothing is granted, in a
-// sentence VibeField already has, and the rows here hold only that no grant is made and no new words are said.
+// be rewritten to name any spark. Nothing in objects reads a session's record, to give or to take. A run nothing
+// vouches for (re-attached at boot, and not named again by fieldd's launch memory) holds nothing, and a hand to it
+// grants nothing, in a sentence VibeField already has. A plain run's grant ends with the fieldd that launched it,
+// vouched or not (`plainHoldAtBoot: "end"`, the only value anything passes); a spark's stands (EY-D9 B) and is held
+// by the runs fieldd starts for it, or vouches for, from then on.
 
 afterEach(cleanupWorlds);
 
@@ -128,7 +127,7 @@ describe("a grant is honoured only for a run this fieldd launched (OB-D18 A)", (
     expect(again.grants(ref)).toEqual([]);
   });
 
-  it("a hand to a live run this fieldd did not launch grants nothing, and says no new words (open: the spec's §8.1)", () => {
+  it("a hand to a live run nothing vouches for grants nothing, and says no new words", () => {
     const h = sparkWorld();
     const ref = h.refOf("k1", "desk.note");
     const again = h.reopen();
@@ -202,6 +201,83 @@ describe("a resume carries grants only between runs this fieldd launched (OB-D18
     resume(h, again, "run-a", "run-c");
     expect(again.grantOf(ref, "run-c")).toBeUndefined();
     expect(again.grants(ref)).toEqual([]);
+  });
+
+  it("does not carry what a vouched plain run held before the restart, when it ends before the settle", () => {
+    const h = world();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    const again = h.reopen({ vouched: ["run-a"] });
+    // run-a is vouched, and what it held at boot is still not this fieldd's to hand on: it ends with the run
+    resume(h, again, "run-a", "run-c");
+    expect(again.grantOf(ref, "run-c")).toBeUndefined();
+    expect(again.grants(ref)).toEqual([]);
+  });
+});
+
+// OB-D18 is ONE rule, at the settle (the spec's §8.1.5): what a plain run held when fieldd booted ends, whether or not
+// fieldd vouches for the run again. `plainHoldAtBoot` decides it, never `bornFor`; `"end"` is James's pick and the only
+// value anything passes. What stood at boot serves nobody from the boot on, and the settle writes that down.
+describe("a plain run's hold at boot ends, vouched or not (OB-D18 A; `plainHoldAtBoot`)", () => {
+  it("under `end`, a vouched plain run's old grant is gone after the boot, and a new hand to it is granted", () => {
+    const h = world();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    // fieldd restarts, and its launch memory names run-a again: a plain run, vouched
+    const again = h.reopen({ vouched: ["run-a"] });
+    // from the boot on, what it held before serves nobody ...
+    expect(again.grantOf(ref, "run-a")).toBeUndefined();
+    again.reconcile();
+    // ... and at the settle it is ended for good, in the file too
+    expect(again.grantOf(ref, "run-a")).toBeUndefined();
+    expect(again.grants(ref)).toEqual([]);
+    expect(grantsOnDisk(h)).toEqual([]);
+    // a new hand is this fieldd's own, and is granted
+    expect(again.hand(ref, "run-a")).toEqual({ handed: true });
+    expect(again.grantOf(ref, "run-a")?.how).toBe("handed");
+    expect(grantsOnDisk(h).map((g) => g.holder)).toEqual(["run-a"]);
+  });
+
+  it("under `end`, a new hand made before the settle is kept by it", () => {
+    const h = world();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    const again = h.reopen({ vouched: ["run-a"] });
+    // the settle is polled, and may come after the first hand. The old grant served nobody, so this is no `already`.
+    expect(again.hand(ref, "run-a")).toEqual({ handed: true });
+    expect(again.grantOf(ref, "run-a")?.how).toBe("handed");
+    again.reconcile();
+    expect(again.grantOf(ref, "run-a")?.how).toBe("handed");
+    expect(grantsOnDisk(h).map((g) => g.holder)).toEqual(["run-a"]);
+  });
+
+  it("a vouched spark's run is served its spark's grants after the boot", () => {
+    const h = sparkWorld();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-1");
+    // run-1 lived through the restart, and fieldd's launch memory says again that it is Vela's
+    const again = h.reopen({ vouched: ["run-1"] });
+    // a spark's grant is the spark's: before the settle, and after it
+    expect(again.grantOf(ref, "run-1")?.how).toBe("handed");
+    again.reconcile();
+    expect(again.grantOf(ref, "run-1")?.how).toBe("handed");
+    expect(again.grants(ref).map((g) => g.holder)).toEqual([`spark:${SPARK}`]);
+  });
+
+  it("`keep-vouched`, which is wired nowhere, keeps a vouched plain run's grant at the settle", () => {
+    const h = world();
+    const ref = h.refOf("k1", "desk.note");
+    const other = h.refOf("k2", "desk.note");
+    h.desk.hand(ref, "run-a");
+    h.desk.hand(other, "run-b");
+    const again = h.reopen({ vouched: ["run-a"] });
+    // until the settle has judged it, what stood at boot serves nobody, whichever rule it will be
+    expect(again.grantOf(ref, "run-a")).toBeUndefined();
+    // OB-D18 is James's pick, and it is "end": nothing but this row passes the other value
+    again.reconcile({ plainHoldAtBoot: "keep-vouched" });
+    expect(again.grantOf(ref, "run-a")?.how).toBe("handed");
+    // a run nothing vouches for keeps nothing under either rule
+    expect(again.grants(other)).toEqual([]);
   });
 });
 

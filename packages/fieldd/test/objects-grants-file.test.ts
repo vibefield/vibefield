@@ -382,14 +382,24 @@ describe("what says sealed is read with care (OB custody, C4)", () => {
     },
   );
 
-  it("reads no more than its bound: a file past it takes the ordinary road", () => {
-    const { h } = handedToVela();
-    // valid JSON that says sealed, padded past the 4 MiB the peek reads
+  it("cannot tell for a file too large to peek: it is left where it is and the store refuses, never set aside", () => {
+    const events: LoggedEvents = [];
+    const { h } = handedToVela({ logger: capture(events) });
+    // Valid JSON that says sealed, padded past the 4 MiB the peek reads. A sealed store's own file could be this
+    // large, and a fieldd that cannot tell does not judge it: being wrong toward refusing is the safe side.
     const padded = `${JSON.stringify({ sealed: true })}${" ".repeat(4 * 1024 * 1024)}`;
     writeFileSync(h.grantsPath, padded, { mode: 0o600 });
+    const names = readdirSync(join(h.root, "objects"));
     const again = h.reopen();
-    expect(() => again.registry.readable()).not.toThrow();
-    expect(asideOf(h, "unsigned")).toHaveLength(1);
+    expect(() => again.registry.readable()).toThrow(UNREADABLE_WORDS.objects);
+    // nothing is moved: not the file (no copy set aside beside it), not one name
+    expect(statSync(h.grantsPath).size).toBe(padded.length);
+    const beside = readdirSync(h.root).filter((name) => name.startsWith("objects.grants.json."));
+    expect(beside).toEqual([]);
+    expect(readdirSync(join(h.root, "objects"))).toEqual(names);
+    const said = events.map((e) => e.event);
+    expect(said).toContain("fieldd.objects.grants_unjudged");
+    expect(said).not.toContain("fieldd.objects.grants_set_aside");
   });
 
   it("takes only `sealed: true` itself for a sealed file: anything else is set aside as any file is", () => {
