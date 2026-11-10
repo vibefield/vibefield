@@ -28,14 +28,18 @@ export const USAGE_FILE = "FAKE_ACCOUNT_USAGE_FILE";
  * `unavailable` result, which is a different path from a typed refusal. */
 export type UsageScript = Record<string, AccountUsageFetchResult | "throw">;
 
+/** A good reading: the five hours and a standby week. `profileId` stamps it with the account it
+ * was read for, as a push from a session bound to an account is stamped (puppeteer 0.4.0, #70). */
 export const available = (
   provider: string,
   at: string,
   usedPercent = 42,
+  profileId?: string,
 ): AccountUsageFetchResult => ({
   status: "available",
   snapshot: {
     provider,
+    ...(profileId !== undefined ? { profileId } : {}),
     fetchedAt: at,
     scope: "subscription",
     source: { kind: "native-protocol", stability: "experimental" },
@@ -59,6 +63,36 @@ export const available = (
       },
     ],
     credits: { balance: "$12.40", hasCredits: true },
+  },
+});
+
+/** Item 274 — a PARTIAL reading, the five hours alone, as a status line pushes it: at puppeteer
+ * 0.4.0 it merges into the reading it lands on, and the week it does not carry keeps its own read
+ * (core `account-usage.ts:72-76`). Optionally stamped with its account, as `available` is. */
+export const fiveHourOnly = (
+  provider: string,
+  at: string,
+  usedPercent = 50,
+  profileId?: string,
+): AccountUsageFetchResult => ({
+  status: "available",
+  snapshot: {
+    provider,
+    ...(profileId !== undefined ? { profileId } : {}),
+    fetchedAt: at,
+    scope: "subscription",
+    source: { kind: "native-statusline", stability: "documented" },
+    metrics: [
+      {
+        id: "five-hour",
+        label: "5H",
+        description: "Rolling five-hour window",
+        kind: "window",
+        usedPercent,
+        durationMinutes: 300,
+        resetsAt: "2026-09-13T14:00:00.000Z",
+      },
+    ],
   },
 });
 

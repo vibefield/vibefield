@@ -29,11 +29,20 @@ import {
   SOCKETS,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
-import type { AccountUsageFetchResult, AgentProfile } from "@vibefield/puppeteer-core";
+import type {
+  AccountUsageEntry,
+  AccountUsageFetchResult,
+  AgentProfile,
+} from "@vibefield/puppeteer-core";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import type { FielddDaemon } from "../src/index";
-import { type AccountUsageRuntime, AccountUsageService, bootstrap } from "../src/index";
+import {
+  type AccountUsageRuntime,
+  AccountUsageService,
+  bootstrap,
+  projectEntry,
+} from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { SCRIPTED_CATALOG } from "./agent-catalog-fixture";
 import { productPathSecret, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
@@ -41,6 +50,7 @@ import { nativeEndpoint, removeTempRoot, shortTmpRoot } from "./native-harness";
 import { desktopSlice, registryPeer } from "./peer-roster";
 import {
   available,
+  fiveHourOnly,
   rateLimited,
   refused,
   type ScriptedProvider,
@@ -485,20 +495,29 @@ describe("the account usage doors (AR-5d)", () => {
 interface FakeRuntime extends AccountUsageRuntime {
   answers: AccountUsageFetchResult[];
   asked: number;
+  /** item 274 — a provider PUSH, as the runtime's `onAccountUsage` delivers one */
+  push(result: AccountUsageFetchResult): void;
 }
 
 function fakeRuntime(pollIntervalMs: number): FakeRuntime {
+  const provider = { id: "scripted", label: "Scripted", refresh: { pollIntervalMs } };
+  type Pushed = (p: typeof provider, result: AccountUsageFetchResult) => void;
+  const pushed = new Set<Pushed>();
   const runtime = {
     answers: [] as AccountUsageFetchResult[],
     asked: 0,
-    accountUsageProviders: () => [
-      { id: "scripted", label: "Scripted", refresh: { pollIntervalMs } },
-    ],
+    accountUsageProviders: () => [provider],
     accountUsage: async (): Promise<AccountUsageFetchResult> => {
       runtime.asked += 1;
       return runtime.answers.shift() ?? unauthenticated("scripted");
     },
-    onAccountUsage: () => () => undefined,
+    onAccountUsage: (listener: Pushed) => {
+      pushed.add(listener);
+      return () => pushed.delete(listener);
+    },
+    push: (result: AccountUsageFetchResult) => {
+      for (const listener of [...pushed]) listener(provider, result);
+    },
     onProfilesChanged: () => () => undefined,
     profiles: async () => [] as AgentProfile[],
   } as unknown as FakeRuntime;
@@ -834,6 +853,150 @@ describe("the reading's own rules (AR-5d)", () => {
     ms += 6_000; // past the provider's own retryAt
     await service.refresh();
     expect(asked).toBe(2);
+  });
+});
+
+// ── item 274: a meter a later reading did not carry keeps its own read ────
+//
+// At puppeteer 0.4.0 a push merges into the reading it lands on (#74): the meters it carries take
+// its stamp, and the ones it did not carry keep their own older read in the metric's `fetchedAt`
+// (core `account-usage.ts:72-76`). The projection must pass that read through, or every kept meter
+// reads as young as the push. These rows drive the service over the fake runtime with the REAL
+// monitor and a clock the test moves, as this file's schedule rows do: what is asserted is the
+// rule.
+
+const READ_AT = "2026-09-13T12:00:00.000Z";
+const PUSHED_AT = "2026-09-13T12:00:45.000Z";
+
+/** each meter's [usedPercent, own read], by id */
+const meters = (entry: AgentAccountUsageEntry | undefined) =>
+  Object.fromEntries((entry?.metrics ?? []).map((m) => [m.id, [m.usedPercent, m.fetchedAt]]));
+
+describe("a meter a later reading did not carry keeps its own read (item 274)", () => {
+  it("F1: the projection passes a meter's own read through, and never notes it as unknown", () => {
+    const unknown: string[] = [];
+    const note = (where: string, value: unknown, known: ReadonlySet<string>): void => {
+      for (const key of Object.keys(value as Record<string, unknown>)) {
+        if (!known.has(key)) unknown.push(`${where}.${key}`);
+      }
+    };
+    const kept = available("scripted", READ_AT) as {
+      status: "available";
+      snapshot: { metrics: Array<Record<string, unknown>> };
+    };
+    const entry = {
+      provider: { id: "scripted", label: "Scripted", refresh: { pollIntervalMs: 1_000 } },
+      result: {
+        ...kept,
+        snapshot: {
+          ...kept.snapshot,
+          fetchedAt: PUSHED_AT,
+          metrics: [kept.snapshot.metrics[0], { ...kept.snapshot.metrics[1], fetchedAt: READ_AT }],
+        },
+      },
+    } as unknown as AccountUsageEntry;
+    const row = projectEntry(entry, PUSHED_AT, note);
+    expect(row.fetchedAt).toBe(PUSHED_AT);
+    expect(row.metrics.map((m) => [m.id, m.fetchedAt])).toEqual([
+      ["five-hour", undefined],
+      ["seven-day", READ_AT],
+    ]);
+    expect(unknown).not.toContain("metric.fetchedAt");
+  });
+
+  it("F2: with nobody watching, a partial push dates its own meter and leaves the week its read", async () => {
+    const ms = Date.parse(PUSHED_AT);
+    const runtime = fakeRuntime(30 * 60_000);
+    const service = new AccountUsageService({ runtime, now: () => new Date(ms) });
+    cleanup.push(() => service.stop());
+    service.start();
+    runtime.answers.push(available("scripted", READ_AT));
+    await service.refresh({ force: true });
+    runtime.push(fiveHourOnly("scripted", PUSHED_AT, 70));
+    await until(() => service.snapshot().entries[0]?.fetchedAt === PUSHED_AT);
+    const row = service.snapshot().entries[0];
+    expect(meters(row)).toEqual({ "five-hour": [70, undefined], "seven-day": [12, READ_AT] });
+    expect(runtime.asked).toBe(1); // the push spent no reading
+  });
+
+  it("F3: over a standing refusal the kept row carries the push's stamp, its week its own, through later refusals", async () => {
+    let ms = Date.parse(READ_AT);
+    const runtime = fakeRuntime(30 * 60_000);
+    const service = new AccountUsageService({ runtime, now: () => new Date(ms) });
+    cleanup.push(() => service.stop());
+    service.start();
+    runtime.answers.push(available("scripted", READ_AT));
+    await service.refresh({ force: true });
+    ms += 30_000;
+    runtime.answers.push(rateLimited("scripted", new Date(ms + 60_000).toISOString()));
+    await service.refresh({ force: true });
+    expect(service.snapshot().entries[0]).toMatchObject({
+      state: "rate-limited",
+      stale: true,
+      fetchedAt: READ_AT,
+    });
+    ms = Date.parse(PUSHED_AT);
+    runtime.push(fiveHourOnly("scripted", PUSHED_AT, 70));
+    await until(() => service.snapshot().entries[0]?.fetchedAt === PUSHED_AT);
+    expect(service.snapshot().entries[0]).toMatchObject({ state: "rate-limited", stale: true });
+    expect(meters(service.snapshot().entries[0])).toEqual({
+      "five-hour": [70, undefined],
+      "seven-day": [12, READ_AT],
+    });
+    // a later refusal keeps the merged reading, both stamps included
+    ms += 120_000; // past the provider's retryAt
+    runtime.answers.push(rateLimited("scripted", new Date(ms + 60_000).toISOString()));
+    await service.refresh({ force: true });
+    expect(runtime.asked).toBe(3);
+    expect(service.snapshot().entries[0]).toMatchObject({
+      state: "rate-limited",
+      stale: true,
+      fetchedAt: PUSHED_AT,
+    });
+    expect(meters(service.snapshot().entries[0])).toEqual({
+      "five-hour": [70, undefined],
+      "seven-day": [12, READ_AT],
+    });
+  });
+
+  // F4 (D6 A, VF-PM 02:35Z) claims ROUTING and STAMP KEEPING only. It cannot prove the per-session
+  // stamping, #70's "a Claude status line's quota goes to its own session's service, stamped with
+  // its account": that lives in adapter-claude, which the scripted provider replaces here (the
+  // file's header). The live two-account witness is James's, with its three preconditions: each
+  // session SPAWNED (not typed) into a profile-bound pane, fieldd launched without
+  // CLAUDE_CONFIG_DIR in its own environment, and Godview open first so the registry has answered.
+  it("F4: two accounts — a stamped push lands on its own row and keeps that row's week; an unstamped one is dropped", async () => {
+    const ms = Date.parse(PUSHED_AT);
+    const runtime = fakeRuntime(30 * 60_000);
+    runtime.profiles = async () =>
+      ["personal", "work"].map((id) => ({
+        id,
+        provider: "scripted",
+        label: id,
+        kind: "managed" as const,
+        dataRoot: `/unused/${id}`,
+        createdAt: new Date(0).toISOString(),
+      }));
+    const service = new AccountUsageService({ runtime, now: () => new Date(ms) });
+    cleanup.push(() => service.stop());
+    service.start();
+    runtime.answers.push(available("scripted", READ_AT, 10), available("scripted", READ_AT, 20));
+    await service.refresh({ force: true });
+    const before = service.snapshot().entries;
+    expect(before.map((e) => [e.profileId, e.metrics[0]?.usedPercent])).toEqual([
+      ["personal", 10],
+      ["work", 20],
+    ]);
+    runtime.push(fiveHourOnly("scripted", PUSHED_AT, 70, "personal"));
+    await until(() => service.snapshot().entries[0]?.fetchedAt === PUSHED_AT);
+    const [personal, work] = service.snapshot().entries;
+    expect(meters(personal)).toEqual({ "five-hour": [70, undefined], "seven-day": [12, READ_AT] });
+    expect(work).toEqual(before[1]); // the other account's row is untouched
+    // a push that names no account, while two rows own the provider, is no row's
+    runtime.push(fiveHourOnly("scripted", "2026-09-13T12:01:30.000Z", 99));
+    expect(service.snapshot().entries).toHaveLength(2);
+    expect(service.snapshot().entries.map((e) => meters(e)["five-hour"]?.[0])).toEqual([70, 20]);
+    expect(runtime.asked).toBe(2);
   });
 });
 
