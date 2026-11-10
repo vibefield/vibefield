@@ -2,7 +2,7 @@
  * PG-5 — THE LIST VIEW'S GOLDEN, read for what it says (`perf/lib/phone-goldens-list.ts`): puppeteer-views' list as it
  * draws the home's window over PG-3a's witness, step by step. These rows never read the golden's bytes (the byte row
  * is `phone-parity.test.ts`'s, over every registered view), so a re-bless cannot carry a behaviour past them. Each
- * expectation is written from the list's own rules (`AgentList.js:16-26` at puppeteer-views 0.3.3): what the host shows
+ * expectation is written from the list's own rules (`AgentList.js:16-26` at puppeteer-views 0.4.0): what the host shows
  * before what it recedes, agents before bare terminals, blocked before working before idle, then by birth.
  */
 import { beforeAll, describe, expect, it } from "vitest";
