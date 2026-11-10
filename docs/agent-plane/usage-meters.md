@@ -30,6 +30,16 @@ built-in adapter ships an account-usage service. puppeteer is consumed from the 
   agent's own profile root; native accounts use the adapter's default credential
   lookup. Native CLIs continue to own token renewal.
 
+*Note, 2026-11-10 (item 277): for the native default account, that lookup
+follows fieldd's own `CLAUDE_CONFIG_DIR` for the credentials file but not for
+the keychain. A native account is given no credential options
+(`packages/adapter-claude/src/services/account-usage.ts:790-791` at `v0.4.0`),
+so the file is read under this process's variable (`:117-123`, `:126-127`),
+while the keychain item it reads keeps the bare service name (`:244`). Claude
+Code itself names a hashed item when the variable is set (`:28-42`), so with
+the variable set in fieldd's environment the file and the keychain item can
+belong to two different roots.*
+
 ## Automatic polling
 
 These are the adapter defaults in
@@ -77,6 +87,37 @@ at 30 minutes. A future provider `retryAt` takes precedence, including waits
 longer than 30 minutes. Claude and Kimi parse `Retry-After`; Grok recognizes rate
 limit failures. Codex and Antigravity currently fall back to generic failure
 backoff rather than carrying a provider-specific retry timestamp.
+
+*Corrected 2026-11-10 (item 277; puppeteer 0.4.0, the EL8 M274): the sentences
+above on profile IDs and the unkeyed row are false at 0.4.0. Claude's adapter
+stamps each status-line reading with the registered account its session's root
+names (`observeStatusLine`,
+`packages/adapter-claude/src/services/account-usage.ts:844`, `:859-864` at
+`v0.4.0`). A session no registered account names is handed no sink, so its
+readings reach no row (`packages/builtin-providers/src/providers.ts:376-393`;
+`packages/builtin-providers/src/session-account.ts:48-57`). The monitor treats
+the registry as the account authority
+(`packages/runtime/src/services/account-usage-monitor.ts:408-431`): a stamped
+push lands on its account's row; once the registry has answered, a push no row
+owns is dropped, and before that it is kept under its bare account id until the
+answer names the row or removes it (item 283); a push that names no account
+lands only on a provider's single row. Three cases still get no sink, so their
+pushes reach no row and their meters move only on their own polls (item 277):*
+
+- **A Claude typed in a pane bound to an Agent Profile.** The typed launch is
+  prepared with no profile (`packages/runtime/src/runtime.ts:3385-3395` at
+  `v0.4.0`), so the persona's root it runs in is bound to no account
+  (`session-account.ts:51-56`).
+- **A This Mac Claude that fieldd starts while fieldd's own environment sets
+  `CLAUDE_CONFIG_DIR`.** The adapter falls back to that variable for the
+  session's root (`packages/adapter-claude/src/launch/config-root.ts:27`,
+  `:35`; `prepare.ts:293`), which is not the native default root
+  (`session-account.ts:51-56`).
+- **Under the same variable, a Claude typed from a pane whose shell names no
+  config dir.** The typed launch takes no config dir
+  (`packages/adapter-claude/src/launch/native-invocation.ts:97-98`), so it gets
+  the same fallback and runs in fieldd's root, and attribution labels it This
+  Mac (`runtime.ts:1072`).
 
 ## Explicit refresh
 
