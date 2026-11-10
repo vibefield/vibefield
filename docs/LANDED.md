@@ -46275,3 +46275,95 @@ sleep, pausing 15 s only after a refusal inside the door (VF-PM 04:10:02Z).
 - James's eye on the two ‹for James› marks: c3's 8% and c4's reading.
 
 **Not done, and not claimed:** no window row ran, and nothing is pushed.
+
+## Item 280 — a start that failed says one sentence, and what failed goes to the log whole (M277)
+
+(2026-11-10; three commits, `6014068ec`, `0f39dd593` and `93e41770b`, on main `40b499b9d`, cut by ow-design in
+`lanes/i280/vibe-field` and landed by the fixer at 06:41:59Z by fast-forward as M277. Validated by run 289, a9, vf-m2;
+the packet is `lanes/i280/packets/280-v2/`, the transport `lanes/i280/packets/280-v2-m2/`.) Opened by VF-PM at 01:06Z
+as item 280, on James's ruling of 00:46Z, whose last words are "it is either the app runs or crashed, do not over
+complicate user experience" (DESIGN.md §9 quotes it whole). VF-PM accepted the sentence at 01:13:08Z.
+
+**What landed, DESIGN.md first** (`6014068ec`, 18/0, two hunks):
+- §9 Voice gains "VibeField's insides are never a person's to read" (`DESIGN.md:7268-7280`). It carries James's words
+  verbatim, holds AO-L8's "never on screen" for all of VibeField, and gives the one sentence with the splash's Retry,
+  where what failed is logged, and the splash's stage words as a known deviation, owed to item 281.
+- §8 "The boot splash" carries the dated amendment at its source (`DESIGN.md:4523-4527`): its plain reason was the
+  error's own message under Electron's wrapping, which named the daemon, its exit code and its signal.
+- The red (`0f39dd593`): 101/5 `boot-machine.test.ts`, 9/5 `onboarding-wizard.test.tsx` and 77/0
+  `preload-window-bootstrap.test.ts`, new. The green (`93e41770b`): 13/1 `machine.ts`, 5/4 `preload/index.ts` and 1/0
+  `splash-parts.tsx`, a comment. Seven files, +224 −15.
+
+**What a person sees.**
+- **The splash.** A start that failed says "VibeField couldn't start." (`FAILED_START`, `machine.ts:150`, made the
+  reason at `:422-428`). It is drawn at `splash-parts.tsx:66` over its Retry (`:67-75`; the splash is mounted at
+  `BootRoot.tsx:259`), whatever failed and however many Retries fail.
+- **The switch** (`SwitchScene.tsx:296-301`) and **the Setup Assistant's desk line** (`SettingUpPane.tsx:105`, drawn at
+  `setting-up.tsx:107`) read the same sentence. No view was edited: the reason they draw is now the sentence.
+- Before, each drew the error's own message: "Error invoking remote method 'vibefield:shell:window-bootstrap':
+  SupervisorError: fieldd exited before readiness (code 1, signal null) …", as the amendment quotes it.
+
+**Where what failed goes,** under `~/Library/Logs/VibeField/`:
+- main logs a refused bootstrap, as before: `desktop.ipc.window_bootstrap_rejected` (`main/ipc.ts:112-116`, the
+  `system/desktop` stream);
+- the boot now logs every failure whole, with the step it stopped at: `renderer.boot.failed` (`machine.ts:417-421`,
+  `system/renderer`);
+- the preload hands the renderer main's own sentence, with Electron's "Error invoking remote method '…': ‹Class›: "
+  stripped (`invokeInHandlerWords`, `preload/index.ts:264-271`; the bootstrap's call at `:362`). No view draws it.
+
+**Validation of record** (run 289, `lanes/vf-m2/i280-289-v-a9-results`, SUMS `3c775ee7116cda01`, 42 of 42 OK by
+`shasum -c`; runner `b367f871b7ee89fe`; launched at 06:27:15Z, the verdict at 06:34:27Z):
+- V: "`pnpm verify` exit 0, 5 min 49 s." Every COUNT row is as expected: field-app `Tests 4678 passed (4678)` and
+  `Test Files 336 passed (336)`; electron-shell `Test Files 184 passed (184)` and
+  `Tests 2829 passed | 2 skipped (2831)`.
+- The delta rows: field-app "`[test/boot-machine.test.ts 37|test/onboarding-wizard.test.tsx 59], 96 in all`" against
+  run 288's 27 and 59; electron-shell "`[test/preload-window-bootstrap.test.ts 2], 2 in all`", new. "The sum: 14679
+  21, which is run288's 14667 21 + 12." dev-runner 483 of 483; cargo 37 of 37; KEPT births 0.
+- **fieldd's six DESIGN.md readers ran inside V**, 6 of 6 at run 288's counts, 200 tests: agent-forwarder-role 8,
+  agent-gateway 106, agent-shim-role 12, needs-words 7, record-stores 43 and spark-transcripts 24. run3 did not run
+  them on the Mac; V ran them (VF-PM's ruling (a)).
+- **S carried by tree 244a989b8429 (run 284's S GREEN).** The slice touches no Swift; S did not run.
+- **Not run: IOS, K, the window rows.**
+- On the Mac, through the door (run3, `lanes/i280/logs/run3/`, 05:29:57Z to 06:02:00Z), at `7d7a91fd6`, whose code is
+  the tip's (its carry onto `40b499b9d` moved `docs/` alone):
+  - vitest field-app over every reader, DESIGN.md's text readers included: 26 files, 609 passed;
+  - vitest electron-shell: 12 files, 128 passed; sound's DESIGN.md reader, 23; plugins/simulator's two, 19;
+  - tsc --noEmit: field-app 0 errors, electron-shell 0 errors;
+  - check:walls, its four commands read from package.json and run by zsh: both self-tests pass; 0 enforced, 0
+    pending; 270 of 1148 test files make a temp root, and all remove.
+
+**A finding beside V.** The bundle's initial chunk moved: "initial 957.3 KB raw / 254.6 KB gz" against run 288's
+957.2 / 254.6, +0.1 KB raw and gz unchanged; the lazy chunks' names and sizes are unchanged. VF-PM classed it
+expected: `boot/machine.ts` and `splash-parts.tsx` are field-app src.
+
+**The cut.**
+- The doc was cut on `fe6a04a7f` (`23dbd9c87`) and carried alone onto `996c51939` (`af2150378`) and `f85d0b023`
+  (`6878152e7`), where the red and the green were cut. The three were then carried by `git rebase --onto` on a clean
+  tree onto `a2c999dab`, `d597a7b95` and `40b499b9d`, each range-diff three `=` (the three `range-diff-carry*.txt` in
+  `lanes/i280/logs/`). The kept refs are `i280/failed-start-f85` (`e98cb3a48`), `-a2c` (`058a8a9b8`), `-d59`
+  (`7d7a91fd6`) and `-v1` (`8929df9ce`, the red's first cut).
+- The green's message names the doc commit by its pre-carry sha, `6878152e7` (reachable from
+  `i280/failed-start-f85`); on main it is `6014068ec`. The fixer noted it; the stack was minted, so it is not
+  reworded. The red's message names the same carry: "range-diff `af2150378` = `6878152e7`".
+- The red was re-cut once by plumbing. Its first cut, `8929df9ce`, wrote the channel as a literal at
+  `boot-machine.test.ts:566`, which wall R6 keeps inside `packages/contracts`; the cut of record names it by
+  `IPC_CHANNELS.windowBootstrap`, as `copy-door.test.ts` does.
+- The packet of record is `lanes/i280/packets/280-v2` (SUMS `fc78672f2dda10fe`; its bundle requires `40b499b9d`).
+  vf-m2's lane held `a2c999dab`, so it fetched the transport `lanes/i280/packets/280-v2-m2` (SUMS
+  `c96c7ec033cae0bb`; its bundle requires `a2c999dab`). v1, `lanes/i280/packets/280-v1`, is sealed, with its erratum
+  beside it, `lanes/i280/packets/280-v1.ERRATUM.md`.
+
+**Found along the way.**
+- The walls script run bare (`node scripts/check-import-boundaries.mjs`) is report-only: it exits 0 on an enforced
+  violation. The first green run's walls row ran it so, and passed R6 in the red's first cut. Every lane's walls row
+  is now check:walls' four commands, read from package.json at run time (VF-PM, 04:10:48Z, amended 04:17:46Z).
+- A row's readers include the tests that read a changed file as text. v1's rows missed DESIGN.md's 25 text readers
+  (the erratum); run3 ran them on the Mac, and fieldd's six ran in V.
+
+**Owed.**
+- The Mac witness of a failed start: the splash, the switch and the Setup Assistant each drawing the one sentence,
+  and its two lines in the log.
+- The window rows at this main: armed by the fixer at 06:50:27Z; no verdict at this writing.
+- Item 281, the splash's stage words (IS-281 A, 02:34:58Z), its own packet on this main.
+
+**Not done, and not claimed:** no window row ran, and nothing is pushed.

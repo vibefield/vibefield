@@ -1026,6 +1026,21 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   (the LANDED entry's second finding).
 - Owed: James's eye on the built room; gate:landing, landing-only.
 
+**IS — VibeField's insides are never a person's to read (items 280, 281 and 282)** · ow-design (lane `lanes/i280`) ·
+law DESIGN.md §9 "VibeField's insides are never a person's to read" (item 280), the page *Insides on Screen*
+(`NqLUt9USAjt5mWCCYzPKRs`; its source `draft/insides-on-screen/page.html`) and the build order
+`lanes/i280/plan/build-order-281-282.md`
+- Ruled 11-10: the rule, in James's words at 00:46Z (DESIGN.md §9 quotes them whole); the failed start's one sentence,
+  accepted by VF-PM at 01:13:08Z; the page's eight picks, all A, 02:34:58Z to 03:32:49Z (DECISIONS "insides · IS-281 ·
+  IS-282-1…IS-282-7"); the build order, accepted by VF-PM at 05:20:40Z.
+- Landed 11-10: **item 280** (`6014068ec` → `93e41770b`, 3 commits, M277, run 289, an ff of `40b499b9d`; LANDED "Item
+  280"): a start that failed says one sentence, "VibeField couldn't start.", over Retry, and what failed goes to the
+  log whole.
+- Next: **item 281**, the splash's stage words (IS-281 A: while a start goes well, the bar alone speaks), its own packet
+  on this main, plan first; then 282's slices in the build order's sequence, with item 293 (ob/ui) before 282-7.
+- Owed: the Mac witness of a failed start; the window rows at this main: armed by the fixer at 06:50:27Z; no verdict
+  at this writing.
+
 **Release rails — WP12 · TD · BP · FW packaging · RD** · prod-builder (resting) · law `specs/build-wp12-updater.md`,
 `specs/trust-and-distribution.md`, the three `specs/electron-*.md` + `electron-packaging-implementation-plan.md`,
 `specs/build-wp8-bundled-plugins.md`, `draft/thinking-browser-profile.md` (BP), `draft/thinking-release-deps.md` (RD),
