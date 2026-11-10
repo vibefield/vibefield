@@ -88,6 +88,14 @@ const PEEK_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBL
 const same = (a: ObjectGrantEntry, b: ObjectGrantEntry): boolean =>
   a.ref === b.ref && a.holder === b.holder;
 
+/** What a failed write said, as its code alone (`ENOSPC`, `EACCES`, `EISDIR`, …). A log line prints an error's code
+ * and never its message: Node's file errors name the file's whole path, which holds the person's home. An error with
+ * no code is `unknown`. */
+const codeOf = (error: unknown): string => {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  return typeof code === "string" ? code : "unknown";
+};
+
 /** `work`, or a rejection once `ms` have passed. */
 const within = <T>(work: Promise<T>, ms: number): Promise<T> =>
   new Promise<T>((resolve, reject) => {
@@ -275,7 +283,7 @@ export class GrantsFile {
     // written. A hand is refused as one the disk would not take is, and a take-back still takes.
     if (!Number.isSafeInteger(generation)) {
       const full = new Error("the grants' count is at the top of what a number holds");
-      if (takes) this.#lost(full);
+      if (takes) this.#lost("count-full");
       if (add !== undefined) throw full;
       return;
     }
@@ -285,7 +293,7 @@ export class GrantsFile {
     try {
       this.#keep(next, generation);
     } catch (error) {
-      if (takes) this.#lost(error);
+      if (takes) this.#lost(codeOf(error));
       if (add !== undefined) throw error;
       return;
     }
@@ -321,8 +329,9 @@ export class GrantsFile {
   }
 
   /** A take-back the disk would not take. It stands in memory. So that no restart finds it undone, the file goes (one
-   * that cannot be removed is said), and the mark rises anyway: under it, a file left behind or put back reads stale. */
-  #lost(error: unknown): void {
+   * that cannot be removed is said), and the mark rises anyway: under it, a file left behind or put back reads stale.
+   * `code` is why, as a code alone (`codeOf`): the error itself never reaches the log. */
+  #lost(code: string): void {
     const { path } = this.opts;
     let removed = true;
     try {
@@ -335,8 +344,8 @@ export class GrantsFile {
     this.opts.logger.error(
       "fieldd.objects.grants_unkept",
       "A take-back could not be written. It stands; the grants file was removed so that no restart finds it undone, and fieldd writes again",
-      error,
-      { file: basename(path), generation: this.#generation, removed },
+      undefined,
+      { file: basename(path), code, generation: this.#generation, removed },
     );
     this.#tell(this.#generation);
     this.#later();
