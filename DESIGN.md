@@ -4520,6 +4520,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   NOT late (there is nothing behind it yet) and NOT frost (nothing to frost).
   Unavailable is honest voice (§9): the stage line becomes the plain reason and a
   ghost "Retry" appears — no apology, no spinner theater.
+  *Amended 2026-11-10 (item 280; §9, VibeField's insides):* the plain reason is one sentence, **"VibeField couldn't
+  start."**, whatever failed. Until then it was the error's own message under Electron's wrapping ("Error invoking
+  remote method 'vibefield:shell:window-bootstrap': SupervisorError: fieldd exited before readiness (code 1, signal
+  null) …"), which named the daemon, its exit code and its signal; the Setup Assistant's desk line and the switch read
+  the same.
   *As built (2026-09-22, the switch):* its first frame is painted synchronously, with the
   theme stamped before it and the product entry render-blocking, so no bare or wrong-theme
   ground ever shows ahead of it. In the switch's dress (below) the wordmark gives way to the
@@ -7259,6 +7264,19 @@ and what to do next; they don't apologize and they're never vague. No filler, no
 demo content is real-shaped — a session's folder name (`vibe-field`), "needs approval · 4m", a
 device's name in mono as Tailscale names it. *(Until 2026-10-28 the examples were the widgets'
 AAPL, San Francisco and 64°; the widgets retired at DK-8.)*
+
+**VibeField's insides are never a person's to read** (item 280, 2026-11-10; James, 00:46Z, verbatim: "a user does not
+care about key or custody, we shouldn't expose such concept to users to confuse them, these underneath mechanism should
+be kept internally, a user should not be exposed to these at all, it is either the app runs or crashed, do not over
+complicate user experience"). What "The agents' words" (below, AO-L8) keeps off the screen for the agent plane is kept
+off it for all of VibeField: no word, sheet or choice asks a person to understand how it works inside (its daemons,
+keys and custody, its channels, exit codes and signals, or its own restarts), and they stay in the log, Diagnostics and
+the code. A failure inside is the app's own: it runs, or it says it couldn't. **A start that failed** says one
+sentence, whatever failed: **"VibeField couldn't start."**, with the splash's **Retry** (§8 "The boot splash"), and
+never a second, however many Retries fail. What failed is logged whole: main logs a refused bootstrap
+(`desktop.ipc.window_bootstrap_rejected`, its `system/desktop` stream) and the boot logs every failure
+(`renderer.boot.failed`, `system/renderer`), under `~/Library/Logs/VibeField/` on a Mac. *Known deviation, owed:* the
+splash's stage words name its insides ("waking the daemon", "staging plugins"); item 281, James's.
 
 **Sizes are said as Finder counts them**, in thousands — bytes, KB, MB, GB (the terminal settings
 page, the line's notes) — and a size a person did not make, such as a link's message, is never
