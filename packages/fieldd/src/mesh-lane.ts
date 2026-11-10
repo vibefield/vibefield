@@ -34,7 +34,12 @@ export interface MeshLaneLinkOptions {
   /** Item 345 — run before EVERY dial: the socket alias's keeper (boot-env's `ensureNativeSocketDir`). A refusal
    * throws, and the dial fails with it; a root that fits makes it a no-op. */
   beforeDial?: () => void;
-  pairingFile: string;
+  /** The file field-native keeps the D8 pairing secret in (the `files` level), read at every dial. One of this and
+   * `pairingSecret` is required. */
+  pairingFile?: string;
+  /** OB custody (C3) — the pairing secret's SOURCE, for a fieldd that was handed it, as NativeLink's is: asked at
+   * every dial, and with one the link never touches a file. */
+  pairingSecret?: () => string;
   /** fieldd's per-process boot id, as used for the mgmt hello (§4.1) */
   bootId: string;
   logger?: Logger;
@@ -98,12 +103,24 @@ export class MeshLaneLink extends EventEmitter {
   #redialFailing = false;
   /** Item 206's boot half — whether any HELLO_OK has landed, so a log can tell a first dial from a redial. */
   #everConnected = false;
+  /** The D8 secret for one dial: the handed source's (OB custody, C3: never a file then), or the pairing file's. */
+  readonly #pairingSecret: () => string;
 
   connected = false;
 
   constructor(private readonly opts: MeshLaneLinkOptions) {
     super();
     this.#logger = (opts.logger ?? createNoopLogger()).child({ component: "mesh.lane" });
+    const { pairingFile, pairingSecret } = opts;
+    if (pairingSecret !== undefined) {
+      this.#pairingSecret = pairingSecret;
+    } else if (pairingFile !== undefined) {
+      this.#pairingSecret = () => readFileSync(pairingFile, "utf8").trim();
+    } else {
+      throw new Error(
+        "MeshLaneLink needs the pairing secret's source or the file field-native keeps it in",
+      );
+    }
   }
 
   /** Dial and authenticate. Resolves once the bridge has answered HELLO_OK —
@@ -112,7 +129,7 @@ export class MeshLaneLink extends EventEmitter {
     if (this.connected) return;
     // item 206's boot half — read before any socket opens: a read that throws would leave one behind, and a dial on
     // the back-off would leave one per attempt
-    const secretHex = readFileSync(this.opts.pairingFile, "utf8").trim();
+    const secretHex = this.#pairingSecret();
     const sock = await this.#open();
     // item 206's boot half — a close() during the open ends this dial, as NativeLink's does: a closed link never says
     // "connected"

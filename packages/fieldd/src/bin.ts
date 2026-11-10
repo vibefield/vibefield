@@ -159,45 +159,82 @@ async function main(): Promise<void> {
 
   let nativePid: number | undefined;
   const mgmtEndpoint = nativeMgmtEndpoint(dataDir);
-  // TC-D1 — ONE spawn serves the boot ensure AND every supervisor respawn:
-  // two derivations of this env composition would be the drift class wearing
-  // its usual hat. The supervisor re-runs it only after failed redials plus a
-  // fresh endpoint probe confirming no listener (the double-spawn guard).
+  // The floor's environment. TC-D1 — ONE composition serves the boot ensure AND every supervisor respawn, at either
+  // custody level: two derivations of it would be the drift class wearing its usual hat.
+  const nativeEnv = (): NodeJS.ProcessEnv => ({
+    ...process.env,
+    // fieldd passes the PAIR's root it already derived (item 78: users/<fuid>
+    // under the platform root the trusted shell mode decision resolved).
+    // field-native never trusts an ambient override alone.
+    // WIN-D1 — and it is the SAME string the probe above resolved its
+    // endpoint from: on win32 both planes derive the pipe name from a hash of
+    // this root, so re-spelling it here (a resolve, a realpath, a trailing
+    // separator) is a pair that binds one name and dials another.
+    FIELD_NATIVE_DATA_DIR: dataDir,
+    FIELD_LOG_DIR: logRoot,
+    FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
+    // TP-S3a — the SAME renderer origins fieldd's own door admits
+    // reach the cells' T1 doors (terminal-pipeline-v3 §8 door
+    // hygiene): one allow-list, one authority, passed down at spawn.
+    FIELD_NATIVE_ALLOWED_ORIGINS: allowedOrigins.join(","),
+    // Level overrides remain development/test-only even though fieldd
+    // inherits a broad shell environment.
+    FIELD_NATIVE_LOG_FILTER:
+      process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1"
+        ? process.env["FIELD_NATIVE_LOG_FILTER"]
+        : undefined,
+    FIELD_NATIVE_ALLOW_LOG_FILTER:
+      process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1" &&
+      process.env["FIELD_NATIVE_ALLOW_LOG_FILTER"] === "1"
+        ? "1"
+        : undefined,
+  });
+  // OB custody (C3; native-bootstrap.ts) — a fieldd handed custody hands its floor the pairing: the floor is spawned
+  // with a piped stdin and its own flag, written ONE line, and its stdin closed. Nothing of the secret is in the
+  // environment above or in an argument. A fieldd handed nothing loads none of this and spawns as it always has.
+  // C6 — the verifier that asks whether the child is ours before the line is written
+  // (`SealedNativeSpawn.verifyNativeChild`) is that slice's to hand here; none is configured in this one.
+  const sealedFloor =
+    custody === undefined
+      ? undefined
+      : {
+          pairing: custody.pairing,
+          spawn: (await import("./native-bootstrap")).spawnSealedNative,
+        };
+  /** how the last sealed spawn's hand ended, as one word (never a rejection); undefined at `files` */
+  let handed: Promise<string> | undefined;
+  /** the boot's own spawn is awaited below and fails the boot; a respawn's has nobody waiting, and says so itself */
+  let booting = true;
+  // TC-D1 — ONE spawn serves the boot ensure AND every supervisor respawn. The
+  // supervisor re-runs it only after failed redials plus a fresh endpoint probe
+  // confirming no listener (the double-spawn guard).
   const spawnNative =
     nativeBin === undefined
       ? undefined
       : (): number | undefined => {
+          if (sealedFloor !== undefined) {
+            const spawned = sealedFloor.spawn({
+              bin: nativeBin,
+              env: nativeEnv(),
+              pairing: sealedFloor.pairing,
+              spawn: (file, args, options) => spawn(file, args, options),
+            });
+            handed = spawned.handed;
+            void spawned.handed.then((outcome) => {
+              // one line, which names no secret. The floor then does not come up, and the supervisor's own
+              // bound on respawns is what ends them.
+              if (outcome !== "handed" && !booting) {
+                process.stderr.write(
+                  `fieldd: a respawned native floor was not handed its pairing (${outcome})\n`,
+                );
+              }
+            });
+            return spawned.pid;
+          }
           // The native plane outlives this fieldd (OS plane; launchd owns it
           // later). field-native unlinks a stale socket itself before binding.
           const child = spawn(nativeBin, [], {
-            env: {
-              ...process.env,
-              // fieldd passes the PAIR's root it already derived (item 78: users/<fuid>
-              // under the platform root the trusted shell mode decision resolved).
-              // field-native never trusts an ambient override alone.
-              // WIN-D1 — and it is the SAME string the probe above resolved its
-              // endpoint from: on win32 both planes derive the pipe name from a hash of
-              // this root, so re-spelling it here (a resolve, a realpath, a trailing
-              // separator) is a pair that binds one name and dials another.
-              FIELD_NATIVE_DATA_DIR: dataDir,
-              FIELD_LOG_DIR: logRoot,
-              FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
-              // TP-S3a — the SAME renderer origins fieldd's own door admits
-              // reach the cells' T1 doors (terminal-pipeline-v3 §8 door
-              // hygiene): one allow-list, one authority, passed down at spawn.
-              FIELD_NATIVE_ALLOWED_ORIGINS: allowedOrigins.join(","),
-              // Level overrides remain development/test-only even though fieldd
-              // inherits a broad shell environment.
-              FIELD_NATIVE_LOG_FILTER:
-                process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1"
-                  ? process.env["FIELD_NATIVE_LOG_FILTER"]
-                  : undefined,
-              FIELD_NATIVE_ALLOW_LOG_FILTER:
-                process.env["FIELDD_ALLOW_LOG_DIR_OVERRIDE"] === "1" &&
-                process.env["FIELD_NATIVE_ALLOW_LOG_FILTER"] === "1"
-                  ? "1"
-                  : undefined,
-            },
+            env: nativeEnv(),
             detached: true,
             // Routine evidence is process-owned NDJSON now. stdout has no logging
             // protocol; stderr is only the one-shot emergency fallback and inherits
@@ -223,7 +260,14 @@ async function main(): Promise<void> {
   }
   if (spawnNative !== undefined && !(homeUsable && (await nativeAlive(mgmtEndpoint)))) {
     nativePid = spawnNative();
+    // OB custody (C3) — sealed: the floor this boot spawned holds its line before the daemon dials it, or the boot
+    // ends here (a child the verifier refused, a spawn that made no process, a floor gone before it read)
+    const outcome = await handed;
+    if (outcome !== undefined && outcome !== "handed") {
+      throw new Error(`the native floor was not handed its pairing (${outcome})`);
+    }
   }
+  booting = false;
 
   const config: FielddConfig = {
     dataDir,

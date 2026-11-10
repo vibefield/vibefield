@@ -1100,12 +1100,19 @@ export async function bootstrap(
   await audit.start();
   let detachHealthSources: (() => void) | null = null;
 
+  // OB custody (C3) — where the D8 pairing secret comes from, for both of this fieldd's links to the floor (mgmt
+  // here, MeshData below). `files`: the file field-native keeps it in. `sealed`: what the spawner handed, and then
+  // neither link looks for a file, reads one or waits on one.
+  const floorPairing =
+    custody === undefined
+      ? { pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE) }
+      : { pairingSecret: () => custody.pairing };
   const native = new NativeLink({
     // WIN-D1: path on unix, pipe name on win32 — one law, boot-env owns it
     socketPath: nativeMgmtEndpoint(config.dataDir),
     // Item 345: the socket alias's keeper before every dial (a root that fits touches nothing)
     beforeDial: () => ensureNativeSocketDir(config.dataDir, logger),
-    pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE),
+    ...floorPairing,
     bootId,
     ...(config.userId !== undefined ? { userId: config.userId } : {}),
     logger: logger.child({ component: "native_link" }),
@@ -1707,7 +1714,7 @@ export async function bootstrap(
       socketPath: nativeEndpoint(config.dataDir, SOCKETS.MESHDATA),
       // Item 345: the keeper before every dial
       beforeDial: () => ensureNativeSocketDir(config.dataDir, logger),
-      pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE),
+      ...floorPairing,
       bootId,
       logger: logger.child({ component: "mesh.lane" }),
       // CP-1b, item 206 — the link dials itself again after a drop or a failed redial, on fieldd's one back-off

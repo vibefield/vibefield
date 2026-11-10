@@ -80,7 +80,13 @@ export interface NativeLinkOptions {
    * throws, and the dial fails with it; a root that fits makes it a no-op. Item 458: `connect()` runs it before each
    * turn's probe too, so a link that went is put back before the probe looks for it. */
   beforeDial?: () => void;
-  pairingFile: string;
+  /** The file field-native keeps the D8 pairing secret in (LAYOUT.PAIRING_FILE): the `files` level. Waited for at
+   * the first connect and read at every hello. One of this and `pairingSecret` is required. */
+  pairingFile?: string;
+  /** OB custody (C3) — the D8 pairing secret's SOURCE, for a fieldd that was handed it (`sealed`): asked at every
+   * hello, and nothing of its answer is kept between hellos. With a source the link never touches a file, whether
+   * `pairingFile` is given or not, and `connect()` gates on the socket alone. */
+  pairingSecret?: () => string;
   /** fieldd's per-process boot id (stable across reconnects within one boot) */
   bootId: string;
   /** UA-2 — the user this pair serves; carried on the mgmt hello. */
@@ -351,6 +357,11 @@ export class NativeLink extends EventEmitter {
    * the next dial (NF-6's re-arm law: never once-and-throw). */
   private terminalRoutesSubscribed = false;
   private readonly logger: Logger;
+  /** The D8 secret for one hello: the handed source's (OB custody, C3: never a file then), or the pairing file's
+   * as field-native wrote it. */
+  private readonly pairingSecret: () => string;
+  /** Is the secret there to pair with yet? A handed one always is; the file's waits for field-native to make it. */
+  private readonly pairingReady: () => boolean;
 
   connected = false;
   superseded = false;
@@ -464,9 +475,22 @@ export class NativeLink extends EventEmitter {
     // with room keeps it for a real leak without warning on every boot.
     this.setMaxListeners(20);
     this.logger = opts.logger ?? createNoopLogger();
+    const { pairingFile, pairingSecret } = opts;
+    if (pairingSecret !== undefined) {
+      this.pairingSecret = pairingSecret;
+      this.pairingReady = () => true;
+    } else if (pairingFile !== undefined) {
+      this.pairingSecret = () => readFileSync(pairingFile, "utf8").trim();
+      this.pairingReady = () => existsSync(pairingFile);
+    } else {
+      throw new Error(
+        "NativeLink needs the pairing secret's source or the file field-native keeps it in",
+      );
+    }
   }
 
-  /** Waits for field-native's pairing file + socket (it creates both), dials, hellos. */
+  /** Waits for field-native's pairing file + socket (it creates both), dials, hellos. A link handed its pairing
+   * secret (`pairingSecret`) waits for the socket alone: no file is looked for. */
   async connect(): Promise<void> {
     this.assertOpen();
     if (this.connected) return;
@@ -485,7 +509,7 @@ export class NativeLink extends EventEmitter {
       // endpoint is a filesystem node only on unix — a named pipe never
       // appears on disk, so there the dial attempt itself is the probe.
       if (
-        existsSync(this.opts.pairingFile) &&
+        this.pairingReady() &&
         (isPipeEndpoint(this.opts.socketPath) || existsSync(this.opts.socketPath))
       ) {
         try {
@@ -609,7 +633,7 @@ export class NativeLink extends EventEmitter {
   }
 
   private async hello(): Promise<void> {
-    const secretHex = readFileSync(this.opts.pairingFile, "utf8").trim();
+    const secretHex = this.pairingSecret();
     const ts = Math.floor(Date.now() / 1000);
     const mac = computePairingMac(secretHex, this.opts.bootId, ts);
     const nonce = newPairingNonce();

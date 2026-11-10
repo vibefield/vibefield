@@ -17,7 +17,7 @@ import {
   STORES,
 } from "@vibefield/contracts";
 import { ensureNativeSocketDir, nativeEndpoint } from "../boot-env";
-import { computeAckMac } from "../pairing";
+import { ackMacMatches, computeAckMac, computePairingMac } from "../pairing";
 
 /** Item 345's stand-in half: the endpoint a floor binds under `dataRoot`, after the
  * socket alias's keeper ran, as field-native runs it before each bind (and fieldd
@@ -396,6 +396,14 @@ export class MockMgmtServer {
   /** WIN-10 — answer with THIS proof instead of the correct one: a squatter
    * that holds the endpoint but not the pairing secret. */
   forgedServerMac: string | null = null;
+  /** OB custody (C3) — check the CLIENT's half of D8 as field-native does (mgmt/mod.rs `handle_hello`): a hello
+   * whose MAC is not the one `pairingSecretHex` makes over its own bootId and ts is refused UNAUTHORIZED, in the
+   * floor's words, and its connection ended. Off by default: every older suite pairs with a mock that never looked,
+   * and some of them hand it a hello of their own making. A row that must know WHICH secret a fieldd paired with
+   * turns it on. */
+  verifyClientMac = false;
+  /** OB custody (C3) — the hellos `verifyClientMac` refused */
+  refusedHellos = 0;
   /** NF-3 — when set, native.lifecycle.observed.subscribe answers this snapshot
    * (an ObservedState); null falls through to the generic `{n:0}` handler,
    * which the fieldd side must read as "no inventory" (tolerant reader). */
@@ -520,9 +528,38 @@ export class MockMgmtServer {
       // a client that offered a nonce REFUSES an ack without a valid proof, so
       // a mock that skipped this would fail every pairing in the suite. The
       // three knobs below let a test drive the refusal paths deliberately.
-      const cred = (msg.params ?? {}) as { credential?: { bootId?: unknown; nonce?: unknown } };
+      const cred = (msg.params ?? {}) as {
+        credential?: { bootId?: unknown; nonce?: unknown; ts?: unknown; mac?: unknown };
+      };
       const nonce = cred.credential?.nonce;
       const bootId = cred.credential?.bootId;
+      if (this.verifyClientMac) {
+        // OB custody (C3) — the client's proof, checked as the floor checks it. No freshness window here: the rows
+        // that turn this on ask which secret made the MAC, not when.
+        const ts = cred.credential?.ts;
+        const mac = cred.credential?.mac;
+        const proven =
+          typeof bootId === "string" &&
+          typeof ts === "number" &&
+          typeof mac === "string" &&
+          ackMacMatches(computePairingMac(this.pairingSecretHex, bootId, ts), mac);
+        if (!proven) {
+          this.refusedHellos += 1;
+          sock.write(
+            `${JSON.stringify({
+              jsonrpc: "2.0",
+              id: msg.id,
+              error: {
+                code: -32001,
+                message: "pairing verification failed",
+                data: { kind: "UNAUTHORIZED", retryable: false },
+              },
+            })}\n`,
+          );
+          sock.end();
+          return;
+        }
+      }
       let serverMac: string | undefined;
       if (this.proveServerIdentity && typeof nonce === "string" && typeof bootId === "string") {
         serverMac = this.forgedServerMac ?? computeAckMac(this.pairingSecretHex, nonce, bootId);
