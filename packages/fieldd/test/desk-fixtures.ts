@@ -139,8 +139,11 @@ export interface DeskWorld {
 }
 
 const worlds: string[] = [];
+const desks: DeskObjects[] = [];
 
 export function cleanupWorlds(): void {
+  // a take-back its disk would not take is written again on a timer: stop it before its root goes
+  for (const desk of desks.splice(0)) desk.close();
   for (const root of worlds.splice(0)) rmSync(root, { recursive: true, force: true });
 }
 
@@ -207,6 +210,7 @@ export function world(
       ...(opts.now ? { now: opts.now } : {}),
     };
     const objects = new DeskObjects(options);
+    desks.push(objects);
     objects.boot();
     return objects;
   };

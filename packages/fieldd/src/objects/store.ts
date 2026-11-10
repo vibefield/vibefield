@@ -10,28 +10,65 @@ import {
   setAsideFile,
   UNREADABLE_WORDS,
 } from "../signed-record";
+import { type GrantMarks, GrantsFile } from "./grants-file";
 
-// OB-3a (thinking-objects-at-work.md §5.6; OB-L1, EY-D9 B) — the desk's registry and grants on disk: one `ObjectRecord`
-// per object, its file named by its ref's eight characters, 0600 in a 0700 directory per user root (LAYOUT.OBJECTS_DIR),
-// each signed by fieldd's one record signer under a key of its own (LAYOUT.OBJECTS_KEY_FILE). A grant is what lets a
-// run work an object, so a same-uid agent that wrote or edited a record could hand itself the person's work. A file that
-// is unsigned, does not verify, does not parse, is exposed to other users, or names another ref than its file does is
-// set aside for a human and never served. That holds against an edit; it is no wall against an agent that reads the key,
-// which is 0600 to the same uid, as the sparks' is (EL7). Read once, at boot (the needs-you store's rule, item 172).
+// OB-3a (thinking-objects-at-work.md §5.6; OB-L1, EY-D9 B) — the desk's registry and grants on disk, signed by fieldd's
+// one record signer under one key per user root. Two things are kept:
+//  - an object's NAME: one `ObjectRecord` per object, its file named by its ref's eight characters, 0600 in a 0700
+//    directory (LAYOUT.OBJECTS_DIR). A name grants nothing (OB-L1); a record that is unsigned, does not verify, does not
+//    parse, is exposed to other users, or names another ref than its file does is still set aside for a human and
+//    never served, because a ref pointed at another object would carry what was handed for the first one there.
+//  - every GRANT, in the one grants file beside that directory (LAYOUT.OBJECTS_GRANTS_FILE; grants-file.ts, OB custody
+//    C4 and C5). A grant is what lets a run work an object, so that file is held to more: a count that only rises, and
+//    a take-back that always takes.
+// The key (OB custody, C4): at custody's `files` level it is LAYOUT.OBJECTS_KEY_FILE, 0600 to the same uid, so the
+// signature holds against an edit and is no wall against an agent that reads the key (EL7). At `sealed` the spawner
+// hands the key (`CustodyHandoff.records`): it is on no disk, the key file is never read or made, and the grants file
+// says so. A fieldd at `files` that finds a sealed grants file moves nothing, not one name: the store refuses.
+// Read once, at boot (the needs-you store's rule, item 172).
 
 const REF_PREFIX = "vf:obj/";
 
 export interface ObjectsStoreOptions {
   /** LAYOUT.OBJECTS_DIR, absolute */
   readonly dir: string;
-  /** LAYOUT.OBJECTS_KEY_FILE, absolute */
+  /** LAYOUT.OBJECTS_KEY_FILE, absolute: the `files` level's key. Never read and never made when `key` is handed. */
   readonly keyPath: string;
+  /** LAYOUT.OBJECTS_GRANTS_FILE, absolute. Absent (a test's store), it is the file that row names: beside `dir`. */
+  readonly grantsPath?: string | undefined;
+  /** OB custody (C4) — the record key the spawner handed (`CustodyHandoff.records`, its 32 bytes): the store is at the
+   * `sealed` level. Absent, it is at `files` and the key is `keyPath`'s. */
+  readonly key?: Buffer | undefined;
+  /** who outlives fieldd and remembers the grants' count (fieldd's `CustodyMarks`). Absent (a test's store), the count
+   * is remembered here and dies with the store. */
+  readonly marks?: GrantMarks | undefined;
   readonly logger?: Logger | undefined;
   /** the record file's read, a seam for a disk that does not answer (tests) */
   readonly readFile?: ((path: string) => string) | undefined;
+  /** the grants file's write, a seam for a disk that will not take it (tests) */
+  readonly writeFile?: ((path: string, text: string) => void) | undefined;
+  /** how long a take-back the disk would not take waits before it is written again (tests) */
+  readonly retryMs?: number | undefined;
+  /** how long an answer waits on a survivor of the count (tests) */
+  readonly noteMs?: number | undefined;
+}
+
+/** A count nobody outlives fieldd to remember: what a store is given when it is handed no marks. */
+function ownMarks(): GrantMarks {
+  const kept = new Map<string, number>();
+  return {
+    get: (name) => kept.get(name) ?? 0,
+    note: async (name, value) => {
+      const next = Math.max(kept.get(name) ?? 0, value);
+      kept.set(name, next);
+      return next;
+    },
+  };
 }
 
 export class ObjectsStore {
+  /** every grant: the one grants file, under this store's signer and guard */
+  readonly grants: GrantsFile;
   readonly #signer: RecordSigner;
   readonly #guard: StoreGuard;
   readonly #logger: Logger;
@@ -47,15 +84,37 @@ export class ObjectsStore {
     });
     this.#signer = new RecordSigner({
       keyPath: opts.keyPath,
+      key: opts.key,
       logger: this.#logger,
       readFile: opts.readFile,
     });
+    this.grants = new GrantsFile({
+      path: opts.grantsPath ?? `${opts.dir}.grants.json`,
+      signer: this.#signer,
+      guard: this.#guard,
+      sealed: opts.key !== undefined,
+      marks: opts.marks ?? ownMarks(),
+      logger: this.#logger,
+      writeFile: opts.writeFile,
+      retryMs: opts.retryMs,
+      noteMs: opts.noteMs,
+    });
   }
 
-  /** The boot's one read: never throws. A store it could not read answers nothing, says so, and refuses every read and
-   * write after (`readable`), until fieldd restarts. */
+  /** The boot's one read: never throws. The grants file is read FIRST, before any name: a sealed one this fieldd was
+   * handed no key for stops the read there, with nothing moved. A store it could not read answers nothing, says so,
+   * and refuses every read and write after (`readable`), until fieldd restarts. */
   boot(): ObjectRecord[] {
-    return this.#guard.boot(() => this.list(), []);
+    const read = (): ObjectRecord[] => {
+      this.grants.boot();
+      return this.list();
+    };
+    const records = this.#guard.boot(read, []);
+    // a grant on an object the store does not name (its record set aside, or a store that could not be read) is
+    // nobody's
+    const named = new Set<string>(records.map((record) => record.ref));
+    this.grants.keepOnly((ref) => named.has(ref));
+    return records;
   }
 
   /** Throws UNAVAILABLE {service: "objects"} in fieldd's words while the boot read has failed. */
@@ -74,13 +133,12 @@ export class ObjectsStore {
     });
   }
 
-  /** Keep a record whole and signed: written beside, then renamed, 0600 in 0700. Throws when it cannot be kept, so
-   * nothing is granted that a restart would not find. */
+  /** Keep a name whole and signed: written beside, then renamed, 0600 in 0700. Throws when it cannot be kept. A
+   * `grants` list a record carried before the grants left for their own file is not written back. */
   write(record: ObjectRecord): void {
     this.#guard.writable(record.ref);
-    const { signature: _previous, ...unsigned } = ObjectRecord.parse(record) as ObjectRecord & {
-      signature?: string;
-    };
+    const parsed = ObjectRecord.parse(record) as ObjectRecord & { signature?: string };
+    const { signature: _previous, grants: _moved, ...unsigned } = parsed;
     const signature = this.#signer.sign(unsigned);
     mkdirSync(this.opts.dir, { recursive: true, mode: 0o700 });
     chmodSync(this.opts.dir, 0o700);
@@ -88,6 +146,11 @@ export class ObjectsStore {
     const temp = `${path}.${process.pid}.tmp`;
     writeFileSync(temp, `${JSON.stringify({ ...unsigned, signature })}\n`, { mode: 0o600 });
     durableRenameSync(temp, path);
+  }
+
+  /** Stop the store's timer (a take-back the disk would not take is written again on one). */
+  close(): void {
+    this.grants.close();
   }
 
   #read(path: string, id: string): ObjectRecord | undefined {

@@ -212,6 +212,9 @@ export class StoreGuard {
 export interface RecordSignerOptions {
   /** the secret's file (a LAYOUT `*_KEY_FILE` row), made once, 0600, in a 0700 directory */
   readonly keyPath: string;
+  /** OB custody (C4) — the secret itself, handed by the spawner (`CustodyHandoff.records`) so that it sits in no file
+   * the same user can read. Used instead of the file: `keyPath` is then never read and never made. */
+  readonly key?: Buffer | undefined;
   readonly logger?: Logger | undefined;
   /** a record file's read (utf8): a seam for a disk that does not answer (EMFILE), in tests */
   readonly readFile?: ((path: string) => string) | undefined;
@@ -228,6 +231,9 @@ export class RecordSigner {
   readonly #keyEncoding: "hex" | "base64";
 
   constructor(opts: RecordSignerOptions) {
+    // a handed key is the key from the first call on (`#signingKey` answers it before it looks at the file); a copy,
+    // so a spawner that wipes its buffer changes no signature
+    if (opts.key !== undefined) this.#key = Buffer.from(opts.key);
     this.#keyPath = opts.keyPath;
     this.#logger = opts.logger ?? createNoopLogger();
     this.#readFile = opts.readFile ?? ((path) => readFileSync(path, "utf8"));

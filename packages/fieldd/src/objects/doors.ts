@@ -18,6 +18,10 @@ import type { DeskObjects } from "./desk-objects";
 // Every one is held to a window's own token: `objects.window` is minted only into window tokens, and this holds it
 // again, because a scope is not "the person's window" (EL7) and `clientKind` is only self-declared. The person's acts
 // (a hand, an undo, a take-back) are audited; what objects hold never enters a line.
+// OB custody (C5; OB-D19 A): a hand and a take-back answer only once whoever outlives fieldd was told the grants' count
+// (a bounded wait that refuses nothing), so that by the time the person is told, an older grants file put back is
+// already stale. A take-back answers `taken: true` whatever the disk said, with `kept: false` beside it when the
+// grants file does not hold it yet.
 
 export interface ObjectDoorsDeps {
   readonly objects: DeskObjects;
@@ -94,7 +98,11 @@ export function registerObjectDoors(api: ObjectDoorsApi, deps: ObjectDoorsDeps):
     return audit.required(
       ctx,
       { action: "objects.hand", target: target(ref), attrs: { run } },
-      () => objects.hand(ref, run),
+      async () => {
+        const handed = objects.hand(ref, run);
+        await objects.settled();
+        return handed;
+      },
       (value) => ({ outcome: value.handed ? "succeeded" : "denied" }),
     );
   });
@@ -121,10 +129,13 @@ export function registerObjectDoors(api: ObjectDoorsApi, deps: ObjectDoorsDeps):
     return audit.required(
       ctx,
       { action: "objects.take_back", target: target(ref), attrs: { run } },
-      () => {
+      async (): Promise<{ taken: true; kept?: false }> => {
         objects.takeBack(ref, run);
-        return { taken: true as const };
+        await objects.settled();
+        // taken, whatever the disk said: `kept: false` says the grants file does not hold it yet
+        return objects.kept ? { taken: true } : { taken: true, kept: false };
       },
+      (value) => (value.kept === false ? { attrs: { kept: false } } : {}),
     );
   });
 

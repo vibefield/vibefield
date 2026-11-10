@@ -2,17 +2,20 @@ import { randomInt } from "node:crypto";
 import {
   OBJECT_RECORD_FORMAT,
   type ObjectGrant,
+  type ObjectGrantEntry,
   type ObjectRecord,
   type ObjectRef,
   type ObjectYours,
 } from "@vibefield/contracts";
 import { RpcCallError } from "../native-link";
+import type { GrantsFile } from "./grants-file";
 import type { ObjectsStore } from "./store";
 
-// OB-3a — the registry (a ref ↔ a board's object) and the grants (OB-L1: which run may work which object). Held in
-// memory after the store's one boot read, and written through before anything acts on the change, so a restart finds
-// exactly what a caller was told. Grants outlive the app (EY-D9 B). A ref is a name and grants nothing: `refFor` hands
-// one to anybody, and only `grant` opens an object.
+// OB-3a — the registry (a ref ↔ a board's object) and the grants (OB-L1: which holder may work which object). Held in
+// memory after the store's one boot read. A ref is a name and grants nothing: `refFor` hands one to anybody, and only
+// `grant` opens an object. A name is written through before anything acts on it. The grants are the grants file's
+// (grants-file.ts; OB custody C4, C5): what is given is in memory only once the disk holds it, so a restart finds
+// exactly what a caller was told, and what is taken away is gone from memory first, whatever the disk then says.
 
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 const REF_CHARS = 8;
@@ -35,10 +38,12 @@ export interface ObjectsRegistryOptions {
 export class ObjectsRegistry {
   readonly #records = new Map<ObjectRef, ObjectRecord>();
   readonly #places = new Map<string, ObjectRef>();
+  readonly #grants: GrantsFile;
   readonly #now: () => number;
   readonly #mint: () => ObjectRef;
 
   constructor(private readonly opts: ObjectsRegistryOptions) {
+    this.#grants = opts.store.grants;
     this.#now = opts.now ?? Date.now;
     this.#mint = opts.mint ?? mintRef;
   }
@@ -72,7 +77,6 @@ export class ObjectsRegistry {
       docId,
       key,
       ...(kind !== undefined ? { kind } : {}),
-      grants: [],
     });
     return ref;
   }
@@ -90,41 +94,60 @@ export class ObjectsRegistry {
   }
 
   grantOf(ref: ObjectRef, holder: string): ObjectGrant | undefined {
-    return this.#records.get(ref)?.grants.find((g) => g.holder === holder);
+    return this.#grants.of(ref, holder);
   }
 
-  /** Every record, for a walk over who holds what. */
-  all(): ObjectRecord[] {
-    return [...this.#records.values()];
+  /** Every grant on one object. */
+  grantsOn(ref: ObjectRef): ObjectGrantEntry[] {
+    return this.#grants.on(ref);
   }
 
-  /** Give `holder` this object. What it placed stays placed: a later hand never weakens that. */
+  /** Every grant, for a walk over who holds what. */
+  grants(): readonly ObjectGrantEntry[] {
+    return this.#grants.all();
+  }
+
+  /** Give `holder` this object. What it placed stays placed: a later hand never weakens that. Throws when the grant
+   * cannot be kept: nothing is granted that a restart would not find. */
   grant(ref: ObjectRef, holder: string, how: ObjectYours, at: number = this.#now()): void {
-    const record = this.#required(ref);
-    const held = record.grants.find((g) => g.holder === holder);
+    this.#required(ref);
+    const held = this.#grants.of(ref, holder);
     if (held !== undefined && (held.how === "placed" || held.how === how)) return;
-    this.#keep({
-      ...record,
-      grants: [...record.grants.filter((g) => g.holder !== holder), { holder, how, at }],
-    });
+    this.#grants.give({ ref, holder, how, at });
   }
 
-  /** End `holder`'s grant. False when it held none. */
+  /** End `holder`'s grant. False when it held none. It is ended whatever the disk says (`end`). */
   revoke(ref: ObjectRef, holder: string): boolean {
-    const record = this.#records.get(ref);
-    if (record === undefined || !record.grants.some((g) => g.holder === holder)) return false;
-    this.#keep({ ...record, grants: record.grants.filter((g) => g.holder !== holder) });
-    return true;
+    return this.end((grant) => grant.ref === ref && grant.holder === holder).length > 0;
   }
 
-  /** OB-D9 — a `one` kind's hand: every other holder's grant ends and `holder` is handed it. Returns those it left. */
+  /** End every grant `match` names, in one write, and answer what ended. A take-back always takes: they are gone
+   * from memory before the disk is asked, and `kept` says whether the disk has them yet. */
+  end(match: (grant: ObjectGrantEntry) => boolean): ObjectGrantEntry[] {
+    return this.#grants.take(match);
+  }
+
+  /** OB-D9 — a `one` kind's hand: every other holder's grant ends and `holder` is handed it, in one write. Returns
+   * those it left. When the hand cannot be kept it throws, and those it left stay left. */
   moveTo(ref: ObjectRef, holder: string): string[] {
-    const record = this.#required(ref);
-    const left = record.grants.filter((g) => g.holder !== holder).map((g) => g.holder);
-    const own = record.grants.find((g) => g.holder === holder);
-    if (left.length === 0 && own !== undefined) return [];
-    this.#keep({ ...record, grants: [own ?? { holder, how: "handed", at: this.#now() }] });
-    return left;
+    this.#required(ref);
+    return this.#grants.move({ ref, holder, how: "handed", at: this.#now() });
+  }
+
+  /** Whether the disk holds every grant change so far: false from a take-back it would not take, until a write
+   * lands. */
+  get kept(): boolean {
+    return this.#grants.kept;
+  }
+
+  /** Once whoever outlives fieldd was told the grants' count as it stands, or the wait for them has run out. */
+  settled(): Promise<void> {
+    return this.#grants.settled();
+  }
+
+  /** Stop the store's timer. */
+  close(): void {
+    this.opts.store.close();
   }
 
   setKind(ref: ObjectRef, kind: string): void {

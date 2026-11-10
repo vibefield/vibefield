@@ -86,11 +86,15 @@ const refuse = (
 ): RpcCallError => new RpcCallError("PRECONDITION_FAILED", text, retryable, { fact, ...more });
 
 /** MT-L4, and how to get it: the refusal is the instruction. Asked of a ref that names nothing here as well: a made-up
- * ref is told no more than a real one the caller does not hold. */
-const notHanded = (ref: string): RpcCallError =>
+ * ref is told no more than a real one the caller does not hold. A run fieldd did not launch (OB-D18 A: it was running
+ * before VibeField restarted) holds nothing and can be handed nothing, so it is told what would help instead, and the
+ * same for any ref. */
+const notHanded = (ref: string, vouched = true): RpcCallError =>
   refuse(
     "not-handed",
-    `${ref} is not yours to work: you neither placed it nor were handed it. Ask the user to hand it to you.`,
+    vouched
+      ? `${ref} is not yours to work: you neither placed it nor were handed it. Ask the user to hand it to you.`
+      : `${ref} is not yours to work: this session was running before VibeField restarted, and what it held then has ended. Ask the user to start it again.`,
   );
 
 const noDesk = (): RpcCallError =>
@@ -250,7 +254,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
     registry.readable();
     const record = registry.get(ref);
     const grant = record && objects.grantOf(ref, run);
-    if (record === undefined || grant === undefined) throw notHanded(ref);
+    if (record === undefined || grant === undefined) throw notHanded(ref, objects.vouched(run));
     return { record, grant };
   };
 
@@ -328,8 +332,10 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
 
     async canvas_place(caller, input) {
       const run = caller.runtimeRunId;
-      // before the window: a store that cannot keep the grant must not leave an object nobody holds
+      // before the window: a store that cannot keep the grant must not leave an object nobody holds, and neither
+      // must a run that can hold nothing (one fieldd did not launch, OB-D18 A)
       registry.readable();
+      objects.vouch(run);
       const kind = objects.kind(input.kind);
       if (kind === undefined || !kind.placeable) {
         const names = objects
@@ -376,6 +382,8 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
           inverse: answered.inverse,
           label: answered.changed ?? `Placed ${value.title}`,
         });
+      // the grant is written; the answer waits until whoever outlives fieldd was told its count (OB-D19 A)
+      await objects.settled();
       return manualOf({
         ref,
         kindId: input.kind,
@@ -525,6 +533,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
       const grant = objects.grantOf(input.ref, run);
       if (grant?.how === "handed") objects.revoke(input.ref, run);
       presence.released(input.ref, run);
+      await objects.settled();
       return { released: true };
     },
   };
