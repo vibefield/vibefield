@@ -84,7 +84,8 @@ export interface Harness {
   /** OB custody — start FIXTURE_SEALED as a child of the test, under `root`, and wait for its ready line. With
    * `handoff` it is a sealed fieldd (`mode: "prove"`, the default): the hand-off goes down its stdin under
    * FIELDD_CUSTODY=stdin, and it writes product.json (custody "sealed") and no shell.token. `mode: "accept"` is a
-   * planted listener: it writes no run files, takes any hello and proves nothing. Tracked and killed in cleanup. */
+   * planted listener: it writes no run files, takes any hello and proves nothing. `marks` are the frames its marks
+   * stream says (SEALED_MARKS_FRAMES): the first at the subscribe, the rest after it. Tracked and killed in cleanup. */
   startSealedDaemon(
     root: string,
     o?: {
@@ -93,6 +94,7 @@ export interface Harness {
       bootId?: string;
       userId?: string;
       buildId?: string;
+      marks?: ReadonlyArray<{ marks: Record<string, number> }>;
     },
   ): Promise<SealedDaemon>;
   /** A data root nested deeply enough that native/run/mgmt.sock overflows the
@@ -199,6 +201,7 @@ export function createHarness(): Harness {
           ...(o.bootId !== undefined ? { SEALED_BOOT_ID: o.bootId } : {}),
           ...(o.userId !== undefined ? { FIELDD_USER_ID: o.userId } : {}),
           ...(o.buildId !== undefined ? { FIELDD_BUILD_ID: o.buildId } : {}),
+          ...(o.marks !== undefined ? { SEALED_MARKS_FRAMES: JSON.stringify(o.marks) } : {}),
         },
         stdio: ["pipe", "pipe", "pipe"],
       });
