@@ -37,6 +37,8 @@ mod marks;
 pub mod mesh;
 /// DS-1 — the egress verbs, dispatched from `mesh::handle` ahead of its node gate.
 mod mesh_egress;
+/// OB custody (§8.1) — `native.terminal.startedFor.set`, what a terminal was started for.
+mod started_for;
 
 /// W3-20 — each connection's one file-transfer stream, by `conn_id`; `DaemonState` keeps it.
 pub(crate) use file_transfer::FileTransferStreams;
@@ -53,6 +55,7 @@ use crate::local_ipc;
 use crate::orphan::Departure;
 use crate::pairing;
 use crate::registries::{mesh_control_limits, native_floor_tick, native_refusals};
+use crate::services::door::peer::Kernel;
 use crate::services::mesh::NodePresence;
 use crate::services::terminal;
 use crate::services::terminal_client::ControlClient;
@@ -612,6 +615,12 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
             "native.marks.set" => {
                 send(&tx, marks::set(&state, params, id));
             }
+            // OB custody (§8.1) — what fieldd started in a terminal (`crate::started_for`, `mgmt/started_for.rs`).
+            // Authorized exactly as a mark is: the hello above, and the single-client rule, which refused a
+            // superseded connection before this match. And only on a floor that was handed its pairing secret.
+            "native.terminal.startedFor.set" => {
+                send(&tx, started_for::set(&state, params, id));
+            }
             "native.diagnostics.query" => {
                 send(&tx, diagnostics::query(&state, &params, id));
             }
@@ -942,6 +951,29 @@ async fn handle_hello(
     let marks = state.marks.snapshot();
     if !marks.is_empty() {
         ack["marks"] = json!(marks);
+    }
+    // OB custody (§8.1) — what this floor's terminals were started for (`HelloAck.startedFor`), on EVERY hello of a
+    // floor that keeps the table: the fieldd that pairs next names a surviving run from this, never from a record
+    // the run's own agent can rewrite. Only the entries that still stand are said, and the rest are dropped here
+    // (`StartedFor::handed`): the session a running pane still rooted at the pid the entry was said of, and that pid
+    // still the process the floor read at the set. A floor that was not handed its pairing secret has no table and
+    // says no key at all. Absent and empty are one thing to a reader (K5), so a floor with nothing to hand says no
+    // key either, as with `marks` above. The log is told a count, never an entry.
+    if let Some(table) = state.started_for() {
+        let handed = {
+            let observed = state.observed_tx.borrow();
+            table.handed(&Kernel, &observed)
+        };
+        tracing::debug!(
+            event = "field_native.mgmt.started_for_handed",
+            component = "mgmt",
+            connection = conn_id,
+            entries = handed.len(),
+            "The hello ack said what this floor's terminals were started for"
+        );
+        if !handed.is_empty() {
+            ack["startedFor"] = json!(handed);
+        }
     }
     // WG-D6 — this process's pid (`HelloAck.pid`), so a fieldd that ADOPTED
     // this floor, as every fieldd-only restart does, has a target for the stops

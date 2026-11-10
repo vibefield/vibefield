@@ -254,6 +254,10 @@ pub struct DaemonState {
     /// name. The floor's and not a connection's: they stand while no client is attached, ride every hello ack, and
     /// die with this process (`marks.rs`).
     pub marks: crate::marks::Marks,
+    /// OB custody (§8.1) — what each terminal was started for (`started_for.rs`), on a floor that keeps the table:
+    /// EMPTY on a floor that was not handed its pairing secret. Private, and set in one place (`keep_started_for`,
+    /// which only the boot calls): nothing outside this crate can give a floor a table its boot did not.
+    started_for: std::sync::OnceLock<Arc<crate::started_for::StartedFor>>,
     next_conn_id: AtomicU64,
     next_sub_id: AtomicU64,
     next_tick_seq: AtomicU64,
@@ -300,10 +304,24 @@ impl DaemonState {
             restart: crate::restart::RestartControl::default(),
             manager: crate::orphan::ManagerPresence::new(std::time::Instant::now()),
             marks: crate::marks::Marks::default(),
+            started_for: std::sync::OnceLock::new(),
             next_conn_id: AtomicU64::new(1),
             next_sub_id: AtomicU64::new(1),
             next_tick_seq: AtomicU64::new(0),
         })
+    }
+
+    /// OB custody (§8.1) — the table of what each terminal was started for, where this floor keeps one. `None` on a
+    /// floor that was not handed its pairing secret: it answers the verb `not-sealed` and its hello ack names no
+    /// table (`mgmt/started_for.rs`, `handle_hello`).
+    pub fn started_for(&self) -> Option<&Arc<crate::started_for::StartedFor>> {
+        self.started_for.get()
+    }
+
+    /// This floor keeps the table: the boot's word, said once, by a boot that was handed its pairing secret
+    /// (`lib.rs`, `boot`). `pub(crate)`, so no test outside the crate can say it for a floor booted from the file.
+    pub(crate) fn keep_started_for(&self) -> Arc<crate::started_for::StartedFor> {
+        self.started_for.get_or_init(Default::default).clone()
     }
 
     /// The floor's composed health, published (IL-D4). `send_replace`, never

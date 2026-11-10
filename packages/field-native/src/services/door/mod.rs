@@ -113,6 +113,11 @@ struct Shared {
     census: OnceLock<Arc<dyn SessionCensus>>,
     /// OB-3d — the helper roots fieldd named over the management channel. Nothing at the door can reach this (EL7).
     roots: Mutex<walk::HelperRoots>,
+    /// OB custody (§8.1.12) — the floor's table of what each terminal was started for, on a floor that keeps one
+    /// (wiring, `DoorHandle::know_started_for`): the walk knows a pane with an entry by the root start read at the
+    /// set. Unset on a floor that was not handed its pairing secret, where every pane keeps the birth rule. The door
+    /// only reads it.
+    started: OnceLock<Arc<crate::started_for::StartedFor>>,
     /// live door subscriptions; fieldd takes a door's bytes only while one is
     subscribers: watch::Sender<usize>,
     refusals: Mutex<HashMap<&'static str, Refusals>>,
@@ -265,6 +270,11 @@ impl Shared {
             .get()
             .map(|observed| walk::pane_roots(&observed.borrow()))
             .unwrap_or_default();
+        // OB custody (§8.1.12) — a pane fieldd said the purpose of is matched by the root start read then
+        let panes = match self.started.get() {
+            Some(started) => walk::with_root_starts(panes, &started.root_starts()),
+            None => panes,
+        };
         let roots = self.roots.lock().unwrap().rows();
         walk::walk(&peer::Kernel, pid, &panes, &roots)
     }
@@ -627,6 +637,12 @@ impl DoorHandle {
         let _ = self.shared.census.set(census);
     }
 
+    /// Wiring: the floor's table of what each terminal was started for, which the walk reads the exact start of a
+    /// pane root from (§8.1.12). Set once, by a boot that was handed its pairing secret (`lib.rs`, `boot`).
+    pub fn know_started_for(&self, table: Arc<crate::started_for::StartedFor>) {
+        let _ = self.shared.started.set(table);
+    }
+
     /// Doors open now.
     pub fn open_count(&self) -> usize {
         self.shared.doors.lock().unwrap().len()
@@ -671,6 +687,7 @@ impl DoorUnit {
                 observed: OnceLock::new(),
                 census: OnceLock::new(),
                 roots: Mutex::new(walk::HelperRoots::default()),
+                started: OnceLock::new(),
                 subscribers: watch::channel(0).0,
                 refusals: Mutex::new(HashMap::new()),
             }),

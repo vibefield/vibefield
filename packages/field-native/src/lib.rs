@@ -42,6 +42,8 @@ pub mod secret_file;
 pub mod services;
 #[cfg(unix)]
 pub mod socket_alias;
+/// OB custody (§8.1) — what each terminal was started for: the table a floor handed its secret keeps for fieldd.
+pub mod started_for;
 pub mod state;
 /// FW-D4 — the floor's ONE supervised child: the cells' shape, and the freeway host's.
 pub mod supervised_child;
@@ -277,6 +279,14 @@ async fn boot(
         logging.clone(),
     );
     state.restart.configure(restart_intent_file, last_exit);
+    // OB custody (§8.1, EL7) — only a floor that was handed its pairing secret keeps the table of what each terminal
+    // was started for, and this is the one place a floor is given it: the same `sealed` that chose where the secret
+    // came from. Where the secret is a file a pane can read, anyone can pair, so such a floor has no table, refuses
+    // the verb (`not-sealed`) and says none in its hello ack. The door is handed the same table here, so its walk
+    // knows a pane with an entry by the root start read at the set (§8.1.12): wiring, as `observe` is below.
+    if sealed {
+        door_handle.know_started_for(state.keep_started_for());
+    }
 
     // NF-D8/§4.3: the endpoints reach fieldd through the pairing hello (off the
     // route snapshot wired two lines above — TM-1 retired the second, fixed

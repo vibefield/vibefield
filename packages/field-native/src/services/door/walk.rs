@@ -25,6 +25,14 @@
 //! it. A root is known by its pid AND the start the floor read from the kernel when it was named, compared at
 //! `START_RESOLUTION_MS`, so a reused pid is never the root. A pane anywhere on the chain wins over a root anywhere on
 //! it: a caller that reaches a pane resolves exactly as it did before helper roots existed.
+//!
+//! OB custody (§8.1.12) — A PANE THE FLOOR HOLDS AN ENTRY FOR (`started_for.rs`) is known the way a helper root is: by
+//! its root's pid AND the start the floor read from the kernel when fieldd said what the pane was started for
+//! (`PaneRoot.root_started_at_ms`). The birth rule gives a pid a minute either side of the row's `createdAt`, and a row
+//! goes on being listed as running for seconds after its root has died, so a pane under a minute old whose root died
+//! could be taken by whoever got that pid next, and with it what the pane's run holds. A process that takes the pid
+//! has another start. A pane with no entry keeps the birth rule: nothing has been said of it, and its run holds
+//! nothing.
 
 use super::peer::ProcessTable;
 use crate::contracts::ObservedState;
@@ -39,6 +47,20 @@ pub struct PaneRoot {
     pub terminal_session_id: String,
     pub pid: u32,
     pub created_at_ms: u64,
+    /// OB custody (§8.1.12) — the root's start as the floor read it from the kernel when fieldd said what this pane
+    /// was started for; `None` for a pane nothing has been said of (`with_root_starts`).
+    pub root_started_at_ms: Option<u64>,
+}
+
+impl PaneRoot {
+    /// Is a process that holds this pane's root pid, and started at `started_at_ms`, the pane's root? Against the
+    /// start read at the set where there is one, exactly as a helper root; else by the birth rule.
+    fn is_rooted_at(&self, started_at_ms: u64) -> bool {
+        match self.root_started_at_ms {
+            Some(read) => same_start(started_at_ms, read),
+            None => born_with(started_at_ms, self.created_at_ms),
+        }
+    }
 }
 
 /// The pane a caller was found in, and how many parents up its root stood (0: the caller IS the root).
@@ -158,13 +180,30 @@ pub fn pane_roots(observed: &ObservedState) -> Vec<PaneRoot> {
                 terminal_session_id: terminal.session_id.clone(),
                 pid: u32::try_from(terminal.pid?).ok().filter(|pid| *pid > 1)?,
                 created_at_ms: u64::try_from(terminal.created_at?).ok()?,
+                root_started_at_ms: None,
             })
         })
         .collect()
 }
 
+/// OB custody (§8.1.12) — say of each pane the floor holds an entry for the start it read at the set: `starts` is
+/// the table's roots by session, a pid and that start (`StartedFor::root_starts`). An entry said of another pid is
+/// not about this row's root, and the pane keeps the birth rule.
+pub fn with_root_starts(
+    mut panes: Vec<PaneRoot>,
+    starts: &HashMap<String, (u32, u64)>,
+) -> Vec<PaneRoot> {
+    for pane in &mut panes {
+        let said = starts.get(&pane.terminal_session_id);
+        if let Some((_, started_at_ms)) = said.filter(|(pid, _)| *pid == pane.pid) {
+            pane.root_started_at_ms = Some(*started_at_ms);
+        }
+    }
+    panes
+}
+
 /// Are these two readings one process's start, at the resolution the kernel's readings agree to?
-fn same_start(a_ms: u64, b_ms: u64) -> bool {
+pub fn same_start(a_ms: u64, b_ms: u64) -> bool {
     a_ms / START_RESOLUTION_MS == b_ms / START_RESOLUTION_MS
 }
 
@@ -195,7 +234,7 @@ pub fn walk(
         };
         let root = panes
             .iter()
-            .find(|pane| pane.pid == pid && born_with(facts.started_at_ms, pane.created_at_ms));
+            .find(|pane| pane.pid == pid && pane.is_rooted_at(facts.started_at_ms));
         if let Some(pane) = root {
             return Some(Reached::Pane(Found {
                 terminal_session_id: pane.terminal_session_id.clone(),
@@ -258,6 +297,7 @@ mod tests {
             terminal_session_id: id.into(),
             pid,
             created_at_ms,
+            root_started_at_ms: None,
         }
     }
 
