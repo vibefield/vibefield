@@ -5,7 +5,11 @@ import Foundation
 
 // PG-7 — THE SPEND VIEW'S COMPOSITION: what it lays out from its input and its own state, and its acts, transcribed
 // from puppeteer-views 0.3.3 at the pin `52d09c8e` (the spend module `5abe8f75`): `src/views/spend/SpendView.tsx`
-// (dist `SpendView.js` :38-643). Held to `phone-spend.golden.json` (SpendParityTests P7, V10, H1…H9).
+// (dist `SpendView.js` :38-643). Held to `phone-spend.golden.json` (SpendParityTests P7, V10, H1…H9). The hero
+// re-transcribed from 0.4.0 at `e6e4753de` (the EL8 of 2026-11-09; #101, `5a0ae86b`): `heroRoom` (dist `SpendView.js`
+// :103-108) and the hero's figure, burn and caption (:258-268). Every other line cited in this file is 0.3.3's dist:
+// 0.4.0 moved those lines (the hero, and a stage out of sight that rests its clock and paint, #103), not what they
+// cite. The rest out of sight is the view's, not this model's, and is not ported: it is owed.
 //
 // React lays out the window's DOM from the view's state; here `frame` lays out the same from `State`, and each act
 // changes `State` as its handler does, after which the caller lays out again (React's re-render). The canvas's scene
@@ -83,6 +87,21 @@ enum SpendModel {
       listW: listW, ly0: 12, ly1: height - 4, rowH: compact ? 30 : 54, axisY: y1 + 6)
   }
 
+  /// `heroRoom` (0.4.0's `SpendView.js` :103-108): the room a narrow hero leaves its caption. Its one line runs from
+  /// the plot's left edge to the list's column, less the list's inset, and the number and the burn come first, each
+  /// measured in its own face (`.heroFigure`, `.heroRate`); the caption's words measure in the rows' `.row`. The
+  /// window's canvas measure leaves out the number's tracking and its tabular figures, as the rows' fit leaves out
+  /// theirs; so does the phone's.
+  static func heroRoom(
+    _ g: Geometry, figure: String, rate: String, measure: @escaping (String, TextStyle) -> Double
+  ) -> SpendWords.HeroRoom {
+    let before =
+      measure(figure, .heroFigure) + SpendWords.NarrowHero.gapPx + measure(rate, .heroRate)
+      + SpendWords.NarrowHero.capGapPx
+    return SpendWords.HeroRoom(
+      width: g.lx0 - SpendWords.NarrowHero.listInsetPx - g.x0 - before, measure: { measure($0, .row) })
+  }
+
   /// A moment's x on the plot (`xOf`).
   static func xOf(_ g: Geometry, _ span: SpendScale.Window, _ t: Double) -> Double {
     g.x0 + ((t - span.ta) / (span.tb - span.ta)) * (g.x1 - g.x0)
@@ -93,8 +112,9 @@ enum SpendModel {
     g.y1 - (value / Swift.max(1e-9, yMax)) * (g.y1 - g.y0)
   }
 
-  /// The two weights the rows measure words in (`600 12px` the state, `400 12px` the task).
-  enum TextStyle: Sendable { case state, row }
+  /// The faces words are measured in: the rows' two (`600 12px` the state, `400 12px` the task, which a narrow hero's
+  /// caption shares), and the narrow hero's number (`300 20px`) and burn (`550 13px`), as `NARROW_HERO` names them.
+  enum TextStyle: Sendable { case state, row, heroFigure, heroRate }
 
   /// What the view lays out from: the rows as spend reads them, now, its own box, and how it measures and says time.
   struct Input {
@@ -143,7 +163,8 @@ enum SpendModel {
   struct Hero: Equatable, Sendable {
     let big: String
     let rate: String
-    let what: String
+    /// The caption (`heroCaption`): nil at a narrow stage with nobody left out.
+    let what: String?
     let compact: Bool
     let narrow: Bool
     let left: Double
@@ -349,17 +370,17 @@ enum SpendModel {
       }
       perMinute += row.burn ?? 0
     }
-    let missing = set.unpriced.filter { $0.bornMs <= tView }
-    let leftOut =
-      missing.count == 1
-      ? " · not counting \(names[missing[0].id]?.one ?? "")"
-      : missing.count > 1 ? " · not counting \(missing.count) agents with no price" : ""
+    let heroFigure = "~\(SpendWords.money(spent))\(partial ? "+" : "")"
     let heroRate =
       tCross.map { "by \(clock($0)) · \(SpendWords.perHour(perMinute)) then" } ?? "\(SpendWords.perHour(perMinute)) now"
+    // its caption: what the figure is, and who it leaves out, the unpriced that had started by the moment (one not yet
+    // running is not missing); a narrow stage keeps only who, cut to the room the number and the burn leave it
+    let missing = set.unpriced.filter { $0.bornMs <= tView }
+    let heroWhat = SpendWords.heroCaption(
+      missing: missing.map { $0.id }, names: names,
+      narrow: g.narrow ? Self.heroRoom(g, figure: heroFigure, rate: heroRate, measure: input.measure) : nil)
     let hero = Hero(
-      big: "~\(SpendWords.money(spent))\(partial ? "+" : "")", rate: heroRate,
-      what: "since each agent started, at API prices\(leftOut)", compact: g.compact || g.narrow, narrow: g.narrow,
-      left: g.x0)
+      big: heroFigure, rate: heroRate, what: heroWhat, compact: g.compact || g.narrow, narrow: g.narrow, left: g.x0)
 
     // ───────────────────────────── the head: who had started by the moment, and what the money column means
     let all = rows.count + unpricedRows.count

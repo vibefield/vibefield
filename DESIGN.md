@@ -5656,6 +5656,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     bar's tooltip (ruling 4). **End lets go of a set moment, and its legend `↘` is printed on the
     Now pill** (M181: every printed legend comes from the toolkit's `keyLegend` table), in the
     view's secondary ink (6.5:1 light, 9.0:1 dark).
+  - **A narrow hero's caption on the phone** (added 2026-11-09, the EL8 to puppeteer 0.4.0, #101;
+    rv-godview-honesty (2) B'): a narrow stage keeps only who the total leaves out, cut to the room
+    beside the number and the burn. The phone's model carries that caption; the phone's view does not
+    draw it at narrow until James rules on the words its own fonts leave there (the mint prints them,
+    `PG-HERO-WORDS`), so the narrow phone hero stays the number and the burn. ‹for James›
 - **History is rosetta's room, on the cover's glass** (AR-8c, built 2026-10-03; One Frame §9
   "History, joined"; FC-D6, FC-D15, FC-D16; AR-D36…AR-D43): History is rosetta's own room — the
   projects, the sessions, the panels and charts, the transcript and its folds — mounted from the

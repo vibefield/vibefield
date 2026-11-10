@@ -69,4 +69,40 @@ extension SpendParityTests {
       #expect(image?.size == CGSize(width: 402, height: 781), "\(scheme): it renders")
     }
   }
+
+  /// R1 — A READ, NOT A ROW (VF-PM, 2026-11-09): it asserts nothing. At each witness step, on the phone's stage at the
+  /// golden's three heights (and, at the open, at a set moment), it prints the narrow hero's caption as the phone's
+  /// own fonts cut it (`SpendView.measure`), beside the room the number and the burn leave it. The view does not draw
+  /// that caption at narrow; these words go to James with one question, whether it should and in what form. Each line
+  /// starts `PG-HERO-WORDS `.
+  @Test @MainActor func thePhonesNarrowHeroWordsAreRead() throws {
+    let frozen = try #require(GodviewViewChoice.frozenNow(["-vf-godview-now=1790803300000"]))
+    let moment = 1_790_803_000_000.0
+    for step in try HomeFixture.witnessSteps() {
+      let input = GodviewStageInput(
+        isActive: true, rows: step.rows, fieldIsLive: true,
+        unreadIds: Set(step.rows.filter { $0.unread }.map { $0.id }), activeId: nil, colour: { _ in nil },
+        now: { frozen }, bandHeight: 93, topInset: 108, skin: GodviewSkin(scheme: .light), isStill: true,
+        onOpen: { _ in })
+      for height in [781.0, 588, 508] {
+        var states = [("now", SpendModel.State())]
+        if step.at == "open" {
+          var held = SpendModel.State()
+          held.held = moment
+          states.append(("moment", held))
+        }
+        for (when, state) in states {
+          let model = SpendView.modelInput(input, size: CGSize(width: 402, height: height))
+          let frame = SpendModel.frame(model, state)
+          let hero = frame.hero
+          let room = SpendModel.heroRoom(frame.g, figure: hero.big, rate: hero.rate, measure: SpendView.measure)
+          let said = hero.what ?? "(none)"
+          let points = String(format: "%.1f", room.width)
+          print(
+            "PG-HERO-WORDS step=\(step.at) at=\(when) stage=402x\(Int(height)) narrow=\(hero.narrow) big=\(hero.big)"
+              + " rate=\(hero.rate) room=\(points)pt what=\(said)")
+        }
+      }
+    }
+  }
 }

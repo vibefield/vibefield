@@ -6,7 +6,9 @@ import SwiftUI
 import UIKit
 
 // PG-7 — SPEND, DRAWN (kit-only: the swarm's theme, its sprites and the words' measure are UIKit's). puppeteer-views
-// 0.3.3's spend (`52d09c8e`, the spend module `5abe8f75`: `SpendView.js` :116-644 and `spend.css`) on the phone, over
+// 0.3.3's spend (`52d09c8e`, the spend module `5abe8f75`: `SpendView.js` :116-644 and `spend.css`), with 0.4.0's
+// narrow hero at `e6e4753de` (#101: `measure` in the hero's two faces; its caption stays undrawn at narrow, below),
+// on the phone, over
 // `SpendModel` (what it lays out), `SpendScene` (what the canvas draws) and `SpendPaint` (the canvas). The view
 // stands in `GodviewStage.framed`, a FLOW stage (PG-4t: from the screen's top to the band's top). Its ground fills the
 // stage, and its own box starts below the Stories row's reserve (`input.insets(.flow).top`; insets are data,
@@ -87,10 +89,17 @@ struct SpendView: View {
     return SpendModel.geometryFor(width: box.width, height: box.height)
   }
 
-  /// The window's `measure` (a canvas's `measureText`): the state words at `600 12px`, a task at `400 12px`, in the
-  /// system's sans.
+  /// The window's `measure` (a canvas's `measureText`), in the system's sans: the state words at `600 12px`, a task
+  /// (and a narrow hero's caption) at `400 12px`, the narrow hero's number at `300 20px` and its burn at `550 13px`
+  /// (550 as `SpendType.weight` maps it: medium). No tracking and no tabular figures, as the window's canvas has none.
   nonisolated static func measure(_ text: String, _ style: SpendModel.TextStyle) -> Double {
-    let font = UIFont.systemFont(ofSize: 12, weight: style == .state ? .semibold : .regular)
+    let font: UIFont =
+      switch style {
+      case .state: UIFont.systemFont(ofSize: 12, weight: .semibold)
+      case .row: UIFont.systemFont(ofSize: 12, weight: .regular)
+      case .heroFigure: UIFont.systemFont(ofSize: 20, weight: .light)
+      case .heroRate: UIFont.systemFont(ofSize: 13, weight: .medium)
+      }
     return Double((text as NSString).size(withAttributes: [.font: font]).width)
   }
 
@@ -237,7 +246,10 @@ struct SpendView: View {
   }
 
   /// The hero (`.vf-monitor-spend-hero`): what was spent, its rate and what the figure counts. Compact on a short or
-  /// narrow stage (its words on one baseline); narrow, the figure smaller and its count unsaid.
+  /// narrow stage (its words on one baseline); narrow, the figure smaller and its caption undrawn. The model carries
+  /// 0.4.0's short narrow caption (`heroCaption`: who the total leaves out, cut to its room); the phone does not draw
+  /// it until James rules on the words the phone's own fonts leave (VF-PM 2026-11-09; DESIGN.md, Godview's spend view;
+  /// the mint prints them, `SpendParityTests.thePhonesNarrowHeroWordsAreRead`).
   @ViewBuilder
   private func hero(_ hero: SpendModel.Hero, _ inks: SpendInks) -> some View {
     let t1 = inks.main.withAlpha(0.88).spendColor
@@ -248,7 +260,8 @@ struct SpendView: View {
       .tracking(-0.02 * size)
       .foregroundStyle(t1)
     let rate = Text(hero.rate).font(SpendType.font(13, 550).monospacedDigit()).foregroundStyle(t1)
-    let what = Text(hero.what).font(SpendType.font(12, 400)).foregroundStyle(t3)
+    // a wide or compact hero always has its caption; only a narrow one with nobody left out has none
+    let what = Text(hero.what ?? "").font(SpendType.font(12, 400)).foregroundStyle(t3)
     Group {
       if hero.compact {
         HStack(alignment: .firstTextBaseline, spacing: 10) {

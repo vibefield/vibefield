@@ -3,14 +3,17 @@ import FieldMesh
 import FieldProduct
 import Foundation
 
-// PG-7 — WHAT THE SPEND VIEW SAYS IN WORDS, transcribed from puppeteer-views 0.3.3 at the pin `52d09c8e` (the spend
-// module `5abe8f75`): `src/views/spend/spend-words.ts` (dist `spend-words.js` :8-166). Money as the swarm prints it
-// (`~$1.84`, `+` when partial, `—` unpriced), the burn by the hour, each row's name and the line under it, and its
+// PG-7 — WHAT THE SPEND VIEW SAYS IN WORDS, transcribed from puppeteer-views 0.4.0 at `e6e4753de` (the EL8 of
+// 2026-11-09; first transcribed from 0.3.3 at `52d09c8e`, the spend module `5abe8f75`):
+// `src/views/spend/spend-words.ts` (dist `spend-words.js` :8-203). Money as the swarm prints it (`~$1.84`, `+` when
+// partial, `—` unpriced), the burn by the hour, the hero's caption, each row's name and the line under it, and its
 // state at a moment. Lengths are short (`11m`, `1h 02m`), never m:ss, which beside a time axis would read as a clock
-// time. The facts are the row's; the formats are the toolkit's, reused: `formatUsd` and `formatRatePerHour`
-// (FieldAgents, JSNumber since items 164/165), `detailLine` and `projectName` (FieldMesh's MonitorWords), and
-// `formatShort` and `formatClock` (GodviewFormat). Held to `phone-spend.golden.json` (SpendParityTests P3, P4, P5b, V1,
-// V5, V6, V7).
+// time. The facts are the row's; the
+// formats are the toolkit's, reused: `formatUsd` and `formatRatePerHour` (FieldAgents, JSNumber since items 164/165),
+// `detailLine` and `projectName` (FieldMesh's MonitorWords), and `formatShort` and `formatClock` (GodviewFormat). Held
+// to `phone-spend.golden.json` (SpendParityTests P3, P4, P5b, V1, V5, V6, V7) and `SpendHeroTests`. 0.4.0 added the
+// hero's caption here (#101, `5a0ae86b`: `HERO_WHAT` :88, `NARROW_HERO` :95-102, `heroCaption` :112-125, and
+// `HeroRoom` in `spend-words.d.ts`) and moved nothing else.
 //
 // JavaScript's strings, kept: a split, a trim and a word boundary are read on Unicode scalars with JavaScript's own
 // whitespace (a Swift Character joins "\r\n" into one, so `split("\n")` would keep it whole), and `===` compares
@@ -152,37 +155,47 @@ enum SpendWords {
 
   // MARK: - The hero's caption
 
-  /// `HERO_WHAT`: what the hero's figure is — an estimate at API prices, never a bill.
+  /// `HERO_WHAT` (:88): what the hero's figure is — an estimate at API prices, never a bill.
   static let heroWhat = "since each agent started, at API prices"
 
-  /// `HeroRoom`: the room a narrow hero leaves its caption beside the total and the burn, and how the caption's words
-  /// measure.
+  /// `HeroRoom` (`spend-words.d.ts`): the room a narrow hero leaves its caption beside the total and the burn, and how
+  /// the caption's words measure.
   struct HeroRoom {
     /// Points from the burn (and the gap after it) to where the caption must stop.
     let width: Double
     let measure: (String) -> Double
   }
 
-  /// `NARROW_HERO`: the narrow hero's one line as spend.css lays it out (the sheet is the authority): the gap after the
-  /// number (`.is-compact`'s 10), the one before the caption (its cap's 8), and how far the list's words sit inside
-  /// their column (its header's padding, 10), where the caption stops. Its three faces are `SpendModel.TextStyle`'s
-  /// `.heroFigure` (`300 20px`), `.heroRate` (`550 13px`) and `.row` (`400 12px`).
+  /// `NARROW_HERO` (:95-102): the narrow hero's one line as spend.css lays it out (the sheet is the authority): the gap
+  /// after the number (`.is-compact`'s 10), the one before the caption (its cap's 8), and how far the list's words sit
+  /// inside their column (its header's padding, 10), where the caption stops. Its three faces are
+  /// `SpendModel.TextStyle`'s `.heroFigure` (`300 20px`), `.heroRate` (`550 13px`) and `.row` (`400 12px`).
   enum NarrowHero {
     static let gapPx = 10.0
     static let capGapPx = 8.0
     static let listInsetPx = 10.0
   }
 
-  /// RED STUB (the EL8 to puppeteer 0.4.0): 0.3.3's caption, whole at every width; the green transcribes 0.4.0's.
+  /// `heroCaption` (:112-125): the caption beside the hero's total and burn — what the figure is, then who it leaves
+  /// out, the one by name, several by how many. A narrow stage keeps only who it leaves out, in short
+  /// (rv-godview-honesty (2) B', ruled 2026-11-06), cut at a word to its room as a row's words are: the one by name
+  /// while a word of the name fits, else how many in the rows' own "no price", the count never cut ("N…" is the
+  /// floor). With nobody left out a narrow stage says nothing. `missing` is the unpriced rows that had started by the
+  /// moment, by id; a name with no words (`""`, which JavaScript reads as false) names nobody.
   static func heroCaption(missing: [String], names: [String: Name], narrow: HeroRoom?) -> String? {
-    let leftOut =
-      missing.count == 1
-      ? " · not counting \(names[missing[0]]?.one ?? "")"
-      : missing.count > 1 ? " · not counting \(missing.count) agents with no price" : ""
-    return "\(heroWhat)\(leftOut)"
+    if missing.isEmpty { return narrow == nil ? heroWhat : nil }
+    let name: String? = missing.count == 1 ? (names[missing[0]]?.one ?? "") : nil
+    guard let narrow else { return "\(heroWhat) · not counting \(name ?? "\(missing.count) agents with no price")" }
+    if let name, !name.isEmpty {
+      let named = fitWords("not counting \(name)", max: narrow.width, measure: narrow.measure)
+      // a word of the name fits: a cut at "not counting…" would say nobody
+      if named.utf16.starts(with: "not counting ".utf16) { return named }
+    }
+    let count = fitWords("\(missing.count) with no price", max: narrow.width, measure: narrow.measure)
+    return count.isEmpty ? "\(missing.count)…" : count
   }
 
-  /// `fitWords` (:88): text fitted to a width at a word boundary, so a cut never lands mid-word.
+  /// `fitWords` (:127): text fitted to a width at a word boundary, so a cut never lands mid-word.
   static func fitWords(_ text: String, max: Double, measure: (String) -> Double) -> String {
     if text.isEmpty || max <= 0 { return "" }
     if measure(text) <= max { return text }
@@ -197,7 +210,7 @@ enum SpendWords {
 
   // MARK: - State
 
-  /// `glyphOf` (:102): a wait's glyph; a kind spend does not know asks with the permission's.
+  /// `glyphOf` (:141): a wait's glyph; a kind spend does not know asks with the permission's.
   static func glyphOf(_ kind: String?) -> Glyph {
     switch kind {
     case "question": .question
@@ -206,7 +219,7 @@ enum SpendWords {
     }
   }
 
-  /// `spendStateAt` (:110): what a row was doing at `t`, as far as the live row says. Before it was born it is not yet
+  /// `spendStateAt` (:149): what a row was doing at `t`, as far as the live row says. Before it was born it is not yet
   /// anything: it says when it starts. From the moment its current state began it is that state, a reply nobody
   /// opened being `unseen` (the stage's unread, S2). Earlier than that the row does not say: `unknown`.
   static func spendStateAt(bornMs: Double, agent: SpendAgent, t: Double, nowMs: Double) -> State {
@@ -224,7 +237,7 @@ enum SpendWords {
     }
   }
 
-  /// `printedBurn` (:132): the burn a row prints at a moment, per minute — a working row's, or what the buckets show
+  /// `printedBurn` (:171): the burn a row prints at a moment, per minute — a working row's, or what the buckets show
   /// before its current state began. Nil when its words say something else, or the burn is too small to print.
   static func printedBurn(_ state: State, perMinute: Double?) -> Double? {
     guard state.key == .working || state.key == .unknown, let perMinute, perMinute > burnFloorPerMinute else {
@@ -233,7 +246,7 @@ enum SpendWords {
     return perMinute
   }
 
-  /// `stateWords` (:138): a state's words for line 2 (or the money slot, for `before` in the one-line form), and their
+  /// `stateWords` (:177): a state's words for line 2 (or the money slot, for `before` in the one-line form), and their
   /// tone. `timeZone` is the reader's: the start of a row not yet born is a clock time.
   static func stateWords(_ state: State, t: Double, perMinute: Double?, timeZone: TimeZone) -> Said {
     let since = GodviewFormat.formatShort(ms: t - state.sinceMs)
@@ -251,7 +264,7 @@ enum SpendWords {
     }
   }
 
-  /// `waits` (:163): a row that waits on the person never folds out of sight (the list docks it).
+  /// `waits` (:202): a row that waits on the person never folds out of sight (the list docks it).
   static func waits(_ state: State) -> Bool { state.key == .blocked || state.key == .unseen }
 
   // MARK: - JavaScript's strings
