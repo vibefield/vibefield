@@ -1,4 +1,14 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname } from "node:path";
 import {
   CUSTODY,
@@ -23,13 +33,16 @@ import {
 //  - `generation` rises with every change, and whoever outlives fieldd is told the count (the mark
 //    `CUSTODY.MARK_OBJECT_GRANTS`: the floor keeps it in memory, and the shell hands what it heard to the next fieldd).
 //    A file below its mark is an older one put back: nothing in it is granted, it is set aside, and the count goes on
-//    above the mark.
+//    above the mark. A file AT its mark is not stale. The count never wraps: past what a number holds exactly, a change
+//    cannot be written.
 //  - A take-back always takes. What a change takes away is gone from memory before the disk is asked; what it gives is
 //    in memory only once the disk holds it, so nothing is granted that a restart would not find. A removal the disk
 //    will not take is closed the other way: the file is removed, the mark rises anyway, and the store writes again at
 //    the next change and on a timer.
 //  - Under custody's `sealed` level the key was handed, and the file says so. A fieldd at `files` cannot judge such a
-//    file: it leaves it exactly where it is and the store refuses (the store's own refusal, until fieldd restarts).
+//    file: it leaves it exactly where it is and the store refuses (the store's own refusal, until fieldd restarts),
+//    names and all. So that it can, a sealed store never leaves the path empty: it writes the file at boot, before any
+//    name, and again before a name whenever the file is known to be gone.
 // What this cannot hold against: with no VibeField process left to remember the mark, a whole older file put back is
 // served. No store the user owns keeps a count the same user cannot put back.
 
@@ -65,6 +78,11 @@ const HELD_KEY = "grants";
 /** How long an answer waits for a survivor to say it remembers the count. */
 const NOTE_MS = 2_000;
 const RETRY_MS = 5_000;
+/** The most the peek for `sealed` reads. A grant is about a hundred bytes, so a real file is far below it; the signer's
+ * own read has no bound to borrow. */
+const PEEK_BYTES = 4 * 1024 * 1024;
+/** The peek's open: read only, never through a link, and never waiting on something that is not a file. */
+const PEEK_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
 
 const same = (a: ObjectGrantEntry, b: ObjectGrantEntry): boolean =>
   a.ref === b.ref && a.holder === b.holder;
@@ -91,6 +109,8 @@ export class GrantsFile {
   #generation = 0;
   /** a take-back stands in memory that the file does not hold */
   #unkept = false;
+  /** nothing of this store's is at the path: never there, set aside, or removed when a take-back was lost */
+  #absent = false;
   #retry: ReturnType<typeof setTimeout> | undefined;
   /** every count told so far, answered or timed out */
   #told: Promise<void> = Promise.resolve();
@@ -100,14 +120,19 @@ export class GrantsFile {
     this.#put = opts.writeFile ?? ((path, text) => writeFileSync(path, text, { mode: 0o600 }));
   }
 
-  /** The boot's one read, made inside the store's guarded boot: for a file it must leave where it is (a disk that did
-   * not answer, a sealed file this fieldd was handed no key for) it throws the store's refusal. */
+  /** The boot's one read, made inside the store's guarded boot and before any name is listed: for a file it must leave
+   * where it is (a disk that did not answer, a sealed file this fieldd was handed no key for) it throws the store's
+   * refusal. A sealed store that finds its path empty writes its file before it returns. */
   boot(): void {
     this.#grants = [];
     this.#generation = 0;
-    const mark = this.opts.marks.get(MARK);
+    this.#absent = false;
+    const mark = this.#mark();
     const file = this.#read(mark);
-    if (file === undefined) return;
+    if (file === undefined) {
+      this.ensure();
+      return;
+    }
     this.#grants = [...file.grants];
     this.#generation = file.generation;
     // a survivor that forgot (a floor that restarted) learns the count again
@@ -130,12 +155,17 @@ export class GrantsFile {
       return guard.unavailable(path, "sealed");
     }
     const read = signer.read(path);
-    if ("absent" in read) return undefined;
+    if ("absent" in read) {
+      this.#absent = true;
+      return undefined;
+    }
     if ("unavailable" in read) return guard.unavailable(path, read.unavailable);
     if ("why" in read) return this.#setAside(read.why);
     if (guard.newer(HELD_KEY, path, read.body)) return undefined;
     const parsed = ObjectGrantsFile.safeParse(read.body);
     if (!parsed.success) return this.#setAside("unreadable");
+    // the belt: a sealed store only ever writes `sealed: true`, and the word is under the signature
+    if (this.opts.sealed && parsed.data.sealed !== true) return this.#setAside("forged");
     if (parsed.data.generation < mark) return this.#stale(parsed.data.generation, mark);
     return parsed.data;
   }
@@ -190,6 +220,21 @@ export class GrantsFile {
     return left;
   }
 
+  /** At `sealed`, the file is what tells a fieldd that was handed no key to leave this store alone, names and all. So a
+   * sealed store never leaves the path empty: with nothing of its own there, it writes memory as it stands (nothing,
+   * at a boot). It is no change: no new count, and nobody is told. Called at boot and before every name is written; a
+   * write the disk will not take is said, refuses nothing, and is made again at the next change or name. */
+  ensure(): void {
+    if (!this.opts.sealed || !this.#absent || !this.opts.guard.keeps(HELD_KEY)) return;
+    if (this.#rewrite() || this.#unkept) return;
+    // a lost take-back has said so already (`#lost`); this is the file a boot could not write
+    this.opts.logger.warn(
+      "fieldd.objects.grants_unwritten",
+      "The grants file could not be written; until it is, another VibeField that was handed no key would not know to leave this store alone",
+      { file: basename(this.opts.path) },
+    );
+  }
+
   /** Once every count told so far has been answered, or its wait has run out. Never rejects: an answer waits on it. */
   settled(): Promise<void> {
     return this.#told;
@@ -201,16 +246,29 @@ export class GrantsFile {
     this.#retry = undefined;
   }
 
+  /** fieldd's view of the mark. One that is not a count a number holds exactly reads as the top of what one does, so
+   * nothing is ever counted past it. */
+  #mark(): number {
+    const mark = this.opts.marks.get(MARK);
+    return Number.isSafeInteger(mark) ? mark : Number.MAX_SAFE_INTEGER;
+  }
+
   /** One change: one count, one write. What it takes away leaves memory first; what it gives enters memory last. */
   #change(drop: (grant: ObjectGrantEntry) => boolean, add?: ObjectGrantEntry): void {
     const stay = this.#grants.filter((grant) => !drop(grant));
     const takes = stay.length < this.#grants.length;
     if (!takes && add === undefined) return;
-    const generation = Math.max(this.#generation, this.opts.marks.get(MARK)) + 1;
-    if (takes) {
-      this.#grants = stay;
-      this.#generation = generation;
+    if (takes) this.#grants = stay;
+    const generation = Math.max(this.#generation, this.#mark()) + 1;
+    // The count never wraps, and is never written where a number does not hold it: at the top, a change cannot be
+    // written. A hand is refused as one the disk would not take is, and a take-back still takes.
+    if (!Number.isSafeInteger(generation)) {
+      const full = new Error("the grants' count is at the top of what a number holds");
+      if (takes) this.#lost(full);
+      if (add !== undefined) throw full;
+      return;
     }
+    if (takes) this.#generation = generation;
     // what `add` replaces (the same holder, held another way) goes only once the new one is kept
     const next = add === undefined ? stay : [...stay.filter((grant) => !same(grant, add)), add];
     try {
@@ -237,6 +295,20 @@ export class GrantsFile {
     durableRenameSync(temp, path);
   }
 
+  /** Memory as it stands, written with no new count: at the count this store holds, or at the mark when a survivor
+   * holds a higher one (below the mark the file would read as stale). False when the disk would not take it. */
+  #rewrite(): boolean {
+    const generation = Math.max(this.#generation, this.#mark());
+    try {
+      this.#keep(this.#grants, generation);
+    } catch {
+      return false;
+    }
+    this.#generation = generation;
+    this.#landed();
+    return true;
+  }
+
   /** A take-back the disk would not take. It stands in memory. So that no restart finds it undone, the file goes (one
    * that cannot be removed is said), and the mark rises anyway: under it, a file left behind or put back reads stale. */
   #lost(error: unknown): void {
@@ -248,6 +320,7 @@ export class GrantsFile {
       removed = false;
     }
     this.#unkept = true;
+    this.#absent = removed;
     this.opts.logger.error(
       "fieldd.objects.grants_unkept",
       "A take-back could not be written. It stands; the grants file was removed so that no restart finds it undone, and fieldd writes again",
@@ -271,13 +344,10 @@ export class GrantsFile {
   /** The timer's write: memory as it stands, at the count the survivors were already told. */
   #again(): void {
     if (!this.#unkept) return;
-    try {
-      this.#keep(this.#grants, this.#generation);
-    } catch {
+    if (!this.#rewrite()) {
       this.#later();
       return;
     }
-    this.#landed();
     this.opts.logger.info(
       "fieldd.objects.grants_kept",
       "The grants file holds every take-back again",
@@ -285,9 +355,10 @@ export class GrantsFile {
     );
   }
 
-  /** A write landed: the file holds everything memory does. */
+  /** A write landed: the file is there, and holds everything memory does. */
   #landed(): void {
     this.#unkept = false;
+    this.#absent = false;
     this.close();
   }
 
@@ -313,11 +384,24 @@ export class GrantsFile {
     this.#told = Promise.all([this.#told, told]).then(() => undefined);
   }
 
-  /** Whether the file's own text says a handed key signed it. Read past the signer, which answers `exposed` and
-   * `unsigned` before it would say; a file that says nothing readable is the signer's to judge. */
+  /** Whether the file's own text says a handed key signed it: JSON whose `sealed` is `true` itself, and nothing else.
+   * Read past the signer, which answers `exposed` and `unsigned` before it would say, and with more care than it
+   * reads: a regular file only, no link followed, and no more than PEEK_BYTES of it. Whatever does not say so here is
+   * the signer's to judge. */
   #saysSealed(): boolean {
+    let fd: number | undefined;
     try {
-      const parsed: unknown = JSON.parse(readFileSync(this.opts.path, "utf8"));
+      fd = openSync(this.opts.path, PEEK_FLAGS);
+      const stat = fstatSync(fd);
+      if (!stat.isFile() || stat.size > PEEK_BYTES) return false;
+      const bytes = Buffer.alloc(stat.size);
+      let got = 0;
+      while (got < bytes.length) {
+        const more = readSync(fd, bytes, got, bytes.length - got, got);
+        if (more === 0) break;
+        got += more;
+      }
+      const parsed: unknown = JSON.parse(bytes.toString("utf8", 0, got));
       return (
         typeof parsed === "object" &&
         parsed !== null &&
@@ -325,12 +409,15 @@ export class GrantsFile {
       );
     } catch {
       return false;
+    } finally {
+      if (fd !== undefined) closeSync(fd);
     }
   }
 
   #setAside(why: SetAsideWhy): undefined {
     const { path } = this.opts;
     const aside = setAsideFile(path, why);
+    this.#absent = true;
     this.opts.logger.warn(
       "fieldd.objects.grants_set_aside",
       `The grants file is ${why}; set aside, and nothing in it is granted`,
@@ -339,19 +426,20 @@ export class GrantsFile {
     return undefined;
   }
 
-  /** An older file put back: set aside for a human as the signed files are, under a name of its own. */
+  /** An older file put back: set aside for a human as the signed files are, beside itself and under a name of its
+   * own. The line names its count and the mark, and nothing else. */
   #stale(generation: number, mark: number): undefined {
     const { path } = this.opts;
-    const aside = `${path}.stale-${Date.now()}`;
     try {
-      renameSync(path, aside);
+      renameSync(path, `${path}.stale-${Date.now()}`);
     } catch {
       // nothing else to do: the store's next write replaces it
     }
+    this.#absent = true;
     this.opts.logger.warn(
       "fieldd.objects.grants_stale",
       "The grants file is older than the count a survivor remembers: an earlier state, put back. Set aside, and nothing in it is granted",
-      { file: basename(path), generation, mark, aside: basename(aside) },
+      { generation, mark },
     );
     return undefined;
   }

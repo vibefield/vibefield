@@ -14,7 +14,8 @@ import { RecordSigner, type SignedRead } from "../src/signed-record";
 // OB custody (C4, C5). Who a run is, for a grant, is what THIS fieldd launched (`bornFor`): every run named in `runs`
 // or `sparkRuns` was launched by the fieldd that is running when it is named, and a `reopen` is a restart, after which
 // every run named before it came back re-attached. What a run's RECORD says is another thing, a file an agent can
-// rewrite (`forgeRecord`). A world also has a survivor (`marks`): who outlives fieldd and remembers the grants' count.
+// rewrite (`forgeRecord`), and nothing in objects reads it: a world hands its desk no reader of one. A world also has a
+// survivor (`marks`): who outlives fieldd and remembers the grants' count.
 
 export const DOC = "doc-main";
 export const NOTE: DeskKind = {
@@ -189,11 +190,6 @@ export function world(
     writeFileSync(recordOf(run), JSON.stringify(signed), { mode: 0o600 });
     return signer.read(recordOf(run));
   };
-  /** What a run's record says its spark is: what the daemon's `sparkOf` answered before nothing in objects read one. */
-  const recordSpark = (run: string): string | undefined => {
-    const read = sessions().read(recordOf(run));
-    return "body" in read && typeof read.body.spark === "string" ? read.body.spark : undefined;
-  };
   const make = (restart?: Restart): DeskObjects => {
     // a restart: fieldd launched none of the runs that were there before it
     const before = new Set(restart === undefined ? [] : [...runs.keys(), ...sparkRuns.keys()]);
@@ -220,7 +216,6 @@ export function world(
         if (spark !== undefined) return { spark };
         return runs.has(run) ? {} : undefined;
       },
-      sparkOf: (run) => recordSpark(run) ?? sparkRuns.get(run),
       sparkName: (id) => sparks.get(id),
       kinds: () => opts.kinds ?? [NOTE, PAGE],
       ...(opts.answerMs !== undefined ? { intents: { answerMs: opts.answerMs } } : {}),

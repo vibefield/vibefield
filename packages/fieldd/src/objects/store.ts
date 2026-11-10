@@ -101,9 +101,10 @@ export class ObjectsStore {
     });
   }
 
-  /** The boot's one read: never throws. The grants file is read FIRST, before any name: a sealed one this fieldd was
-   * handed no key for stops the read there, with nothing moved. A store it could not read answers nothing, says so,
-   * and refuses every read and write after (`readable`), until fieldd restarts. */
+  /** The boot's one read: never throws. The grants file is read FIRST, before any name, at either level: a sealed one
+   * this fieldd was handed no key for stops the read there, with nothing moved, and a sealed store whose path is empty
+   * writes its file there before a name is read. A store it could not read answers nothing, says so, and refuses
+   * every read and write after (`readable`), until fieldd restarts. */
   boot(): ObjectRecord[] {
     const read = (): ObjectRecord[] => {
       this.grants.boot();
@@ -134,9 +135,12 @@ export class ObjectsStore {
   }
 
   /** Keep a name whole and signed: written beside, then renamed, 0600 in 0700. Throws when it cannot be kept. A
-   * `grants` list a record carried before the grants left for their own file is not written back. */
+   * `grants` list a record carried before the grants left for their own file is not written back. A sealed store
+   * first sees that its grants file is there (`GrantsFile.ensure`): no name of its is left without the one file that
+   * tells a fieldd with no key to keep off. */
   write(record: ObjectRecord): void {
     this.#guard.writable(record.ref);
+    this.grants.ensure();
     const parsed = ObjectRecord.parse(record) as ObjectRecord & { signature?: string };
     const { signature: _previous, grants: _moved, ...unsigned } = parsed;
     const signature = this.#signer.sign(unsigned);

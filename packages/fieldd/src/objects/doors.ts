@@ -21,7 +21,8 @@ import type { DeskObjects } from "./desk-objects";
 // OB custody (C5; OB-D19 A): a hand and a take-back answer only once whoever outlives fieldd was told the grants' count
 // (a bounded wait that refuses nothing), so that by the time the person is told, an older grants file put back is
 // already stale. A take-back answers `taken: true` whatever the disk said, with `kept: false` beside it when the
-// grants file does not hold it yet.
+// grants file does not hold it yet. Its audit line names the holders it took the object from (holders are no
+// secret), so that whoever reads the line can see when fieldd took it back from more than the one named.
 
 export interface ObjectDoorsDeps {
   readonly objects: DeskObjects;
@@ -126,16 +127,23 @@ export function registerObjectDoors(api: ObjectDoorsApi, deps: ObjectDoorsDeps):
     if (!parsed.success) throw bad("{ ref, run }");
     const { ref, run } = parsed.data;
     objects.registry.readable();
+    let holders: string[] = [];
     return audit.required(
       ctx,
       { action: "objects.take_back", target: target(ref), attrs: { run } },
       async (): Promise<{ taken: true; kept?: false }> => {
-        objects.takeBack(ref, run);
+        holders = objects.takeBack(ref, run);
         await objects.settled();
         // taken, whatever the disk said: `kept: false` says the grants file does not hold it yet
         return objects.kept ? { taken: true } : { taken: true, kept: false };
       },
-      (value) => (value.kept === false ? { attrs: { kept: false } } : {}),
+      (value) => {
+        // `kept` first: a line over the audit's bound loses its last attrs first
+        const attrs: Record<string, string | boolean> = {};
+        if (value.kept === false) attrs.kept = false;
+        if (holders.length > 0) attrs.holders = holders.join(",");
+        return { attrs };
+      },
     );
   });
 

@@ -86,15 +86,11 @@ const refuse = (
 ): RpcCallError => new RpcCallError("PRECONDITION_FAILED", text, retryable, { fact, ...more });
 
 /** MT-L4, and how to get it: the refusal is the instruction. Asked of a ref that names nothing here as well: a made-up
- * ref is told no more than a real one the caller does not hold. A run fieldd did not launch (OB-D18 A: it was running
- * before VibeField restarted) holds nothing and can be handed nothing, so it is told what would help instead, and the
- * same for any ref. */
-const notHanded = (ref: string, vouched = true): RpcCallError =>
+ * ref is told no more than a real one the caller does not hold. */
+const notHanded = (ref: string): RpcCallError =>
   refuse(
     "not-handed",
-    vouched
-      ? `${ref} is not yours to work: you neither placed it nor were handed it. Ask the user to hand it to you.`
-      : `${ref} is not yours to work: this session was running before VibeField restarted, and what it held then has ended. Ask the user to start it again.`,
+    `${ref} is not yours to work: you neither placed it nor were handed it. Ask the user to hand it to you.`,
   );
 
 const noDesk = (): RpcCallError =>
@@ -254,7 +250,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
     registry.readable();
     const record = registry.get(ref);
     const grant = record && objects.grantOf(ref, run);
-    if (record === undefined || grant === undefined) throw notHanded(ref, objects.vouched(run));
+    if (record === undefined || grant === undefined) throw notHanded(ref);
     return { record, grant };
   };
 
@@ -333,7 +329,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
     async canvas_place(caller, input) {
       const run = caller.runtimeRunId;
       // before the window: a store that cannot keep the grant must not leave an object nobody holds, and neither
-      // must a run that can hold nothing (one fieldd did not launch, OB-D18 A)
+      // must a run that can hold nothing (one fieldd did not launch, OB-D18 A; its words are ‹pending §8.1›)
       registry.readable();
       objects.vouch(run);
       const kind = objects.kind(input.kind);

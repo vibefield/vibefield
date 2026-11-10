@@ -25,7 +25,13 @@ import { AgentUndoShelf, type KeptChange } from "./undo";
 // can rewrite its own run's record to name any spark; were a holder read from it, the agent would be served that
 // spark's grants with no restart at all. So a grant is honoured only for a run THIS fieldd launched: a plain run's
 // grants end with fieldd, a spark's stand (EY-D9 B) and are held by the runs fieldd starts for it from then on, and a
-// run that was already running when fieldd started holds nothing and can be handed nothing.
+// run that was already running when fieldd started holds nothing. Nothing here reads a session's record, to give or
+// to take: the forger is as likely the run being taken from.
+//
+// ‹pending §8.1› What a HAND to such a run should do while it is still live is open. The aim is that the hand simply
+// works, once fieldd's memory of what it launched can be rebuilt. Until then `#handToUnvouched` and `unvouched` below
+// are the two places its outcome is decided, each in a sentence VibeField already had: no words are added for it, and
+// none may name how VibeField works inside.
 
 export type RunState = "live" | "ended" | "unknown";
 
@@ -46,9 +52,6 @@ export interface DeskObjectsOptions {
    * answering for a run that has ended: a sleeping spark is handed things by its last run's id, and a resume is told
    * after the end. */
   bornFor(run: string): BornFor | undefined;
-  /** What a run's RECORD says its spark is. A record is a file an agent can rewrite, so this never gives anything: it
-   * is read only to take away, when the person takes an object back from a run fieldd cannot vouch for. */
-  sparkOf(run: string): string | undefined;
   /** a spark's name; undefined when fieldd no longer holds it */
   sparkName(id: string): string | undefined;
   /** the agent a run is, by its catalog id */
@@ -66,20 +69,16 @@ const SPARK_HOLDER = "spark:";
 const UNVOUCHED_HOLDER = "re-attached:";
 
 const NO_SUCH_AGENT = "VibeField doesn't know that agent.";
-/** A hand to a run fieldd cannot vouch for: it was running before this fieldd started (OB-D18 A). */
-const UNVOUCHED_AGENT =
-  "That agent was running before VibeField restarted. Start it again, or hand this to another.";
 const ENDED_AGENT = "That agent has ended. Start it again, or hand this to another.";
 const NO_SUCH_OBJECT = "VibeField doesn't know that object.";
 
-/** The same, said to the agent itself when it would place something: nothing would hold what it made. */
+/** ‹pending §8.1› — what a run this fieldd did not launch is told when it would be given something of its own making
+ * (a place): nothing would hold it. The words are `NO_SUCH_AGENT`'s, which VibeField already had. */
 const unvouched = (): RpcCallError =>
-  new RpcCallError(
-    "UNAVAILABLE",
-    "This session was running before VibeField restarted, so it holds nothing on the desk. Ask the user to start it again.",
-    false,
-    { service: "desk", state: "before-restart" },
-  );
+  new RpcCallError("UNAVAILABLE", NO_SUCH_AGENT, false, {
+    service: "desk",
+    state: "unknown-agent",
+  });
 
 interface EndedRun {
   readonly on: readonly ObjectRef[];
@@ -175,20 +174,20 @@ export class DeskObjects {
   }
 
   /** OB-L1 — the grant, on the person's play. A run that does not exist or has ended holds nothing: said, never kept. A
-   * spark has not ended when its last run has: it sleeps, and what it is handed waits for it. A run this fieldd did
-   * not launch can be handed nothing, whatever its record says it is (OB-D18 A). Throws when the grant cannot be
-   * kept: nothing is granted that a restart would not find. */
+   * spark has not ended when its last run has: it sleeps, and what it is handed waits for it, when this fieldd
+   * launched that run for it. A run this fieldd did not launch is not given anything on a record's word (OB-D18 A):
+   * ended, it is refused as ended; still live, see `#handToUnvouched`. Throws when the grant cannot be kept: nothing
+   * is granted that a restart would not find. */
   hand(ref: ObjectRef, run: string): ObjectsHandResult {
     const record = this.registry.get(ref);
     if (record === undefined) return { handed: false, reason: NO_SUCH_OBJECT };
     const born = this.opts.bornFor(run);
-    const state = this.opts.runState(run);
-    if (born === undefined)
-      return { handed: false, reason: state === "unknown" ? NO_SUCH_AGENT : UNVOUCHED_AGENT };
-    if (born.spark === undefined) {
+    if (born?.spark === undefined) {
+      const state = this.opts.runState(run);
       if (state === "unknown") return { handed: false, reason: NO_SUCH_AGENT };
       if (state === "ended") return { handed: false, reason: ENDED_AGENT };
     }
+    if (born === undefined) return this.#handToUnvouched(ref, run);
     const holder = this.holder(run);
     const already = this.registry.grantOf(ref, holder) !== undefined;
     if (this.kind(record.kind)?.concurrency === "one") {
@@ -207,22 +206,33 @@ export class DeskObjects {
     return already ? { handed: true, already: true } : { handed: true };
   }
 
-  /** The person takes an object back: the grant ends, and the agent's next call answers `not-handed`. `run` is a run, or
-   * a holder as `grants` names it. A take-back always takes (OB-D19 A): the grant is gone from memory whatever the
-   * disk says, and it reaches the grant the person means whoever fieldd can vouch for. So it ends what the run holds
-   * as fieldd knows it, what is held under the very name given, and, for a run fieldd did not launch, what its record's
-   * spark holds: a record is believed here only because believing it can do no more than take away. */
-  takeBack(ref: ObjectRef, run: string): void {
-    const holders = new Set([this.holder(run), run]);
-    if (!this.vouched(run)) {
-      const spark = this.opts.sparkOf(run);
-      if (spark !== undefined) holders.add(`${SPARK_HOLDER}${spark}`);
-    }
-    this.registry.end((grant) => grant.ref === ref && holders.has(grant.holder));
-    for (const holder of holders) {
+  /** ‹pending §8.1› — a hand to a run that is live and that this fieldd did not launch. OPEN: the aim is that the hand
+   * works. Until that is built nothing is granted, and the reason is one VibeField already gave. */
+  #handToUnvouched(_ref: ObjectRef, _run: string): ObjectsHandResult {
+    return { handed: false, reason: NO_SUCH_AGENT };
+  }
+
+  /** The person takes an object back: the grant ends, and the agent's next call answers `not-handed`. A take-back
+   * always takes (OB-D19 A): the grant is gone from memory whatever the disk says. It reads no record (OB-D18 A):
+   *  - `run` is a run this fieldd launched: that run's holder alone;
+   *  - `run` is a spark's holder as `grants` names it: that holder alone;
+   *  - `run` is anything else, a run fieldd did not launch: it cannot say whose the run is, so the grant under the very
+   *    name given goes, and EVERY spark's grant on this object with it. Sparks' are the only grants that outlive a
+   *    fieldd, so they are what such a run could hold again at its spark's next run. Taking back too much is the safe
+   *    side. No surface names such a run in a take-back; this is a fallback.
+   * Answers the holders it took the object from, sorted, for the take-back's audit line. */
+  takeBack(ref: ObjectRef, run: string): string[] {
+    const fallback = !run.startsWith(SPARK_HOLDER) && !this.vouched(run);
+    const named = fallback ? run : this.holder(run);
+    const goes = (holder: string): boolean =>
+      holder === named || (fallback && holder.startsWith(SPARK_HOLDER));
+    const taken = this.registry.end((grant) => grant.ref === ref && goes(grant.holder));
+    const holders = [...new Set(taken.map((grant) => grant.holder))].sort();
+    for (const holder of new Set([named, ...holders])) {
       this.#releaseHolder(ref, holder);
       this.presence.dropLease(ref, holder);
     }
+    return holders;
   }
 
   /** Whether the grants file holds every change so far: false after a take-back the disk would not take, which
