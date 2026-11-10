@@ -3795,6 +3795,21 @@ export async function bootstrap(
     // OB-3, OB-4 — the desk's room: the registry and grants (signed records under LAYOUT.OBJECTS_DIR, kept across a
     // restart), the intent table the window answers, presence and the agents' undo. Its doors are registered below,
     // beside the needs-you queue's; the window's token is what they hold to.
+    //
+    // OB custody (C4, C5, rule 6; CUSTODY-SPEC §8.1.0, §10) — THREE things the grants rest on are bound HERE and
+    // nowhere else. The rows through this daemon, with nothing handed in at any of the three, are
+    // custody-boot.test.ts's "the desk's store as the real daemon binds it" and agent-session.test.ts's "the desk
+    // hands an object to a run the runtime launched".
+    //  · THE KEY. Handed custody, the store signs under the spawner's `records`, which is on no disk, and never
+    //    reads or makes LAYOUT.OBJECTS_KEY_FILE. Handed nothing (`files`), the key is that file's, as it was.
+    //  · THE MARKS: `custodyMarks`, so the grants' count is remembered past this fieldd (by the floor and the shell
+    //    when custody was handed; by nobody at `files`, where the holder has no floor behind it). It holds what
+    //    the survivors remembered BEFORE the store's boot read just below: the spawner's `expect` since it was
+    //    made, and the floor's word since the hello inside `native.connect()`.
+    //  · WHO A RUN IS: `agents.bornFor`, the runtime's launch memory: what THIS process launched or adopted, or
+    //    vouches for again at its re-attach. Never a record read back. The retired `sparkOf` read the run's row and
+    //    the spark store, each signed under a key file an agent can read. The runtime fills it for a resume's
+    //    successor before it names that successor to `onRunReplaced` below.
     let pluginKinds: readonly DeskKind[] | undefined;
     plugins.on("changed", () => {
       pluginKinds = undefined;
@@ -3803,6 +3818,9 @@ export async function bootstrap(
       store: new ObjectsStore({
         dir: join(config.dataDir, ...LAYOUT.OBJECTS_DIR),
         keyPath: join(config.dataDir, ...LAYOUT.OBJECTS_KEY_FILE),
+        grantsPath: join(config.dataDir, ...LAYOUT.OBJECTS_GRANTS_FILE),
+        ...(custody !== undefined ? { key: Buffer.from(custody.records, "hex") } : {}),
+        marks: custodyMarks,
         logger: logger.child({ component: "objects" }),
       }),
       runState: (runtimeRunId) => {
@@ -3812,10 +3830,7 @@ export async function bootstrap(
       },
       label: runLabel,
       agentOf: (runtimeRunId) => String(runRow(runtimeRunId)?.provider ?? "agent"),
-      // a spark's last run may be gone from the fold after a restart; its record still says which session it thinks in
-      sparkOf: (runtimeRunId) =>
-        runRow(runtimeRunId)?.spark ??
-        sparkStore.list().find((spark) => spark.session?.runtimeRunId === runtimeRunId)?.id,
+      bornFor: (runtimeRunId) => agents.bornFor(runtimeRunId),
       sparkName: (id) => sparks.get(id)?.name,
       kinds: () => {
         pluginKinds ??= pluginDeskKinds(plugins.snapshot().plugins, (id) => plugins.rootPath(id));
