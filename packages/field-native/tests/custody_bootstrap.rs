@@ -483,6 +483,49 @@ async fn with_no_flag_it_makes_and_reads_the_file_as_before() {
     assert!(output.status.success(), "{:?}", output.status);
 }
 
+/// §8.1 — the table of what each terminal was started for is a sealed floor's alone, and the boot that read the
+/// bootstrap line is the one that gives a floor it. Through the real binary and its own `main`, nothing handed in
+/// process: this is the row that proves the binding which the in-process rows of `tests/started_for.rs` take as given
+/// (`bootstrap_handed`).
+#[tokio::test]
+async fn the_floor_sealed_on_stdin_keeps_the_table_and_a_floor_from_the_file_keeps_none() {
+    let verb = "native.terminal.startedFor.set";
+    let ask = json!({"sessionId": "nobody"});
+
+    // handed its secret on stdin: the verb answers about the session it was asked. (Its ack says no table while it
+    // holds none: absent and empty are one thing to a reader.)
+    let (_fixture, data_dir, log_root) = roots();
+    let mut floor = Floor::spawn(&data_dir, &log_root, Some(registry::STDIN));
+    floor.hand(bootstrap_line(1, &handed_hex()));
+    let socket = floor.ready(&data_dir).await;
+    let mut fieldd = Mgmt::connect(&socket).await;
+    let ack = fieldd.hello(&secret_bytes(&handed_hex())).await;
+    assert!(ack["result"].is_object(), "{ack}");
+    let answer = fieldd.call(3, verb, ask.clone()).await;
+    // the code is an entity's, not a method's: the verb is there, and the session is not
+    assert_eq!(answer["error"]["code"], -32003, "{answer}");
+    assert_eq!(answer["error"]["data"]["kind"], "NOT_FOUND", "{answer}");
+    fieldd.stop().await;
+    let output = floor.exits_within(Duration::from_secs(15)).await;
+    assert!(output.status.success(), "{:?}", output.status);
+
+    // booted from its file: no key in the ack, and the verb is refused by name
+    let (_fixture, data_dir, log_root) = roots();
+    let mut floor = Floor::spawn(&data_dir, &log_root, None);
+    let socket = floor.ready(&data_dir).await;
+    let made = std::fs::read_to_string(data_dir.join("native/pairing")).expect("the pairing file");
+    let mut fieldd = Mgmt::connect(&socket).await;
+    let ack = fieldd.hello(&secret_bytes(&made)).await;
+    assert!(ack["result"].is_object(), "{ack}");
+    assert!(ack["result"].get("startedFor").is_none(), "{ack}");
+    let answer = fieldd.call(3, verb, ask).await;
+    let details = &answer["error"]["data"]["details"];
+    assert_eq!(details["reason"], "not-sealed", "{answer}");
+    fieldd.stop().await;
+    let output = floor.exits_within(Duration::from_secs(15)).await;
+    assert!(output.status.success(), "{:?}", output.status);
+}
+
 // ---- the reader alone ----------------------------------------------------------------------------------------------
 
 /// The reader over text this file holds, with a wait no row here reaches.

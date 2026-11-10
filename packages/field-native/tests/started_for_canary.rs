@@ -62,16 +62,19 @@ fn secret(daemon: &RunningDaemon) -> Vec<u8> {
     }
 }
 
-/// The floor's inventory becomes one running pane, rooted at this test process.
-fn plant(daemon: &RunningDaemon, session: &str) {
+/// The floor's inventory becomes two running panes, `pane-a` and `pane-b`, each rooted at this test process.
+fn plant(daemon: &RunningDaemon) {
     let own = std::process::id();
     let facts = process_facts(own).expect("this process has facts");
-    let row = json!({"sessionId": session, "pid": own, "createdAt": facts.started_at_ms});
-    let row: ObservedTerminal = serde_json::from_value(row).expect("an observed row");
+    let row = |session: &str| -> ObservedTerminal {
+        let row = json!({"sessionId": session, "pid": own, "createdAt": facts.started_at_ms});
+        serde_json::from_value(row).expect("an observed row")
+    };
+    let rows = vec![row("pane-a"), row("pane-b")];
     daemon
         .state
         .observed_tx
-        .send_modify(|observed| observed.terminals = vec![row]);
+        .send_modify(|observed| observed.terminals = rows);
 }
 
 /// fieldd's management connection: a call is answered by its id, the floor's ticks aside.
@@ -132,9 +135,14 @@ impl Mgmt {
     }
 }
 
-/// The kind an answer refuses with, or `kept` for an answer that refuses nothing.
+/// The kind an answer refuses with, or `kept` for an answer that refuses nothing. A floor that has no such verb
+/// answers `NOT_FOUND` too, under the method's own code, and that is not a refusal this row means.
 fn kind(answer: &Value) -> &str {
-    answer["error"]["data"]["kind"].as_str().unwrap_or("kept")
+    let error = &answer["error"];
+    if error["code"] == json!(-32601) {
+        return "no such verb";
+    }
+    error["data"]["kind"].as_str().unwrap_or("kept")
 }
 
 #[tokio::test]
@@ -156,7 +164,7 @@ async fn no_log_line_at_any_level_says_an_entrys_values() {
     let files = bootstrap(NativeConfig::for_data_dir(files_dir.path().to_path_buf()))
         .await
         .expect("bootstrap");
-    plant(&files, "pane-a");
+    plant(&files);
     let (mut fieldd, _) = Mgmt::paired(&files).await;
     let answer = fieldd.call(VERB, set("pane-a")).await;
     assert_eq!(kind(&answer), "PRECONDITION_FAILED");
@@ -166,7 +174,13 @@ async fn no_log_line_at_any_level_says_an_entrys_values() {
     let dir = tempfile::tempdir().unwrap();
     let config = NativeConfig::for_data_dir(dir.path().to_path_buf());
     let daemon = bootstrap_handed(config, HANDED).await.expect("bootstrap");
-    plant(&daemon, "pane-a");
+    plant(&daemon);
+    // a PATH under this test's home, planted as a second pane's root (the PM, 2026-11-10): a home directory rides
+    // into a support bundle with any log line that prints one
+    let path = format!("{}/canary-planted-path", dir.path().display());
+    assert!(path.len() <= 128, "the planted path fits an entry's field");
+    let with_path = json!({"run": RUN, "root": path});
+    let set_path = json!({"sessionId": "pane-b", "startedFor": with_path});
     let mut stranger = Mgmt::connect(&daemon).await;
     let answer = stranger.call(VERB, set("pane-a")).await;
     assert_eq!(kind(&answer), "UNAUTHORIZED");
@@ -183,32 +197,37 @@ async fn no_log_line_at_any_level_says_an_entrys_values() {
     for canary in CANARIES {
         assert!(!refusal.contains(canary), "the refusal quotes {canary}");
     }
-    // kept, and said again
+    // kept, and said again; and the pane whose root is the planted path
     for _ in 0..2 {
         let answer = fieldd.call(VERB, set("pane-a")).await;
         assert_eq!(kind(&answer), "kept");
     }
+    let answer = fieldd.call(VERB, set_path.clone()).await;
+    assert_eq!(kind(&answer), "kept");
 
-    // the next fieldd is handed the entry, planted strings and all: the ack is where they are said
+    // the next fieldd is handed the entries, planted strings and all: the ack is where they are said
     let mut handed = entry.clone();
     handed["sessionId"] = json!("pane-a");
+    let mut handed_path = with_path.clone();
+    handed_path["sessionId"] = json!("pane-b");
+    let table = json!([handed, handed_path]);
     let (mut fieldd, ack) = Mgmt::paired(&daemon).await;
-    assert_eq!(ack["startedFor"], json!([handed]));
+    assert_eq!(ack["startedFor"], table);
     // cleared, kept once more, and handed to a third
     let answer = fieldd.call(VERB, json!({"sessionId": "pane-a"})).await;
     assert_eq!(kind(&answer), "kept");
     let answer = fieldd.call(VERB, set("pane-a")).await;
     assert_eq!(kind(&answer), "kept");
     let (_fieldd, ack) = Mgmt::paired(&daemon).await;
-    assert_eq!(ack["startedFor"], json!([handed]));
+    assert_eq!(ack["startedFor"], table);
     daemon.shutdown().await;
 
     // the capture heard the floor: its hellos are there, at their own level
     let log = said.text();
     let heard = log.matches("field_native.mgmt.client_authenticated").count();
     assert!(heard >= 4, "the capture heard {heard} hellos");
-    // and nothing the floor said holds a planted string
-    for canary in CANARIES {
+    // and nothing the floor said holds a planted string, the path among them
+    for canary in CANARIES.into_iter().chain([path.as_str()]) {
         let line = log.lines().find(|line| line.contains(canary));
         assert!(line.is_none(), "a log line says {canary}: {line:?}");
     }

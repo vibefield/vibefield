@@ -202,9 +202,14 @@ fn by_session(table: &Value) -> Vec<Value> {
     entries
 }
 
-/// The refusal an answer carries: its kind and, where it names one, its `details.reason`.
+/// The refusal an answer carries: its kind and, where it names one, its `details.reason`. A floor that has no such
+/// verb answers `NOT_FOUND` too, under the method's own code, and that is not the refusal any row here means.
 fn refusal(answer: &Value) -> (&str, Option<&str>) {
-    let data = &answer["error"]["data"];
+    let error = &answer["error"];
+    if error["code"] == json!(-32601) {
+        return ("no such verb", None);
+    }
+    let data = &error["data"];
     let kind = data["kind"].as_str().unwrap_or("no refusal");
     (kind, data["details"]["reason"].as_str())
 }
@@ -387,11 +392,51 @@ async fn a_floor_booted_from_the_file_answers_not_sealed_and_its_ack_names_no_ta
 }
 
 #[tokio::test]
-async fn a_sealed_floor_that_holds_nothing_says_an_empty_table() {
+async fn a_sealed_floor_that_holds_nothing_says_no_key_and_still_keeps_the_table() {
     let (_dir, daemon) = sealed().await;
-    let (_fieldd, ack) = Mgmt::paired(&daemon).await;
-    // the key says this floor keeps the table, which a floor from before it and a floor not sealed cannot say
-    assert_eq!(ack["startedFor"], json!([]), "{ack}");
+    let (mut fieldd, ack) = Mgmt::paired(&daemon).await;
+    // absent and empty are one thing to a reader, so a floor with nothing to hand says no key, as with `marks`
+    assert!(ack.get("startedFor").is_none(), "{ack}");
+    // it is the verb that tells this floor from one booted from the file: it answers about the session it is asked
+    assert!(daemon.state.started_for().is_some(), "a sealed floor's table");
+    let answer = fieldd.set("nobody", None).await;
+    assert_eq!(refusal(&answer), ("NOT_FOUND", None), "{answer}");
+    daemon.shutdown().await;
+}
+
+/// The contract holds a typed run's pid to 2 or more, and the generated type on this side carries no such bound. So
+/// the floor holds it by hand (the PM, 2026-11-10): nothing out of bound is kept, and none is handed back.
+#[tokio::test]
+async fn a_typed_runs_pid_below_two_is_refused_by_hand_and_two_is_taken() {
+    let (_dir, daemon) = sealed().await;
+    let root = Root::start();
+    plant(&daemon, &[pane("pane-a", root.born())]);
+    let (mut fieldd, _) = Mgmt::paired(&daemon).await;
+    let typed = |pid: i64| {
+        let mut started_for = said_in(TYPED);
+        started_for["process"]["pid"] = json!(pid);
+        started_for
+    };
+    let plain = said_in(PLAIN);
+    let answer = fieldd.set("pane-a", Some(&plain)).await;
+    assert_eq!(answer["result"], json!({}), "{answer}");
+
+    // refused as params the contract does not allow, and what was kept is untouched
+    let bad_params = ("PRECONDITION_FAILED", None);
+    for pid in [-1, 0, 1] {
+        let answer = fieldd.set("pane-a", Some(&typed(pid))).await;
+        assert_eq!(refusal(&answer), bad_params, "pid {pid}: {answer}");
+    }
+    assert_eq!(held(&daemon), 1);
+    let (mut fieldd, ack) = Mgmt::paired(&daemon).await;
+    assert_eq!(ack["startedFor"], json!([entry_for("pane-a", &plain)]));
+
+    // 2 is a pid: taken, and handed on as it was said
+    let two = typed(2);
+    let answer = fieldd.set("pane-a", Some(&two)).await;
+    assert_eq!(answer["result"], json!({}), "{answer}");
+    let (_next, ack) = Mgmt::paired(&daemon).await;
+    assert_eq!(ack["startedFor"], json!([entry_for("pane-a", &two)]));
     daemon.shutdown().await;
 }
 
@@ -469,14 +514,16 @@ async fn set_set_again_and_clear() {
     let (mut fieldd, ack) = Mgmt::paired(&daemon).await;
     assert_eq!(ack["startedFor"], json!([entry_for("pane-a", &spark)]));
 
-    // cleared, it is gone, and clearing nothing is the same answer
-    for _ in 0..2 {
-        let answer = fieldd.set("pane-a", None).await;
-        assert_eq!(answer["result"], json!({}), "{answer}");
-    }
+    // cleared, it is gone: by a null here, which this side reads as an absent `startedFor`
+    let null = json!({"sessionId": "pane-a", "startedFor": null});
+    let answer = fieldd.call(VERB, null).await;
+    assert_eq!(answer["result"], json!({}), "{answer}");
     assert_eq!(held(&daemon), 0);
+    // and clearing nothing is the same answer
+    let answer = fieldd.set("pane-a", None).await;
+    assert_eq!(answer["result"], json!({}), "{answer}");
     let (_fieldd, ack) = Mgmt::paired(&daemon).await;
-    assert_eq!(ack["startedFor"], json!([]), "{ack}");
+    assert!(ack.get("startedFor").is_none(), "{ack}");
     daemon.shutdown().await;
 }
 
@@ -678,7 +725,7 @@ async fn on_a_real_terminal_the_entry_stands_on_the_ptys_own_root_and_ends_with_
     unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
     assert!(settles(|| listed(true)).await, "the floor lists the husk");
     let (mut fieldd, ack) = Mgmt::paired(&daemon).await;
-    assert_eq!(ack["startedFor"], json!([]), "{ack}");
+    assert!(ack.get("startedFor").is_none(), "{ack}");
     assert_eq!(held(&daemon), 0);
     // and nothing can be said of a husk
     let answer = fieldd.set(&session.id, Some(&spark)).await;
