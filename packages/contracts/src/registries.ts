@@ -1624,6 +1624,16 @@ export const CUSTODY = {
    * most a hello ack hands over (`HelloAck.startedFor`). A NEW terminal past it is refused once the floor has dropped
    * what no longer runs; one it holds is always replaced. At its very fullest the table is about 1.7 MB of an ack. */
   STARTED_FOR_MAX: 1024,
+  /** C1, the shell's alone — the most main spends IN ALL on stopping an older pair after it made a root this boot,
+   * measured from its first look at one. Spent, the walk ends: what it signalled and still lives is left, what it did
+   * not reach is left, and the start goes on. The number is the one a start already waits at main, the supervisor's
+   * `READINESS_DEADLINE_MS` (`packages/fieldd-supervisor/src/supervisor.ts:39` at main `fe6a04a7f`), under its own
+   * name here: at the worst a person waits that long twice, the walk and then the start. */
+  OLD_PAIR_WALK_BUDGET_MS: 20_000,
+  /** C1, the shell's alone — while the root is unavailable, an ask that comes sooner than this after the last reading
+   * STARTED gets that reading's answer and reads nothing, with one reading in flight at a time: a person pressing
+   * Retry fast is one read of the keystore, and a Retry two seconds on reads again. */
+  ROOT_REREAD_MIN_MS: 2_000,
 } as const;
 
 /** TPv3 — the terminal pipeline's numbers (terminal-pipeline-v3 §5.1, §8; §20
