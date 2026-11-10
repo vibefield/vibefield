@@ -46722,3 +46722,108 @@ it at 16:53Z):
 - The catalog's 1ms under reduced motion, if James wants the catalog to match.
 
 **Not done, and not claimed:** no running app's veil was watched, and the bundle's 0.7 KB was not traced to its cause.
+
+## Item 314 — the quit's refusal reaches the window in James's words alone, with no class name (M281)
+
+(2026-11-10; three commits, `07f41fc86`, `61abe70a3` and `8bbc3d504`, on main `79e25fcc4`, cut by the RV lead (track
+RV) in `lanes/fg2/vibe-field` and landed by the fixer at 21:05:15Z by fast-forward as M281. Validated by run 294, a9,
+vf-m2; the packet is `lanes/rv/packets/314/`, the transport `lanes/rv/packets/314-m2/`.) Opened by VF-PM at 19:02:21Z
+on RV's trace while writing M278 (LANDED "Item 290", its "Found along the way").
+
+**What landed.**
+- The red (`07f41fc86`): 17/0 `preload-users.test.ts` and 36/0 `devices-section.test.tsx`.
+  - A row wraps the quit's refusal's `toString()` as Electron does, for `usersSwitch` and `usersCreate`, and expects
+    "VibeField is quitting". It was red at `preload-users.test.ts:205`, receiving "QuitRefusal: VibeField is quitting".
+  - A guard at Settings → Devices holds the words alone: the page says none of them.
+- The green (`61abe70a3`): `QuitRefusal` is now `QuitRefusalError`, its `name` "QuitRefusalError"
+  (`quit-latch.ts:15-20`). The preload strips it as it strips `UsersError` and `SupervisorError`
+  (`preload/index.ts:262`). The pattern is not widened (VF-PM, 19:02:21Z). 10/7 `quit-latch.ts`, 11/8
+  `quit-latch.test.ts`, 2/2 `preload-users.test.ts`.
+- The doc (`8bbc3d504`, 6/1 DESIGN.md): §9's "While the quit box is up" (`DESIGN.md:8257-8267`) is corrected at its
+  source, dated.
+  - It named the Me menu and Settings → Account alone. It now gives the Settings head's and the chooser's sentences too,
+    as §8's "The switch" lists where a refusal is said (`DESIGN.md:4909-4910`).
+  - James's ruling on Settings → Devices is quoted with its time, beside the mark "*Not built at this tip: item 315
+    (2026-11-10)*".
+- Five files, +80 −16.
+
+**What a person sees, by reading.** Nothing was run against Electron. How long the window takes presses after the quit
+box's proceed is not measured.
+- A switch or a new user asked for from the window while VibeField quits is refused in James's words, with no class
+  name.
+  - First the window leaves and comes back, as every refused switch does (`leaveFor`, `switch.ts:244-252`; converge
+    600 ms and returned 800 ms, `:61` and `:73`). The stage is the one `SwitchLayer` registers (`SwitchScene.tsx:342`,
+    mounted at `BootRoot.tsx:263`).
+  - Then the door speaks.
+    - The Me menu: "Couldn't switch to Lee — VibeField is quitting." and "Couldn't add a user — VibeField is
+      quitting." (`MeMenu.tsx:1138`, `:1154` → `fireAndForget` (`:1021`) → `refusalSentence`, `use-account.ts:79-82`).
+    - The Settings head: "Couldn't switch to Lee — VibeField is quitting." (`SettingsPanel.tsx:232`, its notice `:213`).
+    - The Account page, for a switch or a new user: "VibeField is quitting" (`UserSwitcher.tsx:84`, drawn at `:172`).
+    - The chooser: "Couldn't open Lee's field — VibeField is quitting." (`UsersPane.tsx:81-84`).
+- **Settings → Devices' New user…:** the window leaves and comes back, then the page says nothing
+  (`DevicesSection.tsx:855`). James ruled at 19:13:21Z, typed at VF-PM's session: "it should not do anything, ignore
+  the press". Item 315 owes it.
+- **The status item's rows:** a refusal goes to the log alone (`tray-controller.ts:499-502` → `index.ts:2882`,
+  `desktop.tray.operation_failed`), as before.
+- **The list is closed by `git grep -n -E 'usersSwitch|usersCreate' 8bbc3d504 -- packages/field-app/src ':!*.test.*'`**:
+  the same eight files as M278's read at `a0538cad3`. field-app's source did not move.
+
+**Validation of record** (run 294, `lanes/vf-m2/rv314-294-v-a9-results`, SUMS `8056aff089bc4e25`, 43 of 43 OK by
+`shasum -c` in the folder at 21:03:41Z; runner `7aa98ab5cc79722e`; launched at 20:02:59Z, the verdict at 20:10:19Z):
+- **V ran at `7a8d35dc9`**, the stack's first cut on `652342cdc`. run 294's verdict says "on a0538cad3": that is the
+  bundle's prerequisite, which vf-m2's lane held. The stack's parent was `652342cdc` (M278's records), carried in the
+  bundle below the three.
+- V: "`pnpm verify` exit 0, 5 min 52 s" (20:03:39Z → 20:09:31Z).
+  - Every COUNT row as expected: electron-shell 2842 | 2 skipped (2844) / 185; field-app 4685 / 337; contracts 1962;
+    fieldd 3832 | 15; ios 454 and 112; biome 3556, 73 warnings, 21 infos; temp roots 270 of 1150.
+  - The delta rows: field-app `devices-section` 39 (run 293: 38); electron-shell `preload-users` 15 and `quit-latch` 5
+    (run 293: 14 and 5).
+  - "The sum: 14699 21", which is run 293's 14697 21 + 2. dev-runner 483 of 483; cargo 37 of 37.
+- **Beside V, as run 294 printed them:**
+  - fieldd's six DESIGN.md readers, 6 of 6 at run 293's counts, 200 in all;
+  - the typecheck read: electron-shell's `tsc --noEmit && tsc --noEmit -p tsconfig.renderer.json` and field-app's
+    `tsc --noEmit`, 0 `error TS` lines each;
+  - the bundle line EQUAL to run 293's, its hashes included;
+  - KEPT births 0; the kept dirs, 65 entries, unmoved; V's lowest free 12,105 MiB (its use 176 MiB); the 1-min load
+    reached 38.35, a reading;
+  - the new ref `rv/314-v1` → `7a8d35dc9`, kept on vf-m2; the four kept refs unmoved;
+  - a9's watch was late: a9's own Mac slept from 20:06:00Z to 20:57:27Z, and the run on vf-m2 was not affected.
+- **S carried by tree 244a989b8429 (run 284's S GREEN).** Not run: IOS, K.
+- On the Mac, through RV's door in `lanes/fg2/vibe-field` (the packet's `rows/`), each row on its stage's tree,
+  uncommitted on `652342cdc`:
+  - the red: electron-shell `Tests 1 failed | 19 passed (20)`, the bridge row alone (19:22:25Z); `devices-section` 39
+    (19:23:44Z);
+  - the green, 19:24:40Z to 19:36:26Z: 20 passed; 39 passed; both packages' `typecheck` scripts 0 errors; biome over
+    the four code files clean; check:walls in form (b) clean;
+  - the doc: DESIGN.md's 31 Mac readers, each equal to run 293's, 742 in all (19:37:21Z and 19:38:59Z).
+
+**The cut.**
+- VF-PM read three diffs before any commit.
+  - v2 added James's Settings → Devices ruling. VF-PM rejected its "does nothing" sentence and the guard's title at
+    19:17:42Z: the product registers a switch stage, so the press plays the leaving first.
+  - v3 renamed the guard to what it holds, the words alone, and turned the sentence into the dated mark.
+- Committed on `652342cdc` under the pre-commit hook at 19:43:26Z to 19:43:28Z, by `lanes/rv/i314/commit-314.sh`
+  (`8a348433e708efdc`): `a250cfeaa`, `a62fc1568`, `7a8d35dc9`. Each tree is the tree its rows ran on.
+- Carried onto `79e25fcc4` (M279 and M280's records, docs alone) at 21:03:18Z by `carry-314.sh` (`afe8a43ffc5e2107`):
+  - `git rebase --onto`, the range-diff three `=`, the bodies byte-equal;
+  - the patch-ids `a164a38f26ad`, `56db0b9a514a` and `936fc6a5bbac`, equal to run 294's;
+  - the old tip kept as `rv/314-v1`.
+- The packet of record is `lanes/rv/packets/314` (SUMS `ceb6936d2af3f737`; its bundle requires `a0538cad3` and carries
+  `652342cdc`). The transport is `lanes/rv/packets/314-m2` (SUMS `1a7da61a5cb2d50c`).
+
+**Found along the way.**
+- **The guard held the words, not the press.** A row with no switch stage goes straight to main
+  (`switch.ts:233-234`); the product registers one, so the leaving plays first. VF-PM found it at 19:17:42Z, before
+  any commit, and the guard's title now says what it holds.
+- **James's Settings → Devices ruling** (19:13:21Z) is item 315's to build. Its plan is
+  `lanes/rv/plan/item-315-PLAN.md`, shape A as VF-PM accepted it: tell the window at the hold, and refuse before
+  leaving.
+- **Item 317** rode on run 294: `~/.bash_history` on vf-m2 was written 16 times inside V. It is its own item.
+
+**Owed.**
+- Item 315, waiting on James's answer for the five doors that speak (its plan's §4, put to him by VF-PM after
+  19:45:53Z).
+- The window rows at this main, before any push.
+- The Mac witness of a refused switch during a real quit.
+
+**Not done, and not claimed:** no row drove a real quit with a press in it, and nothing is pushed.
