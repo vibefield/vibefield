@@ -1594,8 +1594,18 @@ export const CUSTODY = {
    * are about 230 bytes, and an `expect` of MARKS_MAX names at MARK_NAME's longest is about 5.4 KiB more, so the line
    * the registry itself allows always fits (4096, the first value, did not hold it). */
   HANDOFF_MAX_BYTES: 16_384,
-  /** how long a daemon waits for its line before it refuses to boot */
-  HANDOFF_WAIT_MS: 5_000,
+  /** how long a CHILD waits for its line before it refuses to boot, as the child counts it from its own start. Held
+   * at least two seconds past `CHILD_CHECK_BUDGET_MS` (a row holds the two apart): the child's clock starts after
+   * its spawner's, since it has to be started first, so a spawner that used its whole budget still writes to a child
+   * that is there. It was 5 000, which up to three runs of the tool between a spawn and its write could outlast, and
+   * the write then went to a child that had already left. The lead's choice, not a measurement. */
+  HANDOFF_WAIT_MS: 10_000,
+  /** everything between a spawn and its hand-off's write, as the SPAWNER counts it from the spawn: asking whose code
+   * the child is, and whatever else stands before the write. Past it the child is ended and never written to, as a
+   * refused child is, and an answer that comes later is not listened to. One run of the tool that is asked is
+   * bounded by itself (5 s, trust's own); this bounds all of them together. The lead's choice as well: how long the
+   * asking takes, cold after an install and warm, is owed to a signed build. */
+  CHILD_CHECK_BUDGET_MS: 8_000,
   /** the context of the shell's pairing MAC (`shell-pairing.vector.json`):
    * mac = hex(HMAC-SHA256(shell, "vf-shell" 0x00 String(port) 0x00 bootId 0x00 userId 0x00 nonce 0x00 String(ts))) */
   SHELL_CONTEXT: "vf-shell",
