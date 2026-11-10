@@ -1039,10 +1039,16 @@ law DESIGN.md §9 "VibeField's insides are never a person's to read" (item 280),
 - Landed 11-10: **item 280** (`6014068ec` → `93e41770b`, 3 commits, M277, run 289, an ff of `40b499b9d`; LANDED "Item
   280"): a start that failed says one sentence, "VibeField couldn't start.", over Retry, and what failed goes to the
   log whole.
-- Next: **item 281**, the splash's stage words (IS-281 A: while a start goes well, the bar alone speaks), its own packet
-  on this main, plan first; then 282's slices in the build order's sequence, with item 293 (ob/ui) before 282-7.
-- Owed: the Mac witness of a failed start; the window rows at this main: armed by the fixer at 06:50:27Z; no verdict
-  at this writing.
+- Landed 11-10: **item 281** (`c8dee7c9f` → `82cd1fd1c`, 8 commits, M279, run 292, an ff of `57096484d`; LANDED "Item
+  281"): while a start goes well the bar alone speaks, on the splash, the switch, Setting up and the veil; item 299's
+  doc rides as its commit 8.
+- Landed 11-10: **item 300** (`d10b64f09` → `a0538cad3`, 3 commits, M280, run 293, an ff of `82cd1fd1c`; LANDED "Item
+  300"): the veil's bar fades in where it stands on the island's curve, and reduced motion is 90ms for all of it.
+- Next: the rule (§9's paragraph widened from a start to every room, doc only), then 282's slices in the build order's
+  sequence, with item 293 (ob/ui) before 282-7.
+- Owed: the Mac witness of a failed start; item 295, with no owner (the failure sentence's contrast over the field);
+  the veil in the product's own window (read by grep, not watched). The window rows at 280's main are closed by the
+  landing table at `a0538cad3` (LANDED "Item 281").
 
 **Release rails — WP12 · TD · BP · FW packaging · RD** · prod-builder (resting) · law `specs/build-wp12-updater.md`,
 `specs/trust-and-distribution.md`, the three `specs/electron-*.md` + `electron-packaging-implementation-plan.md`,

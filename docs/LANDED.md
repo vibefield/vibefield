@@ -46499,3 +46499,226 @@ OK by `shasum -c`): 17 rows exit 0 from 17:55:47Z to 18:50:13Z, on main with 290
   quit that left a pair running because its sessions could not be read (today's behaviour; 290 does not change it).
 
 **Not done, and not claimed:** no row drove a real quit with a switch or a new pair during it.
+
+## Item 281 — while a start goes well the bar alone speaks: the splash, the switch, Setting up and the veil (M279)
+
+(2026-11-10; eight commits, `c8dee7c9f` to `82cd1fd1c`, on item 290's `57096484d`, cut by ow-design in
+`lanes/i280/vibe-field` and landed by the fixer at 17:27:20Z by fast-forward as M279, the second of three on James's
+word typed at VF-PM's session at 17:23:01Z, "land them, re-arm". Validated by run 292, a9, vf-m2; the packet is
+`lanes/i280/packets/281-v4/`, the transport `lanes/i280/packets/281-v4-m2/`.) James's pick IS-281 A, "while a start
+goes well, the bar alone speaks" (02:34:58Z; DECISIONS "insides · IS-281 · IS-282-1…IS-282-7"). VF-PM accepted the
+plan, `lanes/i280/plan/plan-281.md`, at 07:05:30Z, and read the veil pair as the same pick at 10:34:36Z; the page
+asked it of the splash alone. Item 299, a docs correction found in this stack, rides as its commit 8.
+
+**What landed, DESIGN.md first.**
+- The doc (`c8dee7c9f`, 18/6): §8 "The boot splash": the splash's line goes to the log; FG-O2's splash half is
+  corrected and item 295 named; Setting up's line and the switch follow; §9's known deviation is closed.
+- The red (`35a411c17`, seven test files, +101 −107): boot-machine's log row; the splash, the switch and Setting up
+  drawing no step; the first-run smoke's splash still taken on the bar.
+- The green (`82701f2af`, nine files, +120 −162): each new step goes to the log once, and no face draws it. The
+  comments (`d1c0d18af`, 5/4): three comments the green missed.
+- The veil's doc (`9b9e6b285`, 10/3, §8 "The loading veil"), its red (`31a00dbfd`, two test files, +24 −9) and the
+  veil (`621d84e70`, five files, +12 −14): the veil draws no step word, and neither do its two catalog specimens.
+- Item 299's doc (`82cd1fd1c`, 7/2): the late-veil rule corrected at its source, and what reduced motion did there,
+  as the code did it then. Twenty-four files, +297 −307.
+
+**What a person sees.**
+- **The splash,** while a start goes well: the bar alone. Each new step's words go to the log once, as
+  `renderer.boot.stage { stage, phase }` (`machine.ts:180-185`, the boot's logger at info; the stream
+  `system/renderer`, `registries.ts:1636`). A start that failed keeps item 280's one sentence over its Retry.
+- **The switch:** "Switching to", the name, and the bar at rest, with no words under it. Its face, name and bar stand
+  14.25 px lower, measured once (10:06:12Z, `lanes/i280/logs/g281/measure-100612Z.log`) in the catalog's switch
+  specimen, the shipping SwitchScene through its fixture adapter, not in a live switch.
+- **Setting up's desk line** stands with nothing under it.
+- **The loading veil,** while a doc loads: its bar alone. Before, from 500 ms into a load, it drew the DocManager's
+  step word under the bar (`LoadingVeil.tsx:49` at `57096484d`). What a person can still meet there is the bar's
+  accessible name, "Loading the field" (`LoadingVeil.tsx:41` at `a0538cad3`), once its wrapper's aria-hidden lifts
+  (`:34`); read in the code, not heard with VoiceOver.
+- **The catalog follows:** its Setting up states, its switch arrivals, the veil specimen and the Progress specimen
+  draw the bar alone.
+- The list is closed by `git grep -n -E '\.stage([^A-Za-z0-9_]|$)' a0538cad3 -- packages/field-app/src ':!*.test.*'`
+  and by the same grep at `57096484d`. At `57096484d` it names the three faces that drew the words:
+  `SettingUpPane.tsx:113`, `splash-parts.tsx:62` (`SplashStatus`, drawn by the splash and by the switch at
+  `SwitchScene.tsx:296`) and `LoadingVeil.tsx:49`. At `a0538cad3` it names none of them. Its 28 lines there are the
+  machine's (`machine.ts:180-183`, the log; `:385`, a doc's loading step taken into its view; three comment lines,
+  `:63`, `:146` and `:174`), the DocManager's eight `stage()` calls, which make the words, and fields of other
+  things named stage: Godview's stop, History's search progress, the plugin host's staging, Chat's head and the
+  catalog's switch demo.
+
+**Validation of record** (run 292, `lanes/vf-m2/i281-292-v-a9-results`, SUMS `d7295f03f23b391e`, 41 of 41 OK by
+`shasum -c` at 19:29:52Z; runner `63ae015ebe6872b5`; launched at 13:59:08Z, the verdict at 14:06:25Z; VF-PM accepted
+it at 14:09:09Z):
+- V: "`pnpm verify` exit 0, 5 min 51 s." field-app 4681 passed in 336 files; electron-shell
+  `2841 passed | 2 skipped (2843)` in 185. The delta rows: field-app boot-machine 38, design-system 7 and
+  wearing-the-mat 19, 64 in all; electron-shell smoke-first-run 55; each the wanted, run 291's. "The sum: 14694 21 =
+  run291's." dev-runner 483 of 483; cargo 37 of 37.
+- **Beside V, as run 292 printed them:** fieldd's six DESIGN.md readers, 6 of 6 at run 291's counts, 200 in all; the
+  typecheck read, both programs, 0 `error TS` lines; the bundle line equal to run 291's, "initial 957.4 KB raw /
+  254.6 KB gz" (run 291's 957.3 → 957.4 against run 290 was classed by VF-PM at 13:11Z as 281's own code); KEPT
+  births 0; the kept dirs, 65 entries, equal at the arm and in fin.
+- **S carried by tree 244a989b8429 (run 284's S GREEN).** No kit file moves; S did not run. **Not run: IOS, K.**
+- v3's mint, run 291 (`lanes/vf-m2/i281-291-v-a9-results`, SUMS `c264280cd25d32c0`), printed V GREEN at `a92ac8d5b`
+  and stays as v3's record, superseded, not voided.
+- On the Mac, through the door (`lanes/i280/door2.sh`; the packet's `rows/`, its HOLD lines in
+  `rows/HOLD-lines.txt`), at nice 19 with `--maxWorkers=2` on vitest:
+  - on the tip `82cd1fd1c`: DESIGN.md's 31 readers on the Mac, field-app's 27 (645 passed), sound's one (23),
+    plugins/simulator's two (19) and electron-shell's smoke-first-run (55);
+  - on v2's tip `5ff87d6a5`, from which the re-cuts move DESIGN.md alone: electron-shell's 35 files, 610 passed; its
+    typecheck script, both programs, 0 errors; check:walls in form (b), clean, temp roots 270 of 1149;
+  - on v1's trees: the red's and the veil red's failing rows as named, the greens' readers, field-app's typecheck,
+    and the switch's measure (the packet's table).
+
+**The landing table at `a0538cad3`** (LANDED "Item 290" gives it whole; `lanes/um/gate-a0538cad3-r2`, SUMS
+`eec860308d68f99d`, 34 of 34 OK by `shasum -c` at 19:29:52Z): 17 rows exit 0, on main with 290, 281 and item 300.
+smoke:first-run, whose harness this stack rewrote to take the splash's early still on its bar, was void once (input
+landed, 18:30:17Z) and green on its second arm (18:34:30Z, 206 s).
+
+**The cut.** The carries' and the re-cuts' times are their commits' committer dates.
+- The stack was cut on `93e41770b` and carried by `git rebase --onto` on a clean tree: onto main `50e88fc9b`
+  (11:45:07Z, an identity carry, the docs trio alone; range-diff eight `=`), then onto item 290's `57096484d`
+  (12:01:54Z, on VF-PM's 11:57:03Z and 12:00:13Z; range-diff eight `=`; the trees gain 290's ten files). DESIGN.md
+  is the one file both sides change; its three-way keeps both sides' patch-ids, 281's `13afc24e4fe62789` and 290's
+  `f83a7707404b02fe`.
+- Commit 8 was re-cut twice by plumbing, each on VF-PM's word before a mint:
+  - 12:43:11Z (VF-PM 12:39:15Z and 12:42:18Z): v2's commit 8 said reduced motion made the cover's fades 90ms. The
+    visible state's 220ms rule (`LoadingVeil.css:19-23`, 0,2,0) outranked the reduced-motion block (0,1,0), so the
+    fade-in kept 220ms. a9 held run 291 for it.
+  - 13:36:20Z (VF-PM 13:33Z, (a)): v3's commit 8 said the bar came in "with its rise", and no rise was drawn:
+    Tailwind 4.3.3's `translate-y-1` moves the `translate` property, which the bar's transition did not list, so the
+    4px snapped while the bar was transparent (read from the compiler's output, not watched). Only "with its rise"
+    was struck.
+- Kept refs, nothing deleted: `i281/carry-290-v3` (`a92ac8d5b`), `i281/carry-290-v2` (`5ff87d6a5`),
+  `i281/carry-50e` and `-keep` (`1867c905c`), `i281/stage-words` and `-93e` (`cf19c93e4`), `i281/onto-rv290`
+  (`57096484d`); on vf-m2, `i281/carry-290-v4` (`82cd1fd1c`) beside v3's `i281/carry-290`.
+- The packet of record is `lanes/i280/packets/281-v4` (SUMS `210d0925c1374692`, 101 of 101 OK at 19:29:52Z; its
+  bundle requires `57096484d`), with `281-v4.ADDENDUM.md` (`b20f32f0baa4fcf2`) beside it; the transport is
+  `281-v4-m2` (SUMS `7fd86a1c6a4ab744`, 3 of 3 OK). v3 was minted and is superseded (`281-v3.SUPERSEDED.md`); v2
+  was placed and held before its mint (`281-v2.SUPERSEDED.md`); v1 was never placed (`281-v1.ERRATUM.md`).
+- Main's reflog: `57096484d` at 17:25:34Z, `82cd1fd1c` at 17:27:20Z, `a0538cad3` at 17:28:53Z. Push 131 (18:54Z, on
+  James's typed "2. push") took them to origin.
+
+**Found along the way.**
+- **Gap 1, electron-shell's renderer program** (11:48Z): its typecheck is two programs, and every electron-shell tsc
+  row before 11:49Z ran the first alone; the second compiles `src/renderer-host`, whose field-app imports reach the
+  changed files. Closed on the tips by the whole script. VF-PM's rule since: a typecheck row runs the package's own
+  `typecheck` script, read at run time, every program in it.
+- **Gap 2, the walls row** (11:51Z): the veil red added two import lines after 281's one walls row. VF-PM's rule
+  since: a walls row is owed on the tip whenever any commit in the stack moves an import line.
+- **Gap 3, DESIGN.md's readers** (12:05Z): the old walk's pattern stopped at the first ")", so it found 25 of 37, and
+  twelve field-app tests had not run as DESIGN.md readers on any 281 tree before 12:07Z. readers.py
+  (`53a4b8db0e7c1433`) is the reader since; 280's "25" is corrected in `lanes/i280/NOTES.md` (12:09Z), and v1's in
+  its erratum.
+- **Item 300:** the veil's bar came in on Tailwind's default curve, and under reduced motion the cover's fade-in and
+  the bar's entrance kept their length. Its own stack, landed as M280.
+- **Item 295,** owed with no owner: the failure sentence's contrast over the field, which FG-O2's splash half no
+  longer reads.
+- `.vf-ds-veil-specimen` (`foundations.css:651`, `:679` at the tip) has no user anywhere; found and left.
+- **Item 314** (RV's, opened 19:02:21Z) touches item 290's refusal alone, none of this stack's lines (RV's read,
+  relayed by VF-PM at 19:08:37Z).
+
+**Closes item 280's owed:** the window rows at 280's main. Each of their three runs ended not armed, as the SCOPE DONE
+lines of `lanes/co-plan/HOLD` say:
+- the run of 06:50Z, at `93e41770b`: at 07:11:24Z, on row 1, smoke:godview (line 6130);
+- the run of 07:16Z, at `50e88fc9b`: at 07:46:29Z, on row 2, smoke:godview:no-record (line 6155);
+- its r2, of 07:53Z: at 08:41:01Z, on row 5, still (line 6172).
+
+The landing table at `a0538cad3`, on a main that holds 280, ran its 17 rows exit 0. The Mac witness of a failed start
+stays owed.
+
+**Owed.**
+- The switch, Setting up and the veil in a running app: no row named here watched them. The landing's smoke:first-run
+  takes the splash's early still on its bar.
+- `renderer.boot.stage` in a written log: traced in code, not read from a log the app wrote.
+- Item 295, above.
+
+**Not done, and not claimed:** no live switch was measured, and no log the app wrote was read.
+
+## Item 300 — the veil's bar fades in where it stands on the island's curve; reduced motion is 90ms for all of it (M280)
+
+(2026-11-10; three commits, `d10b64f09`, `0d553611a` and `a0538cad3`, on item 281's `82cd1fd1c`, cut by ow-design in
+`lanes/i280/vibe-field` on the branch `i300/veil-motion` and landed by the fixer at 17:28:53Z by fast-forward as M280,
+the third of three on James's word of 17:23:01Z. Validated by run 293, a9, vf-m2; the packet is
+`lanes/i280/packets/300-v1/`, the transport `lanes/i280/packets/300-v1-m2/`.) Found in item 281's veil work and
+opened by VF-PM at 11:30:32Z as ow-design's; widened at 12:39:15Z to the cover's fade-in under reduced motion. The code
+was what departed from DESIGN.md: M6 (`DESIGN.md:1260-1261`) and §8 "The loading veil".
+
+**What landed, DESIGN.md first.**
+- The doc (`d10b64f09`, 5/5): §8 "The loading veil" (`DESIGN.md:4511-4515`): the bar fades in where it stands, over
+  300ms on `--vf-ease-island`, and under reduced motion every one of the veil's transitions takes 90ms. It drops item
+  299's "which item 300 corrects".
+- The red (`0d553611a`): `test/loading-veil-motion.test.tsx`, new, 84 lines, three rows failing at their own
+  assertions.
+- The green (`a0538cad3`): `LoadingVeil.css` 15/0 and `LoadingVeil.tsx` 2/3. Four files, +106 −8.
+
+**What a person sees** while a doc loads: the veil's cover comes in over 220ms, and from 500 ms its bar.
+- **The bar fades in where it stands:** opacity alone, 300ms on `--vf-ease-island` (`LoadingVeil.css:31-38`; its
+  wrapper, `LoadingVeil.tsx:32-34`). Before, it eased on Tailwind's default curve with `translate-y-1`, whose 4px
+  snapped while the bar was transparent (read from Tailwind's compiled output, not watched).
+- **Under reduced motion every transition of the veil takes 90ms:** the cover's fade-in and its fade-out, the bar's
+  fade and its fill (`LoadingVeil.css:40-49`). The visible state is named in that block, since its own 220ms rule
+  (`:19-23`) would outrank the bare class.
+- The list is closed by `git grep -n 'vf-loading-veil' a0538cad3 -- packages ':!*.test.*'`: `LoadingVeil.css` and
+  `LoadingVeil.tsx` alone name the veil's classes.
+- **The catalog's veil differs under reduced motion:** the catalog's own rule, `.vf-ds-shell *` at 1ms
+  (`scenes.css:1225-1232`, through `design-system.css:4`'s import), names no veil class and wins there, so its veil
+  shows 1ms where the product's shows 90ms. That is the catalog's behaviour, not changed by item 300, and not numbered
+  unless James wants the catalog to match.
+
+**Watched on the Mac** (the witness, `lanes/i280/i300/witness/witness-veil.mjs`, `ae769e32b56c9970`, run once on
+VF-PM's 14:48:41Z word; its log `lanes/i280/logs/i300-witness/witness-144904Z.log`; the addendum
+`lanes/i280/i300/300-green.ADDENDUM.md`, `37310da690f4259c`): headless Chrome over a pipe on the catalog's page, the
+veil moved out of the shell.
+- With no preference: the bar's opacity in 19 distinct values over 30 samples, its top 455 in each; the cover 220ms.
+- Under reduce: 7 distinct values over 31 samples, its top 455 in each; 90ms.
+- Only `LoadingVeil.css` reaches the bar and the cover, as Chrome's cascade names them.
+- Not a read: the in-place pass with no preference stalled (one opacity, two tops far off the page); its cause was not
+  traced. In place under reduce, the catalog's 1ms. The product's page was read by grep, not watched.
+- VF-PM accepted it at 14:52:22Z: "GREEN on the two moved reads, with the in-place no-preference pass recorded as NOT
+  A READ."
+
+**Validation of record** (run 293, `lanes/vf-m2/i300-293-v-a9-results`, SUMS `5341e807ed427751`, 42 of 42 OK by
+`shasum -c` at 19:29:52Z; runner `c1b36ae43928df92`; launched at 16:41:52Z, the verdict at 16:49:15Z; VF-PM accepted
+it at 16:53Z):
+- V: "`pnpm verify` exit 0, 5 min 54 s." field-app 4684 passed in 337 files; electron-shell
+  `2841 passed | 2 skipped (2843)` in 185. The delta row: `test/loading-veil-motion.test.tsx 3`, new. "The sum:
+  14697 21", run 292's with the moves.
+- **Beside V:** fieldd's six DESIGN.md readers, 6 of 6 at run 292's counts, 200; the typecheck read, both programs, 0
+  `error TS` lines; KEPT births 0; the kept dirs, 65, equal; the 1-min load reached 41.82 inside the window (a
+  reading; no row failed).
+- **A finding beside V, the bundle line:** "initial 956.7 KB raw / 254.6 KB gz" against run 292's 957.4; the gz size
+  and every lazy chunk are equal. VF-PM classed it at 16:53Z: consistent with the Tailwind utilities `LoadingVeil.tsx`
+  dropped; its cause not measured.
+- **S carried by tree 244a989b8429 (run 284's S GREEN).** **Not run: IOS, K.**
+- On the Mac, through the door (the packet's `rows/`):
+  - the green's rows on its tree `b6eb951a9fd1`: biome on the two files, clean; vitest field-app over its 15
+    readers (readers.py's, and six source walkers filtered by hand), 418 passed; field-app's typecheck, 0 errors;
+    check:walls in form (b), clean, temp roots 270 of 1150;
+  - on the tip: electron-shell's typecheck script, both programs, 0 errors, since its renderer program compiles
+    `LoadingVeil.tsx` through five renderer-host modules.
+
+**The landing table at `a0538cad3`:** as LANDED "Item 290" gives it, 17 rows exit 0, with item 300 at its tip.
+
+**The cut.**
+- VF-PM accepted the doc's diff at 14:14:15Z, the red and the green at 14:18:29Z, and the green's commit at 14:37:21Z,
+  made by plumbing from the rows' tree (`commit-300-green.sh`); the witness at 14:52:22Z, the tip row at 14:57:23Z
+  and the seal at 15:08:11Z.
+- The packet of record is `lanes/i280/packets/300-v1` (SUMS `9517bcd664477c41`, 46 of 46 OK at 19:29:52Z; its bundle
+  requires `82cd1fd1c`); the transport is `300-v1-m2` (SUMS `0220092d3812108f`, 3 of 3 OK). On vf-m2 the tip is the
+  new ref `i300/veil-motion-v1` (`a0538cad3`).
+- No carry was made: the stack was cut on 281's tip and landed on it.
+
+**Found along the way.**
+- **Two things in the catalog's page would have faked the witness:** `html { scroll-behavior: smooth }`
+  (`catalog-shell.css:27-28`) and the 1ms rule above. The witness scrolls with `behavior: "instant"` and reads the
+  veil moved to the body.
+- **The tip row's gap:** electron-shell's renderer program compiles `LoadingVeil.tsx`, and the green's rows ran
+  field-app's typecheck alone. VF-PM's rule since (14:57:23Z): a typecheck row is owed for every package whose program
+  compiles a changed file.
+- **Item 314** (RV's, opened 19:02:21Z) touches item 290's refusal alone, none of this stack's lines (RV's read,
+  relayed by VF-PM at 19:08:37Z).
+
+**Owed.**
+- The veil in the product's own window: what reaches it there was read by grep, not watched.
+- The catalog's 1ms under reduced motion, if James wants the catalog to match.
+
+**Not done, and not claimed:** no running app's veil was watched, and the bundle's 0.7 KB was not traced to its cause.
