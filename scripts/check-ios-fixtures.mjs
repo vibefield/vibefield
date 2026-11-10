@@ -358,12 +358,11 @@ const sparkFixtures = [
   "needs-item.held-spawn.json",
   "needs-item.agent-ask.json",
   "needs-item.unknown-kind.json",
-  // IOS-12d — CP-4's six flow kinds, which Chat draws as the Mac's card does until CP-4b, and needs.answer's wire
+  // IOS-12d — CP-4's five flow kinds, which Chat draws as the Mac's card does until CP-4b, and needs.answer's wire
   "needs-item.flow-proposal.json",
   "needs-item.flow-gate.json",
   "needs-item.flow-changed.json",
   "needs-item.flow-repair.json",
-  "needs-item.flow-cap.json",
   "needs-item.flow-lost.json",
   "needs-answer-params.valid.json",
   "needs-answer-result.valid.json",

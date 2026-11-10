@@ -132,8 +132,8 @@ struct SparkShapesTests {
 
   @Test("every kind of item reads whole; a kind this build does not know is kept, and its new field named")
   func items() throws {
-    // IOS-12d: CP-4's six flow kinds with them, their run and script held to the contract
-    let flows = ["flow-proposal", "flow-gate", "flow-changed", "flow-repair", "flow-cap", "flow-lost"]
+    // IOS-12d: CP-4's five flow kinds with them, their run and script held to the contract
+    let flows = ["flow-proposal", "flow-gate", "flow-changed", "flow-repair", "flow-lost"]
     for name in ["question", "held-send", "held-send-cut", "held-spawn", "agent-ask"] + flows {
       let item = try NeedsItem(json: try Fixture.json("needs-item.\(name)"))
       #expect(item.knownKind != nil, "\(name)")
@@ -158,7 +158,7 @@ struct SparkShapesTests {
     #expect(spawn.folder == "vibe-field")
     #expect(spawn.live == 8)
     let kinds = NeedsItemKind.allCases.map { $0.rawValue }
-    #expect(kinds.count == 10)
+    #expect(kinds.count == 9)
     let answered = try NeedsAnswerResult(json: try Fixture.json("needs-answer-result.valid")).item
     let answer = try #require(answered.answer)
     #expect(answered.state == "answered")

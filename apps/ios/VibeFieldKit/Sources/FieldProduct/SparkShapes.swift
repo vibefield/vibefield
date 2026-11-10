@@ -249,7 +249,7 @@ public struct ComposeSparksList: Sendable, Equatable {
 
 // MARK: - The needs-you queue
 
-/// An item's kind as this build names it (`NEEDS_ITEM_KINDS`, OPEN). IOS-12d: CP-4's six flow kinds too, which Chat
+/// An item's kind as this build names it (`NEEDS_ITEM_KINDS`, OPEN). IOS-12d: CP-4's five flow kinds too, which Chat
 /// draws as the Mac's card does until CP-4b (Q9).
 public enum NeedsItemKind: String, Sendable, Equatable, CaseIterable {
   case question
@@ -260,7 +260,6 @@ public enum NeedsItemKind: String, Sendable, Equatable, CaseIterable {
   case flowGate = "flow-gate"
   case flowChanged = "flow-changed"
   case flowRepair = "flow-repair"
-  case flowCap = "flow-cap"
   case flowLost = "flow-lost"
 }
 

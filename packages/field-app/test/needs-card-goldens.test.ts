@@ -145,7 +145,6 @@ const KINDS = [
   "flow-gate",
   "flow-changed",
   "flow-repair",
-  "flow-cap",
   "flow-lost",
   "unknown-kind",
 ] as const;
