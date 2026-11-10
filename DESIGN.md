@@ -8230,6 +8230,12 @@ Every place that says what a terminal's life is says those two facts, and no pla
   shape. Its message is the consequence: "Quit VibeField and end 3 terminal sessions?" Its detail names them: "Quitting
   stops the terminal service, which ends:", then up to five rows ("title — cwd"), then "and N more". Its buttons say
   what each does: **Cancel** (the default) · **Quit and end 3 sessions**.
+- **While the quit box is up** (*added 2026-11-10, item 290; James ruled D2 "yes" and D4's words at 06:49Z*), the
+  status item's **Switch User** and **Try Again** do nothing (on macOS they keep their look, as a status item's
+  top-level rows do; elsewhere they are dimmed), and the people under **Switch User** and its **New User…** are
+  dimmed. No new words. A switch or a new user asked for anyway while VibeField quits is refused in one sentence, the
+  reason kept for the log: the Me menu says "Couldn't switch to Lee — VibeField is quitting." or "Couldn't add a user —
+  VibeField is quitting.", and Settings → Account says "VibeField is quitting".
 - **The unknown box**, when a pair's sessions can't be read, says that nothing it can't name will end: "VibeField
   couldn't check for running sessions" · "It ends no session it can't name, so quitting now leaves the terminal service
   running. Open VibeField again and quit to stop it." · **Cancel** · **Quit and leave it running**.
