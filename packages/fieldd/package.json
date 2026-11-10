@@ -39,6 +39,7 @@
     "@vibefield/plugin-build": "workspace:*",
     "@vibefield/plugin-runtime": "workspace:*",
     "@vibefield/plugin-sdk": "workspace:*",
+    "@vibefield/trust": "workspace:*",
     "@vibefield/users": "workspace:*",
     "acorn": "8.19.0",
     "ajv": "^8.17.1",
