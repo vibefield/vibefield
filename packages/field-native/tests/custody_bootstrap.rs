@@ -9,10 +9,15 @@
 //! second wait. And the in-process seam (`bootstrap_handed`), which other files' rows can boot a sealed floor through,
 //! as `RunningDaemon.pairing_file` is the seam of a `files` one.
 //!
+//! Last, the binary's OTHER roles. Only the bare invocation, the daemon's, reads the flag and so a bootstrap line.
+//! `field-native door` is run by any agent in a pane, with the stdin and the environment of its choosing: what it reads
+//! there is the door's ordinary bytes, never a secret, with the flag set or not.
+//!
 //! Every secret here is a repeated byte: nothing in this file is a secret anyone holds.
 #![cfg(unix)]
 
 use field_native::custody::{read_bootstrap, stdin_requested, Refused};
+use field_native::door_bridge::{EXIT_OK, EXIT_UNREACHABLE, EXIT_USAGE};
 use field_native::registries::custody as registry;
 use field_native::services::mesh_bridge::{encode_frame, FrameReader, FRAME_HELLO, FRAME_HELLO_OK};
 use field_native::{bootstrap_handed, config::NativeConfig, pairing, RunningDaemon};
@@ -168,6 +173,26 @@ impl Floor {
             None => command.env_remove(registry::NATIVE_ENV),
         };
         let mut child = command.spawn().expect("spawn field-native");
+        let stdin = child.stdin.take();
+        Self {
+            child: Some(child),
+            stdin,
+        }
+    }
+
+    /// The same binary in another role (`door …`, `--version`): nothing of a daemon's environment, an empty HOME where
+    /// a boot would write its roots, and the custody flag set all the same.
+    fn spawn_role(args: &[&str], home: &Path) -> Self {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_field-native"))
+            .args(args)
+            .env_clear()
+            .env("HOME", home)
+            .env(registry::NATIVE_ENV, registry::STDIN)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn field-native");
         let stdin = child.stdin.take();
         Self {
             child: Some(child),
@@ -626,4 +651,105 @@ async fn a_floor_handed_its_pairing_neither_reads_nor_removes_a_pairing_file_it_
     daemon.shutdown().await;
     let left = std::fs::read_to_string(&pairing_file).expect("still there");
     assert_eq!(left, other_hex(), "and as it was when the floor stopped");
+}
+
+// ---- the binary's other roles: the read is the daemon's alone ------------------------------------------------------
+
+/// Every path under `root` (`tests/door_bridge.rs`'s reading: a boot writes its data and log roots under its HOME).
+fn written_under(root: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut dirs = vec![root.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                dirs.push(path.clone());
+            }
+            found.push(path);
+        }
+    }
+    found
+}
+
+/// The agent's own play: the bridge every pane may run, with the daemon's flag in its environment and a bootstrap line
+/// on its stdin. It is still only the bridge. The line is carried to the door as any caller's bytes, nothing of it is
+/// held or written, the bridge ends at stdin's end as it always did, and the floor pairs under the secret it had.
+#[tokio::test]
+async fn the_door_bridge_carries_a_bootstrap_line_as_its_ordinary_input_and_holds_no_secret() {
+    // a floor that was handed one secret, and an agent that tries the bridge with another
+    let dir = tempfile::tempdir().expect("tempdir");
+    let config = NativeConfig::for_data_dir(dir.path().to_path_buf());
+    let floors = secret_bytes(&other_hex());
+    let daemon = bootstrap_handed(config, floors).await.expect("bootstrap");
+    let door = daemon.state.door.clone();
+    let endpoint = door.info().expect("the door").endpoint.to_string();
+
+    let home = tempfile::tempdir().expect("a temp home");
+    let mut bridge = Floor::spawn_role(&["door", "--endpoint", &endpoint], home.path());
+    let pid = bridge.child.as_ref().expect("child available").id();
+    let line = format!("{}\n", bootstrap_line(1, &handed_hex()));
+    let mut stdin = bridge.stdin.take().expect("stdin");
+    stdin.write_all(line.as_bytes()).expect("write");
+
+    // It is the bridge: the floor's door names it, and holds its line as any caller's bytes (no fieldd is attached).
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while door.held_bytes() != line.len() && Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(door.held_bytes(), line.len(), "the door holds the line");
+    let doors = json!(door.snapshot());
+    assert_eq!(doors["doors"][0]["caller"]["pid"], json!(pid), "{doors}");
+
+    // stdin's end is the bridge's own, as ever: exit 0, nothing said back, nothing written
+    drop(stdin);
+    let output = bridge.exits_within(Duration::from_secs(10)).await;
+    assert_eq!(output.status.code(), Some(EXIT_OK), "{:?}", output.status);
+    assert!(output.stdout.is_empty(), "the bridge said something back");
+    names_no_secret("the bridge", &handed_hex(), &output, "");
+    let wrote = written_under(home.path());
+    assert!(wrote.is_empty(), "the bridge wrote {wrote:?}");
+
+    // and the floor is as it was: no file, and it pairs under its own secret, never the line's
+    let pairing_file = daemon.pairing_file.clone();
+    assert!(!pairing_file.exists(), "a pairing file was made");
+    let socket = PathBuf::from(&daemon.mgmt_endpoint);
+    let mut agent = Mgmt::connect(&socket).await;
+    let refused = agent.hello(&secret_bytes(&handed_hex())).await;
+    assert_eq!(
+        refused["error"]["data"]["kind"], "UNAUTHORIZED",
+        "the line's secret pairs nothing: {refused}"
+    );
+    let mut fieldd = Mgmt::connect(&socket).await;
+    let ack = fieldd.hello(&floors).await;
+    assert!(ack["result"].is_object(), "{ack}");
+    drop(fieldd);
+    drop(agent);
+    daemon.shutdown().await;
+}
+
+/// One run of the binary in another role, the flag set and a bootstrap line on its stdin: nothing it wrote names the
+/// line's secret, nothing is written under its HOME (so it is no daemon), and its exit code is the answer.
+async fn role_exits(args: &[&str], line: &str) -> Option<i32> {
+    let home = tempfile::tempdir().expect("a temp home");
+    let mut role = Floor::spawn_role(args, home.path());
+    role.hand(line.to_owned());
+    // launch_check's bound for a slow exit under load
+    let output = role.exits_within(Duration::from_secs(60)).await;
+    names_no_secret(&args.join(" "), &handed_hex(), &output, "");
+    let wrote = written_under(home.path());
+    assert!(wrote.is_empty(), "{args:?} wrote {wrote:?}");
+    output.status.code()
+}
+
+#[tokio::test]
+async fn no_other_role_reads_the_flag_or_a_bootstrap_line() {
+    let line = bootstrap_line(1, &handed_hex());
+    // each exits as it does with no flag and no line: `--version` and `--help` 0, an unknown argument 2
+    assert_eq!(role_exits(&["--version"], &line).await, Some(0));
+    assert_eq!(role_exits(&["--help"], &line).await, Some(0));
+    assert_eq!(role_exits(&["--no-such-flag"], &line).await, Some(2));
+    // the bridge refused its arguments, and the bridge with no door to dial
+    assert_eq!(role_exits(&["door"], &line).await, Some(EXIT_USAGE));
+    let nowhere = ["door", "--endpoint", "/nonexistent/vf-custody/door.sock"];
+    assert_eq!(role_exits(&nowhere, &line).await, Some(EXIT_UNREACHABLE));
 }
