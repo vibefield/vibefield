@@ -9,8 +9,9 @@ import Testing
 // starts a lane at its row's `statusSince` however long ago, and every reader clamps to its own window (the paint, the
 // wakes, the map and `dayStart`). L1 and L2 are `timeline-lanes.test.ts`'s two rows ("keeps its own start however
 // old", "holds for a lane older than the horizon as now moves"); L3 is what the wakes then draw at the widest window,
-// the day's 24 h. All three are red under 0.3.3's rule, which started a lane older than the day at the horizon, so its
-// key moved with the clock and its wake began at the window's edge with a round cap, as if it had started there.
+// the day's 24 h, for a state older than it and its 30 px lead-in. All three are red under 0.3.3's rule, which started
+// a lane older than the day at the horizon, so its key moved with the clock and its wake began at the window's edge
+// with a round cap, as if it had started there.
 //
 // G1 and G2 are GUARDS, green by design at the red as at the green: the readers' own clamps, which 0.3.3 left them
 // and a lane that keeps its start now leans on. Inside a window shorter than the day, the paint, the wakes and the map
@@ -22,9 +23,12 @@ import Testing
 struct TimelineLanesTests {
   static let nowMs = 1_790_803_300_000.0
   static let minute = 60_000.0
-  /// Born thirty hours ago and working for the last twenty-five: both older than the day.
+  /// Born thirty hours ago and working for the last twenty-eight: both older than the day, and older than the widest
+  /// window's lead-in too (30 px before a 24 h window 300 px wide is 2.4 h, so its edge is 26.4 h back). *Corrected
+  /// 2026-11-10 (run 283's K, the rider on `1f93ebc34`):* this was twenty-five, inside that lead-in, where the wake
+  /// starts at the lane's own start (x −12.5) with its cap, as `WakeGeometry.swift:69` says; L3 read red on it.
   static let bornMs = nowMs - 30 * 60 * minute
-  static let sinceMs = nowMs - 25 * 60 * minute
+  static let sinceMs = nowMs - 28 * 60 * minute
 
   /// The witness's `run-h-quiet` (an agent, working), born and working since then.
   static func row() throws -> TimelineRow {
@@ -63,7 +67,8 @@ struct TimelineLanesTests {
   }
 
   /// L3 — at the day's 24 h window its wake enters from 30 px before the window, as any state older than the window
-  /// does, with no round cap: it did not start at the window's edge.
+  /// and its lead-in does, with no round cap: it did not start at the window's edge. (A state that began inside the
+  /// lead-in starts at its own start, up to 30 px before the edge, with its cap.)
   @Test func atTheWidestWindowItsWakeEntersFromBeforeTheDay() throws {
     let lane = TimelineLanes.lane(for: try Self.row(), nowMs: Self.nowMs)
     let span = TimelineScale.spanMaxMs
