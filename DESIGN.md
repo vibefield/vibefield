@@ -10393,6 +10393,8 @@ are open until James reads them on a board). A Run that VibeField refuses starts
 - "VibeField can't find that spark; nothing was started."
 - "VibeField has no run ‹run›."
 - "That version isn't one of ‹flow›'s."
+  - *Not built at this tip: item 302 (2026-11-10):* ‹flow› here is the flow's slug at each of its three refusals, never
+    its meta name cut as §9 cuts it, though one of them has the library's file in hand.
 - *Proposed 2026-11-06 (CP-4a2b; the version review NN1, ruled 2026-11-06;
   open until James reads it, as the rest are):* a version its static read refuses, by a rule newer than its
   approval or on Run this version of one (Q-a), in the read's own words, unchanged ("What a flow's read refuses"), with
@@ -10410,10 +10412,18 @@ are open until James reads them on a board). A Run that VibeField refuses starts
   at once. Stop one, or run ‹flow› when one ends." For a spark's: "‹spark› is running 2 flows, as many as a spark may."
 - The store's sentence ("VibeField can't read the flows it keeps; nothing was changed") and the host's
   ("VibeField can't run flows: …", above) are unchanged.
+- *Not built at this tip: item 302 (2026-11-10):* no surface says "Couldn't run ‹flow›:". A Run an item's act refuses
+  is said on its card as "You said ‹act› · Couldn't finish it: ‹reason›", and to its spark as "the run of ‹flow› you
+  allowed ‹spark› could not start: ‹reason›"; the flows.run door's refusal is the reason alone.
 
 A step's session is the run's, never a spark's to steer (CP4-S18). A spark that asks to send to it, or to stop its
 turn, is told, in the talk room's own voice: "that agent is a flow's step; ask its run". A spark may end a step only
 of a run it started itself, never one you started in its thread, and may watch any step.
+*Not built at this tip: item 302 (2026-11-10), the step's words:* the talk room has none. A spark that sends to a step
+is told "you may send only to the user's sessions or your own agents"; one that stops a step's turn is not refused,
+and the stop is sent.
+*Not built at this tip: item 302 (2026-11-10), a spark's end of a step:* every step is refused, "you may end only the
+agents you started", in a run the spark started or not; it may watch a step only within its Agent Profiles.
 
 **When a run can't go on, or waits** (track CO, CP-4a2b; 13a's D1–D22, Q-A1, Q-A2, J3, J7, Q-B1 and Q-B2, ruled by
 VF-PM 2026-11-05 16:24Z; the words are open until James reads them on a run). ‹flow› is the meta name, cut as above;
