@@ -300,6 +300,7 @@ describe("what the deck lends the line (FR-2)", () => {
         sessionId: "s1",
         name: "VibeField",
         runs: "Claude Code",
+        agent: "claude",
         state: "working",
         active: false,
       },
