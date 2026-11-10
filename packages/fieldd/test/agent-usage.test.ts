@@ -1000,6 +1000,100 @@ describe("a meter a later reading did not carry keeps its own read (item 274)", 
   });
 });
 
+// ── item 283: a stamped push before fieldd has reconciled, with nobody watching ──
+//
+// At puppeteer 0.4.0 a push stamped with an account that has no row yet, before the registry has
+// answered, is kept under its BARE id as its label (`ingestState`, account-usage-monitor.ts:429-430
+// at v0.4.0), and only a reconcile names that row or drops it. With nobody watching, fieldd ran
+// none: a phone's ask is answered from the cache and never reconciles (daemon.ts:5173-5178), a
+// cold `snapshot()` kicks only before any batch exists, and the push itself makes one, since the
+// monitor publishes it synchronously (`ingest` → `materializeBatch` → fieldd's `ingestBatch`); the
+// phone asks only the cache (MetersFeed.swift:147). So the push itself kicks one reconcile, with
+// `poll: false`.
+
+const WORK: AgentProfile = {
+  id: "work",
+  provider: "scripted",
+  label: "Work",
+  kind: "managed",
+  dataRoot: "/unused/work",
+  createdAt: new Date(0).toISOString(),
+};
+
+/** a fake runtime whose registry names `profiles`, counting each time it is read */
+function registryRuntime(profiles: AgentProfile[]): {
+  runtime: FakeRuntime;
+  listed: () => number;
+} {
+  const runtime = fakeRuntime(30 * 60_000);
+  let listed = 0;
+  runtime.profiles = async () => {
+    listed += 1;
+    return profiles;
+  };
+  return { runtime, listed: () => listed };
+}
+
+/** the clock these rows stand at: the push's own moment */
+const pushedNow = () => new Date(Date.parse(PUSHED_AT));
+
+const row = (service: AccountUsageService, profileId: string) =>
+  service.snapshot().entries.find((entry) => entry.profileId === profileId);
+
+describe("a stamped push before any reconcile, with nobody watching (item 283)", () => {
+  it("kicks ONE reconcile that names the row from the registry, and spends no reading", async () => {
+    const { runtime, listed } = registryRuntime([WORK]);
+    const service = new AccountUsageService({ runtime, now: pushedNow });
+    cleanup.push(() => service.stop());
+    service.start(); // armed; nobody subscribed, nothing reconciled yet
+    runtime.push(fiveHourOnly("scripted", PUSHED_AT, 70, "work"));
+    await until(() => row(service, "work")?.profileLabel === "Work", 2_000, "the row named");
+    expect(listed()).toBe(1);
+    expect(runtime.asked).toBe(0); // `poll: false`: the registry is read, no account is
+    // the provider's own unkeyed row goes with the reconcile: the registry names an account
+    expect(service.snapshot().entries.map((e) => e.profileId)).toEqual(["work"]);
+    expect(meters(row(service, "work"))).toEqual({ "five-hour": [70, undefined] });
+  });
+
+  it("an account the registry does not name is dropped by that reconcile", async () => {
+    const { runtime, listed } = registryRuntime([WORK]);
+    const service = new AccountUsageService({ runtime, now: pushedNow });
+    cleanup.push(() => service.stop());
+    service.start();
+    runtime.push(fiveHourOnly("scripted", PUSHED_AT, 70, "ghost"));
+    await until(() => listed() === 1 && row(service, "ghost") === undefined, 2_000, "dropped");
+    expect(service.snapshot().entries.map((e) => e.profileId)).toEqual(["work"]);
+    expect(runtime.asked).toBe(0);
+  });
+
+  it("one kick per boot: a second push kicks nothing more", async () => {
+    const { runtime, listed } = registryRuntime([WORK]);
+    const service = new AccountUsageService({ runtime, now: pushedNow });
+    cleanup.push(() => service.stop());
+    service.start();
+    runtime.push(fiveHourOnly("scripted", PUSHED_AT, 70, "work"));
+    await until(() => listed() === 1, 2_000, "the one kick");
+    runtime.push(fiveHourOnly("scripted", "2026-09-13T12:01:30.000Z", 71, "work"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(listed()).toBe(1);
+  });
+
+  // A GUARD, green on arrival: a forced read reconciles first today (`refresh`), so no kick is
+  // owed after it. It reddens only if the kick ever ignores a reconcile fieldd already asked for.
+  it("none after any reconcile: a cold forced read reconciled first, so a push kicks nothing", async () => {
+    const { runtime, listed } = registryRuntime([WORK]);
+    const service = new AccountUsageService({ runtime, now: pushedNow });
+    cleanup.push(() => service.stop());
+    service.start();
+    runtime.answers.push(available("scripted", READ_AT));
+    await service.refresh({ force: true }); // the forced refresh reconciles with `poll: false`
+    expect(listed()).toBe(1);
+    runtime.push(fiveHourOnly("scripted", PUSHED_AT, 70, "work"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(listed()).toBe(1);
+  });
+});
+
 // ── the real provider, opt-in ─────────────────────────────────────────────
 
 const REAL = process.env["FIELDD_TEST_REAL_AGENT"] === "1";
