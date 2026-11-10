@@ -251,10 +251,10 @@
   --vf-mark-cobalt: #083cff;
 
   /* §8 the card's bloom: always on the quiet dark veil, so one value for both themes */
-  --vf-bloom-veil: rgb(10 10 10 / 80%);
-  --vf-bloom-ground: #0a0a0a;
-  --vf-bloom-bud: #242424;
-  --vf-bloom-ink: #f5f5f7;
+  --vf-card-bloom-veil: rgb(10 10 10 / 80%);
+  --vf-card-bloom-ground: #0a0a0a;
+  --vf-card-bloom-bud: #242424;
+  --vf-card-bloom-ink: #f5f5f7;
 
   /* §2.7 Godview instrument palette — exact values from the Chopsticks
      Godview reference. Both modes live here because Godview owns a local theme

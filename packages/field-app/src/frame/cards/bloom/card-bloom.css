@@ -5,7 +5,7 @@
   position: fixed;
   z-index: 65;
   inset: 0;
-  color: var(--vf-bloom-ink);
+  color: var(--vf-card-bloom-ink);
 }
 
 .vf-card-bloom[data-still] {
@@ -16,7 +16,7 @@
 .vf-card-bloom-veil {
   position: absolute;
   inset: 0;
-  background: var(--vf-bloom-veil);
+  background: var(--vf-card-bloom-veil);
   animation: vf-card-bloom-fade 240ms ease both;
 }
 
@@ -26,7 +26,7 @@
   height: 400px;
   margin: -200px 0 0 -200px;
   border-radius: 50%;
-  background: radial-gradient(circle, var(--vf-bloom-ground) 0 46%, transparent 70%);
+  background: radial-gradient(circle, var(--vf-card-bloom-ground) 0 46%, transparent 70%);
   animation: vf-card-bloom-fade 200ms ease both;
 }
 
@@ -35,7 +35,7 @@
   height: 1.25px;
   margin-top: -0.6px;
   transform-origin: 0 50%;
-  background: color-mix(in srgb, var(--vf-bloom-ink) 22%, transparent);
+  background: color-mix(in srgb, var(--vf-card-bloom-ink) 22%, transparent);
   animation: vf-card-bloom-fade 280ms ease both;
 }
 
@@ -49,9 +49,9 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
-  color: var(--vf-bloom-ink);
-  background: var(--vf-bloom-bud);
-  box-shadow: inset 0 0 0 1.25px color-mix(in srgb, var(--vf-bloom-ink) 22%, transparent);
+  color: var(--vf-card-bloom-ink);
+  background: var(--vf-card-bloom-bud);
+  box-shadow: inset 0 0 0 1.25px color-mix(in srgb, var(--vf-card-bloom-ink) 22%, transparent);
   place-items: center;
   transition:
     transform 180ms var(--vf-ease-lift),
@@ -61,22 +61,22 @@
 }
 
 .vf-card-bloom-bud[data-on] {
-  color: var(--vf-bloom-bud);
-  background: var(--vf-bloom-ink);
+  color: var(--vf-card-bloom-bud);
+  background: var(--vf-card-bloom-ink);
   transform: scale(1.16);
 }
 
 .vf-card-bloom-bud[data-faint] {
-  color: color-mix(in srgb, var(--vf-bloom-ink) 45%, transparent);
+  color: color-mix(in srgb, var(--vf-card-bloom-ink) 45%, transparent);
   background: transparent;
   box-shadow: none;
-  outline: 1.25px dashed color-mix(in srgb, var(--vf-bloom-ink) 40%, transparent);
+  outline: 1.25px dashed color-mix(in srgb, var(--vf-card-bloom-ink) 40%, transparent);
   outline-offset: -1.25px;
 }
 
 .vf-card-bloom-bud[data-faint][data-on] {
-  color: color-mix(in srgb, var(--vf-bloom-ink) 60%, transparent);
-  background: color-mix(in srgb, var(--vf-bloom-ink) 6%, transparent);
+  color: color-mix(in srgb, var(--vf-card-bloom-ink) 60%, transparent);
+  background: color-mix(in srgb, var(--vf-card-bloom-ink) 6%, transparent);
   transform: none;
 }
 
@@ -85,11 +85,11 @@
   position: absolute;
   display: grid;
   gap: 2px;
-  color: color-mix(in srgb, var(--vf-bloom-ink) 78%, transparent);
+  color: color-mix(in srgb, var(--vf-card-bloom-ink) 78%, transparent);
   white-space: nowrap;
   text-shadow:
-    0 0 6px var(--vf-bloom-ground),
-    0 0 2px var(--vf-bloom-ground);
+    0 0 6px var(--vf-card-bloom-ground),
+    0 0 2px var(--vf-card-bloom-ground);
   animation: vf-card-bloom-fade 200ms ease calc(140ms + var(--k) * 26ms) both;
 }
 
@@ -109,7 +109,7 @@
 }
 
 .vf-card-bloom-label[data-on] {
-  color: var(--vf-bloom-ink);
+  color: var(--vf-card-bloom-ink);
 }
 
 .vf-card-bloom-label b {
@@ -139,18 +139,18 @@
   line-height: 1;
   letter-spacing: -0.04em;
   text-shadow:
-    0 0 24px var(--vf-bloom-ground),
-    0 0 4px var(--vf-bloom-ground);
+    0 0 24px var(--vf-card-bloom-ground),
+    0 0 4px var(--vf-card-bloom-ground);
   animation: vf-card-bloom-slate 150ms ease both;
 }
 
 .vf-card-bloom-verb {
-  color: color-mix(in srgb, var(--vf-bloom-ink) 40%, transparent);
+  color: color-mix(in srgb, var(--vf-card-bloom-ink) 40%, transparent);
 }
 
 .vf-card-bloom-where {
   margin-top: 8px;
-  color: color-mix(in srgb, var(--vf-bloom-ink) 60%, transparent);
+  color: color-mix(in srgb, var(--vf-card-bloom-ink) 60%, transparent);
   font: 500 13px / 1 var(--vf-font-mono);
 }
 
