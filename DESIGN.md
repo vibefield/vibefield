@@ -1191,8 +1191,9 @@ retract curve** (to `.985`) and the sample fades over **480ms `ease`**, uncoveri
 waits for them. Reduced motion: each is one 120ms `ease` fade. **The mark means working** (HG-L1): a living mark that
 stands for a wait (§8 "The living mark, drawn as SVG") moves only while that work moves. A wait whose work has stopped
 answering (its updates paused) shows the mark at rest, the icon's pose, beside its words, and the mark moves again when
-the work does; reduced motion stands every mark at rest. **History's holds** (HG-W1) move as FG-4b's: late as the
-veil's words are (nothing for 120ms, then the words over 180ms `ease` and the mark in over 400ms with them), a new line
+the work does; reduced motion stands every mark at rest. **History's holds** (HG-W1) move as FG-4b's: late (nothing
+for 120ms, then the words over 180ms `ease` and the mark in over 400ms with them; *amended 2026-11-10, item 281's
+veil: this read "late as the veil's words are", and the veil has none now*), a new line
 crossfading in place (140ms out, then 240ms in) while a new sub under the same line only counts, the mark out over
 280ms when the hold leaves, never travelling, scaling or taking a second place. A hold that has begun to show stands at
 least 800ms (the floor above), and a hold the room takes over while it shows is carried, never faded out and shown
@@ -4510,6 +4511,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *Amended 2026-10-07 (DK-16; §2.1's erratum, measured):* the veil wears the mat — its lit sage and
   its lattice, opaque — and its bar and label are in the mat's ink (`--vf-mat-ink`, white at 60 %:
   4.0:1 by day, 5.2:1 by night), so a switch goes from desk to desk on one floor.
+  *Amended 2026-11-10 (item 281's veil; VF-PM's reading of James's IS-281 A, "the bar alone", which the page asked
+  of the splash only, so it can be pulled alone):* while a doc loads the bar alone speaks, at the veil's centre, and
+  no label stands under it. The label named each step in the DocManager's own words ("opening doc" … "drawing the
+  board"), which are VibeField's insides; they leave the screen, and nothing takes their place. The boot still logs
+  them as it opens the window's first board (`renderer.boot.stage`, §8 "The boot splash"); a later switch logs none.
 - **The boot splash** (ESR slice 4; design-03 §4.3 v0.3): the app's first face, painted
   before anything heavy loads — the canvas ground itself (`--vf-canvas-bg` + the §2.1
   CSS-fallback dots at rest; the field waking, not a logo card), the wordmark
@@ -6037,7 +6043,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     running to the window's sides — 8 clear at each side until HN-8 — and the room's hairline under
     the head band), and in the consent line's place and
     type (the kit's empty state under the `history` glyph) it says **"Opening History"** —
-    "rosetta's room is loading." The words are **late**, as the veil's are: invisible until 120ms
+    "rosetta's room is loading." The words are **late** (*amended 2026-11-10, item 281's veil: this read
+    "late, as the veil's are", and the veil has no words now*): invisible until 120ms
     have passed, then a 180ms plain `ease` fade, so a room already loaded never flashes them; the
     glass under them is the room's own, so nothing moves when the room takes their place. A room
     that cannot open says so in the same place, never a blank: **"History could not open"** over
