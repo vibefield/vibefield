@@ -20,6 +20,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -476,6 +477,51 @@ describe("the desk's store as the real daemon binds it (C4, C5, rule 6)", () => 
     expect(mock.requestLog.map((request) => request.method)).not.toContain("native.marks.set");
     expect(daemon.custodyMarks.get(MARK)).toBe(file.generation);
   });
+
+  // THE STOP (the lead, 2026-11-10, on ob-d's note at `9675e5a08`; the PM's bound of 04:39:21Z: the stop releases
+  // the desk's store and its one timer, and nothing of what the stop removes moves). The store writes a take-back
+  // the disk would not take AGAIN on a timer (grants-file.ts `RETRY_MS`, 5 s; production hands the store no other).
+  // That timer belongs to a fieldd that is alive. Left armed past the stop, it writes a signed grants file under a
+  // root that is the next fieldd's by then, or a test's temp root that is gone.
+  //
+  // Nothing is injected: the disk is made to refuse ONE write by a folder standing where the store writes its file
+  // beside itself before the rename (`<grants file>.<pid>.tmp`; these daemons run in this process), and the folder
+  // is taken away again before anything is waited for.
+  it("a stopped fieldd's desk store writes nothing afterwards: a take-back the disk would not take is written again by the store's timer while fieldd lives, and never once fieldd has stopped", async () => {
+    /** longer than the store's timer, with room for a loaded host */
+    const PAST_THE_RETRY_MS = 7_500;
+    const beside = (dataDir: string): string => `${grantsPath(dataDir)}.${process.pid}.tmp`;
+    /** A hand, then a take-back the disk would not take: the door says so (`kept: false`), the store has removed
+     * its file so that no restart finds the take-back undone, and its timer is armed. The disk takes writes again
+     * from the moment this returns. */
+    const lostTakeBack = async (world: Desk): Promise<void> => {
+      const ref = await named(world.win, "k1");
+      const hand = await world.win.call("objects.hand", { ref, run: RUN });
+      expect(hand).toEqual({ handed: true });
+      mkdirSync(beside(world.dataDir));
+      const back = await world.win.call("objects.takeBack", { ref, run: RUN });
+      expect(back).toEqual({ taken: true, kept: false });
+      expect(existsSync(grantsPath(world.dataDir))).toBe(false);
+      rmSync(beside(world.dataDir), { recursive: true });
+    };
+
+    // THE CONTROL: while fieldd lives, the timer writes the file again, with the take-back in it
+    const living = await desk("sealed", { vouched: true });
+    await lostTakeBack(living);
+    await until(
+      () => (existsSync(grantsPath(living.dataDir)) ? true : null),
+      "the living store's timer writing its file again",
+      PAST_THE_RETRY_MS + 5_000,
+    );
+    expect(grantsOnDisk(living.dataDir)).toMatchObject({ sealed: true, grants: [] });
+
+    // the same, and fieldd stops with the timer armed: past the timer's time, nothing has been written
+    const stopped = await desk("sealed", { vouched: true });
+    await lostTakeBack(stopped);
+    await stopped.daemon.stop();
+    await new Promise((resolve) => setTimeout(resolve, PAST_THE_RETRY_MS));
+    expect(existsSync(grantsPath(stopped.dataDir))).toBe(false);
+  }, 90_000);
 });
 
 // ---- the entry itself, as a process ----
