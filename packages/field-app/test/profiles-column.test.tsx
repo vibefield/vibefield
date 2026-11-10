@@ -2007,17 +2007,31 @@ describe("the pill's room (UM-R-F, c6): the circles scroll inside it, the add pi
       let room = 200;
       const natural = (node: Element): number =>
         node.hasAttribute("data-overflow") ? content + 16 : content;
+      // the review's F2: each read of the list's height, with whether the mark stood for it
+      const reads: boolean[] = [];
       vi.spyOn(Element.prototype, "scrollHeight", "get").mockImplementation(function (
         this: Element,
       ) {
-        return this.classList.contains("vf-profiles-circles") ? natural(this) : 0;
+        if (!this.classList.contains("vf-profiles-circles")) return 0;
+        reads.push(this.hasAttribute("data-overflow"));
+        return natural(this);
       });
+      // the sheet's padding under the list's end (happy-dom applies no sheet): the gap's 4, the fade's 20 marked
+      const realStyle = window.getComputedStyle.bind(window);
+      vi.spyOn(window, "getComputedStyle").mockImplementation((node, pseudo) =>
+        node.classList.contains("vf-profiles-circles")
+          ? ({
+              paddingBottom: node.hasAttribute("data-overflow") ? "20px" : "4px",
+            } as CSSStyleDeclaration)
+          : realStyle(node, pseudo),
+      );
       vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (
         this: HTMLElement,
       ) {
         return this.classList.contains("vf-profiles-circles") ? Math.min(room, natural(this)) : 0;
       });
-      const page = mount(<ProfilesColumnView {...several({ cardLayer: cardLayer() })} />);
+      const target = cardLayer();
+      const page = mount(<ProfilesColumnView {...several({ cardLayer: target })} />);
       const list = page.querySelector(".vf-profiles-circles");
       expect(list?.hasAttribute("data-overflow")).toBe(true);
       const watching = observers.find((each) => list !== null && each.targets.includes(list));
@@ -2028,6 +2042,17 @@ describe("the pill's room (UM-R-F, c6): the circles scroll inside it, the add pi
       expect(list?.hasAttribute("data-overflow")).toBe(false);
       room = 200;
       act(() => watching?.fire());
+      expect(list?.hasAttribute("data-overflow")).toBe(true);
+      // the review's F2: a measure that keeps the mark never takes it off to read, so the box never moves under a
+      // list scrolled to its end. A render that keeps every profile does not measure at all; the room moving does.
+      reads.length = 0;
+      act(() =>
+        root?.render(<ProfilesColumnView {...several({ cardLayer: target, open: "work" })} />),
+      );
+      expect(reads).toEqual([]);
+      act(() => watching?.fire());
+      expect(reads.length).toBeGreaterThan(0);
+      expect(reads.every((stood) => stood)).toBe(true);
       expect(list?.hasAttribute("data-overflow")).toBe(true);
       // the catalog's list never scrolls, so it is never marked
       act(() => root?.render(<ProfilesColumnView {...several()} />));

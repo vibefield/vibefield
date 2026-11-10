@@ -187,18 +187,34 @@ function cardKeys(
 }
 
 /** UM-R-F (c6; §8 "The pill", §4 `--vf-scroll-fade`): marks the circles' list `data-overflow` while it holds more than
- * its room, so the sheet gives it §4's fade. It is measured as the list stands without the fade, whose 20 under its
- * end would otherwise keep a list that fits marked. In the stage only: the catalog's list never scrolls. The mark is
- * the DOM's own, set here and read by the sheet alone, so React never renders it. */
-function useOverflowMark(list: RefObject<HTMLDivElement | null>, measure: boolean): void {
+ * its room, so the sheet gives it §4's fade. It is measured as the list would stand without the fade, whose 20 under
+ * its end would otherwise keep a list that fits marked. In the stage only: the catalog's list never scrolls. The mark
+ * is the DOM's own, set here and read by the sheet alone, so React never renders it.
+ * It never changes the box to measure it (the review's F2): taking the mark off for a read laid the list out 16
+ * shorter, and Chromium clamped a list scrolled to its end, which the mark's return did not undo. So the fade's extra
+ * padding is read off instead: the list's own padding under its end, taken while it stands unmarked, against the
+ * padding it wears marked. The mark moves only when the answer does. */
+function useOverflowMark(
+  list: RefObject<HTMLDivElement | null>,
+  measure: boolean,
+  count: number,
+): void {
+  const unmarkedPadding = useRef<number | null>(null);
   const mark = useCallback((): void => {
     const node = list.current;
     if (!node) return;
-    if (node.hasAttribute("data-overflow")) node.removeAttribute("data-overflow");
-    node.toggleAttribute("data-overflow", measure && node.scrollHeight > node.clientHeight);
+    const marked = node.hasAttribute("data-overflow");
+    const padding = Number.parseFloat(getComputedStyle(node).paddingBottom) || 0;
+    if (!marked) unmarkedPadding.current = padding;
+    const extra = marked ? Math.max(0, padding - (unmarkedPadding.current ?? padding)) : 0;
+    const over = measure && node.scrollHeight - extra > node.clientHeight;
+    if (over !== marked) node.toggleAttribute("data-overflow", over);
   }, [list, measure]);
-  // measured as it stands and whenever the column renders (a profile more or fewer), before it paints
-  useLayoutEffect(mark);
+  // measured as it stands and whenever a profile comes or goes, before it paints
+  useLayoutEffect(() => {
+    void count;
+    mark();
+  }, [mark, count]);
   // …and whenever its room moves, with the window, the deck's edge and the cover's scale
   useEffect(() => {
     const node = list.current;
@@ -240,7 +256,7 @@ export function ProfilesColumnView({
   // UM-R-F (c3; §8 "A circle"): the circle the pin holds wears the quiet tell, under a peek too
   const held = pinnedProfile !== undefined ? pinnedProfile : pinned ? open : null;
   const listRef = useRef<HTMLDivElement>(null);
-  useOverflowMark(listRef, cardLayer !== null && cardLayer !== undefined);
+  useOverflowMark(listRef, cardLayer !== null && cardLayer !== undefined, circles.length);
   return (
     // biome-ignore lint/a11y/useSemanticElements: a column of buttons — the profiles and the add — not a fieldset of form inputs
     <div
