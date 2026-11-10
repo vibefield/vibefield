@@ -16,7 +16,15 @@
 // routes, so a birth or a terminate that goes ahead fails at the cell's paper
 // socket: these rows read whether one was ASKED (spies on the terminal
 // service), never what a cell would have answered.
-import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
@@ -29,7 +37,7 @@ import {
 } from "@vibefield/contracts";
 import type { AgentAdapterBinding } from "@vibefield/puppeteer-core";
 import type { AgentProvider, AgentProviderSessionOptions } from "@vibefield/puppeteer-runtime";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import WebSocket from "ws";
 import { LAST_RUN_SETTLE_MS } from "../src/agent-last-run";
 import { ASKED_EXIT_GRACE_MS, EXIT_GRACE_MS } from "../src/agent-runtime";
@@ -145,6 +153,10 @@ interface AgentDaemonSeams {
   processTable?: NonNullable<FielddConfig["agentGateway"]>["processTable"];
   /** the root as the disk holds it when fieldd starts, made after the staged records are written */
   beforeBoot?: (dataDir: string) => void;
+  /** Q17's seam: the signal a typed run's end sends, recorded by the row instead of sent */
+  kill?: NonNullable<FielddConfig["agentGateway"]>["kill"];
+  /** fieldd's own log under `<dataDir>/logs` (none by default: the runtime's logger is a no-op) */
+  logs?: boolean;
 }
 
 /** A daemon over the mock floor answering `observedState` on the fixtures'
@@ -158,7 +170,7 @@ async function agentDaemonOn(
   staged: (dataDir: string) => AgentSessionRecord[],
   seams: AgentDaemonSeams = {},
 ): Promise<AgentFloor> {
-  const { lastBoard, processTable, beforeBoot } = seams;
+  const { lastBoard, processTable, beforeBoot, kill, logs } = seams;
   const dataDir = mkdtempSync(join(tmpdir(), "vf-agent-age-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -188,6 +200,7 @@ async function agentDaemonOn(
   const births: string[] = [];
   const daemon = await bootstrap({
     dataDir,
+    ...(logs === true ? { logRoot: join(dataDir, "logs") } : {}),
     controlPort: 0,
     dataPort: 0,
     secretStore: keychainInMemory(),
@@ -195,7 +208,11 @@ async function agentDaemonOn(
     // the scripted agent alone: no built-in agent's readers run on this machine
     agentProviders: () => [countingAgent(births)],
     // no gateway; a typed run's record is proven against the row's process table, when it hands one
-    agentGateway: { enabled: false, ...(processTable !== undefined ? { processTable } : {}) },
+    agentGateway: {
+      enabled: false,
+      ...(processTable !== undefined ? { processTable } : {}),
+      ...(kill !== undefined ? { kill } : {}),
+    },
     // a pending run's idle poll never fires inside a row: the door is the subject
     agentResumeWhenIdle: { afterMs: 600_000, pollMs: 600_000 },
   });
@@ -942,4 +959,172 @@ describe("records the re-attach could not read (item 201, vf-runtime-5; the mock
       births: 0,
     });
   });
+});
+
+// Q17's leg (2026-11-10). EVERY PID AND THE KILL ARE FAKED; NO PROCESS IS SIGNALLED.
+// A Stop reaches a run this boot holds PENDING (`endRun`) by its provenance, as `endLive` ends a
+// managed one: a run in its own PTY by that PTY, a run TYPED in the person's shell (AR-7) by its
+// process (`endTypedRun`, on the proof its record carries), and never by its terminal, which is the
+// person's shell. Before it, `endRun` read `managed` alone, and a held run's Stop ended nothing.
+//
+// What is faked, and why each is safe:
+//  · the floor is the mock (no cell behind it), and its terminate is spied, as the rows above do;
+//  · the process table is the row's (`processTable`), and the kill is a recorder (`kill`, Q17's
+//    seam): `process.kill` with a signal is never reached;
+//  · the typed run's pid is this worker's OWN. AR-7c's hold asks the system whether it lives
+//    (`processIsGone`, signal 0, which sends nothing) and closes at once a run whose pid is
+//    gone, so the pid must answer alive; and a seam that leaked could reach no process but this
+//    worker;
+//  · the shell's pid is the fixtures' (51207), a number only the row's table holds: B1 refuses it
+//    and the walk never descends to it, and nothing is sent to any pid.
+// The run's own exit (the pid watch, AR-7c) is not read here: this worker's pid never leaves. Its
+// first real read is agent-gateway's floor rows, on V.
+//
+// THE NET, a guard beside the recorder, never the assertion of what fieldd does: the rows' safety
+// rests on daemon.ts's one line threading `agentGateway.kill` → `typedKill`. Were it ever lost, the
+// default `process.kill` would signal this worker. So here `process.kill` passes signal 0 (the pid
+// watch's existence probe) through to the system and THROWS for any other signal, and each row
+// ends by reading that no other signal was ever asked of it. The net is restored in this
+// describe's own afterEach, which runs before the file's afterEach stops the daemon (vitest 3.2.7
+// runs after-hooks in stack order), so it does not cover the teardown. The recorder does, since
+// the daemon keeps its seam until it stops. And the teardown cannot reach `endTypedRun`, by read:
+// its one caller is `endLive`, whose callers are `endRun` (talk's `end`, and FlowRuns, unbound at
+// this tree) and a Stop's escalation, which never takes a typed run.
+describe("Q17's leg — a Stop ends a run this boot holds pending, by its provenance", () => {
+  const TYPED = "run-typed-held";
+  const SHELL_STARTED = "2026-11-10T09:00:00.000Z";
+  const AGENT_STARTED = "2026-11-10T09:05:00.000Z";
+  const realKill = process.kill.bind(process);
+  let net: MockInstance<typeof process.kill> | undefined;
+  beforeEach(() => {
+    net = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (signal === 0) return realKill(pid, 0);
+      throw new Error("Q17: a real signal was about to be sent");
+    });
+  });
+  afterEach(() => {
+    net?.mockRestore();
+    net = undefined;
+  });
+  /** every signal but 0 asked of `process.kill` while the row ran (the net threw for each) */
+  const realSignals = () => (net?.mock.calls ?? []).filter(([, signal]) => signal !== 0);
+  /** the typed run's pid: this worker's own (the head says why) */
+  const AGENT = process.pid;
+  /** the person's shell: the fixtures' ZSH row, as the floor lists it */
+  const SHELL = (freshFloor()["terminals"] as Array<{ sessionId: string; pid: number }>).find(
+    (row) => row.sessionId === ZSH,
+  )?.pid as number;
+
+  /** What this row's fieldd said of a typed run's end, in order: [severity, end]. */
+  const typedEnds = (dataDir: string, runtimeRunId: string): Array<[string, unknown]> => {
+    const file = join(dataDir, "logs", "system", "fieldd.ndjson");
+    if (!existsSync(file)) return [];
+    return readFileSync(file, "utf8")
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .map(
+        (line) =>
+          JSON.parse(line) as { event: string; severity: string; attrs?: Record<string, unknown> },
+      )
+      .filter(
+        (line) =>
+          line.event === "fieldd.agents.typed_run_end" &&
+          line.attrs?.["runtimeRunId"] === runtimeRunId,
+      )
+      .map((line) => [line.severity, line.attrs?.["end"]]);
+  };
+
+  /** A typed run the last fieldd adopted in the person's shell, held pending by this boot: its
+   * record predates the durable identity, so no attach is asked, and its proof is the row's table
+   * (its process under the shell, started when the record says). `obeys`: the recorder takes the
+   * process out of the table at its SIGTERM, as an agent that ends leaves the grace's second
+   * read. */
+  async function heldTyped(obeys = false) {
+    const signals: Array<[number, NodeJS.Signals]> = [];
+    const table = {
+      readable: true,
+      rows: new Map<number, { pid: number; parentPid: number; startedAt: string | undefined }>([
+        [SHELL, { pid: SHELL, parentPid: 1, startedAt: SHELL_STARTED }],
+        [AGENT, { pid: AGENT, parentPid: SHELL, startedAt: AGENT_STARTED }],
+      ]),
+    };
+    const kill = (pid: number, signal: NodeJS.Signals): void => {
+      signals.push([pid, signal]);
+      if (obeys && pid === AGENT && signal === "SIGTERM") table.rows.delete(AGENT);
+    };
+    const box = await agentDaemonOn(
+      freshFloor(),
+      (dataDir) => [
+        runRecord(TYPED, ZSH, dataDir, {
+          spawnedBy: "user-shell",
+          process: { pid: AGENT, startedAt: AGENT_STARTED },
+        }),
+      ],
+      { logs: true, kill, processTable: async () => (table.readable ? table.rows : undefined) },
+    );
+    await until(
+      () => box.daemon.agents.list().sessions.some((row) => row.runtimeRunId === TYPED),
+      10_000,
+      "the typed run held pending",
+    );
+    expect(box.records.read(TYPED)?.exited, "held, not stamped").toBeUndefined();
+    // the floor's terminate, asked of no cell: a call here is the person's shell
+    const terminate = vi
+      .spyOn(box.daemon.terminals, "terminate")
+      .mockResolvedValue({ terminated: true });
+    return { ...box, table, signals, terminate };
+  }
+
+  it("a typed run held pending ends by its PROCESS: SIGTERM on the pid its record proves, never its terminal", async () => {
+    const box = await heldTyped(true);
+    await box.daemon.agents.endRun(TYPED);
+    // before Q17's leg `endRun` read `managed` alone, and this Stop ended nothing (received: [])
+    expect(box.signals, "its process, by its proof, and no more once it left").toEqual([
+      [AGENT, "SIGTERM"],
+    ]);
+    expect(box.terminate, "never the terminal: it is the person's shell").not.toHaveBeenCalled();
+    await until(() => typedEnds(box.dataDir, TYPED).length === 1, 5_000, "the end, logged");
+    expect(typedEnds(box.dataDir, TYPED)).toEqual([["INFO", "signalled"]]);
+    expect(realSignals(), "the net: no real signal was asked").toEqual([]);
+  }, 30_000);
+
+  it("an untyped run held pending ends by its own PTY: the floor's terminate on the session its record names", async () => {
+    const { daemon, records } = await heldRun();
+    const terminate = vi
+      .spyOn(daemon.terminals, "terminate")
+      .mockResolvedValue({ terminated: true });
+    await daemon.agents.endRun(RUN);
+    // before Q17's leg: no call (Number of calls: 0)
+    expect(terminate, "its own PTY, on the agent cell").toHaveBeenCalledWith(CLAUDE);
+    expect(terminate).toHaveBeenCalledTimes(1);
+    // and the run closes as that PTY's exit, as any held run's does
+    await daemon.agents.handleTerminalExit(exited());
+    expect(records.read(RUN)?.exited?.reason).toBe("application-terminated");
+    expect(realSignals(), "the net: no real signal was asked").toEqual([]);
+  }, 30_000);
+
+  it("a typed run held pending whose process the table does not prove gets no end, and the log says so at warn", async () => {
+    const box = await heldTyped();
+    // the pid handed on: a later process holds it (`not-it`)
+    box.table.rows.set(AGENT, {
+      pid: AGENT,
+      parentPid: SHELL,
+      startedAt: "2026-11-10T10:00:00.000Z",
+    });
+    await box.daemon.agents.endRun(TYPED);
+    // and a table that cannot be read (`unknown`)
+    box.table.readable = false;
+    await box.daemon.agents.endRun(TYPED);
+    expect(box.signals, "nothing signalled").toEqual([]);
+    expect(box.terminate, "nothing terminated").not.toHaveBeenCalled();
+    // before Q17's leg nothing was said: the until's own timeout is the red
+    await until(() => typedEnds(box.dataDir, TYPED).length === 2, 5_000, "the two warns");
+    expect(typedEnds(box.dataDir, TYPED)).toEqual([
+      ["WARN", "not-it"],
+      ["WARN", "unknown"],
+    ]);
+    expect(box.records.read(TYPED)?.exited, "the run stands").toBeUndefined();
+    expect(box.daemon.agents.list().sessions.some((row) => row.runtimeRunId === TYPED)).toBe(true);
+    expect(realSignals(), "the net: no real signal was asked").toEqual([]);
+  }, 30_000);
 });
