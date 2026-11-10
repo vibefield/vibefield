@@ -49,6 +49,7 @@ export type BootPhase =
 
 export interface BootUnavailable {
   phase: BootPhase;
+  /** what a person reads: `FAILED_START`, whatever failed (DESIGN.md §9); what failed is in the log */
   reason: string;
   retryable: boolean;
 }
@@ -143,6 +144,10 @@ export interface BootMachine {
 /** The splash's first words — and the switch's, whose leaving window says
  * them before main wakes the other user's pair (DESIGN.md §8 "The switch"). */
 export const FIRST_STAGE = "waking the daemon";
+
+/** What a start that failed says, whatever failed (DESIGN.md §9, VibeField's insides; item 280): the splash, the
+ * Setup Assistant's desk line and the switch draw it over Retry. What failed goes to the log, whole. */
+export const FAILED_START = "VibeField couldn't start.";
 
 const FRAME_BUDGET_MS = 24; // 60Hz + scheduling slack
 const STABLE_FRAMES = 10;
@@ -407,10 +412,17 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
       patch({ phase: "interactive", stage: "", degradedReveal: degraded });
       mark("vf:renderer:interactive");
     } catch (error) {
+      // One sentence, whatever failed (DESIGN.md §9; item 280). The error's own words name VibeField's insides (the
+      // daemon, its exit code and signal, Electron's channel), so they go to the log, whole, at the step that stopped.
+      deps.host.logger
+        .child({ component: "boot" })
+        .error("renderer.boot.failed", "VibeField couldn't start: the boot stopped", error, {
+          phase: view.phase,
+        });
       patch({
         unavailable: {
           phase: view.phase,
-          reason: error instanceof Error ? error.message : String(error),
+          reason: FAILED_START,
           retryable: true,
         },
       });

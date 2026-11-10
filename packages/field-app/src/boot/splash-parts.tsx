@@ -62,6 +62,7 @@ export function SplashStatus({
         <div className={`text-[11px] font-medium ${INK[ink]}`}>{status.stage}</div>
       ) : (
         <div className="flex flex-col items-center gap-2">
+          {/* the boot's one sentence (DESIGN.md §9, item 280); what failed is in the log */}
           <div className={`text-[11px] font-medium ${INK[ink]}`}>{failed.reason}</div>
           {failed.retryable && onRetry !== undefined && (
             <button

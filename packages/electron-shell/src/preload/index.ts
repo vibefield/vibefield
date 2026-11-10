@@ -257,12 +257,13 @@ const themeState = new PreloadThemeStateBridge((issueCount) => {
  * this machine." (UA-7), so the bridge hands back the handler's own words —
  * whichever Error class threw them: a `UsersError` from the §3.3 lock ("another
  * VibeField process is using this data folder…") is a sentence too. Every
- * users verb goes through it. */
+ * users verb goes through it, and so does the window's bootstrap (item 280): the boot logs what it is handed,
+ * so its log line is main's own words. A person reads none of them (DESIGN.md §9). */
 const REMOTE_ERROR_PREFIX = /^Error invoking remote method '[^']*': (?:[A-Za-z]*Error: )?/u;
 
-async function invokeInHandlerWords(channel: string, payload: unknown): Promise<unknown> {
+async function invokeInHandlerWords(channel: string, ...payload: [unknown?]): Promise<unknown> {
   try {
-    return await ipcRenderer.invoke(channel, payload);
+    return await ipcRenderer.invoke(channel, ...payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(message.replace(REMOTE_ERROR_PREFIX, ""));
@@ -358,7 +359,7 @@ contextBridge.exposeInMainWorld("vibefield", {
   claimLiveSurfacePortBridge,
   submitRendererLogs: (serializedBatch: string): boolean => logging.submit(serializedBatch),
   getConnection: async (): Promise<WindowConnection> =>
-    WindowConnection.parse(await ipcRenderer.invoke(IPC_CHANNELS.windowBootstrap)),
+    WindowConnection.parse(await invokeInHandlerWords(IPC_CHANNELS.windowBootstrap)),
   /** UA-3 — the Account page's profile write (name/face/resident/onboarded).
    * Validated both directions; main owns users.json and refuses empty or
    * unregistered-sender updates. UA-7: a face main refuses (another user's, a
