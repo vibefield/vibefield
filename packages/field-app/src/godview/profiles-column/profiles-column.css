@@ -102,6 +102,12 @@
   background: color-mix(in srgb, var(--vf-foreground) 6%, transparent);
 }
 
+/* UM-R-F (c3; §8 "A circle"): a pinned card's circle, one quiet tell. The ready fill, the ink at 8%, held under the
+   pointer and while another circle peeks; after the hover, at its specificity, so it wins. */
+.vf-profiles-circle[data-pinned] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
 /* the lens ring: 2 in the pill's solid, then 1.5 in the ink — the column's only 1.5, for a selection */
 .vf-profiles-circle[aria-pressed="true"] {
   box-shadow:

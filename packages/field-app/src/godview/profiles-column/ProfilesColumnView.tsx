@@ -36,6 +36,9 @@ export interface ProfilesColumnViewProps {
   open: string | null;
   /** the open popover was clicked open (it holds the keys; Esc closes it) */
   pinned: boolean;
+  /** UM-R-F (c3) — the profile whose card a click pinned, whether its card shows or another circle peeks over it;
+   * absent, the open card's while `pinned` (the catalog) */
+  pinnedProfile?: string | null | undefined;
   /** the plan the pointer is on in the open popover (its meter key) */
   focus: string | null;
   /** the open popover's head: the reading's age, or "Reading usage…" */
@@ -120,6 +123,7 @@ export function ProfilesColumnView({
   chosen,
   open,
   pinned,
+  pinnedProfile,
   focus,
   read,
   addOpen,
@@ -140,6 +144,8 @@ export function ProfilesColumnView({
   onRetry,
 }: ProfilesColumnViewProps): ReactElement {
   const popoverId = useId();
+  // UM-R-F (c3; §8 "A circle"): the circle the pin holds wears the quiet tell, under a peek too
+  const held = pinnedProfile !== undefined ? pinnedProfile : pinned ? open : null;
   return (
     // biome-ignore lint/a11y/useSemanticElements: a column of buttons — the profiles and the add — not a fieldset of form inputs
     <div ref={columnRef} className="vf-profiles-column" role="group" aria-label="Agent profiles">
@@ -166,6 +172,7 @@ export function ProfilesColumnView({
               aria-expanded={isOpen}
               {...(isOpen ? { "aria-controls": popoverId } : {})}
               {...(isOpen ? { "data-open": "" } : {})}
+              {...(held === id ? { "data-pinned": "" } : {})}
               onClick={() => onCircle(id)}
             >
               <BandsCircle

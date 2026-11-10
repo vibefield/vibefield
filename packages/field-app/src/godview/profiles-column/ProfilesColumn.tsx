@@ -248,6 +248,7 @@ function ProfilesColumnController({
       chosen={chosen}
       open={open}
       pinned={open !== null && open === pinned}
+      pinnedProfile={pinned}
       focus={focus}
       read={openCircle === undefined ? "" : readWords(openCircle.meters, clock)}
       addOpen={pointed === ADD_TARGET}
