@@ -1207,11 +1207,13 @@ mod tests {
         #[cfg(unix)]
         let mut child = std::process::Command::new("/bin/sh")
             .args(["-c", "exit 0"])
+            .stdin(std::process::Stdio::null())
             .spawn()
             .unwrap();
         #[cfg(windows)]
         let mut child = std::process::Command::new("cmd.exe")
             .args(["/d", "/s", "/c", "exit 0"])
+            .stdin(std::process::Stdio::null())
             .spawn()
             .unwrap();
         let pid = child.id();

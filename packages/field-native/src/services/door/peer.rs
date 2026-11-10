@@ -190,6 +190,7 @@ mod tests {
         let before = now_ms();
         let mut child = std::process::Command::new("sleep")
             .arg("5")
+            .stdin(std::process::Stdio::null())
             .spawn()
             .unwrap();
         let facts = process_facts(child.id());
@@ -213,7 +214,10 @@ mod tests {
 
     #[test]
     fn a_process_that_is_gone_has_no_facts() {
-        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let mut child = std::process::Command::new("true")
+            .stdin(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
         let pid = child.id();
         child.wait().unwrap();
         // reaped: until the system hands the pid on, the kernel knows no such process

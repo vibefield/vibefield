@@ -669,6 +669,7 @@ mod tests {
         let ledger = ledger_in(dir.path());
 
         let dead = std::process::Command::new(if cfg!(windows) { "cmd" } else { "true" })
+            .stdin(std::process::Stdio::null())
             .spawn()
             .expect("spawn a process that exits at once");
         let dead_pid = dead.id();
