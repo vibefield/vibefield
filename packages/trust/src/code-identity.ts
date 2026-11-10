@@ -3,6 +3,11 @@
 // only to a child that is the same team's, under the same runtime, BEFORE anything is written to it (`childIsOurs`).
 // So a daemon binary swapped in the bundle is spawned, asked about, and never handed a secret.
 //
+// C6b — and only to the binary the caller EXPECTS, by its signing identifier. "Our team, hardened" is true of every
+// binary our team signs, and the bundle holds others: `field-terminal-host` and `field-freeway-host` read the first
+// line of their own stdin as a bootstrap, and an agent starts `field-native door` at will. One of them in a daemon's
+// place would pass a team check and be handed the custody line. The requirement therefore names the identifier first.
+//
 // What this is NOT: a check on a peer. A pid proves nothing about who holds a socket (fork, then exec the genuine
 // binary: the pid verifies and the first process speaks). `childIsOurs` is sound only for a child its caller spawned
 // and has not reaped, whose pid cannot be another process's; `processIsOurs` says so about itself.
@@ -19,11 +24,25 @@ const TOOL_TIMEOUT_MS = 5_000;
 const TOOL_OUTPUT_BYTES = 256 * 1024;
 /** An Apple team identifier: ten capitals or digits. Checked before a team is ever put in a requirement. */
 const TEAM = /^[A-Z0-9]{10}$/;
+/** A code signing identifier as this module will ask for one: letters, digits, dot, underscore and hyphen, at most
+ * 128 characters, never a quote or a space. Checked before an identifier is ever put in a requirement. */
+const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+/** The signing identifiers of the two daemons custody is handed to: what the release signer gives each. It passes
+ * no `--identifier` today (`apps/desktop/packaging/sign-mac.mjs`), so each is codesign's default for a bare
+ * executable, its file name. READ, not measured: the custody row on a signed build is what proves these two words. */
+export const FIELDD_SIGNING_IDENTIFIER = "fieldd";
+export const FIELD_NATIVE_SIGNING_IDENTIFIER = "field-native";
 
 /** A team's signature under the hardened runtime: the only identity custody is handed on. */
 export interface CodeIdentity {
   readonly team: string;
   readonly hardened: true;
+}
+
+/** Which binary a caller expects at a pid: its signing identifier (`FIELDD_SIGNING_IDENTIFIER`, or the floor's). */
+export interface ExpectedCode {
+  readonly identifier: string;
 }
 
 export interface ToolResult {
@@ -101,16 +120,29 @@ export async function ownIdentity(
 }
 
 /** The one judgment both doors below make. Never throws: every doubt is `false`. */
-async function satisfies(pid: number, own: CodeIdentity, run: RunTool): Promise<boolean> {
-  // the team is spliced into a requirement, so it is held to its ten characters first: nothing else reaches the tool
+async function satisfies(
+  pid: number,
+  own: CodeIdentity,
+  expect: ExpectedCode,
+  run: RunTool,
+): Promise<boolean> {
+  // the team and the identifier are spliced into a requirement, so each is held to its own pattern first: nothing
+  // else reaches the tool, and neither can close the quotes it is put between
   if (!isPid(pid) || !TEAM.test(own.team)) return false;
+  if (typeof expect?.identifier !== "string" || !IDENTIFIER.test(expect.identifier)) return false;
   try {
+    // WHICH binary, then WHOSE: the identifier the caller expects, under Apple's anchor, signed by our team
+    const requirement = [
+      `=identifier "${expect.identifier}"`,
+      "anchor apple generic",
+      `certificate leaf[subject.OU] = "${own.team}"`,
+    ].join(" and ");
     // `-R` is codesign's `--test-requirement`, the VERIFY option. `--requirement` is not it: that abbreviates
     // `--requirements`, the signing option, and a verify given it tests no requirement at all.
-    const requirement = `=anchor apple generic and certificate leaf[subject.OU] = "${own.team}"`;
     const verified = await run(CODESIGN, ["--verify", "-R", requirement, `+${pid}`]);
     if (verified.code !== 0) return false;
-    // a second read: the requirement says whose, the flags say it runs hardened (no injected library, no debugger)
+    // a second read: the requirement says which and whose, the flags say it runs hardened (no injected library, no
+    // debugger)
     const theirs = await display(pid, run);
     return theirs?.hardened === true;
   } catch {
@@ -119,30 +151,34 @@ async function satisfies(pid: number, own: CodeIdentity, run: RunTool): Promise<
 }
 
 /**
- * true when the CHILD `pid` is signed by `own.team` and runs under the hardened runtime: the dynamic check
- * (`codesign --verify -R … +pid`), then its runtime flag. Only for a child the caller spawned and has not reaped. Its
- * pid is then that child's and no other process's, which is what makes a pid check sound here and nowhere else.
- * Await it BEFORE writing anything to the child.
+ * true when the CHILD `pid` is the binary `expect` names, signed by `own.team`, under the hardened runtime: the
+ * dynamic check (`codesign --verify -R … +pid`), then its runtime flag. Only for a child the caller spawned and has
+ * not reaped. Its pid is then that child's and no other process's, which is what makes a pid check sound here and
+ * nowhere else. Await it BEFORE writing anything to the child.
  */
 export function childIsOurs(
   pid: number,
   own: CodeIdentity,
+  expect: ExpectedCode,
   run: RunTool = runTool,
 ): Promise<boolean> {
-  return satisfies(pid, own, run);
+  return satisfies(pid, own, expect, run);
 }
 
 /**
  * The same requirement and runtime check for a process the caller did NOT spawn (a pid read from product.json). It
- * proves the BINARY at that pid at the moment of asking: that a process there is our team's, hardened. It never
- * proves who holds a socket or who will answer on a port, and the pid can be another process's by the time anything
- * acts on it. So it is fit for one use, deciding whether a pid is safe to signal (WP12 D10: no signal to a pid read
- * from a file without this), and for no decision about whom to trust with a secret.
+ * proves the BINARY at that pid at the moment of asking: that the process there is the one `expect` names, our
+ * team's, hardened. It never proves who holds a socket or who will answer on a port, and the pid can be another
+ * process's by the time anything acts on it. So it has one use and no other: the two stops of an automatic renewal
+ * of the custody root at boot (the old fieldd, then the old floor), each verified IMMEDIATELY before its signal
+ * (WP12 D10: no signal to a pid read from a file without this). It decides nothing about whom to trust with a
+ * secret.
  */
 export function processIsOurs(
   pid: number,
   own: CodeIdentity,
+  expect: ExpectedCode,
   run: RunTool = runTool,
 ): Promise<boolean> {
-  return satisfies(pid, own, run);
+  return satisfies(pid, own, expect, run);
 }
