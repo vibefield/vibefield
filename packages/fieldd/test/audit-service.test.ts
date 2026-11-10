@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type CallerContext, SHELL_CLIPBOARD_AUDIT_ACTIONS } from "@vibefield/contracts";
+import {
+  type CallerContext,
+  SHELL_CLIPBOARD_AUDIT_ACTIONS,
+  SHELL_CUSTODY_AUDIT_ACTIONS,
+} from "@vibefield/contracts";
 import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
 import { AuditService, verifyAuditSegment } from "../src/audit-service";
@@ -201,6 +205,60 @@ describe("LOG-L6 append-only audit ledger", () => {
       ["shell.clipboard.read", "denied", "UNFOCUSED"],
     ]);
     expect(read[0]?.attrs).toEqual({ webContentsId: 3, bytes: 12 });
+  });
+
+  // OB custody (CUSTODY-SPEC §7.4) — red until the two actions are registered: main's append of what it did with its
+  // own custody root is refused as not shell-owned. A record says an outcome and what was stopped, never a secret;
+  // one made before a pair existed says when the thing happened and that it was deferred.
+  it("admits what main records of its custody root from the shell: a root it made, an older pair it stopped", async () => {
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-custody-test" });
+    await service.start();
+    await service.appendFromCaller(shellContext(), {
+      action: SHELL_CUSTODY_AUDIT_ACTIONS.ROOT,
+      target: { kind: "custody-root", id: "shell" },
+      phase: "outcome",
+      outcome: "succeeded",
+      operationId: "op_custody_01",
+      attrs: { outcome: "made-unopenable", at: 1_785_000_000_000, deferred: true },
+    });
+    await service.appendFromCaller(shellContext(), {
+      action: SHELL_CUSTODY_AUDIT_ACTIONS.PAIR,
+      target: { kind: "user-root", id: "1" },
+      phase: "outcome",
+      outcome: "succeeded",
+      operationId: "op_custody_02",
+      attrs: { fieldd: "stopped", floor: "left", sessionsEnded: true, deferred: true },
+    });
+    await service.appendFromCaller(shellContext(), {
+      action: SHELL_CUSTODY_AUDIT_ACTIONS.ROOT,
+      target: { kind: "custody-root", id: "shell" },
+      phase: "outcome",
+      outcome: "failed",
+      reasonCode: "KEYSTORE_UNAVAILABLE",
+      operationId: "op_custody_03",
+      attrs: { outcome: "unavailable", cause: "keystore-unavailable" },
+    });
+    await service.close();
+    const read = await records(service.root);
+    // the names, as contracts spells them
+    expect(read.map((record) => [record.action, record.outcome, record.reasonCode])).toEqual([
+      ["shell.custody.root", "succeeded", undefined],
+      ["shell.custody.pair", "succeeded", undefined],
+      ["shell.custody.root", "failed", "KEYSTORE_UNAVAILABLE"],
+    ]);
+    expect(read[0]?.attrs).toEqual({
+      outcome: "made-unopenable",
+      at: 1_785_000_000_000,
+      deferred: true,
+    });
+    expect(read[1]?.attrs).toEqual({
+      fieldd: "stopped",
+      floor: "left",
+      sessionsEnded: true,
+      deferred: true,
+    });
+    expect(read[2]?.attrs).toEqual({ outcome: "unavailable", cause: "keystore-unavailable" });
   });
 
   it("prevents a required side effect when its attempt cannot be made durable", async () => {
