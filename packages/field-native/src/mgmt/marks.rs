@@ -7,12 +7,17 @@
 //!
 //! Its refusals are the helper roots' shape (`mgmt/door.rs`): params that do not parse (a name off the contract's
 //! pattern among them) are PRECONDITION_FAILED with no details, and one name past the bound is PRECONDITION_FAILED
-//! with `details.reason: "marks-full"`.
+//! with `details.reason: "marks-full"`. A refusal's words are this file's own and never the parser's: serde quotes
+//! the value it could not read, and whoever logs a refusal's message would log that value.
 
 use super::{err, ok};
 use crate::contracts::{NativeMarksSetParams, NativeMarksSetResult};
 use crate::state::DaemonState;
 use serde_json::{json, Value};
+
+/// What params that are not the contract's are answered: a fixed sentence, as the table's arm has
+/// (`mgmt/started_for.rs`).
+const BAD_PARAMS: &str = "bad mark: the params are not the contract's";
 
 pub(super) fn set(state: &DaemonState, params: Value, id: Option<Value>) -> Value {
     match serde_json::from_value::<NativeMarksSetParams>(params) {
@@ -27,13 +32,6 @@ pub(super) fn set(state: &DaemonState, params: Value, id: Option<Value>) -> Valu
                 Some(json!({ "reason": refused.reason() })),
             ),
         },
-        Err(e) => err(
-            id,
-            "PRECONDITION_FAILED",
-            -32005,
-            &format!("bad mark: {e}"),
-            false,
-            None,
-        ),
+        Err(_) => err(id, "PRECONDITION_FAILED", -32005, BAD_PARAMS, false, None),
     }
 }

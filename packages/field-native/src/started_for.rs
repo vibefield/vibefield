@@ -3,9 +3,9 @@
 //!
 //! An agent fieldd launched goes on running in its terminal after fieldd is gone, and the fieldd that pairs next has
 //! to say whose run it is. A record on disk cannot tell it: the agent can rewrite its own. This floor outlives
-//! fieldd, and where it was handed its pairing secret only the paired fieldd can speak to it. So fieldd tells the
-//! floor what it started in a terminal (`native.terminal.startedFor.set`, `mgmt/started_for.rs`), the floor keeps
-//! that here, IN MEMORY, and says it in every hello ack (`mgmt/mod.rs`, `handle_hello`).
+//! fieldd, and where it was handed its pairing secret only a holder of that secret can speak to it. So fieldd tells
+//! the floor what it started in a terminal (`native.terminal.startedFor.set`, `mgmt/started_for.rs`), the floor
+//! keeps that here, IN MEMORY, and says it in every hello ack (`mgmt/mod.rs`, `handle_hello`).
 //!
 //! - **An entry stands on a process, not on a number.** At the set the floor reads the pane root's start from the
 //!   kernel itself and keeps it. An entry stands while its session is a running pane still rooted at that pid AND
