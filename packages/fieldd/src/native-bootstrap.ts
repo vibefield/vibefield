@@ -1,5 +1,12 @@
 import type { Writable } from "node:stream";
 import { CUSTODY, type NativeBootstrap } from "@vibefield/contracts";
+import {
+  type CodeIdentity,
+  childIsOurs,
+  type ExpectedCode,
+  FIELD_NATIVE_SIGNING_IDENTIFIER,
+  ownIdentity,
+} from "@vibefield/trust";
 
 // OB custody (C3; contracts mgmt.ts `NativeBootstrap`, registries.ts `CUSTODY`) — how a `sealed` fieldd spawns its
 // floor.
@@ -12,8 +19,12 @@ import { CUSTODY, type NativeBootstrap } from "@vibefield/contracts";
 //
 // C6's seam is here: a verifier, when one is configured, is asked whether the child is ours BEFORE anything is
 // written to it. A child fieldd spawned and has not reaped cannot change pid, so the check is sound for this pid and
-// for no other. A child it refuses is ended and never written to. The verifier itself (the code signature's check)
-// is `packages/trust`'s; this file only awaits it.
+// for no other. A child it refuses is ended and never written to.
+//
+// And C6's verifier is here (`floorVerifier`; CUSTODY-SPEC §2.4 "v0.15"): the one `bin.ts` hands every sealed spawn.
+// The check itself (the code signature's, asked of macOS's own tool) is `packages/trust`'s; this file asks its two
+// questions in order and turns every doubt into a refusal. This module is loaded only by a fieldd that was handed
+// custody (`bin.ts` imports it behind the hand-off), so at `files` nothing of trust's is loaded or asked.
 //
 // The secret never enters a log, an error or an outcome here: an outcome is one word.
 
@@ -66,6 +77,38 @@ export interface SealedNativeSpawned {
   pid: number | undefined;
   /** how the hand ended. It never rejects: a refusal is an answer. */
   handed: Promise<NativeBootstrapOutcome>;
+}
+
+/** C6 — the verifier a fieldd handed custody gives `spawnSealedNative`: is the child this pid names OUR floor?
+ * Both questions are `@vibefield/trust`'s (whose code this process is; whether a child is the binary named, of the
+ * same team, under the hardened runtime), each asked of macOS's own tool.
+ *
+ *   · fieldd's own identity is asked once for the life of the verifier, and `bin.ts` makes one per process: the
+ *     boot's spawn and every respawn share it.
+ *   · Each child is asked about ALWAYS with the floor's signing identifier. "Our team, hardened" is true of every
+ *     binary the team signs, and only one of them is the floor.
+ *   · A fieldd that cannot say whose code it is itself (not macOS, no team, not hardened) refuses every child,
+ *     exactly as a `false`: there is no unverified hand and no fall back to the file. It does not ask again later
+ *     for a better answer.
+ *
+ * It takes NOTHING from its caller, on purpose: a parameter here would be a seam a row could fake and production
+ * could leave unbound. Its rows run fieldd's real entry and stand in only for the tool below trust
+ * (custody-boot.test.ts). It resolves `true` only on trust's own `true`.
+ *
+ * What a `true` does NOT say (read from how processes work, nothing run; reported to the lead with this slice): it
+ * is about the image at that pid at the moment it is asked. It does not say that image chose its own arguments,
+ * environment and descriptors, and it does not say nobody else holds the read end of the pipe. A process that forks
+ * and THEN becomes the floor's image keeps its pid, verifies, and has left a second reader of its stdin. So this
+ * stops a wrong binary that stays what it is; whether anything stops one that does that is not decided here. */
+export function floorVerifier(): (pid: number) => Promise<boolean> {
+  let own: Promise<CodeIdentity | null> | undefined;
+  const floors: ExpectedCode = { identifier: FIELD_NATIVE_SIGNING_IDENTIFIER };
+  return async (pid) => {
+    own ??= ownIdentity();
+    const identity = await own;
+    if (identity === null) return false;
+    return await childIsOurs(pid, identity, floors);
+  };
 }
 
 /** Spawn the floor to be handed its pairing, and hand it. The spawn answers at once, as the `files` spawn does; the
