@@ -132,7 +132,8 @@ impl MeshPlan {
 /// @vibefield/contracts constants; env overrides (dev):
 /// FIELD_NATIVE_DATA_DIR · FIELD_NATIVE_MESH=1 · FIELD_NATIVE_SIDECAR_PATH ·
 /// FIELD_NATIVE_TERMINAL_MESH=0 (the doors are ON unless it says otherwise,
-/// since TB-T — [`terminal_mesh_requested`]).
+/// since TB-T — [`terminal_mesh_requested`]). Not a dev override, and set by
+/// fieldd alone: FIELD_NATIVE_CUSTODY=stdin (OB custody, `pairing_on_stdin`).
 #[derive(Clone, Debug)]
 pub struct NativeConfig {
     pub data_dir: PathBuf,
@@ -219,6 +220,12 @@ pub struct NativeConfig {
     /// test constructors leave it `None` for a row to set.
     #[doc(hidden)]
     pub socket_alias_parent: Option<PathBuf>,
+    /// OB custody (C3) — the spawner hands this floor its pairing secret as one line on stdin
+    /// (`FIELD_NATIVE_CUSTODY=stdin`, read by [`crate::custody::stdin_requested`]; the line is `custody.rs`'s). Set,
+    /// the floor makes and reads no `native/pairing`, and a line that does not come is a refusal to boot, never a
+    /// fall back to the file. `false` in the test constructors and whenever the flag is unset: today's file. A flag,
+    /// never a secret: the secret itself is held by no config.
+    pub pairing_on_stdin: bool,
 }
 
 /// TS-1 TEST SEAM — the `#[ignore]`d live probes only. The floor's own bring-up
@@ -355,6 +362,8 @@ impl NativeConfig {
             std::env::var_os(crate::registries::SOCKET_ALIAS_PARENT_ENV).as_deref(),
         )
         .map_err(anyhow::Error::msg)?;
+        let custody_flag = std::env::var(crate::registries::custody::NATIVE_ENV).ok();
+        let pairing_on_stdin = crate::custody::stdin_requested(custody_flag.as_deref());
         Ok(Self {
             data_dir,
             log_root,
@@ -370,6 +379,7 @@ impl NativeConfig {
             mesh_start_timeout: None,
             mesh_probe: None,
             socket_alias_parent,
+            pairing_on_stdin,
         })
     }
 
@@ -392,6 +402,7 @@ impl NativeConfig {
             mesh_start_timeout: None,
             mesh_probe: None,
             socket_alias_parent: None,
+            pairing_on_stdin: false,
         }
     }
 
@@ -413,6 +424,7 @@ impl NativeConfig {
             mesh_start_timeout: None,
             mesh_probe: None,
             socket_alias_parent: None,
+            pairing_on_stdin: false,
         }
     }
 

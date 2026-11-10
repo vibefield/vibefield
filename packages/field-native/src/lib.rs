@@ -9,6 +9,8 @@ pub mod config;
 // doors, a revoke of every client); the file is regenerated, so the lint is answered here.
 #[allow(clippy::derivable_impls)]
 pub mod contracts;
+/// OB custody (C3) — the floor's pairing secret, handed on stdin by its spawner under `FIELD_NATIVE_CUSTODY=stdin`.
+pub mod custody;
 /// CP-1a — `field-native door --endpoint <path>`: the stdio bridge a spark's agent runs to the floor's door.
 pub mod door_bridge;
 pub mod endpoints;
@@ -63,6 +65,8 @@ pub struct RunningDaemon {
     /// from the SECRET the daemon actually loaded, rather than reverse-deriving
     /// its path from the mgmt endpoint — which the socket-vs-pipe split makes
     /// impossible, a pipe name has no relationship to the data dir on disk).
+    /// OB custody (C3): a floor handed its secret (`custody.rs`) makes no such
+    /// file and reads none. The path is still where a `files` floor's would be.
     pub pairing_file: std::path::PathBuf,
     pub bridge: services::mesh_bridge::BridgeHandle,
     /// The terminal unit's door, for wiring (the freeway host's revoke reaches every cell
@@ -130,6 +134,18 @@ pub async fn bootstrap(config: config::NativeConfig) -> Result<RunningDaemon> {
     bootstrap_with_logging(config, logging::new_boot_id(), None).await
 }
 
+/// OB custody (C3) — the tests' seam for a floor that is handed its pairing secret, as
+/// `RunningDaemon.pairing_file` is the seam of one that makes its own: `pairing` is held where fieldd's bootstrap
+/// line would put it (`custody.rs`), and the boot makes, reads and removes no pairing file. Nothing in the product
+/// calls it: main boots through `bootstrap_with_logging`, where the secret's source is the spawner's flag.
+#[doc(hidden)]
+pub async fn bootstrap_handed(
+    config: config::NativeConfig,
+    pairing: [u8; 32],
+) -> Result<RunningDaemon> {
+    boot(config, logging::new_boot_id(), None, Some(pairing)).await
+}
+
 /// Production boot after the process-owned writer and tracing subscriber have
 /// been installed by main. Tests use `bootstrap` to avoid competing global
 /// subscribers inside one test process.
@@ -137,6 +153,17 @@ pub async fn bootstrap_with_logging(
     config: config::NativeConfig,
     boot_id: String,
     logging: Option<logging::NativeLogging>,
+) -> Result<RunningDaemon> {
+    boot(config, boot_id, logging, None).await
+}
+
+/// The one boot. `handed` is the pairing secret a test hands in process (`bootstrap_handed`); every other boot
+/// passes `None` and takes its secret from where the config says (the spawner's stdin, or the file).
+async fn boot(
+    config: config::NativeConfig,
+    boot_id: String,
+    logging: Option<logging::NativeLogging>,
+    handed: Option<[u8; 32]>,
 ) -> Result<RunningDaemon> {
     // TC-D6(a): before any listener binds. A process launched by launchd inherits a 256-fd soft limit, which the
     // 24+5N measurement puts one session past at #47 — the rehearsed silent death this raise ends. It lives in the
@@ -163,7 +190,24 @@ pub async fn bootstrap_with_logging(
     }
 
     let pairing_file = config.pairing_file();
-    let secret = pairing::load_or_create_secret(&pairing_file)?;
+    // OB custody (C3, EL7) — where the pairing secret comes from is the spawner's word (`pairing_on_stdin`, the env
+    // flag), never the disk's. Handed, it is read from stdin HERE, before any listener binds, and a line that is
+    // absent, late or not one this floor reads ends the boot with the refusal's own words (`custody::Refused`, which
+    // names no byte of the line): never a fall back to the file, which a floor handed its secret neither makes nor
+    // reads. Not handed, it is today's file, made on the first boot.
+    let sealed = handed.is_some() || config.pairing_on_stdin;
+    let secret = match handed {
+        Some(secret) => secret,
+        None if config.pairing_on_stdin => custody::handed_pairing().await?,
+        None => pairing::load_or_create_secret(&pairing_file)?,
+    };
+    if sealed {
+        tracing::info!(
+            event = "field_native.lifecycle.custody_sealed",
+            component = "bootstrap",
+            "this floor was handed its pairing secret; it makes and reads no pairing file"
+        );
+    }
 
     // WP12 L2b (§9 R3) — take the restart intent the previous floor recorded, BEFORE anything else can write one:
     // how that floor ended rides every hello this boot answers (`lastExit`).
