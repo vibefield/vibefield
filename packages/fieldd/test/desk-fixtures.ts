@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ObjectIntent, ObjectIntentAnswer, ObjectRef } from "@vibefield/contracts";
@@ -6,14 +6,15 @@ import type { LogFields, Logger } from "@vibefield/logging";
 import { DeskObjects, type DeskObjectsOptions, type RunState } from "../src/objects/desk-objects";
 import type { DeskKind } from "../src/objects/kinds";
 import { ObjectsStore } from "../src/objects/store";
+import { RecordSigner, type SignedRead } from "../src/signed-record";
 
 // A real DeskObjects over a real signed store in a temp root, and a scripted window: an intent handed to `respond` gets
 // the answer it returns, and an intent for which it returns nothing stays pending, as a window that has gone quiet.
 //
-// OB custody (C4, C5). Who a run is, for a grant, is what THIS fieldd launched (`bornFor`), so a world keeps that apart
-// from what a run's record says (`sparkOf`): every run named in `runs` or `sparkRuns` was launched by the fieldd that
-// is running when it is named, and a `reopen` is a restart, after which every run named before it came back
-// re-attached. A world also has a survivor (`marks`): who outlives fieldd and remembers the grants' count.
+// OB custody (C4, C5). Who a run is, for a grant, is what THIS fieldd launched (`bornFor`): every run named in `runs`
+// or `sparkRuns` was launched by the fieldd that is running when it is named, and a `reopen` is a restart, after which
+// every run named before it came back re-attached. What a run's RECORD says is another thing, a file an agent can
+// rewrite (`forgeRecord`). A world also has a survivor (`marks`): who outlives fieldd and remembers the grants' count.
 
 export const DOC = "doc-main";
 export const NOTE: DeskKind = {
@@ -132,8 +133,9 @@ export interface DeskWorld {
   readonly sparks: Map<string, string>;
   /** runs this fieldd did not launch, beside those a `reopen` found already there */
   readonly reattached: Set<string>;
-  /** what a run's RECORD says its spark is, where that is not what fieldd launched it as: a file an agent can rewrite */
-  readonly recordSays: Map<string, string>;
+  /** Rewrite a run's session record to say it is `spark`'s, as an agent that reads the sessions' key can (a 0600 file
+   * of the same uid): signed with that key, so it verifies. Answers what whoever reads the record back is told. */
+  forgeRecord(run: string, spark: string): SignedRead;
   /** every ref a world minted, by minting one for a key on `DOC` */
   refOf(key: string, kind?: string): ObjectRef;
 }
@@ -175,7 +177,23 @@ export function world(
   const sparkRuns = new Map<string, string>();
   const sparks = new Map<string, string>();
   const reattached = new Set<string>();
-  const recordSays = new Map<string, string>();
+  // The sessions' records, as far as a row needs them: a file per run, signed with a key that is a file too.
+  const sessions = () =>
+    new RecordSigner({ keyPath: join(root, "sessions.key"), keyEncoding: "base64" });
+  const recordOf = (run: string) => join(root, "sessions", `${run}.json`);
+  const forgeRecord = (run: string, spark: string): SignedRead => {
+    const signer = sessions();
+    const record = { runtimeRunId: run, spark };
+    const signed = { ...record, signature: signer.sign(record) };
+    mkdirSync(join(root, "sessions"), { recursive: true, mode: 0o700 });
+    writeFileSync(recordOf(run), JSON.stringify(signed), { mode: 0o600 });
+    return signer.read(recordOf(run));
+  };
+  /** What a run's record says its spark is: what the daemon's `sparkOf` answered before nothing in objects read one. */
+  const recordSpark = (run: string): string | undefined => {
+    const read = sessions().read(recordOf(run));
+    return "body" in read && typeof read.body.spark === "string" ? read.body.spark : undefined;
+  };
   const make = (restart?: Restart): DeskObjects => {
     // a restart: fieldd launched none of the runs that were there before it
     const before = new Set(restart === undefined ? [] : [...runs.keys(), ...sparkRuns.keys()]);
@@ -202,7 +220,7 @@ export function world(
         if (spark !== undefined) return { spark };
         return runs.has(run) ? {} : undefined;
       },
-      sparkOf: (run) => recordSays.get(run) ?? sparkRuns.get(run),
+      sparkOf: (run) => recordSpark(run) ?? sparkRuns.get(run),
       sparkName: (id) => sparks.get(id),
       kinds: () => opts.kinds ?? [NOTE, PAGE],
       ...(opts.answerMs !== undefined ? { intents: { answerMs: opts.answerMs } } : {}),
@@ -224,7 +242,7 @@ export function world(
     sparkRuns,
     sparks,
     reattached,
-    recordSays,
+    forgeRecord,
     reopen: (over = {}) => make(over),
     refOf: (key, kind) => desk.registry.refFor(DOC, key, kind),
     window: (respond, docId = DOC, tokenId = "tok-window") => {

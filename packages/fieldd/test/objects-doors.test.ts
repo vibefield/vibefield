@@ -3,6 +3,7 @@ import type { CallerContext, ObjectIntent } from "@vibefield/contracts";
 import { METHODS, ObjectsTakeBackResult, TAILNET_SCOPES } from "@vibefield/contracts";
 import { AuditActionV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
+import type { DeskObjects } from "../src/objects/desk-objects";
 import { type ObjectDoorsApi, registerObjectDoors } from "../src/objects/doors";
 import type { ToolPlaneAudit } from "../src/tool-plane";
 import { cleanupWorlds, DOC, type Survivor, world } from "./desk-fixtures";
@@ -34,7 +35,7 @@ type SubHandler = (
   emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
 ) => { snapshot: unknown; start?: () => void; dispose(): void };
 
-function doors(h: ReturnType<typeof world>) {
+function doors(h: ReturnType<typeof world>, desk: DeskObjects = h.desk) {
   const rows = new Map<string, Handler>();
   const subs = new Map<string, SubHandler>();
   const audited: unknown[] = [];
@@ -43,12 +44,15 @@ function doors(h: ReturnType<typeof world>) {
       // the real writer refuses an action outside the audit's own grammar: the fake holds the door to it as well
       AuditActionV1.parse(mutation.action);
       const value = await effect();
+      const described = describe?.(value);
       audited.push({
         action: mutation.action,
         target: mutation.target,
         attrs: mutation.attrs,
         principal: ctx.principal,
-        outcome: describe?.(value).outcome,
+        outcome: described?.outcome,
+        // what the act added to its line once it was done
+        after: described?.attrs,
       });
       return value;
     },
@@ -65,7 +69,7 @@ function doors(h: ReturnType<typeof world>) {
     return row(ctx, params);
   };
   registerObjectDoors(api, {
-    objects: h.desk,
+    objects: desk,
     audit,
     isWindowToken: (id) => windows.has(id),
     presenceIntervalMs: 1,
@@ -327,11 +331,68 @@ describe("a take-back the disk would not take (OB custody, C5; OB-D19 A)", () =>
     expect(answer).toEqual({ taken: true, kept: false });
     expect(ObjectsTakeBackResult.safeParse(answer).success).toBe(true);
     expect(h.desk.grantOf(ref, "run-a")).toBeUndefined();
-    expect(audited.at(-1)).toMatchObject({ action: "objects.take_back", attrs: { run: "run-a" } });
+    expect(audited.at(-1)).toMatchObject({
+      action: "objects.take_back",
+      attrs: { run: "run-a" },
+      after: { holders: "run-a", kept: false },
+    });
     // once the disk takes a write again, a take-back answers as it always did
     failing = false;
     await expect(ask("objects.takeBack", WINDOW, { ref: other, run: "run-a" })).resolves.toEqual({
       taken: true,
     });
+  });
+});
+
+describe("a take-back's line says whom it took the object from (OB-D18 A)", () => {
+  const VELA = "sp-7k2m9q4x";
+  const LYRA = "sp-lyra00000";
+
+  /** Vela and Lyra, each thinking in a run this fieldd launched, each handed one note. */
+  function twoSparks() {
+    const h = world();
+    h.sparks.set(VELA, "Vela").set(LYRA, "Lyra");
+    h.sparkRuns.set("run-1", VELA).set("run-l", LYRA);
+    h.runs.set("run-1", "live").set("run-l", "live");
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-1");
+    h.desk.hand(ref, "run-l");
+    return { h, ref };
+  }
+
+  it("names the one holder a take-back from a run fieldd launched took it from, and the answer says no more", async () => {
+    const { h, ref } = twoSparks();
+    const { ask, audited } = doors(h);
+    await expect(ask("objects.takeBack", WINDOW, { ref, run: "run-1" })).resolves.toEqual({
+      taken: true,
+    });
+    expect(audited.at(-1)).toMatchObject({ after: { holders: `spark:${VELA}` } });
+    expect(h.desk.grants(ref).map((g) => g.holder)).toEqual([`spark:${LYRA}`]);
+  });
+
+  it("names every holder the fallback took it from, sorted, for a run fieldd did not launch; the answer's shape is the same", async () => {
+    const { h, ref } = twoSparks();
+    const again = h.reopen();
+    again.reconcile();
+    const { ask, audited } = doors(h, again);
+    // run-1 came back re-attached: fieldd cannot say whose it is, and takes the object back from every spark
+    await expect(ask("objects.takeBack", WINDOW, { ref, run: "run-1" })).resolves.toEqual({
+      taken: true,
+    });
+    expect(audited.at(-1)).toMatchObject({
+      action: "objects.take_back",
+      attrs: { run: "run-1" },
+      after: { holders: `spark:${VELA},spark:${LYRA}` },
+    });
+    expect(again.grants(ref)).toEqual([]);
+  });
+
+  it("names nobody when there was nothing to take", async () => {
+    const h = world();
+    const { ask, audited } = doors(h);
+    const ref = h.refOf("k1", "desk.note");
+    await ask("objects.takeBack", WINDOW, { ref, run: "run-a" });
+    expect(audited.at(-1)).toMatchObject({ action: "objects.take_back", after: {} });
+    expect((audited.at(-1) as { after?: object }).after).not.toHaveProperty("holders");
   });
 });

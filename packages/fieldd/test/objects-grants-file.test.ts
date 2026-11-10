@@ -5,20 +5,31 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { CUSTODY } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { RecordSigner, UNREADABLE_WORDS } from "../src/signed-record";
-import { capture, cleanupWorlds, type DeskWorld, type LoggedEvents, world } from "./desk-fixtures";
+import {
+  capture,
+  cleanupWorlds,
+  type DeskWorld,
+  type LoggedEvents,
+  survivor,
+  world,
+} from "./desk-fixtures";
 
 // OB custody, C4 (OB-D18 A) — every grant in ONE file, `ObjectGrantsFile` at LAYOUT.OBJECTS_GRANTS_FILE, signed by the
 // objects store's signer; an object's record is its name alone and grants nothing (OB-L1). A file that is unsigned,
 // edited, unparseable or exposed is set aside and nothing in it is granted. Under custody's `sealed` level the key was
-// handed and the file says so: a fieldd at `files` leaves such a file exactly where it is, and the store refuses.
+// handed and the file says so: a fieldd at `files` leaves such a file exactly where it is, and the store refuses. So
+// that it can, a sealed store never leaves the path empty: it writes the file at boot, before any name.
 
 afterEach(cleanupWorlds);
 
+const MARK = CUSTODY.MARK_OBJECT_GRANTS;
 const SPARK = "sp-7k2m9q4x";
 /** A record key as a spawner hands it (`CustodyHandoff.records`): 32 bytes, and plainly nobody's. */
 const HANDED = Buffer.alloc(32, 0x11);
@@ -233,9 +244,10 @@ describe("the key that signs it (OB custody, C4: `files` and `sealed`)", () => {
     const sealed = h.reopen({ key: HANDED });
     expect(sealed.grantOf(ref, wake(h))).toBeUndefined();
     expect(sealed.grants()).toEqual([]);
-    expect(existsSync(h.grantsPath)).toBe(false);
     expect(asideOf(h, "forged")).toHaveLength(1);
     expect(setAsideWhys(events)).toEqual(["forged"]);
+    // and the path is not left empty: the sealed store's own file stands there now, at the mark
+    expect(grantsOf(h)).toMatchObject({ sealed: true, generation: 1, grants: [] });
   });
 
   it("a sealed fieldd sets aside a grants file another handed key signed", () => {
@@ -243,6 +255,151 @@ describe("the key that signs it (OB custody, C4: `files` and `sealed`)", () => {
     const other = h.reopen({ key: Buffer.alloc(32, 0x22) });
     expect(other.grantOf(ref, wake(h))).toBeUndefined();
     expect(asideOf(h, "forged")).toHaveLength(1);
+  });
+
+  it("at `sealed`, a file its key signed that does not say sealed is set aside as forged", () => {
+    const events: LoggedEvents = [];
+    const { h, ref } = handedToVela({ key: HANDED, logger: capture(events) });
+    // the sealed store only ever writes `sealed: true`; the word is under the signature, and this is the belt
+    const signer = new RecordSigner({ keyPath: join(h.root, "never.key"), key: HANDED });
+    const { signature: _gone, ...body } = grantsOf(h);
+    const unsealed = { ...body, sealed: false };
+    const signed = { ...unsealed, signature: signer.sign(unsealed) };
+    writeFileSync(h.grantsPath, JSON.stringify(signed), { mode: 0o600 });
+    const again = h.reopen();
+    expect(again.grantOf(ref, wake(h))).toBeUndefined();
+    expect(asideOf(h, "forged")).toHaveLength(1);
+    expect(setAsideWhys(events)).toEqual(["forged"]);
+  });
+
+  it("at `files`, a file that says sealed is left even when the store's own key file signed it", () => {
+    const { h } = handedToVela();
+    const signer = new RecordSigner({ keyPath: join(h.root, "objects.key") });
+    const { signature: _gone, ...body } = grantsOf(h);
+    const claimed = { ...body, sealed: true };
+    const bytes = JSON.stringify({ ...claimed, signature: signer.sign(claimed) });
+    writeFileSync(h.grantsPath, bytes, { mode: 0o600 });
+    const again = h.reopen();
+    expect(() => again.registry.readable()).toThrow(UNREADABLE_WORDS.objects);
+    expect(readFileSync(h.grantsPath, "utf8")).toBe(bytes);
+  });
+});
+
+describe("a sealed store never leaves the path empty (OB custody, C4)", () => {
+  /** A disk whose write of the grants file can be made to fail. */
+  function disk(failing: boolean) {
+    const state = { failing };
+    return {
+      state,
+      writeFile: (path: string, text: string) => {
+        if (state.failing) throw Object.assign(new Error("ENOSPC: no space"), { code: "ENOSPC" });
+        writeFileSync(path, text, { mode: 0o600 });
+      },
+    };
+  }
+
+  it("a sealed store with names and no grant yet leaves a grants file, so a files fieldd refuses and its names stay where they are", () => {
+    const h = world({ key: HANDED });
+    // written at boot, before any name: empty, at the mark. It is no change: nothing is counted, nobody is told.
+    expect(grantsOf(h)).toMatchObject({ format: 1, sealed: true, generation: 0, grants: [] });
+    expect(h.marks.noted).toEqual([]);
+    const ref = h.refOf("k1", "desk.note");
+    const names = readdirSync(join(h.root, "objects"));
+    const record = readFileSync(recordOf(h, ref), "utf8");
+    const files = h.reopen({ key: undefined });
+    expect(() => files.registry.readable()).toThrow(UNREADABLE_WORDS.objects);
+    expect(readdirSync(join(h.root, "objects"))).toEqual(names);
+    expect(readFileSync(recordOf(h, ref), "utf8")).toBe(record);
+    // the fieldd that is handed the key again still knows the name
+    expect(h.reopen().registry.get(ref)?.key).toBe("k1");
+  });
+
+  it("writes it at the mark and not above, and a file at its mark is not stale", () => {
+    const marks = survivor({ [MARK]: 7 });
+    const h = world({ key: HANDED, marks });
+    expect(grantsOf(h).generation).toBe(7);
+    expect(marks.noted).toEqual([]);
+    const again = h.reopen();
+    expect(asideOf(h, "stale")).toEqual([]);
+    // the first change is the first count above it
+    const ref = again.registry.refFor("doc-main", "k1", "desk.note");
+    h.runs.set("run-new", "live");
+    expect(again.hand(ref, "run-new")).toEqual({ handed: true });
+    expect(grantsOf(h).generation).toBe(8);
+  });
+
+  it("a files store writes nothing at boot, or for a name", () => {
+    const h = world();
+    h.refOf("k1", "desk.note");
+    expect(existsSync(h.grantsPath)).toBe(false);
+  });
+
+  it("a boot write the disk will not take refuses nothing, and is made again before the next name", () => {
+    const events: LoggedEvents = [];
+    const { state, writeFile } = disk(true);
+    const h = world({ key: HANDED, writeFile, logger: capture(events) });
+    expect(existsSync(h.grantsPath)).toBe(false);
+    expect(() => h.desk.registry.readable()).not.toThrow();
+    expect(events.map((e) => e.event)).toContain("fieldd.objects.grants_unwritten");
+    state.failing = false;
+    const ref = h.refOf("k1", "desk.note");
+    expect(grantsOf(h)).toMatchObject({ sealed: true, generation: 0, grants: [] });
+    expect(existsSync(recordOf(h, ref))).toBe(true);
+  });
+
+  it("writes it again before a name when a take-back lost the file", () => {
+    const { state, writeFile } = disk(false);
+    const h = world({ key: HANDED, writeFile, retryMs: 60_000 });
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    state.failing = true;
+    h.desk.takeBack(ref, "run-a");
+    expect(existsSync(h.grantsPath)).toBe(false);
+    state.failing = false;
+    h.refOf("k2", "desk.note");
+    // memory as it stands, at the count the take-back was told at: no new count for a name
+    expect(grantsOf(h)).toMatchObject({ sealed: true, generation: 2, grants: [] });
+    expect(h.desk.kept).toBe(true);
+  });
+});
+
+describe("what says sealed is read with care (OB custody, C4)", () => {
+  it.skipIf(process.platform === "win32")(
+    "does not follow a link to a file that says sealed: a link takes the ordinary road",
+    () => {
+      const { h } = handedToVela();
+      const elsewhere = join(h.root, "elsewhere.json");
+      const says = JSON.stringify({ sealed: true });
+      writeFileSync(elsewhere, says, { mode: 0o600 });
+      rmSync(h.grantsPath);
+      symlinkSync(elsewhere, h.grantsPath);
+      const again = h.reopen();
+      // not left and refused: read as any file there is, found unsigned, and set aside (the link, not what it names)
+      expect(() => again.registry.readable()).not.toThrow();
+      expect(asideOf(h, "unsigned")).toHaveLength(1);
+      expect(existsSync(h.grantsPath)).toBe(false);
+      expect(readFileSync(elsewhere, "utf8")).toBe(says);
+    },
+  );
+
+  it("reads no more than its bound: a file past it takes the ordinary road", () => {
+    const { h } = handedToVela();
+    // valid JSON that says sealed, padded past the 4 MiB the peek reads
+    const padded = `${JSON.stringify({ sealed: true })}${" ".repeat(4 * 1024 * 1024)}`;
+    writeFileSync(h.grantsPath, padded, { mode: 0o600 });
+    const again = h.reopen();
+    expect(() => again.registry.readable()).not.toThrow();
+    expect(asideOf(h, "unsigned")).toHaveLength(1);
+  });
+
+  it("takes only `sealed: true` itself for a sealed file: anything else is set aside as any file is", () => {
+    for (const sealed of ["true", 1, null]) {
+      const { h } = handedToVela();
+      writeFileSync(h.grantsPath, JSON.stringify({ sealed }), { mode: 0o600 });
+      const again = h.reopen();
+      expect(() => again.registry.readable()).not.toThrow();
+      expect(asideOf(h, "unsigned")).toHaveLength(1);
+    }
   });
 });
 

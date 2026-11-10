@@ -176,10 +176,30 @@ describe("an older grants file put back is stale (OB custody, C5)", () => {
     expect(again.grants()).toEqual([]);
     expect(existsSync(h.grantsPath)).toBe(false);
     expect(staleOf(h)).toHaveLength(1);
-    // said once
+    // said once, by the file's count and the mark, and nothing else
     const stale = said(events, "fieldd.objects.grants_stale");
     expect(stale).toHaveLength(1);
-    expect(stale[0]?.attrs).toMatchObject({ generation: 1, mark: 2 });
+    expect(stale[0]?.attrs).toEqual({ generation: 1, mark: 2 });
+  });
+
+  it("a mark at the top of what a number holds refuses a hand and still lets a take-back take", async () => {
+    // the top itself, and a mark past what a number holds exactly, which reads as the top
+    for (const top of [Number.MAX_SAFE_INTEGER, 2 ** 60]) {
+      const h = world({ retryMs: 60_000 });
+      const ref = h.refOf("k1", "desk.note");
+      h.desk.hand(ref, "run-a");
+      // at `files`, whoever reads the pairing file can set a mark on the floor
+      await h.marks.note(MARK, top);
+      // the count cannot rise: it never wraps, and nothing is written at a count a number does not hold
+      expect(() => h.desk.hand(ref, "run-b")).toThrow();
+      expect(h.desk.grantOf(ref, "run-b")).toBeUndefined();
+      expect(grantsOf(h)).toMatchObject({ generation: 1, grants: [{ ref, holder: "run-a" }] });
+      // a take-back still takes, as one the disk would not take does: memory first, and the file goes
+      expect(() => h.desk.takeBack(ref, "run-a")).not.toThrow();
+      expect(h.desk.grantOf(ref, "run-a")).toBeUndefined();
+      expect(h.desk.kept).toBe(false);
+      expect(existsSync(h.grantsPath)).toBe(false);
+    }
   });
 
   it("the floor's mark outlives fieldd: a file at its mark is served, and the count goes on from it", async () => {
