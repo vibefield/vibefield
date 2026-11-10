@@ -7587,6 +7587,14 @@ Next: source cadence and session-local frame fan-out, native snapshot/logical-st
 
 **Found.** Under `pnpm dev` fieldd is Electron-as-Node, and there `process.execve` STALLS (median 4.3 s against 65 ms on a real Node; 13.1 s end to end against 0.77 s, 18 ms bare) — hence the launcher-runtime rule. A packaged VibeField has no Node at all (fieldd is a SEA with the RunAsNode fuse off), so a packaged build offers no launcher today (AR-7j). **The boot window** (the review's blocker): the seam that births a shell integrated was handed over only after the launchers were written, which came after the runtime probe and the install reads (an install read runs the agent's own version command) — a pane opened in those seconds, the first pane after every boot and pair bounce, was unmanaged for its whole life with nothing said; fixed at `93c30c9c` (W4): the integration is the gateway start's FIRST write and the seam is handed over before the launcher's runtime is probed or an install is read, so the first pane after a boot or a pair bounce is born integrated and finds its launcher at the next lookup; a real-floor row births one pane before the integration exists (bare, and the ledger says so) and one during the runtime probe (integrated; a managed run once the launcher lands), and the earlier pane stays bare for life. A request naming a listed shell's OWN pid was placed in that pane (the kit's ancestry walk starts at the asking pid), so a same-uid holder of the bearer could pin a phantom run to the shell and a stop from the deck or the phone would have signalled the person's shell; fixed at `bac2280c` (W4): a request naming a listed shell's own pid is declined `invalid-request` — never placed, so never refused in words; the name runs as typed — and a record whose pid is the terminal's own shell does not re-attach. A settings layer with `disableAllHooks` blinds every launch, the host's own spawns included — the typed half is refused in this landing, the spawn half is `7cb15dd`, held. The runtime dropped an adapter's refusal words on the floor (generic `AGENT_SESSION_CREATE_FAILED`) — now `AGENT_LAUNCH_REFUSED` carries them. The kit's `retryMs` does not survive a clean stop (the rendezvous is withdrawn with the host; the launcher bakes strict and label, not the wait), so the 8 s default holds. The dev runner staged no shim, so under `pnpm dev` nothing typed was managed until V4. The renderer's terminal pool rebuilt its `shell` object on every publication, which rebuilt the deck's monitor door and restarted the fold subscription before any frame landed (181,000 `GODVIEW_DECK` lines in one smoke) — every typed run was invisible on the deck until V5; by the same mechanism a spawned run's row would not have reached the stage either (inferred, not witnessed). The Godview smoke ran the owner's agents before V5 (above). A pane test read a typed line's output file the instant the shell's `>` created it and took an empty read for an answer — once red under load, fixed to wait for content. The launcher directory leaks out of a pane by inheritance (an editor opened from a pane inherits the PATH), which is why the rule of refusal is bound to OUR terminals by ancestry and everything else runs as typed. macOS's temp cleaner empties an untouched launcher home after about three days (the reference app's; ours is under the user root). The Nx daemon served stale file hashes in an SSD worktree — a probe edit was not rebuilt and a smoke passed on the old bundle (`NX_DAEMON=false` after an edit; the memory `nx-daemon-misses-ssd-worktree-edits`). Main's `siblings-javascript` row depends on the colour environment (above).
 
+> **Corrected 2026-11-10 (the EL8 to puppeteer 0.4.0, #73 `c9745a5d`; M274 `996c51939`):** "finds its launcher at the
+> next lookup" was false. zsh keeps a command it has found in its hash tables (HASH_CMDS, HASH_DIRS), and only a PATH
+> assignment or `rehash` clears them, so a pane born before its launcher landed kept what it had found. Since puppeteer
+> 0.4.0 the kit's precmd hook runs `rehash` when the set of launchers changes (#73), so a shell born with that hook
+> finds a new launcher at its next prompt. A pane born before that EL8 keeps its old hook for its life (LANDED "EL8 —
+> puppeteer 0.4.0", Known limits). The same correction stands at its code: `agent-gateway.ts`'s A2 comment and the A2
+> row's words in `agent-gateway-panes.test.ts` (RV's #73 commit).
+
 **Known limits, in words a person meets.** *An agent started inside `tmux` or `screen` in a pane runs on its own, unmanaged* — the multiplexer's server is not in the pane's process tree, so the shim finds no terminal of ours and falls through as the rule says (AR7-D14, James: accept as a limit, documented; refusing it is buildable later with the multiplexer's markers). *Everything a pane starts inherits the launcher directory*: an editor opened from a pane reaches our launcher and runs the real binary after the shim's start, one gateway round trip and one `ps -A` — the latency against the bare binary is unmeasured. *While fieldd is away*, a name typed in a pane waits 8 s and is then refused — a version query included, because the shim cannot classify without the host; the budget is the kit's 8 s after a clean stop and after a crash alike. *Panes older than the landing are never integrated* — a shell's environment is fixed at birth; open a new pane. *After a later fieldd adopts the floor* (an app relaunched from the Dock after a launch from a terminal; a dev-runner restart with another PATH), zsh panes restore that fieldd's ZDOTDIR and non-zsh panes are born with its PATH. *A person whose Claude settings turn hooks off, or whose shell sets `CLAUDE_CODE_SIMPLE`/`CLAUDE_CODE_SAFE_MODE`*, is refused by name in our panes with the adapter's sentence — while the SPAWN button still launches that Claude unobserved (`7cb15dd` held back). *(2026-09-28, later that day — AR7-D1 ruled: `7cb15dd` taken; the SPAWN button refuses that Claude too, see §AR-7 · rulings.)* *A vendor flag the adapter's table has never seen is a refusal naming it* until the table learns it (the census makes that a release's red list). Claude's refused set: `--session-id`, `--settings`, `--bare`, `--safe-mode`, `--fork-session`, `--teleport`, `-w/--worktree`, `--tmux` alone, `--handle-uri`, print-only flags without `-p`, a mapped option twice; Codex's: `--add-dir`, `-p/--profile`, `-C/--cd`, `--worktree`, `--no-daemon`, `--oss`, `--local-provider`, `--approve-for-me`, `--dangerously-bypass-hook-trust`, `--strict-config`, `fork`, `-c` for the permission keys, settings into a resume, a prompt before `resume`; a typed Codex runs against a private app-server the adapter starts, its resume forms keep the thread's own policy, and an untrusted working directory is unmeasured; Claude's `defaultToAgentsView` is not modeled. *A launch caught in a fieldd stop* can be adopted by the old daemon with its answer dropped, then re-attached by the next, so the shim's retry is refused once as "another agent is already running in this pane" — itself — and works on the next try. zsh only: a bash, fish or sh pane gets the kit's best-effort PATH, a profile that prepends the real binary wins, and the audit's `integrated: true` says the variables were sent, not honoured (AR7-D8; James's D3). *(2026-09-28, later that day — AR7-D3 ruled zsh-only: those panes are now born plain, `integrated: false`; see §AR-7 · rulings.)* The gateway does not start on win32. Only `pnpm dev` offers launchers until AR-7j gives the packaged daemon a runtime; the leak detector (AR-7f) is not built. The phone reads neither `spawnedBy` nor `resumable`: a typed run held across a fieldd restart shows there as an unknown row, and its resume is refused with a sentence the phone may not show. The rendezvous file is a same-uid lever while fieldd is unreachable (the accepted EL7 class: same uid can already replace the launchers); every floor session's pid is on the shells list, agent PTYs included, bounded to the 1,024 lowest pids. In the Godview smoke: Claude's usage service may still read the macOS keychain, Homebrew prefixes are searched regardless of the search path, panes open in the owner's home directory while `$HOME` is the person's, and the runner's own variable names reach the agent.
 
 **Owed.** AR-7j (a launcher runtime in the packaged build); AR-7f the leak detector; bash and fish integration (AR7-D8) or the first landing restricted to zsh — James's D3; the multiplexer case if James wants it; a kit petition for `PUPPETEER_SHIM_RETRY_MS` or the 8 s accepted, and the app-restart budget measured — D2; win32's gateway start decided — D4; `7cb15dd` kept, dropped or reworded — D1; D13 read as accepted with D1 — a word, D5; the floor's environment recorded at its spawn and read at adoption (or the equality assumption stated in design-02/03) — B7; the shim's latency against the bare binary; the phone against a typed row; two kit petitions from W4 — a `materializeIntegration` (VibeField now publishes the kit's own `.zshenv` itself, ahead of the launchers, with a copy of the kit's private `publishFile`) and a `rehash` in the precmd hook when the shim directory gains entries (a name that resolved to the real binary before its launcher landed stays hashed in that pane until `rehash` or a PATH change); James's own dogfood of R1/R2 under `pnpm dev` — the first real vendor binary typed into a VibeField pane under strict — before or after the landing, D6. AR7-D1…D16 await the DECISIONS flip at landing.
@@ -45970,3 +45978,163 @@ new indent (VF-PM 19:20:19Z, the resolved blob `810df2d728ef`). Tree equal to me
 - The desk witness on a real Godview with two plans and a real pointer, into the portaled card's plan row too.
 - James's calls: the ‹for James› marks in `DESIGN.md` §8 and §9, and his picks page
   `https://claude.ai/artifact/3j2GazGj9nCidGpZxqztoR`.
+
+## EL8 — puppeteer 0.4.0: item 171's fix, the phone's Timeline and Spend on its rules, a packaged forwarder (M274)
+
+**What landed:** one stack of 12 commits on `fe6a04a7f`, landed whole as a fast-forward (`fe6a04a7f` → `996c51939`; 58
+files, +2271 −433; LANDED_AT 2026-11-10T02:20:13Z). VF-PM ruled it a stack, not a pin bump (2026-11-09 23:10Z): 0.4.0
+moved code the kit transcribes and broke two of fieldd's seams.
+- **The pin** (dd, `ac1aec3f2`, 23 files):
+  - pnpm-workspace.yaml's seven `@vibefield/puppeteer-*` rows 0.3.3 → 0.4.0 with a dated note, and 20 release-age
+    exceptions at @0.4.0 (published 2026-11-09T22:42Z). The 0.3.3 rows were kept for the one install that rewrote the
+    lock.
+  - preflight's `PIN_EXPECTATIONS`, end-anchored.
+  - siblings.lock.json: puppeteer's sha 52d09c8e → `e6e4753de` (v0.4.0) by `pnpm siblings:pin puppeteer` from the lane's
+    own checkout at the tag, `release.npm` 0.4.0, and its comment.
+  - pnpm-lock.yaml by `pnpm install`: the 20 packages swap, and adapter-opencode gains one edge, `jsonc-parser: 3.3.1`.
+  - PG-3a's re-bless, described below.
+- **#73's gateway split** (RV, `b81181e36`): the gateway checks the bearer before the shape (puppeteer `c9745a5d`), so
+  agent-gateway.test.ts's wrong-shape row splits in two. The comments it falsified are corrected at their source, and so
+  is the spawn-through seam row in docs/agent-plane/architecture.html.
+- **Item 203's VF-W3a** (RV, `6c1a7f04e` → `24bbdd2dc`, five commits, re-cut onto the pin from `rv/vf-forwarder`):
+  - puppeteer 0.4.0 (#65, `3c12ba73`) refuses a Claude launch `FORWARDER_RUNTIME_UNAVAILABLE` unless its host lends a
+    forwarder runtime, and a SEA lends none of its own.
+  - A packaged fieldd now lends itself in a fifth closed role (`roles.ts`, `agent-forwarder.ts`), bundled in fieldd's
+    build and named in the package manifest. DESIGN.md §9 says what a person reads when a launch is refused for want of
+    it.
+- **The kit's port** (fd, `dfdef8aef` → `1f93ebc34`): two red-then-green pairs.
+  - **Timeline:** `TimelineLanes.swift` drops 0.3.3's horizon clamp, as 0.4.0's `laneFor` does (#69, `5a0ae86b`).
+  - **Spend:** `SpendWords.swift`, `SpendModel.swift` and `SpendView.swift` take 0.4.0's `heroCaption`, `NARROW_HERO`
+    and `HeroRoom`. DESIGN.md's phone spend passage carries one ‹for James› sentence: the model carries the narrow
+    hero's caption, and the view does not draw it at narrow until he rules.
+  - **The rider** (fd, `996c51939`), after run 283's K: L3's fixture lane now starts 28 h back, past the widest window's
+    30 px lead-in (26.4 h). At 25 h it sat inside the lead-in, where the wake rightly starts at its own start with its
+    cap. The code was right and the fixture was wrong; only the one test file moves (10/5).
+
+**What 0.4.0 is** (#64–#78 since v0.3.4):
+- **#78:** item 171's fix. adapter-opencode imports `#jsonc-parser` through its package.json `imports`, whose `module`
+  condition is jsonc-parser's ESM build. fieldd's esbuild (no `--conditions`) takes it, so the bundle no longer leaves
+  `./impl/*` as runtime requires. **Keep it that way:** a custom `--conditions` drops `module`, and item 171 returns.
+- **The breaking adapter fixes:** claude #65, #68 and #74; grok #72 and #75; and #73, runtime's one git observer per
+  repository and grok's launch.
+- **monitor's #64, and the views' #66, #69 and #71.**
+- **PU-R's spawn-fuel buds (#76).** Its `fuel` is optional and VibeField passes none, so the bud draws as before.
+- **PU-S's body that wears its profile (#77).** It wears the glyph the row already carries, so nothing new is passed.
+- **R23 composes the same 10 providers.** No catalog row or status moves. PROFILE_GLYPHS did not grow.
+
+**The re-bless** (PG-3a's rule): the 8 phone goldens were regenerated and copied to their 9 kit mirrors.
+- **Six moved by their `versions` stamp alone:** body, fold, list, marks, rain and toolkit.
+- **phone-timeline moved in content** (#69, "a timeline lane keeps its true start"):
+  - The witness's `run-a-idle` has been idle past the 24 h horizon, and `laneFor` no longer clamps it. So `sinceMs` and
+    `fromMs` go 1790716900000 → 1790660000000 in all 10 steps.
+  - The label goes "idle for 24 hours" → "idle for 39 hours 48 minutes", and `live.big` "1d 00h" → "1d 15h".
+  - The readouts looking back, the step key and `pulse.rows[0].fromMs` move with them.
+  - Its description now names 0.4.0's timeline, last changed `5a0ae86b`.
+- **phone-spend moved in content** (#69, "a narrow spend hero says who it leaves out"):
+  - On the phone's narrow stage the caption keeps only who the total leaves out, cut to its room.
+  - `hero.what` reads "1 with no…" in 11 steps, "1…" in 3, "2…" in 1, and is absent in the 3 where nobody is left out.
+- **The two comments citing puppeteer-views 0.3.3:**
+  - phone-goldens-list.test.ts:5 moves, because `AgentList.js` is byte-identical at 0.4.0 (`cmp`).
+  - phone-goldens-timeline.ts:74 and :118 say the new truth, because views/timeline moved.
+
+**The light** before the mint: each row went alone through co-plan/door.lock under item 271's gate. Its HOLD lines open
+"dd (EL8 puppeteer 0.4.0: …)". The quotes below are from the lane's logs (lanes/el8-pup040/) and RV's
+(lanes/rv/briefs/el8-pup040-ready/rows/).
+- **The pin (dd):**
+  - `pnpm siblings:pin puppeteer` (pin.log), R23 and the consumers' typecheck, with gen:check rewriting nothing:
+    `check-agent-catalog: pass — 10 catalog row(s) honoured by both pins, 1 warning(s)`
+    `NX   Successfully ran target typecheck for 28 projects`
+  - Its HOLD END line: "gen:check)) — END 1-min load 5.84, swap used 1483.88M; exit 0: OPEN".
+  - Item 171's bundle (row9.out): `require("./impl/format") = 0 (want 0); lib/esm/impl/format.js = 2 (want ≥ 1)`.
+  - field-app's puppeteer, golden and agent rows, over 62 files: `Tests  1298 passed (1298)`.
+  - contracts' agent rows: `Tests  834 passed (834)`.
+  - biome: `Checked 4 files in 26ms. No fixes applied.`
+- **RV's, at the tip:**
+  - field-native, cold: ``Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 33s``.
+  - fieldd's readers of what 0.4.0 changed (the 8 skips are the opt-in describes):
+    `Test Files  34 passed | 1 skipped (35)` `Tests  654 passed | 8 skipped (662)`
+  - electron-shell typed-agent: `Tests  22 passed (22)`.
+- **fd's:** `swiftc -parse` over every Swift file of its four commits, exit 0.
+
+**The mints**, both on vf-m2, against run 280's counts:
+- **Run 283 at `1f93ebc34`** (S, V, X, P, G; `lanes/vf-m2/el8-pup040-a9-results/lw/summary.txt`, sums 37180181172039ba,
+  51 files):
+  - `EL8 S: GREEN at +106 s`
+  - `EL8 V: GREEN at +360 s`. Every count is as the brief read it from syntax:
+    `COUNT fieldd Tests: [Tests 3832 passed | 15 skipped (3847)] = the expected`
+    `COUNT electron-shell Tests: [Tests 2826 passed | 2 skipped (2828)] = the expected`
+    `COUNT field-app Tests: [Tests 4647 passed (4647)] = the expected`
+    `COUNT biome: [Checked 3552 files] = the expected`
+    `dev-runner (node:test): ℹ tests 483; ℹ pass 483; ℹ fail 0; ℹ skipped 0;` `cargo test results: ok 37, FAILED 0`
+  - V's NAMED row, item 171's witness (the row's own ✓ line, 1002 ms):
+    `NAMED V pair-log-root.test.ts:75: [   ✓ item 78 — two users' fieldds under one platform`
+  - Beside V, a reading: the bundle line moved (initial 956.2 KB raw against run 280's 956.0, and SettingsPanel's chunk
+    hash). It is the pin: puppeteer-views 0.4.0 is in the renderer.
+  - `EL8 K: RED (a second name in the Failing tests block) at +120 s`. The two names were item 167 and fd's L3 fixture,
+    which led to the rider.
+- **Run 284 at `996c51939`, the rider** (S, IOS, X, P, G; a FRESH IOSD `~/vf-lanes/ios/el8-040-r3-mint`;
+  `lanes/vf-m2/el8-pup040-r3-a9-results/lw/summary.txt`, sums ae83db85b514685c, 41 files):
+  - `EL8 S: GREEN at +98 s`
+  - `EL8 IOS: GREEN — pnpm check:ios-fixtures at 996c51939, exit 0`, with 454 copies and 112 pins as in run 283.
+  - `TimelineLanesTests (L1-L3, G1, G2): 5 of 5, each by its own ✔ line`
+  - `EL8 K: GREEN-BUT-167 at +120 s`: passed 2425, skipped 3, failed 1 of 2429 tests in 371 suites.
+  - K's READ: 36 lines hold `PG-HERO-WORDS `, the same as run 283's.
+- **V at the landed tip is CARRIED from run 283 on the rider gate:** `git diff --name-only 1f93ebc34 996c51939` is one
+  kit test path, 10/5, which V does not read.
+
+**Found.**
+- **siblings:pin rewrites siblings.lock.json** as `JSON.stringify(…, null, 2)`, which spreads its one-line arrays. The
+  pin restored main's layout and kept the content, and the two parse equal.
+- **A light vitest row at default workers** took the Mac's 1-min load from 3.76 to 22.86 in 19 s, and held a window
+  smoke from arming. Door rows of vitest now pass `--maxWorkers=2`.
+- **The renderer's bundle line moved with the pin** (run 283, beside V). puppeteer-views 0.4.0 is in the renderer.
+- **A message-only rewrap of the pin** (four body lines over 120) made it a sibling of the commit the lane branch held.
+  The lane took a NEW branch, `el8/puppeteer-0.4.0-r2`, and nothing was reset.
+
+**Known limits, in words a person meets.**
+- **A pane born before this landing keeps its old zsh hook for its life.** The new hook runs `rehash` when the launchers
+  change (#73), so only a shell born after the land finds a new launcher at its next prompt. The correction at AR-7's
+  entry says so at its source.
+- **Hermes stays preview** (AC-D6). #78 lets a bundled host start Hermes's gateway, where at 0.3.3 it threw before
+  Python ran, but nothing yet proves a session lives:
+  - Its python is `launch.python ?? $HERMES_PYTHON ?? 'python3'`, and fieldd passes neither. On a Mac, bare `python3`
+    may not import `tui_gateway`, so a launch may now fail with a new cause.
+  - Hermes's close waits up to 10 s, but the supervisor SIGKILLs fieldd 2 s after SIGTERM. A quit with a live Hermes
+    session can outrun the close.
+  - A Hermes interrupt now arrives as `turn:completed{outcome:'interrupted'}`, which flow-step-events.ts and
+    spark-transcripts.ts read as completed and 'end'.
+  - One live Hermes spawn settles all three.
+- **Other behaviour:**
+  - A refused Grok turn now ends `turn:failed` (#72).
+  - A held Claude hook port answers 'retry' with `endpoint-held`, so fieldd's G5 retry tries up to five times (#68).
+- **On the phone, a spend total that leaves someone out does not say so yet.** At narrow the model carries 0.4.0's
+  caption, but the view does not draw it until James rules on its words: `SpendView.swift:271` at `996c51939` is
+  `if !hero.narrow { what }`, and :249-252 say why. James has not ruled. The words it would draw are cut to the room:
+  K's READ at 402 pt prints `what=1 with…` (18 lines), `what=1…` (9) and none (9), in run 284's
+  `lw/kit/G-test.log.clean`.
+- **Item 167:** the kit's one failing test, unchanged by this stack (K GREEN-BUT-167).
+- **Item 283:** the 0.4.0 usage monitor can label a provisional row with a raw profile id before the registry answers.
+  No shipped surface draws it, and its fix rides a fieldd slice in item 274's stack.
+- **Item 285:** the phone hero's burn line at a set moment measures past its line. It is the same on `fe6a04a7f`, so it
+  is not new with this stack; on screen it is not traced.
+
+**Not done, and not claimed:** no window row ran at M274, nothing is pushed, and there is no packaged proof. The main
+checkout's node_modules trailed the lock at the land; the fixer's one frozen install follows on VF-PM's word, and it is
+not part of the stack.
+
+**Owed.**
+- **Packaged:** probe G and desk-gates row 34 (`packaged-typed-agent.test.ts`, agents:package), on the release runner or
+  a signed package.
+- **The landing rows:** rows 22, 23, 35 and 36, and the window rows (`pnpm gate:landing`), on James's typed word and the
+  Mac's swap draining.
+- **James's:**
+  - the desk look of PU-S with two profiles;
+  - the narrow hero's words, and DESIGN.md's ‹for James› sentence;
+  - Hermes's interpreter and stop budget;
+  - PU-R's and PU-S's petition records.
+- **Recorded, not done:**
+  - RainMotion.swift's header still cites view-sdk 0.3.3's `createMotionLoop` (:24-82), which moved in 0.4.0. There is
+    no K: phone-rain moved by its stamp alone.
+  - #74's `fetchedAt` for a kept meter is dropped by fieldd's METRIC_KEYS (agent-usage.ts:53-63). It needs contracts
+    first.
+- **Next:** PU-R's consumer.

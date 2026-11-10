@@ -615,8 +615,10 @@ profiles column", "Search — the Peek", the phone's corner, search sheet and to
 - Landed 11-09: **UM-5, the plan filter** (`f3a7cb587` → `2082837d3`, 25 commits, M273, runs 280 and 281; LANDED
   "UM-5"): choose a plan and the field shows only its sessions, on the desk and the phone. V is green and the kit
   is green but for item 167 (K GREEN-BUT-167); the stills are James's and the device witness over real rows is owed.
-- Next: puppeteer 0.4.0's EL8 (dd's lane: item 171's fix, and PU-S's glyph on the bump), then **PU-R's consumer**,
-  the bloom's buds wear their fuel, on VF-PM's placement, its DESIGN.md text first.
+- Landed 11-10: **the EL8 to puppeteer 0.4.0** (`fe6a04a7f` → `996c51939`, 12 commits, M274, runs 283 and 284; LANDED
+  "EL8 — puppeteer 0.4.0"): item 171's fix, PU-S's body that wears its profile with nothing new passed, and the phone's
+  Timeline and Spend ported to 0.4.0's rules. A desk with two profiles is James's eye.
+- Next: **PU-R's consumer**, the bloom's buds wear their fuel, on VF-PM's placement, its DESIGN.md text first.
 - Owed:
   - UM-R's window rows: `smoke:godview` with UM-R6's rung (written, never run), `smoke:godview:no-record`,
     `smoke:first-run` and `pnpm gate:landing`, on James's typed word and the Mac's swap draining (or his word on
@@ -631,7 +633,8 @@ profiles column", "Search — the Peek", the phone's corner, search sheet and to
   - M-desk's: the catalog stills (the popover's 12-tall line, the limit card's hover, Settings' rows);
   - M-phone's: the stills no row took (the token's menu, search over History, the page three hours on, a stale body
     receded, PJ-7's bloom bud);
-  - the petitions PU-R and PU-S (his to file; both shipped in puppeteer 0.4.0 on 11-09, with item 171's fix);
+  - the petitions PU-R and PU-S: shipped in puppeteer 0.4.0 (#76, #77) and pinned at M274; their records in
+    `draft/petitions/` are unwritten (his to file);
   - SLOT 18's riders: the record, seven at-source corrections, the petitions and the page's hold words.
 
 **RV — the review fixes (Godview's agent monitor, the terminal stack and puppeteer, for Claude Code, Codex and Grok)**
@@ -673,16 +676,17 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   run 243, an ff of `0b98488bf`; LANDED "Item 213 (2)"): two rows keep the whole catalog, four mount their one preview
   and the Studio's two run over the page with its sections stubbed; test-only. The theme row's split waits on the
   20-verify watch and a new ruling after beta.1.
+- Landed 11-10: **item 203's VF-W3a**, the closed agent-forwarder role, and **#73's gateway split**, in the EL8 to
+  puppeteer 0.4.0's stack (M274; LANDED "EL8 — puppeteer 0.4.0"): a packaged fieldd lends puppeteer its own forwarder.
+  Probe G and desk-gates row 34 (packaged, the release runner) are owed.
 - In flight:
-  - item 203's VF-W3a (the closed agent-forwarder role), built and reviewed, landing in EL8-1's chain;
   - the sibling lanes, filed by James on 11-06: puppeteer #64 rv/pup-monitor (#84, #81, #9) and #65
     rv/pup-claude-a (#1, #61, #4, #3, #5a, #64, #62, #63) MERGED, #66 rv/pup-views-a (#38, #39, #106, #107, #40,
     #105) open; ghosttea #102 rv/ghosttea (#115, #37 G-A, #92, #113, #94) MERGED. Their releases and the EL8 pins
     follow. At James's hand, their PR scripts ready (`lanes/rv/pr/`): rv/pup-claude-b (#14, #111, #66, #110, #13)
     and rv/pup-views-b (#103, #104, #41, #101, #108). Building: rv/pup-claude-usage (#70, #32, #34, #102, #109,
     #35, #33). Parked: rv/pup-codex (on rv-pr58-codex-observer).
-- Next: puppeteer R1 (claude-a's PR and item 171's fix, James's hand) → EL8-1 with item 203 in one chain; ghosttea
-  0.15.0 → EL8-g → rv/vf-ghosttea-tail; waves 3–8 by the plan.
+- Next: ghosttea 0.15.0 → EL8-g → rv/vf-ghosttea-tail; waves 3–8 by the plan.
 - Owed: James's hand on every sibling PR and release;
   smoke:plugin-restart and the plugin-runtime soak for item 212; item 215 (freeway's link door), item 217 (item 198's
   door did not take a fresh connection for 30 s after fd pressure; load not shown to be the cause, corrected
@@ -1525,7 +1529,7 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 | truffle | `truffle-core = "=0.7.27"` (Cargo.toml) + the five npm sidecars 0.7.27 (protocol 13) · Swift exact 0.7.26 (Package.swift's `truffleRelease`; lock `release.swift`), which ghosttea 0.14.0 declares | the split, DECISIONS TB (a), `af3f3078f`; EL8-TRUFFLE (track DR, 2026-11-07) moved cargo and npm to 0.7.27; Swift rejoins at the first ghosttea declaring 0.7.27 |
 | ghosttea | 0.14.0 on cargo (`=0.14.0`), npm and Swift | the EL8 of 11-02 (LANDED "EL8 — Ghostty 1.4"); no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
 | ICE | `@vibecook/ice` 0.17.0 exact (overrides row) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | EL8 |
-| puppeteer | `@vibefield/puppeteer-*` 0.3.3 exact (the lock's `52d09c8e8`) | the EL8 of 11-02 (LANDED "GV"; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate |
+| puppeteer | `@vibefield/puppeteer-*` 0.4.0 exact (the lock's `e6e4753de`) | the EL8 of 11-10 (LANDED "EL8 — puppeteer 0.4.0"; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate |
 | rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.5 exact · the kit's `RosettaClient` 0.1.5 exact (`let rosettaRelease`) · rosettad built from `../rosetta-pin` at `811e554c6` (protocol and store schema 30) | EL8 11-08 (`68b80fb95`, M230; 0.1.4 at `a8ab1f13f`, 11-07); npm, Swift and the daemon archives released (v0.1.5); adopting the archives remains RD-D7; the Swift row is PAID on vf-m2 by item 257 (M233 `b3a5930b2`); its exact-tree witness stays the old mini's |
 | mille | `link:../mille-pin` at `c8160d5` (`@vibecook/mille`, `mille-ui`) | FS-1b; no release past v0.3.4; exit RD-6 |
 | rustc | 1.99.1 (`rust-toolchain.toml`) | EL8 |
@@ -1546,11 +1550,11 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
   DS-6's follower's ask; DS-7 landed without it, the follower still diffs snapshots), RO-17…RO-23, and RO-10's
   follow-ups. RO-4's remainder is adopting the released daemon archives (RD-D7). RO-31 (a copy port in rosetta's room;
   History's Copy waits on it, HN-5).
-- **puppeteer:** 0.3.0 PUBLISHED and pinned 10-28 (`1469639a6`) · a later release for AO-7's `installRecipe`,
+- **puppeteer:** 0.4.0 PUBLISHED 11-09 (`v0.4.0` = `e6e4753d`) and pinned at M274 · a later release for
+  AO-7's `installRecipe`,
   item 50's env seam, item 39 and the tuck · PU-12 (verify first) · PU-19 filed as #47 (AO-8) · PU-15
-  (with AR-6). PU-R (UM-D7, the bloom's buds wear their fuel) and PU-S (UM-D6, an agent's body wears its profile):
-  drafted for draft SLOT 18, James's to file; one release and one EL8, behind item 171's 0.3.4, and no UM slice waits on
-  them.
+  (with AR-6). PU-R (UM-D7, the bloom's buds wear their fuel, #76) and PU-S (UM-D6, an agent's body wears its profile,
+  #77) shipped in 0.4.0; PU-R's consumer is VibeField's.
 - **mille:** M11 (with WIN). **ICE:** I47, I48 (named, parked) · the remount edge (a pointer `leave` with no point; a
   candidate if presence UX needs it) · NodeNext portability. **strata:** S3/S4's residue (parked: a measured join or
   reload wall on a real desk document).
@@ -1582,7 +1586,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
 | MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162), MA-4 (M166), MA-3f (M268) and MA-6 (M269, M272) landed; AH-1…3 landed, AH-4 unledgered; Live apps are field-app's since FL-2 (M267), `plugins/browser` gone | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3h; MA-5 after SP-4; James's device rows and stills for MA-6 |
 | DR — the Drive | ACTIVE since 11-06 (DR-D1…D13 ruled; D14, D15 open); DR-1a, DR-2a, DR-1b, DR-3a (W3's VF-FLOOR), the EL8s to rosetta and truffle, DR-3b (W3's VF-RELAY) and DR-1 (B) as MA-3f landed (M183, M188, M190, M203, M205, M217, M249, M268); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D14 and D15 (James); the EL8 to mille and the substrate slice; DR-2…DR-5 |
-| RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196), 211 (RV #97, #96, #93, #116, #95, #47, M199), 212 (RV #30, #29, #67, M201) and 216 (item 192's census row, M204) landed; W1–W2 building, the sibling lanes local | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | puppeteer R1 → EL8-1 with item 203; ghosttea 0.15.0 → EL8-g |
+| RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196) and VF-W3a (M274, with #73), 211 (RV #97, #96, #93, #116, #95, #47, M199), 212 (RV #30, #29, #67, M201) and 216 (item 192's census row, M204) landed; W1–W2 building, the sibling lanes local | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | ghosttea 0.15.0 → EL8-g |
 | UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180); UM-3 and SE-1 landed 11-06 (M-desk `ed8099c1e`, run187, M187); UM-4 and SE-2 landed 11-06 (M-phone `d6d76d079`, run198, M198) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | UM-5 (UM-D14, the plan filter) in wave 2 |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
