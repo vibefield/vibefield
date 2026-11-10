@@ -88,12 +88,14 @@ const PEEK_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBL
 const same = (a: ObjectGrantEntry, b: ObjectGrantEntry): boolean =>
   a.ref === b.ref && a.holder === b.holder;
 
-/** What an error said, as its code alone (`ENOSPC`, `EACCES`, `EISDIR`, …). A log line prints an error's code and
- * never its message: Node's file errors name the file's whole path, which holds the person's home. An error with no
- * code is `unknown`. */
+/** What an error said, as one word alone: its `code` when that is a string (`ENOSPC`, `EACCES`, `EISDIR`, …), else its
+ * `kind` when that is a string (an `RpcCallError` has a kind, and no code that is a word), else `unknown`. Nothing
+ * else of the error is read. A log line prints this and never an error's message: Node's file errors name the file's
+ * whole path, which holds the person's home. */
 export const codeOf = (error: unknown): string => {
-  const code = (error as { code?: unknown } | null | undefined)?.code;
-  return typeof code === "string" ? code : "unknown";
+  const { code, kind } = (error ?? {}) as { code?: unknown; kind?: unknown };
+  if (typeof code === "string") return code;
+  return typeof kind === "string" ? kind : "unknown";
 };
 
 /** What a hand, a place or a grant throws when the store could not keep it: ONE fixed sentence and a code, and
