@@ -536,6 +536,7 @@ const requiredMirrors = [
       "agents-profile-sets.meters.json",
       "agent-usage.valid.json",
       "agent-usage.budget.json",
+      "agent-usage.kept-meters.json",
       "agent-catalog.valid.json",
     ],
     ["Tests/FieldHomeTests"],

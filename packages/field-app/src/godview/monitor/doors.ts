@@ -258,6 +258,8 @@ function toEntry(row: AgentAccountUsageEntry): AccountUsageEntry {
                 : {}),
               ...(metric.startsAt !== undefined ? { startsAt: metric.startsAt } : {}),
               ...(metric.resetsAt !== undefined ? { resetsAt: metric.resetsAt } : {}),
+              // item 274: a meter a later reading did not carry keeps its own read (Core 0.4.0's slot)
+              ...(metric.fetchedAt !== undefined ? { fetchedAt: metric.fetchedAt } : {}),
               // the part of the plan it meters; Core writes standby only as `true`
               ...(metric.group !== undefined
                 ? {

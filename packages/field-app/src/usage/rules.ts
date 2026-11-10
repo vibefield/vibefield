@@ -70,6 +70,16 @@ export function ageWords(fetchedAt: string, now: Date): string {
   return Number.isFinite(age) ? `as of ${durationWords(Math.max(0, age))} ago` : "";
 }
 
+/** Item 274 (UM-274-D2 A; DESIGN.md §8 "A meter a later reading did not carry") — when a meter was read: its own read
+ * where a later, partial reading (a push) did not carry it (puppeteer 0.4.0's `metric.fetchedAt`), else its
+ * reading's. Every age said is the age of the numbers beside it. */
+export function meterReadAt<T extends string | undefined>(
+  metric: { fetchedAt?: string | undefined },
+  readingAt: T,
+): string | T {
+  return metric.fetchedAt ?? readingAt;
+}
+
 /** What a window's pressure reads: its orange (Settings' pace rule), its used share, and whether its `resetsAt` is at
  * or before now, whether its reset came before or after its reading (`passed`). */
 export interface Pressed {

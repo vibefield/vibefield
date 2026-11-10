@@ -21,6 +21,7 @@ import {
   ageWords,
   forecastOf,
   type MeterForecast,
+  meterReadAt,
   type Pressed,
   pressureOf,
   tightestOf,
@@ -85,7 +86,9 @@ export interface MeterWindow {
 }
 
 /** The words at a meter's right: the forecast while it runs ahead, else the reset; a kept reading says its age, and
- * so does one with a window read before its reset (`passed`). */
+ * so does one with a window read before its reset (`passed`). *Since item 274 (2026-11-10, UM-274-D2 A):* the age
+ * is its tightest window's own read (`meterReadAt`), and a passed window ages the words only when the tightest was
+ * read no later than it. */
 export interface MeterRight {
   kind: "forecast" | "reset" | "kept" | "passed" | "reading" | "need" | "none";
   words: string;
@@ -134,7 +137,8 @@ export interface ReadingMeter extends MeterBase {
   hot: boolean;
   /** the reading is the last good one, kept after a refresh failed */
   stale: boolean;
-  /** when the reading was taken */
+  /** when the reading was taken: its newest read. A meter a later reading did not carry names its own older read
+   * (`metric.fetchedAt`, item 274) */
   fetchedAt: string;
   right: MeterRight;
 }
@@ -281,12 +285,18 @@ function rightOf(
   now: Date,
 ): MeterRight {
   // a kept reading says its age, and so does one with a window read before its reset (DESIGN.md §8 "The Bands
-  // circle"): a forecast or a reset read from it would claim a reading it is not
-  const aged = stale ? "kept" : windows.some((each) => each.passed) ? "passed" : undefined;
+  // circle"): a forecast or a reset read from it would claim a reading it is not. Item 274 (UM-274-D2 A; §8 "A meter
+  // a later reading did not carry"): the age is the tightest's own read, and a passed window ages the words only when
+  // the tightest was read no later than it, so a five hours pushed a minute ago keeps its reset beside a week kept
+  // from before that week's reset. An unreadable stamp compares false and ages, as built.
+  const tightestAt = meterReadAt(window.metric, fetchedAt);
+  const agesIt = (each: MeterWindow): boolean =>
+    each.passed && !(Date.parse(tightestAt) > Date.parse(meterReadAt(each.metric, fetchedAt)));
+  const aged = stale ? "kept" : windows.some(agesIt) ? "passed" : undefined;
   if (aged !== undefined) {
     // §9's "as of 5m ago" (the leaf's `ageWords`); a reading whose time cannot be read is kept all the same (its fill
     // at half), and says no age rather than words §9 does not rule
-    return { kind: aged, words: ageWords(fetchedAt, now), hot: false, icon: false };
+    return { kind: aged, words: ageWords(tightestAt, now), hot: false, icon: false };
   }
   if (window.forecast !== undefined) {
     return { kind: "forecast", words: window.forecast.short, hot: true, icon: false };

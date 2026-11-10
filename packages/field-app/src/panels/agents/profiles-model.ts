@@ -76,7 +76,8 @@ export interface ProfileAgentRow {
   /** the account's windows (usage the provider reported), in the adapter's order */
   usage: AgentAccountUsageMetric[];
   /** when the reading those windows are was taken (the entry's `fetchedAt`), while there are any: a window read
-   * before its reset says its age (DESIGN.md §8 "A window read before its reset") */
+   * before its reset says its age (DESIGN.md §8 "A window read before its reset"), its own read where a later
+   * reading did not carry it (`metric.fetchedAt`, item 274) */
   usageFetchedAt?: string | undefined;
   /** the provider does not report usage at all */
   usageUnsupported: boolean;
@@ -431,7 +432,8 @@ export interface SignInLine {
   fact: string;
   /** its plan's windows, when this sign-in is the one that named the account */
   metrics: AgentAccountUsageMetric[];
-  /** when the reading those windows are was taken, while there are any (its card's `fetchedAt`) */
+  /** when the reading those windows are was taken, while there are any (its card's `fetchedAt`); a window a later
+   * reading did not carry names its own (`metric.fetchedAt`, item 274) */
   fetchedAt?: string | undefined;
   planId?: string | undefined;
 }

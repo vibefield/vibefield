@@ -1,0 +1,101 @@
+{
+  "entries": [
+    {
+      "provider": "claude",
+      "label": "Claude",
+      "profileId": "claude:native-default",
+      "profileLabel": "Default",
+      "state": "available",
+      "metrics": [
+        {
+          "id": "five-hour",
+          "label": "5H",
+          "kind": "window",
+          "usedPercent": 42,
+          "durationMinutes": 300,
+          "startsAt": "2026-09-16T09:30:00.000Z",
+          "resetsAt": "2026-09-16T14:30:00.000Z"
+        },
+        {
+          "id": "seven-day",
+          "label": "7D",
+          "kind": "window",
+          "usedPercent": 47,
+          "durationMinutes": 10080,
+          "resetsAt": "2026-09-17T00:00:00.000Z"
+        },
+        {
+          "id": "fable",
+          "label": "FABLE",
+          "description": "Current week (Fable) usage",
+          "kind": "window",
+          "usedPercent": 81,
+          "durationMinutes": 10080,
+          "resetsAt": "2026-09-16T11:45:00.000Z",
+          "group": {
+            "id": "scope:fable",
+            "label": "Fable only"
+          },
+          "fetchedAt": "2026-09-16T11:20:00.000Z"
+        },
+        {
+          "id": "credit",
+          "label": "CREDIT",
+          "description": "Usage credits",
+          "kind": "budget",
+          "usedPercent": 20,
+          "fetchedAt": "2026-09-16T11:20:00.000Z"
+        }
+      ],
+      "fetchedAt": "2026-09-16T11:59:30.000Z",
+      "scope": "subscription",
+      "source": {
+        "kind": "native-statusline",
+        "stability": "documented"
+      }
+    },
+    {
+      "provider": "claude",
+      "label": "Claude",
+      "profileId": "5d8a2f6c-9e1b-4c37-a4d0-8b6e2f9c1a35",
+      "profileLabel": "Side",
+      "state": "rate-limited",
+      "metrics": [
+        {
+          "id": "five-hour",
+          "label": "5H",
+          "kind": "window",
+          "usedPercent": 30,
+          "durationMinutes": 300,
+          "startsAt": "2026-09-16T10:00:00.000Z",
+          "resetsAt": "2026-09-16T15:00:00.000Z"
+        },
+        {
+          "id": "fable",
+          "label": "FABLE",
+          "description": "Current week (Fable) usage",
+          "kind": "window",
+          "usedPercent": 96,
+          "durationMinutes": 10080,
+          "resetsAt": "2026-09-17T00:00:00.000Z",
+          "group": {
+            "id": "scope:fable",
+            "label": "Fable only"
+          },
+          "fetchedAt": "2026-09-16T10:00:00.000Z"
+        }
+      ],
+      "message": "Claude account usage is rate limited; retry after the window resets",
+      "retryable": true,
+      "retryAt": "2026-09-16T12:20:00.000Z",
+      "stale": true,
+      "fetchedAt": "2026-09-16T11:59:30.000Z",
+      "scope": "subscription",
+      "source": {
+        "kind": "native-statusline",
+        "stability": "documented"
+      }
+    }
+  ],
+  "generatedAt": "2026-09-16T11:59:30.000Z"
+}

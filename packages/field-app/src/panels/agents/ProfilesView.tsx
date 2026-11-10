@@ -15,7 +15,7 @@ import {
   useState,
 } from "react";
 import { meterWindows } from "../../usage/meters";
-import { ageWords, resetForm } from "../../usage/rules";
+import { ageWords, meterReadAt, resetForm } from "../../usage/rules";
 import type { SettingsSubpage } from "../SettingsDialog";
 import { borderCls, fieldCls, labelCls, SettingsRow, SettingsSection } from "../settings-ui";
 import type { AgentsNotice } from "./AgentsView";
@@ -153,8 +153,9 @@ export type UsageResetForm = NonNullable<ReturnType<typeof resetForm>>;
  * each window that runs out before its reset at this pace ("out in ~35m"), said
  * at its line's end, how each reset is said (`resetForm`), and the reading's
  * age for each window read before its reset (`passed`; the leaf's `ageWords`,
- * "as of 3h ago", from when the reading was taken, `fetchedAt`) — so Settings
- * and Godview's popover never say different things. */
+ * "as of 3h ago", from when that window was read: its own `fetchedAt` where a
+ * later reading did not carry it, else the reading's, `meterReadAt`, item 274)
+ * — so Settings and Godview's popover never say different things. */
 function meterLines(
   metrics: Parameters<typeof meterWindows>[0],
   now: Date,
@@ -171,11 +172,13 @@ function meterLines(
   const ages: Record<string, string> = {};
   // what a window read before its reset metered is gone, so its reset gives way to the reading's age (DESIGN.md §8
   // "A window read before its reset"); one whose time cannot be read keeps its reset
-  const age = fetchedAt === undefined ? "" : ageWords(fetchedAt, now);
   for (const window of windows) {
     if (window.forecast !== undefined) forecasts[window.line.id] = window.forecast.short;
     const form = resetForm(window);
     if (form !== undefined) resetForms[window.line.id] = form;
+    // item 274 (UM-274-D2 A): each passed line says its own read's age
+    const at = meterReadAt(window.metric, fetchedAt);
+    const age = at === undefined ? "" : ageWords(at, now);
     if (window.passed && age !== "") ages[window.line.id] = age;
   }
   return { lines: windows.map((window) => window.line), forecasts, resetForms, ages };
