@@ -11,6 +11,14 @@ import { RecordSigner, type SignedRead } from "../src/signed-record";
 // A real DeskObjects over a real signed store in a temp root, and a scripted window: an intent handed to `respond` gets
 // the answer it returns, and an intent for which it returns nothing stays pending, as a window that has gone quiet.
 //
+// WHAT IS INJECTED HERE, and so what every row that uses a world shows (OB custody; the spec's §10). A world builds
+// the store and the desk itself and hands them their collaborators: `bornFor` (who a run is: a map of this file's
+// making), `marks` (who remembers the grants' count: `survivor()` below), `key` (the handed record key, when a row
+// gives one), the grants file's write (`writeFile`), the clock (`now`) and the timers (`retryMs`, `noteMs`). So each
+// such row is a row GIVEN AN INJECTED `bornFor`, `marks` and `key`: it shows the store's rule given those. None of
+// them shows that production hands the store the real ones: that binding is proved by ob-d's rows through the real
+// daemon, `packages/fieldd/test/custody-boot.test.ts`.
+//
 // OB custody (C4, C5). Who a run is, for a grant, is what THIS fieldd launched or vouches for (`bornFor`): every run
 // named in `runs` or `sparkRuns` was launched by the fieldd that is running when it is named, and a `reopen` is a
 // restart, after which every run named before it came back re-attached and unvouched, unless the restart names it
@@ -78,6 +86,22 @@ export function capture(events: LoggedEvents): Logger {
     info: (event, _m, attrs) => void events.push({ event, attrs }),
     warn: (event, _m, attrs) => void events.push({ event, attrs }),
     error: (event, _m, _e, attrs) => void events.push({ event, attrs }),
+    fatal: () => undefined,
+    isLevelEnabled: () => true,
+  };
+  return logger;
+}
+
+/** A logger that keeps EVERYTHING it is handed at info and above, as handed: the event, the sentence, an error (an
+ * error line's third) and the attrs. For a row that must see what a line carries beside its attrs. */
+export function captureAll(calls: unknown[][]): Logger {
+  const logger: Logger = {
+    child: () => logger,
+    trace: () => undefined,
+    debug: () => undefined,
+    info: (...call) => void calls.push(call),
+    warn: (...call) => void calls.push(call),
+    error: (...call) => void calls.push(call),
     fatal: () => undefined,
     isLevelEnabled: () => true,
   };

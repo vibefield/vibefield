@@ -13,6 +13,11 @@ import {
 
 // OB-4 (§7; OB-L5, OB-L6, OB-D9, OB-D11) — who is at work on what, the person's hand over everything, one holder at a
 // time on a `one` kind, and the agents' separate undo, against a real DeskObjects and a scripted window.
+//
+// Given an injected `bornFor`, `marks` and (where a row gives one) `key`: every row here builds its desk through
+// desk-fixtures.ts, which hands the store and the desk those collaborators, and shows the store's rule given them.
+// That production binds the real ones is proved by ob-d's rows through the real daemon,
+// `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(() => {
   cleanupWorlds();

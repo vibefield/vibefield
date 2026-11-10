@@ -26,6 +26,11 @@ import {
 // edited, unparseable or exposed is set aside and nothing in it is granted. Under custody's `sealed` level the key was
 // handed and the file says so: a fieldd at `files` leaves such a file exactly where it is, and the store refuses. So
 // that it can, a sealed store never leaves the path empty: it writes the file at boot, before any name.
+//
+// Given an injected `key`: a store is `sealed` here because a row hands it 32 bytes (`HANDED`), with `marks` and
+// `bornFor` of desk-fixtures.ts's making, and the rows show the store's rule given them. None shows that a spawner
+// really hands a key, or that the daemon passes it to the store: that is proved by ob-d's rows through the real
+// daemon, `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(cleanupWorlds);
 

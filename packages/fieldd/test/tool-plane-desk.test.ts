@@ -7,6 +7,11 @@ import { cleanupWorlds, ordinaryWindow, world } from "./desk-fixtures";
 // OB-3b — the desk room through the real plane: what a caller is listed and told, the audit line written before the act
 // with `ref` and `tool` and no contents (CP-L6), and a refusal reaching the model as a fact with what it needs to mend
 // the call.
+//
+// Given an injected `bornFor`, `marks` and (where a row gives one) `key`: every row here builds its desk through
+// desk-fixtures.ts, which hands the store and the desk those collaborators, and shows the store's rule given them.
+// That production binds the real ones is proved by ob-d's rows through the real daemon,
+// `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(cleanupWorlds);
 

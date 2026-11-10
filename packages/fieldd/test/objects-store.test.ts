@@ -11,6 +11,11 @@ import { cleanupWorlds, DOC, world } from "./desk-fixtures";
 // *Moved 2026-11-10 (OB custody, C4):* a record is the object's name alone now. Every grant is in the one grants file
 // (objects-grants-file.test.ts), and whose it is after a restart is objects-this-boot.test.ts's; the rows here that
 // read a record's `grants` read the desk's own list instead.
+//
+// Given an injected `bornFor`, `marks` and (where a row gives one) `key`: every row here builds its desk through
+// desk-fixtures.ts, which hands the store and the desk those collaborators, and shows the store's rule given them.
+// That production binds the real ones is proved by ob-d's rows through the real daemon,
+// `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(cleanupWorlds);
 

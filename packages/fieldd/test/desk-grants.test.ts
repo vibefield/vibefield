@@ -9,6 +9,11 @@ import { cleanupWorlds, type DeskWorld, DOC, ordinaryWindow, world } from "./des
 // here said a plain run's grant, or a spark's for the run that was there, survives a restart of fieldd; they say the
 // new rule now (a plain run's ends with fieldd, a spark's waits for the spark's next run). The rule's own rows are
 // objects-this-boot.test.ts.
+//
+// Given an injected `bornFor`, `marks` and (where a row gives one) `key`: every row here builds its desk through
+// desk-fixtures.ts, which hands the store and the desk those collaborators, and shows the store's rule given them.
+// That production binds the real ones is proved by ob-d's rows through the real daemon,
+// `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(cleanupWorlds);
 

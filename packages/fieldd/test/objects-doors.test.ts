@@ -12,6 +12,11 @@ import { cleanupWorlds, DOC, type Survivor, world } from "./desk-fixtures";
 // the person's window), and the person's acts audited. Rows are called through a fake API, as registerObjectDoors hands
 // them to the real one. OB custody (C5): a hand and a take-back answer only once whoever outlives fieldd was told the
 // grants' count, and a take-back answers `taken: true` whatever the disk said, with `kept: false` beside it then.
+//
+// Given an injected `bornFor`, `marks` and audit: every row here builds its desk through desk-fixtures.ts, which hands
+// the store and the desk their collaborators, and hands the door a fake audit. The rows show the door's and the
+// store's rule given those. That production binds the real ones is proved by ob-d's rows through the real daemon,
+// `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(cleanupWorlds);
 

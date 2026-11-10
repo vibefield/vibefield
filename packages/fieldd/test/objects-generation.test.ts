@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDeskVerbs } from "../src/tool-plane/rooms/desk/verbs";
 import {
   capture,
+  captureAll,
   cleanupWorlds,
   type DeskWorld,
   type LoggedEvents,
@@ -29,6 +30,10 @@ import {
 //
 // The survivor here is the store's own two-method shape. That the floor really keeps a mark and the shell really hands
 // it on are their own rows (field-native's marks.rs, the supervisor's hand-off).
+//
+// Given an injected `marks`: every row here hands the store its survivor (one of desk-fixtures.ts's making), its
+// write, its timers and, through the world, `bornFor`, and shows the store's rule given those. That production binds
+// the real ones is proved by ob-d's rows through the real daemon, `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(() => {
   cleanupWorlds();
@@ -329,6 +334,45 @@ describe("a take-back always takes (OB custody, C5; OB-D19 A)", () => {
     const again = h.reopen();
     expect(again.grantOf(ref, wake(h))).toBeUndefined();
     expect(staleOf(h)).toHaveLength(1);
+  });
+
+  it("says a take-back the disk would not take by the error's code alone: no part of a path its message holds", () => {
+    const calls: unknown[][] = [];
+    // Node's file errors name the file's whole path, in the message and beside it, and that holds the person's home
+    const planted = "/Users/planted-home/Library/VibeField/fieldd/objects.grants.json.1.tmp";
+    const says = `ENOSPC: no space left on device, open '${planted}'`;
+    const coded = Object.assign(new Error(says), { code: "ENOSPC", path: planted });
+    const bare = new Error(`write refused at ${planted}`);
+    let refused: Error | undefined;
+    const h = world({
+      logger: captureAll(calls),
+      retryMs: 60_000,
+      writeFile: (path, text) => {
+        if (refused !== undefined) throw refused;
+        writeFileSync(path, text, { mode: 0o600 });
+      },
+    });
+    const ref = h.refOf("k1", "desk.note");
+    const other = h.refOf("k2", "desk.note");
+    h.desk.hand(ref, "run-a");
+    h.desk.hand(other, "run-b");
+    refused = coded;
+    h.desk.takeBack(ref, "run-a");
+    // an error with no code is said as `unknown`, and nothing of what it says
+    refused = bare;
+    h.desk.takeBack(other, "run-b");
+    // a line is (event, sentence, error, attrs): no error is handed to the logger, and the attrs carry its code
+    const unkept = calls.filter(([event]) => event === "fieldd.objects.grants_unkept");
+    expect(unkept.map((call) => call[2])).toEqual([undefined, undefined]);
+    const codes = unkept.map((call) => (call[3] as { code?: unknown }).code);
+    expect(codes).toEqual(["ENOSPC", "unknown"]);
+    // everything every line was handed, with an error's message, stack and fields spelled out
+    const spelled = JSON.stringify(calls, (_key, value: unknown) =>
+      value instanceof Error ? { ...value, message: value.message, stack: value.stack } : value,
+    );
+    expect(spelled).toContain("fieldd.objects.grants_unkept");
+    for (const part of ["planted-home", "/Users", ".tmp", "write refused at"])
+      expect(spelled).not.toContain(part);
   });
 
   it.skipIf(!MODES_BITE)(

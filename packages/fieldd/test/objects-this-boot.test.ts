@@ -11,6 +11,11 @@ import { cleanupWorlds, type DeskWorld, DOC, world } from "./desk-fixtures";
 // grants nothing, in a sentence VibeField already has. A plain run's grant ends with the fieldd that launched it,
 // vouched or not (`plainHoldAtBoot: "end"`, the only value anything passes); a spark's stands (EY-D9 B) and is held
 // by the runs fieldd starts for it, or vouches for, from then on.
+//
+// Given an injected `bornFor`: every row here is handed one of desk-fixtures.ts's making (what a world's runs were
+// named as, and which of them a restart vouches for), with a survivor for `marks`, and shows the store's rule given
+// it. None shows what fieldd's launch memory really answers, or that the daemon hands it to the store: that is proved
+// by ob-d's rows through the real daemon, `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(cleanupWorlds);
 

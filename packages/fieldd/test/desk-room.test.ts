@@ -16,6 +16,11 @@ import {
 // OB-3b — the desk room's eight, against a real DeskObjects and a scripted window. The order of a call is the room's law:
 // the caller holds the object (MT-L4), the tool is in the kind's manual, its input fits the kind's schema, and only then
 // does the window see it. A refusal teaches: it says what to do next.
+//
+// Given an injected `bornFor`, `marks` and (where a row gives one) `key`: every row here builds its desk through
+// desk-fixtures.ts, which hands the store and the desk those collaborators, and shows the store's rule given them.
+// That production binds the real ones is proved by ob-d's rows through the real daemon,
+// `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(() => {
   cleanupWorlds();

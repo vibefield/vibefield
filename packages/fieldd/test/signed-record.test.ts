@@ -171,6 +171,9 @@ describe("a signed file read back: why it is not served", () => {
 // OB custody (C4): under the `sealed` level a store's key is HANDED by the spawner (`CustodyHandoff.records`), so that
 // no key sits in a file the same user can read. The signer then uses the handed key instead of the file, and the file's
 // path is never read and never made. With no key handed, every row above is today's, byte for byte.
+// Given an injected `key`: each row hands the signer one, and shows the signer's rule given it. That a spawner hands
+// one and the daemon passes it on is proved by ob-d's rows through the real daemon,
+// `packages/fieldd/test/custody-boot.test.ts`.
 describe("a handed key is used instead of the file (OB custody, C4)", () => {
   /** A key as a spawner hands it: 32 bytes, and plainly nobody's. */
   const handed = () => Buffer.alloc(32, 0x5a);

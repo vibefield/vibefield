@@ -16,6 +16,11 @@ import {
 
 // The independent review of OB-3 and OB-4: each of these is a way the room could say something untrue or lose something
 // the person is owed, reproduced first.
+//
+// Given an injected `bornFor`, `marks` and (where a row gives one) `key`: every row here builds its desk through
+// desk-fixtures.ts, which hands the store and the desk those collaborators, and shows the store's rule given them.
+// That production binds the real ones is proved by ob-d's rows through the real daemon,
+// `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(() => {
   cleanupWorlds();
