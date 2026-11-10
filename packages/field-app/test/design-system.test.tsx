@@ -1031,14 +1031,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(frame("connect").textContent).toContain("Opening Tailscale…");
 
     // AO-1 — Setting up, fed the boot machine's states by hand: one line under the logo
-    // (FG-D21 B), the desk's own stage under it while it opens, then the welcome on that line.
+    // (FG-D21 B), with nothing under it while the desk opens (item 281: the steps' words go to
+    // the log), then the welcome on that line.
     const standing = (state: string): Element | null =>
       frame(state).querySelector('.vf-wizard-status-words:not([data-state="out"])');
     const said = (state: string): [string, string] => [
       standing(state)?.querySelector(".vf-wizard-status-line")?.textContent ?? "",
       standing(state)?.querySelector(".vf-wizard-status-sub")?.textContent ?? "",
     ];
-    expect(said("setting-up")).toEqual(["Opening your field…", "drawing the board"]);
+    expect(said("setting-up")).toEqual(["Opening your field…", ""]);
     await choose("setting-up", "ready");
     expect(said("setting-up")).toEqual([
       "Welcome to your field, James.",

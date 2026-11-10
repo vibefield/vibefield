@@ -119,13 +119,14 @@ function harness(
   const importWorkspace = vi.fn();
   const clientStub = { close: () => {} } as unknown as FielddClient;
   const makeClient = vi.fn(() => clientStub);
+  const info = vi.fn<RendererLogger["info"]>();
   const warn = vi.fn<RendererLogger["warn"]>();
   const error = vi.fn<RendererLogger["error"]>();
   const logger: RendererLogger = {
     child: () => logger,
     trace: vi.fn(),
     debug: vi.fn(),
-    info: vi.fn(),
+    info,
     warn,
     error,
     fatal: vi.fn(),
@@ -173,6 +174,7 @@ function harness(
     importWorkspace,
     makeClient,
     clientStub,
+    info,
     warn,
     error,
     /** Set the scripted clock to `at`, then run the next queued rAF tick. */
@@ -445,6 +447,40 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
       "vf:renderer:stable",
       "vf:renderer:interactive",
     ]);
+  });
+
+  it("logs each step of a good start once, in the machine's own words, as renderer.boot.stage (item 281)", async () => {
+    // While a start goes well the bar alone speaks (DESIGN.md §8 "The boot splash"): the steps' words are
+    // VibeField's insides, so they go to the log, one line a step, and never to the screen.
+    const h = harness();
+    h.getConnection.mockResolvedValue({ port: 4242, token: "abc" });
+    h.importWorkspace.mockResolvedValue(workspaceModule);
+    h.machine.start();
+    await flush();
+    const mgr = firstManager();
+    // the warming passes the DocManager's step through with each progress tick: one line for the step
+    mgr.emit({ phase: "loading", loading: { stage: "fetching board", progress: 0.25 } });
+    mgr.emit({ phase: "loading", loading: { stage: "fetching board", progress: 0.4 } });
+    mgr.emit({ phase: "loading", loading: { stage: "drawing the board", progress: 0.6 } });
+    mgr.emit({ phase: "ready", loading: null });
+    await flush();
+    await feedCleanFrames(h);
+    expect(h.machine.view().phase).toBe("interactive");
+
+    const steps = h.info.mock.calls
+      .filter(([event]) => event === "renderer.boot.stage")
+      .map(([, , attrs]) => attrs);
+    expect(steps).toEqual([
+      { stage: "waking the daemon", phase: "requesting-bootstrap" },
+      { stage: "loading the field", phase: "connecting-fieldd" },
+      { stage: "staging plugins", phase: "opening-document" },
+      { stage: "opening doc", phase: "opening-document" },
+      { stage: "fetching board", phase: "warming" },
+      { stage: "drawing the board", phase: "warming" },
+      { stage: "settling", phase: "stabilizing" },
+    ]);
+    // the boot's marks stand as they were, one per phase, and carry no step's words
+    expect(h.marks.some((name) => name.includes(" "))).toBe(false);
   });
 
   it("resets the stability streak on a long frame, then reveals after N consecutive clean frames", async () => {

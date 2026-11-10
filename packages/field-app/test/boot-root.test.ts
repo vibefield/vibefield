@@ -631,11 +631,13 @@ describe("BootRoot and the switch (DESIGN.md §8)", () => {
     const { machine, set } = fakeMachine();
     mountBoot(machine);
 
-    // The first render IS the held frame: the face, its name, the real stages.
+    // The first render IS the held frame: the face, its name and the bar on the boot's real progress, and
+    // no step's words, which are VibeField's insides (DESIGN.md §8 "The switch", item 281).
     expect(scene()?.getAttribute("data-step")).toBe("held");
     expect(scene()?.querySelector(".vf-switch-name")?.textContent).toBe("James (work)");
     expect(scene()?.textContent).toContain("Switching to");
-    expect(scene()?.textContent).toContain("waking the daemon");
+    expect(scene()?.querySelector('[role="progressbar"]')).not.toBeNull();
+    expect(scene()?.textContent).not.toContain("waking the daemon");
     // The plain splash stands down while the switch's scene is this boot's splash,
     expect(host?.querySelector(".vf-splash")).toBeNull();
     expect(host?.textContent).not.toContain("VibeField");
@@ -643,7 +645,9 @@ describe("BootRoot and the switch (DESIGN.md §8)", () => {
     expect(document.documentElement.hasAttribute("data-vf-switch-landing")).toBe(true);
 
     act(() => set({ phase: "warming", stage: "opening doc", progress: 0.5 }));
-    expect(scene()?.textContent).toContain("opening doc");
+    expect(scene()?.textContent).not.toContain("opening doc");
+    const bar = scene()?.querySelector('[role="progressbar"]');
+    expect(bar?.getAttribute("aria-valuenow")).toBe("50");
     expect(scene()?.getAttribute("data-step")).toBe("held");
 
     act(() => set({ phase: "interactive", stage: "" }));

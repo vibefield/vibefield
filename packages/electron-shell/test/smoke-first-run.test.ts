@@ -46,13 +46,11 @@ import {
   passedOver,
   readFrozen,
   type SignInSeen,
-  type StageReading,
   shotDirRefusal,
   splashLook,
   TEAR_NOT_OPEN,
   WALKED_FACES,
   type WordSeen,
-  type WordsSeen,
 } from "../src/testing/smoke-first-run";
 import type { StagedTypedAgent } from "../src/testing/typed-agent";
 import { fakeElectron } from "./fake-electron";
@@ -607,21 +605,6 @@ function capture(
 }
 
 describe('FG-O2\'s judge: every word on the glass at 4.5:1 (DESIGN.md §8 "Its words read")', () => {
-  const words = (
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    text = "",
-    shown = 1,
-  ): WordsSeen => ({
-    x,
-    y,
-    width,
-    height,
-    text,
-    shown,
-  });
   const word = (
     x: number,
     y: number,
@@ -649,22 +632,23 @@ describe('FG-O2\'s judge: every word on the glass at 4.5:1 (DESIGN.md §8 "Its w
     wizard: false,
     field: "live",
     canvas: 1,
-    stage: null,
+    bar: null,
     words: [],
     ...over,
   });
 
-  it("takes the splash's still on the field that has come, keeps one on a field still waking, and stops at the wizard", () => {
-    const stage = words(20, 20, 10, 5, "loading the field");
+  it("takes the splash's still on its bar whole on the field that has come, keeps one on a field still waking, and stops at the wizard", () => {
+    // while a start goes well the bar alone speaks (DESIGN.md §8 "The boot splash", item 281): no words to wait for
+    const bar = { x: 20, y: 20, width: 110, height: 2, shown: 1 };
     expect(splashLook(null)).toBe("stop");
-    expect(splashLook(seen({ stage, wizard: true }))).toBe("stop");
+    expect(splashLook(seen({ bar, wizard: true }))).toBe("stop");
     expect(splashLook(seen())).toBe("wait");
-    expect(splashLook(seen({ stage: { ...stage, shown: 0.5 } }))).toBe("wait");
-    expect(splashLook(seen({ stage, field: "waking", canvas: 0 }))).toBe("keep");
+    expect(splashLook(seen({ bar: { ...bar, shown: 0.5 } }))).toBe("wait");
+    expect(splashLook(seen({ bar, field: "waking", canvas: 0 }))).toBe("keep");
     // the live field fading in over its still (500ms)
-    expect(splashLook(seen({ stage, canvas: 0.6 }))).toBe("keep");
-    expect(splashLook(seen({ stage }))).toBe("take");
-    expect(splashLook(seen({ stage, field: "still", canvas: null }))).toBe("take");
+    expect(splashLook(seen({ bar, canvas: 0.6 }))).toBe("keep");
+    expect(splashLook(seen({ bar }))).toBe("take");
+    expect(splashLook(seen({ bar, field: "still", canvas: null }))).toBe("take");
   });
 
   it("holds a word as it stands, dimmed or not, and passes over one that does not show as it stands, saying why", () => {
@@ -698,10 +682,9 @@ describe('FG-O2\'s judge: every word on the glass at 4.5:1 (DESIGN.md §8 "Its w
   });
 
   it("cuts every word from its still by its own lines, holds each at 4.5:1, and prints the lowest and every short one", () => {
-    // a window 60 × 30 at 2 to the px on a glass of 200: the stage line's glyph cores at 40, a label's at 120, two
-    // buttons' at 40, and a voice of two lines at 90 with a darker mark between its lines' ends
+    // a window 60 × 30 at 2 to the px on a glass of 200: a label's glyph cores at 120, two buttons' at 40, and a
+    // voice of two lines at 90 with a darker mark between its lines' ends
     const still = capture(60, 30, 2, 200, [
-      { x0: 2, x1: 4, y0: 1, y1: 3, level: 40 },
       { x0: 14, x1: 15, y0: 2, y1: 3, level: 120 },
       { x0: 26, x1: 27, y0: 2, y1: 3, level: 40 },
       { x0: 50, x1: 51, y0: 2, y1: 3, level: 40 },
@@ -727,25 +710,11 @@ describe('FG-O2\'s judge: every word on the glass at 4.5:1 (DESIGN.md §8 "Its w
       wizard: true,
       words: [you, onward, { ...back, y: 3 }, next, voice, later],
     });
-    const cuts = [
-      ...inkCuts("01-splash.png", still, seen({ stage: words(0, 0, 10, 5, "loading the field") }), [
-        "stage",
-      ]),
-      ...inkCuts("05-agents.png", still, agents, ["words"], before),
-    ];
+    // the splash has no words to cut while a start goes well (item 281): its still is for the eye
+    const cuts = inkCuts("05-agents.png", still, agents, ["words"], before);
     const glass = [200, 200, 200];
     const contrast = firstRunContrast(cuts);
     expect(contrast).toEqual({
-      stage: {
-        at: "01-splash.png",
-        said: "loading the field",
-        field: "live",
-        canvas: 1,
-        ground: glass,
-        ink: [40, 40, 40],
-        ratio: 8.8,
-        shown: 1,
-      },
       words: [
         {
           at: "05-agents.png",
@@ -803,51 +772,19 @@ describe('FG-O2\'s judge: every word on the glass at 4.5:1 (DESIGN.md §8 "Its w
     expect(judgeContrast(contrast)).toEqual([]);
   });
 
-  it("judges the splash's stage line as it is cut: under 4.5:1 it is red with its numbers", () => {
-    const stage: StageReading = {
-      at: "01-splash.png",
-      said: "loading the field",
-      field: "waking",
-      canvas: 0,
-      ground: [200, 200, 200],
-      ink: [90, 90, 90],
-      ratio: 4.1,
-      shown: 1,
-    };
-    expect(judgeContrast({ stage, words: [] })).toEqual([
-      "the splash's stage line reads 4.1:1 ([200,200,200] → [90,90,90]) on 01-splash.png, under 4.5:1",
-    ]);
-    expect(
-      judgeContrast({ stage: { ...stage, ink: [40, 40, 40], ratio: 8.8 }, words: [] }),
-    ).toEqual([]);
-  });
-
   it("says what it could not read: no still prints nothing, and a capture not the window's size is red, unread", () => {
-    expect(firstRunContrast([])).toEqual({ stage: null, words: [] });
-    expect(judgeContrast({ stage: null, words: [] })).toEqual([]);
+    expect(firstRunContrast([])).toEqual({ words: [] });
+    expect(judgeContrast({ words: [] })).toEqual([]);
     const odd = new Uint8Array(4 * 7);
-    const contrast = firstRunContrast([
-      ...inkCuts("01-splash.png", odd, seen({ stage: words(0, 0, 10, 5, "loading the field") }), [
-        "stage",
-      ]),
-      ...inkCuts(
+    const contrast = firstRunContrast(
+      inkCuts(
         "11-connect.png",
         odd,
         seen({ wizard: true, words: [word(0, 0, 10, 5, "Not now")] }),
         ["words"],
       ),
-    ]);
+    );
     expect(contrast).toEqual({
-      stage: {
-        at: "01-splash.png",
-        said: "loading the field",
-        field: "live",
-        canvas: 1,
-        ground: null,
-        ink: null,
-        ratio: null,
-        shown: 1,
-      },
       words: [
         {
           at: "11-connect.png",
@@ -867,7 +804,6 @@ describe('FG-O2\'s judge: every word on the glass at 4.5:1 (DESIGN.md §8 "Its w
       ],
     });
     expect(judgeContrast(contrast)).toEqual([
-      "the splash's stage line could not be cut from 01-splash.png",
       'on 11-connect.png "Not now" could not be cut from its still',
     ]);
   });

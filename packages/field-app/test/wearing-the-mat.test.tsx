@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
+import { type BootView, FAILED_START, FIRST_STAGE } from "../src/boot/machine";
 import { MatSplashFace, SplashFace } from "../src/boot/splash-parts";
 import { LoadingVeilView } from "../src/hud/LoadingVeil";
 
@@ -47,6 +48,20 @@ function render(element: ReturnType<typeof createElement>): HTMLElement {
   };
   return host;
 }
+
+/** The boot's view while a start goes well: it carries its step's own word, which goes to the log (item 281). */
+const STARTING: BootView = {
+  phase: "requesting-bootstrap",
+  unavailable: null,
+  stage: FIRST_STAGE,
+  progress: null,
+  degradedReveal: false,
+};
+/** …and when it failed: 280's one sentence. */
+const FAILED: BootView = {
+  ...STARTING,
+  unavailable: { phase: "requesting-bootstrap", reason: FAILED_START, retryable: true },
+};
 
 describe("the mat in CSS — the kit's tokens", () => {
   it("lights its lattice in the mat's own cream: the Sun's by day, the Moon's by night (MAT.md §4)", () => {
@@ -134,11 +149,7 @@ describe("the switch, the veil and the explorer's tiles wear it — and the dots
   });
 
   it("writes the switch's plain splash in the mat's ink, never the light theme's black", () => {
-    const host = render(
-      createElement(MatSplashFace, {
-        status: { stage: "waking the daemon", progress: null, unavailable: null },
-      }),
-    );
+    const host = render(createElement(MatSplashFace, { status: STARTING }));
     const html = host.innerHTML;
     expect(html).toContain("text-[var(--vf-mat-ink)]");
     expect(html).not.toMatch(/text-black|bg-black/u);
@@ -203,17 +214,20 @@ describe("the boot's first face stands on the field (track FG, DESIGN.md §2.1)"
     expect(rule).toContain("color-mix(in srgb, var(--vf-field-ground) 30%, transparent) 55%");
   });
 
-  it("writes the splash's words in the field's ink, under the mark, with no wordmark", () => {
-    const host = render(
-      createElement(SplashFace, {
-        status: { stage: "waking the daemon", progress: null, unavailable: null },
-      }),
-    );
+  it("draws the splash's bar alone under the mark while a start goes well, with no wordmark (item 281)", () => {
+    // the boot's view carries its step's word for the log; the splash draws none (DESIGN.md §8 "The boot splash")
+    const host = render(createElement(SplashFace, { status: STARTING }));
+    expect(host.querySelector('.vf-field-words > [role="progressbar"]')).not.toBeNull();
+    expect(host.textContent).toBe("");
+  });
+
+  it("writes a failed start's one sentence in the field's ink, under the mark, never the mat's", () => {
+    const host = render(createElement(SplashFace, { status: FAILED }));
     const html = host.innerHTML;
     expect(html).toContain("text-[var(--vf-field-ink)]");
     expect(html).not.toContain("--vf-mat-ink");
     expect(html).not.toMatch(/text-black|bg-black/u);
     expect(host.querySelector(".vf-field-words")).not.toBeNull();
-    expect(host.textContent).toBe("waking the daemon");
+    expect(host.textContent).toBe(FAILED_START);
   });
 });

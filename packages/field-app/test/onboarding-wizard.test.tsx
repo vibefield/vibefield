@@ -560,11 +560,11 @@ describe("Setup Assistant", () => {
     // Setting up is one line under the logo (FG-D21 B), the desk's while it opens.
     expect(container?.querySelector('.vf-wizard-hold[data-face="setting-up:line"]')).not.toBeNull();
     expect(holdLine()).toBe("Opening your field…");
-    // W4 — the line is the boot machine's own, its stage under it, never a bar of
-    // its own; the band's segment fills with the boot's own progress (FG-4b).
+    // W4 — the line is the boot machine's own, with nothing under it: the steps' words go to the log
+    // (item 281). Never a bar of its own; the band's segment fills with the boot's own progress (FG-4b).
     await boot(bootAt("warming", { stage: "drawing the board", progress: 0.6 }));
     expect(holdLine()).toBe("Opening your field…");
-    expect(holdSub()).toBe("drawing the board");
+    expect(holdSub()).toBe("");
     expect(container?.querySelector('[role="progressbar"]')).toBeNull();
     const segment = container?.querySelector<HTMLElement>(
       '.vf-wizard-steps li[data-step="setting-up"]',

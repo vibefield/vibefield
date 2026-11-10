@@ -60,7 +60,8 @@ describe("the first frame", () => {
     mountFieldApp({ container, host });
     // No act(), no await: this is the document the blocked first paint shows —
     // the field (track FG), here its still, since this document has no WebGPU,
-    // and the words under its mark. The wordmark retired: the mark is the name.
+    // and the bar under its mark, alone: the steps' words go to the log (item
+    // 281). The wordmark retired: the mark is the name.
     expect(container.querySelector(".vf-splash .vf-field")?.getAttribute("data-field")).toBe(
       "still",
     );
@@ -68,7 +69,7 @@ describe("the first frame", () => {
       "Starting VibeField",
     );
     expect(container.textContent).not.toContain("VibeField");
-    expect(container.textContent).toContain("waking the daemon");
+    expect(container.textContent).not.toContain("waking the daemon");
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(document.documentElement.dataset.theme).toBe("dark");
   });
@@ -87,7 +88,9 @@ describe("the first frame", () => {
     const scene = document.querySelector(".vf-switch");
     expect(scene?.getAttribute("data-step")).toBe("held");
     expect(scene?.querySelector(".vf-switch-name")?.textContent).toBe("Sandbox");
-    expect(scene?.textContent).toContain("waking the daemon");
+    // its bar alone under the name (DESIGN.md §8 "The switch", item 281)
+    expect(scene?.querySelector('[role="progressbar"]')).not.toBeNull();
+    expect(scene?.textContent).not.toContain("waking the daemon");
     // Never the plain splash first (neither the boot's ground nor the switch's
     // own plain frame), and never the other theme.
     expect(container.querySelector(".vf-splash")).toBeNull();
