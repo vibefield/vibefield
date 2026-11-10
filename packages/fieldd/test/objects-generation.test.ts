@@ -10,6 +10,7 @@ import {
 import { join } from "node:path";
 import { CUSTODY } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { RpcCallError } from "../src/native-link";
 import { createDeskVerbs } from "../src/tool-plane/rooms/desk/verbs";
 import {
   capture,
@@ -175,33 +176,48 @@ describe("every change is counted, and the survivors are told (OB custody, C5)",
     const says = `EACCES: permission denied, open '${planted}'`;
     const coded = Object.assign(new Error(says), { code: "EACCES", path: planted });
     const bare = new Error(`marks refused at ${planted}`);
+    // a typed refusal, as fieldd's link to the floor makes one: it has a kind, and no code that is a word
+    const refused = `link refused at ${planted}`;
+    const kinded = new RpcCallError("UNAVAILABLE", refused, false, { path: planted });
     let told = 0;
     const refusing: Survivor = {
       noted: [],
       get: () => 0,
-      // it says no as Node would of a file, then with an error that has no code, then never answers
+      // it says no as Node would of a file, then with an error that has no code, then with a typed refusal, then
+      // never answers
       note: () => {
         told += 1;
         if (told === 1) return Promise.reject(coded);
         if (told === 2) return Promise.reject(bare);
+        if (told === 3) return Promise.reject(kinded);
         return new Promise<number>(() => undefined);
       },
     };
     const h = world({ marks: refusing, noteMs: 20, logger: captureAll(calls) });
     const ref = h.refOf("k1", "desk.note");
+    const other = h.refOf("k2", "desk.note");
     h.desk.hand(ref, "run-a");
     h.desk.hand(ref, "run-b");
+    h.desk.hand(other, "run-a");
     h.desk.takeBack(ref, "run-a");
     await h.desk.settled();
-    // a line is (event, sentence, attrs): its reason is a code, or the store's own word for a wait that ran out
+    // a line is (event, sentence, attrs): its reason is a code, a typed refusal's kind when it has no code, or the
+    // store's own word for a wait that ran out
     const unanswered = calls.filter(([event]) => event === "fieldd.objects.grants_mark_unanswered");
     const reasons = unanswered.map((call) => (call[2] as { reason?: unknown }).reason);
-    expect(reasons).toEqual(["EACCES", "unknown", "timeout"]);
+    expect(reasons).toEqual(["EACCES", "unknown", "UNAVAILABLE", "timeout"]);
     // everything every line was handed, with an error's message, stack and fields spelled out
     const spelled = JSON.stringify(calls, (_key, value: unknown) =>
       value instanceof Error ? { ...value, message: value.message, stack: value.stack } : value,
     );
-    const never = ["planted-home", "/Users", "marks.json", "marks refused at", "no answer in"];
+    const never = [
+      "planted-home",
+      "/Users",
+      "marks.json",
+      "marks refused at",
+      "link refused at",
+      "no answer in",
+    ];
     for (const part of never) expect(spelled).not.toContain(part);
   });
 });
