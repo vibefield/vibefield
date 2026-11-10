@@ -9,7 +9,7 @@ use field_native::contracts::{
     FreewayJoinsFrame, FreewayRevokeParams, FreewayRevokeResult, FreewayState, Hello, HelloAck,
     LogRecordV1, LoggingHealthV1, MeshEgressProxy, MeshEgressRouteAddParams, MeshEgressRouteBound,
     MeshEgressRouteRef, MeshEgressRouteTable, MeshLaneCloseRequest, MeshLaneClosed,
-    MeshLaneOpenRequest, MeshLanePeerOpened, MeshNotUpDetails, MeshSelfIdentity,
+    MeshLaneOpenRequest, MeshLanePeerOpened, MeshNotUpDetails, MeshSelfIdentity, NativeBootstrap,
     NativeDetachParams, NativeDetachResult, NativeDoorCloseParams, NativeDoorCloseResult,
     NativeDoorClosed, NativeDoorInfoResult, NativeDoorOpen, NativeDoorRootsClearParams,
     NativeDoorRootsClearResult, NativeDoorRootsSetParams, NativeDoorRootsSetResult,
@@ -672,4 +672,36 @@ fn restart_verb_fixtures() {
     let mut whim = load("native-shutdown-params.valid.json");
     whim["reason"] = serde_json::json!("whim");
     assert!(serde_json::from_value::<NativeShutdownParams>(whim).is_err());
+}
+
+/// OB custody (C3) — the floor's bootstrap line: what fieldd writes on the floor's stdin under
+/// `FIELD_NATIVE_CUSTODY=stdin` (`custody.rs`). The floor only READS it; strict costs nothing and pins both fields.
+/// The secret is a pattern-checked newtype on this side, and the version is the floor's own to check: the generated
+/// twin holds `v` to a whole number above zero, never to 1.
+#[test]
+fn custody_bootstrap_fixture() {
+    roundtrip::<NativeBootstrap>("native-bootstrap.valid.json", true);
+    let line: NativeBootstrap =
+        serde_json::from_value(load("native-bootstrap.valid.json")).expect("bootstrap");
+    assert_eq!(line.v.get(), 1);
+    assert_eq!(line.pairing.as_str(), "b4".repeat(32));
+
+    // The pattern is the contract's, carried by typify: the Rust twin refuses what zod refuses.
+    let off_pattern = [
+        "b4b4".to_owned(),
+        "B4".repeat(32),
+        "b4".repeat(33),
+        "zz".repeat(32),
+    ];
+    for pairing in off_pattern {
+        let mut line = load("native-bootstrap.valid.json");
+        line["pairing"] = Value::String(pairing.clone());
+        assert!(
+            serde_json::from_value::<NativeBootstrap>(line).is_err(),
+            "{pairing:?} is no pairing secret"
+        );
+    }
+    let mut zero = load("native-bootstrap.valid.json");
+    zero["v"] = serde_json::json!(0);
+    assert!(serde_json::from_value::<NativeBootstrap>(zero).is_err());
 }
