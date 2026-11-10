@@ -46367,3 +46367,135 @@ expected: `boot/machine.ts` and `splash-parts.tsx` are field-app src.
 - Item 281, the splash's stage words (IS-281 A, 02:34:58Z), its own packet on this main.
 
 **Not done, and not claimed:** no window row ran, and nothing is pushed.
+
+## Item 290 — a pair that comes up during a person's quit is stopped with the rest, and a switch is refused (M278)
+
+(2026-11-10; four commits, `105280023` to `57096484d`, on main `50e88fc9b`, cut by the RV lead (track RV) in
+`lanes/fg2/vibe-field` and landed by the fixer at 17:25:34Z by fast-forward as M278, the first of three on James's
+word typed at VF-PM's session at 17:23:01Z, "land them, re-arm". Validated by run 290, a9, vf-m2; the packet is
+`lanes/rv/packets/290/`, the transport `lanes/rv/packets/290-m2/`.) Item 287's residual (LANDED "Item 287", its
+"Still open"). VF-PM accepted the plan, `lanes/rv/plan/item-290-PLAN.md`, with its D1 A widened on VF-PM's hole
+(03:14:55Z). James ruled D2, D3 and D4 at 06:49Z, typed at VF-PM's session: "6. yes, no limit, yes" (the plan's §7).
+
+**What landed, DESIGN.md first.**
+- The doc (`105280023`, 6/0): §9 "The quit's words" gains the bullet "While the quit box is up"
+  (`DESIGN.md:8257-8262` at `a0538cad3`), with D2 in a person's terms and the sentence D4 asks of each door.
+- The red (`0f7489a2d`): eight rows red and two guards over stubs, in the tests of the coordinator
+  (`fieldd-recovery`), the gate (`quit-gate`), the latch (`quit-latch`, new) and the status item (`tray-model`).
+- Red 2 (`4e44c82c5`, VF-PM's bound 3, 09:57:55Z): the seam `latchedSwitch`, one row red and two guards.
+- The green (`57096484d`): five sources in `packages/electron-shell/src/main`. Ten files, +596 −57.
+
+**How a quit holds now.** The decision read the pairs once, before its box (`quit-gate.ts:183`), so a pair whose start
+landed after that read was in no stop and outlived VibeField, against CLAUDE.md's "Two planes".
+- The stop begins with `withLaterPairs` (`quit-gate.ts:269`, called at `:255`). It waits for the port's `settle`
+  (`index.ts:2775-2778`: the switches under way, then each coordinator's `settled()`,
+  `fieldd-handle-coordinator.ts:244-245`), reads the pairs again (`quit-gate.ts:273`) and stops every boot the decision
+  did not reach. A new pair with no sessions stops; one with sessions is asked about in the stop's second box
+  (`bornDuringQuit`, `:312`); one whose sessions can't be read is left running, and the stop is incomplete
+  (`desktop.quit.reread_failed`, `:276`).
+- The quit's latch (`index.ts:1128-1135`) is set by the gate's hold and cleared by its release (`:2765-2772`). A pair
+  bundle born under it starts held (`heldAtBirth`, `:1161`). A switch is refused before it starts its pair and again
+  once that pair answers (`latchedSwitch`, `:1778`), so the window is never re-targeted mid-quit. A new user is
+  refused before any user is made (`:1837`).
+
+**What a person sees.**
+- **The status item while the quit box is up:** Switch User and Try Again do nothing (on macOS they keep their look,
+  elsewhere they are dimmed), and the people under Switch User and its New User… are dimmed. `switchable`
+  (`tray-model.ts:351`) holds the rows at `:398`, `:406-407`, `:418-419` and `:432`; the box sets `decidingQuit`
+  (`index.ts:2746`), and a Cancel clears it (`:2752`).
+- **A pair that comes up during the quit** is stopped with the rest; with sessions, the stop's second box asks first.
+- **A switch or a new user asked for from the window while VibeField quits is refused, and the refusal carries the
+  class's name** (item 314). By reading, at five doors, in DESIGN.md's names for where a refusal is said
+  (`DESIGN.md:4909-4910`):
+  - the Me menu's switch and its new user: "Couldn't switch to Lee — QuitRefusal: VibeField is quitting." and
+    "Couldn't add a user — QuitRefusal: VibeField is quitting." (`MeMenu.tsx:1138`, `:1154` → `fireAndForget`
+    (`:1021`) → `refusalSentence`, `use-account.ts:79-83`);
+  - the Settings head: "Couldn't switch to Lee — QuitRefusal: VibeField is quitting." (`SettingsPanel.tsx:232`,
+    drawn as its notice, `:213`);
+  - the Account page (Settings → Account), for a switch or a new user: "QuitRefusal: VibeField is quitting"
+    (`UserSwitcher.tsx:84`, drawn at `:171-172`);
+  - the chooser (the second user's Setup Assistant, its users pane): "Couldn't open Lee's field — QuitRefusal:
+    VibeField is quitting." (`UsersPane.tsx:81-84`).
+  - One more caller draws nothing: Settings → Devices' new user (`DevicesSection.tsx:855`, `.catch(() => undefined)`).
+  - The list is closed by `git grep -n -E 'usersSwitch|usersCreate' a0538cad3 -- packages/field-app/src ':!*.test.*'`,
+    which names eight files: the doors' four (`MeMenu.tsx`, `SettingsPanel.tsx`, `UserSwitcher.tsx`, `UsersPane.tsx`),
+    `DevicesSection.tsx`, and three that ask main nothing: `host.ts` (the port's type), `use-account.ts`
+    (`canSwitch` and `canCreate`, `:245-246`) and `OnboardingWizard.tsx:185` (a presence check). The catalog's
+    `SurfacesSection.tsx` is not among them: its faces take `onSwitch: () => undefined` and `onNewUser={noop}`
+    (`:97`, `:358`).
+  - The road: `QuitRefusal` names itself (`quit-latch.ts:12-16`) and reaches the users handlers whole
+    (`ipc.ts:177-196`). Main replies with the error's `toString()` (`preload/index.ts:253-256`), and the preload
+    strips only `[A-Za-z]*Error: ` (`:262`). The pattern was run in node over that string; nothing was run against
+    Electron.
+  - When: after the box's proceed, which sets the hold (`index.ts:2766`), and before the windows close, since the box
+    is modal to the window (`:2743-2750`, by Electron's documented contract); or for a switch already under way when
+    the hold lands. That window of time is not measured.
+  - The status item's switch rows reach the same refusal (`index.ts:2866-2871`), and it goes to the log alone: the
+    tray's controller hands a rejection to `onError` (`tray-controller.ts:499-504`), which logs
+    `desktop.tray.operation_failed` (`index.ts:2880-2887`). No screen draws it.
+- **The quit's wait** for a start under way says nothing (D3, no new bound). The Dock, the status item's service row
+  and its icon during that wait are not traced.
+
+**Validation of record** (run 290, `lanes/vf-m2/rv290-v-a9-results`, SUMS `72fe92fc4b161a09`, 43 of 43 OK by
+`shasum -c` at 18:59:34Z; runner `d40f07fe433ddb6a`; launched at 10:48:23Z, the verdict at 10:55:40Z):
+- V: "`pnpm verify` exit 0, 5 min 52 s." electron-shell `Test Files 185 passed (185)` and
+  `Tests 2842 passed | 2 skipped (2844)`. The delta row: `fieldd-recovery.test.ts` 25, `quit-gate.test.ts` 22,
+  `quit-latch.test.ts` 5 (new) and `tray-model.test.ts` 81, 133 in all, against run 289's 22, 20, absent and 78. "The
+  sum: 14692 21, which is run289's 14679 21 + 13." dev-runner 483 of 483; cargo 37 of 37.
+- **Beside V, as run 290 printed them:**
+  - fieldd's six DESIGN.md readers, 6 of 6 at run 289's counts, 200 in all (the read VF-PM named at 10:40:00Z);
+  - the bundle line, equal to run 289's with its hashes: "initial 957.3 KB raw / 254.6 KB gz";
+  - **KEPT births 1:** `/private/tmp/.tmpPdqL0M` on vf-m2, a directory born at 10:53:15Z inside V's test stage,
+    7 entries and 4 KiB; the known `.tmp*` class of run 287's `.tmpunq2zp` (VF-PM, 10:58:57Z). Not removed.
+  - the kept dirs, 64 entries, equal at the arm and in fin; V's lowest free 12,177 MiB, its use 19 MiB.
+- **S carried by tree 244a989b8429 (run 284's S GREEN).** No kit file moves; S did not run. **Not run: IOS, K.**
+- On the Mac, through RV's door in `lanes/fg2/vibe-field` (the packet's `rows/`, its HOLD lines in
+  `rows/HOLD-lines.txt`), electron-shell's vitest with `--maxWorkers=2`:
+  - the base at the doc commit, 244 in ten files; the red's eight and red 2's nine failing as named;
+  - the green's tree `0e51529ac3ff`: eleven files, 257 passed and 0 failed; the six text readers of `index.ts`, 97,
+    each equal to run 289; `tsc --noEmit` 0 errors; biome over nine files clean; the walls in form (b) clean;
+  - DESIGN.md's 31 readers on the red, each package equal to run 289.
+
+**The landing table at `a0538cad3`** (the fixer's, `lanes/um/gate-a0538cad3-r2`, SUMS `eec860308d68f99d`, 34 of 34
+OK by `shasum -c`): 17 rows exit 0 from 17:55:47Z to 18:50:13Z, on main with 290, 281-v4 and item 300.
+- smoke:first-run was void once, input having landed during it (18:30:17Z), and green on its second arm (18:34:30Z).
+- smoke:canvas took 832 s.
+- field-native read `daefeaffb1e9b0fc` at row 15's arm and `739a063f37532456` at its end (smoke:studio, 18:13:01Z to
+  18:16:24Z): it was rebuilt inside smoke:studio's own build.
+- The fixer's FINAL line: "18:50:13Z ROWS DONE, red 0 [], void 1, void twice [], not armed []".
+- No row of it is read here as driving a quit with a switch or a new pair during it.
+
+**The cut.**
+- VF-PM accepted each commit in turn: the doc and the red at 08:57:54Z, the red's re-cut at 09:27Z, red 2 at
+  10:00:18Z and the green at 10:37:46Z, which was committed on that word. The messages of the red, red 2 and the green
+  say each was committed under the pre-commit hook.
+- The red was re-cut once by plumbing. Its first cut, `dcb6a88e0` (kept as `rv/290-red-v1`), had one line at 101
+  columns, `fieldd-recovery.test.ts:816`, which biome refused; the re-cut gives it biome's four-line form, with the
+  same message bytes.
+- The packet of record is `lanes/rv/packets/290` (SUMS `d65b4a479e73ac33`, 51 of 51 OK; its bundle requires
+  `50e88fc9b`). vf-m2's lane held `40b499b9d`, so it fetched the transport `lanes/rv/packets/290-m2` (SUMS
+  `0327ab6ba8c6fa39`).
+- Main stood at `50e88fc9b` from run 290 to the land, so no carry was made. Main's reflog: `57096484d` at 17:25:34Z,
+  281-v4 to `82cd1fd1c` at 17:27:20Z, item 300 to `a0538cad3` at 17:28:53Z. Push 131 (18:54Z, on James's typed
+  "2. push" at 18:53:37Z) took them to origin: `origin/main` is `a0538cad3`.
+
+**Found along the way.**
+- **Item 314, the class's name.** A refusal crossing the window's bridge keeps only its words when its class's name
+  ends in `Error`, and `QuitRefusal`'s does not. No row fed it through the bridge: `quit-latch.test.ts` holds the
+  latch alone, and `preload-users.test.ts` wraps `Error:` only. RV found it at 19:01Z while tracing this entry's
+  callers; VF-PM opened it as item 314 at 19:02:21Z.
+- **Two doors more, and a silent path.** 290's doc commit and its green's message name three doors: the Me menu's
+  two and the Account page. RV found the Settings head (19:01Z) by tracing `refusalSentence`'s callers for this
+  entry. The chooser and the silent Devices path came at 19:10Z, by the grep above, while writing item 314's DESIGN.md
+  correction; by then this entry's first cut, `d930c4a87` (kept as `rv/290-records-v1`, never landed), named four.
+- **The red's message.** `0f7489a2d` keeps the first cut's message bytes, so it says it was committed under the
+  pre-commit hook; the re-cut was made by plumbing.
+
+**Owed.**
+- Item 314 (RV's, VF-PM 19:02:21Z): the class renamed `QuitRefusalError`, red first through the bridge, and a dated
+  correction at DESIGN.md §9 "The quit's words" naming the Settings head and the chooser.
+- The Mac witness of a quit with a switch asked from the window after the box, and with a pair coming up during it.
+- Not traced: the Dock, the status item's service row and its icon during the quit's wait; the next launch after a
+  quit that left a pair running because its sessions could not be read (today's behaviour; 290 does not change it).
+
+**Not done, and not claimed:** no row drove a real quit with a switch or a new pair during it.
