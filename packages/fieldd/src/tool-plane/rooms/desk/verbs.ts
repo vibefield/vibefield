@@ -329,7 +329,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
     async canvas_place(caller, input) {
       const run = caller.runtimeRunId;
       // before the window: a store that cannot keep the grant must not leave an object nobody holds, and neither
-      // must a run that can hold nothing (one fieldd did not launch, OB-D18 A; its words are ‹pending §8.1›)
+      // must a run that can hold nothing (one nothing vouches for, OB-D18 A)
       registry.readable();
       objects.vouch(run);
       const kind = objects.kind(input.kind);

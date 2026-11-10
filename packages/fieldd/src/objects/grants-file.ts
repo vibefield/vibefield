@@ -41,7 +41,8 @@ import {
 //    the next change and on a timer.
 //  - Under custody's `sealed` level the key was handed, and the file says so. A fieldd at `files` cannot judge such a
 //    file: it leaves it exactly where it is and the store refuses (the store's own refusal, until fieldd restarts),
-//    names and all. So that it can, a sealed store never leaves the path empty: it writes the file at boot, before any
+//    names and all. A file too large for it to tell is left and refused the same way: wrong toward refusing is the
+//    safe side. So that it can, a sealed store never leaves the path empty: it writes the file at boot, before any
 //    name, and again before a name whenever the file is known to be gone.
 // What this cannot hold against: with no VibeField process left to remember the mark, a whole older file put back is
 // served. No store the user owns keeps a count the same user cannot put back.
@@ -79,7 +80,7 @@ const HELD_KEY = "grants";
 const NOTE_MS = 2_000;
 const RETRY_MS = 5_000;
 /** The most the peek for `sealed` reads. A grant is about a hundred bytes, so a real file is far below it; the signer's
- * own read has no bound to borrow. */
+ * own read has no bound to borrow. A file past it cannot be told, and is not judged at all. */
 const PEEK_BYTES = 4 * 1024 * 1024;
 /** The peek's open: read only, never through a link, and never waiting on something that is not a file. */
 const PEEK_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
@@ -144,8 +145,9 @@ export class GrantsFile {
   #read(mark: number): ObjectGrantsFile | undefined {
     const { path, signer, guard } = this.opts;
     // Before the signer is asked anything: a fieldd at `files` does not judge what a handed key signed, whatever its
-    // signature or mode says, and never moves it.
-    if (!this.opts.sealed && this.#saysSealed()) {
+    // signature or mode says, and never moves it. Nor one it cannot tell about.
+    const says = this.opts.sealed ? "plain" : this.#peek();
+    if (says === "sealed") {
       this.opts.logger.error(
         "fieldd.objects.grants_sealed",
         "The grants file was sealed by a VibeField that was handed its key, and this one was not: it is left where it is, and the desk's objects refuse",
@@ -153,6 +155,15 @@ export class GrantsFile {
         { file: basename(path) },
       );
       return guard.unavailable(path, "sealed");
+    }
+    if (says === "untold") {
+      this.opts.logger.error(
+        "fieldd.objects.grants_unjudged",
+        "The grants file is larger than fieldd reads to tell who sealed it: it is left where it is, and the desk's objects refuse",
+        undefined,
+        { file: basename(path), bound: PEEK_BYTES },
+      );
+      return guard.unavailable(path, "too-large");
     }
     const read = signer.read(path);
     if ("absent" in read) {
@@ -384,16 +395,19 @@ export class GrantsFile {
     this.#told = Promise.all([this.#told, told]).then(() => undefined);
   }
 
-  /** Whether the file's own text says a handed key signed it: JSON whose `sealed` is `true` itself, and nothing else.
-   * Read past the signer, which answers `exposed` and `unsigned` before it would say, and with more care than it
-   * reads: a regular file only, no link followed, and no more than PEEK_BYTES of it. Whatever does not say so here is
-   * the signer's to judge. */
-  #saysSealed(): boolean {
+  /** What the file's own text says of who signed it, read past the signer (which answers `exposed` and `unsigned`
+   * before it would say) and with more care than it reads: a regular file only, no link followed, and no more than
+   * PEEK_BYTES of it.
+   *  - `sealed`: JSON whose `sealed` is `true` itself, and nothing else: a handed key signed it.
+   *  - `untold`: a regular file past PEEK_BYTES. It cannot be told, so it is not judged at all.
+   *  - `plain`: anything else, which is the signer's to judge. */
+  #peek(): "sealed" | "untold" | "plain" {
     let fd: number | undefined;
     try {
       fd = openSync(this.opts.path, PEEK_FLAGS);
       const stat = fstatSync(fd);
-      if (!stat.isFile() || stat.size > PEEK_BYTES) return false;
+      if (!stat.isFile()) return "plain";
+      if (stat.size > PEEK_BYTES) return "untold";
       const bytes = Buffer.alloc(stat.size);
       let got = 0;
       while (got < bytes.length) {
@@ -402,13 +416,13 @@ export class GrantsFile {
         got += more;
       }
       const parsed: unknown = JSON.parse(bytes.toString("utf8", 0, got));
-      return (
+      const sealed =
         typeof parsed === "object" &&
         parsed !== null &&
-        (parsed as { sealed?: unknown }).sealed === true
-      );
+        (parsed as { sealed?: unknown }).sealed === true;
+      return sealed ? "sealed" : "plain";
     } catch {
-      return false;
+      return "plain";
     } finally {
       if (fd !== undefined) closeSync(fd);
     }

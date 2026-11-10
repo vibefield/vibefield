@@ -23,15 +23,16 @@ import { AgentUndoShelf, type KeptChange } from "./undo";
 // OB custody (C4; OB-D18 A) — who a run is, for a grant, is fieldd's own memory of what it launched (`bornFor`), never
 // a record read back from disk. A run's record is signed with a key that is a file the same user can read, so an agent
 // can rewrite its own run's record to name any spark; were a holder read from it, the agent would be served that
-// spark's grants with no restart at all. So a grant is honoured only for a run THIS fieldd launched: a plain run's
-// grants end with fieldd, a spark's stand (EY-D9 B) and are held by the runs fieldd starts for it from then on, and a
-// run that was already running when fieldd started holds nothing. Nothing here reads a session's record, to give or
-// to take: the forger is as likely the run being taken from.
+// spark's grants with no restart at all. So a grant is honoured only for a run THIS fieldd launched, or vouches for
+// again at its re-attach (its launch memory, rebuilt: the spec's §8.1). A run nothing vouches for holds nothing, and a
+// hand to it grants nothing, in a sentence VibeField already had (`#handToUnvouched`, `unvouched`): that is the answer
+// for such a run, and no words name how VibeField works inside. Nothing here reads a session's record, to give or to
+// take: the forger is as likely the run being taken from.
 //
-// ‹pending §8.1› What a HAND to such a run should do while it is still live is open. The aim is that the hand simply
-// works, once fieldd's memory of what it launched can be rebuilt. Until then `#handToUnvouched` and `unvouched` below
-// are the two places its outcome is decided, each in a sentence VibeField already had: no words are added for it, and
-// none may name how VibeField works inside.
+// A plain run's grants end with the fieldd that launched it; a spark's stand (EY-D9 B) and are held by the runs fieldd
+// starts for it, or vouches for, from then on. That is ONE rule (`PlainHoldAtBoot`, the spec's §8.1.5): what a plain
+// run held when fieldd booted serves nobody from the boot on, and the settle ends it, vouched or not. Vouching says
+// who a run is. It never decides whether a plain hold outlives a fieldd.
 
 export type RunState = "live" | "ended" | "unknown";
 
@@ -39,6 +40,11 @@ export type RunState = "live" | "ended" | "unknown";
 export interface BornFor {
   readonly spark?: string | undefined;
 }
+
+/** OB-D18, the spec's §8.1.5 — what becomes, at the settle, of what a plain run held when fieldd booted. `"end"` is
+ * James's pick (A) and the only value anything passes: it ends, whether or not fieldd vouches for the run again.
+ * `"keep-vouched"` keeps it for a live run fieldd vouches for; it is wired nowhere, and nothing here chooses it. */
+export type PlainHoldAtBoot = "end" | "keep-vouched";
 
 export interface DeskObjectsOptions {
   readonly store: ObjectsStore;
@@ -48,9 +54,9 @@ export interface DeskObjectsOptions {
   label(run: string): string;
   /** OB-D18 A — what THIS fieldd process launched the run as, from the launch call's own argument and never from a
    * record: `{ spark }` for a spark's run, `{}` for a plain one (a launch adopted through the agent gateway is plain,
-   * whatever its record names), and undefined for a run it did not launch (re-attached at boot). It must go on
-   * answering for a run that has ended: a sleeping spark is handed things by its last run's id, and a resume is told
-   * after the end. */
+   * whatever its record names), and undefined for a run nothing vouches for (re-attached at boot, and not named again
+   * by fieldd's launch memory). It must go on answering for a run that has ended: a sleeping spark is handed things by
+   * its last run's id, and a resume is told after the end. */
   bornFor(run: string): BornFor | undefined;
   /** a spark's name; undefined when fieldd no longer holds it */
   sparkName(id: string): string | undefined;
@@ -65,15 +71,18 @@ export interface DeskObjectsOptions {
 
 /** A spark's grants are the spark's: its run id changes each time it sleeps and wakes. */
 const SPARK_HOLDER = "spark:";
-/** A run this fieldd did not launch holds under a name nothing is ever granted to, so it holds nothing. */
+/** A run nothing vouches for holds under a name nothing is ever granted to, so it holds nothing. */
 const UNVOUCHED_HOLDER = "re-attached:";
 
 const NO_SUCH_AGENT = "VibeField doesn't know that agent.";
 const ENDED_AGENT = "That agent has ended. Start it again, or hand this to another.";
 const NO_SUCH_OBJECT = "VibeField doesn't know that object.";
 
-/** ‹pending §8.1› — what a run this fieldd did not launch is told when it would be given something of its own making
- * (a place): nothing would hold it. The words are `NO_SUCH_AGENT`'s, which VibeField already had. */
+/** One grant, by its object and its holder. */
+const holdOf = (ref: ObjectRef, holder: string): string => `${ref}\u0000${holder}`;
+
+/** What a run nothing vouches for is told when it would be given something of its own making (a place): nothing would
+ * hold it. The words are `NO_SUCH_AGENT`'s, which VibeField already had. */
 const unvouched = (): RpcCallError =>
   new RpcCallError("UNAVAILABLE", NO_SUCH_AGENT, false, {
     service: "desk",
@@ -92,6 +101,9 @@ export class DeskObjects {
   readonly undo = new AgentUndoShelf();
   /** what each ended run had, until a resume names its successor: fieldd's memory, bounded, never a claim */
   readonly #ended = new Map<string, EndedRun>();
+  /** the plain grants that stood when this fieldd booted, by `holdOf`: they serve nobody (OB-D18 A), until the settle
+   * has judged them or a new hand has made one this fieldd's own */
+  readonly #stoodAtBoot = new Set<string>();
 
   constructor(private readonly opts: DeskObjectsOptions) {
     this.registry = new ObjectsRegistry({
@@ -110,8 +122,12 @@ export class DeskObjects {
     });
   }
 
+  /** The boot's read. Every plain grant it finds is marked as one that stood at boot (`reconcile` judges them). */
   boot(): void {
     this.registry.boot();
+    this.#stoodAtBoot.clear();
+    for (const { ref, holder } of this.registry.grants())
+      if (!holder.startsWith(SPARK_HOLDER)) this.#stoodAtBoot.add(holdOf(ref, holder));
   }
 
   kinds(): readonly DeskKind[] {
@@ -138,8 +154,8 @@ export class DeskObjects {
   }
 
   /** Who a run's grants belong to (OB-D18 A): what THIS fieldd launched it as, never what a record says. A run it
-   * launched for a spark holds as the spark; a plain run it launched, as itself; a run it did not launch, under a name
-   * nothing is ever granted to, so it holds nothing. A spark's holder as `grants` names it is taken as itself. */
+   * launched for a spark holds as the spark; a plain run it launched, as itself; a run nothing vouches for, under a
+   * name nothing is ever granted to, so it holds nothing. A spark's holder as `grants` names it is taken as itself. */
   holder(run: string): string {
     if (run.startsWith(SPARK_HOLDER)) return run;
     const born = this.opts.bornFor(run);
@@ -147,25 +163,35 @@ export class DeskObjects {
     return born.spark === undefined ? run : `${SPARK_HOLDER}${born.spark}`;
   }
 
-  /** Whether this fieldd launched the run, and so can say whose it is. */
+  /** Whether fieldd can say whose the run is: it launched it, or vouches for it again. */
   vouched(run: string): boolean {
     return this.opts.bornFor(run) !== undefined;
   }
 
-  /** Throws unless the run can be given anything. A run fieldd did not launch holds nothing, and is told so before
+  /** Throws unless the run can be given anything. A run nothing vouches for holds nothing, and is told so before
    * the window is asked to make an object nobody would hold. */
   vouch(run: string): void {
     if (!this.vouched(run)) throw unvouched();
   }
 
+  /** What a run holds on an object, as it is served. What a plain run held when fieldd booted serves nobody, vouched
+   * or not, until the settle has judged it (`reconcile`) or the person has handed it again. */
   grantOf(ref: ObjectRef, run: string): ObjectGrant | undefined {
-    return this.registry.grantOf(ref, this.holder(run));
+    return this.#held(ref, this.holder(run));
+  }
+
+  #held(ref: ObjectRef, holder: string): ObjectGrant | undefined {
+    if (this.#stoodAtBoot.has(holdOf(ref, holder))) return undefined;
+    return this.registry.grantOf(ref, holder);
   }
 
   /** Throws when the run cannot be vouched for, or the grant cannot be kept. */
   grant(ref: ObjectRef, run: string, how: ObjectYours): void {
     this.vouch(run);
-    this.registry.grant(ref, this.holder(run), how);
+    const holder = this.holder(run);
+    this.registry.grant(ref, holder, how);
+    // given by this fieldd: no longer a hold from before it
+    this.#stoodAtBoot.delete(holdOf(ref, holder));
   }
 
   /** The run's grant ends; a spark's for every run of it. */
@@ -175,8 +201,9 @@ export class DeskObjects {
 
   /** OB-L1 — the grant, on the person's play. A run that does not exist or has ended holds nothing: said, never kept. A
    * spark has not ended when its last run has: it sleeps, and what it is handed waits for it, when this fieldd
-   * launched that run for it. A run this fieldd did not launch is not given anything on a record's word (OB-D18 A):
-   * ended, it is refused as ended; still live, see `#handToUnvouched`. Throws when the grant cannot be kept: nothing
+   * launched that run for it. A run nothing vouches for is not given anything on a record's word (OB-D18 A): ended,
+   * it is refused as ended; still live, see `#handToUnvouched`. What the run held when fieldd booted served nobody,
+   * so a hand of it is a new hand, and this fieldd's own from then on. Throws when the grant cannot be kept: nothing
    * is granted that a restart would not find. */
   hand(ref: ObjectRef, run: string): ObjectsHandResult {
     const record = this.registry.get(ref);
@@ -189,7 +216,7 @@ export class DeskObjects {
     }
     if (born === undefined) return this.#handToUnvouched(ref, run);
     const holder = this.holder(run);
-    const already = this.registry.grantOf(ref, holder) !== undefined;
+    const already = this.#held(ref, holder) !== undefined;
     if (this.kind(record.kind)?.concurrency === "one") {
       const others = this.registry.grantsOn(ref).filter((grant) => grant.holder !== holder);
       try {
@@ -203,11 +230,13 @@ export class DeskObjects {
     } else {
       this.registry.grant(ref, holder, "handed");
     }
+    // handed by the person to this fieldd: no longer a hold from before it
+    this.#stoodAtBoot.delete(holdOf(ref, holder));
     return already ? { handed: true, already: true } : { handed: true };
   }
 
-  /** ‹pending §8.1› — a hand to a run that is live and that this fieldd did not launch. OPEN: the aim is that the hand
-   * works. Until that is built nothing is granted, and the reason is one VibeField already gave. */
+  /** A hand to a live run nothing vouches for: nothing is granted, and the reason is one VibeField already gave. That
+   * is the answer for such a run. A run fieldd vouches for never comes here. */
   #handToUnvouched(_ref: ObjectRef, _run: string): ObjectsHandResult {
     return { handed: false, reason: NO_SUCH_AGENT };
   }
@@ -216,7 +245,7 @@ export class DeskObjects {
    * always takes (OB-D19 A): the grant is gone from memory whatever the disk says. It reads no record (OB-D18 A):
    *  - `run` is a run this fieldd launched: that run's holder alone;
    *  - `run` is a spark's holder as `grants` names it: that holder alone;
-   *  - `run` is anything else, a run fieldd did not launch: it cannot say whose the run is, so the grant under the very
+   *  - `run` is anything else, a run nothing vouches for: fieldd cannot say whose it is, so the grant under the very
    *    name given goes, and EVERY spark's grant on this object with it. Sparks' are the only grants that outlive a
    *    fieldd, so they are what such a run could hold again at its spark's next run. Taking back too much is the safe
    *    side. No surface names such a run in a take-back; this is a fallback.
@@ -296,18 +325,24 @@ export class DeskObjects {
       if (this.holder(run) === holder) this.presence.released(ref, run);
   }
 
-  /** Once the boot's re-attach has settled: every plain run's grant from before this fieldd ends (OB-D18 A: a plain
-   * run's grants end with the fieldd that launched it, whether or not the run came back), and so does a spark's when
-   * fieldd no longer holds the spark. One write. A plain run launched and handed something since the boot keeps it:
-   * the settle is polled, and may come after the first hand. */
-  reconcile(): void {
-    this.registry.end((grant) => this.#gone(grant.holder));
+  /** Once the boot's re-attach has settled, OB-D18's one rule (the spec's §8.1.5): what a plain run held when fieldd
+   * booted ends. Under `"end"`, the default and the only value anything passes, it ends whether or not fieldd vouches
+   * for the run: a plain run's grants end with the fieldd that launched it. `"keep-vouched"`, wired nowhere, keeps it
+   * for a live run fieldd vouches for. The option decides a plain hold, never `bornFor`. A spark's grant ends when
+   * fieldd no longer holds the spark. One write. A grant made since the boot is this fieldd's own and is not judged
+   * here: the settle is polled, and may come after the first hand. */
+  reconcile(opts: { plainHoldAtBoot?: PlainHoldAtBoot } = {}): void {
+    const keepVouched = opts.plainHoldAtBoot === "keep-vouched";
+    this.registry.end(({ ref, holder }) => this.#endsAtSettle(ref, holder, keepVouched));
+    this.#stoodAtBoot.clear();
   }
 
-  #gone(holder: string): boolean {
+  #endsAtSettle(ref: ObjectRef, holder: string, keepVouched: boolean): boolean {
     if (holder.startsWith(SPARK_HOLDER))
       return this.opts.sparkName(holder.slice(SPARK_HOLDER.length)) === undefined;
-    return this.opts.bornFor(holder) === undefined || this.opts.runState(holder) !== "live";
+    // made since the boot: this fieldd's own
+    if (!this.#stoodAtBoot.has(holdOf(ref, holder))) return false;
+    return !keepVouched || !(this.vouched(holder) && this.runLive(holder));
   }
 
   resolve(ref: ObjectRef): { docId: string; key: string } | undefined {
@@ -325,14 +360,15 @@ export class DeskObjects {
   /** A run has left for good. A plain run's grants end with it, in one write, so nothing goes on claiming an object for
    * it (a spark's are the spark's, and wait for its next run). What it had is remembered, in fieldd's memory only,
    * because the runtime tells a run's end before a resume's successor exists: `runReplaced` hands it on. Nothing is
-   * remembered for a run this fieldd did not launch: what stood under its name ended with the fieldd before, and no
-   * resume carries it. */
+   * remembered for a run nothing vouches for, nor of what a vouched run held when fieldd booted and was never handed
+   * again: that ended with the fieldd before (OB-D18 A), and no resume carries it. */
   runEnded(run: string): void {
     const on = this.presence.onObjects(run);
     this.presence.runEnded(run);
     const ended = this.registry.end((grant) => grant.holder === run);
     if (!this.vouched(run)) return;
-    const grants = ended.map(({ ref, how, at }) => ({ ref, how, at }));
+    const own = ended.filter(({ ref, holder }) => !this.#stoodAtBoot.has(holdOf(ref, holder)));
+    const grants = own.map(({ ref, how, at }) => ({ ref, how, at }));
     if (on.length === 0 && grants.length === 0) return;
     this.#ended.set(run, { on, grants });
     for (const oldest of this.#ended.keys()) {
@@ -343,7 +379,7 @@ export class DeskObjects {
 
   /** A resume continued a session in a new run: the grants, the place on each object and the undo offer go with it. A run
    * whose end named no successor has already lost them. A `one` kind handed to someone meanwhile stays with them.
-   * They go only to a run this fieldd launched (OB-D18 A): a successor it cannot vouch for is handed nothing on. */
+   * They go only to a run fieldd vouches for (OB-D18 A): a successor it cannot vouch for is handed nothing on. */
   runReplaced(old: string, next: string): void {
     const ended = this.#ended.get(old);
     this.#ended.delete(old);
