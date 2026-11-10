@@ -1323,13 +1323,17 @@ describe("item 306 — a Stop of a held run and G5's attach retry (the mock floo
 
   const CREATION = "q306-retry-creation";
   /** A held run whose boot attach was refused `retry`: its claim staged, its adapter the row's. `later` answers
-   * every attach after the first. */
-  async function heldWithRetry(later: () => Promise<AgentAdapterBinding>) {
+   * every attach after the first. `seams` adds the idle poll a row drives (item 312). */
+  async function heldWithRetry(
+    later: () => Promise<AgentAdapterBinding>,
+    seams: Pick<AgentDaemonSeams, "resumeWhenIdle"> = {},
+  ) {
     const attaches: string[] = [];
     const box = await agentDaemonOn(
       freshFloor(),
       (dataDir) => [runRecord(RUN, CLAUDE, dataDir, { creationRequestId: CREATION })],
       {
+        ...seams,
         beforeBoot: async (dataDir) => {
           await createFileCreationRequestRegistry({
             directory: join(dataDir, ...LAYOUT.AGENT_RUNS_DIR),
@@ -1409,6 +1413,36 @@ describe("item 306 — a Stop of a held run and G5's attach retry (the mock floo
     expect(box.records.read(RUN)?.exited?.reason, "closed by the Stop's own exit").toBe(
       "application-terminated",
     );
+    expect(box.births, "nothing born").toEqual([]);
+    expect(realSignals(), "the net: no real signal was asked").toEqual([]);
+  }, 30_000);
+
+  // Item 312 (2026-11-10) — G5's retry and the idle poll are never armed together: no replacement races an attach
+  // that may still land (`retryAttach`'s own doc). A Stop that places nothing re-arms the poll (306's `finally`), and
+  // before 312 it did so beside an armed retry. The row drives the poll every 50 ms with the index answering
+  // "working", so no replacement runs either way, and counts every ask made while the retry is still armed (its
+  // attach not yet asked again). The floor answers the Stop's terminate `terminated: false` for the PTY it lists,
+  // which places nothing.
+  it("item 312 — a Stop that places nothing while the retry is armed arms no idle poll beside it, and the retry asks its attach", async () => {
+    const box = await heldWithRetry(
+      () => Promise.reject(new Error("scripted: the attach did not land")),
+      { resumeWhenIdle: { afterMs: 1, pollMs: 50 } },
+    );
+    const besideRetry: string[] = [];
+    vi.spyOn(box.daemon.index, "sessionByNativeId").mockImplementation(async (nativeSessionId) => {
+      if (box.attaches.length === 1) besideRetry.push(nativeSessionId);
+      return { id: "idx-312", nativeSessionId, activity: null, streamState: "ready" };
+    });
+    box.terminate.mockResolvedValue({ terminated: false });
+    await box.daemon.agents.endRun(RUN);
+    expect(box.terminate, "the Stop: its own PTY, asked once").toHaveBeenCalledTimes(1);
+    expect(box.attaches, "the Stop inside the retry's delay").toHaveLength(1);
+    expect(box.records.read(RUN)?.exited, "nothing placed: the run stands").toBeUndefined();
+    // the retry stands: its attach is asked at its own delay (1 s from the hold)
+    await until(() => box.attaches.length === 2, 5_000, "the retry's attach, asked");
+    // before 312 the poll the Stop re-armed asked the index every 50 ms until then
+    expect(besideRetry, "no idle poll asked while the retry was armed").toEqual([]);
+    expect(box.terminate, "nothing more ended").toHaveBeenCalledTimes(1);
     expect(box.births, "nothing born").toEqual([]);
     expect(realSignals(), "the net: no real signal was asked").toEqual([]);
   }, 30_000);
