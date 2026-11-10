@@ -3,6 +3,7 @@ import {
   CONTRACTS_VERSION,
   CUSTODY,
   CustodyHandoff,
+  CustodyMarksFrame,
   type ProductInfo,
   type ShellLeaveReason,
   SOCKET_ALIAS_PARENT_ENV,
@@ -70,6 +71,8 @@ const TAKEOVER_FAILURES: ReadonlySet<ProbeFailure> = new Set([
   "user-mismatch",
   "foreign-listener",
 ]);
+/** OB custody (C5) — what a mark's name looks like (the registry's pattern, compiled once). */
+const MARK_NAME = new RegExp(CUSTODY.MARK_NAME);
 
 /** Item 212 (RV #30) — what the busy wait hands run()'s one decision. */
 interface BusyWait {
@@ -105,6 +108,11 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
   let handle: FielddHandle | null = null;
   let child: ChildProcess | null = null;
   let disposed = false;
+  /** OB custody (C5) — fieldd's marks as this supervisor has heard them, the highest value per name, for this data
+   * root and this supervisor's life. The shell is one of a mark's two survivors (the floor is the other): what is
+   * kept here is the next spawn's `expect`, so a fieldd that never saw a mark rise still reads a store below it as
+   * stale. */
+  const marksHeard = new Map<string, number>();
 
   function ensure(options?: { signal?: AbortSignal }): Promise<FielddHandle> {
     if (disposed) return Promise.reject(new SupervisorError("disposed", "supervisor disposed"));
@@ -145,7 +153,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     // OB custody — `sealed` iff the host handed a provider. The hand-off is asked ONCE for this attempt: its shell
     // secret pairs every probe below, and the whole of it is the one line a spawned child is handed.
     const custody = opts.custody;
-    const handoff = custody === undefined ? null : takeHandoff(custody);
+    const handoff = custody === undefined ? null : withMarksHeard(takeHandoff(custody));
 
     const first = await adoptProbe(opts.adoptProbeMs ?? ADOPT_PROBE_MS, signal, handoff);
     throwIfAborted(signal);
@@ -433,6 +441,53 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       );
     }
     return given;
+  }
+
+  /** OB custody (C5) — the hand-off with `expect` raised to what this supervisor has heard: per name, the higher of
+   * the provider's own and the stream's. A supervisor that has heard nothing hands the provider's line as it is. */
+  function withMarksHeard(handoff: CustodyHandoff): CustodyHandoff {
+    if (marksHeard.size === 0) return handoff;
+    const expect: Record<string, number> = { ...handoff.expect };
+    for (const [name, value] of marksHeard) {
+      if (value > (expect[name] ?? -1)) expect[name] = value;
+    }
+    return { ...handoff, expect };
+  }
+
+  /** OB custody (C5) — one frame of fieldd's marks stream: the whole value, of which only a rise is kept. A frame
+   * that is no frame is no news, a name off the registry's pattern is no mark, and no more names are kept than the
+   * floor itself holds. The provider is told the whole memory when any of it rose; what it does then is its own. */
+  function hearMarks(custody: FielddCustody, payload: unknown): void {
+    const frame = CustodyMarksFrame.safeParse(payload);
+    if (!frame.success) return;
+    let rose = false;
+    for (const [name, value] of Object.entries(frame.data.marks)) {
+      const kept = marksHeard.get(name);
+      if (kept === undefined) {
+        if (!MARK_NAME.test(name) || marksHeard.size >= CUSTODY.MARKS_MAX) continue;
+      } else if (value <= kept) {
+        continue;
+      }
+      marksHeard.set(name, value);
+      rose = true;
+    }
+    if (!rose) return;
+    try {
+      custody.noted?.(Object.fromEntries(marksHeard));
+    } catch {
+      // Observation must never control daemon ownership or lifecycle.
+    }
+  }
+
+  /** OB custody (C5) — open fieldd's marks stream on a handle's client, after any adoption or spawn at `sealed`. The
+   * subscription is the client's: it replays with a fresh snapshot at every reconnect and ends when the client
+   * closes. A daemon that refuses it is still the daemon the pairing proved; no mark is heard from it. */
+  function openMarks(client: FielddClient, custody: FielddCustody): void {
+    const hear = (payload: unknown): void => hearMarks(custody, payload);
+    void client.subscribe("system.custody.marks.subscribe", {}, hear).then(
+      (subscription) => hear(subscription.snapshot),
+      () => undefined,
+    );
   }
 
   /** OB custody — hand a spawned child its custody. C6 first: the child is asked about BEFORE anything is written
@@ -749,6 +804,8 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
         return stopping;
       },
     };
+    // OB custody (C5) — at `sealed`, every handle's client hears fieldd's marks for as long as it lives
+    if (opts.custody !== undefined) openMarks(probe.client, opts.custody);
     const livenessOptions = opts.liveness ?? FIELDD_LIVENESS;
     if (livenessOptions !== false) {
       watch = watchLiveness(probe.client, {

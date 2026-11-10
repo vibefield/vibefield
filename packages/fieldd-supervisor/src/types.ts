@@ -154,6 +154,11 @@ export interface FielddCustody {
    * place is not fieldd). Awaited BEFORE anything is written to the child; `false` or a throw stops the child and
    * fails the attempt `child-not-ours`. Absent: no check (a test's supervisor). */
   verifyChild?(pid: number): Promise<boolean>;
+  /** C5 — fieldd's marks as this supervisor has heard them: the highest value per name, WHOLE, told each time one
+   * rises (never for a fall, which a mark does not do, or for a frame that changed nothing). The supervisor keeps
+   * the same memory for its data root and raises the next hand-off's `expect` by it whatever the provider does with
+   * this; a provider that keeps it too carries the marks across supervisors. */
+  noted?(marks: Readonly<Record<string, number>>): void;
 }
 
 export interface FielddSupervisorOptions {
@@ -214,7 +219,9 @@ export interface FielddSupervisorOptions {
    * `FIELDD_CUSTODY=stdin` and, once it is verified ours, ONE line: the hand-off. Readiness is its own ready line
    * and then one pairing probe of that port and boot; adoption is product.json and then the pairing. A daemon from
    * before custody (it refuses the pairing and its `shell.token` answers) is asked to stop by that bearer and
-   * replaced, whatever `buildMismatch` says. Absent: `files`, today's path in every byte. */
+   * replaced, whatever `buildMismatch` says. Every handle's client then hears fieldd's marks
+   * (`system.custody.marks.subscribe`), and the highest heard per name is the next spawn's `expect`. Absent: `files`,
+   * today's path in every byte. */
   custody?: FielddCustody;
   /** Typed lifecycle/control/emergency boundary. Readiness stdout is never
    * collapsed into stderr or duplicated as a routine shell log. */
