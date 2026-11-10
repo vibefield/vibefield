@@ -472,6 +472,9 @@ export interface StartedForFloor {
 interface UntoldSet {
   readonly sessionId: string;
   readonly startedFor: StartedFor;
+  /** the run's row has been seen running in an inventory, and the set was said then (CUSTODY-SPEC §8.1.0 "v0.24").
+   * Until it is, nothing is sent; after it, no later sighting says it again */
+  said: boolean;
   /** a set for this run is on the wire: never more than one */
   inFlight: boolean;
   /** the run's ONE retry timer, while it waits to say the same again */
@@ -2565,7 +2568,15 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * values (CUSTODY-SPEC §8.1.0), so what this life remembers and what the next fieldd is handed cannot differ.
    * Called right after `enter` returns and never awaited: a launch waits on nothing here. `root` is the creation
    * request the launch announced, which is also the id its helper root is named by. At `files` no floor was given:
-   * the memory is kept and nothing is said. */
+   * the memory is kept and nothing is said.
+   *
+   * WHEN the floor is told (§8.1.0 "v0.24"): ONCE, when the run's row is first seen running in an inventory. The
+   * floor takes a set only for a terminal its own inventory lists, and a terminal born a moment ago may not be
+   * listed yet; fieldd's inventory is the floor's own push of that state, so a row seen here is a row the floor
+   * lists. If fieldd's latest inventory already lists it (an adoption; a spawn whose inventory was quick), that
+   * moment is now; otherwise it is `handleInventory`'s first sighting (`sayAtSighting`). A run that leaves the
+   * fold before its row is ever seen is never said. A fieldd that stops before the set is answered leaves the run
+   * unvouched at the next boot: a stated limit, and it fails closed. */
   private remember(
     entry: ManagedEntry,
     who: { spark?: SparkId | undefined },
@@ -2581,12 +2592,31 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       this.born.delete(oldest);
     }
     if (this.opts.startedFor === undefined) return;
-    this.tellFloor(run, entry.info.terminalSessionId, {
+    const sessionId = entry.info.terminalSessionId;
+    const startedFor: StartedFor = {
       run,
       ...(spark !== undefined ? { spark } : {}),
       ...(more.process !== undefined ? { process: more.process } : {}),
       ...(more.root !== undefined ? { root: more.root } : {}),
-    });
+    };
+    this.untold.set(run, { sessionId, startedFor, said: false, inFlight: false });
+    if (this.listedRunning(sessionId)) this.sayAtSighting(run);
+  }
+
+  /** OB custody (rule 6; §8.1.0 "v0.24") — fieldd's latest inventory lists the session, and its process runs. */
+  private listedRunning(sessionId: string): boolean {
+    const terminals = this.opts.terminals?.() ?? null;
+    if (terminals === null || !this.listed(terminals, sessionId)) return false;
+    return terminals.get(sessionId)?.exited !== true;
+  }
+
+  /** OB custody (rule 6; §8.1.0 "v0.24") — the run's row is listed running: what the run was started for is said
+   * to the floor now, if it has not been. Once per launch: a later sighting says nothing more. */
+  private sayAtSighting(run: string): void {
+    const untold = this.untold.get(run);
+    if (untold === undefined || untold.said) return;
+    untold.said = true;
+    this.tellFloor(run, untold);
   }
 
   /** OB custody (rule 6) — a run this process ADOPTED: a person's own typed launch, taken in through the gateway on
@@ -2610,20 +2640,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   }
 
   /** OB custody (rule 6) — say one set to the floor: never more than one on the wire for a run, and ONE timer per
-   * run while the floor has not taken it. `set` is done. `not-found` is quiet (the run ended first): said once, no
-   * retry. `not-sealed` is a floor that keeps no table: said once for this process, no retry. `unanswered` and
-   * `full` arm the timer, which says the same values again. A run's end stops it (`forgetUntold`). */
-  private tellFloor(run: string, sessionId: string, startedFor: StartedFor): void {
+   * run while the floor has not taken it. `set` is done. `not-found` is quiet and final: the session ended, or its
+   * row went, between the sighting and the set. `not-sealed` is a floor that keeps no table: said once for this
+   * process, no retry. `unanswered` and `full` arm the timer, which says the same values again. A run's end stops
+   * it (`forgetUntold`). */
+  private tellFloor(run: string, waiting: UntoldSet): void {
     const floor = this.opts.startedFor;
-    if (floor === undefined) return;
-    let untold = this.untold.get(run);
-    if (untold === undefined) {
-      untold = { sessionId, startedFor, inFlight: false };
-      this.untold.set(run, untold);
-    }
-    if (untold.inFlight) return;
-    untold.inFlight = true;
-    const waiting = untold;
+    if (floor === undefined || waiting.inFlight) return;
+    waiting.inFlight = true;
     const answered = (answer: StartedForAnswer): void => {
       waiting.inFlight = false;
       // the run ended while this was on the wire: nothing more is said or armed for it
@@ -2636,7 +2660,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       if (answer === "not-found") {
         this.logger.debug(
           "fieldd.agents.started_for_not_found",
-          "The floor lists no such running terminal for a run's entry; the run ended first",
+          "The floor lists no such running terminal for a run's entry; it ended before the set",
           { runtimeRunId: run },
         );
       } else if (answer === "not-sealed" && !this.notSealedSaid) {
@@ -2662,7 +2686,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     untold.timer = setTimeout(() => {
       untold.timer = undefined;
       if (this.disposed || this.untold.get(run) !== untold) return;
-      this.tellFloor(run, untold.sessionId, untold.startedFor);
+      this.tellFloor(run, untold);
     }, this.opts.startedForRetryMs ?? STARTED_FOR_RETRY_MS);
     untold.timer.unref();
   }
@@ -2796,6 +2820,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         entry.terminal = row;
       }
       if (row !== undefined && row.exited !== true) {
+        // OB custody (rule 6; §8.1.0 "v0.24") — the run's row, running, in an inventory: what it was started for is
+        // said to the floor at its FIRST such sighting, and at no later one
+        this.sayAtSighting(runtimeRunId);
         if (entry.backstop !== undefined) {
           // listed again: a reading that briefly lacked it, not an exit
           clearTimeout(entry.backstop);
