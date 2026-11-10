@@ -142,6 +142,7 @@ import { readCensus, requestConsentedStop } from "./pair-stop";
 import { installPluginProtocol } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { createQuitGate, type QuitGate, type QuitPair } from "./quit-gate";
+import { createQuitLatch, latchedSwitch } from "./quit-latch";
 import { RecoveringFielddObservers } from "./recovering-fieldd-observers";
 import { installRendererLogging } from "./renderer-logging";
 import {
@@ -1122,6 +1123,16 @@ async function main(
     }
   };
   const pairBundles = new Map<string, PairBundle>();
+  // Item 290 (D4; DESIGN.md §9 "The quit's words") — the quit's latch: the quit gate's hold sets it and its release
+  // clears it (the gate port below). A switch or a new user is refused under it in James's words; the log hears which.
+  const quitLatch = createQuitLatch({
+    onRefused: (what) =>
+      logger.info(
+        "desktop.quit.switch_refused",
+        "A switch was refused because VibeField is quitting",
+        { what },
+      ),
+  });
   let windowRendererBoundary: ReturnType<typeof registerWindowBootstrap> | null = null;
   const ensurePairBundle = (
     userId: string,
@@ -1146,6 +1157,8 @@ async function main(
     const handles: FielddHandleCoordinator = new FielddHandleCoordinator({
       upstreamEnsure: (options) => sup.ensure(options),
       intensity: recoveryIntensity,
+      // Item 290 — a bundle born while a person's quit holds every pair starts held, so it starts nothing
+      heldAtBirth: quitLatch.held,
       onEnsureError: (error) => {
         fielddLink.ensureFailed(handles);
         pluginProvenance.invalidate();
@@ -1737,7 +1750,17 @@ async function main(
    * not, and the window reloads: the renderer bootstrap generation re-mints
    * against the new pair for free. */
   let switching = false;
-  const attachUser = async (targetUserId: string): Promise<UserRecord> => {
+  /** Item 290 — the switches and new users under way, which the quit's settle waits for (the gate port's `settle`) */
+  const switchesInFlight = new Set<Promise<unknown>>();
+  const tracked = <T>(pending: Promise<T>): Promise<T> => {
+    switchesInFlight.add(pending);
+    const forget = (): void => {
+      switchesInFlight.delete(pending);
+    };
+    void pending.then(forget, forget);
+    return pending;
+  };
+  const attachUserNow = async (targetUserId: string): Promise<UserRecord> => {
     const file = readUsersFile(attached.rootReal);
     if (file === null) throw new Error("users.json is unreadable");
     const target = file.users.find((u) => u.userId === targetUserId);
@@ -1749,53 +1772,69 @@ async function main(
       const previousId = attached.userId;
       const previousRecord = file.users.find((u) => u.userId === previousId);
       const targetRoot = userRootFor(attached.rootReal, target);
-      const bundle = ensurePairBundle(target.userId, targetRoot);
-      // item 212 (RV #29): a switch to a person is that person asking for their field service (out of its crash
-      // loop too), as the reloaded window's bootstrap would
-      await bundle.handles.ensure({ person: true });
-      shellDisposers.delete(attachmentDisposer);
-      attachmentWiring.dispose();
-      supervisor = bundle.supervisor;
-      fielddHandles = bundle.handles;
-      attached = { userId: target.userId, name: target.name, rootReal: attached.rootReal };
-      attachmentWiring = wireAttachment(bundle, targetRoot);
-      attachmentDisposer = (): void => attachmentWiring.dispose();
-      shellDisposers.add(attachmentDisposer);
-      if (previousRecord !== undefined && previousRecord.resident === false) {
-        const previous = pairBundles.get(previousId);
-        pairBundles.delete(previousId);
-        if (previous !== undefined) {
-          previous.handles.dispose();
-          // dispose stops OWNED children under a stop-owned policy; an
-          // adopted external pair is not ours to kill — it stays, honestly,
-          // and (AL-7) is told this shell left it on purpose
-          void previous.supervisor.dispose({ leave: "user-switch" }).catch(() => undefined);
-        }
-      }
-      void setLastAttached(attached.rootReal, target.userId, {}, (error) => {
-        logger.warn(
-          "desktop.users.last_attached_skipped",
-          "The lastAttached hint could not be written (best-effort, never blocking)",
-          { error: String(error) },
-        );
-      });
-      // UA-7 (W6 as amended): the silent deal, switch half; the boot half sits
-      // beside ensureUsersRoot. Called after the hint so the hint's 200ms lock
-      // budget never waits behind it. Never awaited: the face the deal writes
-      // is the face already shown, so nothing waits on it or redraws for it.
-      void dealOwedFace(attached.rootReal, target.userId, { logger });
-      trayController?.update(trayUsers());
-      logger.info("desktop.users.attached", "The shell re-targeted to another user", {
-        userId: target.userId,
-        fuid: target.fuid,
-      });
-      registry.primary()?.webContents.reload();
-      return target;
+      // Item 290 (D4) — refused while VibeField quits before any bundle is made, and refused again once the pair has
+      // answered if the quit's hold came while it started: nothing re-targets mid-quit, and the pair it started is the
+      // quit's second read's to stop (`latchedSwitch`)
+      return await latchedSwitch(
+        quitLatch,
+        "switch",
+        async () => {
+          const bundle = ensurePairBundle(target.userId, targetRoot);
+          // item 212 (RV #29): a switch to a person is that person asking for their field service (out of its crash
+          // loop too), as the reloaded window's bootstrap would
+          await bundle.handles.ensure({ person: true });
+          return bundle;
+        },
+        (bundle) => {
+          shellDisposers.delete(attachmentDisposer);
+          attachmentWiring.dispose();
+          supervisor = bundle.supervisor;
+          fielddHandles = bundle.handles;
+          attached = { userId: target.userId, name: target.name, rootReal: attached.rootReal };
+          attachmentWiring = wireAttachment(bundle, targetRoot);
+          attachmentDisposer = (): void => attachmentWiring.dispose();
+          shellDisposers.add(attachmentDisposer);
+          if (previousRecord !== undefined && previousRecord.resident === false) {
+            const previous = pairBundles.get(previousId);
+            pairBundles.delete(previousId);
+            if (previous !== undefined) {
+              previous.handles.dispose();
+              // dispose stops OWNED children under a stop-owned policy; an
+              // adopted external pair is not ours to kill — it stays, honestly,
+              // and (AL-7) is told this shell left it on purpose
+              void previous.supervisor.dispose({ leave: "user-switch" }).catch(() => undefined);
+            }
+          }
+          void setLastAttached(attached.rootReal, target.userId, {}, (error) => {
+            logger.warn(
+              "desktop.users.last_attached_skipped",
+              "The lastAttached hint could not be written (best-effort, never blocking)",
+              { error: String(error) },
+            );
+          });
+          // UA-7 (W6 as amended): the silent deal, switch half; the boot half sits
+          // beside ensureUsersRoot. Called after the hint so the hint's 200ms lock
+          // budget never waits behind it. Never awaited: the face the deal writes
+          // is the face already shown, so nothing waits on it or redraws for it.
+          void dealOwedFace(attached.rootReal, target.userId, { logger });
+          trayController?.update(trayUsers());
+          logger.info("desktop.users.attached", "The shell re-targeted to another user", {
+            userId: target.userId,
+            fuid: target.fuid,
+          });
+          registry.primary()?.webContents.reload();
+          return target;
+        },
+      );
     } finally {
       switching = false;
     }
   };
-  const createAndAttach = async (params: UsersCreateParams): Promise<UserRecord> => {
+  const attachUser = (targetUserId: string): Promise<UserRecord> =>
+    tracked(attachUserNow(targetUserId));
+  const createAndAttachNow = async (params: UsersCreateParams): Promise<UserRecord> => {
+    // Item 290 (D4) — no user is made while VibeField quits
+    quitLatch.refuse("new-user");
     const { user: minted } = await createUser(
       attached.rootReal,
       {},
@@ -1810,6 +1849,8 @@ async function main(
     trayController?.update({ users: rosterFor() });
     return attachUser(minted.userId);
   };
+  const createAndAttach = (params: UsersCreateParams): Promise<UserRecord> =>
+    tracked(createAndAttachNow(params));
   registerUsersRoster(
     registry,
     {
@@ -2554,7 +2595,7 @@ async function main(
   const restoreAfterAbort = (what: "update" | "quit"): void => {
     registry.cancelShutdown();
     if (what === "update") lifecycleFlow?.resetAfterAbortedQuit();
-    trayController?.update({ quitting: false });
+    trayController?.update({ quitting: false, decidingQuit: false });
     redrawUpdateMenu?.();
     void revealPrimaryWindow().catch((error: unknown) => {
       logger.error(
@@ -2700,11 +2741,16 @@ async function main(
             : {}),
         };
         const parent = registry.primary();
+        // Item 290 (D2; DESIGN.md §9 "The quit's words") — while a quit box is up, the status item's Switch User, New
+        // User… and Try Again do nothing; a Cancel gives them back, and a Quit leaves them to `quitting`
+        trayController?.update({ decidingQuit: true });
         const answer =
           parent !== null && !parent.isDestroyed()
             ? await dialog.showMessageBox(parent, options)
             : await dialog.showMessageBox(options);
-        return { confirmed: answer.response !== box.cancelId, suppress: answer.checkboxChecked };
+        const confirmed = answer.response !== box.cancelId;
+        if (!confirmed) trayController?.update({ decidingQuit: false });
+        return { confirmed, suppress: answer.checkboxChecked };
       },
       suppress: () => {
         void setAppPreference(APP_PREFERENCE_KEYS.CONFIRM_QUIT, false).catch((error: unknown) => {
@@ -2715,14 +2761,21 @@ async function main(
           );
         });
       },
+      // Item 290 — the hold sets the quit's latch too, so a bundle born from now on starts held and a switch is refused
       hold: () => {
+        quitLatch.hold();
         for (const bundle of pairBundles.values()) bundle.handles.holdForStop();
       },
       release: () => {
+        quitLatch.release();
         for (const bundle of pairBundles.values()) bundle.handles.releaseHold();
       },
-      // Item 290's red: a stub that waits for nothing (the green awaits the switch in flight, then every coordinator)
-      settle: async () => undefined,
+      // Item 290 — after the hold: the switches under way first (a new user still writing users.json; a bundle born now
+      // starts held), then every pair's attempt in flight. Nothing starts here.
+      settle: async () => {
+        while (switchesInFlight.size > 0) await Promise.allSettled([...switchesInFlight]);
+        await Promise.all([...pairBundles.values()].map((bundle) => bundle.handles.settled()));
+      },
       // AU-5 (LC-24, LC-25, LC-36) — the box's last line, only when this quit will try to install the ready update; a
       // move to Applications waiting for this quit installs nothing (the update waits for the copy in Applications)
       installLine: () =>

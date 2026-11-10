@@ -33,7 +33,7 @@ export interface QuitLatch {
   refuse(what: QuitRefused): void;
 }
 
-export function createQuitLatch(_options: QuitLatchOptions = {}): QuitLatch {
+export function createQuitLatch(options: QuitLatchOptions = {}): QuitLatch {
   let held = false;
   return {
     get held() {
@@ -45,16 +45,19 @@ export function createQuitLatch(_options: QuitLatchOptions = {}): QuitLatch {
     release() {
       held = false;
     },
-    // Item 290's red: a stub that refuses nothing (the green throws a `QuitRefusal` while held, and says `what`)
-    refuse(_what) {},
+    refuse(what) {
+      if (!held) return;
+      options.onRefused?.(what);
+      throw new QuitRefusal();
+    },
   };
 }
 
 /** Item 290 (VF-PM's bound 3, 09:57:55Z) — a switch under the quit's latch: refused before it starts its pair, and
  * refused again once that pair has answered if the quit's hold came while it started, so a switch already starting
  * never swaps the window mid-quit. The pair it started stays up for the quit's second read to stop
- * (`quit-gate.ts`'s stop). `attachUser` in `index.ts` runs through it. Item 290's red 2: a stub that refuses only
- * before the start (the green refuses again before the swap). */
+ * (`quit-gate.ts`'s stop). `attachUser` in `index.ts` runs through it. The second refusal and the swap run in the same
+ * turn, so no hold can land between them. */
 export async function latchedSwitch<S, T>(
   latch: Pick<QuitLatch, "refuse">,
   what: QuitRefused,
@@ -63,5 +66,6 @@ export async function latchedSwitch<S, T>(
 ): Promise<T> {
   latch.refuse(what);
   const started = await start();
+  latch.refuse(what);
   return swap(started);
 }

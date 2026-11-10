@@ -72,8 +72,7 @@ export interface TraySnapshot {
   readonly windowOpen: boolean;
   readonly quitting: boolean;
   /** Item 290 (D2, James 2026-11-10 06:49Z; DESIGN.md §9 "The quit's words") — the quit box is up: Switch User, New
-   * User… and Try Again do nothing (dimmed where the menu can draw it). Absent or false changes nothing. Item 290's
-   * red: declared, not yet read (the green makes those three not actionable). */
+   * User… and Try Again do nothing (dimmed where the menu can draw it). Absent or false changes nothing. */
   readonly decidingQuit?: boolean;
   /** TS-4 (TS-D7) — the attached user's Mac is not connected: offer Connect Your
    * Devices…. Absent or false hides the row (older callers, tests, a link not
@@ -347,6 +346,9 @@ export function buildTrayMenu(
   platform: TrayPlatform,
 ): readonly TrayMenuItem[] {
   const actionable = !snapshot.quitting;
+  // Item 290 (D2; DESIGN.md §9 "The quit's words") — while the quit box is up, Switch User, its rows, New User… and
+  // Try Again do nothing; every other row is as it was
+  const switchable = actionable && snapshot.decidingQuit !== true;
   const items: TrayMenuItem[] = [
     ...(snapshot.inBackground === true
       ? [
@@ -393,7 +395,7 @@ export function buildTrayMenu(
           {
             id: "switch-user",
             label: "Switch User",
-            ...availability(platform, actionable),
+            ...availability(platform, switchable),
             submenu: [
               ...snapshot.users.map(
                 (u): TrayMenuItem => ({
@@ -401,8 +403,8 @@ export function buildTrayMenu(
                   type: "checkbox",
                   label: userLabel(u.name, u.face),
                   checked: u.attached,
-                  enabled: actionable && !u.attached,
-                  ...(actionable && !u.attached
+                  enabled: switchable && !u.attached,
+                  ...(switchable && !u.attached
                     ? { click: () => actions.switchUser?.(u.userId) }
                     : {}),
                 }),
@@ -413,8 +415,8 @@ export function buildTrayMenu(
                     {
                       id: "new-user",
                       label: "New User…",
-                      enabled: actionable,
-                      ...(actionable ? { click: actions.newUser } : {}),
+                      enabled: switchable,
+                      ...(switchable ? { click: actions.newUser } : {}),
                     },
                   ] satisfies TrayMenuItem[])
                 : []),
@@ -427,7 +429,7 @@ export function buildTrayMenu(
       label: serviceStatus(snapshot),
       ...availability(platform, false),
     },
-    ...retryItem(snapshot, actions, platform, actionable),
+    ...retryItem(snapshot, actions, platform, switchable),
     // TS-4 (TS-D7; DESIGN.md §8 "Asking again") — a row, never a badge, in title
     // case as macOS menus are; gone the moment the link lands
     ...(snapshot.connectDevices === true && actions.connectDevices !== undefined

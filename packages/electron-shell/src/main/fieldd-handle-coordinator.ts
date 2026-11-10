@@ -72,8 +72,7 @@ export interface FielddHandleCoordinatorOptions {
   /** The intensity window's clock (unix ms); `Date.now` unless a test injects its own. */
   readonly now?: () => number;
   /** Item 290 — the coordinator is born while a person's quit holds every pair (the quit's latch): it starts held, so
-   * nothing it is asked starts a pair, a person's ask included, until a release. Item 290's red: declared, not yet
-   * read (the green starts the coordinator held). */
+   * nothing it is asked starts a pair, a person's ask included, until a release. */
   readonly heldAtBirth?: boolean;
 }
 
@@ -149,6 +148,9 @@ export class FielddHandleCoordinator {
   private inFlight: Promise<FielddHandle> | null = null;
   /** the attempt the spacing will start, which an incidental caller waits on until then */
   private spacing: Spacing | null = null;
+  /** Item 290 — every attempt started and not yet settled, a person's ask among them (`inFlight` holds a recovery's
+   * only): what `settled()` waits for */
+  private readonly underWay = new Set<Promise<FielddHandle>>();
   private state: FielddRecoveryState = READY;
   private readonly upstreamEnsure: FielddSupervisor["ensure"];
   private readonly onEnsureError: ((error: unknown) => void) | undefined;
@@ -166,6 +168,7 @@ export class FielddHandleCoordinator {
     this.reprobeAfterMs = options.reprobeAfterMs ?? FIELDD_REPROBE_AFTER_MS;
     this.intensity = options.intensity ?? FIELDD_RECOVERY_INTENSITY;
     this.now = options.now ?? (() => Date.now());
+    this.held = options.heldAtBirth === true;
     if (!Number.isSafeInteger(this.reprobeAfterMs) || this.reprobeAfterMs < 0) {
       throw new Error("fieldd reprobe deadline must be a nonnegative safe integer");
     }
@@ -193,7 +196,7 @@ export class FielddHandleCoordinator {
         spacing.waiters.push({ resolve, reject });
       });
     }
-    return this.attempt(options);
+    return this.started(this.attempt(options));
   }
 
   /** The live handle, if any — read without starting anything (AL-3: a quit must never spawn what it means to stop). */
@@ -235,12 +238,11 @@ export class FielddHandleCoordinator {
     return this.held;
   }
 
-  /** Item 290 — resolves once no attempt this coordinator started is still in flight (a person's ask, a recovery's,
-   * or the one the spacing will start), whatever it answered; it starts nothing. A quit's stop awaits it after the
-   * hold, so a pair that lands is read again and stopped. Item 290's red: a stub that resolves at once (the green
-   * waits). */
-  settled(): Promise<void> {
-    return Promise.resolve();
+  /** Item 290 — resolves once no attempt this coordinator started is still in flight (a person's ask, or a
+   * recovery's), whatever it answered; it never rejects and starts nothing. A spacing not yet fired is no attempt, and
+   * a hold clears it. A quit's stop awaits this after the hold, so a pair that lands is read again and stopped. */
+  async settled(): Promise<void> {
+    while (this.underWay.size > 0) await Promise.allSettled([...this.underWay]);
   }
 
   onHandle(listener: HandleListener): () => void {
@@ -352,7 +354,17 @@ export class FielddHandleCoordinator {
     const made = this.madeInWindow(now);
     if (made >= this.intensity.max) return this.tripCrashLoop(made, now);
     this.automaticAt.push(now);
-    return this.track(this.attempt());
+    return this.track(this.started(this.attempt()));
+  }
+
+  /** Item 290 — an attempt is under way until it settles, whatever it answers: `settled()` waits on it. */
+  private started(attempt: Promise<FielddHandle>): Promise<FielddHandle> {
+    this.underWay.add(attempt);
+    const forget = (): void => {
+      this.underWay.delete(attempt);
+    };
+    void attempt.then(forget, forget);
+    return attempt;
   }
 
   /** A recovery's attempt: incidental callers join it while it is in flight, and its failure arms the next. */
@@ -416,7 +428,7 @@ export class FielddHandleCoordinator {
     if (this.inFlight !== null) return this.inFlight;
     const spacing = this.takeSpacing();
     if (underWay) this.setState({ kind: "recovering", attempt: 0, of: this.intensity.max });
-    const attempt = this.attempt(options);
+    const attempt = this.started(this.attempt(options));
     if (this.lost) this.track(attempt);
     if (spacing !== null) {
       for (const waiter of spacing.waiters) void attempt.then(waiter.resolve, waiter.reject);

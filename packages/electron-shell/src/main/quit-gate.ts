@@ -67,8 +67,7 @@ export interface QuitGatePort {
   /** … until a quit that ended nothing gives the app back */
   release(): void;
   /** Item 290 — after the hold, resolves once nothing that could still bring up a pair is in flight (a switch, every
-   * pair's attempt); it starts nothing. The stop awaits it, then reads the pairs again. Item 290's red: declared, not
-   * yet called (the green's stop awaits it). */
+   * pair's attempt); it starts nothing. The stop awaits it, then reads the pairs again. */
   settle(): Promise<void>;
   /** AU-5 — the consent box's last line when this quit will install a ready update (null: it will not — nothing staged,
    * updates off, a policy that asks first, a move waiting); read only for a person's quit whose census box shows */
@@ -253,12 +252,82 @@ export function createQuitGate(port: QuitGatePort): QuitGate {
         return { kind: "done", complete: false, ended: 0 };
       }
       try {
-        return await stopPlanned(current);
+        const settled = await withLaterPairs(current);
+        if (settled === "aborted") return { kind: "aborted" };
+        return await stopPlanned(settled);
       } finally {
         closeReached();
       }
     },
   };
+
+  /** Item 290 — after the hold nothing new can start a pair, so the stop first settles what is in flight, then reads
+   * the pairs again. A boot the decision did not reach is planned too, its census by the second box's rules: empty, it
+   * stops; with sessions, a person's quit asks about them (`bornDuringQuit`), and a logout ends them; unreadable, it is
+   * left running and the stop is incomplete. A boot the decision did reach, read again as a fresh value (a resident
+   * pair's second probe), is closed and never stopped twice. The attached user's pair still stops last. */
+  async function withLaterPairs(current: QuitPlan): Promise<QuitPlan | "aborted"> {
+    await port.settle();
+    let again: readonly QuitPair[];
+    try {
+      again = await port.pairs();
+    } catch (error) {
+      port.log.warn(
+        "desktop.quit.reread_failed",
+        "The quit could not read the pairs again; a pair that came up during it may keep running",
+        { error: error instanceof Error ? error.message : String(error) },
+      );
+      return { ...current, whole: false };
+    }
+    const known = new Set(reached.map((pair) => pair.bootId));
+    const fresh: QuitPair[] = [];
+    for (const pair of again) {
+      if (known.has(pair.bootId)) {
+        if (!reached.includes(pair)) pair.close?.();
+        continue;
+      }
+      known.add(pair.bootId);
+      fresh.push(pair);
+    }
+    reached = [...reached, ...fresh];
+    port.log.info("desktop.quit.pairs_reread", "The quit read the pairs again after the hold", {
+      found: fresh.length,
+    });
+    if (fresh.length === 0) return current;
+    let whole = current.whole;
+    const later: PlannedStop[] = [];
+    for (const pair of fresh) {
+      const census = await pair.census();
+      if (!census.known) {
+        port.log.warn(
+          "desktop.quit.pair_left_running",
+          "A daemon pair came up during the quit and its sessions could not be read; it keeps running",
+          { attached: pair.attached },
+        );
+        whole = false;
+        continue;
+      }
+      if (census.sessions.length > 0 && current.reason === "quit") {
+        const answer = await port.confirm(
+          quitConsentBox(census.sessions, { bornDuringQuit: true }),
+        );
+        if (!answer.confirmed) {
+          port.release();
+          port.log.info(
+            "desktop.quit.aborted",
+            "A session started during the quit and the person kept the app",
+            { attached: pair.attached, sessions: census.sessions.length },
+          );
+          return "aborted";
+        }
+      }
+      later.push({ pair, sessions: census.sessions.map((s) => s.sessionId) });
+    }
+    const stops = [...current.stops, ...later].sort(
+      (a, b) => Number(a.pair.attached) - Number(b.pair.attached),
+    );
+    return { ...current, stops, whole };
+  }
 
   async function stopPlanned(current: QuitPlan): Promise<QuitStopOutcome> {
     let complete = current.whole;
