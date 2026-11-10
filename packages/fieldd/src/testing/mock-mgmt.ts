@@ -14,6 +14,7 @@ import {
   NativeFileTransferPullParams,
   NativeFileTransferRootsParams,
   NativeMarksSetParams,
+  NativeTerminalStartedForSetParams,
   RPC_ERROR_CODES,
   SOCKETS,
   STORES,
@@ -413,6 +414,27 @@ export class MockMgmtServer {
   readonly marks = new Map<string, number>();
   /** OB custody (C5) — every `native.marks.set` whose params parsed, in order, as asked: answered or refused. */
   readonly markSets: Array<{ name: string; value: number }> = [];
+  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — the started-for table this floor holds, as field-native is specified
+   * to keep it: what each terminal was started for, by its session id, in memory (custody.ts `TerminalStartedFor`).
+   * The hello ack hands it when there is any. It is the floor's, not a connection's: `killClients()` leaves it. */
+  readonly startedFor = new Map<string, object>();
+  /** OB custody (rule 6) — when a row sets it, the hello ack's `startedFor` is `said` AS IT STANDS, whatever this
+   * floor holds: anything at all, so a row can plant what no floor would send and see the client read it on its own
+   * terms. null = the table above. */
+  helloStartedFor: { said: unknown } | null = null;
+  /** OB custody (rule 6) — false: a floor that was NOT booted by the stdin hand-off. It keeps no table: its ack has
+   * no `startedFor` key and its verb answers `PRECONDITION_FAILED`, `details.reason: "not-sealed"`. */
+  startedForSealed = true;
+  /** OB custody (rule 6) — the terminals this floor lists as running, for the verb's `NOT_FOUND`; null = every
+   * session it is asked about is one. */
+  startedForSessions: Set<string> | null = null;
+  /** OB custody (rule 6) — true: a NEW terminal is refused `started-for-full`, as at `CUSTODY.STARTED_FOR_MAX`. */
+  startedForFull = false;
+  /** OB custody (rule 6) — when set, EVERY set is refused with this, whatever it asked: a refusal a row scripts. */
+  startedForRefusal: { kind: string; message: string; details?: unknown } | null = null;
+  /** OB custody (rule 6) — every `native.terminal.startedFor.set`'s params AS RECEIVED, in order, answered or
+   * refused: a clear is one with no `startedFor` key. (A method in `silentMethods` is never recorded.) */
+  readonly startedForAsks: unknown[] = [];
   /** NF-3 — when set, native.lifecycle.observed.subscribe answers this snapshot
    * (an ObservedState); null falls through to the generic `{n:0}` handler,
    * which the fieldd side must read as "no inventory" (tolerant reader). */
@@ -602,6 +624,8 @@ export class MockMgmtServer {
             ...(this.helloLastManager !== null ? { lastManager: this.helloLastManager } : {}),
             // OB custody (C5) — `HelloAck.marks`: absent when the floor holds none
             ...(this.marks.size > 0 ? { marks: Object.fromEntries(this.marks) } : {}),
+            // OB custody (rule 6) — `HelloAck.startedFor`
+            ...this.ackStartedFor(),
             ...(serverMac !== undefined ? { serverMac } : {}),
           },
         }) + "\n",
@@ -650,6 +674,57 @@ export class MockMgmtServer {
           result: { value: mark },
         })}\n`,
       );
+      return;
+    }
+    if (msg.method === "native.terminal.startedFor.set") {
+      // OB custody (rule 6) — as the floor is specified to answer it (CUSTODY-SPEC §8.1.0; mgmt.ts
+      // `NativeTerminalStartedForSet*`), in the floor's order: a floor not booted by the hand-off keeps no table; the
+      // terminal must be one it lists as running; a set with no `startedFor` clears (clearing nothing is no error);
+      // a NEW terminal past the bound is refused; a terminal it holds is always replaced.
+      const refuse = (kind: string, message: string, details?: unknown): void => {
+        const known: Record<string, number | undefined> = RPC_ERROR_CODES;
+        const code = known[kind] ?? RPC_ERROR_CODES.INTERNAL;
+        const data = { kind, retryable: false, ...(details !== undefined ? { details } : {}) };
+        const reply = { jsonrpc: "2.0", id: msg.id, error: { code, message, data } };
+        sock.write(`${JSON.stringify(reply)}\n`);
+      };
+      this.startedForAsks.push(msg.params);
+      if (this.startedForRefusal !== null) {
+        const { kind, message, details } = this.startedForRefusal;
+        refuse(kind, message, details);
+        return;
+      }
+      const asked = NativeTerminalStartedForSetParams.safeParse(msg.params);
+      if (!asked.success) {
+        // JSON-RPC's own word for params that do not parse (a `process.pid` below 2 among them)
+        const error = { code: -32602, message: "invalid params" };
+        sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, error })}\n`);
+        return;
+      }
+      const { sessionId, startedFor } = asked.data;
+      if (!this.startedForSealed) {
+        refuse("PRECONDITION_FAILED", "this floor keeps no started-for table", {
+          reason: "not-sealed",
+        });
+        return;
+      }
+      if (this.startedForSessions !== null && !this.startedForSessions.has(sessionId)) {
+        refuse("NOT_FOUND", "the floor lists no such running terminal");
+        return;
+      }
+      if (startedFor === undefined) {
+        this.startedFor.delete(sessionId);
+      } else {
+        const full = this.startedForFull || this.startedFor.size >= CUSTODY.STARTED_FOR_MAX;
+        if (!this.startedFor.has(sessionId) && full) {
+          refuse("PRECONDITION_FAILED", "this floor remembers no more terminals", {
+            reason: "started-for-full",
+          });
+          return;
+        }
+        this.startedFor.set(sessionId, startedFor);
+      }
+      sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} })}\n`);
       return;
     }
     if (msg.method === "native.lifecycle.health.subscribe" && this.healthSnapshot !== null) {
@@ -1816,6 +1891,17 @@ export class MockMgmtServer {
       nextCursor: `native:${this.diagnosticBootId}:${this.diagnosticCursor}`,
       droppedBefore: 0,
     };
+  }
+
+  /** OB custody (rule 6) — the hello ack's `startedFor`: what a row planted, as it stands; else this floor's table,
+   * each entry with its terminal beside it; and NO key from a floor that holds none or was not booted by the
+   * hand-off. */
+  private ackStartedFor(): { startedFor?: unknown } {
+    if (this.helloStartedFor !== null) return { startedFor: this.helloStartedFor.said };
+    if (!this.startedForSealed || this.startedFor.size === 0) return {};
+    const table: object[] = [];
+    for (const [sessionId, entry] of this.startedFor) table.push({ sessionId, ...entry });
+    return { startedFor: table };
   }
 
   killClients(): void {
