@@ -376,6 +376,70 @@ describe("the check between a spawn and its hand-off has one budget", () => {
     expect(said).not.toContain("ENOENT");
   });
 
+  // The sentence is ONE for both reasons, and it says what is known: the child WAS NOT SHOWN to be ours. "Is not" was
+  // only ever true of a refusal; for a check that ran out of time it claimed a finding nobody made. `reason` is what
+  // tells the two apart. "signed code" and "handed nothing" stay in both sentences on purpose: they are the words a
+  // row on the splash's side looks for, to hold that neither ever reaches a person.
+  it("says one sentence for a refusal and a slow check: was not shown to be ours", async () => {
+    const shown = "was not shown to be this app's own signed code";
+    const inEvent = `The spawned fieldd ${shown}; it is stopped and was handed nothing`;
+    const inError = `the spawned fieldd ${shown}; it was handed nothing`;
+
+    // refused: the tool says no
+    const refusedEvents: FielddSupervisorEvent[] = [];
+    const no = { handoff: () => HANDOFF, verifyChild: async () => false };
+    const refused = await refusal(sup(h.mkRoot(), refusedEvents, { custody: no }), refusedEvents);
+
+    // over budget: the tool never says, and the supervisor's own clock (faked; the child is real) runs out
+    const slowEvents: FielddSupervisorEvent[] = [];
+    let asked: () => void = () => undefined;
+    const askedOnce = new Promise<void>((resolve) => {
+      asked = resolve;
+    });
+    let answer: (ours: boolean) => void = () => undefined;
+    const never = {
+      handoff: () => HANDOFF,
+      verifyChild(): Promise<boolean> {
+        return new Promise<boolean>((resolve) => {
+          answer = resolve;
+          asked();
+        });
+      },
+    };
+    let slow: unknown;
+    try {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      try {
+        const outcome = refusal(sup(h.mkRoot(), slowEvents, { custody: never }), slowEvents);
+        await askedOnce;
+        await vi.advanceTimersByTimeAsync(CUSTODY.CHILD_CHECK_BUDGET_MS);
+        // said before the attempt's end is awaited: a supervisor that never gives up fails here, not by a hang
+        expect(slowEvents.some(notOurs)).toBe(true);
+        slow = await outcome;
+      } finally {
+        vi.useRealTimers();
+      }
+    } finally {
+      answer(false);
+    }
+
+    const both = [
+      ["refused", refusedEvents, refused],
+      ["over-budget", slowEvents, slow],
+    ] as const;
+    for (const [reason, events, error] of both) {
+      const event = events.find(notOurs);
+      expect(event, reason).toMatchObject({ message: inEvent, attrs: { reason } });
+      expect((error as SupervisorError).kind, reason).toBe("child-not-ours");
+      expect((error as Error).message, reason).toBe(inError);
+      for (const sentence of [(event as { message: string }).message, (error as Error).message]) {
+        expect(sentence, reason).toContain("signed code");
+        expect(sentence, reason).toContain("handed nothing");
+        expect(sentence, reason).not.toContain("is not this app's");
+      }
+    }
+  });
+
   // A pin, green before C6c and after it: the write's failure was already an outcome. FIXTURE_DEAF stands for a
   // child that already left, without the race of an exit: the pipe has no reader either way.
   it("takes a write the child will never read as an outcome, never a throw", async () => {
