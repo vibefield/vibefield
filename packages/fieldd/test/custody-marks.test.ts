@@ -87,6 +87,15 @@ describe("the link and the floor's marks (C5)", () => {
     expect(Object.fromEntries(link.marks)).toEqual({ [GRANTS]: 2 });
   });
 
+  // the floor's count is a u64: past the safe integers it reads as the top here, never as no mark (§8, v0.11)
+  it("a mark past the safe integers reads as the top: in the ack, and in a set's answer", async () => {
+    const { mock, link } = await floorAndLink();
+    mock.marks.set(GRANTS, 2 ** 60);
+    await link.connect();
+    expect(link.marks.get(GRANTS)).toBe(Number.MAX_SAFE_INTEGER);
+    await expect(link.setMark(GRANTS, 3)).resolves.toBe(Number.MAX_SAFE_INTEGER);
+  });
+
   it("`setMark` answers what the floor keeps", async () => {
     const { mock, link } = await floorAndLink();
     await link.connect();

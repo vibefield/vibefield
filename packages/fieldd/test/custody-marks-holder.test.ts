@@ -214,6 +214,27 @@ describe("the marks' holder (C5)", () => {
     expect(marks.get(GRANTS)).toBe(4);
   });
 
+  // CUSTODY-SPEC §8 (v0.11): the floor's count has no ceiling of its own (a u64), and a number past the safe integers
+  // that read as NOTHING would be a mark that fell. It reads as the top, and a store whose next count would pass the
+  // top cannot write: the safe side.
+  it("a mark past the safe integers reads as the top, never as nothing", async () => {
+    const top = Number.MAX_SAFE_INTEGER;
+    // from the spawner
+    expect(new CustodyMarks({ expect: { [GRANTS]: 2 ** 60 } }).get(GRANTS)).toBe(top);
+    // from the floor's word at a hello
+    const atHello = new CustodyMarks({ expect: { [GRANTS]: 5 } });
+    await atHello.heard(new Map([[GRANTS, 2 ** 60]]));
+    expect(atHello.get(GRANTS)).toBe(top);
+    // and from what the floor keeps when it is told
+    const floor = new FakeFloor();
+    floor.kept.set(GRANTS, 2 ** 60);
+    const told = new CustodyMarks({ floor });
+    await expect(told.note(GRANTS, 3)).resolves.toBe(top);
+    expect(told.frame()).toEqual({ marks: { [GRANTS]: top } });
+    // a store's own note is still a count it could have written
+    await expect(told.note(GRANTS, 2 ** 60)).rejects.toThrow();
+  });
+
   it("a listener that throws does not stop a note or the listeners after it", async () => {
     const marks = new CustodyMarks();
     const said: CustodyMarksFrame[] = [];
