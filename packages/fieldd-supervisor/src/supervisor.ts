@@ -314,6 +314,8 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
           signal,
           opts.expectedBuildId,
           opts.userId,
+          // only the `files` road reaches this poll: a sealed spawn returned above, by its pairing
+          { credential: { kind: "token-file" } },
         );
         if (!probe.ok) {
           lastFailure = probe.failure;
@@ -392,7 +394,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
   /** The adopt phase's probe: this build and this user only, and (`replace`) the other build's client kept open.
    * OB custody — with a hand-off it pairs under the shell secret and reads no token, and a stale client is always
    * kept: a fieldd from before custody is replaced whatever the build policy says, and run()'s decision closes any
-   * other. */
+   * other. Each road NAMES its credential (C2b): the token file is `files`' alone, and nothing falls to it. */
   function adoptProbe(
     probeMs: number,
     signal: AbortSignal,
@@ -401,6 +403,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     if (handoff === null) {
       return tryAdopt(opts.dataRoot, probeMs, signal, opts.expectedBuildId, opts.userId, {
         keepStaleClient: opts.buildMismatch === "replace",
+        credential: { kind: "token-file" },
       });
     }
     return tryAdopt(opts.dataRoot, probeMs, signal, opts.expectedBuildId, opts.userId, {

@@ -15,6 +15,10 @@ import type { ProbeFailure } from "./types";
 // (`{kind: "pairing"}`), reads product.json alone, and proves itself with a MAC over the recorded port and boot; what
 // answers must prove the same secret back, or it is a foreign listener that was told nothing. The secret is never
 // sent and never logged.
+//
+// WHICH of the two a probe proves itself with is the caller's to name, every time (C2b; CUSTODY-SPEC §10). There is no
+// default: the token file is the weaker road (any process of the same user reads it), and a caller that named
+// nothing used to be put on it in silence. The one thing `tryAdopt` throws is that mistake of its caller's.
 
 /** A live fieldd of ANOTHER build that answered our token (WP12 D10): kept open only when the caller asked, so the
  * supervisor can ask it to stop over the authenticated channel before it spawns this build's. */
@@ -23,11 +27,19 @@ export interface StaleDaemon {
   readonly info: ProductInfo;
 }
 
-/** What an adoption probe proves itself with: the bearer in `shell.token` (custody's `files` level, the default), or
- * the shell's pairing secret (`sealed`: `CustodyHandoff.shell`, 64 lowercase hex characters). */
+/** What an adoption probe proves itself with: the bearer in `shell.token` (custody's `files` level), or the shell's
+ * pairing secret (`sealed`: `CustodyHandoff.shell`, 64 lowercase hex characters). Neither is a default. */
 export type AdoptCredential =
   | { readonly kind: "token-file" }
   | { readonly kind: "pairing"; readonly secret: string };
+
+/** `tryAdopt`'s last argument. */
+export interface AdoptOptions {
+  /** REQUIRED: what this probe proves itself with. A `files` caller says `{ kind: "token-file" }` in so many words. */
+  readonly credential: AdoptCredential;
+  /** WP12 D10 — keep a live daemon of ANOTHER build open, as `stale`, for the replace path to ask it to stop */
+  readonly keepStaleClient?: boolean;
+}
 
 export type ProbeResult =
   | { ok: true; client: FielddClient; info: ProductInfo }
@@ -75,12 +87,18 @@ export async function awaitDeparture(
 export async function tryAdopt(
   dataRoot: string,
   probeMs: number,
-  signal?: AbortSignal,
-  expectedBuildId?: string,
-  expectedUserId?: string,
-  options: { readonly keepStaleClient?: boolean; readonly credential?: AdoptCredential } = {},
+  signal: AbortSignal | undefined,
+  expectedBuildId: string | undefined,
+  expectedUserId: string | undefined,
+  options: AdoptOptions,
 ): Promise<ProbeResult> {
-  const credential: AdoptCredential = options.credential ?? { kind: "token-file" };
+  // The one throw of a probe, and it is its caller's mistake: no credential named (a caller the compiler did not
+  // hold), or one of a kind this build does not know. Said before anything is read or dialled, and never answered by
+  // the token file, which is where an unnamed probe and an unknown kind both used to go.
+  const credential = options?.credential;
+  if (credential?.kind !== "token-file" && credential?.kind !== "pairing") {
+    throw new TypeError("tryAdopt needs its credential named: token-file or pairing");
+  }
   let rawProduct: string;
   let token = "";
   try {

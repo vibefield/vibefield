@@ -19,6 +19,7 @@ export {
 } from "./paths";
 export {
   type AdoptCredential,
+  type AdoptOptions,
   awaitDeparture,
   type ProbeResult,
   readRecordedProduct,
