@@ -15,15 +15,19 @@
 //
 // GIVEN AN INJECTED FLOOR (the PM's rows rule, v0.19): the floor here is the mock, which keeps a table as field-native
 // is specified to and hands the ack whatever a row plants. These rows show the LINK's rule given that floor. That a
-// sealed daemon binds this link as its runtime's table, and that a `files` daemon binds none, is proved through the
-// real daemon by the runtime's rows (agent-started-for.test.ts) once that slice lands; until then: NONE.
+// sealed daemon binds this link as its runtime's table, and that a `files` daemon binds none (`daemon.ts`,
+// `startedFor: native` only when custody was handed), is proved through the real daemon by the runtime's rows:
+// agent-session.test.ts's "OB custody §8.1" rows titled "through the real daemon", agent-started-for.test.ts, and
+// agent-reattach-vouch.test.ts for the table's one read.
+// *Corrected 2026-11-10: this said "once that slice lands; until then: NONE". The slice landed (`8bd1e6fd9`,
+// `f883700c2`).*
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CUSTODY, LAYOUT, SOCKETS } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
-import { NativeLink, type StartedFor } from "../src/native-link";
+import { NativeLink, RpcCallError, type StartedFor } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { type Cleanup, runCleanup } from "./custody-harness";
 import { nativeEndpoint, removeTempRoot, shortTmpRoot } from "./native-harness";
@@ -300,6 +304,34 @@ describe("telling the floor what a terminal was started for", () => {
       details: { reason: "a-later-reason" },
     };
     await expect(link.setStartedFor("term-1", PLAIN)).resolves.toBe("unanswered");
+  });
+
+  // THE MOCK FLOOR ANSWERS AS field-native DOES (`field-native/src/mgmt/started_for.rs`, read at `ob/custody-floor`
+  // `8eadd9e10`; CUSTODY-SPEC §8.1.0, corrected v0.22): the error registry has no kind for invalid params, so params
+  // that are not the contract's are `PRECONDITION_FAILED` with NO `details.reason`, and a floor that keeps no table
+  // says so before a word of the params is read. This row pins the mock to that, at the pid's bound.
+  it("params that are not the contract's, a pid below 2 among them, are refused `PRECONDITION_FAILED` with no reason, which this side has no word for; 2 is a pid; and a floor that keeps no table says `not-sealed` before it reads them", async () => {
+    const mock = await floor();
+    const link = await paired(mock);
+    const atPid = (pid: number): StartedFor => ({
+      run: "run-typed",
+      process: { pid, startedAtMs: 1_762_000_000_000 },
+    });
+    // the wire itself, past the link's five words: the floor's refusal as it stands
+    const asked = link.request(SET, { sessionId: "term-1", startedFor: atPid(1) });
+    const refusal = await asked.then(() => undefined, (error: unknown) => error);
+    expect(refusal).toBeInstanceOf(RpcCallError);
+    expect(refusal).toMatchObject({ kind: "PRECONDITION_FAILED" });
+    expect((refusal as RpcCallError).details).toBeUndefined();
+    // the link's word for a refusal it has no word for; nothing was kept
+    await expect(link.setStartedFor("term-1", atPid(0))).resolves.toBe("unanswered");
+    await expect(link.setStartedFor("term-1", atPid(1))).resolves.toBe("unanswered");
+    expect(mock.startedFor.size).toBe(0);
+    await expect(link.setStartedFor("term-1", atPid(2))).resolves.toBe("set");
+
+    // the floor's order: no table, said before the params are read
+    mock.startedForSealed = false;
+    await expect(link.setStartedFor("term-2", atPid(1))).resolves.toBe("not-sealed");
   });
 });
 
