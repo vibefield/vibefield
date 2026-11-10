@@ -270,11 +270,13 @@ describe("OB custody — what main records of its own root", () => {
 });
 
 describe("OB custody — how long main waits on its own root's account", () => {
-  it("stops an older pair inside the wait a start already has: twenty seconds in all", () => {
+  // its own name, never an import of the supervisor's constant (contracts cannot import it): the title says whose
+  // number it is, and a change to either is weighed against the other
+  it("gives an older pair's stop the supervisor's READINESS_DEADLINE_MS: twenty seconds", () => {
     expect(CUSTODY.OLD_PAIR_WALK_BUDGET_MS).toBe(20_000);
   });
 
-  it("reads an unavailable root again at most once in two seconds", () => {
+  it("lets a person's ask read an unavailable root again at most once in two seconds", () => {
     expect(CUSTODY.ROOT_REREAD_MIN_MS).toBe(2_000);
   });
 });

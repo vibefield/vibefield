@@ -1627,12 +1627,15 @@ export const CUSTODY = {
   /** C1, the shell's alone — the most main spends IN ALL on stopping an older pair after it made a root this boot,
    * measured from its first look at one. Spent, the walk ends: what it signalled and still lives is left, what it did
    * not reach is left, and the start goes on. The number is the one a start already waits at main, the supervisor's
-   * `READINESS_DEADLINE_MS` (`packages/fieldd-supervisor/src/supervisor.ts:39` at main `fe6a04a7f`), under its own
-   * name here: at the worst a person waits that long twice, the walk and then the start. */
+   * `READINESS_DEADLINE_MS` (`packages/fieldd-supervisor/src/supervisor.ts:39` at main `fe6a04a7f`): at the worst a
+   * person waits that long twice, the walk and then the start. It is its OWN name with the same value, never an
+   * import or an alias of that constant, so a change to either number is weighed against the other. */
   OLD_PAIR_WALK_BUDGET_MS: 20_000,
-  /** C1, the shell's alone — while the root is unavailable, an ask that comes sooner than this after the last reading
-   * STARTED gets that reading's answer and reads nothing, with one reading in flight at a time: a person pressing
-   * Retry fast is one read of the keystore, and a Retry two seconds on reads again. */
+  /** C1, the shell's alone — while the root is unavailable, the least time between two readings of it. Only a
+   * PERSON's ask reads the root again there (a window's bootstrap and its Retry, a user switch, the tray's Try Again);
+   * an incidental ask (a timer, an audit append) is answered from the last reading and reads nothing at all. So this
+   * guards a person's asks alone: one that comes sooner than this after the last reading STARTED gets that reading's
+   * answer, with one reading in flight at a time, and a Retry two seconds on reads again. */
   ROOT_REREAD_MIN_MS: 2_000,
 } as const;
 
