@@ -46,6 +46,9 @@ import { THREAD_MARK_WORDS, type ThreadMark } from "../src/chat/thread-marks";
 import { ChatPreview } from "../src/design-system/ChatPreview";
 import type { ChatState } from "../src/design-system/chat-fixtures";
 import type { KeyedCallClient } from "../src/forwarded-call";
+import { cardTargets } from "../src/frame/cards/card-targets";
+import type { Card } from "../src/frame/cards/cards-model";
+import { HAND_OVER_WORDS, setHandOverDoor } from "../src/frame/cards/hand-over";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { hearLineSays } from "../src/frame/line-door";
 import { listedRun, runsDoor, runsOverBoard } from "./runs-door-fixture";
@@ -1478,6 +1481,97 @@ describe("Chat, live (the feed and its acts)", () => {
       "Couldn't wake Kiwi: the spark's agent has no sign-in",
     );
     expect(headActs()).toEqual([["Wake", "wake"]]);
+  });
+
+  // Item 293 (OB-L1, §4.3): a Live card sent to a sleeping spark is handed to the run its wake started. The wake's own
+  // answer (`compose.sparks.open`) carries that run; the list may still say the record's ended session, as it does
+  // here for the whole row, so the hand that reads the feed after the wake names the ended run.
+  describe("a Live card sent to a sleeping spark (item 293)", () => {
+    const LIVE_CARD: Card = {
+      id: "m293",
+      at: 0,
+      origin: { view: "canvas", how: "copy" },
+      title: "Q3 plan",
+      about: "Mind map",
+      faces: [
+        {
+          id: "ref",
+          type: "ref",
+          label: "Live",
+          ref: "vf:obj/7hk2qx4m",
+          kindName: "Mind map",
+          title: "Q3 plan",
+          still: { src: "", width: 40, height: 20 },
+        },
+      ],
+    };
+
+    /** Kiwi asleep, its one own run the ended "run-Kiwi"; the wake answers `woken` at once, and the list keeps the
+     * record as it stood. A Live card is played on the composer and sent by Return. */
+    async function sendLiveTo(woken: SparkSummary) {
+      const { port, door } = scripted([KIWI]);
+      const said: ComposeSparksSayParams[] = [];
+      const asked: Array<[string, string]> = [];
+      const offHand = setHandOverDoor(async (ref, run) => {
+        asked.push([ref, run]);
+        return { handed: true };
+      });
+      try {
+        stop = startSparksFeed({
+          ...door,
+          open: async (id) => {
+            port.woke.push(id);
+            return woken;
+          },
+          say: async (params) => {
+            said.push(params);
+            return {
+              spark: params.spark,
+              requestId: params.requestId,
+              state: "waking",
+              queued: true,
+            };
+          },
+        });
+        mount(<Chat />);
+        await settle();
+        const composer = cardTargets.list().find((target) => target.id === "chat-composer");
+        if (composer === undefined) throw new Error("no composer on the card's road");
+        await act(async () => composer.play(LIVE_CARD, "ref", { x: 0, y: 0 }));
+        await act(async () => {
+          $(".vf-chat-input")?.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+          );
+        });
+        await settle();
+        await settle();
+      } finally {
+        offHand();
+      }
+      return { port, said, asked };
+    }
+
+    it("hands the card to the run the wake answered, never the record's ended one, and the send is queued", async () => {
+      const { port, said, asked } = await sendLiveTo({
+        ...KIWI,
+        session: { runtimeRunId: "run-woken", live: true },
+      });
+      expect(port.woke).toEqual(["sp-kiwi0001"]);
+      expect(asked).toEqual([["vf:obj/7hk2qx4m", "run-woken"]]);
+      expect(said).toHaveLength(1);
+      // no not-handed outcome is drawn: nothing on the line speaks of a hand
+      expect(
+        noted.filter((note) => note.startsWith("Not handed") || note.includes("has ended")),
+      ).toEqual([]);
+    });
+
+    it("says the spark has no session when its wake answered none, and asks fieldd to hand nothing", async () => {
+      const { session: _ended, ...noSession } = KIWI;
+      const { said, asked } = await sendLiveTo(noSession);
+      expect(asked).toEqual([]);
+      expect(said).toEqual([]);
+      expect(noted).toContain(HAND_OVER_WORDS.noRun);
+    });
   });
 
   it("jumps to Vela's own session in Godview by Jump to's path, its row read at the press, and says so on the line (TH-2)", async () => {
