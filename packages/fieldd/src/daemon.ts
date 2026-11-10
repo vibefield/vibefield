@@ -687,6 +687,9 @@ export interface FielddConfig {
   agentResumeWhenIdle?: AgentRuntimeServiceOptions["resumeWhenIdle"];
   /** ST test seam: how long a sent Stop waits to be heard (production: `AGENT_STOP.HEARD_WITHIN_MS`). */
   agentStopHeardWithinMs?: AgentRuntimeServiceOptions["stopHeardWithinMs"];
+  /** OB custody test seam: how long until a started-for set the floor did not take is said again (production:
+   * the runtime's `STARTED_FOR_RETRY_MS`). */
+  agentStartedForRetryMs?: AgentRuntimeServiceOptions["startedForRetryMs"];
   /** AR-5d test/product seam: the account-usage polling cadence. Unset ⇒ each
    * adapter's own `refresh.pollIntervalMs` (the provider knows its quota). */
   agentUsage?: AccountUsagePollOptions;
@@ -1513,6 +1516,14 @@ export async function bootstrap(
       set: (rootId, pid) => native.request("native.door.roots.set", { rootId, pid }),
       clear: (rootId) => native.request("native.door.roots.clear", { rootId }),
     },
+    // OB custody (rule 6; CUSTODY-SPEC §8.1.0) — THE LEVEL, for the runtime: what THIS process was booted with. A
+    // fieldd handed custody gives the runtime the floor's started-for table (the link), so its launches are said to
+    // the floor; a fieldd handed nothing gives it none, and the verb is never called. Never a file, an env var, or
+    // the floor's word.
+    ...(custody !== undefined ? { startedFor: native } : {}),
+    ...(config.agentStartedForRetryMs !== undefined
+      ? { startedForRetryMs: config.agentStartedForRetryMs }
+      : {}),
     terminals: () => terminalsRef,
     deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
     onProfileSignedIn: async (profileId): Promise<void> => {

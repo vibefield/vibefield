@@ -145,7 +145,7 @@ import {
 } from "./agent-typed-run";
 import type { AccountUsageRuntime } from "./agent-usage";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
-import { RpcCallError } from "./native-link";
+import { RpcCallError, type StartedFor, type StartedForAnswer } from "./native-link";
 import { createDarwinSecretStore, type SecretStore } from "./plugin-settings";
 import type { ProfileDraftsStore } from "./profile-drafts";
 import type { OwnPlace } from "./projects/project-groups";
@@ -367,6 +367,15 @@ const TYPED_PROOF_RETRY_MS = 500;
  * the shell's child, so there is no code and no signal to report. */
 const PROCESS_EXITED = { exitCode: null, signal: null, reason: "process-exited" } as const;
 
+/** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — how long until a set the floor did not take (no answer, or its table
+ * full) is said again: one timer per run, the same values, until the floor takes it or the run ends. */
+const STARTED_FOR_RETRY_MS = 5_000;
+
+/** OB custody (rule 6; CUSTODY-SPEC §8, v0.10) — the most runs launch memory answers for. It answers for the
+ * process's whole life and is never dropped at a run's exit; this bound is generous and evicts oldest-first, and an
+ * evicted run reads as not born here. */
+const BORN_MAX = 16_384;
+
 /** The audit ledger's system-actor entry (`AuditService.requiredSystem`):
  * the daemon's own acts — a re-attach at boot, a resume-when-idle — are
  * mutations of a session a person will want to find in the ledger. */
@@ -450,6 +459,25 @@ export interface AgentAdoption {
   ): Promise<void>;
 }
 
+/** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — the floor's memory of what each terminal was started for, as much of
+ * it as the runtime needs. `NativeLink` is one. */
+export interface StartedForFloor {
+  /** the table the floor handed this fieldd at its hello, by terminal session id; handed over ONCE */
+  takeStartedFor(): ReadonlyMap<string, StartedFor>;
+  /** say what a terminal was started for, or, with none, to forget it: one word, never a throw */
+  setStartedFor(sessionId: string, startedFor: StartedFor | undefined): Promise<StartedForAnswer>;
+}
+
+/** OB custody (rule 6) — one set the floor has not taken yet (`AgentRuntimeService.untold`). */
+interface UntoldSet {
+  readonly sessionId: string;
+  readonly startedFor: StartedFor;
+  /** a set for this run is on the wire: never more than one */
+  inFlight: boolean;
+  /** the run's ONE retry timer, while it waits to say the same again */
+  timer?: NodeJS.Timeout | undefined;
+}
+
 export interface AgentRuntimeServiceOptions {
   /** this user's root (`FielddConfig.dataDir`): the registry, the managed roots and the session records live under it */
   userRoot: string;
@@ -524,6 +552,13 @@ export interface AgentRuntimeServiceOptions {
   typedWatch?: TypedWatchOptions;
   /** OB-3d — the floor's door for a run's helper root; absent, a helper's run holds nothing at the door */
   helperRoots?: HelperRootFloor;
+  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — the floor's started-for table. Given ONLY by a fieldd that was handed
+   * custody, and its presence IS the level (never a file, an env var, or the floor's word): with it (`sealed`) every
+   * launch and adoption is said to the floor; without it (`files`) the verb is never called. Launch memory
+   * (`bornFor`) is kept at both. */
+  startedFor?: StartedForFloor;
+  /** OB custody test seam: how long until a set the floor did not take is said again (default `STARTED_FOR_RETRY_MS`) */
+  startedForRetryMs?: number;
   /** FS-1a (L2) — a run entered the fold in this folder at this moment
    * (spawned, resumed, re-attached or adopted): the files service makes the
    * folder a PLACE, or moves its `lastActiveAt`. Called after the record is
@@ -748,6 +783,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private readonly managed = new Map<string, ManagedEntry>();
   /** OB-3d — the helpers this fieldd named to the floor, by attempt */
   private readonly helperRoots: RunHelperRoots;
+  /** OB custody (rule 6; CUSTODY-SPEC §8) — LAUNCH MEMORY: who each run is, for a grant, as THIS process knows it
+   * from launching or adopting it. Never read back from a record (an agent can rewrite its own run's), never
+   * dropped at a run's exit (`bornFor`). Filled by `remember` alone, which says the same to the floor. */
+  private readonly born = new Map<string, { spark?: SparkId }>();
+  /** OB custody (rule 6) — the sets the floor has not taken yet, by run: at most one on the wire and one timer each */
+  private readonly untold = new Map<string, UntoldSet>();
+  /** OB custody (rule 6) — a floor that keeps no table was said once in the log, for this process's life */
+  private notSealedSaid = false;
   private readonly pending = new Map<string, PendingEntry>();
   /** MF-1f — runs whose process ended while the floor still lists their PTY */
   private readonly exited = new Map<string, ExitedEntry>();
@@ -1451,7 +1494,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       const selection =
         params.modelSelection !== undefined ? modelSelectionOf(params.modelSelection) : undefined;
       const profileSet = params.profileSet ?? result.info.profileSetId;
-      return this.enter(result, {
+      const entered = this.enter(result, {
         cwd,
         title: params.title,
         ...identity.launched(),
@@ -1472,6 +1515,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         // TU-1 — a new conversation, which has not worked yet
         turnedAt: null,
       });
+      // OB custody (rule 6) — who it is, from the launch call's OWN argument and never a record, remembered and said
+      // to the floor from the same values. After `enter`, and not awaited: nothing was added before it
+      this.remember(entered, { spark: compose?.spark }, { root: identity.creationRequestId });
+      return entered;
     });
     return this.ticketed(entry, principal, terminals, forwardedFor);
   }
@@ -1709,7 +1756,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
       if (isSessionFailure(result))
         throw this.sessionFailureToError(result, params.provider, "resume");
-      return this.enter(result, {
+      const entered = this.enter(result, {
         cwd,
         title: params.title,
         ...identity.launched(),
@@ -1722,6 +1769,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         // TH-1 — it continues a conversation: the spark's transcript does not begin a new one here
         resumed: true,
       });
+      // OB custody (rule 6) — a resume by native id is a resume: who it is follows the same rule (`resumedAs`)
+      this.remember(entered, this.resumedAs(previous), { root: identity.creationRequestId });
+      return entered;
     });
     return {
       ...this.ticketed(entry, principal, terminals, forwardedFor),
@@ -2499,6 +2549,132 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     };
   }
 
+  /** OB custody (rule 6; CUSTODY-SPEC §8, §8.1.0) — LAUNCH MEMORY: who a run is, for a grant.
+   *  · `{ spark }` — this process launched it FOR that spark: the id is the launch call's own argument;
+   *  · `{}` — this process launched or adopted it as a plain run;
+   *  · undefined — nothing this process did vouches for it: it holds nothing.
+   * Never the run's record: its key is a file an agent can read, so an agent could rewrite its own run's record to
+   * name another spark. It answers for the process's whole life and is not dropped at a run's exit (a run's end, its
+   * replacement and a sleeping spark's last run all read it). */
+  bornFor(runtimeRunId: string): { spark?: SparkId } | undefined {
+    const born = this.born.get(runtimeRunId);
+    return born === undefined ? undefined : { ...born };
+  }
+
+  /** OB custody (rule 6) — THE one place launch memory is filled, and the floor is told the same from the same
+   * values (CUSTODY-SPEC §8.1.0), so what this life remembers and what the next fieldd is handed cannot differ.
+   * Called right after `enter` returns and never awaited: a launch waits on nothing here. `root` is the creation
+   * request the launch announced, which is also the id its helper root is named by. At `files` no floor was given:
+   * the memory is kept and nothing is said. */
+  private remember(
+    entry: ManagedEntry,
+    who: { spark?: SparkId | undefined },
+    more: { process?: StartedFor["process"]; root?: string | undefined } = {},
+  ): void {
+    const run = entry.info.runtimeRunId;
+    const spark = who.spark;
+    this.born.delete(run);
+    this.born.set(run, spark !== undefined ? { spark } : {});
+    // generous, oldest first: an evicted run reads as not born here
+    for (const oldest of this.born.keys()) {
+      if (this.born.size <= BORN_MAX) break;
+      this.born.delete(oldest);
+    }
+    if (this.opts.startedFor === undefined) return;
+    this.tellFloor(run, entry.info.terminalSessionId, {
+      run,
+      ...(spark !== undefined ? { spark } : {}),
+      ...(more.process !== undefined ? { process: more.process } : {}),
+      ...(more.root !== undefined ? { root: more.root } : {}),
+    });
+  }
+
+  /** OB custody (rule 6) — a run this process ADOPTED: a person's own typed launch, taken in through the gateway on
+   * a bearer an agent can read by design. It is born PLAIN, whatever its request or its record names, so this
+   * setter HAS NO spark parameter: the adoption path cannot pass one (CUSTODY-SPEC §8, §8.1.0). Its process (pid and
+   * the kernel's start) is what proves a typed run at the next boot; one this side cannot state exactly is left
+   * out, and the entry then vouches for no typed run. */
+  private rememberAdopted(
+    entry: ManagedEntry,
+    typed: { pid: number; startedAt: string },
+    root: string | undefined,
+  ): void {
+    const startedAtMs = Date.parse(typed.startedAt);
+    const exact =
+      Number.isSafeInteger(typed.pid) &&
+      typed.pid >= 2 &&
+      Number.isSafeInteger(startedAtMs) &&
+      startedAtMs >= 0;
+    const proof = exact ? { pid: typed.pid, startedAtMs } : undefined;
+    this.remember(entry, {}, { process: proof, root });
+  }
+
+  /** OB custody (rule 6) — say one set to the floor: never more than one on the wire for a run, and ONE timer per
+   * run while the floor has not taken it. `set` is done. `not-found` is quiet (the run ended first): said once, no
+   * retry. `not-sealed` is a floor that keeps no table: said once for this process, no retry. `unanswered` and
+   * `full` arm the timer, which says the same values again. A run's end stops it (`forgetUntold`). */
+  private tellFloor(run: string, sessionId: string, startedFor: StartedFor): void {
+    const floor = this.opts.startedFor;
+    if (floor === undefined) return;
+    let untold = this.untold.get(run);
+    if (untold === undefined) {
+      untold = { sessionId, startedFor, inFlight: false };
+      this.untold.set(run, untold);
+    }
+    if (untold.inFlight) return;
+    untold.inFlight = true;
+    const waiting = untold;
+    const answered = (answer: StartedForAnswer): void => {
+      waiting.inFlight = false;
+      // the run ended while this was on the wire: nothing more is said or armed for it
+      if (this.untold.get(run) !== waiting) return;
+      if (answer === "unanswered" || answer === "full") {
+        this.armRetry(run, waiting, answer);
+        return;
+      }
+      this.untold.delete(run);
+      if (answer === "not-found") {
+        this.logger.debug(
+          "fieldd.agents.started_for_not_found",
+          "The floor lists no such running terminal for a run's entry; the run ended first",
+          { runtimeRunId: run },
+        );
+      } else if (answer === "not-sealed" && !this.notSealedSaid) {
+        this.notSealedSaid = true;
+        this.logger.warn(
+          "fieldd.agents.started_for_not_sealed",
+          "The floor keeps no started-for table; no run will be vouched for after a restart",
+        );
+      }
+    };
+    const said = floor.setStartedFor(waiting.sessionId, waiting.startedFor);
+    void said.then(answered, () => answered("unanswered"));
+  }
+
+  /** OB custody (rule 6) — the run's ONE timer: armed only when none stands, and never after a stop. */
+  private armRetry(run: string, untold: UntoldSet, answer: StartedForAnswer): void {
+    if (this.disposed || untold.timer !== undefined) return;
+    this.logger.debug(
+      "fieldd.agents.started_for_untold",
+      "The floor did not take a run's entry; the same is said again",
+      { runtimeRunId: run, answer },
+    );
+    untold.timer = setTimeout(() => {
+      untold.timer = undefined;
+      if (this.disposed || this.untold.get(run) !== untold) return;
+      this.tellFloor(run, untold.sessionId, untold.startedFor);
+    }, this.opts.startedForRetryMs ?? STARTED_FOR_RETRY_MS);
+    untold.timer.unref();
+  }
+
+  /** OB custody (rule 6) — a run ended: its timer stops and nothing more is said for it. */
+  private forgetUntold(run: string): void {
+    const untold = this.untold.get(run);
+    if (untold === undefined) return;
+    if (untold.timer !== undefined) clearTimeout(untold.timer);
+    this.untold.delete(run);
+  }
+
   /** `agent.subscribe`: full snapshots, at most one per tick. */
   subscribe(emit: (rows: AgentListResult) => void): () => void {
     this.subscribers.add(emit);
@@ -2951,6 +3127,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     for (const login of this.logins.values()) clearTimeout(login.timer);
     this.logins.clear();
+    // OB custody (rule 6) — no set is said again after a stop; what the floor was not told, the next boot does not
+    // vouch for
+    for (const untold of this.untold.values()) {
+      if (untold.timer !== undefined) clearTimeout(untold.timer);
+    }
+    this.untold.clear();
     for (const entry of this.managed.values()) {
       if (entry.backstop !== undefined) clearTimeout(entry.backstop);
       this.clearStopTimer(entry);
@@ -3359,6 +3541,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // TU-1 — fieldd saw no turn of it yet (a typed `--resume` too, until its next turn here)
       turnedAt: null,
     });
+    // OB custody (rule 6) — an adopted run is born PLAIN, with the process that proves it: no spark can be passed
+    this.rememberAdopted(entry, input.process, input.launched.creationRequestId);
     // A preparation slower than the launcher's patience leaves fieldd holding
     // a run whose process gave up and left: over before it began. The watch
     // would say so at its next poll; this says so at once.
@@ -3533,7 +3717,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
       if (isSessionFailure(result))
         throw this.sessionFailureToError(result, record.provider, "resume");
-      return this.enter(result, {
+      const entered = this.enter(result, {
         cwd,
         title: record.title,
         ...identity.launched(),
@@ -3549,7 +3733,24 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         turnedAt: record.turnedAt,
         resumed: true,
       });
+      // OB custody (rule 6) — who the successor is, for launch memory and the floor's entry ONLY (`resumedAs`): the
+      // record's spark above is the runtime's other use of it, and is not this packet's. Filled before the caller
+      // names the successor to those keeping something per run (`replaced`)
+      this.remember(entered, this.resumedAs(record), { root: identity.creationRequestId });
+      return entered;
     });
+  }
+
+  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0, "a RESUME is the hard one") — who a RESUMED run is, for launch memory
+   * and the floor's entry and nothing else. `previous` is the run it continues. At `sealed` the record's word is not
+   * taken: it is what launch memory holds for the run it continues (a run this life launched or vouched for: the
+   * new run is what the old one was), else plain, whatever the record says. At `files` the record names it, as it
+   * always did. ONE `if`. */
+  private resumedAs(
+    previous: { runtimeRunId: string; spark?: SparkId | undefined } | undefined,
+  ): { spark?: SparkId | undefined } {
+    if (this.opts.startedFor === undefined) return { spark: previous?.spark };
+    return (previous === undefined ? undefined : this.born.get(previous.runtimeRunId)) ?? {};
   }
 
   /** ITEM 124 — a briefed birth (`agent-door-launch.ts`). Refused for the door by its executable
@@ -5014,6 +5215,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private ended(runtimeRunId: string, attempt: string | undefined): void {
     // OB-3d — the caller names the attempt: `closeRun`, the main way out, has already taken the run from the fold
     if (attempt !== undefined) this.helperRoots.end(attempt);
+    // OB custody (rule 6) — nothing more is said to the floor for a run that ended: its one timer stops. What launch
+    // memory holds for it stays (`bornFor` answers for the process's whole life)
+    this.forgetUntold(runtimeRunId);
     for (const listener of this.runEndedListeners) {
       try {
         listener(runtimeRunId);
@@ -5289,6 +5493,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.byTerminal.delete(entry.info.terminalSessionId);
     this.terminalHost?.forget(entry.info.terminalSessionId);
     this.ended(runtimeRunId, entry.creationRequestId);
+    // OB custody (rule 6) — a TYPED run closed while its shell lives on: the floor still lists that terminal as
+    // running, so its entry would stand. It is cleared, once and unawaited. (A spawned run's terminal exits with
+    // it, and the floor drops the entry itself.) If fieldd dies before the clear, the stale entry vouches nothing:
+    // its `process` is no longer a live process, and the next boot's proof fails
+    if (entry.typed !== undefined) {
+      void this.opts.startedFor?.setStartedFor(entry.info.terminalSessionId, undefined);
+    }
     // MF-1f — the process is over, but the PANE may not be: while the floor
     // still lists this PTY the deck is showing it, so the row stays (carrying
     // the mirror's last state and the resume verb) until the pane goes.
