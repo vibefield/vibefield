@@ -22,6 +22,11 @@ import type { FielddSupervisor, FielddSupervisorEvent } from "../src/index";
 
 const DEFAULT_TOKEN = "shell-token-0123456789abcdefghij";
 
+/** OB custody — what a probe of a `files` daemon names: the bearer in `shell.token`. `tryAdopt` has no default
+ * credential (the token file is the weaker of its two roads, and a caller that names nothing must not be put on it
+ * in silence), so every row that probes by the file says so with this. */
+export const BY_TOKEN_FILE = { credential: { kind: "token-file" } } as const;
+
 /** The token-service slice ProductApi needs; the grant's scopes are irrelevant
  * to adoption (hello only), so an empty grant suffices for a live listener.
  * WIN-D5 tests grant `native.admin` to exercise the stop verb's happy path. */

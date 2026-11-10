@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { tryAdopt } from "../src/index";
-import { createHarness, type Harness } from "./helpers";
+import { BY_TOKEN_FILE, createHarness, type Harness } from "./helpers";
 
 // UA-2 — the probe's user gate: identity is stricter than build. A daemon
 // whose product.json records a different user — or none at all (pre-UA-2, or
@@ -22,7 +22,7 @@ describe("UA-2 — probe user gate", () => {
     const { port } = await h.startProduct();
     const root = h.mkRoot();
     h.writeRunFiles(root, { port, pid: process.pid, extra: { userId: USER_A } });
-    const result = await tryAdopt(root, 2_000, undefined, undefined, USER_A);
+    const result = await tryAdopt(root, 2_000, undefined, undefined, USER_A, BY_TOKEN_FILE);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.info.userId).toBe(USER_A);
@@ -34,7 +34,7 @@ describe("UA-2 — probe user gate", () => {
     const { port } = await h.startProduct();
     const root = h.mkRoot();
     h.writeRunFiles(root, { port, pid: process.pid, extra: { userId: USER_B } });
-    const result = await tryAdopt(root, 2_000, undefined, undefined, USER_A);
+    const result = await tryAdopt(root, 2_000, undefined, undefined, USER_A, BY_TOKEN_FILE);
     // item 212 (RV #30): the refusal carries the record it read, as any failure after the parse
     expect(result).toEqual({
       ok: false,
@@ -47,7 +47,7 @@ describe("UA-2 — probe user gate", () => {
     const { port } = await h.startProduct();
     const root = h.mkRoot();
     h.writeRunFiles(root, { port, pid: process.pid });
-    const result = await tryAdopt(root, 2_000, undefined, undefined, USER_A);
+    const result = await tryAdopt(root, 2_000, undefined, undefined, USER_A, BY_TOKEN_FILE);
     expect(result).toEqual({
       ok: false,
       failure: "user-mismatch",
@@ -59,7 +59,7 @@ describe("UA-2 — probe user gate", () => {
     const { port } = await h.startProduct();
     const root = h.mkRoot();
     h.writeRunFiles(root, { port, pid: process.pid });
-    const result = await tryAdopt(root, 2_000);
+    const result = await tryAdopt(root, 2_000, undefined, undefined, undefined, BY_TOKEN_FILE);
     expect(result.ok).toBe(true);
     if (result.ok) result.client.close();
   });

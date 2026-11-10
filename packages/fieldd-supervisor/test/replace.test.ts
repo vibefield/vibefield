@@ -182,6 +182,7 @@ describe("WP12 D10 — adoption after an app update", () => {
     });
     const probe = await tryAdopt(root, 800, undefined, "build-y", "01MEUSERAAAAAAAAAAAAAAAAAA", {
       keepStaleClient: true,
+      credential: { kind: "token-file" },
     });
     expect(probe.ok).toBe(false);
     if (!probe.ok) {

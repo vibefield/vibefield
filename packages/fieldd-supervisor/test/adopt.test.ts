@@ -7,6 +7,7 @@ import {
   createFielddSupervisor,
   type FielddSupervisorEvent,
   type FielddSupervisorOptions,
+  type ProbeResult,
   productPath,
   runDir,
   SupervisorError,
@@ -14,7 +15,7 @@ import {
   tokenPath,
   tryAdopt,
 } from "../src/index";
-import { createHarness, FIXTURE_READY, type Harness } from "./helpers";
+import { BY_TOKEN_FILE, createHarness, FIXTURE_READY, type Harness } from "./helpers";
 
 // §12.2 "valid adopt" + the tryAdopt failure taxonomy + "actual dynamic
 // endpoint use" + re-attempt after the handle's client closes. Adoption needs
@@ -190,7 +191,7 @@ describe("adopt: a live fieldd is discovered, not respawned", () => {
 
 describe("tryAdopt: the non-adoption taxonomy (§12.2)", () => {
   it("no run files → no-run-files", async () => {
-    const probe = await tryAdopt(h.mkRoot(), 300);
+    const probe = await tryAdopt(h.mkRoot(), 300, undefined, undefined, undefined, BY_TOKEN_FILE);
     expect(probe.ok).toBe(false);
     if (!probe.ok) expect(probe.failure).toBe("no-run-files");
   });
@@ -200,7 +201,7 @@ describe("tryAdopt: the non-adoption taxonomy (§12.2)", () => {
     mkdirSync(runDir(root), { recursive: true });
     writeFileSync(tokenPath(root), "a-token");
     writeFileSync(productPath(root), "{ this is not json ]");
-    const probe = await tryAdopt(root, 300);
+    const probe = await tryAdopt(root, 300, undefined, undefined, undefined, BY_TOKEN_FILE);
     expect(probe.ok).toBe(false);
     if (!probe.ok) expect(probe.failure).toBe("malformed-product");
   });
@@ -211,7 +212,7 @@ describe("tryAdopt: the non-adoption taxonomy (§12.2)", () => {
     writeFileSync(tokenPath(root), "a-token");
     // valid JSON, but `port` is missing / non-positive → ProductInfo rejects it
     writeFileSync(productPath(root), JSON.stringify({ pid: 10, bootId: "b" }));
-    const probe = await tryAdopt(root, 300);
+    const probe = await tryAdopt(root, 300, undefined, undefined, undefined, BY_TOKEN_FILE);
     expect(probe.ok).toBe(false);
     if (!probe.ok) expect(probe.failure).toBe("malformed-product");
   });
@@ -226,7 +227,7 @@ describe("tryAdopt: the non-adoption taxonomy (§12.2)", () => {
       buildId: "dev-stale",
     });
 
-    const probe = await tryAdopt(root, 800, undefined, "dev-current");
+    const probe = await tryAdopt(root, 800, undefined, "dev-current", undefined, BY_TOKEN_FILE);
     expect(probe.ok).toBe(false);
     if (!probe.ok) expect(probe.failure).toBe("incompatible-build");
   });
@@ -256,11 +257,18 @@ describe("tryAdopt: the non-adoption taxonomy (§12.2)", () => {
     const root = h.mkRoot();
     h.writeRunFiles(root, { port, pid: process.pid, token, buildId: null });
 
-    const devProbe = await tryAdopt(root, 800, undefined, "dev-current");
+    const devProbe = await tryAdopt(root, 800, undefined, "dev-current", undefined, BY_TOKEN_FILE);
     expect(devProbe.ok).toBe(false);
     if (!devProbe.ok) expect(devProbe.failure).toBe("incompatible-build");
 
-    const productionProbe = await tryAdopt(root, 800);
+    const productionProbe = await tryAdopt(
+      root,
+      800,
+      undefined,
+      undefined,
+      undefined,
+      BY_TOKEN_FILE,
+    );
     expect(productionProbe.ok).toBe(true);
     if (productionProbe.ok) productionProbe.client.close();
   });
@@ -269,7 +277,7 @@ describe("tryAdopt: the non-adoption taxonomy (§12.2)", () => {
     const { port, token } = await h.startProduct({ verify: () => null });
     const root = h.mkRoot();
     h.writeRunFiles(root, { port, pid: 4242, token });
-    const probe = await tryAdopt(root, 800);
+    const probe = await tryAdopt(root, 800, undefined, undefined, undefined, BY_TOKEN_FILE);
     expect(probe.ok).toBe(false);
     if (!probe.ok) expect(probe.failure).toBe("foreign-listener");
   });
@@ -284,11 +292,59 @@ describe("tryAdopt: the non-adoption taxonomy (§12.2)", () => {
     h.writeRunFiles(root, { port, pid: 4242, token });
     api.close();
     const started = Date.now();
-    const probe = await tryAdopt(root, 800);
+    const probe = await tryAdopt(root, 800, undefined, undefined, undefined, BY_TOKEN_FILE);
     expect(probe.ok).toBe(false);
     if (!probe.ok) expect(probe.failure).toBe("stale-files");
     // and FAST — the verdict lands on the failed dial, well before probeMs
     expect(Date.now() - started).toBeLessThan(700);
+  });
+});
+
+// OB custody (CUSTODY-SPEC §10, "the default is the weaker path") — a probe proves itself with the bearer in
+// `shell.token` or with the shell's pairing secret, and the token file is the weaker of the two: any process of the
+// same user reads it. So `tryAdopt` has NO default. A caller that names no credential is a caller's mistake, said
+// at once, and is never put on the token file in silence.
+describe("tryAdopt: the credential is the caller's to name (OB custody)", () => {
+  /** What an unnamed probe came to: the error it was refused with, or "probed" (its client closed: an open probe
+   * client reconnects for ever). */
+  async function refusalOf(probe: Promise<ProbeResult>): Promise<unknown> {
+    try {
+      const result = await probe;
+      if (result.ok) result.client.close();
+      return "probed";
+    } catch (error) {
+      return error;
+    }
+  }
+
+  it("probes nothing when no credential is named, with the token file right there", async () => {
+    // a live `files` daemon whose token is on disk: the weaker road is open, and must not be taken unasked
+    const { port, token } = await h.startProduct();
+    const root = h.mkRoot();
+    h.writeRunFiles(root, { port, pid: process.pid, token });
+
+    // @ts-expect-error the sixth argument is required: a probe names what it proves itself with
+    const unnamed = refusalOf(tryAdopt(root, 800));
+    expect(await unnamed).toBeInstanceOf(TypeError);
+    // @ts-expect-error and options with no credential in them name nothing either
+    const empty = refusalOf(tryAdopt(root, 800, undefined, undefined, undefined, {}));
+    const refused = await empty;
+    expect(refused).toBeInstanceOf(TypeError);
+    expect((refused as TypeError).message).toContain("credential");
+
+    // named, the same daemon is adopted as it always was
+    const named = await tryAdopt(root, 800, undefined, undefined, undefined, BY_TOKEN_FILE);
+    expect(named.ok).toBe(true);
+    if (named.ok) named.client.close();
+  });
+
+  it("takes neither road for a credential of a kind it does not know", async () => {
+    const { port, token } = await h.startProduct();
+    const root = h.mkRoot();
+    h.writeRunFiles(root, { port, pid: process.pid, token });
+    const strange = { credential: { kind: "bearer" } } as unknown as typeof BY_TOKEN_FILE;
+    const probe = refusalOf(tryAdopt(root, 800, undefined, undefined, undefined, strange));
+    expect(await probe).toBeInstanceOf(TypeError);
   });
 });
 

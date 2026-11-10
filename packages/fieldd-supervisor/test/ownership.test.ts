@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { CONTRACTS_VERSION } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createFielddSupervisor, tryAdopt } from "../src/index";
-import { createHarness, FIXTURE_READY, type Harness } from "./helpers";
+import { BY_TOKEN_FILE, createHarness, FIXTURE_READY, type Harness } from "./helpers";
 
 // §12.2 ownership distinction + stop-owned vs leave-running + "no adopted
 // process is ever killed". The law: the shell never terminates what it did not
@@ -90,7 +90,7 @@ describe("ownership: adopted daemons are never killed", () => {
     await sup.dispose(); // closes our client, but must not kill the daemon
 
     // a FRESH probe still adopts it — the server is up (adopted, never killed)
-    const reprobe = await tryAdopt(root, 800);
+    const reprobe = await tryAdopt(root, 800, undefined, undefined, undefined, BY_TOKEN_FILE);
     expect(reprobe.ok).toBe(true);
     if (reprobe.ok) reprobe.client.close();
   });
