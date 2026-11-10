@@ -18,8 +18,16 @@ import {
 // floor then never creates the file. The D8 handshake itself is unchanged: only where the secret comes from.
 //
 // C6's seam is here: a verifier, when one is configured, is asked whether the child is ours BEFORE anything is
-// written to it. A child fieldd spawned and has not reaped cannot change pid, so the check is sound for this pid and
-// for no other. A child it refuses is ended and never written to.
+// written to it. A child fieldd spawned and has not reaped cannot change pid, so the answer is about that child's
+// image and no other process's. A child it refuses is ended and never written to.
+// *Corrected 2026-11-10 (item 288; CUSTODY-SPEC §2.4 "v0.21"): this said "the check is sound for this pid". The
+// answer is about the right process, at the moment of asking; what a yes does not say is at `floorVerifier`.*
+//
+// The hand has ONE budget (CUSTODY-SPEC §2.4 "v0.21"; `CUSTODY.CHILD_CHECK_BUDGET_MS`): everything between the spawn
+// and the write. The verifier is up to three runs of a tool, and the floor waits only so long for its line
+// (`CUSTODY.HANDOFF_WAIT_MS`, longer than the budget by a margin a contracts row holds). So a check that has not
+// answered inside the budget is a refusal like any other: the child is ended and never written to, and an answer
+// that comes later is not listened to. A line that IS written is written to a child still waiting for it.
 //
 // And C6's verifier is here (`floorVerifier`; CUSTODY-SPEC §2.4 "v0.15"): the one `bin.ts` hands every sealed spawn.
 // The check itself (the code signature's, asked of macOS's own tool) is `packages/trust`'s; this file asks its two
@@ -59,15 +67,17 @@ export interface SealedNativeSpawn {
   env: NodeJS.ProcessEnv;
   /** the floor's pairing secret for this user root (`FielddCustody.pairing`): 64 hex characters */
   pairing: string;
-  /** C6 — is the child this pid names ours? Awaited before the line is written; `false`, or a throw, ends the child
-   * and hands it nothing. Absent, the line is written at once. */
+  /** C6 — is the child this pid names ours? Awaited before the line is written, for no longer than
+   * `CUSTODY.CHILD_CHECK_BUDGET_MS`; `false`, a throw, or no answer inside the budget ends the child and hands it
+   * nothing. Absent, the line is written at once. */
   verifyNativeChild?: (pid: number) => Promise<boolean>;
   spawn: SpawnBootstrapChild;
 }
 
 /** How one hand ended, in a word a log may keep:
  *   · `handed` — the child holds its line and its stdin is closed;
- *   · `child-not-ours` — the verifier refused it: it was ended, and never written to;
+ *   · `child-not-ours` — the verifier refused it, or did not answer inside the budget: it was ended, and never
+ *     written to;
  *   · `no-child` — the spawn made no process, or one with no pipe: nobody to hand anything to;
  *   · `write-failed` — the child was gone before it read (the pipe's own error). */
 export type NativeBootstrapOutcome = "handed" | "child-not-ours" | "no-child" | "write-failed";
@@ -83,8 +93,10 @@ export interface SealedNativeSpawned {
  * Both questions are `@vibefield/trust`'s (whose code this process is; whether a child is the binary named, of the
  * same team, under the hardened runtime), each asked of macOS's own tool.
  *
- *   · fieldd's own identity is asked once for the life of the verifier, and `bin.ts` makes one per process: the
- *     boot's spawn and every respawn share it.
+ *   · fieldd's own identity is asked once for the life of the verifier, WHEN IT IS MADE (§2.4 "v0.21"), and
+ *     `bin.ts` makes one per process, before any floor is spawned: the boot's spawn and every respawn share it,
+ *     and the hand's one budget is spent on the child's check alone. So a fieldd handed custody asks this at every
+ *     boot, also when its floor is already alive and nothing is spawned.
  *   · Each child is asked about ALWAYS with the floor's signing identifier. "Our team, hardened" is true of every
  *     binary the team signs, and only one of them is the floor.
  *   · A fieldd that cannot say whose code it is itself (not macOS, no team, not hardened) refuses every child,
@@ -101,18 +113,40 @@ export interface SealedNativeSpawned {
  * and THEN becomes the floor's image keeps its pid, verifies, and has left a second reader of its stdin. So this
  * stops a wrong binary that stays what it is; whether anything stops one that does that is not decided here. */
 export function floorVerifier(): (pid: number) => Promise<boolean> {
-  let own: Promise<CodeIdentity | null> | undefined;
+  // asked NOW, not at the first child. Trust answers null for every doubt and does not throw; were it ever to, that
+  // is one more doubt, held here as a null so that no rejection is left for nobody to hear.
+  const own: Promise<CodeIdentity | null> = ownIdentity().catch(() => null);
   const floors: ExpectedCode = { identifier: FIELD_NATIVE_SIGNING_IDENTIFIER };
   return async (pid) => {
-    own ??= ownIdentity();
     const identity = await own;
     if (identity === null) return false;
     return await childIsOurs(pid, identity, floors);
   };
 }
 
+type ChildVerifier = (pid: number) => Promise<boolean>;
+
+/** The verifier's word on the child, or `false` once `CUSTODY.CHILD_CHECK_BUDGET_MS` has passed since this was
+ * called (§2.4 "v0.21"). The first word settles it and nothing after is heard: a verifier that answers past the
+ * budget is not listened to. A verifier that throws, rejects, or answers anything but `true` is a `false`. Never
+ * rejects. The timer is not unref'd: ending a child nobody answered for is this hand's to do, and it holds the
+ * process no longer than the budget. */
+function oursInsideBudget(verify: ChildVerifier, pid: number): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => resolve(false), CUSTODY.CHILD_CHECK_BUDGET_MS);
+    const settle = (ours: boolean): void => {
+      clearTimeout(timer);
+      resolve(ours);
+    };
+    // asked inside a promise's own turn, so a verifier that throws before it answers is a rejection like any other
+    const asked = new Promise<boolean>((answer) => answer(verify(pid)));
+    void asked.then((ours) => settle(ours === true), () => settle(false));
+  });
+}
+
 /** Spawn the floor to be handed its pairing, and hand it. The spawn answers at once, as the `files` spawn does; the
- * hand settles after the verifier (if any) and the write. */
+ * hand settles after the verifier (if any) and the write, or at the budget. The hand begins in the turn of the
+ * spawn, so its budget is counted from the spawn. */
 export function spawnSealedNative(opts: SealedNativeSpawn): SealedNativeSpawned {
   const child = opts.spawn(opts.bin, [], {
     env: { ...opts.env, [CUSTODY.NATIVE_ENV]: CUSTODY.STDIN },
@@ -127,8 +161,8 @@ export function spawnSealedNative(opts: SealedNativeSpawn): SealedNativeSpawned 
   };
 }
 
-/** Hand a spawned floor its bootstrap line: the verifier first when there is one, then one line of JSON, a newline,
- * and the end of its stdin. Never rejects. */
+/** Hand a spawned floor its bootstrap line: the verifier first when there is one, inside the hand's one budget, then
+ * one line of JSON, a newline, and the end of its stdin. Never rejects. */
 export async function handNativeBootstrap(
   child: BootstrapChild,
   pairing: string,
@@ -146,12 +180,8 @@ export async function handNativeBootstrap(
     failed = true;
   });
   if (verifyNativeChild !== undefined) {
-    let ours = false;
-    try {
-      ours = await verifyNativeChild(pid);
-    } catch {
-      // a verifier that could not say is a child that is not known to be ours
-    }
+    // a verifier that could not say, or did not say in time, is a child that is not known to be ours
+    const ours = await oursInsideBudget(verifyNativeChild, pid);
     if (!ours) {
       // by the pid this process spawned and has not reaped, and nothing was written to it
       child.kill("SIGKILL");
