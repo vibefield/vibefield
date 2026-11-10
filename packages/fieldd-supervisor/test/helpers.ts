@@ -455,6 +455,16 @@ export const FIXTURE_IDLE = `
 setInterval(() => {}, 1e6);
 `;
 
+/** OB custody — a child that will never read its line: it shuts its own stdin at once, says so by writing its pid to
+ * MARK_FILE, and idles. A write to it fails, because the pipe has no reader: what a write to a child that already
+ * left looks like to its spawner, without the race of an exit. */
+export const FIXTURE_DEAF = `
+import { closeSync, writeFileSync } from "node:fs";
+closeSync(0);
+writeFileSync(process.env.MARK_FILE, String(process.pid));
+setInterval(() => {}, 1e6);
+`;
+
 /** OB custody — a fieldd stand-in that speaks the SEALED side by itself: no in-test ProductApi answers for it, because
  * the door's own sealed hello is fieldd's half and is not in this package's reach. It is a whole listener: a minimal
  * WebSocket server (text frames under 64 KiB, which is every frame these rows send) answering JSON-RPC, with the

@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { CONTRACTS_VERSION, type CustodyHandoff } from "@vibefield/contracts";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { CONTRACTS_VERSION, CUSTODY, type CustodyHandoff } from "@vibefield/contracts";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFielddSupervisor,
   type FielddSupervisorEvent,
@@ -12,6 +12,7 @@ import {
 } from "../src/index";
 import {
   createHarness,
+  FIXTURE_DEAF,
   FIXTURE_EXIT_1,
   FIXTURE_SEALED,
   type Harness,
@@ -221,6 +222,182 @@ describe("a sealed spawn hands fieldd custody", () => {
     expect((error as SupervisorError).kind).toBe("child-exit");
     expect((error as Error).message).toContain("boom: fieldd refused to start");
     for (const secret of SECRETS) expect((error as Error).message).not.toContain(secret);
+  });
+});
+
+// C6c (CUSTODY-SPEC §2.4, "one budget for the check") — the supervisor is fieldd's SPAWNER: the spawn, the wait on
+// the check and the hand-off's write are all its own, so everything between a spawn and its write is its to bound,
+// here and not behind the seam it asks.
+//
+// GIVEN AN INJECTED VERIFIER, every row below: `verifyChild` is the one thing a host binds here, and each row hands
+// the REAL supervisor a stand-in for it and a real child (FIXTURE_SEALED, which writes what it observed only once
+// its stdin has said something; FIXTURE_EXIT_1, which leaves at once; FIXTURE_DEAF, which will never read). They
+// show the supervisor's rule given that verifier. They do NOT show that production binds one: the binding is the
+// shell's provider, no row runs main's real composition root in vitest, and that proof is owed to a signed build.
+// What the check itself is worth is not these rows' claim either: it stops a wrong binary that stays itself.
+describe("the check between a spawn and its hand-off has one budget", () => {
+  const notOurs = (event: FielddSupervisorEvent): boolean =>
+    event.kind === "lifecycle" && event.event === "fieldd.supervisor.child_not_ours";
+  const handed = (event: FielddSupervisorEvent): boolean =>
+    event.kind === "lifecycle" && event.event === "fieldd.supervisor.custody_handed";
+  const alive = (pid: number): boolean => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  it("ends a child whose check never settles, at the budget, deaf to a late yes", async () => {
+    const root = h.mkRoot();
+    const events: FielddSupervisorEvent[] = [];
+    let asked: (pid: number) => void = () => undefined;
+    const askedOnce = new Promise<number>((resolve) => {
+      asked = resolve;
+    });
+    let answer: (ours: boolean) => void = () => undefined;
+    const custody = {
+      handoff: () => HANDOFF,
+      // the tool that would say whose code the child is hangs: no answer, no throw
+      verifyChild(pid: number): Promise<boolean> {
+        return new Promise<boolean>((resolve) => {
+          answer = resolve;
+          asked(pid);
+        });
+      },
+    };
+    let error: unknown;
+    let pid = 0;
+    try {
+      // only the supervisor's own clock is faked: the child is real, and its exit is a real event
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      try {
+        const outcome = refusal(sup(root, events, { custody }), events);
+        pid = await askedOnce;
+        h.trackPid(pid);
+        // one tick short of the budget the supervisor is still asking, and the child is still there
+        await vi.advanceTimersByTimeAsync(CUSTODY.CHILD_CHECK_BUDGET_MS - 1);
+        expect(events.some(notOurs)).toBe(false);
+        expect(alive(pid)).toBe(true);
+        // at the budget it stops asking, and the child is refused as one that was not shown to be ours
+        await vi.advanceTimersByTimeAsync(1);
+        expect(events.find(notOurs)).toMatchObject({ attrs: { pid, reason: "over-budget" } });
+        error = await outcome;
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(error).toBeInstanceOf(SupervisorError);
+      expect((error as SupervisorError).kind).toBe("child-not-ours");
+      for (const secret of SECRETS) expect(String((error as Error).message)).not.toContain(secret);
+      expect(await waitDead(pid)).toBe(true);
+      // the tool answers at last, and says yes: nobody is listening, and nothing was or is written
+      answer(true);
+      await delay(100);
+      expect(events.some(handed)).toBe(false);
+      expect(existsSync(sealedObservePath(root))).toBe(false);
+    } finally {
+      // a supervisor that is still asking (this row's red) is let go on to its end: nothing outlives the row
+      answer(false);
+    }
+  });
+
+  it("lets a child that left while it was asked about say so itself: child-exit", async () => {
+    const root = h.mkRoot();
+    const events: FielddSupervisorEvent[] = [];
+    const custody = {
+      handoff: () => HANDOFF,
+      // the tool, asked about a pid that is gone, says no: that no is about nothing
+      async verifyChild(pid: number) {
+        await waitDead(pid);
+        return false;
+      },
+    };
+    const error = await refusal(sup(root, events, { custody }, FIXTURE_EXIT_1), events);
+    expect((error as SupervisorError).kind).toBe("child-exit");
+    expect((error as Error).message).toContain("boom: fieldd refused to start");
+    expect(events.some(notOurs)).toBe(false);
+    expect(events.some(handed)).toBe(false);
+  });
+
+  it("stops asking the moment the attempt is given up, and hands nothing after", async () => {
+    const root = h.mkRoot();
+    const events: FielddSupervisorEvent[] = [];
+    let asked: () => void = () => undefined;
+    const askedOnce = new Promise<void>((resolve) => {
+      asked = resolve;
+    });
+    let answered = false;
+    const custody = {
+      handoff: () => HANDOFF,
+      // slow, and it would say yes
+      async verifyChild() {
+        asked();
+        await delay(2_000);
+        answered = true;
+        return true;
+      },
+    };
+    const given = new AbortController();
+    const supervisor = sup(root, events, { custody });
+    const outcome = supervisor.ensure({ signal: given.signal }).then(
+      () => null,
+      (failure: unknown) => failure,
+    );
+    await askedOnce;
+    given.abort();
+    const error = await outcome;
+    h.trackPid(spawnedPid(events));
+    // it did not wait for the tool: the attempt ended before the answer came
+    expect(answered).toBe(false);
+    expect((error as SupervisorError).kind).toBe("aborted");
+    expect(await waitDead(spawnedPid(events) as number)).toBe(true);
+    expect(events.some(handed)).toBe(false);
+    expect(existsSync(sealedObservePath(root))).toBe(false);
+  });
+
+  it("names a refusal by a code, and repeats nothing of what the tool threw", async () => {
+    const root = h.mkRoot();
+    const events: FielddSupervisorEvent[] = [];
+    // what a file error's message carries: an absolute path, which holds a person's home
+    const canary = join(root, "planted", "canary-7f3a");
+    const custody = {
+      handoff: () => HANDOFF,
+      verifyChild: async (): Promise<boolean> => {
+        throw new Error(`ENOENT: no such file or directory, open '${canary}'`);
+      },
+    };
+    const error = await refusal(sup(root, events, { custody }), events);
+    expect((error as SupervisorError).kind).toBe("child-not-ours");
+    // "refused" here, "over-budget" above: the log tells the two apart by this word and by nothing an error said
+    expect(events.find(notOurs)).toMatchObject({ attrs: { reason: "refused" } });
+    const said = JSON.stringify([events, String((error as Error).message)]);
+    expect(said).not.toContain("canary-7f3a");
+    expect(said).not.toContain("ENOENT");
+  });
+
+  // A pin, green before C6c and after it: the write's failure was already an outcome. FIXTURE_DEAF stands for a
+  // child that already left, without the race of an exit: the pipe has no reader either way.
+  it("takes a write the child will never read as an outcome, never a throw", async () => {
+    const root = h.mkRoot();
+    const events: FielddSupervisorEvent[] = [];
+    const mark = join(root, "deaf.pid");
+    const custody = {
+      handoff: () => HANDOFF,
+      // yes, but only once the child has shut its stdin: the write then goes to a pipe nobody reads
+      async verifyChild() {
+        while (!existsSync(mark)) await delay(10);
+        return true;
+      },
+    };
+    const extra = { custody, readinessDeadlineMs: 600 };
+    const supervisor = sup(root, events, extra, FIXTURE_DEAF, { MARK_FILE: mark });
+    const error = await refusal(supervisor, events);
+    // the attempt ends as any start that never says ready ends: nothing threw at the write, and nothing was handed
+    expect(error).toBeInstanceOf(SupervisorError);
+    expect((error as SupervisorError).kind).toBe("readiness-timeout");
+    expect(events.some(handed)).toBe(false);
+    expect(await waitDead(spawnedPid(events) as number)).toBe(true);
   });
 });
 
