@@ -1,3 +1,4 @@
+import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -850,5 +851,48 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
       expect(installOnQuit).toHaveBeenCalledTimes(1);
       expect(rig.gate.stop).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// Item 287 — the main entry's `ensureFieldd` starts fieldd only through the attached pair's
+// coordinator. Its old bare road, `supervisor.ensure`, was reachable only once teardown had nulled
+// the coordinator, and it could not start a pair then for one reason: the lifecycle disposes the
+// supervisor in the SAME run as the shell (`disposeShell()`, then `getSupervisor()?.dispose(…)`,
+// with no await between), and the supervisor sets `disposed` before its first await. A guard,
+// green on arrival: it reddens only if an await is ever put between the two.
+describe("teardown disposes the supervisor in the same run as the shell (item 287)", () => {
+  beforeEach(() => electron.reset());
+  afterEach(async () => {
+    await drain();
+  });
+
+  it("by the first microtask after the shell's teardown, its dispose has begun", async () => {
+    const order: string[] = [];
+    let disposing = false;
+    const supervisor = {
+      ensure: vi.fn(),
+      // as the real one does: `disposed` is set before its first await
+      dispose: vi.fn(async () => {
+        disposing = true;
+        order.push("supervisor.dispose");
+      }),
+    } as unknown as FielddSupervisor;
+    installLifecycle({
+      registry: new WindowRegistry(),
+      getSupervisor: () => supervisor,
+      openPrimaryWindow: vi.fn(async () => {}),
+      keepAliveWithoutWindows: () => true,
+      onQuitRequested: vi.fn(),
+      disposeShell: () => {
+        order.push("disposeShell");
+        // the earliest any late caller's continuation can run once the shell is torn down
+        queueMicrotask(() => order.push(disposing ? "late: disposing" : "late: supervisor LIVE"));
+      },
+      logger: logger(),
+      closeLogging: async () => {},
+    });
+    electron.emit("will-quit", { preventDefault: vi.fn() });
+    await vi.waitFor(() => expect(electron.app.exit).toHaveBeenCalledWith(0));
+    expect(order).toEqual(["disposeShell", "supervisor.dispose", "late: disposing"]);
   });
 });
