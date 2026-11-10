@@ -1,6 +1,6 @@
 import { IPC_CHANNELS } from "@vibefield/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { QuitRefusal } from "../src/main/quit-latch";
+import { QuitRefusalError } from "../src/main/quit-latch";
 
 // The users door as the PAGE sees it (UA-3/UA-5/UA-7). The sibling preload
 // bridges are plain classes with their own tests; these four verbs live directly
@@ -199,7 +199,7 @@ describe("preload profile door: the face (UA-7)", () => {
   // what this bridge hands back, so the page must get James's words alone.
   it("hands the page the quit's refusal in its words alone, never its class's name", async () => {
     const wrapped = (channel: string): Error =>
-      new Error(`Error invoking remote method '${channel}': ${new QuitRefusal().toString()}`);
+      new Error(`Error invoking remote method '${channel}': ${new QuitRefusalError().toString()}`);
 
     stub.invoke.mockRejectedValueOnce(wrapped(IPC_CHANNELS.usersSwitch));
     await expect(usersSwitch()({ userId: RECORD.userId })).rejects.toMatchObject({

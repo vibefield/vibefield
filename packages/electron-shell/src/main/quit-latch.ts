@@ -4,15 +4,18 @@
 // James's words, and a pair bundle born now starts held (`FielddHandleCoordinator`'s `heldAtBirth`), so nothing it is
 // asked starts a pair. Pure, so its refusal is held by a test without the composition root.
 
-/** James's words (D4): what a switch or a new user asked for while VibeField quits says. The Me menu draws "Couldn't
- * switch to Lee — VibeField is quitting." (`refusalSentence`); Settings → Account draws the words alone. */
+/** James's words (D4): what a switch or a new user asked for while VibeField quits says. The Me menu and the Settings
+ * head draw "Couldn't switch to Lee — VibeField is quitting." (`refusalSentence`), the chooser "Couldn't open Lee's
+ * field — VibeField is quitting."; Settings → Account draws the words alone. */
 export const QUITTING_WORDS = "VibeField is quitting";
 
-/** The refusal a switch carries up to the window's doors, which draw its message whole. Its reason is the log's. */
-export class QuitRefusal extends Error {
+/** The refusal a switch carries up to the window's doors, which draw its message whole. Main replies with its
+ * `toString()`, and the preload strips a class's name only when it ends in `Error` (`preload/index.ts`,
+ * `REMOTE_ERROR_PREFIX`), so this name keeps James's words alone on screen (item 314). Its reason is the log's. */
+export class QuitRefusalError extends Error {
   constructor() {
     super(QUITTING_WORDS);
-    this.name = "QuitRefusal";
+    this.name = "QuitRefusalError";
   }
 }
 
@@ -29,7 +32,7 @@ export interface QuitLatch {
   readonly held: boolean;
   hold(): void;
   release(): void;
-  /** while held, throws a `QuitRefusal` and says `what` to the log; otherwise does nothing */
+  /** while held, throws a `QuitRefusalError` and says `what` to the log; otherwise does nothing */
   refuse(what: QuitRefused): void;
 }
 
@@ -48,7 +51,7 @@ export function createQuitLatch(options: QuitLatchOptions = {}): QuitLatch {
     refuse(what) {
       if (!held) return;
       options.onRefused?.(what);
-      throw new QuitRefusal();
+      throw new QuitRefusalError();
     },
   };
 }
