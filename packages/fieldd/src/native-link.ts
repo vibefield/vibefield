@@ -14,6 +14,7 @@ import {
   NativeTickParams,
   NativeUnavailableDetails,
   PingAck,
+  SparkId,
   TerminalEndpoints,
   type TerminalRouteCell,
   TerminalRouteSnapshot,
@@ -153,6 +154,28 @@ const TIMED_OUT_RECORD_CAP = 256;
 
 const PING_METHOD = "native.lifecycle.ping";
 const HELLO_METHOD = "native.lifecycle.hello";
+
+/** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — the verb that tells the floor what a terminal was started for, and how
+ * long its answer is waited for: a launch never waits on it, and its caller's retry is what an unanswered one meets. */
+const STARTED_FOR_SET = "native.terminal.startedFor.set";
+const STARTED_FOR_SET_MS = 2_000;
+
+/** OB custody (rule 6; contracts custody.ts `TerminalStartedFor`) — what one terminal was started for, as this side
+ * holds it: read from a hello ack by hand, field by field, or made from a launch call's own arguments to be said to
+ * the floor. A sealed fieldd may not learn any of this from a run's record, which an agent can rewrite. */
+export type StartedFor = {
+  /** the run in the terminal: its `runtimeRunId` */
+  run: string;
+  /** the spark it was started for; absent for a plain run. Held to `SparkId` here, whatever string the wire carries */
+  spark?: SparkId;
+  /** a typed run's alone: the process fieldd adopted, its pid (2 or more) and the kernel's start for it, epoch ms */
+  process?: { pid: number; startedAtMs: number };
+  /** the creation request announced for the launch, which is also the id the run's helper root is named by */
+  root?: string;
+};
+
+/** OB custody (rule 6) — how one `native.terminal.startedFor.set` ended (`NativeLink.setStartedFor`). */
+export type StartedForAnswer = "set" | "not-found" | "full" | "not-sealed" | "unanswered";
 
 /** WG-D6 — the two requests that carry no `deadlineAt` (`RpcRequest`): the
  * heartbeat, whose late pong is evidence the ladder keeps (WG-E2), and the
@@ -413,6 +436,13 @@ export class NativeLink extends EventEmitter {
    * HELLO, read again at every hello and never in between: `setMark` answers the floor's word for one name and
    * does not rewrite this. fieldd's own view of the marks is `CustodyMarks`'s (custody-marks.ts), which reads this. */
   marks: ReadonlyMap<string, number> = new Map();
+  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — what the floor said each terminal was started for, by its session
+   * id, in the hello ack of the LATEST hello (`HelloAck.startedFor`): held here only until it is taken. Empty before
+   * any hello, and for a floor that holds none, is not sealed, or predates the table. Never logged by value. */
+  private startedFor: ReadonlyMap<string, StartedFor> = new Map();
+  /** OB custody (rule 6) — the table was handed over (`takeStartedFor`): from then on a later ack's is dropped
+   * unread, so a reconnect later in this life changes nothing this life believes. */
+  private startedForTaken = false;
   private pairedOnce = false;
   /** TM-1/TM-2 (MF-1l) — "this floor's terminal doors are PUBLISHED on the
    * tailnet", the floor's own word (`HelloAck.terminalMesh`), re-learned at
@@ -691,6 +721,7 @@ export class NativeLink extends EventEmitter {
       lastManager?: unknown;
       pid?: unknown;
       marks?: unknown;
+      startedFor?: unknown;
       serverMac?: unknown;
     };
     const expected = computeAckMac(secretHex, nonce, this.opts.bootId);
@@ -748,7 +779,49 @@ export class NativeLink extends EventEmitter {
     // OB custody (C5) — on their own terms like the label: whatever is not a map of marks is a floor that holds
     // none, and inside one a name off the pattern or a value that is no count is not a mark.
     this.marks = ackMarks(record.marks);
+    // OB custody (rule 6) — on its own terms like the marks: what is not a table is none, and an entry that fails
+    // its shape is skipped alone. Kept only until it is taken; after that this ack's table is not read at all.
+    if (!this.startedForTaken) this.startedFor = ackStartedFor(record.startedFor);
     this.emit("terminal-endpoints");
+  }
+
+  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — hand over what the floor said each terminal was started for: the
+   * table of the LATEST hello, by terminal session id. ONCE: this empties it, and every later ack's table is dropped
+   * unread. The one caller is the runtime's re-attach, at `sealed`, with the first inventory of the connection that
+   * is paired then, so the table and the inventory are one connection's. A `files` fieldd never calls it. */
+  takeStartedFor(): ReadonlyMap<string, StartedFor> {
+    const table = this.startedFor;
+    this.startedForTaken = true;
+    this.startedFor = new Map();
+    return table;
+  }
+
+  /** OB custody (rule 6) — `native.terminal.startedFor.set`: tell the floor what a terminal was started for, or,
+   * with no `startedFor`, to forget it (a clear, sent as NO key and never a null). It answers one word and NEVER
+   * throws, inside `STARTED_FOR_SET_MS`:
+   *  · `set` — the floor holds it (or cleared it; clearing nothing is no error);
+   *  · `not-found` — the floor lists no such running terminal: the run ended first;
+   *  · `full` — a NEW terminal while the floor holds `CUSTODY.STARTED_FOR_MAX`;
+   *  · `not-sealed` — the floor was not booted by the hand-off and keeps no table;
+   *  · `unanswered` — anything else: no answer in time, a link that is down or held unresponsive, a refusal this
+   *    side has no word for.
+   * Nothing of the entry is logged here. */
+  async setStartedFor(
+    sessionId: string,
+    startedFor: StartedFor | undefined,
+  ): Promise<StartedForAnswer> {
+    try {
+      const params = startedFor === undefined ? { sessionId } : { sessionId, startedFor };
+      await this.request(STARTED_FOR_SET, params, { deadlineMs: STARTED_FOR_SET_MS });
+      return "set";
+    } catch (error) {
+      if (!(error instanceof RpcCallError)) return "unanswered";
+      if (error.kind === "NOT_FOUND") return "not-found";
+      if (error.kind !== "PRECONDITION_FAILED") return "unanswered";
+      const reason = (error.details as { reason?: unknown } | null | undefined)?.reason;
+      if (reason === "started-for-full") return "full";
+      return reason === "not-sealed" ? "not-sealed" : "unanswered";
+    }
   }
 
   /** OB custody (C5) — `native.marks.set`: tell the floor a mark. The floor keeps max(old, value) in memory and
@@ -1553,6 +1626,75 @@ function ackMarks(value: unknown): ReadonlyMap<string, number> {
     marks.set(name, mark);
   }
   return marks;
+}
+
+/** An id as the started-for table holds one (custody.ts `TerminalStartedForId`): 1 to 128 characters. */
+const isStartedForId = (value: unknown): value is string =>
+  typeof value === "string" && value.length >= 1 && value.length <= 128;
+
+/** A whole number from `least` up that this side can hold exactly. */
+const isWholeFrom = (value: unknown, least: number): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= least;
+
+type StartedForRow = { sessionId: string; startedFor: StartedFor };
+
+/** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — a hello ack's `startedFor`, read BY HAND as every field of that ack
+ * is: the shape a live floor sent decides, never the schema this build carries. Anything but an array is no table.
+ * Inside one, an entry that fails its shape is skipped ALONE and the rest stands (the PM's condition 2); a second
+ * entry for a terminal the table already holds is skipped too, so a terminal's first word stands; and no more than
+ * `CUSTODY.STARTED_FOR_MAX` are kept (the floor holds no more). Nothing here throws, and nothing here logs. */
+function ackStartedFor(value: unknown): ReadonlyMap<string, StartedFor> {
+  const table = new Map<string, StartedFor>();
+  if (!Array.isArray(value)) return table;
+  for (const said of value) {
+    if (table.size >= CUSTODY.STARTED_FOR_MAX) break;
+    const row = startedForRowOf(said);
+    if (row === undefined || table.has(row.sessionId)) continue;
+    table.set(row.sessionId, row.startedFor);
+  }
+  return table;
+}
+
+/** One entry of the table, or undefined when any field of it fails its shape. A field this build does not know is
+ * not read and not kept. */
+function startedForRowOf(value: unknown): StartedForRow | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const said = value as {
+    sessionId?: unknown;
+    run?: unknown;
+    spark?: unknown;
+    process?: unknown;
+    root?: unknown;
+  };
+  if (!isStartedForId(said.sessionId) || !isStartedForId(said.run)) return undefined;
+  const startedFor: StartedFor = { run: said.run };
+  if (said.spark !== undefined) {
+    // the wire's spark is an opaque string (a floor outlives fieldd and must not pin today's pattern), so THIS side
+    // holds it to `SparkId`: an entry whose spark is not one names no spark this fieldd could serve
+    const spark = SparkId.safeParse(said.spark);
+    if (!spark.success) return undefined;
+    startedFor.spark = spark.data;
+  }
+  if (said.process !== undefined) {
+    const typed = startedForProcessOf(said.process);
+    if (typed === undefined) return undefined;
+    startedFor.process = typed;
+  }
+  if (said.root !== undefined) {
+    if (!isStartedForId(said.root)) return undefined;
+    startedFor.root = said.root;
+  }
+  return { sessionId: said.sessionId, startedFor };
+}
+
+/** A typed run's process as an entry names it, or undefined. Its pid is 2 or more BY THIS SIDE'S OWN CHECK (the
+ * kernel's pid and launchd's are never a person's process): the generated Rust type cannot say so, the floor
+ * refuses one by hand, and neither side trusts the other's generator (the PM, 02:02:04Z). */
+function startedForProcessOf(value: unknown): StartedFor["process"] {
+  if (typeof value !== "object" || value === null) return undefined;
+  const { pid, startedAtMs } = value as { pid?: unknown; startedAtMs?: unknown };
+  if (!isWholeFrom(pid, 2) || !isWholeFrom(startedAtMs, 0)) return undefined;
+  return { pid, startedAtMs };
 }
 
 /** fieldd's one back-off for its links to the floor: 500 ms doubling to 10 s, by the attempts made since the last
