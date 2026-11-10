@@ -141,6 +141,7 @@ import {
   processStartedAtUnder,
   readProcesses,
   SPAWNED_BY_SHELL,
+  type TypedEndDeps,
   type TypedWatchOptions,
   typedRunProof,
   watchTypedProcess,
@@ -578,6 +579,10 @@ export interface AgentRuntimeServiceOptions {
   startedFor?: StartedForFloor;
   /** OB custody test seam: how long until a set the floor did not take is said again (default `STARTED_FOR_RETRY_MS`) */
   startedForRetryMs?: number;
+  /** Q17 test seam: the signal a typed run's end sends (`endTypedRun`'s
+   * `kill`). Absent, none is handed and `endTypedRun` takes its own default,
+   * `process.kill`. No production path sets it (`typedEndDeps`) */
+  typedKill?: TypedEndDeps["kill"];
   /** FS-1a (L2) — a run entered the fold in this folder at this moment
    * (spawned, resumed, re-attached or adopted): the files service makes the
    * folder a PLACE, or moves its `lastActiveAt`. Called after the record is
@@ -768,6 +773,23 @@ export interface RecordedRun {
   profileSet?: string;
   projectKey?: string;
   title?: string;
+}
+
+/** Q17 — what `endLive` hands `endTypedRun`: the shell's pid as the floor lists it, the runtime's one table read
+ * (item 537, 2026-11-18: a test's table, or `ps` under the agents' allow-list snapshot; never fieldd's own
+ * environment), and the runtime's test seams. `kill` is handed only when a test gave one (`typedKill`); absent,
+ * `endTypedRun` takes its own default, `process.kill`, the one place fieldd's end of a typed run reaches the system. */
+export function typedEndDeps(
+  opts: Pick<AgentRuntimeServiceOptions, "typedWatch" | "typedKill">,
+  readTable: TypedEndDeps["readTable"],
+  shellPid: number | undefined,
+): TypedEndDeps {
+  return {
+    shellPid,
+    readTable,
+    watch: (pid, onExit) => watchTypedProcess(pid, onExit, opts.typedWatch),
+    ...(opts.typedKill !== undefined ? { kill: opts.typedKill } : {}),
+  };
 }
 
 export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
@@ -2476,11 +2498,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (typed === undefined) {
       return { ended: "terminal", placed: await this.terminateLive(terminals, sessionId) };
     }
-    const end = await endTypedRun(typed, {
-      shellPid: this.listed(terminals, sessionId) ? terminals.get(sessionId)?.pid : undefined,
-      readTable: this.processTable,
-      watch: (pid, onExit) => watchTypedProcess(pid, onExit, this.opts.typedWatch),
-    });
+    const shellPid = this.listed(terminals, sessionId) ? terminals.get(sessionId)?.pid : undefined;
+    const end = await endTypedRun(typed, typedEndDeps(this.opts, this.processTable, shellPid));
     const placed = end === "signalled" || end === "gone";
     const attrs = { runtimeRunId: entry.info.runtimeRunId, sessionId, end };
     if (placed) {

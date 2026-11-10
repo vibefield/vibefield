@@ -721,6 +721,10 @@ export interface FielddConfig {
     runtimeFacts?: AgentGatewayOptions["runtimeFacts"];
     /** a typed run's pid watch: its cadence and its grace */
     watch?: AgentRuntimeServiceOptions["typedWatch"];
+    /** TEST SEAM ONLY (Q17): the signal a typed run's end sends, recorded by a row instead of
+     * sent. Absent, `endTypedRun` takes its own default, `process.kill`. No production path
+     * sets it: bin.ts never names it */
+    kill?: AgentRuntimeServiceOptions["typedKill"];
     /** the gateway's start waits here before its first write (A2's row: a
      * pane born before the integration exists) */
     hold?: AgentGatewayOptions["hold"];
@@ -1587,6 +1591,7 @@ export async function bootstrap(
       ? { processTable: config.agentGateway.processTable }
       : {}),
     ...(config.agentGateway?.watch !== undefined ? { typedWatch: config.agentGateway.watch } : {}),
+    ...(config.agentGateway?.kill !== undefined ? { typedKill: config.agentGateway.kill } : {}),
     logger: logger.child({ component: "agent_runtime" }),
   });
   // TH-1 — the transcript hears a spark's own runs from their entry, a re-attach's included (before the inventory that
