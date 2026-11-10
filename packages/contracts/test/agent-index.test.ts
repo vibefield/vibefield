@@ -534,7 +534,7 @@ describe("LAYOUT — the topology's segments (AR-D15…D18)", () => {
     for (const name of machine) expect([...LAYOUT_ROOT_LEVEL] as string[]).toContain(name);
   });
 
-  it("LAYOUT_ROOT_LEVEL is the whole never-re-root set: UA-1's four plus the machine set, and nothing under a user shares a first segment with it", () => {
+  it("LAYOUT_ROOT_LEVEL is the whole never-re-root set: UA-1's four, the machine set and the shell's custody key, and nothing under a user shares a first segment with it", () => {
     expect([...LAYOUT_ROOT_LEVEL].sort()).toEqual(
       [
         "USERS_DIR",
@@ -545,6 +545,8 @@ describe("LAYOUT — the topology's segments (AR-D15…D18)", () => {
         "MACHINE_AGENTS_DIR",
         "MACHINE_DISTRIBUTION_FILE",
         "MACHINE_UPDATES_DIR",
+        // OB custody (C1) — the shell's wrapped root, one for every user of this install
+        "CUSTODY_KEY",
       ].sort(),
     );
     const rootFirsts = new Set<string>(LAYOUT_ROOT_LEVEL.map((name) => LAYOUT[name][0] as string));
