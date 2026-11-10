@@ -1,5 +1,6 @@
 import { IPC_CHANNELS } from "@vibefield/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { QuitRefusal } from "../src/main/quit-latch";
 
 // The users door as the PAGE sees it (UA-3/UA-5/UA-7). The sibling preload
 // bridges are plain classes with their own tests; these four verbs live directly
@@ -191,6 +192,22 @@ describe("preload profile door: the face (UA-7)", () => {
 
     stub.invoke.mockRejectedValueOnce(wrapped(IPC_CHANNELS.usersUpdate, `UsersError: ${locked}`));
     await expect(usersUpdate()({ name: "Work" })).rejects.toMatchObject({ message: locked });
+  });
+
+  // Item 314 — the quit's latch (item 290) refuses a switch and a new user with its own class, and
+  // main replies with that error's toString(), its class's name included. The window's doors draw
+  // what this bridge hands back, so the page must get James's words alone.
+  it("hands the page the quit's refusal in its words alone, never its class's name", async () => {
+    const wrapped = (channel: string): Error =>
+      new Error(`Error invoking remote method '${channel}': ${new QuitRefusal().toString()}`);
+
+    stub.invoke.mockRejectedValueOnce(wrapped(IPC_CHANNELS.usersSwitch));
+    await expect(usersSwitch()({ userId: RECORD.userId })).rejects.toMatchObject({
+      message: "VibeField is quitting",
+    });
+
+    stub.invoke.mockRejectedValueOnce(wrapped(IPC_CHANNELS.usersCreate));
+    await expect(usersCreate()({})).rejects.toMatchObject({ message: "VibeField is quitting" });
   });
 
   it("leaves a rejection it does not recognise exactly as it came", async () => {

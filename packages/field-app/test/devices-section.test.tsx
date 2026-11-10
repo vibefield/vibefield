@@ -306,6 +306,42 @@ describe("Settings → Devices: the Tailscale card (TS-D1, TS-D2, TS-D4)", () =>
     expect(button("New user…")).not.toBeUndefined();
   });
 
+  // Item 314 — this row holds the WORDS alone: main refuses a new user in the quit's words (item
+  // 290's latch), and this page says none of them. No switch stage is registered here, so
+  // `leaveFor` goes straight to main; in the product the window leaves and comes back first.
+  // James's ruling of 2026-11-10 19:13:21Z ("it should not do anything, ignore the press") is
+  // item 315's to build.
+  it("says nothing when a new user is refused while VibeField quits", async () => {
+    const create = vi.fn(async () => {
+      throw new Error("VibeField is quitting");
+    });
+    host(null, {
+      list: async () => ({
+        attachedUserId: "01J8ZQ7W9K3M5N7P9R1T3V5X7Z",
+        users: [
+          {
+            userId: "01J8ZQ7W9K3M5N7P9R1T3V5X7Z",
+            fuid: 1,
+            name: "James",
+            face: { emoji: "🦊" },
+            resident: true,
+            onboarded: true,
+          },
+        ],
+      }),
+      create,
+    });
+    await mount(client({ link: LINKED() }));
+    await act(flush);
+    await act(async () => button("Use another account")?.click());
+    const before = text();
+    await act(async () => button("New user…")?.click());
+    await act(flush);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(text()).toBe(before);
+    expect(text()).not.toContain("quitting");
+  });
+
   it("keeps the browser's exits while the sign-in waits on the person", async () => {
     host(null);
     await mount(
