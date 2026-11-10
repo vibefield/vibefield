@@ -1,0 +1,25 @@
+{
+  "contractsVersion": "0.1.0",
+  "serverKind": "field-native",
+  "grantedScopes": [],
+  "nativeBuild": "field-native/0.1.0+0.9.0+2490459",
+  "lastExit": "unplanned",
+  "pid": 25821,
+  "marks": { "objects.grants": 8 },
+  "startedFor": [
+    {
+      "sessionId": "sess-01J9A2T4",
+      "run": "run-7",
+      "process": {
+        "pid": 48213,
+        "startedAtMs": 1792431662417
+      }
+    },
+    {
+      "sessionId": "sess-01JB7Q2V",
+      "run": "run-12",
+      "spark": "sp-7k2m9q4x",
+      "root": "4bd1c7e2-6f0a-4c3e-9a55-1f2e3d4c5b6a"
+    }
+  ]
+}
