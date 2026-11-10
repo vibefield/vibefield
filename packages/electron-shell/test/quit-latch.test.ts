@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { createQuitLatch, QUITTING_WORDS, QuitRefusal } from "../src/main/quit-latch";
+import {
+  createQuitLatch,
+  latchedSwitch,
+  QUITTING_WORDS,
+  QuitRefusal,
+} from "../src/main/quit-latch";
 
 // Item 290 (D4, James 2026-11-10 06:49Z; DESIGN.md §9 "The quit's words") — while a person's quit holds every pair, a
 // switch and a new user are refused BEFORE they reach any coordinator, in James's words: the coordinator's own refusal
@@ -35,5 +40,57 @@ describe("the quit's latch (item 290, D4)", () => {
     expect(latch.held).toBe(false);
     expect(() => latch.refuse("new-user")).not.toThrow();
     expect(onRefused).not.toHaveBeenCalled();
+  });
+});
+
+// Item 290 (VF-PM's bound 3, 09:57:55Z) — a switch already starting when the quit's hold lands: its pair answers, and
+// the switch is refused before it swaps the window, so nothing re-targets mid-quit. The pair it started is left up; the
+// quit's second read stops it (`quit-gate.test.ts`, "a pair that comes up during the quit"). Each row drives the seam
+// with its own latch, so it holds `latchedSwitch` alone.
+describe("a switch under the quit's latch (item 290, latchedSwitch)", () => {
+  function latchOf() {
+    const state = { held: false };
+    const refuse = vi.fn(() => {
+      if (state.held) throw new QuitRefusal();
+    });
+    return { state, latch: { refuse } };
+  }
+
+  it("a switch already starting when the hold lands never swaps: refused once its pair has answered", async () => {
+    const { state, latch } = latchOf();
+    let up!: (pair: string) => void;
+    const start = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          up = resolve;
+        }),
+    );
+    const swap = vi.fn((pair: string) => `swapped to ${pair}`);
+    const switching = latchedSwitch(latch, "switch", start, swap);
+    expect(start).toHaveBeenCalledTimes(1);
+    state.held = true;
+    up("Lee's pair");
+    await expect(switching).rejects.toBeInstanceOf(QuitRefusal);
+    expect(swap).not.toHaveBeenCalled();
+    expect(latch.refuse.mock.calls).toEqual([["switch"], ["switch"]]);
+  });
+
+  it("refused before it starts while the hold stands: nothing starts", async () => {
+    const { state, latch } = latchOf();
+    state.held = true;
+    const start = vi.fn(async () => "Lee's pair");
+    const swap = vi.fn();
+    await expect(latchedSwitch(latch, "switch", start, swap)).rejects.toBeInstanceOf(QuitRefusal);
+    expect(start).not.toHaveBeenCalled();
+    expect(swap).not.toHaveBeenCalled();
+  });
+
+  it("with no hold it starts, then swaps with what started, and answers the swap's", async () => {
+    const { latch } = latchOf();
+    const swap = vi.fn((pair: string) => `swapped to ${pair}`);
+    await expect(latchedSwitch(latch, "switch", async () => "Lee's pair", swap)).resolves.toBe(
+      "swapped to Lee's pair",
+    );
+    expect(swap).toHaveBeenCalledWith("Lee's pair");
   });
 });

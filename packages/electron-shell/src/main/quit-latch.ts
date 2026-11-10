@@ -49,3 +49,19 @@ export function createQuitLatch(_options: QuitLatchOptions = {}): QuitLatch {
     refuse(_what) {},
   };
 }
+
+/** Item 290 (VF-PM's bound 3, 09:57:55Z) — a switch under the quit's latch: refused before it starts its pair, and
+ * refused again once that pair has answered if the quit's hold came while it started, so a switch already starting
+ * never swaps the window mid-quit. The pair it started stays up for the quit's second read to stop
+ * (`quit-gate.ts`'s stop). `attachUser` in `index.ts` runs through it. Item 290's red 2: a stub that refuses only
+ * before the start (the green refuses again before the swap). */
+export async function latchedSwitch<S, T>(
+  latch: Pick<QuitLatch, "refuse">,
+  what: QuitRefused,
+  start: () => Promise<S>,
+  swap: (started: S) => T,
+): Promise<T> {
+  latch.refuse(what);
+  const started = await start();
+  return swap(started);
+}
