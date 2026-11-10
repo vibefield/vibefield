@@ -1,6 +1,7 @@
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -443,5 +444,65 @@ describe("a hand that cannot be written is refused (OB custody, C4)", () => {
     failing = false;
     expect(h.desk.hand(ref, "run-a")).toEqual({ handed: true });
     expect(grantsOf(h).generation).toBe(2);
+  });
+
+  it("throws one fixed sentence with the disk's code, and nothing else of what the disk said", () => {
+    // What a refused write throws travels: to the window, and to an agent when a tool call was behind it. Node's own
+    // message names the file's whole path, which holds the person's home.
+    const planted = "/Users/planted-home/Library/VibeField/fieldd/objects.grants.json.1.tmp";
+    const says = `EROFS: read-only file system, open '${planted}'`;
+    let refused: Error | undefined;
+    const h = world({
+      retryMs: 60_000,
+      writeFile: (path, text) => {
+        if (refused !== undefined) throw refused;
+        writeFileSync(path, text, { mode: 0o600 });
+      },
+    });
+    /** What an act throws, as it would travel: its message, its own fields, and what it carries as its cause. */
+    const thrownBy = (act: () => unknown) => {
+      try {
+        act();
+      } catch (error) {
+        const { message, cause } = error as { message?: unknown; cause?: unknown };
+        return { message, fields: JSON.stringify({ ...(error as object) }), cause };
+      }
+      return undefined;
+    };
+    const unwritten = (code: string) => ({
+      message: `the desk objects could not be written (${code})`,
+      fields: "{}",
+      cause: undefined,
+    });
+    const ref = h.refOf("k1", "desk.note");
+    const page = h.refOf("page", "vibefield.page");
+    const held = h.refOf("k2", "desk.note");
+    h.desk.hand(held, "run-b");
+    refused = Object.assign(new Error(says), { code: "EROFS", path: planted });
+    // a hand, a `one` kind's hand, and a grant, which is what a place makes
+    const gives = [
+      () => h.desk.hand(ref, "run-a"),
+      () => h.desk.hand(page, "run-a"),
+      () => h.desk.grant(ref, "run-a", "placed"),
+    ];
+    for (const give of gives) expect(thrownBy(give)).toEqual(unwritten("EROFS"));
+    // an error with no code is said as `unknown`
+    refused = new Error(`write refused at ${planted}`);
+    expect(thrownBy(() => h.desk.hand(ref, "run-a"))).toEqual(unwritten("unknown"));
+    // a take-back is as it was: it takes, throws nothing, and is not kept until a write lands
+    expect(thrownBy(() => h.desk.takeBack(held, "run-b"))).toBeUndefined();
+    expect(h.desk.grantOf(held, "run-b")).toBeUndefined();
+    expect(h.desk.kept).toBe(false);
+  });
+
+  it("says a name the disk will not take the same way (the real disk, no seam)", () => {
+    const h = world();
+    // a name with no kind yet, and a folder where the store writes beside before it renames
+    const ref = h.refOf("k1");
+    mkdirSync(`${recordOf(h, ref)}.${process.pid}.tmp`);
+    // the window tells the kind, so the name is written again: Node says EISDIR, with the file's whole path
+    expect(() => h.refOf("k1", "desk.note")).toThrow(
+      new Error("the desk objects could not be written (EISDIR)"),
+    );
   });
 });

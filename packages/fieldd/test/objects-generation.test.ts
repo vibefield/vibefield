@@ -167,6 +167,43 @@ describe("every change is counted, and the survivors are told (OB custody, C5)",
     expect(h.desk.grants(ref)).toEqual([]);
     expect(said(events, "fieldd.objects.grants_mark_unanswered")).toHaveLength(2);
   });
+
+  it("says a survivor that took no count by a code alone: no part of a path its error's message holds", async () => {
+    const calls: unknown[][] = [];
+    // what a survivor rejects with may name a file as Node's errors do: its whole path, which holds the person's home
+    const planted = "/Users/planted-home/Library/VibeField/native/marks.json";
+    const says = `EACCES: permission denied, open '${planted}'`;
+    const coded = Object.assign(new Error(says), { code: "EACCES", path: planted });
+    const bare = new Error(`marks refused at ${planted}`);
+    let told = 0;
+    const refusing: Survivor = {
+      noted: [],
+      get: () => 0,
+      // it says no as Node would of a file, then with an error that has no code, then never answers
+      note: () => {
+        told += 1;
+        if (told === 1) return Promise.reject(coded);
+        if (told === 2) return Promise.reject(bare);
+        return new Promise<number>(() => undefined);
+      },
+    };
+    const h = world({ marks: refusing, noteMs: 20, logger: captureAll(calls) });
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    h.desk.hand(ref, "run-b");
+    h.desk.takeBack(ref, "run-a");
+    await h.desk.settled();
+    // a line is (event, sentence, attrs): its reason is a code, or the store's own word for a wait that ran out
+    const unanswered = calls.filter(([event]) => event === "fieldd.objects.grants_mark_unanswered");
+    const reasons = unanswered.map((call) => (call[2] as { reason?: unknown }).reason);
+    expect(reasons).toEqual(["EACCES", "unknown", "timeout"]);
+    // everything every line was handed, with an error's message, stack and fields spelled out
+    const spelled = JSON.stringify(calls, (_key, value: unknown) =>
+      value instanceof Error ? { ...value, message: value.message, stack: value.stack } : value,
+    );
+    const never = ["planted-home", "/Users", "marks.json", "marks refused at", "no answer in"];
+    for (const part of never) expect(spelled).not.toContain(part);
+  });
 });
 
 describe("an older grants file put back is stale (OB custody, C5)", () => {
@@ -195,8 +232,11 @@ describe("an older grants file put back is stale (OB custody, C5)", () => {
       h.desk.hand(ref, "run-a");
       // at `files`, whoever reads the pairing file can set a mark on the floor
       await h.marks.note(MARK, top);
-      // the count cannot rise: it never wraps, and nothing is written at a count a number does not hold
-      expect(() => h.desk.hand(ref, "run-b")).toThrow();
+      // the count cannot rise: it never wraps, and nothing is written at a count a number does not hold. The hand
+      // throws what a hand the disk would not take throws: the one fixed sentence, with its own code
+      expect(() => h.desk.hand(ref, "run-b")).toThrow(
+        new Error("the desk objects could not be written (count-full)"),
+      );
       expect(h.desk.grantOf(ref, "run-b")).toBeUndefined();
       expect(grantsOf(h)).toMatchObject({ generation: 1, grants: [{ ref, holder: "run-a" }] });
       // a take-back still takes, as one the disk would not take does: memory first, and the file goes
