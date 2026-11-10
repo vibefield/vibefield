@@ -44,10 +44,10 @@ struct AgentProfilesWords: Equatable {
     }
 
     enum Body: Equatable {
-      /// every window as Settings' C1 line, the kept reading's age, the reading's age said in the reset's place of each
-      /// window read before its reset (`MeterWindow.passed`; nil when none was, or its time cannot be read), and the
-      /// forecast's sentence
-      case reading(windows: [MeterWindow], kept: String?, age: String?, forecast: String?, stale: Bool)
+      /// every window as Settings' C1 line, the kept reading's age, the age said in the reset's place of each window
+      /// read before its reset (`MeterWindow.passed`), by its line's id (none when no window was, or its time cannot be
+      /// read; item 274: each its own read, Settings' `meterLines`' `ages`), and the forecast's sentence
+      case reading(windows: [MeterWindow], kept: String?, ages: [String: String], forecast: String?, stale: Bool)
       /// the first reading is out
       case firstRead
       /// what it needs, said with no act
@@ -190,10 +190,13 @@ struct AgentProfilesWords: Equatable {
   static func body(_ entry: PlanMeter, home: String, now: Date) -> PlanRow.Body {
     switch entry.state {
     case .reading(let reading):
+      // item 274's red: the reading's one age, keyed for each passed line, so no value moves (the green says each
+      // line's own read)
       let age = MeterRules.ageWords(fetchedAt: reading.fetchedAt, now: now)
+      let passed: [(String, String)] = age.isEmpty ? [] : reading.windows.filter(\.passed).map { ($0.line.id, age) }
+      let ages = Dictionary(passed, uniquingKeysWith: { first, _ in first })
       return .reading(
-        windows: reading.windows, kept: reading.stale ? entry.right?.words : nil,
-        age: reading.windows.contains(where: { $0.passed }) && !age.isEmpty ? age : nil,
+        windows: reading.windows, kept: reading.stale ? entry.right?.words : nil, ages: ages,
         forecast: reading.tightest.forecast?.long, stale: reading.stale)
     case .firstRead:
       return .firstRead
@@ -523,13 +526,13 @@ private struct AgentPlanRowView: View {
   @ViewBuilder
   private var detail: some View {
     switch row.body {
-    case .reading(let windows, let kept, let age, let forecast, let stale):
+    case .reading(let windows, let kept, let ages, let forecast, let stale):
       if let kept {
         Text(kept)
           .font(ChromeListType.detail)
           .foregroundStyle(ChromePalette.inkTertiary)
       }
-      UsageLinesView(windows: windows, stale: stale, age: age)
+      UsageLinesView(windows: windows, stale: stale, ages: ages)
       if let forecast {
         Text(forecast)
           .font(ChromeListType.detail)

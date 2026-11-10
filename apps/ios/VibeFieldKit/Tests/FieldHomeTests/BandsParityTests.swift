@@ -71,7 +71,8 @@ struct BandsParityTests {
     let golden = try Self.golden()
     let nows = try #require(golden["nows"])
     let records = try #require(golden["meters"]?.arrayValue)
-    #expect(records.count == 9)
+    // item 274: 9 + the two kept-meters records (This Mac and Side over `agent-usage.kept-meters`)
+    #expect(records.count == 11)
     for record in records {
       let meters = try Self.meters(record, nows: nows)
       var ours: [String: JSONValue] = [
@@ -90,7 +91,8 @@ struct BandsParityTests {
     let golden = try Self.golden()
     let nows = try #require(golden["nows"])
     let circles = try #require(golden["circles"]?.arrayValue)
-    #expect(circles.count == 27)
+    // item 274: 27 + the three kept-meters cases (the popover and the bud over This Mac, and Side's kept row)
+    #expect(circles.count == 30)
     for circle in circles {
       let meters = try Self.meters(circle, nows: nows)
       let size = try #require(circle["size"]?.doubleValue)
@@ -237,6 +239,8 @@ struct BandsParityTests {
     if let minutes = window.metric.durationMinutes { fields["durationMinutes"] = .int(Int64(minutes)) }
     if let resetIn = window.resetIn { fields["resetIn"] = .double(resetIn) }
     if let forecast = window.forecast { fields["forecast"] = Self.forecast(forecast) }
+    // item 274: a meter a later reading did not carry names its own read, as the golden's `windowRecord` writes it
+    if let read = window.metric.fetchedAt { fields["fetchedAt"] = .string(read) }
     return .object(fields)
   }
 

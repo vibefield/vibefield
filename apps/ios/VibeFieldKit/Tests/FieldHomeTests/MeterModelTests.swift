@@ -89,6 +89,64 @@ struct MeterModelTests {
     #expect(MeterModel.veiledAccount(" · Northlight") == nil)
   }
 
+  /// Item 274 (UM-274-D2 A, James 2026-11-10; DESIGN.md §8 "A meter a later reading did not carry"): at puppeteer
+  /// 0.4.0 a push carries only the meters it reads, so a plan holds meters of two readings, each kept meter with its
+  /// own `fetchedAt`. Every age said is the age of the numbers beside it. The twins of the desktop's U1-U3
+  /// (`packages/field-app/test/usage-meters.test.ts`), read at the mock door's `now`, 2026-09-16 12:00Z.
+  static func anthropicRight(_ set: String, _ batch: AgentAccountUsageBatch) throws -> MeterRight? {
+    let sets = try AgentProfileSetsResult(json: try HomeFixture.json("agents-profile-sets.meters")).sets
+    let rows = try AgentCatalogResult(json: try HomeFixture.json("agent-catalog.valid")).catalog
+    let profile = try #require(sets.first { $0.id == set })
+    let options = MetersOptions(catalog: MeterCatalog(rows: rows))
+    let meters = MeterModel.planMeters(profile, rows: batch.entries, now: MetersFixtureDoor.now, options: options)
+    return meters.entries.first { $0.key == "plan:anthropic" }?.right
+  }
+
+  @Test("item 274, U1: a kept reading says its tightest window's own age, not the push's")
+  func keptSaysItsTightestsAge() throws {
+    // Side's: kept after a refused refresh; its Fable week, the tightest at 96%, was read at 10:00Z, the push 11:59:30Z
+    let batch = try AgentAccountUsageBatch(json: try HomeFixture.json("agent-usage.kept-meters"))
+    let right = try Self.anthropicRight("side", batch)
+    #expect(right == MeterRight(kind: .kept, words: "as of 2h ago", hot: false, icon: false))
+  }
+
+  @Test("item 274, U2: a model week kept from before its reset leaves a pushed tightest its reset")
+  func keptPassedWeekAgesNothingElse() throws {
+    // This Mac's: the push at 11:59:30Z carried the five hours and the week; the Fable week, read at 11:20Z, reset at
+    // 11:45Z. The tightest (the week, 47%) was read after it, so the plan keeps its reset
+    let batch = try AgentAccountUsageBatch(json: try HomeFixture.json("agent-usage.kept-meters"))
+    let right = try Self.anthropicRight("native", batch)
+    #expect(right == MeterRight(kind: .reset, words: "12h", hot: false, icon: true))
+  }
+
+  @Test("item 274, U3: a tightest kept from an earlier read than a passed window is aged by it, with its own age")
+  func olderTightestIsAgedByItsOwnRead() throws {
+    // pushed at 11:59Z: a five hours spent at 100% whose reset came at 11:55Z; the week, the tightest at 70%, was kept
+    // from a read at 10:30Z
+    let metric = { (id: String, used: Double, minutes: Int64, resetsAt: String, read: String?) -> JSONValue in
+      var fields: [String: JSONValue] = [
+        "id": .string(id), "label": .string(id), "kind": .string("window"), "usedPercent": .double(used),
+        "durationMinutes": .int(minutes), "resetsAt": .string(resetsAt),
+      ]
+      if let read { fields["fetchedAt"] = .string(read) }
+      return .object(fields)
+    }
+    let entry: JSONValue = .object([
+      "provider": .string("claude"), "label": .string("Claude"), "profileId": .string("claude:native-default"),
+      "profileLabel": .string("Default"), "state": .string("available"),
+      "fetchedAt": .string("2026-09-16T11:59:00.000Z"), "scope": .string("subscription"),
+      "source": .object(["kind": .string("native-statusline"), "stability": .string("documented")]),
+      "metrics": .array([
+        metric("five-hour", 100, 300, "2026-09-16T11:55:00.000Z", nil),
+        metric("seven-day", 70, 10080, "2026-09-17T00:00:00.000Z", "2026-09-16T10:30:00.000Z"),
+      ]),
+    ])
+    let batch = try AgentAccountUsageBatch(
+      json: .object(["generatedAt": .string("2026-09-16T11:59:00.000Z"), "entries": .array([entry])]))
+    let right = try Self.anthropicRight("native", batch)
+    #expect(right == MeterRight(kind: .passed, words: "as of 1h 30m ago", hot: false, icon: false))
+  }
+
   @Test("a plan by its product's name, as Settings' card says it")
   func planTitles() {
     let anthropic = AgentSignInService(id: "anthropic", label: "Anthropic")

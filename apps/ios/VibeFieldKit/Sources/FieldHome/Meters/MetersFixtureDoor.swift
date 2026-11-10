@@ -12,6 +12,8 @@
   ///
   /// The usage-state doors (`-vf-mock-usage=`): `first-read` answers the empty batch, `refused` refuses `agent.usage`
   /// as an older desktop does (`FORBIDDEN_SCOPE`), `unavailable` cannot answer; none is the batch above, which runs hot.
+  /// `kept-meters` (item 274, UM-274-D7 A) answers `agent-usage.kept-meters`: a push half a minute old over meters kept
+  /// from earlier reads, read at the same `now`, so each passed line says its own read.
   @MainActor
   final class MetersFixtureDoor: ChatDoor {
     enum Usage: String, Sendable {
@@ -19,6 +21,7 @@
       case firstRead = "first-read"
       case refused
       case unavailable
+      case keptMeters = "kept-meters"
     }
 
     static let argument = "-vf-mock-usage="
@@ -70,6 +73,7 @@
       switch usage {
       case .readings: return try answer("agent-usage.budget")
       case .firstRead: return try answer("agent-usage.empty")
+      case .keptMeters: return try answer("agent-usage.kept-meters")
       case .refused:
         throw FieldProductError(kind: "FORBIDDEN_SCOPE", message: "agent.usage is not granted to this device")
       case .unavailable:

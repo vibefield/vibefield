@@ -519,10 +519,15 @@ const requiredMirrors = [
   // UM-4 — the home's usage batch and its profile sets, read by the kit's readers
   ["usage", usageFixtures, ["Tests/FieldProductTests"]],
   // and what the meters' demo door answers under `-vf-mock` (MetersFixtureDoor, DEBUG): the batch with a budget, the
-  // empty one (a first read), and the profile sets with plans
+  // empty one (a first read), the kept meters (item 274, `-vf-mock-usage=kept-meters`), and the profile sets with plans
   [
     "usage",
-    ["agent-usage.budget.json", "agent-usage.empty.json", "agents-profile-sets.meters.json"],
+    [
+      "agent-usage.budget.json",
+      "agent-usage.empty.json",
+      "agent-usage.kept-meters.json",
+      "agents-profile-sets.meters.json",
+    ],
     ["Sources/FieldHome"],
   ],
   // UM-4 PH-2 — the usage bands golden and every input it was computed from (its `inputs`, and the catalog whose order

@@ -117,14 +117,14 @@ struct AgentProfilesPageTests {
     #expect(titles == ["Claude Max", "ChatGPT Business", "Kimi Code"])
     let bodies = work.plans.map(\.body)
     let first = try #require(bodies.first)
-    guard case .reading(let windows, let kept, let age, let forecast, let stale) = first else {
+    guard case .reading(let windows, let kept, let ages, let forecast, let stale) = first else {
       Issue.record("Work's first plan is not a reading: \(first)")
       return
     }
     let ids = windows.map(\.line.id)
     #expect(ids == ["five-hour", "seven-day"])
     #expect(kept == nil)
-    #expect(age == nil)
+    #expect(ages.isEmpty)
     #expect(forecast == "Runs out in ~1h 30m at this pace")
     #expect(!stale)
     #expect(bodies.dropFirst().first == .needs("Couldn't read · retry"))
@@ -324,11 +324,12 @@ struct AgentProfilesPageTests {
     let later = Self.now.addingTimeInterval(3 * 3600)
     let words = AgentProfilesWords(reading: reading, lens: Self.lens(reading, "native"), home: "studio", now: later)
     let anthropic = try #require(words.plans.first { $0.key == "plan:anthropic" })
-    guard case .reading(let windows, let kept, let age, let forecast, _) = anthropic.body else {
+    guard case .reading(let windows, let kept, let ages, let forecast, _) = anthropic.body else {
       Issue.record("This Mac's Anthropic plan is not a reading: \(anthropic.body)")
       return
     }
     #expect(kept == nil)
+    let age = ages["five-hour"]
     #expect(age == "as of 3h 1m ago")
     #expect(forecast == nil)
     let passed = windows.filter { $0.passed }.map(\.line.id)
@@ -340,16 +341,47 @@ struct AgentProfilesPageTests {
     let weekSaid = UsageLineView.words(week.line, form: week.resetForm)
     #expect(weekSaid == "7D: 47% used, resets in 9h")
     let openai = try #require(words.plans.first { $0.key == "plan:openai" })
-    guard case .reading(_, let openaiKept, let openaiAge, _, let stale) = openai.body else {
+    guard case .reading(_, let openaiKept, let openaiAges, _, let stale) = openai.body else {
       Issue.record("This Mac's OpenAI plan is not a reading: \(openai.body)")
       return
     }
     #expect(stale)
     #expect(openaiKept == "as of 3h 32m ago")
+    // Codex's passed line is its primary window (reset 13:30Z, read at 11:28Z): the one key `ages` holds
+    let openaiAge = openaiAges["primary"]
     #expect(openaiAge == "as of 3h 32m ago")
     let native = try #require(words.profiles.first { $0.profileId == "native" })
     #expect(native.word == "47%")
     #expect(!native.hot)
+  }
+
+  /// Item 274 (UM-274-D2 A, James 2026-11-10; DESIGN.md §8 "A meter a later reading did not carry"): the phone's twin
+  /// of Settings' S1. A push half a minute old over meters kept from earlier reads (`agent-usage.kept-meters`, the
+  /// mock door's `-vf-mock-usage=kept-meters`, read at its `now`): each passed line says its own read, and a kept plan
+  /// says its tightest's.
+  @Test("item 274: each passed line says its own read's age, and a kept plan its tightest's, never the push's")
+  func keptMetersSayTheirOwnRead() throws {
+    let batch = try AgentAccountUsageBatch(json: try HomeFixture.json("agent-usage.kept-meters"))
+    let reading = try Self.reading(.batch(batch))
+    let mac = AgentProfilesWords(reading: reading, lens: Self.lens(reading, "native"), home: "studio", now: Self.now)
+    let anthropic = try #require(mac.plans.first { $0.key == "plan:anthropic" })
+    guard case .reading(_, let kept, let ages, _, _) = anthropic.body else {
+      Issue.record("This Mac's Anthropic plan is not a reading: \(anthropic.body)")
+      return
+    }
+    // the Fable week was read at 11:20Z and its reset came at 11:45Z; the push came at 11:59:30Z
+    #expect(kept == nil)
+    #expect(ages == ["fable": "as of 40m ago"])
+    let side = AgentProfilesWords(reading: reading, lens: Self.lens(reading, "side"), home: "studio", now: Self.now)
+    let sideAnthropic = try #require(side.plans.first { $0.key == "plan:anthropic" })
+    guard case .reading(_, let sideKept, let sideAges, _, let stale) = sideAnthropic.body else {
+      Issue.record("Side's Anthropic plan is not a reading: \(sideAnthropic.body)")
+      return
+    }
+    // kept after a refused refresh; its tightest, the Fable week at 96%, was read at 10:00Z and still runs
+    #expect(stale)
+    #expect(sideKept == "as of 2h ago")
+    #expect(sideAges.isEmpty)
   }
 
   @Test("an agent with no meter says ‹agent› shows no meter; a plan no agent named says its title alone")

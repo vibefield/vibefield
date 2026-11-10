@@ -11,12 +11,13 @@ import SwiftUI
 // when the window runs hot (`UsageLine.hot`), which a window read before its reset never does.
 
 /// A plan's windows, each a C1 line, under their groups' headings; a kept reading draws at 50%. Each window read
-/// before its reset (`MeterWindow.passed`) says `age` in its reset's place.
+/// before its reset (`MeterWindow.passed`) says its own age (`ages`, by its line's id) in its reset's place.
 struct UsageLinesView: View {
   let windows: [MeterWindow]
   var stale = false
-  /// the reading's age, "as of 3h ago"; nil when no window was read before its reset, or its time cannot be read
-  var age: String? = nil
+  /// each passed window's age, "as of 3h ago", by its line's id (item 274: its own read); none when no window was read
+  /// before its reset, or its time cannot be read
+  var ages: [String: String] = [:]
 
   var body: some View {
     VStack(alignment: .leading, spacing: 5) {
@@ -28,7 +29,7 @@ struct UsageLinesView: View {
             .lineLimit(1)
             .accessibilityHidden(true)
         }
-        UsageLineView(line: window.line, form: window.resetForm, age: window.passed ? age : nil)
+        UsageLineView(line: window.line, form: window.resetForm, age: window.passed ? ages[window.line.id] : nil)
       }
     }
     .opacity(stale ? 0.5 : 1)
