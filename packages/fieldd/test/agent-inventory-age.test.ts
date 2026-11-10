@@ -1413,3 +1413,66 @@ describe("item 306 — a Stop of a held run and G5's attach retry (the mock floo
     expect(realSignals(), "the net: no real signal was asked").toEqual([]);
   }, 30_000);
 });
+
+// Item 310 (2026-11-10) — the idle road's replacement is audited (`audited` → the audit's `requiredSystem`), and
+// the audit writes its `attempt` BEFORE the replacement's work runs. An audit that refuses there runs neither the
+// work nor its `restore`, so before 310 the held run stayed `resuming` until a restart: no poll asked again, a
+// person's resume was refused "being resumed already", and the floor's exit went to a replacement that no longer
+// ran, so the run never closed. The row makes the audit refuse that one attempt (its `requiredSystem`, spied,
+// rejecting without running the effect, as a refused `attempt` append does) and reads the third: the floor's exit
+// then closes the run.
+// No pid is touched and no process is signalled, under the same net.
+describe("item 310 — an audit-refused idle replacement leaves the run held (mock floor)", () => {
+  const realKill = process.kill.bind(process);
+  let net: MockInstance<typeof process.kill> | undefined;
+  beforeEach(() => {
+    net = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (signal === 0) return realKill(pid, 0);
+      throw new Error("Q17: a real signal was about to be sent");
+    });
+  });
+  afterEach(() => {
+    net?.mockRestore();
+    net = undefined;
+  });
+  /** every signal but 0 asked of `process.kill` while the row ran (the net threw for each) */
+  const realSignals = () => (net?.mock.calls ?? []).filter(([, signal]) => signal !== 0);
+
+  it("the audit refuses the idle replacement's attempt: the run is held again, and the floor's exit closes it", async () => {
+    const { daemon, records, births } = await agentDaemonOn(
+      freshFloor(),
+      (dataDir) => [runRecord(RUN, CLAUDE, dataDir)],
+      { resumeWhenIdle: { afterMs: 1, pollMs: 50 } },
+    );
+    // the conversation is idle until the audit has refused once, then working again
+    let idle = true;
+    vi.spyOn(daemon.index, "sessionByNativeId").mockImplementation(async (nativeSessionId) => ({
+      id: "idx-310",
+      nativeSessionId,
+      activity: idle ? { firstAt: 1, lastAt: 1 } : null,
+      streamState: "ready",
+    }));
+    // the audit refuses the idle replacement's attempt once, before its work runs
+    const refused = vi.spyOn(daemon.audit, "requiredSystem").mockImplementationOnce(async () => {
+      idle = false;
+      throw new Error("the audit log refused the attempt");
+    });
+    const terminate = vi
+      .spyOn(daemon.terminals, "terminate")
+      .mockResolvedValue({ terminated: true });
+    await until(() => refused.mock.calls.length >= 1, 10_000, "the idle replacement, audited");
+    expect(refused.mock.calls[0]?.[0]?.action, "the idle road's own audit").toBe(
+      "agent.session.resume",
+    );
+    expect(terminate, "refused before its work: nothing was ended").not.toHaveBeenCalled();
+    expect(daemon.agents.replacing(RUN), "no replacement in flight").toBe(false);
+    // the floor's exit for the PTY (its process ended on its own): the held run closes by it
+    await daemon.agents.handleTerminalExit(exited());
+    // before 310 the exit went to a replacement that never ran, and the run stood (received: undefined)
+    expect(records.read(RUN)?.exited?.reason, "closed by the floor's exit").toBe(
+      "application-terminated",
+    );
+    expect(births, "nothing born").toEqual([]);
+    expect(realSignals(), "the net: no real signal was asked").toEqual([]);
+  }, 30_000);
+});
