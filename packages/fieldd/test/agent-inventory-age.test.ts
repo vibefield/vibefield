@@ -157,6 +157,8 @@ interface AgentDaemonSeams {
   kill?: NonNullable<FielddConfig["agentGateway"]>["kill"];
   /** fieldd's own log under `<dataDir>/logs` (none by default: the runtime's logger is a no-op) */
   logs?: boolean;
+  /** item 306: the idle poll a row drives itself (default: it never fires inside a row) */
+  resumeWhenIdle?: { afterMs: number; pollMs: number };
 }
 
 /** A daemon over the mock floor answering `observedState` on the fixtures'
@@ -170,7 +172,7 @@ async function agentDaemonOn(
   staged: (dataDir: string) => AgentSessionRecord[],
   seams: AgentDaemonSeams = {},
 ): Promise<AgentFloor> {
-  const { lastBoard, processTable, beforeBoot, kill, logs } = seams;
+  const { lastBoard, processTable, beforeBoot, kill, logs, resumeWhenIdle } = seams;
   const dataDir = mkdtempSync(join(tmpdir(), "vf-agent-age-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -213,8 +215,8 @@ async function agentDaemonOn(
       ...(processTable !== undefined ? { processTable } : {}),
       ...(kill !== undefined ? { kill } : {}),
     },
-    // a pending run's idle poll never fires inside a row: the door is the subject
-    agentResumeWhenIdle: { afterMs: 600_000, pollMs: 600_000 },
+    // a pending run's idle poll never fires inside a row (the door is the subject), unless the row drives it
+    agentResumeWhenIdle: resumeWhenIdle ?? { afterMs: 600_000, pollMs: 600_000 },
   });
   cleanup.push(() => daemon.stop());
   const grant = daemon.tokens.mint(["agent.spawn", "agent.observe"], "agent-age");
@@ -1220,4 +1222,71 @@ describe("Q29 (i) — `replacing(id)`, read at a held run's end (the mock floor)
     expect(told).toEqual([[RUN, false]]);
     expect(realSignals(), "the net: no real signal was asked").toEqual([]);
   });
+});
+
+// Item 306 (2026-11-10) — a person's Stop of a held run is not undone by the idle poll. Q17's leg ends an untyped
+// held run by its own PTY (the floor's terminate), and the run stays held until the floor's exit, a ladder later.
+// Before 306 an idle poll in that window could start a replacement: it asks the floor's terminate again, waits for
+// the SAME exit, and births a successor, so the Stop is undone. The row drives the poll itself (every 50 ms, never a
+// 600 s wait), and the index says the conversation is idle only once the Stop is placed. No pid is touched and no
+// process is signalled: the end is the floor's terminate, spied, as every row here, under the same net as Q17's.
+describe("item 306 — a Stop of a held run is not undone by the idle poll (the mock floor)", () => {
+  const realKill = process.kill.bind(process);
+  let net: MockInstance<typeof process.kill> | undefined;
+  beforeEach(() => {
+    net = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (signal === 0) return realKill(pid, 0);
+      throw new Error("Q17: a real signal was about to be sent");
+    });
+  });
+  afterEach(() => {
+    net?.mockRestore();
+    net = undefined;
+  });
+  /** every signal but 0 asked of `process.kill` while the row ran (the net threw for each) */
+  const realSignals = () => (net?.mock.calls ?? []).filter(([, signal]) => signal !== 0);
+
+  it("between a held run's terminate and the floor's exit, no replacement starts: the Stop stands", async () => {
+    const { daemon, records, births } = await agentDaemonOn(
+      freshFloor(),
+      (dataDir) => [runRecord(RUN, CLAUDE, dataDir)],
+      { resumeWhenIdle: { afterMs: 1, pollMs: 50 } },
+    );
+    // the index answers every poll; the conversation is idle only once the Stop is placed
+    let idle = false;
+    const asked = vi
+      .spyOn(daemon.index, "sessionByNativeId")
+      .mockImplementation(async (nativeSessionId) => ({
+        id: "idx-306",
+        nativeSessionId,
+        activity: idle ? { firstAt: 1, lastAt: 1 } : null,
+        streamState: "ready",
+      }));
+    await until(
+      () => records.read(RUN)?.reattach !== undefined,
+      10_000,
+      "the run held pending at boot",
+    );
+    // the poll asks at its own cadence before the Stop, and finds the conversation working: no false green
+    await until(() => asked.mock.calls.length >= 2, 5_000, "the idle poll asking at its cadence");
+    const terminate = vi
+      .spyOn(daemon.terminals, "terminate")
+      .mockResolvedValue({ terminated: true });
+    await daemon.agents.endRun(RUN);
+    expect(terminate, "the Stop: its own PTY").toHaveBeenCalledTimes(1);
+    // the conversation goes idle while the floor's ladder runs, and the poll asks again and again
+    idle = true;
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    // before 306 the idle poll's replacement asked the floor's terminate again (calls: 2)
+    expect(terminate, "no replacement asked the floor again").toHaveBeenCalledTimes(1);
+    expect(daemon.agents.replacing(RUN), "and none is in flight").toBe(false);
+    // the floor's exit for the Stop's own terminate
+    await daemon.agents.handleTerminalExit(exited());
+    await until(() => records.read(RUN)?.exited !== undefined, 5_000, "the run closed");
+    expect(records.read(RUN)?.exited?.reason, "closed by the Stop's own exit").toBe(
+      "application-terminated",
+    );
+    expect(births, "nothing born: the Stop stands").toEqual([]);
+    expect(realSignals(), "the net: no real signal was asked").toEqual([]);
+  }, 30_000);
 });
