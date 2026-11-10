@@ -1,7 +1,8 @@
+import { IPC_CHANNELS } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BootMachineDeps, BootPhase, WorkspaceModule } from "../src/boot/machine";
-import { createBootMachine } from "../src/boot/machine";
+import { createBootMachine, FAILED_START } from "../src/boot/machine";
 import type { FieldHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 
@@ -76,6 +77,22 @@ async function flush(): Promise<void> {
   for (let i = 0; i < 25; i++) await Promise.resolve();
 }
 
+/** VibeField's insides (DESIGN.md §9; AO-L8's list): words a sentence the boot shows a person never holds — Electron's
+ * wrapping, an error's class, the daemon and its exit. "code" and "signal" fit the failed start's one sentence; a row
+ * that reuses the list (item 281's stage words) checks that each word fits its own sentence. */
+const INSIDE_WORDS = [
+  "Error invoking",
+  "window-bootstrap",
+  "SupervisorError",
+  "Error:",
+  "fieldd",
+  "daemon",
+  "code",
+  "signal",
+  "pairing",
+  "keychain",
+] as const;
+
 function harness(
   opts: {
     stableFrames?: number;
@@ -103,13 +120,14 @@ function harness(
   const clientStub = { close: () => {} } as unknown as FielddClient;
   const makeClient = vi.fn(() => clientStub);
   const warn = vi.fn<RendererLogger["warn"]>();
+  const error = vi.fn<RendererLogger["error"]>();
   const logger: RendererLogger = {
     child: () => logger,
     trace: vi.fn(),
     debug: vi.fn(),
     info: vi.fn(),
     warn,
-    error: vi.fn(),
+    error,
     fatal: vi.fn(),
     isLevelEnabled: () => true,
   };
@@ -156,6 +174,7 @@ function harness(
     makeClient,
     clientStub,
     warn,
+    error,
     /** Set the scripted clock to `at`, then run the next queued rAF tick. */
     fireFrame(at: number) {
       clock = at;
@@ -476,7 +495,14 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     const failed = h.machine.view().unavailable;
     expect(failed).not.toBeNull();
     expect(failed?.phase).toBe("requesting-bootstrap");
-    expect(failed?.reason).toContain("daemon unreachable");
+    // ONE sentence, whatever failed (DESIGN.md §9, item 280); what failed goes to the log, whole
+    expect(failed?.reason).toBe(FAILED_START);
+    expect(h.error).toHaveBeenCalledWith(
+      "renderer.boot.failed",
+      expect.any(String),
+      expect.objectContaining({ message: "daemon unreachable" }),
+      { phase: "requesting-bootstrap" },
+    );
     expect(failed?.retryable).toBe(true);
 
     // retry() re-enters run() — completed checkpoints skip, so the workspace import (which
@@ -511,8 +537,14 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     await flush();
     const first = h.machine.view().unavailable;
     expect(first).not.toBeNull();
-    expect(first?.reason).toContain("workspace chunk failed");
+    expect(first?.reason).toBe(FAILED_START);
     expect(first?.phase).toBe("connecting-fieldd"); // failed at the workspace await, client made
+    expect(h.error).toHaveBeenCalledWith(
+      "renderer.boot.failed",
+      expect.any(String),
+      expect.objectContaining({ message: "workspace chunk failed" }),
+      { phase: "connecting-fieldd" },
+    );
 
     h.machine.retry();
     await flush();
@@ -525,6 +557,63 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     expect(h.machine.view().unavailable).toBeNull();
     expect(h.importWorkspace).toHaveBeenCalledTimes(2); // re-imported — the reset let retry re-fetch
     expect(h.getConnection).toHaveBeenCalledTimes(1); // bootstrap checkpoint stayed resumed
+  });
+
+  // Item 280: what a person read when a start failed, cause by cause, as ob-foundation traced them on main
+  // (2026-11-10 01:11Z): Electron's wrapping, the error's class name, then main's message (fieldd's own stderr tail
+  // after an exit). The last is custody's cause (the keychain did not answer). None of it may reach the reason the
+  // splash, the Setup Assistant's desk line and the switch draw (DESIGN.md §9, VibeField's insides).
+  const WRAPPED = (thrown: string): Error =>
+    new Error(`Error invoking remote method '${IPC_CHANNELS.windowBootstrap}': ${thrown}`);
+  const TODAY = [
+    "SupervisorError: fieldd did not come up within 20000ms (last probe: connect ECONNREFUSED 127.0.0.1:4242)",
+    "SupervisorError: fieldd exited before readiness (code 1, signal null)\nfieldd failed to start: pairing verification failed",
+    "SupervisorError: could not spawn fieldd: Error: spawn EACCES",
+    "SupervisorError: a live fieldd from a different development build already owns this data root",
+    "Error: fieldd crash loop: 3 automatic restarts did not keep it up",
+    "Error: fieldd supervisor is unavailable",
+    "Error: fieldd bin missing (build it): /Applications/VibeField.app/Contents/Resources/fieldd/bin.js",
+    "Error: window bootstrap refused: unregistered sender",
+    "Error: fieldd was not started",
+  ];
+  it.each(TODAY)("says one sentence for a failed start, none of its words: %s", async (thrown) => {
+    const h = harness();
+    const refusal = WRAPPED(thrown);
+    h.getConnection.mockRejectedValueOnce(refusal);
+    h.importWorkspace.mockReturnValue(deferred<WorkspaceModule>().promise);
+
+    h.machine.start();
+    await flush();
+    const reason = h.machine.view().unavailable?.reason;
+    expect(FAILED_START).toBe("VibeField couldn't start.");
+    expect(reason).toBe(FAILED_START);
+    // the wrapping, the class's name, the daemon, its code and its signal, and main's own words: none is drawn
+    for (const word of INSIDE_WORDS) {
+      expect(reason).not.toContain(word);
+    }
+    // what failed is in the log, whole: the very error main sent, at the step where the boot stopped
+    expect(h.error).toHaveBeenCalledTimes(1);
+    expect(h.error).toHaveBeenCalledWith("renderer.boot.failed", expect.any(String), refusal, {
+      phase: "requesting-bootstrap",
+    });
+  });
+
+  it("says the same one sentence whatever a failed start's message holds, words no row has seen included", async () => {
+    // The nine above are a sample of today's, never the list: once OB's custody lands a start can fail in words of a
+    // pairing or a signed code (VF-PM, 2026-11-10 02:21Z), and any message at all says only the sentence.
+    const h = harness();
+    const unseen = WRAPPED(
+      "CustodyError: the floor refused this pairing: the signed code did not verify (quarantine 7f3a)",
+    );
+    h.getConnection.mockRejectedValueOnce(unseen);
+    h.importWorkspace.mockReturnValue(deferred<WorkspaceModule>().promise);
+
+    h.machine.start();
+    await flush();
+    expect(h.machine.view().unavailable?.reason).toBe(FAILED_START);
+    expect(h.error).toHaveBeenCalledWith("renderer.boot.failed", expect.any(String), unseen, {
+      phase: "requesting-bootstrap",
+    });
   });
 
   it("start() is idempotent and retry() is a no-op unless unavailable", async () => {
@@ -785,7 +874,14 @@ describe("boot machine (ESR slice 4 — splash-gated boot)", () => {
     FakeManager.failNext = true;
     h.machine.completeOnboarding();
     await flush();
-    expect(h.machine.view().unavailable?.reason).toContain("document open failed");
+    const failed = h.machine.view().unavailable;
+    expect(failed?.reason).toBe(FAILED_START);
+    expect(h.error).toHaveBeenCalledWith(
+      "renderer.boot.failed",
+      expect.any(String),
+      expect.objectContaining({ message: "document open failed" }),
+      { phase: failed?.phase },
+    );
 
     h.machine.retry();
     await flush();

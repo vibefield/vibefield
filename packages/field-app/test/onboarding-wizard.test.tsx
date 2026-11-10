@@ -1915,7 +1915,7 @@ describe("Setup Assistant", () => {
     expect(fieldd.request).not.toHaveBeenCalledWith("setup.answer", expect.anything());
   });
 
-  it("says why a desk could not open beneath the glass, and its Retry is the boot's own", async () => {
+  it("says a desk could not open beneath the glass in the boot's one sentence, and its Retry is the boot's own", async () => {
     host(
       vi.fn(
         async (params: Record<string, unknown>) =>
@@ -1935,15 +1935,19 @@ describe("Setup Assistant", () => {
     await boot(
       bootAt("opening-document", {
         stage: "opening doc",
-        unavailable: { phase: "opening-document", reason: "document open failed", retryable: true },
+        unavailable: {
+          phase: "opening-document",
+          reason: "VibeField couldn't start.",
+          retryable: true,
+        },
       }),
     );
 
-    // The splash's rule, on the glass: what went wrong stays a pane — the plain
-    // reason, then Retry (§8; FG-4b).
+    // The splash's rule, on the glass: what went wrong stays a pane — the boot's one
+    // sentence, then Retry (§8; FG-4b; §9, item 280: what failed is in the log, never here).
     expect(container?.querySelector(".vf-wizard-hold")).toBeNull();
     expect(title()).toBe("Getting your desk ready.");
-    expect(text()).toContain("document open failed");
+    expect(text()).toContain("VibeField couldn't start.");
     await click("Retry");
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(onReveal).not.toHaveBeenCalled();
