@@ -150,6 +150,38 @@ enum SpendWords {
     return out
   }
 
+  // MARK: - The hero's caption
+
+  /// `HERO_WHAT`: what the hero's figure is — an estimate at API prices, never a bill.
+  static let heroWhat = "since each agent started, at API prices"
+
+  /// `HeroRoom`: the room a narrow hero leaves its caption beside the total and the burn, and how the caption's words
+  /// measure.
+  struct HeroRoom {
+    /// Points from the burn (and the gap after it) to where the caption must stop.
+    let width: Double
+    let measure: (String) -> Double
+  }
+
+  /// `NARROW_HERO`: the narrow hero's one line as spend.css lays it out (the sheet is the authority): the gap after the
+  /// number (`.is-compact`'s 10), the one before the caption (its cap's 8), and how far the list's words sit inside
+  /// their column (its header's padding, 10), where the caption stops. Its three faces are `SpendModel.TextStyle`'s
+  /// `.heroFigure` (`300 20px`), `.heroRate` (`550 13px`) and `.row` (`400 12px`).
+  enum NarrowHero {
+    static let gapPx = 10.0
+    static let capGapPx = 8.0
+    static let listInsetPx = 10.0
+  }
+
+  /// RED STUB (the EL8 to puppeteer 0.4.0): 0.3.3's caption, whole at every width; the green transcribes 0.4.0's.
+  static func heroCaption(missing: [String], names: [String: Name], narrow: HeroRoom?) -> String? {
+    let leftOut =
+      missing.count == 1
+      ? " · not counting \(names[missing[0]]?.one ?? "")"
+      : missing.count > 1 ? " · not counting \(missing.count) agents with no price" : ""
+    return "\(heroWhat)\(leftOut)"
+  }
+
   /// `fitWords` (:88): text fitted to a width at a word boundary, so a cut never lands mid-word.
   static func fitWords(_ text: String, max: Double, measure: (String) -> Double) -> String {
     if text.isEmpty || max <= 0 { return "" }
