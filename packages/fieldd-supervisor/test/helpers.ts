@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONTRACTS_VERSION, type Scope } from "@vibefield/contracts";
+import { CONTRACTS_VERSION, type CustodyHandoff, type Scope } from "@vibefield/contracts";
 import { ProductApi } from "@vibefield/fieldd";
 import type { FielddSupervisor, FielddSupervisorEvent } from "../src/index";
 
@@ -29,9 +30,66 @@ function acceptOnly(token: string, scopes: readonly Scope[] = []) {
     t === token ? { tokenId: "tk-shell", scopes: [...scopes], label: "shell" } : null;
 }
 
+/** OB custody — what FIXTURE_SEALED writes to its OBSERVE_FILE: what it was handed and what it heard, with no
+ * secret in it (a digest of the hand-off line, never the line). */
+export interface SealedObserved {
+  pid: number;
+  /** FIELDD_CUSTODY as the child saw it, or null */
+  custodyFlag: string | null;
+  /** when the first byte of stdin arrived (the child's clock, ms) */
+  stdinAtMs: number | null;
+  /** sha256 of the hand-off line, without its newline */
+  handoffSha256: string | null;
+  /** the marks the spawner remembered, as the hand-off carried them */
+  handoffExpect: Record<string, number> | null;
+  /** whether any of the three secrets was in the child's argv or environment */
+  secretInArgv: boolean | null;
+  secretInEnv: boolean | null;
+  /** every hello it heard: the kind claimed, the credential's type, and the hello's params as JSON */
+  hellos: Array<{
+    clientKind: string | null;
+    credential: "string" | "object" | "none";
+    raw: string;
+  }>;
+  /** how many times `system.custody.marks.subscribe` was opened */
+  subscribes: number;
+}
+
+/** A FIXTURE_SEALED child the TEST started (an adoption row's incumbent, or a planted listener). */
+export interface SealedDaemon {
+  readonly pid: number;
+  readonly port: number;
+  readonly bootId: string;
+  /** what it has observed so far */
+  observed(): SealedObserved;
+}
+
+/** Where a supervisor-spawned FIXTURE_SEALED child writes what it observed, by convention of these tests. */
+export function sealedObservePath(root: string): string {
+  return join(root, "fx", "observed.json");
+}
+
+export function readSealedObserved(root: string): SealedObserved {
+  return JSON.parse(readFileSync(sealedObservePath(root), "utf8")) as SealedObserved;
+}
+
 export interface Harness {
   /** A short temp data root, tracked for removal. */
   mkRoot(): string;
+  /** OB custody — start FIXTURE_SEALED as a child of the test, under `root`, and wait for its ready line. With
+   * `handoff` it is a sealed fieldd (`mode: "prove"`, the default): the hand-off goes down its stdin under
+   * FIELDD_CUSTODY=stdin, and it writes product.json (custody "sealed") and no shell.token. `mode: "accept"` is a
+   * planted listener: it writes no run files, takes any hello and proves nothing. Tracked and killed in cleanup. */
+  startSealedDaemon(
+    root: string,
+    o?: {
+      handoff?: CustodyHandoff;
+      mode?: "prove" | "accept";
+      bootId?: string;
+      userId?: string;
+      buildId?: string;
+    },
+  ): Promise<SealedDaemon>;
   /** A data root nested deeply enough that native/run/mgmt.sock overflows the
    * sun_path safety margin. *Corrected 2026-11-12 (item 345):* this said "for
    * the data-root-too-long guard"; such a root now binds through the short
@@ -119,6 +177,62 @@ export function createHarness(): Harness {
       const port = await api.listen();
       apis.push(api);
       return { api, port, token };
+    },
+
+    async startSealedDaemon(root, o = {}) {
+      const fx = join(root, "fx");
+      mkdirSync(fx, { recursive: true });
+      const script = join(fx, "sealed.mjs");
+      writeFileSync(script, FIXTURE_SEALED);
+      const child = spawn(process.execPath, [script], {
+        env: {
+          CV: CONTRACTS_VERSION,
+          FIELDD_DATA_DIR: root,
+          OBSERVE_FILE: sealedObservePath(root),
+          SEALED_MODE: o.mode ?? "prove",
+          ...(o.handoff !== undefined ? { FIELDD_CUSTODY: "stdin" } : {}),
+          ...(o.bootId !== undefined ? { SEALED_BOOT_ID: o.bootId } : {}),
+          ...(o.userId !== undefined ? { FIELDD_USER_ID: o.userId } : {}),
+          ...(o.buildId !== undefined ? { FIELDD_BUILD_ID: o.buildId } : {}),
+        },
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      const pid = child.pid;
+      if (pid === undefined) throw new Error("the sealed fixture did not start");
+      pids.add(pid);
+      // a child that exits before it reads must not throw EPIPE at the suite
+      child.stdin.on("error", () => undefined);
+      child.stdin.end(o.handoff !== undefined ? `${JSON.stringify(o.handoff)}\n` : "");
+      const ready = await new Promise<{ port: number; bootId: string }>((resolve, reject) => {
+        let out = "";
+        let err = "";
+        const fail = (why: string): void => {
+          clearTimeout(timer);
+          reject(new Error(`the sealed fixture ${why}; its stderr: ${err.trim()}`));
+        };
+        const timer = setTimeout(() => fail("printed no ready line within 3 s"), 3_000);
+        child.stderr.on("data", (chunk: Buffer) => {
+          err += chunk.toString("utf8");
+        });
+        child.stdout.on("data", (chunk: Buffer) => {
+          out += chunk.toString("utf8");
+          const end = out.indexOf("\n");
+          if (end === -1) return;
+          clearTimeout(timer);
+          try {
+            resolve(JSON.parse(out.slice(0, end)) as { port: number; bootId: string });
+          } catch {
+            fail("printed a first line that is not JSON");
+          }
+        });
+        child.once("exit", (code) => fail(`exited with code ${code} before its ready line`));
+      });
+      return {
+        pid,
+        port: ready.port,
+        bootId: ready.bootId,
+        observed: () => readSealedObserved(root),
+      };
     },
 
     async startGatedProxy(targetPort) {
@@ -331,4 +445,280 @@ setTimeout(() => process.exit(1), 40);
 /** Never writes run files; idles forever (readiness-timeout / abort fodder). */
 export const FIXTURE_IDLE = `
 setInterval(() => {}, 1e6);
+`;
+
+/** OB custody — a fieldd stand-in that speaks the SEALED side by itself: no in-test ProductApi answers for it, because
+ * the door's own sealed hello is fieldd's half and is not in this package's reach. It is a whole listener: a minimal
+ * WebSocket server (text frames under 64 KiB, which is every frame these rows send) answering JSON-RPC, with the
+ * pairing recipe spelled a second time in plain node:crypto, so a row that pairs with it checks the maker against an
+ * independent verifier.
+ *
+ * Under FIELDD_CUSTODY=stdin it reads ONE line from stdin and exits 2, with a stderr line and no ready line, when the
+ * line is absent or is no hand-off. SEALED_MODE:
+ *  - "prove" (the default): a sealed fieldd. It needs the hand-off, verifies a shell-main hello's PairingMac against
+ *    its own port, boot and user and the hand-off's shell secret, answers `serverMac`, refuses anything else
+ *    UNAUTHORIZED and closes 1008. It writes product.json with custody "sealed" and NEVER a shell.token.
+ *  - "accept": a planted listener. It writes no run files, takes any hello and proves nothing.
+ * Then, both modes: the ready line. SEALED_BOOT_ID names its boot (default "boot-sealed"); FIELDD_USER_ID its user.
+ * SEALED_MARKS_FRAMES is a JSON array of `{marks}` frames: the first answers `system.custody.marks.subscribe`,
+ * the rest follow as snapshots 30 ms apart. OBSERVE_FILE, if set, is rewritten with a SealedObserved whenever what
+ * it has seen changes: never a secret, only a digest of the line and whether a secret was in argv or env. */
+export const FIXTURE_SEALED = `
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import { join } from "node:path";
+
+const root = process.env.FIELDD_DATA_DIR;
+const bootId = process.env.SEALED_BOOT_ID ?? "boot-sealed";
+const userId = process.env.FIELDD_USER_ID ?? "";
+const mode = process.env.SEALED_MODE ?? "prove";
+const frames = JSON.parse(process.env.SEALED_MARKS_FRAMES ?? "[]");
+const dir = join(root, "fieldd", "run");
+const HEX64 = /^[0-9a-f]{64}$/;
+const NONCE = /^[0-9a-f]{32}$/;
+const GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+const observed = {
+  pid: process.pid,
+  custodyFlag: process.env.FIELDD_CUSTODY ?? null,
+  stdinAtMs: null,
+  handoffSha256: null,
+  handoffExpect: null,
+  secretInArgv: null,
+  secretInEnv: null,
+  hellos: [],
+  subscribes: 0,
+};
+function note() {
+  if (process.env.OBSERVE_FILE) writeFileSync(process.env.OBSERVE_FILE, JSON.stringify(observed));
+}
+
+function readLine() {
+  return new Promise((resolve) => {
+    let text = "";
+    const timer = setTimeout(() => resolve(null), 5000);
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => {
+      if (observed.stdinAtMs === null) observed.stdinAtMs = Date.now();
+      text += chunk;
+      const end = text.indexOf("\\n");
+      if (end === -1) return;
+      clearTimeout(timer);
+      resolve(text.slice(0, end));
+    });
+    process.stdin.on("end", () => {
+      clearTimeout(timer);
+      resolve(null);
+    });
+  });
+}
+
+let shell = null;
+if (process.env.FIELDD_CUSTODY === "stdin") {
+  const line = await readLine();
+  let handoff = null;
+  try {
+    handoff = line === null ? null : JSON.parse(line);
+  } catch {
+    handoff = null;
+  }
+  const secrets = handoff === null ? [] : [handoff.shell, handoff.pairing, handoff.records];
+  const valid =
+    handoff !== null &&
+    typeof handoff === "object" &&
+    handoff.v === 1 &&
+    secrets.every((secret) => typeof secret === "string" && HEX64.test(secret));
+  if (!valid) {
+    process.stderr.write("fieldd: custody was flagged and no valid hand-off arrived\\n");
+    process.exit(2);
+  }
+  shell = handoff.shell;
+  observed.handoffSha256 = createHash("sha256").update(line, "utf8").digest("hex");
+  observed.handoffExpect = handoff.expect ?? null;
+  observed.secretInArgv = secrets.some((secret) => process.argv.some((arg) => arg.includes(secret)));
+  observed.secretInEnv = secrets.some((secret) =>
+    Object.values(process.env).some((value) => typeof value === "string" && value.includes(secret)),
+  );
+}
+note();
+if (mode === "prove" && shell === null) {
+  process.stderr.write("fieldd: a sealed boot needs FIELDD_CUSTODY=stdin and its hand-off\\n");
+  process.exit(2);
+}
+
+const mac = (parts) =>
+  createHmac("sha256", Buffer.from(shell, "hex")).update(parts.join("\\0"), "utf8").digest("hex");
+const same = (a, b) => {
+  if (typeof a !== "string") return false;
+  const mine = Buffer.from(a, "utf8");
+  const theirs = Buffer.from(b, "utf8");
+  return mine.length === theirs.length && timingSafeEqual(mine, theirs);
+};
+
+function frame(value) {
+  const payload = Buffer.from(JSON.stringify(value), "utf8");
+  if (payload.length < 126) return Buffer.concat([Buffer.from([0x81, payload.length]), payload]);
+  const head = Buffer.alloc(4);
+  head[0] = 0x81;
+  head[1] = 126;
+  head.writeUInt16BE(payload.length, 2);
+  return Buffer.concat([head, payload]);
+}
+
+function serve(socket, port) {
+  let buffered = Buffer.alloc(0);
+  let authed = false;
+  const send = (value) => socket.write(frame(value));
+  const answer = (id, result) => send({ jsonrpc: "2.0", id, result });
+  const refuse = (id, kind, message) =>
+    send({ jsonrpc: "2.0", id, error: { code: -32001, message, data: { kind, retryable: false } } });
+  const onMessage = (msg) => {
+    const id = msg.id;
+    const params = msg.params ?? {};
+    if (msg.method === "system.hello") {
+      const credential = params.credential;
+      observed.hellos.push({
+        clientKind: typeof params.clientKind === "string" ? params.clientKind : null,
+        credential:
+          typeof credential === "string" ? "string" : credential === undefined ? "none" : "object",
+        raw: JSON.stringify(params),
+      });
+      note();
+      const ack = {
+        contractsVersion: process.env.CV,
+        serverKind: "fieldd",
+        grantedScopes: ["tokens.mint", "native.admin"],
+        userId: userId === "" ? null : userId,
+      };
+      if (mode === "accept") {
+        authed = true;
+        answer(id, ack);
+        return;
+      }
+      const paired =
+        credential !== null &&
+        typeof credential === "object" &&
+        params.clientKind === "shell-main" &&
+        credential.bootId === bootId &&
+        typeof credential.nonce === "string" &&
+        NONCE.test(credential.nonce) &&
+        Number.isInteger(credential.ts) &&
+        same(credential.mac, mac(["vf-shell", port, bootId, userId, credential.nonce, credential.ts]));
+      if (!paired) {
+        refuse(id, "UNAUTHORIZED", "invalid token");
+        // a close frame, code 1008, as the door closes a bad token's socket
+        socket.end(Buffer.from([0x88, 0x02, 0x03, 0xf0]));
+        return;
+      }
+      authed = true;
+      answer(id, { ...ack, serverMac: mac(["vf-shell-ack", credential.nonce, bootId, port]) });
+      return;
+    }
+    if (!authed) {
+      refuse(id, "UNAUTHORIZED", "hello required first");
+      return;
+    }
+    if (msg.method === "system.health") {
+      answer(id, { ok: true, state: "READY" });
+      return;
+    }
+    if (msg.method === "system.unsubscribe") {
+      answer(id, {});
+      return;
+    }
+    if (msg.method === "system.custody.marks.subscribe") {
+      observed.subscribes += 1;
+      note();
+      const subId = "marks-" + observed.subscribes;
+      answer(id, { subId, snapshot: frames[0] ?? { marks: {} } });
+      frames.slice(1).forEach((payload, index) => {
+        const later = { jsonrpc: "2.0", method: "system.custody.marks.snapshot", params: { subId, payload } };
+        setTimeout(() => send(later), 30 * (index + 1));
+      });
+      return;
+    }
+    if (msg.method === "system.shutdown") {
+      answer(id, {});
+      rmSync(join(dir, "product.json"), { force: true });
+      setTimeout(() => process.exit(0), 20);
+      return;
+    }
+    refuse(id, "NOT_FOUND", "no such method");
+  };
+  socket.on("error", () => socket.destroy());
+  socket.on("data", (chunk) => {
+    buffered = Buffer.concat([buffered, chunk]);
+    for (;;) {
+      if (buffered.length < 2) return;
+      const opcode = buffered[0] & 0x0f;
+      const masked = (buffered[1] & 0x80) !== 0;
+      let length = buffered[1] & 0x7f;
+      let offset = 2;
+      if (length === 126) {
+        if (buffered.length < 4) return;
+        length = buffered.readUInt16BE(2);
+        offset = 4;
+      } else if (length === 127) {
+        socket.destroy();
+        return;
+      }
+      const maskAt = offset;
+      if (masked) offset += 4;
+      if (buffered.length < offset + length) return;
+      const payload = Buffer.from(buffered.subarray(offset, offset + length));
+      if (masked) {
+        for (let i = 0; i < payload.length; i += 1) payload[i] ^= buffered[maskAt + (i % 4)];
+      }
+      buffered = buffered.subarray(offset + length);
+      if (opcode === 0x8) {
+        socket.end(Buffer.from([0x88, 0x00]));
+        return;
+      }
+      if (opcode === 0x9) {
+        socket.write(Buffer.concat([Buffer.from([0x8a, payload.length]), payload]));
+        continue;
+      }
+      if (opcode !== 0x1) continue;
+      let msg;
+      try {
+        msg = JSON.parse(payload.toString("utf8"));
+      } catch {
+        continue;
+      }
+      onMessage(msg);
+    }
+  });
+}
+
+const server = createServer((request, response) => {
+  response.writeHead(426);
+  response.end();
+});
+server.on("upgrade", (request, socket, head) => {
+  const key = request.headers["sec-websocket-key"];
+  const accept = createHash("sha1").update(key + GUID).digest("base64");
+  socket.write(
+    "HTTP/1.1 101 Switching Protocols\\r\\n" +
+      "Upgrade: websocket\\r\\n" +
+      "Connection: Upgrade\\r\\n" +
+      "Sec-WebSocket-Accept: " + accept + "\\r\\n\\r\\n",
+  );
+  serve(socket, server.address().port);
+  if (head.length > 0) socket.emit("data", head);
+});
+server.listen(0, "127.0.0.1", () => {
+  const port = server.address().port;
+  if (mode === "prove") {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "product.json"), JSON.stringify({
+      port, pid: process.pid, bootId,
+      contractsVersion: process.env.CV, startedAt: Date.now(), nativePid: null,
+      buildId: process.env.FIELDD_BUILD_ID ?? null,
+      ...(userId === "" ? {} : { userId }),
+      custody: "sealed",
+    }));
+  }
+  process.stdout.write(JSON.stringify({ ready: true, port, bootId }) + "\\n");
+});
 `;
