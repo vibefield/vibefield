@@ -15,13 +15,13 @@ use field_native::contracts::{
     NativeDoorRootsClearResult, NativeDoorRootsSetParams, NativeDoorRootsSetResult,
     NativeDoorSnapshot, NativeDoorSubscribeResult, NativeFileTransferDelta,
     NativeFileTransferPullParams, NativeFileTransferPullResult, NativeFileTransferRootsParams,
-    NativeFileTransferRootsResult, NativeFileTransferSnapshot, NativeHealth,
-    NativePrepareRestartParams, NativePrepareRestartResult, NativeShutdownParams,
-    NativeShutdownResult, NativeTickParams, ObservedState, PeerInfo, PingAck, RpcNotification,
-    RpcRequest, RpcResponse, ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot,
-    TerminalRoutesStreamPayload,
+    NativeFileTransferRootsResult, NativeFileTransferSnapshot, NativeHealth, NativeMarksSetParams,
+    NativeMarksSetResult, NativePrepareRestartParams, NativePrepareRestartResult,
+    NativeShutdownParams, NativeShutdownResult, NativeTickParams, ObservedState, PeerInfo, PingAck,
+    RpcNotification, RpcRequest, RpcResponse, ServeConfig, ServeEntry, StoreSnapshot,
+    TerminalRouteSnapshot, TerminalRoutesStreamPayload,
 };
-use field_native::registries::{mesh_file_transfer, native_refusals, terminal_inventory};
+use field_native::registries::{custody, mesh_file_transfer, native_refusals, terminal_inventory};
 use serde_json::Value;
 use std::{fs, path::PathBuf};
 
@@ -704,4 +704,50 @@ fn custody_bootstrap_fixture() {
     let mut zero = load("native-bootstrap.valid.json");
     zero["v"] = serde_json::json!(0);
     assert!(serde_json::from_value::<NativeBootstrap>(zero).is_err());
+}
+
+/// OB custody (C5) — marks. The floor READS the set's params and EMITS its answer and the ack's `marks`, so all
+/// three are strict. The ack's `marks` is checked through the trip rather than by its field, so the row holds
+/// whichever map the generator gives it.
+#[test]
+fn custody_marks_fixtures() {
+    roundtrip::<NativeMarksSetParams>("native-marks-set-params.valid.json", true);
+    roundtrip::<NativeMarksSetResult>("native-marks-set-result.valid.json", true);
+    roundtrip::<HelloAck>("hello-ack.marks.json", true);
+    let ack: HelloAck = serde_json::from_value(load("hello-ack.marks.json")).expect("ack");
+    let said = serde_json::to_value(&ack).unwrap();
+    assert_eq!(said["marks"], serde_json::json!({"objects.grants": 8}));
+    // an ack from a floor that holds none carries no `marks` at all, and none comes back
+    let none: HelloAck = serde_json::from_value(load("hello-ack.pid.json")).expect("ack");
+    let said = serde_json::to_value(&none).unwrap();
+    assert!(said.get("marks").is_none());
+
+    // The first mark's name is the registry's.
+    let params = load("native-marks-set-params.valid.json");
+    assert_eq!(params["name"], custody::MARK_OBJECT_GRANTS);
+
+    // The pattern and the whole number are the contract's, carried by typify: the Rust twin refuses what zod
+    // refuses, so a name the floor reads is a name fieldd could have sent.
+    let too_long = "a".repeat(65);
+    let off_pattern = [
+        "",
+        "Objects.grants",
+        "9lives",
+        "objects grants",
+        too_long.as_str(),
+    ];
+    for name in off_pattern {
+        let mut params = load("native-marks-set-params.valid.json");
+        params["name"] = Value::String(name.to_owned());
+        assert!(
+            serde_json::from_value::<NativeMarksSetParams>(params).is_err(),
+            "{name:?} is no mark's name"
+        );
+    }
+    let mut longest = load("native-marks-set-params.valid.json");
+    longest["name"] = Value::String("a".repeat(64));
+    assert!(serde_json::from_value::<NativeMarksSetParams>(longest).is_ok());
+    let mut negative = load("native-marks-set-params.valid.json");
+    negative["value"] = serde_json::json!(-1);
+    assert!(serde_json::from_value::<NativeMarksSetParams>(negative).is_err());
 }
