@@ -22,6 +22,8 @@ pub mod leash;
 pub mod local_ipc;
 pub mod logging;
 pub mod manager;
+/// OB custody (C5) — the marks this floor keeps for fieldd: named numbers that only rise, in memory alone.
+pub mod marks;
 pub mod mgmt;
 pub mod orphan;
 pub mod pairing;

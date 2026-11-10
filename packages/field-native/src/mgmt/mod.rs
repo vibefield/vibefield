@@ -28,6 +28,8 @@ mod diagnostics;
 mod door;
 /// DR-3a (W3) — the file transfer verbs, dispatched from `mesh::handle` ahead of its node gate.
 mod file_transfer;
+/// OB custody (C5) — `native.marks.set`, the floor's marks.
+mod marks;
 /// T-M4 — PUBLIC so an integration test can build a serve config through the
 /// PRODUCTION mapping rather than a copy of it (`build_serve_config`; the
 /// `terminal_cell_route_probe` row that dials a cell route). Nothing else in
@@ -604,6 +606,12 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
             m if m.starts_with("native.door.") => {
                 door::handle(&state, &tx, method.as_str(), params, id);
             }
+            // OB custody (C5) — a mark only rises (`crate::marks`, `mgmt/marks.rs`). Authorized as every mutating
+            // verb here is: the hello above, and the single-client rule, which refused a superseded connection
+            // before this match.
+            "native.marks.set" => {
+                send(&tx, marks::set(&state, params, id));
+            }
             "native.diagnostics.query" => {
                 send(&tx, diagnostics::query(&state, &params, id));
             }
@@ -927,6 +935,13 @@ async fn handle_hello(
     // fieldd says an unplanned one (a fieldd crash) through AL-7's notice. Absent when none held the slot before.
     if let Some(last_manager) = state.manager.take_last().await {
         ack["lastManager"] = json!(last_manager);
+    }
+    // OB custody (C5) — the marks this floor holds (`HelloAck.marks`), on EVERY hello: a fieldd started beside a
+    // living floor reads here what the one before it wrote, and a store below its mark is stale. Absent when the
+    // floor holds none, which is also what a floor from before marks says. Names and counts, never a secret.
+    let marks = state.marks.snapshot();
+    if !marks.is_empty() {
+        ack["marks"] = json!(marks);
     }
     // WG-D6 — this process's pid (`HelloAck.pid`), so a fieldd that ADOPTED
     // this floor, as every fieldd-only restart does, has a target for the stops

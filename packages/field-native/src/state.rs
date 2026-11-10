@@ -250,6 +250,10 @@ pub struct DaemonState {
     pub restart: crate::restart::RestartControl,
     /// AL-8a — who holds the management slot, since when nobody has, and how the last holder left (`orphan.rs`).
     pub manager: crate::orphan::ManagerPresence,
+    /// OB custody (C5) — the marks fieldd told this floor (`native.marks.set`), each the highest value under its
+    /// name. The floor's and not a connection's: they stand while no client is attached, ride every hello ack, and
+    /// die with this process (`marks.rs`).
+    pub marks: crate::marks::Marks,
     next_conn_id: AtomicU64,
     next_sub_id: AtomicU64,
     next_tick_seq: AtomicU64,
@@ -295,6 +299,7 @@ impl DaemonState {
             logging,
             restart: crate::restart::RestartControl::default(),
             manager: crate::orphan::ManagerPresence::new(std::time::Instant::now()),
+            marks: crate::marks::Marks::default(),
             next_conn_id: AtomicU64::new(1),
             next_sub_id: AtomicU64::new(1),
             next_tick_seq: AtomicU64::new(0),
