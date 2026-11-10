@@ -320,9 +320,12 @@ const liveSurfaceTextureBudgets = new Map<string, LiveSurfaceTextureTransferBudg
 // only before boot completes or after shell teardown (doors answer UNAVAILABLE).
 let liveSurfaceAuthority: LiveSurfaceAuthority | null = null;
 let liveSurfaceSupport: ProductionLiveSurfaceSupport | null = null;
+// Item 287 — fieldd is started only through the attached pair's coordinator, which refuses while held for a stop
+// and once disposed. With none attached (before boot, after teardown) nothing starts it. The bare
+// `supervisor.ensure` road this replaced could not start a pair after teardown either, but only because the
+// supervisor is disposed in the same run as the shell (lifecycle.ts; the guard in test/lifecycle.test.ts).
 const ensureFieldd: FielddSupervisor["ensure"] = (options) => {
   if (fielddHandles !== null) return fielddHandles.ensure(options);
-  if (supervisor !== null) return supervisor.ensure(options);
   return Promise.reject(new Error("fieldd supervisor is unavailable"));
 };
 
