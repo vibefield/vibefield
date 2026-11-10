@@ -19,8 +19,8 @@ export type SupervisorErrorKind =
   /** the spawned child exited before readiness — rejected promptly, never
    * waiting out the deadline (slice-0 finding 3 class) */
   | "child-exit"
-  /** OB custody (C6) — the spawned child is not this app's own signed code (`custody.verifyChild` said no, or
-   * threw): it was stopped, and nothing was written to it */
+  /** OB custody (C6) — the spawned child was not shown to be this app's own signed code (`custody.verifyChild`
+   * said no, threw, or did not answer inside the budget): it was stopped, and nothing was written to it */
   | "child-not-ours"
   | "readiness-timeout"
   | "aborted"
@@ -95,7 +95,7 @@ export type SupervisorLifecycleEventName =
   | "fieldd.supervisor.wedge_killed"
   // ESP-18 (item 341) — `spawnEnvironment` rejected or did not answer in time; the spawn went on without it
   | "fieldd.supervisor.spawn_environment_unavailable"
-  // OB custody — a sealed spawn: the child was handed its custody, or was not ours and was handed nothing
+  // OB custody — a sealed spawn: the child was handed its custody, or was not shown to be ours and was handed nothing
   | "fieldd.supervisor.custody_handed"
   | "fieldd.supervisor.child_not_ours";
 

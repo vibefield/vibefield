@@ -546,14 +546,16 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       // last words, is what the readiness wait reports
       if (check === "left") return;
       if (check === "refused" || check === "over-budget") {
+        // ONE sentence for both, and it says what is known: the child WAS NOT SHOWN to be ours. "Is not" would be a
+        // finding nobody made when the asking ran out of time; `reason` is what tells the two apart
         lifecycle(
           "fieldd.supervisor.child_not_ours",
-          "The spawned fieldd is not this app's own signed code; it is stopped and was handed nothing",
+          "The spawned fieldd was not shown to be this app's own signed code; it is stopped and was handed nothing",
           { pid, reason: check },
         );
         throw new SupervisorError(
           "child-not-ours",
-          "the spawned fieldd is not this app's own signed code; it was handed nothing",
+          "the spawned fieldd was not shown to be this app's own signed code; it was handed nothing",
         );
       }
     }
