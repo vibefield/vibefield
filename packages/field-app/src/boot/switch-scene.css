@@ -1,6 +1,6 @@
 /* The switch (DESIGN.md §8 "The switch"). One layer over the whole window:
  * a frost that defocuses whatever is under it, the splash's own ground, and a
- * column — the face, the words, the splash's bar and stage line.
+ * column — the face, the words, the splash's bar.
  *
  * The step lives on the root (`data-step`), set by the view in a layout
  * effect. The rules WITHOUT a step are the held frame — the frame both windows

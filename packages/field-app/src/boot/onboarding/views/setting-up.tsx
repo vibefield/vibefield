@@ -24,8 +24,9 @@ export type OnboardingCompletionFlag =
   | { kind: "failed"; reason: string };
 
 /** One phase of Setting up: the line it says while it runs, and under it what
- * it is doing now, in the words its door reports ("drawing the board", "1,215
- * files checked"); `failed` says the plain reason (the splash's rule). */
+ * it is doing now, in the words its door reports ("1,215 files checked") — the
+ * desk's steps are the log's since item 281; `failed` says the plain reason
+ * (the splash's rule). */
 export interface OnboardingSetupPhase {
   readonly key: string;
   readonly line: string;
@@ -33,7 +34,7 @@ export interface OnboardingSetupPhase {
   readonly detail?: string | undefined;
 }
 
-/** The desk's line while it opens (FG-D21 B), over the boot machine's stage. */
+/** The desk's line while it opens (FG-D21 B), with nothing under it (item 281). */
 export const DESK_LINE = "Opening your field…";
 
 /** History's first pass has run 8s past the desk (AO-D4): said over Start now. */
