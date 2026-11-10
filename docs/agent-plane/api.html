@@ -1936,6 +1936,11 @@
               a wait and never a throw. Both usage doors answer the projection and nothing else — a key
               upstream adds that this projection has no word for is logged once and dropped, never
               forwarded blind.
+              <em>Since item 274 (2026-11-10)</em> a meter's own <code>fetchedAt</code> is a word of the
+              projection: at puppeteer 0.4.0 a push merges into the reading it lands on, and a meter it
+              did not carry keeps its own older read (<code>AgentAccountUsageMetric.fetchedAt</code>;
+              a reader takes <code>metric.fetchedAt ?? entry.fetchedAt</code>). Until then it was logged
+              once and dropped.
             </p>
 
             <h3 id="cat-index">index.* — the transcript index</h3>

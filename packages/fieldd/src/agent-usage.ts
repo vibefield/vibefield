@@ -60,6 +60,10 @@ const METRIC_KEYS = new Set([
   "startsAt",
   "resetsAt",
   "group",
+  // Item 274 (2026-11-10) — puppeteer 0.4.0 #74's core `AccountUsageMetricSchema.fetchedAt`: a
+  // meter a later, partial reading (a push) did not carry keeps its own older read. Until 274 this
+  // was logged once and dropped, so a kept meter read under the push's stamp.
+  "fetchedAt",
 ]);
 const GROUP_KEYS = new Set(["id", "label", "standby"]);
 const CREDITS_KEYS = new Set(["balance", "hasCredits", "unlimited", "resetCreditsAvailable"]);
@@ -108,6 +112,7 @@ function projectMetric(
     ...(typeof metric["startsAt"] === "string" ? { startsAt: metric["startsAt"] } : {}),
     ...(typeof metric["resetsAt"] === "string" ? { resetsAt: metric["resetsAt"] } : {}),
     ...(group !== undefined ? { group } : {}),
+    ...(typeof metric["fetchedAt"] === "string" ? { fetchedAt: metric["fetchedAt"] } : {}),
   };
 }
 
@@ -180,6 +185,10 @@ export function projectEntry(
     // renderer/account-usage.ts) — deliberately widened here, because
     // "available" over a signed-out account is the one state a person must
     // not be shown. `stale` + the retained `metrics` keep the numbers.
+    // *Corrected 2026-11-10 (item 274; puppeteer 0.4.0, #74): a retained reading
+    // is a MERGE when a push reached it — its stamp is the push's, and each meter
+    // the push did not carry keeps its own older read in the metric's
+    // `fetchedAt`, which `projectMetric` passes through.*
     state: entry.refreshFailure !== undefined ? stateOf(entry.refreshFailure) : "available",
     metrics: entry.result.snapshot.metrics.map((metric) =>
       projectMetric(metric as unknown as Record<string, unknown>, note),
