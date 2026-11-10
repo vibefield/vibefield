@@ -5183,7 +5183,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         this.judgePendingBackstop(record.runtimeRunId, entry, terminals.get(oldId));
       this.armPending(entry);
     };
+    // Item 310 (2026-11-10) — whether `work` began: the idle road's audit writes its `attempt` before it runs
+    // (`audited`), and a refusal there must restore the entry too, or it stays `resuming` until a restart
+    let worked = false;
     const work = async (): Promise<ManagedEntry> => {
+      worked = true;
       let briefing: AgentRunBriefing;
       // ── before the point of no return: every throw restores the entry ──
       try {
@@ -5328,9 +5332,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         outcome: "succeeded",
         attrs: { runtimeRunId: next.info.runtimeRunId, sessionId: next.info.terminalSessionId },
       }));
+    } catch (error) {
+      // Item 310 (2026-11-10) — refused before `work` began (the audit's `attempt`): nothing was ended, so the entry
+      // is restored as a refusal before the point of no return restores it, and the refusal is the caller's
+      if (!worked) restore();
+      throw error;
     } finally {
-      // Q29 (i) — the backstop: a road that skipped the three ends above (the idle road's audit refusing its
-      // `attempt` before `work` runs) leaves no span behind. Every road read has ended its own span by here.
+      // Q29 (i) — the backstop: every road read ends its own span above (the idle road's audit refusing its
+      // `attempt` before `work` runs ends it in `restore`, item 310), and a road not yet read leaves no span behind.
       endSpan();
     }
   }
