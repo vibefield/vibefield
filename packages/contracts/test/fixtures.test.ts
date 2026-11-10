@@ -284,6 +284,7 @@ import {
   SystemNativeRestartResult,
   TerminalRoutesStreamPayload,
 } from "../src/mgmt";
+import { ObjectGrantsFile } from "../src/objects";
 import {
   BundledPluginIndex,
   PluginsCatalog,
@@ -554,6 +555,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "native-bootstrap": NativeBootstrap,
   "native-marks-set-params": NativeMarksSetParams,
   "native-marks-set-result": NativeMarksSetResult,
+  // OB custody (C4) — every grant of one user root in ONE signed, counted file (objects.ts; TS-only, fieldd's alone):
+  // a sealed one with a spark's hand and a run's own placing. Its own rows: objects.test.ts.
+  "object-grants-file": ObjectGrantsFile,
   // DS-1 — the egress facade (mgmt.ts). The table has TWO fixtures on purpose:
   // a bound table (a MagicDNS target and a bracketed IPv6 one) and the EMPTY
   // snapshot a node teardown pushes, which is the facade's reset.

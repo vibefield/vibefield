@@ -55,8 +55,10 @@ export const ProductInfo = z
     /** OB custody — the level this daemon booted at (custody.ts): `sealed` = its spawner handed it custody, it
      * wrote no `shell.token`, and a `shell-main` hello pairs by MAC; `files` = today's files. Absent = a daemon
      * from before custody, which is `files`. Discovery only, as the rest of this file is: it grants nothing, and a
-     * reader that needs the level proved proves it by the pairing, never by this word. */
-    custody: CustodyLevel.optional(),
+     * reader that needs the level proved proves it by the pairing, never by this word. Tolerant (P3): a level this
+     * build does not know reads as absent, never as a file that will not parse, so a newer daemon's product.json
+     * still names its port and its pids to an older shell. */
+    custody: CustodyLevel.optional().catch(undefined),
   })
   .passthrough();
 export type ProductInfo = z.infer<typeof ProductInfo>;

@@ -1,7 +1,8 @@
 // OB custody (custody.ts; mgmt.ts `NativeBootstrap` and `NativeMarksSet*`; envelope.ts `HelloAck.marks`; registries.ts
 // `CUSTODY`). The shapes' own rows: what a spawner hands a daemon, the level a daemon says it runs at, the marks and
-// their one verb, and the inputs of the shell pairing's vector. The vector's two MACs are not read here: contracts
-// holds no recipe, and the maker's test and the verifier's are the ones that compute them.
+// their one verb, where the shell's wrapped root lives, and the inputs of the shell pairing's vector. The vector's
+// MACs are not read here: contracts holds no recipe, and the maker's test and the verifier's are the ones that
+// compute them.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +12,13 @@ import { CustodyHandoff, CustodyLevel, CustodyMarksFrame, CustodySecret } from "
 import { HelloAck, PairingMac } from "../src/envelope";
 import { METHODS } from "../src/methods";
 import { NativeBootstrap, NativeMarksSetParams, NativeMarksSetResult } from "../src/mgmt";
-import { CUSTODY, ENV_PREFIXES, TAILNET_SCOPES } from "../src/registries";
+import {
+  CUSTODY,
+  ENV_PREFIXES,
+  LAYOUT,
+  LAYOUT_ROOT_LEVEL,
+  TAILNET_SCOPES,
+} from "../src/registries";
 import { ProductInfo } from "../src/shell";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
@@ -54,7 +61,22 @@ describe("OB custody — what a spawner hands fieldd", () => {
     }
   });
 
-  it("names two levels, and product.json says one or says nothing", () => {
+  it("holds the largest hand-off the registry allows under the line's bound", () => {
+    const handoff = CustodyHandoff.parse(fixture("custody-handoff.valid.json"));
+    // MARKS_MAX names, each as long as MARK_NAME lets one be, each at the largest count JSON carries whole
+    const longName = (i: number) => `m${String(i).padStart(63, "0")}`;
+    const names = Array.from({ length: CUSTODY.MARKS_MAX }, (_, i) => longName(i));
+    const pattern = new RegExp(CUSTODY.MARK_NAME);
+    expect(names.every((name) => pattern.test(name))).toBe(true);
+    const marks = Object.fromEntries(names.map((name) => [name, Number.MAX_SAFE_INTEGER]));
+    const largest = { ...handoff, expect: marks };
+    expect(CustodyHandoff.safeParse(largest).success).toBe(true);
+    const bytes = Buffer.byteLength(`${JSON.stringify(largest)}\n`);
+    expect(bytes).toBeGreaterThan(4096);
+    expect(bytes).toBeLessThanOrEqual(CUSTODY.HANDOFF_MAX_BYTES);
+  });
+
+  it("names two levels, and product.json says one, says nothing, or says one this build does not know", () => {
     expect(CustodyLevel.options).toEqual(["files", "sealed"]);
     const product = {
       port: 49213,
@@ -68,7 +90,22 @@ describe("OB custody — what a spawner hands fieldd", () => {
     expect(ProductInfo.parse({ ...product, custody: "files" }).custody).toBe("files");
     // a daemon from before custody says nothing, and its file still reads
     expect(ProductInfo.parse(product).custody).toBeUndefined();
-    expect(ProductInfo.safeParse({ ...product, custody: "keychain" }).success).toBe(false);
+    // a level this build does not know reads as absent, and the rest of the file still reads (P3)
+    for (const level of ["keychain", 2, null]) {
+      const newer = ProductInfo.parse({ ...product, custody: level });
+      expect(newer.custody, String(level)).toBeUndefined();
+      expect(newer.port).toBe(product.port);
+    }
+  });
+
+  it("keeps the shell's wrapped root at the VibeField root, above every user's", () => {
+    expect(LAYOUT.CUSTODY_KEY).toEqual(["shell", "custody.key"]);
+    expect(LAYOUT_ROOT_LEVEL).toContain("CUSTODY_KEY");
+    // no row under a user starts where it does, so the flat-v1 manifest never takes `shell/` for a v1 entry
+    const sharing = Object.entries(LAYOUT)
+      .filter(([name, segs]) => name !== "CUSTODY_KEY" && segs[0] === LAYOUT.CUSTODY_KEY[0])
+      .map(([name]) => name);
+    expect(sharing).toEqual([]);
   });
 
   it("puts both flags under the prefixes an agent's PTY is stripped of, with one value", () => {
@@ -169,9 +206,8 @@ describe("OB custody — fieldd's marks, as the shell hears them", () => {
 });
 
 describe("OB custody — the shell's pairing vector", () => {
-  const ShellPairingVector = z
+  const ShellPairingCase = z
     .object({
-      note: z.string().min(1),
       secretHex: CustodySecret,
       port: z.number().int().min(1).max(65_535),
       bootId: z.string().min(1),
@@ -182,16 +218,29 @@ describe("OB custody — the shell's pairing vector", () => {
       ackMac: z.string().min(1),
     })
     .strict();
+  const ShellPairingVector = z
+    .object({ note: z.string().min(1), cases: z.array(ShellPairingCase).length(2) })
+    .strict();
 
   it("names every input the recipe reads, each in the form the registry gives it", () => {
     const vector = ShellPairingVector.parse(fixture("shell-pairing.vector.json"));
-    // the hello it stands for is the envelope's own PairingMac, with the nonce a shell must send
-    const { bootId, ts, mac, nonce } = vector;
-    expect(PairingMac.safeParse({ bootId, ts, mac, nonce }).success).toBe(true);
+    for (const { bootId, ts, mac, nonce } of vector.cases) {
+      // the hello it stands for is the envelope's own PairingMac, with the nonce a shell must send
+      expect(PairingMac.safeParse({ bootId, ts, mac, nonce }).success, bootId).toBe(true);
+    }
     // two contexts, neither of them D8's: no transcript replays the other way or at the floor
     const contexts = [CUSTODY.SHELL_CONTEXT, CUSTODY.SHELL_ACK_CONTEXT, "fn-boot", "fn-ack"];
     expect(new Set(contexts).size).toBe(4);
     expect(vector.note).toContain(`'${CUSTODY.SHELL_CONTEXT}'`);
     expect(vector.note).toContain(`'${CUSTODY.SHELL_ACK_CONTEXT}'`);
+  });
+
+  it("has a daemon that serves a user and one that has none, whose user id is the empty string", () => {
+    const vector = ShellPairingVector.parse(fixture("shell-pairing.vector.json"));
+    expect(vector.cases.map((c) => c.userId === "")).toEqual([false, true]);
+    // every other input differs too, so neither case passes on the other's MAC
+    for (const key of ["secretHex", "port", "bootId", "nonce", "ts"] as const) {
+      expect(new Set(vector.cases.map((c) => c[key])).size, key).toBe(2);
+    }
   });
 });

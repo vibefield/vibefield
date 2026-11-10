@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "sealed": true,
+  "generation": 8,
+  "grants": [
+    {
+      "ref": "vf:obj/7hk2qx4m",
+      "holder": "spark:sp-7k2m9q4x",
+      "how": "handed",
+      "at": 1792431660120
+    },
+    {
+      "ref": "vf:obj/2m9qx4k7",
+      "holder": "01JA7RUNAAAAAAAAAAAAAAAAAA",
+      "how": "placed",
+      "at": 1792431662417
+    }
+  ],
+  "signature": "d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6d6"
+}

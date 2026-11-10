@@ -348,6 +348,7 @@ export const ObjectsIntentAnswerResult = z.object({ taken: z.boolean() }).passth
 // ── What fieldd keeps per object (§5.6; OB-L1, EY-D9 B) ────────────────────────────────────────
 
 export const OBJECT_RECORD_FORMAT = 1;
+export const OBJECT_GRANTS_FORMAT = 1;
 
 /** Who holds a grant: a plain run by its id, or a spark, whose run id changes each time it sleeps and wakes, as
  * `spark:<id>`. A person's hand is meant to outlast that (§5.6, EY-D9 B). */
@@ -356,8 +357,12 @@ export const ObjectGrant = z
   .passthrough();
 export type ObjectGrant = z.infer<typeof ObjectGrant>;
 
-/** One object's name and who may work it: a file per object under LAYOUT.OBJECTS_DIR, signed with OBJECTS_KEY_FILE's
- * secret. A grant lets a run work the person's object, so an unsigned or forged record is set aside, never served. */
+/** One object's NAME: a file per object under LAYOUT.OBJECTS_DIR, signed by the objects store's signer. A name grants
+ * nothing (OB-L1); an unsigned or forged record is still set aside, never served, because a ref re-pointed at another
+ * object would carry its grants there.
+ * *Corrected 2026-11-10 (OB custody, C4):* this record carried `grants`, one list per object. Every grant is in
+ * `ObjectGrantsFile` now, one file, so that a take-back is one write and an older state put back is seen. The format
+ * stays 1: the store has shipped nowhere. A record written before this still parses, its `grants` an unread key. */
 export const ObjectRecord = z
   .object({
     format: z.literal(OBJECT_RECORD_FORMAT),
@@ -366,10 +371,34 @@ export const ObjectRecord = z
     key: DeskObjectKey,
     /** absent until the window has told fieldd what it is */
     kind: KindId.optional(),
-    grants: z.array(ObjectGrant),
   })
   .passthrough();
 export type ObjectRecord = z.infer<typeof ObjectRecord>;
+
+/** One grant in the grants file: the object's ref beside who holds it. */
+export const ObjectGrantEntry = ObjectGrant.extend({ ref: ObjectRef }).passthrough();
+export type ObjectGrantEntry = z.infer<typeof ObjectGrantEntry>;
+
+/** OB custody (C4, C5) — who may work which object, for one user root: ONE file at LAYOUT.OBJECTS_GRANTS_FILE, 0600,
+ * written beside and renamed, signed by the objects store's signer. A grant lets a run work the person's object, so a
+ * file that is unsigned, forged, unparseable or exposed is set aside and nothing in it is granted.
+ *  - `sealed`: the key that signed it was HANDED (custody's `sealed` level), never a file. A fieldd at `files` cannot
+ *    judge such a file, so it leaves it where it is and refuses in the objects' words: it never sets it aside.
+ *  - `generation`: raised by every change. A file below the mark a survivor remembers
+ *    (`CUSTODY.MARK_OBJECT_GRANTS`) is an older state put back: stale, nothing in it granted, and the count goes on
+ *    above the mark.
+ *  - `signature`: the signer's HMAC over the rest, as every signed record carries it. Absent only on the body before
+ *    it is signed. */
+export const ObjectGrantsFile = z
+  .object({
+    format: z.literal(OBJECT_GRANTS_FORMAT),
+    sealed: z.boolean(),
+    generation: z.number().int().min(0),
+    grants: z.array(ObjectGrantEntry),
+    signature: z.string().optional(),
+  })
+  .passthrough();
+export type ObjectGrantsFile = z.infer<typeof ObjectGrantsFile>;
 
 /** The window names an object it is making a card of, and is told its ref. */
 export const ObjectsRefParams = z
@@ -402,7 +431,12 @@ export const ObjectsUndoResult = z.discriminatedUnion("undone", [
   z.object({ undone: z.literal(true), changed: z.string().optional() }).passthrough(),
   z.object({ undone: z.literal(false), reason: z.string().min(1) }).passthrough(),
 ]);
-export const ObjectsTakeBackResult = z.object({ taken: z.literal(true) }).passthrough();
+/** A take-back always takes (OB custody, C5): the grant is gone from fieldd's memory before anything is written, so
+ * `taken` is true whatever the disk does. `kept` says whether the grants file holds it yet: absent or true, it does;
+ * false, the write failed, the take-back stands in memory and under the raised mark, and fieldd writes again. */
+export const ObjectsTakeBackResult = z
+  .object({ taken: z.literal(true), kept: z.boolean().optional() })
+  .passthrough();
 
 export const ObjectsResolveParams = z.object({ ref: ObjectRef }).passthrough();
 export const ObjectsResolveResult = z.discriminatedUnion("found", [

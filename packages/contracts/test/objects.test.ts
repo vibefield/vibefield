@@ -1,18 +1,29 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SERVED_TOOLS } from "../gen/tools";
 import {
   CHIP_TYPES,
   doorCanName,
+  OBJECT_GRANTS_FORMAT,
   ObjectActInput,
+  ObjectGrantsFile,
   ObjectIntent,
   ObjectIntentAnswer,
   ObjectManual,
+  ObjectRecord,
   ObjectRef,
   ObjectsHandResult,
+  ObjectsTakeBackResult,
 } from "../src/objects";
+import { LAYOUT, LAYOUT_ROOT_LEVEL } from "../src/registries";
 import { toolRow } from "../src/tools";
 
 // OB-0 — the desk room's wire truth (`draft/thinking-objects-at-work.md` §4, §5).
+
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+const fixture = (name: string): unknown => JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
 
 const REF = "vf:obj/7hk2qx4m";
 
@@ -115,6 +126,71 @@ describe("the window's door (CP-D13)", () => {
   it("says why a hand was refused", () => {
     expect(ObjectsHandResult.safeParse({ handed: false }).success).toBe(false);
     expect(ObjectsHandResult.safeParse({ handed: false, reason: "no-run" }).success).toBe(true);
+  });
+});
+
+// OB custody (C4, C5) — a record is a name, and every grant is in one counted file.
+describe("what fieldd keeps: an object's name, and the grants in one file (OB custody)", () => {
+  const name = { format: 1, ref: REF, docId: "doc-1", key: "obj-1" };
+  const grant = { holder: "01JA7RUNAAAAAAAAAAAAAAAAAA", how: "handed", at: 1 };
+
+  it("keeps an object's record as its name alone: a grant is no part of it", () => {
+    expect(Object.keys(ObjectRecord.shape)).toEqual(["format", "ref", "docId", "key", "kind"]);
+    expect(ObjectRecord.safeParse(name).success).toBe(true);
+    expect(ObjectRecord.safeParse({ ...name, kind: "vibefield.mindmap" }).success).toBe(true);
+    // a record written before the grants left still parses: its list is a key nobody reads
+    expect(ObjectRecord.safeParse({ ...name, grants: [grant] }).success).toBe(true);
+    expect(ObjectRecord.safeParse({ ...name, ref: "vf:obj/SHORT" }).success).toBe(false);
+  });
+
+  it("keeps every grant in one file: sealed or not, counted, each naming its object", () => {
+    const file = ObjectGrantsFile.parse(fixture("object-grants-file.valid.json"));
+    expect(file.format).toBe(OBJECT_GRANTS_FORMAT);
+    expect(file.sealed).toBe(true);
+    expect(file.generation).toBe(8);
+    expect(file.grants.map((g) => [g.ref, g.holder, g.how])).toEqual([
+      [REF, "spark:sp-7k2m9q4x", "handed"],
+      ["vf:obj/2m9qx4k7", "01JA7RUNAAAAAAAAAAAAAAAAAA", "placed"],
+    ]);
+    // what the signer signs is the same shape without its signature
+    const { signature: _signature, ...body } = file;
+    expect(ObjectGrantsFile.safeParse(body).success).toBe(true);
+    // the file a first change starts from: no grant, the count at zero
+    const empty = { format: 1, sealed: false, generation: 0, grants: [] };
+    expect(ObjectGrantsFile.safeParse(empty).success).toBe(true);
+  });
+
+  it("refuses a grants file with no count or no level, or a grant that names no object", () => {
+    const whole = fixture("object-grants-file.valid.json") as Record<string, unknown>;
+    for (const key of ["format", "sealed", "generation", "grants"]) {
+      const rest = Object.fromEntries(Object.entries(whole).filter(([k]) => k !== key));
+      expect(ObjectGrantsFile.safeParse(rest).success, key).toBe(false);
+    }
+    for (const generation of [-1, 1.5, "8"]) {
+      const counted = { ...whole, generation };
+      expect(ObjectGrantsFile.safeParse(counted).success, String(generation)).toBe(false);
+    }
+    expect(ObjectGrantsFile.safeParse({ ...whole, format: 2 }).success).toBe(false);
+    expect(ObjectGrantsFile.safeParse({ ...whole, grants: [grant] }).success).toBe(false);
+    const named = { ...grant, ref: REF };
+    expect(ObjectGrantsFile.safeParse({ ...whole, grants: [named] }).success).toBe(true);
+  });
+
+  it("puts the grants file beside the objects' folder, never in it, under the user's root", () => {
+    expect(LAYOUT.OBJECTS_GRANTS_FILE).toEqual(["fieldd", "objects.grants.json"]);
+    // the store reads every .json in OBJECTS_DIR as an object's record
+    const folder = LAYOUT.OBJECTS_DIR.join("/");
+    expect(LAYOUT.OBJECTS_GRANTS_FILE.join("/").startsWith(`${folder}/`)).toBe(false);
+    expect(LAYOUT.OBJECTS_GRANTS_FILE.slice(0, -1)).toEqual(LAYOUT.OBJECTS_DIR.slice(0, -1));
+    expect(LAYOUT_ROOT_LEVEL).not.toContain("OBJECTS_GRANTS_FILE");
+  });
+
+  it("answers a take-back as taken, and says when the disk has not kept it yet", () => {
+    expect(ObjectsTakeBackResult.parse({ taken: true }).kept).toBeUndefined();
+    expect(ObjectsTakeBackResult.parse({ taken: true, kept: false }).kept).toBe(false);
+    expect(ObjectsTakeBackResult.parse({ taken: true, kept: true }).kept).toBe(true);
+    // a take-back always takes: there is no answer that says it did not
+    expect(ObjectsTakeBackResult.safeParse({ taken: false, kept: false }).success).toBe(false);
   });
 });
 

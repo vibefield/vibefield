@@ -1262,7 +1262,8 @@ export type NativeBootstrap = z.infer<typeof NativeBootstrap>;
 
 /** `native.marks.set` — a mark only rises: the floor keeps max(old, value) and answers what it keeps, so a value
  * below the mark changes nothing and reads the mark back. Refused `PRECONDITION_FAILED`: a name off
- * `CUSTODY.MARK_NAME`, or a name beyond the `CUSTODY.MARKS_MAX` the floor holds at once (a held name always rises). */
+ * `CUSTODY.MARK_NAME` (the params do not parse), or, with `details.reason` `marks-full`, a NEW name while the floor
+ * holds `CUSTODY.MARKS_MAX` (a name it holds always rises). */
 export const NativeMarksSetParams = z
   .object({
     name: z.string().regex(new RegExp(CUSTODY.MARK_NAME)),

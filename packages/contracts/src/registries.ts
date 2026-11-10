@@ -1589,8 +1589,10 @@ export const CUSTODY = {
   NATIVE_ENV: "FIELD_NATIVE_CUSTODY",
   /** the one value either flag takes */
   STDIN: "stdin",
-  /** the longest hand-off line a daemon reads, its newline included; a longer one is invalid */
-  HANDOFF_MAX_BYTES: 4096,
+  /** the longest hand-off line a daemon reads, its newline included; a longer one is invalid. 16 KiB: three secrets
+   * are about 230 bytes, and an `expect` of MARKS_MAX names at MARK_NAME's longest is about 5.4 KiB more, so the line
+   * the registry itself allows always fits (4096, the first value, did not hold it). */
+  HANDOFF_MAX_BYTES: 16_384,
   /** how long a daemon waits for its line before it refuses to boot */
   HANDOFF_WAIT_MS: 5_000,
   /** the context of the shell's pairing MAC (`shell-pairing.vector.json`):
@@ -2435,9 +2437,18 @@ export const LAYOUT = {
    * its file named by its ref's eight characters, 0600 in a 0700 directory, each signed with OBJECTS_KEY_FILE's secret
    * (0600, made once, never overwritten). A grant is what lets a run work an object, so an agent that edits one must not
    * hand itself the user's work: an unsigned or forged record is set aside, never served. That holds against an edit;
-   * the key is 0600 to the same uid, as the sparks' is (EL7). */
+   * the key is 0600 to the same uid, as the sparks' is (EL7).
+   * *Corrected 2026-11-10 (OB custody, C4):* a record no longer carries a grant. It is the object's name alone
+   * (`ObjectRecord`: ref, doc, key, kind), which grants nothing (OB-L1); every grant is in OBJECTS_GRANTS_FILE. */
   OBJECTS_DIR: ["fieldd", "objects"],
   OBJECTS_KEY_FILE: ["fieldd", "objects.key"],
+  /** OB custody (C4, C5) — who may work which object: ONE file per user root (`ObjectGrantsFile`, 0600, written beside
+   * and renamed), signed by the objects store's signer, its `generation` raised by every change so a file put back as
+   * it was earlier reads as stale against the mark a survivor remembers (`CUSTODY.MARK_OBJECT_GRANTS`). BESIDE
+   * OBJECTS_DIR, never in it: the store reads every `.json` in that folder as an object's record. Under custody's
+   * `sealed` level its key is handed (`CustodyHandoff.records`) and OBJECTS_KEY_FILE is never written; under `files`
+   * the key is that file's, and the EL7 note above holds as it reads. */
+  OBJECTS_GRANTS_FILE: ["fieldd", "objects.grants.json"],
   /** Item 159 (TH0-Q11 (b), ruled 2026-11-04) — fieldd's own files for each spark: one 0700 folder per spark, named by
    * its id (`spark-files/<sparkId>/`), holding its kept record (`SparkKeptRecord`, compose.ts's SPARK_KEPT_FILE, 0600)
    * and, with TH-1, its runs' transcript files beside it. One key for the folder: SPARK_FILES_KEY_FILE's secret (0600,
@@ -2593,7 +2604,9 @@ export const LAYOUT = {
   /** UA-1 — the user directory ABOVE the per-user roots. `users/<fuid>/` holds
    * a full tree of the segments above; these four live at the VibeField root
    * itself and, with the `machine/` set below, are the only segments that
-   * never re-root (LAYOUT_ROOT_LEVEL is that set, as data). */
+   * never re-root (LAYOUT_ROOT_LEVEL is that set, as data).
+   * *Corrected 2026-11-10 (OB custody):* not the only ones now. The shell's
+   * custody key, CUSTODY_KEY below, is root-level too. */
   USERS_DIR: ["users"],
   USERS_FILE: ["users.json"],
   USERS_LOCK: ["users.json.lock"],
@@ -2610,6 +2623,13 @@ export const LAYOUT = {
   MACHINE_AGENTS_DIR: ["machine", "agents"],
   MACHINE_DISTRIBUTION_FILE: ["machine", "agents", "distribution.json"],
   MACHINE_UPDATES_DIR: ["machine", "agents", "updates"],
+  /** OB custody (C1) — the shell's custody root, WRAPPED: 32 random bytes the packaged shell keeps under the OS
+   * keystore's key (0600, written beside and renamed), from which it derives every user root's secrets
+   * (`CUSTODY.LABELS`) and hands them to the daemons it spawns (`CustodyHandoff`). At the VibeField ROOT, above the
+   * user roots (LAYOUT_ROOT_LEVEL): one root for every user of this install, and the shell's alone. No daemon reads
+   * it, and the bytes on disk open nothing without the keystore. Written only at custody's `sealed` level; a dev run
+   * or an unsigned package never makes it. */
+  CUSTODY_KEY: ["shell", "custody.key"],
   /** FS-1a (`thinking-files-service.md` §6) — the files service's state under
    * this user: the roots registry (`roots.json`, fieldd-owned, written
    * atomically) — every place an agent was spawned, with when it was last
@@ -2644,9 +2664,11 @@ export const LAYOUT = {
 } as const;
 
 /** The segments that live at the VibeField ROOT and never re-root under
- * `users/<fuid>/` (UA-1's four + AR-D15's machine scope) — as data, so the
- * flat-v1 migration's manifest and every "is this root-level?" question read
- * one list instead of respelling it. */
+ * `users/<fuid>/` (UA-1's four + AR-D15's machine scope + OB custody's key) —
+ * as data, so the flat-v1 migration's manifest and every "is this root-level?"
+ * question read one list instead of respelling it. The key is in it for that
+ * manifest's sake too: a row outside this list names a v1 top entry, and a
+ * `shell/` folder at the root would then read as a flat-v1 tree to migrate. */
 export const LAYOUT_ROOT_LEVEL = [
   "USERS_DIR",
   "USERS_FILE",
@@ -2656,6 +2678,7 @@ export const LAYOUT_ROOT_LEVEL = [
   "MACHINE_AGENTS_DIR",
   "MACHINE_DISTRIBUTION_FILE",
   "MACHINE_UPDATES_DIR",
+  "CUSTODY_KEY",
 ] as const satisfies readonly (keyof typeof LAYOUT)[];
 
 /** One named pull root: its name on the wire, and the LAYOUT rows it serves and lands in. */
