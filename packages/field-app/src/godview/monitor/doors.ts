@@ -279,6 +279,11 @@ function toEntry(row: AgentAccountUsageEntry): AccountUsageEntry {
     provider,
     result,
     ...(row.profileId !== undefined ? { profileId: row.profileId } : {}),
+    // Item 283 (2026-11-10): undrawn in VibeField today. Nothing calls `toAccountUsageBatch` but
+    // its test, and no product code mounts puppeteer's usage views. A views tile with
+    // `showAccount` (two rows for one provider) draws it uppercased (views' `account-usage.ts:94`,
+    // `:289` at puppeteer 0.4.0). Before fieldd's first registry reconcile a pushed row's label can
+    // be its bare profile id; fieldd kicks one reconcile on such a push (`agent-usage.ts`).
     ...(row.profileLabel !== undefined ? { profileLabel: row.profileLabel } : {}),
     ...(held && row.stale === true ? { stale: true, refreshFailure: failure() } : {}),
   };

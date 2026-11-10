@@ -252,6 +252,12 @@ export class AccountUsageService {
   /** the poll is running — true only while somebody is subscribed */
   private polling = false;
   private disposed = false;
+  /** Item 283 — fieldd has asked the registry since boot: any reconcile of its own goes through
+   * `reconcile`, the push's kick included. Puppeteer's monitor keeps its `registryAnswered` to
+   * itself, and its `refreshProfiles` resolves on a failed read too, so this says "asked", not
+   * "answered": a failed read is `onError`'s warn, and the other reconciles (a subscribe, a forced
+   * refresh, a sign-in, a profile change while polling) still run. */
+  private reconciled = false;
 
   constructor(opts: AccountUsageServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
@@ -293,6 +299,24 @@ export class AccountUsageService {
             provider: provider.id,
             error: error instanceof Error ? error.message : String(error),
           });
+        }
+        // Item 283 — a push stamped with an account, before fieldd has reconciled and with
+        // nobody polling, is kept under its BARE id (puppeteer's `ingestState`), and only a
+        // reconcile names that row or drops it. A home watched only by a phone runs none: a
+        // phone's ask is answered from the cache (daemon.ts's `agents.usage` door), and
+        // `snapshot()` kicks only before any batch exists, which the push itself made. So the push
+        // kicks ONE reconcile with `poll: false`: the registry is read, no account is. Armed
+        // only, as `snapshot` is.
+        if (
+          !this.reconciled &&
+          !this.polling &&
+          this.armed &&
+          result.status === "available" &&
+          result.snapshot.profileId !== undefined
+        ) {
+          void this.reconcile({ poll: false }).catch((error: unknown) =>
+            this.warnProfilesUnread(error),
+          );
         }
       }),
       opts.runtime.onProfilesChanged(() => {
@@ -399,7 +423,7 @@ export class AccountUsageService {
     if (this.disposed || (options.force && !this.armed)) {
       return this.latest ?? { entries: [], generatedAt: this.now().toISOString() };
     }
-    if (options.force) await this.monitor.refreshProfiles({ poll: false });
+    if (options.force) await this.reconcile({ poll: false });
     if (!this.disposed) await this.monitor.refresh(options);
     return this.latest ?? { entries: [], generatedAt: this.now().toISOString() };
   }
@@ -409,7 +433,7 @@ export class AccountUsageService {
    * A registry reconcile alone keeps existing rows and their failure delay. */
   async signedIn(profileId: string): Promise<void> {
     if (this.disposed) return;
-    await this.monitor.refreshProfiles({ poll: false });
+    await this.reconcile({ poll: false });
     if (this.disposed) return;
     await this.monitor.invalidateProfileAuthentication(profileId);
     if (this.armed && this.polling && !this.disposed) {
@@ -422,12 +446,25 @@ export class AccountUsageService {
    * (puppeteer's `onProfilesChanged`, which fires for create/delete/verify). */
   async refreshProfiles(): Promise<void> {
     try {
-      await this.monitor.refreshProfiles();
+      await this.reconcile();
     } catch (error) {
-      this.logger.warn("fieldd.agents.usage_profiles_failed", "Account usage profiles not read", {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      this.warnProfilesUnread(error);
     }
+  }
+
+  /** Item 283 — every registry reconcile fieldd asks for goes through here, so `reconciled`
+   * misses none. */
+  private reconcile(options?: { poll: false }): Promise<AccountUsageBatch> {
+    this.reconciled = true;
+    return this.monitor.refreshProfiles(options);
+  }
+
+  /** Item 283 — a reconcile that rejected, said in one place: by `refreshProfiles`' catch and
+   * by the push's kick. A failed registry read resolves instead, and `onError` says it. */
+  private warnProfilesUnread(error: unknown): void {
+    this.logger.warn("fieldd.agents.usage_profiles_failed", "Account usage profiles not read", {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   stop(): void {
