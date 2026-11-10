@@ -2468,6 +2468,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return entry !== undefined && !entry.exiting;
   }
 
+  /** Q29 (i) (2026-11-10) — whether a replacement of this held run is in flight now. RED: the span is not kept
+   * yet, so it always answers false; the next commit keeps it. */
+  replacing(_runtimeRunId: string): boolean {
+    return false;
+  }
+
   /** CP-2 — every change of a live run's monitor row, once fieldd has folded it. */
   onRunMonitor(
     listener: (runtimeRunId: string, mirror: AgentMonitorMirror | undefined) => void,

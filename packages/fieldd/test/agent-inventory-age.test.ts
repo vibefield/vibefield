@@ -1128,3 +1128,96 @@ describe("Q17's leg — a Stop ends a run this boot holds pending, by its proven
     expect(realSignals(), "the net: no real signal was asked").toEqual([]);
   }, 30_000);
 });
+
+// Q29 (i) (ruled 2026-11-08; built at the re-cut 2026-11-10) — `replacing(id)`, the runtime's one public
+// read of a replacement in flight, read SYNCHRONOUSLY at the end's tell (`onRunEnded`), as FlowRuns reads it: a
+// step whose session a replacement took waits for `begun: "resume"`, and mints no false card. True from the
+// replacement's entry until the successor has entered or the replacement failed; the end a replacement tells at its
+// point of no return reads it TRUE. A replacement refused before that point, and a held run's own end, read FALSE
+// at their tells, so the next wake mints the true card. The mock floor's paper cell refuses every successor's
+// birth, so the successor's own entry is not read here (the replacement ends `replace-failed`); it is read where
+// a cell answers.
+describe("Q29 (i) — `replacing(id)`, read at a held run's end (the mock floor)", () => {
+  // THE NET, as Q17's rows carry it: no row here signals anything, and none may. `process.kill` passes signal 0
+  // through and THROWS for any other signal while a row runs; each row ends by reading that none was asked.
+  const realKill = process.kill.bind(process);
+  let net: MockInstance<typeof process.kill> | undefined;
+  beforeEach(() => {
+    net = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (signal === 0) return realKill(pid, 0);
+      throw new Error("Q17: a real signal was about to be sent");
+    });
+  });
+  afterEach(() => {
+    net?.mockRestore();
+    net = undefined;
+  });
+  /** every signal but 0 asked of `process.kill` while the row ran (the net threw for each) */
+  const realSignals = () => (net?.mock.calls ?? []).filter(([, signal]) => signal !== 0);
+
+  it("a replacement's end, told at its point of no return, reads replacing TRUE, and the span ends with it", async () => {
+    const { mock, daemon, rpc, records } = await heldRun();
+    const told: Array<[string, boolean]> = [];
+    daemon.agents.onRunEnded((id) => told.push([id, daemon.agents.replacing(id)]));
+    let askedAt: number | undefined;
+    vi.spyOn(daemon.terminals, "terminationAskedAt").mockImplementation((id) =>
+      id === CLAUDE ? askedAt : undefined,
+    );
+    vi.spyOn(daemon.terminals, "terminate").mockImplementation(async () => {
+      askedAt = Date.now();
+      mock.pushObserved(withoutClaude());
+      return { terminated: true };
+    });
+    expect(daemon.agents.replacing(RUN), "held, no replacement yet").toBe(false);
+    const asked = rpc.callErr("agent.resume", { runtimeRunId: RUN });
+    await until(
+      () => daemon.terminals.get(CLAUDE) === undefined,
+      5_000,
+      "the PTY left the inventory",
+    );
+    // in flight: the replacement waits on the floor's exit for the PTY it ended
+    expect(daemon.agents.replacing(RUN), "a replacement in flight").toBe(true);
+    await daemon.agents.handleTerminalExit(exited());
+    await asked;
+    expect(records.read(RUN)?.exited?.reason, "the paper cell refused the successor").toBe(
+      "replace-failed",
+    );
+    expect(told, "the end, once, told while the replacement held it").toEqual([[RUN, true]]);
+    expect(daemon.agents.replacing(RUN), "failed past its point of no return: the span ended").toBe(
+      false,
+    );
+    expect(realSignals(), "the net: no real signal was asked").toEqual([]);
+  }, 30_000);
+
+  it("a replacement refused before its point of no return tells its end with replacing FALSE", async () => {
+    const { daemon, rpc, records } = await heldRun();
+    const told: Array<[string, boolean]> = [];
+    daemon.agents.onRunEnded((id) => told.push([id, daemon.agents.replacing(id)]));
+    // the floor's exit comes in the terminate's own read, and its connection dies before the answer
+    vi.spyOn(daemon.terminals, "terminate").mockImplementation(async () => {
+      await daemon.agents.handleTerminalExit(exited());
+      throw new RpcCallError("UNAVAILABLE", "the terminal floor died mid-terminate", true, {
+        service: "terminal",
+        state: "unreachable",
+      });
+    });
+    const refused = await rpc.callErr("agent.resume", { runtimeRunId: RUN });
+    expect(refused.data?.kind).toBe("UNAVAILABLE");
+    expect(records.read(RUN)?.exited?.reason, "the floor's word").toBe("application-terminated");
+    expect(told, "restored, then closed by the exit it heard: no replacement at the tell").toEqual([
+      [RUN, false],
+    ]);
+    expect(daemon.agents.replacing(RUN)).toBe(false);
+    expect(realSignals(), "the net: no real signal was asked").toEqual([]);
+  }, 30_000);
+
+  it("a held run's own end (the floor's exit) reads replacing FALSE at its tell", async () => {
+    const { daemon, records } = await heldRun();
+    const told: Array<[string, boolean]> = [];
+    daemon.agents.onRunEnded((id) => told.push([id, daemon.agents.replacing(id)]));
+    await daemon.agents.handleTerminalExit(exited());
+    expect(records.read(RUN)?.exited?.reason).toBe("application-terminated");
+    expect(told).toEqual([[RUN, false]]);
+    expect(realSignals(), "the net: no real signal was asked").toEqual([]);
+  });
+});
