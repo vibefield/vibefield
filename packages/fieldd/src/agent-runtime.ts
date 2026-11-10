@@ -808,6 +808,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private readonly untold = new Map<string, UntoldSet>();
   /** OB custody (rule 6) — a floor that keeps no table was said once in the log, for this process's life */
   private notSealedSaid = false;
+  /** OB custody (rule 6; §8.1.0 "v0.25") — a wake that asked for another spark than launch memory holds was said
+   * once in the log, for this process's life */
+  private askMismatchSaid = false;
   /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — what the LAST fieldd told the floor of its launches, as the floor
    * handed it to this one at its hello: read ONCE (`readStartedFor`), joined to the running rows of the inventory
    * the re-attach was handed, by terminal session. Undefined until that read; never read at `files`. An entry here
@@ -3803,19 +3806,31 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** OB custody (rule 6; CUSTODY-SPEC §8.1.0, "a RESUME is the hard one") — who a RESUMED run is, for launch memory
    * and the floor's entry and nothing else. `previous` is the run it continues. At `files` the record names it, as
-   * it always did, and `asked` is not read. At `sealed` the record's word is not taken, and the order is:
-   *  1. `asked` — fieldd's own spark wake asked this resume FOR that spark: the launch call's own argument;
-   *  2. what launch memory holds for the run it continues (a run this life launched or vouched for: the new run is
-   *     what the old one was);
+   * it always did, and `asked` is not read. At `sealed` the record's word is not taken, and the order is
+   * (§8.1.0 "v0.25", LAUNCH MEMORY BEATS THE ASK):
+   *  1. what launch memory holds for the run it continues (a run this life launched or vouched for: the new run is
+   *     what the old one was), WHATEVER spark the wake asked for;
+   *  2. `asked` — fieldd's own spark wake asked this resume FOR that spark: the launch call's own argument;
    *  3. plain, whatever the record says.
-   * ONE `if` between the levels. */
+   * Why 1 before 2: the run a wake resumes is the one the SPARK's record names, and that store's key is a file too.
+   * Where this process knows what the run is, its own memory is better than a file. The two differ only when a
+   * record was rewritten or something is broken: said once for the process, by a code. ONE `if` between the levels. */
   private resumedAs(
     previous: { runtimeRunId: string; spark?: SparkId | undefined } | undefined,
     asked?: SparkId,
   ): { spark?: SparkId | undefined } {
     if (this.opts.startedFor === undefined) return { spark: previous?.spark };
-    if (asked !== undefined) return { spark: asked };
-    return (previous === undefined ? undefined : this.born.get(previous.runtimeRunId)) ?? {};
+    const known = previous === undefined ? undefined : this.born.get(previous.runtimeRunId);
+    if (known === undefined) return asked !== undefined ? { spark: asked } : {};
+    if (asked !== undefined && known.spark !== asked && !this.askMismatchSaid) {
+      this.askMismatchSaid = true;
+      this.logger.warn(
+        "fieldd.agents.resume_ask_mismatch",
+        "A wake asked a resume for another spark than the run it continues was born as; launch memory stands",
+        { code: "launch-memory-wins" },
+      );
+    }
+    return known;
   }
 
   /** ITEM 124 — a briefed birth (`agent-door-launch.ts`). Refused for the door by its executable
