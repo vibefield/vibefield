@@ -74,7 +74,7 @@ public struct AgentAccountUsageMetric: Sendable, Equatable {
   public let resetsAt: String?
   public let group: AgentAccountUsageGroup?
   /// item 274 — when this meter was read, when that is earlier than its entry's `fetchedAt` (a meter a later reading
-  /// did not carry); nil, it is as old as its entry. RED: a stub, the key is not read yet
+  /// did not carry); nil, it is as old as its entry. A reader takes `metric.fetchedAt ?? entry.fetchedAt`
   public let fetchedAt: String?
   public let unknownFields: [String]
 
@@ -97,7 +97,8 @@ public struct AgentAccountUsageMetric: Sendable, Equatable {
         id: try group.text("id", 1...Int.max), label: try group.text("label", 1...Int.max),
         standby: try group.typedBool("standby"))
     }
-    fetchedAt = nil
+    // as strict as zod's `z.string().optional()`: absent is nil, null and a non-string are refused
+    fetchedAt = try object.typedString("fetchedAt")
     unknownFields = object.unknownFields
   }
 }
@@ -136,6 +137,8 @@ public struct AgentAccountUsageSource: Sendable, Equatable {
 
 /// One reading: an agent, the account it was read for, and its meters or the reason there are none. `fetchedAt` is
 /// when the data was read: a kept reading (`stale`) keeps its older stamp.
+/// *Corrected 2026-11-10 (item 274; puppeteer 0.4.0, #74): a push merges into the reading it lands on, so `fetchedAt`
+/// is the newest meter's read; a meter the push did not carry keeps its own older read in its `fetchedAt`.*
 public struct AgentAccountUsageEntry: Sendable, Equatable {
   public let provider: String
   public let label: String
@@ -149,7 +152,8 @@ public struct AgentAccountUsageEntry: Sendable, Equatable {
   public let message: String?
   public let retryable: Bool?
   public let retryAt: String?
-  /// the metrics are a reading kept after the last refresh failed
+  /// the metrics are a reading kept after the last refresh failed (each metric's age is its own `fetchedAt`, else this
+  /// entry's: corrected 2026-11-10, item 274)
   public let stale: Bool?
   public let fetchedAt: String
   public let scope: String?

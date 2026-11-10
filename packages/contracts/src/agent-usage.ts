@@ -90,6 +90,13 @@ export const AgentAccountUsageMetric = z
         standby: z.boolean().optional(),
       })
       .optional(),
+    /** item 274 (UM-D29) — when this meter was read, present only when that is
+     * earlier than its entry's `fetchedAt`: a meter a later, partial reading (a
+     * push) did not carry, kept from the reading that did (upstream
+     * `AccountUsageMetricSchema.fetchedAt`, puppeteer 0.4.0 #74). Absent, the
+     * meter is as old as its entry: a reader takes
+     * `metric.fetchedAt ?? entry.fetchedAt` */
+    fetchedAt: z.string().optional(),
   })
   .passthrough();
 export type AgentAccountUsageMetric = z.infer<typeof AgentAccountUsageMetric>;
@@ -121,7 +128,11 @@ export type AgentAccountUsageSource = z.infer<typeof AgentAccountUsageSource>;
  * `fetchedAt` is when the DATA was read, never when the batch was built — so
  * a `stale` row (the last good snapshot, kept because a later refresh failed)
  * keeps the older stamp and says `stale: true` beside it. A failure row's
- * `fetchedAt` is the instant the failed reading completed. */
+ * `fetchedAt` is the instant the failed reading completed.
+ * *Corrected 2026-11-10 (item 274; puppeteer 0.4.0, #74): a push merges into
+ * the reading it lands on, so `fetchedAt` is the entry's NEWEST meter's read.
+ * A `stale` row a push reached carries the push's stamp, and each meter the
+ * push did not carry keeps its own older read in the metric's `fetchedAt`.* */
 export const AgentAccountUsageEntry = z
   .object({
     /** puppeteer's provider id — OPEN (AR-L1: no vendor is enumerated here) */
@@ -150,7 +161,9 @@ export const AgentAccountUsageEntry = z
     retryAt: z.string().optional(),
     /** the metrics are a RETAINED reading and the last refresh failed
      * (`state`/`message`/`retryable` then describe that failure, not the
-     * metrics, whose age is `fetchedAt`) */
+     * metrics, whose age is `fetchedAt`)
+     * *Corrected 2026-11-10 (item 274): each metric's age is its own
+     * `fetchedAt`, else this entry's.* */
     stale: z.boolean().optional(),
     fetchedAt: z.string(),
     /** upstream `subscription | api | workspace | unknown`; open */
@@ -184,7 +197,9 @@ export type AgentAccountUsageBatch = z.infer<typeof AgentAccountUsageBatch>;
  * it is answered the cached batch, whose `generatedAt` and each entry's
  * `fetchedAt`/`stale` say how old it is (fieldd's door, daemon.ts) — save,
  * with nothing cached yet, the one reading any cold read kicks
- * (`AccountUsageService.snapshot`).* */
+ * (`AccountUsageService.snapshot`).*
+ * *Corrected 2026-11-10 (item 274): how old each METER is, is its own
+ * `fetchedAt`, else its entry's; an entry's `fetchedAt` is its newest meter's.* */
 export const AgentsUsageParams = z
   .object({
     refresh: z.boolean().optional(),
