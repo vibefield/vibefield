@@ -119,6 +119,29 @@ pushes reach no row and their meters move only on their own polls (item 277):*
   the same fallback and runs in fieldd's root, and attribution labels it This
   Mac (`runtime.ts:1072`).
 
+*Corrected 2026-11-10 (item 274; puppeteer 0.4.0, #74): a push is a reading of
+the meters it carries. It merges into the row by metric id and never moves the
+poll's clock, save that a push carrying every meter the last poll did, and its
+credits if any, stands in for that poll and may defer the next one, never bring
+it forward (`packages/runtime/src/services/account-usage-monitor.ts:133-141`,
+`:302-337` at `v0.4.0`). So "defers the OAuth poll by 30 minutes" above holds
+only for such a push: one that carries fewer meters than the last poll defers
+nothing. A poll is the whole reading and replaces the row's, pushes merged in
+included (`:275-300`). While a poll's failure stands, no push defers the poll,
+and a passing failure (a failed or rate-limited read) stays beside the merged
+reading (`:327-332`).*
+
+*Kept meters (item 274).* A meter a push did not carry keeps the read of the
+reading it came from, in the metric's `fetchedAt`, present only when that read
+is older than the push (the monitor's `mergePush`, `:90-117`, and core
+`packages/core/src/services/account-usage.ts:72-76`, both at `v0.4.0`). After a
+merge the entry's own `fetchedAt` is the push's (the monitor's `:109`). fieldd
+passes the metric's through (`METRIC_KEYS` in
+`packages/fieldd/src/agent-usage.ts`), and the contract names it
+(`AgentAccountUsageMetric.fetchedAt`), so a reader takes
+`metric.fetchedAt ?? entry.fetchedAt`. What the desk and the phone say with
+that age waits for James's picks on item 274's page.
+
 ## Explicit refresh
 
 Previously `agents.usage` only returned the cached snapshot. The service's
