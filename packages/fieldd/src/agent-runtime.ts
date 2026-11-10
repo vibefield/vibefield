@@ -931,6 +931,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** QL — the conversations a resume is starting right now ("provider\0native
    * id"), claimed before its first await (`claimConversation`). */
   private readonly resumingConversations = new Set<string>();
+  /** Q29 (i) — the held runs whose replacement is in flight, by the held run's own id, each held by its own
+   * replacement's token, so an end can close only its own span (`replacing`) */
+  private readonly replacingRuns = new Map<string, symbol>();
   /** AR-S2 — creations in flight (a spawn or resume puppeteer has not
    * answered yet), by token, with the persona they named; null = none named,
    * so the default set decides and it may be any. */
@@ -2468,10 +2471,23 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return entry !== undefined && !entry.exiting;
   }
 
-  /** Q29 (i) (2026-11-10) — whether a replacement of this held run is in flight now. RED: the span is not kept
-   * yet, so it always answers false; the next commit keeps it. */
-  replacing(_runtimeRunId: string): boolean {
-    return false;
+  /** Q29 (i) (ruled 2026-11-08; built 2026-11-10) — whether a replacement of this held run is in flight
+   * NOW, read synchronously, as FlowRuns reads it at an end's tell (its `agents.replacing` port, which slice 15
+   * binds): a step whose session a replacement took waits for `begun: "resume"`, and mints no false card. Keyed by
+   * the held run's own id, never by `pending.get(id)?.resuming`: the held entry leaves `pending` at the point of no
+   * return while the span goes on. Never `plainStopCensus()`'s unkeyed `replacements` count, which says how many
+   * and of whom not. The span is its replacement's own (a token), and each of its ends, in `replacePendingClaimed`,
+   * is a `Q29 (i) —` comment with `endSpan()` beside it:
+   *  · it opens beside `entry.resuming = true`, so the end the point of no return tells (`ended`) reads TRUE;
+   *  · it ends when the successor has entered, on the line after `resumeFromRecord` returns it (`enter`'s
+   *    `managed.set` and the successor's `begun: "resume"` come a few microtasks before);
+   *  · or when the replacement failed: refused before its point of no return (`restore`'s FIRST line, before an
+   *    exit it heard is told, so that end reads FALSE and the next wake mints the true card), or past it (the
+   *    `replace-failed` catch, which tells nothing more: a stated cost);
+   *  · a `finally` backstop leaves no span behind on a road that skips all three (the idle road's audit refusing
+   *    before `work` runs). */
+  replacing(runtimeRunId: string): boolean {
+    return this.replacingRuns.has(runtimeRunId);
   }
 
   /** CP-2 — every change of a live run's monitor row, once fieldd has folded it. */
@@ -5075,6 +5091,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       });
     }
     entry.resuming = true;
+    // Q29 (i) — the span `replacing` reads opens here, this replacement's own
+    const span = Symbol(record.runtimeRunId);
+    this.replacingRuns.set(record.runtimeRunId, span);
+    const endSpan = (): void => {
+      if (this.replacingRuns.get(record.runtimeRunId) === span) {
+        this.replacingRuns.delete(record.runtimeRunId);
+      }
+    };
     // Item 201 (RV #43) — from here the PTY's exit is this replacement's (`handleTerminalExit`): no window between
     // asking the floor to end it and waiting for its word
     entry.heardExit = undefined;
@@ -5094,6 +5118,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     const oldId = record.terminalSessionId;
     const restore = (): void => {
+      // Q29 (i) — refused before the point of no return: the span ends BEFORE an exit heard is told below
+      endSpan();
       entry.resuming = false;
       entry.onExit = undefined;
       const heard = entry.heardExit;
@@ -5193,6 +5219,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       try {
         next = await this.resumeFromRecord(record, cwdOverride, oldId, briefing, asked, through);
       } catch (error) {
+        // Q29 (i) — failed past the point of no return: the span ends, and nothing more is told
+        endSpan();
         // the old PTY is gone; the resume did not happen — the record says
         // exactly that, and the door's ordinary resume takes it next
         const now = this.now().toISOString();
@@ -5210,6 +5238,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         if (record.profileId !== undefined) void this.profiles.sweep();
         throw error;
       }
+      // Q29 (i) — the successor has entered (`enter`'s `managed.set`, inside `resumeFromRecord`): the span ends
+      endSpan();
       // the old record names its successor
       const current = this.records.read(record.runtimeRunId);
       if (current !== undefined) {
@@ -5238,20 +5268,26 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
       return next;
     };
-    if (how === "manual") return await work();
-    const mutation: AuditMutation = {
-      action: "agent.session.resume",
-      target: { kind: "agent-session", id: record.runtimeRunId },
-      attrs: {
-        provider: record.provider,
-        how,
-        ...(oldId !== undefined ? { replaced: oldId } : {}),
-      },
-    };
-    return await this.audited(mutation, work, (next) => ({
-      outcome: "succeeded",
-      attrs: { runtimeRunId: next.info.runtimeRunId, sessionId: next.info.terminalSessionId },
-    }));
+    try {
+      if (how === "manual") return await work();
+      const mutation: AuditMutation = {
+        action: "agent.session.resume",
+        target: { kind: "agent-session", id: record.runtimeRunId },
+        attrs: {
+          provider: record.provider,
+          how,
+          ...(oldId !== undefined ? { replaced: oldId } : {}),
+        },
+      };
+      return await this.audited(mutation, work, (next) => ({
+        outcome: "succeeded",
+        attrs: { runtimeRunId: next.info.runtimeRunId, sessionId: next.info.terminalSessionId },
+      }));
+    } finally {
+      // Q29 (i) — the backstop: a road that skipped the three ends above (the idle road's audit refusing its
+      // `attempt` before `work` runs) leaves no span behind. Every road read has ended its own span by here.
+      endSpan();
+    }
   }
 
   /** A pending run leaves, its record stamped with `exit`, and its listeners hear its end once
