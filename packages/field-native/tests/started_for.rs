@@ -1,6 +1,7 @@
 //! OB custody (§8.1, rule 6) — WHAT EACH TERMINAL WAS STARTED FOR: on the management channel, on the table itself and
-//! at the door's walk (`CUSTODY-SPEC.md` §8.1.0 "The floor", §8.1.12; contracts mgmt.ts `TerminalStartedFor` and
-//! `NativeTerminalStartedForSet*`, envelope.ts `HelloAck.startedFor`, registries.ts `CUSTODY.STARTED_FOR_MAX`).
+//! at the door's walk (`CUSTODY-SPEC.md` §8.1.0 "The floor", §8.1.12; contracts custody.ts `TerminalStartedFor*`,
+//! mgmt.ts `NativeTerminalStartedForSet*`, envelope.ts `HelloAck.startedFor`, and registries.ts's
+//! `CUSTODY.STARTED_FOR_MAX`).
 //!
 //! An agent fieldd launched outlives it. The fieldd that pairs next has to say whose run that agent is, and a record
 //! on disk cannot tell it: the agent can rewrite its own. So fieldd tells the floor what it started in each terminal

@@ -1,4 +1,4 @@
-//! OB custody (§8.1, rule 6) — WHAT EACH TERMINAL WAS STARTED FOR (`CUSTODY-SPEC.md` §8.1.0; contracts mgmt.ts
+//! OB custody (§8.1, rule 6) — WHAT EACH TERMINAL WAS STARTED FOR (`CUSTODY-SPEC.md` §8.1.0; contracts custody.ts
 //! `TerminalStartedFor`, envelope.ts `HelloAck.startedFor`, registries.ts `CUSTODY.STARTED_FOR_MAX`).
 //!
 //! An agent fieldd launched goes on running in its terminal after fieldd is gone, and the fieldd that pairs next has
