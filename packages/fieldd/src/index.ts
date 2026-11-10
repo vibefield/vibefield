@@ -179,7 +179,6 @@ export {
   type ServiceProviderHandlers,
   ServiceRegistry,
 } from "./service-registry";
-export { computeShellAckMac, computeShellPairingMac } from "./shell-pairing";
 export { renderTerminalText } from "./terminal-text";
 export {
   type TokenGrant,

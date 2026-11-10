@@ -1,6 +1,5 @@
-import { createHmac, randomBytes } from "node:crypto";
-import { CUSTODY, PairingMac } from "@vibefield/contracts";
-import { ackMacMatches } from "./pairing";
+import { CUSTODY, CustodySecret, PairingMac } from "@vibefield/contracts";
+import { macMatches, shellAckMac, shellPairingMac } from "@vibefield/trust";
 
 // OB custody (C2; contracts custody.ts, registries.ts `CUSTODY`) — the shell's pairing at a `sealed` fieldd.
 //
@@ -11,59 +10,10 @@ import { ackMacMatches } from "./pairing";
 // learns nothing and cannot answer, and because the port and the boot are under the MAC, a hello it relays to the
 // real fieldd is a hello made for another port.
 //
-// The recipe, pinned across packages by contracts/fixtures/shell-pairing.vector.json (this file is the verifier's
-// copy; `packages/trust` holds the maker's). NUL separators and decimal numbers, as D8's (pairing.ts):
-//   mac       = hex(HMAC-SHA256(shell, "vf-shell"     0x00 String(port) 0x00 bootId 0x00 userId 0x00 nonce 0x00 String(ts)))
-//   serverMac = hex(HMAC-SHA256(shell, "vf-shell-ack" 0x00 nonce 0x00 bootId 0x00 String(port)))
-// `shell` is the secret's 32 bytes. `port` is the TCP port the daemon listens on and the client dialled. `userId` is
-// the daemon's configured user id, or the empty string when it has none. A different context each way, so neither
-// direction's transcript replays as the other's.
-
-/** What the shell's MAC is made over. */
-export interface ShellPairingFacts {
-  /** the TCP port the daemon listens on and the client dialled */
-  port: number;
-  /** the daemon's own boot, as `product.json` and the ready line state it */
-  bootId: string;
-  /** the daemon's configured user id; the empty string when it has none */
-  userId: string;
-  /** `CUSTODY.NONCE_HEX` lowercase hex characters, fresh per connection */
-  nonce: string;
-  /** the shell's clock, unix seconds */
-  ts: number;
-}
-
-/** The shell's half: proof that the caller holds the handed secret, for this port, boot and user alone. */
-export function computeShellPairingMac(secretHex: string, facts: ShellPairingFacts): string {
-  const message = [
-    CUSTODY.SHELL_CONTEXT,
-    String(facts.port),
-    facts.bootId,
-    facts.userId,
-    facts.nonce,
-    String(facts.ts),
-  ].join("\0");
-  return createHmac("sha256", Buffer.from(secretHex, "hex")).update(message, "utf8").digest("hex");
-}
-
-/** The daemon's half: proof that the answerer holds the same secret, over the nonce the shell picked. */
-export function computeShellAckMac(
-  secretHex: string,
-  facts: Pick<ShellPairingFacts, "nonce" | "bootId" | "port">,
-): string {
-  const message = [
-    CUSTODY.SHELL_ACK_CONTEXT,
-    facts.nonce,
-    facts.bootId,
-    String(facts.port),
-  ].join("\0");
-  return createHmac("sha256", Buffer.from(secretHex, "hex")).update(message, "utf8").digest("hex");
-}
-
-/** A fresh nonce for one connection: `CUSTODY.NONCE_HEX` hex characters from the CSPRNG. */
-export function newShellPairingNonce(): string {
-  return randomBytes(CUSTODY.NONCE_HEX / 2).toString("hex");
-}
+// The recipe is NOT spelled here. It has one home, `@vibefield/trust` (custody.ts: `shellPairingMac`, `shellAckMac`,
+// `macMatches`), where the supervisor makes the MAC this file checks, so that the maker and the verifier cannot
+// spell the message two ways; contracts/fixtures/shell-pairing.vector.json pins it across packages. What this file
+// owns is the door's ORDER of checks and its memory of nonces.
 
 /** Why a pairing was refused. For fieldd's own log alone: the door answers every one in the same words. */
 export type ShellPairingRefusal = "shape" | "boot" | "stale" | "nonce" | "mac";
@@ -73,7 +23,7 @@ export type ShellPairingVerdict =
   | { ok: false; reason: ShellPairingRefusal };
 
 export interface ShellPairingVerifierOptions {
-  /** the shell's pairing secret for this user root (`CustodyHandoff.shell`), 64 hex characters */
+  /** the shell's pairing secret for this user root (`CustodyHandoff.shell`), 64 lowercase hex characters */
   secretHex: string;
   /** this daemon's boot */
   bootId: string;
@@ -95,7 +45,14 @@ export class ShellPairingVerifier {
   /** nonces that paired, oldest first (a Set iterates in insertion order) */
   private readonly seen = new Set<string>();
 
-  constructor(private readonly opts: ShellPairingVerifierOptions) {}
+  /** Throws on a secret that is not one. trust's recipe refuses to key a MAC with such a string (the empty key,
+   * whose MACs look like any other), and `verify` must never throw on a hello: so the refusal is here, where the
+   * daemon boots, and it never says the secret back. */
+  constructor(private readonly opts: ShellPairingVerifierOptions) {
+    if (!CustodySecret.safeParse(opts.secretHex).success) {
+      throw new TypeError("the shell's pairing secret is 64 lowercase hex characters");
+    }
+  }
 
   /** `credential` is a hello's, as it came; `port` is the port this daemon is listening on. */
   verify(credential: unknown, port: number): ShellPairingVerdict {
@@ -107,23 +64,15 @@ export class ShellPairingVerifier {
     if (Math.abs(now - ts) > CUSTODY.WINDOW_SECS) return { ok: false, reason: "stale" };
     if (nonce === undefined || !NONCE.test(nonce) || this.seen.has(nonce))
       return { ok: false, reason: "nonce" };
-    const expected = computeShellPairingMac(this.opts.secretHex, {
-      port,
-      bootId,
-      userId: this.opts.userId,
-      nonce,
-      ts,
-    });
-    // constant time, and a mac of another length is simply not equal: never an exception on a hostile input
-    if (!ackMacMatches(expected, mac)) return { ok: false, reason: "mac" };
+    const { secretHex: secret, userId } = this.opts;
+    const expected = shellPairingMac({ secret, port, bootId, userId, nonce, ts });
+    // constant time, and a mac that is no mac is simply not equal: never an exception on a hostile input
+    if (!macMatches(expected, mac)) return { ok: false, reason: "mac" };
     this.seen.add(nonce);
     for (const oldest of this.seen) {
       if (this.seen.size <= CUSTODY.NONCES_KEPT) break;
       this.seen.delete(oldest);
     }
-    return {
-      ok: true,
-      serverMac: computeShellAckMac(this.opts.secretHex, { nonce, bootId, port }),
-    };
+    return { ok: true, serverMac: shellAckMac({ secret, nonce, bootId, port }) };
   }
 }
