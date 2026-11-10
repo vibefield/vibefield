@@ -701,6 +701,38 @@ interface PendingEntry {
   attaching: boolean;
 }
 
+/** Item 191, Q17 — what fieldd ends a live run by (`endLive`): the run's own PTY, or, for a run typed in the
+ * person's shell (AR-7), the process its record proves, never that shell. A managed run's is its entry's
+ * (`managedRunOf`), a pending run's its record's (`pendingRunOf`). */
+interface LiveRun {
+  runtimeRunId: string;
+  /** the run's PTY: its own for a run one of our doors started, the person's shell for a typed one */
+  sessionId: string;
+  /** AR-7 — present for a typed run: its process, as its record proves it (a pid and its start) */
+  typed?: { pid: number; startedAt: string } | undefined;
+}
+
+function managedRunOf(entry: ManagedEntry): LiveRun {
+  return {
+    runtimeRunId: entry.info.runtimeRunId,
+    sessionId: entry.info.terminalSessionId,
+    typed: entry.typed,
+  };
+}
+
+/** Q17 — a pending run's provenance, from its record as the boot held it (`hold`): a typed record (`spawnedBy`)
+ * by its `process`, an untyped one by its PTY. Undefined when the record proves nothing to end: a typed record
+ * without its process is NEVER read as untyped, whose end is its terminal (the person's shell), and a record
+ * naming no PTY ends nothing. Neither is held by construction (`typedRunProof` refuses `no-process`; `hold`
+ * takes the PTY the record names). */
+function pendingRunOf(entry: PendingEntry): LiveRun | undefined {
+  const { runtimeRunId, terminalSessionId: sessionId } = entry.record;
+  if (sessionId === undefined) return undefined;
+  if (!isTypedRun(entry.record)) return { runtimeRunId, sessionId };
+  const typed = entry.record.process;
+  return typed === undefined ? undefined : { runtimeRunId, sessionId, typed };
+}
+
 /** MF-1f — a run whose PROCESS ended while its PTY is still on the floor.
  *
  * The deck is still showing that pane, and §07's resume verb belongs ON it —
@@ -2373,7 +2405,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           async () =>
             terminals === null || entry.typed !== undefined
               ? false
-              : (await this.endLive(entry, terminals)).placed,
+              : (await this.endLive(managedRunOf(entry), terminals)).placed,
           (terminated) =>
             terminated
               ? { outcome: "succeeded" }
@@ -2475,11 +2507,28 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   }
 
   /** CP-2 — agent_stop: end a live run, the one way fieldd ends one (`endLive`): a run in its own PTY by that PTY,
-   * a run typed in the person's shell by its process, never the shell (item 191). */
+   * a run typed in the person's shell by its process, never the shell (item 191). Q17 (2026-11-10): a run this
+   * boot holds PENDING is ended the same way, by what its record proves (`pendingRunOf`).
+   * One being replaced is left to its replacement, which is ending that PTY already, as a managed run `exiting`
+   * is left. A held record that proves nothing to end is skipped, and the log says so at warn. */
   async endRun(runtimeRunId: string): Promise<void> {
     const entry = this.managed.get(runtimeRunId);
-    if (entry === undefined || entry.exiting) return;
-    await this.endLive(entry, this.requireTerminals());
+    if (entry !== undefined) {
+      if (!entry.exiting) await this.endLive(managedRunOf(entry), this.requireTerminals());
+      return;
+    }
+    const held = this.pending.get(runtimeRunId);
+    if (held === undefined || held.resuming) return;
+    const run = pendingRunOf(held);
+    if (run === undefined) {
+      this.logger.warn(
+        "fieldd.agents.typed_run_end",
+        "A held run's end was not placed: its record proves nothing to end",
+        { runtimeRunId, end: "unproven" },
+      );
+      return;
+    }
+    await this.endLive(run, this.requireTerminals());
   }
 
   /** Item 191 (RV #2) — THE ONE WAY fieldd ends a live run, by its provenance. A run one of our doors started ends
@@ -2488,20 +2537,21 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * the terminal, which is the person's shell and outlives it (R1, B1). `placed`: the end was placed, and the run's
    * own exit closes it — the floor's exit for a PTY, the pid's watch for a typed run (`watchTyped`); a held Stop is
    * heard there. A typed run whose pid the table cannot read, or does not prove, has no end placed (`not-it`,
-   * `unknown`), and the log says so at warn: nothing there was ended that fieldd can stand behind. */
+   * `unknown`), and the log says so at warn: nothing there was ended that fieldd can stand behind. Q17: a run this
+   * boot holds pending is ended here too, by what its record proves, and closes by the same two exits
+   * (`handleTerminalExit`, `watchPendingTyped`). */
   private async endLive(
-    entry: ManagedEntry,
+    run: LiveRun,
     terminals: TerminalService,
   ): Promise<{ ended: "terminal" | "process"; placed: boolean }> {
-    const sessionId = entry.info.terminalSessionId;
-    const typed = entry.typed;
+    const { sessionId, typed } = run;
     if (typed === undefined) {
       return { ended: "terminal", placed: await this.terminateLive(terminals, sessionId) };
     }
     const shellPid = this.listed(terminals, sessionId) ? terminals.get(sessionId)?.pid : undefined;
     const end = await endTypedRun(typed, typedEndDeps(this.opts, this.processTable, shellPid));
     const placed = end === "signalled" || end === "gone";
-    const attrs = { runtimeRunId: entry.info.runtimeRunId, sessionId, end };
+    const attrs = { runtimeRunId: run.runtimeRunId, sessionId, end };
     if (placed) {
       this.logger.info("fieldd.agents.typed_run_end", "A typed run's end was placed", attrs);
     } else {

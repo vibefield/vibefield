@@ -223,7 +223,11 @@ export interface FlowRunPorts {
      * 2026-11-07, §H 2): an agent that exits in the instant of its end counts one too many, a race (`ofRun` reads
      * `live` first), and an orphan a lagging or throwing read cannot show exited (#agentsOf; fold 2); and `endRun`
      * reads the runtime's `managed` sessions alone (agent-runtime.ts:2179–2180), so a resolve counts `ended` over a
-     * `pending` session that still works. Slice 14 carries that leg (K9) */
+     * `pending` session that still works. Slice 14 carries that leg (K9).
+     * *Corrected 2026-11-10 (Q17):* the leg is carried. `endRun` now ends a session the boot holds
+     * pending by what its record proves (`pendingRunOf`: its PTY, or a typed run's process), so a resolve over a
+     * pending session placed its end. It still skips one being replaced, and a held record that proves nothing to
+     * end (warned). The cite above was stale: `endRun`'s managed read had moved from :2179–2180 to :2292–2294. */
     end(runtimeRunId: string): Promise<void>;
     /** slice 13 (Q11 (a′), D19): a handed session's working turn the run began, paused at Stop alone:
      * AgentRuntimeService.pause, NEVER `interrupt`, which escalates to an end (ruled 2026-11-07) */
