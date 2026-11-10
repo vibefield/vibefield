@@ -9,11 +9,55 @@
 //
 // The floor here is a fake that keeps marks as the real one is specified to. custody-marks.test.ts runs the holder
 // inside the daemon, over the mock floor and the product door.
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { CUSTODY, type CustodyMarksFrame } from "@vibefield/contracts";
+import type { Logger } from "@vibefield/logging";
 import { describe, expect, it } from "vitest";
 import { CustodyMarks, type CustodyMarksFloor } from "../src/custody-marks";
 
 const GRANTS = CUSTODY.MARK_OBJECT_GRANTS;
+
+/** A path under a home, as a file's error would name one: the canary no log line may hold. */
+const PLANTED = join(tmpdir(), "a-home", "Library", "Application Support", "VibeField", "a.key");
+
+/** One line a holder logged: its event and what it was given to print. */
+interface Line {
+  level: string;
+  event: string;
+  attrs: unknown;
+}
+
+/** What a log would keep of a value: an error with its message, its code and its stack, as the real serializer keeps
+ * them (`JSON.stringify` alone drops an error's message, and a row that looked for a path there would find none
+ * whatever the line was given). */
+function kept(value: unknown): unknown {
+  if (value instanceof Error) {
+    return { ...value, name: value.name, message: value.message, stack: value.stack };
+  }
+  if (typeof value !== "object" || value === null) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, inner] of Object.entries(value)) out[key] = kept(inner);
+  return out;
+}
+
+/** A logger that keeps every line it is told, at EVERY level. */
+function everyLine(lines: Line[]): Logger {
+  const keep = (level: string, event: string, attrs: unknown): void => {
+    lines.push({ level, event, attrs: kept(attrs) });
+  };
+  const logger: Logger = {
+    child: () => logger,
+    trace: (event, _message, attrs) => keep("trace", event, attrs),
+    debug: (event, _message, attrs) => keep("debug", event, attrs),
+    info: (event, _message, attrs) => keep("info", event, attrs),
+    warn: (event, _message, attrs) => keep("warn", event, attrs),
+    error: (event, _message, error, attrs) => keep("error", event, { error, attrs }),
+    fatal: (event, _message, error, attrs) => keep("fatal", event, { error, attrs }),
+    isLevelEnabled: () => true,
+  };
+  return logger;
+}
 
 /** A floor as the link presents one: it keeps the highest value per name and answers what it keeps. */
 class FakeFloor implements CustodyMarksFloor {
@@ -246,5 +290,60 @@ describe("the marks' holder (C5)", () => {
     });
     await expect(marks.note(GRANTS, 3)).resolves.toBe(3);
     expect(said).toEqual([{ marks: { [GRANTS]: 3 } }]);
+  });
+
+  // CUSTODY-SPEC v0.19 (the lead 02:04:54Z, accepted by the PM 02:05:49Z): a custody log line prints an error's
+  // `code`, never its message. Node's file errors name a whole path, which holds the person's home and rides into a
+  // support bundle. What `note` rejects with is printed by its caller (the grants file's `grants_mark_unanswered`),
+  // which prints a code too, so a rejection carries one.
+  it("what a note is refused for is said as a code", async () => {
+    const marks = new CustodyMarks();
+    await expect(marks.note("Not A Name", 1)).rejects.toMatchObject({ code: "mark-name" });
+    await expect(marks.note(GRANTS, -1)).rejects.toMatchObject({ code: "mark-count" });
+    await expect(marks.note(GRANTS, 2 ** 53)).rejects.toMatchObject({ code: "mark-count" });
+    for (let i = 0; i < CUSTODY.MARKS_MAX; i += 1) await marks.note(`held.${i}`, 1);
+    await expect(marks.note("one.more", 1)).rejects.toMatchObject({ code: "marks-full" });
+  });
+
+  it("a floor that cannot be told is logged by its code alone: no line at any level holds what its error said", async () => {
+    const lines: Line[] = [];
+    let failure: unknown;
+    const floor: CustodyMarksFloor = { setMark: () => Promise.reject(failure) };
+    const marks = new CustodyMarks({ floor, logger: everyLine(lines) });
+    const untold = (): Line[] => lines.filter((line) => line.event.endsWith("floor_untold"));
+
+    // a file's error, as Node says one: its message names the whole path
+    const noFile = new Error(`ENOENT: no such file or directory, open '${PLANTED}'`);
+    failure = Object.assign(noFile, { code: "ENOENT", path: PLANTED });
+    await marks.note(GRANTS, 1);
+    expect(untold()).toHaveLength(1);
+    expect(untold()[0]?.attrs).toEqual({ name: GRANTS, code: "ENOENT" });
+
+    // the link's own refusal carries its word as `kind` (native-link.ts `RpcCallError`), its `code` a number
+    const noAnswer = new Error(`no answer from ${PLANTED}`);
+    failure = Object.assign(noAnswer, { kind: "TIMEOUT", code: -32004 });
+    await marks.note(GRANTS, 2);
+    expect(untold()[1]?.attrs).toEqual({ name: GRANTS, code: "TIMEOUT" });
+
+    // and an error with no word at all is `unknown`
+    failure = new Error(`something about ${PLANTED}`);
+    await marks.note(GRANTS, 3);
+    expect(untold()[2]?.attrs).toEqual({ name: GRANTS, code: "unknown" });
+
+    expect(JSON.stringify(lines)).not.toContain(PLANTED);
+    expect(JSON.stringify(lines)).not.toContain("a-home");
+  });
+
+  it("a listener that throws is logged by its code alone too", async () => {
+    const lines: Line[] = [];
+    const marks = new CustodyMarks({ logger: everyLine(lines) });
+    marks.onChange(() => {
+      throw Object.assign(new Error(`EPIPE: write to ${PLANTED}`), { code: "EPIPE" });
+    });
+    await marks.note(GRANTS, 3);
+    const failed = lines.filter((line) => line.event.endsWith("listener_failed"));
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.attrs).toEqual({ code: "EPIPE" });
+    expect(JSON.stringify(lines)).not.toContain(PLANTED);
   });
 });
