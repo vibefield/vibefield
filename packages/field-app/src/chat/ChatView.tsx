@@ -1,4 +1,4 @@
-import type { NeedsItem, SparkId } from "@vibefield/contracts";
+import type { NeedsItem, SparkId, SparkSummary } from "@vibefield/contracts";
 import {
   type ReactElement,
   type SetStateAction,
@@ -231,6 +231,9 @@ export function ChatView({
         // asleep or not started: its session does not run, so the send wakes it first
         const needsWake = !entry.awake;
         const requestId = sayRequestId();
+        // the wake's own answer (item 293): its session is the run the wake started or resumed. The list may still say
+        // the record's ended session for a while, so a send that woke the spark hands to this run, or to none
+        let woken: SparkSummary | null = null;
         let outcome: ThreadSendOutcome;
         try {
           outcome = await sendToThread(
@@ -239,7 +242,7 @@ export function ChatView({
               wake: async () => {
                 setAct({ spark, act: { state: "busy" } });
                 try {
-                  await opener(spark);
+                  woken = await opener(spark);
                 } finally {
                   setAct((current) => (current?.spark === spark ? null : current));
                 }
@@ -248,8 +251,10 @@ export function ChatView({
                 sayer({ spark, ...ask, ...(chips.length > 0 ? { chips: [...chips] } : {}) }),
               stillKept,
               handFileKept: (path) => handFileKept(path),
-              // read after any wake: a spark that had no session has one by now (§4.3, OB-L1)
+              // a spark this send woke: the run its wake answered, or none (noRun's words), never the list's older
+              // entry; one already awake: its live session, read from the feed (§4.3, OB-L1)
               hand: handToSpark(async () => {
+                if (needsWake) return woken?.session?.runtimeRunId;
                 const now = await whenSparkEntry(
                   spark,
                   (current) => current.ownRuns.length > 0,

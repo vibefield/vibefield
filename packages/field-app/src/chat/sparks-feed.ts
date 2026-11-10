@@ -211,11 +211,12 @@ interface FeedState {
   readonly cell: ThreadMark | null;
 }
 
-/** Wake a spark (`compose.sparks.open`): its last session resumes; a live one is answered as it is (CR-D11). It throws
- * its refusal, in fieldd's words, for the act that asked to say once, where it was asked (DESIGN.md §8 "Chat's list",
- * the thread's column as SP-1d built it). THE one wake for every act that asks for one: Wake on the thread's line, and
- * Send. */
-export type SparkOpener = (spark: SparkId) => Promise<void>;
+/** Wake a spark (`compose.sparks.open`): its last session resumes; a live one is answered as it is (CR-D11). It
+ * answers the record the wake left, whose session is the run the spark has now (item 293: a send that woke it hands
+ * to that run, never to the list's older entry), and throws its refusal, in fieldd's words, for the act that asked
+ * to say once, where it was asked (DESIGN.md §8 "Chat's list", the thread's column as SP-1d built it). THE one wake
+ * for every act that asks for one: Wake on the thread's line, and Send. */
+export type SparkOpener = (spark: SparkId) => Promise<SparkSummary>;
 
 /** Answer one of the queue's items by its act's place (`needs.answer`, CP-3): the item fieldd handed back with its
  * answer, or its refusal thrown in fieldd's words, for the card that asked to say. */
@@ -366,10 +367,11 @@ class RunningFeed {
   /** The feed's pause (TH-2): the board's row says what came of it (its `stop`), for every window. */
   readonly pause: SparkPauser = (runtimeRunId) => this.port.pause(runtimeRunId);
 
-  /** The feed's wake: the list is asked again whether it woke or not, since the record says what the door did. */
+  /** The feed's wake: the record the door answered, and the list asked again whether it woke or not, since the record
+   * says what the door did. The list's answer lands later, so whatever needs the woken run reads it here (item 293). */
   readonly open: SparkOpener = async (spark) => {
     try {
-      await this.port.open(spark);
+      return await this.port.open(spark);
     } finally {
       refreshSparks();
     }
