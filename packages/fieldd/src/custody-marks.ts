@@ -26,6 +26,30 @@ const MARK_NAME = new RegExp(CUSTODY.MARK_NAME);
 const isCount = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
+/** What `note` refuses a caller for, by a word a log line may print (CUSTODY-SPEC v0.19: a custody log line prints an
+ * error's `code`, never its message, and the grants file prints this one as `grants_mark_unanswered`'s reason):
+ *  · `mark-name` — the name is off `CUSTODY.MARK_NAME`;
+ *  · `mark-count` — the value is no count;
+ *  · `marks-full` — one name more than `CUSTODY.MARKS_MAX`. */
+export class CustodyMarkRefusal extends Error {
+  constructor(
+    readonly code: "mark-name" | "mark-count" | "marks-full",
+    message: string,
+  ) {
+    super(message);
+    this.name = "CustodyMarkRefusal";
+  }
+}
+
+/** An error as a custody log line prints it: its code alone. Node's file errors name a whole path in their message,
+ * which holds the person's home and rides into a support bundle. The link's own refusal carries its word as `kind`
+ * and a number as `code` (native-link.ts `RpcCallError`), so its `kind` is read; an error with neither is `unknown`. */
+const codeOf = (error: unknown): string => {
+  const said = error as { code?: unknown; kind?: unknown } | null | undefined;
+  if (typeof said?.code === "string") return said.code;
+  return typeof said?.kind === "string" ? said.kind : "unknown";
+};
+
 /** A mark as another side said it (the spawner, the floor): a whole number from 0 up, or undefined when it is not
  * one. The floor's count is a u64 with no ceiling of its own, so one past the safe integers reads as THE TOP and
  * never as nothing: a mark that read as nothing would be a mark that fell (CUSTODY-SPEC §8, "the count never wraps":
@@ -81,17 +105,21 @@ export class CustodyMarks {
    * answers the mark.
    *
    * It rejects only for what its caller got wrong: a name off `CUSTODY.MARK_NAME`, a value that is no count, or one
-   * name more than `CUSTODY.MARKS_MAX` (the floor holds no more, and a hand-off carries no more). A floor's silence
-   * or refusal is never a rejection. */
+   * name more than `CUSTODY.MARKS_MAX` (the floor holds no more, and a hand-off carries no more), each a
+   * `CustodyMarkRefusal` with its `code`. A floor's silence or refusal is never a rejection. */
   async note(name: string, value: number): Promise<number> {
-    if (!MARK_NAME.test(name)) throw new Error("a mark's name is off the pattern");
+    if (!MARK_NAME.test(name)) {
+      throw new CustodyMarkRefusal("mark-name", "a mark's name is off the pattern");
+    }
     if (!isCount(value)) {
-      throw new Error(`a mark is a count, and ${name} was noted as something else`);
+      const said = `a mark is a count, and ${name} was noted as something else`;
+      throw new CustodyMarkRefusal("mark-count", said);
     }
     const held = this.get(name);
     if (value <= held) return held;
     if (!this.#view.has(name) && this.#view.size >= CUSTODY.MARKS_MAX) {
-      throw new Error(`fieldd holds ${CUSTODY.MARKS_MAX} marks already; ${name} is one more`);
+      const said = `fieldd holds ${CUSTODY.MARKS_MAX} marks already; ${name} is one more`;
+      throw new CustodyMarkRefusal("marks-full", said);
     }
     this.#view.set(name, value);
     this.#say();
@@ -141,10 +169,11 @@ export class CustodyMarks {
       // the floor may keep more than it was told: a mark set by a fieldd before this one
       if (this.#raise(name, await floor.setMark(name, value))) this.#say();
     } catch (error) {
+      // the error's code, never the error: what it says may name a path
       this.#logger.debug(
         "fieldd.custody.marks.floor_untold",
         "The floor did not take a mark; fieldd's own view of it stands",
-        { name, error },
+        { name, code: codeOf(error) },
       );
     }
     return this.get(name);
@@ -159,7 +188,7 @@ export class CustodyMarks {
         this.#logger.debug(
           "fieldd.custody.marks.listener_failed",
           "A listener of the marks threw; the others were still told",
-          { error },
+          { code: codeOf(error) },
         );
       }
     }
