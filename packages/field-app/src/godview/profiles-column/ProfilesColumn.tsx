@@ -165,6 +165,25 @@ function ProfilesColumnController({
   // UM-R-F (c4; §8 "Focus is pointing"): the keyboard's own target, a profile's id or the add, beside the pointer's
   // and the pin. It has no timers: the keyboard shows a card at once and takes it away at once.
   const [keyboardTarget, setKeyboardTarget] = useState<string | null>(null);
+  // UM-R-F (fix, the review's F1; §8 "Focus is pointing"): only the keyboard's focus points. Chromium focuses a button
+  // the pointer presses, and the window hands that focus back when it returns. So after a press, focus is the
+  // pointer's until a key is pressed with no ⌘, ⌃ or ⌥ held (⌘Tab leaves the window; it is not a walk).
+  const pressed = useRef(false);
+  useEffect(() => {
+    const onPress = (): void => {
+      pressed.current = true;
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      pressed.current = false;
+    };
+    window.addEventListener("pointerdown", onPress, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPress, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, []);
   const [addPresses, setAddPresses] = useState(0);
   const pointedProfile = pointed !== null && pointed !== ADD_TARGET ? pointed : null;
   const keyboardProfile = keyboardTarget !== ADD_TARGET ? keyboardTarget : null;
@@ -203,16 +222,17 @@ function ProfilesColumnController({
   const pin = (setId: string): void => {
     if (!covered) setPinned(setId);
   };
-  // UM-R-F (c4): the keyboard came onto a circle, its card or the add, or left them. It reaches what the pointer may
-  // reach (`columnPoint`'s gate). A pointer resting on another target lets go, as a close does, so the card the
-  // keyboard reached shows and the pointer must leave and return to peek; a focus the keyboard already holds (the
-  // card's own circle, handed the keyboard as a peek takes the card) leaves the pointer be.
+  // UM-R-F (c4): focus came onto a circle, its card or the add, or left them. A focus a press gave is the pointer's and
+  // shows nothing (the review's F1), and so is one handed on while it stands: the circle a close or a peek hands it to.
+  // It reaches what the pointer may reach (`columnPoint`'s gate). A pointer resting on another target lets go, as a
+  // close does, so the card the keyboard reached shows and the pointer must leave and return to peek; a focus the
+  // keyboard already holds (the card's own circle, handed the keyboard as a peek takes the card) leaves the pointer be.
   const keyboardPoint = (target: string | null): void => {
     if (target === null) {
       setKeyboardTarget(null);
       return;
     }
-    if (covered) return;
+    if (pressed.current || covered) return;
     if (target === ADD_TARGET && columnRef.current?.querySelector(".vf-profiles-moment > *")) {
       return;
     }

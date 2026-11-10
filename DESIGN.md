@@ -3429,7 +3429,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       closes a card it shows, as every close does (below), and the card stays closed until the keyboard leaves and
       comes back. With no card open, Esc is not the column's and passes on, so it stays with the terminal. While the
       terminals fill the window, or while the limit card stands in the add's card's place, focus shows nothing, as
-      the pointer shows nothing.
+      the pointer shows nothing. Only the keyboard's focus points. A press focuses the button it presses (Chromium
+      does), and that focus is the pointer's: it shows no card, and neither does the focus the window gives back when
+      it returns. Focus is the keyboard's again once a key is pressed with no ⌘, ⌃ or ⌥ held, so ⌘Tab away and back
+      opens nothing (*added the same day, UM-R-F's review, F1: a click's focus kept a card open past the grace, and
+      over a click outside that left the focus in place*).
     - **The head:** the profile's glyph (15) and its name at 14/600; a **default** tag when there are several
       profiles (10/600, padded 3 6, a capsule ringed by the strong hairline, in the secondary ink); the reading's
       age at 11.5 in the tertiary ink; and × at the end, a 24 round on the ink at 6% holding `close` 11 in the

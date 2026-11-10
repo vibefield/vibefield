@@ -1836,6 +1836,90 @@ describe("focus is pointing (UM-R-F, c4): the keyboard on a circle shows its car
     focus(add);
     expect(target.children).toHaveLength(0);
   });
+
+  // UM-R-F (fix, the review's F1): Chromium focuses a button the pointer presses, so a press is a pointerdown, then
+  // the focus, then the click. That focus is the pointer's, not the keyboard's.
+  const press = (node: HTMLElement | null | undefined): void => {
+    act(() => {
+      node?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    });
+    act(() => node?.focus());
+    act(() => node?.click());
+  };
+
+  it("a card pinned by a press closes on a pointerdown outside that leaves focus in place, after the grace (the review's F1)", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { target, page } = setup();
+      // the deck's lip: its pointerdown calls preventDefault, so focus stays where it was
+      const lip = outside();
+      over(itemOf(page, "work"));
+      press(circleOf(page, "work"));
+      expect(standOf(target, "work")).not.toBeNull();
+      expect(monitorHoldsKeys()).toBe(true);
+      expect(document.activeElement).toBe(circleOf(page, "work"));
+      act(() => {
+        lip.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      });
+      expect(monitorHoldsKeys()).toBe(false);
+      expect(document.activeElement).toBe(circleOf(page, "work"));
+      out(itemOf(page, "work"));
+      wait(320);
+      expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a press on a plan's row in a pointed card leaves it the pointer's: it closes on the grace (the review's F1)", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { target, page } = setup();
+      over(itemOf(page, "work"));
+      const choose = standOf(target, "work")?.querySelector<HTMLButtonElement>(
+        "button.vf-profiles-pop-row-choose",
+      );
+      expect(choose).not.toBeNull();
+      press(choose);
+      expect(document.activeElement).toBe(choose);
+      expect(monitorHoldsKeys()).toBe(false);
+      out(itemOf(page, "work"));
+      wait(319);
+      expect(standOf(target, "work")).not.toBeNull();
+      wait(1);
+      expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the window's return hands a pressed circle its focus back and opens no card; a key with no ⌘ makes focus the keyboard's again (the review's F1)", () => {
+    const { target, page } = setup({ sets: [FIXTURE_NATIVE] });
+    const circle = circleOf(page, "native");
+    over(itemOf(page, "native"));
+    // a press pins the card, and a second press unpins it: closing is one act
+    press(circle);
+    expect(monitorHoldsKeys()).toBe(true);
+    press(circle);
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    // ⌘Tab away: a key with ⌘ held is no walk, and the window takes the focus with it
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Meta", metaKey: true }));
+    });
+    act(() => circle?.blur());
+    // …and back: the circle has its focus again, and no card opens
+    focus(circle);
+    expect(document.activeElement).toBe(circle);
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    // Shift+Tab off the circle and back onto it: that focus is the keyboard's, so its card shows
+    act(() => circle?.blur());
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true }));
+    });
+    focus(circle);
+    expect(standOf(target, "native")).not.toBeNull();
+    expect(monitorHoldsKeys()).toBe(false);
+  });
 });
 
 /* ── the pill's room (UM-R-F, c6; DESIGN.md §8 "The pill") ───────────────── */

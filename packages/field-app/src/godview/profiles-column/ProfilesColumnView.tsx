@@ -74,8 +74,9 @@ export interface ProfilesColumnViewProps {
   columnRef?: Ref<HTMLDivElement> | undefined;
   /** the pointer came onto a circle (its profile's id) or the add (`ADD_TARGET`), or left them (null) */
   onPoint: (target: string | null) => void;
-  /** UM-R-F (c4) — the keyboard came onto a circle or its card (its profile's id) or the add (`ADD_TARGET`), or left
-   * them (null); absent (the catalog), focus shows nothing */
+  /** UM-R-F (c4) — focus came onto a circle or its card (its profile's id) or the add (`ADD_TARGET`), or left them
+   * (null); the controller counts only the keyboard's (a press's focus is the pointer's). Absent (the catalog), focus
+   * shows nothing */
   onKeyboardTarget?: ((target: string | null) => void) | undefined;
   onCircle: (setId: string) => void;
   onClose: () => void;
