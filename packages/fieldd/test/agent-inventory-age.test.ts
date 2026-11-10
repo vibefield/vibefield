@@ -1475,4 +1475,44 @@ describe("item 310 — an audit-refused idle replacement leaves the run held (mo
     expect(births, "nothing born").toEqual([]);
     expect(realSignals(), "the net: no real signal was asked").toEqual([]);
   }, 30_000);
+
+  it("after the refusal the poll asks again: the run is held as it was, and a replacement can begin", async () => {
+    const { daemon, records, births } = await agentDaemonOn(
+      freshFloor(),
+      (dataDir) => [runRecord(RUN, CLAUDE, dataDir)],
+      { resumeWhenIdle: { afterMs: 1, pollMs: 50 } },
+    );
+    let idle = true;
+    vi.spyOn(daemon.index, "sessionByNativeId").mockImplementation(async (nativeSessionId) => ({
+      id: "idx-310",
+      nativeSessionId,
+      activity: idle ? { firstAt: 1, lastAt: 1 } : null,
+      streamState: "ready",
+    }));
+    // the first idle replacement's attempt is refused; every later one is audited for real
+    const audited = vi.spyOn(daemon.audit, "requiredSystem").mockImplementationOnce(async () => {
+      idle = false;
+      throw new Error("the audit log refused the attempt");
+    });
+    const terminate = vi
+      .spyOn(daemon.terminals, "terminate")
+      .mockResolvedValue({ terminated: true });
+    await until(() => audited.mock.calls.length >= 1, 10_000, "the idle replacement, refused");
+    // the conversation is idle again: a held run's poll asks, and its replacement begins
+    idle = true;
+    // before 310 the run stayed `resuming`: no poll asked again, and nothing began (the until's timeout)
+    await until(
+      () => terminate.mock.calls.length >= 1,
+      5_000,
+      "a replacement began: the floor's terminate asked",
+    );
+    expect(audited.mock.calls.length, "audited again, for real").toBeGreaterThanOrEqual(2);
+    expect(daemon.agents.replacing(RUN), "a replacement in flight").toBe(true);
+    // the floor's exit lets it pass its point of no return; the paper cell refuses the successor
+    await daemon.agents.handleTerminalExit(exited());
+    await until(() => records.read(RUN)?.exited !== undefined, 10_000, "the replacement ended");
+    expect(records.read(RUN)?.exited?.reason).toBe("replace-failed");
+    expect(births, "the successor's birth, asked once").toEqual([`native-${RUN}`]);
+    expect(realSignals(), "the net: no real signal was asked").toEqual([]);
+  }, 30_000);
 });
