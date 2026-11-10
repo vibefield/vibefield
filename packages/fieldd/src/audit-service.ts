@@ -14,6 +14,7 @@ import {
 import {
   type CallerContext,
   SHELL_CLIPBOARD_AUDIT_ACTIONS,
+  SHELL_CUSTODY_AUDIT_ACTIONS,
   UPDATES_AUDIT_ACTIONS,
 } from "@vibefield/contracts";
 import {
@@ -48,6 +49,9 @@ const SHELL_ACTIONS = new Set<string>([
   ...Object.values(UPDATES_AUDIT_ACTIONS),
   // Item 102: the clipboard read door's outcomes (bytes, never the text), named in contracts.
   ...Object.values(SHELL_CLIPBOARD_AUDIT_ACTIONS),
+  // OB custody (CUSTODY-SPEC §7.4): what main did with its own custody root, and with an older pair when it made
+  // one (an outcome and what was stopped, never a secret, never the wrapped bytes), named in contracts.
+  ...Object.values(SHELL_CUSTODY_AUDIT_ACTIONS),
 ]);
 
 export interface AuditServiceOptions {
