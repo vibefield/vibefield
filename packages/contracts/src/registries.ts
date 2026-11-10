@@ -1576,6 +1576,49 @@ export const NATIVE_DOOR = {
   LINE_MAX_BYTES: 8 * 1024 * 1024,
 } as const;
 
+/** OB custody (EL7; the shapes are custody.ts's `CustodyHandoff` and mgmt.ts's `NativeBootstrap` and `NativeMarksSet*`)
+ * — how a spawner hands a daemon its secrets, and the marks that outlive fieldd. ONE authority for the shell and the
+ * supervisor (by import), fieldd (by import) and the floor (by generation, its scalar rows; the HKDF labels are the
+ * shell's alone and stay TS-only). Both env names sit under ENV_PREFIXES, so neither reaches an agent's PTY, and each
+ * carries a FLAG, never a secret: a secret rides the daemon's stdin and nothing else. */
+export const CUSTODY = {
+  /** fieldd's environment: `FIELDD_CUSTODY=stdin` says a `CustodyHandoff` is coming on stdin. The flag set and no
+   * valid hand-off is a refusal to boot, never a fall back to the files. */
+  ENV: "FIELDD_CUSTODY",
+  /** the floor's twin: `FIELD_NATIVE_CUSTODY=stdin` says a `NativeBootstrap` is coming on stdin, by the same rule */
+  NATIVE_ENV: "FIELD_NATIVE_CUSTODY",
+  /** the one value either flag takes */
+  STDIN: "stdin",
+  /** the longest hand-off line a daemon reads, its newline included; a longer one is invalid */
+  HANDOFF_MAX_BYTES: 4096,
+  /** how long a daemon waits for its line before it refuses to boot */
+  HANDOFF_WAIT_MS: 5_000,
+  /** the context of the shell's pairing MAC (`shell-pairing.vector.json`):
+   * mac = hex(HMAC-SHA256(shell, "vf-shell" 0x00 String(port) 0x00 bootId 0x00 userId 0x00 nonce 0x00 String(ts))) */
+  SHELL_CONTEXT: "vf-shell",
+  /** the ack's, a different context so neither direction's transcript replays as the other's:
+   * serverMac = hex(HMAC-SHA256(shell, "vf-shell-ack" 0x00 nonce 0x00 bootId 0x00 String(port))) */
+  SHELL_ACK_CONTEXT: "vf-shell-ack",
+  /** how far a shell pairing's `ts` may be from the verifier's clock, in seconds (D8's own window) */
+  WINDOW_SECS: 300,
+  /** a shell pairing's nonce, in hex characters: 16 bytes, fresh per connection */
+  NONCE_HEX: 32,
+  /** the nonces fieldd remembers, to refuse one it has seen inside the window */
+  NONCES_KEPT: 1024,
+  /** HKDF-SHA256 labels (`info = label 0x00 context`, 32 bytes out), one per secret of a `CustodyHandoff` */
+  LABELS: {
+    shell: "vf/custody/v1/shell",
+    pairing: "vf/custody/v1/pairing",
+    records: "vf/custody/v1/records",
+  },
+  /** the marks the floor holds at once; one more name is refused */
+  MARKS_MAX: 64,
+  /** a mark's name, as a pattern SOURCE (mgmt.ts's patterns are strings too, so one spelling reaches Rust) */
+  MARK_NAME: "^[a-z][a-z0-9.:-]{0,63}$",
+  /** the first mark: the objects store's grants generation */
+  MARK_OBJECT_GRANTS: "objects.grants",
+} as const;
+
 /** TPv3 — the terminal pipeline's numbers (terminal-pipeline-v3 §5.1, §8; §20
  * item 5 "numeric limits with owners"). ONE authority for the cell (Rust, by
  * generation), fieldd (the grant TTLs) and the renderer. Every value is

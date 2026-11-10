@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ARTIFACT_LIMITS, ArtifactId, ArtifactTitle, MadeAppReach, Sha256Hex } from "./artifacts";
+import { CustodyLevel } from "./custody";
 import { ClientKind, SemverString } from "./envelope";
 import { ErrorKind, UnavailableDetails } from "./errors";
 import {
@@ -51,6 +52,11 @@ export const ProductInfo = z
      * probe refuses a mismatch the way it refuses incompatible-build; null =
      * unconfigured, optional keeps pre-UA-2 product files adoptable. */
     userId: z.string().min(1).nullable().optional(),
+    /** OB custody — the level this daemon booted at (custody.ts): `sealed` = its spawner handed it custody, it
+     * wrote no `shell.token`, and a `shell-main` hello pairs by MAC; `files` = today's files. Absent = a daemon
+     * from before custody, which is `files`. Discovery only, as the rest of this file is: it grants nothing, and a
+     * reader that needs the level proved proves it by the pairing, never by this word. */
+    custody: CustodyLevel.optional(),
   })
   .passthrough();
 export type ProductInfo = z.infer<typeof ProductInfo>;

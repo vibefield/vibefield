@@ -304,6 +304,11 @@ export const HelloAck = z
      * floor predating it: a fieldd holding no pid of its own then offers no restart and says
      * "restart it outside VibeField". */
     pid: z.number().int().min(1).optional(),
+    /** OB custody (C5) — mgmt surface only: the marks this floor holds (`native.marks.set`, mgmt.ts), each a name
+     * and the highest value any fieldd told it in this floor's run. They are the floor's memory alone and die with
+     * it, so a fieldd started beside a living floor reads here what the one before it wrote, and a store below its
+     * mark is stale. Absent when the floor holds none, on every product ack, and from a floor predating it. */
+    marks: z.record(z.string(), z.number().int().nonnegative()).optional(),
   })
   .passthrough();
 export type HelloAck = z.infer<typeof HelloAck>;

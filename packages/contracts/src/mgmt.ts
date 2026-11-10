@@ -1,9 +1,16 @@
 import { z } from "zod";
 import { Blake3Hex, Sha256Hex } from "./artifacts";
+import { CustodySecret } from "./custody";
 import { TerminalCellRole, TerminalRouteCell, TerminalWorkloadClass } from "./envelope";
 import { UnavailableDetails } from "./errors";
 import { ServeHeaders } from "./made-app-network";
-import { CELL_SUPERVISION, FILE_TRANSFER_ROOTS, NATIVE_FLOOR_TICK, PORTS } from "./registries";
+import {
+  CELL_SUPERVISION,
+  CUSTODY,
+  FILE_TRANSFER_ROOTS,
+  NATIVE_FLOOR_TICK,
+  PORTS,
+} from "./registries";
 
 // Management channel (design-01 §5.2, M2 subset): native.lifecycle.* + the mesh
 // facade P0 subset (peers / store / serve). Laws honored here:
@@ -1222,6 +1229,55 @@ export type NativeDoorRootsClearResult = z.infer<typeof NativeDoorRootsClearResu
 export function sameStartSecond(aMs: number, bMs: number): boolean {
   return Math.floor(aMs / 1_000) === Math.floor(bMs / 1_000);
 }
+
+// ---- custody (OB custody, EL7 · custody.ts's levels and hand-off · registries.ts `CUSTODY`) ----
+//
+// The floor's half of custody, and so in the Rust bundle (custody.ts is otherwise TS-only).
+//
+// BOOTSTRAP (C3). Under `CUSTODY.NATIVE_ENV=stdin` fieldd spawns the floor with a piped stdin, writes ONE line, a
+// `NativeBootstrap`, and closes it. The floor reads to the first newline, holds the pairing secret in memory, and never
+// creates or reads LAYOUT.PAIRING_FILE. The line absent, late (`CUSTODY.HANDOFF_WAIT_MS`), longer than
+// `CUSTODY.HANDOFF_MAX_BYTES` or invalid is a refusal to boot: exit non-zero and one log line that names no secret,
+// never a fall back to the file. The flag unset is today's file, untouched. The D8 handshake (`PairingMac`,
+// `pairing.vector.json`) and `meshdata.sock` are unchanged: only where the secret comes from moves. The secret never
+// reaches a child: the floor's stdin is not passed on, and nothing of it enters an env or an argv.
+//
+// MARKS (C5). A mark is a named number that only rises: what a survivor remembers of a store, so a store put back as
+// it was earlier is seen to be stale. fieldd tells the floor (`native.marks.set`); the floor keeps the highest value
+// per name IN MEMORY and says what it holds in its hello ack (`HelloAck.marks`), so a mark outlives fieldd and dies
+// with the floor. Marks are the unit's, not a connection's. Management channel only (EL7): nothing an agent does at a
+// door reaches a mark.
+
+/** fieldd → the floor: line 1 of the floor's stdin at spawn, under `CUSTODY.NATIVE_ENV=stdin`, then a newline, then
+ * EOF. Never argv, never env, never a file, never a log. `pairing` is the D8 handshake's secret for this user root.
+ * `v` is 1, spelled as a bounded integer and not `z.literal(1)`: this shape rides the Rust bundle, where no numeric
+ * const has been through typify and logging.ts's `LogSchemaVersionV1` is the spelling that has. */
+export const NativeBootstrap = z
+  .object({
+    v: z.number().int().min(1).max(1),
+    pairing: CustodySecret,
+  })
+  .passthrough();
+export type NativeBootstrap = z.infer<typeof NativeBootstrap>;
+
+/** `native.marks.set` — a mark only rises: the floor keeps max(old, value) and answers what it keeps, so a value
+ * below the mark changes nothing and reads the mark back. Refused `PRECONDITION_FAILED`: a name off
+ * `CUSTODY.MARK_NAME`, or a name beyond the `CUSTODY.MARKS_MAX` the floor holds at once (a held name always rises). */
+export const NativeMarksSetParams = z
+  .object({
+    name: z.string().regex(new RegExp(CUSTODY.MARK_NAME)),
+    value: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type NativeMarksSetParams = z.infer<typeof NativeMarksSetParams>;
+
+/** The value the floor keeps for that name after the set: the mark. */
+export const NativeMarksSetResult = z
+  .object({
+    value: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type NativeMarksSetResult = z.infer<typeof NativeMarksSetResult>;
 
 // ---- egress (DS-1 · design-02 §2.4's egress bullet · design-06 §3 · petition T7 = truffle RFC 026) ----
 //

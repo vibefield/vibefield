@@ -1,0 +1,11 @@
+{
+  "note": "OB custody cross-language crypto vector, the shell's pairing under `sealed`. mac = hex(HMAC-SHA256(secret, 'vf-shell' 0x00 decimal(port) 0x00 bootId 0x00 userId 0x00 nonce 0x00 decimal(ts))); ackMac = hex(HMAC-SHA256(secret, 'vf-shell-ack' 0x00 nonce 0x00 bootId 0x00 decimal(port))). The secret is the 32 bytes secretHex decodes to; userId is the empty string for a daemon that has none. A DIFFERENT context string each way, so neither direction's transcript replays as the other's. mac and ackMac say TO-BE-COMPUTED until the first admitted row computes them: both vector tests fail on that word.",
+  "secretHex": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+  "port": 49213,
+  "bootId": "fieldd-1a2b3c4d5e6f7a8b",
+  "userId": "01J9USERAAAAAAAAAAAAAAAAAA",
+  "nonce": "9f8e7d6c5b4a39281706f5e4d3c2b1a0",
+  "ts": 1784930400,
+  "mac": "TO-BE-COMPUTED",
+  "ackMac": "TO-BE-COMPUTED"
+}

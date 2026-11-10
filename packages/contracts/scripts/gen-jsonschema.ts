@@ -42,12 +42,17 @@
 // refusals) are TS-only: the floor carries the slice as opaque store JSON under its byte cap and reads none of it. Its
 // file transfer (src/mgmt.ts `NativeFileTransfer*`) is the floor's seam and rides the bundle, with artifacts.ts's
 // `Blake3Hex` named beside it; its registries reach Rust through gen-registries-rs.ts.
+// Custody (OB custody, src/custody.ts) is split the same way. fieldd's own hand-off, the level and the marks' product
+// stream are TS-only: the shell, the supervisor and fieldd are their sides. The floor's half rides the bundle: its
+// bootstrap line and the marks verb (src/mgmt.ts `NativeBootstrap`, `NativeMarksSet*`), `HelloAck.marks`, and
+// custody.ts's `CustodySecret` named beside them; `CUSTODY`'s scalar rows reach Rust through gen-registries-rs.ts.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ZodTypeAny } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { Blake3Hex } from "../src/artifacts";
+import { CustodySecret } from "../src/custody";
 import {
   DiagnosticCursorV1,
   DiagnosticLogDeltaV1,
@@ -151,6 +156,7 @@ import {
   MeshStartParams,
   MeshStartResult,
   MeshStopResult,
+  NativeBootstrap,
   NativeDetachParams,
   NativeDetachResult,
   NativeDoorCaller,
@@ -176,6 +182,8 @@ import {
   NativeFileTransferRow,
   NativeFileTransferSnapshot,
   NativeHealth,
+  NativeMarksSetParams,
+  NativeMarksSetResult,
   NativePrepareRestartParams,
   NativePrepareRestartResult,
   NativeRestartReason,
@@ -493,6 +501,14 @@ const bundle = tightenLoggingWireSchema(
       NativeFileTransferRow,
       NativeFileTransferSnapshot,
       NativeFileTransferDelta,
+      // OB custody — the floor's half (mgmt.ts): its bootstrap line and the marks verb. Bundle-only
+      // for the same reason: no other seam's entry embeds them. The secret is custody.ts's
+      // `CustodySecret`, named so the floor reads one typed, pattern-checked string. The hello
+      // ack's `marks` is an inline record and needs no name.
+      CustodySecret,
+      NativeBootstrap,
+      NativeMarksSetParams,
+      NativeMarksSetResult,
     },
   }),
 );

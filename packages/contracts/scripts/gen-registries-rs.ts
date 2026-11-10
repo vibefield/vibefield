@@ -10,6 +10,7 @@ import {
   APP_ID,
   CELL_ISOLATION,
   CELL_SUPERVISION,
+  CUSTODY,
   DRIVE_LIMITS,
   ENV_PREFIXES,
   FILE_TRANSFER_ROOTS,
@@ -174,6 +175,21 @@ const lines: string[] = [
   "/// authority with fieldd; see registries.ts.",
   "pub mod native_door {",
   ...Object.entries(NATIVE_DOOR).map(([k, v]) => `    pub const ${k}: u64 = ${v};`),
+  "}",
+  "",
+  "/// OB custody — how a spawner hands the floor its pairing secret, and the marks the floor",
+  "/// keeps for fieldd: the flag's env names and its one value, the hand-off line's bounds, the",
+  "/// shell pairing's contexts and window, the marks' bound and name pattern. `CUSTODY`'s scalar",
+  "/// rows; its HKDF labels are the shell's alone and stay TS-only. One authority with fieldd;",
+  "/// see registries.ts.",
+  "pub mod custody {",
+  ...Object.entries(CUSTODY).flatMap(([k, v]) =>
+    typeof v === "number"
+      ? [`    pub const ${k}: u64 = ${v};`]
+      : typeof v === "string"
+        ? [`    pub const ${k}: &str = "${v}";`]
+        : [],
+  ),
   "}",
   "",
   "/// TPv3 (terminal-pipeline-v3 §5.1/§8; §20 item 5) — the pipeline's numbers:",

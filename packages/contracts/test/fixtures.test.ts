@@ -154,6 +154,7 @@ import {
   SparkKeptRecord,
   SparkRecord,
 } from "../src/compose";
+import { CustodyHandoff, CustodyMarksFrame } from "../src/custody";
 import {
   DeviceInfo,
   DeviceNameFile,
@@ -244,6 +245,7 @@ import {
   MeshLanePeerOpened,
   MeshNotUpDetails,
   MeshSelfIdentity,
+  NativeBootstrap,
   NativeDetachParams,
   NativeDetachResult,
   NativeDoorClosed,
@@ -265,6 +267,8 @@ import {
   NativeFileTransferSnapshot,
   NativeHealth,
   NativeLinkHealth,
+  NativeMarksSetParams,
+  NativeMarksSetResult,
   NativePrepareRestartParams,
   NativePrepareRestartResult,
   NativeShutdownParams,
@@ -539,6 +543,17 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "native-door-roots-set-result": NativeDoorRootsSetResult,
   "native-door-roots-clear-params": NativeDoorRootsClearParams,
   "native-door-roots-clear-result": NativeDoorRootsClearResult,
+  // OB custody — the hand-off a spawner writes on fieldd's stdin (with the marks it remembers, and one with none) and
+  // the marks' product stream (one mark, and the EMPTY frame a fieldd holding none answers), both TS-only
+  // (custody.ts); the floor's bootstrap line and the marks verb (mgmt.ts), the floor's half, parsed on both sides
+  // (fixture_parity.rs). The hello ack that carries marks rides the `hello-ack` prefix (`hello-ack.marks`), and the
+  // shell pairing's recipe is a vector (`shell-pairing.vector.json`), pinned by its maker's test and its verifier's.
+  // Their own rows: custody.test.ts.
+  "custody-handoff": CustodyHandoff,
+  "custody-marks": CustodyMarksFrame,
+  "native-bootstrap": NativeBootstrap,
+  "native-marks-set-params": NativeMarksSetParams,
+  "native-marks-set-result": NativeMarksSetResult,
   // DS-1 — the egress facade (mgmt.ts). The table has TWO fixtures on purpose:
   // a bound table (a MagicDNS target and a bracketed IPv6 one) and the EMPTY
   // snapshot a node teardown pushes, which is the facade's reset.

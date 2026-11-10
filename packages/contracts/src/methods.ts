@@ -335,6 +335,18 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // OB custody (C5) — the marks fieldd holds (custody.ts `CustodyMarksFrame`): every mark, whole at the open and whole
+  // again at every rise, so the shell can hand the highest it heard to the next fieldd it spawns
+  // (`CustodyHandoff.expect`). Gated as `system.mintWindowToken` is: `tokens.mint`, the shell's scope and local-only
+  // forever, and fieldd answers it for a `shell-main` principal alone. A bare `true`: no tailnet principal can open it.
+  defineMethod({
+    surface: "product",
+    method: "system.custody.marks.subscribe",
+    scope: "tokens.mint",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
   // TC-D1 (terminal-custody TC-S1) — the escalation affordance: after the
   // floor's respawn intensity trips to the permanent honest "gone" state, a
   // human overrides ON PURPOSE. Resets the intensity window and runs one
@@ -813,6 +825,17 @@ export const METHODS: MethodDef[] = [
     method: "native.door.roots.clear",
     scope: null,
     // a root already gone answers `cleared: false`, never an error
+    idempotent: true,
+    locality: "local",
+  }),
+  // OB custody (C5) — MARKS: fieldd tells the floor a named number that only rises (mgmt.ts `NativeMarksSet*`), and the
+  // floor says what it holds in its hello ack (`HelloAck.marks`), so a mark outlives fieldd. Management channel only
+  // (EL7), as the roots are: nothing a caller does at the door reaches it.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.marks.set",
+    scope: null,
+    // the floor keeps max(old, value), so the same set again answers the same mark
     idempotent: true,
     locality: "local",
   }),
