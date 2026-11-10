@@ -29,9 +29,8 @@ export function LoadingVeilView({
   return (
     <div className="vf-loading-veil" data-visible={shown ? "true" : "false"} aria-hidden={!shown}>
       <div
-        className={`flex translate-y-0 flex-col items-center gap-3 transition-[opacity,transform] duration-300 ${
-          details ? "opacity-100" : "translate-y-1 opacity-0"
-        }`}
+        className="vf-loading-veil__details flex flex-col items-center gap-3"
+        data-details={details ? "true" : "false"}
         aria-hidden={!details}
       >
         <div

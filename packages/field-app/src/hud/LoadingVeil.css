@@ -26,8 +26,23 @@
   transition: width 240ms var(--vf-ease-island);
 }
 
+/* The bar comes in late (500ms, LoadingVeil.tsx) and fades in where it stands, on the island's curve (DESIGN.md §8,
+   item 300). */
+.vf-loading-veil__details {
+  opacity: 0;
+  transition: opacity 300ms var(--vf-ease-island);
+}
+
+.vf-loading-veil__details[data-details="true"] {
+  opacity: 1;
+}
+
+/* Under reduced motion every one of the veil's transitions takes 90ms (M6): the visible state is named here too, since
+   its own 220ms rule would outrank the bare class; coming later at its own specificity, this one wins. */
 @media (prefers-reduced-motion: reduce) {
   .vf-loading-veil,
+  .vf-loading-veil[data-visible="true"],
+  .vf-loading-veil__details,
   .vf-loading-veil__progress {
     transition-duration: 90ms;
   }
