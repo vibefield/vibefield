@@ -546,7 +546,7 @@
    arrive, as the stage's own rule does (UM-R-F's review, F4; DESIGN.md §8
    "The pill"). The stage lent the swarm has its own rule below, which wins. */
 .vf-godview[data-godview-deck-edge][data-godview-deck="away"]:not([data-godview-deck-motion])
-  .vf-monitor-chrome {
+.vf-monitor-chrome {
   max-height: calc(100% - var(--vf-godview-head-reserve) - 8px - var(--vf-godview-panes-foot));
 }
 
@@ -562,16 +562,14 @@
    `--vf-godview-deck-shift`, so a raise moves it and never the pill.
    *Corrected the same day (UM-R-F's review, F3):* this said "as the field
    wall's top does", which is true only at rest. */
-.vf-godview[data-godview-deck-edge]
-  .vf-godview-monitor-stage[data-stage-allocation="full"]
+.vf-godview[data-godview-deck-edge] .vf-godview-monitor-stage[data-stage-allocation="full"]
   > .vf-monitor-chrome {
   max-height: calc(var(--vf-godview-field-foot) - var(--vf-godview-head-reserve) - 8px);
 }
 
 /* …and with the terminals away the swarm's field runs to the panes' foot (the
    wall's own away rule, below), so the room does too (UM-R-F's review, F3) */
-.vf-godview[data-godview-deck-edge][data-godview-deck="away"]
-  .vf-godview-monitor-stage[data-stage-allocation="full"]
+.vf-godview[data-godview-deck-edge][data-godview-deck="away"] .vf-godview-monitor-stage[data-stage-allocation="full"]
   > .vf-monitor-chrome {
   max-height: calc(100% - var(--vf-godview-panes-foot) - var(--vf-godview-head-reserve) - 8px);
 }

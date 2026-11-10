@@ -1453,7 +1453,7 @@ describe("UI system ownership boundaries", () => {
       '\n.vf-cover\n  .vf-godview[data-godview-deck-edge][data-godview-deck="away"]',
     );
     const swarmAway = godview.indexOf(
-      '\n.vf-godview[data-godview-deck-edge][data-godview-deck="away"]\n  .vf-godview-monitor-stage',
+      '\n.vf-godview[data-godview-deck-edge][data-godview-deck="away"] .vf-godview-monitor-stage',
     );
     expect(coverAway).toBeGreaterThan(-1);
     expect(swarmAway).toBeGreaterThan(coverAway);
