@@ -180,6 +180,8 @@ function service(
   const root = tmp();
   const calls: string[] = [];
   const launched: { launch: SparkLaunch; spark: string }[] = [];
+  // OB custody (CUSTODY-SPEC §8.1.0) — the spark each resume was asked FOR: the wake's own last argument
+  const resumedFor: Array<string | undefined> = [];
   let resumable = true;
   // a resume that takes its time until the test lets it answer, or refuse
   let held: Promise<void> = Promise.resolve();
@@ -197,8 +199,9 @@ function service(
       launched.push({ launch, spark: sparkId });
       return { runtimeRunId: `run-${launched.length}` };
     },
-    resume: async (runtimeRunId) => {
+    resume: async (runtimeRunId, _principal, spark) => {
       calls.push(`resume:${runtimeRunId}`);
+      resumedFor.push(spark);
       if (resuming.has(runtimeRunId)) return undefined;
       resuming.add(runtimeRunId);
       try {
@@ -216,6 +219,7 @@ function service(
     root,
     calls,
     launched,
+    resumedFor,
     principal,
     notResumable: () => {
       resumable = false;
@@ -352,6 +356,18 @@ describe("hatch, list and open (CP-1c; NS-D1, NS-D5, CR-D11)", () => {
     await h.svc.open(vela.id, h.principal);
     expect(h.calls).toEqual(["resume:run-1-b", "spawn"]);
     expect(h.svc.list().map((s) => s.name)).toEqual(["Vela"]);
+  });
+
+  // OB custody (CUSTODY-SPEC §8.1.0, the resume rule's case 1) — GIVEN AN INJECTED `resume` (this file's harness): the
+  // service's half of the rule. That the daemon's wrapper hands the id on to the runtime, and what the runtime does
+  // with it at each level, are agent-session.test.ts's rows through the real daemon ("after a restart, a wake of S").
+  it("a wake names the spark it is waking to the resume: the id it was asked to open, as the resume's last argument", async () => {
+    const h = service();
+    const vela = await h.svc.hatch(HATCH, h.principal);
+    h.calls.length = 0;
+    await h.svc.open(vela.id, h.principal);
+    expect(h.calls).toEqual(["resume:run-1"]);
+    expect(h.resumedFor).toEqual([vela.id]);
   });
 
   it("answers an open asked while one is under way with that same wake: one resume, one run, for both callers", async () => {

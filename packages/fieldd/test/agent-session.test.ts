@@ -6872,11 +6872,11 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
     await exitedOn(box, spawned.session.runtimeRunId);
   };
   /** A spark hatched through the window's door, as TU-1's rows hatch one: its first session, on the scripted agent. */
-  async function hatched(win: WsRpc, box: Box) {
+  async function hatched(win: WsRpc, box: Box, name = "Vela", seed = 7) {
     await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
     const { spark } = (await win.call("compose.sparks.hatch", {
-      name: "Vela",
-      face: { seed: 7 },
+      name,
+      face: { seed },
       agent: "scripted",
       profiles: ["native"],
       thinksUnder: "native",
@@ -7222,5 +7222,129 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
     for (const run of runs) {
       await win.call("terminal.terminate", { sessionId: run.terminal.sessionId });
     }
+  }, 150_000);
+
+  // ── a RESUME (§8.1.0, "a RESUME is the hard one"). Its spark is read back from the RECORD for everything else the
+  // runtime does with it (the briefing, the row; item 276's, not touched). For launch memory and the floor's entry,
+  // at `sealed`, in this order: the spark fieldd's own wake asked the resume FOR; else what launch memory holds for
+  // the run it continues; else plain. At `files`: the record's, as it always was. All three rows go through the real
+  // daemon, the wake through `compose.sparks.open` and the door through `agent.resume`.
+
+  /** Two sparks, S and V, hatched and asleep; then S's last run's record rewritten ON DISK to name V, signed, which
+   * is what an agent that reads the record key can do to its own run's record; then fieldd restarted. Nothing the
+   * next life did vouches for either run. */
+  async function sleptAndRestarted(level: "sealed" | "files", tag: string) {
+    const config: SetupConfig = {
+      floor: "real",
+      ...WITH_SPARKS,
+      ...(level === "sealed" ? { custody: HANDED, startedForRetryMs: NO_RETRY_MS } : {}),
+    };
+    const windowAt = (box: Box, suffix: string): Promise<WsRpc> => {
+      if (level === "sealed") return sealedWindow(box.daemon, HANDED, SPARK_WINDOW, suffix);
+      return window(box.daemon, SPARK_WINDOW, suffix);
+    };
+    const first = await setup(config);
+    const win1 = await windowAt(first, `${tag}a`);
+    const s = await hatched(win1, first, "Vela", 7);
+    const v = await hatched(win1, first, "Lyra", 11);
+    for (const asleep of [s, v]) {
+      await win1.call("terminal.terminate", { sessionId: asleep.paneId });
+      await exitedOn(first, asleep.runId);
+    }
+    await first.daemon.stop();
+    first.records.write({ ...readRecord(first.dataDir, s.runId), spark: v.spark.id });
+    const second = await setup({ ...config, restartOf: first });
+    const win2 = await windowAt(second, `${tag}b`);
+    return { second, win2, s, v };
+  }
+  /** fieldd's own wake of a spark, through the window's door: the run it thinks in afterwards. */
+  async function woken(win: WsRpc, spark: string): Promise<string> {
+    const answer = await win.call("compose.sparks.open", { spark });
+    const runId = ComposeSparksOpenResult.parse(answer).spark.session?.runtimeRunId;
+    if (runId === undefined) throw new Error("the wake left the spark no session");
+    return runId;
+  }
+  /** `agent.resume` through the window's door, which names no spark. */
+  async function resumedByDoor(win: WsRpc, runtimeRunId: string): Promise<AgentSpawnResult> {
+    return (await born(win, "agent.resume", { runtimeRunId })) as AgentSpawnResult;
+  }
+
+  it("sealed, through the real daemon: after a restart, a wake of S resumes its run FOR S although that run's record names V; and a resume through the door, which names no spark, is plain although its record names one", async () => {
+    const { second, win2, s, v } = await sleptAndRestarted("sealed", "sf9");
+    const agents = second.daemon.agents;
+    const said = vi.spyOn(second.daemon.native, "setStartedFor");
+    const entryOf = (runId: string) =>
+      said.mock.calls.find(([, entry]) => entry?.run === runId)?.[1];
+    expect(agents.bornFor(s.runId)).toBeUndefined();
+    expect(agents.bornFor(v.runId)).toBeUndefined();
+
+    // through the door: no spark is named and nothing vouches for the run it continues, so the successor is PLAIN,
+    // whatever the record says (rule 3)
+    const byDoor = await resumedByDoor(win2, v.runId);
+    const doorRun = byDoor.session.runtimeRunId;
+    expect(readRecord(second.dataDir, v.runId).spark).toBe(v.spark.id);
+    expect(agents.bornFor(doorRun)).toEqual({});
+
+    // fieldd's own wake of S: the successor is S's, by the wake's own argument (rule 1). The record it continues
+    // says V, and so does the successor's own record (the runtime's other use of it, item 276's); neither decides
+    const wokenRun = await woken(win2, s.spark.id);
+    expect(wokenRun).not.toBe(s.runId);
+    expect(readRecord(second.dataDir, wokenRun).spark).toBe(v.spark.id);
+    expect(agents.bornFor(wokenRun)).toEqual({ spark: s.spark.id });
+
+    // and the floor is told the same of each
+    const bothSaid = () => entryOf(doorRun) !== undefined && entryOf(wokenRun) !== undefined;
+    await poll(
+      async () => (bothSaid() ? true : undefined),
+      15_000,
+      "both successors said to the floor",
+    );
+    expect(entryOf(wokenRun)).toEqual({
+      run: wokenRun,
+      spark: s.spark.id,
+      root: rootOf(second, wokenRun),
+    });
+    expect(entryOf(doorRun)).toEqual({ run: doorRun, root: rootOf(second, doorRun) });
+    expect(entryOf(doorRun)).not.toHaveProperty("spark");
+    await win2.call("terminal.terminate", { sessionId: byDoor.terminal.sessionId });
+  }, 240_000);
+
+  it("files, through the real daemon: the same wake and the same door name the successor by its RECORD, as they always did, and the floor is told nothing", async () => {
+    const { second, win2, s, v } = await sleptAndRestarted("files", "sf10");
+    const agents = second.daemon.agents;
+    const said = vi.spyOn(second.daemon.native, "setStartedFor");
+
+    const byDoor = await resumedByDoor(win2, v.runId);
+    expect(agents.bornFor(byDoor.session.runtimeRunId)).toEqual({ spark: v.spark.id });
+    // the wake of S continues a run whose record says V: at `files` the record's word stands, the rewritten one
+    // too. That is the level's known weakness, and what `sealed` closes (the row above)
+    const wokenRun = await woken(win2, s.spark.id);
+    expect(agents.bornFor(wokenRun)).toEqual({ spark: v.spark.id });
+    expect(said).not.toHaveBeenCalled();
+    await win2.call("terminal.terminate", { sessionId: byDoor.terminal.sessionId });
+  }, 240_000);
+
+  it("sealed, through the real daemon: a resume of a run born here for S is S's, through the door that names no spark: the successor is what the run it continues was born as", async () => {
+    const box = await setup({ ...SEALED, ...WITH_SPARKS, startedForRetryMs: NO_RETRY_MS });
+    const win = await sealedWindow(box.daemon, HANDED, SPARK_WINDOW, "sf11");
+    const said = vi.spyOn(box.daemon.native, "setStartedFor");
+    const entryOf = (runId: string) =>
+      said.mock.calls.find(([, entry]) => entry?.run === runId)?.[1];
+    const s = await hatched(win, box);
+    await win.call("terminal.terminate", { sessionId: s.paneId });
+    await exitedOn(box, s.runId);
+
+    const resumed = await resumedByDoor(win, s.runId);
+    const next = resumed.session.runtimeRunId;
+    expect(box.daemon.agents.bornFor(next)).toEqual({ spark: s.spark.id });
+    await poll(
+      async () => (entryOf(next) !== undefined ? true : undefined),
+      15_000,
+      "the successor said to the floor",
+    );
+    expect(entryOf(next)).toEqual({ run: next, spark: s.spark.id, root: rootOf(box, next) });
+    // the run it continued is still what it was born as
+    expect(box.daemon.agents.bornFor(s.runId)).toEqual({ spark: s.spark.id });
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
   }, 150_000);
 });
