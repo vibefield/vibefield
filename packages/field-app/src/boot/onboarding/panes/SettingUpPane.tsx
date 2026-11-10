@@ -27,9 +27,10 @@ export const WELCOME_BEAT_MS = 1_600;
  *      recorded answer or the person's "Continue anyway" (W5's honesty: a
  *      wizard that says it finished when nothing was recorded reopens next
  *      launch with no explanation);
- *   2. the desk opens beneath the glass — its line is the boot machine's own
- *      phase and stage (W4), and a desk that cannot open says why and offers
- *      the boot's Retry, as the splash would;
+ *   2. the desk opens beneath the glass — its line follows the boot machine's
+ *      own phase (W4; since item 281 the step's words are the log's, never the
+ *      line's), and a desk that cannot open says the boot's one sentence (item
+ *      280) and offers its Retry, as the splash would;
  *   3. once every fact is in — the desk, and History's first pass when history
  *      was brought in (AO-4b: at most 8s past the desk, then Start now) — the
  *      welcome's beat, then the hand-over (BootRoot, FG-5). A second user's end
@@ -106,12 +107,7 @@ export function SettingUpPane({
       : deskReady
         ? { key: "desk", line: DESK_LINE, state: "done" }
         : answered
-          ? {
-              key: "desk",
-              line: DESK_LINE,
-              state: "live",
-              ...(boot.stage === "" ? {} : { detail: boot.stage }),
-            }
+          ? { key: "desk", line: DESK_LINE, state: "live" }
           : { key: "desk", line: DESK_LINE, state: "waiting" };
 
   // AO-4b — History's first pass, when history was brought in (AO-D4): its

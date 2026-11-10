@@ -2,7 +2,6 @@ import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useEffect, useRef, useState } from "react";
 import { MeMenuView } from "../account/MeMenu";
 import type { AccountMe, AccountPerson } from "../account/use-account";
-import { FIRST_STAGE } from "../boot/machine";
 import { LEAVING_STATUS, type SwitchBox, SwitchSceneView } from "../boot/SwitchScene";
 import type { SplashStatusView } from "../boot/splash-parts";
 import type { SwitchOrigin, SwitchPersona } from "../boot/switch";
@@ -13,18 +12,20 @@ import { FIXTURE_ME, FIXTURE_OTHERS } from "./account-fixtures";
 // daemon to wake, a window to reload — played on a clock. Choosing a user in
 // the menu runs the whole thing: the leaving, the held frame, the "reload"
 // (the scene remounts, exactly as the next window paints it), the real boot's
-// stage words, and the reveal that sends the face home to the corner.
+// bar, step by step, and the reveal that sends the face home to the corner.
 
 const OUTCOMES = ["Switches", "Refused"] as const;
 type Outcome = (typeof OUTCOMES)[number];
 
-/** The boot's real stage words, in its order (machine.ts, the DocManager). */
+/** The boot's bar, step by step in its real order (machine.ts, the DocManager): the
+ * first two steps come before the document reports numbers. No words under it since
+ * item 281 — the steps' words are the log's. */
 const ARRIVAL_STAGES: readonly SplashStatusView[] = [
-  { stage: FIRST_STAGE, progress: null, unavailable: null },
-  { stage: "loading the field", progress: null, unavailable: null },
-  { stage: "opening doc", progress: 0.25, unavailable: null },
-  { stage: "drawing the board", progress: 0.75, unavailable: null },
-  { stage: "settling", progress: 1, unavailable: null },
+  { progress: null, unavailable: null },
+  { progress: null, unavailable: null },
+  { progress: 0.25, unavailable: null },
+  { progress: 0.75, unavailable: null },
+  { progress: 1, unavailable: null },
 ];
 
 /** How long main takes to wake the other pair, and each boot stage, here. */

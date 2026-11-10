@@ -158,7 +158,7 @@ export function catalogCuts(
     wizard: true,
     field: null,
     canvas: null,
-    stage: null,
+    bar: null,
     words: read.words.map(
       (word): WordSeen => ({
         ...moved(word),

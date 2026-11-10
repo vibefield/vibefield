@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { FIRST_STAGE } from "./machine";
 import { MatSplashFace, SplashStatus, type SplashStatusView } from "./splash-parts";
 import {
   registerSwitchStage,
@@ -307,10 +306,10 @@ export function SwitchSceneView({
   );
 }
 
-/** What the leaving window's splash says while main wakes the other pair:
- * exactly what the arriving window's splash will say first. */
+/** What the leaving window's splash shows while main wakes the other pair:
+ * the bar at rest, as the arriving window's splash begins it, with no words
+ * under it (item 281). */
 export const LEAVING_STATUS: SplashStatusView = Object.freeze({
-  stage: FIRST_STAGE,
   progress: null,
   unavailable: null,
 });

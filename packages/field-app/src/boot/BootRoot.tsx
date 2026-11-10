@@ -21,11 +21,12 @@ import { isSwitchCovering, SWITCH_MOTION, useSwitchState } from "./switch";
 import "./boot.css";
 
 // BootRoot (ESR §5.4.2): the splash is the app's first face (DESIGN.md §8 —
-// the field waking, the veil's thin bar, real stage labels); the
+// the field waking and the veil's thin bar, alone while a start goes well:
+// item 281 sent the steps' words to the log); the
 // workspace mounts UNDERNEATH it as soon as the module + document exist, and
 // the reveal plays only once the machine hands the desk over — fully warm,
 // frame-stable, never mid-hitch. Since FG-2 a returning boot's splash opens
-// onto it: its words go (240ms), then the field tears from its centre (1.9s)
+// onto it: its bar goes (240ms), then the field tears from its centre (1.9s)
 // as the desk settles in from .985 and its exposure comes down from 1.16, and
 // only then is it `interactive`. Without a live field, under Reduce Motion or
 // in a hidden window, the reveal is the base one: a 240ms fade over a 560ms
@@ -33,11 +34,11 @@ import "./boot.css";
 //
 // UA-3w borrows that first face once per install: from the machine's
 // `onboarding` hold the Setup Assistant takes the splash's layer and ground,
-// and the splash's own face (bar, stage line) stands down and the field's
+// and the splash's own face (its bar) stands down and the field's
 // mark goes under the glass. Since
 // AO-D2 it keeps them to the end: its answers recorded, the document opens,
-// warms and settles behind its glass while Setting up reports those stages,
-// so the splash never returns between the wizard and the desk. Since FG-5 its
+// warms and settles behind its glass while Setting up's desk line stands
+// live, so the splash never returns between the wizard and the desk. Since FG-5 its
 // last beat hands over as a returning boot's splash does, its glass leaving
 // first: its words go, its logo holds alone, and the glass clears as the
 // field's mark takes over; then the tear, or the base reveal's fade. W5 in
@@ -50,7 +51,7 @@ import "./boot.css";
 // down until its reveal sends the face home.
 
 const EASE = "cubic-bezier(0.25, 1, 0.3, 1)"; // --vf-ease-island
-const WORDS_OUT_MS = 240; // the website's `SPLASH.wordsOut`: the bar and the stage go first
+const WORDS_OUT_MS = 240; // the website's `SPLASH.wordsOut`: the bar goes first
 
 /** The Setup Assistant's hand-over (FG-5; DESIGN.md §6), as its glass plays it (wizard-ui.css):
  * its words go, its logo holds alone, and its glass clears as the field's mark takes over — fades

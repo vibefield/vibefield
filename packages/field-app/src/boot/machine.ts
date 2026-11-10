@@ -58,7 +58,9 @@ export interface BootUnavailable {
 export interface BootView {
   phase: BootPhase;
   unavailable: BootUnavailable | null;
-  /** lowercase stage label (DESIGN.md §8 — real stages, never theater) */
+  /** The step the boot is on, in the machine's own lowercase words (real stages, never theater). Since item 281 no face
+   * draws it (DESIGN.md §8: while a start goes well the bar alone speaks); each new step goes to the log once, as
+   * `renderer.boot.stage`. */
   stage: string;
   /** null before the document pipeline reports numbers */
   progress: number | null;
@@ -141,8 +143,8 @@ export interface BootMachine {
   revealDesk(): void;
 }
 
-/** The splash's first words — and the switch's, whose leaving window says
- * them before main wakes the other user's pair (DESIGN.md §8 "The switch"). */
+/** The boot's first step, in its own words. Since item 281 they are the log's alone (`renderer.boot.stage`): neither
+ * the splash nor the switch's leaving window draws them (DESIGN.md §8). */
 export const FIRST_STAGE = "waking the daemon";
 
 /** What a start that failed says, whatever failed (DESIGN.md §9, VibeField's insides; item 280): the splash, the
@@ -168,8 +170,20 @@ export function createBootMachine(deps: BootMachineDeps): BootMachine {
     progress: null,
     degradedReveal: false,
   };
+  // Item 281 (DESIGN.md §8; IS-281 A): a step's words are VibeField's insides, so each new step goes to the log, once,
+  // in the machine's own words. The tracker is its own, never `view.stage`: the first view already holds FIRST_STAGE,
+  // and the patch that names it is still the step being reached.
+  const bootLog = deps.host.logger.child({ component: "boot" });
+  let logged: string | null = null;
   const patch = (next: Partial<BootView>): void => {
     view = { ...view, ...next };
+    if (next.stage !== undefined && next.stage !== "" && next.stage !== logged) {
+      logged = next.stage;
+      bootLog.info("renderer.boot.stage", "The boot reached a step", {
+        stage: next.stage,
+        phase: view.phase,
+      });
+    }
     for (const fn of [...listeners]) fn();
   };
 

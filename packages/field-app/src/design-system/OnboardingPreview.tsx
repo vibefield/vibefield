@@ -222,20 +222,13 @@ const COMPLETION_FAILURE = {
 };
 
 /** AO-D2 — Setting up as the boot machine moves under it: the answers being
- * written, the desk's own stages (the DocManager's words), then Ready. AO-4b:
+ * written, the desk opening (its line alone: since item 281 the steps' words
+ * are the log's, never the line's), then Ready. AO-4b:
  * History's line after the desk's, in the room's words (the shipping
  * `historySetupPhase` over a fixture status) — still finding with the desk
  * ready, Start now 8s past it, and found at Ready. FG-4b: one line under the
  * logo, the work still going on. */
-const SETTING_UP_STATES = [
-  "saving",
-  "opening",
-  "drawing",
-  "settling",
-  "finding",
-  "slow",
-  "ready",
-] as const;
+const SETTING_UP_STATES = ["saving", "opening", "finding", "slow", "ready"] as const;
 type SettingUpState = (typeof SETTING_UP_STATES)[number];
 
 const DESK_WAITING: OnboardingSetupPhase = { key: "desk", line: DESK_LINE, state: "waiting" };
@@ -246,11 +239,7 @@ function deskPhase(state: SettingUpState): OnboardingSetupPhase {
     case "saving":
       return DESK_WAITING;
     case "opening":
-      return { key: "desk", line: DESK_LINE, state: "live", detail: "opening doc" };
-    case "drawing":
-      return { key: "desk", line: DESK_LINE, state: "live", detail: "drawing the board" };
-    case "settling":
-      return { key: "desk", line: DESK_LINE, state: "live", detail: "settling" };
+      return { key: "desk", line: DESK_LINE, state: "live" };
     case "finding":
     case "slow":
     case "ready":
@@ -559,7 +548,7 @@ function HistoryPreview(): ReactElement {
 }
 
 function SettingUpPreview(): ReactElement {
-  const [state, setState] = useState<SettingUpState>("drawing");
+  const [state, setState] = useState<SettingUpState>("opening");
   return (
     <OnboardingFrame
       index="08"

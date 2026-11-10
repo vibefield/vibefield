@@ -45,8 +45,9 @@
 //     and the standing pane, cut from the window's own capture where the page placed it and measured as DK-16
 //     measured the mat's (its ground, its ink, their WCAG ratio), reads at 4.5:1 or more. A word passed over is said
 //     with why: in a control that is off, still fading, cut off, under a list's masked foot, or changed under the
-//     capture (`passedOver`). The splash's stage line, on its one early still, is held to the same bar as it is cut.
-//     Each still prints how many it held, its lowest, every short one in full and every one passed over.
+//     capture (`passedOver`). The splash's one early still is for the eye: while a start goes well its bar alone
+//     speaks (item 281), so it holds no word to measure. Each still prints how many it held, its lowest, every short
+//     one in full and every one passed over.
 //   · The walk's end: Setting up's welcome said, the durable `onboarded: true`, the wizard gone, no CSP refusal.
 // Printed, never judged (FG-O3, VF-PM 16:04Z): the page's frame intervals and the GPU's load over the tear and over as
 // long a stretch before the hand-over: the GPU process's CPU as Electron counts it, and the GPU's own busy share where
@@ -449,11 +450,17 @@ export function readGpuBusy(): Promise<number | null> {
   });
 }
 
-/** FG-O2's words as the page finds them (`inks()`), the splash's stage line one of them: the box their glyphs take (a
- * range over their text, never the element's box), in CSS px of the window; what they say; and how much of them
- * shows, their opacity times every ancestor's. */
+/** FG-O2's words as the page finds them (`inks()`): the box their glyphs take (a range over their text, never the
+ * element's box), in CSS px of the window; what they say; and how much of them shows, their opacity times every
+ * ancestor's. */
 export interface WordsSeen extends Box {
   readonly text: string;
+  readonly shown: number;
+}
+
+/** The splash's bar as the page finds it (`inks()`): its box, in CSS px of the window, and how much of it shows, its
+ * opacity times every ancestor's. While a start goes well it stands alone, with no words under it (item 281). */
+export interface BarSeen extends Box {
   readonly shown: number;
 }
 
@@ -487,54 +494,45 @@ const CUT_SAID: Readonly<Record<NonNullable<WordSeen["cut"]>, string>> = {
 };
 
 /** FG-O2's read of the page (`inks()`): the window's size, whether the wizard has come, the field under the splash
- * (its state, and its canvas's opacity while the live field fades in over its still), the splash's stage line (null
- * where none stands), and every lettered word of the band and the standing pane (FG-O2's judge). */
+ * (its state, and its canvas's opacity while the live field fades in over its still), the splash's bar (null where
+ * none stands), and every lettered word of the band and the standing pane (FG-O2's judge). */
 export interface InksSeen {
   readonly view: { readonly width: number; readonly height: number };
   readonly wizard: boolean;
   readonly field: string | null;
   readonly canvas: number | null;
-  readonly stage: WordsSeen | null;
+  readonly bar: BarSeen | null;
   readonly words: readonly WordSeen[];
 }
 
-/** FG-O2: what the splash's one early still does with a read of the page. Its stage line whole on the field that has
- * come (the still, or the live field with its canvas whole) is the still ("take"); whole on a field still waking or
- * fading in, the first such capture is kept ("keep") for a wizard that comes before the field; the wizard come, or a
- * page that can't say, ends the look ("stop"). */
+/** FG-O2: what the splash's one early still does with a read of the page. Its bar whole on the field that has come
+ * (the still, or the live field with its canvas whole) is the still ("take"); whole on a field still waking or fading
+ * in, the first such capture is kept ("keep") for a wizard that comes before the field; the wizard come, or a page
+ * that can't say, ends the look ("stop"). The bar, because while a start goes well it alone speaks (item 281). */
 export function splashLook(seen: InksSeen | null): "take" | "keep" | "wait" | "stop" {
   if (seen === null || seen.wizard) return "stop";
-  if (seen.stage === null || seen.stage.shown < 0.999) return "wait";
+  if (seen.bar === null || seen.bar.shown < 0.999) return "wait";
   if (seen.field === "still") return "take";
   return seen.field === "live" && (seen.canvas ?? 0) >= 0.999 ? "take" : "keep";
 }
 
-/** Which of FG-O2's reads a still is cut for: the splash's stage line, or every word on the glass. */
-export type InkWords = "stage" | "words";
+/** Which of FG-O2's reads a still is cut for: every word on the glass. (The splash's stage line was the other until
+ * item 281; the splash's still is for the eye.) */
+export type InkWords = "words";
 
 /** One of FG-O2's words, cut from a still's capture (`cutChip`, its BGRA null where the capture could not be cut) and
- * measured at the walk's end (`firstRunContrast`): the stage line with the field under it, or a word on the glass
- * with its colour, and why it is passed over where it is (`passedOver`). */
-export type InkCut =
-  | {
-      readonly words: "stage";
-      /** the still it was cut from */
-      readonly at: string;
-      readonly said: string;
-      readonly field: string | null;
-      readonly canvas: number | null;
-      readonly shown: number;
-      readonly px: Uint8Array | null;
-    }
-  | {
-      readonly words: "words";
-      readonly at: string;
-      readonly text: string;
-      readonly color: string;
-      readonly shown: number;
-      readonly passed: string | null;
-      readonly px: Uint8Array | null;
-    };
+ * measured at the walk's end (`firstRunContrast`): a word on the glass with its colour, and why it is passed over
+ * where it is (`passedOver`). */
+export interface InkCut {
+  readonly words: "words";
+  /** the still it was cut from */
+  readonly at: string;
+  readonly text: string;
+  readonly color: string;
+  readonly shown: number;
+  readonly passed: string | null;
+  readonly px: Uint8Array | null;
+}
 
 /** FG-O2's judge: why a word is passed over rather than held at the bar, or null when it is held. A word is held as it
  * stands, dimmed or not: one in a control that is off is passed over (an inactive control's words carry no contrast
@@ -567,9 +565,8 @@ export function passedOver(word: WordSeen, before: readonly WordSeen[] | null): 
   return null;
 }
 
-/** FG-O2: the words a still holds, each cut from its capture where `seen` places it: the splash's stage line, or every
- * word on the glass, each held at the bar or passed over (`passedOver`, against `before`, the page read on the
- * capture's other side). */
+/** FG-O2: the words a still holds, each cut from its capture where `seen` places it: every word on the glass, each
+ * held at the bar or passed over (`passedOver`, against `before`, the page read on the capture's other side). */
 export function inkCuts(
   at: string,
   bitmap: Uint8Array,
@@ -579,17 +576,6 @@ export function inkCuts(
 ): InkCut[] {
   const cut = (box: Box): Uint8Array | null => cutChip(bitmap, seen.view, box);
   const cuts: InkCut[] = [];
-  const stage = seen.stage;
-  if (words.includes("stage") && stage !== null)
-    cuts.push({
-      words: "stage",
-      at,
-      said: stage.text,
-      field: seen.field,
-      canvas: seen.canvas,
-      shown: stage.shown,
-      px: cut(stage),
-    });
   if (words.includes("words"))
     for (const word of seen.words) {
       const passed = passedOver(word, before?.words ?? null);
@@ -628,15 +614,6 @@ export interface ChipReading {
   readonly ratio: number | null;
 }
 
-/** The splash's stage line as the row prints it: the still it was cut from, its words and the field under them. */
-export interface StageReading extends ChipReading {
-  readonly at: string;
-  readonly said: string;
-  readonly field: string | null;
-  readonly canvas: number | null;
-  readonly shown: number;
-}
-
 /** A word under the bar, or unread, in full: its whole text, its colour as computed, and its chip's reading. */
 export interface ShortWord extends ChipReading {
   readonly text: string;
@@ -657,21 +634,18 @@ export interface StillWords {
   readonly passed: readonly (readonly [string, string, number | null])[];
 }
 
-/** FG-O2's contrast as the row prints it: the splash's stage line (null where the walk never saw it whole), and every
- * still's words, in the walk's order. */
+/** FG-O2's contrast as the row prints it: every still's words, in the walk's order. */
 export interface FirstRunContrast {
-  readonly stage: StageReading | null;
   readonly words: readonly StillWords[];
 }
 
-/** FG-O2's contrast, as DK-16 measured the mat's: each chip's ground and ink as measured and their WCAG ratio, the
- * stage line with the still it was cut from, and each still's words (`StillWords`). */
+/** FG-O2's contrast, as DK-16 measured the mat's: each chip's ground and ink as measured and their WCAG ratio, and
+ * each still's words (`StillWords`). */
 export function firstRunContrast(cuts: readonly InkCut[]): FirstRunContrast {
   const reading = (px: Uint8Array | null): ChipReading =>
     px === null ? { ground: null, ink: null, ratio: null } : measureChip(px);
   const clip = (text: string): string =>
     text.length > FIRST_RUN.wordChars ? `${text.slice(0, FIRST_RUN.wordChars - 1)}…` : text;
-  let stage: StageReading | null = null;
   const stills = new Map<
     string,
     {
@@ -681,11 +655,6 @@ export function firstRunContrast(cuts: readonly InkCut[]): FirstRunContrast {
     }
   >();
   for (const cut of cuts) {
-    if (cut.words === "stage") {
-      const { at, said, field, canvas, shown } = cut;
-      stage = { at, said, field, canvas, ...reading(cut.px), shown };
-      continue;
-    }
     let still = stills.get(cut.at);
     if (still === undefined) {
       still = { read: [], short: [], passed: [] };
@@ -701,7 +670,6 @@ export function firstRunContrast(cuts: readonly InkCut[]): FirstRunContrast {
       still.short.push({ text: cut.text, color: cut.color, ...chip });
   }
   return {
-    stage,
     words: [...stills].map(([at, { read, short, passed }]) => ({
       at,
       judged: read.length,
@@ -712,19 +680,13 @@ export function firstRunContrast(cuts: readonly InkCut[]): FirstRunContrast {
   };
 }
 
-/** FG-O2's judge (DESIGN.md §8 "Its words read"): the splash's stage line as it is cut, and every word held at the
- * bar, read at 4.5:1 or more; a word under it is red with its numbers, and one its still could not give up is red as
- * unread. */
+/** FG-O2's judge (DESIGN.md §8 "Its words read"): every word held at the bar, read at 4.5:1 or more; a word under it
+ * is red with its numbers, and one its still could not give up is red as unread. */
 export function judgeContrast(contrast: FirstRunContrast): string[] {
   const bar = FIRST_RUN.wordContrast;
   const reads = (chip: ChipReading): string =>
     `${chip.ratio}:1 (${JSON.stringify(chip.ground)} → ${JSON.stringify(chip.ink)})`;
   const problems: string[] = [];
-  const stage = contrast.stage;
-  if (stage !== null && stage.ratio === null)
-    problems.push(`the splash's stage line could not be cut from ${stage.at}`);
-  else if (stage !== null && (stage.ratio ?? bar) < bar)
-    problems.push(`the splash's stage line reads ${reads(stage)} on ${stage.at}, under ${bar}:1`);
   for (const still of contrast.words)
     for (const word of still.short)
       problems.push(
@@ -989,17 +951,14 @@ export const FIRST_RUN_PAGE = `(() => {
     return rootsOf(frame).reverse().find((child) => !child.classList.contains(LEAVING)) ?? null;
   };
 ${PAGE_WORDS}
-  // FG-O2's stage line: the box its glyphs take (a range over its text, never the element's), what it says, and how
-  // much of it shows (its own opacity times every ancestor's)
-  const wordsOf = (el) => {
-    if (el === null || el.textContent.trim() === "") return null;
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    const r = range.getBoundingClientRect();
+  // the splash's bar (FG-O2's early still; alone while a start goes well, item 281): its box, and how much of it
+  // shows (its own opacity times every ancestor's)
+  const barOf = (el) => {
+    if (el === null) return null;
+    const r = el.getBoundingClientRect();
     let shown = 1;
     for (let at = el; at !== null; at = at.parentElement) shown *= opacity(at);
-    const text = el.textContent.trim();
-    return { x: r.x, y: r.y, width: r.width, height: r.height, text, shown: Math.round(shown * 1000) / 1000 };
+    return { x: r.x, y: r.y, width: r.width, height: r.height, shown: Math.round(shown * 1000) / 1000 };
   };
   // a scope's list (overflow-y auto or scroll): the one that outgrows its box, else the first, which fits
   const scrollerIn = (scope) => {
@@ -1149,7 +1108,7 @@ ${PAGE_WORDS}
       return document.activeElement === el;
     },
     count: (selector) => document.querySelectorAll(selector).length,
-    /** FG-O2's words where they stand now: the splash's stage line over the field, and every word of the band and the
+    /** FG-O2's words where they stand now: the splash's bar over the field, and every word of the band and the
      * standing pane (FG-O2's judge) */
     inks: () => {
       const field = document.querySelector(".vf-field");
@@ -1159,7 +1118,7 @@ ${PAGE_WORDS}
         wizard: shellOf() !== null,
         field: field?.getAttribute("data-field") ?? null,
         canvas: canvas === null ? null : Math.round(opacity(canvas) * 1000) / 1000,
-        stage: wordsOf(document.querySelector('.vf-field-words > [role="progressbar"] + div')),
+        bar: barOf(document.querySelector('.vf-field-words > [role="progressbar"]')),
         words: [...wordsIn(shellOf()?.querySelector(".vf-wizard-steps")), ...wordsIn(standingRoot())],
       };
     },
@@ -1854,8 +1813,8 @@ export async function firstRunRows(
     await dbg.sendCommand("Page.addScriptToEvaluateOnNewDocument", { source: FIRST_RUN_PAGE });
     await loadRenderer(d.win, "smoke-first-run", d.viteUrl);
 
-    // 0 · the splash (FG-O2): its stage line's one early still, on the field that has come, or on the field still
-    // waking when the wizard comes first
+    // 0 · the splash (FG-O2): its one early still, its bar whole, on the field that has come, or on the field still
+    // waking when the wizard comes first. For the eye: while a start goes well no word stands to cut (item 281)
     step("splash");
     let early: { image: NativeImage; seen: InksSeen } | null = null;
     const splashBy = Date.now() + FIRST_RUN.paneMs;
@@ -1869,7 +1828,7 @@ export async function firstRunRows(
       }
       await sleep(50);
     }
-    if (early !== null) cutFrom(keep("splash", early.image), early.seen, ["stage"]);
+    if (early !== null) keep("splash", early.image);
 
     // 1 · the welcome's title card, its logo whole
     step("welcome");
