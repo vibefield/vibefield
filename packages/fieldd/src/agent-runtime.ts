@@ -468,6 +468,20 @@ export interface StartedForFloor {
   setStartedFor(sessionId: string, startedFor: StartedFor | undefined): Promise<StartedForAnswer>;
 }
 
+/** OB custody (rule 6) — who a run this process did not launch is as it re-attaches, and by whose word
+ * (`AgentRuntimeService.standingOf`): the record's at `files`, the floor's entry at `sealed`, or nobody's. */
+type RunStanding =
+  | { readonly vouched: false }
+  | {
+      readonly vouched: true;
+      readonly level: "files" | "sealed";
+      readonly spark: SparkId | undefined;
+      /** a typed run's process, by which it is proven; none for a run in a terminal of its own */
+      readonly process: { pid: number; startedAt: string } | undefined;
+      /** the creation request its helper root is named by */
+      readonly root: string | undefined;
+    };
+
 /** OB custody (rule 6) — one set the floor has not taken yet (`AgentRuntimeService.untold`). */
 interface UntoldSet {
   readonly sessionId: string;
@@ -794,6 +808,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private readonly untold = new Map<string, UntoldSet>();
   /** OB custody (rule 6) — a floor that keeps no table was said once in the log, for this process's life */
   private notSealedSaid = false;
+  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — what the LAST fieldd told the floor of its launches, as the floor
+   * handed it to this one at its hello: read ONCE (`readStartedFor`), joined to the running rows of the inventory
+   * the re-attach was handed, by terminal session. Undefined until that read; never read at `files`. An entry here
+   * is the only thing that vouches for a run this process did not launch (`standingOf`). */
+  private vouching: Map<string, StartedFor> | undefined;
   private readonly pending = new Map<string, PendingEntry>();
   /** MF-1f — runs whose process ended while the floor still lists their PTY */
   private readonly exited = new Map<string, ExitedEntry>();
@@ -2591,13 +2610,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   ): void {
     const run = entry.info.runtimeRunId;
     const spark = who.spark;
-    this.born.delete(run);
-    this.born.set(run, spark !== undefined ? { spark } : {});
-    // generous, oldest first: an evicted run reads as not born here
-    for (const oldest of this.born.keys()) {
-      if (this.born.size <= BORN_MAX) break;
-      this.born.delete(oldest);
-    }
+    this.keepBorn(run, spark);
     if (this.opts.startedFor === undefined) return;
     const sessionId = entry.info.terminalSessionId;
     const startedFor: StartedFor = {
@@ -2608,6 +2621,17 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     };
     this.untold.set(run, { sessionId, startedFor, said: false, inFlight: false });
     if (this.listedRunning(sessionId)) this.sayAtSighting(run);
+  }
+
+  /** OB custody (rule 6) — launch memory's one write: by `remember` for a run this process launched or adopted, and
+   * by `vouch` for a run it re-attached to. Bounded, oldest first: an evicted run reads as not born here. */
+  private keepBorn(run: string, spark: SparkId | undefined): void {
+    this.born.delete(run);
+    this.born.set(run, spark !== undefined ? { spark } : {});
+    for (const oldest of this.born.keys()) {
+      if (this.born.size <= BORN_MAX) break;
+      this.born.delete(oldest);
+    }
   }
 
   /** OB custody (rule 6; §8.1.0 "v0.24") — fieldd's latest inventory lists the session, and its process runs. */
@@ -3942,6 +3966,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * with none (DESIGN.md §9, item 177), and it has not run. The floor's next inventory asks again, over that
    * inventory's rows, and the runs this boot has entered or ended meanwhile keep what this boot gave them. */
   private async reattach(rows: ReadonlyMap<string, TerminalInfo>): Promise<void> {
+    // OB custody (rule 6) — the floor's table, read once, for THIS inventory, before any record is judged
+    this.readStartedFor(rows);
     let records: AgentSessionRecord[];
     try {
       records = this.records.list();
@@ -4035,6 +4061,90 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // pane's birth is an inventory that asks again). The last fieldd's drafts wait for the next start, as they did
     // when the start could not read the records
     if (unreadSince === undefined) void this.profiles.sweepDrafts();
+  }
+
+  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — THE ONE PLACE the floor's started-for table is read. Once, at the
+   * first re-attach, for the inventory it was handed: the link gives the table of the hello that is paired then,
+   * and drops every later one unread. THE JOIN IS TO RUNNING ROWS ONLY: an entry whose session is not a row
+   * `runningRowOf` returns in THIS inventory is dropped here and never kept, so a terminal that appears later has
+   * no entry. A `files` fieldd has no table to read and reads none. Nothing of an entry is logged: two counts. */
+  private readStartedFor(rows: ReadonlyMap<string, TerminalInfo>): void {
+    const floor = this.opts.startedFor;
+    if (floor === undefined || this.vouching !== undefined) return;
+    const handed = floor.takeStartedFor();
+    const joined = new Map<string, StartedFor>();
+    for (const [sessionId, entry] of handed) {
+      if (runningRowOf(rows, sessionId) !== undefined) joined.set(sessionId, entry);
+    }
+    this.vouching = joined;
+    this.logger.info(
+      "fieldd.agents.started_for_read",
+      "The floor's started-for table was read for the re-attach, once",
+      { entries: joined.size, dropped: handed.size - joined.size },
+    );
+  }
+
+  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — WHO a run this process did not launch is, as it re-attaches (entered
+   * or held). THE ONE `if` between the levels is here.
+   *
+   * At `files` the record names it, as it always did: its spark, its typed process, its creation request.
+   *
+   * At `sealed` the record's word is not taken for any of that (its key is a file an agent can read). The run is
+   * VOUCHED iff the floor's entry for its terminal names its run id; then its spark, whether it is a typed run with
+   * which process, and its helper root are the ENTRY's. A record that says "typed" on a terminal whose entry names
+   * no process is unvouched. Unvouched, the run is attached as its record says and holds nothing: `bornFor` is
+   * undefined for it, and nothing falls back to the record. */
+  private standingOf(record: AgentSessionRecord, terminalId: string): RunStanding {
+    if (this.opts.startedFor === undefined) {
+      return {
+        vouched: true,
+        level: "files",
+        spark: record.spark,
+        process: isTypedRun(record) ? record.process : undefined,
+        root: record.creationRequestId,
+      };
+    }
+    const entry = this.vouching?.get(terminalId);
+    if (entry === undefined || entry.run !== record.runtimeRunId) return { vouched: false };
+    if (isTypedRun(record) && entry.process === undefined) return { vouched: false };
+    // the kit's process table says a start as an ISO instant (`startedAtFromPs`); the entry carries the same
+    // instant in milliseconds (`rememberAdopted`)
+    const proof = entry.process;
+    const typed =
+      proof === undefined
+        ? undefined
+        : { pid: proof.pid, startedAt: new Date(proof.startedAtMs).toISOString() };
+    return { vouched: true, level: "sealed", spark: entry.spark, process: typed, root: entry.root };
+  }
+
+  /** OB custody (rule 6) — the record as THIS LIFE holds it in memory for a re-attached run. At `files`, and for a
+   * run nothing vouches for, it is the record. For a run the floor's entry vouches for, the four things the entry
+   * says replace the record's: its spark, its typed process (and so whether it is a typed run at all), and its
+   * creation request, which is the id its helper root is named by. Never written back for its own sake: what
+   * `enter` and `hold` write is the record as it stands on disk. */
+  private namedBy(record: AgentSessionRecord, standing: RunStanding): AgentSessionRecord {
+    if (!standing.vouched || standing.level === "files") return record;
+    const { spark: _spark, process: _process, spawnedBy, ...rest } = record;
+    const typed = standing.process;
+    // the entry says whether it is a typed run: with a process it is one, whatever the record's word was
+    const by = typed !== undefined ? SPAWNED_BY_SHELL : spawnedBy;
+    return {
+      ...rest,
+      ...(by !== undefined ? { spawnedBy: by } : {}),
+      ...(standing.spark !== undefined ? { spark: standing.spark } : {}),
+      ...(typed !== undefined ? { process: typed } : {}),
+      ...(standing.root !== undefined ? { creationRequestId: standing.root } : {}),
+    };
+  }
+
+  /** OB custody (rule 6) — a re-attached run enters the fold, attached or held: launch memory takes what vouches for
+   * it, and its helper root is named again so that its helper answers at the door after the restart (OB-3d's gap,
+   * closed at both levels). Unvouched: nothing, and `bornFor` stays undefined. No set is sent: the floor holds the
+   * entry already. */
+  private vouch(runtimeRunId: string, standing: RunStanding): void {
+    if (!standing.vouched) return;
+    this.keepBorn(runtimeRunId, standing.spark);
+    if (standing.root !== undefined) this.helperRoots.nameAgain(standing.root, standing.spark);
   }
 
   /** A record whose PTY the first inventory lacked (AR-4b): the same grace
@@ -4181,25 +4291,37 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * act, so a ledger that fails after the effect leaves nothing orphaned.
    * `attempt` counts G5's retries of an attach the adapter called transient. */
   private async attachRecord(
-    record: AgentSessionRecord,
+    onDisk: AgentSessionRecord,
     row: TerminalInfo,
     terminalId: string,
     attempt = 0,
   ): Promise<void> {
     if (this.disposed) return;
+    // OB custody (rule 6) — who the run is and by whose word, judged once here; `record` is the run as this life
+    // holds it (`namedBy`): the record itself at `files` and for a run nothing vouches for
+    const standing = this.standingOf(onDisk, terminalId);
+    const record = this.namedBy(onDisk, standing);
     if (isTypedRun(record)) {
       // AR-7c — a typed run lives in the person's own shell, off the agent
       // cell by construction: the rule beside this one would refuse every
       // one. Its record is trusted on its OWN proof (`typedRunProof`), and
       // what passes is only ever attached to — never replaced.
-      if (!(await this.provesTyped(record, row, terminalId))) return;
+      if (!(await this.provesTyped(onDisk, record, row, terminalId))) {
+        // OB custody (rule 6) — a typed entry whose process did not prove vouches nothing, and is stale: the shell
+        // lives on, so the floor would hand it to every later fieldd. It is cleared, once and unawaited
+        if (standing.vouched && standing.level === "sealed") {
+          this.vouching?.delete(terminalId);
+          void this.opts.startedFor?.setStartedFor(terminalId, undefined);
+        }
+        return;
+      }
     } else {
       // EL7 (AR-4b): the daemon re-attaches only to PTYs it spawned — born on
       // the agent cell, or (item 121) on the cell its own signed record says
       // TC-D4's fallback put this terminal on (`agent-placement.ts`). A record
       // naming any other terminal — a shell of the user's — is not a run this
       // daemon ever spawned, whatever the file says.
-      const verdict = this.cellVerdict(record, terminalId, row);
+      const verdict = this.cellVerdict(onDisk, terminalId, row);
       if (!verdict.admits) {
         this.logger.warn(
           "fieldd.agents.reattach_refused_cell",
@@ -4230,10 +4352,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // every time. Re-sync before asking.
     let expectedEpoch = record.runtimeEpoch;
     let claimState: "allocated" | "terminal" | "missing" | "unread" = "allocated";
-    if (record.creationRequestId !== undefined) {
+    // OB custody (rule 6) — the durable claim is asked for by the id the record in hand carries, as it always was.
+    // The floor's entry names the run's helper root for THIS process (`namedBy`); its `root` goes to no registry
+    const ownId = onDisk.creationRequestId;
+    if (ownId !== undefined) {
       try {
         const claim = await this.claims.lookup({
-          creationRequestId: record.creationRequestId,
+          creationRequestId: ownId,
           runtimeRunId: record.runtimeRunId,
         });
         if (claim === undefined) claimState = "missing";
@@ -4278,10 +4403,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     await this.audited(
       mutation,
       async () => {
-        const outcome = await this.tryAttach(record, terminalId, expectedEpoch, claimState);
+        const outcome = await this.tryAttach(record, ownId, terminalId, expectedEpoch, claimState);
         if (outcome.state === "attached") {
           // G5 — a retried attach that succeeded: the row it held gives way
           this.releasePending(record.runtimeRunId);
+          // OB custody (rule 6) — vouched before it enters, so whoever hears the run enter can ask who it is
+          this.vouch(record.runtimeRunId, standing);
           const entry = this.enter(outcome.agent, {
             cwd: record.cwd,
             title: record.title,
@@ -4340,11 +4467,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   private async tryAttach(
     record: AgentSessionRecord,
+    /** the creation request the durable claim is restored against: the record's own (`attachRecord`) */
+    creationRequestId: string | undefined,
     terminalId: string,
     expectedEpoch: number,
     claimState: "allocated" | "terminal" | "missing" | "unread",
   ): Promise<{ state: "attached"; agent: Agent } | AttachFailure> {
-    if (record.creationRequestId === undefined) {
+    if (creationRequestId === undefined) {
       return {
         state: "failed",
         reason:
@@ -4368,7 +4497,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     try {
       result = await this.runtime.attach({
         agent: record.provider,
-        creationRequestId: record.creationRequestId,
+        creationRequestId,
         runtimeRunId: record.runtimeRunId,
         expectedRuntimeEpoch: expectedEpoch,
         sessionId: record.continuation.nativeSessionId,
@@ -4425,14 +4554,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // the record as it stands on disk: an attach record the adapter reported
     // during the attempt is already there, and the boot's copy predates it
     const current = this.records.read(record.runtimeRunId) ?? record;
-    const held: AgentSessionRecord = {
+    const written: AgentSessionRecord = {
       ...current,
       runtimeEpoch,
       reattach: { state, at: now, reason, ...(next !== undefined ? { next } : {}) },
       updatedAt: now,
     };
-    this.records.write(held);
+    this.records.write(written);
     if (this.disposed) return;
+    // OB custody (rule 6) — a HELD run is vouched as an entered one is, and this life holds it as the floor's entry
+    // names it (`namedBy`); what was written above is the record as it stands on disk. At `files` the two are one
+    const standing = this.standingOf(written, terminalId);
+    const held = this.namedBy(written, standing);
+    this.vouch(record.runtimeRunId, standing);
     // a retried attach that failed again: the row it held gives way to this one
     this.releasePending(record.runtimeRunId);
     const entry: PendingEntry = {
@@ -4558,13 +4692,18 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** AR-7c — the typed run's proof, from ONE read of the process table. A
    * record that does not pass is stamped as an unknown exit — the process is
    * gone, or is not in the terminal the record names — and NOTHING is held:
-   * no row, no watch, and nothing of the terminal is touched. */
+   * no row, no watch, and nothing of the terminal is touched.
+   *
+   * OB custody (rule 6) — `onDisk` is the record in hand, whose signature is what verifies; `record` is the run as
+   * this life names it (`namedBy`), whose PROCESS is what is proven: the floor's entry's for a run it vouches
+   * for, never the record's. At `files` the two are one object. */
   private async provesTyped(
+    onDisk: AgentSessionRecord,
     record: AgentSessionRecord,
     row: TerminalInfo,
     terminalId: string,
   ): Promise<boolean> {
-    const verified = this.records.verifies(record);
+    const verified = this.records.verifies(onDisk);
     const read = this.opts.processTable ?? readProcesses;
     let verdict = await typedRunProof({ record, verified, terminal: row, table: await read() });
     for (

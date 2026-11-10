@@ -143,17 +143,36 @@ export class RunHelperRoots {
     return named === undefined ? undefined : { entering: true, ...named };
   }
 
+  /** OB custody (CUSTODY-SPEC §8.1.0) — a run this fieldd RE-ATTACHED to: its helper root is named again, in this
+   * process's memory only. The floor still holds the root from the fieldd that announced it, and is told nothing;
+   * before this, the next fieldd had forgotten the name, and the run's helper held nothing at the door (OB-3d).
+   * The id is the record's creation request at `files` and the floor's entry's `root` at `sealed`
+   * (`AgentRuntimeService.vouch`). A run that never had a helper is named too, and no door ask ever uses it. */
+  nameAgain(rootId: string, spark?: SparkId): void {
+    this.#named.set(rootId, spark !== undefined ? { spark } : {});
+  }
+
   /** The attempt's run ended, or the attempt failed: the floor forgets its helper. */
   end(rootId: string): void {
     if (!this.#named.delete(rootId)) return;
     this.opts.floor?.clear(rootId).catch((err: unknown) => {
+      // OB custody — by its code, never its message, and without the root: after a restart a root id may be a value
+      // the floor's started-for table handed over, and nothing of an entry is said in a log
       this.opts.logger.warn(
         "fieldd.agents.helper_root_clear_failed",
         "The floor did not hear a helper root's end; it drops the root when the process goes",
-        { rootId, reason: (err as Error).message },
+        { code: failureCode(err) },
       );
     });
   }
+}
+
+/** An error by its code: a string `code`, else a string `kind` (the link's refusals carry a kind), else `unknown`. */
+function failureCode(error: unknown): string {
+  const named = error as { code?: unknown; kind?: unknown } | null | undefined;
+  if (typeof named?.code === "string") return named.code;
+  if (typeof named?.kind === "string") return named.kind;
+  return "unknown";
 }
 
 // PU-J — A TYPED LAUNCH GETS THE DOOR A SPAWNED ONE GETS. puppeteer's `prepareInvocation` takes a briefing and
