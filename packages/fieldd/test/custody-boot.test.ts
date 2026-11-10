@@ -288,8 +288,10 @@ describe("fieldd's entry under FIELDD_CUSTODY=stdin", () => {
     const userRoot = join(scratch, "vf", ...LAYOUT.USERS_DIR, "1");
     mkdirSync(join(userRoot, ...LAYOUT.NATIVE_RUN_DIR), { recursive: true });
     // C3: no pairing file anywhere on the root. The floor is the mock, alive before the boot (so fieldd spawns none
-    // and asks nobody whose code it is), holding the handed secret and checking each hello's MAC under it: a ready
-    // fieldd is one that paired from its hand-off.
+    // and asks about no child), holding the handed secret and checking each hello's MAC under it: a ready fieldd is
+    // one that paired from its hand-off. (§2.4 "v0.21": a fieldd handed custody asks whose code IT is when it makes
+    // its verifier, child or no child. Nothing is stood in for here, so that one question goes to the machine's own
+    // tool, about this row's own process, and nothing in this row rests on the answer.)
     const mock = new MockMgmtServer(nativeEndpoint(userRoot, SOCKETS.MGMT));
     mock.pairingSecretHex = HANDED.pairing;
     mock.verifyClientMac = true;
@@ -846,12 +848,46 @@ childProcess.execFile = execFile;
       const targets = verifies.map((one) => one.args[3]);
       expect(targets.slice(0, 2)).toEqual([`+${first.pid}`, `+${second.pid}`]);
       for (const one of verifies) expect(one.args[2]).toBe(FLOOR_REQUIREMENT);
-      // whose code fieldd is itself was asked once, at the boot's spawn, and never again
+      // whose code fieldd is itself was asked once, when the verifier was made, and never again
       expect(asked().filter((one) => one.own)).toHaveLength(1);
       // no floor answers now, so fieldd goes on respawning inside its bound: the row's cleanup stops fieldd, then
       // every stand-in by the pid it wrote down
     },
     240_000,
+  );
+
+  // §2.4 "v0.21", item 3 — fieldd asks whose code IT is when it makes its verifier, before any floor is spawned, so
+  // that the one budget a hand has (`CUSTODY.CHILD_CHECK_BUDGET_MS`) is spent on the child's check alone. Seen here
+  // where NO floor is spawned at all: the floor is the mock, alive before the boot. Asked at its first child, as it
+  // was before, this fieldd would have asked nothing.
+  it.skipIf(process.platform !== "darwin")(
+    "sealed, fieldd asks whose code it is itself when it makes its verifier, before any floor is spawned: on a floor already alive it asks that once, and about no child",
+    async () => {
+      const scratch = shortTmpRoot("vf-cust-own-");
+      cleanup.push(() => removeTempRoot(scratch));
+      const userRoot = join(scratch, "vf", ...LAYOUT.USERS_DIR, "1");
+      mkdirSync(join(userRoot, ...LAYOUT.NATIVE_RUN_DIR), { recursive: true });
+      const mock = await mockFloor(userRoot, HANDED.pairing);
+      const codesign = codesignSays(scratch, VERIFIES);
+      const run = runFieldd(
+        [],
+        { FIELDD_USER_ROOT: userRoot, FIELDD_USER_ID: USER, [CUSTODY.ENV]: CUSTODY.STDIN },
+        "pipe",
+        scratch,
+        codesign.nodeArgs,
+      );
+      run.child.stdin?.end(line(HANDOFF));
+      expect(await readyOf(run)).toBe(true);
+      // it paired with the floor that was there, and spawned none
+      expect(mock.refusedHellos).toBe(0);
+      expect(codesign.asked().map(kindOf)).toEqual(["display own"]);
+      run.child.kill("SIGTERM");
+      expect(await exitWithin(run.child, 30_000), run.stderr()).toMatchObject({
+        code: 0,
+        timedOut: false,
+      });
+    },
+    180_000,
   );
 
   // A GUARD, not a red row: at `files` nobody asks whose code the floor is, and nothing is handed. The same stand-in
