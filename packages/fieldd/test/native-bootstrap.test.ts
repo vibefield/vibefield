@@ -7,17 +7,34 @@
 //
 // The child is a fake with a stdin the row reads back. custody-boot.test.ts runs the same spawn under fieldd's real
 // entry, against a stand-in floor that writes down how it was born; native-pairing-sealed.test.ts holds the links.
+//
+// C6, wired (§2.4 "v0.15"): `floorVerifier` is the verifier `bin.ts` hands every sealed spawn. The rows below script
+// trust's two questions to say what it asks and in what order. The ONE row with nothing scripted, through fieldd's
+// real entry and trust's real questions, is custody-boot.test.ts's ("a floor that is not ours is written nothing").
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
+import { fileURLToPath } from "node:url";
 import { CUSTODY, NativeBootstrap } from "@vibefield/contracts";
+import {
+  type CodeIdentity,
+  type ExpectedCode,
+  FIELD_NATIVE_SIGNING_IDENTIFIER,
+  FIELDD_SIGNING_IDENTIFIER,
+} from "@vibefield/trust";
 import { describe, expect, it } from "vitest";
 import {
   type BootstrapChild,
+  type FloorIdentityQuestions,
+  floorVerifier,
   handNativeBootstrap,
+  type SealedNativeSpawned,
   type SealedSpawnOptions,
   type SpawnBootstrapChild,
   spawnSealedNative,
 } from "../src/native-bootstrap";
 
+const SRC = join(dirname(fileURLToPath(import.meta.url)), "../src");
 const FLOOR_SECRET = "d7".repeat(32);
 const LINE = `${JSON.stringify({ v: 1, pairing: FLOOR_SECRET })}\n`;
 const FLOOR_ENV = { FIELD_NATIVE_DATA_DIR: "/tmp/vf-a-root", FIELD_LOG_DIR: "/tmp/vf-a-root/logs" };
@@ -217,5 +234,166 @@ describe("the floor's sealed spawn (C3)", () => {
     // an answer, and no stream error left for nobody to hear (which would end the process)
     expect(await handNativeBootstrap(child, FLOOR_SECRET)).toBe("write-failed");
     await beat();
+  });
+});
+
+// ---- C6, wired: the verifier `bin.ts` hands every sealed spawn (§2.4 "v0.15") ----
+
+/** fieldd's own identity in these rows: a team's, hardened. No team of anybody's. */
+const OWN: CodeIdentity = { team: "ABCDE12345", hardened: true };
+
+interface AskedOfAChild {
+  pid: number;
+  own: CodeIdentity;
+  expect: ExpectedCode;
+}
+
+/** trust's two questions, scripted and counted: whose code fieldd is itself, and which children are its floor. */
+function questions(
+  own: CodeIdentity | null,
+  ours: (pid: number) => boolean = () => true,
+): { ask: FloorIdentityQuestions; children: AskedOfAChild[]; ownAsked: () => number } {
+  const children: AskedOfAChild[] = [];
+  let ownAsked = 0;
+  const ask: FloorIdentityQuestions = {
+    ownIdentity: async () => {
+      ownAsked += 1;
+      return own;
+    },
+    childIsOurs: async (pid, mine, which) => {
+      children.push({ pid, own: mine, expect: which });
+      return ours(pid);
+    },
+  };
+  return { ask, children, ownAsked: () => ownAsked };
+}
+
+/** One sealed spawn of a fake child under a verifier, as `bin.ts`'s closure makes each of its own. */
+function sealedSpawn(
+  child: FakeChild,
+  verifyNativeChild: (pid: number) => Promise<boolean>,
+): SealedNativeSpawned {
+  return spawnSealedNative({
+    bin: "/a/field-native",
+    env: FLOOR_ENV,
+    pairing: FLOOR_SECRET,
+    spawn: fakeSpawn(child).spawn,
+    verifyNativeChild,
+  });
+}
+
+describe("the floor's verifier, as bin.ts makes it (C6)", () => {
+  it("a sealed spawn whose child does not verify writes no line", async () => {
+    const { ask, children } = questions(OWN, () => false);
+    const child = new FakeChild(4_250);
+    const spawned = sealedSpawn(child, floorVerifier(ask));
+    await expect(spawned.handed).resolves.toBe("child-not-ours");
+    expect(children.map((one) => one.pid)).toEqual([4_250]);
+    // not a byte, then or a beat later, and the child is ended
+    await beat();
+    expect(child.said()).toBe("");
+    expect(child.kills).toEqual(["SIGKILL"]);
+  });
+
+  it("a child that verifies is handed its line, after it was asked about", async () => {
+    const { ask, children } = questions(OWN);
+    const child = new FakeChild(4_251);
+    const spawned = sealedSpawn(child, floorVerifier(ask));
+    await expect(spawned.handed).resolves.toBe("handed");
+    expect(await child.sent()).toBe(LINE);
+    expect(children).toHaveLength(1);
+    expect(child.kills).toEqual([]);
+  });
+
+  it("a null own identity is a refusal: the child is not asked about, not written to, and ended", async () => {
+    const { ask, children, ownAsked } = questions(null);
+    const verify = floorVerifier(ask);
+    const child = new FakeChild(4_252);
+    await expect(sealedSpawn(child, verify).handed).resolves.toBe("child-not-ours");
+    await beat();
+    expect(child.said()).toBe("");
+    expect(child.kills).toEqual(["SIGKILL"]);
+    // nobody to compare a child with: the second question is never asked
+    expect(children).toEqual([]);
+    // and it stays a refusal: a fieldd that could not say whose code it is does not ask again for a better answer
+    const next = new FakeChild(4_253);
+    await expect(sealedSpawn(next, verify).handed).resolves.toBe("child-not-ours");
+    await beat();
+    expect(next.said()).toBe("");
+    expect(children).toEqual([]);
+    expect(ownAsked()).toBe(1);
+  });
+
+  it("the identifier asked for is the floor's, with fieldd's own identity and the child's pid", async () => {
+    const { ask, children } = questions(OWN);
+    await expect(floorVerifier(ask)(4_254)).resolves.toBe(true);
+    const floors: ExpectedCode = { identifier: FIELD_NATIVE_SIGNING_IDENTIFIER };
+    expect(children).toEqual([{ pid: 4_254, own: OWN, expect: floors }]);
+    // the floor's is not fieldd's own: another of the team's binaries in the floor's place is not the floor
+    expect(FIELD_NATIVE_SIGNING_IDENTIFIER).toBe("field-native");
+    expect(FIELD_NATIVE_SIGNING_IDENTIFIER).not.toBe(FIELDD_SIGNING_IDENTIFIER);
+  });
+
+  it("a respawn is verified too: one verifier, each child asked about, fieldd's own identity asked once", async () => {
+    const { ask, children, ownAsked } = questions(OWN, (pid) => pid === 4_255);
+    // ONE verifier for the process, as bin.ts holds it: the boot's spawn, then a respawn's
+    const verify = floorVerifier(ask);
+    const first = new FakeChild(4_255);
+    await expect(sealedSpawn(first, verify).handed).resolves.toBe("handed");
+    const respawned = new FakeChild(4_256);
+    await expect(sealedSpawn(respawned, verify).handed).resolves.toBe("child-not-ours");
+    expect(children.map((one) => one.pid)).toEqual([4_255, 4_256]);
+    expect(ownAsked()).toBe(1);
+    // the first holds its line; the respawned one, which did not verify, was written nothing and ended
+    expect(await first.sent()).toBe(LINE);
+    await beat();
+    expect(respawned.said()).toBe("");
+    expect(respawned.kills).toEqual(["SIGKILL"]);
+  });
+
+  it("a question that could not be asked is a refusal", async () => {
+    const ask: FloorIdentityQuestions = {
+      ownIdentity: () => Promise.reject(new Error("codesign did not run")),
+      childIsOurs: async () => true,
+    };
+    const child = new FakeChild(4_257);
+    const spawned = sealedSpawn(child, floorVerifier(ask));
+    await expect(spawned.handed).resolves.toBe("child-not-ours");
+    await beat();
+    expect(child.said()).toBe("");
+    expect(child.kills).toEqual(["SIGKILL"]);
+  });
+
+  // The binding, read from the entry's source (the row that RUNS it is custody-boot.test.ts's). `floorVerifier` takes
+  // its questions as a parameter so the rows above can script them; what production gets is the default, trust's
+  // own, and only as long as `bin.ts` hands it nothing.
+  it("bin.ts makes ONE verifier, with trust's own questions, and hands it to the sealed spawn", () => {
+    const entry = readFileSync(join(SRC, "bin.ts"), "utf8");
+    // made once, with no argument: nothing stands in for trust
+    expect(entry.split("floorVerifier(")).toHaveLength(2);
+    expect(entry).toContain("floorVerifier()");
+    // and handed to the spawn the boot and every respawn share
+    expect(entry).toContain("verifyNativeChild: sealedFloor.verifyNativeChild,");
+    // the verifier's own questions are trust's, by default and by name
+    const source = readFileSync(join(SRC, "native-bootstrap.ts"), "utf8");
+    expect(source).toContain("ask: FloorIdentityQuestions = { ownIdentity, childIsOurs }");
+    const taken = /^import \{([^}]+)\} from "@vibefield\/trust";$/m.exec(source)?.[1] ?? "";
+    const names = taken.split(",").map((name) => name.trim());
+    for (const name of ["childIsOurs", "ownIdentity", "FIELD_NATIVE_SIGNING_IDENTIFIER"])
+      expect(names, name).toContain(name);
+  });
+
+  // A GUARD, not a red row: it holds before the verifier is wired and after. What it pins is that nothing of this
+  // module, and so nothing of trust, is loaded by a fieldd that was handed nothing. custody-boot.test.ts has the
+  // same guard as a run: handed nothing, a stand-in no verifier would pass is the floor of record.
+  it("at files nothing of it is loaded: bin.ts reaches the verifier's module only from a hand-off", () => {
+    const entry = readFileSync(join(SRC, "bin.ts"), "utf8");
+    // the one place the module is named, in the arm of a conditional that a fieldd handed nothing never takes
+    expect(entry.split('import("./native-bootstrap")')).toHaveLength(2);
+    expect(entry).toMatch(
+      /custody === undefined\s*\?\s*undefined\s*:[^;]*import\("\.\/native-bootstrap"\)/,
+    );
+    // and the entry itself names trust nowhere: trust is native-bootstrap.ts's import, loaded with it or not at all
+    expect(entry).not.toContain("@vibefield/trust");
   });
 });

@@ -9,8 +9,10 @@
 //   · in this process, through `FielddConfig.custody` (the seam): the run files, the level, the log, the stop;
 //   · as a PROCESS, through fieldd's own entry bundled the way its build bundles it (`fieldd-bin-bundle.ts`), with
 //     the hand-off written to its stdin as a supervisor writes it: the pipe itself, and the refusals.
-// The floor in both is the mock, and its pairing is C3's: until that slice a sealed fieldd still reads the floor's
-// file, so these rows write it (custody-harness.ts `floorFile`) and hold before C3 and after it.
+// The floor in both is the mock, and its pairing is C3's: until that slice a sealed fieldd still read the floor's
+// file, so the rows in this process write it (custody-harness.ts `floorFile`) and hold before C3 and after it. The
+// sealed process row pairs with no file. A floor the entry SPAWNS is a stand-in script: handed custody, fieldd asks
+// whose code it is and refuses it (C6); handed nothing, it asks nobody.
 import { type ChildProcess, spawn } from "node:child_process";
 import {
   copyFileSync,
@@ -283,9 +285,12 @@ describe("fieldd's entry under FIELDD_CUSTODY=stdin", () => {
     cleanup.push(() => removeTempRoot(scratch));
     const userRoot = join(scratch, "vf", ...LAYOUT.USERS_DIR, "1");
     mkdirSync(join(userRoot, ...LAYOUT.NATIVE_RUN_DIR), { recursive: true });
-    writeFileSync(join(userRoot, ...LAYOUT.PAIRING_FILE), HANDED.pairing);
+    // C3: no pairing file anywhere on the root. The floor is the mock, alive before the boot (so fieldd spawns none
+    // and asks nobody whose code it is), holding the handed secret and checking each hello's MAC under it: a ready
+    // fieldd is one that paired from its hand-off.
     const mock = new MockMgmtServer(nativeEndpoint(userRoot, SOCKETS.MGMT));
     mock.pairingSecretHex = HANDED.pairing;
+    mock.verifyClientMac = true;
     await mock.start();
     cleanup.push(() => mock.stop());
 
@@ -312,6 +317,9 @@ describe("fieldd's entry under FIELDD_CUSTODY=stdin", () => {
       90_000,
     );
 
+    // it paired with the floor under what it was handed, and no file was read or made for it
+    expect(mock.refusedHellos).toBe(0);
+    expect(existsSync(join(userRoot, ...LAYOUT.PAIRING_FILE))).toBe(false);
     // nothing secret on disk: no shell token, and the record says the level
     expect(existsSync(tokenPath(userRoot))).toBe(false);
     expect(readProduct(userRoot)).toMatchObject({
@@ -354,23 +362,33 @@ describe("fieldd's entry under FIELDD_CUSTODY=stdin", () => {
     }
   }, 180_000);
 
-  // C3 — the floor's own bootstrap, under the real entry. The floor here is a stand-in that writes down how it was
-  // born (its flag, its arguments, every byte of its stdin) and stays; the mock floor then takes the endpoint, holding
-  // the handed secret and checking each hello's MAC under it, so a ready fieldd is one that paired from its hand-off.
-  it.skipIf(process.platform === "win32")(
-    "sealed, it spawns its floor with a pipe: the flag, one bootstrap line, a closed stdin, and it pairs with no file",
-    async () => {
-      const scratch = shortTmpRoot("vf-cust-floor-");
-      cleanup.push(() => removeTempRoot(scratch));
-      const userRoot = join(scratch, "vf", ...LAYOUT.USERS_DIR, "1");
-      mkdirSync(join(userRoot, ...LAYOUT.NATIVE_RUN_DIR), { recursive: true });
-      const pairing = "d7".repeat(32);
-      const born = join(scratch, "floor-born.json");
-      const floorPids = join(scratch, "floor.pids");
-      const standIn = join(scratch, "field-native");
-      writeFileSync(
-        standIn,
-        `#!${process.execPath}
+  /** What a stand-in floor wrote down of its birth, at its stdin's end. */
+  interface FloorBirth {
+    pid: number;
+    args: string[];
+    flag: string | null;
+    dataDir: string | null;
+    stdin: string;
+  }
+
+  /** A stand-in for field-native: a script that writes down its pid at once, each piece of its stdin as it arrives
+   * and, at its stdin's end, how it was born (its flag, its arguments, the whole of its stdin), then stays. It is no
+   * floor: nothing of it listens, and on no host is it signed as the floor is. The row's cleanup ends each one by
+   * the pid it wrote down. */
+  function standInFloor(scratch: string): {
+    bin: string;
+    pids: () => number[];
+    /** everything it has read of its stdin so far: what a stand-in ended before its stdin's end still leaves */
+    heard: () => string;
+    birth: () => FloorBirth | null;
+  } {
+    const born = join(scratch, "floor-born.json");
+    const floorPids = join(scratch, "floor.pids");
+    const floorHeard = join(scratch, "floor.heard");
+    const bin = join(scratch, "field-native");
+    writeFileSync(
+      bin,
+      `#!${process.execPath}
 "use strict";
 const fs = require("node:fs");
 fs.appendFileSync(${JSON.stringify(floorPids)}, process.pid + "\\n");
@@ -380,13 +398,9 @@ let stdin = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => {
   stdin += chunk;
+  fs.appendFileSync(${JSON.stringify(floorHeard)}, chunk);
 });
 process.stdin.on("end", () => {
-  let secret = null;
-  try {
-    secret = JSON.parse(stdin).pairing;
-  } catch {}
-  const holds = (text) => typeof secret === "string" && String(text).includes(secret);
   fs.writeFileSync(
     ${JSON.stringify(born)},
     JSON.stringify({
@@ -395,34 +409,83 @@ process.stdin.on("end", () => {
       flag: process.env.FIELD_NATIVE_CUSTODY ?? null,
       dataDir: process.env.FIELD_NATIVE_DATA_DIR ?? null,
       stdin,
-      secretInEnv: Object.values(process.env).some(holds),
-      secretInArgv: process.argv.some(holds),
     }),
   );
 });
 setInterval(() => {}, 1_000);
 `,
-        { mode: 0o755 },
-      );
-      // the stand-in outlives fieldd by design (detached, unref'd): the row ends each one by the pid it wrote down
-      // (a fieldd that loses its floor spawns another, so there may be more than one)
-      cleanup.push(() => {
-        if (!existsSync(floorPids)) return;
-        for (const pid of readFileSync(floorPids, "utf8").split("\n").filter(Boolean)) {
-          try {
-            process.kill(Number(pid), "SIGKILL");
-          } catch {
-            // already gone
-          }
+      { mode: 0o755 },
+    );
+    const pids = (): number[] => {
+      if (!existsSync(floorPids)) return [];
+      const written = readFileSync(floorPids, "utf8").split("\n");
+      return written.filter(Boolean).map(Number);
+    };
+    // a stand-in outlives fieldd by design (detached, unref'd)
+    cleanup.push(() => {
+      for (const pid of pids()) {
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          // already gone
         }
-      });
+      }
+    });
+    const heard = (): string => {
+      if (!existsSync(floorHeard)) return "";
+      return readFileSync(floorHeard, "utf8");
+    };
+    const birth = (): FloorBirth | null => {
+      if (!existsSync(born)) return null;
+      try {
+        return JSON.parse(readFileSync(born, "utf8")) as FloorBirth;
+      } catch {
+        return null; // half written
+      }
+    };
+    return { bin, pids, heard, birth };
+  }
+
+  /** Is there a process at this pid still? */
+  function alive(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // C3 and C6 under the real entry (§2.4 "v0.15"): THE row that goes through the real wiring. It is fieldd's own
+  // entry, bundled as its build bundles it; no verifier is handed in, and nothing below it is replaced either. A
+  // fieldd handed custody asks whose code its floor is BEFORE it writes the floor anything (trust's `childIsOurs`,
+  // always with the floor's signing identifier), and a floor that does not verify is written nothing, is ended, and
+  // fails the boot: never an unverified hand. The floor here is a stand-in script, which on no host is the floor.
+  //
+  // What it meets depends on the Node it runs under, and it cannot say which. On macOS under a Node a team signed
+  // for the hardened runtime, fieldd's own identity is that team's and so is the stand-in's, which is the same Node:
+  // what refuses it is the floor's identifier and nothing else, asked of the real `codesign` (display and verify of
+  // its own two processes, no more). Under any other Node, and off macOS, fieldd cannot say whose code it is itself,
+  // which is the same refusal with `codesign` asked once or never.
+  //
+  // That a floor which DOES verify is written one line and no more is native-bootstrap.test.ts's, with a fake child;
+  // under the real entry that half waits for a signed build.
+  it.skipIf(process.platform === "win32")(
+    "sealed, a floor that is not ours is written nothing and the boot fails by name",
+    async () => {
+      const scratch = shortTmpRoot("vf-cust-floor-");
+      cleanup.push(() => removeTempRoot(scratch));
+      const userRoot = join(scratch, "vf", ...LAYOUT.USERS_DIR, "1");
+      mkdirSync(join(userRoot, ...LAYOUT.NATIVE_RUN_DIR), { recursive: true });
+      const pairing = "d7".repeat(32);
+      const floor = standInFloor(scratch);
 
       const run = runFieldd(
         [],
         {
           FIELDD_USER_ROOT: userRoot,
           FIELDD_USER_ID: USER,
-          FIELDD_NATIVE_BIN: standIn,
+          FIELDD_NATIVE_BIN: floor.bin,
           [CUSTODY.ENV]: CUSTODY.STDIN,
         },
         "pipe",
@@ -430,43 +493,69 @@ setInterval(() => {}, 1_000);
       );
       run.child.stdin?.end(line({ ...HANDOFF, pairing }));
 
-      const floor = await until(
+      // the boot ends by itself: it does not wait out the readiness of a floor it refused
+      const exit = await exitWithin(run.child, 60_000);
+      // the claim first: not a byte reached the stand-in, as it read or at its stdin's end
+      expect(floor.heard()).toBe("");
+      expect(floor.birth()?.stdin ?? "").toBe("");
+      // a child WAS spawned and judged (a spawn that made no process says `no-child`), and the boot failed on it
+      expect(exit, run.stderr()).toMatchObject({ code: 1, timedOut: false });
+      expect(run.stderr()).toContain(
+        "fieldd failed to start: the native floor was not handed its pairing (child-not-ours)",
+      );
+      expect(run.stdout()).not.toContain('"ready":true');
+      expect(existsSync(productPath(userRoot))).toBe(false);
+      // it was ended, by the pid fieldd spawned, and a boot that failed asked for no second floor
+      const gone = await until(
+        () => {
+          return floor.pids().some(alive) ? null : true;
+        },
+        "the refused floor's end",
+        10_000,
+      );
+      expect(gone).toBe(true);
+      expect(floor.pids().length).toBeLessThanOrEqual(1);
+      for (const said of [run.stdout(), run.stderr()]) expect(said).not.toContain(pairing);
+    },
+    120_000,
+  );
+
+  // A GUARD, not a red row: at `files` nobody asks whose code the floor is, and nothing is handed. The same stand-in
+  // a sealed fieldd refuses is spawned as the floor always was (its stdin ignored, no flag), is left alive, and once
+  // a floor answers at its endpoint the boot comes up on it. `bin.ts` makes its verifier only from a hand-off, so
+  // without one trust is never loaded and neither of its two questions is asked: had either been, this stand-in
+  // would have been refused as the row above refuses it.
+  it.skipIf(process.platform === "win32")(
+    "handed nothing, the floor is spawned as it always was: no pipe, no flag, and nobody asks whose code it is",
+    async () => {
+      const scratch = shortTmpRoot("vf-cust-files-");
+      cleanup.push(() => removeTempRoot(scratch));
+      const userRoot = join(scratch, "vf", ...LAYOUT.USERS_DIR, "1");
+      mkdirSync(join(userRoot, ...LAYOUT.NATIVE_RUN_DIR), { recursive: true });
+      const floor = standInFloor(scratch);
+
+      const run = runFieldd(
+        [],
+        { FIELDD_USER_ROOT: userRoot, FIELDD_USER_ID: USER, FIELDD_NATIVE_BIN: floor.bin },
+        "ignore",
+        scratch,
+      );
+      const born = await until(
         () => {
           if (run.child.exitCode !== null)
             throw new Error(`fieldd exited ${run.child.exitCode}: ${run.stderr()}`);
-          if (!existsSync(born)) return null;
-          try {
-            return JSON.parse(readFileSync(born, "utf8")) as {
-              pid: number;
-              args: string[];
-              flag: string | null;
-              dataDir: string | null;
-              stdin: string;
-              secretInEnv: boolean;
-              secretInArgv: boolean;
-            };
-          } catch {
-            return null; // half written
-          }
+          return floor.birth();
         },
         "the floor's account of its birth",
         60_000,
       );
-      // the flag, and ONE line on a stdin that then ended (the stand-in writes this only at its stdin's end)
-      expect(floor.flag).toBe(CUSTODY.STDIN);
-      expect(floor.stdin).toBe(line({ v: 1, pairing }));
-      // nothing of the secret anywhere else it was born with, and the composition every floor gets
-      expect(floor).toMatchObject({
-        args: [],
-        dataDir: userRoot,
-        secretInEnv: false,
-        secretInArgv: false,
-      });
+      // born with nothing: no flag, a stdin that is nobody's (it ended at once, empty), the composition every floor gets
+      expect(born).toMatchObject({ flag: null, stdin: "", args: [], dataDir: userRoot });
 
-      // the floor is up: fieldd pairs under the handed secret, with no pairing file anywhere on the root
+      // the floor comes up as field-native does at `files`: its pairing file, then its endpoint
+      writeFileSync(join(userRoot, ...LAYOUT.PAIRING_FILE), HANDED.pairing);
       const mock = new MockMgmtServer(nativeEndpoint(userRoot, SOCKETS.MGMT));
-      mock.pairingSecretHex = pairing;
-      mock.verifyClientMac = true;
+      mock.pairingSecretHex = HANDED.pairing;
       await mock.start();
       cleanup.push(() => mock.stop());
       const ready = await until(
@@ -479,11 +568,9 @@ setInterval(() => {}, 1_000);
         90_000,
       );
       expect(ready).toBe(true);
-      expect(mock.refusedHellos).toBe(0);
-      expect(existsSync(join(userRoot, ...LAYOUT.PAIRING_FILE))).toBe(false);
-      // the floor it spawned is the floor of record
-      expect(readProduct(userRoot)).toMatchObject({ custody: "sealed", nativePid: floor.pid });
-      expect(run.stderr()).not.toContain(pairing);
+      // nobody ended it: the stand-in is the floor of record, and alive
+      expect(alive(born.pid)).toBe(true);
+      expect(readProduct(userRoot)).toMatchObject({ custody: "files", nativePid: born.pid });
       // fieldd goes first, while its floor still answers: a fieldd that lost its floor would spawn another
       run.child.kill("SIGTERM");
       expect(await exitWithin(run.child, 30_000), run.stderr()).toMatchObject({
