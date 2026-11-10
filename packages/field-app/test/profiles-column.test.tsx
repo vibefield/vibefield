@@ -1486,8 +1486,13 @@ describe("closing is one act (UM-R3): the pin, the pointer's hold and the keyboa
     }
   });
 
-  it("grace expiry and a dwell swap do not hand focus to the circle (the pointer's, not a deliberate act)", () => {
+  it("grace expiry and a dwell swap are the pointer's: with the keyboard outside the column they hand it nowhere", () => {
+    // UM-R-F (c4) rewrote this row. It put the keyboard inside the card, and since focus counts as pointing that card
+    // now stays past the grace, and a dwell that takes it hands the keyboard to its circle ("focus is pointing" below).
+    // What stays true: a timer moves no keyboard that was never in the column.
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const elsewhere = document.createElement("button");
+    document.body.appendChild(elsewhere);
     try {
       const target = cardLayer();
       const page = mount(<ProfilesColumn {...controller({ cardLayer: target })} />);
@@ -1501,23 +1506,23 @@ describe("closing is one act (UM-R3): the pin, the pointer's hold and the keyboa
           vi.advanceTimersByTime(ms);
         });
       };
-      // a grace: the card leaves, and the circle does not take the keys
+      act(() => elsewhere.focus());
+      // a grace: the card leaves, and the keyboard stays where it was
       over(itemOf(page, "work"));
-      target.querySelector<HTMLButtonElement>(".vf-profiles-pop-close")?.focus();
       out(itemOf(page, "work"));
       wait(320);
-      expect(target.querySelector(".vf-profiles-pop")).toBeNull();
-      expect(document.activeElement).not.toBe(circleOf(page, "work"));
-      // a dwell: the card is swapped, and the circle it stood for does not take the keys
+      expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+      expect(document.activeElement).toBe(elsewhere);
+      // a dwell: the card is swapped, and neither circle takes the keyboard
       over(itemOf(page, "native"));
-      target.querySelector<HTMLButtonElement>(".vf-profiles-pop-close")?.focus();
       out(itemOf(page, "native"));
       over(itemOf(page, "work"));
       wait(120);
       expect(target.querySelector('.vf-profiles-stand[data-profile="work"]')).not.toBeNull();
       expect(target.querySelector('.vf-profiles-stand[data-profile="native"]')).toBeNull();
-      expect(document.activeElement).not.toBe(circleOf(page, "native"));
+      expect(document.activeElement).toBe(elsewhere);
     } finally {
+      elsewhere.remove();
       vi.useRealTimers();
     }
   });
@@ -1598,6 +1603,238 @@ describe("the pinned tell (UM-R-F, c3): a pinned card's circle wears the ready f
     expect(circleOf(page, "native")?.hasAttribute("data-pinned")).toBe(true);
     act(() => root?.render(<ProfilesColumnView {...column({ open: "native", pinned: false })} />));
     expect(circleOf(page, "native")?.hasAttribute("data-pinned")).toBe(false);
+  });
+});
+
+/* ── focus is pointing (UM-R-F, c4; DESIGN.md §8 "Focus is pointing") ────────── */
+
+describe("focus is pointing (UM-R-F, c4): the keyboard on a circle shows its card, and Tab walks on", () => {
+  let elsewhere: HTMLButtonElement | null = null;
+  /** a button outside the column, where the keyboard can go */
+  const outside = (): HTMLButtonElement => {
+    elsewhere = document.createElement("button");
+    document.body.appendChild(elsewhere);
+    return elsewhere;
+  };
+  afterEach(() => {
+    elsewhere?.remove();
+    elsewhere = null;
+  });
+  const over = (node: Element | null | undefined): void => {
+    act(() => {
+      node?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    });
+  };
+  const out = (node: Element | null | undefined): void => {
+    act(() => {
+      node?.dispatchEvent(new PointerEvent("pointerout", { bubbles: true }));
+    });
+  };
+  const wait = (ms: number): void => {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  };
+  const focus = (node: HTMLElement | null | undefined): void => {
+    act(() => node?.focus());
+  };
+  const key = (node: Element | null | undefined, name: string): KeyboardEvent => {
+    const event = new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true });
+    act(() => {
+      node?.dispatchEvent(event);
+    });
+    return event;
+  };
+  const circleOf = (page: HTMLElement, id: string): HTMLButtonElement | null =>
+    page.querySelector<HTMLButtonElement>(`[data-profile="${id}"] .vf-profiles-circle`);
+  const itemOf = (page: HTMLElement, id: string): HTMLElement | null =>
+    page.querySelector<HTMLElement>(`.vf-profiles-item[data-profile="${id}"]`);
+  const standOf = (target: HTMLElement, id: string): HTMLElement | null =>
+    target.querySelector<HTMLElement>(`.vf-profiles-stand[data-profile="${id}"]`);
+  const setup = (
+    props: Partial<ProfilesColumnProps> = {},
+  ): { target: HTMLElement; page: HTMLElement } => {
+    const target = cardLayer();
+    const page = mount(<ProfilesColumn {...controller({ cardLayer: target, ...props })} />);
+    return { target, page };
+  };
+
+  it("focus on a circle shows its card at once, holds no keys, and says it is open", () => {
+    const { target, page } = setup();
+    focus(circleOf(page, "work"));
+    expect(standOf(target, "work")).not.toBeNull();
+    expect(monitorHoldsKeys()).toBe(false);
+    expect(circleOf(page, "work")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("focus moving to another circle swaps the card at once, with no dwell", () => {
+    const { target, page } = setup();
+    focus(circleOf(page, "native"));
+    expect(standOf(target, "native")).not.toBeNull();
+    focus(circleOf(page, "work"));
+    expect(standOf(target, "work")).not.toBeNull();
+    expect(standOf(target, "native")).toBeNull();
+  });
+
+  it("focus leaving the circle and its card closes the card it showed, at once, and the keyboard stays where it went", () => {
+    const { target, page } = setup();
+    const away = outside();
+    focus(circleOf(page, "work"));
+    expect(standOf(target, "work")).not.toBeNull();
+    focus(away);
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    expect(document.activeElement).toBe(away);
+  });
+
+  it("moving between the circle and its portaled card is no leave", () => {
+    const { target, page } = setup();
+    focus(circleOf(page, "work"));
+    focus(standOf(target, "work")?.querySelector<HTMLButtonElement>(".vf-profiles-pop-close"));
+    expect(standOf(target, "work")).not.toBeNull();
+    expect(monitorHoldsKeys()).toBe(false);
+    focus(circleOf(page, "work"));
+    expect(standOf(target, "work")).not.toBeNull();
+  });
+
+  it("a pointer resting on another circle lets go when the keyboard reaches a circle: its card shows (§8 'Focus is pointing')", () => {
+    // the plan's review: with the pointer still on This Mac, a Tab to Work showed nothing, and the next Tab walked
+    // into This Mac's card
+    const { target, page } = setup();
+    over(itemOf(page, "native"));
+    expect(standOf(target, "native")).not.toBeNull();
+    focus(circleOf(page, "work"));
+    expect(standOf(target, "work")).not.toBeNull();
+    expect(standOf(target, "native")).toBeNull();
+    expect(circleOf(page, "work")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("Tab from the card's last control goes on to the next circle, or the add; into the card is unchanged (§8 'Pinned')", () => {
+    const target = cardLayer();
+    const props = column({
+      circles: [thisMac(), work()],
+      lens: true,
+      open: "native",
+      cardLayer: target,
+    });
+    const page = mount(<ProfilesColumnView {...props} />);
+    const controls = (id: string): HTMLElement[] => [
+      ...(standOf(target, id)?.querySelectorAll<HTMLElement>("button:not(:disabled)") ?? []),
+    ];
+    const lastOf = (id: string): HTMLElement | undefined => {
+      const all = controls(id);
+      return all[all.length - 1];
+    };
+    // into the card, as before: Tab on the open circle lands on its first control
+    circleOf(page, "native")?.focus();
+    expect(key(circleOf(page, "native"), "Tab").defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(controls("native")[0]);
+    // out of its last control: the next circle, as if the card stood after its own
+    lastOf("native")?.focus();
+    expect(key(lastOf("native"), "Tab").defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(circleOf(page, "work"));
+    // the last circle's card: on to the add
+    act(() => root?.render(<ProfilesColumnView {...props} open="work" />));
+    lastOf("work")?.focus();
+    expect(key(lastOf("work"), "Tab").defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(page.querySelector(".vf-profiles-add"));
+    // and with nothing after it that can act, the window's order
+    act(() => root?.render(<ProfilesColumnView {...props} open="work" canAdd={false} />));
+    const last = lastOf("work");
+    last?.focus();
+    expect(key(last, "Tab").defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(last);
+  });
+
+  it("Esc where the keyboard is closes a card focus showed; it stays closed; with no card open Esc passes on", () => {
+    const { target, page } = setup();
+    focus(circleOf(page, "work"));
+    expect(standOf(target, "work")).not.toBeNull();
+    const first = key(circleOf(page, "work"), "Escape");
+    expect(first.defaultPrevented).toBe(true);
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    expect(document.activeElement).toBe(circleOf(page, "work"));
+    expect(monitorHoldsKeys()).toBe(false);
+    // the keyboard has not left, so the card has not come back; a second Esc is the terminal's, not the column's
+    const second = key(circleOf(page, "work"), "Escape");
+    expect(second.defaultPrevented).toBe(false);
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+  });
+
+  it("the keyboard handed home by a close does not reopen the card", () => {
+    // a guard: it passed before c4 and must keep passing, since the circle's own focus now shows a card
+    const { target, page } = setup();
+    act(() => circleOf(page, "work")?.click());
+    focus(standOf(target, "work")?.querySelector<HTMLButtonElement>(".vf-profiles-pop-close"));
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
+    });
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    expect(document.activeElement).toBe(circleOf(page, "work"));
+    expect(monitorHoldsKeys()).toBe(false);
+  });
+
+  it("the pointer peeks over a focus-shown card after the dwell, letting go brings it back, and a peek that takes the card holding the keyboard hands it to that card's circle", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { target, page } = setup();
+      focus(circleOf(page, "work"));
+      focus(standOf(target, "work")?.querySelector<HTMLButtonElement>(".vf-profiles-pop-close"));
+      over(itemOf(page, "native"));
+      wait(119);
+      expect(standOf(target, "work")).not.toBeNull();
+      expect(standOf(target, "native")).toBeNull();
+      wait(1);
+      expect(standOf(target, "native")).not.toBeNull();
+      expect(standOf(target, "work")).toBeNull();
+      expect(document.activeElement).toBe(circleOf(page, "work"));
+      out(itemOf(page, "native"));
+      wait(320);
+      expect(standOf(target, "work")).not.toBeNull();
+      expect(standOf(target, "native")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("focus on another circle peeks over a pinned card, and leaving it brings the pinned card back", () => {
+    const { target, page } = setup();
+    const away = outside();
+    act(() => circleOf(page, "work")?.click());
+    expect(standOf(target, "work")).not.toBeNull();
+    expect(monitorHoldsKeys()).toBe(true);
+    focus(circleOf(page, "native"));
+    expect(standOf(target, "native")).not.toBeNull();
+    expect(standOf(target, "work")).toBeNull();
+    expect(monitorHoldsKeys()).toBe(true);
+    focus(away);
+    expect(standOf(target, "work")).not.toBeNull();
+    expect(standOf(target, "native")).toBeNull();
+    expect(monitorHoldsKeys()).toBe(true);
+  });
+
+  it("focus shows the add's card while it can act, and nothing while the terminals fill the window or the limit card stands", () => {
+    const target = cardLayer();
+    const props = controller({ cardLayer: target, openNewProfile: vi.fn() });
+    const page = mount(<ProfilesColumn {...props} />);
+    const away = outside();
+    const add = page.querySelector<HTMLButtonElement>(".vf-profiles-add");
+    focus(add);
+    expect(target.querySelector('.vf-profiles-stand[data-card="add"]')).not.toBeNull();
+    focus(away);
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    // behind full-window terminals, focus shows nothing, on a circle or on the add
+    act(() => root?.render(<ProfilesColumn {...props} covered />));
+    focus(circleOf(page, "work"));
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    focus(add);
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    // while the limit card stands in the add's card's place, focus on the add holds no hidden card
+    focus(away);
+    act(() => root?.render(<ProfilesColumn {...props} moment={<p data-moment="">limit</p>} />));
+    focus(add);
+    expect(target.children).toHaveLength(0);
   });
 });
 
