@@ -1598,10 +1598,15 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     params: AgentResumeParams,
     principal: GrantPrincipal,
     forwardedFor?: ForwardedFor,
+    /** OB custody (rule 6; CUSTODY-SPEC §8.1.0, the resume rule's case 1) — the spark fieldd's OWN wake asked this
+     * resume FOR (`tool-plane/sparks.ts` `#wake`, through daemon.ts's wrapper), as a spawn's `compose.spark` is the
+     * launch call's own argument. Never a door's params: the `agent.resume` door passes none. At `sealed` it names
+     * the resumed run for launch memory and the floor's entry (`resumedAs`); at `files` it is not read. */
+    compose?: { readonly spark?: SparkId },
   ): Promise<AgentSpawnResult> {
     this.requireLaunchesOpen();
     return isAgentResumeRun(params)
-      ? await this.resumeRun(params, principal, forwardedFor)
+      ? await this.resumeRun(params, principal, forwardedFor, compose?.spark)
       : await this.resumeNative(params, principal, forwardedFor);
   }
 
@@ -1867,6 +1872,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     params: AgentResumeRunParams,
     principal: GrantPrincipal,
     forwardedFor?: ForwardedFor,
+    /** OB custody (rule 6) — the spark fieldd's own wake asked this resume for (`resume`'s last argument) */
+    asked?: SparkId,
   ): Promise<AgentSpawnResult> {
     const terminals = this.requireTerminals();
     // Item 87 — first, so everything below reads the record as it stands after
@@ -1913,7 +1920,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           { runtimeRunId: record.runtimeRunId, state: "signed-out" },
         );
       }
-      const entry = await this.track(this.replacePending(pending, params.cwd, "manual"));
+      const entry = await this.track(this.replacePending(pending, params.cwd, "manual", asked));
       const said = this.resumeSelection(record.provider, record.modelSelection).outcome;
       return {
         ...this.ticketed(entry, principal, terminals, forwardedFor),
@@ -1978,7 +1985,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // Item 192 (RV #6) — the gate again, at the birth: `awaitExitCleanup` above is outside `creating`, so a
       // consented stop that closed the launches meanwhile counted no birth for this resume
       this.requireLaunchesOpen();
-      entry = await this.resumeFromRecord(record, params.cwd, husk);
+      entry = await this.resumeFromRecord(record, params.cwd, husk, undefined, asked);
     } finally {
       release();
     }
@@ -3718,6 +3725,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     cwdOverride: string | undefined,
     replaced: string | undefined,
     preparedBriefing?: AgentRunBriefing,
+    /** OB custody (rule 6) — the spark fieldd's own wake asked this resume for; read by `resumedAs` and nothing else */
+    asked?: SparkId,
   ): Promise<ManagedEntry> {
     const continuation = continuationOf(record);
     const cwd = cwdOverride ?? record.cwd;
@@ -3763,20 +3772,25 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // OB custody (rule 6) — who the successor is, for launch memory and the floor's entry ONLY (`resumedAs`): the
       // record's spark above is the runtime's other use of it, and is not this packet's. Filled before the caller
       // names the successor to those keeping something per run (`replaced`)
-      this.remember(entered, this.resumedAs(record), { root: identity.creationRequestId });
+      this.remember(entered, this.resumedAs(record, asked), { root: identity.creationRequestId });
       return entered;
     });
   }
 
   /** OB custody (rule 6; CUSTODY-SPEC §8.1.0, "a RESUME is the hard one") — who a RESUMED run is, for launch memory
-   * and the floor's entry and nothing else. `previous` is the run it continues. At `sealed` the record's word is not
-   * taken: it is what launch memory holds for the run it continues (a run this life launched or vouched for: the
-   * new run is what the old one was), else plain, whatever the record says. At `files` the record names it, as it
-   * always did. ONE `if`. */
+   * and the floor's entry and nothing else. `previous` is the run it continues. At `files` the record names it, as
+   * it always did, and `asked` is not read. At `sealed` the record's word is not taken, and the order is:
+   *  1. `asked` — fieldd's own spark wake asked this resume FOR that spark: the launch call's own argument;
+   *  2. what launch memory holds for the run it continues (a run this life launched or vouched for: the new run is
+   *     what the old one was);
+   *  3. plain, whatever the record says.
+   * ONE `if` between the levels. */
   private resumedAs(
     previous: { runtimeRunId: string; spark?: SparkId | undefined } | undefined,
+    asked?: SparkId,
   ): { spark?: SparkId | undefined } {
     if (this.opts.startedFor === undefined) return { spark: previous?.spark };
+    if (asked !== undefined) return { spark: asked };
     return (previous === undefined ? undefined : this.born.get(previous.runtimeRunId)) ?? {};
   }
 
@@ -4721,6 +4735,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     entry: PendingEntry,
     cwdOverride: string | undefined,
     how: "idle" | "manual",
+    /** OB custody (rule 6) — the spark fieldd's own wake asked this resume for (`resume`'s last argument) */
+    asked?: SparkId,
   ): Promise<ManagedEntry> {
     // QL — the replacement takes the run out of `pending` before its new run
     // is entered, so for that window `runContinuing` cannot see it: it holds
@@ -4731,7 +4747,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       entry.record.runtimeRunId,
     );
     try {
-      return await this.replacePendingClaimed(entry, cwdOverride, how);
+      return await this.replacePendingClaimed(entry, cwdOverride, how, asked);
     } finally {
       release();
     }
@@ -4741,6 +4757,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     entry: PendingEntry,
     cwdOverride: string | undefined,
     how: "idle" | "manual",
+    asked?: SparkId,
   ): Promise<ManagedEntry> {
     const { record } = entry;
     // AR-7c — never a typed run: the PTY this would end is the person's shell
@@ -4892,7 +4909,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // 2. the new run: the vendor's own conversation continued in a new PTY
       let next: ManagedEntry;
       try {
-        next = await this.resumeFromRecord(record, cwdOverride, oldId, briefing);
+        next = await this.resumeFromRecord(record, cwdOverride, oldId, briefing, asked);
       } catch (error) {
         // the old PTY is gone; the resume did not happen — the record says
         // exactly that, and the door's ordinary resume takes it next

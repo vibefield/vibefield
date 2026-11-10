@@ -3477,11 +3477,13 @@ export async function bootstrap(
         );
         return { runtimeRunId: result.session.runtimeRunId };
       },
-      resume: async (runtimeRunId, principal) => {
+      resume: async (runtimeRunId, principal, spark) => {
         try {
-          return {
-            runtimeRunId: (await agents.resume({ runtimeRunId }, principal)).session.runtimeRunId,
-          };
+          // OB custody (rule 6; CUSTODY-SPEC §8.1.0, the resume rule's case 1) — the spark the wake is waking, handed
+          // on as the launch call's own argument. A caller that names none resumes exactly as before
+          const asked = spark !== undefined ? { spark } : undefined;
+          const resumed = await agents.resume({ runtimeRunId }, principal, undefined, asked);
+          return { runtimeRunId: resumed.session.runtimeRunId };
         } catch (error) {
           // a session that cannot be resumed (gone, never resumable) is started again in the spark's folder
           if (

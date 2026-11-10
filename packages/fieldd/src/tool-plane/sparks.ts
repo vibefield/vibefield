@@ -201,6 +201,8 @@ export interface SparkServiceOptions {
   resume(
     runtimeRunId: string,
     principal: GrantPrincipal,
+    /** OB custody (CUSTODY-SPEC §8.1.0; the PM, 2026-11-10 01:58:44Z) — the spark this wake is waking */
+    spark?: SparkId,
   ): Promise<{ runtimeRunId: string } | undefined>;
   now(): Date;
   readonly logger?: Logger;
@@ -303,7 +305,7 @@ export class SparkService {
     const runs = this.opts.runs();
     if (this.#liveRun(spark, runs)) return this.#summary(spark, runs);
     if (spark.session) {
-      const resumed = await this.opts.resume(spark.session.runtimeRunId, principal);
+      const resumed = await this.opts.resume(spark.session.runtimeRunId, principal, id);
       if (resumed) return this.#summary(this.#keep(spark, resumed.runtimeRunId), this.opts.runs());
     }
     return this.#summary(await this.#launch(spark, principal), this.opts.runs());
