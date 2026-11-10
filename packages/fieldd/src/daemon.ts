@@ -10089,6 +10089,12 @@ export async function bootstrap(
             ["presence-rooms", () => presenceRooms?.stop()],
             ["tool-plane", () => toolPlane?.stop()],
             ["needs-queue", () => needsQueue?.stop()],
+            // OB custody (C5) — the desk's store is released: its one timer (a take-back the disk would not
+            // take is written again on it) stops here, once every door that can change a grant has closed (the
+            // window's with the API, the desk room's with the tool plane) and the settle with the queue. A
+            // stopped fieldd's store writes nothing more. What a lost take-back left is already safe on disk:
+            // its file removed, its mark raised.
+            ["desk-objects", () => deskObjects.close()],
             ["doc-sync", () => docSync?.stop()],
             ["lane-link", () => laneLink.close()],
             ["docs", () => docs.dispose()],

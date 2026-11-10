@@ -44,6 +44,7 @@ export const STOP_STEPS = [
   "presence-rooms",
   "tool-plane",
   "needs-queue",
+  "desk-objects",
   "doc-sync",
   "lane-link",
   "docs",
