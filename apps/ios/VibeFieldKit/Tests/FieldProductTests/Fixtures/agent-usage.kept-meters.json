@@ -11,7 +11,7 @@
           "id": "five-hour",
           "label": "5H",
           "kind": "window",
-          "usedPercent": 64,
+          "usedPercent": 42,
           "durationMinutes": 300,
           "startsAt": "2026-09-16T09:30:00.000Z",
           "resetsAt": "2026-09-16T14:30:00.000Z"
@@ -29,7 +29,7 @@
           "label": "FABLE",
           "description": "Current week (Fable) usage",
           "kind": "window",
-          "usedPercent": 88,
+          "usedPercent": 81,
           "durationMinutes": 10080,
           "resetsAt": "2026-09-16T11:45:00.000Z",
           "group": {
@@ -43,7 +43,7 @@
           "label": "CREDIT",
           "description": "Usage credits",
           "kind": "budget",
-          "usedPercent": 18,
+          "usedPercent": 20,
           "fetchedAt": "2026-09-16T11:20:00.000Z"
         }
       ],
