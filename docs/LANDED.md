@@ -46210,3 +46210,68 @@ in-flight attempt a coordinator adopts past a hold (`fieldd-handle-coordinator.t
 while a person's quit decides, after its census, so the quit can leave that pair running. 287 does not close it.
 
 **Not done, and not claimed:** no window row ran, and nothing is pushed.
+
+## UM-R-F — the column's open calls: a pinned circle's tell, focus as pointing, a pill that scrolls (M276)
+
+(2026-11-10; thirteen commits, `a5f16b79b` to `d597a7b95`, on main `a2c999dab`, cut by the UM lead (vibe-field-fb) in
+`lanes/um1-ud8/vibe-field` and landed by the fixer as M276. Validated by run 288, a9, vf-m2; the packet is
+`lanes/um/umrf-d597a7b95/`, the transport `lanes/um/umrf-transport-c0032d626/`.) James's picks on the page *The
+Column's Open Calls* (2026-11-09): c3, c4 and c6, built here; c1, c2 and c5 stood as UM-R built them. His order of
+2026-11-09: "refine these details".
+
+**What landed, DESIGN.md first** (`a5f16b79b`, `b0fc7e4d9`): §8 "Godview's profiles column" folds the three picks,
+dated, and keeps the lead's two readings as ‹for James› marks: c3's 8% (`DESIGN.md:3367-3370`) and c4's four rules for
+the keyboard (`DESIGN.md:3423-3427`). No new visual constant. The UM row in DECISIONS says the picks.
+
+**What a person sees.**
+- **c3, the pinned tell.** A circle whose card a click pinned keeps the ready fill, the ink at 8%, under the pointer
+  and while another circle's card peeks (`profiles-column.css:152-154`, set at `ProfilesColumnView.tsx:257` and
+  `:303`).
+- **c4, focus is pointing.** A circle the keyboard reaches shows its card (`ProfilesColumnView.tsx:285`,
+  `ProfilesColumn.tsx:230-235`). Esc closes it where the keyboard is (`ProfilesColumnView.tsx:179`), and Tab leaves a
+  card for the next circle (`:140`). A click's focus shows no card: after a press, focus is the pointer's until a key
+  with no ⌘, ⌃ or ⌥ (`ProfilesColumn.tsx:168-186`), so ⌘Tab back to the window opens nothing.
+- **c6, the pill scrolls.** With more circles than its room, they scroll in their own list inside the pill with no
+  scrollbar, and the add stays at its foot (`profiles-column.css:90-98`; the add's item `ProfilesColumnView.tsx:338`).
+  The list fades at its foot while it holds more (`profiles-column.css:106-109`), and an open card follows its circle
+  as the list scrolls (`CardStand.tsx:103-109`).
+- **The pill's room** ends at the field's foot (`godview.css:524-540`). With the terminals away it runs to the panes'
+  foot, in flow (`godview.css:548-557`) and on the stage lent the swarm (`godview.css:572-575`).
+
+**Validation of record** (run 288, `lanes/vf-m2/umrf288-v-a9-results`, SUMS `e6fe4e0fe13e2347`, 37 of 37 OK by
+`shasum -c` at 05:10:12Z; runner `13228d947b7f0862`).
+- V: "`pnpm verify` exit 0, 5 min 52 s." "Every COUNT row is as expected: field-app `Tests 4668 passed (4668)` and
+  `Test Files 336 passed (336)`". The delta row:
+  "`[test/profiles-column.test.tsx 103|test/ui-system-boundaries.test.ts 50|test/design-system.test.tsx 6], 159 in all`"
+  against run 287's 82, 50 and 6. "The sum: 14667 21, which is run287's 14646 21 + 21." DESIGN.md's readers
+  (electron-shell, contracts, sound) "are unchanged". dev-runner 483 of 483; cargo 37 of 37; KEPT births 0.
+- **S carried by tree 244a989b8429 (run 284's S GREEN).** The slice touches no Swift; S did not run.
+- **Not run: IOS, K, the window rows.**
+- On the Mac, through the door, at `f37bfb1de` (field-app byte-equal to the tip): the three files 159 passed, 138 at
+  `996c51939`, with biome and field-app's tsc green.
+
+**A finding beside V.** The bundle's initial chunk moved: "initial 957.2 KB raw / 254.6 KB gz" against run 287's 956.2
+/ 254.5, +1.0 KB raw and +0.1 KB gz. The lazy chunks' names and sizes are unchanged.
+
+**The cut.**
+- Built on `fe6a04a7f`, re-cut by plumbing onto `996c51939` (range-diff 13 `=`), then `a2118e122`, `f85d0b023` and
+  `a2c999dab`. Twice `docs/DECISIONS.md` met a records commit: on `a2118e122` the UM row itself, on `a2c999dab` the RV
+  row beside it. Each time the file is main's with only the UM row replaced, the union of both edits and no third
+  (VF-PM 02:35:51Z, 04:18:12Z).
+- The 13th was re-cut in place, not followed (VF-PM 04:26:21Z). Its first cut joined three `godview.css` selectors to
+  biome's form and said "Whitespace only; no rule changes", but `ui-system-boundaries.test.ts:1456` finds one of them
+  by its bytes. Red by itself, 158 of 159 at its tip (04:25:28Z), the miss is the lead's: the tests were measured
+  before it and only biome after. The test's string now moves with it; the old tip is
+  `um/col-follow-f85d0b023-pre-r13`.
+
+**Found along the way.** A whitespace-only change to CSS still needs every test that reads the file by its bytes. The
+door's loop slept 30 s between `lockf` tries and lost the door to rows waiting on the lock; it now waits 900 s with no
+sleep, pausing 15 s only after a refusal inside the door (VF-PM 04:10:02Z).
+
+**Owed.**
+- The Mac witness on a real Godview: a click on a circle (its card opens and the click's focus holds none), ⌘Tab away
+  and back, the deck's lip, and six or more profiles with the terminals away, in flow and on the swarm's stage.
+- `pnpm gate:landing` with `smoke:godview`, on James's typed word and the Mac's swap draining.
+- James's eye on the two ‹for James› marks: c3's 8% and c4's reading.
+
+**Not done, and not claimed:** no window row ran, and nothing is pushed.

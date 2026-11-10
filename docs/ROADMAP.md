@@ -618,13 +618,20 @@ profiles column", "Search — the Peek", the phone's corner, search sheet and to
 - Landed 11-10: **the EL8 to puppeteer 0.4.0** (`fe6a04a7f` → `996c51939`, 12 commits, M274, runs 283 and 284; LANDED
   "EL8 — puppeteer 0.4.0"): item 171's fix, PU-S's body that wears its profile with nothing new passed, and the phone's
   Timeline and Spend ported to 0.4.0's rules. A desk with two profiles is James's eye.
-- Next: **PU-R's consumer**, the bloom's buds wear their fuel, on VF-PM's placement, its DESIGN.md text first.
+- Landed 11-10: **UM-R-F, the column's open calls** (`a5f16b79b` → `d597a7b95`, 13 commits, M276, run 288; LANDED
+  "UM-R-F"): James's c3, c4 and c6, a pinned circle's tell, focus as pointing and a pill that scrolls. V is green;
+  the Mac witness and his eye on its two ‹for James› marks are owed.
+- Next: **PU-R's bands** in puppeteer (James's b1 "bands"; built on `pu/bloom-bands`, unrun, his to push), its
+  release and EL8, then **PU-R's consumer**, the bloom's buds wear their fuel, its DESIGN.md text first.
 - Owed:
   - UM-R's window rows: `smoke:godview` with UM-R6's rung (written, never run), `smoke:godview:no-record`,
     `smoke:first-run` and `pnpm gate:landing`, on James's typed word and the Mac's swap draining (or his word on
     that), one invocation per row, display awake; then his eye on a card over live terminals;
   - UM-5's: `pnpm gate:landing` with `smoke:godview` on James's typed word; the R rows at its Swift red shas, until
     James names kit dirs to reap; the two-plan desk witness; the device witness of the plan filter over real rows;
+  - UM-R-F's: the Mac witness (a click on a circle, ⌘Tab away and back, the deck's lip, six or more profiles with
+    the terminals away) and `pnpm gate:landing` with `smoke:godview` on James's typed word; his eye on c3's 8% and
+    c4's reading (DESIGN.md §8's two ‹for James› marks);
   - to James: the ‹for James› marks in DESIGN.md §8, §9 and §13 (the lead's rulings 1, 2, 5, 19, 22 and 24; UM-D14's
     wave-1 interim; the self-only lens; the desk token clearing on close; the model's words; §9's marks; the page's
     age width, the honest words and the spoken hints; Every profile's `person`; LANDED "UM-0…UM-2", "UM-3 and SE-1"
