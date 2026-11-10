@@ -7411,4 +7411,61 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
     await win2.call("terminal.terminate", { sessionId: v.paneId });
     await win2.call("terminal.terminate", { sessionId: plain.terminal.sessionId });
   }, 240_000);
+
+  // ── §8.1.0 "v0.25": LAUNCH MEMORY BEATS THE ASK. The run a wake resumes is the one the SPARK's record names, and
+  // the spark store is signed under a key file too. So where fieldd itself launched or vouched the run being
+  // continued, what it remembers of that run wins over the spark the wake asked for; the asked spark names only a
+  // run this life knows nothing of. An honest wake is unchanged: S's record names S's own run.
+  it("sealed, through the real daemon: a wake of S whose spark record was rewritten to name another run of this life resumes that run as what it was BORN: plain for a run launched plain, V's for a run launched for V; an honest wake of S is S's", async () => {
+    const box = await setup({ ...SEALED, ...WITH_SPARKS, startedForRetryMs: NO_RETRY_MS });
+    const win = await sealedWindow(box.daemon, HANDED, SPARK_WINDOW, "sf13");
+    const agents = box.daemon.agents;
+    const sparks = new SparkStore({
+      dir: join(box.dataDir, ...LAYOUT.SPARKS_DIR),
+      keyPath: join(box.dataDir, ...LAYOUT.SPARKS_KEY_FILE),
+    });
+    const asleep = async (runId: string): Promise<void> => {
+      await agents.endRun(runId);
+      await exitedOn(box, runId);
+    };
+    const plain = await spawnPlain(win, box);
+    const plainRun = plain.session.runtimeRunId;
+    const s = await hatched(win, box, "Vela", 7);
+    const v = await hatched(win, box, "Lyra", 11);
+    for (const runId of [plainRun, s.runId, v.runId]) await asleep(runId);
+    /** What a holder of the sparks' key file can do: S's record now names `runId` as S's session, signed. */
+    const nameAsSessionOfS = (runId: string): void => {
+      const record = sparks.get(s.spark.id);
+      if (record === undefined) throw new Error("S's record is gone");
+      sparks.write({ ...record, session: { runtimeRunId: runId } });
+    };
+
+    // S's record names a run this life launched PLAIN: its successor is plain, whatever the wake asked for
+    nameAsSessionOfS(plainRun);
+    const fromPlain = await woken(win, s.spark.id);
+    expect(fromPlain).not.toBe(plainRun);
+    expect(agents.bornFor(fromPlain)).toEqual({});
+    await asleep(fromPlain);
+
+    // S's record names a run this life launched FOR V: its successor is V's
+    nameAsSessionOfS(v.runId);
+    const fromV = await woken(win, s.spark.id);
+    expect(agents.bornFor(fromV)).toEqual({ spark: v.spark.id });
+    await asleep(fromV);
+
+    // an honest wake: S's record names S's own run, and both words agree
+    nameAsSessionOfS(s.runId);
+    const fromS = await woken(win, s.spark.id);
+    expect(agents.bornFor(fromS)).toEqual({ spark: s.spark.id });
+    await asleep(fromS);
+
+    // the two wakes that differed were said ONCE for the process, by a code
+    const mismatch = "fieldd.agents.resume_ask_mismatch";
+    await poll(
+      async () => (logged(box, mismatch) > 0 ? true : undefined),
+      15_000,
+      "the mismatch said in fieldd's log",
+    );
+    expect(logged(box, mismatch)).toBe(1);
+  }, 240_000);
 });
