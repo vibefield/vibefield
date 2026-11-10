@@ -3347,11 +3347,27 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     in Godview's own mode (§2.7 "The app's chrome in Godview's mode"): it is the stage's chrome, as the claims
     strip is, and follows Settings → Terminal → Look as the stage does, unlike the head, which wears the frame's
     theme. It holds no labels, no dividers and no discs.
+    - **With more circles than its room holds** (*added 2026-11-09, UM-R-F; James, the picks page "The Column's
+      Open Calls", c6: "Scroll inside the pill", "The add stays pinned at the foot"*), the circles scroll inside it
+      and the add stays at its foot, 4 under them. Its room runs from its top, 64, to the field's foot, 12 above the
+      deck at rest (`--vf-godview-deck-field-gap`) and lower with an edge set lower, as the field's own foot is. A
+      deck raised over it still covers it, as it covers the limit card (§8 "The moments"), and a raise never
+      resizes it. The list keeps §4's rule for a list that can outgrow what holds it (`--vf-scroll-fade`): no
+      scrollbar; while it holds more, its last 20 fade from whole to clear, 20 of padding stand under its last
+      circle, and a circle the keyboard reaches scrolls into view 20 short of its foot. While every circle fits it
+      wears no fade and no padding of its own, so the pill stands as it did. Its edge is the pill's: its top rounded
+      to the pill's 26, and the pill's 6 kept at its sides and its top, so a lens ring and the focus ring are never
+      cut. An open card follows its circle as the list scrolls. ‹for James: the picks page drew a dashed track
+      beside the pill; §4's rule draws no scrollbar, so none is built›. The catalog, which has no stage, never
+      scrolls the list, since its cards stand in place and a scroller would cut them.
   - **A circle** is a 40 round button holding the profile's Bands circle at 40 (§8 "The Bands circle"): the
     profile's glyph in its middle, and the hot dot while a plan runs hot. Under the pointer, and while its popover
-    is open, it takes the ink at 6% (160ms `ease`). **The lens ring**, the chosen profile's, is 2 in the pill's
-    solid and then 1.5 in the ink, outside the circle's edge. It is the column's only 1.5, for a selection, never
-    a state.
+    is open, it takes the ink at 6% (160ms `ease`). A pinned card's circle, its card clicked open, takes the ready
+    fill, the ink at 8%, and keeps it under the pointer and while another circle's card peeks over its own, so a
+    pinned card's circle never looks like a pointed one (*added 2026-11-09, UM-R-F; James, the picks page "The
+    Column's Open Calls", c3: "One quiet tell", "The circle's open fill a little stronger"; the 8% is for his eye
+    in the stills*). **The lens ring**, the chosen profile's, is 2 in the pill's solid and then 1.5 in the ink,
+    outside the circle's edge. It is the column's only 1.5, for a selection, never a state.
   - **Which circles.** The profiles stand in Settings' order, This Mac first.
     - **One profile** (UM-D21, UM-D12): **This Mac**, one circle carrying every plan, with the add under it. There
       is no lens to choose: a click pins its popover and filters nothing.
@@ -3383,9 +3399,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     stage no z-index could raise it over the terminals, since the stage's head mask is a stacking context the deck
     paints over. Added the same day, UM-R's review: the 10 was not only the build's. It is the geometry of the
     drawing this column names, `round4.css`'s `left: calc(100% + 16px)` of the 40 item, inside the pill's padding of
-    6, so this prose and its drawing disagreed, and UM-R settled it for the prose. ‹for James: the popover, the add's
-    card and the limit card stand 6 right of what he ruled on in round 4; the drawing's 10 is the one number back
-    (`CardStand`'s `RIGHT_OF_PILL`, `.vf-profiles-stand`, `.vf-profiles-moment`)›.)*
+    6, so this prose and its drawing disagreed, and UM-R settled it for the prose. The popover, the add's card and
+    the limit card stand 6 right of what he ruled on in round 4, and the 16 stands (2026-11-09, James, the picks page
+    "The Column's Open Calls", c1: "16 from the pill"): the drawing's 10 does not come back (`CardStand`'s
+    `RIGHT_OF_PILL`, `.vf-profiles-stand`, `.vf-profiles-moment`).)*
     - **Where the cards stand.** The popover and the add's card stand in **the cards layer** (`.vf-monitor-cards`),
       a root-level sibling after the stage at **z 13**: over the deck (10), its veil (11) and its readout (12), under
       the curtain (20), the CRT layers (30) and the head. Its box is the room a card may have: from the pill's top
@@ -3397,10 +3414,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       level crossing never leaves the hover. Leaving arms a **320ms** grace, and entering the card or the circle
       again in it cancels it; entering another circle or the add while a card shows waits a **120ms** dwell, and
       reaching the shown card first cancels that. The first open, with nothing showing, is at once. A pinned card
-      can still be peeked over this way, as before ‹for James: may another circle's hover replace a pinned card for
-      a moment? It has since UM-3, and this keeps it, the lean being to keep the peek; §8 had not said› (*added
-      2026-11-09, UM-R; the two numbers are the edge drawer's, retired HN-8, "opened after 120ms and closed after a
-      320ms grace" §8 "Edge trays", the only hover contract recorded*).
+      can still be peeked over this way, as it has been since UM-3, and letting go brings the pinned card back
+      (2026-11-09, James, the picks page *The Column's Open Calls*, c2: "Keep the peek") (*added 2026-11-09, UM-R;
+      the two numbers are the edge drawer's, retired HN-8, "opened after 120ms and closed after a 320ms grace" §8
+      "Edge trays", the only hover contract recorded*).
+    - **Focus is pointing** (*added 2026-11-09, UM-R-F; James, the picks page "The Column's Open Calls", c4: "Yes,
+      focus counts as pointing"*). The keyboard on a circle, or on the add while it can act, shows its card as the
+      pointer does, at once and with no dwell, and holds no keys: it is not a pin. A pointer resting on another
+      circle lets go, as a close does, so the card the keyboard reached shows, and the pointer must leave and return
+      to peek. The card stays while the keyboard is on its circle or in the card, and it leaves at once, with no
+      grace, when the keyboard leaves both; the window losing the keyboard is a leave, and its return a coming back.
+      The pointer still peeks over it, as over a pinned card, and letting go brings it back; a peek that takes away
+      the card that holds the keyboard first hands the keyboard to that card's circle. **Esc** where the keyboard is
+      closes a card it shows, as every close does (below), and the card stays closed until the keyboard leaves and
+      comes back. With no card open, Esc is not the column's and passes on, so it stays with the terminal. While the
+      terminals fill the window, or while the limit card stands in the add's card's place, focus shows nothing, as
+      the pointer shows nothing.
     - **The head:** the profile's glyph (15) and its name at 14/600; a **default** tag when there are several
       profiles (10/600, padded 3 6, a capsule ringed by the strong hairline, in the secondary ink); the reading's
       age at 11.5 in the tertiary ink; and × at the end, a 24 round on the ink at 6% holding `close` 11 in the
@@ -3437,21 +3466,24 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - **The arc** in the open circle chooses as its row does, and a plan that needs you chooses nothing there. It
         is pointer only: the circle is one image to VoiceOver, and the row's button is the keyboard's and VoiceOver's
         door to the same act.
-      - **The twin rule** (2026-11-09, UM-5a; ‹for James›, not drawn): a plan two profiles share is one plan (the
-        union's rule, UM-D12), so filtering it keeps both profiles' sessions, and its row draws pressed in either
-        profile's popover, where a click clears it.
+      - **The twin rule** (2026-11-09, UM-5a; ruled the same day, James, the picks page *The Column's Open Calls*,
+        p1: "Yes, the twin comes too"; not drawn): a plan two profiles share is one plan (the union's rule, UM-D12),
+        so filtering it keeps both profiles' sessions, and its row draws pressed in either profile's popover, where a
+        click clears it.
       - **A lens and a plan** (2026-11-09): choosing a profile clears a plan that is not in it (the drawing's rule),
-        and choosing a plan clears a lens it is not in (‹for James›, not drawn), so the stage never says a false
-        "No sessions". A session recedes unless the lens, the plan and the desktop all keep it. Under a plan a
-        peer's session and a terminal recede too: they spend no plan of this home's.
+        and choosing a plan clears a lens it is not in (2026-11-09, James, the picks page *The Column's Open Calls*,
+        p2: "Yes, clear the lens"; not drawn), so the stage never says a false "No sessions". A session recedes
+        unless the lens, the plan and the desktop all keep it. Under a plan a peer's session and a terminal recede
+        too: they spend no plan of this home's.
     - **The foot**, over a hairline, at 11/400 in the tertiary ink: the lens's words with several profiles, the
       plan's words with one (§9 "The meters' words"; none while no row there can be chosen, 2026-11-09, UM-5a's
       review), and **Agent Profiles…** at its end (600, the secondary ink, the primary under the pointer, *added
       2026-11-09, UM-R's review*), which opens Settings → Agent Profiles on that profile's page.
     - *Wave 1 (2026-11-06, UM-D14's interim, the lead's ruling 23; ‹for James›) ended on the desktop 2026-11-09, at
       UM-5a:* the one-profile popover's foot said only **Agent Profiles…**, and a plan's row took no click.
-      **Partner lighting** (a plan lighting the bodies that spend it, and a body its plan) stays owed: UM-5 brought
-      the session-to-plan join, and it does not light the bodies (‹for James›, 2026-11-09). *(Corrected 2026-11-09,
+      **Partner lighting** (a plan lighting the bodies that spend it, and a body its plan) stays owed, and comes
+      later (2026-11-09, James, the picks page *The Column's Open Calls*, p5: "Later", "Ship the filter first"): UM-5
+      brought the session-to-plan join, and it does not light the bodies. *(Corrected 2026-11-09,
       UM-5a: this said partner lighting "waits for UM-5, which brings the session-to-plan join".)*
     - **Pinned**, it holds Godview's keys, so **Esc** closes it before a pane hears it; a click outside closes it
       too. **Closing is one act**, on one profile too: Esc, ×, a click on the chosen circle, the second click on a
@@ -3460,9 +3492,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       closed until the pointer leaves and returns. While the terminals fill the window no card opens at all: the
       deck only fades the stage, so a circle behind it stays reachable, and neither a pointer nor a press on it shows
       or pins a card (its lens still chooses) (*added 2026-11-09, UM-R's review*). **Tab** from the open circle enters the card, on its first control that can act;
-      **Shift+Tab** from there returns to the circle. Forward out of the card's last control follows the window's
-      order into the deck (*added 2026-11-09, UM-R: Esc, the chosen circle and the lone unpin cleared only the pin, so
-      a card under the pointer stood where it was*).
+      **Shift+Tab** from there returns to the circle. Forward out of the card's last control goes on to the next
+      circle, or the add while it can act, as if the card stood after its circle, and from the column's last it
+      follows the window's order into the deck. Shift+Tab walks back circle by circle and enters no card: a card is
+      entered forward, from its circle (*added 2026-11-09, UM-R: Esc, the chosen circle and the lone unpin cleared
+      only the pin, so a card under the pointer stood where it was*; *amended the same day, UM-R-F: this said forward
+      out of the card's last control "follows the window's order into the deck"; while focus shows a card, Tab on
+      every circle enters its card, so that order alone never reached a second circle*).
   - **The add** (UM-D21, UM-D22) is a 40 round at the column's foot in the ready fill: the ink at 8%, and 14% under
     the pointer, the ready fill's own step (the drawing's 12% is not one). It holds `plus` 17 in the tertiary ink
     (the primary under the pointer). A click opens Settings → Agent Profiles on **New profile…** (`openNewProfile`,
@@ -3485,10 +3521,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     a plain button that opens its popover, not pressable. With several each circle is a toggle (`aria-pressed`,
     true on the chosen profile's), said with ", click to show only its sessions" or, pressed, ", showing only its
     sessions". Every circle says whether its popover is open (`aria-expanded`, and while it is, `aria-controls` names
-    it; *added 2026-11-09, UM-R*). The add is "Add a profile…".
-  - **Reduced motion** (M6), and Godview's animations off: the first read stands still at 60%; the ring and the
-    hover change at once; and the limit card enters with no fade (§8 "The moments"). *(Corrected 2026-11-06,
-    PLAN §4 (a): this said the first read "does not breathe", with no still state named.)*
+    it; *added 2026-11-09, UM-R*). A card the keyboard shows is said the same way. The add is "Add a profile…".
+  - **Reduced motion** (M6), and Godview's animations off: the first read stands still at 60%; the ring, the hover
+    and the pinned tell change at once; and the limit card enters with no fade (§8 "The moments"). *(Corrected
+    2026-11-06, PLAN §4 (a): this said the first read "does not breathe", with no still state named.)*
   - The phone's half is §8 "The phone's corner" and "The phone's profile token".
 - **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
   face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
@@ -3884,14 +3920,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     The card is a menu's solid in Godview's mode, with its ring and shadow (§2.7): 284 wide, corners 16,
     padded 12 14 13, its lines 9 apart, and a pointer at the add (a 12 square turned 45°, 6 out of the
     card's left edge and 28 down, ringed on its two outer sides). It stands 16 right of the pill (*added
-    2026-11-09, UM-R's review: 10 until then, round 4's drawing; ‹for James›, the popover's correction above*). Its
+    2026-11-09, UM-R's review: 10 until then, round 4's drawing; the 16 stands, James, the picks page "The Column's
+    Open Calls", c1, the same day, as the popover's correction above says*). Its
     acts are 26 tall, corners 13, padded 0 11, at 11.5/600. It enters with the profile notice's 300ms fade, a transition never a
     keyframe, and none under Reduce Motion. It is said as a group, "Another subscription?". It stands
     over the stage, so it moves no view in flow and widens no strip; the swarm steers around it, as around every
     chrome rectangle (*corrected 2026-11-09, UM-R: this sentence stopped at "strip", and the swarm's bodies ran under
-    the card*). ‹for James: a deck raised to the
-    fill line (104) covers it, as it covers the column; that is the card under a raised deck that
-    AO-6b3 moved onto the strip, and the lead reads the add's place as worth it›. Under the Last
+    the card*). A deck raised to the
+    fill line (104) covers it, as it covers the column: that is the card under a raised deck that
+    AO-6b3 moved onto the strip, and it stays in the stage (2026-11-09, James, the picks page *The Column's Open
+    Calls*, c5: "Stays in the stage", "The deck can cover it, along with its pill"). Under the Last
     Run curtain it waits: the curtain is the window's one question. It reads the stage's own feeds
     (the profile filter's sets, the column's readings) and opens none of its own.
     *Amended 2026-10-27 (AO-6b3; James, 23:13Z: "go ahead and fix, go with your lean", on the review
@@ -6224,8 +6262,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     read — ‹fieldd's words›". (K9's "searched in Godview" retired with it.) **Everything looks through
     every profile** (UM-D28 A, 2026-11-06): while Godview's profile filter is on, Everything's foot adds
     " · every profile; Work comes back on Live now". It looks through every plan as well, and says so while a plan
-    is chosen (2026-11-09, UM-5a; ‹for James›, UM-D28's honesty extended): " · every plan; Claude Max comes back on
-    Live now", and with a profile chosen too " · every profile; Work and Claude Max come back on Live now".
+    is chosen (2026-11-09, UM-5a, UM-D28's honesty extended; James, the picks page *The Column's Open Calls*, p4:
+    "Ship the words"): " · every plan; Claude Max comes back on Live now", and with a profile chosen too
+    " · every profile; Work and Claude Max come back on Live now".
   - **Keys** (the kit's): ⌘F opens the popup or refocuses its field, on the view's own scope —
     **Live now in Godview, Everything in History** (GV-D9); **Esc** closes an open menu, then the
     popup, before anything else hears it; **↑ ↓** move the hot row; **↵** opens it, or applies the
@@ -6630,8 +6669,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **the foot:** "Manage profiles in Settings → Agent Profiles. New profiles are made on a desktop."
     - *Wave 1 (2026-11-06, UM-D14's interim, the lead's ruling 23) ended 2026-11-09 at UM-5b:* the page draws
       **Show** and **Showing** and the sessions line. The row itself still takes no tap (it is not a button; **Show**
-      is the act). Partner lighting (§8 "Godview's profiles column") stays owed, ‹for James›. *(Corrected the same
-      day: this said the page draws neither and that partner lighting waits for UM-5.)*
+      is the act). Partner lighting (§8 "Godview's profiles column") stays owed, and comes later (2026-11-09,
+      James, the picks page *The Column's Open Calls*, p5: "Later"). *(Corrected the same day: this said the page
+      draws neither and that partner lighting waits for UM-5.)*
   - The drawing's first-use hint, "Hold your face for your agents' usage", is not drawn: it was not a ruled mark
     ‹for James›.
   - The desktop's half is §8 "Godview's profiles column".
@@ -7100,8 +7140,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     at 15/600, ellipsised. It opens the token's menu.
   - **Its ×** is a 26 round on the ink at 8% holding `xmark` at 10 in the secondary ink (§13). It clears the lens,
     said "Show every profile".
-  - **A plan chosen** (2026-11-09, UM-5b; ‹for James›, never drawn): the token also stands for the plan filter, for
-    everyone, with one profile too. Its name reads the plan's agent's mark at 15 and the plan's title; a tap opens the
+  - **A plan chosen** (2026-11-09, UM-5b; James, the picks page *The Column's Open Calls*, p3: "Ship it", never
+    drawn and marked for his eye in the stills): the token also stands for the plan filter, for everyone, with one
+    profile too. Its name reads the plan's agent's mark at 15 and the plan's title; a tap opens the
     Agent Profiles page, where the plan's **Showing** stands. Its × clears only the plan, said "Show every plan". With
     a lens and a plan both, it names the plan, and its × brings back the profile's form.
   - It grows out of the search circle's middle, from 0.35, on the bar's spring. It shows on Field at rest only, and
@@ -7873,8 +7914,9 @@ here.
   A home that does not share usage yet says "‹home› doesn't share usage yet" on the page and the hold (the lead's
   words; never a blank), and the Me menu row's word then is ‹for James›. *(Corrected 2026-11-09, UM-5b's review: the
   hold says it only while the field is not live; a live field's line says sessions, §8 "The words follow the reach".)*
-- **The token** is said "Showing only ‹profile›", its × "Show every profile"; a plan's form (‹for James›, 2026-11-09,
-  UM-5b) "Showing only ‹plan›", its × "Show every plan", and its hint "Opens Agent Profiles". Its menu says **Agent Profiles…**,
+- **The token** is said "Showing only ‹profile›", its × "Show every profile"; a plan's form (2026-11-09, UM-5b;
+  James, the picks page *The Column's Open Calls*, p3: "Ship it") "Showing only ‹plan›", its × "Show every plan",
+  and its hint "Opens Agent Profiles". Its menu says **Agent Profiles…**,
   **Show**, each profile with its sessions ("1 session", "4 sessions"), and **Every profile**. *(Added 2026-11-06,
   the M-phone stack, as SE-2d built it; ‹for James›: VoiceOver says the token's hint after its name, "Opens the
   profiles to show", and "menu open" as its value while the menu stands, as the corner's face says it.)*
@@ -7906,7 +7948,8 @@ field gives them, and “q” what was typed.
   `thisDeviceWord` alone.)*
 - **Everything looks through every profile** (UM-D28): while Godview's profile filter is on, Everything's foot adds
   " · every profile; ‹profile› comes back on Live now" on the desktop, and " · every profile; ‹profile› comes back on
-  Field" on the phone. While a plan is chosen on the desktop (2026-11-09, UM-5a; ‹for James›, not drawn) it adds
+  Field" on the phone. While a plan is chosen on the desktop (2026-11-09, UM-5a; James, the picks page *The
+  Column's Open Calls*, p4: "Ship the words"; not drawn) it adds
   " · every plan; ‹plan› comes back on Live now", and with a profile chosen too " · every profile; ‹profile› and
   ‹plan› come back on Live now"; on the phone (UM-5b) the same on Field: " · every plan; ‹plan› comes back on Field",
   " · every profile; ‹profile› and ‹plan› come back on Field".
