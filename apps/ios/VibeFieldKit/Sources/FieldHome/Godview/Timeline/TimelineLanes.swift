@@ -3,20 +3,22 @@ import FieldMesh
 import FieldProduct
 import Foundation
 
-// PG-6 — THE TIMELINE'S LANES, transcribed from puppeteer-views 0.3.3 at the lock's `52d09c8e` (the timeline is
-// byte-identical to 0.3.2's `95a70aa7`; its last change `5abe8f75`, 2026-10-12), `src/views/timeline/timeline-lanes.ts`
-// (dist `timeline-lanes.js`): `byBirth` :3, `laneStatus` :5-8, `laneFor` :32-51, `timelineLanes` :95-107, `stateAt`
-// :148-156, `QUIET_ALPHA` :158, `laneAlpha` :166-171, `laneContentKey` :195-223, `dayStart` :231-236 and
-// `earliestHead` :237-239; and puppeteer-view-sdk's `src/toolkit/lane-words.ts` (`5abe8f75`): `LANE_WAIT_WORDS_MAX`
-// :12 and `laneWaitWords` :18-23, which only the timeline reads. Held to `phone-timeline.golden.json`
-// (`TimelineModelParityTests`).
+// PG-6 — THE TIMELINE'S LANES, transcribed from puppeteer-views 0.4.0 at `e6e4753de` (the EL8 of 2026-11-09; first
+// transcribed from 0.3.3 at `52d09c8e`), `src/views/timeline/timeline-lanes.ts` (dist `timeline-lanes.js`): `byBirth`
+// :3, `laneStatus` :5-8, `laneFor` :34-53, `timelineLanes` :97-109, `stateAt` :150-158, `QUIET_ALPHA` :160,
+// `laneAlpha` :168-173, `laneContentKey` :197-225, `dayStart` :233-238 and `earliestHead` :239-241; and
+// puppeteer-view-sdk's `src/toolkit/lane-words.ts` (`5abe8f75`, unchanged at 0.4.0): `LANE_WAIT_WORDS_MAX` :12 and
+// `laneWaitWords` :18-23, which only the timeline reads. Held to `phone-timeline.golden.json`
+// (`TimelineModelParityTests`) and `TimelineLanesTests`. 0.4.0 moved one rule here (#41, `5a0ae86b`): a lane keeps
+// its true start however old, and every reader clamps to its own window (the paint `TimelinePaint.lanes`, the wakes
+// `WakeGeometry.segments`, the map `PulseMap` and `dayStart`), each of which already did.
 //
 // RUNTIME ONLY (fd's Q1 ruling, 2026-11-04): the phone is lent no `history` (puppeteer-view-sdk `view.d.ts:132-137`;
 // DESIGN.md "Runtime only where no record is lent … the whole drawing on the phone"), so no lane has a recorded past
 // or an end. NOT transcribed, a named deviation from the brief's §10 list (a puppeteer change to any of them is still
-// a phone item): `pastBefore` :13, `endedLane` :53, `historyLanes` :67, `mergeByBirth` :79, `scrolledOutKey` :109,
-// `withoutScrolledOut` :118, `spanIndexAt` :125, `recordedAt` :141, `ENDED_ALPHA` :160, `pastKey` :188, and the past
-// and ended arms of `laneFor`, `timelineLanes`, `stateAt`, `laneAlpha` and `laneContentKey`. Nor `stepLight` :177, the
+// a phone item): `pastBefore` :13, `endedLane` :55, `historyLanes` :69, `mergeByBirth` :81, `scrolledOutKey` :111,
+// `withoutScrolledOut` :120, `spanIndexAt` :127, `recordedAt` :143, `ENDED_ALPHA` :162, `pastKey` :190, and the past
+// and ended arms of `laneFor`, `timelineLanes`, `stateAt`, `laneAlpha` and `laneContentKey`. Nor `stepLight` :179, the
 // keyboard's light: the phone's stage has no keys (fd's Q2).
 
 /// The row as the timeline reads it (`AgentView`, puppeteer-view-sdk `model.d.ts:327-337`): the replica's row and the
@@ -76,8 +78,8 @@ struct TimelineSpan: Equatable, Sendable {
   let wait: TimelineWait?
 }
 
-/// `LiveLane`: a row's lane — born at its birth, its current status since `sinceMs` (never before the horizon). The
-/// instants are JavaScript's numbers: ms, as `Double`.
+/// `LiveLane`: a row's lane — born at its birth, its current status since `sinceMs`, however long ago: the horizon is
+/// its readers' to clamp to, never the lane's. The instants are JavaScript's numbers: ms, as `Double`.
 struct TimelineLane: Equatable, Sendable, Identifiable {
   let row: TimelineRow
   let bornMs: Double
@@ -144,12 +146,13 @@ enum TimelineLanes {
     return String(decoding: units.prefix(waitWordsMax - 1), as: UTF16.self) + "…"
   }
 
-  /// `laneFor` with no record: born at the row's birth, its current status since `statusSince`, never before now less
-  /// the horizon, never after now.
+  /// `laneFor` with no record: born at the row's birth, its current status since `statusSince` however long ago, and
+  /// never after now (a peer's clock running ahead). Every reader clamps to its own window, so a lane older than the
+  /// day keeps its key from one publish to the next.
   static func lane(for row: TimelineRow, nowMs: Double) -> TimelineLane {
     let monitor = row.monitor
     let createdAt = Double(monitor.createdAt)
-    let sinceMs = min(nowMs, max(createdAt, Double(monitor.statusSince), nowMs - TimelineScale.horizonMs))
+    let sinceMs = min(nowMs, max(createdAt, Double(monitor.statusSince)))
     let status = status(of: row)
     let wait = status == .blocked
       ? monitor.wait.map {
