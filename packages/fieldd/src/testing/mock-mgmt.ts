@@ -677,8 +677,9 @@ export class MockMgmtServer {
       return;
     }
     if (msg.method === "native.terminal.startedFor.set") {
-      // OB custody (rule 6) — as the floor is specified to answer it (CUSTODY-SPEC §8.1.0; mgmt.ts
-      // `NativeTerminalStartedForSet*`), in the floor's order: a floor not booted by the hand-off keeps no table; the
+      // OB custody (rule 6) — as the floor answers it (CUSTODY-SPEC §8.1.0; mgmt.ts `NativeTerminalStartedForSet*`;
+      // field-native `mgmt/started_for.rs`), in the floor's order: a floor not booted by the hand-off keeps no table,
+      // and says so before a word of the params is read; params that are not the contract's are refused; the
       // terminal must be one it lists as running; a set with no `startedFor` clears (clearing nothing is no error);
       // a NEW terminal past the bound is refused; a terminal it holds is always replaced.
       const refuse = (kind: string, message: string, details?: unknown): void => {
@@ -694,20 +695,22 @@ export class MockMgmtServer {
         refuse(kind, message, details);
         return;
       }
-      const asked = NativeTerminalStartedForSetParams.safeParse(msg.params);
-      if (!asked.success) {
-        // JSON-RPC's own word for params that do not parse (a `process.pid` below 2 among them)
-        const error = { code: -32602, message: "invalid params" };
-        sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, error })}\n`);
-        return;
-      }
-      const { sessionId, startedFor } = asked.data;
       if (!this.startedForSealed) {
         refuse("PRECONDITION_FAILED", "this floor keeps no started-for table", {
           reason: "not-sealed",
         });
         return;
       }
+      const asked = NativeTerminalStartedForSetParams.safeParse(msg.params);
+      if (!asked.success) {
+        // The floor's ONE refusal for params that are not the contract's, a `process.pid` below 2 among them: the
+        // error registry has no kind for invalid params, so it is `PRECONDITION_FAILED` with NO `details.reason`,
+        // in a fixed sentence that quotes nothing of them. (*Corrected 2026-11-10: this answered JSON-RPC's -32602,
+        // which field-native never sends for this verb.*)
+        refuse("PRECONDITION_FAILED", "bad started-for: the params are not the contract's");
+        return;
+      }
+      const { sessionId, startedFor } = asked.data;
       if (this.startedForSessions !== null && !this.startedForSessions.has(sessionId)) {
         refuse("NOT_FOUND", "the floor lists no such running terminal");
         return;
