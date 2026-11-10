@@ -2622,6 +2622,7 @@ async function main(
     }): QuitPair => ({
       label: pair.label,
       attached: pair.attached,
+      bootId: pair.bootId,
       census: () => readCensus(() => pair.client),
       stop: async (sessions, reason) => {
         const outcome = await requestConsentedStop(
@@ -2720,6 +2721,8 @@ async function main(
       release: () => {
         for (const bundle of pairBundles.values()) bundle.handles.releaseHold();
       },
+      // Item 290's red: a stub that waits for nothing (the green awaits the switch in flight, then every coordinator)
+      settle: async () => undefined,
       // AU-5 (LC-24, LC-25, LC-36) — the box's last line, only when this quit will try to install the ready update; a
       // move to Applications waiting for this quit installs nothing (the update waits for the copy in Applications)
       installLine: () =>

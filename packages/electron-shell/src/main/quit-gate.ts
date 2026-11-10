@@ -32,6 +32,9 @@ export interface QuitPair {
   readonly label: string;
   /** the attached user's pair stops LAST, so a refusal there leaves the app whole */
   readonly attached: boolean;
+  /** Item 290 — the pair's fieldd boot: the stop's second read plans a stop only for a boot the decision did not
+   * reach */
+  readonly bootId: string;
   /** `terminal.list`, bounded; anything but a current list is `known: false` (`censusOf`) */
   census(): Promise<CensusSnapshot>;
   /** `system.shutdown {reason, native: {stop, sessions}}`, then a bounded wait for the pair to go */
@@ -63,6 +66,10 @@ export interface QuitGatePort {
   hold(): void;
   /** … until a quit that ended nothing gives the app back */
   release(): void;
+  /** Item 290 — after the hold, resolves once nothing that could still bring up a pair is in flight (a switch, every
+   * pair's attempt); it starts nothing. The stop awaits it, then reads the pairs again. Item 290's red: declared, not
+   * yet called (the green's stop awaits it). */
+  settle(): Promise<void>;
   /** AU-5 — the consent box's last line when this quit will install a ready update (null: it will not — nothing staged,
    * updates off, a policy that asks first, a move waiting); read only for a person's quit whose census box shows */
   installLine?(): string | null;

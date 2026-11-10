@@ -32,6 +32,7 @@ function pair(
   const value: QuitPair = {
     label,
     attached,
+    bootId: label,
     census: async () => censuses[Math.min(read++, censuses.length - 1)] ?? { known: false },
     stop: async (sessions, reason) => {
       stops.push({ sessions: [...sessions], reason });
@@ -43,7 +44,7 @@ function pair(
 
 function port(pairs: QuitPair[], answers: QuitBoxAnswer[] = [], confirmEnabled = true) {
   const boxes: QuitBox[] = [];
-  const calls = { hold: 0, release: 0, suppress: 0 };
+  const calls = { hold: 0, release: 0, suppress: 0, settle: 0 };
   let answered = 0;
   const value: QuitGatePort = {
     pairs: async () => pairs,
@@ -55,6 +56,7 @@ function port(pairs: QuitPair[], answers: QuitBoxAnswer[] = [], confirmEnabled =
     suppress: () => void calls.suppress++,
     hold: () => void calls.hold++,
     release: () => void calls.release++,
+    settle: async () => void calls.settle++,
     log: { info: vi.fn(), warn: vi.fn() },
   };
   return { value, boxes, calls };
@@ -261,6 +263,77 @@ describe("the quit gate (AL-3)", () => {
     const gate = createQuitGate(port([p.value], [yes]).value);
     await gate.decide({ unattended: false });
     expect(await gate.stop()).toEqual({ kind: "done", complete: false, ended: 0 });
+  });
+});
+
+// Item 290 (plan lanes/rv/plan/item-290-PLAN.md §1, §5, §6; D1 A as widened) — the decision reads the pairs ONCE,
+// before its box, so a pair whose start lands after that read was in no stop and kept running after VibeField had gone. After
+// the hold nothing new can start, so the stop first settles what is in flight, then reads the pairs again and plans a
+// stop only for a boot the decision did not reach. A pair it finds with sessions takes the stop's second box.
+describe("a pair that comes up during the quit (item 290)", () => {
+  it("is stopped with the rest: the stop settles, reads the pairs again, and stops only the boot it had not reached", async () => {
+    const order: string[] = [];
+    const tapped = (p: ReturnType<typeof pair>, name: string): QuitPair => ({
+      ...p.value,
+      stop: async (s, r) => {
+        order.push(name);
+        return p.value.stop(s, r);
+      },
+    });
+    const mine = pair("Me", [{ known: true, sessions: [] }]);
+    // the same boot read again comes back as a fresh value (a resident pair's second read opens a new probe client):
+    // it is not stopped twice, and its client is closed
+    const again = pair("Me", [{ known: true, sessions: [] }]);
+    const closeAgain = vi.fn();
+    const born = pair("Kid", [{ known: true, sessions: [] }], [{ ok: true }], false);
+    const reads: QuitPair[][] = [
+      [tapped(mine, "Me")],
+      [{ ...tapped(again, "Me again"), close: closeAgain }, tapped(born, "Kid")],
+    ];
+    const events: string[] = [];
+    const h = port([]);
+    const gate = createQuitGate({
+      ...h.value,
+      pairs: async () => {
+        events.push("pairs");
+        return reads[Math.min(events.filter((e) => e === "pairs").length - 1, 1)] ?? [];
+      },
+      hold: () => void events.push("hold"),
+      settle: async () => void events.push("settle"),
+    });
+    expect(await gate.decide({ unattended: false })).toBe("proceed");
+    expect(await gate.stop()).toEqual({ kind: "done", complete: true, ended: 0 });
+    expect(events).toEqual(["pairs", "hold", "settle", "pairs"]);
+    expect(born.stops).toEqual([{ sessions: [], reason: "quit" }]);
+    expect(mine.stops).toEqual([{ sessions: [], reason: "quit" }]);
+    expect(again.stops).toEqual([]);
+    expect(closeAgain).toHaveBeenCalledTimes(1);
+    // the attached user's pair still stops LAST
+    expect(order).toEqual(["Kid", "Me"]);
+  });
+
+  it("a pair that comes up with sessions is asked about in the stop's second box, and stops with what that box named", async () => {
+    const mine = pair("Me", [{ known: true, sessions: [] }]);
+    const born = pair(
+      "Kid",
+      [{ known: true, sessions: [session("k", "vim", "~/kid")] }],
+      [{ ok: true }],
+      false,
+    );
+    const h = port([], [yes]);
+    let read = 0;
+    const gate = createQuitGate({
+      ...h.value,
+      pairs: async () => (read++ === 0 ? [mine.value] : [mine.value, born.value]),
+    });
+    expect(await gate.decide({ unattended: false })).toBe("proceed");
+    expect(h.boxes).toEqual([]); // census 0 at the decision: no box
+    expect(await gate.stop()).toEqual({ kind: "done", complete: true, ended: 1 });
+    expect(h.boxes).toHaveLength(1);
+    expect(h.boxes[0]?.detail).toContain("A session started while VibeField was quitting");
+    expect(h.boxes[0]?.detail).toContain("vim — ~/kid");
+    expect(born.stops).toEqual([{ sessions: ["k"], reason: "quit" }]);
+    expect(mine.stops).toEqual([{ sessions: [], reason: "quit" }]);
   });
 });
 

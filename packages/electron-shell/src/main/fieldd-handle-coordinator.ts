@@ -71,6 +71,10 @@ export interface FielddHandleCoordinatorOptions {
   readonly intensity?: FielddRecoveryIntensity;
   /** The intensity window's clock (unix ms); `Date.now` unless a test injects its own. */
   readonly now?: () => number;
+  /** Item 290 — the coordinator is born while a person's quit holds every pair (the quit's latch): it starts held, so
+   * nothing it is asked starts a pair, a person's ask included, until a release. Item 290's red: declared, not yet
+   * read (the green starts the coordinator held). */
+  readonly heldAtBirth?: boolean;
 }
 
 export interface FielddDaemonBootTransition {
@@ -229,6 +233,14 @@ export class FielddHandleCoordinator {
 
   get isHeld(): boolean {
     return this.held;
+  }
+
+  /** Item 290 — resolves once no attempt this coordinator started is still in flight (a person's ask, a recovery's,
+   * or the one the spacing will start), whatever it answered; it starts nothing. A quit's stop awaits it after the
+   * hold, so a pair that lands is read again and stopped. Item 290's red: a stub that resolves at once (the green
+   * waits). */
+  settled(): Promise<void> {
+    return Promise.resolve();
   }
 
   onHandle(listener: HandleListener): () => void {

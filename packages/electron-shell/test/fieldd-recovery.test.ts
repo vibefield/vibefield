@@ -751,3 +751,77 @@ describe("the field service's silence, forwarded (item 212, RV #67)", () => {
     expect(coordinator.recovery).toEqual({ kind: "unresponsive" });
   });
 });
+
+// Item 290 (plan lanes/rv/plan/item-290-PLAN.md §5–§6; D1 A as widened) — a person's quit holds every pair, and its
+// stop then settles what is in flight before it reads the pairs again. The coordinator's half: `settled()` waits for an
+// attempt already under way at the hold, which is still adopted when it lands (so the stop's second read finds it and
+// stops it), whatever it answers, and starts nothing; and a coordinator born while the quit holds starts held, refusing
+// a person's ask too, until a release.
+describe("a quit's hold and what it waits for (item 290)", () => {
+  const turn = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("an attempt in flight at the hold is adopted when it lands, and settled() resolves only after it", async () => {
+    const landing = handle("boot-late", []);
+    const answer = deferred<FielddHandle>();
+    const upstream = vi.fn(() => answer.promise);
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream as unknown as FielddSupervisor["ensure"],
+    });
+    // a switch's ask (a person's), started before the quit's hold
+    const asked = coordinator.ensure({ person: true });
+    coordinator.holdForStop();
+    let settled = false;
+    const waiting = coordinator.settled().then(() => {
+      settled = true;
+    });
+    await turn();
+    expect(settled).toBe(false);
+    answer.resolve(landing);
+    await expect(asked).resolves.toBe(landing);
+    await waiting;
+    expect(settled).toBe(true);
+    expect(coordinator.currentHandle).toBe(landing);
+    expect(upstream).toHaveBeenCalledTimes(1);
+  });
+
+  it("settled() waits for an attempt that fails too, resolves rather than rejects, and starts nothing", async () => {
+    let fail!: (error: Error) => void;
+    const upstream = vi.fn(
+      () =>
+        new Promise<FielddHandle>((_, reject) => {
+          fail = reject;
+        }),
+    );
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream as unknown as FielddSupervisor["ensure"],
+    });
+    const asked = coordinator.ensure({ person: true });
+    coordinator.holdForStop();
+    let settled = false;
+    const waiting = coordinator.settled().then(() => {
+      settled = true;
+    });
+    await turn();
+    expect(settled).toBe(false);
+    fail(new Error("spawn failed"));
+    await expect(asked).rejects.toThrow("spawn failed");
+    await expect(waiting).resolves.toBeUndefined();
+    expect(coordinator.currentHandle).toBeNull();
+    expect(upstream).toHaveBeenCalledTimes(1);
+  });
+
+  it("a coordinator born under a quit's hold refuses a person's ask, and its release lets it go", async () => {
+    const up = handle("boot-1", []);
+    const upstream = vi.fn().mockResolvedValue(up) as unknown as FielddSupervisor["ensure"];
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      heldAtBirth: true,
+    });
+    expect(coordinator.isHeld).toBe(true);
+    await expect(coordinator.ensure({ person: true })).rejects.toThrow(/held for a stop/);
+    expect(upstream).not.toHaveBeenCalled();
+    coordinator.releaseHold();
+    await expect(coordinator.ensure({ person: true })).resolves.toBe(up);
+    expect(upstream).toHaveBeenCalledTimes(1);
+  });
+});

@@ -71,6 +71,10 @@ export interface TraySnapshot {
   readonly showTray: boolean;
   readonly windowOpen: boolean;
   readonly quitting: boolean;
+  /** Item 290 (D2, James 2026-11-10 06:49Z; DESIGN.md §9 "The quit's words") — the quit box is up: Switch User, New
+   * User… and Try Again do nothing (dimmed where the menu can draw it). Absent or false changes nothing. Item 290's
+   * red: declared, not yet read (the green makes those three not actionable). */
+  readonly decidingQuit?: boolean;
   /** TS-4 (TS-D7) — the attached user's Mac is not connected: offer Connect Your
    * Devices…. Absent or false hides the row (older callers, tests, a link not
    * read yet). */

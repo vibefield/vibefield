@@ -387,6 +387,63 @@ describe("the Switch User submenu (UA-5)", () => {
   });
 });
 
+// Item 290 (D2, James 2026-11-10 06:49Z; DESIGN.md §9 "The quit's words") — while the quit box is up, Switch User, New
+// User… and Try Again do nothing: every click under them goes, the submenu's rows are dimmed everywhere, and the two
+// top-level rows are dimmed where the menu can draw it (on macOS a status item's top-level rows keep their look: the
+// availability rule, held above). Nothing else in the menu changes while the box is up.
+describe("while the quit box is up (item 290, D2)", () => {
+  const users = [
+    { userId: "01AAA", name: "James", attached: true },
+    { userId: "01BBB", name: "Work", attached: false },
+  ];
+  const acts = () => ({
+    ...actions(),
+    switchUser: vi.fn(),
+    newUser: vi.fn(),
+    retryFieldService: vi.fn(),
+  });
+  const deciding = snapshot({
+    users,
+    decidingQuit: true,
+    link: "crash-loop",
+    serviceTries: 3,
+  });
+
+  it("on macOS: the people and New User… are dimmed with no click, and Try Again keeps its look with no click", () => {
+    const a = acts();
+    const menu = buildTrayMenu(deciding, a, "darwin");
+    const rows = (byId(menu, "switch-user").submenu ?? []).filter((s) => s.type !== "separator");
+    expect(rows.map((s) => s.id)).toEqual(["switch-user-01AAA", "switch-user-01BBB", "new-user"]);
+    for (const row of rows) {
+      expect(row.enabled, row.id).toBe(false);
+      expect(row.click, row.id).toBeUndefined();
+    }
+    expect(byId(menu, "retry-field-service").click).toBeUndefined();
+    expect(byId(menu, "retry-field-service").enabled).toBeUndefined();
+    expect(byId(menu, "switch-user").enabled).toBeUndefined();
+  });
+
+  it("elsewhere the two top-level rows are dimmed as well", () => {
+    for (const platform of ["win32", "linux"] as const) {
+      const menu = buildTrayMenu(deciding, acts(), platform);
+      expect(byId(menu, "switch-user").enabled, platform).toBe(false);
+      expect(byId(menu, "retry-field-service").enabled, platform).toBe(false);
+      expect(byId(menu, "retry-field-service").click, platform).toBeUndefined();
+    }
+  });
+
+  it("nothing else changes while the box is up: Open VibeField, Settings… and Quit VibeField still act", () => {
+    const a = acts();
+    const menu = buildTrayMenu(deciding, a, "darwin");
+    byId(menu, "open").click?.();
+    byId(menu, "settings").click?.();
+    byId(menu, "quit").click?.();
+    expect(a.openPrimaryWindow).toHaveBeenCalledTimes(1);
+    expect(a.openSettings).toHaveBeenCalledTimes(1);
+    expect(a.quit).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("the face in the tray (UA-7)", () => {
   // DESIGN.md §2.8: the emoji leads the item's label, and the name sits beside
   // it (I-4). A native menu draws no frame, so only the emoji travels.
