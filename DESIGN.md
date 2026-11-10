@@ -3350,8 +3350,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **With more circles than its room holds** (*added 2026-11-09, UM-R-F; James, the picks page "The Column's
       Open Calls", c6: "Scroll inside the pill", "The add stays pinned at the foot"*), the circles scroll inside it
       and the add stays at its foot, 4 under them. Its room runs from its top, 64, to the field's foot, 12 above the
-      deck at rest (`--vf-godview-deck-field-gap`) and lower with an edge set lower, as the field's own foot is. A
-      deck raised over it still covers it, as it covers the limit card (§8 "The moments"), and a raise never
+      deck at rest (`--vf-godview-deck-field-gap`) and lower with an edge set lower, as the field's own foot is.
+      With the terminals away it runs to the panes' foot, as the field then does: 8 above the window's foot, or the
+      covers' reserve inside the cover (*added the same day, UM-R-F's review, F3 and F4: the swarm's room stopped at
+      the rest line, and a view in flow ran the pill to the window's foot*). A deck raised over it still covers it, as it covers the limit card (§8 "The moments"), and a raise never
       resizes it. The list keeps §4's rule for a list that can outgrow what holds it (`--vf-scroll-fade`): no
       scrollbar; while it holds more, its last 20 fade from whole to clear, 20 of padding stand under its last
       circle, and a circle the keyboard reaches scrolls into view 20 short of its foot. While every circle fits it

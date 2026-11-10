@@ -540,11 +540,23 @@
 }
 
 /* …and on the stage lent the swarm, the window's height, the room ends at the
-   field's foot itself, as the field wall's top does (UM-R-F, c6) */
+   field's foot as last set, `--vf-godview-field-foot` (UM-R-F, c6). The field
+   wall's top stands there at rest too, but it follows the live
+   `--vf-godview-deck-shift`, so a raise moves it and never the pill.
+   *Corrected the same day (UM-R-F's review, F3):* this said "as the field
+   wall's top does", which is true only at rest. */
 .vf-godview[data-godview-deck-edge]
   .vf-godview-monitor-stage[data-stage-allocation="full"]
   > .vf-monitor-chrome {
   max-height: calc(var(--vf-godview-field-foot) - var(--vf-godview-head-reserve) - 8px);
+}
+
+/* …and with the terminals away the swarm's field runs to the panes' foot (the
+   wall's own away rule, below), so the room does too (UM-R-F's review, F3) */
+.vf-godview[data-godview-deck-edge][data-godview-deck="away"]
+  .vf-godview-monitor-stage[data-stage-allocation="full"]
+  > .vf-monitor-chrome {
+  max-height: calc(100% - var(--vf-godview-panes-foot) - var(--vf-godview-head-reserve) - 8px);
 }
 
 /* …and the strip is chrome the same way the column is, so a view that lays out

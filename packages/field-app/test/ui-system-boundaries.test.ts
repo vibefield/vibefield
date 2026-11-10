@@ -1432,6 +1432,14 @@ describe("UI system ownership boundaries", () => {
     expect(godview).toMatch(
       /\[data-stage-allocation="full"\]\s*> \.vf-monitor-chrome \{\s*max-height: calc\(var\(--vf-godview-field-foot\) - var\(--vf-godview-head-reserve\) - 8px\);/u,
     );
+    // UM-R-F's review (F3): with the terminals away the swarm's field wall stands at the panes' foot, so the room ends
+    // there too, not at the rest line
+    expect(godview).toMatch(
+      /^\.vf-godview\[data-godview-deck-edge\]\[data-godview-deck="away"\]\s+\.vf-godview-monitor-stage\[data-stage-allocation="full"\]\s*> \.vf-monitor-chrome \{\s*max-height: calc\(100% - var\(--vf-godview-panes-foot\) - var\(--vf-godview-head-reserve\) - 8px\);/mu,
+    );
+    expect(godview).toMatch(
+      /^\.vf-godview\[data-godview-deck="away"\] \.vf-godview-field-wall \{\s*top: calc\(100% - var\(--vf-godview-panes-foot\)\);/mu,
+    );
     expect(godview).toMatch(/^\.vf-monitor-claims \{[^}]*left: 79px/m);
     // the review: at one z-index the strip, later in the DOM, painted its chips (a Retry and the approval line among
     // them, both taking clicks) over the popover's head and the cards beside the add — the column stands one over it
