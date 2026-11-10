@@ -10,7 +10,7 @@ import {
   setAsideFile,
   UNREADABLE_WORDS,
 } from "../signed-record";
-import { type GrantMarks, GrantsFile } from "./grants-file";
+import { codeOf, type GrantMarks, GrantsFile, unwritten } from "./grants-file";
 
 // OB-3a (thinking-objects-at-work.md §5.6; OB-L1, EY-D9 B) — the desk's registry and grants on disk, signed by fieldd's
 // one record signer under one key per user root. Two things are kept:
@@ -134,22 +134,27 @@ export class ObjectsStore {
     });
   }
 
-  /** Keep a name whole and signed: written beside, then renamed, 0600 in 0700. Throws when it cannot be kept. A
-   * `grants` list a record carried before the grants left for their own file is not written back. A sealed store
-   * first sees that its grants file is there (`GrantsFile.ensure`): no name of its is left without the one file that
-   * tells a fieldd with no key to keep off. */
+  /** Keep a name whole and signed: written beside, then renamed, 0600 in 0700. When it cannot be kept it throws the
+   * store's refusal, or `unwritten` with the code of what the key or the disk said: that error travels, to the window
+   * and to an agent, and what Node says names a path under the person's home. A `grants` list a record carried before
+   * the grants left for their own file is not written back. A sealed store first sees that its grants file is there
+   * (`GrantsFile.ensure`): no name of its is left without the one file that tells a fieldd with no key to keep off. */
   write(record: ObjectRecord): void {
     this.#guard.writable(record.ref);
     this.grants.ensure();
     const parsed = ObjectRecord.parse(record) as ObjectRecord & { signature?: string };
     const { signature: _previous, grants: _moved, ...unsigned } = parsed;
-    const signature = this.#signer.sign(unsigned);
-    mkdirSync(this.opts.dir, { recursive: true, mode: 0o700 });
-    chmodSync(this.opts.dir, 0o700);
     const path = join(this.opts.dir, `${record.ref.slice(REF_PREFIX.length)}.json`);
     const temp = `${path}.${process.pid}.tmp`;
-    writeFileSync(temp, `${JSON.stringify({ ...unsigned, signature })}\n`, { mode: 0o600 });
-    durableRenameSync(temp, path);
+    try {
+      const signature = this.#signer.sign(unsigned);
+      mkdirSync(this.opts.dir, { recursive: true, mode: 0o700 });
+      chmodSync(this.opts.dir, 0o700);
+      writeFileSync(temp, `${JSON.stringify({ ...unsigned, signature })}\n`, { mode: 0o600 });
+      durableRenameSync(temp, path);
+    } catch (error) {
+      throw unwritten(codeOf(error));
+    }
   }
 
   /** Stop the store's timer (a take-back the disk would not take is written again on one). */

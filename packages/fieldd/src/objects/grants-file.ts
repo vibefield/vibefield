@@ -88,18 +88,27 @@ const PEEK_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBL
 const same = (a: ObjectGrantEntry, b: ObjectGrantEntry): boolean =>
   a.ref === b.ref && a.holder === b.holder;
 
-/** What a failed write said, as its code alone (`ENOSPC`, `EACCES`, `EISDIR`, …). A log line prints an error's code
- * and never its message: Node's file errors name the file's whole path, which holds the person's home. An error with
- * no code is `unknown`. */
-const codeOf = (error: unknown): string => {
+/** What an error said, as its code alone (`ENOSPC`, `EACCES`, `EISDIR`, …). A log line prints an error's code and
+ * never its message: Node's file errors name the file's whole path, which holds the person's home. An error with no
+ * code is `unknown`. */
+export const codeOf = (error: unknown): string => {
   const code = (error as { code?: unknown } | null | undefined)?.code;
   return typeof code === "string" ? code : "unknown";
 };
 
-/** `work`, or a rejection once `ms` have passed. */
+/** What a hand, a place or a grant throws when the store could not keep it: ONE fixed sentence and a code, and
+ * nothing else of what the disk said (no field, no cause). What is thrown here travels, to the window and to an agent
+ * when a tool call was behind the write, and Node's own message names the file's whole path. It is no typed refusal,
+ * and no sentence a person is meant to read. */
+export const unwritten = (code: string): Error =>
+  new Error(`the desk objects could not be written (${code})`);
+
+/** `work`, or a rejection once `ms` have passed: an error whose code is `timeout`. */
 const within = <T>(work: Promise<T>, ms: number): Promise<T> =>
   new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`no answer in ${ms} ms`)), ms);
+    const timer = setTimeout(() => {
+      reject(Object.assign(new Error(`no answer in ${ms} ms`), { code: "timeout" }));
+    }, ms);
     timer.unref?.();
     work.then(
       (value) => {
@@ -213,7 +222,8 @@ export class GrantsFile {
     this.#grants = this.#grants.filter((grant) => named(grant.ref));
   }
 
-  /** Give `entry`. Throws the store's refusal, or what the disk said: memory is unchanged then. */
+  /** Give `entry`. Throws the store's refusal, or `unwritten` with the code of what the disk said: memory is unchanged
+   * then. */
   give(entry: ObjectGrantEntry): void {
     this.opts.guard.writable(HELD_KEY);
     this.#change(() => false, entry);
@@ -282,9 +292,8 @@ export class GrantsFile {
     // The count never wraps, and is never written where a number does not hold it: at the top, a change cannot be
     // written. A hand is refused as one the disk would not take is, and a take-back still takes.
     if (!Number.isSafeInteger(generation)) {
-      const full = new Error("the grants' count is at the top of what a number holds");
       if (takes) this.#lost("count-full");
-      if (add !== undefined) throw full;
+      if (add !== undefined) throw unwritten("count-full");
       return;
     }
     if (takes) this.#generation = generation;
@@ -293,8 +302,11 @@ export class GrantsFile {
     try {
       this.#keep(next, generation);
     } catch (error) {
-      if (takes) this.#lost(codeOf(error));
-      if (add !== undefined) throw error;
+      // what the key or the disk said goes no further than its code: to the log for a take-back, in the one fixed
+      // sentence for a giving
+      const code = codeOf(error);
+      if (takes) this.#lost(code);
+      if (add !== undefined) throw unwritten(code);
       return;
     }
     this.#grants = next;
@@ -397,7 +409,7 @@ export class GrantsFile {
         this.opts.logger.warn(
           "fieldd.objects.grants_mark_unanswered",
           "No survivor took the grants' count; until one does, an older grants file put back would be served",
-          { generation, reason: error instanceof Error ? error.message : String(error) },
+          { generation, reason: codeOf(error) },
         );
       },
     );
