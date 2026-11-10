@@ -13,6 +13,10 @@ use tokio::time::{timeout, timeout_at, Instant};
 
 /// The first mark, by the registry's name: the objects store's grants generation.
 const GRANTS: &str = custody::MARK_OBJECT_GRANTS;
+/// Planted in sets the floor refuses, to be found in no answer. The name is one the pattern takes, so it can stand
+/// where a name belongs and where a number does.
+const PLANTED_NAME: &str = "canary.mark.7c1e09aa";
+const PLANTED_NUMBER: i64 = 918_273_645;
 
 /// Every row that boots a floor ends with `daemon.shutdown().await` (item 196: a floor still running when its
 /// `TempDir` drops leaves cells binding inside the removal).
@@ -265,6 +269,44 @@ async fn a_name_off_the_pattern_is_refused() {
     let longest = "a".repeat(64);
     let answer = fieldd.set(&longest, 1).await;
     assert_eq!(answer["result"], json!({"value": 1}), "{answer}");
+    daemon.shutdown().await;
+}
+
+/// A refusal is the floor's own sentence. The words of the parser that could not read the params quote the value it
+/// stopped at (`invalid type: string "…", expected u64`), and whoever logs a refusal's message would log that value.
+#[tokio::test]
+async fn params_the_floor_cannot_read_are_refused_in_words_that_quote_none_of_them() {
+    let (_dir, daemon) = boot().await;
+    let (mut fieldd, _) = Mgmt::paired(&daemon).await;
+    let number = PLANTED_NUMBER.to_string();
+    // both planted: the name off the pattern, and the number below zero under a name that is one
+    let off_pattern = format!("{PLANTED_NAME} off the pattern");
+    let named_off_pattern = json!({"name": off_pattern, "value": PLANTED_NUMBER});
+    let below_zero = json!({"name": PLANTED_NAME, "value": -PLANTED_NUMBER});
+    // and each planted where the other belongs
+    let string_for_number = json!({"name": GRANTS, "value": PLANTED_NAME});
+    let number_for_name = json!({"name": PLANTED_NUMBER, "value": 1});
+    let bad = [
+        ("a name off the pattern", named_off_pattern),
+        ("a number below zero", below_zero),
+        ("a string for the number", string_for_number),
+        ("a number for the name", number_for_name),
+    ];
+    for (what, params) in bad {
+        let refused = fieldd.call("native.marks.set", params).await;
+        assert_eq!(
+            refused["error"]["data"]["kind"], "PRECONDITION_FAILED",
+            "{what}: {refused}"
+        );
+        // it still says why, and nowhere in the answer is anything it was sent
+        let message = refused["error"]["message"].as_str().unwrap_or_default();
+        assert!(!message.is_empty(), "{what}: the refusal says why");
+        let said = refused.to_string();
+        assert!(!said.contains(PLANTED_NAME), "{what}: {said}");
+        assert!(!said.contains(&number), "{what}: {said}");
+    }
+    let held = daemon.state.marks.snapshot();
+    assert!(held.is_empty(), "a refused set kept a mark: {held:?}");
     daemon.shutdown().await;
 }
 

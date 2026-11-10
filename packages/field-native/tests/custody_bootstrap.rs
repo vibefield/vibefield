@@ -5,9 +5,9 @@
 //! file. With the flag unset it is today's file, untouched.
 //!
 //! Three kinds of row. The REAL binary with a piped stdin: the claim as fieldd meets it (the env flag, the pipe, the
-//! exit code, the log). The reader alone, over text and pipes this file holds: the bounds to the byte, with no five
-//! second wait. And the in-process seam (`bootstrap_handed`), which other files' rows can boot a sealed floor through,
-//! as `RunningDaemon.pairing_file` is the seam of a `files` one.
+//! exit code, the log). The reader alone, over text and pipes this file holds: the bounds to the byte, without the
+//! registry's wait. And the in-process seam (`bootstrap_handed`), which other files' rows can boot a sealed floor
+//! through, as `RunningDaemon.pairing_file` is the seam of a `files` one.
 //!
 //! Last, the binary's OTHER roles. Only the bare invocation, the daemon's, reads the flag and so a bootstrap line.
 //! `field-native door` is run by any agent in a pane, with the stdin and the environment of its choosing: what it reads
