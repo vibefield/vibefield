@@ -7347,4 +7347,68 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
     expect(box.daemon.agents.bornFor(s.runId)).toEqual({ spark: s.spark.id });
     await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
   }, 150_000);
+
+  // ── RE-ATTACH (§8.1.0): the next fieldd reads the floor's table once, and a run is vouched iff the entry for its
+  // terminal names it. Here the table is the real floor's, holding what the FIRST fieldd said of its own launches:
+  // the whole chain, with nothing injected. The mock-floor rows for each rule are agent-reattach-vouch.test.ts's.
+  it("sealed, through the real daemon (the PM's row 4): a run launched at sealed is vouched after a fieldd restart, a plain run plain and a spark's run its spark's although its record was rewritten to name another; and a door resume of that vouched run is the spark's", async () => {
+    const config: SetupConfig = {
+      floor: "real",
+      attach: true,
+      custody: HANDED,
+      ...WITH_SPARKS,
+      startedForRetryMs: NO_RETRY_MS,
+    };
+    const first = await setup(config);
+    const win1 = await sealedWindow(first.daemon, HANDED, SPARK_WINDOW, "sf12a");
+    const said = vi.spyOn(first.daemon.native, "setStartedFor");
+    const plain = await spawnPlain(win1, first);
+    const plainRun = plain.session.runtimeRunId;
+    await joinedRow(win1, plainRun);
+    const s = await hatched(win1, first, "Vela", 7);
+    const v = await hatched(win1, first, "Lyra", 11);
+    // each launch was said, and the floor has answered each, before this fieldd goes
+    await poll(
+      async () => (said.mock.calls.length >= 3 ? true : undefined),
+      15_000,
+      "the three launches said to the floor",
+    );
+    const answers = await Promise.all(said.mock.results.map((result) => result.value));
+    console.log(`STARTED_FOR_BEFORE_RESTART ${JSON.stringify(answers)}`);
+    await first.daemon.stop();
+    // what an agent that reads the record key can do to ITS OWN run's record: S's run now says it is V's, signed
+    first.records.write({ ...readRecord(first.dataDir, s.runId), spark: v.spark.id });
+
+    const second = await setup({ ...config, restartOf: first });
+    const win2 = await sealedWindow(second.daemon, HANDED, SPARK_WINDOW, "sf12b");
+    const agents = second.daemon.agents;
+    const reattached = (runId: string) =>
+      poll(
+        async () => {
+          const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
+          const row = sessions.find((each) => each.runtimeRunId === runId);
+          return row?.continuation?.reattached === true ? row : undefined;
+        },
+        20_000,
+        "the run re-attached",
+      );
+    await reattached(plainRun);
+    await reattached(v.runId);
+    const row = await reattached(s.runId);
+    expect(agents.bornFor(plainRun)).toEqual({});
+    expect(agents.bornFor(v.runId)).toEqual({ spark: v.spark.id });
+    expect(agents.bornFor(s.runId)).toEqual({ spark: s.spark.id });
+    // this life holds the run as the floor's entry names it: the row's spark is S, while the record still says V
+    expect(row.spark).toBe(s.spark.id);
+    expect(readRecord(second.dataDir, s.runId).spark).toBe(v.spark.id);
+
+    // a resume of a VOUCHED run of S, through the door that names no spark: S's (the resume rule's case 2)
+    await win2.call("terminal.terminate", { sessionId: s.paneId });
+    await exitedOn(second, s.runId);
+    const resumed = await resumedByDoor(win2, s.runId);
+    expect(agents.bornFor(resumed.session.runtimeRunId)).toEqual({ spark: s.spark.id });
+    await win2.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+    await win2.call("terminal.terminate", { sessionId: v.paneId });
+    await win2.call("terminal.terminate", { sessionId: plain.terminal.sessionId });
+  }, 240_000);
 });

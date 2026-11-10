@@ -145,6 +145,44 @@ describe("OB custody §8.1 — a typed run and the floor's started-for table (th
     FLOOR_BUDGET_MS,
   );
 
+  it(
+    "sealed, through the real daemon: after a fieldd restart a typed run is vouched by the process its ENTRY names, plain, on the real process table; and its helper root is named again",
+    async () => {
+      const first = await floor({ bundle: shimScript, custody: HANDED, attach: true });
+      const said = vi.spyOn(first.daemon.native, "setStartedFor");
+      const { pane, row, record } = await typedIn(first);
+      const runId = row.runtimeRunId;
+      // the floor has the entry before this fieldd goes
+      const taken = await Promise.all(said.mock.results.map((result) => result.value));
+      expect(taken).toEqual(["set"]);
+      await first.daemon.stop();
+
+      const second = await floor({
+        bundle: shimScript,
+        custody: HANDED,
+        attach: true,
+        restartOf: first,
+      });
+      const again = await until(
+        () => {
+          const found = rowOf(second, runId);
+          return found?.continuation?.reattached === true ? found : undefined;
+        },
+        FLOOR_WAIT_MS,
+        "the typed run re-attached",
+      );
+      // the entry's process is an instant in milliseconds; the kit's table says the same instant, and it proves
+      expect(again.spawnedBy).toBe("user-shell");
+      expect(second.daemon.agents.bornFor(runId)).toEqual({});
+      expect(second.daemon.agents.runForRoot(record.creationRequestId ?? "")).toMatchObject({
+        runtimeRunId: runId,
+      });
+      await endedAtItsPrompt(second, pane, runId);
+      expect(isAlive(pane.pid)).toBe(true);
+    },
+    FLOOR_BUDGET_MS,
+  );
+
   it("the adoption path cannot pass a spark: its setter takes the run, its process and its root and has NO spark parameter, and `adopt` reaches launch memory through it alone (read from the source)", () => {
     const source = readFileSync(RUNTIME, "utf8");
     const setter = source.indexOf("  private rememberAdopted(");
