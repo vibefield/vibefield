@@ -676,7 +676,6 @@
   background: color-mix(in srgb, var(--vf-ds-ink) 72%, transparent);
 }
 
-.vf-ds-progress-face p,
 .vf-ds-veil-specimen small {
   margin: 0;
   color: var(--vf-ds-muted);

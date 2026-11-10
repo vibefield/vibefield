@@ -233,7 +233,7 @@ export function SurfacesSection(): ReactElement {
       <div className="vf-ds-grid vf-ds-grid-3">
         <Specimen title="Loading veil" source="hud/LoadingVeil.tsx">
           <div className="vf-ds-veil-stage">
-            <LoadingVeilView view={{ progress: 0.38, stage: "opening doc" }} shown details />
+            <LoadingVeilView view={{ progress: 0.38 }} shown details />
           </div>
         </Specimen>
         <Specimen title="Confirmation" source="destructive flows">

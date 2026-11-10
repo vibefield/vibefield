@@ -2,17 +2,18 @@ import { type ReactElement, useEffect, useRef, useState } from "react";
 import "./LoadingVeil.css";
 
 // The loading veil (thinking-b4 §2, DESIGN.md §8): a cover over the ENTIRE
-// window while a doc loads — since DK-16 the mat in CSS, its words the mat's
-// paper-white ink (LoadingVeil.css). The cover itself is immediate and
-// opaque: a keyed engine may never tear down in front of the user. Progress
-// details remain late (500ms), so a normal local switch reads as one soft
-// dissolve rather than a loading screen; slow I/O stays honest. Reveal waits
-// for FieldView's framed-canvas presentation signal, then fades over the new
-// fully composed scene.
+// window while a doc loads — since DK-16 the mat in CSS (LoadingVeil.css), and
+// on it the bar alone, never the DocManager's step word (item 281). The cover
+// itself is immediate and opaque: a keyed engine may never tear down in front
+// of the user. Progress details remain late (500ms), so a normal local switch
+// reads as one soft dissolve rather than a loading screen; slow I/O stays
+// honest. Reveal waits for FieldView's framed-canvas presentation signal, then
+// fades over the new fully composed scene.
 
+/** All the veil draws: the load's progress. The DocManager's step word is VibeField's
+ * insides (item 281). */
 export interface LoadingVeilState {
   progress: number;
-  stage: string;
 }
 
 /** Exact veil composition with controller-free timing state for the catalog. */
@@ -46,7 +47,6 @@ export function LoadingVeilView({
             style={{ width: `${Math.round(view.progress * 100)}%` }}
           />
         </div>
-        <div className="text-[11px] font-medium text-[var(--vf-mat-ink)]">{view.stage}</div>
       </div>
     </div>
   );
@@ -62,7 +62,7 @@ export function LoadingVeil({
   const [shown, setShown] = useState(false);
   const [details, setDetails] = useState(false);
   // The fade-out keeps rendering after `loading` goes null — show the last frame.
-  const last = useRef<LoadingVeilState>({ progress: 0, stage: "opening doc" });
+  const last = useRef<LoadingVeilState>({ progress: 0 });
   if (loading !== null) last.current = loading;
 
   useEffect(() => {
