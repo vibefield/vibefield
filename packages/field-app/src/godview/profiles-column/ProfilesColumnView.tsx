@@ -1,6 +1,17 @@
 import type { AgentProfileSet } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import { type KeyboardEvent, type ReactElement, type ReactNode, type Ref, useId } from "react";
+import {
+  type KeyboardEvent,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { PROFILES_WORDS } from "../../setup/profiles-words";
 import { bandsGeometry, bandsLabel } from "../../usage/bands";
 import type { ProfileMeters } from "../../usage/meters";
@@ -174,6 +185,29 @@ function cardKeys(
   tabAcrossPortal(event, layer, id);
 }
 
+/** UM-R-F (c6; §8 "The pill", §4 `--vf-scroll-fade`): marks the circles' list `data-overflow` while it holds more than
+ * its room, so the sheet gives it §4's fade. It is measured as the list stands without the fade, whose 20 under its
+ * end would otherwise keep a list that fits marked. In the stage only: the catalog's list never scrolls. The mark is
+ * the DOM's own, set here and read by the sheet alone, so React never renders it. */
+function useOverflowMark(list: RefObject<HTMLDivElement | null>, measure: boolean): void {
+  const mark = useCallback((): void => {
+    const node = list.current;
+    if (!node) return;
+    if (node.hasAttribute("data-overflow")) node.removeAttribute("data-overflow");
+    node.toggleAttribute("data-overflow", measure && node.scrollHeight > node.clientHeight);
+  }, [list, measure]);
+  // measured as it stands and whenever the column renders (a profile more or fewer), before it paints
+  useLayoutEffect(mark);
+  // …and whenever its room moves, with the window, the deck's edge and the cover's scale
+  useEffect(() => {
+    const node = list.current;
+    if (!measure || !node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(mark);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [list, measure, mark]);
+}
+
 export function ProfilesColumnView({
   circles,
   lens,
@@ -204,74 +238,86 @@ export function ProfilesColumnView({
   const popoverId = useId();
   // UM-R-F (c3; §8 "A circle"): the circle the pin holds wears the quiet tell, under a peek too
   const held = pinnedProfile !== undefined ? pinnedProfile : pinned ? open : null;
+  const listRef = useRef<HTMLDivElement>(null);
+  useOverflowMark(listRef, cardLayer !== null && cardLayer !== undefined);
   return (
     // biome-ignore lint/a11y/useSemanticElements: a column of buttons — the profiles and the add — not a fieldset of form inputs
-    <div ref={columnRef} className="vf-profiles-column" role="group" aria-label="Agent profiles">
-      {circles.map((circle) => {
-        const id = circle.set.id;
-        const isChosen = lens && chosen === id;
-        const isOpen = open === id;
-        return (
-          // the pointer or the keyboard on a circle or its popover shows the popover; the circle is the control
-          <div
-            key={id}
-            className="vf-profiles-item"
-            data-profile={id}
-            {...(isOpen && pinned ? { "data-pinned": "" } : {})}
-            onPointerEnter={() => onPoint(id)}
-            onPointerLeave={() => onPoint(null)}
-            onFocus={() => onKeyboardTarget?.(id)}
-            onBlur={(event) => {
-              if (!keepsKeyboard(event.relatedTarget, event.currentTarget, id)) {
-                onKeyboardTarget?.(null);
+    <div
+      ref={columnRef}
+      className="vf-profiles-column"
+      role="group"
+      aria-label="Agent profiles"
+      {...(cardLayer ? { "data-cards": "layer" } : {})}
+    >
+      {/* UM-R-F (c6; §8 "The pill"): the circles' own list, which scrolls inside the pill in the stage; the add
+          stands after it, at the pill's foot */}
+      <div ref={listRef} className="vf-profiles-circles">
+        {circles.map((circle) => {
+          const id = circle.set.id;
+          const isChosen = lens && chosen === id;
+          const isOpen = open === id;
+          return (
+            // the pointer or the keyboard on a circle or its popover shows the popover; the circle is the control
+            <div
+              key={id}
+              className="vf-profiles-item"
+              data-profile={id}
+              {...(isOpen && pinned ? { "data-pinned": "" } : {})}
+              onPointerEnter={() => onPoint(id)}
+              onPointerLeave={() => onPoint(null)}
+              onFocus={() => onKeyboardTarget?.(id)}
+              onBlur={(event) => {
+                if (!keepsKeyboard(event.relatedTarget, event.currentTarget, id)) {
+                  onKeyboardTarget?.(null);
+                }
+              }}
+              onKeyDown={
+                isOpen ? (event) => cardKeys(event, cardLayer, id, pinned, onClose) : undefined
               }
-            }}
-            onKeyDown={
-              isOpen ? (event) => cardKeys(event, cardLayer, id, pinned, onClose) : undefined
-            }
-          >
-            <button
-              type="button"
-              className="vf-profiles-circle"
-              aria-label={circleWords(circle, lens, isChosen)}
-              {...(lens ? { "aria-pressed": isChosen } : {})}
-              aria-expanded={isOpen}
-              {...(isOpen ? { "aria-controls": popoverId } : {})}
-              {...(isOpen ? { "data-open": "" } : {})}
-              {...(held === id ? { "data-pinned": "" } : {})}
-              onClick={() => onCircle(id)}
             >
-              <BandsCircle
-                geometry={bandsGeometry(COLUMN_CIRCLE, circle.meters.entries, {
-                  centre: "glyph",
-                  hotDot: true,
-                })}
-                profile={circle.set}
-              />
-            </button>
-            {isOpen ? (
-              <CardStand layer={cardLayer} profile={id}>
-                <ProfilePopoverView
-                  id={popoverId}
-                  circle={circle}
-                  lens={lens}
-                  chosen={isChosen}
-                  focus={focus}
-                  read={read}
-                  canOpen={canOpen}
-                  canRetry={canRetry}
-                  chosenPlanFamily={chosenPlanFamily}
-                  onChoosePlan={onChoosePlan}
-                  onClose={onClose}
-                  onFocusPlan={onFocusPlan}
-                  onOpenProfile={onOpenProfile}
-                  onRetry={onRetry}
+              <button
+                type="button"
+                className="vf-profiles-circle"
+                aria-label={circleWords(circle, lens, isChosen)}
+                {...(lens ? { "aria-pressed": isChosen } : {})}
+                aria-expanded={isOpen}
+                {...(isOpen ? { "aria-controls": popoverId } : {})}
+                {...(isOpen ? { "data-open": "" } : {})}
+                {...(held === id ? { "data-pinned": "" } : {})}
+                onClick={() => onCircle(id)}
+              >
+                <BandsCircle
+                  geometry={bandsGeometry(COLUMN_CIRCLE, circle.meters.entries, {
+                    centre: "glyph",
+                    hotDot: true,
+                  })}
+                  profile={circle.set}
                 />
-              </CardStand>
-            ) : null}
-          </div>
-        );
-      })}
+              </button>
+              {isOpen ? (
+                <CardStand layer={cardLayer} profile={id}>
+                  <ProfilePopoverView
+                    id={popoverId}
+                    circle={circle}
+                    lens={lens}
+                    chosen={isChosen}
+                    focus={focus}
+                    read={read}
+                    canOpen={canOpen}
+                    canRetry={canRetry}
+                    chosenPlanFamily={chosenPlanFamily}
+                    onChoosePlan={onChoosePlan}
+                    onClose={onClose}
+                    onFocusPlan={onFocusPlan}
+                    onOpenProfile={onOpenProfile}
+                    onRetry={onRetry}
+                  />
+                </CardStand>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
       <div className="vf-profiles-item vf-profiles-add-item">
         {/* the pointer or the keyboard on the add shows its card; the add is the control. The limit card beside it is
             not the add. */}

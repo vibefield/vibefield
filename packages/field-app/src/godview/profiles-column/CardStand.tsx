@@ -100,6 +100,14 @@ export function CardStand({
     observer.observe(stand);
     return () => observer.disconnect();
   }, [layer, place]);
+  // UM-R-F (c6; §8 "The pill"): the circles scroll inside the pill, so an open card follows its circle. A scroll does
+  // not bubble, so the list itself is heard; the add's card stands outside it and has none.
+  useEffect(() => {
+    const list = layer ? anchorRef.current?.closest(".vf-profiles-circles") : null;
+    if (!list) return;
+    list.addEventListener("scroll", place, { passive: true });
+    return () => list.removeEventListener("scroll", place);
+  }, [layer, place]);
   // UM-R-F (c4; §8 "Focus is pointing"): a card taken away while it holds the keyboard — a peek over it, after the
   // pointer's dwell — first hands the keyboard to its own circle, so the keyboard is never lost to the page and the
   // card it stood for comes back when the peek lets go. React runs a component's layout cleanup before it removes the

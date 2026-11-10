@@ -13,6 +13,8 @@
   align-items: center;
   gap: 4px;
   width: 52px;
+  /* UM-R-F (c6): it may shrink below its circles, to its room in the slot; its list then scrolls */
+  min-height: 0;
   padding: 6px;
   border-radius: 26px;
   background: var(--vf-profiles-line);
@@ -67,6 +69,49 @@
 .vf-profiles-item {
   position: relative;
   display: grid;
+}
+
+/* ── UM-R-F (c6; DESIGN.md §8 "The pill"): the circles' own list, the add standing after it at the pill's foot ── */
+.vf-profiles-circles {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: center;
+  align-self: stretch;
+  gap: 4px;
+  min-height: 0;
+}
+
+/* In the stage (its cards in their layer) the list scrolls inside the pill when it holds more than its room. Its
+   edge is the pill's: the pill's 6 at its sides and its top, its top rounded to the pill's 26, and the gap's 4 at its
+   foot, the margins giving the padding back, so a list that fits stands exactly as the pill did and a lens ring or
+   the focus ring is never cut. No scrollbar (§4). In the catalog the cards stand in place, and a scroller would cut
+   them. */
+.vf-profiles-column[data-cards="layer"] .vf-profiles-circles {
+  margin: -6px -6px -4px;
+  padding: 6px 6px 4px;
+  border-radius: 26px 26px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.vf-profiles-column[data-cards="layer"] .vf-profiles-circles::-webkit-scrollbar {
+  display: none;
+}
+
+/* …and while it holds more (`ProfilesColumnView` marks it), §4's rule for a list that can outgrow what holds it: its
+   last 20 fade from whole to clear, 20 of padding under its last circle, so at its end that circle clears the fade,
+   and a scroll into view stops 20 short of its foot */
+.vf-profiles-column[data-cards="layer"] .vf-profiles-circles[data-overflow] {
+  padding-bottom: var(--vf-scroll-fade);
+  scroll-padding-bottom: var(--vf-scroll-fade);
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--vf-scroll-fade)), transparent);
+}
+
+/* the add never shrinks: it stays at the pill's foot */
+.vf-profiles-add-item {
+  flex: none;
 }
 
 /* the add's own hover: the button and its stand, so the limit card beside it is not the add (UM-R4) */

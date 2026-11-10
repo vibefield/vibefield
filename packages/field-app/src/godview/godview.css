@@ -514,14 +514,37 @@
    *Corrected 2026-11-09 (UM-R1; DESIGN.md §8 "Where the cards stand"):* the
    cards themselves left this context for `.vf-monitor-cards` beside the stage,
    z 13, so the deck no longer covers a card; the pill and the limit card it
-   holds stay under a raised deck, as stated here. */
+   holds stay under a raised deck, as stated here.
+   UM-R-F (c6, 2026-11-09; DESIGN.md §8 "The pill", James's pick on the page
+   "The Column's Open Calls"): the slot is a column with a room, and the pill
+   shrinks into it, its circles scrolling inside while the add stays at its
+   foot. The room runs to the field's foot: with no deck edge the stage is the
+   deck's rest tall, so the foot is the field's gap above the stage's own. A
+   raised deck covers the pill and never resizes it. */
 .vf-monitor-chrome {
   position: absolute;
   z-index: 8;
   top: calc(var(--vf-godview-head-reserve) + 8px);
   left: 13px;
+  display: flex;
+  flex-direction: column;
   width: 52px;
+  max-height: calc(100% - var(--vf-godview-head-reserve) - 8px - var(--vf-godview-deck-field-gap));
   color: var(--text-main);
+}
+
+/* …on a stage whose deck edge moves, in flow, the stage already ends at the
+   field's foot (its `flex-basis` above), so the room ends at its own foot… */
+.vf-godview[data-godview-deck-edge] .vf-monitor-chrome {
+  max-height: calc(100% - var(--vf-godview-head-reserve) - 8px);
+}
+
+/* …and on the stage lent the swarm, the window's height, the room ends at the
+   field's foot itself, as the field wall's top does (UM-R-F, c6) */
+.vf-godview[data-godview-deck-edge]
+  .vf-godview-monitor-stage[data-stage-allocation="full"]
+  > .vf-monitor-chrome {
+  max-height: calc(var(--vf-godview-field-foot) - var(--vf-godview-head-reserve) - 8px);
 }
 
 /* …and the strip is chrome the same way the column is, so a view that lays out
