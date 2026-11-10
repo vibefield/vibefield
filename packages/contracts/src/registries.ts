@@ -1576,11 +1576,12 @@ export const NATIVE_DOOR = {
   LINE_MAX_BYTES: 8 * 1024 * 1024,
 } as const;
 
-/** OB custody (EL7; the shapes are custody.ts's `CustodyHandoff` and mgmt.ts's `NativeBootstrap` and `NativeMarksSet*`)
- * — how a spawner hands a daemon its secrets, and the marks that outlive fieldd. ONE authority for the shell and the
- * supervisor (by import), fieldd (by import) and the floor (by generation, its scalar rows; the HKDF labels are the
- * shell's alone and stay TS-only). Both env names sit under ENV_PREFIXES, so neither reaches an agent's PTY, and each
- * carries a FLAG, never a secret: a secret rides the daemon's stdin and nothing else. */
+/** OB custody (EL7; the shapes are custody.ts's `CustodyHandoff` and `TerminalStartedFor*`, and mgmt.ts's
+ * `NativeBootstrap`, `NativeMarksSet*` and `NativeTerminalStartedForSet*`) — how a spawner hands a daemon its secrets,
+ * and what outlives fieldd in the floor's memory: the marks, and what each terminal was started for. ONE authority for
+ * the shell and the supervisor (by import), fieldd (by import) and the floor (by generation, its scalar rows; the HKDF
+ * labels are the shell's alone and stay TS-only). Both env names sit under ENV_PREFIXES, so neither reaches an agent's
+ * PTY, and each carries a FLAG, never a secret: a secret rides the daemon's stdin and nothing else. */
 export const CUSTODY = {
   /** fieldd's environment: `FIELDD_CUSTODY=stdin` says a `CustodyHandoff` is coming on stdin. The flag set and no
    * valid hand-off is a refusal to boot, never a fall back to the files. */
@@ -1619,6 +1620,10 @@ export const CUSTODY = {
   MARK_NAME: "^[a-z][a-z0-9.:-]{0,63}$",
   /** the first mark: the objects store's grants generation */
   MARK_OBJECT_GRANTS: "objects.grants",
+  /** the terminals the floor remembers a started-for entry for at once (custody.ts `TerminalStartedFor*`), and so the
+   * most a hello ack hands over (`HelloAck.startedFor`). A NEW terminal past it is refused once the floor has dropped
+   * what no longer runs; one it holds is always replaced. At its very fullest the table is about 1.7 MB of an ack. */
+  STARTED_FOR_MAX: 1024,
 } as const;
 
 /** TPv3 — the terminal pipeline's numbers (terminal-pipeline-v3 §5.1, §8; §20

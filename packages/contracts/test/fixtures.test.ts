@@ -273,6 +273,8 @@ import {
   NativePrepareRestartResult,
   NativeShutdownParams,
   NativeShutdownResult,
+  NativeTerminalStartedForSetParams,
+  NativeTerminalStartedForSetResult,
   ObservedState,
   PeerInfo,
   PingAck,
@@ -555,6 +557,12 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "native-bootstrap": NativeBootstrap,
   "native-marks-set-params": NativeMarksSetParams,
   "native-marks-set-result": NativeMarksSetResult,
+  // OB custody (rule 6) — what a terminal was started for (mgmt.ts's verb, custody.ts's shapes), parsed on both sides:
+  // a set of a plain run, of a spark's with its root, of a typed run with its process, and the CLEAR (no
+  // `startedFor`); the empty answer. The table an ack hands over rides the `hello-ack` prefix
+  // (`hello-ack.started-for`). Their own rows: custody-started-for.test.ts.
+  "native-terminal-started-for-set-params": NativeTerminalStartedForSetParams,
+  "native-terminal-started-for-set-result": NativeTerminalStartedForSetResult,
   // OB custody (C4) — every grant of one user root in ONE signed, counted file (objects.ts; TS-only, fieldd's alone):
   // a sealed one with a spark's hand and a run's own placing. Its own rows: objects.test.ts.
   "object-grants-file": ObjectGrantsFile,

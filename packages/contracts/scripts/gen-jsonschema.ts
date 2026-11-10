@@ -46,13 +46,21 @@
 // stream are TS-only: the shell, the supervisor and fieldd are their sides. The floor's half rides the bundle: its
 // bootstrap line and the marks verb (src/mgmt.ts `NativeBootstrap`, `NativeMarksSet*`), `HelloAck.marks`, and
 // custody.ts's `CustodySecret` named beside them; `CUSTODY`'s scalar rows reach Rust through gen-registries-rs.ts.
+// So does the started-for table (rule 6): its verb (src/mgmt.ts `NativeTerminalStartedForSet*`) and the four shapes
+// custody.ts holds for it, three of which `HelloAck.startedFor` embeds and so are BASE_SHARED.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ZodTypeAny } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { Blake3Hex } from "../src/artifacts";
-import { CustodySecret } from "../src/custody";
+import {
+  CustodySecret,
+  TerminalStartedFor,
+  TerminalStartedForEntry,
+  TerminalStartedForId,
+  TerminalStartedForProcess,
+} from "../src/custody";
 import {
   DiagnosticCursorV1,
   DiagnosticLogDeltaV1,
@@ -189,6 +197,8 @@ import {
   NativeRestartReason,
   NativeShutdownParams,
   NativeShutdownResult,
+  NativeTerminalStartedForSetParams,
+  NativeTerminalStartedForSetResult,
   NativeTickParams,
   ObservedStaleCell,
   ObservedState,
@@ -321,6 +331,13 @@ const BASE_SHARED = {
   NativeDetachParams,
   NativeDetachResult,
   NativeLastManager,
+  // OB custody (rule 6) — the hello ack's `startedFor`: its entry, and the id and the process the entry embeds
+  // (the id four times over). BASE_SHARED because the `hello-ack` entry embeds them, as it does `NativeLastExit`:
+  // unnamed there, the id's second use would dedupe into a nested property path. Named, the floor reads ONE
+  // `TerminalStartedForId` and ONE `TerminalStartedForProcess`, never a type per field.
+  TerminalStartedForId,
+  TerminalStartedForProcess,
+  TerminalStartedForEntry,
 } as const;
 
 // Logging/diagnostics (LOG-42) — ONLY the native-consumed subset. Audit,
@@ -509,6 +526,13 @@ const bundle = tightenLoggingWireSchema(
       NativeBootstrap,
       NativeMarksSetParams,
       NativeMarksSetResult,
+      // OB custody (rule 6) — the started-for verb and what a set carries. Bundle-only: no entry embeds
+      // these three. The table's entry, its id and its process ride BASE_SHARED above, since the hello
+      // ack embeds them; `TerminalStartedFor` is spelled beside the entry, not extended into it, so both
+      // resolve to those two names.
+      TerminalStartedFor,
+      NativeTerminalStartedForSetParams,
+      NativeTerminalStartedForSetResult,
     },
   }),
 );

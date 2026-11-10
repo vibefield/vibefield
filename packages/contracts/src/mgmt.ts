@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Blake3Hex, Sha256Hex } from "./artifacts";
-import { CustodySecret } from "./custody";
+import { CustodySecret, TerminalStartedFor, TerminalStartedForId } from "./custody";
 import { TerminalCellRole, TerminalRouteCell, TerminalWorkloadClass } from "./envelope";
 import { UnavailableDetails } from "./errors";
 import { ServeHeaders } from "./made-app-network";
@@ -1247,6 +1247,12 @@ export function sameStartSecond(aMs: number, bMs: number): boolean {
 // per name IN MEMORY and says what it holds in its hello ack (`HelloAck.marks`), so a mark outlives fieldd and dies
 // with the floor. Marks are the unit's, not a connection's. Management channel only (EL7): nothing an agent does at a
 // door reaches a mark.
+//
+// STARTED FOR (rule 6). What each terminal was started for, which a sealed fieldd may not read back from a file an
+// agent can rewrite: fieldd tells the floor at the launch or the adoption (`native.terminal.startedFor.set`), the
+// floor keeps it IN MEMORY for at most `CUSTODY.STARTED_FOR_MAX` terminals, and hands the table to the next fieldd in
+// its hello ack (`HelloAck.startedFor`), never on a terminal's row. The table's shapes are custody.ts's
+// `TerminalStartedFor*`, which says why they live there. Management channel only (EL7), as the marks are.
 
 /** fieldd → the floor: line 1 of the floor's stdin at spawn, under `CUSTODY.NATIVE_ENV=stdin`, then a newline, then
  * EOF. Never argv, never env, never a file, never a log. `pairing` is the D8 handshake's secret for this user root.
@@ -1279,6 +1285,27 @@ export const NativeMarksSetResult = z
   })
   .passthrough();
 export type NativeMarksSetResult = z.infer<typeof NativeMarksSetResult>;
+
+/** `native.terminal.startedFor.set` — this terminal was started for that. A set of one `sessionId` replaces what the
+ * floor held for it; a set with NO `startedFor` clears it, and clearing nothing is no error. Never `null`: an
+ * optional is the spelling the Rust generator takes (serde reads a `null` there as absent, so the floor would take
+ * one for a clear; this side refuses it and fieldd never sends it). A `process.pid` below 2 does not parse here; the
+ * generated Rust type cannot say so, and the floor refuses it by hand (`INVALID_PARAMS`).
+ * Refused `PRECONDITION_FAILED` with `details.reason`: `not-sealed`, a floor that was not booted by the stdin
+ * hand-off and so keeps no table; or `started-for-full`, a NEW `sessionId` while the floor still holds
+ * `CUSTODY.STARTED_FOR_MAX` after dropping what no longer runs (a session it holds is always replaced).
+ * `NOT_FOUND`: the floor lists no such running terminal, or the terminal's root process is not the one it began as. */
+export const NativeTerminalStartedForSetParams = z
+  .object({
+    sessionId: TerminalStartedForId,
+    startedFor: TerminalStartedFor.optional(),
+  })
+  .passthrough();
+export type NativeTerminalStartedForSetParams = z.infer<typeof NativeTerminalStartedForSetParams>;
+
+/** Nothing: a set and a clear answer alike. */
+export const NativeTerminalStartedForSetResult = z.object({}).passthrough();
+export type NativeTerminalStartedForSetResult = z.infer<typeof NativeTerminalStartedForSetResult>;
 
 // ---- egress (DS-1 · design-02 §2.4's egress bullet · design-06 §3 · petition T7 = truffle RFC 026) ----
 //

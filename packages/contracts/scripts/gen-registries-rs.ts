@@ -177,11 +177,11 @@ const lines: string[] = [
   ...Object.entries(NATIVE_DOOR).map(([k, v]) => `    pub const ${k}: u64 = ${v};`),
   "}",
   "",
-  "/// OB custody — how a spawner hands the floor its pairing secret, and the marks the floor",
-  "/// keeps for fieldd: the flag's env names and its one value, the hand-off line's bounds, the",
-  "/// shell pairing's contexts and window, the marks' bound and name pattern. `CUSTODY`'s scalar",
-  "/// rows; its HKDF labels are the shell's alone and stay TS-only. One authority with fieldd;",
-  "/// see registries.ts.",
+  "/// OB custody — how a spawner hands the floor its pairing secret, and what the floor keeps",
+  "/// for fieldd: the flag's env names and its one value, the hand-off line's bounds, the shell",
+  "/// pairing's contexts and window, the marks' bound and name pattern, and the started-for",
+  "/// table's bound. `CUSTODY`'s scalar rows; its HKDF labels are the shell's alone and stay",
+  "/// TS-only. One authority with fieldd; see registries.ts.",
   "pub mod custody {",
   ...Object.entries(CUSTODY).flatMap(([k, v]) =>
     typeof v === "number"

@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { TerminalStartedForEntry } from "./custody";
 import { ErrorData } from "./errors";
+import { CUSTODY } from "./registries";
 
 // Envelope & transport conventions (design-01 §4).
 // P3 — tolerant reader: every wire object is .passthrough(); receivers log unknown fields.
@@ -309,6 +311,14 @@ export const HelloAck = z
      * it, so a fieldd started beside a living floor reads here what the one before it wrote, and a store below its
      * mark is stale. Absent when the floor holds none, on every product ack, and from a floor predating it. */
     marks: z.record(z.string(), z.number().int().nonnegative()).optional(),
+    /** OB custody (rule 6) — mgmt surface only: what each terminal this floor still runs was started for
+     * (`native.terminal.startedFor.set`, mgmt.ts; the entry is custody.ts's `TerminalStartedForEntry`), as a fieldd
+     * told it in this floor's run. A sealed floor's memory alone, so a fieldd started beside a living floor learns
+     * here, from a survivor and not from a file, which runs it may vouch for. At most `CUSTODY.STARTED_FOR_MAX`
+     * entries. Absent and empty are ONE answer, "nothing to vouch for": a floor that holds none, a floor not booted
+     * by the stdin hand-off, a floor predating it and every product ack say nothing (the generated Rust writes no
+     * key for an empty table). It rides the ack and never a terminal's row. */
+    startedFor: z.array(TerminalStartedForEntry).max(CUSTODY.STARTED_FOR_MAX).optional(),
   })
   .passthrough();
 export type HelloAck = z.infer<typeof HelloAck>;

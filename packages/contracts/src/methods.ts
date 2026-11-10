@@ -839,6 +839,17 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // OB custody (rule 6) — STARTED FOR: fieldd tells the floor what a terminal was started for (mgmt.ts
+  // `NativeTerminalStartedForSet*`), and the floor hands the table to the next fieldd in its hello ack
+  // (`HelloAck.startedFor`), never on a terminal's row. Management channel only (EL7), as the marks are.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.terminal.startedFor.set",
+    scope: null,
+    // the same set again leaves the same entry, and a clear of nothing answers as any clear does
+    idempotent: true,
+    locality: "local",
+  }),
 
   // DS-1 — EGRESS (design-02 §2.4's egress bullet; shapes in mgmt.ts). The
   // mirror image of `serve`: a desktop reaches a peer THROUGH its own node, so
