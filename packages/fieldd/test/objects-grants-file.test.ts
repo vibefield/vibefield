@@ -505,4 +505,34 @@ describe("a hand that cannot be written is refused (OB custody, C4)", () => {
       new Error("the desk objects could not be written (EISDIR)"),
     );
   });
+
+  it("says `unknown` in the thrown sentence for a code or a kind that is no plain token", () => {
+    const planted = "/Users/planted-home/Library/VibeField/fieldd/objects.grants.json.1.tmp";
+    let refused: unknown;
+    const h = world({
+      writeFile: (path, text) => {
+        if (refused !== undefined) throw refused;
+        writeFileSync(path, text, { mode: 0o600 });
+      },
+    });
+    const ref = h.refOf("k1", "desk.note");
+    const unsaid = new Error("the desk objects could not be written (unknown)");
+    // a path where a code goes, a path where a kind goes, and a code one character too long: none is said, since
+    // this sentence travels to the window and to an agent
+    const refusals: unknown[] = [
+      Object.assign(new Error("refused"), { code: planted }),
+      Object.assign(new Error("refused"), { kind: planted }),
+      Object.assign(new Error("refused"), { code: "E".repeat(65) }),
+    ];
+    for (const refusal of refusals) {
+      refused = refusal;
+      expect(() => h.desk.hand(ref, "run-a")).toThrow(unsaid);
+    }
+    // the longest code that is still said
+    const longest = "E".repeat(64);
+    refused = Object.assign(new Error("refused"), { code: longest });
+    expect(() => h.desk.hand(ref, "run-a")).toThrow(
+      new Error(`the desk objects could not be written (${longest})`),
+    );
+  });
 });

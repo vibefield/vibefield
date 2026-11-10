@@ -220,6 +220,40 @@ describe("every change is counted, and the survivors are told (OB custody, C5)",
     ];
     for (const part of never) expect(spelled).not.toContain(part);
   });
+
+  it("says `unknown` for a code or a kind that is no plain token: a path in either, or a word past 64 characters", async () => {
+    const calls: unknown[][] = [];
+    const planted = "/Users/planted-home/Library/VibeField/native/marks.json";
+    // What a survivor rejects with, each time: a path where a code goes, a path where a kind goes, a code one
+    // character too long, and a code of the longest length that is still said. A code is a word of the code's own
+    // choosing, so a field that holds anything else is not printed at all.
+    const longest = "E".repeat(64);
+    const answers: unknown[] = [
+      Object.assign(new Error("refused"), { code: planted }),
+      new RpcCallError(planted, "refused"),
+      Object.assign(new Error("refused"), { code: `${longest}E` }),
+      Object.assign(new Error("refused"), { code: longest }),
+    ];
+    const refusing: Survivor = {
+      noted: [],
+      get: () => 0,
+      note: () => Promise.reject(answers.shift()),
+    };
+    const h = world({ marks: refusing, logger: captureAll(calls) });
+    const ref = h.refOf("k1", "desk.note");
+    const other = h.refOf("k2", "desk.note");
+    h.desk.hand(ref, "run-a");
+    h.desk.hand(ref, "run-b");
+    h.desk.hand(other, "run-a");
+    h.desk.takeBack(ref, "run-a");
+    await h.desk.settled();
+    const unanswered = calls.filter(([event]) => event === "fieldd.objects.grants_mark_unanswered");
+    const reasons = unanswered.map((call) => (call[2] as { reason?: unknown }).reason);
+    expect(reasons).toEqual(["unknown", "unknown", "unknown", longest]);
+    const spelled = JSON.stringify(calls);
+    for (const part of ["planted-home", "/Users", "marks.json"])
+      expect(spelled).not.toContain(part);
+  });
 });
 
 describe("an older grants file put back is stale (OB custody, C5)", () => {
