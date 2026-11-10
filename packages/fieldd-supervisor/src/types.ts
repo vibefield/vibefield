@@ -1,4 +1,4 @@
-import type { ProductInfo, ShellLeaveReason } from "@vibefield/contracts";
+import type { CustodyHandoff, ProductInfo, ShellLeaveReason } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 
 // @vibefield/fieldd-supervisor (ESR spec §5.3): Node-only fieldd discovery,
@@ -19,13 +19,17 @@ export type SupervisorErrorKind =
   /** the spawned child exited before readiness — rejected promptly, never
    * waiting out the deadline (slice-0 finding 3 class) */
   | "child-exit"
+  /** OB custody (C6) — the spawned child is not this app's own signed code (`custody.verifyChild` said no, or
+   * threw): it was stopped, and nothing was written to it */
+  | "child-not-ours"
   | "readiness-timeout"
   | "aborted"
   | "disposed";
 
 /** Why an adoption probe did NOT adopt (diagnosis detail on errors/logs). */
 export type ProbeFailure =
-  /** no product.json/shell.token pair — nothing to adopt (normal first boot) */
+  /** no product.json/shell.token pair — nothing to adopt (normal first boot). Under custody's `sealed` level, no
+   * product.json: a sealed fieldd writes no token */
   | "no-run-files"
   | "malformed-product"
   /** run files exist but nothing adoptable answers on the recorded port */
@@ -90,7 +94,10 @@ export type SupervisorLifecycleEventName =
   // item 212 (RV #67) — an OWNED fieldd silent past the wedge bound, ended by the child-only ladder
   | "fieldd.supervisor.wedge_killed"
   // ESP-18 (item 341) — `spawnEnvironment` rejected or did not answer in time; the spawn went on without it
-  | "fieldd.supervisor.spawn_environment_unavailable";
+  | "fieldd.supervisor.spawn_environment_unavailable"
+  // OB custody — a sealed spawn: the child was handed its custody, or was not ours and was handed nothing
+  | "fieldd.supervisor.custody_handed"
+  | "fieldd.supervisor.child_not_ours";
 
 /** Item 212 (RV #67) — the liveness watch's numbers (liveness.ts; FIELDD_LIVENESS are the house's): an ask every
  * `intervalMs`, `missThreshold` misses in a row to `unresponsive`, and `confirmMs` of reply silence to `wedged`. */
@@ -132,6 +139,22 @@ export type FielddSupervisorEvent =
       readonly kind: "unexpected-stdout";
       readonly line: string;
     };
+
+/** OB custody — what a host that holds custody hands the supervisor (the packaged shell's keystore-rooted provider;
+ * the supervisor stays Electron-free, wall R3). Its presence IS the `sealed` level for this data root: the pair is
+ * adopted by pairing and spawned with a hand-off, and no token file is read or expected.
+ *
+ * The hand-off is secret. The supervisor writes it to the child's stdin and uses its `shell` secret to make and check
+ * pairing MACs; it never logs it, puts it in an event or an error, an argument or an environment. */
+export interface FielddCustody {
+  /** This data root's hand-off: asked once per `ensure()` attempt. */
+  handoff(): CustodyHandoff;
+  /** C6 — is the child this supervisor just spawned our own signed fieldd? The host wires `@vibefield/trust`'s
+   * `childIsOurs` with `{ identifier: FIELDD_SIGNING_IDENTIFIER }` (C6b: a sibling binary of our team in fieldd's
+   * place is not fieldd). Awaited BEFORE anything is written to the child; `false` or a throw stops the child and
+   * fails the attempt `child-not-ours`. Absent: no check (a test's supervisor). */
+  verifyChild?(pid: number): Promise<boolean>;
+}
 
 export interface FielddSupervisorOptions {
   dataRoot: string;
@@ -187,6 +210,12 @@ export interface FielddSupervisorOptions {
    * adopted one is only said (ESR §5.3). `false` arms none: a fieldd under the inspector, whose paused debugger is no
    * wedge. */
   liveness?: FielddLivenessOptions | false;
+  /** OB custody — given: this pair runs `sealed` (`FielddCustody`). A spawned fieldd gets a piped stdin,
+   * `FIELDD_CUSTODY=stdin` and, once it is verified ours, ONE line: the hand-off. Readiness is its own ready line
+   * and then one pairing probe of that port and boot; adoption is product.json and then the pairing. A daemon from
+   * before custody (it refuses the pairing and its `shell.token` answers) is asked to stop by that bearer and
+   * replaced, whatever `buildMismatch` says. Absent: `files`, today's path in every byte. */
+  custody?: FielddCustody;
   /** Typed lifecycle/control/emergency boundary. Readiness stdout is never
    * collapsed into stderr or duplicated as a routine shell log. */
   onEvent?: (event: FielddSupervisorEvent) => void;

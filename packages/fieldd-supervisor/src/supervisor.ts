@@ -1,5 +1,8 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import {
+  CONTRACTS_VERSION,
+  CUSTODY,
+  CustodyHandoff,
   type ProductInfo,
   type ShellLeaveReason,
   SOCKET_ALIAS_PARENT_ENV,
@@ -11,12 +14,14 @@ import { assertDataRootUsable } from "./paths";
 import {
   awaitDeparture,
   type ProbeResult,
+  probeSealedBoot,
   readRecordedProduct,
   type StaleDaemon,
   tryAdopt,
 } from "./probe";
 import { createLineBuffer, createLogTail, redactLine } from "./process-log";
 import {
+  type FielddCustody,
   type FielddHandle,
   type FielddLiveness,
   type FielddReadySignal,
@@ -137,14 +142,18 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       aliasParent: socketAliasParentFrom(opts.environment[SOCKET_ALIAS_PARENT_ENV]),
     });
     throwIfAborted(signal);
+    // OB custody — `sealed` iff the host handed a provider. The hand-off is asked ONCE for this attempt: its shell
+    // secret pairs every probe below, and the whole of it is the one line a spawned child is handed.
+    const custody = opts.custody;
+    const handoff = custody === undefined ? null : takeHandoff(custody);
 
-    const first = await adoptProbe(opts.adoptProbeMs ?? ADOPT_PROBE_MS, signal);
+    const first = await adoptProbe(opts.adoptProbeMs ?? ADOPT_PROBE_MS, signal, handoff);
     throwIfAborted(signal);
     // item 212 (RV #30) — a probe-timeout is busy, not gone: the wait's final probe goes to the ONE decision below,
     // exactly as a first probe would
     const waited =
       !first.ok && first.failure === "probe-timeout" && first.recorded !== undefined
-        ? await awaitBusyIncumbent(first, first.recorded, signal)
+        ? await awaitBusyIncumbent(first, first.recorded, signal, handoff)
         : null;
     const adopted = waited?.probe ?? first;
     if (adopted.ok) {
@@ -170,7 +179,10 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       TAKEOVER_FAILURES.has(adopted.failure) ||
       (adopted.failure === "probe-timeout" && waited?.gone !== true);
     if (adopted.failure === "incompatible-build") {
-      if (opts.buildMismatch !== "replace" || adopted.stale === undefined) {
+      // OB custody — a fieldd from before custody (the probe's one legacy read) is replaced whatever the build
+      // policy says: it bears a token a sealed shell does not use, and its own bearer is what asks it to stop
+      const replace = opts.buildMismatch === "replace" || adopted.preCustody === true;
+      if (!replace || adopted.stale === undefined) {
         adopted.stale?.client.close();
         throw new SupervisorError(
           "incompatible-build",
@@ -195,14 +207,22 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     const asked = await askSpawnEnvironment(signal);
 
     const tail = createLogTail();
-    const spawned = spawnFieldd(tail, asked);
-    child = spawned;
-
     // child exit before readiness rejects PROMPTLY (spec; slice-0 finding 3)
     const exitState: { info: { code: number | null; signal: NodeJS.Signals | null } | null } = {
       info: null,
     };
     const exitWaiters = new Set<() => void>();
+    // OB custody — a sealed child's own ready line, which its readiness waits on. At `files` the line is only
+    // reported, as before, and wakes nothing: the run-file poll keeps its own cadence.
+    const sealed = handoff !== null;
+    const readyState: { said: FielddReadySignal | null } = { said: null };
+    const spawned = spawnFieldd(tail, asked, sealed, (said) => {
+      readyState.said = said;
+      if (!sealed) return;
+      for (const wake of [...exitWaiters]) wake();
+    });
+    child = spawned;
+
     const noteExit = (code: number | null, sig: NodeJS.Signals | null) => {
       exitState.info = { code, signal: sig };
       for (const wake of [...exitWaiters]) wake();
@@ -216,6 +236,64 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     });
 
     try {
+      if (custody !== undefined && handoff !== null) {
+        // OB custody — sealed readiness. The child is asked about and handed its custody, says ready on its own
+        // stdout, and then proves the pairing ONCE, on the port and boot that line stated: no run file decides
+        // anything, and no token is read. A lost spawn race reads as this child's exit here; the next ensure()
+        // adopts the winner by pairing.
+        await handCustody(spawned, custody, handoff, tail);
+        const boundMs = opts.readinessDeadlineMs ?? READINESS_DEADLINE_MS;
+        const deadline = Date.now() + boundMs;
+        let said: FielddReadySignal | null = null;
+        for (;;) {
+          throwIfAborted(signal);
+          said = readyState.said;
+          if (said !== null) break;
+          const exited = exitState.info;
+          if (exited) {
+            throw new SupervisorError(
+              "child-exit",
+              `fieldd exited before readiness (code ${exited.code}, signal ${exited.signal})` +
+                (tail.lines().length > 0 ? `\n  ${tail.lines().join("\n  ")}` : ""),
+            );
+          }
+          const leftMs = deadline - Date.now();
+          if (leftMs <= 0) {
+            throw new SupervisorError(
+              "readiness-timeout",
+              `fieldd did not say ready within ${boundMs}ms`,
+            );
+          }
+          await wakeOrWait(Math.min(POLL_INTERVAL_MS, leftMs), signal, exitWaiters);
+        }
+        const daemon = { port: said.port, bootId: said.bootId, userId: opts.userId ?? "" };
+        const probeMs = Math.max(POLL_PROBE_MS, deadline - Date.now());
+        const paired = await probeSealedBoot(daemon, handoff.shell, probeMs, signal);
+        // an answer that lands with the abort is closed here: an open probe client reconnects forever
+        if (signal.aborted && paired.ok) paired.client.close();
+        throwIfAborted(signal);
+        if (!paired.ok) {
+          if (paired.failure === "probe-timeout") {
+            throw new SupervisorError(
+              "readiness-timeout",
+              `fieldd said ready and did not answer the pairing within ${boundMs}ms`,
+              paired.failure,
+            );
+          }
+          throw new SupervisorError(
+            "spawn-failed",
+            `the spawned fieldd said ready and did not prove the pairing (${paired.failure})`,
+            paired.failure,
+          );
+        }
+        const info = await recordOfSealedSpawn(spawned, said);
+        lifecycle("fieldd.supervisor.ready", "Spawned fieldd became ready", {
+          port: info.port,
+          pid: info.pid,
+          bootId: info.bootId,
+        });
+        return makeHandle("spawned", { ok: true, client: paired.client, info });
+      }
       const deadline = Date.now() + (opts.readinessDeadlineMs ?? READINESS_DEADLINE_MS);
       let lastFailure: ProbeFailure = "no-run-files";
       let answeredLate = false;
@@ -311,11 +389,124 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     }
   }
 
-  /** The adopt phase's probe: this build and this user only, and (`replace`) the other build's client kept open. */
-  function adoptProbe(probeMs: number, signal: AbortSignal): Promise<ProbeResult> {
+  /** The adopt phase's probe: this build and this user only, and (`replace`) the other build's client kept open.
+   * OB custody — with a hand-off it pairs under the shell secret and reads no token, and a stale client is always
+   * kept: a fieldd from before custody is replaced whatever the build policy says, and run()'s decision closes any
+   * other. */
+  function adoptProbe(
+    probeMs: number,
+    signal: AbortSignal,
+    handoff: CustodyHandoff | null,
+  ): Promise<ProbeResult> {
+    if (handoff === null) {
+      return tryAdopt(opts.dataRoot, probeMs, signal, opts.expectedBuildId, opts.userId, {
+        keepStaleClient: opts.buildMismatch === "replace",
+      });
+    }
     return tryAdopt(opts.dataRoot, probeMs, signal, opts.expectedBuildId, opts.userId, {
-      keepStaleClient: opts.buildMismatch === "replace",
+      keepStaleClient: true,
+      credential: { kind: "pairing", secret: handoff.shell },
     });
+  }
+
+  /** OB custody — this attempt's hand-off, as the provider gave it and held to the contract. What is thrown names
+   * no part of it: a schema issue can quote what it refused. */
+  function takeHandoff(custody: FielddCustody): CustodyHandoff {
+    let given: CustodyHandoff;
+    try {
+      given = custody.handoff();
+    } catch (cause) {
+      throw new SupervisorError(
+        "spawn-failed",
+        "the custody provider gave no hand-off",
+        undefined,
+        cause,
+      );
+    }
+    if (!CustodyHandoff.safeParse(given).success) {
+      throw new SupervisorError(
+        "spawn-failed",
+        "the custody provider's hand-off is not a hand-off",
+      );
+    }
+    return given;
+  }
+
+  /** OB custody — hand a spawned child its custody. C6 first: the child is asked about BEFORE anything is written
+   * to it, and a child that is not ours (or a verifier that throws) fails the attempt `child-not-ours`; run()'s
+   * failure path stops it. Then ONE line, the hand-off as JSON, and EOF. The line exists only here: never logged,
+   * never in an event, never in an error. A stdin that closed under the write is a child already going; its exit
+   * is what the readiness wait reports. */
+  async function handCustody(
+    proc: ChildProcess,
+    custody: FielddCustody,
+    handoff: CustodyHandoff,
+    tail: ReturnType<typeof createLogTail>,
+  ): Promise<void> {
+    const pid = proc.pid;
+    const stdin = proc.stdin;
+    if (pid === undefined || stdin === null) {
+      throw new SupervisorError("spawn-failed", "the spawned fieldd has no stdin to be handed on");
+    }
+    if (custody.verifyChild !== undefined) {
+      let ours = false;
+      try {
+        ours = (await custody.verifyChild(pid)) === true;
+      } catch {
+        ours = false;
+      }
+      if (!ours) {
+        lifecycle(
+          "fieldd.supervisor.child_not_ours",
+          "The spawned fieldd is not this app's own signed code; it is stopped and was handed nothing",
+          { pid },
+        );
+        throw new SupervisorError(
+          "child-not-ours",
+          "the spawned fieldd is not this app's own signed code; it was handed nothing",
+        );
+      }
+    }
+    const line = `${JSON.stringify(handoff)}\n`;
+    const written = await new Promise<boolean>((resolve) => {
+      // the end's callback hears an error too, when the stream failed before it finished
+      const finished = (error?: Error | null): void => resolve(!error);
+      stdin.once("error", () => resolve(false));
+      stdin.end(line, "utf8", finished);
+    });
+    if (written) {
+      lifecycle("fieldd.supervisor.custody_handed", "Handed the spawned fieldd its custody", {
+        pid,
+      });
+    } else {
+      tail.note("[supervisor] the hand-off could not be written: the child's stdin had closed");
+    }
+  }
+
+  /** OB custody — the record a sealed spawn's handle carries: product.json when it is this boot's (fieldd writes it
+   * before its ready line), else what the ready line and the spawn themselves state. Readiness never waited on it. */
+  async function recordOfSealedSpawn(
+    proc: ChildProcess,
+    said: FielddReadySignal,
+  ): Promise<ProductInfo> {
+    const recorded = await readRecordedProduct(opts.dataRoot);
+    if (recorded !== null && recorded.bootId === said.bootId && recorded.port === said.port) {
+      return recorded;
+    }
+    if (proc.pid === undefined) {
+      throw new SupervisorError("spawn-failed", "the spawned fieldd has no pid");
+    }
+    return {
+      port: said.port,
+      pid: proc.pid,
+      bootId: said.bootId,
+      contractsVersion: CONTRACTS_VERSION,
+      startedAt: Date.now(),
+      nativePid: null,
+      buildId: opts.expectedBuildId ?? null,
+      ...(opts.userId !== undefined ? { userId: opts.userId } : {}),
+      custody: "sealed",
+    };
   }
 
   /** Item 212 (RV #30) — a probe-timeout is a listener that took the dial and not the hello inside the budget: a
@@ -333,6 +524,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     first: ProbeResult,
     recorded: ProductInfo,
     signal: AbortSignal,
+    handoff: CustodyHandoff | null,
   ): Promise<BusyWait> {
     const started = Date.now();
     const deadline = started + (opts.readinessDeadlineMs ?? READINESS_DEADLINE_MS);
@@ -357,7 +549,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       const leftMs = deadline - Date.now();
       if (leftMs <= 0) return { probe: last, waitedMs: Date.now() - started, gone: false };
       budgetMs = Math.min(budgetMs * 2, leftMs);
-      const probe = await adoptProbe(budgetMs, signal);
+      const probe = await adoptProbe(budgetMs, signal, handoff);
       if (signal.aborted) {
         // an answer that lands with the abort is closed here: an open probe client reconnects forever
         if (probe.ok) probe.client.close();
@@ -420,9 +612,13 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     }
   }
 
+  /** `sealed` (OB custody): the child gets a piped stdin and `FIELDD_CUSTODY=stdin`, a flag and never a secret;
+   * run() hands it its custody next. `onReady` hears the child's ready line, once. */
   function spawnFieldd(
     tail: ReturnType<typeof createLogTail>,
     asked: Readonly<Record<string, string>>,
+    sealed: boolean,
+    onReady: (said: FielddReadySignal) => void,
   ): ChildProcess {
     const env: Record<string, string | undefined> = {
       ...opts.environment,
@@ -444,12 +640,13 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       ...(opts.controlPort !== undefined ? { FIELDD_CONTROL_PORT: String(opts.controlPort) } : {}),
       ...(opts.dataPort !== undefined ? { FIELDD_DATA_PORT: String(opts.dataPort) } : {}),
       ...(opts.expectedBuildId !== undefined ? { FIELDD_BUILD_ID: opts.expectedBuildId } : {}),
+      ...(sealed ? { [CUSTODY.ENV]: CUSTODY.STDIN } : {}),
     };
     let spawned: ChildProcess;
     try {
       spawned = spawn(opts.spawn.command, [...opts.spawn.args], {
         env,
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: [sealed ? "pipe" : "ignore", "pipe", "pipe"],
         // WIN-3 — a spawned fieldd is a background daemon; without this every
         // launch flashes a console window on Windows (EDP §10.2 forbids it).
         // Detach and job breakaway are a separate decision (§4.3), not here.
@@ -463,12 +660,15 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
         e,
       );
     }
+    // a child that died before it read must not throw EPIPE at the shell: the hand-off's write reads its own failure
+    spawned.stdin?.on("error", () => undefined);
     let readySeen = false;
     const stdoutSink = (line: string) => {
       const signal = readySeen ? null : parseReadySignal(line);
       if (signal) {
         readySeen = true;
         emit({ kind: "readiness", signal });
+        onReady(signal);
         return;
       }
       tail.note(`[stdout] ${line}`);
@@ -785,6 +985,22 @@ function keptSpawnKeys(answer: unknown): Record<string, string> {
 
 function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) throw new SupervisorError("aborted", "supervisor operation aborted");
+}
+
+/** Sleep `ms`, waking early on abort or when something calls a waker in `wakers` (a child's exit, a sealed child's
+ * ready line). */
+function wakeOrWait(ms: number, signal: AbortSignal, wakers: Set<() => void>): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const t = setTimeout(done, ms);
+    function done(): void {
+      clearTimeout(t);
+      signal.removeEventListener("abort", done);
+      wakers.delete(done);
+      resolve();
+    }
+    signal.addEventListener("abort", done, { once: true });
+    wakers.add(done);
+  });
 }
 
 /** Item 212 (RV #30) — does `pid` name a process? `process.kill(pid, 0)` is the existence check and delivers no

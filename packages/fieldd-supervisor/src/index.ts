@@ -8,6 +8,7 @@ export {
   type LivenessWatch,
   watchLiveness,
 } from "./liveness";
+export { type PairedDaemon, shellPairing } from "./pairing";
 export {
   assertDataRootUsable,
   nativeMgmtEndpoint,
@@ -17,6 +18,7 @@ export {
   tokenPath,
 } from "./paths";
 export {
+  type AdoptCredential,
   awaitDeparture,
   type ProbeResult,
   readRecordedProduct,
@@ -32,6 +34,7 @@ export {
 } from "./process-log";
 export { createFielddSupervisor } from "./supervisor";
 export {
+  type FielddCustody,
   type FielddHandle,
   type FielddLiveness,
   type FielddLivenessOptions,

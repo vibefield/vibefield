@@ -3,6 +3,7 @@ import {
   CONTRACTS_VERSION,
   ForwardReceipt,
   KEYED_FORWARD_METHODS,
+  type PairingMac,
   PRODUCT_NOTIFICATIONS,
   SystemTick,
 } from "@vibefield/contracts";
@@ -129,6 +130,16 @@ function isTransportFrameRefusal(error: unknown): boolean {
   );
 }
 
+/** OB custody — whether `pairing` takes a hello ack's `serverMac` as proof. What is not a string never reaches the
+ * judge as one, and a judge that throws was not convinced. */
+function provedBy(pairing: FielddPairing, serverMac: unknown): boolean {
+  try {
+    return pairing.proves(typeof serverMac === "string" ? { serverMac } : {}) === true;
+  } catch {
+    return false;
+  }
+}
+
 /** Item 60 — whether a frame is over `bound` UTF-8 bytes, counted without
  * encoding it. A UTF-16 unit is one to three bytes (a surrogate pair is two
  * units, four bytes), so a frame of at most bound/3 units is under, uncounted;
@@ -187,11 +198,28 @@ export type FielddClientStatus =
   | "closed"
   | "failed";
 
+/** OB custody (C2) — how a `shell-main` client proves itself where no shell token exists (custody's `sealed`
+ * level): it pairs. Two functions, made in Node from the pairing secret and handed in, because this file is
+ * browser-safe and holds no crypto and no secret.
+ *  - `credential()` makes the hello's `PairingMac` (`{bootId, ts, nonce, mac}`): asked ONCE per connection attempt, so
+ *    every dial carries a fresh nonce.
+ *  - `proves(ack)` judges the answer to THAT attempt: whether the ack's `serverMac` proves the listener holds the
+ *    same secret. A listener that only took the hello learned a MAC it cannot reuse and nothing else. */
+export interface FielddPairing {
+  credential(): PairingMac;
+  proves(ack: { serverMac?: string }): boolean;
+}
+
 export interface FielddClientOptions {
   url: string; // e.g. ws://127.0.0.1:9410
   /** empty string = no credential in hello (C5: peer dials ride the tailnet
-   * door's WhoIs grant — a token would be wrong there, not just absent) */
+   * door's WhoIs grant — a token would be wrong there, not just absent).
+   * Never sent while `pairing` is given. */
   token: string;
+  /** OB custody (C2) — pair instead of bearing: the hello carries `pairing.credential()` in place of `token`, and
+   * an ack that `pairing.proves` rejects ends the client `UNAUTHORIZED` ("the listener did not prove the pairing"),
+   * terminal like a refused token: the same listener would answer the same way again. */
+  pairing?: FielddPairing;
   clientKind?: ClientKind;
   /** C5/D32 — the peer-fieldd identity claim, sent in hello (label only;
    * honored solely on a tailnet door — see contracts Hello.deviceId) */
@@ -724,16 +752,40 @@ export class FielddClient {
   }
 
   private async hello(ws: WsLike): Promise<void> {
+    // OB custody — a pairing stands in for the bearer: made here, once for this attempt
+    const pairing = this.opts.pairing;
+    let credential: string | PairingMac | undefined;
+    if (pairing === undefined) {
+      credential = this.credential !== "" ? this.credential : undefined;
+    } else {
+      try {
+        credential = pairing.credential();
+      } catch {
+        // no credential, no hello; the next attempt would fail the same way, so this is terminal
+        this.fail(
+          new FielddRpcError("UNAUTHORIZED", "this client could not make its pairing credential"),
+        );
+        return;
+      }
+    }
     try {
       const ack = (await this.sendRequest("system.hello", {
         contractsVersion: CONTRACTS_VERSION,
         minCompatible: CONTRACTS_VERSION,
         clientKind: this.opts.clientKind ?? "renderer",
-        ...(this.credential !== "" ? { credential: this.credential } : {}),
+        ...(credential !== undefined ? { credential } : {}),
         ...(this.opts.deviceId !== undefined ? { deviceId: this.opts.deviceId } : {}),
         ...(this.opts.userId !== undefined ? { userId: this.opts.userId } : {}),
       })) as { grantedScopes?: string[]; deviceId?: unknown };
       if (this.ws !== ws) return; // superseded by a newer dial while awaiting
+      // read before anything else of the ack, and tolerantly: an ack that is no object proves nothing
+      const serverMac = (ack as { serverMac?: unknown } | null | undefined)?.serverMac;
+      if (pairing !== undefined && !provedBy(pairing, serverMac)) {
+        // the listener took the hello and proved nothing: not our daemon, and nothing of the ack is believed.
+        // No JSON-RPC code: this is the client's own verdict, never a remote answer
+        this.fail(new FielddRpcError("UNAUTHORIZED", "the listener did not prove the pairing"));
+        return;
+      }
       this.grantedScopes = ack.grantedScopes ?? [];
       this.helloDeviceId =
         typeof ack.deviceId === "string" && ack.deviceId !== "" ? ack.deviceId : undefined;
