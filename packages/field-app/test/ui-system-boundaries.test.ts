@@ -1415,7 +1415,23 @@ describe("UI system ownership boundaries", () => {
     expect(rule).toContain("top: calc(var(--vf-godview-head-reserve) + 8px)");
     expect(rule).toContain("left: 13px");
     expect(rule).toContain("width: 52px");
-    expect(rule).not.toMatch(/\bheight:/);
+    // no fixed height: the pill hugs its circles. (UM-R-F, c6: `\b` matched between `max-` and `height:`, so the
+    // guard reads a `height:` that no `-` or letter leads.)
+    expect(rule).not.toMatch(/(?<![-\w])height:/u);
+    // UM-R-F (c6; DESIGN.md §8 "The pill"): a column, and its room ends at the field's foot. With no deck edge the
+    // stage is the deck's rest tall, so the foot is the field's gap above its own; on a stage whose deck edge moves,
+    // in flow the stage already ends at the field's foot; and on the stage lent the swarm, the field's foot itself.
+    expect(rule).toContain("display: flex");
+    expect(rule).toContain("flex-direction: column");
+    expect(rule).toContain(
+      "max-height: calc(100% - var(--vf-godview-head-reserve) - 8px - var(--vf-godview-deck-field-gap));",
+    );
+    expect(godview).toMatch(
+      /^\.vf-godview\[data-godview-deck-edge\] \.vf-monitor-chrome \{\s*max-height: calc\(100% - var\(--vf-godview-head-reserve\) - 8px\);/mu,
+    );
+    expect(godview).toMatch(
+      /\[data-stage-allocation="full"\]\s*> \.vf-monitor-chrome \{\s*max-height: calc\(var\(--vf-godview-field-foot\) - var\(--vf-godview-head-reserve\) - 8px\);/u,
+    );
     expect(godview).toMatch(/^\.vf-monitor-claims \{[^}]*left: 79px/m);
     // the review: at one z-index the strip, later in the DOM, painted its chips (a Retry and the approval line among
     // them, both taking clicks) over the popover's head and the cards beside the add — the column stands one over it

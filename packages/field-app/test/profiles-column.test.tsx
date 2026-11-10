@@ -1838,6 +1838,147 @@ describe("focus is pointing (UM-R-F, c4): the keyboard on a circle shows its car
   });
 });
 
+/* ── the pill's room (UM-R-F, c6; DESIGN.md §8 "The pill") ───────────────── */
+
+describe("the pill's room (UM-R-F, c6): the circles scroll inside it, the add pinned at its foot", () => {
+  // the UM-R5 rows' helper, copied: one rule's block of the column's sheet
+  const block = (selector: string): string => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    return new RegExp(`\\n${escaped} \\{[^}]*\\}`, "u").exec(CSS)?.[0] ?? "";
+  };
+  const box = (left: number, top: number, width: number, height: number): DOMRect =>
+    ({ left, top, width, height, right: left + width, bottom: top + height }) as DOMRect;
+  const several = (props: Partial<ProfilesColumnViewProps> = {}): ProfilesColumnViewProps =>
+    column({ circles: [thisMac(), work()], lens: true, ...props });
+
+  it("the circles stand in their own list and the add stays outside it, at the pill's foot; the list scrolls only in the stage", () => {
+    const target = cardLayer();
+    const page = mount(<ProfilesColumnView {...several({ cardLayer: target })} />);
+    const pill = page.querySelector<HTMLElement>(".vf-profiles-column");
+    const list = pill?.querySelector(".vf-profiles-circles");
+    expect(list?.parentElement).toBe(pill);
+    expect(list?.querySelectorAll(".vf-profiles-circle")).toHaveLength(2);
+    expect(pill?.querySelectorAll(".vf-profiles-circle")).toHaveLength(2);
+    expect(list?.querySelector(".vf-profiles-add-item")).toBeNull();
+    expect(pill?.lastElementChild?.classList.contains("vf-profiles-add-item")).toBe(true);
+    expect(pill?.getAttribute("data-cards")).toBe("layer");
+    // the catalog: its cards stand in place, so its list is not the scroller
+    act(() => root?.render(<ProfilesColumnView {...several()} />));
+    expect(page.querySelector(".vf-profiles-column")?.hasAttribute("data-cards")).toBe(false);
+  });
+
+  it("names the list's rules: it shrinks, scrolls only in the stage with no bar, keeps the pill's edge, and wears §4's fade while it holds more", () => {
+    expect(block(".vf-profiles-column")).toContain("min-height: 0;");
+    const list = block(".vf-profiles-circles");
+    for (const rule of ["display: flex;", "flex: 0 1 auto;", "gap: 4px;", "min-height: 0;"]) {
+      expect(list, rule).toContain(rule);
+    }
+    // the catalog's list never clips the cards that stand in place beside it
+    expect(list).not.toContain("overflow");
+    const stage = block('.vf-profiles-column[data-cards="layer"] .vf-profiles-circles');
+    for (const rule of [
+      "margin: -6px -6px -4px;",
+      "padding: 6px 6px 4px;",
+      "border-radius: 26px 26px 0 0;",
+      "overflow-y: auto;",
+      "overscroll-behavior: contain;",
+      "scrollbar-width: none;",
+    ]) {
+      expect(stage, rule).toContain(rule);
+    }
+    expect(CSS).toMatch(
+      /\n\.vf-profiles-column\[data-cards="layer"\] \.vf-profiles-circles::-webkit-scrollbar \{\s*display: none;/u,
+    );
+    const fade = block(
+      '.vf-profiles-column[data-cards="layer"] .vf-profiles-circles[data-overflow]',
+    );
+    expect(fade).toContain("padding-bottom: var(--vf-scroll-fade);");
+    expect(fade).toContain("scroll-padding-bottom: var(--vf-scroll-fade);");
+    expect(fade).toContain(
+      "mask-image: linear-gradient(to bottom, black calc(100% - var(--vf-scroll-fade)), transparent);",
+    );
+    expect(block(".vf-profiles-add-item")).toContain("flex: none;");
+  });
+
+  it("marks the list while it holds more than its room, measured as it stands without the fade; never in the catalog", () => {
+    const observers: { fire: () => void; targets: Element[] }[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        private readonly entry: { fire: () => void; targets: Element[] };
+        constructor(callback: () => void) {
+          this.entry = { fire: callback, targets: [] };
+          observers.push(this.entry);
+        }
+        observe(target: Element): void {
+          this.entry.targets.push(target);
+        }
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
+    try {
+      // the circles are 300 tall; the fade's 20 under their end, in place of the 4, adds 16 while the mark stands
+      const content = 300;
+      let room = 200;
+      const natural = (node: Element): number =>
+        node.hasAttribute("data-overflow") ? content + 16 : content;
+      vi.spyOn(Element.prototype, "scrollHeight", "get").mockImplementation(function (
+        this: Element,
+      ) {
+        return this.classList.contains("vf-profiles-circles") ? natural(this) : 0;
+      });
+      vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return this.classList.contains("vf-profiles-circles") ? Math.min(room, natural(this)) : 0;
+      });
+      const page = mount(<ProfilesColumnView {...several({ cardLayer: cardLayer() })} />);
+      const list = page.querySelector(".vf-profiles-circles");
+      expect(list?.hasAttribute("data-overflow")).toBe(true);
+      const watching = observers.find((each) => list !== null && each.targets.includes(list));
+      expect(watching).toBeDefined();
+      // room for every circle, though not for the fade's 20 too: it fits, so the mark goes
+      room = 310;
+      act(() => watching?.fire());
+      expect(list?.hasAttribute("data-overflow")).toBe(false);
+      room = 200;
+      act(() => watching?.fire());
+      expect(list?.hasAttribute("data-overflow")).toBe(true);
+      // the catalog's list never scrolls, so it is never marked
+      act(() => root?.render(<ProfilesColumnView {...several()} />));
+      expect(page.querySelector(".vf-profiles-circles")?.hasAttribute("data-overflow")).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("an open card follows its circle as the list scrolls", () => {
+    const target = cardLayer();
+    let itemTop = 120;
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: Element,
+    ) {
+      if (this === target) return box(0, 64, 1000, 600);
+      if (this.classList.contains("vf-profiles-column")) return box(13, 64, 52, 200);
+      if (this.classList.contains("vf-profiles-item")) return box(19, itemTop, 40, 40);
+      if (this.classList.contains("vf-profiles-stand")) return box(0, 0, 566, 300);
+      return box(0, 0, 0, 0);
+    });
+    const page = mount(<ProfilesColumnView {...several({ open: "work", cardLayer: target })} />);
+    const stand = target.querySelector<HTMLElement>('.vf-profiles-stand[data-profile="work"]');
+    expect(stand?.style.top).toBe("50px");
+    const list = page.querySelector(".vf-profiles-circles");
+    expect(list).not.toBeNull();
+    // the list scrolled 60 up: the item's top is 60, so the card stands at 60 − 64 − 6, held at the layer's top
+    itemTop = 60;
+    act(() => {
+      list?.dispatchEvent(new Event("scroll"));
+    });
+    expect(stand?.style.top).toBe("0px");
+  });
+});
+
 /* ── the card's details (UM-R5) ──────────────────────────────────────────── */
 
 describe("the card's details (UM-R5): §7 'Off', the truncations, the rings, the motion-off lists", () => {
