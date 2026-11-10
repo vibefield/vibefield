@@ -699,6 +699,9 @@ interface PendingEntry {
   retry?: NodeJS.Timeout | undefined;
   /** G5 — that attach is in flight: a replacement waits for its outcome */
   attaching: boolean;
+  /** Item 306 — a Stop's end was asked of this run's own PTY (`endRun`), and the floor's exit is owed: the idle
+   * poll holds off, so no replacement of the daemon's own can undo the Stop. A person's resume is not held. */
+  ending?: boolean | undefined;
 }
 
 /** Item 191, Q17 — what fieldd ends a live run by (`endLive`): the run's own PTY, or, for a run typed in the
@@ -2550,7 +2553,35 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
       return;
     }
-    await this.endLive(run, this.requireTerminals());
+    // Item 306 (2026-11-10) — an untyped run's end is its PTY's, and the run stays held until the floor's exit, a
+    // ladder later: the idle poll holds off meanwhile, and so does G5's attach retry (`retryAttach` defers while
+    // `ending`), so nothing of the daemon's own re-attaches the PTY or undoes the Stop. A typed run is never armed.
+    // An end that placed nothing, or threw, arms the poll again, and the deferred retry's next tick proceeds.
+    if (run.typed === undefined) {
+      // an attach in flight comes first (G5), as it does for a replacement: it may bind the PTY this would end
+      if (held.attaching) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "the session is being re-attached; ask again in a moment",
+          true,
+          { runtimeRunId, state: "attaching" },
+        );
+      }
+      held.ending = true;
+      if (held.poll !== undefined) {
+        clearTimeout(held.poll);
+        held.poll = undefined;
+      }
+    }
+    let placed = false;
+    try {
+      placed = (await this.endLive(run, this.requireTerminals())).placed;
+    } finally {
+      if (run.typed === undefined && !placed && this.pending.get(runtimeRunId) === held) {
+        held.ending = false;
+        this.armPending(held);
+      }
+    }
   }
 
   /** Item 191 (RV #2) — THE ONE WAY fieldd ends a live run, by its provenance. A run one of our doors started ends
@@ -4794,6 +4825,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         this.retryAttach(entry, attempt);
         return;
       }
+      // Item 306 — a Stop whose exit is owed (`ending`) holds it the same way: no attach of the PTY the Stop is
+      // ending, and no re-hold that would arm the idle poll again. Armed again at the same attempt, so a Stop that
+      // placed nothing leaves the retry as it found it
+      if (entry.ending === true) {
+        this.retryAttach(entry, attempt);
+        return;
+      }
       entry.attaching = true;
       void this.attachCounted(entry.record, row, terminalId, attempt)
         .catch((error: unknown) => {
@@ -4899,6 +4937,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (
       this.disposed ||
       entry.resuming ||
+      entry.ending === true ||
       isTypedRun(entry.record) ||
       !conversationSaved(entry.record)
     )
@@ -4911,9 +4950,15 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private async pollPending(entry: PendingEntry): Promise<void> {
     entry.poll = undefined;
     const runtimeRunId = entry.record.runtimeRunId;
-    if (this.disposed || entry.resuming || this.pending.get(runtimeRunId) !== entry) return;
+    // item 306 — and never while a Stop's end is owed (`ending`), read again after the index's answer
+    const polled = (): boolean =>
+      !this.disposed &&
+      !entry.resuming &&
+      entry.ending !== true &&
+      this.pending.get(runtimeRunId) === entry;
+    if (!polled()) return;
     const verdict = await this.idleVerdict(entry.record);
-    if (this.disposed || entry.resuming || this.pending.get(runtimeRunId) !== entry) return;
+    if (!polled()) return;
     if (!verdict.answered) {
       entry.failures += 1;
       this.armPending(entry);
