@@ -1,7 +1,9 @@
 // @vibefield/trust — OB custody (C6): whose code a process is, asked of macOS's own tool. Custody is handed only by a
 // shell that is itself signed by a team under the hardened runtime (`ownIdentity`, else the level is `files`), and
 // only to a child that is the same team's, under the same runtime, BEFORE anything is written to it (`childIsOurs`).
-// So a daemon binary swapped in the bundle is spawned, asked about, and never handed a secret.
+// So a daemon binary swapped in the bundle that is STILL that binary when it is asked about is spawned, asked about,
+// and never handed a secret: this stops a wrong binary that stays itself, and no more than that (see "What this is
+// NOT", corrected 2026-11-10).
 //
 // C6b — and only to the binary the caller EXPECTS, by its signing identifier. "Our team, hardened" is true of every
 // binary our team signs, and the bundle holds others: `field-terminal-host` and `field-freeway-host` read the first
@@ -9,8 +11,16 @@
 // place would pass a team check and be handed the custody line. The requirement therefore names the identifier first.
 //
 // What this is NOT: a check on a peer. A pid proves nothing about who holds a socket (fork, then exec the genuine
-// binary: the pid verifies and the first process speaks). `childIsOurs` is sound only for a child its caller spawned
-// and has not reaped, whose pid cannot be another process's; `processIsOurs` says so about itself.
+// binary: the pid passes and the first process speaks). And for a spawned child, a `true` is about the IMAGE at that
+// pid at the moment it is asked, and about nothing else. It does not say that image chose its own arguments,
+// environment and descriptors, and it does not say that nobody else holds the read end of the pipe: a program that
+// forks and THEN becomes the genuine binary keeps its pid, passes, and has left a second reader of its stdin.
+// What a child its caller spawned and has not reaped does give is narrower: its pid cannot have been taken by another
+// process, so the answer is about that child's image and nobody else's. `processIsOurs` says what it is not about
+// itself.
+// *Corrected 2026-11-10 (item 288; James's pick, NOT ruled). The opening said a swapped binary is "never handed a
+// secret", with no condition, and this paragraph said `childIsOurs` "is sound" for a child its caller spawned.
+// Neither holds for a program written to pass, and nothing in this module stops that one.*
 //
 // Never run on a signed build (the lane's rows are edits only): every expectation of codesign here is read from its
 // manual, and the rows inject `run`. A landing-class row on a signed package is owed.
@@ -151,10 +161,15 @@ async function satisfies(
 }
 
 /**
- * true when the CHILD `pid` is the binary `expect` names, signed by `own.team`, under the hardened runtime: the
- * dynamic check (`codesign --verify -R … +pid`), then its runtime flag. Only for a child the caller spawned and has
- * not reaped. Its pid is then that child's and no other process's, which is what makes a pid check sound here and
- * nowhere else. Await it BEFORE writing anything to the child.
+ * true when the image at the CHILD `pid`, now, is the binary `expect` names, signed by `own.team`, under the hardened
+ * runtime: the dynamic check (`codesign --verify -R … +pid`), then its runtime flag. Only for a child the caller
+ * spawned and has not reaped: its pid is then that child's and no other process's, so the answer is about that
+ * child's image and nobody else's. Await it BEFORE writing anything to the child. It stops a wrong binary that stays
+ * itself. A `true` does not say that image chose its own arguments, environment and descriptors, or that nobody
+ * else holds the read end of the child's stdin.
+ * *Corrected 2026-11-10 (item 288; James's pick, NOT ruled): this said the pid's being the child's "is what makes a
+ * pid check sound here". It makes the answer be about the right process. It does not make a hand-off on that answer
+ * safe from a program that forks and then becomes this binary.*
  */
 export function childIsOurs(
   pid: number,

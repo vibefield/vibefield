@@ -219,10 +219,10 @@ export interface FielddSupervisorOptions {
    * wedge. */
   liveness?: FielddLivenessOptions | false;
   /** OB custody — given: this pair runs `sealed` (`FielddCustody`). A spawned fieldd gets a piped stdin,
-   * `FIELDD_CUSTODY=stdin` and, once it is verified ours, ONE line: the hand-off. Readiness is its own ready line
-   * and then one pairing probe of that port and boot; adoption is product.json and then the pairing. A daemon from
-   * before custody (it refuses the pairing and its `shell.token` answers) is asked to stop by that bearer and
-   * replaced, whatever `buildMismatch` says. Every handle's client then hears fieldd's marks
+   * `FIELDD_CUSTODY=stdin` and, once it was asked about and not refused, ONE line: the hand-off. Readiness is its
+   * own ready line and then one pairing probe of that port and boot; adoption is product.json and then the pairing.
+   * A daemon from before custody (it refuses the pairing and its `shell.token` answers) is asked to stop by that
+   * bearer and replaced, whatever `buildMismatch` says. Every handle's client then hears fieldd's marks
    * (`system.custody.marks.subscribe`), and the highest heard per name is the next spawn's `expect`. Absent: `files`,
    * today's path in every byte. */
   custody?: FielddCustody;

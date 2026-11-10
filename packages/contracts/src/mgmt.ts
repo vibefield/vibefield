@@ -1290,7 +1290,8 @@ export type NativeMarksSetResult = z.infer<typeof NativeMarksSetResult>;
  * floor held for it; a set with NO `startedFor` clears it, and clearing nothing is no error. Never `null`: an
  * optional is the spelling the Rust generator takes (serde reads a `null` there as absent, so the floor would take
  * one for a clear; this side refuses it and fieldd never sends it). A `process.pid` below 2 does not parse here; the
- * generated Rust type cannot say so, and the floor refuses it by hand (`INVALID_PARAMS`).
+ * generated Rust type cannot say so, and the floor refuses it by hand, with `PRECONDITION_FAILED` and no
+ * `details.reason`. *Corrected 2026-11-10: this said `INVALID_PARAMS`. No such kind exists (errors.ts, `ErrorKind`).*
  * Refused `PRECONDITION_FAILED` with `details.reason`: `not-sealed`, a floor that was not booted by the stdin
  * hand-off and so keeps no table; or `started-for-full`, a NEW `sessionId` while the floor still holds
  * `CUSTODY.STARTED_FOR_MAX` after dropping what no longer runs (a session it holds is always replaced).
