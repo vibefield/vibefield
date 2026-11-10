@@ -8,9 +8,8 @@
 // THE FIRST TWO ROWS GO THROUGH THE REAL DAEMON with nothing injected. `daemon.ts` hands the runtime its link as the
 // floor's table only when custody was handed (the level), and the rows WATCH that link's `setStartedFor` with a spy
 // that calls through, so every answer is the real floor's. A typed run's terminal was listed long before its
-// adoption, so here the floor's answer IS asserted. (The spawn rows in agent-session.test.ts do not assert it: a set
-// sent in the turn a new terminal is born can reach the floor before its inventory lists it; CUSTODY-SPEC §8.1.0
-// "v0.24".)
+// adoption: it is the case of CUSTODY-SPEC §8.1.0 "v0.24" in which the row is already listed when the run enters,
+// so the set is said right then, once, and the floor takes it.
 //
 // The last row reads the source: that the adoption path cannot pass a spark is a property of a signature.
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";

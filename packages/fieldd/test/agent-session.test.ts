@@ -6826,20 +6826,26 @@ describe("item 121 — a run TC-D4's fallback put on the interactive cell re-att
 // OB custody (CUSTODY-SPEC §8.1.0, rule 6) — LAUNCH MEMORY, and the floor is told what each terminal was started for.
 // A run's record is signed under a key file an agent can read, so who a run is, for a grant, is never read back from
 // it. fieldd remembers what IT launched (`agents.bornFor`), and a fieldd that was handed custody says the same to the
-// floor in the turn the run entered, so that the next fieldd is handed it in the hello ack. A fieldd handed nothing
-// keeps the memory and tells the floor nothing.
+// floor, so that the next fieldd is handed it in the hello ack. A fieldd handed nothing keeps the memory and tells
+// the floor nothing.
 //
-// THE FIRST TWO ROWS GO THROUGH THE REAL DAEMON on the real floor, with nothing injected. `daemon.ts` hands the
+// WHEN it is said (CUSTODY-SPEC §8.1.0 "v0.24"): ONCE, when the run's row is first seen running in an inventory.
+// The floor takes a set only for a terminal its own inventory lists, and a set sent in the turn a new terminal is
+// born can reach it first (ob-d's finding of 2026-11-10). A row already listed when the run enters is said right
+// then; a run that leaves the fold before its row is ever seen is never said; a later inventory says nothing more.
+//
+// THE ROWS TITLED "through the real daemon" run on the real floor with nothing injected. `daemon.ts` hands the
 // runtime its link as the floor's table only when custody was handed (the level), and these rows WATCH that link's
 // `setStartedFor` with a spy that calls through. They are §10's proof that the level and `setStartedFor` are bound.
 //
-// The rows titled "GIVEN AN INJECTED FLOOR" replace that one method's ANSWER on the same real daemon, to show the
-// runtime's rule for each word the link can say. They prove nothing of the binding; the two rows before them do.
+// The rows titled "GIVEN A HELD INVENTORY" hold the runtime's own two reads of the floor's inventory (`holdInventory`)
+// so that the order "entered before its row was seen" is certain. The custody seam is not touched in them.
 //
-// NOT ASSERTED HERE: the real floor's own answer to a set sent this early. In this pair the set leaves in the turn
-// the run enters, and the floor answers NOT_FOUND until its own inventory lists the new terminal (ob-d's finding of
-// 2026-11-10; CUSTODY-SPEC §8.1.0 "v0.24" rules when it is said instead, and that is the rider on top of this pair).
-// The first row prints the answers it got (`STARTED_FOR_ANSWER`) and asserts nothing of them.
+// The rows titled "GIVEN AN INJECTED FLOOR" replace `setStartedFor`'s ANSWER on the same real daemon, to show the
+// runtime's rule for each word the link can say. They prove nothing of the binding.
+//
+// COUNTED, NOT GATED (the PM's row 4): of the first row's launches, how many sayings the real floor answered
+// `not-found`. It prints `STARTED_FOR_COUNT` and asserts nothing of it; none is expected in this form.
 describe("OB custody §8.1 — launch memory, and the floor is told what each terminal was started for", () => {
   const SEALED = { floor: "real", custody: HANDED } as const;
   const WITH_SPARKS = { profiles: true, briefing: SPARK_BRIEFING } as const;
@@ -6892,39 +6898,94 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
       .map((line) => JSON.parse(line) as { event?: string })
       .filter((record) => record.event === event).length;
   };
+  /** No retry inside a row that counts sayings: every set it sees is a sighting's. */
+  const NO_RETRY_MS = 600_000;
+  /** One more inventory, as the floor would push it: the terminals fieldd lists now. */
+  const anotherInventory = (box: Box): void => {
+    box.daemon.agents.handleInventory(box.daemon.terminals.list());
+  };
+  /** GIVEN A HELD INVENTORY — the order "entered before its row was seen", made certain. The runtime reads the
+   * floor's inventory in two places: `listed` (what `enter` asks of the latest one) and `handleInventory` (each
+   * push). From this call until `release()`, `listed` answers no for every terminal born since, and every push is
+   * kept back; `release()` delivers what was kept and lets the rest through. The custody seam is not touched: the
+   * link, and what daemon.ts hands the runtime, are the real ones. */
+  function holdInventory(box: Box): { release(): void } {
+    type Reads = {
+      listed(terminals: unknown, sessionId: string): boolean;
+      handleInventory(rows: readonly TerminalInfo[]): void;
+    };
+    const runtime = box.daemon.agents as unknown as Reads;
+    const known = new Set(box.daemon.terminals.list().map((row) => row.sessionId));
+    const listed = runtime.listed;
+    const inventory = runtime.handleInventory;
+    const keptBack: Array<readonly TerminalInfo[]> = [];
+    let holding = true;
+    vi.spyOn(runtime, "listed").mockImplementation((terminals, sessionId) => {
+      if (holding && !known.has(sessionId)) return false;
+      return listed.call(runtime, terminals, sessionId);
+    });
+    vi.spyOn(runtime, "handleInventory").mockImplementation((rows) => {
+      if (holding) keptBack.push(rows);
+      else inventory.call(runtime, rows);
+    });
+    return {
+      release: () => {
+        holding = false;
+        for (const rows of keptBack.splice(0)) inventory.call(runtime, rows);
+      },
+    };
+  }
 
-  it("sealed, through the real daemon: a launch is remembered, and said to the floor in the turn it entered, from the launch's own values: a plain run plain, a spark's run with its spark", async () => {
-    const box = await setup({ ...SEALED, ...WITH_SPARKS });
+  it("sealed, through the real daemon: a launch is remembered, and said to the floor ONCE, when its row is first seen running, from the launch's own values: a plain run plain, a spark's run with its spark; and how many sayings the floor answered `not-found` is counted, not gated", async () => {
+    const box = await setup({ ...SEALED, ...WITH_SPARKS, startedForRetryMs: NO_RETRY_MS });
     const win = await sealedWindow(box.daemon, HANDED, SPARK_WINDOW, "sf1");
     // WATCHED, never replaced: this is the link daemon.ts handed the runtime, and every answer is the floor's own
     const said = vi.spyOn(box.daemon.native, "setStartedFor");
     const saidFor = (sessionId: string) => said.mock.calls.filter(([id]) => id === sessionId);
+    const untilSaid = (sessionId: string): Promise<true> =>
+      poll(
+        async () => (saidFor(sessionId).length > 0 ? true : undefined),
+        15_000,
+        "the launch said to the floor at its row's first sighting",
+      );
 
     const plain = await spawnPlain(win, box);
     const plainRun = plain.session.runtimeRunId;
-    // by the time the door answered, the set had been sent: for this run's terminal, with the creation request the
-    // launch announced, and naming no spark and no process
+    // this life's memory waits on nothing: it answers as soon as the door has
+    expect(box.daemon.agents.bornFor(plainRun)).toEqual({});
+    await untilSaid(plain.terminal.sessionId);
+    // for this run's terminal, with the creation request the launch announced, naming no spark and no process
     expect(rootOf(box, plainRun)).toEqual(expect.any(String));
-    expect(said.mock.calls).toEqual([
+    expect(saidFor(plain.terminal.sessionId)).toEqual([
       [plain.terminal.sessionId, { run: plainRun, root: rootOf(box, plainRun) }],
     ]);
-    expect(said.mock.calls[0]?.[1]).not.toHaveProperty("spark");
-    expect(said.mock.calls[0]?.[1]).not.toHaveProperty("process");
-    expect(box.daemon.agents.bornFor(plainRun)).toEqual({});
+    expect(saidFor(plain.terminal.sessionId)[0]?.[1]).not.toHaveProperty("spark");
+    expect(saidFor(plain.terminal.sessionId)[0]?.[1]).not.toHaveProperty("process");
 
     // a spark's run: the spark is the launch call's OWN argument (daemon.ts's `spawn` for the sparks), and the same
     // value is what this life remembers and what the floor is told
     const { spark, runId, paneId } = await hatched(win, box);
-    const sparks = saidFor(paneId);
-    expect(sparks.length).toBeGreaterThan(0);
-    for (const call of sparks) {
-      expect(call).toEqual([paneId, { run: runId, spark: spark.id, root: rootOf(box, runId) }]);
-    }
     expect(box.daemon.agents.bornFor(runId)).toEqual({ spark: spark.id });
+    await untilSaid(paneId);
+    expect(saidFor(paneId)).toEqual([
+      [paneId, { run: runId, spark: spark.id, root: rootOf(box, runId) }],
+    ]);
 
-    // what the floor answered, for whoever reads this row's output; nothing is asserted of it (the header)
+    // three more launches, for the count; then two more inventories: each launch was said once, and only once
+    const more: AgentSpawnResult[] = [];
+    for (let n = 0; n < 3; n++) more.push(await spawnPlain(win, box));
+    for (const run of more) await untilSaid(run.terminal.sessionId);
+    anotherInventory(box);
+    anotherInventory(box);
+    const others = more.map((run) => run.terminal.sessionId);
+    const panes = [plain.terminal.sessionId, paneId, ...others];
+    expect(said.mock.calls.map(([sessionId]) => sessionId).sort()).toEqual([...panes].sort());
+
+    // THE COUNT (the PM's row 4), for whoever reads this row's output; nothing is asserted of it
     const answers = await Promise.all(said.mock.results.map((result) => result.value));
-    console.log(`STARTED_FOR_ANSWER ${JSON.stringify(answers)}`);
+    const notFound = answers.filter((answer) => answer === "not-found").length;
+    const count = { launches: panes.length, notFound, answers };
+    console.log(`STARTED_FOR_COUNT ${JSON.stringify(count)}`);
 
     // launch memory answers for the process's whole life: a run that has ended is still what it was born as, and
     // nothing vouches for a run this process never launched
@@ -6932,6 +6993,111 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
     expect(box.daemon.agents.bornFor(plainRun)).toEqual({});
     expect(box.daemon.agents.bornFor("run-nobody-launched")).toBeUndefined();
     await win.call("terminal.terminate", { sessionId: paneId });
+    for (const run of more) {
+      await win.call("terminal.terminate", { sessionId: run.terminal.sessionId });
+    }
+  }, 150_000);
+
+  it("sealed, through the real daemon: a run whose row is already listed when it enters is said right then, once, and the floor takes it", async () => {
+    let daemon: FielddDaemon | undefined;
+    const box = await setup({
+      ...SEALED,
+      startedForRetryMs: NO_RETRY_MS,
+      // item 72's order, made certain: every inventory this birth causes reaches the runtime BEFORE the run is
+      // registered (the spawn returns only after it), and an idle pane causes no other. A saying that waited for
+      // the next inventory would wait for good
+      afterBirth: async (paneId) => {
+        await poll(
+          async () => {
+            const terminals = daemon?.terminals;
+            const there =
+              terminals !== undefined &&
+              terminals.observation() !== undefined &&
+              terminals.list().some((terminal) => terminal.sessionId === paneId);
+            return there ? true : undefined;
+          },
+          15_000,
+          "the floor's inventory listing the new pane",
+        );
+        await pause(500);
+      },
+    });
+    daemon = box.daemon;
+    const win = await sealedWindow(box.daemon, HANDED, DECK, "sf6");
+    const said = vi.spyOn(box.daemon.native, "setStartedFor");
+
+    const spawned = await spawnPlain(win, box);
+    const runId = spawned.session.runtimeRunId;
+    // by the time the door answered
+    expect(said.mock.calls).toEqual([
+      [spawned.terminal.sessionId, { run: runId, root: rootOf(box, runId) }],
+    ]);
+    // the floor's own word: the terminal was in its inventory, so the entry is kept
+    expect(await said.mock.results[0]?.value).toBe("set");
+    anotherInventory(box);
+    anotherInventory(box);
+    expect(said).toHaveBeenCalledTimes(1);
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+  }, 150_000);
+
+  it("GIVEN A HELD INVENTORY: a run that enters before its row is seen is NOT said then; it is said at its row's first sighting, once, and a later inventory says nothing more", async () => {
+    const box = await setup({ ...SEALED, startedForRetryMs: NO_RETRY_MS });
+    const win = await sealedWindow(box.daemon, HANDED, DECK, "sf7");
+    const said = vi.spyOn(box.daemon.native, "setStartedFor");
+    const saidFor = (sessionId: string) => said.mock.calls.filter(([id]) => id === sessionId);
+    // a first, ordinary launch: the floor and the fold are past their first inventory before anything is held
+    const warm = await spawnPlain(win, box);
+    await poll(
+      async () => (saidFor(warm.terminal.sessionId).length > 0 ? true : undefined),
+      15_000,
+      "the first launch said",
+    );
+
+    const held = holdInventory(box);
+    const late = await spawnPlain(win, box);
+    const lateRun = late.session.runtimeRunId;
+    const latePane = late.terminal.sessionId;
+    await untilListed(win, latePane, true);
+    await pause(300);
+    // entered and remembered, and NOT said: no inventory the runtime has read lists its row
+    expect(box.daemon.agents.bornFor(lateRun)).toEqual({});
+    expect(saidFor(latePane)).toEqual([]);
+
+    // the first inventory that lists its row running: said in that turn, with the launch's own values
+    held.release();
+    anotherInventory(box);
+    const lateEntry = { run: lateRun, root: rootOf(box, lateRun) };
+    expect(saidFor(latePane)).toEqual([[latePane, lateEntry]]);
+    anotherInventory(box);
+    anotherInventory(box);
+    await pause(300);
+    expect(saidFor(latePane)).toHaveLength(1);
+    await win.call("terminal.terminate", { sessionId: latePane });
+    await win.call("terminal.terminate", { sessionId: warm.terminal.sessionId });
+  }, 150_000);
+
+  it("GIVEN A HELD INVENTORY: a run that leaves the fold before its row is ever seen is never said, and is still what it was born as", async () => {
+    const box = await setup({ ...SEALED, startedForRetryMs: NO_RETRY_MS });
+    const win = await sealedWindow(box.daemon, HANDED, DECK, "sf8");
+    const said = vi.spyOn(box.daemon.native, "setStartedFor");
+    const saidFor = (sessionId: string) => said.mock.calls.filter(([id]) => id === sessionId);
+    const warm = await spawnPlain(win, box);
+    await poll(
+      async () => (saidFor(warm.terminal.sessionId).length > 0 ? true : undefined),
+      15_000,
+      "the first launch said",
+    );
+
+    const held = holdInventory(box);
+    const brief = await spawnPlain(win, box);
+    // its exit is heard for a run the fold holds, and closes it, with no inventory read in between
+    await end(win, box, brief);
+    held.release();
+    anotherInventory(box);
+    await pause(300);
+    expect(saidFor(brief.terminal.sessionId)).toEqual([]);
+    expect(box.daemon.agents.bornFor(brief.session.runtimeRunId)).toEqual({});
+    await win.call("terminal.terminate", { sessionId: warm.terminal.sessionId });
   }, 150_000);
 
   it("files, through the real daemon: launch memory is kept all the same, and the floor is never told: no set leaves fieldd for a launch, a spark's launch, or an end", async () => {
@@ -6954,7 +7120,7 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
     expect(box.daemon.agents.bornFor(plain.session.runtimeRunId)).toEqual({});
   }, 150_000);
 
-  it("GIVEN AN INJECTED FLOOR that never answers: the launch returns its run all the same, with the set sent and not yet answered, and an exit right after is closed, not dropped (C2)", async () => {
+  it("GIVEN AN INJECTED FLOOR that never answers: the launch returns its run all the same; its set, said at the row's first sighting, stays unanswered; and the run's exit is closed, not dropped (C2)", async () => {
     const box = await setup({ ...SEALED, startedForRetryMs: RETRY_MS });
     const win = await sealedWindow(box.daemon, HANDED, DECK, "sf3");
     const silent = () => new Promise<never>(() => undefined);
@@ -6962,10 +7128,14 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
 
     const spawned = await spawnPlain(win, box);
     const runId = spawned.session.runtimeRunId;
-    // entered before anything was heard from the floor: recorded, in the fold, remembered
-    expect(said).toHaveBeenCalledTimes(1);
+    // entered with nothing heard from the floor, and waiting on nothing of it: recorded, in the fold, remembered
     expect(readRecord(box.dataDir, runId).exited).toBeUndefined();
     expect(box.daemon.agents.bornFor(runId)).toEqual({});
+    await poll(
+      async () => (said.mock.calls.length > 0 ? true : undefined),
+      15_000,
+      "the launch said to the floor at its row's first sighting",
+    );
 
     // its terminal's exit, with that set still on the wire: heard for a run the fold holds, so the run is closed
     await end(win, box, spawned);
@@ -7034,17 +7204,17 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
 
     const runs: AgentSpawnResult[] = [];
     for (let n = 0; n < 3; n++) runs.push(await spawnPlain(win, box));
+    const notSealed = "fieldd.agents.started_for_not_sealed";
     await poll(
-      async () => (logged(box, "fieldd.agents.started_for_not_sealed") > 0 ? true : undefined),
+      async () => (said.mock.calls.length >= 3 && logged(box, notSealed) > 0 ? true : undefined),
       15_000,
-      "the floor that keeps no table said in fieldd's log",
+      "each run said, and the floor that keeps no table said in fieldd's log",
     );
     // six periods on: each run's set was said once and never again
     await pause(RETRY_MS * 6);
-    expect(said.mock.calls.map(([sessionId]) => sessionId)).toEqual(
-      runs.map((run) => run.terminal.sessionId),
-    );
-    expect(logged(box, "fieldd.agents.started_for_not_sealed")).toBe(1);
+    const panes = runs.map((run) => run.terminal.sessionId);
+    expect(said.mock.calls.map(([sessionId]) => sessionId).sort()).toEqual([...panes].sort());
+    expect(logged(box, notSealed)).toBe(1);
     // this life's memory waits on no answer of the floor's
     for (const run of runs) {
       expect(box.daemon.agents.bornFor(run.session.runtimeRunId)).toEqual({});
