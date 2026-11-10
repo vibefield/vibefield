@@ -162,8 +162,9 @@ async fn the_hello_ack_carries_the_marks_and_carries_none_when_none_is_held() {
     let params = load("native-marks-set-params.valid.json");
     let answer = fieldd.call("native.marks.set", params).await;
     assert_eq!(answer["result"], json!({"value": 8}), "{answer}");
-    // a hello again on this connection reads them, as the next fieldd's first hello does
-    let again = fieldd.hello(&daemon).await;
+    // The next hello reads them. On a NEW connection, as every fieldd's is: a hello supersedes whoever holds the
+    // slot, the connection that says it included, so a second hello on one connection closes it.
+    let (_next, again) = Mgmt::paired(&daemon).await;
     let golden = load("hello-ack.marks.json");
     assert_eq!(again["result"]["marks"], golden["marks"], "{again}");
     assert_eq!(again["result"]["marks"], json!({GRANTS: 8}), "{again}");
@@ -218,7 +219,7 @@ async fn the_65th_name_is_refused_marks_full_and_changes_nothing() {
     let held = daemon.state.marks.snapshot();
     assert_eq!(held.len() as u64, max);
     assert!(!held.contains_key("one.too.many"), "{held:?}");
-    let again = fieldd.hello(&daemon).await;
+    let (_next, again) = Mgmt::paired(&daemon).await;
     let said = again["result"]["marks"].as_object().expect("marks");
     assert_eq!(said.len() as u64, max, "{again}");
     assert_eq!(said.get("mark.0"), Some(&json!(7)), "{again}");
@@ -289,8 +290,9 @@ async fn a_superseded_connection_raises_no_mark() {
     let (mut current, ack) = Mgmt::paired(&daemon).await;
     assert_eq!(ack["result"]["marks"], json!({GRANTS: 3}), "{ack}");
 
-    // The stale connection's reader still runs (its write half is what closed), so its request reaches the
-    // per-request single-client rule, the verb's only authorization, and is refused before any effect.
+    // The floor closes a superseded connection, and until its reader has stopped a request on it still meets the
+    // per-request single-client rule, the verb's only authorization. Either way it has no effect, and its answer may
+    // never come: the row reads the floor.
     let params = json!({"name": GRANTS, "value": 99});
     stale.tell("native.marks.set", params).await;
     tokio::time::sleep(Duration::from_millis(400)).await;
