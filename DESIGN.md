@@ -2962,7 +2962,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the ring **92** from the hub, buds **48**, **42°** apart (narrowed to fit 220°), the arc opening UP and turning in 15° steps
     only as far as the window's edges force it (a bud's centre 70 in from the sides, 44 from the top and 30 from the foot),
     never moving the centre. **Every face keeps its place**, in the card's order. **A bud** is a clear disc in
-    `--vf-bloom-bud` with a 1.25px ring of its ink at 22%, wearing its type's glyph at 22 (§13); the one pointed at inverts to
+    `--vf-card-bloom-bud` with a 1.25px ring of its ink at 22%, wearing its type's glyph at 22 (§13); the one pointed at inverts to
     ink and lifts to 1.16× (`--vf-ease-lift`, 180ms). A face that can't land stands faint and dashed. **Its label**, 34 from
     the hub's side of the bud's centre, above it or to its side: the face's name, mono 9.5/700 in capitals at 78% ink, over
     its reason when it can't land, mono 7.5/800, 72%. **Choosing:** by direction past a 22 dead zone (sectors at most
@@ -2973,11 +2973,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     full ink and the verb at 40% — *Hand over the live map*, *Paste its outline*, *Not here* for a faint bud, *Cancel* on open
     ground — over one mono line, 13/500 at 60%, naming where it lands ("claude·2 · Godview"); 40 clear of the bloom,
     above it, or below it where it doesn't fit; they change as a new slate in 150ms and are the live region. **The
-    window goes quiet:** `--vf-bloom-veil` over everything but the carried card, above the hand (z 65) with the card at
-    its own 66, and a clearing of `--vf-bloom-ground` under the bloom and the words. **Motion:** buds pop out
+    window goes quiet:** `--vf-card-bloom-veil` over everything but the carried card, above the hand (z 65) with the card at
+    its own 66, and a clearing of `--vf-card-bloom-ground` under the bloom and the words. **Motion:** buds pop out
     centre-first on the pop curve (280ms, 26ms apart), labels 140ms behind; on leaving, back along their spokes on the
     retract curve (180ms) with their labels. Reduced motion (M6): 90ms fades, no travel and no lift. A change of view or
     the place going away folds it, and the card goes home.
+    *Corrected 2026-11-10 (item 309, before any landing):* its inks were named `--vf-bloom-*`, but `vf-bloom` is the
+    spawn bloom's own name (§8 "Hold, reach, let go"), which the swarm's view carries in its own stylesheet and no host
+    stylesheet may name; they are `--vf-card-bloom-*`, the prefix its classes already wear.
   - **One owner** (§10; HN-L7): the hand raised and a card picked up are the frame's open surface
     `cards` — raising the hand folds the others, and another opening lowers it. The hand stands above the
     line (z 63; the line 62), a card picked up above it (64), a carried card above both (66). The label
