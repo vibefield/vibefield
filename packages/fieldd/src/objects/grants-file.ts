@@ -88,14 +88,21 @@ const PEEK_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBL
 const same = (a: ObjectGrantEntry, b: ObjectGrantEntry): boolean =>
   a.ref === b.ref && a.holder === b.holder;
 
-/** What an error said, as one word alone: its `code` when that is a string (`ENOSPC`, `EACCES`, `EISDIR`, …), else its
- * `kind` when that is a string (an `RpcCallError` has a kind, and no code that is a word), else `unknown`. Nothing
- * else of the error is read. A log line prints this and never an error's message: Node's file errors name the file's
- * whole path, which holds the person's home. */
+/** A code or a kind that may be said: a plain token of letters, digits, `_`, `.` and `-`, at most 64 characters. A
+ * path put in either field is not one. The shell's reader holds the same rule
+ * (`packages/electron-shell/src/main/custody/custody.ts`): the two are one rule, and change together. */
+const CODE_TOKEN = /^[A-Za-z0-9_.-]{1,64}$/u;
+
+/** What an error said, as one word alone: its `code` when that is a plain token (`ENOSPC`, `EACCES`, `EISDIR`, …),
+ * else its `kind` when that is one (an `RpcCallError` has a kind, and no code that is a word), else `unknown`.
+ * Nothing else of the error is read. A log line prints this and never an error's message: Node's file errors name the
+ * file's whole path, which holds the person's home. The word also goes into `unwritten`'s sentence, which travels, so
+ * a field that holds anything but a token is not said at all. */
 export const codeOf = (error: unknown): string => {
   const { code, kind } = (error ?? {}) as { code?: unknown; kind?: unknown };
-  if (typeof code === "string") return code;
-  return typeof kind === "string" ? kind : "unknown";
+  if (typeof code === "string" && CODE_TOKEN.test(code)) return code;
+  if (typeof kind === "string" && CODE_TOKEN.test(kind)) return kind;
+  return "unknown";
 };
 
 /** What a hand, a place or a grant throws when the store could not keep it: ONE fixed sentence and a code, and
