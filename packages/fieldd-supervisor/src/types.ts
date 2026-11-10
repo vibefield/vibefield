@@ -151,8 +151,11 @@ export interface FielddCustody {
   handoff(): CustodyHandoff;
   /** C6 — is the child this supervisor just spawned our own signed fieldd? The host wires `@vibefield/trust`'s
    * `childIsOurs` with `{ identifier: FIELDD_SIGNING_IDENTIFIER }` (C6b: a sibling binary of our team in fieldd's
-   * place is not fieldd). Awaited BEFORE anything is written to the child; `false` or a throw stops the child and
-   * fails the attempt `child-not-ours`. Absent: no check (a test's supervisor). */
+   * place is not fieldd). Asked BEFORE anything is written to the child, and listened to for no longer than what is
+   * left of `CUSTODY.CHILD_CHECK_BUDGET_MS` counted from the spawn (C6c: the supervisor holds that bound itself,
+   * whatever this does): `false`, a throw, or no answer in that time stops the child and fails the attempt
+   * `child-not-ours`, and an answer that comes later is not heard. It stops a wrong binary that stays itself; it
+   * does not say who else holds the child's stdin. Absent: no check (a test's supervisor). */
   verifyChild?(pid: number): Promise<boolean>;
   /** C5 — fieldd's marks as this supervisor has heard them: the highest value per name, WHOLE, told each time one
    * rises (never for a fall, which a mark does not do, or for a frame that changed nothing). The supervisor keeps

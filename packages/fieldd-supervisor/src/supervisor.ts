@@ -83,6 +83,24 @@ interface BusyWait {
   readonly gone: boolean;
 }
 
+/** OB custody (C6c) — what the asking between a spawn and its hand-off came to. A CODE: the two that fail the attempt
+ * `child-not-ours` are said in its event as they are, so the log tells a refusal from a slow check by this word and
+ * never by what an error said. */
+type ChildCheck = "ours" | "refused" | "over-budget" | "left" | "aborted";
+
+/** OB custody (C6c) — the gap between a spawn and its hand-off's write, as the one function that holds it is told
+ * it. Everything here is about the child spawned in THIS call. */
+interface SpawnGap {
+  /** when the supervisor spawned it, by the supervisor's own clock: the budget is counted from here */
+  readonly spawnedAt: number;
+  /** the attempt's abort */
+  readonly signal: AbortSignal;
+  /** has that child exited? */
+  readonly exited: () => boolean;
+  /** woken at that child's exit (and at its ready line, which settles nothing here) */
+  readonly exitWaiters: Set<() => void>;
+}
+
 export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSupervisor {
   const emit = (event: FielddSupervisorEvent): void => {
     try {
@@ -224,6 +242,8 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     // reported, as before, and wakes nothing: the run-file poll keeps its own cadence.
     const sealed = handoff !== null;
     const readyState: { said: FielddReadySignal | null } = { said: null };
+    // C6c — the spawner's clock starts here: everything between this spawn and the hand-off's write is counted from it
+    const spawnedAt = Date.now();
     const spawned = spawnFieldd(tail, asked, sealed, (said) => {
       readyState.said = said;
       if (!sealed) return;
@@ -249,7 +269,12 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
         // stdout, and then proves the pairing ONCE, on the port and boot that line stated: no run file decides
         // anything, and no token is read. A lost spawn race reads as this child's exit here; the next ensure()
         // adopts the winner by pairing.
-        await handCustody(spawned, custody, handoff, tail);
+        await handCustody(spawned, custody, handoff, tail, {
+          spawnedAt,
+          signal,
+          exited: () => exitState.info !== null,
+          exitWaiters,
+        });
         const boundMs = opts.readinessDeadlineMs ?? READINESS_DEADLINE_MS;
         const deadline = Date.now() + boundMs;
         let said: FielddReadySignal | null = null;
@@ -490,34 +515,41 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     );
   }
 
-  /** OB custody — hand a spawned child its custody. C6 first: the child is asked about BEFORE anything is written
-   * to it, and a child that is not ours (or a verifier that throws) fails the attempt `child-not-ours`; run()'s
-   * failure path stops it. Then ONE line, the hand-off as JSON, and EOF. The line exists only here: never logged,
-   * never in an event, never in an error. A stdin that closed under the write is a child already going; its exit
-   * is what the readiness wait reports. */
+  /** OB custody — hand the child spawned in this call its custody. C6 first: the child is asked about BEFORE anything
+   * is written to it. C6c bounds the asking: everything between the spawn and the write is held to
+   * `CUSTODY.CHILD_CHECK_BUDGET_MS`, counted from the spawn, and to the attempt's abort. A child that is refused (a
+   * verifier that throws refuses), or that no answer came for inside the budget, fails the attempt `child-not-ours`,
+   * and the event says which by a code; an answer that comes later is not listened to. run()'s failure path then
+   * stops that child: the one this call spawned, by the handle it holds, and it signals nothing else. A child that
+   * left while it was asked about is neither refused nor written to. Then ONE line, the hand-off as JSON, and EOF.
+   * The line exists only here: never logged, never in an event, never in an error. A stdin that closed under the
+   * write is an outcome, never a throw: a child already going, whose exit is what the readiness wait reports.
+   * What the asking is worth is not this function's claim: it stops a wrong binary that stays itself. */
   async function handCustody(
     proc: ChildProcess,
     custody: FielddCustody,
     handoff: CustodyHandoff,
     tail: ReturnType<typeof createLogTail>,
+    gap: SpawnGap,
   ): Promise<void> {
     const pid = proc.pid;
     const stdin = proc.stdin;
     if (pid === undefined || stdin === null) {
       throw new SupervisorError("spawn-failed", "the spawned fieldd has no stdin to be handed on");
     }
-    if (custody.verifyChild !== undefined) {
-      let ours = false;
-      try {
-        ours = (await custody.verifyChild(pid)) === true;
-      } catch {
-        ours = false;
-      }
-      if (!ours) {
+    const verifyChild = custody.verifyChild;
+    if (verifyChild !== undefined) {
+      const check = await checkChild(() => verifyChild.call(custody, pid), gap);
+      // an attempt given up while it asked: nothing is written on a yes that came with or after the abort
+      throwIfAborted(gap.signal);
+      // gone while it was asked about: there is nobody to refuse and nobody to write to, and its exit, with its own
+      // last words, is what the readiness wait reports
+      if (check === "left") return;
+      if (check === "refused" || check === "over-budget") {
         lifecycle(
           "fieldd.supervisor.child_not_ours",
           "The spawned fieldd is not this app's own signed code; it is stopped and was handed nothing",
-          { pid },
+          { pid, reason: check },
         );
         throw new SupervisorError(
           "child-not-ours",
@@ -1045,6 +1077,44 @@ function keptSpawnKeys(answer: unknown): Record<string, string> {
 
 function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) throw new SupervisorError("aborted", "supervisor operation aborted");
+}
+
+/** OB custody (C6c) — ask about the child spawned in this call, for no longer than what is left of
+ * `CUSTODY.CHILD_CHECK_BUDGET_MS` counted from its spawn. Whichever comes FIRST settles it, and nothing after is
+ * listened to: the answer (a throw, at once or later, is a refusal), the budget, the child's own exit, the attempt's
+ * abort. So a verifier that never answers, or answers late, decides nothing. Never rejects. */
+function checkChild(ask: () => Promise<boolean>, gap: SpawnGap): Promise<ChildCheck> {
+  return new Promise<ChildCheck>((resolve) => {
+    let settled = false;
+    let timer: NodeJS.Timeout | undefined;
+    function settle(check: ChildCheck): void {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      gap.signal.removeEventListener("abort", onAbort);
+      gap.exitWaiters.delete(onExit);
+      resolve(check);
+    }
+    function onAbort(): void {
+      settle("aborted");
+    }
+    function onExit(): void {
+      // the wakers are woken for more than an exit (a sealed child's ready line): only an exit settles this
+      if (gap.exited()) settle("left");
+    }
+    if (gap.signal.aborted) return settle("aborted");
+    if (gap.exited()) return settle("left");
+    const leftMs = Math.max(0, CUSTODY.CHILD_CHECK_BUDGET_MS - (Date.now() - gap.spawnedAt));
+    timer = setTimeout(() => settle("over-budget"), leftMs);
+    gap.signal.addEventListener("abort", onAbort, { once: true });
+    gap.exitWaiters.add(onExit);
+    // asked in a turn of its own, so a verifier that throws where it stands is a refusal like one that rejects
+    const answered = Promise.resolve().then(ask);
+    void answered.then(
+      (ours) => settle(ours === true ? "ours" : "refused"),
+      () => settle("refused"),
+    );
+  });
 }
 
 /** Sleep `ms`, waking early on abort or when something calls a waker in `wakers` (a child's exit, a sealed child's
