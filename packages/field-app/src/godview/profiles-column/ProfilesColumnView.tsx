@@ -63,6 +63,9 @@ export interface ProfilesColumnViewProps {
   columnRef?: Ref<HTMLDivElement> | undefined;
   /** the pointer came onto a circle (its profile's id) or the add (`ADD_TARGET`), or left them (null) */
   onPoint: (target: string | null) => void;
+  /** UM-R-F (c4) — the keyboard came onto a circle or its card (its profile's id) or the add (`ADD_TARGET`), or left
+   * them (null); absent (the catalog), focus shows nothing */
+  onKeyboardTarget?: ((target: string | null) => void) | undefined;
   onCircle: (setId: string) => void;
   onClose: () => void;
   onFocusPlan: (key: string | null) => void;
@@ -97,24 +100,78 @@ export function circleWords(circle: ColumnCircle, lens: boolean, chosen: boolean
   return `${circleState(circle)}${toggle}`;
 }
 
+/** Where Tab may land in the column after a card: a circle, or the add while it can act. */
+const TAB_STOPS = ".vf-profiles-circle, .vf-profiles-add:not(:disabled)";
+
+/** UM-R-F (c4; §8 "Focus is pointing"): whether the keyboard, going to `node`, stays with `target` — inside its item
+ * (the circle, or the add's zone) or inside the stand that carries its card in the layer. Found by the stands' own
+ * `dataset`, as `CSS.escape` is not ours to lean on under happy-dom. */
+function keepsKeyboard(node: EventTarget | null, item: HTMLElement, target: string): boolean {
+  if (!(node instanceof Element)) return false;
+  if (item.contains(node)) return true;
+  const stand = node.closest<HTMLElement>(".vf-profiles-stand");
+  if (!stand) return false;
+  return target === ADD_TARGET ? stand.dataset.card === "add" : stand.dataset.profile === target;
+}
+
 /** Tab across the portal (§8 "Pinned"): the card leaves the circle's DOM once it stands in the layer, so its Tab order
  * is carried by hand, forward from the circle onto the card's first control that can act, and back from that control.
- * Key events bubble through the portal to the circle's item, which holds this. No layer, the DOM's own order holds. */
+ * Forward from its last control it goes on to the next circle, or the add while it can act, as if the card stood
+ * after its circle (UM-R-F, c4: focus shows a card, so Tab on every circle enters its card, and the window's order
+ * alone never reached a second circle). Key events bubble through the portal to the circle's item, which holds this.
+ * No layer, the DOM's own order holds. */
 function tabAcrossPortal(
   event: KeyboardEvent<HTMLElement>,
   layer: HTMLElement | null | undefined,
+  id: string,
 ): void {
   if (event.key !== "Tab" || !layer) return;
-  const first = layer.querySelector<HTMLElement>(".vf-profiles-stand button:not(:disabled)");
+  let stand: HTMLElement | undefined;
+  for (const each of layer.querySelectorAll<HTMLElement>(".vf-profiles-stand")) {
+    if (each.dataset.profile === id) {
+      stand = each;
+      break;
+    }
+  }
+  const controls = [...(stand?.querySelectorAll<HTMLElement>("button:not(:disabled)") ?? [])];
+  const first = controls[0];
+  const last = controls[controls.length - 1];
   const circle = event.currentTarget.querySelector<HTMLElement>(".vf-profiles-circle");
-  if (!first || !circle) return;
+  if (!first || !last || !circle) return;
   if (!event.shiftKey && event.target === circle) {
     event.preventDefault();
     first.focus();
   } else if (event.shiftKey && event.target === first) {
     event.preventDefault();
     circle.focus();
+  } else if (!event.shiftKey && event.target === last) {
+    const column = circle.closest(".vf-profiles-column");
+    const stops = [...(column?.querySelectorAll<HTMLElement>(TAB_STOPS) ?? [])];
+    const next = stops[stops.indexOf(circle) + 1];
+    if (!next) return;
+    event.preventDefault();
+    next.focus();
   }
+}
+
+/** The keys an open card takes where the keyboard is: Esc closes a card the keyboard shows (UM-R-F, c4; a pinned
+ * card's Esc is the window's, which takes it first), and Tab crosses the portal. With no card open there is no
+ * handler, so Esc passes on to whatever holds it. */
+function cardKeys(
+  event: KeyboardEvent<HTMLElement>,
+  layer: HTMLElement | null | undefined,
+  id: string,
+  pinned: boolean,
+  onClose: () => void,
+): void {
+  if (event.key === "Escape") {
+    if (pinned) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onClose();
+    return;
+  }
+  tabAcrossPortal(event, layer, id);
 }
 
 export function ProfilesColumnView({
@@ -136,6 +193,7 @@ export function ProfilesColumnView({
   cardLayer,
   columnRef,
   onPoint,
+  onKeyboardTarget,
   onCircle,
   onClose,
   onFocusPlan,
@@ -154,7 +212,7 @@ export function ProfilesColumnView({
         const isChosen = lens && chosen === id;
         const isOpen = open === id;
         return (
-          // the pointer on a circle or its popover shows the popover; the circle is the control
+          // the pointer or the keyboard on a circle or its popover shows the popover; the circle is the control
           <div
             key={id}
             className="vf-profiles-item"
@@ -162,7 +220,15 @@ export function ProfilesColumnView({
             {...(isOpen && pinned ? { "data-pinned": "" } : {})}
             onPointerEnter={() => onPoint(id)}
             onPointerLeave={() => onPoint(null)}
-            onKeyDown={isOpen ? (event) => tabAcrossPortal(event, cardLayer) : undefined}
+            onFocus={() => onKeyboardTarget?.(id)}
+            onBlur={(event) => {
+              if (!keepsKeyboard(event.relatedTarget, event.currentTarget, id)) {
+                onKeyboardTarget?.(null);
+              }
+            }}
+            onKeyDown={
+              isOpen ? (event) => cardKeys(event, cardLayer, id, pinned, onClose) : undefined
+            }
           >
             <button
               type="button"
@@ -207,11 +273,28 @@ export function ProfilesColumnView({
         );
       })}
       <div className="vf-profiles-item vf-profiles-add-item">
-        {/* the pointer on the add shows its card; the add is the control. The limit card beside it is not the add. */}
+        {/* the pointer or the keyboard on the add shows its card; the add is the control. The limit card beside it is
+            not the add. */}
         <div
           className="vf-profiles-add-zone"
           onPointerEnter={() => onPoint(ADD_TARGET)}
           onPointerLeave={() => onPoint(null)}
+          onFocus={() => onKeyboardTarget?.(ADD_TARGET)}
+          onBlur={(event) => {
+            if (!keepsKeyboard(event.relatedTarget, event.currentTarget, ADD_TARGET)) {
+              onKeyboardTarget?.(null);
+            }
+          }}
+          onKeyDown={
+            addOpen && canAdd
+              ? (event) => {
+                  if (event.key !== "Escape") return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onClose();
+                }
+              : undefined
+          }
         >
           <button
             type="button"

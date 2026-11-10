@@ -46,8 +46,10 @@ const THIS_MAC: AgentProfileSet = {
 export const ColumnAddPresses = createContext(0);
 
 /** The keyboard home when a deliberate act closes the card (§8 "Pinned"): if the card holds it, to that profile's circle.
- * The timers never call this: a grace or a dwell is the pointer's, and the circle is a live toggle. Found by the items'
- * own `dataset`, as `CSS.escape` is not ours to lean on under happy-dom. */
+ * The timers never call this: a grace or a dwell is the pointer's, and the circle is a live toggle. Since UM-R-F (c4)
+ * a timer cannot close a card that holds the keyboard (focus is pointing, so the card stays), and a dwell that peeks
+ * over it hands the keyboard to that card's circle from `CardStand` itself, never from here. Found by the items' own
+ * `dataset`, as `CSS.escape` is not ours to lean on under happy-dom. */
 function handFocusHome(column: HTMLElement | null): void {
   const id = document.activeElement?.closest<HTMLElement>(".vf-profiles-stand")?.dataset.profile;
   if (!column || id === undefined) return;
@@ -160,20 +162,28 @@ function ProfilesColumnController({
   const [pointed, setPointed] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
+  // UM-R-F (c4; §8 "Focus is pointing"): the keyboard's own target, a profile's id or the add, beside the pointer's
+  // and the pin. It has no timers: the keyboard shows a card at once and takes it away at once.
+  const [keyboardTarget, setKeyboardTarget] = useState<string | null>(null);
   const [addPresses, setAddPresses] = useState(0);
   const pointedProfile = pointed !== null && pointed !== ADD_TARGET ? pointed : null;
-  const open =
-    circles.find((circle) => circle.set.id === (pointedProfile ?? pinned))?.set.id ?? null;
+  const keyboardProfile = keyboardTarget !== ADD_TARGET ? keyboardTarget : null;
+  // the pointer, then the keyboard, then the pin: a pointer peeks over a keyboard's card as over a pinned one (c2)
+  const shown = pointedProfile ?? keyboardProfile ?? pinned;
+  const open = circles.find((circle) => circle.set.id === shown)?.set.id ?? null;
+  const addOpen = pointed === ADD_TARGET || (pointed === null && keyboardTarget === ADD_TARGET);
   // §8 "The reach": the pointer's own hold, its grace and its dwell; the card shows as it always did from `pointed`
-  const showing = pointed === ADD_TARGET && openNewProfile !== undefined ? ADD_TARGET : open;
+  const showing = addOpen && openNewProfile !== undefined ? ADD_TARGET : open;
   const { point, clear } = useColumnPointer(showing, setPointed);
-  // §8 "Pinned": CLOSING IS ONE ACT, wherever it comes from — the keyboard home if the card holds it, then the pin and
-  // the pointer's hold. No new enter fires while the pointer sits still, so the card stays closed until it leaves and
-  // returns.
+  // §8 "Pinned": CLOSING IS ONE ACT, wherever it comes from — the keyboard home if the card holds it, then the pin,
+  // the keyboard's card and the pointer's hold. No new enter fires while the pointer sits still, and no new focus
+  // while the keyboard does, so the card stays closed until one of them leaves and returns. The circle's own focus,
+  // as the keyboard goes home, sets its target before the null that follows it here, so it does not reopen the card.
   const columnRef = useRef<HTMLDivElement>(null);
   const closeCard = useCallback((): void => {
     handFocusHome(columnRef.current);
     setPinned(null);
+    setKeyboardTarget(null);
     clear();
   }, [clear]);
   // what the pointer and a press may reach. Behind full-window terminals, nothing (§8 "Pinned": the deck only fades
@@ -193,6 +203,22 @@ function ProfilesColumnController({
   const pin = (setId: string): void => {
     if (!covered) setPinned(setId);
   };
+  // UM-R-F (c4): the keyboard came onto a circle, its card or the add, or left them. It reaches what the pointer may
+  // reach (`columnPoint`'s gate). A pointer resting on another target lets go, as a close does, so the card the
+  // keyboard reached shows and the pointer must leave and return to peek; a focus the keyboard already holds (the
+  // card's own circle, handed the keyboard as a peek takes the card) leaves the pointer be.
+  const keyboardPoint = (target: string | null): void => {
+    if (target === null) {
+      setKeyboardTarget(null);
+      return;
+    }
+    if (covered) return;
+    if (target === ADD_TARGET && columnRef.current?.querySelector(".vf-profiles-moment > *")) {
+      return;
+    }
+    if (pointed !== null && pointed !== target && target !== keyboardTarget) clear();
+    setKeyboardTarget(target);
+  };
   // a plan is pointed at inside one popover: another popover starts with none
   useEffect(() => {
     if (open === null) setFocus(null);
@@ -201,6 +227,16 @@ function ProfilesColumnController({
   useEffect(() => {
     if (pinned !== null && !circles.some((circle) => circle.set.id === pinned)) setPinned(null);
   }, [circles, pinned]);
+  // …and the keyboard's card the same way
+  useEffect(() => {
+    if (
+      keyboardTarget !== null &&
+      keyboardTarget !== ADD_TARGET &&
+      !circles.some((circle) => circle.set.id === keyboardTarget)
+    ) {
+      setKeyboardTarget(null);
+    }
+  }, [circles, keyboardTarget]);
   // ruling 11: a pinned popover holds Godview's keys, so Esc closes it before a pane hears it; a click outside too
   useEffect(() => {
     if (pinned === null) return;
@@ -251,7 +287,7 @@ function ProfilesColumnController({
       pinnedProfile={pinned}
       focus={focus}
       read={openCircle === undefined ? "" : readWords(openCircle.meters, clock)}
-      addOpen={pointed === ADD_TARGET}
+      addOpen={addOpen}
       cardLayer={cardLayer}
       columnRef={columnRef}
       canAdd={openNewProfile !== undefined}
@@ -265,6 +301,7 @@ function ProfilesColumnController({
         )
       }
       onPoint={columnPoint}
+      onKeyboardTarget={keyboardPoint}
       onCircle={(setId) => {
         if (!lens) {
           if (pinned === setId) closeCard();

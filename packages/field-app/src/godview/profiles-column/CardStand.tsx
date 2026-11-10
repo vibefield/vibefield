@@ -100,6 +100,22 @@ export function CardStand({
     observer.observe(stand);
     return () => observer.disconnect();
   }, [layer, place]);
+  // UM-R-F (c4; §8 "Focus is pointing"): a card taken away while it holds the keyboard — a peek over it, after the
+  // pointer's dwell — first hands the keyboard to its own circle, so the keyboard is never lost to the page and the
+  // card it stood for comes back when the peek lets go. React runs a component's layout cleanup before it removes the
+  // component's nodes, so the stand still holds the keyboard here. A deliberate close has handed it home already.
+  useLayoutEffect(() => {
+    const stand = standRef.current;
+    // with no layer the stand is in its item, and there is no anchor
+    const anchor = layer ? anchorRef.current : null;
+    return () => {
+      if (!stand?.contains(document.activeElement)) return;
+      (anchor ?? stand)
+        .closest(".vf-profiles-item")
+        ?.querySelector<HTMLElement>(".vf-profiles-circle")
+        ?.focus();
+    };
+  }, [layer]);
   const style: CSSProperties | undefined = placement === null ? undefined : placement;
   const stand = (
     <div
