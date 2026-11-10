@@ -136,6 +136,13 @@ enum MeterRules {
     return "as of \(durationWords(max(0, (now.timeIntervalSince1970 - at.timeIntervalSince1970) / 60))) ago"
   }
 
+  /// Item 274 (UM-274-D2 A; DESIGN.md §8 "A meter a later reading did not carry") — when a meter was read: its own read
+  /// where a later, partial reading (a push) did not carry it (puppeteer 0.4.0's `metric.fetchedAt`), else its
+  /// reading's (rules.ts' `meterReadAt`). Every age said is the age of the numbers beside it.
+  static func meterReadAt(_ metric: AgentAccountUsageMetric, readingAt: String) -> String {
+    metric.fetchedAt ?? readingAt
+  }
+
   /// Settings' reset words: "2h 10m" under a day, its weekday and clock from a day on (the phone's own zone and
   /// locale, as Settings says it in the desktop's), "now" once it has passed.
   static func resetWords(at: Date, now: Date) -> String {
@@ -595,10 +602,22 @@ enum MeterModel {
     _ windows: [MeterWindow], _ window: MeterWindow, stale: Bool, fetchedAt: String, now: Date
   ) -> MeterRight {
     // a kept reading says its age, and so does one with a window read before its reset (DESIGN.md §8 "A window read
-    // before its reset"): a forecast or a reset read from it would claim a reading it is not
-    if stale || windows.contains(where: { $0.passed }) {
+    // before its reset"): a forecast or a reset read from it would claim a reading it is not. Item 274 (UM-274-D2 A;
+    // §8 "A meter a later reading did not carry"; meters.ts' `rightOf`): the age is the tightest's own read, and a
+    // passed window ages the words only when the tightest was read no later than it. A stamp that cannot be read
+    // compares false and ages, as the desktop's `Date.parse` NaN does.
+    let tightestAt = MeterRules.meterReadAt(window.metric, readingAt: fetchedAt)
+    let agesIt = { (each: MeterWindow) -> Bool in
+      guard each.passed else { return false }
+      guard
+        let tightestRead = parseWireDate(tightestAt),
+        let eachRead = parseWireDate(MeterRules.meterReadAt(each.metric, readingAt: fetchedAt))
+      else { return true }
+      return !(tightestRead > eachRead)
+    }
+    if stale || windows.contains(where: agesIt) {
       return MeterRight(
-        kind: stale ? .kept : .passed, words: MeterRules.ageWords(fetchedAt: fetchedAt, now: now), hot: false,
+        kind: stale ? .kept : .passed, words: MeterRules.ageWords(fetchedAt: tightestAt, now: now), hot: false,
         icon: false)
     }
     if let forecast = window.forecast {

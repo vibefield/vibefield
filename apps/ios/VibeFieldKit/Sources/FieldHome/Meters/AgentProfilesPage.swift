@@ -186,14 +186,17 @@ struct AgentProfilesWords: Equatable {
 
   /// A plan's row below its title. A window read before its reset says the reading's age in its reset's place, as
   /// Settings' line does (`meterLines`' `ages`, 48a30767d) — a kept reading's too, under its own age above — and only
-  /// while that age can be said.
+  /// while that age can be said. *Since item 274 (2026-11-10, UM-274-D2 A):* each passed line says its own read's age
+  /// (`MeterRules.meterReadAt`), as Settings' line now does.
   static func body(_ entry: PlanMeter, home: String, now: Date) -> PlanRow.Body {
     switch entry.state {
     case .reading(let reading):
-      // item 274's red: the reading's one age, keyed for each passed line, so no value moves (the green says each
-      // line's own read)
-      let age = MeterRules.ageWords(fetchedAt: reading.fetchedAt, now: now)
-      let passed: [(String, String)] = age.isEmpty ? [] : reading.windows.filter(\.passed).map { ($0.line.id, age) }
+      // item 274 (UM-274-D2 A): each passed line says its own read's age, as Settings' `meterLines` says it
+      let passed: [(String, String)] = reading.windows.filter(\.passed).compactMap { window in
+        let read = MeterRules.meterReadAt(window.metric, readingAt: reading.fetchedAt)
+        let age = MeterRules.ageWords(fetchedAt: read, now: now)
+        return age.isEmpty ? nil : (window.line.id, age)
+      }
       let ages = Dictionary(passed, uniquingKeysWith: { first, _ in first })
       return .reading(
         windows: reading.windows, kept: reading.stale ? entry.right?.words : nil, ages: ages,
