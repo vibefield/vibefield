@@ -4506,8 +4506,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   fill: loading is not a §2.5 state) over an 11px/50% lowercase stage label
   ("drawing the board" — its last; DK-4 retired "preparing previews" with the
   R3F preview capture). **Late-veil rule:** invisible until 120ms of loading elapse
-  (a cached switch never flashes); 240ms fade-out. Loading is modal (it holds no stage since
-  DK-17 — M5).
+  (a cached switch never flashes); 240ms fade-out. *Corrected 2026-11-10 (item 299; the code is the truth):* the
+  cover is never late. It mounts as the load begins and fades in over 220ms from the next frame, because a keyed
+  engine may never tear down in front of a person; only the bar waits, 500ms, then comes in over 300ms, so a cached
+  switch reads as one soft dissolve and never as a loading screen. It fades out over 380ms and is gone at 400ms.
+  Under reduced motion the cover's fade-out and the bar's fill take 90ms; its fade-in still takes 220ms, and the
+  bar still comes in over 300ms, which item 300 corrects (M6). Loading is modal (it holds no stage
+  since DK-17 — M5).
   *Amended 2026-10-07 (DK-16; §2.1's erratum, measured):* the veil wears the mat — its lit sage and
   its lattice, opaque — and its bar and label are in the mat's ink (`--vf-mat-ink`, white at 60 %:
   4.0:1 by day, 5.2:1 by night), so a switch goes from desk to desk on one floor.
