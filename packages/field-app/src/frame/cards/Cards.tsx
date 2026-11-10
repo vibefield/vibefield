@@ -38,6 +38,7 @@ import { dealCapture } from "./cards-sources";
 import { type CardStore, cardsStore, useCards } from "./cards-store";
 import { captureRefusal } from "./cards-words";
 import { isField } from "./caret";
+import { usePrintedStock } from "./press/use-printed-stock";
 
 /**
  * The hand's controller (track HN, HN-1; DESIGN.md §8 "The hand", §10): it holds the window's
@@ -188,6 +189,8 @@ export function Cards({
   const host = hostProp ?? getHost();
   const state = useCards(store);
   const view = useActiveView();
+  // the stock, printed once by the press for this theme and pixel density (DESIGN.md §5 "the press")
+  usePrintedStock();
   // a paste's key in where a card came from, as the frame spells its keys (`views.ts`): the
   // host's platform, the page's where a fixture host names none
   const [keys] = useState(() => viewKeysOf(host.platform));

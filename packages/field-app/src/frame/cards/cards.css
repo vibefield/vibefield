@@ -83,6 +83,21 @@
   opacity: var(--card-grain);
 }
 
+/* printed (§5 "the press"): once the press has printed, the stock wears its print (the paper, its weave and the lamp's
+   light) in place of the flat paper and its grain, and a card picked up wears the print made at its size. The agent's
+   dark card keeps its own stock until the round 5 face. */
+:root[data-vf-card-print="ready"] .vf-card:not([data-kind="agent"]) .vf-card-stock {
+  background: var(--vf-card-print-front) center / 100% 100% no-repeat;
+}
+
+:root[data-vf-card-print="ready"] .vf-card[data-held]:not([data-kind="agent"]) .vf-card-stock {
+  background-image: var(--vf-card-print-front-held, var(--vf-card-print-front));
+}
+
+:root[data-vf-card-print="ready"] .vf-card:not([data-kind="agent"]) .vf-card-stock::after {
+  display: none;
+}
+
 .vf-card-face {
   position: absolute;
   inset: 0;

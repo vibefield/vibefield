@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { PAPER_TEX, paperTexture, TOOTH_SCALE } from "@vibecook/ice/desk/kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BACK_MARK, markLength } from "../src/frame/cards/press/back-mark";
-import { PAPER_TEX, paperTexture } from "../src/frame/cards/press/paper-texture";
 import {
   PRESS,
   type PressDeps,
@@ -10,6 +10,7 @@ import {
   printStock,
   resetPressForTest,
 } from "../src/frame/cards/press/press";
+import { PRESS_FS } from "../src/frame/cards/press/press-shader";
 
 // THE PRESS (CS-D5 A, CS-D6 C; DESIGN.md §5 "The stock is printed, once — the press"): every card wears one printed stock,
 // so it is printed once per size, density and light, by one WebGL2 context that is then let go. The GPU itself is not
@@ -20,6 +21,8 @@ afterEach(() => resetPressForTest());
 /** A WebGL2 stand-in: every call is a no-op that is counted; shaders compile and programs link. */
 function fakeGl() {
   const calls: string[] = [];
+  /** every texImage2D's arguments, in order */
+  const uploads: unknown[][] = [];
   const lose = vi.fn();
   const gl = new Proxy(
     {},
@@ -31,12 +34,13 @@ function fakeGl() {
         if (/^[A-Z_0-9]+$/.test(name)) return 0;
         return (...args: unknown[]) => {
           calls.push(name);
+          if (name === "texImage2D") uploads.push(args);
           return name.startsWith("create") || name.startsWith("get") ? { name, args } : undefined;
         };
       },
     },
   );
-  return { gl, calls, lose };
+  return { gl, calls, lose, uploads };
 }
 
 function deps(webgl2: boolean) {
@@ -168,15 +172,14 @@ describe("what the press prints from", () => {
     expect(markLength()).toBe(markLength());
   });
 
-  it("the paper is the desk's: 256² rgba, the same every time", () => {
-    const a = paperTexture(7);
-    expect(PAPER_TEX).toBe(256);
-    expect(a.length).toBe(256 * 256 * 4);
-    expect(paperTexture(7)).toEqual(a);
-    expect(paperTexture(8)).not.toEqual(a);
-    let sum = 0;
-    for (let i = 0; i < a.length; i += 4) sum += a[i] ?? 0;
-    expect(sum / (256 * 256)).toBeGreaterThan(100);
-    expect(sum / (256 * 256)).toBeLessThan(156);
+  it("the paper is the desk's own page: ICE's, uploaded byte for byte, decoded at ICE's scale", async () => {
+    const { d, made } = deps(true);
+    await printStock(FRONT, d);
+    // the 9-argument upload is a byte array's; the paper is the one PAPER_TEX square (the empty slots are 1 × 1)
+    const paper = made[0]?.uploads.filter((args) => args.length === 9 && args[3] === PAPER_TEX);
+    expect(paper).toHaveLength(1);
+    expect(paper?.[0]?.[4]).toBe(PAPER_TEX);
+    expect(paper?.[0]?.[8]).toEqual(paperTexture());
+    expect(PRESS_FS).toContain(`(2.0 * ${TOOTH_SCALE.toFixed(1)} / 9.6)`);
   });
 });
