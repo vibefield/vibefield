@@ -992,7 +992,7 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(readWords(metersOf(FIXTURE_NATIVE, []), NOW)).toBe("Reading usage…");
   });
 
-  // A GUARD, green on arrival (item 274, UM-274-D4 A, James 2026-11-10): the head says the batch's
+  // A GUARD, green on arrival (item 274, UM-274-D4 A, 2026-11-10): the head says the batch's
   // newest read, so a meter kept from an older reading (its own `fetchedAt`) never ages it. It
   // reddens only if the head ever reads a meter's own read.
   it("P1: the head says the newest read whatever a kept meter's own read", () => {

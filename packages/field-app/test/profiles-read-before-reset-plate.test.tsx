@@ -54,7 +54,7 @@ describe("Agent Profiles' catalog plate: a window read before its reset", () => 
   });
 });
 
-// Item 274 (UM-274-D7 A, James 2026-11-10; DESIGN.md §8 "A meter a later reading did not carry"): the SHIPPING page over
+// Item 274 (UM-274-D7 A, 2026-11-10; DESIGN.md §8 "A meter a later reading did not carry"): the SHIPPING page over
 // a push a minute old whose five hours was kept from a read three hours ago. Each line says its own read.
 describe("Agent Profiles' catalog plate: a meter a later reading did not carry (item 274)", () => {
   it("is a state the catalog offers", () => {

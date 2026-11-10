@@ -959,10 +959,10 @@ describe("a meter a later reading did not carry keeps its own read (item 274)", 
     });
   });
 
-  // F4 (D6 A, VF-PM 02:35Z) claims ROUTING and STAMP KEEPING only. It cannot prove the per-session
+  // F4 (D6 A) claims ROUTING and STAMP KEEPING only. It cannot prove the per-session
   // stamping, #70's "a Claude status line's quota goes to its own session's service, stamped with
   // its account": that lives in adapter-claude, which the scripted provider replaces here (the
-  // file's header). The live two-account witness is James's, with its three preconditions: each
+  // file's header). The live two-account witness is manual, with its three preconditions: each
   // session SPAWNED (not typed) into a profile-bound pane, fieldd launched without
   // CLAUDE_CONFIG_DIR in its own environment, and Godview open first so the registry has answered.
   it("F4: two accounts — a stamped push lands on its own row and keeps that row's week; an unstamped one is dropped", async () => {

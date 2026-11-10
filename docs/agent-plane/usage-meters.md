@@ -140,7 +140,7 @@ passes the metric's through (`METRIC_KEYS` in
 `packages/fieldd/src/agent-usage.ts`), and the contract names it
 (`AgentAccountUsageMetric.fetchedAt`), so a reader takes
 `metric.fetchedAt ?? entry.fetchedAt`. What the desk and the phone say with
-that age waits for James's picks on item 274's page.
+that age is DESIGN.md §8's "A meter a later reading did not carry".
 
 ## Explicit refresh
 

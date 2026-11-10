@@ -3522,7 +3522,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     was read no later than it ("A meter a later reading did not carry", below). And the phone's batch is not as old as a
     desktop window's last poll: a session's status line pushes into it whether or not a window polls, so its stamp can
     be a minute old while a poll-only meter is hours old, each such meter carrying its own read.)*
-  - **A meter a later reading did not carry** (*added 2026-11-10, item 274; James ruled UM-274-D2, UM-274-D3 and
+  - **A meter a later reading did not carry** (*added 2026-11-10, item 274; decided: UM-274-D2, UM-274-D3 and
     UM-274-D4 at A on 2026-11-10*). At puppeteer 0.4.0 a push carries only the meters it reads, so a plan can hold
     meters of two readings: the pushed ones, dated by the push, and the poll's others, each kept with its own read.
     Every age said is the age of the numbers beside it (UM-274-D2): a window's line says its own read, and a plan's

@@ -355,7 +355,7 @@ struct AgentProfilesPageTests {
     #expect(!native.hot)
   }
 
-  /// Item 274 (UM-274-D2 A, James 2026-11-10; DESIGN.md §8 "A meter a later reading did not carry"): the phone's twin
+  /// Item 274 (UM-274-D2 A, 2026-11-10; DESIGN.md §8 "A meter a later reading did not carry"): the phone's twin
   /// of Settings' S1. A push half a minute old over meters kept from earlier reads (`agent-usage.kept-meters`, the
   /// mock door's `-vf-mock-usage=kept-meters`, read at its `now`): each passed line says its own read, and a kept plan
   /// says its tightest's.

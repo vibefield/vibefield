@@ -89,7 +89,7 @@ struct MeterModelTests {
     #expect(MeterModel.veiledAccount(" · Northlight") == nil)
   }
 
-  /// Item 274 (UM-274-D2 A, James 2026-11-10; DESIGN.md §8 "A meter a later reading did not carry"): at puppeteer
+  /// Item 274 (UM-274-D2 A, 2026-11-10; DESIGN.md §8 "A meter a later reading did not carry"): at puppeteer
   /// 0.4.0 a push carries only the meters it reads, so a plan holds meters of two readings, each kept meter with its
   /// own `fetchedAt`. Every age said is the age of the numbers beside it. The twins of the desktop's U1-U3
   /// (`packages/field-app/test/usage-meters.test.ts`), read at the mock door's `now`, 2026-09-16 12:00Z.
