@@ -1508,9 +1508,11 @@ describe("item 310 — an audit-refused idle replacement leaves the run held (mo
     );
     expect(audited.mock.calls.length, "audited again, for real").toBeGreaterThanOrEqual(2);
     expect(daemon.agents.replacing(RUN), "a replacement in flight").toBe(true);
-    // the floor's exit lets it pass its point of no return; the paper cell refuses the successor
+    // the floor's exit lets it pass its point of no return; the paper cell refuses the successor. The record says
+    // "replaced" at that point, before the successor's birth is asked, so the row waits for the span's end: the
+    // refusal is written in the same synchronous step
     await daemon.agents.handleTerminalExit(exited());
-    await until(() => records.read(RUN)?.exited !== undefined, 10_000, "the replacement ended");
+    await until(() => !daemon.agents.replacing(RUN), 10_000, "the replacement ended");
     expect(records.read(RUN)?.exited?.reason).toBe("replace-failed");
     expect(births, "the successor's birth, asked once").toEqual([`native-${RUN}`]);
     expect(realSignals(), "the net: no real signal was asked").toEqual([]);
