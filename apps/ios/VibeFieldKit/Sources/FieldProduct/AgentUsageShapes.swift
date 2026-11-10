@@ -73,6 +73,9 @@ public struct AgentAccountUsageMetric: Sendable, Equatable {
   public let startsAt: String?
   public let resetsAt: String?
   public let group: AgentAccountUsageGroup?
+  /// item 274 — when this meter was read, when that is earlier than its entry's `fetchedAt` (a meter a later reading
+  /// did not carry); nil, it is as old as its entry. RED: a stub, the key is not read yet
+  public let fetchedAt: String?
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
@@ -94,6 +97,7 @@ public struct AgentAccountUsageMetric: Sendable, Equatable {
         id: try group.text("id", 1...Int.max), label: try group.text("label", 1...Int.max),
         standby: try group.typedBool("standby"))
     }
+    fetchedAt = nil
     unknownFields = object.unknownFields
   }
 }

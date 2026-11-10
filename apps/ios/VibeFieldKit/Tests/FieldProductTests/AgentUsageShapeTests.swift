@@ -150,10 +150,38 @@ struct AgentUsageShapeTests {
       ["resetsAt": .null],
       ["group": .object(["id": .string(""), "label": .string("Fable only")])],
       ["group": .object(["id": .string("scope:fable")])],
+      // item 274 — a meter's own read is a string or absent, as zod's `z.string().optional()`
+      ["fetchedAt": .null],
+      ["fetchedAt": .int(1)],
     ] as [[String: JSONValue?]])
   func metricRefused(_ fields: [String: JSONValue?]) throws {
     let raw = try Self.metric(fields)
     #expect(throws: WireDecodeError.self) { try AgentAccountUsageMetric(json: raw) }
+  }
+
+  @Test("a meter a later reading did not carry names its own read (item 274)")
+  func keptMetersNameTheirRead() throws {
+    let batch = try AgentAccountUsageBatch(json: try Fixture.json("agent-usage.kept-meters"))
+    let count = batch.entries.count
+    #expect(count == 2)
+    let first = batch.entries.first
+    let mine = try #require(first)
+    let fableFound = mine.metrics.first { $0.id == "fable" }
+    let fiveHourFound = mine.metrics.first { $0.id == "five-hour" }
+    let fable = try #require(fableFound)
+    let fiveHour = try #require(fiveHourFound)
+    let fableRead = fable.fetchedAt
+    let fableUnknown = fable.unknownFields
+    let fiveHourRead = fiveHour.fetchedAt
+    #expect(fableRead == "2026-09-16T11:20:00.000Z")
+    #expect(fableUnknown.isEmpty)
+    #expect(fiveHourRead == nil)
+    let last = batch.entries.last
+    let side = try #require(last)
+    let sideWeekFound = side.metrics.first { $0.id == "fable" }
+    let sideWeek = try #require(sideWeekFound)
+    let sideWeekRead = sideWeek.fetchedAt
+    #expect(sideWeekRead == "2026-09-16T10:00:00.000Z")
   }
 
   @Test("a batch with an entry zod refuses is refused whole, as `z.array` refuses it")

@@ -6,6 +6,7 @@ import {
   AGENT_ACCOUNT_USAGE_STATES,
   AgentAccountUsageBatch,
   AgentAccountUsageEntry,
+  AgentAccountUsageMetric,
   AgentsUsageParams,
 } from "../src/agent-usage";
 import { METHODS } from "../src/methods";
@@ -166,5 +167,45 @@ describe("the account-usage batch (AR-5d)", () => {
         metrics: [],
       }).success,
     ).toBe(false);
+  });
+});
+
+// Item 274 (UM-D29) — at puppeteer 0.4.0 a push merges into the reading it lands on (#74): the
+// meters it carries take its stamp, and the ones it did not carry keep their own older read (core
+// `account-usage.ts:72-76` at v0.4.0). A meter's own `fetchedAt` is optional and a string, as
+// `startsAt`/`resetsAt` are; a reader takes `metric.fetchedAt ?? entry.fetchedAt`.
+describe("a meter a later reading did not carry keeps its own read (item 274)", () => {
+  const meter = {
+    id: "fable",
+    label: "FABLE",
+    kind: "window",
+    usedPercent: 96,
+    durationMinutes: 10_080,
+    resetsAt: "2026-09-17T00:00:00.000Z",
+  };
+
+  it("C1: a meter's read time that is not a string is refused", () => {
+    expect(AgentAccountUsageMetric.safeParse({ ...meter, fetchedAt: 42 }).success).toBe(false);
+  });
+
+  it("C2: a meter's read time is never null (absent means as old as its entry)", () => {
+    expect(AgentAccountUsageMetric.safeParse({ ...meter, fetchedAt: null }).success).toBe(false);
+  });
+
+  it("C3: the kept meters carry their own read, and the pushed ones none", () => {
+    const batch = AgentAccountUsageBatch.parse(fixture("agent-usage.kept-meters.json"));
+    const [mine, side] = batch.entries;
+    expect(mine?.fetchedAt).toBe("2026-09-16T11:59:30.000Z");
+    expect(mine?.metrics.map((m) => [m.id, m.fetchedAt])).toEqual([
+      ["five-hour", undefined],
+      ["seven-day", undefined],
+      ["fable", "2026-09-16T11:20:00.000Z"],
+      ["credit", "2026-09-16T11:20:00.000Z"],
+    ]);
+    expect(side).toMatchObject({ state: "rate-limited", stale: true });
+    expect(side?.metrics.map((m) => [m.id, m.fetchedAt])).toEqual([
+      ["five-hour", undefined],
+      ["fable", "2026-09-16T10:00:00.000Z"],
+    ]);
   });
 });

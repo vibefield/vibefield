@@ -409,10 +409,12 @@ const sayFixtures = [
 // UM-4 (UM-D8 A) — the phone's meters: the home's usage batch (one with readings, needs and a model's week; the empty
 // one before the first refresh; one with a budget, a kept reading and a shared plan) and its profile sets with
 // personas and plans, which the kit's `AgentAccountUsageBatch` / `AgentProfileSet` readers (FieldProductTests) parse.
+// Item 274 — and the batch whose meters a later reading did not carry, each keeping its own read
 const usageFixtures = [
   "agent-usage.valid.json",
   "agent-usage.empty.json",
   "agent-usage.budget.json",
+  "agent-usage.kept-meters.json",
   "agents-profile-sets.meters.json",
 ];
 const requiredMirrors = [
