@@ -17,9 +17,11 @@ use field_native::contracts::{
     NativeFileTransferPullParams, NativeFileTransferPullResult, NativeFileTransferRootsParams,
     NativeFileTransferRootsResult, NativeFileTransferSnapshot, NativeHealth, NativeMarksSetParams,
     NativeMarksSetResult, NativePrepareRestartParams, NativePrepareRestartResult,
-    NativeShutdownParams, NativeShutdownResult, NativeTickParams, ObservedState, PeerInfo, PingAck,
+    NativeShutdownParams, NativeShutdownResult, NativeTerminalStartedForSetParams,
+    NativeTerminalStartedForSetResult, NativeTickParams, ObservedState, PeerInfo, PingAck,
     RpcNotification, RpcRequest, RpcResponse, ServeConfig, ServeEntry, StoreSnapshot,
-    TerminalRouteSnapshot, TerminalRoutesStreamPayload,
+    TerminalRouteSnapshot, TerminalRoutesStreamPayload, TerminalStartedFor,
+    TerminalStartedForEntry,
 };
 use field_native::registries::{custody, mesh_file_transfer, native_refusals, terminal_inventory};
 use serde_json::Value;
@@ -750,4 +752,75 @@ fn custody_marks_fixtures() {
     let mut negative = load("native-marks-set-params.valid.json");
     negative["value"] = serde_json::json!(-1);
     assert!(serde_json::from_value::<NativeMarksSetParams>(negative).is_err());
+}
+
+/// OB custody (§8.1) — what each terminal was started for. The floor READS the set's params and EMITS its ack's
+/// table, entry by entry, so every golden is strict. The answer to a set is an empty object, whatever the generator
+/// makes of one.
+#[test]
+fn custody_started_for_fixtures() {
+    let sets = [
+        "native-terminal-started-for-set-params.valid.json",
+        "native-terminal-started-for-set-params.spark.json",
+        "native-terminal-started-for-set-params.typed.json",
+        "native-terminal-started-for-set-params.clear.json",
+    ];
+    for name in sets {
+        roundtrip::<NativeTerminalStartedForSetParams>(name, true);
+    }
+    roundtrip::<NativeTerminalStartedForSetResult>(
+        "native-terminal-started-for-set-result.valid.json",
+        true,
+    );
+    roundtrip::<HelloAck>("hello-ack.started-for.json", true);
+
+    // What the goldens are of: a plain run names no spark and no process, a spark's names its spark, a typed run's
+    // its process, and a clear says nothing was started.
+    let said = |name: &str| load(name)["startedFor"].clone();
+    let plain = said(sets[0]);
+    assert!(plain["run"].is_string(), "{plain}");
+    assert!(plain.get("spark").is_none() && plain.get("process").is_none());
+    assert!(said(sets[1])["spark"].is_string());
+    let typed = said(sets[2]);
+    assert!(typed["process"]["pid"].is_u64() && typed["process"]["startedAtMs"].is_u64());
+    assert!(load(sets[3]).get("startedFor").is_none());
+    let answer = load("native-terminal-started-for-set-result.valid.json");
+    assert_eq!(answer, serde_json::json!({}));
+
+    // The ack's table: two entries, each an entry on this side, and what was started in each is what a set says.
+    let ack = load("hello-ack.started-for.json");
+    let table = ack["startedFor"].as_array().expect("the ack's table");
+    assert_eq!(table.len(), 2);
+    for entry in table {
+        let parsed: TerminalStartedForEntry =
+            serde_json::from_value(entry.clone()).unwrap_or_else(|e| panic!("{entry}: {e}"));
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), *entry);
+        let mut started_for = entry.clone();
+        let fields = started_for.as_object_mut().expect("an entry");
+        assert!(fields.remove("sessionId").is_some(), "{entry}");
+        let parsed: TerminalStartedFor =
+            serde_json::from_value(started_for.clone()).unwrap_or_else(|e| panic!("{entry}: {e}"));
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), started_for);
+    }
+    let rooted = |entry: &Value| entry["spark"].is_string() && entry["root"].is_string();
+    assert!(table.iter().any(rooted), "one is a spark's, with its root");
+
+    // The bounds are the contract's, carried by typify: the Rust twin refuses what zod refuses.
+    let long = "r".repeat(129);
+    for run in ["", long.as_str()] {
+        let length = run.len();
+        let mut params = load(sets[0]);
+        params["startedFor"]["run"] = Value::String(run.to_owned());
+        assert!(
+            serde_json::from_value::<NativeTerminalStartedForSetParams>(params).is_err(),
+            "a run of {length} characters"
+        );
+    }
+    let mut longest = load(sets[0]);
+    longest["startedFor"]["run"] = Value::String("r".repeat(128));
+    assert!(serde_json::from_value::<NativeTerminalStartedForSetParams>(longest).is_ok());
+    let mut nameless = load(sets[0]);
+    nameless["sessionId"] = Value::String(String::new());
+    assert!(serde_json::from_value::<NativeTerminalStartedForSetParams>(nameless).is_err());
+    assert_eq!(custody::STARTED_FOR_MAX, 1024);
 }
