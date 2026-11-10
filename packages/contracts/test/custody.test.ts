@@ -1,8 +1,8 @@
 // OB custody (custody.ts; mgmt.ts `NativeBootstrap` and `NativeMarksSet*`; envelope.ts `HelloAck.marks`; registries.ts
-// `CUSTODY`). The shapes' own rows: what a spawner hands a daemon, the level a daemon says it runs at, the marks and
-// their one verb, where the shell's wrapped root lives, and the inputs of the shell pairing's vector. The vector's
-// MACs are not read here: contracts holds no recipe, and the maker's test and the verifier's are the ones that
-// compute them.
+// `CUSTODY`; shell.ts `SHELL_CUSTODY_AUDIT_ACTIONS`). The shapes' own rows: what a spawner hands a daemon, the level
+// a daemon says it runs at, the marks and their one verb, where the shell's wrapped root lives, the inputs of the
+// shell pairing's vector, and the two actions main records of its own root. The vector's MACs are not read here:
+// contracts holds no recipe, and the maker's test and the verifier's are the ones that compute them.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,7 +19,11 @@ import {
   LAYOUT_ROOT_LEVEL,
   TAILNET_SCOPES,
 } from "../src/registries";
-import { ProductInfo } from "../src/shell";
+import {
+  ProductInfo,
+  SHELL_CLIPBOARD_AUDIT_ACTIONS,
+  SHELL_CUSTODY_AUDIT_ACTIONS,
+} from "../src/shell";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 const fixture = (name: string): unknown => JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
@@ -242,5 +246,25 @@ describe("OB custody — the shell's pairing vector", () => {
     for (const key of ["secretHex", "port", "bootId", "nonce", "ts"] as const) {
       expect(new Set(vector.cases.map((c) => c[key])).size, key).toBe(2);
     }
+  });
+});
+
+describe("OB custody — what main records of its own root", () => {
+  it("names two audit actions: the root, and an older pair", () => {
+    expect(SHELL_CUSTODY_AUDIT_ACTIONS).toEqual({
+      ROOT: "shell.custody.root",
+      PAIR: "shell.custody.pair",
+    });
+  });
+
+  it("keeps both under the prefix the shell's actions share, apart from its neighbour's", () => {
+    const custody = Object.values(SHELL_CUSTODY_AUDIT_ACTIONS);
+    const clipboard = Object.values(SHELL_CLIPBOARD_AUDIT_ACTIONS);
+    for (const action of [...custody, ...clipboard]) {
+      expect(action.startsWith("shell."), action).toBe(true);
+    }
+    expect(custody.every((action) => action.startsWith("shell.custody."))).toBe(true);
+    // no two of the shell's actions are one name: fieldd admits them as one set
+    expect(new Set([...custody, ...clipboard]).size).toBe(custody.length + clipboard.length);
   });
 });

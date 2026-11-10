@@ -403,6 +403,22 @@ export const SHELL_CLIPBOARD_AUDIT_ACTIONS = {
   READ: "shell.clipboard.read",
 } as const;
 
+/** OB custody (C1) — what main records of its own custody root, appended by main through
+ * fieldd's `audit.append` (wall R17), which admits only registered shell-owned actions.
+ * Appended after a pair is up, never before: an append must never be what starts one, so
+ * what main learned earlier in the boot waits in memory until then.
+ *  · `ROOT` — a root main made by itself (none was there, or the one there did not open),
+ *    or a start it refused because the keystore did not answer. A root that simply opened
+ *    is not recorded;
+ *  · `PAIR` — what main stopped, or left alone, of an older pair on a user root when it
+ *    made a root.
+ * The outcome and its cause in the record's own attrs, never a secret and never the
+ * wrapped bytes. */
+export const SHELL_CUSTODY_AUDIT_ACTIONS = {
+  ROOT: "shell.custody.root",
+  PAIR: "shell.custody.pair",
+} as const;
+
 /** Small host fact used only to describe platform-specific desktop behavior in
  * Settings. Unknown Electron platforms collapse to `other` at the preload
  * boundary rather than leaking Node's process object into the renderer. */
