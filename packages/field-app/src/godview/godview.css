@@ -539,6 +539,23 @@
   max-height: calc(100% - var(--vf-godview-head-reserve) - 8px);
 }
 
+/* …with the terminals away, arrived, the stage in flow runs to the window's
+   foot (its `flex: 1 1 0` below), so the room ends the panes' 8 above it, as
+   the field does. Inside the cover the stage itself stops at the covers'
+   reserve, so the room ends at the stage's foot. Both wait for the deck to
+   arrive, as the stage's own rule does (UM-R-F's review, F4; DESIGN.md §8
+   "The pill"). The stage lent the swarm has its own rule below, which wins. */
+.vf-godview[data-godview-deck-edge][data-godview-deck="away"]:not([data-godview-deck-motion])
+  .vf-monitor-chrome {
+  max-height: calc(100% - var(--vf-godview-head-reserve) - 8px - var(--vf-godview-panes-foot));
+}
+
+.vf-cover
+  .vf-godview[data-godview-deck-edge][data-godview-deck="away"]:not([data-godview-deck-motion])
+  .vf-monitor-chrome {
+  max-height: calc(100% - var(--vf-godview-head-reserve) - 8px);
+}
+
 /* …and on the stage lent the swarm, the window's height, the room ends at the
    field's foot as last set, `--vf-godview-field-foot` (UM-R-F, c6). The field
    wall's top stands there at rest too, but it follows the live

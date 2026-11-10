@@ -1440,6 +1440,23 @@ describe("UI system ownership boundaries", () => {
     expect(godview).toMatch(
       /^\.vf-godview\[data-godview-deck="away"\] \.vf-godview-field-wall \{\s*top: calc\(100% - var\(--vf-godview-panes-foot\)\);/mu,
     );
+    // UM-R-F's review (F4): in flow, the terminals away and arrived, the stage runs to the window's foot, so the room
+    // ends the panes' 8 above it; inside the cover the stage already stops at the covers' reserve. The swarm's away
+    // rule names one selector more than the cover's, so it comes after it and wins on a full stage.
+    expect(godview).toMatch(
+      /^\.vf-godview\[data-godview-deck-edge\]\[data-godview-deck="away"\]:not\(\[data-godview-deck-motion\]\)\s+\.vf-monitor-chrome \{\s*max-height: calc\(100% - var\(--vf-godview-head-reserve\) - 8px - var\(--vf-godview-panes-foot\)\);/mu,
+    );
+    expect(godview).toMatch(
+      /^\.vf-cover\s+\.vf-godview\[data-godview-deck-edge\]\[data-godview-deck="away"\]:not\(\[data-godview-deck-motion\]\)\s+\.vf-monitor-chrome \{\s*max-height: calc\(100% - var\(--vf-godview-head-reserve\) - 8px\);/mu,
+    );
+    const coverAway = godview.indexOf(
+      '\n.vf-cover\n  .vf-godview[data-godview-deck-edge][data-godview-deck="away"]',
+    );
+    const swarmAway = godview.indexOf(
+      '\n.vf-godview[data-godview-deck-edge][data-godview-deck="away"]\n  .vf-godview-monitor-stage',
+    );
+    expect(coverAway).toBeGreaterThan(-1);
+    expect(swarmAway).toBeGreaterThan(coverAway);
     expect(godview).toMatch(/^\.vf-monitor-claims \{[^}]*left: 79px/m);
     // the review: at one z-index the strip, later in the DOM, painted its chips (a Retry and the approval line among
     // them, both taking clicks) over the popover's head and the cards beside the add — the column stands one over it
