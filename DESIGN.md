@@ -3517,7 +3517,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     desktop's Settings may still say "resets now" for a spent window. *(Corrected 2026-11-06, the re-review:
     this said a window whose reset "has come since its reading was taken", where the rule as built reads
     `resetsAt` against now alone; and it said such a window ranks last while a running window at 0% tied it at 0
-    and, the first of equals, could lose to it.)*
+    and, the first of equals, could lose to it.)* *(Corrected 2026-11-10, item 274: where a plan holds meters of two
+    readings, its right words say its tightest window's own read, and a passed window ages them only when the tightest
+    was read no later than it ("A meter a later reading did not carry", below). And the phone's batch is not as old as a
+    desktop window's last poll: a session's status line pushes into it whether or not a window polls, so its stamp can
+    be a minute old while a poll-only meter is hours old, each such meter carrying its own read.)*
+  - **A meter a later reading did not carry** (*added 2026-11-10, item 274; James ruled UM-274-D2, UM-274-D3 and
+    UM-274-D4 at A on 2026-11-10*). At puppeteer 0.4.0 a push carries only the meters it reads, so a plan can hold
+    meters of two readings: the pushed ones, dated by the push, and the poll's others, each kept with its own read.
+    Every age said is the age of the numbers beside it (UM-274-D2): a window's line says its own read, and a plan's
+    right words, its circle's said words and a bud's word say its tightest window's own read. A passed window ages its
+    plan's words only when the tightest was read no later than it, so a 5 hours pushed a minute ago keeps its reset or
+    forecast beside a model week kept from before that week's reset, and the week says its own age on its line. With one
+    reading this is the rule above, word for word. A kept meter draws as read, and its forecast and orange are computed
+    from its old use at now (UM-274-D3: no new state). ‹for James›, the open mark, in both halves: a meter kept for
+    hours while pushes flow (on the phone, with no desktop poll, a model week) says no age unless it has passed; and
+    while it is its plan's tightest and still running, its forecast and orange understate its pace.
   - **Pointing** at an arc at the open size focuses that plan: the others dim to 28%, and the middle says it.
   - **Said** as an image, "Usage: ‹plan›: 42% of 5 hours, resets in 2h; ‹plan›: not signed in", or "No meters",
     or, while the usage cannot be read, "‹profile›: usage unavailable", and "Usage unavailable" for every profile's
@@ -8766,7 +8781,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **the circle** at 214 (a tap on a plan focuses it), its middle naming the window its figure reads as the
       popover's does (§8 "The body": "7D" where the agent's mark stood; a plan with no reading keeps its mark; added
       2026-11-17), the bands key under it, and where the reading comes from: "Read a minute ago, from studio", or
-      "Reading usage…";
+      "Reading usage…" (*the batch's newest read, as the popover's head; added 2026-11-10, item 274, UM-274-D4*);
     - **Profiles**, an inset group on the fill under History's group head. Its rows are 60 tall: a Bands circle at
       36, the profile's name at 17, its line at 13 in the tertiary ink ("default · the agents' own sign-ins · 2
       plans"), and its word at 15 (the tightest percent; the attention ink at 600 when hot). With several profiles
@@ -8779,7 +8794,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       in the tertiary ink, giving way first when the line is tight; VoiceOver says it with "…" for the dots; added
       2026-11-17), the age of a kept reading ("as of 5m ago") or of one taken before a window's
       reset that has since come (§8 "The Bands circle"; added 2026-11-06, ‹for James›), every window as Settings'
-      C1 line, and "Runs out in ~35m at this pace" while it would (UM-D4). While the field is live a plan's row adds
+      C1 line (*each passed line saying its own read's age; added 2026-11-10, item 274, UM-274-D2*), and "Runs out in
+      ~35m at this pace" while it would (UM-D4). While the field is live a plan's row adds
       its sessions line ("3 sessions · 1 working · 1 waiting for you", or "no sessions"); a plan with sessions draws
       **Show**, **Showing** while it is the one chosen, for everyone, with one profile too (UM-D14, built 2026-11-09,
       UM-5b), and either closes the page. Under a lens a plan's row counts only the sessions in that profile, and draws
@@ -10403,7 +10419,8 @@ here.
   page says it as Settings does — a window whose reset has come says the reading's age in its reset's place, "as of 3h
   ago", unlit and with no reset mark, a kept reading's too under its own age above — so on the phone "resets now"
   stands only where no age can be said. ‹for James›: the age keeps its own width, the line's track giving way to it,
-  where a reset keeps the slot's 58.)*
+  where a reset keeps the slot's 58.)* *(Added 2026-11-10, item 274, UM-274-D2: "its age" is the age of the window it
+  names; a meter a later reading did not carry says its own read, §8 "A meter a later reading did not carry".)*
 - **What needs you.** On the desktop, "not signed in" with **Sign in**, and "couldn't read" with **Retry**. On the
   phone, "Not signed in · sign in on ‹home›" and "Couldn't read · retry", with no act. A sign-in already under way
   says "signing in…" with no act, as Settings' row says "Signing in…" and offers only its cancel; it is said
@@ -10426,7 +10443,9 @@ here.
   (‹for James›, 2026-11-09). *(Added 2026-11-06, UM-3's
   review; ‹for James›: the head's other ages as built, "Read just now", "Read 5 minutes ago", "Read an hour ago",
   "Read 3 hours ago"; and while the usage cannot be read the popover says the profile's one line, "‹profile›: usage
-  unavailable", in place of a line per agent, an agent with no meter keeping its own.)*
+  unavailable", in place of a line per agent, an agent with no meter keeping its own.)* *(Added 2026-11-10, item 274,
+  UM-274-D4: the head's age is the batch's newest read; a meter kept from an older reading says its own age on its line,
+  never in the head.)*
 - **The add.** **Add a profile…**; AO-5's offer and fact, "Keep work, personal, or client accounts separate. Use
   accounts side by side without signing each other out."; and "Opens Settings → Agent Profiles on New profile…".
 - **The limit moment** keeps AO-6b's words (§8 "The moments"): **Another subscription?**, "92% · 7 days", **Add a
