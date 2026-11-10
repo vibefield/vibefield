@@ -3367,8 +3367,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     is open, it takes the ink at 6% (160ms `ease`). A pinned card's circle, its card clicked open, takes the ready
     fill, the ink at 8%, and keeps it under the pointer and while another circle's card peeks over its own, so a
     pinned card's circle never looks like a pointed one (*added 2026-11-09, UM-R-F; James, the picks page "The
-    Column's Open Calls", c3: "One quiet tell", "The circle's open fill a little stronger"; the 8% is for his eye
-    in the stills*). **The lens ring**, the chosen profile's, is 2 in the pill's solid and then 1.5 in the ink,
+    Column's Open Calls", c3: "One quiet tell", "The circle's open fill a little stronger"*) ‹for James: the 8% is
+    the lead's reading of "a little stronger", the ready fill's step; it is for his eye in the stills›. **The lens ring**, the chosen profile's, is 2 in the pill's solid and then 1.5 in the ink,
     outside the circle's edge. It is the column's only 1.5, for a selection, never a state.
   - **Which circles.** The profiles stand in Settings' order, This Mac first.
     - **One profile** (UM-D21, UM-D12): **This Mac**, one circle carrying every plan, with the add under it. There
@@ -3421,7 +3421,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       the two numbers are the edge drawer's, retired HN-8, "opened after 120ms and closed after a 320ms grace" §8
       "Edge trays", the only hover contract recorded*).
     - **Focus is pointing** (*added 2026-11-09, UM-R-F; James, the picks page "The Column's Open Calls", c4: "Yes,
-      focus counts as pointing"*). The keyboard on a circle, or on the add while it can act, shows its card as the
+      focus counts as pointing", "Tabbing to a circle opens its card"*). ‹for James: the pick says those two things.
+      Four rules below are the lead's reading of it, not his words: a pointer resting on another circle lets go when
+      the keyboard arrives; the window's blur is a leave, and its return a coming back; Tab out of a card's last
+      control goes on to the next circle; and Shift+Tab enters no card (the last two under "Pinned")›. The keyboard
+      on a circle, or on the add while it can act, shows its card as the
       pointer does, at once and with no dwell, and holds no keys: it is not a pin. A pointer resting on another
       circle lets go, as a close does, so the card the keyboard reached shows, and the pointer must leave and return
       to peek. The card stays while the keyboard is on its circle or in the card, and it leaves at once, with no
@@ -3504,7 +3508,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       entered forward, from its circle (*added 2026-11-09, UM-R: Esc, the chosen circle and the lone unpin cleared
       only the pin, so a card under the pointer stood where it was*; *amended the same day, UM-R-F: this said forward
       out of the card's last control "follows the window's order into the deck"; while focus shows a card, Tab on
-      every circle enters its card, so that order alone never reached a second circle*).
+      every circle enters its card, so that order alone never reached a second circle*). ‹for James: this amendment
+      is the lead's reading of c4, not his words. It reverses UM-R's "follows the window's order into the deck",
+      which the pick did not speak to›.
   - **The add** (UM-D21, UM-D22) is a 40 round at the column's foot in the ready fill: the ink at 8%, and 14% under
     the pointer, the ready fill's own step (the drawing's 12% is not one). It holds `plus` 17 in the tertiary ink
     (the primary under the pointer). A click opens Settings → Agent Profiles on **New profile…** (`openNewProfile`,
