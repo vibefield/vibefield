@@ -698,9 +698,18 @@ describe('Send while the spark waits on you (TH-1; ER-C2; DESIGN.md §8 "Chat\'s
     );
     expect(words($(".vf-chat-thread-status"))).toBe("Needs your OK");
     const deps = await sendNow("and the docs too");
-    // Send reads no blocker and waits on no pane: it is handed its message and the say
+    // Send reads no blocker and waits on no pane. It is handed its message and the say, and,
+    // since OB-1b, the card road's two hands (the grant and the kept file), which do neither
     expect(road.sent.map((send) => send.text)).toEqual(["and the docs too"]);
-    expect(Object.keys(deps).sort()).toEqual(["needsWake", "say", "sending", "stillKept", "wake"]);
+    expect(Object.keys(deps).sort()).toEqual([
+      "hand",
+      "handFileKept",
+      "needsWake",
+      "say",
+      "sending",
+      "stillKept",
+      "wake",
+    ]);
   });
 
   it("wakes a sleeping spark with an item first, though its word says Asking you throughout", async () => {
