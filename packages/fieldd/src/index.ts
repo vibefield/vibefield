@@ -72,6 +72,7 @@ export {
   verifyAuditSegment,
 } from "./audit-service";
 export type { FielddCustody } from "./custody-handoff";
+export type { CustodyMarks, CustodyMarksFloor } from "./custody-marks";
 export {
   bootstrap,
   type FielddConfig,

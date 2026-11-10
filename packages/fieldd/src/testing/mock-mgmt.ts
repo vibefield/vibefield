@@ -5,6 +5,7 @@
 import { readFileSync, rmSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import {
+  CUSTODY,
   DRIVE_LIMITS,
   ErrorData,
   isPipeEndpoint,
@@ -12,6 +13,7 @@ import {
   MESH_FILE_TRANSFER,
   NativeFileTransferPullParams,
   NativeFileTransferRootsParams,
+  NativeMarksSetParams,
   RPC_ERROR_CODES,
   SOCKETS,
   STORES,
@@ -404,6 +406,13 @@ export class MockMgmtServer {
   verifyClientMac = false;
   /** OB custody (C3) — the hellos `verifyClientMac` refused */
   refusedHellos = 0;
+  /** OB custody (C5) — the marks this floor holds, as field-native is specified to keep them (CUSTODY-SPEC §2.5): a
+   * name and the highest value it was told, in memory. The hello ack carries them when there are any, as they
+   * stand (a row may seed one no floor would hold, to see the client drop it). They are the floor's, not a
+   * connection's: `killClients()` leaves them. A floor that DIED and came back is `marks.clear()` beside it. */
+  readonly marks = new Map<string, number>();
+  /** OB custody (C5) — every `native.marks.set` whose params parsed, in order, as asked: answered or refused. */
+  readonly markSets: Array<{ name: string; value: number }> = [];
   /** NF-3 — when set, native.lifecycle.observed.subscribe answers this snapshot
    * (an ObservedState); null falls through to the generic `{n:0}` handler,
    * which the fieldd side must read as "no inventory" (tolerant reader). */
@@ -591,9 +600,55 @@ export class MockMgmtServer {
             ...(this.terminalRoutes !== null ? { terminalRoutes: this.terminalRoutes } : {}),
             ...(this.helloPid !== null ? { pid: this.helloPid } : {}),
             ...(this.helloLastManager !== null ? { lastManager: this.helloLastManager } : {}),
+            // OB custody (C5) — `HelloAck.marks`: absent when the floor holds none
+            ...(this.marks.size > 0 ? { marks: Object.fromEntries(this.marks) } : {}),
             ...(serverMac !== undefined ? { serverMac } : {}),
           },
         }) + "\n",
+      );
+      return;
+    }
+    if (msg.method === "native.marks.set") {
+      // OB custody (C5) — as the floor is specified to answer it (CUSTODY-SPEC §2.5, mgmt.ts `NativeMarksSet*`): a
+      // mark only rises, a name off the pattern is the params' own parse failure, and one name more than
+      // `CUSTODY.MARKS_MAX` is refused with the door's roots' error shape.
+      const refuse = (message: string, details?: unknown): void => {
+        sock.write(
+          `${JSON.stringify({
+            jsonrpc: "2.0",
+            id: msg.id,
+            error: {
+              code: RPC_ERROR_CODES.PRECONDITION_FAILED,
+              message,
+              data: {
+                kind: "PRECONDITION_FAILED",
+                retryable: false,
+                ...(details !== undefined ? { details } : {}),
+              },
+            },
+          })}\n`,
+        );
+      };
+      const asked = NativeMarksSetParams.safeParse(msg.params);
+      if (!asked.success) {
+        refuse("native.marks.set takes a mark's name and a count");
+        return;
+      }
+      const { name, value } = asked.data;
+      this.markSets.push({ name, value });
+      const held = this.marks.get(name);
+      if (held === undefined && this.marks.size >= CUSTODY.MARKS_MAX) {
+        refuse("this floor holds no more marks", { reason: "marks-full" });
+        return;
+      }
+      const mark = Math.max(held ?? 0, value);
+      this.marks.set(name, mark);
+      sock.write(
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: { value: mark },
+        })}\n`,
       );
       return;
     }

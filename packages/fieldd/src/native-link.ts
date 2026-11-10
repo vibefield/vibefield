@@ -4,12 +4,14 @@ import { createConnection, type Socket } from "node:net";
 import { performance } from "node:perf_hooks";
 import {
   CONTRACTS_VERSION,
+  CUSTODY,
   isPipeEndpoint,
   MESH_CONTROL_LIMITS,
   MGMT_NOTIFICATIONS,
   NATIVE_SUPERVISION,
   NativeLastExit,
   NativeLastManager,
+  NativeMarksSetResult,
   NativeTickParams,
   NativeUnavailableDetails,
   PingAck,
@@ -405,6 +407,12 @@ export class NativeLink extends EventEmitter {
    * (`HelloAck.lastManager`), believed on THIS process's first hello alone: a re-pair's record is about this fieldd's
    * own dropped connection, never another fieldd's crash. The daemon takes it once (undefined after). */
   lastManager: NativeLastManager | undefined;
+  /** OB custody (C5) — the marks the floor said it holds, in the hello ack of the connection that is paired now
+   * (`HelloAck.marks`): a name and a number that only rises, kept in the floor's memory so that it outlives this
+   * fieldd. Empty before any hello, and for a floor that holds none or predates marks. It is the floor's word AT THE
+   * HELLO, read again at every hello and never in between: `setMark` answers the floor's word for one name and
+   * does not rewrite this. fieldd's own view of the marks is `CustodyMarks`'s (custody-marks.ts), which reads this. */
+  marks: ReadonlyMap<string, number> = new Map();
   private pairedOnce = false;
   /** TM-1/TM-2 (MF-1l) — "this floor's terminal doors are PUBLISHED on the
    * tailnet", the floor's own word (`HelloAck.terminalMesh`), re-learned at
@@ -471,7 +479,8 @@ export class NativeLink extends EventEmitter {
     // The daemon wires its consumers of this link once, for its own life, and
     // the fan-out is fixed: eleven `connected` listeners as of PG-1d (daemon.ts
     // seven and its gate watcher, the diagnostics service, the mesh client and
-    // the native supervisor). Node's default of ten is a leak heuristic; a bound
+    // the native supervisor), and a twelfth in a fieldd handed custody (OB
+    // custody, C5: the marks' holder). Node's default of ten is a leak heuristic; a bound
     // with room keeps it for a real leak without warning on every boot.
     this.setMaxListeners(20);
     this.logger = opts.logger ?? createNoopLogger();
@@ -681,6 +690,7 @@ export class NativeLink extends EventEmitter {
       lastExit?: unknown;
       lastManager?: unknown;
       pid?: unknown;
+      marks?: unknown;
       serverMac?: unknown;
     };
     const expected = computeAckMac(secretHex, nonce, this.opts.bootId);
@@ -735,7 +745,25 @@ export class NativeLink extends EventEmitter {
       typeof record.pid === "number" && Number.isSafeInteger(record.pid) && record.pid >= 1
         ? record.pid
         : undefined;
+    // OB custody (C5) — on their own terms like the label: whatever is not a map of marks is a floor that holds
+    // none, and inside one a name off the pattern or a value that is no count is not a mark.
+    this.marks = ackMarks(record.marks);
     this.emit("terminal-endpoints");
+  }
+
+  /** OB custody (C5) — `native.marks.set`: tell the floor a mark. The floor keeps max(old, value) in memory and
+   * answers what it keeps, so a value below the mark changes nothing and reads the mark back. Rejects as any request
+   * does (the link is down, the floor is held unresponsive, the deadline passed), and with the floor's own refusal:
+   * `PRECONDITION_FAILED` for a name off `CUSTODY.MARK_NAME`, or for one name more than it holds at once
+   * (`details.reason: "marks-full"`). A floor from before marks answers that it has no such method. */
+  async setMark(name: string, value: number): Promise<number> {
+    const answer = NativeMarksSetResult.safeParse(
+      await this.request("native.marks.set", { name, value }),
+    );
+    if (!answer.success) {
+      throw new RpcCallError("INTERNAL", "the floor answered native.marks.set with no mark");
+    }
+    return answer.data.value;
   }
 
   /** TC-D15 — arm the route stream once. From then on NativeLink's ordinary
@@ -1505,6 +1533,24 @@ export function terminalCreateTarget(
  * with agent cells and no interactive one (it hosts no deck). */
 function cellEndpoints(snapshot: TerminalRouteSnapshot): TerminalEndpoints | undefined {
   return terminalCreateTarget(snapshot, "interactive")?.endpoints;
+}
+
+const MARK_NAME = new RegExp(CUSTODY.MARK_NAME);
+
+/** OB custody (C5) — a hello ack's `marks`, read tolerantly as every field of that ack is: the shape a live floor
+ * sent decides, never the schema this build carries. Anything but an object is no marks; inside one, an entry whose
+ * name is off `CUSTODY.MARK_NAME` or whose value is not a count is dropped, and no more than `CUSTODY.MARKS_MAX`
+ * are kept (the floor holds no more). A Map, never an object: a mark may be named as something every object has. */
+function ackMarks(value: unknown): ReadonlyMap<string, number> {
+  const marks = new Map<string, number>();
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return marks;
+  for (const [name, mark] of Object.entries(value)) {
+    if (marks.size >= CUSTODY.MARKS_MAX) break;
+    if (!MARK_NAME.test(name)) continue;
+    if (typeof mark !== "number" || !Number.isSafeInteger(mark) || mark < 0) continue;
+    marks.set(name, mark);
+  }
+  return marks;
 }
 
 /** fieldd's one back-off for its links to the floor: 500 ms doubling to 10 s, by the attempts made since the last

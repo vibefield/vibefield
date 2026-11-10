@@ -286,6 +286,7 @@ import {
   splitPathList,
 } from "./boot-env";
 import type { FielddCustody } from "./custody-handoff";
+import { CustodyMarks } from "./custody-marks";
 import { runStopSteps, type StopStep, stopFailure } from "./daemon-stop";
 import { openSwarmReplay } from "./debug/swarm-replay";
 import { DeviceRemoval } from "./device-removal";
@@ -909,6 +910,9 @@ export interface FielddDaemon {
   /** the all-scopes token written to run/shell.token (tests read it here). A fieldd handed custody has none
    * (`SealedFielddDaemon`). */
   shellToken: string;
+  /** OB custody (C5) — fieldd's view of every mark (custody-marks.ts): what the stores note and the shell's stream
+   * says. At `files` it has no floor behind it. */
+  custodyMarks: CustodyMarks;
   health(): FielddHealth;
   nativeHealth(): NativeHealth | null;
   /** TC-D1/TC-D2 — floor supervision (tests drive requestRestart directly;
@@ -1117,6 +1121,21 @@ export async function bootstrap(
     ...(config.userId !== undefined ? { userId: config.userId } : {}),
     logger: logger.child({ component: "native_link" }),
   });
+  // OB custody (C5; custody-marks.ts) — fieldd's view of every mark, made before the floor is dialled so that it
+  // holds the higher of what the spawner remembered and what the floor says BEFORE any store reads it: the floor's
+  // word is taken at each hello, the boot's own first (`connected` fires inside `native.connect()` below), and the
+  // floor is then told what it holds less of. At `files` there is no hand-off and no floor behind the holder: a
+  // store has one code path, and this fieldd asks nothing new of its floor.
+  const custodyMarks = new CustodyMarks({
+    ...(custody?.expect !== undefined ? { expect: custody.expect } : {}),
+    ...(custody !== undefined ? { floor: native } : {}),
+    logger: logger.child({ component: "custody.marks" }),
+  });
+  if (custody !== undefined) {
+    native.on("connected", () => {
+      void custodyMarks.heard(native.marks);
+    });
+  }
   // TC-D1/TC-D2 (terminal-custody TC-S1): fieldd owns floor respawn + wedge
   // detection. Constructed before connect() so no lifecycle event is missed.
   // WG-D1 — the wedge ladder's two late-bound witnesses: the census reads the
@@ -5744,6 +5763,29 @@ export async function bootstrap(
       if (firstError !== undefined) throw firstError;
       return { revoked, droppedConnections };
     });
+    // OB custody (C5) — the marks' stream (contracts custody.ts `CustodyMarksFrame`): fieldd's view of every mark,
+    // whole at the open and whole again at every rise, so the shell can hand the highest it heard to the next
+    // fieldd it spawns. Gated exactly as `system.mintWindowToken` is: the local shell alone, whatever scopes a
+    // window's token carries. Served at both levels (at `files` the view starts empty and dies with this fieldd).
+    api.registerSubscription("system.custody.marks.subscribe", (ctx, _params, emit) => {
+      requireShellWindowTokenAuthority(ctx);
+      // a rise between this answer and its reply would be a frame ahead of its subId: it is held, and said whole
+      // once the reply is out (`start`)
+      let open = false;
+      let roseBeforeOpen = false;
+      const leave = custodyMarks.onChange((frame) => {
+        if (open) emit(frame);
+        else roseBeforeOpen = true;
+      });
+      return {
+        snapshot: custodyMarks.frame(),
+        dispose: leave,
+        start: () => {
+          open = true;
+          if (roseBeforeOpen) emit(custodyMarks.frame());
+        },
+      };
+    });
 
     // -- doc lane (the :9411-class binary data plane) + doc.* handlers --
     const docLane = new DocLane({
@@ -10158,6 +10200,7 @@ export async function bootstrap(
       diagnostics: diagnosticsService,
       // OB custody (C2) — a sealed fieldd minted none
       shellToken: shellGrant?.token,
+      custodyMarks,
       health,
       nativeHealth: () => latestHealth,
       nativeSupervisor: supervisor,
