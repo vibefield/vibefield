@@ -5,6 +5,10 @@ import { cleanupWorlds, type DeskWorld, DOC, ordinaryWindow, world } from "./des
 // OB-3a (§5.6, §11; OB-L1, EY-D9 B) — who a grant belongs to. A spark's run id changes each time it sleeps and wakes (a
 // resume continues in a new run), and the send that hands it an object is meant to outlast that, so a spark's grants are
 // the spark's. A plain run's are its run's, and end with it. Whatever is held can be listed, and taken back.
+// *Moved 2026-11-10 (OB custody, C4; OB-D18 A):* a grant is honoured only for a run THIS fieldd launched. Four rows
+// here said a plain run's grant, or a spark's for the run that was there, survives a restart of fieldd; they say the
+// new rule now (a plain run's ends with fieldd, a spark's waits for the spark's next run). The rule's own rows are
+// objects-this-boot.test.ts.
 
 afterEach(cleanupWorlds);
 
@@ -43,14 +47,18 @@ describe("a spark keeps what it was handed (§5.6)", () => {
     ).resolves.toMatchObject({ result: { text: "eggs" } });
   });
 
-  it("across a sleep, a wake and a restart of fieldd (EY-D9 B)", async () => {
+  it("across a sleep, a wake and a restart of fieldd, for the run fieldd starts for it next (EY-D9 B, OB-D18 A)", async () => {
     const h = sparkWorld();
     const ref = h.refOf("k1", "desk.note");
     h.desk.hand(ref, "run-1");
     sleepAndWake(h);
     const again = h.reopen();
     again.reconcile();
-    expect(again.grantOf(ref, "run-2")?.how).toBe("handed");
+    // run-2 was running before the restart: this fieldd did not launch it, and cannot vouch whose it is
+    expect(again.grantOf(ref, "run-2")).toBeUndefined();
+    h.sparkRuns.set("run-3", SPARK);
+    h.runs.set("run-3", "live");
+    expect(again.grantOf(ref, "run-3")?.how).toBe("handed");
   });
 
   it("what it placed, too", async () => {
@@ -113,13 +121,14 @@ describe("a plain run's grants end with it", () => {
     expect(h.reopen().grantOf(ref, "run-a")).toBeUndefined();
   });
 
-  it("survive a restart of fieldd while the run lives (EY-D9 B)", () => {
+  it("end with fieldd too: a run that lived through a restart holds nothing after it (OB-D18 A)", () => {
     const h = world();
     const ref = h.refOf("k1", "desk.note");
     h.desk.hand(ref, "run-a");
     const again = h.reopen();
     again.reconcile();
-    expect(again.grantOf(ref, "run-a")?.how).toBe("handed");
+    expect(again.grantOf(ref, "run-a")).toBeUndefined();
+    expect(again.grants(ref)).toEqual([]);
   });
 
   it("are dropped once the re-attach has settled, when the run ended while fieldd was down", () => {
@@ -147,8 +156,8 @@ describe("a plain run's grants end with it", () => {
     h.sparks.delete("sp-gone00000");
     const again = h.reopen();
     again.reconcile();
-    expect(again.grantOf(ref, "run-1")?.how).toBe("handed");
-    expect(again.registry.get(other)?.grants).toEqual([]);
+    expect(again.grants(ref).map((g) => g.holder)).toEqual([`spark:${SPARK}`]);
+    expect(again.grants(other)).toEqual([]);
   });
 });
 
@@ -226,7 +235,7 @@ describe("a run replaced by a resume of its session hands on what it had (§7, E
     desk.runReplaced("run-a", "run-c");
   };
 
-  it("carries a plain run's grant to the run that continues it, and a restart keeps it", async () => {
+  it("carries a plain run's grant to the run that continues it, and it ends with fieldd as any plain run's does", async () => {
     const h = world();
     const ref = h.refOf("k1", "desk.note");
     h.desk.hand(ref, "run-a");
@@ -244,7 +253,8 @@ describe("a run replaced by a resume of its session hands on what it had (§7, E
     });
     const again = h.reopen();
     again.reconcile();
-    expect(again.grantOf(ref, "run-c")?.how).toBe("handed");
+    expect(again.grantOf(ref, "run-c")).toBeUndefined();
+    expect(again.grants(ref)).toEqual([]);
   });
 
   it("keeps what it placed as placed", () => {

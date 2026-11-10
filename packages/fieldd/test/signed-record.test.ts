@@ -1,6 +1,7 @@
 import { createHmac, randomBytes } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -164,5 +165,71 @@ describe("a signed file read back: why it is not served", () => {
     expect(signer.read(path)).toEqual({ why: "unreadable" });
     // item 172: nothing there is absent, never a record to set aside (record-stores.test.ts R3)
     expect(signer.read(join(root, "fieldd", "absent.json"))).toEqual({ absent: true });
+  });
+});
+
+// OB custody (C4): under the `sealed` level a store's key is HANDED by the spawner (`CustodyHandoff.records`), so that
+// no key sits in a file the same user can read. The signer then uses the handed key instead of the file, and the file's
+// path is never read and never made. With no key handed, every row above is today's, byte for byte.
+describe("a handed key is used instead of the file (OB custody, C4)", () => {
+  /** A key as a spawner hands it: 32 bytes, and plainly nobody's. */
+  const handed = () => Buffer.alloc(32, 0x5a);
+  const macOf = (key: Buffer) =>
+    createHmac("sha256", key).update(canonicalJson(record)).digest("hex");
+
+  it("signs and verifies with the key it was handed, and never makes the key's file or its folder", () => {
+    const root = tmp();
+    const signer = new RecordSigner({ keyPath: keyIn(root), key: handed() });
+    const signature = signer.sign(record);
+    expect(signature).toBe(macOf(handed()));
+    expect(signer.verifies(record, signature)).toBe(true);
+    expect(signer.secret().equals(handed())).toBe(true);
+    expect(existsSync(join(root, "fieldd"))).toBe(false);
+    // a second signer handed the same key reads what the first signed
+    const path = join(root, "record.json");
+    writeSigned(path, record, signature);
+    expect(new RecordSigner({ keyPath: keyIn(root), key: handed() }).read(path)).toEqual({
+      body: record,
+    });
+    expect(existsSync(join(root, "fieldd"))).toBe(false);
+  });
+
+  it("never reads the file at its path: a key file there, exposed or holding no key, is left as it is", () => {
+    const files: [held: string, mode: number][] = [
+      ["not a key", 0o600],
+      [randomBytes(32).toString("hex"), 0o644],
+    ];
+    for (const [held, mode] of files) {
+      const root = tmp();
+      mkdirSync(join(root, "fieldd"), { recursive: true, mode: 0o700 });
+      writeFileSync(keyIn(root), held, { mode });
+      chmodSync(keyIn(root), mode);
+      const signer = new RecordSigner({ keyPath: keyIn(root), key: handed() });
+      expect(signer.sign(record)).toBe(macOf(handed()));
+      expect(readFileSync(keyIn(root), "utf8")).toBe(held);
+      expect(statSync(keyIn(root)).mode & 0o777).toBe(mode);
+      expect(readdirSync(join(root, "fieldd"))).toEqual(["store.key"]);
+    }
+  });
+
+  it("is not the file's key: what the file's key signed reads as forged, and the other way about", () => {
+    const root = tmp();
+    const file = new RecordSigner({ keyPath: keyIn(root) });
+    const sealed = new RecordSigner({ keyPath: keyIn(root), key: handed() });
+    expect(sealed.verifies(record, file.sign(record))).toBe(false);
+    expect(file.verifies(record, sealed.sign(record))).toBe(false);
+    const path = join(root, "fieldd", "record.json");
+    writeSigned(path, record, file.sign(record));
+    expect(sealed.read(path)).toEqual({ why: "forged" });
+    expect(file.read(path)).toEqual({ body: record });
+  });
+
+  it("keeps the bytes it was handed: a spawner's buffer wiped afterwards changes no signature", () => {
+    const key = handed();
+    const signer = new RecordSigner({ keyPath: keyIn(tmp()), key });
+    const signature = signer.sign(record);
+    key.fill(0);
+    expect(signer.sign(record)).toBe(signature);
+    expect(signature).toBe(macOf(handed()));
   });
 });

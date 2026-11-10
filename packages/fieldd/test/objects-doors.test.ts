@@ -1,14 +1,16 @@
+import { writeFileSync } from "node:fs";
 import type { CallerContext, ObjectIntent } from "@vibefield/contracts";
-import { METHODS, TAILNET_SCOPES } from "@vibefield/contracts";
+import { METHODS, ObjectsTakeBackResult, TAILNET_SCOPES } from "@vibefield/contracts";
 import { AuditActionV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
 import { type ObjectDoorsApi, registerObjectDoors } from "../src/objects/doors";
 import type { ToolPlaneAudit } from "../src/tool-plane";
-import { cleanupWorlds, DOC, world } from "./desk-fixtures";
+import { cleanupWorlds, DOC, type Survivor, world } from "./desk-fixtures";
 
 // OB-3a — the window's door: ten `objects.*` rows, local-only, each held to a window's own token (a scope alone is not
 // the person's window), and the person's acts audited. Rows are called through a fake API, as registerObjectDoors hands
-// them to the real one.
+// them to the real one. OB custody (C5): a hand and a take-back answer only once whoever outlives fieldd was told the
+// grants' count, and a take-back answers `taken: true` whatever the disk said, with `kept: false` beside it then.
 
 afterEach(cleanupWorlds);
 
@@ -230,5 +232,106 @@ describe("the window's door (OB-3a)", () => {
     const opened = subs.get("objects.presence.subscribe")?.(WINDOW, {}, () => undefined);
     expect(opened?.snapshot).toEqual({ objects: [] });
     opened?.dispose();
+  });
+});
+
+describe("the answer waits for the count to be remembered (OB custody, C5)", () => {
+  /** A survivor that answers only when the row says so. */
+  function slow() {
+    const waiting: (() => void)[] = [];
+    const marks: Survivor = {
+      noted: [],
+      get: () => 0,
+      note: (_name, value) =>
+        new Promise((resolve) => {
+          waiting.push(() => resolve(value));
+        }),
+    };
+    const answer = () => {
+      for (const tell of waiting.splice(0)) tell();
+    };
+    return { marks, answer };
+  }
+
+  /** Long enough for an answer that waits on nothing to have arrived. */
+  const aMoment = () =>
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, 10);
+    });
+
+  it("answers a hand only once the survivors were told: written and held first, then the answer", async () => {
+    const { marks, answer } = slow();
+    const h = world({ marks });
+    const { ask } = doors(h);
+    const ref = h.refOf("k1");
+    let answered = false;
+    const hand = ask("objects.hand", WINDOW, { ref, run: "run-a" }).then((value) => {
+      answered = true;
+      return value;
+    });
+    await aMoment();
+    expect(h.desk.grantOf(ref, "run-a")?.how).toBe("handed");
+    expect(answered).toBe(false);
+    answer();
+    await expect(hand).resolves.toEqual({ handed: true });
+  });
+
+  it("answers a take-back only once the survivors were told", async () => {
+    const { marks, answer } = slow();
+    const h = world({ marks });
+    const { ask } = doors(h);
+    const ref = h.refOf("k1");
+    h.desk.hand(ref, "run-a");
+    answer();
+    let answered = false;
+    const taken = ask("objects.takeBack", WINDOW, { ref, run: "run-a" }).then((value) => {
+      answered = true;
+      return value;
+    });
+    await aMoment();
+    // taken already: the agent's next call is refused whether or not anyone has answered
+    expect(h.desk.grantOf(ref, "run-a")).toBeUndefined();
+    expect(answered).toBe(false);
+    answer();
+    await expect(taken).resolves.toEqual({ taken: true });
+  });
+
+  it("answers within the wait when no survivor does: a floor that is not there refuses nothing", async () => {
+    const { marks } = slow();
+    const h = world({ marks, noteMs: 20 });
+    const { ask } = doors(h);
+    const ref = h.refOf("k1");
+    await expect(ask("objects.hand", WINDOW, { ref, run: "run-a" })).resolves.toEqual({
+      handed: true,
+    });
+  });
+});
+
+describe("a take-back the disk would not take (OB custody, C5; OB-D19 A)", () => {
+  it("`objects.takeBack` answers `kept: false` then, and `taken: true` all the same", async () => {
+    let failing = false;
+    const h = world({
+      retryMs: 60_000,
+      writeFile: (path, text) => {
+        if (failing) throw Object.assign(new Error("ENOSPC: no space"), { code: "ENOSPC" });
+        writeFileSync(path, text, { mode: 0o600 });
+      },
+    });
+    const { ask, audited } = doors(h);
+    const ref = h.refOf("k1", "desk.note");
+    const other = h.refOf("k2", "desk.note");
+    await ask("objects.hand", WINDOW, { ref, run: "run-a" });
+    await ask("objects.hand", WINDOW, { ref: other, run: "run-a" });
+    failing = true;
+    const answer = await ask("objects.takeBack", WINDOW, { ref, run: "run-a" });
+    expect(answer).toEqual({ taken: true, kept: false });
+    expect(ObjectsTakeBackResult.safeParse(answer).success).toBe(true);
+    expect(h.desk.grantOf(ref, "run-a")).toBeUndefined();
+    expect(audited.at(-1)).toMatchObject({ action: "objects.take_back", attrs: { run: "run-a" } });
+    // once the disk takes a write again, a take-back answers as it always did
+    failing = false;
+    await expect(ask("objects.takeBack", WINDOW, { ref: other, run: "run-a" })).resolves.toEqual({
+      taken: true,
+    });
   });
 });

@@ -8,6 +8,9 @@ import { cleanupWorlds, DOC, world } from "./desk-fixtures";
 
 // OB-3a — the desk's registry and grants: a ref is a name (OB-L1) and only the person's play grants; records are signed
 // per object, read once at boot, and a bad one is set aside and never served. Grants outlive the app (EY-D9 B).
+// *Moved 2026-11-10 (OB custody, C4):* a record is the object's name alone now. Every grant is in the one grants file
+// (objects-grants-file.test.ts), and whose it is after a restart is objects-this-boot.test.ts's; the rows here that
+// read a record's `grants` read the desk's own list instead.
 
 afterEach(cleanupWorlds);
 
@@ -70,9 +73,9 @@ describe("the registry (OB-3a, OB-L1)", () => {
     const unsigned = h.refOf("unsigned");
     const copied = h.refOf("copied");
     h.desk.hand(edited, "run-a");
-    // an agent gives itself the object
+    // an agent points the name at another object, so that what was handed for this one would open that one
     const body = JSON.parse(readFileSync(fileOf(h.root, edited), "utf8"));
-    body.grants.push({ holder: "run-evil", how: "handed", at: 1 });
+    body.key = "another-object";
     writeFileSync(fileOf(h.root, edited), JSON.stringify(body));
     const bare = JSON.parse(readFileSync(fileOf(h.root, unsigned), "utf8"));
     delete bare.signature;
@@ -92,18 +95,18 @@ describe("the registry (OB-3a, OB-L1)", () => {
     expect(whys.sort()).toEqual(["forged", "forged", "unsigned"]);
   });
 
-  it("reads what a same-uid agent signed with the store's own key (EL7: it holds against an edit, no wall)", () => {
+  it("reads what a same-uid agent signed with the store's own key file (EL7: at `files` it holds against an edit, no wall)", () => {
     const h = world();
     const ref = h.refOf("k1");
     h.desk.hand(ref, "run-a");
-    const body = JSON.parse(readFileSync(fileOf(h.root, ref), "utf8"));
-    const { signature: _gone, ...unsigned } = body;
+    // at `files` the key is a 0600 file of the same uid: an agent that reads it writes itself a grant, and it verifies.
+    // Custody's `sealed` level is the wall: the key is handed, and is on no disk (objects-grants-file.test.ts).
+    const { signature: _gone, ...unsigned } = JSON.parse(readFileSync(h.grantsPath, "utf8"));
+    unsigned.grants.push({ ref, holder: "spark:sp-evil0000", how: "handed", at: 1 });
     const signer = new RecordSigner({ keyPath: join(h.root, "objects.key") });
-    writeFileSync(
-      fileOf(h.root, ref),
-      JSON.stringify({ ...unsigned, signature: signer.sign(unsigned) }),
-    );
-    expect(h.reopen().registry.grantOf(ref, "run-a")?.how).toBe("handed");
+    const signed = { ...unsigned, signature: signer.sign(unsigned) };
+    writeFileSync(h.grantsPath, JSON.stringify(signed), { mode: 0o600 });
+    expect(h.reopen().registry.grantOf(ref, "spark:sp-evil0000")?.how).toBe("handed");
   });
 
   it("a disk that does not answer leaves the file where it is and refuses in fieldd's words", () => {
@@ -147,7 +150,7 @@ describe("the person's acts on who holds what (OB-L1, OB-D9)", () => {
       handed: false,
       reason: expect.stringContaining("has ended"),
     });
-    expect(h.desk.registry.get(ref)?.grants).toEqual([]);
+    expect(h.desk.grants(ref)).toEqual([]);
     expect(h.desk.hand("vf:obj/zzzzzzzz", "run-a")).toEqual({
       handed: false,
       reason: expect.stringContaining("doesn't know that object"),
@@ -173,12 +176,8 @@ describe("the person's acts on who holds what (OB-L1, OB-D9)", () => {
     const note = h.refOf("note", "desk.note");
     h.desk.hand(note, "run-a");
     h.desk.hand(note, "run-b");
-    expect(
-      h.desk.registry
-        .get(note)
-        ?.grants.map((g) => g.holder)
-        .sort(),
-    ).toEqual(["run-a", "run-b"]);
+    const holders = h.desk.grants(note).map((g) => g.holder);
+    expect(holders.sort()).toEqual(["run-a", "run-b"]);
   });
 
   it("a hand never weakens what an agent placed", () => {
