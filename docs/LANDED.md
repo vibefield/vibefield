@@ -46138,3 +46138,75 @@ not part of the stack.
   - #74's `fetchedAt` for a kept meter is dropped by fieldd's METRIC_KEYS (agent-usage.ts:53-63). It needs contracts
     first.
 - **Next:** PU-R's consumer.
+
+## Item 277's S0 — the usage page says where 0.4.0 puts a Claude push, and who still gets no sink (track RV)
+
+(2026-11-10; `f85d0b023` on `a2118e122`, cut by the RV lead, landed by the fixer at 02:59:26Z by fast-forward, rule
+(b); docs only, so no run.) 41/0 `docs/agent-plane/usage-meters.md`, two dated texts tied to puppeteer `v0.4.0`:
+- **The push paragraph, corrected:** each status-line reading carries its session's account; a session no registered
+  account names gets no sink; an unowned push is dropped once the registry answers, kept under its bare id before.
+- **Still no sink:** a typed Claude in a profile-bound pane; a This Mac Claude fieldd starts under its own
+  `CLAUDE_CONFIG_DIR`; under that variable, a typed Claude from a shell naming no config dir, labelled This Mac.
+- **The sources note:** the native default's lookup follows that variable for the file, not the keychain item.
+- **Still open:** S1 ships in 278's puppeteer release; 277's D2 is James's; the poll-deferral clause is item 274's.
+
+## Item 287 — fieldd starts only through the coordinator, and a row holds teardown's order (M275)
+
+(2026-11-10; two commits, `36d8a3aa0` and `c0032d626`, on main `f85d0b023`, cut by the RV lead (track RV) in
+`lanes/fg2/vibe-field` and landed by the fixer at 03:54:47Z by fast-forward as M275. Validated by run 287, a9, vf-m2;
+the packet is `lanes/rv/packets/287-v2/`.) Opened by VF-PM at 02:15Z on ob-foundation's report, from OB's shell
+study, read at `fe6a04a7f`; then corrected to NOT REACHABLE at 02:37Z on RV's plan `lanes/rv/plan/item-287-PLAN.md`,
+where VF-PM ruled its D1 (a).
+
+**What landed.**
+- **The guard** (`36d8a3aa0`, 44/0 `packages/electron-shell/test/lifecycle.test.ts`): its own describe drives teardown
+  through `will-quit` with no quit gate to `app.exit(0)`, over a fake supervisor whose `dispose` records as the real one
+  sets its flag, before any await. It expects `disposeShell`, `supervisor.dispose`, then a late continuation that sees
+  the supervisor disposing. Green on arrival: it reddens only if an await is ever put between `lifecycle.ts:109` and
+  `:111`. No rig held that order before; every rig passed `getSupervisor: () => null`.
+- **D1 (a)** (`c0032d626`, 4/1 `packages/electron-shell/src/main/index.ts`): `ensureFieldd` starts fieldd only through
+  the attached pair's coordinator. With none attached, before boot or after teardown, it refuses "fieldd supervisor is
+  unavailable". The bare `supervisor.ensure` road (`index.ts:325` at `f85d0b023`) is gone, so no pair can start round
+  the coordinator's hold whatever the lifecycle's order.
+- Two files, +48 −1. The range's patch-id is `cc6ed9e40b53` (run 287's read).
+
+**What a person sees: nothing changes.** The removed road was unreachable at main. Teardown disposes the supervisor
+in the same run as the shell (`lifecycle.ts:109-111`), and the supervisor sets `disposed` before its first await
+(`fieldd-supervisor/src/supervisor.ts:648-650`), so its `ensure` refused (`:96`). Before boot both roads refused
+alike. No electron-shell code reads the refusal's kind or message (`git grep` over `src` and `test`).
+
+**Validation of record** (run 287, `lanes/vf-m2/rv287-v-a9-results`, SUMS `a32bb274c7115111`; runner
+`bc68f33e76bc7f86`):
+- V: `pnpm verify` exit 0 in 5 min 51 s at `c0032d626`. Every count is as expected, with one move: electron-shell
+  `Tests 2826 passed | 2 skipped (2828)` → `Tests 2827 passed | 2 skipped (2829)`, and the sum 14645 → 14646.
+  dev-runner 483 of 483; cargo 37 of 37.
+- **S carried by tree 244a989b8429 (run284's S GREEN).** `c0032d626:apps/ios/VibeFieldKit` is `244a989b8429`, as at
+  `996c51939`. S did not run.
+- **The +1, measured twice.**
+  - On the Mac, through the door: electron-shell's five quit files (`lifecycle`, `quit-gate`, `quit-flow`,
+    `updates/apply`, `signal-quit`) gave 114 at the tip (HOLD 03:11:23Z → 03:11:27Z) against 113 at main's
+    electron-shell (03:21:25Z → 03:21:28Z): `lifecycle.test.ts` 40 against 39, the other four 20, 14, 36 and 4 on both.
+    Beside it, `tsc --noEmit -p .` in electron-shell gave 0 errors, and biome's `check` of the two files was clean.
+  - In run 287's V, electron-shell's own section: the same five files, 114 against run 283's 113.
+- One KEPT birth on vf-m2 from V: `/private/tmp/.tmpunq2zp` (`native/run/termcell.1.crumb`, `termcell.2.crumb`),
+  the class of run 277's `.tmp7vPCa5`. Not removed.
+
+**The cut.**
+- Made by plumbing on `a2118e122`, then carried onto `f85d0b023` when item 277's S0 landed: range-diff `=`, the carry
+  swapping only `docs/agent-plane/usage-meters.md`, which neither commit touches.
+- Then re-cut MESSAGE ONLY on VF-PM's audit (03:23Z). Each message's last bullet said "NOT RUN: no row ran" after four
+  rows had run, and named a parent the commit no longer had. The old tips are `49c70bac6` and `ed6da4b18`; the trees
+  are equal (`e1d9ca0846da`, `af14f8ec7618`), so the rows carried, and the range-diff's `!` is in the messages alone.
+- The packet of record is `lanes/rv/packets/287-v2` (SUMS `59fc734293d35012`; its bundle requires `f85d0b023`).
+  vf-m2's lane held `996c51939`, so it fetched the transport `lanes/rv/packets/287-v2-m2` (bundle
+  `6ee3d382c276a3e3`, requiring `996c51939` only).
+
+**Found along the way.** A commit body true when it is written can be false on its landing day: here, rows that ran
+after the commit was made. The re-cut rewrote the messages, never the trees, and showed the tree equality that carries
+the rows.
+
+**Still open: item 290** (RV's; its plan accepted 2026-11-10, `lanes/rv/plan/item-290-PLAN.md`). It covers the
+in-flight attempt a coordinator adopts past a hold (`fieldd-handle-coordinator.ts:255-288`), and a pair that comes up
+while a person's quit decides, after its census, so the quit can leave that pair running. 287 does not close it.
+
+**Not done, and not claimed:** no window row ran, and nothing is pushed.

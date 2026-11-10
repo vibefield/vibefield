@@ -679,7 +679,13 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 - Landed 11-10: **item 203's VF-W3a**, the closed agent-forwarder role, and **#73's gateway split**, in the EL8 to
   puppeteer 0.4.0's stack (M274; LANDED "EL8 — puppeteer 0.4.0"): a packaged fieldd lends puppeteer its own forwarder.
   Probe G and desk-gates row 34 (packaged, the release runner) are owed.
+- Landed 11-10: **item 277's S0** (`f85d0b023`, docs; LANDED "Item 277's S0"): the usage page says where 0.4.0 puts
+  a Claude push, and the three cases that still get no sink. S1 ships in 278's puppeteer release; D2 is James's.
+- Landed 11-10: **item 287** (`36d8a3aa0`, `c0032d626`, M275, run 287; LANDED "Item 287"): fieldd starts only through
+  the coordinator, and a guard row holds teardown's order. Nothing a person sees changes. Its residual is item 290.
 - In flight:
+  - item 290, 287's residual: a pair that comes up while a person's quit decides (plan accepted 11-10,
+    `lanes/rv/plan/item-290-PLAN.md`).
   - the sibling lanes, filed by James on 11-06: puppeteer #64 rv/pup-monitor (#84, #81, #9) and #65
     rv/pup-claude-a (#1, #61, #4, #3, #5a, #64, #62, #63) MERGED, #66 rv/pup-views-a (#38, #39, #106, #107, #40,
     #105) open; ghosttea #102 rv/ghosttea (#115, #37 G-A, #92, #113, #94) MERGED. Their releases and the EL8 pins
