@@ -9,6 +9,7 @@ import { OnboardingPreview } from "../src/design-system/OnboardingPreview";
 import { PaneLauncherPreview } from "../src/design-system/PaneLauncherPreview";
 import { SpawnBloomPreview } from "../src/design-system/SpawnBloomPreview";
 import { SwarmBodiesPreview } from "../src/design-system/SwarmBodiesPreview";
+import { StatusSection } from "../src/design-system/sections/StatusSection";
 import { CHAT_REACH, HAND_REACH } from "../src/frame/cards/cards-model";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -1210,5 +1211,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       await new Promise((resolve) => setTimeout(resolve, 32));
     });
     expect(first?.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("draws the Progress specimen as the veil draws its face: the bar alone, no words (item 281's veil)", async () => {
+    // The Status section alone, as the rows above mount their one preview each (item 213 (2)).
+    await act(async () => root?.render(<StatusSection />));
+    const face = container?.querySelector<HTMLElement>(".vf-ds-progress-face");
+    if (!face) throw new Error("The Progress specimen is not mounted");
+    const fill = face.querySelector<HTMLElement>(".vf-ds-progress-track > span");
+    expect(fill?.style.width).toBe("62%");
+    expect(face.textContent).toBe("");
   });
 });

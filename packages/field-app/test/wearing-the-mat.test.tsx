@@ -17,6 +17,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { type BootView, FAILED_START, FIRST_STAGE } from "../src/boot/machine";
 import { MatSplashFace, SplashFace } from "../src/boot/splash-parts";
+import type { DocManagerState } from "../src/doc-manager";
 import { LoadingVeilView } from "../src/hud/LoadingVeil";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -155,17 +156,20 @@ describe("the switch, the veil and the explorer's tiles wear it — and the dots
     expect(html).not.toMatch(/text-black|bg-black/u);
   });
 
-  it("writes the veil's bar and stage line in the mat's ink", () => {
+  it("draws the veil's bar alone over the mat, with no step word under it (item 281's veil)", () => {
+    // The veil is handed the DocManager's own state, its step word included (ChromeLayer passes
+    // `docState.loading`), and draws the bar alone: the word is VibeField's insides (DESIGN.md §8
+    // "The loading veil", amended 2026-11-10).
+    const loading: NonNullable<DocManagerState["loading"]> = {
+      progress: 0.4,
+      stage: "drawing the board",
+    };
     const host = render(
-      createElement(LoadingVeilView, {
-        view: { progress: 0.4, stage: "drawing the board" },
-        shown: true,
-        details: true,
-      }),
+      createElement(LoadingVeilView, { view: loading, shown: true, details: true }),
     );
-    const html = host.innerHTML;
-    expect(html).toContain("text-[var(--vf-mat-ink)]");
-    expect(html).not.toMatch(/text-black|bg-black/u);
+    expect(host.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("40");
+    expect(host.textContent).toBe("");
+    expect(host.innerHTML).not.toMatch(/text-black|bg-black/u);
   });
 
   it("writes the switch's words in the mat's ink — the switch keeps the mat (track FG)", () => {
