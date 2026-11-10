@@ -22,9 +22,18 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 
 const MARK_NAME = new RegExp(CUSTODY.MARK_NAME);
 
-/** A count: what a mark's value is, here and on both wires. */
+/** A count: what a store may note. */
 const isCount = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
+/** A mark as another side said it (the spawner, the floor): a whole number from 0 up, or undefined when it is not
+ * one. The floor's count is a u64 with no ceiling of its own, so one past the safe integers reads as THE TOP and
+ * never as nothing: a mark that read as nothing would be a mark that fell (CUSTODY-SPEC §8, "the count never wraps":
+ * a store whose next count would pass the top cannot write, which is the safe side). */
+export function markOf(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) return undefined;
+  return Math.min(value, Number.MAX_SAFE_INTEGER);
+}
 
 /** The floor, as much of it as the marks need. `NativeLink` is one. */
 export interface CustodyMarksFloor {
@@ -99,8 +108,8 @@ export class CustodyMarks {
     if (rose) this.#say();
     if (this.#floor === undefined) return;
     for (const [name, value] of [...this.#view]) {
-      const theirs = held.get(name);
-      if (isCount(theirs) && theirs >= value) continue;
+      const theirs = markOf(held.get(name));
+      if (theirs !== undefined && theirs >= value) continue;
       await this.#tell(name, value);
     }
   }
@@ -115,11 +124,12 @@ export class CustodyMarks {
 
   /** Raise one mark to `value` if that is a rise this view can hold. Answers whether it rose. */
   #raise(name: string, value: unknown): boolean {
-    if (!MARK_NAME.test(name) || !isCount(value)) return false;
+    const mark = markOf(value);
+    if (!MARK_NAME.test(name) || mark === undefined) return false;
     const held = this.#view.get(name);
-    if (value <= (held ?? 0)) return false;
+    if (mark <= (held ?? 0)) return false;
     if (held === undefined && this.#view.size >= CUSTODY.MARKS_MAX) return false;
-    this.#view.set(name, value);
+    this.#view.set(name, mark);
     return true;
   }
 

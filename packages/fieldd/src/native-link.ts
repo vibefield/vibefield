@@ -11,7 +11,6 @@ import {
   NATIVE_SUPERVISION,
   NativeLastExit,
   NativeLastManager,
-  NativeMarksSetResult,
   NativeTickParams,
   NativeUnavailableDetails,
   PingAck,
@@ -21,6 +20,7 @@ import {
   type TerminalWorkloadClass,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { markOf } from "./custody-marks";
 import { ackMacMatches, computeAckMac, computePairingMac, newPairingNonce } from "./pairing";
 
 // NativeLink (design-02 §3.3): the ONLY door to field-native. Owns the mgmt
@@ -757,13 +757,14 @@ export class NativeLink extends EventEmitter {
    * `PRECONDITION_FAILED` for a name off `CUSTODY.MARK_NAME`, or for one name more than it holds at once
    * (`details.reason: "marks-full"`). A floor from before marks answers that it has no such method. */
   async setMark(name: string, value: number): Promise<number> {
-    const answer = NativeMarksSetResult.safeParse(
-      await this.request("native.marks.set", { name, value }),
-    );
-    if (!answer.success) {
+    const answer = await this.request("native.marks.set", { name, value });
+    // read as the ack's marks are (`NativeMarksSetResult` by hand): the floor's count is a u64, and one past the
+    // safe integers is the top, not a refusal to read it
+    const kept = markOf((answer as { value?: unknown } | null)?.value);
+    if (kept === undefined) {
       throw new RpcCallError("INTERNAL", "the floor answered native.marks.set with no mark");
     }
-    return answer.data.value;
+    return kept;
   }
 
   /** TC-D15 — arm the route stream once. From then on NativeLink's ordinary
@@ -1544,10 +1545,11 @@ const MARK_NAME = new RegExp(CUSTODY.MARK_NAME);
 function ackMarks(value: unknown): ReadonlyMap<string, number> {
   const marks = new Map<string, number>();
   if (typeof value !== "object" || value === null || Array.isArray(value)) return marks;
-  for (const [name, mark] of Object.entries(value)) {
+  for (const [name, said] of Object.entries(value)) {
     if (marks.size >= CUSTODY.MARKS_MAX) break;
-    if (!MARK_NAME.test(name)) continue;
-    if (typeof mark !== "number" || !Number.isSafeInteger(mark) || mark < 0) continue;
+    // a count past the safe integers is the top (custody-marks.ts `markOf`): never dropped, or the mark would fall
+    const mark = markOf(said);
+    if (!MARK_NAME.test(name) || mark === undefined) continue;
     marks.set(name, mark);
   }
   return marks;
