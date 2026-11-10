@@ -103,7 +103,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { markedText } from "../src/agent-input-queue";
 import { EXIT_GRACE_MS } from "../src/agent-runtime";
-import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
+import { type FielddConfig, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
 import { FORWARDER_MISSING_REASON } from "../src/roles";
@@ -115,6 +115,14 @@ import { RootsRegistry } from "../src/workspace/roots";
 import { born } from "./agent-birth";
 import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
 import { installFakeClaude } from "./fake-claude";
+import {
+  bootAt,
+  HANDED,
+  handFloorPairing,
+  hello,
+  pairingCredential,
+  SEALED_FLOOR_ENV,
+} from "./custody-harness";
 import {
   type FloorScene,
   killDaemonTree,
@@ -700,6 +708,13 @@ interface SetupConfig {
    * running and its records on disk: the restart */
   restartOf?: Box;
   resumeWhenIdle?: { afterMs: number; pollMs: number };
+  /** OB custody (CUSTODY-SPEC §8.1) — boot SEALED: a real floor is told its pairing comes on stdin and is written
+   * the one line, and fieldd is handed this custody (`FielddConfig.custody`, the seam a pipe fills in `bin.ts`). A
+   * sealed fieldd has no shell token: its windows pair (`sealedWindow`). A restart of a sealed box names it again.
+   * Absent: `files`, as every row here was. */
+  custody?: typeof HANDED;
+  /** OB custody — how long until a started-for set the floor did not take is said again (default: the runtime's) */
+  startedForRetryMs?: number;
   /** the fake rosettad's scripted misbehaviour for THIS boot (default `ok`) */
   rosettadMode?: string;
   /** AR-S2 — give the scripted provider an account capability (sign-ins) */
@@ -762,16 +777,19 @@ async function setup(config: SetupConfig): Promise<Box> {
     cleanup.push(() => mock.stop());
   } else {
     spawnedAt = Date.now();
+    const sealed = config.custody;
     const child = spawn(BIN, [], {
       env: {
         ...process.env,
         FIELD_NATIVE_DATA_DIR: dataDir,
         FIELD_LOG_DIR: join(dataDir, "logs"),
         FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
+        ...(sealed !== undefined ? SEALED_FLOOR_ENV : {}),
       },
-      stdio: "ignore",
+      stdio: sealed !== undefined ? ["pipe", "ignore", "ignore"] : "ignore",
     });
     children.push(child);
+    if (sealed !== undefined) handFloorPairing(child, sealed);
     await waitForMgmtEndpoint(dataDir, 15_000);
   }
   // The scripted `claude` is what puppeteer's claude profile service runs for
@@ -809,7 +827,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     resumeSelection: config.resumeSelection ?? true,
     discovered: [],
   };
-  const daemon = await bootstrap({
+  const fielddConfig: FielddConfig = {
     dataDir,
     // item 68 — fieldd's own log beside the floor's, for the waits' evidence (fieldd logged nowhere here before)
     logRoot: join(dataDir, "logs"),
@@ -872,6 +890,9 @@ async function setup(config: SetupConfig): Promise<Box> {
     ...(config.stopHeardWithinMs !== undefined
       ? { agentStopHeardWithinMs: config.stopHeardWithinMs }
       : {}),
+    ...(config.startedForRetryMs !== undefined
+      ? { agentStartedForRetryMs: config.startedForRetryMs }
+      : {}),
     // FS-1a — every run's folder becomes a place, a test root under /tmp or
     // /var/folders included: a place refuses only a filesystem root. The
     // /System, /Library and /private exclusion is the browse exports' (and
@@ -883,7 +904,9 @@ async function setup(config: SetupConfig): Promise<Box> {
       ? { terminalBirthWaitMs: 300 }
       : {}),
     ...(config.classRoutes !== undefined ? { terminalClassRoutes: config.classRoutes } : {}),
-  });
+  };
+  // OB custody — at the level the row asked for (`bootAt`: a sealed daemon has no shell token to read)
+  const daemon = await bootAt(fielddConfig, config.custody);
   cleanup.push(() => daemon.stop().catch(() => undefined));
   scene = { dataDir, spawnedAt, link: daemon.native };
   // The floor's terminal endpoints reach the daemon over the management link AFTER `bootstrap` resolves, so a row that
@@ -980,6 +1003,28 @@ async function window(daemon: FielddDaemon, scopes: string[], suffix: string): P
     rendererParticipant: rendererParticipant(suffix),
   })) as { token: string };
   const win = await openRpc(daemon.controlPort);
+  await helloAs(win, minted.token);
+  return win;
+}
+
+/** OB custody — `window` for a SEALED fieldd (`setup({ custody })`). It has no shell token: the shell PAIRS under
+ * the secret it was handed (CUSTODY-SPEC §2.3; custody-harness.ts spells the recipe), then mints the window's token
+ * as any shell does. */
+async function sealedWindow(
+  daemon: FielddDaemon,
+  custody: typeof HANDED,
+  scopes: string[],
+  suffix: string,
+): Promise<WsRpc> {
+  const { controlPort: port, bootId } = daemon;
+  const shell = await openRpc(port);
+  await hello(shell, pairingCredential({ port, bootId, secretHex: custody.shell }));
+  const minted = (await shell.call("system.mintWindowToken", {
+    scopes,
+    label: `window-${suffix}`,
+    rendererParticipant: rendererParticipant(suffix),
+  })) as { token: string };
+  const win = await openRpc(port);
   await helloAs(win, minted.token);
   return win;
 }
@@ -6775,5 +6820,237 @@ describe("item 121 — a run TC-D4's fallback put on the interactive cell re-att
     const refused = await refusal(second, runId, "fieldd.agents.reattach_refused_cell");
     expect(refused.attrs).toMatchObject({ sessionId: ptyId, why: "other-cell" });
     await untouched(second, runId, ptyId);
+  }, 150_000);
+});
+
+// OB custody (CUSTODY-SPEC §8.1.0, rule 6) — LAUNCH MEMORY, and the floor is told what each terminal was started for.
+// A run's record is signed under a key file an agent can read, so who a run is, for a grant, is never read back from
+// it. fieldd remembers what IT launched (`agents.bornFor`), and a fieldd that was handed custody says the same to the
+// floor in the turn the run entered, so that the next fieldd is handed it in the hello ack. A fieldd handed nothing
+// keeps the memory and tells the floor nothing.
+//
+// THE FIRST TWO ROWS GO THROUGH THE REAL DAEMON on the real floor, with nothing injected. `daemon.ts` hands the
+// runtime its link as the floor's table only when custody was handed (the level), and these rows WATCH that link's
+// `setStartedFor` with a spy that calls through. They are §10's proof that the level and `setStartedFor` are bound.
+//
+// The rows titled "GIVEN AN INJECTED FLOOR" replace that one method's ANSWER on the same real daemon, to show the
+// runtime's rule for each word the link can say. They prove nothing of the binding; the two rows before them do.
+//
+// NOT ASSERTED HERE: the real floor's own answer to a set sent this early. In this pair the set leaves in the turn
+// the run enters, and the floor answers NOT_FOUND until its own inventory lists the new terminal (ob-d's finding of
+// 2026-11-10; CUSTODY-SPEC §8.1.0 "v0.24" rules when it is said instead, and that is the rider on top of this pair).
+// The first row prints the answers it got (`STARTED_FOR_ANSWER`) and asserts nothing of them.
+describe("OB custody §8.1 — launch memory, and the floor is told what each terminal was started for", () => {
+  const SEALED = { floor: "real", custody: HANDED } as const;
+  const WITH_SPARKS = { profiles: true, briefing: SPARK_BRIEFING } as const;
+  const SPARK_WINDOW = [...DECK, "agents.manage", "sparks.use"];
+  const VERB = "native.terminal.startedFor.set";
+  /** Shorter than any answer the injected floors below take, so a second set for a run would overlap its first. */
+  const RETRY_MS = 150;
+
+  const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+  async function spawnPlain(win: WsRpc, box: Box): Promise<AgentSpawnResult> {
+    const launch = { provider: "scripted", cwd: box.envOut };
+    return (await born(win, "agent.spawn", launch)) as AgentSpawnResult;
+  }
+  /** The creation request a launch announced, as its record keeps it: the id its helper root is named by. */
+  const rootOf = (box: Box, runId: string) => readRecord(box.dataDir, runId).creationRequestId;
+  const exitedOn = (box: Box, runId: string): Promise<true> =>
+    poll(
+      async () => (readRecord(box.dataDir, runId).exited ? true : undefined),
+      15_000,
+      "the run's exit on its record",
+    );
+  const end = async (win: WsRpc, box: Box, spawned: AgentSpawnResult): Promise<void> => {
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await exitedOn(box, spawned.session.runtimeRunId);
+  };
+  /** A spark hatched through the window's door, as TU-1's rows hatch one: its first session, on the scripted agent. */
+  async function hatched(win: WsRpc, box: Box) {
+    await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
+    const { spark } = (await win.call("compose.sparks.hatch", {
+      name: "Vela",
+      face: { seed: 7 },
+      agent: "scripted",
+      profiles: ["native"],
+      thinksUnder: "native",
+    })) as ComposeSparksHatchResult;
+    const runId = spark.session?.runtimeRunId;
+    const paneId = box.sessions.at(-1)?.runtimeSessionId;
+    if (runId === undefined || paneId === undefined)
+      throw new Error("the hatch started no session");
+    await joinedRow(win, runId);
+    return { spark, runId, paneId };
+  }
+  /** fieldd's own log lines of one event (`logRoot`, as `setup` boots it). */
+  const logged = (box: Box, event: string): number => {
+    const file = join(box.dataDir, "logs", "system", "fieldd.ndjson");
+    if (!existsSync(file)) return 0;
+    return readFileSync(file, "utf8")
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .map((line) => JSON.parse(line) as { event?: string })
+      .filter((record) => record.event === event).length;
+  };
+
+  it("sealed, through the real daemon: a launch is remembered, and said to the floor in the turn it entered, from the launch's own values: a plain run plain, a spark's run with its spark", async () => {
+    const box = await setup({ ...SEALED, ...WITH_SPARKS });
+    const win = await sealedWindow(box.daemon, HANDED, SPARK_WINDOW, "sf1");
+    // WATCHED, never replaced: this is the link daemon.ts handed the runtime, and every answer is the floor's own
+    const said = vi.spyOn(box.daemon.native, "setStartedFor");
+    const saidFor = (sessionId: string) => said.mock.calls.filter(([id]) => id === sessionId);
+
+    const plain = await spawnPlain(win, box);
+    const plainRun = plain.session.runtimeRunId;
+    // by the time the door answered, the set had been sent: for this run's terminal, with the creation request the
+    // launch announced, and naming no spark and no process
+    expect(rootOf(box, plainRun)).toEqual(expect.any(String));
+    expect(said.mock.calls).toEqual([
+      [plain.terminal.sessionId, { run: plainRun, root: rootOf(box, plainRun) }],
+    ]);
+    expect(said.mock.calls[0]?.[1]).not.toHaveProperty("spark");
+    expect(said.mock.calls[0]?.[1]).not.toHaveProperty("process");
+    expect(box.daemon.agents.bornFor(plainRun)).toEqual({});
+
+    // a spark's run: the spark is the launch call's OWN argument (daemon.ts's `spawn` for the sparks), and the same
+    // value is what this life remembers and what the floor is told
+    const { spark, runId, paneId } = await hatched(win, box);
+    const sparks = saidFor(paneId);
+    expect(sparks.length).toBeGreaterThan(0);
+    for (const call of sparks) {
+      expect(call).toEqual([paneId, { run: runId, spark: spark.id, root: rootOf(box, runId) }]);
+    }
+    expect(box.daemon.agents.bornFor(runId)).toEqual({ spark: spark.id });
+
+    // what the floor answered, for whoever reads this row's output; nothing is asserted of it (the header)
+    const answers = await Promise.all(said.mock.results.map((result) => result.value));
+    console.log(`STARTED_FOR_ANSWER ${JSON.stringify(answers)}`);
+
+    // launch memory answers for the process's whole life: a run that has ended is still what it was born as, and
+    // nothing vouches for a run this process never launched
+    await end(win, box, plain);
+    expect(box.daemon.agents.bornFor(plainRun)).toEqual({});
+    expect(box.daemon.agents.bornFor("run-nobody-launched")).toBeUndefined();
+    await win.call("terminal.terminate", { sessionId: paneId });
+  }, 150_000);
+
+  it("files, through the real daemon: launch memory is kept all the same, and the floor is never told: no set leaves fieldd for a launch, a spark's launch, or an end", async () => {
+    const box = await setup({ floor: "real", ...WITH_SPARKS });
+    const win = await window(box.daemon, SPARK_WINDOW, "sf2");
+    const said = vi.spyOn(box.daemon.native, "setStartedFor");
+    // and by no other road either: every request this fieldd makes of its floor
+    const asked = vi.spyOn(box.daemon.native, "request");
+
+    const plain = await spawnPlain(win, box);
+    const { spark, runId, paneId } = await hatched(win, box);
+    expect(box.daemon.agents.bornFor(plain.session.runtimeRunId)).toEqual({});
+    expect(box.daemon.agents.bornFor(runId)).toEqual({ spark: spark.id });
+    await end(win, box, plain);
+    await win.call("terminal.terminate", { sessionId: paneId });
+    await exitedOn(box, runId);
+
+    expect(said).not.toHaveBeenCalled();
+    expect(asked.mock.calls.map(([method]) => method)).not.toContain(VERB);
+    expect(box.daemon.agents.bornFor(plain.session.runtimeRunId)).toEqual({});
+  }, 150_000);
+
+  it("GIVEN AN INJECTED FLOOR that never answers: the launch returns its run all the same, with the set sent and not yet answered, and an exit right after is closed, not dropped (C2)", async () => {
+    const box = await setup({ ...SEALED, startedForRetryMs: RETRY_MS });
+    const win = await sealedWindow(box.daemon, HANDED, DECK, "sf3");
+    const silent = () => new Promise<never>(() => undefined);
+    const said = vi.spyOn(box.daemon.native, "setStartedFor").mockImplementation(silent);
+
+    const spawned = await spawnPlain(win, box);
+    const runId = spawned.session.runtimeRunId;
+    // entered before anything was heard from the floor: recorded, in the fold, remembered
+    expect(said).toHaveBeenCalledTimes(1);
+    expect(readRecord(box.dataDir, runId).exited).toBeUndefined();
+    expect(box.daemon.agents.bornFor(runId)).toEqual({});
+
+    // its terminal's exit, with that set still on the wire: heard for a run the fold holds, so the run is closed
+    await end(win, box, spawned);
+    // one set was ever on the wire for it; nothing was said again while it was unanswered, nor after the end
+    await pause(RETRY_MS * 6);
+    expect(said).toHaveBeenCalledTimes(1);
+  }, 150_000);
+
+  it("GIVEN AN INJECTED FLOOR: a set the floor did not take is said again by ONE timer, with the same values and never two on the wire; once taken it is not said again; and nothing is said after the run ends", async () => {
+    const box = await setup({ ...SEALED, startedForRetryMs: RETRY_MS });
+    const win = await sealedWindow(box.daemon, HANDED, DECK, "sf4");
+    // the floor's words in order, each SLOWER than the retry period; past them, it never takes a set
+    const words: Array<"unanswered" | "full" | "set"> = ["unanswered", "full", "set"];
+    let onTheWire = 0;
+    let most = 0;
+    const said = vi.spyOn(box.daemon.native, "setStartedFor").mockImplementation(async () => {
+      onTheWire += 1;
+      most = Math.max(most, onTheWire);
+      await pause(400);
+      onTheWire -= 1;
+      return words.shift() ?? "unanswered";
+    });
+
+    const first = await spawnPlain(win, box);
+    const firstRun = first.session.runtimeRunId;
+    await poll(
+      async () => (said.mock.calls.length >= 3 && onTheWire === 0 ? true : undefined),
+      15_000,
+      "the set said until the floor took it",
+    );
+    // taken: six periods on, nothing more was said for it
+    await pause(RETRY_MS * 6);
+    const entry = { run: firstRun, root: rootOf(box, firstRun) };
+    expect(said.mock.calls).toEqual([
+      [first.terminal.sessionId, entry],
+      [first.terminal.sessionId, entry],
+      [first.terminal.sessionId, entry],
+    ]);
+    expect(most).toBe(1);
+
+    // a second run, whose set the floor never takes: said again and again, until the run ends
+    const second = await spawnPlain(win, box);
+    const saidForSecond = () =>
+      said.mock.calls.filter(([sessionId]) => sessionId === second.terminal.sessionId).length;
+    await poll(
+      async () => (saidForSecond() >= 2 ? true : undefined),
+      15_000,
+      "the untaken set said again",
+    );
+    await end(win, box, second);
+    // whatever was on the wire at its end has answered by now; from here nothing is said for the run
+    await pause(600);
+    const atItsEnd = saidForSecond();
+    await pause(RETRY_MS * 8);
+    expect(saidForSecond()).toBe(atItsEnd);
+    expect(most).toBe(1);
+    await win.call("terminal.terminate", { sessionId: first.terminal.sessionId });
+  }, 150_000);
+
+  it("GIVEN AN INJECTED FLOOR: `not-found` and `not-sealed` are each the last word: the set is not said again and no timer is armed, and a floor that keeps no table is said once in the log however many runs meet it", async () => {
+    const box = await setup({ ...SEALED, startedForRetryMs: RETRY_MS });
+    const win = await sealedWindow(box.daemon, HANDED, DECK, "sf5");
+    const words: Array<"not-found" | "not-sealed"> = ["not-found", "not-sealed", "not-sealed"];
+    const word = async (): Promise<"not-found" | "not-sealed"> => words.shift() ?? "not-sealed";
+    const said = vi.spyOn(box.daemon.native, "setStartedFor").mockImplementation(word);
+
+    const runs: AgentSpawnResult[] = [];
+    for (let n = 0; n < 3; n++) runs.push(await spawnPlain(win, box));
+    await poll(
+      async () => (logged(box, "fieldd.agents.started_for_not_sealed") > 0 ? true : undefined),
+      15_000,
+      "the floor that keeps no table said in fieldd's log",
+    );
+    // six periods on: each run's set was said once and never again
+    await pause(RETRY_MS * 6);
+    expect(said.mock.calls.map(([sessionId]) => sessionId)).toEqual(
+      runs.map((run) => run.terminal.sessionId),
+    );
+    expect(logged(box, "fieldd.agents.started_for_not_sealed")).toBe(1);
+    // this life's memory waits on no answer of the floor's
+    for (const run of runs) {
+      expect(box.daemon.agents.bornFor(run.session.runtimeRunId)).toEqual({});
+    }
+    for (const run of runs) {
+      await win.call("terminal.terminate", { sessionId: run.terminal.sessionId });
+    }
   }, 150_000);
 });

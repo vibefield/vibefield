@@ -45,7 +45,12 @@ import {
 } from "@vibefield/puppeteer-runtime/spawn-through";
 import WebSocket from "ws";
 import { agentShimHome } from "../src/agent-gateway";
-import { bootstrap, type FielddConfig, type FielddDaemon, SessionRecordStore } from "../src/index";
+import {
+  type FielddConfig,
+  type FielddCustody,
+  type FielddDaemon,
+  SessionRecordStore,
+} from "../src/index";
 import type { SecretStore } from "../src/plugin-settings";
 import {
   TYPED_CATALOG,
@@ -55,6 +60,13 @@ import {
   typedProvider,
   typedScript,
 } from "./agent-gateway-fixture";
+import {
+  bootAt,
+  handFloorPairing,
+  hello,
+  pairingCredential,
+  SEALED_FLOOR_ENV,
+} from "./custody-harness";
 import {
   type FloorScene,
   killDaemonTree,
@@ -213,6 +225,11 @@ export interface FloorConfig {
   /** Item 192 (RV #6) — the catalog the doors answer from (default `TYPED_CATALOG`, whose scripted row claims
    * re-attach): a row that does not claim it is what a fieldd-only stop counts */
   catalog?: readonly AgentCatalogEntry[];
+  /** OB custody (CUSTODY-SPEC §8.1) — boot SEALED: the floor is told its pairing comes on stdin and is written the
+   * one line, and fieldd is handed this custody (`FielddConfig.custody`, the seam a pipe fills in `bin.ts`). The
+   * box's window pairs, for a sealed fieldd has no shell token. A restart of a sealed box names it again. Absent:
+   * `files`, as every row on this harness was. */
+  custody?: FielddCustody;
 }
 
 async function openRpc(port: number): Promise<WsRpc> {
@@ -254,10 +271,39 @@ export async function windowAt(
   return win;
 }
 
+/** OB custody — `windowOf` for a SEALED fieldd. It has no shell token: the shell PAIRS under the secret it was
+ * handed (CUSTODY-SPEC §2.3; custody-harness.ts spells the recipe), then mints the window's token as any shell
+ * does. */
+export async function sealedWindowOf(
+  daemon: Pick<FielddDaemon, "controlPort" | "bootId">,
+  custody: FielddCustody,
+  scopes: string[],
+): Promise<WsRpc> {
+  const suffix = Math.random().toString(36).slice(2, 8);
+  const { controlPort: port, bootId } = daemon;
+  const shell = await openRpc(port);
+  await hello(shell, pairingCredential({ port, bootId, secretHex: custody.shell }));
+  const minted = (await shell.call("system.mintWindowToken", {
+    scopes,
+    label: `window-${suffix}`,
+    rendererParticipant: {
+      participantId: `renderer:desktop-test:window-${suffix}`,
+      incarnation: `renderer:desktop-test:window-${suffix}:document-1`,
+    },
+  })) as { token: string };
+  const win = await openRpc(port);
+  await helloAs(win, minted.token);
+  return win;
+}
+
+/** What a box's own window holds (`Floor.win`): it may make panes, read the fold and resume a run. */
+const BOX_WINDOW = ["agent.spawn", "agent.observe", "agent.control", "terminal.attach"];
+
 /** Boot fieldd over the REAL field-native, the scripted typed agent composed
  * and nothing of any vendor's. */
 export async function floor(config: FloorConfig): Promise<Floor> {
   const restart = config.restartOf;
+  const custody = config.custody;
   const root = restart?.root ?? shortTmpRoot("vf-ar7-");
   // the root is removed AFTER every floor's tree is reaped
   if (restart === undefined) roots.push(root);
@@ -292,10 +338,12 @@ export async function floor(config: FloorConfig): Promise<Floor> {
         FIELD_NATIVE_DATA_DIR: dataDir,
         FIELD_LOG_DIR: join(dataDir, "logs"),
         FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
+        ...(custody !== undefined ? SEALED_FLOOR_ENV : {}),
       },
-      stdio: "ignore",
+      stdio: custody !== undefined ? ["pipe", "ignore", "ignore"] : "ignore",
     });
     floors.push(child);
+    if (custody !== undefined) handFloorPairing(child, custody);
     await waitForMgmtEndpoint(dataDir, 30_000);
   }
   const script = restart?.script ?? typedScript(join(root, "scripted"));
@@ -307,7 +355,7 @@ export async function floor(config: FloorConfig): Promise<Floor> {
   // Item 67 — a restart's root may still hold the dead fieldd's rendezvous (a death leaves it; row 12 puts it back),
   // and the new gateway is `listening` before it writes its own: the token on disk BEFORE this boot tells them apart.
   const stale = restart === undefined ? undefined : (await readRendezvous(home))?.token;
-  const daemon = await bootstrap({
+  const fielddConfig: FielddConfig = {
     dataDir,
     // item 68 — fieldd's own log beside the floor's, for the waits' evidence (fieldd logged nowhere here before)
     logRoot: join(dataDir, "logs"),
@@ -345,7 +393,9 @@ export async function floor(config: FloorConfig): Promise<Floor> {
       ...(config.retryMs !== undefined ? { retryMs: config.retryMs } : {}),
       ...config.gateway,
     },
-  });
+  };
+  // OB custody — at the level the row asked for (`bootAt`: a sealed daemon has no shell token to read)
+  const daemon = await bootAt(fielddConfig, custody);
   closers.push(() => daemon.stop().catch(() => undefined));
   scene = { dataDir, spawnedAt, link: daemon.native };
   // The gateway's start is not a boot gate, and it is the DAEMON's to begin:
@@ -402,12 +452,10 @@ export async function floor(config: FloorConfig): Promise<Floor> {
         keyPath: join(dataDir, ...LAYOUT.AGENT_SESSIONS_KEY_FILE),
         now: () => new Date(),
       }),
-    win: await windowOf(daemon, [
-      "agent.spawn",
-      "agent.observe",
-      "agent.control",
-      "terminal.attach",
-    ]),
+    win:
+      custody === undefined
+        ? await windowOf(daemon, BOX_WINDOW)
+        : await sealedWindowOf(daemon, custody, BOX_WINDOW),
     config,
     sessionsFile,
     requestLog,

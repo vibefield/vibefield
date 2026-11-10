@@ -5,13 +5,15 @@
 // is held to the spec, not to its own copy of it. `shell-pairing.vector.json` pins the same recipe across packages
 // (shell-pairing-vector.test.ts reads it), and its outputs say TO-BE-COMPUTED until the first admitted row, so until
 // then this spelling is the only independent one the door meets.
+import type { ChildProcess } from "node:child_process";
 import { createHmac, randomBytes } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CONTRACTS_VERSION, LAYOUT, SOCKETS } from "@vibefield/contracts";
+import { CONTRACTS_VERSION, CUSTODY, LAYOUT, SOCKETS } from "@vibefield/contracts";
 import WebSocket from "ws";
 import {
   bootstrap,
+  type FielddConfig,
   type FielddCustody,
   type FielddDaemon,
   type SealedFielddDaemon,
@@ -117,6 +119,36 @@ export async function bootFiles(cleanup: Cleanup, opts: BootOptions = {}): Promi
   });
   cleanup.push(() => daemon.stop());
   return { dataDir, mock, daemon };
+}
+
+// ── a REAL floor at `sealed`, for the harnesses that spawn field-native (agent-session.test.ts,
+// agent-gateway-floor.ts) ──
+
+/** What a sealed floor is spawned with beside its own environment: the flag. It is the spawner's word and no secret;
+ * the secret is the one line (`handFloorPairing`). */
+export const SEALED_FLOOR_ENV = { [CUSTODY.NATIVE_ENV]: CUSTODY.STDIN } as const;
+
+/** CUSTODY-SPEC §2.4 — hand a real floor its pairing: ONE line on its stdin, then the end of it. The line is spelled
+ * here from the spec's words, never through `src/native-bootstrap.ts`: that module asks first whose code the child
+ * is, and a test's floor is nobody's signed build. The child must have been spawned with a piped stdin. */
+export function handFloorPairing(child: ChildProcess, custody: FielddCustody): void {
+  const stdin = child.stdin;
+  if (stdin === null) throw new Error("a sealed floor is spawned with a piped stdin");
+  // a floor that left before its line is found by the caller's wait for its socket, never by an unhandled pipe error
+  stdin.on("error", () => undefined);
+  stdin.end(`${JSON.stringify({ v: 1, pairing: custody.pairing })}\n`);
+}
+
+/** Boot fieldd at the level a row asked for, answered as the one daemon type a harness's box holds. A SEALED daemon
+ * has no shell token, whatever that type says of it: nothing may read one from it, and a sealed row's shell pairs
+ * (`pairingCredential`). `custody` is `FielddConfig.custody`, the seam a pipe fills in `bin.ts`. */
+export async function bootAt(
+  base: FielddConfig,
+  custody: FielddCustody | undefined,
+): Promise<FielddDaemon> {
+  if (custody === undefined) return await bootstrap(base);
+  const sealed: SealedFielddDaemon = await bootstrap({ ...base, custody });
+  return sealed as unknown as FielddDaemon;
 }
 
 /** One connection to a daemon's control port (`path`: the sidecar's secret route, for a tailnet caller). */
