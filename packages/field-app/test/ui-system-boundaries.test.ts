@@ -649,6 +649,70 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
+  it("keeps the Plugins popup's fixture an ADAPTER — the shipping controller over a fixture port and snapshot, never its markup (MK-4a)", () => {
+    // The catalog stands in for what the frame supplies — the popup's port, the plugins a desktop has, the
+    // open surface (docs/UI_SYSTEM.md, Catalog fidelity). Never its classes, never a stylesheet, never
+    // the product's doors, fieldd's client or the window's registry store.
+    const preview = source("design-system/PluginsPreview.tsx");
+    const fixtures = source("design-system/plugins-fixtures.ts");
+    expect(preview).toMatch(/<Plugins\s/u);
+    expect(preview).toContain("pluginsFixturePort");
+    expect(preview).toContain("PLUGINS_FIXTURE_SNAPSHOT");
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/className="vf-plugins/);
+      expect(file).not.toContain("<style");
+      expect(file).not.toContain("getHost");
+      expect(file).not.toContain("useFielddClient");
+      expect(file).not.toContain("pluginsPortOver");
+      expect(file).not.toContain("usePluginRegistrySnapshot");
+    }
+  });
+
+  it("opens Plugins from nowhere in the product yet — only its own files and the catalog set its surface (MK-4a)", () => {
+    // VF-PM 2026-11-11 11:40:58Z, ruling 6: MK-4a builds the popup and no door to it; the Me menu's row,
+    // the palette's acts and the pegboard's pill are MK-4b's and MK-4d's. A call that hands the frame's
+    // owner the `plugins` surface, or a state that starts on it, outside frame/plugins/ and the catalog
+    // is a door.
+    const sets = /(?:[Ss]urface\w*\(|<FrameSurface[^>]*>\()\s*"plugins"/u;
+    const files = (readdirSync(join(PACKAGE_ROOT, "src"), { recursive: true }) as string[])
+      .map((name) => name.split("\\").join("/"))
+      .filter((name) => /\.tsx?$/u.test(name))
+      .filter((name) => !name.startsWith("frame/plugins/") && !name.startsWith("design-system/"));
+    expect(files.length).toBeGreaterThan(100);
+    expect(files.filter((name) => sets.test(source(name)))).toEqual([]);
+    expect(source("design-system/PluginsPreview.tsx")).toMatch(sets);
+  });
+
+  it('pins every line outside Plugins\' own files that names "plugins" — a new one is read before it lands (MK-4a)', () => {
+    // VF-PM 2026-11-11 12:29:46Z: the regex above misses a toggle, a chord's row or a kind, so every line of src
+    // outside frame/plugins/ and design-system/ that holds the literal "plugins" is pinned here by file. Each is
+    // Settings' own page, Agents' own list, or the frame's surface and modal rule. A new line anywhere is a red
+    // that makes someone read it: a door to the popup is MK-4b's and MK-4d's.
+    const PINNED: Readonly<Record<string, number>> = {
+      "field.tsx": 1,
+      "frame/frame-surface.ts": 1,
+      "panels/SettingsDialog.tsx": 3,
+      "panels/SettingsPanel.tsx": 1,
+      "panels/agents/ExtensionsView.tsx": 4,
+      "panels/agents/ProfilesSection.tsx": 2,
+      "panels/agents/browse-model.ts": 2,
+      "panels/agents/extensions-model.ts": 13,
+    };
+    const lines: Record<string, number> = {};
+    for (const name of (readdirSync(join(PACKAGE_ROOT, "src"), { recursive: true }) as string[])
+      .map((entry) => entry.split("\\").join("/"))
+      .filter((entry) => /\.tsx?$/u.test(entry))
+      .filter(
+        (entry) => !entry.startsWith("frame/plugins/") && !entry.startsWith("design-system/"),
+      )) {
+      const count = source(name)
+        .split("\n")
+        .filter((line) => line.includes('"plugins"')).length;
+      if (count > 0) lines[name] = count;
+    }
+    expect(lines).toEqual(PINNED);
+  });
+
   it("recedes the field under the Peek and the New spark sheet and holds it out of reach — at rest no transform, so no stacking context (2026-10-08; SP-1c)", () => {
     // DESIGN.md §6: the view AND the frame recede to 0.98 about 50% 46% over
     // 420ms on the island curve while the Peek stands, or the New spark sheet
@@ -656,7 +720,9 @@ describe("UI system ownership boundaries", () => {
     // the field. A resting transform would bury the head under the drag strip
     // (BootRoot, 2026-07-22).
     const field = source("field.tsx");
-    expect(field).toContain('const modal = surface === "search" || surface === "new-spark";');
+    expect(field).toContain(
+      'const modal = surface === "search" || surface === "new-spark" || surface === "plugins";',
+    );
     expect(field).toContain(
       '<div className="field-recede" data-peek-recede={modal ? "true" : "false"}>',
     );

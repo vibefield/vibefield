@@ -36,6 +36,7 @@ import { needsNoticesPortOver, startNeedsNotices } from "../frame/needs-notices"
 import { PackageCircle } from "../frame/PackageCircle";
 import { FramePeek } from "../frame/Peek";
 import type { FrameActRun } from "../frame/palette-acts";
+import { FramePlugins } from "../frame/plugins/Plugins";
 import { StatusLine } from "../frame/StatusLine";
 import { runSystemControl } from "../frame/system-control-door";
 import { ViewFrame } from "../frame/ViewFrame";
@@ -433,6 +434,13 @@ export function ChromeLayer({
         onSurfaceChange={onSurfaceChange}
         openLiveFeed={openHistoryLiveFeed}
       />
+
+      {/* PLUGINS — THE FRAME'S SECOND POPUP (MK-4a; DESIGN.md §8 "Plugins —
+          the frame's second popup"): drawn on the document's body over the
+          search scrim, as the Peek is, so the view and the frame recede
+          under it. One of the frame's open surfaces (`plugins`). Nothing
+          opens it yet: its doors are MK-4b's and MK-4d's. */}
+      <FramePlugins view={view} surface={surface} onSurfaceChange={onSurfaceChange} />
 
       {/* THE HAND (track HN; DESIGN.md §8 "The hand", §10): every copy is a
           card at the window's foot, fanned like a hand you hold — the

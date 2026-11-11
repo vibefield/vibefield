@@ -351,8 +351,9 @@ export function FieldView({
   // they stand (a modal: nothing under the scrim may hold the keyboard). What
   // you see recedes under them — the cover's still and the frame's chrome, in
   // `.field-recede` below — and the desk's own box never does (DK-15). The New
-  // spark sheet (SP-1c; §8 "The New spark sheet") is the same kind of modal.
-  const modal = surface === "search" || surface === "new-spark";
+  // spark sheet (SP-1c; §8 "The New spark sheet") is the same kind of modal,
+  // and so is Plugins (MK-4a; §8 "Plugins — the frame's second popup").
+  const modal = surface === "search" || surface === "new-spark" || surface === "plugins";
 
   return (
     <div

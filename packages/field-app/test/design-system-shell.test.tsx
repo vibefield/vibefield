@@ -46,6 +46,7 @@ vi.mock(
 vi.mock("../src/design-system/sections/OnboardingSection", stub("OnboardingSection", "onboarding"));
 vi.mock("../src/design-system/sections/GodviewSection", stub("GodviewSection", "godview"));
 vi.mock("../src/design-system/sections/HistorySection", stub("HistorySection", "history"));
+vi.mock("../src/design-system/sections/PluginsSection", stub("PluginsSection", "plugins"));
 vi.mock("../src/design-system/sections/InventorySection", stub("InventorySection", "inventory"));
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -177,6 +178,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "onboarding",
       "godview",
       "history",
+      "plugins",
       "inventory",
     ]);
     for (const section of sections) {

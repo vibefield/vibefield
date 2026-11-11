@@ -13,6 +13,7 @@ import { InventorySection } from "./sections/InventorySection";
 import { LiveSurfacesSection } from "./sections/LiveSurfacesSection";
 import { OnboardingSection } from "./sections/OnboardingSection";
 import { OverviewSection } from "./sections/OverviewSection";
+import { PluginsSection } from "./sections/PluginsSection";
 import { StatusSection } from "./sections/StatusSection";
 import { SurfacesSection } from "./sections/SurfacesSection";
 import type { DesignSystemStudioController, DesignSystemStudioState } from "./studio-controller";
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   ["onboarding", "Onboarding", "10"],
   ["godview", "Control room", "11"],
   ["history", "History", "11a"],
+  ["plugins", "Plugins", "11b"],
   ["inventory", "Coverage index", "12"],
 ] as const;
 
@@ -126,6 +128,7 @@ export function DesignSystemPage({
         <OnboardingSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
         <GodviewSection dark={dark} />
         <HistorySection />
+        <PluginsSection />
         <InventorySection />
       </main>
 

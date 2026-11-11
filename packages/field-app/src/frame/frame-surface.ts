@@ -56,7 +56,10 @@ export type FrameSurface =
   | "new-spark"
   /** @'s list, grown upward from the caret in Chat's composer (SP-1d; DESIGN.md §8 "Chat's
    * composer", §10): the agents to start and the sessions running in the spark's profiles. */
-  | "at";
+  | "at"
+  /** Plugins — the frame's second popup over the search scrim (MK-4a; `plugins/Plugins.tsx`;
+   * DESIGN.md §8 "Plugins — the frame's second popup"). Its doors are MK-4b's and MK-4d's. */
+  | "plugins";
 
 /** What a surface's own close asks of the owner: fold it if it is the one
  * open, and leave the others alone — the board's Esc must not close the palette. */
