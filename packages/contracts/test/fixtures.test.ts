@@ -251,6 +251,10 @@ import {
   NativeDoorCloseResult,
   NativeDoorInfoResult,
   NativeDoorOpen,
+  NativeDoorRootsClearParams,
+  NativeDoorRootsClearResult,
+  NativeDoorRootsSetParams,
+  NativeDoorRootsSetResult,
   NativeDoorSnapshot,
   NativeDoorSubscribeResult,
   NativeFileTransferDelta,
@@ -531,6 +535,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "native-door-close-params": NativeDoorCloseParams,
   "native-door-close-result": NativeDoorCloseResult,
   "native-door-info": NativeDoorInfoResult,
+  "native-door-roots-set-params": NativeDoorRootsSetParams,
+  "native-door-roots-set-result": NativeDoorRootsSetResult,
+  "native-door-roots-clear-params": NativeDoorRootsClearParams,
+  "native-door-roots-clear-result": NativeDoorRootsClearResult,
   // DS-1 — the egress facade (mgmt.ts). The table has TWO fixtures on purpose:
   // a bound table (a MagicDNS target and a bracketed IPv6 one) and the EMPTY
   // snapshot a node teardown pushes, which is the facade's reset.

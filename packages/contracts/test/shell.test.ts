@@ -244,7 +244,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
   // meet at it in a merge and conflict out loud, where a number in the title
   // went stale in silence (item 102, found at HN's rebase rehearsal).
   it("exposes exactly its channel keys, in order", () => {
-    expect(Object.keys(IPC_CHANNELS)).toHaveLength(40);
+    expect(Object.keys(IPC_CHANNELS)).toHaveLength(43);
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "zoomHaptic",
       "windowBootstrap",
@@ -282,6 +282,9 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "screenshotPreview",
       "screenshotStillBytes", // HN-D7 — a retained still's bytes, for the desk's print of a snapshot
       "screenshotStillKept", // HN-4 — whether a still is kept, before a pane is given its path
+      "handPictureWrite",
+      "handFileWrite",
+      "handFileKept",
       "rendererReplace", // DK-9 — the window's renderer replaced at its own asking (a plugin's kinds)
       "browserDataClear", // BP-D4 — Settings' Clear browsing data: the desk's profile cleared, its pages reloaded
       "clipboardRead", // item 102 — a paste's read through main, for the focused product window
@@ -329,6 +332,9 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       screenshotPreview: "vibefield:screenshot:preview",
       screenshotStillBytes: "vibefield:screenshot:still-bytes",
       screenshotStillKept: "vibefield:screenshot:still-kept",
+      handPictureWrite: "vibefield:screenshot:hand-picture-write",
+      handFileWrite: "vibefield:screenshot:hand-file-write",
+      handFileKept: "vibefield:screenshot:hand-file-kept",
       rendererReplace: "vibefield:shell:renderer-replace",
       browserDataClear: "vibefield:browser:clear-data",
       clipboardRead: "vibefield:clipboard:read",
