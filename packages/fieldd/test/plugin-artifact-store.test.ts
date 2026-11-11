@@ -205,3 +205,90 @@ describe("PRC-5b immutable plugin artifact slots", () => {
     expect(await readFile(join(first.root, "dist", "renderer.js"), "utf8")).toContain("1.0.0");
   });
 });
+
+// Item 322 — a revision slot is named by the artifact's hash, and a folder that is already there says so only by
+// its own marker, which whoever wrote the folder also wrote. So a slot that exists is never taken on its marker's
+// word: the caller's `prepare` (the unpack of the bytes it fetched and hashed, and its checks of them) always runs,
+// and the folder is reused only when it holds exactly what `prepare` made.
+describe("item 322: a revision slot that already exists is not taken on its marker's word", () => {
+  const stagingLeft = async (value: PluginArtifactStore): Promise<string[]> =>
+    (await readdir(value.installedRoot)).filter((name) => name.startsWith(".staging-"));
+
+  it("refuses a slot whose files are not what prepare made, and leaves it", async () => {
+    const value = await store();
+    // a folder at the slot of sha("a"), with a marker that names sha("a"), holding other bytes
+    const there = await stage(value, "0.0.0-other", sha("a"));
+
+    await expect(stage(value, "1.0.0", sha("a"))).rejects.toMatchObject({
+      name: "PluginArtifactSlotMismatchError",
+    });
+    // what was there is not replaced and not removed: it may be the current revision
+    expect(await readFile(join(there.root, "dist", "renderer.js"), "utf8")).toContain(
+      "0.0.0-other",
+    );
+    expect(await stagingLeft(value)).toEqual([]);
+  });
+
+  it("runs prepare for a slot that exists, and reuses it when the files are the same", async () => {
+    const value = await store();
+    let prepared = 0;
+    const once = () =>
+      value.stage({
+        pluginId: PLUGIN_ID,
+        artifactSha256: sha("a"),
+        prepare: async (root) => {
+          prepared += 1;
+          await writeArtifact(root, "1.0.0", sha("a"));
+        },
+      });
+    const first = await once();
+    const second = await once();
+
+    expect(prepared).toBe(2);
+    expect(first.reused).toBe(false);
+    expect(second.reused).toBe(true);
+    expect(second.root).toBe(first.root);
+    expect(await stagingLeft(value)).toEqual([]);
+  });
+
+  it("hears a prepare that refuses, though the slot exists", async () => {
+    const value = await store();
+    await stage(value, "1.0.0", sha("a"));
+
+    await expect(
+      value.stage({
+        pluginId: PLUGIN_ID,
+        artifactSha256: sha("a"),
+        prepare: async () => {
+          throw new Error("the artifact's manifest names another plugin");
+        },
+      }),
+    ).rejects.toThrow("the artifact's manifest names another plugin");
+    expect(await stagingLeft(value)).toEqual([]);
+  });
+
+  it("tells a longer file, a missing file and an extra file", async () => {
+    for (const change of ["longer", "missing", "extra"] as const) {
+      const value = await store();
+      await stage(value, "1.0.0", sha("a"));
+      await expect(
+        value.stage({
+          pluginId: PLUGIN_ID,
+          artifactSha256: sha("a"),
+          prepare: async (root) => {
+            await writeArtifact(root, "1.0.0", sha("a"));
+            if (change === "longer") {
+              const file = join(root, "dist", "renderer.js");
+              await writeFile(file, `${await readFile(file, "utf8")}\n`);
+            } else if (change === "missing") {
+              await rm(join(root, "dist", "renderer.js"));
+            } else {
+              await writeFile(join(root, "dist", "more.js"), "export {};\n");
+            }
+          },
+        }),
+        change,
+      ).rejects.toMatchObject({ name: "PluginArtifactSlotMismatchError" });
+    }
+  });
+});
