@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
-import { InstallSetEntry, LAYOUT, SETTINGS_DOC_SECTIONS } from "@vibefield/contracts";
+import {
+  APP_PREFERENCES_NEVER_UNDONE,
+  InstallSetEntry,
+  LAYOUT,
+  SETTINGS_DOC_SECTIONS,
+} from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { LoroDoc, UndoManager } from "loro-crdt";
 import type { SystemDocOwner } from "./doc-service";
@@ -13,6 +18,11 @@ import { SystemDocFile } from "./system-doc-file";
 // SETTINGS_DOC_SECTIONS): per-plugin user-scope settings, spine preferences,
 // and the §16.6 install-set. Per-key LWW; op history retained in the snapshot;
 // every commit stamps writer provenance into its origin.
+//   *Correction 2026-11-11 (item 323):* the origin is not kept. loro-crdt says
+//   of `commit`, "The `origin` will not be persisted, but the `message` will"
+//   (1.13.8), and this file sets no message. The stamp lives in memory only,
+//   where the undo filter and local events read it; nothing in the snapshot,
+//   the doc file or a peer's merge says which principal wrote a key.
 //
 // D29′ laws, mechanically enforced here:
 //   1. only user-scope keys live in this doc (device/secret never enter);
@@ -106,6 +116,8 @@ export interface InstallSetChange {
 
 const S = SETTINGS_DOC_SECTIONS;
 const ORIGIN_INSTALL_SET = "no-undo:install-set:";
+/** MK-2a (S1): an app preference that must never be undone (`APP_PREFERENCES_NEVER_UNDONE`). */
+const ORIGIN_APP_NEVER_UNDONE = "no-undo:app:";
 
 /** `[pluginId, capability]` — a JSON tuple, so no id alphabet can collide. */
 function grantKey(pluginId: string, capability: string): string {
@@ -342,10 +354,16 @@ export class SettingsDocService extends EventEmitter {
     return this.doc.getMap(SETTINGS_DOC_SECTIONS.APP).toJSON() as Record<string, unknown>;
   }
 
+  /** MK-2a (S1; MK-E3): a key in `APP_PREFERENCES_NEVER_UNDONE` commits under the
+   * "no-undo:" prefix the UndoManager excludes (law 2), so ⌘Z never turns
+   * community plugins on. Each call commits its one write at once, so that
+   * commit carries this key alone. */
   async setAppValue(key: string, value: unknown, by: string): Promise<void> {
     await this.ready();
     this.doc.getMap(SETTINGS_DOC_SECTIONS.APP).set(key, value as never);
-    this.doc.commit({ origin: `settings:${by}` });
+    const neverUndone = (APP_PREFERENCES_NEVER_UNDONE as readonly string[]).includes(key);
+    const origin = neverUndone ? `${ORIGIN_APP_NEVER_UNDONE}${by}` : `settings:${by}`;
+    this.doc.commit({ origin });
     await this.persistNow();
     this.emit("changed", { section: "app" });
   }

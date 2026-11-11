@@ -57,6 +57,30 @@ describe("the system settings doc (D29′)", () => {
     expect(sections).toEqual(["app", "settings"]);
   });
 
+  it("law 2 for the switch — undo never turns community plugins on or off (MK-2a, S1)", async () => {
+    const svc = make(tempDataDir());
+    await svc.setAppValue("plugins.community", true, "pane");
+    // the switch alone: nothing to undo
+    expect(await svc.undo()).toEqual({ applied: false, reason: "empty-stack" });
+    await svc.setAppValue("desktop.showTray", false, "pane");
+    await svc.setAppValue("plugins.community", false, "pane");
+    await svc.setAppValue("desktop.sounds", false, "pane");
+    // each undo reverts an undoable write; the switch stays as last set
+    expect(await svc.undo()).toEqual({ applied: true });
+    expect(await svc.appValues()).toEqual({
+      "plugins.community": false,
+      "desktop.showTray": false,
+    });
+    expect(await svc.undo()).toEqual({ applied: true });
+    expect(await svc.appValues()).toEqual({ "plugins.community": false });
+    expect(await svc.undo()).toEqual({ applied: false, reason: "empty-stack" });
+    expect(await svc.redo()).toEqual({ applied: true });
+    expect(await svc.appValues()).toEqual({
+      "plugins.community": false,
+      "desktop.showTray": false,
+    });
+  });
+
   it("migrates P5's settings-user.json once, doc values winning, file renamed aside", async () => {
     const dataDir = tempDataDir();
     mkdirSync(join(dataDir, "fieldd", "plugins"), { recursive: true });

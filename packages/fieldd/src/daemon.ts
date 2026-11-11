@@ -45,6 +45,7 @@ import {
   AgentsUpdateParams,
   AgentsUpdateStopParams,
   AgentsUsageParams,
+  APP_PREFERENCE_KEYS,
   AppPreferenceSetParams,
   ARTIFACT_LIMITS,
   ArtifactMarkParams,
@@ -7049,6 +7050,45 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit|desktop.keepRunningOnQuit|desktop.sounds|mesh.connectAsks (boolean) | mesh.syncPosture (automatic|opt-in) | desktop.soundsQuietUntil (epoch ms or null) }",
           false,
         );
+      }
+      if (parsed.data.key === APP_PREFERENCE_KEYS.COMMUNITY_PLUGINS) {
+        // MK-2a (D4, VF-PM 2026-11-11 08:48:07Z, 09:09:35Z): until the slice that draws the switch
+        // (MK-4) opens it, this door refuses an ON, so no ON comes through it before the guard
+        // exists. An OFF is the safe direction and passes: an ON that reached the doc another
+        // way (a sync, a write of the file) can still be turned off here. Every ask is audited,
+        // its refusal included (S2): the key, the value asked and the caller's kind; the actor
+        // is the ledger's own (a token's id, never the token).
+        const turningOn = parsed.data.value === true;
+        await audit.required(
+          ctx,
+          {
+            action: "plugin.community.set",
+            target: { kind: "app-preference", id: parsed.data.key },
+            attrs: {
+              preference: parsed.data.key,
+              value: parsed.data.value,
+              principalKind: ctx.principal.kind,
+              clientKind: ctx.clientKind ?? "unstated",
+            },
+          },
+          async () => {
+            if (turningOn) return;
+            await settingsDoc.setAppValue(
+              parsed.data.key,
+              parsed.data.value,
+              ctx.clientKind === "shell-main" ? "shell" : "pane",
+            );
+          },
+          () => (turningOn ? { outcome: "denied", reasonCode: "COMMUNITY_SWITCH_CLOSED" } : {}),
+        );
+        if (turningOn) {
+          throw new RpcCallError(
+            "PRECONDITION_FAILED",
+            "community plugins can't be turned on in this build",
+            false,
+          );
+        }
+        return { ok: true };
       }
       await settingsDoc.setAppValue(
         parsed.data.key,

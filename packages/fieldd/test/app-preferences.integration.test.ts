@@ -1,10 +1,19 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SOCKETS } from "@vibefield/contracts";
+import { LAYOUT, SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src";
+import { SettingsDocService } from "../src/settings-doc";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
@@ -15,9 +24,13 @@ afterEach(async () => {
   cleanup = [];
 });
 
-async function fixture(): Promise<FielddDaemon> {
+/** `seed` writes this test's own settings doc, in its own temp root, before the daemon boots. */
+async function boot(
+  seed?: (dataDir: string) => Promise<void>,
+): Promise<{ daemon: FielddDaemon; dataDir: string }> {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-app-preferences-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+  if (seed !== undefined) await seed(dataDir);
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
   const native = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
@@ -25,7 +38,21 @@ async function fixture(): Promise<FielddDaemon> {
   cleanup.push(() => native.stop());
   const daemon = await bootstrap({ dataDir, controlPort: 0 });
   cleanup.push(() => daemon.stop());
-  return daemon;
+  return { daemon, dataDir };
+}
+
+async function fixture(): Promise<FielddDaemon> {
+  return (await boot()).daemon;
+}
+
+/** The plugins ledger's lines (JSONL) under this test's own data dir. */
+function pluginsLedger(dataDir: string): Array<Record<string, unknown>> {
+  const dir = join(dataDir, ...LAYOUT.AUDIT_DIR);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => f.startsWith("plugins.") && f.endsWith(".jsonl"))
+    .flatMap((f) => readFileSync(join(dir, f), "utf8").split("\n").filter(Boolean))
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 async function connect(
@@ -61,6 +88,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       connectAsks: true,
       keepRunningOnQuit: false,
       sounds: true,
+      communityPlugins: false,
     });
 
     await shell.call("storage.appPreferences.set", {
@@ -84,6 +112,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       connectAsks: true,
       keepRunningOnQuit: false,
       sounds: true,
+      communityPlugins: false,
     });
 
     const rendererGrant = daemon.tokens.mint(["settings.manage"], "test-window");
@@ -97,6 +126,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       connectAsks: true,
       keepRunningOnQuit: false,
       sounds: true,
+      communityPlugins: false,
     });
     await renderer.call("storage.appPreferences.set", {
       key: "desktop.screenshotHotkey",
@@ -139,6 +169,66 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
     await expect(
       shell.call("storage.appPreferences.set", { key: "desktop.soundsQuietUntil", value: true }),
     ).rejects.toThrow();
+  });
+
+  it("refuses an ON for Community plugins until MK-4, lets an OFF through, audits each (D4, S2)", async () => {
+    const { daemon, dataDir } = await boot();
+    const shell = await connect(daemon, daemon.shellToken, "shell-main");
+    const grant = daemon.tokens.mint(["settings.manage"], "test-window");
+    const renderer = await connect(daemon, grant.token, "renderer");
+    const refused = await shell.callErr("storage.appPreferences.set", {
+      key: "plugins.community",
+      value: true,
+    });
+    expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(
+      await renderer.call("storage.appPreferences.set", { key: "plugins.community", value: false }),
+    ).toEqual({ ok: true });
+    expect(await shell.call("storage.appPreferences.get", {})).toMatchObject({
+      communityPlugins: false,
+    });
+    await until(
+      () =>
+        pluginsLedger(dataDir).filter(
+          (l) => l.action === "plugin.community.set" && l.phase === "outcome",
+        ).length === 2,
+    );
+    const lines = pluginsLedger(dataDir).filter((l) => l.action === "plugin.community.set");
+    expect(lines.map((l) => l.phase)).toEqual(["attempt", "outcome", "attempt", "outcome"]);
+    expect(lines[0]?.attrs).toEqual({
+      preference: "plugins.community",
+      value: true,
+      principalKind: "shell-main",
+      clientKind: "shell-main",
+    });
+    expect(lines[2]?.attrs).toEqual({
+      preference: "plugins.community",
+      value: false,
+      principalKind: "local-token",
+      clientKind: "renderer",
+    });
+    expect(lines[1]).toMatchObject({ outcome: "denied", reasonCode: "COMMUNITY_SWITCH_CLOSED" });
+    expect(lines[3]).toMatchObject({ outcome: "succeeded" });
+    expect(lines[3]?.reasonCode).toBeUndefined();
+    const written = JSON.stringify(lines);
+    expect(written).not.toContain(daemon.shellToken);
+    expect(written).not.toContain(grant.token);
+  });
+
+  it("an ON found in the doc reads true, and the door can still turn it off ((D)'s residue)", async () => {
+    const { daemon } = await boot(async (dataDir) => {
+      const doc = new SettingsDocService({ dataDir });
+      await doc.setAppValue("plugins.community", true, "test");
+      await doc.dispose();
+    });
+    const shell = await connect(daemon, daemon.shellToken, "shell-main");
+    expect(await shell.call("storage.appPreferences.get", {})).toMatchObject({
+      communityPlugins: true,
+    });
+    await shell.call("storage.appPreferences.set", { key: "plugins.community", value: false });
+    expect(await shell.call("storage.appPreferences.get", {})).toMatchObject({
+      communityPlugins: false,
+    });
   });
 
   it("requires both the local scope and a trusted desktop client kind", async () => {

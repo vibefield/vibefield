@@ -7,5 +7,6 @@
   "connectAsks": true,
   "keepRunningOnQuit": false,
   "sounds": true,
+  "communityPlugins": false,
   "soundsQuietUntil": 1793980800000
 }

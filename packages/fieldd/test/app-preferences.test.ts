@@ -29,7 +29,16 @@ describe("app preferences", () => {
       connectAsks: true,
       keepRunningOnQuit: false,
       sounds: true,
+      communityPlugins: false,
     });
+  });
+
+  it("keeps community plugins off unless a true is stored (MK-2a, S3)", () => {
+    expect(effectiveAppPreferences({}).communityPlugins).toBe(false);
+    const read = (value: unknown) =>
+      effectiveAppPreferences({ [APP_PREFERENCE_KEYS.COMMUNITY_PLUGINS]: value }).communityPlugins;
+    expect(read(true)).toBe(true);
+    for (const off of [false, "true", 1, null, {}]) expect(read(off), String(off)).toBe(false);
   });
 
   it("plays sounds from the first run, until the person turns them off (SD-2, SD-D19)", () => {
