@@ -967,6 +967,11 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       // an ordinary (non-prefixed) var survives the strip: HOME on unix, the user
       // profile path on Windows (the strip is exact-prefix, so both are untouched).
       expect(env).toContain(WIN ? "USERPROFILE=" : "HOME=");
+      // item 317: the suite's HISTFILE (vitest.config.ts) reaches a real pane by that same road,
+      // so a test's sh saves no history into the runner's home. Only the HISTFILE lines are
+      // compared, so a red prints none of the pane's environment.
+      const histfile = env.split("\n").filter((line) => line.startsWith("HISTFILE="));
+      if (!WIN) expect(histfile).toEqual(["HISTFILE=/dev/null"]);
     });
   }, 60_000);
 
