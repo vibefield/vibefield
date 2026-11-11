@@ -698,6 +698,9 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 - Landed 11-11: **item 315** (`4636f1f0e` to `e464eb5cc`, M282, run 296; LANDED "Item 315"): once VibeField's quit
   goes ahead, a switch or a new user pressed at any of the window's five doors does nothing and says nothing, as
   James ruled; the press goes to the log alone.
+- Landed 11-11: **items 318 + 317** (318's doc to 317's green, M283, run 306; LANDED "Items 318 + 317"): the
+  palette takes no pointer while it folds, so a press after ⌘K or Esc reaches what it was aimed at; the suites'
+  shells keep no history in the runner's home. Landed after the push, by James's pick.
 - In flight:
   - the sibling lanes, filed by James on 11-06: puppeteer #64 rv/pup-monitor (#84, #81, #9) and #65
     rv/pup-claude-a (#1, #61, #4, #3, #5a, #64, #62, #63) MERGED, #66 rv/pup-views-a (#38, #39, #106, #107, #40,
@@ -706,7 +709,8 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
     and rv/pup-views-b (#103, #104, #41, #101, #108). Building: rv/pup-claude-usage (#70, #32, #34, #102, #109,
     #35, #33). Parked: rv/pup-codex (on rv-pr58-codex-observer).
 - Next: ghosttea 0.15.0 → EL8-g → rv/vf-ghosttea-tail; waves 3–8 by the plan.
-- Owed: James's hand on every sibling PR and release;
+- Owed: James's hand on every sibling PR and release; the landing table at M283 before its push; item 320 (a
+  red over a whole environment prints it), no owner;
   smoke:plugin-restart and the plugin-runtime soak for item 212; item 215 (freeway's link door), item 217 (item 198's
   door did not take a fresh connection for 30 s after fd pressure; load not shown to be the cause, corrected
   2026-11-07; measured beside item 204) and petition G36 (ghosttea's accept loops).

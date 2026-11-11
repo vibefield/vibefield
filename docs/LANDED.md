@@ -46963,3 +46963,121 @@ one rerun OFF, VF-PM's word at 00:37:01Z; launched at 00:45:32Z, the `.done` `ff
 - The release run in flight at the land (`42923289865`, attempt 2; VF-PM 00:59:46Z): the push waits on James.
 
 **Not done, and not claimed:** no row drove a real quit with a press in it, and nothing is pushed.
+
+## Items 318 + 317 — the palette takes no pointer while it folds; the suites' shells keep no history (M283)
+
+(2026-11-11; five commits on main `8fffb13c7`, in roles: 318's doc, red and green, then 317's red and green,
+`f9b4c98d4` to `5438a5b3d`. Cut by the RV lead (track RV) in `lanes/fg2/vibe-field` and landed by the fixer at
+23:22:51Z (main's reflog; the fixer's LANDED_AT the same) by fast-forward as M283, after the push of `8fffb13c7`, by
+James's pick "After the push" (relayed by VF-PM at 23:03:08Z). Validated by run 306, a9, on the old mini. The packet
+is `lanes/rv/packets/318-317-b/`, with its transport `318-317-b-m2/` and three dated addenda beside them.) James gave
+RV both items at 03:45Z ("6. you spawn one", relayed by VF-PM).
+
+**What landed.**
+- Item 318, the doc (2/1 DESIGN.md): §6 Motion, the head's menus (`DESIGN.md:1376-1377`), now says the palette fades
+  out over 200ms `ease`, "taking no pointer as it goes (*amended 2026-11-11, item 318*)". No token, easing or visual
+  constant.
+- Item 318, the red: `command-palette.test.tsx`, "takes no pointer while it folds, so the unseen layer eats no press
+  (item 318)" (`:355-361`). It reads the stylesheet from the package root and expects the rule's text at its
+  `toMatch` (`:358`); happy-dom does no hit testing, so the text is what a unit row can hold.
+- Item 318, the green:
+  - `CommandPalette.css:24-26`, `.vf-palette-layer:not([data-visible]) { pointer-events: none; }`, with its reason
+    at `:18-23`. Folding, and for the one frame before it shows as it mounts, the layer, its dim and its panel take
+    no pointer. The rule outranks `:where(.field-recede) > *` (`styles/base.css:58-60`).
+  - smoke:godview, two rungs in `smoke.ts`. Right after "the palette folded", the layer's computed `pointer-events`
+    must be `none`, or the layer gone (`:10241-10249`). 11k's facts gain `top`, what a press at the Apps circle's
+    middle would land on (`:10293-10294`, `:10318-10322`, `:10341`).
+- Item 317, the red: kill-matrix row 6 compares the pane's `HISTFILE=` lines alone with `["HISTFILE=/dev/null"]`
+  (`terminal-kill-matrix.test.ts:970-974`). It never compares the dump, because vitest prints a failed expect's
+  actual value whole.
+- Item 317, the green: `HISTFILE=/dev/null` in fieldd's workers (`vitest.config.ts:51`, its reason at `:35-44`) and
+  in tp_activation's sessions (`tp_activation.rs:81`, its reason at `:64-66`).
+- 7 files, +60 −1. No file added, removed or renamed.
+
+**What a person sees, by reading.** Nothing of 318 was run against Electron on the Mac.
+- For 200 ms after the palette closed (Esc, ⌘K, a row run, a click on its dim), a press anywhere in the window did
+  nothing: the unseen layer stood over the whole window, above the frame (z 70 over 62), and its dim took the press.
+  Now the press reaches what it was aimed at. While the palette shows, a press on its dim still closes it.
+- smoke:godview:no-record went red once at `7d44b7997` on that press: rung 11k's press on the Apps circle, right
+  after ⌘K folded the palette (`lanes/um/gate-7d44b7997/01-smoke_godview_no-record.log`; green on its re-run).
+- 317 changes nothing a person sees. A `pnpm verify` no longer rewrites the runner's `~/.bash_history` (run 294: 16
+  times; run 296: 14; run 297: 16, on vf-m2).
+
+**Validation of record** (run 306, `lanes/ts6/rv318-317-306-v-a9-results`, the `.done` `01105f87aaa33ea9` at
+19:44:42Z on the old mini; SUMS-run306 10 of 10 OK and SUMS-step1 2 of 2 OK by `shasum -c` in their folders):
+- **The host.** James, typed at VF-PM's session and relayed at 18:35:55Z: "vf-m2 is no longer there, please use old
+  mac mini for all the test, i already freed a lot of space on that mini". run 303 on vf-m2 has no verdict. The
+  packet's two addenda carry the move (`318-317-b-addendum-2026-11-11.md`, `-2.md`).
+- **Step 1, the red of record, at 317's red** (19:37:34Z to 19:38:05Z):
+  - kill-matrix alone, exit 1 in 30 s, `Tests 1 failed | 18 passed | 1 skipped (20)`, row 6 alone, at its
+    `toEqual` (`:974`);
+  - a lane `HISTFILE` (VF-PM's (b), 18:42:08Z: a lane HISTFILE, no write into `jasper`'s `.bash_history`), set for
+    step 1 alone, as a prefix on its one command, as addendum 2 has it; so Received was that line;
+  - the env-shaped grep found 2 hits, the Expected and Received sides (lines 60 and 61);
+  - `jasper`'s two history files were unchanged in stat over step 1.
+- **V at `5438a5b3d`**: "verify exit 0", 6 min 20 s (19:38:05Z to 19:44:25Z).
+  - contracts 1963; electron-shell `2845 passed | 3 skipped (2848)`; field-app 4696 (338 files, command-palette
+    11 → 12); fieldd `3832 passed | 15 skipped (3847)`.
+  - cargo `ok 37`; dev-runner 483 of 483; census OK; bundle assert OK.
+  - The file row: 27 packages, 1004 files at the expected, none off, missing, extra or twice.
+  - The sum over the count lines: 14714 22.
+- **Beside V, as run 306 printed them:**
+  - The host reading: electron-shell's executable-arch row skipped, 0 → 1. No release field-native was built on that
+    host (`executable-arch.test.ts:99`). It is the sum's one move against the expected 14715 21.
+  - Item 317 over V: bash attributed 0, unattributed 0, zsh 0. Both history files were equal in stat at every read,
+    stat only and never opened.
+  - The bundle line: 957.4 KB raw / 254.9 KB gz, equal to run 296's. The packet said it would differ; addendum 3
+    corrects that.
+  - The cold target spend: 812 MiB.
+  - One KEPT birth on the V host, `/private/tmp/vf-conv-B-bXDzui`.
+  - The new ref `rv/318-317-run306` → `5438a5b3d`, kept.
+- **S carried by tree 244a989b8429 (run 284's S GREEN).** Not run: IOS, K.
+- **On the Mac**, through RV's door in `lanes/fg2/vibe-field` (the packet's `rows/`, HOLD 7263–7364), each row on its
+  stage's tree, uncommitted:
+  - 318's doc: DESIGN.md's 30 Mac readers, 645, 23 and 19.
+  - 318's red: `1 failed | 11 passed (12)` at its `toMatch`.
+  - 318's green:
+    - field-app's seven files 253, with command-palette 12;
+    - smoke.ts's three text readers 52;
+    - the typecheck scripts, 0 errors (three programs);
+    - biome clean;
+    - check:walls clean, 270 of 1151.
+  - 317's red and green: biome and fieldd's `tsc --noEmit`, 0 errors.
+  - 317's green tree before v3: `cargo fmt --check` and walls clean.
+
+**The cut.**
+- 318's first red died on a TypeError under happy-dom (`readFileSync(new URL(…))`). It was re-cut to read from the
+  package root before any commit (VF-PM 05:00:03Z).
+- 318's three commits went in at 05:21:03Z to 05:21:05Z, on VF-PM's word of 05:20:36Z.
+- 317's second cut compared the pane's whole `env` dump. A red there would print the runner's environment into a log
+  that travels, so it was stopped before any run. VF-PM chose option A at 06:12:50Z: "a deliberate red that prints
+  the runner's environment into a log that travels is exactly what 'secrets never in logs' forbids".
+  - The third cut compares the `HISTFILE` lines alone.
+  - It was committed at 06:19:40Z to 06:19:41Z on 318's green, on VF-PM's word of 06:19:16Z, by `commit-317v3.sh`.
+  - The superseded tip is kept as `rv/318-317-v2`.
+- Each commit went through the pre-commit hook, with its index set to its tree by `git read-tree` and checked.
+- The packet of record is `lanes/rv/packets/318-317-b` (SUMS `d8a01210306fca99`). Its bundle requires `8fffb13c7`
+  alone. VF-PM accepted the packet at 06:25:01Z. The transport is `318-317-b-m2` (SUMS `b164260bedb77baf`), its
+  bundle byte-equal to the packet's (`cmp`); run 306 read its SUMS all OK at the arm.
+  - Addendum 1 (`7ad7ee7053e163f4`) moves V to the old mini.
+  - Addendum 2 (`3cbd653363871858`) records the rulings on it.
+  - Addendum 3 (`83d545a99096cc97`) corrects the bundle line.
+
+**Found along the way.**
+- **Item 320:** a fieldd red on an expect whose actual is a pane's or a child's whole environment prints that
+  environment. Row 6's `:964`–`:969` and the Windows witness are like that. The floor log a red prints is redacted by
+  key alone (`field-native/src/logging/record.rs:640-665`). No owner, and nobody runs those rows red to find out.
+- **Item 324:** run 305's V had no verdict. mille's binding was rebuilt under the lane's exported `CARGO_TARGET_DIR`,
+  which is the runner's own fault; run 306 answered it.
+- **run 309** (VF-PM 23:03:08Z) measured +538 B to `jasper`'s bash history at the cargo stage, at a main without
+  317's green, with `HISTFILE` set in the runner. tp_activation's sessions take their own environment, so 317's green
+  names it there too.
+- *Correction (2026-11-11, the fixer):* "5438a5b3d's message cites :428 for the throwaway HOME; it is
+  agent-gateway-floor.ts:429 (read 2026-11-11 by the fixer)". VF-PM ruled no re-cut.
+
+**Owed.**
+- The landing table at `5438a5b3d`, before the push. smoke:godview's two new rungs run there first.
+- `/private/tmp/vf-conv-B-bXDzui`, a kept birth on the V host.
+- Item 320, above.
+
+**Not done, and not claimed:** nothing of 318 was driven in Electron on the Mac, and nothing here is pushed.
