@@ -742,7 +742,7 @@ describe("the sync dot and the tiles' sync words (C6-4, UA-D7)", () => {
     expect(dot.dataset.dot).toBe("attention");
     // the decline's own reason stays inside; the status names no peer, so none is said (IS-282-7)
     expect(dot.title).toMatch(
-      /^One of your devices didn't take the latest changes — last exchange /u,
+      /^This device didn't take some changes from another device — last exchange /u,
     );
     expect(dot.title).not.toContain("unknown-doc");
   });
