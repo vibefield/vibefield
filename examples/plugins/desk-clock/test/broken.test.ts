@@ -1,7 +1,8 @@
 // @vitest-environment node
 // THE FAULT FIXTURE (ICE petition I24, ported at DK-7) breaks exactly as it says — and it is the SDK's
 // KIND-CONFORMANCE HARNESS's negative fixture, beside the clock that passes it:
-//  - the clock itself passes: its declaration, its program (READ), every declared state, its dispose;
+//  - the clock itself passes: its declaration, its program (READ), every declared state, its agent
+//    half (its summary, faces and tools, answered at its one fixture), its dispose;
 //  - the FAULTY clock is refused by the states it breaks — its record from the third call
 //    (`state-spawn-failed`) and its hit on every pick (`state-hit-missed`);
 //  - the BROKEN clock's WGSL names what nothing declares, which only a compiler refuses: the harness READS
@@ -51,7 +52,13 @@ describe("the kind-conformance harness over the clock and its fault fixture (DK-
     expect(refusals(r)).toEqual([]);
     expect(r.plan.modes).toEqual(["idle", "selected", "held", "open", "contained"]);
     expect(r.states).toBe(5 * 21 + 1);
-    expect(r.verdicts.map((v) => v.code)).toEqual(["ok", "ok", "object-wgsl-not-compiled", "ok"]);
+    expect(r.verdicts.map((v) => v.code)).toEqual([
+      "ok",
+      "ok",
+      "object-wgsl-not-compiled",
+      "ok",
+      "ok",
+    ]);
   });
 
   it("REFUSES the faulty clock by the states it breaks: its record from the third call, its hit on every pick", async () => {
