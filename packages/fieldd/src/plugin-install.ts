@@ -44,8 +44,17 @@ export interface RegistryInstallConfig {
    * install unsigned) */
   registryPublicKey?: string;
   fetchImpl?: typeof fetch;
+  /** MK-2b (2026-11-11, MK-D5): how long one registry fetch may take before it answers as unreachable;
+   * tests shorten it */
+  fetchTimeoutMs?: number;
   logger?: Logger;
 }
+
+/** MK-2b (MK-D5): a registry host that does not answer is offline, never a hang. */
+export const REGISTRY_FETCH_TIMEOUT_MS = 20_000;
+
+/** MK-2b (L1): the carriers a parse may catch to undefined, by where they sit. */
+const ENTRY_CARRIERS = ["rung", "listing"] as const;
 
 /** A verified, durable candidate that is still invisible to discovery. PRC-5c
  * will carry this handle through the participant prepare barrier before the
@@ -79,6 +88,9 @@ export class RegistryInstallService {
   private readonly log: Logger;
   private readonly artifacts: PluginArtifactStore;
   readonly installedRoot: string;
+  /** MK-2b (2026-11-11, L1): a list's dropped carriers are said once per its `generatedAt`, not on every
+   * read of it */
+  private readonly droppedLogged = new Set<number>();
 
   constructor(private readonly cfg: RegistryInstallConfig) {
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "plugin.install" });
@@ -103,6 +115,19 @@ export class RegistryInstallService {
   /** fetch + signature-verify + parse the index (§5.3.1 — the byte is the
    * unit of trust: the signature covers the exact file, never a re-canon). */
   async fetchIndex(): Promise<{ index: RegistryIndex; indexRef: string }> {
+    const signed = await this.fetchSignedIndex();
+    return { index: this.parseIndex(signed.bytes), indexRef: signed.indexRef };
+  }
+
+  /** MK-2b (2026-11-11): a registry is configured only with both its location and its verify key. */
+  registryConfigured(): boolean {
+    return this.cfg.registryUrl !== undefined && this.cfg.registryPublicKey !== undefined;
+  }
+
+  /** MK-2b: fetch the index's exact bytes and its signature, and verify them; nothing is parsed
+   * here, so the catalog can hold the exact bytes as fetched (base64, with the signature, in its one
+   * held file, `plugin-catalog.ts`). */
+  async fetchSignedIndex(): Promise<{ bytes: Buffer; signature: string; indexRef: string }> {
     const url = this.cfg.registryUrl;
     if (url === undefined)
       throw new RpcCallError("UNAVAILABLE", "no plugin registry is configured", false, {
@@ -114,25 +139,82 @@ export class RegistryInstallService {
         "no registry verify key is configured — unsigned indexes never install",
         false,
       );
-    const indexBytes = await this.fetchBytes(url);
-    const sigText = (await this.fetchBytes(`${url}.sig`)).toString("utf8").trim();
-    if (!verifyRegistryIndex(indexBytes, sigText, this.cfg.registryPublicKey))
+    const timeoutMs = this.cfg.fetchTimeoutMs ?? REGISTRY_FETCH_TIMEOUT_MS;
+    const bytes = await this.fetchBytes(url, timeoutMs);
+    const signature = (await this.fetchBytes(`${url}.sig`, timeoutMs)).toString("utf8").trim();
+    if (!this.verifyIndex(bytes, signature)) {
+      this.refused("signature");
       throw new RpcCallError(
         "PRECONDITION_FAILED",
         "registry index signature verification FAILED — refusing the index",
         false,
         { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
       );
+    }
+    return { bytes, signature, indexRef: url };
+  }
+
+  /** MK-2b: the configured key's verdict over exact bytes (the catalog re-verifies its held list
+   * with it on every read). No key, no verdict but false. */
+  verifyIndex(bytes: Buffer, signature: string): boolean {
+    const key = this.cfg.registryPublicKey;
+    return key !== undefined && verifyRegistryIndex(bytes, signature, key);
+  }
+
+  /** MK-2b: verified bytes to the typed index. A carrier the schema caught is logged (L1); a
+   * refusal is logged with its reason (L2). Neither line carries the bytes or a value. */
+  parseIndex(bytes: Buffer): RegistryIndex {
     let parsed: unknown;
     try {
-      parsed = JSON.parse(indexBytes.toString("utf8"));
+      parsed = JSON.parse(bytes.toString("utf8"));
     } catch {
+      this.refused("not-json");
       throw new RpcCallError("PRECONDITION_FAILED", "registry index is not JSON", false);
     }
     const index = RegistryIndexSchema.safeParse(parsed);
-    if (!index.success)
+    if (!index.success) {
+      this.refused("schema");
       throw new RpcCallError("PRECONDITION_FAILED", "registry index failed its schema", false);
-    return { index: index.data, indexRef: url };
+    }
+    this.logDropped(parsed, index.data);
+    return index.data;
+  }
+
+  /** L2 (custody note §6): "Diagnostics has the details" is true only if the refusal is logged. */
+  private refused(reason: "signature" | "not-json" | "schema"): void {
+    this.log.warn(
+      "fieldd.plugin_install.index_refused",
+      "A plugin list arrived that VibeField could not use, and was refused",
+      { reason },
+    );
+  }
+
+  /** L1 (custody note §6): a listing, rung or pick the schema caught goes unshown; say which, by
+   * plugin id and field, once per list (`generatedAt`), never the value. */
+  private logDropped(raw: unknown, index: RegistryIndex): void {
+    if (this.droppedLogged.has(index.generatedAt)) return;
+    this.droppedLogged.add(index.generatedAt);
+    const rawIndex = raw as {
+      plugins?: Record<string, Record<string, unknown> | undefined>;
+      featured?: unknown;
+    };
+    for (const [id, entry] of Object.entries(index.plugins)) {
+      const rawEntry = rawIndex.plugins?.[id];
+      for (const field of ENTRY_CARRIERS) {
+        if (rawEntry?.[field] !== undefined && entry[field] === undefined)
+          this.log.warn(
+            "fieldd.plugin_install.listing_dropped",
+            "A listed plugin's field did not parse, so it goes unshown",
+            { pluginId: id, field },
+          );
+      }
+    }
+    if (rawIndex.featured !== undefined && index.featured === undefined)
+      this.log.warn(
+        "fieldd.plugin_install.listing_dropped",
+        "The maintainers' pick did not parse, so it goes unshown",
+        { field: "featured" },
+      );
   }
 
   /** Resolve, verify, unpack, and durably publish an immutable candidate slot.
@@ -369,12 +451,23 @@ export class RegistryInstallService {
     return `${base}${release.artifactUrl}`;
   }
 
-  private async fetchBytes(url: string): Promise<Buffer> {
+  /** `timeoutMs` bounds the index's two small fetches alone (MK-2b, 2026-11-11, MK-D5), the body's read
+   * included; an artifact's download keeps today's unbounded fetch. The timer is cleared however
+   * the fetch ends, so nothing is left running after it. */
+  private async fetchBytes(url: string, timeoutMs?: number): Promise<Buffer> {
+    const abort = timeoutMs !== undefined ? new AbortController() : undefined;
+    const timer =
+      abort !== undefined
+        ? setTimeout(() => abort.abort(new Error(`no answer in ${timeoutMs} ms`)), timeoutMs)
+        : undefined;
     try {
       if (url.startsWith("file://")) return await readFile(fileURLToPath(url));
       if (!/^https?:\/\//.test(url)) return await readFile(fileURLToPath(pathToFileURL(url).href));
       const fetcher = this.cfg.fetchImpl ?? fetch;
-      const res = await fetcher(url, { redirect: "follow" });
+      const res = await fetcher(url, {
+        redirect: "follow",
+        ...(abort !== undefined ? { signal: abort.signal } : {}),
+      });
       if (!res.ok)
         throw new RpcCallError("UNAVAILABLE", `registry fetch failed: HTTP ${res.status}`, true, {
           pluginKind: "PLUGIN_SOURCE_UNAVAILABLE",
@@ -388,6 +481,8 @@ export class RegistryInstallService {
         true,
         { pluginKind: "PLUGIN_SOURCE_UNAVAILABLE" },
       );
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
     }
   }
 }

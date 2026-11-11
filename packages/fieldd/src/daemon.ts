@@ -338,6 +338,7 @@ import {
   UNKNOWN_FLOOR_CENSUS,
 } from "./native-supervisor";
 import { PeerLink } from "./peer-link";
+import { PluginCatalogService } from "./plugin-catalog";
 import { RegistryInstallService } from "./plugin-install";
 import { PluginModuleAuthority } from "./plugin-modules";
 import { PluginRegistryService } from "./plugin-registry";
@@ -1849,6 +1850,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // Item 279 (S2) — with the installed root withheld, boot leaves it as it finds it.
     if (listKeyed) await installer.recover();
+    // MK-2b (2026-11-11, MK-D5) — the plugin list the Plugins popup reads: held under <dataDir>, re-verified
+    // on every read, read afresh only on the person's act (plugins.catalog.refresh)
+    const catalog = new PluginCatalogService({
+      dataDir: config.dataDir,
+      installer,
+      plugins,
+      logger,
+    });
     const emitPluginLog =
       config.pluginLog ??
       ((record: PluginServiceLogRecord): void => {
@@ -6846,6 +6855,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return { ok: true };
     });
     api.register("plugins.updates.check", () => installer.updatesCheck());
+    // MK-2b (2026-11-11, MK-D5): get answers at once from the held list and never reads; refresh is the read,
+    // audited with the state it ended in and how many plugins it lists (never a URL or a key)
+    api.register("plugins.catalog.get", () => catalog.get());
+    api.register("plugins.catalog.refresh", (ctx) =>
+      audit.required(
+        ctx,
+        { action: "plugin.catalog.refresh", target: { kind: "plugin-registry", id: "catalog" } },
+        () => catalog.refresh(),
+        (read) => ({ attrs: { state: read.state, count: read.plugins.length } }),
+      ),
+    );
 
     // D29′ — the undo surface. A USER affordance: pane-only in v1 (plugin
     // principals refused honestly; per-section stacks are a later
