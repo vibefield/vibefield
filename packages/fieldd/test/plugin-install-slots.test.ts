@@ -120,4 +120,54 @@ describe("PRC-5b registry installer slots", () => {
     expect(restarted.get(KV_ID)?.version).toBe("0.2.0");
     expect(restarted.commitEpoch(KV_ID)).toBe(2);
   });
+
+  // Item 322 — the installer's side. The artifact it fetched matched the signed index; the folder already at that
+  // artifact's slot does not hold the artifact's files. It is refused as an artifact mismatch, the kind the window
+  // already has a sentence for, and the folder is left as it was found.
+  it("item 322: a revision at the slot that is not the artifact's files is refused", async () => {
+    const dataDir = temp("vf-install-slots-data-");
+    const registryDir = temp("vf-install-slots-registry-");
+    const releaseWork = temp("vf-install-slots-releases-");
+    const installedRoot = join(dataDir, "plugins", "installed");
+    mkdirSync(installedRoot, { recursive: true });
+
+    const only = await release(releaseWork, "0.1.0");
+    const keys = generateRegistryKeypair();
+    buildFixtureRegistry({ dir: registryDir, secretKey: keys.secretKey, plugins: [only] });
+
+    const plugins = new PluginRegistryService({
+      dataDir,
+      roots: { bundled: [], devLinked: [], installed: [installedRoot] },
+    });
+    cleanup.push(() => plugins.dispose());
+    await plugins.refresh();
+    const installer = new RegistryInstallService({
+      dataDir,
+      plugins,
+      registryUrl: pathToFileURL(join(registryDir, "index.json")).href,
+      registryPublicKey: keys.publicKey,
+    });
+
+    const first = await installer.prepare({ id: KV_ID, version: "0.1.0" });
+    // the same folder with one file a line longer; its marker still names the artifact
+    const manifestPath = join(first.artifact.root, "vibefield.plugin.json");
+    writeFileSync(manifestPath, `${readFileSync(manifestPath, "utf8")}\n`);
+    const found = readFileSync(manifestPath, "utf8");
+
+    const refusal = await installer.prepare({ id: KV_ID, version: "0.1.0" }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(refusal).toMatchObject({
+      name: "RpcCallError",
+      kind: "PRECONDITION_FAILED",
+      details: { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
+    });
+    // the refusal's words name no path
+    expect((refusal as Error).message).not.toContain(dataDir);
+    // what was there stays as it was found, and nothing is published
+    expect(readFileSync(manifestPath, "utf8")).toBe(found);
+    expect(existsSync(join(installedRoot, KV_ID, PLUGIN_CURRENT_POINTER_FILE))).toBe(false);
+    expect(plugins.get(KV_ID)).toBeUndefined();
+  });
 });
