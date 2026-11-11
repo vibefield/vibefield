@@ -55,6 +55,41 @@ export const CATALOG_FIXTURES = {
   }),
 } as const;
 
+/** A list held that also lists a community plugin this desktop has (MK-4c's
+ * page plate): its maker and its own words come from here alone. */
+export const CATALOG_LISTED = PluginsCatalog.parse({
+  ...CATALOG_FIXTURES.ready,
+  plugins: [
+    ...CATALOG_FIXTURES.ready.plugins,
+    {
+      id: "acme.kanban",
+      listedAs: "community",
+      latest: {
+        version: "2.1.0",
+        artifactUrl: "artifacts/acme.kanban-2.1.0.vfplugin",
+        sha256: PIN,
+        minApp: "0.9.0",
+        minContracts: "0.1.0",
+        publishedAt: PLUGINS_FIXTURE_READ_AT,
+      },
+      compatible: true,
+      listing: {
+        title: "Kanban",
+        summary: "A board and its cards, for the work on your desk.",
+        publisherName: "Acme Tools",
+        objects: [
+          { type: "acme.kanban.board", label: "Board", category: "things" },
+          { type: "acme.kanban.card", label: "Card", category: "things" },
+        ],
+      },
+    },
+  ],
+});
+
+/** A list held that found two updates (MK-4c's count plate; the Me row's
+ * count, which Updates carries). */
+export const CATALOG_COUNTED = PluginsCatalog.parse({ ...CATALOG_FIXTURES.ready, updates: 2 });
+
 /** How a plate's fixture port answers: a list, a door that fails, or a read
  * still under way (it never ends, so the plate holds the reading state). */
 export interface PluginsFixtureRead {
@@ -94,12 +129,21 @@ function record(fields: {
   id: string;
   title: string;
   version: string;
-  source: "bundled" | "dev-linked" | "sideload";
+  source: "bundled" | "dev-linked" | "sideload" | "registry";
   enabled?: boolean;
   objects?: readonly Record<string, unknown>[];
   service?: "none" | "active";
+  /** the powers it holds (MK-4c's page plates) */
+  granted?: readonly string[];
+  /** powers of its own it declares */
+  declares?: readonly Record<string, unknown>[];
+  /** tools for your agents it brings */
+  tools?: readonly Record<string, unknown>[];
+  /** what a registry plugin's folder says of itself: a display copy no page reads (item 321) */
+  registry?: Record<string, unknown>;
 }): Record<string, unknown> {
   const enabled = fields.enabled ?? true;
+  const granted = fields.granted ?? [];
   return {
     id: fields.id,
     version: fields.version,
@@ -107,12 +151,19 @@ function record(fields: {
     source: fields.source,
     manifestHash: PIN,
     installRevision: "fixture",
+    ...(fields.registry !== undefined ? { registry: fields.registry } : {}),
     state: enabled ? "enabled" : "disabled",
     compatible: true,
     enabled,
-    requestedCapabilities: [],
-    grantedCapabilities: [],
-    contributions: { objects: fields.objects ?? [], commands: [], surfaces: [] },
+    requestedCapabilities: granted,
+    grantedCapabilities: granted,
+    contributions: {
+      objects: fields.objects ?? [],
+      commands: [],
+      surfaces: [],
+      capabilities: fields.declares ?? [],
+      ...(fields.tools !== undefined ? { mcp: { tools: fields.tools, servers: [] } } : {}),
+    },
     renderer: (fields.objects ?? []).length > 0 ? "active" : "none",
     service: fields.service ?? "none",
   };
@@ -134,6 +185,7 @@ export const PLUGINS_FIXTURE_SNAPSHOT = PluginRegistrySnapshot.parse({
         object("Tablet", "SimTablet"),
         object("Watch", "SimWatch", "Apple Watch"),
       ],
+      granted: ["surface.capture", "canvas.read"],
     }),
     record({
       id: "vibefield.comment-pad",
@@ -156,6 +208,48 @@ export const PLUGINS_FIXTURE_SNAPSHOT = PluginRegistrySnapshot.parse({
       version: "0.2.0",
       source: "sideload",
       service: "active",
+    }),
+  ],
+});
+
+/** The same desktop with a community plugin from the list (MK-4c's page
+ * plate): it adds two objects, brings a tool for your agents and holds a power
+ * it names itself. Its folder calls its maker "Someone Else", which no page
+ * reads: the list held calls it "Acme Tools". */
+export const PLUGINS_FIXTURE_LISTED_SNAPSHOT = PluginRegistrySnapshot.parse({
+  generation: 2,
+  problems: [],
+  plugins: [
+    ...PLUGINS_FIXTURE_SNAPSHOT.plugins,
+    record({
+      id: "acme.kanban",
+      title: "Kanban",
+      version: "2.1.0",
+      source: "registry",
+      objects: [object("Board", "AcmeBoard", "Board"), object("Card", "AcmeCard", "Card")],
+      granted: ["canvas.write", "x.acme.kanban.sync"],
+      declares: [
+        {
+          id: "x.acme.kanban.sync",
+          title: "Keep your boards in step",
+          description: "Copies a board's cards to the boards you share.",
+          risk: "write",
+        },
+      ],
+      tools: [
+        {
+          name: "add_card",
+          title: "Add a card",
+          description: "Adds a card to a board.",
+          method: "cards.add",
+        },
+      ],
+      registry: {
+        indexRef: "index.json",
+        artifactSha256: `sha256:${"b".repeat(64)}`,
+        publisher: "acme",
+        publisherName: "Someone Else",
+      },
     }),
   ],
 });

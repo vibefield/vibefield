@@ -94,7 +94,8 @@ export const SOURCE_WORDS = {
 
 /** An Installed row's one line (§9 "Installed, off and Remove…"). Where a set hangs ("Things, Tools") is the
  * desk's pegboard's to name, which the frame's popup does not read: MK-4a's line leaves it out (MK's, ‹draft›),
- * and the plugin's page (MK-4c) brings it. */
+ * and it waits for the pegboard's names to reach the popup (MK-4d), not for the plugin's page (corrected at MK-4c,
+ * as DESIGN.md §9 says). */
 export const INSTALLED_LINE = {
   set: (objects: number, version: string) => `${plural(objects, "object", "objects")} · ${version}`,
   builtIn: "comes with VibeField",
@@ -112,6 +113,31 @@ export function hasWords(service: boolean, tools: boolean): string | null {
   if (tools) return "tools";
   return null;
 }
+
+/** A plugin's page, read only (MK-4c; DESIGN.md §8 "Read only first", §9 MK-4c's block). Its section heads are
+ * §9's ("The popup"); "Installed", where its act will stand, is the act's own word once true (§9 "Installing, and
+ * after"), said as words; a Built in plugin's maker is §9's sentence ("Installed, off and Remove…"); "Nothing
+ * beyond drawing its own objects" is the install card's (§9). The rest are MK's, ‹draft›, for James's eye. */
+export const PAGE_WORDS = {
+  /** the back row's name to assistive tech (MK's) */
+  back: (tab: string) => `Back to ${tab}`,
+  installed: "Installed",
+  adds: "What it adds",
+  can: "What it can do",
+  madeBy: "Made by",
+  version: "Version",
+  /** What it adds: a plugin's tools for your agents, and a service it runs (MK's; "service" is James's to keep or
+   * strike, with Q5) */
+  tools: "Tools for your agents",
+  service: "A service",
+  /** What it can do, for a power whose declaring plugin is not installed here (MK's) */
+  ownUnknown: "A power named by a plugin that isn't installed here",
+  /** What it can do, when it holds no power: with objects (the install card's), and with none (MK's) */
+  nothing: "Nothing beyond drawing its own objects",
+  nothingNoObject: "Nothing beyond its own work",
+  /** Made by, for a Built in plugin (§9) */
+  builtIn: "Comes with VibeField. It can be turned off, not removed.",
+} as const;
 
 /** Installed, when no plugin holds every typed word (MK's, ‹draft›; the Peek's "Nothing in your past holds every
  * word of “q”" is its pattern). */

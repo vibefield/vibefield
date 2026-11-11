@@ -15,15 +15,22 @@ import { usePluginRegistrySnapshot } from "../../plugin-host/plugin-registry-sto
 import { useGodviewFindDoor } from "../find-door";
 import { type FrameSurface, foldSurface } from "../frame-surface";
 import { PluginsView } from "./PluginsView";
-import { claimWindowAsk, primePluginUpdates, takePluginUpdates } from "./plugins-count";
+import {
+  claimWindowAsk,
+  primePluginUpdates,
+  takePluginUpdates,
+  usePluginUpdates,
+} from "./plugins-count";
 import {
   catalogFoot,
   installedFoot,
   installedRows,
   type PluginsRead,
   type PluginsTab,
+  pluginPage,
   pluginsLayout,
   shelfState,
+  walkHot,
 } from "./plugins-model";
 import { type PluginsPort, pluginsPortOver } from "./plugins-port";
 
@@ -35,12 +42,15 @@ import { type PluginsPort, pluginsPortOver } from "./plugins-port";
 // fieldd holds at once (`catalog`) and reads it once (`refresh`, MK-D5: the
 // person's act — no timer, no retry). Esc on the window's capture phase and a
 // click on the scrim fold it; the keyboard goes back where it was. Installed
-// reads the registry snapshot the window already holds, read only (MK-4c
-// brings its switch and its page). Its doors (MK-4b) are the Me menu's
-// Plugins… row and the palette's Plugins… and Check plugins for updates, each
-// through ChromeLayer's `openPlugins`; the pegboard's pill is MK-4d's. The
-// catalog mounts this controller over a fixture port
-// (`design-system/PluginsPreview.tsx`).
+// reads the registry snapshot the window already holds. MK-4c: its rows open a
+// plugin's page, read only, from that snapshot and the list this popup already
+// read — no page asks fieldd anything — and ↑ ↓ walk its hot row, kept in
+// sight, ↵ opening its page; Esc goes back from a page before it folds the
+// popup; Updates carries the Me row's count. Installed's switch is MK-4c2's.
+// Its doors (MK-4b) are the Me menu's Plugins… row and the palette's Plugins…
+// and Check plugins for updates, each through ChromeLayer's `openPlugins`; the
+// pegboard's pill is MK-4d's. The catalog mounts this controller over a
+// fixture port (`design-system/PluginsPreview.tsx`).
 
 function boxOf(container: HTMLElement | null | undefined): { width: number; height: number } {
   if (container !== null && container !== undefined) {
@@ -69,8 +79,23 @@ export interface PluginsProps {
   holdKeys?: (() => () => void) | undefined;
   /** Every answer the popup takes, in the order it takes them (MK-4b: the Me row's count). A plate passes none. */
   onCatalog?: ((catalog: PluginsCatalog) => void) | undefined;
+  /** Updates' count: the Me row's own value (MK-4c, VF-PM's C1); a plate passes a fixture's. */
+  updates?: number | null;
+  /** Whether a page says a power's Mac note (and "this Mac" where a power names the machine). */
+  onMac?: boolean;
+  /** A plugin whose page each opening starts on, from Installed (a plate's; the product passes none). */
+  initialPage?: string | null;
   now?: () => number;
 }
+
+/** The page shown in the body: its plugin, and the tab it opened from. */
+interface OpenPage {
+  readonly id: string;
+  readonly from: PluginsTab;
+}
+
+const pageAt = (id: string | null | undefined): OpenPage | null =>
+  id === null || id === undefined ? null : { id, from: "installed" };
 
 export function Plugins({
   surface,
@@ -83,6 +108,9 @@ export function Plugins({
   initialTab = "discover",
   holdKeys,
   onCatalog,
+  updates = null,
+  onMac = false,
+  initialPage = null,
   now = Date.now,
 }: PluginsProps): ReactElement | null {
   const open = surface === "plugins";
@@ -91,7 +119,10 @@ export function Plugins({
   const [read, setRead] = useState<PluginsRead>({ kind: "asking" });
   const [reading, setReading] = useState(false);
   const [box, setBox] = useState(() => boxOf(container));
+  const [page, setPage] = useState<OpenPage | null>(() => pageAt(initialPage));
+  const [hot, setHot] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const returnFocus = useRef<Element | null>(null);
   // The read below runs once per opening; whoever hears its answers may change
   // without starting another read.
@@ -113,6 +144,8 @@ export function Plugins({
     if (open) {
       setTab(initialTab);
       setQuery("");
+      setPage(pageAt(initialPage));
+      setHot(0);
       // the last opening's "neither door answered" is not this one's: it says
       // the read until this one's doors answer (a held list stays, shown at once)
       setRead((was) => (was.kind === "away" ? { kind: "asking" } : was));
@@ -170,19 +203,27 @@ export function Plugins({
     };
   }, [open, port]);
 
-  // While open, Esc is the popup's before anything else hears it (MK-4a has no
-  // page or question for it to answer first).
+  // A page goes back to the tab it opened from, the keyboard to the field.
+  const back = useCallback(() => {
+    setPage(null);
+    if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+  }, [takeFocus]);
+
+  // While open, Esc is the popup's before anything else hears it, and answers
+  // the nearest first (§8 "Keys"): a page goes back to its tab, then the popup
+  // folds. No question stands yet (MK-4c builds none).
   useEffect(() => {
     if (!open || !bindKeys) return;
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      fold();
+      if (page !== null) back();
+      else fold();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, bindKeys, fold]);
+  }, [open, bindKeys, fold, page, back]);
 
   // QL-D2: over Godview, the stage holds its keys while the popup stands.
   const hold = open && bindKeys ? holdKeys : undefined;
@@ -223,23 +264,85 @@ export function Plugins({
     () => (snapshot === null ? null : installedRows(snapshot, catalog, query)),
     [snapshot, catalog, query],
   );
+  // the hot row, held to the rows there are
+  const hotAt = installed === null ? 0 : Math.max(0, Math.min(hot, installed.length - 1));
+  // a page reads the record the window holds; a plugin gone from it closes its page
+  const shown = useMemo(() => {
+    const record =
+      page === null ? undefined : snapshot?.plugins.find((plugin) => plugin.id === page.id);
+    return record === undefined || snapshot === null
+      ? null
+      : pluginPage(record, catalog, snapshot, onMac);
+  }, [page, snapshot, catalog, onMac]);
+
   const showInstalled = useCallback(() => {
     setTab("installed");
     inputRef.current?.focus({ preventScroll: true });
   }, []);
+  // A row opens its page in place (MK-D2); the keyboard stays in the field.
+  const openPage = useCallback(
+    (id: string) => {
+      setPage({ id, from: tab });
+      if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+    },
+    [tab, takeFocus],
+  );
+  // Words typed on a page go back to its tab's list, filtered; a tab pressed on
+  // a page leaves it for that tab. Either starts the hot row at the first.
+  const onQuery = useCallback(
+    (next: string) => {
+      setQuery(next);
+      setHot(0);
+      if (page !== null) {
+        setTab(page.from);
+        setPage(null);
+      }
+    },
+    [page],
+  );
+  const onTab = useCallback((next: PluginsTab) => {
+    setTab(next);
+    setPage(null);
+    setHot(0);
+  }, []);
 
-  // ↵ presses the one act on the screen: Show installed, on Discover's
-  // no-registry state (a button keeps its own Return).
+  // The hot row stays in sight as the keys walk it (as the Peek's does).
+  useEffect(() => {
+    if (!open || page !== null || tab !== "installed") return;
+    const row = listRef.current?.querySelector<HTMLElement>('[data-hot="true"]');
+    if (row !== null && row !== undefined && typeof row.scrollIntoView === "function") {
+      row.scrollIntoView({ block: "nearest" });
+    }
+  }, [open, page, tab, hotAt]);
+
+  // The field holds the keys (a row is no stop of Tab): on Installed ↑ ↓ walk
+  // the hot row and ↵ opens its page; ↵ presses Show installed on Discover's
+  // no-registry state. A page has no act yet, so ↵ there does nothing; a button
+  // keeps its own Return.
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-      if (event.target instanceof HTMLButtonElement) return;
+      if (event.nativeEvent.isComposing || page !== null) return;
+      const rows = tab === "installed" && installed !== null ? installed : [];
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        if (event.target !== inputRef.current || rows.length === 0) return;
+        event.preventDefault();
+        const key = event.key;
+        setHot((at) => walkHot(Math.min(at, rows.length - 1), key, rows.length));
+        return;
+      }
+      if (event.key !== "Enter" || event.target instanceof HTMLButtonElement) return;
       if (tab === "discover" && shelf.kind === "unconfigured") {
         event.preventDefault();
         showInstalled();
+        return;
+      }
+      const row = rows[hotAt];
+      if (row !== undefined) {
+        event.preventDefault();
+        openPage(row.id);
       }
     },
-    [tab, shelf.kind, showInstalled],
+    [tab, shelf.kind, showInstalled, page, installed, hotAt, openPage],
   );
 
   const target = container === undefined ? document.body : container;
@@ -254,11 +357,18 @@ export function Plugins({
       foot={foot}
       installed={installed}
       installedFoot={snapshot === null ? null : installedFoot(snapshot)}
+      hot={hotAt}
+      page={shown}
+      pageFrom={page?.from ?? tab}
+      updates={updates}
       inputRef={inputRef}
-      onQuery={setQuery}
-      onTab={setTab}
+      listRef={listRef}
+      onQuery={onQuery}
+      onTab={onTab}
       onClose={fold}
       onShowInstalled={showInstalled}
+      onOpenPage={openPage}
+      onBack={back}
       onKeyDown={onKeyDown}
     />,
     target,
@@ -276,22 +386,28 @@ const takeCount = (catalog: PluginsCatalog): void => takePluginUpdates(catalog.u
  * so the Me menu's row says what the last read found (MK-4b's ‹draft› line in
  * DESIGN.md §8 "The Me menu"; VF-PM's C1): never the registry, on no timer,
  * once per window; an answer that fails or comes late leaves the row with no
- * count and the window says nothing of it. */
+ * count and the window says nothing of it. Updates carries that same count
+ * (MK-4c, VF-PM's C1), and a page says the Mac's notes on a Mac (`onMac`:
+ * ChromeLayer's `getHost().platform === "darwin"`, the read it makes for the
+ * Settings shortcut; with no platform named, no Mac note). */
 export function FramePlugins({
   view,
   surface,
   onSurfaceChange,
   openOn = "discover",
+  onMac = false,
 }: {
   view: FrameView;
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
   openOn?: PluginsTab;
+  onMac?: boolean;
 }): ReactElement | null {
   const fieldd = useFielddClient();
   const port = useMemo(() => pluginsPortOver(fieldd), [fieldd]);
   const snapshot = usePluginRegistrySnapshot();
   const godview = useGodviewFindDoor();
+  const updates = usePluginUpdates();
   useEffect(() => {
     if (!claimWindowAsk()) return;
     port.catalog().then(
@@ -308,6 +424,8 @@ export function FramePlugins({
       initialTab={openOn}
       holdKeys={view === "godview" ? godview?.holdKeys : undefined}
       onCatalog={takeCount}
+      updates={updates}
+      onMac={onMac}
     />
   );
 }

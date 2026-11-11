@@ -178,9 +178,17 @@
   background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
 }
 
+/* Updates' count (MK-4c, ‹draft›): after its word, 4 apart, in the part's own
+   ink and weight, its figures tabular (§2's Data small) */
+.vf-plugins-count {
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
 .vf-plugins-esc:focus-visible,
 .vf-plugins-seg button:focus-visible,
-.vf-plugins-act:focus-visible {
+.vf-plugins-act:focus-visible,
+.vf-plugins-back:focus-visible {
   outline: 2px solid var(--vf-select);
   outline-offset: 2px;
 }
@@ -207,7 +215,9 @@
    hot row in the ready fill; the picture slot 32, corners 8, on the ready fill,
    holding the `plugin` glyph 16 in tertiary ink; 12 after it, the title at
    14/600, the source pill 8 after it, and the one line at 12/400 in tertiary
-   ink (§8 "Installed", drawn 2026-11-11, ‹draft›) ── */
+   ink (§8 "Installed", drawn 2026-11-11, ‹draft›). MK-4c: each row is a press
+   that opens its page, the hot row and the pointer's in the ready fill, and the
+   `chevron` 12 in tertiary ink at its end, 12 after its text ── */
 .vf-plugins-list {
   display: grid;
   align-content: start;
@@ -219,15 +229,28 @@
 
 .vf-plugins-row {
   display: flex;
+  width: 100%;
   min-width: 0;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
+  border: 0;
   border-radius: 14px;
+  color: inherit;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.vf-plugins-row:hover {
+.vf-plugins-row:hover,
+.vf-plugins-row[data-hot="true"] {
   background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-plugins-chevron {
+  flex: none;
+  color: var(--vf-text-tertiary);
 }
 
 .vf-plugins-slot {
@@ -279,6 +302,154 @@
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ── a plugin's page, read only (MK-4c; §8 "Read only first", drawn 2026-11-11,
+   ‹draft›): its back row at its top, 36 tall, padded 0 10, corners 10, the
+   `chevron` 12 turned back and the tab's word at 12/500 in secondary ink, the
+   ready fill under the pointer; its two columns padded 8 24 24 under it, 32
+   apart, the second 280 wide and the first the rest, stacking — the second
+   above — in a popup narrower than 720; the second's head (the row's 32 slot,
+   the title at 15/600, its pill 8 under the title), and 12 under it
+   "Installed" at 12.5/600 in tertiary ink, 32 tall, words and not a control;
+   sections 20 apart, each head at 12/600 in secondary ink, its lines 6 under
+   it at 13/400 in primary ink. MK-4c's rider draws the rest in §8: the back
+   row 8 under the body's top and 14 in (its chevron, padded 10, on the
+   columns' 24), its glyph and word 6 apart; the title at 15/600 (§2's Title),
+   the slot beside it 12 apart, two pills 8 apart; a column's parts 20 apart, a
+   section's lines 6 apart at §2's Body 1.45, a head's 1.3, the title's 1.2; a
+   power's note under it at 12/400 in tertiary ink. ── */
+.vf-plugins-page {
+  display: grid;
+  align-content: start;
+  container-type: inline-size;
+}
+
+.vf-plugins-back {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  margin: 8px 0 0 14px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--vf-text-secondary);
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.vf-plugins-back:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-plugins-page-columns {
+  display: grid;
+  align-items: start;
+  gap: 32px;
+  padding: 8px 24px 24px;
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+.vf-plugins-page-column {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 20px;
+}
+
+.vf-plugins-page-top {
+  display: grid;
+  gap: 12px;
+}
+
+.vf-plugins-page-name {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.vf-plugins-page-name-text {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.vf-plugins-page-title {
+  margin: 0;
+  color: var(--vf-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.vf-plugins-page-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* words, not a control: no fill, no pointer, no focus */
+.vf-plugins-page-act {
+  display: flex;
+  height: 32px;
+  align-items: center;
+  margin: 0;
+  color: var(--vf-text-tertiary);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.vf-plugins-page-section {
+  display: grid;
+  gap: 6px;
+}
+
+.vf-plugins-page-head {
+  margin: 0;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.vf-plugins-page-words,
+.vf-plugins-page-lines {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+  list-style: none;
+}
+
+.vf-plugins-page-under {
+  display: block;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+@container (max-width: 719px) {
+  .vf-plugins-page-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vf-plugins-page-column[data-column="second"] {
+    order: -1;
+  }
 }
 
 /* ── the foot: 52 tall over a hairline — one sentence at 12/400 in tertiary

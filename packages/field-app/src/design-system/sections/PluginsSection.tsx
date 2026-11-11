@@ -4,7 +4,8 @@ import { PluginsPlate } from "../PluginsPreview";
 
 // Plugins (MK-4a; DESIGN.md §8 "Plugins — the frame's second popup"): the
 // frame's second popup as it opens today, on fixture ports — the shipping
-// controller in each state the read can be in. Discover's shelf, Updates'
+// controller in each state the read can be in, a plugin's page, read only
+// (MK-4c), and Updates carrying the Me row's count. Discover's shelf, Updates'
 // rows and Installed's switch come with later MK-4 parts.
 
 export function PluginsSection(): ReactElement {
@@ -60,6 +61,23 @@ export function PluginsSection(): ReactElement {
         bleed
       >
         <PluginsPlate state="away" />
+      </Specimen>
+      <Specimen
+        title="A plugin's page, read only — one that comes with VibeField"
+        source="frame/plugins/PluginsView.tsx · frame/plugins/plugins-model.ts"
+        bleed
+      >
+        <PluginsPlate state="page" />
+      </Specimen>
+      <Specimen
+        title="A plugin's page — a community plugin the list names"
+        source="frame/plugins/plugins-model.ts"
+        bleed
+      >
+        <PluginsPlate state="page-listed" />
+      </Specimen>
+      <Specimen title="Updates, carrying its count" source="frame/plugins/PluginsView.tsx" bleed>
+        <PluginsPlate state="count" />
       </Specimen>
     </Section>
   );

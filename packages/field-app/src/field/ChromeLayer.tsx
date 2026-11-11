@@ -463,6 +463,7 @@ export function ChromeLayer({
         surface={surface}
         onSurfaceChange={onSurfaceChange}
         openOn={pluginsOpenOn}
+        onMac={getHost().platform === "darwin"}
       />
 
       {/* THE HAND (track HN; DESIGN.md §8 "The hand", §10): every copy is a

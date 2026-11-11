@@ -1,24 +1,29 @@
-import { PluginRegistrySnapshot, PluginsCatalog } from "@vibefield/contracts";
+import { type PluginRecord, PluginRegistrySnapshot, PluginsCatalog } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import {
   CATALOG_FIXTURES,
+  CATALOG_LISTED,
+  PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_READ_AT,
   PLUGINS_FIXTURE_SNAPSHOT,
 } from "../src/design-system/plugins-fixtures";
 import {
+  bringsTools,
   catalogFoot,
   installedFoot,
   installedRows,
   type PluginsRead,
+  pluginPage,
   pluginsLayout,
   shelfState,
+  walkHot,
 } from "../src/frame/plugins/plugins-model";
 import * as words from "../src/frame/plugins/plugins-words";
 
 // MK-4a — the Plugins popup's model (DESIGN.md §8 "Plugins — the frame's second popup", §9 "The plugins'
 // words"): its place in a window (MK-E1), what Discover and Updates say in each state of the read, the foot,
-// and Installed's rows from the registry snapshot.
+// and Installed's rows from the registry snapshot; MK-4c adds a plugin's page, read only, and the hot row's walk.
 
 const answered = (catalog: PluginsCatalog): PluginsRead => ({ kind: "answered", catalog });
 const when = words.listTime(PLUGINS_FIXTURE_READ_AT, PLUGINS_FIXTURE_NOW);
@@ -232,6 +237,189 @@ describe("Installed (§8 'Installed', read only)", () => {
   });
 });
 
+/** A record of a fixture snapshot, by id. */
+function recordOf(snapshot: PluginRegistrySnapshot, id: string): PluginRecord {
+  const record = snapshot.plugins.find((plugin) => plugin.id === id);
+  if (record === undefined) throw new Error(`the fixture holds no ${id}`);
+  return record;
+}
+
+describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's block)", () => {
+  it("says a Built in plugin from the snapshot: its objects, its powers in plain words, its maker and version", () => {
+    const simulators = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator");
+    const page = pluginPage(simulators, null, PLUGINS_FIXTURE_SNAPSHOT, true);
+    expect(page).toEqual({
+      id: "vibefield.simulator",
+      title: "Simulators",
+      source: "Built in",
+      community: false,
+      summary: null,
+      // by its pegboard label, or by its title when it hangs nowhere
+      adds: [
+        { key: "object:SimPhone", words: "Phone" },
+        { key: "object:SimTablet", words: "Tablet" },
+        { key: "object:SimWatch", words: "Apple Watch" },
+      ],
+      powers: [
+        {
+          key: "surface.capture",
+          words: "See other apps' windows",
+          under: "macOS asks you once, for Screen Recording",
+          whose: null,
+        },
+        { key: "canvas.read", words: "Read what's on the desk", under: null, whose: null },
+      ],
+      nothing: null,
+      madeBy: words.PAGE_WORDS.builtIn,
+      version: "1.2.0",
+    });
+    // off the Mac, no Mac note
+    const offMac = pluginPage(simulators, null, PLUGINS_FIXTURE_SNAPSHOT, false);
+    expect(offMac.powers.map((power) => power.under)).toEqual([null, null]);
+  });
+
+  it("takes a registry plugin's maker and own words from the signed list alone, never its folder's copy (item 321)", () => {
+    const kanban = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban");
+    // the folder's display copy names a maker of its own
+    expect(kanban.registry?.publisherName).toBe("Someone Else");
+    const listed = pluginPage(kanban, CATALOG_LISTED, PLUGINS_FIXTURE_LISTED_SNAPSHOT, true);
+    expect([listed.source, listed.community, listed.madeBy, listed.summary]).toEqual([
+      "Acme Tools",
+      true,
+      "Acme Tools",
+      "A board and its cards, for the work on your desk.",
+    ]);
+    // a list held with no entry for it, and no list held: no maker, no words of its own
+    for (const catalog of [CATALOG_FIXTURES.ready, null]) {
+      const page = pluginPage(kanban, catalog, PLUGINS_FIXTURE_LISTED_SNAPSHOT, true);
+      expect([page.source, page.community, page.madeBy, page.summary]).toEqual([
+        "Community",
+        false,
+        null,
+        null,
+      ]);
+    }
+    for (const catalog of [CATALOG_LISTED, CATALOG_FIXTURES.ready, null]) {
+      const page = pluginPage(kanban, catalog, PLUGINS_FIXTURE_LISTED_SNAPSHOT, true);
+      expect(JSON.stringify(page)).not.toContain("Someone Else");
+    }
+  });
+
+  it("says a plugin's own power by its declaring plugin's words, and one named by a plugin not installed here", () => {
+    const kanban = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban");
+    const page = pluginPage(kanban, CATALOG_LISTED, PLUGINS_FIXTURE_LISTED_SNAPSHOT, true);
+    expect(page.adds.map((line) => line.words)).toEqual(["Board", "Card", "Tools for your agents"]);
+    expect(page.powers).toEqual([
+      { key: "canvas.write", words: "Change what's on the desk", under: null, whose: null },
+      {
+        key: "x.acme.kanban.sync",
+        words: "Keep your boards in step",
+        under: "Copies a board's cards to the boards you share.",
+        whose: "A power of its own, named by Kanban",
+      },
+    ]);
+    // another plugin holding Kanban's power: whose it is, named
+    const pad = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.comment-pad");
+    const borrower = { ...pad, grantedCapabilities: ["x.acme.kanban.sync"] };
+    const lent = pluginPage(borrower, null, PLUGINS_FIXTURE_LISTED_SNAPSHOT, true);
+    expect(lent.powers.map((power) => power.whose)).toEqual(["A power Kanban names"]);
+    // with Kanban not installed, the power has no words of its own to say, and no id is shown
+    const alone = pluginPage(borrower, null, PLUGINS_FIXTURE_SNAPSHOT, true);
+    expect(alone.powers).toEqual([
+      { key: "x.acme.kanban.sync", words: words.PAGE_WORDS.ownUnknown, under: null, whose: null },
+    ]);
+    // what the page says of it never names its id
+    const said = alone.powers.flatMap((power) => [power.words, power.under, power.whose]);
+    expect(said.join(" ")).not.toContain("x.acme");
+  });
+
+  it("says when it holds no power, what it adds with no object, and no maker for Development or Sideloaded", () => {
+    const pad = pluginPage(
+      recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.comment-pad"),
+      null,
+      PLUGINS_FIXTURE_SNAPSHOT,
+      true,
+    );
+    expect([pad.powers, pad.nothing]).toEqual([[], words.PAGE_WORDS.nothing]);
+    // a held power this build cannot name is not said, and the page does not say it holds none
+    const unnamed = {
+      ...recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.comment-pad"),
+      grantedCapabilities: ["made.up"],
+    };
+    const odd = pluginPage(unnamed, null, PLUGINS_FIXTURE_SNAPSHOT, true);
+    expect([odd.powers, odd.nothing]).toEqual([[], null]);
+    const store = pluginPage(
+      recordOf(PLUGINS_FIXTURE_SNAPSHOT, "example.kv-service"),
+      null,
+      PLUGINS_FIXTURE_SNAPSHOT,
+      true,
+    );
+    expect(store.adds).toEqual([{ key: "service", words: words.PAGE_WORDS.service }]);
+    expect([store.nothing, store.madeBy, store.source]).toEqual([
+      words.PAGE_WORDS.nothingNoObject,
+      null,
+      "Sideloaded",
+    ]);
+    const clock = pluginPage(
+      recordOf(PLUGINS_FIXTURE_SNAPSHOT, "example.desk-clock"),
+      null,
+      PLUGINS_FIXTURE_SNAPSHOT,
+      true,
+    );
+    expect([clock.madeBy, clock.source, clock.version]).toEqual([null, "Development", "0.3.0"]);
+    const bare = {
+      ...recordOf(PLUGINS_FIXTURE_SNAPSHOT, "example.kv-service"),
+      service: "none" as const,
+    };
+    expect(pluginPage(bare, null, PLUGINS_FIXTURE_SNAPSHOT, true).adds).toEqual([
+      { key: "none", words: "No objects" },
+    ]);
+  });
+
+  it("calls tools what a plugin brings your agents, never its commands — on Installed's row and its page alike (VF-PM 16:05:52Z)", () => {
+    const base = {
+      ...recordOf(PLUGINS_FIXTURE_SNAPSHOT, "example.kv-service"),
+      service: "none" as const,
+    };
+    const contributions = base.contributions;
+    const command = { id: "acme.do", title: "Do it", placements: [] };
+    const commandsOnly: PluginRecord = {
+      ...base,
+      contributions: {
+        ...contributions,
+        commands: [command] as unknown as PluginRecord["contributions"]["commands"],
+      },
+    };
+    const tool = { name: "do_it", title: "Do it", description: "Does it.", method: "do.it" };
+    const withTools: PluginRecord = {
+      ...base,
+      contributions: { ...contributions, mcp: { tools: [tool], servers: [] } },
+    };
+    const lineOf = (record: PluginRecord) =>
+      installedRows({ generation: 1, problems: [], plugins: [record] }, null)[0]?.line;
+    const adds = (record: PluginRecord) =>
+      pluginPage(record, null, PLUGINS_FIXTURE_SNAPSHOT, true).adds.map((line) => line.words);
+    expect([bringsTools(commandsOnly), lineOf(commandsOnly), adds(commandsOnly)]).toEqual([
+      false,
+      "No objects",
+      ["No objects"],
+    ]);
+    expect([bringsTools(withTools), lineOf(withTools), adds(withTools)]).toEqual([
+      true,
+      "No objects · tools",
+      [words.PAGE_WORDS.tools],
+    ]);
+  });
+
+  it("walks Installed's hot row one step, held at the first row and the last", () => {
+    expect(walkHot(0, "ArrowDown", 4)).toBe(1);
+    expect(walkHot(3, "ArrowDown", 4)).toBe(3);
+    expect(walkHot(1, "ArrowUp", 4)).toBe(0);
+    expect(walkHot(0, "ArrowUp", 4)).toBe(0);
+    expect(walkHot(0, "ArrowDown", 0)).toBe(0);
+  });
+});
+
 /** Every function the words module exports, at any depth, called with sample
  * arguments: a word built by a function is read as it is said. A function
  * with no samples here is a red that names it (VF-PM 2026-11-11 12:21:20Z). */
@@ -269,6 +457,7 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
     [PLUGINS_FIXTURE_READ_AT, PLUGINS_FIXTURE_NOW + 7 * 24 * 60 * 60_000],
   ],
   updatesWords: [[0], [1], [2]],
+  "PAGE_WORDS.back": [["Installed"]],
 };
 
 /** The strings a value says: strings as they are, objects and arrays by their

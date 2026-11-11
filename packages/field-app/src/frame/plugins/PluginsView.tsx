@@ -4,6 +4,7 @@ import type { KeyboardEvent, ReactElement, ReactNode, RefObject } from "react";
 import type {
   FootSentence,
   InstalledRow,
+  PluginPage,
   PluginsLayout,
   PluginsTab,
   ShelfState,
@@ -12,6 +13,7 @@ import { PLUGINS_TABS } from "./plugins-model";
 import {
   NO_REGISTRY,
   noMatchWords,
+  PAGE_WORDS,
   PLUGINS_AWAY,
   PLUGINS_CLOSE,
   PLUGINS_NAME,
@@ -30,7 +32,10 @@ import "./plugins.css";
 // under it), the body, which scrolls, and the foot (one sentence, and the act
 // with ↵ printed on it). Its numbers are §8's, in `plugins.css`; its words are
 // `plugins-words.ts`'s. The view holds no state: the controller (`Plugins.tsx`)
-// owns the read, the tab and the keyboard.
+// owns the read, the tab, the page, the hot row and the keyboard. MK-4c: each
+// of Installed's rows is a press that opens its page (the field keeps ↑ ↓ ↵, as
+// the Peek's does, so a row is no stop of Tab), a plugin's page reads only, and
+// Updates carries the Me row's count.
 
 export interface PluginsViewProps {
   open: boolean;
@@ -43,11 +48,21 @@ export interface PluginsViewProps {
   /** Installed's rows; null: the window holds no plugins yet */
   installed: readonly InstalledRow[] | null;
   installedFoot: string | null;
+  /** Installed's hot row */
+  hot: number;
+  /** The page shown in the body, and the tab it opened from; null: the tab's own body */
+  page: PluginPage | null;
+  pageFrom: PluginsTab;
+  /** Updates' count, the Me row's (null or 0: none) */
+  updates: number | null;
   inputRef: RefObject<HTMLInputElement | null>;
+  listRef: RefObject<HTMLUListElement | null>;
   onQuery: (query: string) => void;
   onTab: (tab: PluginsTab) => void;
   onClose: () => void;
   onShowInstalled: () => void;
+  onOpenPage: (id: string) => void;
+  onBack: () => void;
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
 }
 
@@ -78,47 +93,167 @@ function shelfBody(tab: "discover" | "updates", shelf: ShelfState): ReactNode {
   }
 }
 
-function InstalledList({ rows }: { rows: readonly InstalledRow[] }): ReactElement {
+function InstalledList({
+  rows,
+  hot,
+  listRef,
+  onOpen,
+}: {
+  rows: readonly InstalledRow[];
+  hot: number;
+  listRef: RefObject<HTMLUListElement | null>;
+  onOpen: (id: string) => void;
+}): ReactElement {
   return (
-    <ul className="vf-plugins-list" aria-label={PLUGINS_TAB_WORDS.installed}>
-      {rows.map((row) => (
-        <li key={row.id} className="vf-plugins-row">
-          <span className="vf-plugins-slot" aria-hidden="true">
-            <FieldGlyph name="plugin" size={16} />
-          </span>
-          <span className="vf-plugins-row-text">
-            <span className="vf-plugins-row-head">
-              <span className="vf-plugins-title">{row.title}</span>
-              <UiPill className="vf-plugins-source">{row.source}</UiPill>
-              {row.community && (
-                <UiPill className="vf-plugins-source">{SOURCE_WORDS.community}</UiPill>
-              )}
+    <ul ref={listRef} className="vf-plugins-list" aria-label={PLUGINS_TAB_WORDS.installed}>
+      {rows.map((row, index) => (
+        <li key={row.id}>
+          <button
+            type="button"
+            tabIndex={-1}
+            className="vf-plugins-row"
+            data-hot={index === hot ? "true" : undefined}
+            onClick={() => onOpen(row.id)}
+          >
+            <span className="vf-plugins-slot" aria-hidden="true">
+              <FieldGlyph name="plugin" size={16} />
             </span>
-            <span className="vf-plugins-line">{row.line}</span>
-          </span>
+            <span className="vf-plugins-row-text">
+              <span className="vf-plugins-row-head">
+                <span className="vf-plugins-title">{row.title}</span>
+                <UiPill className="vf-plugins-source">{row.source}</UiPill>
+                {row.community && (
+                  <UiPill className="vf-plugins-source">{SOURCE_WORDS.community}</UiPill>
+                )}
+              </span>
+              <span className="vf-plugins-line">{row.line}</span>
+            </span>
+            <FieldGlyph name="chevron" size={12} className="vf-plugins-chevron" />
+          </button>
         </li>
       ))}
     </ul>
   );
 }
 
+/** One section of a page: its head, then its lines. */
+function PageSection({ head, children }: { head: string; children: ReactNode }): ReactElement {
+  return (
+    <section className="vf-plugins-page-section">
+      <h3 className="vf-plugins-page-head">{head}</h3>
+      {children}
+    </section>
+  );
+}
+
+/** A plugin's page, read only (MK-4c; DESIGN.md §8 "Read only first"): its back
+ * row, then two columns — the plugin's own words and What it adds; its head,
+ * "Installed" where its act will stand (words, never a control), What it can do,
+ * Made by and Version. */
+function PageView({
+  page,
+  from,
+  onBack,
+}: {
+  page: PluginPage;
+  from: PluginsTab;
+  onBack: () => void;
+}): ReactElement {
+  return (
+    <div className="vf-plugins-page">
+      <button
+        type="button"
+        className="vf-plugins-back"
+        aria-label={PAGE_WORDS.back(PLUGINS_TAB_WORDS[from])}
+        onClick={onBack}
+      >
+        <FieldGlyph name="chevron" size={12} turn={180} />
+        {PLUGINS_TAB_WORDS[from]}
+      </button>
+      <div className="vf-plugins-page-columns">
+        <div className="vf-plugins-page-column">
+          {page.summary !== null && <p className="vf-plugins-page-words">{page.summary}</p>}
+          <PageSection head={PAGE_WORDS.adds}>
+            <ul className="vf-plugins-page-lines">
+              {page.adds.map((line) => (
+                <li key={line.key}>{line.words}</li>
+              ))}
+            </ul>
+          </PageSection>
+        </div>
+        <div className="vf-plugins-page-column" data-column="second">
+          <div className="vf-plugins-page-top">
+            <div className="vf-plugins-page-name">
+              <span className="vf-plugins-slot" aria-hidden="true">
+                <FieldGlyph name="plugin" size={16} />
+              </span>
+              <div className="vf-plugins-page-name-text">
+                <h2 className="vf-plugins-page-title">{page.title}</h2>
+                <span className="vf-plugins-page-pills">
+                  <UiPill className="vf-plugins-source">{page.source}</UiPill>
+                  {page.community && (
+                    <UiPill className="vf-plugins-source">{SOURCE_WORDS.community}</UiPill>
+                  )}
+                </span>
+              </div>
+            </div>
+            {/* where its act will stand: words, not a control (VF-PM 13:56:27Z, 4) */}
+            <p className="vf-plugins-page-act">{PAGE_WORDS.installed}</p>
+          </div>
+          <PageSection head={PAGE_WORDS.can}>
+            {page.nothing !== null ? (
+              <p className="vf-plugins-page-lines">{page.nothing}</p>
+            ) : (
+              <ul className="vf-plugins-page-lines">
+                {page.powers.map((power) => (
+                  <li key={power.key}>
+                    {power.words}
+                    {power.under !== null && (
+                      <span className="vf-plugins-page-under">{power.under}</span>
+                    )}
+                    {power.whose !== null && (
+                      <span className="vf-plugins-page-under">{power.whose}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </PageSection>
+          {page.madeBy !== null && (
+            <PageSection head={PAGE_WORDS.madeBy}>
+              <p className="vf-plugins-page-lines">{page.madeBy}</p>
+            </PageSection>
+          )}
+          <PageSection head={PAGE_WORDS.version}>
+            <p className="vf-plugins-page-lines">{page.version}</p>
+          </PageSection>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PluginsView(props: PluginsViewProps): ReactElement {
   const { open, layout, tab, query, shelf, foot, installed, installedFoot, inputRef } = props;
-  const { onQuery, onTab, onClose, onShowInstalled, onKeyDown } = props;
+  const { hot, page, pageFrom, updates, listRef } = props;
+  const { onQuery, onTab, onClose, onShowInstalled, onOpenPage, onBack, onKeyDown } = props;
   const body =
-    tab === "installed" ? (
+    page !== null ? (
+      <PageView page={page} from={pageFrom} onBack={onBack} />
+    ) : tab === "installed" ? (
       installed === null ? (
         <State title={READING_YOURS} />
       ) : installed.length === 0 && query.trim() !== "" ? (
         <State title={noMatchWords(query)} />
       ) : (
-        <InstalledList rows={installed} />
+        <InstalledList rows={installed} hot={hot} listRef={listRef} onOpen={onOpenPage} />
       )
     ) : (
       shelfBody(tab, shelf)
     );
   const said = tab === "installed" ? installedFoot : (foot?.words ?? null);
-  const act = tab === "discover" && shelf.kind === "unconfigured";
+  const act = page === null && tab === "discover" && shelf.kind === "unconfigured";
+  const count = updates !== null && updates > 0 ? updates : null;
   return (
     <div className="vf-plugins" data-open={open ? "true" : "false"}>
       {/* the scrim is a pointer's way out; Esc is the keyboard's */}
@@ -153,9 +288,17 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
                   type="button"
                   role="radio"
                   aria-checked={tab === which}
+                  aria-label={
+                    which === "updates" && count !== null
+                      ? `${PLUGINS_TAB_WORDS[which]} ${count}`
+                      : undefined
+                  }
                   onClick={() => onTab(which)}
                 >
                   {PLUGINS_TAB_WORDS[which]}
+                  {which === "updates" && count !== null && (
+                    <span className="vf-plugins-count">{count}</span>
+                  )}
                 </button>
               ))}
             </div>

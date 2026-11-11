@@ -3,7 +3,10 @@ import type { FrameSurface } from "../frame/frame-surface";
 import { Plugins } from "../frame/plugins/Plugins";
 import type { PluginsTab } from "../frame/plugins/plugins-model";
 import {
+  CATALOG_COUNTED,
   CATALOG_FIXTURES,
+  CATALOG_LISTED,
+  PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_SNAPSHOT,
   type PluginsFixtureRead,
@@ -17,7 +20,8 @@ import {
 // size of the default window, one plate per state of the read. The plate is
 // the window: the scrim and the popup are drawn in it. No plate binds a key on
 // the page and none takes its focus; a click on its scrim folds it, as the
-// product's does.
+// product's does. MK-4c adds a plugin's page, read only — a Built in one, and
+// a community one the list held names — and Updates carrying a count.
 
 export type PluginsPlateState =
   | "no-registry"
@@ -26,7 +30,10 @@ export type PluginsPlateState =
   | "offline"
   | "refused"
   | "held"
-  | "away";
+  | "away"
+  | "page"
+  | "page-listed"
+  | "count";
 
 const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   "no-registry": {
@@ -39,25 +46,44 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   refused: { catalog: CATALOG_FIXTURES.refused, refresh: CATALOG_FIXTURES.refused },
   held: { catalog: CATALOG_FIXTURES.ready, refresh: CATALOG_FIXTURES.ready },
   away: { catalog: "fails", refresh: "fails" },
+  page: { catalog: CATALOG_FIXTURES.unconfigured, refresh: CATALOG_FIXTURES.unconfigured },
+  "page-listed": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
+  count: { catalog: CATALOG_COUNTED, refresh: CATALOG_COUNTED },
 };
+
+/** The page a plate opens on, from Installed. */
+const PLATE_PAGES: Readonly<Partial<Record<PluginsPlateState, string>>> = {
+  page: "vibefield.simulator",
+  "page-listed": "acme.kanban",
+};
+
+function plateTab(state: PluginsPlateState): PluginsTab {
+  if (state === "count") return "updates";
+  return state === "installed" || state in PLATE_PAGES ? "installed" : "discover";
+}
 
 export function PluginsPlate({ state }: { state: PluginsPlateState }): ReactElement {
   const [surface, setSurface] = useState<FrameSurface | null>("plugins");
   const [plate, setPlate] = useState<HTMLDivElement | null>(null);
   const [port] = useState(() => pluginsFixturePort(PLATE_READS[state]));
   const now = useCallback(() => PLUGINS_FIXTURE_NOW, []);
-  const tab: PluginsTab = state === "installed" ? "installed" : "discover";
+  const tab = plateTab(state);
   return (
     <div ref={setPlate} className="vf-ds-history-plate" data-state={`plugins-${state}`}>
       <Plugins
         surface={surface}
         onSurfaceChange={setSurface}
         port={port}
-        snapshot={PLUGINS_FIXTURE_SNAPSHOT}
+        snapshot={
+          state === "page-listed" ? PLUGINS_FIXTURE_LISTED_SNAPSHOT : PLUGINS_FIXTURE_SNAPSHOT
+        }
         bindKeys={false}
         container={plate}
         takeFocus={false}
         initialTab={tab}
+        initialPage={PLATE_PAGES[state] ?? null}
+        updates={state === "count" ? CATALOG_COUNTED.updates : null}
+        onMac
         now={now}
       />
     </div>

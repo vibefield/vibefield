@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { PluginRegistrySnapshot, PluginsCatalog } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
@@ -7,6 +10,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CATALOG_FIXTURES,
+  CATALOG_LISTED,
+  PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_READ_AT,
   PLUGINS_FIXTURE_SNAPSHOT,
@@ -25,6 +30,7 @@ import * as words from "../src/frame/plugins/plugins-words";
 // re-render (MK-D5; one audit row per opening, `plugin.catalog.refresh`); Esc and the scrim fold it; the keyboard
 // goes to its field and back; every state is said, never a blank. MK-4b adds the Me row's count (every answer the
 // popup takes, and the window's one ask, over a fixture client in a FielddProvider) and the tab a door opens it on.
+// MK-4c adds a plugin's page, read only (it asks fieldd nothing), Installed's hot row and Updates' count.
 // No real fieldd, no network, no child.
 
 let host: HTMLDivElement;
@@ -67,10 +73,12 @@ function Window({
   port,
   snapshot,
   open,
+  updates = null,
 }: {
   port: PluginsPort;
   snapshot: PluginRegistrySnapshot | null;
   open: boolean;
+  updates?: number | null;
 }): ReactElement {
   const [surface, set] = useState<FrameSurface | null>(open ? "plugins" : null);
   setSurface = set;
@@ -84,6 +92,7 @@ function Window({
         onSurfaceChange={set}
         port={port}
         snapshot={snapshot}
+        updates={updates}
         now={() => PLUGINS_FIXTURE_NOW}
       />
     </>
@@ -490,5 +499,217 @@ describe("the frame's popup: its doors' tab and the window's one ask (MK-4b)", (
     act(() => root.render(<FrameWindow client={client} surface="plugins" openOn="discover" />));
     await settle();
     expect(chosen()).toBe(words.PLUGINS_TAB_WORDS.discover);
+  });
+});
+
+/** The switch's part that says `words`. */
+const part = (words_: string): HTMLButtonElement | null =>
+  [...document.body.querySelectorAll<HTMLButtonElement>(".vf-plugins-seg button")].find((button) =>
+    button.textContent?.startsWith(words_),
+  ) ?? null;
+const field = (): HTMLInputElement | null =>
+  document.body.querySelector<HTMLInputElement>(".vf-plugins-field input");
+/** A key pressed in the field, as a person types it. */
+const press = (key: string): void =>
+  act(() => {
+    field()?.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+  });
+const esc = (): void =>
+  act(() => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+const rows = (): HTMLButtonElement[] => [
+  ...document.body.querySelectorAll<HTMLButtonElement>(".vf-plugins-row"),
+];
+const pageTitle = (): string | null =>
+  document.body.querySelector(".vf-plugins-page-title")?.textContent ?? null;
+const hotTitle = (): string | null =>
+  document.body.querySelector('.vf-plugins-row[data-hot="true"] .vf-plugins-title')?.textContent ??
+  null;
+const toInstalled = (): void => act(() => part(words.PLUGINS_TAB_WORDS.installed)?.click());
+
+describe("a plugin's page, read only (MK-4c; §8 'Read only first')", () => {
+  it("opens a row's page on a press, asking fieldd nothing; its back row and Esc go back, and Esc then folds", async () => {
+    const { port, calls } = counting(pluginsFixturePort(NO_REGISTRY));
+    await mount(port);
+    toInstalled();
+    // Comment pad, then Simulators: Built in first, then by title
+    act(() => rows()[1]?.click());
+    expect(pageTitle()).toBe("Simulators");
+    expect(bodyText()).toContain(words.PAGE_WORDS.builtIn);
+    expect(bodyText()).toContain("Read what's on the desk");
+    expect(bodyText()).toContain("Apple Watch");
+    const back = document.body.querySelector<HTMLButtonElement>(".vf-plugins-back");
+    expect(back?.getAttribute("aria-label")).toBe(words.PAGE_WORDS.back("Installed"));
+    act(() => back?.click());
+    expect(pageTitle()).toBeNull();
+    expect(chosen()).toBe(words.PLUGINS_TAB_WORDS.installed);
+    act(() => rows()[0]?.click());
+    expect(pageTitle()).toBe("Comment pad");
+    esc();
+    expect(pageTitle()).toBeNull();
+    expect(pop()).not.toBeNull();
+    esc();
+    expect(pop()).toBeNull();
+    // the opening's one catalog and one refresh, and nothing for any page (VF-PM 13:56:27Z, 1)
+    expect(calls).toEqual({ catalog: 1, refresh: 1 });
+  });
+
+  it("walks Installed's hot row with ↑ ↓ from the field, keeps it in sight, and ↵ opens its page", async () => {
+    const seen: { row: Element; options: unknown }[] = [];
+    const before = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value(this: HTMLElement, options: unknown) {
+        seen.push({ row: this, options });
+      },
+    });
+    try {
+      await mount(NO_REGISTRY);
+      toInstalled();
+      expect(hotTitle()).toBe("Comment pad");
+      press("ArrowDown");
+      expect(hotTitle()).toBe("Simulators");
+      const last = seen.at(-1);
+      expect(last?.row.querySelector(".vf-plugins-title")?.textContent).toBe("Simulators");
+      expect(last?.options).toEqual({ block: "nearest" });
+      for (let i = 0; i < 5; i += 1) press("ArrowDown");
+      expect(hotTitle()).toBe("Key-value store");
+      press("ArrowUp");
+      expect(hotTitle()).toBe("Desk clock");
+      press("Enter");
+      expect(pageTitle()).toBe("Desk clock");
+      // back on the list, the hot row is where it was
+      esc();
+      expect(hotTitle()).toBe("Desk clock");
+    } finally {
+      if (before === undefined) {
+        Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+      } else {
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", before);
+      }
+    }
+  });
+
+  it("says Installed where its act will stand as words: no button, no fill, no stop of Tab, never in the walk", async () => {
+    await mount(NO_REGISTRY);
+    toInstalled();
+    act(() => rows()[1]?.click());
+    const said = document.body.querySelector(".vf-plugins-page-act");
+    expect(said?.tagName).toBe("P");
+    expect(said?.textContent).toBe(words.PAGE_WORDS.installed);
+    expect(said?.closest("button")).toBeNull();
+    expect(said?.querySelector("button, [tabindex]")).toBeNull();
+    expect(said?.hasAttribute("tabindex")).toBe(false);
+    // the page's one control is its back row
+    const controls = [
+      ...document.body.querySelectorAll(".vf-plugins-page button, .vf-plugins-page [tabindex]"),
+    ];
+    expect(controls.map((node) => node.className)).toEqual(["vf-plugins-back"]);
+    // ↑ ↓ and ↵ on a page walk nothing and press nothing
+    press("ArrowDown");
+    press("Enter");
+    expect(pageTitle()).toBe("Simulators");
+    expect(document.body.querySelector('[data-hot="true"]')).toBeNull();
+    // no fill: its rule draws no ground, and nothing of it answers the pointer
+    const css = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/frame/plugins/plugins.css"),
+      "utf8",
+    );
+    const rule = /\.vf-plugins-page-act \{([^}]*)\}/u.exec(css)?.[1] ?? "";
+    expect(rule).toContain("color: var(--vf-text-tertiary)");
+    expect(rule).not.toMatch(/background|cursor/u);
+    expect(css).not.toMatch(/\.vf-plugins-page-act[^{,]*:(?:hover|focus)/u);
+  });
+
+  it("leaves a page for a tab pressed on it, and for words typed on it, back to its list, filtered", async () => {
+    await mount(NO_REGISTRY);
+    toInstalled();
+    act(() => rows()[1]?.click());
+    act(() => part(words.PLUGINS_TAB_WORDS.discover)?.click());
+    expect(pageTitle()).toBeNull();
+    expect(chosen()).toBe(words.PLUGINS_TAB_WORDS.discover);
+    toInstalled();
+    act(() => rows()[1]?.click());
+    const input = field();
+    act(() => {
+      if (input === null) return;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        input,
+        "clock",
+      );
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(pageTitle()).toBeNull();
+    expect(chosen()).toBe(words.PLUGINS_TAB_WORDS.installed);
+    const titles = [...document.body.querySelectorAll(".vf-plugins-title")].map(
+      (n) => n.textContent,
+    );
+    expect(titles).toEqual(["Desk clock"]);
+  });
+
+  it("names a listed community plugin's maker from the list held, never its folder's copy", async () => {
+    await mount(
+      { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
+      PLUGINS_FIXTURE_LISTED_SNAPSHOT,
+    );
+    toInstalled();
+    const kanban = rows().find((row) => row.textContent?.includes("Kanban"));
+    act(() => kanban?.click());
+    expect(pageTitle()).toBe("Kanban");
+    expect(bodyText()).toContain("Acme Tools");
+    expect(bodyText()).toContain("A board and its cards, for the work on your desk.");
+    expect(bodyText()).toContain(words.PAGE_WORDS.tools);
+    expect(bodyText()).toContain("A power of its own, named by Kanban");
+    expect(bodyText()).not.toContain("Someone Else");
+  });
+
+  it("carries the count on Updates, after its word, and none at 0 or with none given", async () => {
+    const counted = (): string | null =>
+      part(words.PLUGINS_TAB_WORDS.updates)?.querySelector(".vf-plugins-count")?.textContent ??
+      null;
+    act(() =>
+      root.render(
+        <Window
+          port={pluginsFixturePort(NO_REGISTRY)}
+          snapshot={PLUGINS_FIXTURE_SNAPSHOT}
+          open
+          updates={2}
+        />,
+      ),
+    );
+    await settle();
+    expect(counted()).toBe("2");
+    expect(part(words.PLUGINS_TAB_WORDS.updates)?.getAttribute("aria-label")).toBe("Updates 2");
+    for (const updates of [0, null]) {
+      act(() =>
+        root.render(
+          <Window
+            port={pluginsFixturePort(NO_REGISTRY)}
+            snapshot={PLUGINS_FIXTURE_SNAPSHOT}
+            open
+            updates={updates}
+          />,
+        ),
+      );
+      await settle();
+      expect(counted()).toBeNull();
+      expect(part(words.PLUGINS_TAB_WORDS.updates)?.hasAttribute("aria-label")).toBe(false);
+    }
+  });
+
+  it("carries the Me row's own count in the frame's popup (VF-PM's C1)", async () => {
+    resetPluginUpdates();
+    try {
+      const { client } = fielddAnswering(async () => found(2));
+      act(() => root.render(<FrameWindow client={client} surface="plugins" />));
+      await settle();
+      expect(getPluginUpdates()).toBe(2);
+      expect(
+        part(words.PLUGINS_TAB_WORDS.updates)?.querySelector(".vf-plugins-count")?.textContent,
+      ).toBe("2");
+    } finally {
+      resetPluginUpdates();
+    }
   });
 });
