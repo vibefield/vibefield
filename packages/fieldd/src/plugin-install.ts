@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -64,6 +65,12 @@ export const COMMUNITY_SWITCH_CLOSED = "COMMUNITY_SWITCH_CLOSED";
 /** MK-2b (MK-D5): a registry host that does not answer is offline, never a hang. */
 export const REGISTRY_FETCH_TIMEOUT_MS = 20_000;
 
+/** MK-2e (2026-11-11; MK-E9, B1): one listing picture's read. Its bytes are not checked here: the catalog hashes them
+ * against the pin (`plugin-catalog.ts`). */
+export type ListingFileRead =
+  | { ok: true; bytes: Buffer }
+  | { ok: false; reason: "size" | "unreachable" };
+
 /** MK-2b (L1): the carriers a parse may catch to undefined, by where they sit. */
 const ENTRY_CARRIERS = ["rung", "listing"] as const;
 
@@ -86,6 +93,32 @@ export interface PreparedRegistryInstall {
 
 const sha256hex = (bytes: Buffer): string =>
   `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+
+/** MK-2e: an index-relative path as URL segments, each percent-encoded. */
+const encodePath = (path: string): string => path.split("/").map(encodeURIComponent).join("/");
+
+/** MK-2e: a regular file's bytes, at most `maxBytes`, opened without following a link at its last component. The
+ * size is read from the open handle, and the read stops one byte past it: a file that grew while it was read is
+ * refused (past the cap, `size`; under it, `unreachable`), never read on. */
+export async function readFileCapped(file: string, maxBytes: number): Promise<ListingFileRead> {
+  const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) return { ok: false, reason: "unreachable" };
+    if (stat.size > maxBytes) return { ok: false, reason: "size" };
+    const buffer = Buffer.alloc(stat.size + 1);
+    let total = 0;
+    while (total < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, total, buffer.length - total, null);
+      if (bytesRead === 0) break;
+      total += bytesRead;
+    }
+    if (total > stat.size) return { ok: false, reason: total > maxBytes ? "size" : "unreachable" };
+    return { ok: true, bytes: buffer.subarray(0, total) };
+  } finally {
+    await handle.close();
+  }
+}
 
 /** minimal semver compare for update checks (a.b.c only — prerelease tags
  * compare as strings, honestly crude until a real semver lands) */
@@ -520,6 +553,75 @@ export class RegistryInstallService {
         });
     }
     return { checkedAt: Date.now(), updates, missing };
+  }
+
+  /** MK-2e (2026-11-11; MK-E9, B1; VF-PM 11:00:56Z): one listing picture, read at most `maxBytes`.
+   * - The path is index-relative (`ListingPath` refused a scheme, "..", and an absolute path) and resolves against
+   *   the index's base, so the URL keeps the index's scheme: an http(s) index never reads a file. On a URL index each
+   *   segment is percent-encoded, so an encoded dot never becomes a segment.
+   * - The cap holds while reading on both arms: http(s) counts the stream; a file opens without following a link at
+   *   its last component and reads at most the cap.
+   * - Redirects are followed as an artifact's are. The index's timeout bounds it, and `signal` (the catalog's
+   *   budget) ends it sooner; the timer is cleared however it ends. */
+  async fetchListingFile(
+    indexRef: string,
+    path: string,
+    opts: { maxBytes: number; signal?: AbortSignal },
+  ): Promise<ListingFileRead> {
+    const timeoutMs = this.cfg.fetchTimeoutMs ?? REGISTRY_FETCH_TIMEOUT_MS;
+    const timeout = new AbortController();
+    const timer = setTimeout(
+      () => timeout.abort(new Error(`no answer in ${timeoutMs} ms`)),
+      timeoutMs,
+    );
+    const signal =
+      opts.signal !== undefined ? AbortSignal.any([timeout.signal, opts.signal]) : timeout.signal;
+    const base = indexRef.slice(0, indexRef.lastIndexOf("/") + 1);
+    try {
+      if (/^https?:\/\//.test(indexRef))
+        return await this.readListingHttp(`${base}${encodePath(path)}`, opts.maxBytes, signal);
+      const file = /^file:\/\//.test(indexRef)
+        ? fileURLToPath(`${base}${encodePath(path)}`)
+        : fileURLToPath(pathToFileURL(`${base}${path}`).href);
+      return await readFileCapped(file, opts.maxBytes);
+    } catch {
+      return { ok: false, reason: "unreachable" };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async readListingHttp(
+    url: string,
+    maxBytes: number,
+    signal: AbortSignal,
+  ): Promise<ListingFileRead> {
+    const fetcher = this.cfg.fetchImpl ?? fetch;
+    const res = await fetcher(url, { redirect: "follow", signal });
+    if (!res.ok) {
+      await res.body?.cancel().catch(() => undefined);
+      return { ok: false, reason: "unreachable" };
+    }
+    const declared = Number(res.headers.get("content-length") ?? 0);
+    if (declared > maxBytes) {
+      await res.body?.cancel().catch(() => undefined);
+      return { ok: false, reason: "size" };
+    }
+    if (res.body === null) return { ok: true, bytes: Buffer.alloc(0) };
+    const reader = res.body.getReader();
+    const chunks: Buffer[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return { ok: false, reason: "size" };
+      }
+      chunks.push(Buffer.from(value));
+    }
+    return { ok: true, bytes: Buffer.concat(chunks, total) };
   }
 
   private resolveArtifactUrl(indexRef: string, release: RegistryRelease): string {

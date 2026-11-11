@@ -1,11 +1,14 @@
+import { createHash, randomBytes } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { rename } from "node:fs/promises";
@@ -102,6 +105,8 @@ function make(opts: {
   installed?: Array<{ id: string; version: string; source: string }>;
   now?: () => number;
   rename?: typeof rename;
+  /** MK-2e: the phase's budget and the two caps, the tests' seams */
+  pictures?: { budgetMs?: number; fileMaxBytes?: number; cacheMaxBytes?: number };
 }): Made {
   const logs: CapturedLog[] = [];
   const logger = captureLogger(logs);
@@ -127,6 +132,7 @@ function make(opts: {
     logger,
     ...(opts.now !== undefined ? { now: opts.now } : {}),
     ...(opts.rename !== undefined ? { rename: opts.rename } : {}),
+    ...(opts.pictures !== undefined ? { pictures: opts.pictures } : {}),
   });
   return { catalog, logs };
 }
@@ -524,5 +530,508 @@ describe("the catalog doors (MK-2b)", () => {
     const written = JSON.stringify(lines);
     expect(written.includes(registry)).toBe(false);
     expect(written.includes(KEYS.publicKey)).toBe(false);
+  });
+});
+
+// MK-2e (2026-11-11; MK-E9, B1; `lanes/mk/mk2e/PLAN.md` v3) — the pictures the held list pins, kept in fieldd's folder.
+// Every picture here is the test's own: bytes it makes, beside an index it signs with its own key, in its own temp
+// root (file://), or served by an injected fetch for `https://registry.test`. No network, no real data dir, no child.
+describe("the pictures the held list pins (MK-2e)", () => {
+  const hexOf = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
+  const pinned = (path: string, bytes: Buffer) => ({ path, sha256: `sha256:${hexOf(bytes)}` });
+  const picturesDir = (dataDir: string) => join(heldDir(dataDir), "pictures");
+  const refusals = (logs: CapturedLog[]) =>
+    logs.filter((l) => l.event === "fieldd.plugin_catalog.picture_refused").map((l) => l.attrs);
+  const prunes = (logs: CapturedLog[]) =>
+    logs.filter((l) => l.event === "fieldd.plugin_catalog.pictures_pruned").map((l) => l.attrs);
+
+  /** The test's index with the simulator's listing given, and any other entry's listing beside it. */
+  function listed(
+    generatedAt: number,
+    listing: Record<string, unknown>,
+    others: Record<string, Record<string, unknown>> = {},
+  ): Record<string, unknown> {
+    const body = index(generatedAt);
+    const plugins = body.plugins as Record<string, Record<string, unknown>>;
+    plugins["vibefield.simulator"]!.listing = { title: "Simulators", ...listing };
+    for (const [id, extra] of Object.entries(others))
+      plugins[id]!.listing = { title: "Burndown", ...extra };
+    return body;
+  }
+
+  /** Picture files the test writes beside its own index. */
+  function place(registry: string, files: Record<string, Buffer>): void {
+    for (const [path, bytes] of Object.entries(files)) {
+      mkdirSync(join(registry, path, ".."), { recursive: true });
+      writeFileSync(join(registry, path), bytes);
+    }
+  }
+
+  /** An https registry the test serves through an injected fetch; `asked` is every URL fetched, in order. */
+  function served(body: Record<string, unknown>, files: Record<string, Buffer>) {
+    const bytes = Buffer.from(JSON.stringify(body), "utf8");
+    const table: Record<string, Buffer> = {
+      "https://registry.test/index.json": bytes,
+      "https://registry.test/index.json.sig": Buffer.from(signRegistryIndex(bytes, KEYS.secretKey)),
+    };
+    for (const [path, file] of Object.entries(files)) table[`https://registry.test/${path}`] = file;
+    const asked: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      asked.push(url);
+      const file = table[url];
+      return file === undefined
+        ? new Response(null, { status: 404 })
+        : new Response(new Uint8Array(file));
+    }) as unknown as typeof fetch;
+    const pictures = () => asked.filter((u) => !u.includes("/index.json"));
+    return { fetchImpl, asked, pictures };
+  }
+
+  it("keeps each pinned picture under its pin's hex, the same bytes, mode 0o600, one file per pin", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const registry = tempDir("vf-registry-");
+    const icon = randomBytes(40);
+    const day = randomBytes(50);
+    const night = randomBytes(60);
+    const still = randomBytes(70);
+    place(registry, {
+      "pictures/icon.png": icon,
+      "pictures/day.png": day,
+      "pictures/night.png": night,
+      "pictures/still.png": still,
+    });
+    publish(
+      registry,
+      listed(1000, {
+        icon: pinned("pictures/icon.png", icon),
+        spread: {
+          day: pinned("pictures/day.png", day),
+          night: pinned("pictures/night.png", night),
+        },
+        objects: [
+          {
+            type: "phone",
+            label: "Phone",
+            category: "devices",
+            stills: {
+              day: pinned("pictures/still.png", still),
+              night: pinned("pictures/still.png", still),
+            },
+          },
+        ],
+      }),
+    );
+    const { catalog, logs } = make({ dataDir, registryUrl: urlOf(registry) });
+    expect((await catalog.refresh()).state).toBe("ready");
+    const all = [icon, day, night, still];
+    expect(readdirSync(picturesDir(dataDir)).sort()).toEqual(all.map(hexOf).sort());
+    for (const bytes of all) {
+      const file = join(picturesDir(dataDir), hexOf(bytes));
+      expect(readFileSync(file).equals(bytes)).toBe(true);
+      expect(statSync(file).mode & 0o777).toBe(0o600);
+    }
+    expect(refusals(logs)).toEqual([]);
+    expect(prunes(logs)).toEqual([]);
+  });
+
+  it("keeps no bytes that miss their pin, and says so once by id, field and reason; the list stays ready", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const registry = tempDir("vf-registry-");
+    const promised = randomBytes(32);
+    place(registry, { "pictures/icon.png": randomBytes(32) });
+    publish(registry, listed(1000, { icon: pinned("pictures/icon.png", promised) }));
+    const { catalog, logs } = make({ dataDir, registryUrl: urlOf(registry) });
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(readdirSync(picturesDir(dataDir))).toEqual([]);
+    expect(refusals(logs)).toEqual([
+      { pluginId: "vibefield.simulator", field: "icon", reason: "pin" },
+    ]);
+  });
+
+  it("refuses a file past the cap while reading (size), says a missing one unreachable, keeps the rest", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const registry = tempDir("vf-registry-");
+    const big = randomBytes(65);
+    const fits = randomBytes(64);
+    place(registry, { "pictures/big.png": big, "pictures/fits.png": fits });
+    publish(
+      registry,
+      listed(1000, {
+        icon: pinned("pictures/big.png", big),
+        spread: {
+          day: pinned("pictures/gone.png", randomBytes(8)),
+          night: pinned("pictures/fits.png", fits),
+        },
+      }),
+    );
+    const { catalog, logs } = make({
+      dataDir,
+      registryUrl: urlOf(registry),
+      pictures: { fileMaxBytes: 64 },
+    });
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(readdirSync(picturesDir(dataDir))).toEqual([hexOf(fits)]);
+    const said = refusals(logs);
+    expect(said).toHaveLength(2);
+    expect(said).toEqual(
+      expect.arrayContaining([
+        { pluginId: "vibefield.simulator", field: "icon", reason: "size" },
+        { pluginId: "vibefield.simulator", field: "spread.day", reason: "unreachable" },
+      ]),
+    );
+  });
+
+  it("refuses an https picture past the cap while it streams", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const big = randomBytes(65);
+    const registry = served(listed(1000, { icon: pinned("pictures/big.png", big) }), {
+      "pictures/big.png": big,
+    });
+    const { catalog, logs } = make({
+      dataDir,
+      registryUrl: "https://registry.test/index.json",
+      fetchImpl: registry.fetchImpl,
+      pictures: { fileMaxBytes: 64 },
+    });
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(registry.pictures()).toEqual(["https://registry.test/pictures/big.png"]);
+    expect(readdirSync(picturesDir(dataDir))).toEqual([]);
+    expect(refusals(logs)).toEqual([
+      { pluginId: "vibefield.simulator", field: "icon", reason: "size" },
+    ]);
+  });
+
+  it("makes no fetch that could pass the folder's cap, and says the first one once (total)", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const files = [randomBytes(10), randomBytes(11), randomBytes(12), randomBytes(13)];
+    const registry = served(
+      listed(1000, {
+        icon: pinned("pictures/0.png", files[0]!),
+        spread: {
+          day: pinned("pictures/1.png", files[1]!),
+          night: pinned("pictures/2.png", files[2]!),
+        },
+        objects: [
+          {
+            type: "phone",
+            label: "Phone",
+            category: "devices",
+            stills: {
+              day: pinned("pictures/3.png", files[3]!),
+              night: pinned("pictures/3.png", files[3]!),
+            },
+          },
+        ],
+      }),
+      Object.fromEntries(files.map((bytes, i) => [`pictures/${i}.png`, bytes])),
+    );
+    // 100 bytes held back per fetch in flight against a cap of 250: two fetches fit, the third would pass it
+    const { catalog, logs } = make({
+      dataDir,
+      registryUrl: "https://registry.test/index.json",
+      fetchImpl: registry.fetchImpl,
+      pictures: { fileMaxBytes: 100, cacheMaxBytes: 250 },
+    });
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(registry.pictures()).toEqual([
+      "https://registry.test/pictures/0.png",
+      "https://registry.test/pictures/1.png",
+    ]);
+    expect(readdirSync(picturesDir(dataDir)).sort()).toEqual(
+      [files[0]!, files[1]!].map(hexOf).sort(),
+    );
+    expect(refusals(logs)).toEqual([
+      { pluginId: "vibefield.simulator", field: "spread.night", reason: "total" },
+    ]);
+  });
+
+  it("fetches one pin once, whichever entries name it", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const same = randomBytes(24);
+    const registry = served(
+      listed(
+        1000,
+        { icon: pinned("pictures/simulator.png", same) },
+        { "acme.burndown": { icon: pinned("pictures/burndown.png", same) } },
+      ),
+      { "pictures/simulator.png": same, "pictures/burndown.png": same },
+    );
+    const { catalog } = make({
+      dataDir,
+      registryUrl: "https://registry.test/index.json",
+      fetchImpl: registry.fetchImpl,
+    });
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(registry.pictures()).toEqual(["https://registry.test/pictures/simulator.png"]);
+    expect(readdirSync(picturesDir(dataDir))).toEqual([hexOf(same)]);
+  });
+
+  it("keeps an https index's scheme, and an encoded dot never becomes a segment", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const icon = randomBytes(24);
+    const registry = served(listed(1000, { icon: pinned("a/%2e%2e/icon.png", icon) }), {
+      "a/%252e%252e/icon.png": icon,
+    });
+    const { catalog } = make({
+      dataDir,
+      registryUrl: "https://registry.test/index.json",
+      fetchImpl: registry.fetchImpl,
+    });
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(registry.pictures()).toEqual(["https://registry.test/a/%252e%252e/icon.png"]);
+    expect(readFileSync(join(picturesDir(dataDir), hexOf(icon))).equals(icon)).toBe(true);
+  });
+
+  it("on a file index, an encoded dot is a name: the picture beside it is read, never the one above", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const registry = tempDir("vf-registry-");
+    const icon = randomBytes(24);
+    // the bytes an escape would reach, one folder up from `a/`, are not the pinned ones
+    place(registry, { "a/%2e%2e/icon.png": icon, "icon.png": randomBytes(24) });
+    publish(registry, listed(1000, { icon: pinned("a/%2e%2e/icon.png", icon) }));
+    const { catalog, logs } = make({ dataDir, registryUrl: urlOf(registry) });
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(readFileSync(join(picturesDir(dataDir), hexOf(icon))).equals(icon)).toBe(true);
+    expect(refusals(logs)).toEqual([]);
+  });
+
+  it("a refused, a rolled-back and an unreachable read fetch nothing and prune nothing", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const registry = tempDir("vf-registry-");
+    const icon = randomBytes(24);
+    place(registry, { "pictures/icon.png": icon });
+    publish(registry, listed(1000, { icon: pinned("pictures/icon.png", icon) }));
+    const first = make({ dataDir, registryUrl: urlOf(registry) });
+    expect((await first.catalog.refresh()).state).toBe("ready");
+    // a file the list does not pin: any phase would prune it
+    const stale = join(picturesDir(dataDir), hexOf(randomBytes(8)));
+    writeFileSync(stale, randomBytes(8));
+    const before = readdirSync(picturesDir(dataDir)).sort();
+    const reads: Array<[string, Made]> = [];
+    // refused: the same list signed by another key
+    const refusedAt = tempDir("vf-registry-");
+    place(refusedAt, { "pictures/icon.png": icon });
+    publish(
+      refusedAt,
+      listed(3000, { icon: pinned("pictures/icon.png", randomBytes(24)) }),
+      OTHER_KEYS,
+    );
+    reads.push(["refused", make({ dataDir, registryUrl: urlOf(refusedAt) })]);
+    // rolled back: a list older than the one held
+    const olderAt = tempDir("vf-registry-");
+    place(olderAt, { "pictures/icon.png": icon });
+    publish(olderAt, listed(500, { icon: pinned("pictures/icon.png", randomBytes(24)) }));
+    reads.push(["refused", make({ dataDir, registryUrl: urlOf(olderAt) })]);
+    // unreachable: no index at the place named
+    reads.push(["unreachable", make({ dataDir, registryUrl: urlOf(join(registry, "nowhere")) })]);
+    for (const [state, made] of reads) {
+      expect((await made.catalog.refresh()).state).toBe(state);
+      expect(readdirSync(picturesDir(dataDir)).sort()).toEqual(before);
+      expect(prunes(made.logs)).toEqual([]);
+      expect(refusals(made.logs)).toEqual([]);
+    }
+    expect(existsSync(stale)).toBe(true);
+  });
+
+  it("fetches again a cached file that no longer matches, and one past the cap without reading it", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const icon = randomBytes(24);
+    const day = randomBytes(24);
+    const registry = served(
+      listed(1000, {
+        icon: pinned("pictures/icon.png", icon),
+        spread: { day: pinned("pictures/day.png", day), night: pinned("pictures/icon.png", icon) },
+      }),
+      { "pictures/icon.png": icon, "pictures/day.png": day },
+    );
+    const { catalog } = make({
+      dataDir,
+      registryUrl: "https://registry.test/index.json",
+      fetchImpl: registry.fetchImpl,
+      pictures: { fileMaxBytes: 64 },
+    });
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(registry.pictures()).toHaveLength(2);
+    // one changed under the same size, one grown past the cap
+    writeFileSync(join(picturesDir(dataDir), hexOf(icon)), randomBytes(24));
+    writeFileSync(join(picturesDir(dataDir), hexOf(day)), randomBytes(65));
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(registry.pictures()).toHaveLength(4);
+    expect(readFileSync(join(picturesDir(dataDir), hexOf(icon))).equals(icon)).toBe(true);
+    expect(readFileSync(join(picturesDir(dataDir), hexOf(day))).equals(day)).toBe(true);
+    // a third read finds both matching and fetches nothing
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(registry.pictures()).toHaveLength(4);
+  });
+
+  it("never follows or removes what is not a regular file under a pin's name", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const linked = randomBytes(24);
+    const walled = randomBytes(24);
+    const registry = served(
+      listed(1000, {
+        icon: pinned("pictures/linked.png", linked),
+        spread: {
+          day: pinned("pictures/walled.png", walled),
+          night: pinned("pictures/linked.png", linked),
+        },
+      }),
+      { "pictures/linked.png": linked, "pictures/walled.png": walled },
+    );
+    const dir = picturesDir(dataDir);
+    mkdirSync(dir, { recursive: true });
+    // made in the test's own root, pointing only inside it
+    const target = join(dataDir, "target.bin");
+    const kept = randomBytes(24);
+    writeFileSync(target, kept);
+    symlinkSync(target, join(dir, hexOf(linked)));
+    mkdirSync(join(dir, hexOf(walled)));
+    const unpinnedLink = join(dir, hexOf(randomBytes(8)));
+    symlinkSync(target, unpinnedLink);
+    const unpinnedDir = join(dir, hexOf(randomBytes(8)));
+    mkdirSync(unpinnedDir);
+    const { catalog, logs } = make({
+      dataDir,
+      registryUrl: "https://registry.test/index.json",
+      fetchImpl: registry.fetchImpl,
+    });
+    expect((await catalog.refresh()).state).toBe("ready");
+    // the link read as absent: fetched, and the rename replaced the link, never its target
+    expect(lstatSync(join(dir, hexOf(linked))).isFile()).toBe(true);
+    expect(readFileSync(join(dir, hexOf(linked))).equals(linked)).toBe(true);
+    expect(readFileSync(target).equals(kept)).toBe(true);
+    // the directory stays, its pin refused, its temp file gone
+    expect(lstatSync(join(dir, hexOf(walled))).isDirectory()).toBe(true);
+    expect(refusals(logs)).toEqual([
+      { pluginId: "vibefield.simulator", field: "spread.day", reason: "cache" },
+    ]);
+    expect(readdirSync(dir).some((name) => name.includes(".tmp-"))).toBe(false);
+    // neither unpinned one was pruned
+    expect(lstatSync(unpinnedLink).isSymbolicLink()).toBe(true);
+    expect(lstatSync(unpinnedDir).isDirectory()).toBe(true);
+    expect(prunes(logs)).toEqual([]);
+  });
+
+  it("refuses a pictures folder that is not a directory, and fetches nothing", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const icon = randomBytes(24);
+    const registry = served(listed(1000, { icon: pinned("pictures/icon.png", icon) }), {
+      "pictures/icon.png": icon,
+    });
+    mkdirSync(heldDir(dataDir), { recursive: true });
+    writeFileSync(picturesDir(dataDir), "not a folder");
+    const { catalog, logs } = make({
+      dataDir,
+      registryUrl: "https://registry.test/index.json",
+      fetchImpl: registry.fetchImpl,
+    });
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(registry.pictures()).toEqual([]);
+    expect(refusals(logs)).toEqual([{ field: "pictures", reason: "cache" }]);
+    expect(readFileSync(picturesDir(dataDir), "utf8")).toBe("not a folder");
+  });
+
+  it("prunes, before it fetches, the pinned-name files a newer list drops, and says a count", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const registry = tempDir("vf-registry-");
+    const kept = randomBytes(24);
+    const dropped = randomBytes(24);
+    place(registry, { "pictures/kept.png": kept, "pictures/dropped.png": dropped });
+    publish(
+      registry,
+      listed(1000, {
+        icon: pinned("pictures/kept.png", kept),
+        spread: {
+          day: pinned("pictures/dropped.png", dropped),
+          night: pinned("pictures/kept.png", kept),
+        },
+      }),
+    );
+    const { catalog, logs } = make({ dataDir, registryUrl: urlOf(registry) });
+    expect((await catalog.refresh()).state).toBe("ready");
+    const dir = picturesDir(dataDir);
+    writeFileSync(join(dir, "notes.txt"), "the folder's other names stay");
+    writeFileSync(join(dir, hexOf(randomBytes(8)).toUpperCase()), "not lowercase hex");
+    publish(registry, listed(2000, { icon: pinned("pictures/kept.png", kept) }));
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(existsSync(join(dir, hexOf(kept)))).toBe(true);
+    expect(existsSync(join(dir, hexOf(dropped)))).toBe(false);
+    expect(existsSync(join(dir, "notes.txt"))).toBe(true);
+    expect(readdirSync(dir)).toHaveLength(3);
+    expect(prunes(logs)).toEqual([{ count: 1 }]);
+  });
+
+  it("ends the phase at its budget, unsaid, and the refresh answers ready", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const body = Buffer.from(
+      JSON.stringify(listed(1000, { icon: pinned("pictures/icon.png", randomBytes(24)) })),
+      "utf8",
+    );
+    const files: Record<string, Buffer> = {
+      "https://registry.test/index.json": body,
+      "https://registry.test/index.json.sig": Buffer.from(signRegistryIndex(body, KEYS.secretKey)),
+    };
+    let asked = 0;
+    const fetchImpl = ((url: string, init?: RequestInit) => {
+      const file = files[url];
+      if (file !== undefined) return Promise.resolve(new Response(new Uint8Array(file)));
+      asked += 1;
+      // a picture host that never answers: it ends only when its signal does
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init?.signal?.reason), { once: true });
+      });
+    }) as unknown as typeof fetch;
+    const { catalog, logs } = make({
+      dataDir,
+      registryUrl: "https://registry.test/index.json",
+      fetchImpl,
+      pictures: { budgetMs: 50 },
+    });
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(asked).toBe(1);
+    expect(readdirSync(picturesDir(dataDir))).toEqual([]);
+    expect(refusals(logs)).toEqual([]);
+  });
+
+  it("says reading while the phase runs, and ready once it ends", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const icon = randomBytes(24);
+    const body = Buffer.from(
+      JSON.stringify(listed(1000, { icon: pinned("pictures/icon.png", icon) })),
+      "utf8",
+    );
+    const files: Record<string, Buffer> = {
+      "https://registry.test/index.json": body,
+      "https://registry.test/index.json.sig": Buffer.from(signRegistryIndex(body, KEYS.secretKey)),
+    };
+    let open!: () => void;
+    const held = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    let pictureAsked = false;
+    const fetchImpl = (async (url: string) => {
+      const file = files[url];
+      if (file !== undefined) return new Response(new Uint8Array(file));
+      pictureAsked = true;
+      await held;
+      return new Response(new Uint8Array(icon));
+    }) as unknown as typeof fetch;
+    const { catalog } = make({
+      dataDir,
+      registryUrl: "https://registry.test/index.json",
+      fetchImpl,
+    });
+    const read = catalog.refresh();
+    cleanup.push(async () => {
+      open();
+      await read.catch(() => undefined);
+    });
+    await until(() => pictureAsked);
+    expect((await catalog.get()).state).toBe("reading");
+    open();
+    expect((await read).state).toBe("ready");
+    expect((await catalog.get()).state).toBe("ready");
+    expect(readFileSync(join(picturesDir(dataDir), hexOf(icon))).equals(icon)).toBe(true);
   });
 });

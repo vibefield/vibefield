@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readFile, rename, rm, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
   CONTRACTS_VERSION,
@@ -8,11 +8,18 @@ import {
   type PluginsCatalogState,
   type RegistryIndex,
   type RegistryListedAs,
+  type RegistryListingFile,
   registryListedAs,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "./native-link";
-import { type RegistryInstallService, semverNewer } from "./plugin-install";
+import {
+  type ListingFileRead,
+  REGISTRY_FETCH_TIMEOUT_MS,
+  type RegistryInstallService,
+  readFileCapped,
+  semverNewer,
+} from "./plugin-install";
 import { contractsRangeSatisfied, type PluginRegistryService } from "./plugin-registry";
 
 // PluginCatalogService (MK-2b; MK-D5, MK-E8; MK-2's custody note §1 G3 and its rollback addendum): the plugin
@@ -31,23 +38,62 @@ import { contractsRangeSatisfied, type PluginRegistryService } from "./plugin-re
 // write. The re-verify holds a rung or an entry to the signature; the rollback floor holds against the network, not
 // against that (custody note, addenda 2026-11-11). Nothing at load reads this list yet (`listedAsFor`, G3's read):
 // whether a community plugin still loads while the switch is off is James's.
+//
+// MK-2e (2026-11-11; MK-E9, B1; `lanes/mk/mk2e/PLAN.md` v3, VF-PM 11:00:56Z, 11:03:18Z): the pictures. After a read
+// ends ready, inside the person's refresh, the catalog keeps the pictures the held list pins in
+// `<dataDir>/plugins/catalog/pictures/<hex>`, one file per pin, and the refresh answers once that phase ends:
+//   - the folder is read by lstat (not a directory: refused, nothing fetched or pruned); then the prune, the count
+//     and the fetches, in that order;
+//   - only direct children that are REGULAR files named 64 lowercase hex are ever hashed or removed, each removal one
+//     unlink; anything else under such a name reads as absent and is never followed;
+//   - a cached file is kept only while its bytes (at most the per-file cap, read without following a link) hash to
+//     its pin; a fetched one is written only when they do, by a `wx` temp file (0o600), synced and renamed;
+//   - one budget for the phase, four fetches at a time, 512 a phase, 4 MiB a file, 256 MiB the folder;
+//   - a refusal is said once per pin and reason (`picture_refused`: the id, the field, the reason code).
+// Nothing serves the folder yet: main's serve is MK-4's (and its token side ob/ui's). What the folder does not hold:
+// it is under `<dataDir>`, which a process running as the same user can write; fieldd's hash holds a file at its
+// check, not after it (custody note, its fifth addendum).
 
 const CATALOG_DIR = ["plugins", "catalog"] as const;
 const HELD_FILE = "held.json";
 /** the catalog contract's own bound (`PluginsCatalog.plugins`) */
 const MAX_ENTRIES = 4096;
+/** MK-2e: the pictures' folder, under the catalog's (Q4: MK-4 decides its home when main reads it) */
+const PICTURES_DIR = "pictures";
+/** MK-2e: the most bytes one picture file may have */
+export const PICTURE_FILE_MAX_BYTES = 4 * 1024 * 1024;
+/** MK-2e (VF-PM 11:00:56Z, Q2): the most bytes the folder holds. A plausible list of 100 plugins is about 160 MiB
+ * (each an icon, a spread by day and night, four objects' stills: about 1.6 MiB). */
+export const PICTURE_CACHE_MAX_BYTES = 256 * 1024 * 1024;
+/** MK-2e: the most fetches one phase makes */
+export const PICTURE_FETCHES_MAX = 512;
+const PICTURE_FETCHES_AT_ONCE = 4;
+/** a cached picture's name: its pin's hex */
+const PIN_NAME = /^[0-9a-f]{64}$/;
+
+type PictureRefusal = "pin" | "size" | "unreachable" | "total" | "cache";
+
+/** One picture the held list pins, named by the first entry and field that pin it. */
+interface Picture {
+  hex: string;
+  pluginId: string;
+  field: string;
+  path: string;
+}
 
 export interface PluginCatalogConfig {
   dataDir: string;
   installer: Pick<
     RegistryInstallService,
-    "registryConfigured" | "fetchSignedIndex" | "verifyIndex" | "parseIndex"
+    "registryConfigured" | "fetchSignedIndex" | "verifyIndex" | "parseIndex" | "fetchListingFile"
   >;
   plugins: Pick<PluginRegistryService, "list">;
   logger?: Logger;
   now?: () => number;
   /** The tests' seam alone, to hold a write open between its temp file and its rename; daemon.ts never passes it. */
   rename?: typeof rename;
+  /** MK-2e: the tests' seams alone (daemon.ts never passes them): the phase's budget and the two caps. */
+  pictures?: { budgetMs?: number; fileMaxBytes?: number; cacheMaxBytes?: number };
 }
 
 interface HeldList {
@@ -72,6 +118,8 @@ export class PluginCatalogService {
    * is plugins.read, and a caller with it must not fill the log, so a refusal is said once per key (a restart says
    * it once more). */
   private lastRefusedHeld: { key: string; reason: HeldRefusal } | null = null;
+  /** MK-2e: the picture refusals said, `<hex>:<reason>`, in memory alone; kept to the held list's pins */
+  private readonly saidPictures = new Set<string>();
 
   constructor(private readonly cfg: PluginCatalogConfig) {
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "plugin.catalog" });
@@ -152,7 +200,158 @@ export class PluginCatalogService {
     const checkedAt = this.now();
     await this.writeHeld(signed.bytes, signed.signature, checkedAt);
     this.lastRead = "ready";
+    // MK-2e: the pictures this list pins, inside the person's read; `get` says reading until the phase ends
+    await this.picturesPhase(index, signed.indexRef);
     return this.answerFrom({ index, checkedAt }, "ready");
+  }
+
+  /** MK-2e (plan v3 §2): the folder's lstat, the prune, the count, the fetches. Runs only after a ready read. */
+  private async picturesPhase(index: RegistryIndex, indexRef: string): Promise<void> {
+    const pictures = picturesOf(index);
+    for (const key of this.saidPictures)
+      if (!pictures.has(key.slice(0, 64))) this.saidPictures.delete(key);
+    const dir = join(this.dir, PICTURES_DIR);
+    const fileMax = this.cfg.pictures?.fileMaxBytes ?? PICTURE_FILE_MAX_BYTES;
+    const cacheMax = this.cfg.pictures?.cacheMaxBytes ?? PICTURE_CACHE_MAX_BYTES;
+    // the folder, by lstat: anything but a directory is refused, and nothing is fetched or pruned. None, and a list
+    // that pins no picture, leaves it unmade: there is nothing to prune and nothing to keep
+    const before = await lstat(dir).then(
+      () => true,
+      (error: NodeJS.ErrnoException) => error.code !== "ENOENT",
+    );
+    if (!before && pictures.size === 0) return;
+    await mkdir(dir, { recursive: true }).catch(() => undefined);
+    const folder = await lstat(dir).catch(() => null);
+    const names = folder?.isDirectory() === true ? await readdir(dir).catch(() => null) : null;
+    if (names === null) {
+      this.log.warn(
+        "fieldd.plugin_catalog.picture_refused",
+        "The pictures folder could not be used; no picture was fetched",
+        { field: "pictures", reason: "cache" },
+      );
+      return;
+    }
+    // its direct children: only a regular file named 64 lowercase hex is ever hashed or removed
+    const present = new Map<string, number>();
+    for (const name of names) {
+      if (!PIN_NAME.test(name)) continue;
+      const stat = await lstat(join(dir, name)).catch(() => null);
+      if (stat?.isFile() === true) present.set(name, stat.size);
+    }
+    // the prune, before the count (VF-PM 11:03:18Z): the list is held, so a file it does not pin is stale
+    let pruned = 0;
+    for (const name of [...present.keys()]) {
+      if (pictures.has(name)) continue;
+      present.delete(name);
+      // one file each, never a recursive remove; one that cannot go is left for the next ready read
+      const gone = await unlink(join(dir, name)).then(
+        () => true,
+        () => false,
+      );
+      if (gone) pruned += 1;
+    }
+    if (pruned > 0)
+      this.log.info(
+        "fieldd.plugin_catalog.pictures_pruned",
+        "Pictures the plugin list no longer names were removed",
+        { count: pruned },
+      );
+    // the count: the bytes of the pinned files that still hash to their pins (a file past the cap is not read)
+    let total = 0;
+    const wanted: Picture[] = [];
+    for (const picture of pictures.values()) {
+      const size = present.get(picture.hex);
+      const kept =
+        size !== undefined && size <= fileMax
+          ? await cachedBytes(join(dir, picture.hex), picture.hex, fileMax)
+          : null;
+      if (kept !== null) total += kept;
+      else wanted.push(picture);
+    }
+    // the fetches: one budget, four at a time, 512 a phase, and the folder's cap with 4 MiB held per fetch in flight
+    const budget = new AbortController();
+    const timer = setTimeout(
+      () => budget.abort(new Error("the pictures' budget ended")),
+      this.cfg.pictures?.budgetMs ?? REGISTRY_FETCH_TIMEOUT_MS,
+    );
+    let next = 0;
+    let made = 0;
+    let inFlight = 0;
+    let full = false;
+    const fetchOne = async (): Promise<void> => {
+      while (!budget.signal.aborted && !full) {
+        const picture = wanted[next];
+        if (picture === undefined || made >= PICTURE_FETCHES_MAX) return;
+        next += 1;
+        if (total + (inFlight + 1) * fileMax > cacheMax) {
+          // the first fetch that would pass the cap is not made, and the phase makes no other: said once
+          full = true;
+          this.log.warn(
+            "fieldd.plugin_catalog.picture_refused",
+            "The pictures folder is full; the rest wait",
+            { pluginId: picture.pluginId, field: picture.field, reason: "total" },
+          );
+          return;
+        }
+        made += 1;
+        // the fetch's 4 MiB stay held until its bytes are counted or refused
+        inFlight += 1;
+        try {
+          await this.keepOne(dir, indexRef, picture, fileMax, budget.signal, (bytes) => {
+            total += bytes;
+          });
+        } finally {
+          inFlight -= 1;
+        }
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: PICTURE_FETCHES_AT_ONCE }, fetchOne));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** MK-2e: one picture fetched, checked against its pin and written; `kept` counts the bytes written. */
+  private async keepOne(
+    dir: string,
+    indexRef: string,
+    picture: Picture,
+    fileMax: number,
+    budget: AbortSignal,
+    kept: (bytes: number) => void,
+  ): Promise<void> {
+    const read: ListingFileRead = await this.cfg.installer.fetchListingFile(
+      indexRef,
+      picture.path,
+      {
+        maxBytes: fileMax,
+        signal: budget,
+      },
+    );
+    if (!read.ok) {
+      // what the budget ended waits for the next refresh, unsaid
+      if (!budget.aborted) this.pictureRefused(picture, read.reason);
+      return;
+    }
+    if (sha256Hex(read.bytes) !== picture.hex) {
+      this.pictureRefused(picture, "pin");
+      return;
+    }
+    if (await writePicture(dir, picture.hex, read.bytes)) kept(read.bytes.length);
+    else this.pictureRefused(picture, "cache");
+  }
+
+  /** Says a picture's refusal once per pin and reason, by its id, field and reason code alone (rule 22). */
+  private pictureRefused(picture: Picture, reason: PictureRefusal): void {
+    const key = `${picture.hex}:${reason}`;
+    if (this.saidPictures.has(key)) return;
+    this.saidPictures.add(key);
+    this.log.warn(
+      "fieldd.plugin_catalog.picture_refused",
+      "A listing picture was not kept; the plugin shows without it",
+      { pluginId: picture.pluginId, field: picture.field, reason },
+    );
   }
 
   private answerFrom(
@@ -292,6 +491,61 @@ function heldFile(
 
 function sha256Hex(raw: Buffer): string {
   return createHash("sha256").update(raw).digest("hex");
+}
+
+/** MK-2e: every picture the list's parsed listings pin, by pin, in the list's order: the icon, the spread by day and
+ * night, each object's stills by day and night. One pin named twice is one picture, named by its first naming. */
+function picturesOf(index: RegistryIndex): Map<string, Picture> {
+  const out = new Map<string, Picture>();
+  const add = (pluginId: string, field: string, file: RegistryListingFile | undefined): void => {
+    if (file === undefined) return;
+    const hex = file.sha256.slice("sha256:".length);
+    if (!out.has(hex)) out.set(hex, { hex, pluginId, field, path: file.path });
+  };
+  for (const entry of Object.values(index.plugins).slice(0, MAX_ENTRIES)) {
+    const listing = entry.listing;
+    if (listing === undefined) continue;
+    add(entry.id, "icon", listing.icon);
+    add(entry.id, "spread.day", listing.spread?.day);
+    add(entry.id, "spread.night", listing.spread?.night);
+    listing.objects.forEach((object, i) => {
+      add(entry.id, `objects.${i}.stills.day`, object.stills?.day);
+      add(entry.id, `objects.${i}.stills.night`, object.stills?.night);
+    });
+  }
+  return out;
+}
+
+/** MK-2e: a cached picture's size while its bytes still hash to its pin, else null. Read without following a link,
+ * at most the cap, re-checked on the open handle (`readFileCapped`). */
+async function cachedBytes(file: string, hex: string, maxBytes: number): Promise<number | null> {
+  try {
+    const read = await readFileCapped(file, maxBytes);
+    return read.ok && sha256Hex(read.bytes) === hex ? read.bytes.length : null;
+  } catch {
+    return null;
+  }
+}
+
+/** MK-2e: a picture's bytes, already matched to its pin, written as the held list is: a `wx` temp file (0o600, never an
+ * existing name), synced, renamed onto `<hex>`. A rename replaces a link's entry, never its target; one that cannot
+ * replace the entry (a directory) fails, and the temp file goes. */
+async function writePicture(dir: string, hex: string, bytes: Buffer): Promise<boolean> {
+  const temp = join(dir, `${hex}.tmp-${randomBytes(8).toString("hex")}`);
+  try {
+    const handle = await open(temp, "wx", 0o600);
+    try {
+      await handle.writeFile(bytes);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await rename(temp, join(dir, hex));
+    return true;
+  } catch {
+    await rm(temp, { force: true }).catch(() => undefined);
+    return false;
+  }
 }
 
 /** A state with no list shown and no time said. */
