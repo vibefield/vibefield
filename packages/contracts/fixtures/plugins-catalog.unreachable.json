@@ -1,0 +1,21 @@
+{
+  "state": "unreachable",
+  "checkedAt": 1762823100000,
+  "plugins": [
+    {
+      "id": "vibefield.simulator",
+      "listedAs": "vibefield",
+      "latest": {
+        "version": "1.2.0",
+        "artifactUrl": "artifacts/a-1.2.0.vfplugin",
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "minApp": "0.9.0",
+        "minContracts": "0.1.0",
+        "publishedAt": 1762819200000
+      },
+      "compatible": true
+    }
+  ],
+  "featured": [],
+  "updates": 0
+}

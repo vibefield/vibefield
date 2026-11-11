@@ -1678,6 +1678,23 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // MK-1 — the catalog door (MK-D5): get answers at once from the held list; refresh is the fresh signed read, on
+  // the person's act only, so it is plugins.manage like the updates check (§5.3.1: no timer, no push feed). No
+  // handler until MK-2: until then fieldd advertises these two rows and answers a call to either as unknown (-32601).
+  defineMethod({
+    surface: "product",
+    method: "plugins.catalog.get",
+    scope: "plugins.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.catalog.refresh",
+    scope: "plugins.manage",
+    idempotent: true,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "storage.settings.undo",

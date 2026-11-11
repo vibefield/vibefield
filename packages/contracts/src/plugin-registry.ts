@@ -210,6 +210,15 @@ export type PluginsReloadParams = z.infer<typeof PluginsReloadParams>;
 export const PluginsListResult: typeof PluginRegistrySnapshot = PluginRegistrySnapshot;
 export type PluginsListResult = z.infer<typeof PluginsListResult>;
 
+/** MK-1: what plugins.install answers today, as fieldd returns it (`daemon.ts`, the plugins.install handler): the
+ * installed plugin's record, flat, or `{ id }` alone when the record is not in the registry's snapshot yet. A wrapped
+ * shape would break the readers that take the record's fields at the top level. */
+export const PluginsInstallResult = z.union([
+  PluginRecord,
+  z.object({ id: PluginId }).passthrough(),
+]);
+export type PluginsInstallResult = z.infer<typeof PluginsInstallResult>;
+
 // --- P8b: approved plugin module URLs (ESP §8.4) ------------------------------
 //
 // §8.4 splits this surface in two, and the split is the security property:

@@ -1,0 +1,69 @@
+{
+  "state": "ready",
+  "checkedAt": 1762823100000,
+  "featured": ["vibefield.simulator"],
+  "updates": 1,
+  "plugins": [
+    {
+      "id": "vibefield.simulator",
+      "listedAs": "vibefield",
+      "latest": {
+        "version": "1.2.0",
+        "artifactUrl": "artifacts/a-1.2.0.vfplugin",
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "minApp": "0.9.0",
+        "minContracts": "0.1.0",
+        "publishedAt": 1762819200000
+      },
+      "compatible": true,
+      "listing": {
+        "title": "Simulators",
+        "summary": "An iPhone, an iPad and a Watch, live on your desk.",
+        "publisherName": "VibeField",
+        "icon": "listing/vibefield.simulator/icon.png",
+        "spread": {
+          "day": "listing/vibefield.simulator/spread-day.png",
+          "night": "listing/vibefield.simulator/spread-night.png"
+        },
+        "objects": [
+          {
+            "type": "vibefield.simulator.phone",
+            "label": "Phone",
+            "category": "devices",
+            "stills": {
+              "day": "listing/vibefield.simulator/phone-day.png",
+              "night": "listing/vibefield.simulator/phone-night.png"
+            }
+          },
+          {
+            "type": "vibefield.simulator.tablet",
+            "label": "Tablet",
+            "category": "devices"
+          },
+          {
+            "type": "vibefield.simulator.watch",
+            "label": "Watch",
+            "category": "devices"
+          }
+        ],
+        "tools": 0,
+        "services": 0,
+        "settings": true,
+        "size": 1468006
+      }
+    },
+    {
+      "id": "acme.burndown",
+      "listedAs": "community",
+      "latest": {
+        "version": "0.7.0",
+        "artifactUrl": "artifacts/b-0.7.0.vfplugin",
+        "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "minApp": "0.9.0",
+        "minContracts": "0.1.0",
+        "publishedAt": 1762819200000
+      },
+      "compatible": false
+    }
+  ]
+}

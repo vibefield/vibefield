@@ -32,6 +32,7 @@ export * from "./plugin-distribution";
 export * from "./plugin-registry";
 export * from "./plugin-runtime";
 export * from "./plugin-update";
+export * from "./plugin-words";
 export * from "./plugins";
 export * from "./project-doors";
 export * from "./project-places";

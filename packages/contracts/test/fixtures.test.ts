@@ -267,8 +267,14 @@ import {
   SystemNativeRestartResult,
   TerminalRoutesStreamPayload,
 } from "../src/mgmt";
-import { BundledPluginIndex, RegistryIndexV2 } from "../src/plugin-distribution";
-import { PluginRegistrySnapshot } from "../src/plugin-registry";
+import {
+  BundledPluginIndex,
+  PluginsCatalog,
+  RegistryIndex,
+  RegistryIndexV2,
+  RegistryProvenance,
+} from "../src/plugin-distribution";
+import { PluginRegistrySnapshot, PluginsInstallResult } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
 import {
   ProjectChangesDelta,
@@ -593,6 +599,13 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // and the release's update policy. Their refusals live in trust-root.test.ts.
   "trust-root": TrustRoot,
   "registry-index-v2": RegistryIndexV2,
+  // MK-1 (MK-D12, MK's J1): the registry's index v1 with listings, the maintainers' pick and the rung that says
+  // VibeField's own or community (absent or unknown reads as community; plugin-market.test.ts); the catalog door's
+  // answers; the install answer; the provenance sidecar with its display copies, which decide nothing.
+  "registry-index-v1": RegistryIndex,
+  "plugins-catalog": PluginsCatalog,
+  "plugins-install-result": PluginsInstallResult,
+  "registry-provenance": RegistryProvenance,
   "update-policy": UpdatePolicy,
   // WP12a (build-wp12-updater.md D4): the channel heads every release carries (refusals in trust-root.test.ts).
   "channel-heads": ChannelHeads,

@@ -516,7 +516,20 @@ export const APP_PREFERENCE_KEYS = {
   /** SD-2 (SD-D22; DESIGN.md §14 "Quiet") — the moment Quiet ends, in epoch milliseconds; null ends it now. It rides
    * the same settings doc as every preference, so the person's desktops go quiet together */
   SOUNDS_QUIET_UNTIL: "desktop.soundsQuietUntil",
+  /** MK-1 (MK-D6, MK-E3; MK's J1) — Community plugins: off until the person turns it on, synced to their desktops in
+   * the settings doc's app section, and never undone once MK-2 commits it outside the undo history (today every app
+   * preference commits as undoable, `fieldd/src/settings-doc.ts:348`). While it is off a community install is
+   * refused, by fieldd (MK-2). Open, James's call (2026-11-11): whether the "statement seen" flag syncs with it or
+   * stays per desktop; no flag is typed until he rules. From MK-1 the existing setter takes the key; it is inert,
+   * read by nothing, until MK-2. */
+  COMMUNITY_PLUGINS: "plugins.community",
 } as const;
+
+/** MK-1 (MK-E3): the preferences no undo may ever change. This is a LIST, which nothing enforces until MK-2: today
+ * fieldd commits every app preference as undoable (`fieldd/src/settings-doc.ts:348`); MK-2 commits these outside the
+ * undo history so ⌘Z never turns community plugins on. Do not read this constant as the guard. */
+export const APP_PREFERENCES_NEVER_UNDONE: readonly (typeof APP_PREFERENCE_KEYS)[keyof typeof APP_PREFERENCE_KEYS][] =
+  [APP_PREFERENCE_KEYS.COMMUNITY_PLUGINS];
 
 export const AppPreferenceKey = z.enum([
   APP_PREFERENCE_KEYS.SHOW_TRAY,
@@ -528,6 +541,7 @@ export const AppPreferenceKey = z.enum([
   APP_PREFERENCE_KEYS.KEEP_RUNNING_ON_QUIT,
   APP_PREFERENCE_KEYS.SOUNDS,
   APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL,
+  APP_PREFERENCE_KEYS.COMMUNITY_PLUGINS,
 ]);
 export type AppPreferenceKey = z.infer<typeof AppPreferenceKey>;
 
@@ -556,6 +570,8 @@ export const AppPreferences = z
     // SD-2 (SD-D22): OPTIONAL, never required — absent is no Quiet, as an older daemon's snapshot says. An integer
     // count of epoch milliseconds; Quiet holds while now is before it, and ends by itself at it.
     soundsQuietUntil: z.number().int().nonnegative().optional(),
+    // MK-1 (MK-D6, MK-E3): OPTIONAL, never required — absent is off, as an older daemon's snapshot says.
+    communityPlugins: z.boolean().optional(),
   })
   .passthrough();
 export type AppPreferences = z.infer<typeof AppPreferences>;

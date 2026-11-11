@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { SemverString } from "./envelope";
-import { CapabilityId, PluginId } from "./plugins";
+import { CapabilityId, isSafeRelativePath, PLUGIN_LIMITS, PluginId } from "./plugins";
 import { IsoInstant } from "./trust-root";
 
 // P7 — distribution and the synced install-set (spec §5.3.1/§6.3/§16.6 + D29′).
@@ -30,6 +30,73 @@ export const RegistryRelease = z
   .passthrough();
 export type RegistryRelease = z.infer<typeof RegistryRelease>;
 
+// --- MK-1: what a listing says (MK-D12, ruled A by James 2026-11-11; DESIGN.md §8 "Plugins — the frame's
+// second popup") ------------------------------------------------------------------------------------------------
+//
+// The registry's CI writes the listing from the manifest it rebuilt, never the author (MK-D12's A): its words,
+// its objects and every picture come from the build a person would install. Pictures are paths relative to the
+// index (`ListingPath` holds them there: no URL, no "..", no absolute path), served to the window only through
+// fieldd's cache and main's plugin scheme (MK-E9). Every field but the title (and a picture's day and night, an
+// object's type, label and category) is optional, and every carrier of a listing or a pick catches to undefined: one
+// bad listing must never refuse the whole index (fieldd parses the index whole, `plugin-install.ts`), it just goes
+// unshown. Its bounds are the manifest's own (`PLUGIN_LIMITS`), since the registry writes it from the manifest.
+
+/** A path relative to the index, as `isSafeRelativePath` holds a manifest's paths. */
+const ListingPath = z
+  .string()
+  .min(1)
+  .max(512)
+  .refine((p) => isSafeRelativePath(`./${p}`), "listing pictures are index-relative paths");
+
+/** A picture the registry rendered, by day and by night; the app's theme picks which. */
+export const RegistryListingPicture = z
+  .object({
+    day: ListingPath,
+    night: ListingPath,
+  })
+  .passthrough();
+export type RegistryListingPicture = z.infer<typeof RegistryListingPicture>;
+
+/** One object in the set, in the pegboard's tray order (`contributes.objects`). */
+export const RegistryListingObject = z
+  .object({
+    /** the object's type id; never shown (DESIGN.md §9, VibeField's insides) */
+    type: z.string().min(1).max(256),
+    /** its pegboard label (`tray.label`) */
+    label: z.string().min(1).max(PLUGIN_LIMITS.TITLE_MAX),
+    /** the pegboard category it hangs under (`tray.category`) */
+    category: z.string().min(1).max(PLUGIN_LIMITS.ID_MAX),
+    stills: RegistryListingPicture.optional(),
+  })
+  .passthrough();
+export type RegistryListingObject = z.infer<typeof RegistryListingObject>;
+
+export const RegistryListing = z
+  .object({
+    /** the manifest's title */
+    title: z.string().min(1).max(PLUGIN_LIMITS.TITLE_MAX),
+    /** the manifest's description */
+    summary: z.string().max(PLUGIN_LIMITS.TEXT_MAX).optional(),
+    /** the publisher's name as a person reads it (MK-E11's source word); absent says the namespace */
+    publisherName: z.string().min(1).max(120).optional(),
+    icon: ListingPath.optional(),
+    /** the set laid out together, as it will sit on a desk (MK-D3, MK-D4) */
+    spread: RegistryListingPicture.optional(),
+    objects: z.array(RegistryListingObject).max(PLUGIN_LIMITS.OBJECTS_MAX).default([]),
+    tools: z.number().int().nonnegative().optional(),
+    services: z.number().int().nonnegative().optional(),
+    settings: z.boolean().optional(),
+    /** the artifact's size in bytes */
+    size: z.number().int().nonnegative().optional(),
+  })
+  .passthrough();
+export type RegistryListing = z.infer<typeof RegistryListing>;
+
+/** The maintainers' pick, shown first on Discover (MK-D12): ids that should be listed in the same index. Strict
+ * itself; each carrier of it catches, so a bad pick reads as none. */
+export const RegistryFeatured = z.array(PluginId).max(24);
+export type RegistryFeatured = z.infer<typeof RegistryFeatured>;
+
 export const RegistryPluginEntry = z
   .object({
     id: PluginId,
@@ -37,6 +104,16 @@ export const RegistryPluginEntry = z
     latest: RegistryRelease,
     /** newest-first; latest is NOT duplicated here */
     history: z.array(RegistryRelease).max(64).default([]),
+    /** MK-1 (MK's J1, ruled by James 2026-11-11): the rung it is listed at, v2's own field carried on v1. The SIGNED
+     * index entry is the one authority for whether a listed plugin is VibeField's own (R1) or a community one: fieldd
+     * verifies the index's signature over its exact bytes before it parses it (`fieldd/src/plugin-install.ts:118`,
+     * `fetchIndex`), and no copy elsewhere decides. Absent, or a value this reader does not know, reads as community,
+     * never the other way (`registryListedAs`). */
+    rung: z
+      .lazy(() => RegistryRung)
+      .optional()
+      .catch(undefined),
+    listing: RegistryListing.optional().catch(undefined),
   })
   .passthrough();
 export type RegistryPluginEntry = z.infer<typeof RegistryPluginEntry>;
@@ -46,6 +123,8 @@ export const RegistryIndex = z
     schemaVersion: z.literal(1),
     generatedAt: z.number().int().nonnegative(),
     plugins: z.record(RegistryPluginEntry),
+    /** MK-1 (MK-D12): the maintainers' pick */
+    featured: RegistryFeatured.optional().catch(undefined),
   })
   .passthrough();
 export type RegistryIndex = z.infer<typeof RegistryIndex>;
@@ -111,6 +190,8 @@ export const RegistryPluginEntryV2 = z
       .object({ downloads: z.number().int().nonnegative(), at: z.number().int().nonnegative() })
       .passthrough()
       .optional(),
+    /** MK-1 (MK-D12): what the set says and shows, written by the registry's CI */
+    listing: RegistryListing.optional().catch(undefined),
   })
   .passthrough()
   .superRefine((entry, ctx) => {
@@ -139,6 +220,8 @@ export const RegistryIndexV2 = z
     expires: IsoInstant,
     publishers: z.record(z.string().min(1).max(64), RegistryPublisher),
     plugins: z.record(RegistryPluginEntryV2),
+    /** MK-1 (MK-D12): the maintainers' pick */
+    featured: RegistryFeatured.optional().catch(undefined),
   })
   .passthrough()
   .superRefine((index, ctx) => {
@@ -158,6 +241,20 @@ export const RegistryIndexV2 = z
     }
   });
 export type RegistryIndexV2 = z.infer<typeof RegistryIndexV2>;
+
+/** MK-1 (MK's J1; VF-PM 2026-11-11 07:42:17Z): whether a listed plugin is VibeField's own or a community one, read
+ * from its SIGNED index entry and nowhere else. Closed and tolerant: only R1 is VibeField's own; R2, R3, R0 (which no
+ * index lists), absent and anything unknown read as community. Its parameter is an index entry (`id` and `latest`),
+ * so the provenance sidecar's display copy cannot be passed to it. The community switch's fence is fieldd's (MK-2).
+ * *Note 2026-11-11 (MK-1):* v2's own `rung` (above) is strict, so an unknown value there refuses the v2 index rather
+ * than reading as community; nothing parses v2 at runtime until the registry rung (TD §9 TD-4), which settles it. */
+export const RegistryListedAs = z.enum(["vibefield", "community"]);
+export type RegistryListedAs = z.infer<typeof RegistryListedAs>;
+export function registryListedAs(
+  entry: Pick<RegistryPluginEntry, "id" | "latest"> & { readonly rung?: unknown },
+): RegistryListedAs {
+  return entry.rung === "R1" ? "vibefield" : "community";
+}
 
 // --- the bundled plugin index (WP8; ESP §10.4, trust-and-distribution.md §5) ---
 //
@@ -282,9 +379,71 @@ export const RegistryProvenance = z
     indexRef: z.string().max(256),
     artifactSha256: Sha256Pin,
     publisher: z.string().max(256),
+    /** MK-1: DISPLAY COPIES of the signed entry, which fieldd writes beside the folder at install from MK-2 (today it
+     * writes indexRef, artifactSha256 and publisher alone, `fieldd/src/plugin-install.ts`). They decide NOTHING: a
+     * process running as the same user can rewrite what a folder says about itself (item 321), so whether a plugin is
+     * VibeField's own or a community one is read from the signed index entry alone (`registryListedAs`). A bad value
+     * reads as absent, so neither reader of this file can fail on them. */
+    rung: RegistryRung.optional().catch(undefined),
+    publisherName: z.string().min(1).max(120).optional().catch(undefined),
   })
   .passthrough();
 export type RegistryProvenance = z.infer<typeof RegistryProvenance>;
+
+// --- MK-1: the catalog door (plugins.catalog.*; MK-D5, MK-E8) -------------------------------------------------
+//
+// Opening Plugins… reads the plugin list: `plugins.catalog.get` answers at once from the list fieldd holds, and
+// `plugins.catalog.refresh` is the fresh signed read, on the person's act only (PA-30: no timer, no push feed, no
+// identity). Its state says where the list stands, its time always said and never implied fresh (DESIGN.md §9
+// "Reading the list"); why a read failed goes to Diagnostics and the log, never this shape's words.
+
+/** unconfigured: no build configures a registry (every build until the registry rung, TD §9 TD-4) · reading: a read
+ * runs, the held list (if any) shown with its time · ready: read and current · stale: the held list is past its date
+ * (v2's `expires`) · unreachable: offline or the host did not answer, the held list shown · refused: a list arrived
+ * that VibeField could not use (signature, schema or rollback), nothing new shown. */
+export const PluginsCatalogState = z.enum([
+  "unconfigured",
+  "reading",
+  "ready",
+  "stale",
+  "unreachable",
+  "refused",
+]);
+export type PluginsCatalogState = z.infer<typeof PluginsCatalogState>;
+
+export const PluginsCatalogEntry = z
+  .object({
+    id: PluginId,
+    /** from the signed entry (`registryListedAs`); a value this reader does not know reads as community */
+    listedAs: RegistryListedAs.catch("community"),
+    latest: RegistryRelease,
+    /** false when engine ranges refuse this device (honest, not hidden), as `PluginUpdateInfo` says it */
+    compatible: z.boolean(),
+    listing: RegistryListing.optional().catch(undefined),
+  })
+  .passthrough();
+export type PluginsCatalogEntry = z.infer<typeof PluginsCatalogEntry>;
+
+export const PluginsCatalog = z
+  .object({
+    state: PluginsCatalogState,
+    /** when the held list was read; null when no list is held */
+    checkedAt: z.number().int().nonnegative().nullable(),
+    plugins: z.array(PluginsCatalogEntry).max(4096).default([]),
+    featured: RegistryFeatured.default([]).catch([]),
+    /** how many installed plugins the held list has a newer compatible release for (the Me menu's "1 update") */
+    updates: z.number().int().nonnegative().default(0),
+  })
+  .passthrough();
+export type PluginsCatalog = z.infer<typeof PluginsCatalog>;
+
+export const PluginsCatalogGetParams = z.object({}).passthrough();
+export type PluginsCatalogGetParams = z.infer<typeof PluginsCatalogGetParams>;
+export const PluginsCatalogRefreshParams = z.object({}).passthrough();
+export type PluginsCatalogRefreshParams = z.infer<typeof PluginsCatalogRefreshParams>;
+/** Both doors answer the whole catalog; refresh answers once its read has ended. */
+export const PluginsCatalogResult: typeof PluginsCatalog = PluginsCatalog;
+export type PluginsCatalogResult = z.infer<typeof PluginsCatalogResult>;
 
 // --- the D29′ system settings doc (design-03 §7.2, spec §16.6) -----------------
 //
