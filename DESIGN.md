@@ -1638,8 +1638,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *Amended 2026-10-27 (track AO, AO-D8 ruled by James):* while History imports, its cell carries
   **the arc** (§6): a fifth of the clock's own circle travels it once every 1.1s on the island curve
   over the glyph at a third of its ink, until the room says the archive is ready. It carries no
-  number, never a badge or a count, and its accessible name adds "importing" ("History, importing").
-  The cell is otherwise unchanged and still presses at once.
+  number, never a badge or a count, and its accessible name adds "reading" ("History, reading").
+  *Amended 2026-11-11 (item 282, IS-282-7 A): it said "importing".* The cell is otherwise unchanged and
+  still presses at once.
 - **The line** (One Frame FR-2, FR-3, §5; FC-D1, FC-D3, FC-D14 ruled 2026-10-01; built 2026-10-03;
   *shortened by Cards in Hand — LN-D1 and LN-D3 ruled by James 2026-10-29, the leans; built at HN-2*):
   the frame's foot (§10), the same in every view — `[views] snapshot create`: the views, the snapshot
@@ -1660,14 +1661,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     and Return or Done keeps it; what you kept leaves its region as a picture card and arcs into the
     hand (§8 "The hand", §6), the still on the system clipboard as the tool has always put it. A
     cancel says nothing; a refusal says why on the note, in the words the clipboard tray's Snap
-    tile said — "Screen Recording is off — System Settings › Privacy & Security", "Not captured — no
-    capture helper on this platform", "Not captured — one capture at a time" — else "Not captured —"
+    tile said — "Screen Recording is off — System Settings › Privacy & Security", "Not captured —
+    snapshots aren't available on this computer", "Not captured — one capture at a time" — else "Not captured —"
     and the tool's own reason. Its
     tooltip says its key, "Snapshot  ⌃⌘A". With no capture door (no shell) or no helper on this
     platform it waits, faint by ink, and its tooltip says why ("Snapshot — no capture here", "Snapshot
-    — no capture helper on this platform"); with Screen Recording refused it stays pressable and its
+    — snapshots aren't available on this computer"); with Screen Recording refused it stays pressable and its
     tooltip says so ("Snapshot — Screen Recording is off — System Settings › Privacy & Security") —
-    the clipboard tray's Snap tile's words, which moved here with the door. A refusal from any door (the
+    the clipboard tray's Snap tile's words, which moved here with the door. *Amended 2026-11-11 (item 282,
+    IS-282-7 A): the note and the tooltip said "no capture helper on this platform".* A refusal from any door (the
     line's own, ⌃⌘A, the View menu) is remembered until the next capture lands;
   - **create** — **40 round** in the ready fill, its corners concentric with the line's (26 − 6), 6
     after the snapshot, the line's right end; its glyph 16 in secondary ink (primary while open or
@@ -4283,11 +4285,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   own (the placeholder kind is struck). **The bar names it**, in words where the kind's acts would
   stand: the type's human name — the manifest's when there is one, else the type id (R12) — and
   why, in one of five words (R12, R24): **"plugin off"** (its plugin disabled) · **"plugin gone"**
-  (uninstalled) · **"no kind"** (never registered) · **"remount to draw it"** (registered after the
-  mount, I25) · **"can't draw"** (its kind faulted) — "Note · plugin off" — 13/500 in secondary
+  (uninstalled) · **"can't draw here"** (never registered) · **"reload to draw it"** (registered after
+  the mount, I25) · **"can't draw"** (its kind faulted) — "Note · plugin off" — 13/500 in secondary
   ink, a label and not a control; the grown menu's eyebrow says the same in capitals, and Copy's
   card carries the type's name. It is said once, in the status line (R12, above), never painted onto the
-  object as an alarm.
+  object as an alarm. *Amended 2026-11-11 (item 282, IS-282-7 A): the third and fourth words were "no kind"
+  and "remount to draw it".*
 - **The covers over the desk** (DK-D25 ruled 2026-10-02 — "frozen desk should be still and consume
   no render time at all"; FC-D13, FC-D15, FC-D16; ICE I23; R16; DK-15): **under a cover the desk is
   a still and costs nothing** — the cover fades in over the LIVE desk (240ms) while
@@ -6291,13 +6294,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     limit. With nothing matching: **"Nothing in your past holds every word of “q”. Try fewer words,
     or a phrase in quotes."** — rosetta matches a quoted phrase whole, and while a quote is still
     open nothing is asked: the foot says "Close the quote to search for the phrase". An index that
-    cannot answer says so in the foot in fieldd's words, and the list keeps what it last showed —
+    cannot answer says so in the foot in plain words, "Search is getting ready · 42%" while it builds, else
+    "Search isn't available right now", and the list keeps what it last showed —
     never "no matches" for a question nobody answered. **Live now**'s foot: "3 live sessions,
     waiting first" before a word (or "Nothing runs right now"); with words "2 sessions · 3 lines
     matched", with "searching" while the newest ask is out, "the words were not searched" when the
     index did not answer (the last answer's lines stand), "the first page only — narrow the
-    search" when it clipped; the index's own state after it when it is not ready ("transcript search
-    off — …", "indexing · 40%"). Nothing live holding the words: **"No live session holds every word
+    search" when it clipped; the index's state after it when it is not ready, in the same plain words
+    ("search is getting ready · 40%", "search isn't available right now"). *Amended 2026-11-11 (item 282,
+    IS-282-7 A): the foot gave fieldd's words ("No answer yet — the index is being built · 42%", "transcript
+    search off — …", "indexing · 40%"). Known deviation, owed: by IS-282-1 what the index or its door said goes
+    to the log; until that is built it reaches neither the screen nor the log.* Nothing live holding the words:
+    **"No live session holds every word
     of “q”."** with a press, **Search everything for “q”**. **Live now in History** (docket PK5
     (a), 2026-10-09) is live while it shows: the Peek opens the monitor's own feed (the model board,
     over this window's fieldd client) when Live now comes to show and closes it when it stops — a
