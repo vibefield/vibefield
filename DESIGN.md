@@ -4340,10 +4340,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   for it again once it hangs the set. *Status 2026-11-11: ruled, to be built.* The set's own token —
   the board showing only the new set under "Desk things · 4 new", each object over its own
   category's tape, its × back to every object — waits for ICE's door (a filter by a set of types;
-  ICE 0.17.0's lay filters by one category alone; petition I54, drafted), as the ruled lean itself
-  says: until then the board falls back as above (MK-D8). Whether a plugin from the registry,
-  VibeField's own included, may add objects at all is *open, James's call (MK, 2026-11-11)* (§8
-  "Plugins — the frame's second popup").
+  ICE 0.17.0's lay filters by one category alone; petition I54, drafted, which James files after the
+  v0.9.0 tag), as the ruled lean itself says: until then the board falls back as above (MK-D8). Every
+  plugin from the registry may add objects, VibeField's own and community plugins alike, a community
+  plugin's only once community plugins are turned on (MK's J1, ruled by James 2026-11-11 06:43:00Z;
+  §8 "Plugins — the frame's second popup").
 
   **One object at a time waits** (MK-D9, ruled A by James 2026-11-11: each object its own pegboard
   switch; not buildable on ICE 0.17.0, VF-PM's MK-E2): until ICE's door, a plugin's objects hang
@@ -4356,7 +4357,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   only some of a set — a switch per object on its plugin's page, the objects already on a desk
   drawing as before, the choice syncing with the install set and, like grants, never undone by ⌘Z
   (VF-PM's MK-E4) — waits for ICE's door (a filter on what the board hangs, apart from what the desk
-  draws): *open, James's call (MK, 2026-11-11)*.
+  draws). MK-D9's A stays the goal, and VibeField ships without it until that door (ruled by James
+  2026-11-11 06:48:31Z at MK's lean).
 
   **One surface at a time:** Objects is one of the frame's open surfaces (§10) — it folds the pill's
   sheet on either shelf (Artifacts' was the right edge's drawer until HN-8), the menus, the cards,
@@ -5086,10 +5088,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   ‹name›"), never in the pill (§8 "Plugins — the frame's second popup"). No rung's code, signature
   or repository reaches the screen (§9, VibeField's insides; §9 "The plugins' words"). *Owed at the
   source (MK):* a dated note on TD-17 and on TD §7, whose every row shows the rung, the reviewer and the build
-  line `built from <repo>@<commit>`, whose R2 rows say "worker-hosted" until PA §27 item 4's probe,
-  and whose switch stands "in Settings → Plugins" (`trust-and-distribution.md`); the reviewer's
-  leaving the row, which MK-D6's why keeps there and the ruled page draws on the plugin's page, is
-  ‹for James›. *To be built by track MK (nothing of it lands before the v0.9.0 tag unless James says
+  line `built from <repo>@<commit>`, whose R2 rows say "worker-hosted" until PA §27 item 4's probe, whose
+  switch stands "in Settings → Plugins" and whose last line keeps kinds to R0 (`trust-and-distribution.md`;
+  MK's J1 amends that line). The reviewer leaves the row for the plugin's page, as the ruled page draws it,
+  though MK-D6's why kept it on the row (the page, not the row: ruled by James 2026-11-11 06:48:31Z at MK's
+  lean; TD-17's dated note, owed above (MK-0d), will say so). *To be built by track MK (nothing of it lands
+  before the v0.9.0 tag unless James says
   so, MK-E13). Until then* the pill stands on Settings → Plugins' rows (`panels/PluginsSection.tsx`,
   `SOURCE_LABEL`), where a registry row reads "Registry · ‹publisher›". No build configures a
   registry before the registry rung (TD §9 TD-4), so no row wears it yet. *Known deviation,
@@ -5117,8 +5121,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     result's words are §9 "The plugins' words": a release that needs a newer VibeField, a plugin
     gone from the list and a download that didn't match are said in plain words, and their insides
     ("needs app X · contracts Y", the hash) stay off the popup and go to the log (item 282-6's
-    plugin half, by MK-E12); what replaces James's ruled "dropped from registry" is his to rule
-    (‹for James›; §9 "The plugins' words"). A download that didn't match is logged today
+    plugin half, by MK-E12); "dropped from registry", James's earlier ruled words, gives way to
+    "No longer listed · it keeps working here, with no more updates" (ruled by James 2026-11-11
+    06:48:31Z at MK's lean; §9 "The plugins' words"). A download that didn't match is logged today
     (`fieldd.plugin_install.artifact_mismatch`); a read's incompatible and vanished entries are
     not, since `updatesCheck` hands them only to its caller, and logging them is *owed (MK)*.
     *To be built by track MK. Until then* Settings → Plugins keeps its section-top "updates ▸"
@@ -5128,8 +5133,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     incompatible one "needs app X · contracts Y" with no action, a vanished entry "dropped from
     registry", an all-clear "everything current", under "checked HH:MM:SS". Its ids and engine ranges
     are VibeField's insides on screen, a known deviation that item 282-6's plugin half pays
-    (MK-E12); "dropped from registry" is James's ruled wording, and its replacement goes to him
-    as a proposal (DECISIONS' insides row), never amended here.
+    (MK-E12); "dropped from registry" was James's ruled wording, and its replacement is his ruling
+    of 2026-11-11 (above; DECISIONS' insides row).
   - **An agent's own updates** (Settings → Agents' shelf, AR-D22, and an agent's plugins lists on
     Agent Profiles) keep the old law and their own words: nothing fetches until **Check for
     updates** is pressed (**Update catalogs…** where the agent's fetch also updates what it
@@ -5242,25 +5247,29 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   sideloads are not built, so what Remove… does for a Development plugin is *open (MK,
   2026-11-11)*. It asks in place, on the page: "Remove ‹title›?", over "Its settings and data stay
   on your desktops, so installing it again brings them back. ‹Clock and Ruler› objects on your desks
-  draw as missing on this Mac until then." ("this PC" off the Mac; §9 "The plugins' words"; the
-  ruled page's words, "on this Mac" added while MK-E10 is open; the objects it adds, by name, and a
-  plugin with none names none; whether a registry plugin may add objects at all is *open, James's
-  call (MK, 2026-11-11, MK's J1)*: kinds are R0's alone today, TD §7) — **Cancel** leading and focused,
-  **Remove** trailing. Under them, **Remove it and its data…** in `--vf-red` text (the danger tone,
-  visually distinct BEFORE any confirm, §2.5 red = destructive) is its own two-step: "Remove ‹title›
-  and its data?" states exactly what goes, and its button says **Remove data**, Cancel leading. One
+  draw as missing on your desktops until then." (§9 "The plugins' words"; the ruled page's words,
+  "on your desktops" in place of "on this Mac" by MK-E10, ruled by James 2026-11-11 06:48:31Z at MK's
+  lean; the objects it adds by name, a listed plugin's as any plugin's (MK's J1), and a plugin with
+  none names none) — **Cancel** leading and focused, **Remove** trailing. Under them, **Remove it and
+  its data…** in `--vf-red` text (the danger tone, visually distinct BEFORE any confirm, §2.5 red =
+  destructive) is its own two-step: "Remove ‹title› and its data?" states exactly what goes, and its
+  button says **Remove data**, Cancel leading. One
   click is never irreversible, and red is text-only, never a filled alarm — honesty over dread.
   **What stays on the desk** (spec §16.5 keeps canvas entities): each of its objects, if it has any
-  (MK's J1, above), stays where it lies and wears ICE's missing face, wordless, while the bar names it
-  "‹name› · plugin gone" (§8 "The missing face"; the desk remounts without its kinds), until it is
-  installed again. *Owed (MK):* with the plugin's record gone, the bar's ‹name› falls back to the
-  type id (`desk-object-words.ts`), an id on screen against §9, VibeField's insides, so what the bar
-  names a removed plugin's object by is still to be said, here first. **Remove… takes it off this
-  desktop** and, today, out of the set your desktops share: a desktop that has not installed it yet
-  no longer will, and one that has keeps it, since the reconciler installs and never removes
-  (`install-reconciler.ts`), though spec §16.6 says dropping an entry uninstalls code everywhere.
-  Whether Remove… also takes the set off your other desktops (their data kept) is *open, James's
-  call (MK, 2026-11-11, MK-E10)*. *To be built by track MK. Until then* Settings → Plugins' registry
+  (MK's J1, ruled by James 2026-11-11 06:43:00Z), stays where it lies and wears ICE's missing face,
+  wordless, while the bar names it "‹name› · plugin gone" (§8 "The missing face"; the desk remounts
+  without its kinds), until it is installed again. *Owed (MK):* with the plugin's record gone, the
+  bar's ‹name› falls back to the type id (`desk-object-words.ts`), an id on screen against §9,
+  VibeField's insides, so what the bar names a removed plugin's object by is still to be said, here
+  first. **Remove… takes it off every desktop**, its settings and data kept (MK-E10, ruled by James
+  2026-11-11 06:48:31Z at MK's lean: "everywhere, with settings and data kept"), and **Remove it and
+  its data…** "stays the separate red, two-step act" (the lean's words); it reaches this desktop
+  alone, and whether it also deletes the plugin's data on your other desktops is *open, James's call
+  (MK-0b, 2026-11-11; VF-PM 07:23:04Z)*. Today fieldd's uninstall takes it off this desktop and out
+  of the set your desktops share: a desktop that has not installed it yet no longer will, and one
+  that has keeps it, since the reconciler installs and never removes (`install-reconciler.ts`),
+  though spec §16.6 says dropping an entry uninstalls code everywhere; teaching it to remove is
+  MK-2's, after its custody note. *To be built by track MK. Until then* Settings → Plugins' registry
   and sideloaded rows carry a **More +** disclosure revealing **Uninstall** (keeps data) and
   **Remove plugin and data** (the danger tone), each a two-step confirm with Cancel beside it:
   "Uninstall ‹title›?" says "Plugin data is preserved, so reinstalling can restore its settings.";
@@ -5285,8 +5294,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   be undone there or in Settings. The form says which applies at its foot — "Synced settings can be
   undone here or in Settings." or "Device and secret settings stay on this device and are not part
   of settings history." Never on it, by D29′'s second law (undo never re-escalates): what is
-  installed and whether it is on, and grants; by MK-E3, the community switch; and, if MK-D9's
-  pegboard switches come (*open, James's call (MK, 2026-11-11)*), which objects hang (MK-E4) — so
+  installed and whether it is on, and grants; by MK-E3, the community switch; and, once MK-D9's
+  pegboard switches come (ICE's door first; MK-D9's A stays the goal, ruled by James 2026-11-11
+  06:48:31Z at MK's lean), which objects hang (MK-E4) — so
   ⌘Z never brings back a removed plugin or a power, nor turns community plugins on, and Settings →
   General's note ("plugin grants … are excluded") stays true. The outcome is said in words: "Last
   synced change undone", "Change restored", "Nothing left to undo", "Nothing left to redo",
@@ -6581,7 +6591,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     **the peek folds and the list fills the popup**.
 - **Plugins — the frame's second popup** (MK-D1…MK-D13, every mark A, ruled by James 2026-11-11 03:41:23Z on the
   page *A Place for Plugins*, Xy5CTh2M, `draft/plugin-market/round1/`; VF-PM's engineering rulings MK-E1…E9 and
-  MK-E11…E13, 04:30:39Z; MK-E10 is James's call): ONE place for plugins, search's sibling — "Plugins move out of
+  MK-E11…E13, 04:30:39Z; James's later rulings that day, MK's J1 at 06:43:00Z, and MK-E10, MK-D9's change and the
+  four calls on its words at MK's leans at 06:48:31Z): ONE place for plugins, search's sibling — "Plugins move out of
   Settings. The Me menu gets a Plugins… row, and it opens a popup of its own: the frame's second popup, built the
   way search is" (the page). A plugin is usually a set of objects, so its shelf shows sets. It is the frame's, as
   the Peek is, and it opens over every view, Canvas among them. *Status 2026-11-11: ruled; nothing of it is built.*
@@ -6590,9 +6601,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   (MK-E13). No build configures a registry today (`fieldd/src/bin.ts` sets none, and `fieldd/src/plugin-install.ts`
   answers "no plugin registry is configured"), so Discover says **No plugin registry yet** in every build until the
   registry rung (TD §9 TD-4). fieldd reads index v1 alone; MK types `listing` and `featured` on v1 and v2 alike, and
-  v2's reader stays the registry rung's (MK-E8). *Open, James's call (MK, 2026-11-11):* whether a plugin from the
-  registry, VibeField's own included, may add objects at all, since TD §7 hosts object kinds at R0 alone today. The
-  shelf's design, sets of objects, is ruled; whether a set from the registry may carry objects waits on that call.
+  v2's reader stays the registry rung's (MK-E8). **Every plugin from the registry may add objects**, VibeField's own
+  and community plugins alike, a community plugin's only once community plugins are turned on (MK's J1, ruled by
+  James 2026-11-11: "then i think plugins from the plugin list should be able to add objects", 06:39:29Z, then
+  "Community too", 06:43:00Z). So a listed set carries its objects, a community set once the switch is on, whose
+  ask says once that nothing isolates their code (the community tile, below). TD §7's last line ("Kinds … are R0
+  only") owes its dated amendment at its source (MK-0d), and an object's code is never called isolated (PA §20.1
+  v0.4). Today nothing in fieldd refuses a listed plugin's objects and no community gate exists (item 321): MK-2
+  builds the gate in fieldd, never in the window (VF-PM 2026-11-11 06:43:50Z).
   - **Its doors** (MK-D1): **Plugins…** in the Me menu, directly above Settings… (§8 "The Me menu"); in the palette,
     **Plugins…** and **Check plugins for updates**, which opens it on Updates (MK-E7; §8 "The head", the palette); and
     **More in Plugins…**, a glass pill at the pegboard's foot, which opens Discover on the board's category (§8
@@ -6648,9 +6664,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **The community tile** (MK-D6; TD-17) stands at Discover's end, its switch off by default. Turned on the first
       time, it asks once, in place, with trust-and-distribution §7's statement word for word: "Community plugins run
       with the app's access. VibeField reviews the first listing and rebuilds every version from source; nothing
-      isolates their code from yours." Then the community's sets join Discover after VibeField's, each naming its
-      maker, and its page its reviewer (TD-17; §8 "The plugin source badge") — never its rung (§9, VibeField's
-      insides; TD-17 and TD §7, which put the rung on the row and the switch in Settings → Plugins, owe their dated
+      isolates their code from yours." It is the once MK's J1 names (ruled by James 2026-11-11 06:43:00Z: "the switch
+      states once that nothing isolates their code"), and it covers their objects: a community plugin may add objects
+      to your pegboard, as any listed plugin may. Then the community's sets join Discover after VibeField's, each
+      naming its maker, and its page its reviewer, never the row (the page, not the row: ruled by James 2026-11-11
+      06:48:31Z at MK's lean; TD-17; §8 "The plugin source badge") — never its rung (§9, VibeField's insides; TD-17
+      and TD §7, which put the rung and the reviewer on the row and the switch in Settings → Plugins, owe their dated
       amendments at their source). The switch is an app preference that syncs to your desktops, with a flag that the
       statement was seen; it takes no undo, so ⌘Z never turns it on, and while it is off a community install is
       refused (MK-E3).
@@ -6710,8 +6729,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       that removes it too (PA-21). Remove… stands on every installed plugin but a Built in one, as the page draws it
       (§8 "The destructive uninstall affordance"); fieldd removes registry installs alone today
       (`fieldd/src/plugin-install.ts`; sideloads are not built yet), so what it does for a Development plugin is
-      *open (MK, 2026-11-11)*. It acts on this desktop; whether it also takes the set off your other desktops, their
-      data kept, is *open, James's call (MK, 2026-11-11; MK-E10)*.
+      *open (MK, 2026-11-11)*. It takes the set off every desktop, its settings and data kept, and **Remove it and
+      its data…** "stays the separate red, two-step act" (MK-E10, ruled by James 2026-11-11 06:48:31Z at MK's lean:
+      "everywhere, with settings and data kept").
     - **Its settings** (MK-D10; MK-E12, item 282-6's plugin half): the plugin's settings form leaves Settings for its
       page, and its runtime detail — its controllers, its behaviors and the Doctor's issues — becomes a Plugins
       section in Settings → Diagnostics. The form stays on the same undo history as Settings (MK-E5) — the page carries
@@ -6728,10 +6748,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     other desktops install the set when they are next on: the install-set syncs the choice, never the code (PA-31).
     The ruled board — just the new set under a token that names it ("Desk things · 4 new"), whose × goes back to
     every object — waits for ICE's door (a filter by a set of types: ICE 0.17.0's tray filters by category alone;
-    petition I54, drafted), as the ruled lean itself says: until it lands, the board falls back as above (MK-D8).
+    petition I54, drafted, which James files after the v0.9.0 tag), as the ruled lean itself says: until it lands,
+    the board falls back as above (MK-D8).
   - **One object at a time waits** (MK-D9 ruled A, waiting; MK-E2, MK-E4): each object's own pegboard switch on a
     plugin's page is not built, and cannot be on ICE 0.17.0 (the tray's lay reads the engine's catalog every tick).
-    It waits for ICE's door and James's word — *open, James's call (MK, 2026-11-11)*. Until then a plugin's objects
+    It waits for ICE's door; MK-D9's A stays the goal, and VibeField ships without it until then (ruled by James
+    2026-11-11 06:48:31Z at MK's lean). Until then a plugin's objects
     hang together, and Installed's one switch is the only one that takes its objects off your pegboard. When it is
     built, the set of hidden objects syncs with the install-set and takes no undo, as grants take none (MK-E4).
   - **Keys**: the caret is in the field as it opens. **↑ ↓ ← →** walk Discover's tiles, as the page draws them, and
@@ -8747,23 +8769,24 @@ product writes these with straight apostrophes, as `update-words.ts` does.
 
 **The plugins' words** (track MK, MK-0; MK-D1…D13 ruled A by James 2026-11-11 03:41:23Z from the page *A Place for
 Plugins*, with VF-PM's engineering rulings MK-E1…E9 and MK-E11…E13 of 04:30:39Z, by which MK-D8 ships its fallback and
-MK-D9 waits; MK-E10 is James's call; added 2026-11-11 ahead of its build, MK-1, MK-2 and MK-4…MK-7's). Where each word
-stands is §8 "Plugins — the frame's second popup". This is the one home of the plugins' words: every other section
+MK-D9 waits; James's later rulings that day, MK's J1 at 06:43:00Z, and MK-E10, MK-D9's change and the four calls on
+these words at MK's leans at 06:48:31Z; added 2026-11-11 ahead of its build, MK-1, MK-2 and MK-4…MK-7's). Where each
+word stands is §8 "Plugins — the frame's second popup". This is the one home of the plugins' words: every other section
 that says one cross-refers here. The page's words stand, less VibeField's insides (the last bullet) and what the code
 or this canon makes untrue (four powers changed below, the clauses nothing builds yet, a version said as `releaseName`
-says it); words the page did not draw are drafted here (MK-0) and marked ‹for James›, owed to him. A plugin's things
-are **objects**, never "widgets" (retired at DK-8) or "kinds" (AO-L8); a plugin's objects are its **set**. ‹plugin› is
-a plugin's title as its manifest writes it, ‹object› an object's pegboard label (`tray.label`), ‹category› the
-pegboard category it hangs under (`tray.category`), ‹desktop› a desktop's name as Tailscale names it, and ‹n› a count.
-**Plugins are VibeField's own:** they add objects to your pegboard, and tools and services to VibeField. Whether a
-listed plugin may bring objects at all is *open, James's call (MK, 2026-11-11)*: built-in and development plugins
-bring them today (trust-and-distribution §7 keeps kinds to R0), and the words below for a listed or community set
-stand for the day one may. An agent's plugins are the agent's, on its page in Settings → Agent Profiles under
-**Extensions**, installed by its own command (AR-D35; VibeField knows no vendor, AR-L1): Plugins never lists them, and
-Extensions never lists VibeField's. **The install card** is this canon's name for the card every install asks first
-with (MK-D7). It is never "the consent card", which names History's card (§8 "History") and trust-and-distribution's
-TD-8 card (the app update's, naming the plugins a new VibeField would leave incompatible); and "consent" is never on
-screen (AO-L8).
+says it); words the page did not draw, and the ones changed here, are drafted (MK-0) and marked ‹draft›: James
+accepted them as drafts (2026-11-11 06:48:31Z), judged on screen at MK-4. A plugin's things are **objects**, never
+"widgets" (retired at DK-8) or "kinds" (AO-L8); a plugin's objects are its **set**. ‹plugin› is a plugin's title as
+its manifest writes it, ‹object› an object's pegboard label (`tray.label`), ‹category› the pegboard category it hangs
+under (`tray.category`), ‹desktop› a desktop's name as Tailscale names it, and ‹n› a count. **Plugins are VibeField's
+own:** they add objects to your pegboard, and tools and services to VibeField. Every listed plugin may bring objects,
+those VibeField publishes and community plugins alike, a community plugin's only once community plugins are turned on
+(MK's J1, ruled by James 2026-11-11 06:43:00Z), so the words below for a listed or community set stand as written. An
+agent's plugins are the agent's, on its page in Settings → Agent Profiles under **Extensions**, installed by its own
+command (AR-D35; VibeField knows no vendor, AR-L1): Plugins never lists them, and Extensions never lists VibeField's.
+**The install card** is this canon's name for the card every install asks first with (MK-D7). It is never "the consent
+card", which names History's card (§8 "History") and trust-and-distribution's TD-8 card (the app update's, naming the
+plugins a new VibeField would leave incompatible); and "consent" is never on screen (AO-L8).
 - **The doors** (MK-D1, MK-D11; MK-E7). The Me menu's row is **Plugins…** (glyph `plugin`), directly above
   **Settings…**; once a read found any, its end says "1 update" or "2 updates" in the row's secondary ink. Nothing
   goes on the face, whose badge slot is the app's (§2.8 I-5), and never a cyan dot: cyan says an app install waits on
@@ -8780,32 +8803,36 @@ screen (AO-L8).
   plugin, "Reviewed by ‹name›", who reviewed its first listing) and **Version**.
 - **Reading the list** (MK-D5). Opening the popup reads the plugin list, and the list it already holds shows at once,
   its time always said and never implied fresh. While a read runs the foot says **Reading the plugin list…**
-  ‹for James› · "showing the list from 14:02" (with no list held yet, **Reading the plugin list…** alone
-  ‹for James›); once read, "12 plugins, 31 objects · checked 14:02", with "· community off" while the switch is
-  off; a list from another day says its day, "checked Nov 6, 14:02" ‹for James›. Offline: "Offline · the list from
+  ‹draft› · "showing the list from 14:02" (with no list held yet, **Reading the plugin list…** alone
+  ‹draft›); once read, "12 plugins, 31 objects · checked 14:02", with "· community off" while the switch is
+  off; a list from another day says its day, "checked Nov 6, 14:02" ‹draft›. Offline: "Offline · the list from
   Nov 6, 14:02", and an Install waits, saying "Installing needs the internet". A list past its date: "The plugin
-  list expired Feb 4 · installs wait for a newer one" ‹for James›. A new list VibeField can't use: "VibeField
-  couldn't use the new plugin list, so nothing new is shown · Diagnostics has the details" ‹for James› (the page
+  list expired Feb 4 · installs wait for a newer one" ‹draft›. A new list VibeField can't use: "VibeField
+  couldn't use the new plugin list, so nothing new is shown · Diagnostics has the details" ‹draft› (the page
   said "Reading vibefield/registry…", "The registry's list" and "didn't verify", VibeField's insides).
 - **No plugin registry yet.** It is what every build says until the registry rung (TD §9 TD-4): no build configures a
   registry, so fieldd's `fetchIndex` refuses a read ("no plugin registry is configured"). Discover says **No plugin
   registry yet** over "The plugins that come with VibeField are in Installed." with **Show installed**; Updates says
-  "Plugins that come with VibeField update with it." ‹for James›; the foot says no time, for nothing was read; and
+  "Plugins that come with VibeField update with it." ‹draft›; the foot says no time, for nothing was read; and
   **Check plugins for updates** opens Updates on those words, never on a check that failed.
 - **Community plugins** (MK-D6; MK-E3). Discover's last tile is **Community plugins**, with its switch, over "‹n›
-  plugins by other people. VibeField reviews each one's first listing and rebuilds every version from its source."
-  ‹for James› (the page's "The registry reviews…", less the insides) and "Off until you turn them on". Turning it on
-  asks once, in place: **Turn on community plugins?**, then
+  plugins by other people. VibeField checks each one before it's listed." ‹draft› (the page's "The registry
+  reviews…", less the insides; the line MK's lean softened, which James took 2026-11-11 06:48:31Z; it claims the
+  first listing alone, and by TD-11 a person reviews a plugin's first listing and machine checks gate every
+  version) and "Off until you turn them on". Turning it on asks once, in place: **Turn on community plugins?**, then
   trust-and-distribution §7's statement, word for word, "Community plugins run with the app's access. VibeField
   reviews the first listing and rebuilds every version from source; nothing isolates their code from yours." ·
-  **Cancel** · **Turn on community plugins**. Once seen it is not asked again. While it is off, search says "Community
-  plugins are off, so their objects aren't searched.", and a community install is refused, in words ‹for James›.
+  **Cancel** · **Turn on community plugins**. Once seen it is not asked again. That ask is the once MK's J1 names
+  (ruled by James 2026-11-11 06:43:00Z: "the switch states once that nothing isolates their code"), and it covers
+  their objects: a community plugin may add objects to your pegboard, as any listed plugin may. While it is off,
+  search says "Community plugins are off, so their objects aren't searched.", and a community install is refused,
+  in words MK-4 drafts, judged on screen with the rest.
 - **The install card** (MK-D7). It asks **Install ‹plugin›?**, then says "It adds ‹n› objects to your pegboard:" with
   each ‹object›; "It gives your agents ‹n› tools." when it brings tools; "It can:" with its powers in their plain
   words (below), or "Nothing beyond drawing its own objects" when it asks for none (for a plugin with no object that
-  asks for none, ‹for James›); and "It installs on your ‹n› desktops, because an install on one reaches the others."
-  ‹for James› (the page's "your desktops share one set of plugins" would answer MK-E10, which is open), with each
-  ‹desktop› by name ("It installs on this Mac." while you have one, "this PC" off the Mac, ‹for James›) ·
+  asks for none, words MK-4 drafts); and "It installs on your ‹n› desktops, because your desktops share one set of
+  plugins." (its reason the page's words, true now that MK-E10 is ruled; the rest ‹draft›), with each ‹desktop› by
+  name ("It installs on this Mac." while you have one, "this PC" off the Mac, ‹draft›) ·
   **Cancel** · **Install** ↵. Its powers are granted as it installs (PA-12), and **What it can do** on its page gives
   each its own switch, to turn off one by one.
 - **Installing, and after** (MK-D8, MK-D13; MK-E2). The act says **Install** and, once true, **Installed** (a name
@@ -8813,21 +8840,21 @@ screen (AO-L8).
   pegboard** ("Show on the pegboard" for a set of one), over where its objects hang, "Clock, Calendar and Timer hang
   under Things; Ruler under Tools.", and "mini and studio install it when they're next on." The board opens on the
   set's first category with its first object focused (MK-D8's fallback, as it ships); the token the ruled lean drew,
-  "Desk things · 4 new", waits for ICE's door (petition I54, drafted), as the ruled lean says (MK-D8). An install that
-  fails names the step that didn't happen, as the update's words do: "VibeField didn't install ‹plugin›. Nothing
-  changed." with **Try again** ‹for James›; why it failed goes to Diagnostics and the log. A plugin that needs a newer
-  VibeField says "Needs 0.10" on its act and "Needs VibeField 0.10 · you're on VibeField 0.9.0" in its line: the
-  version you're on as `releaseName` says it ("The update's words", above; "you're on the Nov 7 nightly" on a
-  nightly), and the one it needs as its `engines.app` floor ‹for James›.
+  "Desk things · 4 new", waits for ICE's door (petition I54, drafted, which James files after the v0.9.0 tag), as the
+  ruled lean says (MK-D8). An install that fails names the step that didn't happen, as the update's words do:
+  "VibeField didn't install ‹plugin›. Nothing changed." with **Try again** ‹draft›; why it failed goes to Diagnostics
+  and the log. A plugin that needs a newer VibeField says "Needs 0.10" on its act and "Needs VibeField 0.10 · you're
+  on VibeField 0.9.0" in its line: the version you're on as `releaseName` says it ("The update's words", above;
+  "you're on the Nov 7 nightly" on a nightly), and the one it needs as its `engines.app` floor ‹draft›.
 - **Updates** (MK-D5, MK-D11; MK-E6). The tab's head says "1 update · checked 14:02", or "Everything is up to date ·
   checked 14:02"; **Update all** while any wait; its foot, **Check again**. A row says "0.6.1 → 0.7.0 · Nov 7", what
   it changes in the set, "Adds Watch" · "Removes Burndown", and its notes, with **Update**. An update that removes an
   object asks first, so its act is **Update…** and its card says "Burndown objects on your desks will draw as
-  missing." ‹for James›; while one waits, **Update all** asks too, as **Update all…** ‹for James›. While it runs,
+  missing." ‹draft›; while one waits, **Update all** asks too, as **Update all…** ‹draft›. While it runs,
   "Updating…"; then its row says "Updated to 0.7.0" and the plugin's page **Installed** with the new version. An
   update to a plugin with objects brings the window back fresh first, and the popup reopens on that plugin's page
   saying **Installed**: no word says it reloaded or restarted (MK-E6). The tab's note: "Plugins look for updates when
-  you open Plugins. Updates never install on their own. An update that removes an object asks first." ‹for James›
+  you open Plugins. Updates never install on their own. An update that removes an object asks first." ‹draft›
   (the page's "Nothing installs on its own, and going back a version is always your choice.", less the clause no
   MK slice builds). A plugin's own
   look when VibeField starts (MK-D5; PA §5.3.1's per-plugin opt-in) is its page's switch, **Check for updates on its
@@ -8837,22 +8864,23 @@ screen (AO-L8).
   Tools · 1.0.0", or for a set of one "Hangs under Things · 1.0.0", with its switch; a built-in's ends "· comes with
   VibeField", and its page says "Comes with VibeField. It can be turned off, not removed." A plugin with no object
   says "No objects · a service and tools" (a built-in, "Comes with VibeField · no object on the desk"). The switch is
-  the plugin's one switch, and its objects hang together: a switch for each object waits for ICE's door and for James
-  — *open, James's call (MK, 2026-11-11)*. An off plugin says "Off · its objects on your desks draw as missing until
-  it's on" ("Off · its service is stopped" with no object), and one that kept crashing, "Stopped after 3 crashes ·
-  turn it on to try again"; one that isn't working, "‹plugin› isn't working right now" with **Try again**, its
-  details in Diagnostics (IS-282-6, ruled; §8 "Settings → Diagnostics' Plugins section"), and while VibeField
-  can't read its plugins, "Reading your plugins…", then "Plugins aren't available right now." with **Try again**
-  (IS-282-2's row, ruled; MK-5 takes both, MK-E12). With the registry rung's list (TD §9 TD-4), one VibeField
-  turned off says why, "VibeField
-  turned it off: it lost cards on macOS 26.1 · a fix is on its way" ‹for James›, and one no longer listed, "No longer
-  listed · it keeps working here, with no more updates" ‹for James›. The tab's foot: "6 plugins, 14 objects · 1 off".
-  **Remove…** asks **Remove ‹plugin›?** · "Its settings and data stay on your desktops, so installing it again brings
-  them back. Clock, Calendar and Ruler objects on your desks draw as missing on this Mac until then." ("this PC" off
-  the Mac; "on this Mac" is added to the page's words while MK-E10 is open, ‹for James›) · **Cancel** · **Remove**,
-  with **Remove it and its data…** under them, which asks **Remove ‹plugin› and its data?** · **Cancel** ·
-  **Remove data**. Remove… acts on this desktop; whether it also takes the set off your other desktops, its data
-  kept, is *open, James's call (MK, 2026-11-11; MK-E10)*.
+  the plugin's one switch, and its objects hang together: a switch for each object waits for ICE's door (MK-D9's A
+  stays the goal, and VibeField ships without it until then: ruled by James 2026-11-11 06:48:31Z at MK's lean). An
+  off plugin says "Off · its objects on your desks draw as missing until it's on" ("Off · its service is stopped"
+  with no object), and one that kept crashing, "Stopped after 3 crashes · turn it on to try again"; one that isn't
+  working, "‹plugin› isn't working right now" with **Try again**, its details in Diagnostics (IS-282-6, ruled; §8
+  "Settings → Diagnostics' Plugins section"), and while VibeField can't read its plugins, "Reading your plugins…",
+  then "Plugins aren't available right now." with **Try again** (IS-282-2's row, ruled; MK-5 takes both, MK-E12).
+  With the registry rung's list (TD §9 TD-4), one VibeField turned off says why, "VibeField turned it off: it lost
+  cards on macOS 26.1 · a fix is on its way" ‹draft›, and one no longer listed, "No longer listed · it keeps working
+  here, with no more updates" (James's ruled words in place of "dropped from registry", 2026-11-11 06:48:31Z at MK's
+  lean). The tab's foot: "6 plugins, 14 objects · 1 off". **Remove…** asks **Remove ‹plugin›?** · "Its settings and
+  data stay on your desktops, so installing it again brings them back. Clock, Calendar and Ruler objects on your
+  desks draw as missing on your desktops until then." ("on your desktops" in place of "on this Mac": MK-E10, ruled by
+  James 2026-11-11 06:48:31Z at MK's lean) · **Cancel** · **Remove**, with **Remove it and its data…** under them,
+  which asks **Remove ‹plugin› and its data?** · **Cancel** · **Remove data**. Remove… takes the set off every
+  desktop, its settings and data kept, and **Remove it and its data…** "stays the separate red, two-step act"
+  (MK-E10, the lean's words).
 - **Sources** (MK-D13; MK-E11). **Built in** (a bundled plugin, decided first) · **VibeField** (a listed plugin
   VibeField publishes) · the publisher's name otherwise, with **Community** beside it on a community row ·
   **Development** and **Sideloaded**, as today. Never "Registry", "Registry · ‹publisher›" or "Built by the registry";
@@ -8864,7 +8892,7 @@ screen (AO-L8).
   same on the install card and on the plugin's page, and never by its id. The core powers a plugin may hold are
   `PLUGIN_CAPABILITY_ELIGIBILITY`'s (contracts `plugins.ts`), twenty-seven. The page drew sixteen; four are changed
   here, `workspace.read`, `shell.dialog` and `shell.open` to what the power does and `artifact.publish` to §9 "Apps"'
-  word (the page drew "pages"). Those four and the eleven it did not draw are ‹for James›: `doc.read`, `doc.write`,
+  word (the page drew "pages"). Those four and the eleven it did not draw are ‹draft›: `doc.read`, `doc.write`,
   `index.read`, `approval.respond`, `mcp.consume`, `terminal.attach`, `agent.spawn`, `agent.control`, `shell.windows`,
   `shell.clipboard` and `shell.webcontents`.
   - On the desk: `canvas.read` "Read what's on the desk" · `canvas.write` "Change what's on the desk" · `doc.read`
@@ -8888,19 +8916,20 @@ screen (AO-L8).
   - **A power of its own.** One a plugin names itself (`x.‹pluginId›.‹name›`, declared in `contributes.capabilities`)
     is said by the title the plugin that declares it wrote, its description under it, and "A power of its own, named
     by ‹plugin›", so the words are never taken for VibeField's; when the plugin asking is not the one that declares
-    it, "A power ‹plugin› names" ‹for James›, ‹plugin› the declaring one. One whose declaring plugin isn't installed
-    has no title to say, and its words are ‹for James›. *Known deviation, owed (MK, MK-E12; item 282-6's plugin
-    half):* Settings → Plugins' Capabilities pane names each power by its id (`panels/PluginCapabilities.tsx`) and
-    says one it can't give in `DENIAL_TEXT`'s words, "not eligible for this entry kind" or "blocked by source policy";
-    its updates say "artifact hash mismatch — discarded" (`installErrorText`, `panels/PluginUpdates.tsx`).
+    it, "A power ‹plugin› names" ‹draft›, ‹plugin› the declaring one. One whose declaring plugin isn't installed
+    has no title to say, and its words are MK-4's to draft, judged on screen with the rest. *Known deviation, owed
+    (MK, MK-E12; item 282-6's plugin half):* Settings → Plugins' Capabilities pane names each power by its id
+    (`panels/PluginCapabilities.tsx`) and says one it can't give in `DENIAL_TEXT`'s words, "not eligible for this
+    entry kind" or "blocked by source policy"; its updates say "artifact hash mismatch — discarded"
+    (`installErrorText`, `panels/PluginUpdates.tsx`).
 - **Settings and Diagnostics** (MK-D10; MK-E5, MK-E12). A plugin's settings are said on its page, under **Settings**,
   as Settings says its own; the page carries Settings' Undo and Redo, so the form's foot no longer sends you to the
   window toolbar ("Synced user settings can be undone from the window toolbar.", `panels/PluginSettingsForm.tsx`) and
-  says "Synced settings can be undone here or in Settings." ‹for James› (§8 "The settings undo affordance"); where
+  says "Synced settings can be undone here or in Settings." ‹draft› (§8 "The settings undo affordance"); where
   the pair sits on the page is drawn at MK-4 and written in §8 "Plugins — the frame's second popup" first. Settings'
   undo note stays true ("… plugin grants, and live canvas tuning are excluded.", its "Synced preference history" row,
-  `panels/SettingsPanel.tsx`). Settings → Updates' foot says "Plugins update from Plugins… in the Me menu." ‹for
-  James›. Settings → Diagnostics' **Plugins** section is where a plugin's insides may be read: its id, its controllers
+  `panels/SettingsPanel.tsx`). Settings → Updates' foot says "Plugins update from Plugins… in the Me menu." ‹draft›.
+  Settings → Diagnostics' **Plugins** section is where a plugin's insides may be read: its id, its controllers
   and behaviors, the Doctor's issues, under "Each plugin's runtime: its controllers, behaviors and the Doctor's
   issues. Moved here from Settings → Plugins." (MK-D10's ruled drawing; §8 "Settings → Diagnostics' Plugins
   section").
@@ -8908,12 +8937,11 @@ screen (AO-L8).
   window before it completes). **Plugins…** and **More in Plugins…** open the popup. Two acts the rule would give
   one are bare as ruled: **Check plugins for updates**, which opens the popup on Updates (where the app menu's
   Check for Updates… wears one, answering in a box), by MK-D1 and MK-E7 ("words as the page drew them"), and
-  **Install**, which asks on the install card, by MK-D13 beside **Remove…**. *Known deviation from the rule, ruled
-  (MK, 2026-11-11):* each changes here first if James says so.
-  **Remove…** and **Remove it and its data…** ask; **Update…** and **Update all…** ask only while an update removes an
-  object. **Show them on the
-  pegboard**, **Update**, **Update all**, **Check again**, **Show installed**, **Try again** and the cards' own
-  **Install**, **Remove** and **Turn on community plugins** complete as pressed and wear none.
+  **Install**, which asks on the install card, by MK-D13 beside **Remove…**. *Known deviation from the rule, kept by
+  James (2026-11-11 06:48:31Z, at MK's lean: "keep them as ruled").* **Remove…** and **Remove it and its data…** ask;
+  **Update…** and **Update all…** ask only while an update removes an object. **Show them on the pegboard**,
+  **Update**, **Update all**, **Check again**, **Show installed**, **Try again** and the cards' own **Install**,
+  **Remove** and **Turn on community plugins** complete as pressed and wear none.
 - **Never on screen** (the insides rule, above). Where the list comes from (`vibefield/registry`, a URL), "signed", a
   hash or "sha256", "Built from ‹repo› at ‹commit›", a rung (R0, R1, R2), "worker-hosted" or "sandboxed" (TD-6: the UI
   never calls a community plugin sandboxed), a plugin's id or a power's id, a plugin's controllers, workers or
