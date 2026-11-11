@@ -294,6 +294,20 @@ struct AccountCornerView: View {
     .accessibilityLabel("\(face.name.isEmpty ? "You" : face.name)\(face.detail.map { ", \($0)" } ?? "") — account")
   }
 
+  /// The acts above the desktops, top to bottom as they stand on screen: Sign out farthest from the thumb, then Sign
+  /// in while the tailnet asks, Theme (IOS-10b), Lock now while the lock is on, and Settings…. Pure, and
+  /// nonisolated, so a test holds the order: Theme stands above Settings…, and above Lock now, which keeps its place
+  /// just above Settings… (WI-3; DESIGN.md §8 "The phone's corner", amended 2026-11-11).
+  nonisolated static func menuRows(canSignOut: Bool, offersSignIn: Bool, lockOn: Bool) -> [AccountMenuRowKind] {
+    var rows: [AccountMenuRowKind] = []
+    if canSignOut { rows.append(.signOut) }
+    if offersSignIn { rows.append(.signIn) }
+    rows.append(.theme)
+    if lockOn { rows.append(.lockNow) }
+    rows.append(.settings)
+    return rows
+  }
+
   /// The rows above you, top to bottom as they stand on screen.
   private var rows: some View {
     VStack(alignment: .leading, spacing: 1) {
@@ -306,16 +320,25 @@ struct AccountCornerView: View {
           .padding(.top, 10)
           .padding(.bottom, 6)
       }
-      if face.canSignOut {
-        AccountMenuRow(glyph: "rectangle.portrait.and.arrow.right", label: "Sign out", action: onSignOut)
+      ForEach(
+        Self.menuRows(canSignOut: face.canSignOut, offersSignIn: face.offersSignIn, lockOn: onLockNow != nil),
+        id: \.self
+      ) { row in
+        switch row {
+        case .signOut:
+          AccountMenuRow(glyph: "rectangle.portrait.and.arrow.right", label: "Sign out", action: onSignOut)
+        case .signIn:
+          AccountMenuRow(glyph: "key", label: face.signInWord, action: onSignIn)
+        case .theme:
+          ThemeMenuRow()
+        case .lockNow:
+          if let onLockNow {
+            AccountMenuRow(glyph: "lock", label: "Lock now", action: onLockNow)
+          }
+        case .settings:
+          AccountMenuRow(glyph: "gearshape", label: "Settings…", action: onSettings)
+        }
       }
-      if face.offersSignIn {
-        AccountMenuRow(glyph: "key", label: face.signInWord, action: onSignIn)
-      }
-      if let onLockNow {
-        AccountMenuRow(glyph: "lock", label: "Lock now", action: onLockNow)
-      }
-      AccountMenuRow(glyph: "gearshape", label: "Settings…", action: onSettings)
       separator
       if !face.desktops.isEmpty {
         ChromeEyebrow("Your desktops")
@@ -366,6 +389,52 @@ struct AccountCornerView: View {
       .padding(.horizontal, 6)
       .padding(.vertical, 4)
   }
+}
+
+/// The Me menu's acts above the desktops (`AccountCornerView.menuRows`), each drawn by its own row.
+enum AccountMenuRowKind: Hashable, Sendable {
+  case signOut
+  case signIn
+  case theme
+  case lockNow
+  case settings
+}
+
+/// IOS-10b — the Me menu's Theme row (theme-row, James on the page Settings in a Pocket, 2026-11-11; DESIGN.md §8
+/// "The phone's corner", amended that day): the Mac's own row at touch pitch. `sun` (or `moon`, by night) in the
+/// glyph's column, then a small segmented control, Light · Dark · Auto. It keeps the one setting Settings ›
+/// Appearance keeps, so the window changes at once, and choosing leaves the menu open while it does.
+struct ThemeMenuRow: View {
+  /// The one key every view that reads or writes the phone's look uses (`PhoneAppearance.storageKey`).
+  nonisolated static let storageKey = PhoneAppearance.storageKey
+
+  @AppStorage(ThemeMenuRow.storageKey) private var look: PhoneAppearance = .auto
+  @Environment(\.colorScheme) private var scheme
+
+  var body: some View {
+    HStack(spacing: 4) {
+      AccountMenuGlyph(glyph: Self.glyph(dark: scheme == .dark), device: nil)
+        .frame(width: AccountCornerView.circle - 12)
+      Text("Theme")
+        .font(ChromeType.sans(15, .medium))
+        .foregroundStyle(ChromePalette.ink)
+        .lineLimit(1)
+      Spacer(minLength: 8)
+      Picker("Theme", selection: $look) {
+        ForEach(PhoneAppearance.allCases) { option in
+          Text(option.word).tag(option)
+        }
+      }
+      .pickerStyle(.segmented)
+      .controlSize(.small)
+      .fixedSize()
+      .padding(.trailing, 8)
+    }
+    .frame(minHeight: 44)
+  }
+
+  /// `sun`, or `moon` by night, as the Mac's Theme row wears them.
+  nonisolated static func glyph(dark: Bool) -> String { dark ? "moon" : "sun.max" }
 }
 
 /// One menu row: a lead in the face's own 50 pt column, a label, and an
