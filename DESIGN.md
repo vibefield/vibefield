@@ -6603,6 +6603,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Settings. The Me menu gets a Plugins… row, and it opens a popup of its own: the frame's second popup, built the
   way search is" (the page). A plugin is usually a set of objects, so its shelf shows sets. It is the frame's, as
   the Peek is, and it opens over every view, Canvas among them. *Status 2026-11-11: ruled; nothing of it is built.*
+  *Corrected 2026-11-11 (MK-4c's docs; VF-PM 13:56:27Z): "nothing of it is built" stopped being true at MK-4a,
+  which built the popup; MK-4b built its doors in the Me menu and the palette, and MK-4c a plugin's page, read
+  only. The rest below is not built.*
   MK-1, MK-2 and MK-4…MK-6 build it (MK-4 the popup, MK-5 Settings' half, MK-6 its catalog plates and gates; there
   is no MK-3), MK-7 what waits on ICE's door, and none of it lands before the v0.9.0 tag unless James says so
   (MK-E13). No build configures a registry today (`fieldd/src/bin.ts` sets none, and `fieldd/src/plugin-install.ts`
@@ -6647,6 +6650,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     tertiary ink — what the tab holds and when the list was read ("checked 14:02") — and the act the hot tile
     offers, 32 tall, corners 16, 12.5/600 on the ready fill (14% under the pointer), with **↵ printed on it** in
     tertiary ink. Its words are in §9 "The plugins' words".
+    *Drawn and built 2026-11-11 (MK-4c; VF-PM 13:56:27Z), ‹draft› for James's eye:* Updates' part says its count
+    after its word, 4 apart, in the part's own ink and weight, read from the one value the Me menu's row reads;
+    while that is 0, or before any read, it says none.
   - **Discover** (MK-D2, the Shelf): **the featured set** first, while the category is All — the index's `featured`,
     the maintainers' pick (MK-D12) — its picture large beside its words; then **the pegboard's categories**, All and
     then those the listed objects hang under, as the pegboard's own filters read (§8 "The pegboard"), with no
@@ -6721,6 +6727,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     source badge"), and under the title its one line at 12/400 in tertiary ink, ellipsised. Built in first, then by
     title. MK-4a draws the row read only: its switch and its chevron come with its page (MK-4c), and the switch stays
     in Settings → Plugins until that page leaves (MK-5).
+    *Corrected 2026-11-11 (MK-4c; VF-PM 13:56:27Z):* the chevron comes with the page (MK-4c) and the switch with
+    the slice after it (MK-4c2); the switch stays in Settings → Plugins until the page leaves (MK-5).
+    *Drawn and built 2026-11-11 (MK-4c), ‹draft› for James's eye:* each row is a press that opens its page. The
+    hot row wears the ready fill, as a Peek row's does: the first row as the tab shows, ↑ ↓ moving it and keeping
+    it in sight (scrolled to the nearest edge, as the Peek's), and ↵ or a press opening its page; the row under
+    the pointer wears the same fill. Its end is the `chevron` 12 in tertiary ink, 12 after its text.
   - **Updates** is what the last read found, its time at its head. Each update says how it changes the set before
     you take it — the objects it adds or removes (MK-D4) — over its notes, with **Update**; one that removes an
     object asks first, because the objects of that kind on your desks would wear the missing face. Nothing installs
@@ -6765,6 +6777,39 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **An update brings the window back fresh** when the plugin adds objects (MK-E6): the popup opens again on that
       plugin's page, saying Installed, and nothing on screen says the window came back (§9: no reload or restart
       word).
+    - **Read only first** (*drawn and built 2026-11-11, MK-4c; VF-PM 13:56:27Z*; ‹draft› for James's eye, its
+      words in §9 "The plugins' words"): until the acts above are built, a page holds none of them. In every
+      build only Installed's rows open one (Discover's tiles and Updates' rows are not built). As shipped on
+      2026-11-11 no build configures a registry, so the pages a person can open are Built in plugins' and, under a
+      developer's roots, Development ones'.
+      - **Its back row** stands at its top, 36 tall, padded 0 10, corners 10: the `chevron` 12 pointing back and
+        the tab's word at 12/500 in secondary ink, the ready fill under the pointer. A press or Esc goes back.
+      - **Its columns**, padded 8 24 24 under the back row, 32 apart: the second 280 wide, the first the rest. In
+        a popup narrower than 720 they stack, the second above the first. The body scrolls them together.
+      - **The second column's head**: the row's 32 slot with the `plugin` glyph 16 (no picture reaches the
+        window yet, so the first column holds no picture and no strip), then the title at 20/600 in primary
+        ink, and its source pill (§8 "The plugin source badge") 8 under it.
+      - **Where its act will stand**, 12 under the head: **Installed** at 12.5/600 in tertiary ink, 32 tall,
+        with no ↵ — words, not a control. It is no button, wears no fill under the pointer, takes no stop of
+        Tab, and the ↑ ↓ walk never reaches it (VF-PM 13:56:27Z).
+      - **Its sections**, 20 apart: each head at 12/600 in secondary ink, its lines 6 under it at 13/400 in
+        primary ink. The first column holds the plugin's own words (the listing's summary, for a plugin in the
+        plugin list held alone), then **What it adds**; the second, under the act, **What it can do**, **Made
+        by** and **Version**. No **Settings** yet (MK-4c2).
+      - **What it adds**: each object by its pegboard label, or by its title when it hangs nowhere; then its
+        tools and its service; or that it adds none. Where each hangs waits for the pegboard's names to reach
+        the popup (MK-4d).
+      - **What it can do**: each power it holds, in §9's plain words, the Mac's note under one on a Mac. A power
+        it asked for and does not hold comes back with its switch (MK-4c2); until then Settings → Plugins shows
+        it.
+      - **Made by**: a Built in plugin's §9 sentence; for a plugin in the plugin list held, that list's word for
+        its maker (VibeField, or its publisher's name), never what the installed folder says of itself (item
+        321); a Development or Sideloaded plugin has none. Who reviewed it is not said: the plugin list does not
+        carry it yet.
+      - **Version**: its version.
+      - Esc on a page goes back to its tab before it folds the popup (Keys, below); a tab pressed on a page
+        leaves the page for that tab; words typed on a page go back to its tab's list, filtered. The foot keeps
+        its tab's sentence and offers no act.
   - **After install: Show them on the pegboard** (MK-D8 ruled A, B ships; MK-E2). As it ships, the act folds the popup
     and the board rises on the set's first category with its first object in the keyboard's focus — the pegboard's
     own category and focus doors (§8 "The pegboard"), and nothing of ICE's insides; over a covered view the frame
@@ -8919,6 +8964,8 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     differs from the ruled line above, which says where a set hangs ("4 objects · Things, Tools · 1.0.0"; "Hangs under
     Things · 1.0.0"), for those names are the pegboard's and the popup does not read them yet. A built-in's keeps its
     version before its end, "3 objects · 1.2.0 · comes with VibeField".
+    *Corrected 2026-11-11 (MK-4c; VF-PM 13:56:27Z): the place waits for the pegboard's names to reach the popup
+    (MK-4d), not for the plugin's page.*
   - A plugin with no object and one of the two says "No objects · a service" or "No objects · tools", and with
     neither, "No objects".
   - One of a thing is said as one: "1 plugin", "1 object".
@@ -8928,6 +8975,21 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     ink, for the plugin list VibeField holds carries no expiry yet, and fieldd sends no such state.
   - To assistive tech, the switch is named "Discover · Installed · Updates", the field by its words, "Search plugins
     and objects…", and Installed's list "Installed".
+  *Added 2026-11-11 (MK-4c; VF-PM 13:56:27Z), MK's words, ‹draft›, for James's eye:*
+  - A plugin's page's back row says the chevron and its tab's word, "Installed", and is named "Back to
+    Installed" to assistive tech. Where its act will stand it says **Installed**, the act's own word once true,
+    as words.
+  - **What it adds** says each ‹object› (one that hangs nowhere, by its title), then "Tools for your agents"
+    when it brings tools and "A service" when it runs one ("service" is near VibeField's insides, so it is
+    James's to keep or strike); with none of them, "No objects".
+  - **What it can do** says each power it holds in the plain words below; one named by a plugin that isn't
+    installed, "A power named by a plugin that isn't installed here"; with none, "Nothing beyond drawing its
+    own objects" (the install card's) or, for a plugin with no object, "Nothing beyond its own work".
+  - **Made by** says a Built in plugin's sentence above, "Comes with VibeField. It can be turned off, not
+    removed."; a listed plugin's, "VibeField" or its publisher's name. A Development or Sideloaded plugin's
+    page has no Made by, and no page says "Reviewed by" until the plugin list carries who reviewed it.
+  - **Version** says its version, "1.2.0".
+  - The switch's **Updates** says its count after its word, "Updates 2", and nothing while there are none.
 - **Sources** (MK-D13; MK-E11). **Built in** (a bundled plugin, decided first) · **VibeField** (a listed plugin
   VibeField publishes) · the publisher's name otherwise, with **Community** beside it on a community row ·
   **Development** and **Sideloaded**, as today. Never "Registry", "Registry · ‹publisher›" or "Built by the registry";
