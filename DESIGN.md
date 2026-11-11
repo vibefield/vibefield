@@ -7306,6 +7306,28 @@ never a second, however many Retries fail. What failed is logged whole: main log
 2026-11-10 (item 281, IS-281 A):* the splash's stage words named its insides ("waking the daemon", "staging plugins");
 while a start goes well the bar alone speaks, and the steps' words go to the log (`renderer.boot.stage`).
 
+**Every room keeps them inside, the same way** (item 282, 2026-11-10: James's picks IS-282-1…7, all A, on the page
+*Insides on Screen*, 02:35:35Z to 03:32:49Z):
+- **A failure says the act and its next step** ("Couldn't resume this session." and **Try again**), and what failed
+  goes to the log, as a start's does (IS-282-1).
+- **VibeField is named, never one of its parts** (IS-282-2). A part that stopped is VibeField that stopped or
+  restarted, and what a person can do is the same either way.
+- **History speaks as History** (IS-282-3): it is opening, isn't answering, is updating, or stopped, with **Try again**.
+  Its index, rosettad, its schema and its restart are its insides, and AO-L8 (2026-10-27) wins over the older index
+  words (fix7, 2026-10-14).
+- **Keychains, link records, tailnet names and VibeField's own folders stay inside** (IS-282-4). A person reads what
+  the thing does for them ("kept safe", "connected"), and where a file needs moving, VibeField moves it or says which
+  button to press.
+- **The phone's terminal card says what the person can do** (IS-282-5): type, wait, or try again. How the phone
+  reaches the terminal stays inside.
+- **What only someone fixing VibeField needs lives in Diagnostics** (IS-282-6), which AO-L8 already makes its home. An
+  everyday page keeps one plain line per row, and its act.
+- **The small words follow** (IS-282-7): the index is History, the deck is terminals, and kinds and exit signals stay
+  inside.
+
+*Known deviation, owed: ruled 2026-11-10 and not yet built. Each pick is built as its own slice, and that slice amends
+at their source, dated, the lines of this file that still give the older words.*
+
 **Sizes are said as Finder counts them**, in thousands — bytes, KB, MB, GB (the terminal settings
 page, the line's notes) — and a size a person did not make, such as a link's message, is never
 said as theirs. A count in 1024s names itself KiB or MiB (Diagnostics). Where a size meets a
