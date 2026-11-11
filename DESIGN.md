@@ -6653,6 +6653,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   2026-11-06, UM-4 (the M-phone stack): the meters' feed (`MetersFeed`), the Me menu's Agent Profiles row, the Agent
   Profiles page and the held face.* *(Corrected the same day, the M-phone stack: this said "Nothing is drawn yet: UM-4
   draws it.")*
+  *Amended 2026-11-11 (James on the page Settings in a Pocket, 23:00Z: theme-row, the row):* the Me menu gains
+  **Theme**, the Mac's row at touch pitch (§8 "The Me menu"): `sun` (or `moon`, by night) in the glyph's column, then
+  a small segmented control, **Light · Dark · Auto**, the same one setting as Settings › Appearance
+  (`PhoneAppearance.storageKey`). It stands above Settings…, and above Lock now while the lock is on, so Lock now keeps
+  its place just above Settings… (WI-3). Choosing leaves the menu open while the phone changes behind it, as the
+  Mac's does.
   - **At rest the face is plain** (UM-D24 A): no ring, no meter's dot and no lens glyph. A tap is still the menu.
   - **Hold it** for **520ms**, the spawn bloom's own hold (`FieldMotion.longPressDuration`, puppeteer-views'
     `holdMs`), with 10 of slop before it opens; a short tap stays the menu's. ‹for James: the page said 450 "as the
