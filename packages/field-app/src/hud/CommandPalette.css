@@ -15,6 +15,16 @@
   opacity: 1;
 }
 
+/* Folding, it takes no pointer (DESIGN.md §6: the palette fades out over 200ms, taking no
+   pointer as it goes; item 318). Unseen for its 200ms, and until `CommandPalette` unmounts
+   it, the layer is still the whole window's (`.field-recede`'s box) and above the frame (70
+   over 62): a press on the head's or the line's own controls landed on its dim and was lost.
+   The one frame before it shows, as it mounts, is the same. The rule outranks the box's
+   `:where(.field-recede) > *` (base.css), and the dim and the panel inherit it. */
+.vf-palette-layer:not([data-visible]) {
+  pointer-events: none;
+}
+
 /* The backdrop dim (§5) — a click on it closes the palette. No recede. */
 .vf-palette-dim {
   position: absolute;

@@ -10238,6 +10238,15 @@ export async function runSmokeGodview(opts: {
         `document.querySelector(".vf-palette-layer[data-visible]") === null ? "ok" : "open"`,
         5_000,
       );
+      // Item 318: folded, the layer stands unseen for its fade, over the whole window and above
+      // the frame. It must take no pointer there, or 11k's press on the circle lands on its dim.
+      const folding = (await win.webContents.executeJavaScript(`(() => {
+        const layer = document.querySelector(".vf-palette-layer");
+        return layer === null ? "gone" : getComputedStyle(layer).pointerEvents;
+      })()`)) as string;
+      if (folding !== "gone" && folding !== "none") {
+        throw new Error(`the folding palette's layer still takes the pointer: ${folding}`);
+      }
       headKeys["typing"] = `⇧1 into the palette's field typed "${typed}" and fit nothing`;
       await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
       pressViewKey(win, "godview");
@@ -10281,6 +10290,8 @@ export async function runSmokeGodview(opts: {
       hubs: number;
       /** The heading of Live's quiet state, or null while it shows its tiles. */
       quiet: string | null;
+      /** What a press at the circle's middle would land on: its class, or its tag (item 318). */
+      top: string | null;
     };
     /** The covered sheet, its circle and its shelf as the page shows them now. Under a cover
      * `.vf-head-sheet` is the circle's sheet alone: the pill is `.vf-head-place`. */
@@ -10304,6 +10315,11 @@ export async function runSmokeGodview(opts: {
           : shelf.querySelector('[aria-label="Live"] .vf-artifact-quiet .vf-ui-empty-state__title');
       const hub =
         shelf === null ? null : shelf.querySelector('.vf-head-hub [aria-label="Live"]');
+      const middle = box(circle === null ? null : circle.querySelector(".vf-package-button"));
+      const top =
+        middle === null
+          ? null
+          : document.elementFromPoint(middle.x + middle.w / 2, middle.y + middle.h / 2);
       return {
         view: ${VIEW_NOW},
         circle: circle === null ? null : {
@@ -10322,6 +10338,7 @@ export async function runSmokeGodview(opts: {
         hub: hub !== null,
         hubs: document.querySelectorAll('[aria-label="Live"]').length,
         quiet: quiet === null ? null : (quiet.textContent ?? "").trim(),
+        top: top === null ? null : (top.getAttribute("class") ?? top.tagName),
       };
     })()`;
     const hubFacts = async (): Promise<HubFacts> =>
