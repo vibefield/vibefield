@@ -31,18 +31,19 @@ export interface PaneFace {
 /** How a session's ending reads. Exit 0 is an ending, not a failure — DESIGN.md
  * §2.5 gives red to `failed`, and a shell the user typed `exit` into did not
  * fail — so it takes the muted ramp (no color) and states the fact in words.
- * A nonzero code or a signal is a real failure and wears `--vf-red`. */
+ * A nonzero code or a signal is a real failure and wears `--vf-red`. The code and the signal's name stay inside
+ * (item 282, IS-282-7, 2026-11-11): a signal says "ended", a nonzero code "exited with an error". */
 export function describePane(session: DeckSession): PaneFace | undefined {
   if (!session.exited) return undefined;
   if (session.exitSignal !== null) {
-    return { label: `ended · ${session.exitSignal}`, color: "var(--vf-red)" };
+    return { label: "ended", color: "var(--vf-red)" };
   }
   if (session.exitCode === null) {
     // The floor knows it ended and not how. Saying so beats inventing a code.
     return { label: "ended" };
   }
   if (session.exitCode === 0) return { label: "exited" };
-  return { label: `exited · ${session.exitCode}`, color: "var(--vf-red)" };
+  return { label: "exited with an error", color: "var(--vf-red)" };
 }
 
 /**

@@ -7,11 +7,11 @@ import type { PluginRegistrySnapshot } from "@vibefield/contracts";
 //
 //   "plugin off"          — its plugin is disabled (the desk was remounted without its kind);
 //   "plugin gone"         — its plugin was uninstalled (a staged plugin whose record left the registry);
-//   "no kind"             — a type this build never registered (a ghost stub's faceless type — a board from
-//                           another desktop);
-//   "remount to draw it"  — its plugin is on, but the desk was mounted without its kind (ICE I25: the kind set
+//   "can't draw here"     — a type this build never registered (a ghost stub's faceless type — a board from
+//                           another desktop); it said "no kind" until item 282 (IS-282-7, 2026-11-11);
+//   "reload to draw it"   — its plugin is on, but the desk was mounted without its kind (ICE I25: the kind set
 //                           is fixed for a layer's life — a plugin turned on again, or new to this engine, draws
-//                           at the next mount);
+//                           at the next mount); it said "remount to draw it" until item 282 (IS-282-7, 2026-11-11);
 //   "can't draw"          — its kind FAULTED: refused at create or quarantined (ICE I24, `status().faults`).
 //
 // The bar prints the label where the kind's acts would stand ("Clock · plugin off"), the grown menu's eyebrow
@@ -21,8 +21,8 @@ import type { PluginRegistrySnapshot } from "@vibefield/contracts";
 export type ObjectWordState =
   | "plugin off"
   | "plugin gone"
-  | "no kind"
-  | "remount to draw it"
+  | "can't draw here"
+  | "reload to draw it"
   | "can't draw";
 
 export interface ObjectWords {
@@ -70,11 +70,11 @@ function stateOf(
     // mounted without its kind, its plugin not disabled: with no registry to read (the daemon away) it is off,
     // as the desk was told; a record gone from the registry was uninstalled; one that is on waits for a mount
     if (facts.snapshot === null) return "plugin off";
-    return enabled === undefined ? "plugin gone" : "remount to draw it";
+    return enabled === undefined ? "plugin gone" : "reload to draw it";
   }
   if (!facts.kinded) {
-    if (enabled === true) return "remount to draw it";
-    if (facts.builtIn?.[type] === undefined) return "no kind";
+    if (enabled === true) return "reload to draw it";
+    if (facts.builtIn?.[type] === undefined) return "can't draw here";
   }
   return null;
 }

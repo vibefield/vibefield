@@ -150,7 +150,7 @@ export function StatusSection(): ReactElement {
           source="frame/StatusLine.tsx"
         >
           <div className="vf-ds-status-line-stage vf-ds-status-line-stage--held">
-            <StatusLineView notice={{ id: "remount", text: "Dial · remount to draw it" }} held />
+            <StatusLineView notice={{ id: "remount", text: "Dial · reload to draw it" }} held />
           </div>
         </Specimen>
         <Specimen
@@ -207,7 +207,7 @@ export function StatusSection(): ReactElement {
         <div>
           <StatusDot tone="attention" />
           <strong>Waiting on 3</strong>
-          <small>A peer is offline</small>
+          <small>One of your devices is offline</small>
         </div>
         <div>
           <StatusDot tone="error" />

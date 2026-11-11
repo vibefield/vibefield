@@ -75,7 +75,10 @@ describe("what a copy is called, and the words it keeps (copy-face.ts)", () => {
 
   it("a MISSING FACE is named by its type — never its word", () => {
     expect(copyName([{ ...clock, words: words(clock.type, "Clock", "plugin off") }])).toBe("Clock");
-    const noKind = { type: "acme.widget", words: words("acme.widget", "acme.widget", "no kind") };
+    const noKind = {
+      type: "acme.widget",
+      words: words("acme.widget", "acme.widget", "can't draw here"),
+    };
     expect(copyName([{ ...noKind, props: {} }])).toBe("acme.widget");
   });
 

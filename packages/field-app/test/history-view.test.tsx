@@ -760,7 +760,7 @@ describe("History's create: New terminal in the project the room shows (HN-7)", 
   it("a deck that is up is asked first: its refusal is said in History, and the window stays", async () => {
     const newTerminal = vi.fn<LineViewDoor["newTerminal"]>(async () => ({
       state: "refused",
-      reason: "no pane to open it in — open one in the deck first",
+      reason: "no pane to open it in — open a terminal in Godview first",
     }));
     publishGodviewLineDoor(deck(newTerminal));
     mount(
@@ -777,7 +777,7 @@ describe("History's create: New terminal in the project the room shows (HN-7)", 
       create().click();
     });
     expect(await until(noteNow, "the line's note")).toBe(
-      "Terminal could not be opened — no pane to open it in — open one in the deck first",
+      "Terminal could not be opened — no pane to open it in — open a terminal in Godview first",
     );
     expect(newTerminal).toHaveBeenCalledExactlyOnceWith({ cwd: "/Users/me/Projects/vibe-field" });
     expect(asked).not.toContain("godview");

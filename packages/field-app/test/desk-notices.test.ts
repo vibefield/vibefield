@@ -31,13 +31,13 @@ const wordsFrom =
 
 describe("the desk's notices on the status line (DK-11)", () => {
   it("says each missing type once, in the bar's words — and never a type its kind draws", () => {
-    const words = wordsFrom({ "x.clock": "plugin off", "x.dial": "no kind" });
+    const words = wordsFrom({ "x.clock": "plugin off", "x.dial": "can't draw here" });
     announceMissing(["desk.note", "x.clock", "x.dial"], words);
     announceMissing(["desk.note", "x.clock", "x.dial"], words); // the next frame, the next status: nothing
     vi.advanceTimersByTime(STATUS_STAND_MS * 3); // one at a time: the second takes the line after the first
     expect(statusLineSaid()).toEqual([
       { id: "missing:x.clock:plugin off", text: "clock · plugin off" },
-      { id: "missing:x.dial:no kind", text: "dial · no kind" },
+      { id: "missing:x.dial:can't draw here", text: "dial · can't draw here" },
     ]);
   });
 

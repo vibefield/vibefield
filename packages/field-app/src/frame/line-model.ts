@@ -86,7 +86,7 @@ export const SNAPSHOT_NO_DOOR = "no capture here";
  * — a platform with none, or a tree before its first `build:screenshot-helper`
  * (`capture-state.ts`; R-B 4): the Snap tile's words, as `captureRefusal` says
  * the same refusal on the note. */
-export const SNAPSHOT_NO_HELPER = "no capture helper on this platform";
+export const SNAPSHOT_NO_HELPER = "snapshots aren't available on this computer";
 
 /** Its key as the frame says it: MAIN's, taken above the page in
  * `before-input-event` (`window-chords.ts`; the View menu's Take Screenshot) —

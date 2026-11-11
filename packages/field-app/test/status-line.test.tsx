@@ -38,10 +38,10 @@ afterEach(() => {
 
 describe("the status line", () => {
   it("says a plain notice once, for 2.4s, then it goes", () => {
-    sayStatus({ id: "remount", text: "Note · remount to draw it" });
-    expect(getStatusNotice()?.text).toBe("Note · remount to draw it");
+    sayStatus({ id: "remount", text: "Note · reload to draw it" });
+    expect(getStatusNotice()?.text).toBe("Note · reload to draw it");
     vi.advanceTimersByTime(STATUS_STAND_MS - 1);
-    sayStatus({ id: "remount", text: "Note · remount to draw it" }); // said again: nothing
+    sayStatus({ id: "remount", text: "Note · reload to draw it" }); // said again: nothing
     vi.advanceTimersByTime(1);
     expect(getStatusNotice()).toBeNull();
     expect(STATUS_STAND_MS).toBe(2400);

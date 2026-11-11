@@ -269,7 +269,7 @@ export function CanvasStage({
     let frame: number | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     // the chrome's words for a type ON THIS MOUNT: against the kinds the layer was made without (I25 — a plugin
-    // turned on again draws only at the next mount: "remount to draw it"), the registry and the desk's faults now
+    // turned on again draws only at the next mount: "reload to draw it"), the registry and the desk's faults now
     const mountedOff = mountedOffRef.current;
     const builtIn = Object.fromEntries(
       ce.catalog

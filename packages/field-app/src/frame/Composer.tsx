@@ -190,7 +190,7 @@ export function Composer({
 
   const newTerminal = useCallback(async () => {
     if (door === null) {
-      say(newTerminalNote({ state: "refused", reason: "the deck is not connected yet" }), "create");
+      say(newTerminalNote({ state: "refused", reason: "terminals aren't ready yet" }), "create");
       return;
     }
     say(newTerminalNote(await door.newTerminal()), "create");
@@ -344,7 +344,7 @@ export function Composer({
     [create, keys, surface, takesNewSpark, view],
   );
 
-  const createWaits = view === "godview" && door === null ? "the deck is not connected yet" : null;
+  const createWaits = view === "godview" && door === null ? "terminals aren't ready yet" : null;
 
   return (
     <ComposerLineView

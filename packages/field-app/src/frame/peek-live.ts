@@ -130,17 +130,17 @@ export type LiveFeedState =
  * when it is ready and has nothing to add. */
 export function liveIndexWords(status: HistorySearchStatus | undefined): string | null {
   if (status === undefined) return null;
-  if (!status.reachable) return `transcript search off — ${status.detail ?? "no daemon"}`;
+  if (!status.reachable) return "search isn't available right now";
   switch (status.readiness) {
     case "building":
       return status.progress !== undefined && status.progress.total > 0
-        ? `indexing · ${Math.floor((100 * status.progress.done) / status.progress.total)}%`
-        : "the index is being prepared";
+        ? `search is getting ready · ${Math.floor((100 * status.progress.done) / status.progress.total)}%`
+        : "search is getting ready";
     case "catching-up":
       return "catching up";
     case "stale":
     case "failed":
-      return "transcript search unavailable";
+      return "search isn't available right now";
     default:
       return null;
   }

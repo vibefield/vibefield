@@ -479,14 +479,14 @@ export function Peek({
         phase.failed === undefined
           ? narrowed
             ? "None of your latest sessions is in what the filters keep."
-            : "Nothing to show yet — your latest sessions appear here once the index has read them."
+            : "Nothing to show yet — your latest sessions appear here once History has read them."
           : "Your latest sessions could not be read.";
     } else if (phase.kind === "answer") {
       none = phase.result.answered
         ? peekNone(words, filtered)
-        : `Search waits for the index — ${unansweredWords(phase.result)}.`;
+        : `${unansweredWords(phase.result)}.`;
     } else if (phase.kind === "failed") {
-      none = "Search could not ask the index.";
+      none = "Search isn't available right now.";
     }
   }
   const foot =

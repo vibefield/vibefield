@@ -50,7 +50,7 @@ export function newTerminalOutcome(outcome: LocalMountOutcome): NewTerminalOutco
       ...(outcome.placement !== undefined ? { placement: outcome.placement } : {}),
     };
   if (outcome.state === "failed") return { state: "refused", reason: outcome.reason };
-  return { state: "refused", reason: "no pane to open it in — open one in the deck first" };
+  return { state: "refused", reason: "no pane to open it in — open a terminal in Godview first" };
 }
 
 /** Paste `text` into a deck pane's input — the road ⌘V takes (`terminal/paste-road.ts`), into

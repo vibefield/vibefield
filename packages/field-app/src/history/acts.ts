@@ -233,7 +233,7 @@ export async function newTerminalIn(
     const deck = up ?? (await deckOf(deps));
     if (deck === null) {
       deps.unplaced?.("terminal");
-      return { state: "refused", reason: "the deck is not connected yet" };
+      return { state: "refused", reason: "terminals aren't ready yet" };
     }
     const opened = await deckAnswerWithin(
       cwd === undefined ? deck.newTerminal() : deck.newTerminal({ cwd }),

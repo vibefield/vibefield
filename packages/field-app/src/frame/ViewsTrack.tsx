@@ -53,7 +53,7 @@ export interface ViewsTrackViewProps {
   /** CH-D4 — the note over Chat's cell, for 2.4 s, or null. */
   note?: ViewsNote | null;
   /** AO-4b — History imports (`history/first-reading.ts`): its cell carries
-   * the arc (DESIGN.md §6) and its name says so, "History, importing". */
+   * the arc (DESIGN.md §6) and its name says so, "History, reading" (item 282, IS-282-7, 2026-11-11). */
   importing?: boolean;
 }
 
@@ -152,7 +152,7 @@ export function ViewsTrackView({
 
 /** A cell's accessible name: its view's, and what its arc or its dot says. */
 function cellLabel(cell: FrameViewCell, arc: boolean, dot: ThreadMark | null): string {
-  if (arc) return `${cell.name}, importing`;
+  if (arc) return `${cell.name}, reading`;
   if (dot === "needs") return `${cell.name}, a spark needs you`;
   if (dot === "unread") return `${cell.name}, a thread is unread`;
   return cell.name;

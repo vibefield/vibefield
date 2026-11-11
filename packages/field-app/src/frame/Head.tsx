@@ -83,23 +83,23 @@ export function syncDot(status: DocSyncStatus): HeadDot | null {
     case "pending":
       return {
         tone: "muted",
-        title: `Waiting on ${status.pendingRecords} record${status.pendingRecords === 1 ? "" : "s"} from a peer${when}`,
+        title: `Waiting on ${status.pendingRecords} change${status.pendingRecords === 1 ? "" : "s"} from another device${when}`,
       };
     case "peer-offline":
       // Honest about the window (F-C6-22): the last exchange, never promptness.
       return {
         tone: "muted",
-        title: `A peer is offline — not everything here has reached it${when}`,
+        title: `One of your devices is offline — not everything here has reached it${when}`,
       };
     case "peer-declined":
       return {
         tone: "attention",
-        title: `A peer's records were declined (${status.reason ?? "unknown"}) — devices may differ${when}`,
+        title: `This device didn't take some changes from another device${when}`,
       };
     case "epoch-stale":
       return {
         tone: "attention",
-        title: `Parted from a peer by compaction — it must re-bootstrap${when}`,
+        title: `Catching up with your other devices${when}`,
       };
     default:
       return null; // in step, and syncing: the pill stays quiet

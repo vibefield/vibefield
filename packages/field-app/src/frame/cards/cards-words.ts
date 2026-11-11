@@ -210,7 +210,7 @@ export function captureRefusal(error: ScreenshotCaptureError): string {
       return "Screen Recording is off — System Settings › Privacy & Security";
     case "helper-missing":
     case "unsupported-platform":
-      return "Not captured — no capture helper on this platform";
+      return "Not captured — snapshots aren't available on this computer";
     case "busy":
       return "Not captured — one capture at a time";
     default:

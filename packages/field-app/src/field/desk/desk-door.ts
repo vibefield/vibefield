@@ -365,7 +365,7 @@ export interface VfDeskDoor {
   ambient(mode?: AmbientMode): AmbientMode;
   memory(): GpuMemory | null;
   /** DK-9, DK-11 — what the selection bar prints for an object of `type`: its human name, and why the desk
-   * draws it as missing ("plugin off", "plugin gone", "no kind", "remount to draw it", "can't draw"), the
+   * draws it as missing ("plugin off", "plugin gone", "can't draw here", "reload to draw it", "can't draw"), the
    * label "Clock · plugin off". */
   words(type: string): ObjectWords;
   /** DK-11 — every notice the status line has said this session, in order (each said ONCE). */

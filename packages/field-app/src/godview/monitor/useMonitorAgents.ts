@@ -699,7 +699,7 @@ export function useMonitorAgents({
         remoteSessionId,
       });
       if (outcome.state === "no-pane") {
-        announce("no pane to attach to — open one in the deck first");
+        announce("no pane to attach to — open a terminal first");
         return;
       }
       if (outcome.state === "failed") {
@@ -749,7 +749,7 @@ export function useMonitorAgents({
       }
       const outcome = await door.mountLocal(sessionId);
       if (outcome.state === "no-pane") {
-        announce("no pane to mount into — open one in the deck first");
+        announce("no pane to mount into — open a terminal first");
         return;
       }
       if (outcome.state === "failed") {
@@ -829,7 +829,7 @@ export function useMonitorAgents({
       }
       landed();
       if (outcome.state === "no-pane") {
-        throw refuse("no pane to open a terminal in — open one in the deck first");
+        throw refuse("no pane to open a terminal in — open a terminal in Godview first");
       }
       if (outcome.state === "failed") {
         throw refuse(`terminal could not be opened${under} — ${outcome.reason}`);

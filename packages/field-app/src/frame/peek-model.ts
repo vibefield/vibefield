@@ -294,14 +294,16 @@ export type PeekPhase =
 const plural = (count: number, one: string, many = `${one}s`): string =>
   `${count} ${count === 1 ? one : many}`;
 
-/** Why the index did not answer, in words — its own sentence when it gave
- * one, its build's progress while it builds. */
+/** Why the index did not answer, in Search's words (item 282, IS-282-7, 2026-11-11): getting ready while it
+ * builds, with its count when it has one; else not available. The index's own detail stays off the screen. */
 export function unansweredWords(result: IndexSearchResult): string {
-  const { progress, readiness, detail } = result.state;
-  if (readiness === "building" && progress !== undefined && progress.total > 0) {
-    return `the index is being built · ${Math.floor((100 * progress.done) / progress.total)}%`;
+  const { progress, readiness } = result.state;
+  if (readiness === "building") {
+    return progress !== undefined && progress.total > 0
+      ? `Search is getting ready · ${Math.floor((100 * progress.done) / progress.total)}%`
+      : "Search is getting ready";
   }
-  return detail ?? `the index's search is ${readiness}`;
+  return "Search isn't available right now";
 }
 
 /** Everything's foot: one sentence (the kit's `footHtml`, in VibeField's
@@ -317,10 +319,10 @@ export function peekFoot(phase: PeekPhase, rows: readonly PeekRow[]): string {
     case "searching":
       return "Searching your past…";
     case "failed":
-      return `Search could not ask the index — ${phase.reason}`;
+      return "Search isn't available right now";
     case "answer": {
       const { result } = phase;
-      if (!result.answered) return `No answer yet — ${unansweredWords(result)}`;
+      if (!result.answered) return unansweredWords(result);
       const lines = rows.reduce((sum, row) => sum + row.lines.length, 0);
       const said = `${plural(rows.length, "session")} · ${plural(lines, "line")} matched`;
       return result.clipped ? `${said} · the first page only — narrow the search` : said;

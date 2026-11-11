@@ -1508,7 +1508,7 @@
 }
 
 /* THE EXIT FACE, kept and moved (GT-6).
-   `describePane` says what became of a dead pane — "exited · 1", "ended · 9" —
+   `describePane` says what became of a dead pane — "exited", "exited with an error", "ended" —
    through the one vocabulary ghosttea gives an embedder, its pane badge; the
    record has no field for it, and the frame's own badge now owns the top-right
    corner that badge sits in. So the host's badge moves to the bottom-left, over
