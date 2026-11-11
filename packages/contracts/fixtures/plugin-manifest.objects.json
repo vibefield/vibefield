@@ -65,10 +65,7 @@
         "agent": {
           "summary": "An analogue desk clock.",
           "concurrency": "many",
-          "faces": [
-            { "type": "ref", "label": "Live" },
-            { "type": "image", "label": "Picture" }
-          ],
+          "faces": [{ "type": "ref", "label": "Live" }, { "type": "image", "label": "Picture" }],
           "guide": "./assets/agent/guide.md",
           "tools": [
             {
