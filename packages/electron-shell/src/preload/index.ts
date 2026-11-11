@@ -142,24 +142,47 @@ const liveSurfaceFrames = new PreloadLiveSurfaceFrameMux({
   },
 });
 const diagnostics = new PreloadDiagnosticsBridge();
-const desktopState = new PreloadDesktopStateBridge((issueCount) => {
-  logging.submit(
-    JSON.stringify({
-      v: 1,
-      records: [
-        {
-          v: 1,
-          time: Date.now(),
-          level: "error",
-          event: "renderer.preload.desktop_state_rejected",
-          msg: "Preload rejected malformed desktop capability state",
-          component: "preload.shell",
-          attrs: { issueCount },
-        },
-      ],
-    }),
-  );
-});
+const desktopState = new PreloadDesktopStateBridge(
+  (issueCount) => {
+    logging.submit(
+      JSON.stringify({
+        v: 1,
+        records: [
+          {
+            v: 1,
+            time: Date.now(),
+            level: "error",
+            event: "renderer.preload.desktop_state_rejected",
+            msg: "Preload rejected malformed desktop capability state",
+            component: "preload.shell",
+            attrs: { issueCount },
+          },
+        ],
+      }),
+    );
+  },
+  // Item 315 — the bridge fans out; a reader that throws is said here and the others still run
+  (error) => {
+    logging.submit(
+      JSON.stringify({
+        v: 1,
+        records: [
+          {
+            v: 1,
+            time: Date.now(),
+            level: "error",
+            event: "renderer.preload.desktop_state_reader_failed",
+            msg: "A reader of the desktop state threw; the other readers still received it",
+            component: "preload.shell",
+            attrs: {
+              error: (error instanceof Error ? error.message : String(error)).slice(0, 512),
+            },
+          },
+        ],
+      }),
+    );
+  },
+);
 const shellCommands = new PreloadShellCommandBridge((issueCount) => {
   logging.submit(
     JSON.stringify({

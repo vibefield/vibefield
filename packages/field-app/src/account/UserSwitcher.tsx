@@ -1,6 +1,6 @@
 import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
 import { type ReactElement, useEffect, useState } from "react";
-import { leaveFor } from "../boot/switch";
+import { leaveFor, QuitHeldRefusal } from "../boot/switch";
 import { type FieldUserFace, type FieldUserProfile, type FieldUserRoster, getHost } from "../host";
 import { buttonCls, labelCls, SettingsSection } from "../panels/settings-ui";
 import { shownFaces } from "./faces";
@@ -81,6 +81,8 @@ export function UserSwitcher(): ReactElement {
     setActionError(null);
     void act().catch((cause: unknown) => {
       setPressed({ kind: "none" });
+      // item 315 — a press made while VibeField quits is ignored: nothing is said
+      if (cause instanceof QuitHeldRefusal) return;
       setActionError(cause instanceof Error ? cause.message : String(cause));
     });
   };

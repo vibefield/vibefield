@@ -8,10 +8,10 @@ import {
 
 // Item 290 (D4, James 2026-11-10 06:49Z; DESIGN.md §9 "The quit's words") — while a person's quit holds every pair, a
 // switch and a new user are refused BEFORE they reach any coordinator, in James's words: the coordinator's own refusal
-// ("fieldd is held for a stop: …") never travels up to a window. The words reach the Me menu as "Couldn't switch to
-// Lee — VibeField is quitting." (`MeMenu.tsx:1138` → `refusalSentence`), as the Settings head and the chooser say them
-// too, and Settings → Account whole (`UserSwitcher.tsx:84`); the reason is the log's. That they cross the preload with
-// no class's name is `preload-users.test.ts`'s to hold (item 314).
+// ("fieldd is held for a stop: …") never travels up to a window; the reason is the log's. Since item 315 the window
+// ignores a press while the quit's hold stands (its desktop state's `quitting`, told by `onHeld`), so no door draws
+// these words; that a refusal crossing the preload carries no class's name is `preload-users.test.ts`'s to hold
+// (item 314).
 describe("the quit's latch (item 290, D4)", () => {
   it("while held, a switch and a new user are refused in James's words, never the service's, and the log hears which", () => {
     const onRefused = vi.fn();

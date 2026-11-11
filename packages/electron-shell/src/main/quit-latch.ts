@@ -4,9 +4,10 @@
 // James's words, and a pair bundle born now starts held (`FielddHandleCoordinator`'s `heldAtBirth`), so nothing it is
 // asked starts a pair. Pure, so its refusal is held by a test without the composition root.
 
-/** James's words (D4): what a switch or a new user asked for while VibeField quits says. The Me menu and the Settings
- * head draw "Couldn't switch to Lee — VibeField is quitting." (`refusalSentence`), the chooser "Couldn't open Lee's
- * field — VibeField is quitting."; Settings → Account draws the words alone. */
+/** James's words (D4): the latch's refusal of a switch or a new user while VibeField quits, kept for the log. Since
+ * item 315 no door draws them: the window ignores a press while the quit's hold stands (its desktop state's
+ * `quitting`, `onHeld` below), and a refusal from here reaches a door only in the race the preload's bridge row holds
+ * (`preload-users.test.ts`). */
 export const QUITTING_WORDS = "VibeField is quitting";
 
 /** The refusal a switch carries up to the window's doors, which draw its message whole. Main replies with its
@@ -25,8 +26,7 @@ export type QuitRefused = "switch" | "new-user";
 export interface QuitLatchOptions {
   /** said once per refusal, for the log (never the person's words) */
   readonly onRefused?: (what: QuitRefused) => void;
-  /** Item 315 — the hold set (true) and its release (false), for the window's desktop state (`quitting`). RED:
-   * declared, never called. */
+  /** Item 315 — the hold set (true) and its release (false), for the window's desktop state (`quitting`). */
   readonly onHeld?: (held: boolean) => void;
 }
 
@@ -47,9 +47,11 @@ export function createQuitLatch(options: QuitLatchOptions = {}): QuitLatch {
     },
     hold() {
       held = true;
+      options.onHeld?.(true);
     },
     release() {
       held = false;
+      options.onHeld?.(false);
     },
     refuse(what) {
       if (!held) return;

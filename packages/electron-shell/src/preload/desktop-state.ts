@@ -5,15 +5,23 @@ import {
 
 /** Latest-value bridge for main-owned desktop capability truth. Main can
  * publish before React mounts; every later subscriber receives the current
- * validated snapshot immediately. */
+ * validated snapshot immediately.
+ *
+ * Item 315 — it fans out: the field's chrome and the switch's layer both read
+ * the desktop state, and before item 315 a second subscriber replaced the
+ * first. Each subscriber gets the latest snapshot as it subscribes and every
+ * snapshot after. The same reader subscribed twice is one entry, so either of
+ * its two unsubscribes removes it. A reader that throws is reported to
+ * `onHandlerError` and never stops the others: the preload has no caller to
+ * hand the throw back to, and one broken reader must not starve the rest. */
 export class PreloadDesktopStateBridge {
-  private handler: ((state: DesktopShellState) => void) | null = null;
+  private readonly handlers = new Set<(state: DesktopShellState) => void>();
   private latest: DesktopShellState | null = null;
 
   constructor(
     private readonly onRejected: (issueCount: number) => void,
-    /** Item 315 — a reader that throws is reported here and the others still run. RED: declared, not called. */
-    readonly onHandlerError: (error: unknown) => void = () => undefined,
+    /** a reader that threw, reported once per throw; the others still ran */
+    private readonly onHandlerError: (error: unknown) => void = () => undefined,
   ) {}
 
   accept(raw: unknown): void {
@@ -23,14 +31,22 @@ export class PreloadDesktopStateBridge {
       return;
     }
     this.latest = parsed.data;
-    this.handler?.(parsed.data);
+    for (const handler of [...this.handlers]) this.deliver(handler, parsed.data);
   }
 
   subscribe(handler: (state: DesktopShellState) => void): () => void {
-    this.handler = handler;
-    if (this.latest !== null) handler(this.latest);
+    this.handlers.add(handler);
+    if (this.latest !== null) this.deliver(handler, this.latest);
     return () => {
-      if (this.handler === handler) this.handler = null;
+      this.handlers.delete(handler);
     };
+  }
+
+  private deliver(handler: (state: DesktopShellState) => void, state: DesktopShellState): void {
+    try {
+      handler(state);
+    } catch (error) {
+      this.onHandlerError(error);
+    }
   }
 }

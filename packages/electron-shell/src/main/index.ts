@@ -1125,6 +1125,9 @@ async function main(
   const pairBundles = new Map<string, PairBundle>();
   // Item 290 (D4; DESIGN.md §9 "The quit's words") — the quit's latch: the quit gate's hold sets it and its release
   // clears it (the gate port below). A switch or a new user is refused under it in James's words; the log hears which.
+  // Item 315 — the hold and its release republish the window's desktop state, which carries `quitting`, so the window
+  // ignores a press while VibeField quits (DESIGN.md §9). Before the state's first publish there is nothing to
+  // republish; that first publish reads the latch itself.
   const quitLatch = createQuitLatch({
     onRefused: (what) =>
       logger.info(
@@ -1132,6 +1135,7 @@ async function main(
         "A switch was refused because VibeField is quitting",
         { what },
       ),
+    onHeld: () => republishDesktopState?.(),
   });
   let windowRendererBoundary: ReturnType<typeof registerWindowBootstrap> | null = null;
   const ensurePairBundle = (
@@ -2442,6 +2446,8 @@ async function main(
       browser: { signIns: browserProfiles.signIns },
       // item 212 (RV #29) — the attached person's field service, as the link model holds it (null while it is up)
       fieldd: fielddLink.view().fieldd,
+      // item 315 — a person's quit has gone ahead: the latch's hold, read at every publish
+      quitting: quitLatch.held,
     });
     latestDesktopState = state;
     const window = registry.primary();

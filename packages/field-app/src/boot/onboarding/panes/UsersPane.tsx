@@ -2,7 +2,7 @@ import { type ReactElement, useEffect, useState } from "react";
 import { faceOf, shownFaces } from "../../../account/faces";
 import { refusalSentence } from "../../../account/use-account";
 import { type FieldUserProfile, type FieldUserRoster, getHost } from "../../../host";
-import { leaveFor } from "../../switch";
+import { leaveFor, QuitHeldRefusal } from "../../switch";
 import { OnboardingUsersPaneView } from "../views/users";
 
 /** The users chooser's controller: the roster, and the switch. Choosing another
@@ -81,6 +81,8 @@ export function UsersPane({
           () => usersSwitch({ userId }),
         ).catch((cause: unknown) => {
           setOpening(null);
+          // item 315 — a tile pressed while VibeField quits is ignored: nothing is said
+          if (cause instanceof QuitHeldRefusal) return;
           setError(refusalSentence(`Couldn't open ${name}'s field`, cause));
         });
       }}

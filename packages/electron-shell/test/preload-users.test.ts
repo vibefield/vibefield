@@ -195,8 +195,9 @@ describe("preload profile door: the face (UA-7)", () => {
   });
 
   // Item 314 — the quit's latch (item 290) refuses a switch and a new user with its own class, and
-  // main replies with that error's toString(), its class's name included. The window's doors draw
-  // what this bridge hands back, so the page must get James's words alone.
+  // main replies with that error's toString(), its class's name included. Since item 315 the window
+  // ignores a press while VibeField quits, so a refusal reaches the page only in a race (main's
+  // refusal before its desktop state's `quitting`); this row keeps even that one free of the name.
   it("hands the page the quit's refusal in its words alone, never its class's name", async () => {
     const wrapped = (channel: string): Error =>
       new Error(`Error invoking remote method '${channel}': ${new QuitRefusalError().toString()}`);

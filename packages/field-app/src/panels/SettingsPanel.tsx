@@ -18,7 +18,7 @@ import {
 } from "react";
 import { hasLink, linkFace, type UserLinkStatus } from "../account/link";
 import { refusalSentence, useAccountSnapshot } from "../account/use-account";
-import { leaveFor } from "../boot/switch";
+import { leaveFor, QuitHeldRefusal } from "../boot/switch";
 import { getHost } from "../host";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
 import { finishSetupRows, useSetupLedger } from "../setup/ledger";
@@ -229,6 +229,8 @@ export function SettingsPanel({
                     () => usersSwitch({ userId }),
                   ).catch((cause: unknown) => {
                     setSwitching(false);
+                    // item 315 — a face pressed while VibeField quits is ignored: nothing is said
+                    if (cause instanceof QuitHeldRefusal) return;
                     setSwitchRefusal(refusalSentence(`Couldn't switch to ${name}`, cause));
                   });
                 },

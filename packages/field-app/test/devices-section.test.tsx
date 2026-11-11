@@ -316,7 +316,7 @@ describe("Settings → Devices: the Tailscale card (TS-D1, TS-D2, TS-D4)", () =>
   // 290's latch), and this page says none of them. No switch stage is registered here, so
   // `leaveFor` goes straight to main; in the product the window leaves and comes back first.
   // James's ruling of 2026-11-10 19:13:21Z ("it should not do anything, ignore the press") is
-  // item 315's to build.
+  // item 315's, held by the row below with a stage registered.
   it("says nothing when a new user is refused while VibeField quits", async () => {
     const create = vi.fn(async () => {
       throw new Error("VibeField is quitting");

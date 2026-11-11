@@ -19,7 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { leaveFor } from "../boot/switch";
+import { leaveFor, QuitHeldRefusal } from "../boot/switch";
 import { roundButtonCls } from "../field/theme-constants";
 import { getHost } from "../host";
 import { errorText, NO_FLOW, type UpdatesFlow, useUpdateRestart } from "../panels/update-flow";
@@ -1018,6 +1018,8 @@ export function MeMenu({
     setRefusal(null);
     void run().catch((cause: unknown) => {
       setBusy(false);
+      // item 315 — a press made while VibeField quits is ignored: nothing is said
+      if (cause instanceof QuitHeldRefusal) return;
       setRefusal(refusalSentence(head, cause));
       onOpenChange(true);
     });

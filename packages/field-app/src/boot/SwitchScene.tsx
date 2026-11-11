@@ -7,8 +7,10 @@ import {
   useRef,
   useState,
 } from "react";
+import { peekHost } from "../host";
 import { MatSplashFace, SplashStatus, type SplashStatusView } from "./splash-parts";
 import {
+  followQuitState,
   registerSwitchStage,
   revealArrival,
   SWITCH_MOTION,
@@ -340,7 +342,9 @@ export function SwitchLayer({
 }): ReactElement | null {
   const state = useSwitchState();
   useLayoutEffect(() => registerSwitchStage(), []);
-  // Item 315, RED: the layer does not yet read main's desktop state (`followQuitState`).
+  // Item 315 — the layer reads main's desktop state for `quitting`, so a press made while VibeField quits is
+  // ignored. It is mounted in every window state (BootRoot), the Setup Assistant's chooser included.
+  useEffect(() => peekHost()?.onDesktopState?.(followQuitState), []);
   useEffect(() => {
     if (ready && state.kind === "arriving" && state.phase === "held") revealArrival();
   }, [ready, state]);

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { FieldUserFace } from "../host";
+import { type FieldUserFace, peekHost } from "../host";
 
 // The switch (DESIGN.md §8 "The switch"; UA-D15). Changing users reloads the
 // window, so the transition is two halves that meet on one frame: the window
@@ -238,10 +238,37 @@ function faceIn(from: Element): Element | null {
   return from.matches(".vf-face") ? from : from.querySelector(".vf-face");
 }
 
+/** Item 315 — a press ignored while VibeField quits: said once to the log, then refused as the quit's, which every
+ * door swallows. `what` is "new-user" for a leaving with no persona (the chooser's rare missing person is logged so
+ * too, a known wrong label). `refused` is main's failure when the hold landed while main was asked: whatever it was,
+ * the press is the quit's and nothing is said, so its message rides the log line (bounded, as the preload's
+ * reader-failure line) and is the one place the real cause is kept. */
+function ignoredWhileQuitting(persona: SwitchPersona | null, refused?: { cause: unknown }): never {
+  try {
+    const log = peekHost()?.logger.child({ component: "switch" });
+    const attrs: Record<string, string> = { what: persona === null ? "new-user" : "switch" };
+    if (refused !== undefined) {
+      const { cause } = refused;
+      attrs.cause = (cause instanceof Error ? cause.message : String(cause)).slice(0, 512);
+    }
+    log?.info(
+      "renderer.switch.ignored_while_quitting",
+      "A press was ignored: VibeField is quitting",
+      attrs,
+    );
+  } catch {
+    // a logging fault never stops the press being ignored
+  }
+  throw new QuitHeldRefusal();
+}
+
 /** Leave this window for another user: play the leaving, and only once the
  * frame has converged ask main (`act`) — main re-targets and reloads, and the
  * next window opens on the same frame. A refusal plays the leaving backwards
- * and rejects with main's error, for the caller to say where it always does. */
+ * and rejects with main's error, for the caller to say where it always does.
+ * Item 315: while VibeField quits the press is ignored. It rejects with
+ * `QuitHeldRefusal` before anything moves, and a refusal from main that lands
+ * once the quit has gone ahead rejects so too, as the return begins. */
 export async function leaveFor(
   persona: SwitchPersona | null,
   from: Element | null,
@@ -250,12 +277,19 @@ export async function leaveFor(
   if (getSwitchState().kind !== "idle") {
     throw new Error("a user switch is already in flight");
   }
-  // Item 315, RED: a held window is not refused here yet. The green refuses before any state is set, and logs it.
+  // Item 315 — once VibeField's quit has gone ahead the press is ignored: nothing leaves and main is not asked.
+  if (quitHeld) ignoredWhileQuitting(persona);
   // Nobody here plays a switch (a browser harness, a unit test): nothing to
   // converge, and no scene on the other side to hand a face to — straight to
   // main, which is what a switch was before it had a scene.
   if (stages === 0) {
-    await act();
+    try {
+      await act();
+    } catch (error) {
+      // item 315 — main's refusal that lands after the quit went ahead is the quit's
+      if (quitHeld) ignoredWhileQuitting(persona, { cause: error });
+      throw error;
+    }
     return;
   }
   const face = from === null ? null : faceIn(from);
@@ -275,6 +309,8 @@ export async function leaveFor(
     clearArrival();
     set({ ...leaving, phase: "returning" });
     arm(SWITCH_MOTION.returned + SAFETY_MS, switchReturned);
+    // item 315 — a switch already leaving when the quit went ahead comes back and says nothing
+    if (quitHeld) ignoredWhileQuitting(persona, { cause: error });
     throw error;
   }
   arm(WATCHDOG_MS, () => {
