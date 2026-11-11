@@ -3048,7 +3048,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     System control, as HK Q3, James 2026-10-28 "B", made the surface lab development's alone)*;
     **App** — Settings… ⌘, · Plugins… · Check plugins for updates, which opens the Plugins popup on
     Updates: opening it is the read (§8 "Plugins — the frame's second popup"; *amended 2026-11-11,
-    MK-D1, MK-D5, VF-PM's MK-E7; to be built in track MK*); neither has a key; then each enabled
+    MK-D1, MK-D5, VF-PM's MK-E7; to be built in track MK*; *built 2026-11-11, MK-4b*); neither has
+    a key; then each enabled
     plugin's palette commands under the plugin's name, one no live handler answers drawn
     "unavailable" and never run. Eyebrows 10px mono capitals in tertiary ink; rows 36, a 16 glyph
     in a 24 column in secondary ink (the zoom acts and System control carry none), 13/500, the
@@ -3069,7 +3070,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     and the covered sheet back into the circle's place, also as the cover lowers — and the Hub
     stays in the sheet that showed it, never moving to the other. The Plugins popup is in the same
     value, as `plugins` (§8 "Plugins — the frame's second popup"; *amended 2026-11-11, MK-D2;
-    to be built in track MK*): opening it folds the Peek, the palette, the Me menu and the rest,
+    to be built in track MK*; *built 2026-11-11, MK-4a, noted at MK-4b*): opening it folds the Peek,
+    the palette, the Me menu and the rest,
     and each of them folds it.
   - **The right slot is the zoom readout alone**, 16 in, and the pill gives up only the wider of
     the lights' 96 and that slot (FR-4, 2026-10-03: the theme went into the Me menu, FC-D5, F3, and
@@ -3789,7 +3791,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   words, never a mark: no dot and no cyan (cyan says an install of the app waits on you, AU-D1, §2.5), and
   nothing on your face, whose badge slot stays the waiting count's or the app update's (§2.8 I-5). Opening the
   menu reads nothing: the row says what the last read found. *To be built in track MK; until then the menu has
-  no Plugins… row.* Its words are §9 "The plugins' words".
+  no Plugins… row.* *Built 2026-11-11, MK-4b.* Its words are §9 "The plugins' words".
+  *Added 2026-11-11 (MK-4b; VF-PM 12:56:02Z, C1), MK's words, ‹draft›, for James's eye:* so that the row says what
+  the last read found after VibeField starts again, the window asks fieldd once, as it opens, for the list fieldd
+  already holds (`plugins.catalog.get`, which never reads the registry). It asks once per window, on no timer and
+  never as the menu opens; an answer that fails or comes late leaves the row with no count, the window says
+  nothing of it, and the popup's next opening is the next read.
 - **The Connect pane** (Setup pane 4, and every surface that starts the link; track TS, ruled
   2026-10-27 — TS-D1…TS-D8, TS-D12, TS-D13; the record is `draft/thinking-tailscale-onboarding.md`,
   the page *Your Devices, One Field*). The pane keeps its place, the wizard's glass and its fixed
@@ -9357,7 +9364,8 @@ and the pegboard's **More in Plugins…** pill (15; §8 "The pegboard"), and the
 (§8 "Plugins — the frame's second popup"). The palette's **Check plugins for updates** wears
 `reset`, as the app's update does. The Settings rail's Plugins row wears it today and retires with
 MK-D10, when that page leaves Settings; the agents' Extensions in Settings → Agent Profiles keep
-wearing it. *To be built in track MK.*
+wearing it. *To be built in track MK.* *Built 2026-11-11: the popup's field at MK-4a, and the Me menu's and the
+palette's doors at MK-4b; the pegboard's pill is MK-4d's.*
 **`package`** is Artifacts' (PL-D1, PL-D2; built at HN-8; *amended 2026-11-05, MA-D13 (a): the shelf it opens
 says Apps, and the glyph stays, below*): the pill's button and the covered views'
 circle (§8 "The head"), folded into the terminals' title bar with search. It was the right notch's
