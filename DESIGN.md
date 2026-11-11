@@ -6735,6 +6735,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     hot row wears the ready fill, as a Peek row's does: the first row as the tab shows, ↑ ↓ moving it and keeping
     it in sight (scrolled to the nearest edge, as the Peek's), and ↵ or a press opening its page; the row under
     the pointer wears the same fill. Its end is the `chevron` 12 in tertiary ink, 12 after its text.
+    *Drawn 2026-11-11 (MK-4c2a; VF-PM 18:36:34Z), ‹draft› for James's eye:* a Built in or Development plugin's row
+    carries its one switch, the kit's switch, 12 after its text and 12 before its chevron. The row's press is its
+    picture, its title and its line; the switch stands beside it, a control of its own and never inside the press,
+    with its own stop of Tab in the rows' order, while ↑ ↓ ↵ and the pointer keep the press's. A row of any other
+    source — a plugin from the plugin list, whatever the list says of it, or a Sideloaded one — has no switch, for
+    a record's source and id are what its folder can say (item 321). Settings → Plugins keeps its switch until MK-5.
   - **Updates** is what the last read found, its time at its head. Each update says how it changes the set before
     you take it — the objects it adds or removes (MK-D4) — over its notes, with **Update**; one that removes an
     object asks first, because the objects of that kind on your desks would wear the missing face. Nothing installs
@@ -6822,6 +6828,23 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - Esc on a page goes back to its tab before it folds the popup (Keys, below); a tab pressed on a page
         leaves the page for that tab; words typed on a page go back to its tab's list, filtered. The foot keeps
         its tab's sentence and offers no act.
+    - **Its switches** (*drawn 2026-11-11, MK-4c2a; VF-PM 18:36:34Z*; ‹draft› for James's eye, its words in §9
+      "The plugins' words"): a Built in or Development plugin's page carries them, and any other page carries
+      none and says, 12 under where its act stands, at 12/400 in tertiary ink, that they aren't here yet.
+      - **The one switch** stands 12 after **Installed**, centred on its 32: the same switch as its row's. A press
+        on either moves neither until fieldd's next snapshot says the plugin is on or off, and then both move.
+      - **What it can do** lists each power it asked for: one it holds with its switch on, one taken back with
+        its switch off, each switch at its line's end, 12 after its words. One it can't have on this desktop
+        has no switch, and says why under its words at 12/400 in tertiary ink.
+      - **While it is off**, the powers' switches take no press, and a line 6 under What it can do's head, at
+        12/400 in tertiary ink, says how to change them.
+      - **Under way**, a switch keeps its place and takes no press, and nothing spins: it moves when fieldd's
+        snapshot does. **Refused**, it stays where fieldd has it, and one line under it, at 12/400 in the
+        attention ink (§2.5), says it couldn't change, never the error's own text. **Away** (fieldd isn't
+        answering), no switch takes a press, and the page says the popup's away sentence 12 under its act.
+      - A Built in plugin's page says, 12 under its act at 12/400 in tertiary ink, that its switches reach your
+        other desktops: the install-set carries a Built in plugin's choices, and never a Development one's, so a
+        Development plugin's page does not say it.
   - **After install: Show them on the pegboard** (MK-D8 ruled A, B ships; MK-E2). As it ships, the act folds the popup
     and the board rises on the set's first category with its first object in the keyboard's focus — the pegboard's
     own category and focus doors (§8 "The pegboard"), and nothing of ICE's insides; over a covered view the frame
@@ -9002,6 +9025,18 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     page has no Made by, and no page says "Reviewed by" until the plugin list carries who reviewed it.
   - **Version** says its version, "1.2.0".
   - The switch's **Updates** says its count after its word, "Updates 2", and nothing while there are none.
+  *Added 2026-11-11 (MK-4c2a; VF-PM 18:36:34Z, 18:39:16Z), MK's words, ‹draft›, for James's eye:*
+  - A plugin's one switch is named to assistive tech by the plugin, "‹plugin›", and a power's switch by the power's
+    plain words; each says on or off as a switch does, so its name never changes with its state.
+  - A page of a plugin from the plugin list, or a Sideloaded one, says "Its switches aren't here yet."
+  - A Built in plugin's page says "Turning it off, or a power off, does the same on your other desktops."
+  - An off plugin's page says, under What it can do, "Turn it on to change what it can do."
+  - A power it can't have here says why: "Its kind of plugin can't have this power", "Not allowed for a plugin from
+    its source" or "Not available on this desktop".
+  - A switch that couldn't change says "Couldn't turn it off. Try again." or "Couldn't turn it on. Try again."
+  - *Kept, dated 2026-11-11 (VF-PM 18:36:34Z, ruling 10):* Settings → Plugins keeps its own words until MK-5 —
+    "Enable ‹plugin›" and "Disable ‹plugin›" on its switch (`panels/PluginsSection.tsx`), `DENIAL_TEXT`'s reasons
+    (`panels/PluginCapabilities.tsx`) and an error's own text. MK-4c2a changes nothing there.
 - **Sources** (MK-D13; MK-E11). **Built in** (a bundled plugin, decided first) · **VibeField** (a listed plugin
   VibeField publishes) · the publisher's name otherwise, with **Community** beside it on a community row ·
   **Development** and **Sideloaded**, as today. Never "Registry", "Registry · ‹publisher›" or "Built by the registry";
