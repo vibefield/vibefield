@@ -3,11 +3,27 @@ import FieldSettings
 import SwiftUI
 import UIKit
 
+/// WI-W4 B (James, 2026-11-11; DESIGN.md §8 "The phone's way in", WI-L4 amended) — the acts' glass's own measures:
+/// 18 above its first slot and 18 under the last thing it holds; the pill 50; a second 50 under 10; a third at least
+/// 22 under 14; the welcome's foot, a 12 pt line, under 10. Outside the view, so the glass's height is pure anywhere.
+private enum GlassMeasure {
+  static let pad: CGFloat = 18
+  /// `ChromePillStyle.wideHeight`; WayInScreenTests' `glassFits` holds the two equal.
+  static let pill: CGFloat = 50
+  static let secondGap: CGFloat = 10
+  static let thirdGap: CGFloat = 14
+  static let thirdLine: CGFloat = 22
+  static let footGap: CGFloat = 10
+  static let footLine: CGFloat = 14
+  /// How far a hold steps the glass down, out of its way: the 210 every glass was, and 30 more.
+  static let stepAway: CGFloat = 240
+}
+
 /// WI-1/WI-2 — the way in, standing over the splash's field (DESIGN.md §8 "The phone's way in"; every word is
-/// §9 "The way in"'s, by way of `FieldHomeModel.wayInScreen`). Three places that never move (WI-L4): where you
-/// are at the top; one picture on the words line, the splash's own mark or what takes its place, and the words
-/// under it; the acts in one glass at the bottom, the primary always in its first slot. It decides nothing:
-/// every act goes back to the home.
+/// §9 "The way in"'s, by way of `FieldHomeModel.wayInScreen`). Three places (WI-L4): where you are at the top; one
+/// picture on the words line, the splash's own mark or what takes its place, and the words under it; the acts in one
+/// glass at the bottom, the primary always in its first slot, the glass fitted to what it holds (WI-W4 B, WI-L4 as
+/// amended 2026-11-11). It decides nothing: every act goes back to the home.
 struct WayInView: View {
   let screen: FieldHomeModel.WayInScreen
   /// The face that takes the mark's place (the found beat, Tailscale asking again), and its tilt's seed.
@@ -20,16 +36,19 @@ struct WayInView: View {
   @State private var copied = false
 
   /// The page's measures, on a 402 × 874 phone: the picture stands on a line 29 pt under the screen's centre
-  /// (the mark's own centre), and the words start 45 pt under it.
+  /// (the mark's own centre), and the words start 45 pt under it. The glass's own are `GlassMeasure`'s.
   private enum Measure {
     static let pictureLine: CGFloat = 29
     static let pictureBox: CGFloat = 200
     static let wordsTop: CGFloat = 45
-    static let glassHeight: CGFloat = 210
     static let glassInset: CGFloat = 8
     static let slotInset: CGFloat = 20
     static let faceSize: CGFloat = 96
   }
+
+  /// WI-W2c B (James, 2026-11-11; DESIGN.md §8): the note under the words wears the line's own ink, so it holds where
+  /// the field's rays cross it, and size alone tells it from the line.
+  nonisolated static let noteInk = ChromePalette.inkSecondary
 
   /// What shows in the mark's place.
   var picture: FieldHomeModel.WayInScreen.Picture {
@@ -169,7 +188,7 @@ struct WayInView: View {
       if let note = screen.words.note {
         Text(note)
           .font(ChromeType.sans(ChromeType.hintSize))
-          .foregroundStyle(ChromePalette.inkTertiary)
+          .foregroundStyle(Self.noteInk)
           .multilineTextAlignment(.center)
           .fixedSize(horizontal: false, vertical: true)
           .frame(maxWidth: 320)
@@ -215,6 +234,18 @@ struct WayInView: View {
     return glass
   }
 
+  /// WI-W4 B (James, 2026-11-11; WI-L4 amended): the glass fits what it holds, its height for one line in each slot.
+  /// One act is 86, two 146 (the curtain's act and its note), three 182, the welcome with its foot 206; a glass that
+  /// holds nothing has no height, since a hold steps it away. Pure, and nonisolated, so a test holds it.
+  nonisolated static func glassHeight(_ glass: Glass) -> CGFloat {
+    guard !glass.slots.isEmpty else { return 0 }
+    var height = GlassMeasure.pad + GlassMeasure.pill
+    if glass.slots.count > 1 { height += GlassMeasure.secondGap + GlassMeasure.pill }
+    if glass.slots.count > 2 { height += GlassMeasure.thirdGap + GlassMeasure.thirdLine }
+    if glass.foot != nil { height += GlassMeasure.footGap + GlassMeasure.footLine }
+    return height + GlassMeasure.pad
+  }
+
   private var actsGlass: some View {
     let shape = UnevenRoundedRectangle(
       topLeadingRadius: 32, bottomLeadingRadius: 47, bottomTrailingRadius: 47, topTrailingRadius: 32,
@@ -222,36 +253,41 @@ struct WayInView: View {
     let glass = Self.glass(screen.acts)
     let acts = glass.slots
     let shown = risen && !acts.isEmpty
+    let motion = reduceMotion ? FieldMotion.plainEase(0.12) : FieldMotion.island(0.46)
+    // the slots in a ZStack, so a step's old acts and its new ones crossfade over each other while the glass,
+    // which is the background and never this content, keeps its place and only changes height
     return ZStack(alignment: .top) {
-      ChromeMaterial.glass(in: shape)
       if !acts.isEmpty {
         VStack(spacing: 0) {
           slot(acts[0]).frame(height: ChromePillStyle.wideHeight)
           if acts.count > 1 {
-            slot(acts[1]).frame(height: ChromePillStyle.wideHeight).padding(.top, 10)
+            slot(acts[1]).frame(height: ChromePillStyle.wideHeight).padding(.top, GlassMeasure.secondGap)
           }
           if acts.count > 2 {
-            slot(acts[2]).frame(minHeight: 22).padding(.top, 14)
+            slot(acts[2]).frame(minHeight: GlassMeasure.thirdLine).padding(.top, GlassMeasure.thirdGap)
           }
-          // the foot under the third slot: 18 + 50 + 10 + 50 + 14 + 22 = 164, then 10 and a 12 pt line, inside 210
+          // the foot under the slots: the welcome's legal line, and the glass ends 18 under it
           if let foot = glass.foot {
-            slot(foot).padding(.top, 10)
+            slot(foot).padding(.top, GlassMeasure.footGap)
           }
         }
-        .padding(.horizontal, Measure.slotInset)
-        .padding(.top, 18)
         .id(screen.words.title)
         .transition(.opacity)
       }
     }
-    .frame(height: Measure.glassHeight)
+    .padding(.horizontal, Measure.slotInset)
+    .padding(.vertical, GlassMeasure.pad)
+    // WI-W4 B: the glass fits what it holds, and never falls short of its slots' own measure (a wrapped note grows it)
+    .frame(maxWidth: .infinity, minHeight: Self.glassHeight(glass), alignment: .top)
+    .background { ChromeMaterial.glass(in: shape) }
+    .animation(motion, value: Self.glassHeight(glass))
     .padding(.horizontal, Measure.glassInset)
     .padding(.bottom, Measure.glassInset)
     // a hold has no acts: the glass steps down out of its way
-    .offset(y: shown ? 0 : Measure.glassHeight + 30)
+    .offset(y: shown ? 0 : GlassMeasure.stepAway)
     .opacity(shown ? 1 : 0)
     .allowsHitTesting(shown)
-    .animation(reduceMotion ? FieldMotion.plainEase(0.12) : FieldMotion.island(0.46), value: acts.isEmpty)
+    .animation(motion, value: acts.isEmpty)
   }
 
   @ViewBuilder

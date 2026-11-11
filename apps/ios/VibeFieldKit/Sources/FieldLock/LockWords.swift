@@ -1,6 +1,7 @@
 /// WI-3 — every word the lock says, held to DESIGN.md §9 "The lock". Every word names the method the phone has:
 /// Face ID, Touch ID, or the passcode where neither is set up. Face ID's words are ruled (WI-D3…D7 A); the Touch ID
-/// swap, the passcode-only set and the ask's reason are drafts pending James (§9's as-built note).
+/// swap, the passcode-only set and the ask's reason, drafted with WI-3, are ruled as written (WI-W2d A, James,
+/// 2026-11-11; §9).
 ///
 /// The four words that name the device take it as its platform names it (L4's word pass, 2026-11-06; DESIGN.md §9
 /// "The phone's legal words"): `device` is FieldDesign's `DeviceWord.noun` ("iPhone", "iPad", "device"), which

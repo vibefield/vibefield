@@ -118,6 +118,9 @@ extension FieldHomeModel {
     /// offer it (WI-3), so it never promises a step that does not come.
     static let steps = ["Sign in", "Your computer"]
     static let sendTheLink = "Send the link to my computer"
+    /// WI-W2a A (James, 2026-11-11; §9, ruled that day): a join that fails says so and nothing more. The network's
+    /// own reason is VibeField's insides, and it stays off the screen.
+    static let couldNotConnect = "Couldn’t connect."
   }
 
   /// The way in's steps' names: its two, and the lock's while it will be offered (`lock`, the phone's method).
@@ -209,12 +212,13 @@ extension FieldHomeModel {
             anotherAccountLine(current: current, expected: expected, from: from, byLink: byLink, device: device))),
         acts: acts)
 
-    case .page(.joining(let login, let note)):
+    case .page(.joining(let login, let failure)):
+      // `failure` is the mesh's own reason: it says only that the join failed (WI-W2a A), never the reason itself
       return WayInScreen(
         steps: .step(1),
         words: .init(
           title: "Joining your network…", line: login.map { AttributedString("Signed in as \($0)") },
-          note: note.map { "Couldn’t connect — \($0)." }, hold: true))
+          note: failure.map { _ in words.couldNotConnect }, hold: true))
 
     case .page(.looking(let login)):
       return WayInScreen(
