@@ -82,6 +82,17 @@ import { SystemDocFile } from "./system-doc-file";
 //     revocation still beats another desktop's old grant once both cross —
 //     and emptied. The migration completes before the daemon registers the
 //     document with the host, so no whole entry ever crosses.
+//   - MK-2d (2026-11-11; E10's R1, R2; VF-PM 10:34:14Z): a removal travels. Uninstall adds one key to the
+//     grow-only `installSet.removals` (`[pluginId, eventId] → {at}`, never deleted) in the transaction that deletes
+//     the entry, so "removed" is told apart from "never published". Every identity write stamps `removalGeneration`,
+//     the count of removal keys for that plugin the writer's doc holds, and an entry stands only while its stamp is
+//     not below the merged count (clock-free, as a grant's revocation generation is). So:
+//       - a removal and a concurrent explicit install (which did not see it: stamp 0, count 1) read as removed;
+//       - two concurrent removals and a reinstall that saw one of them (stamp 1, count 2) read as removed;
+//       - an identity with no stamp (an older build's) reads as generation 0.
+//     An `ensure` keeps an entry and never makes one for a removed plugin (R2); an explicit install does, stamped.
+//     The removal key carries `{at}` alone: what a removal reaches on another desktop is the plugin's code, never its
+//     data (`install-reconciler.ts`, R3).
 
 export interface SettingsDocConfig {
   dataDir: string;
@@ -138,17 +149,31 @@ function readKey(key: string, arity: number): string[] | null {
 }
 
 /** The identity register's value: only the identity's own fields, so a whole
- * entry handed in (the migration, the seeding verb) leaves its decisions out. */
-function identityValue(identity: {
-  source: InstallIdentity["source"];
-  version?: string | undefined;
-  artifactSha256?: string | undefined;
-}): Record<string, string> {
+ * entry handed in (the migration, the seeding verb) leaves its decisions out.
+ * MK-2d: stamped with the removal generation the writer saw. */
+function identityValue(
+  identity: {
+    source: InstallIdentity["source"];
+    version?: string | undefined;
+    artifactSha256?: string | undefined;
+  },
+  removalGeneration: number,
+): Record<string, string | number> {
   return {
     source: identity.source,
     ...(identity.version !== undefined ? { version: identity.version } : {}),
     ...(identity.artifactSha256 !== undefined ? { artifactSha256: identity.artifactSha256 } : {}),
+    removalGeneration,
   };
+}
+
+/** MK-2d: an identity's removal stamp; none (an older build's) is 0. */
+function stampOf(identity: unknown): number {
+  const stamp =
+    identity !== null && typeof identity === "object"
+      ? (identity as { removalGeneration?: unknown }).removalGeneration
+      : undefined;
+  return typeof stamp === "number" && Number.isSafeInteger(stamp) && stamp >= 0 ? stamp : 0;
 }
 
 export class SettingsDocService extends EventEmitter {
@@ -286,7 +311,7 @@ export class SettingsDocService extends EventEmitter {
       const enabled = this.doc.getMap(S.INSTALL_SET_ENABLED);
       const grants = this.doc.getMap(S.INSTALL_SET_GRANTS);
       if (plugins.get(pluginId) === undefined) {
-        plugins.set(pluginId, identityValue(entry) as never);
+        plugins.set(pluginId, identityValue(entry, this.removalGenerationOf(pluginId)) as never);
       }
       if (enabled.get(pluginId) === undefined) enabled.set(pluginId, entry.enabled);
       for (const decision of entry.grants) {
@@ -388,6 +413,7 @@ export class SettingsDocService extends EventEmitter {
       of[capability] = (of[capability] ?? 0) + 1;
       generations.set(pluginId, of);
     }
+    const removals = this.removalCounts();
     const decisions = new Map<string, unknown[]>();
     const grants = this.doc.getMap(S.INSTALL_SET_GRANTS);
     for (const key of grants.keys()) {
@@ -399,9 +425,15 @@ export class SettingsDocService extends EventEmitter {
     }
     const out: Record<string, InstallSetEntry> = {};
     for (const [pluginId, identity] of Object.entries(identities)) {
+      // MK-2d: an identity below the merged removal count was removed, whatever the merge kept of it
+      if ((removals.get(pluginId) ?? 0) > stampOf(identity)) continue;
       const of = generations.get(pluginId);
+      const { removalGeneration: _stamp, ...fields } =
+        identity !== null && typeof identity === "object"
+          ? (identity as Record<string, unknown>)
+          : {};
       const parsed = InstallSetEntry.safeParse({
-        ...(identity !== null && typeof identity === "object" ? identity : {}),
+        ...fields,
         pluginId,
         // An identity with no enablement beside it is reachable only through a
         // concurrent uninstall and reinstall; the reinstall's intent is to run.
@@ -435,13 +467,16 @@ export class SettingsDocService extends EventEmitter {
     let wrote = false;
     // Field order is fixed (identity, enablement, decisions) in every writer,
     // so two concurrent transactions compare their registers in one order.
+    // MK-2d (R2): an ensure keeps an entry and never makes one for a removed plugin; an explicit install does,
+    // stamped with the removal generation this doc holds
+    const removalGeneration = this.removalGenerationOf(pluginId);
     const identity =
       change.identity ??
-      (change.ensure !== undefined && plugins.get(pluginId) === undefined
+      (change.ensure !== undefined && plugins.get(pluginId) === undefined && removalGeneration === 0
         ? change.ensure.identity
         : undefined);
     if (identity !== undefined) {
-      plugins.set(pluginId, identityValue(identity) as never);
+      plugins.set(pluginId, identityValue(identity, removalGeneration) as never);
       wrote = true;
     }
     const desired =
@@ -486,7 +521,9 @@ export class SettingsDocService extends EventEmitter {
   async setInstallSetEntry(entry: InstallSetEntry, by: string): Promise<void> {
     await this.ready();
     const grants = this.doc.getMap(S.INSTALL_SET_GRANTS);
-    this.doc.getMap(S.INSTALL_SET_PLUGINS).set(entry.pluginId, identityValue(entry) as never);
+    this.doc
+      .getMap(S.INSTALL_SET_PLUGINS)
+      .set(entry.pluginId, identityValue(entry, this.removalGenerationOf(entry.pluginId)) as never);
     this.doc.getMap(S.INSTALL_SET_ENABLED).set(entry.pluginId, entry.enabled);
     for (const decision of entry.grants) {
       if (decision.decision === "revoked") {
@@ -507,7 +544,9 @@ export class SettingsDocService extends EventEmitter {
 
   /** Uninstall everywhere: the identity, the enablement and the decisions go;
    * the REVOCATIONS stay — a generation never shrinks, or a grant some desktop
-   * made before a revocation would come back to life. */
+   * made before a revocation would come back to life. MK-2d (R1): one removal
+   * key joins the grow-only set in the same transaction, carrying `{at}` alone
+   * (never whether data goes: that stays the act's own desktop's). */
   async removeInstallSetEntry(pluginId: string, by: string): Promise<void> {
     await this.ready();
     const plugins = this.doc.getMap(S.INSTALL_SET_PLUGINS);
@@ -523,9 +562,40 @@ export class SettingsDocService extends EventEmitter {
     if (plugins.get(pluginId) !== undefined) plugins.delete(pluginId);
     if (enabled.get(pluginId) !== undefined) enabled.delete(pluginId);
     for (const key of decided) grants.delete(key);
+    this.doc
+      .getMap(S.INSTALL_SET_REMOVALS)
+      .set(JSON.stringify([pluginId, randomUUID()]), { at: Date.now() } as never);
     this.doc.commit({ origin: `${ORIGIN_INSTALL_SET}${by}` });
     await this.persistNow();
     this.emit("changed", { section: "installSet" });
+  }
+
+  /** MK-2d (R3's read): the plugins this doc reads as removed — at least one removal key, and no identity
+   * whose stamp has seen them all. The reconciler removes their code on its own desktop, data kept. */
+  async removedPlugins(): Promise<Set<string>> {
+    await this.ready();
+    const identities = this.doc.getMap(S.INSTALL_SET_PLUGINS);
+    const removed = new Set<string>();
+    for (const [pluginId, count] of this.removalCounts()) {
+      const identity: unknown = identities.get(pluginId);
+      if (identity === undefined || count > stampOf(identity)) removed.add(pluginId);
+    }
+    return removed;
+  }
+
+  /** How many removal keys each plugin has. */
+  private removalCounts(): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const key of this.doc.getMap(S.INSTALL_SET_REMOVALS).keys()) {
+      const pluginId = readKey(key, 2)?.[0];
+      if (pluginId !== undefined) counts.set(pluginId, (counts.get(pluginId) ?? 0) + 1);
+    }
+    return counts;
+  }
+
+  /** How many removal keys this plugin has: the generation an identity written now is stamped with. */
+  private removalGenerationOf(pluginId: string): number {
+    return this.removalCounts().get(pluginId) ?? 0;
   }
 
   /** How many revocations of this capability the document holds. */

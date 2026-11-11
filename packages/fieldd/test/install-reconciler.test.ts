@@ -1,4 +1,13 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -28,6 +37,7 @@ import type { RegistryInstallService } from "../src/plugin-install";
 import type { PluginRegistryService } from "../src/plugin-registry";
 import { SettingsDocService } from "../src/settings-doc";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { type CapturedLog, captureLogger } from "./drive-fakes";
 import { nativeEndpoint } from "./native-harness";
 import { until } from "./ws-rpc";
 
@@ -222,14 +232,16 @@ interface AuditRow {
 class MemoryRegistry {
   readonly #decisions: Record<string, boolean> = {};
   record: PluginRecord;
+  /** MK-2d: the record's code was removed here (the fake uninstall's effect) */
+  #gone = false;
 
-  constructor(revoked: readonly string[] = []) {
+  constructor(revoked: readonly string[] = [], source: PluginRecord["source"] = "bundled") {
     for (const capability of revoked) this.#decisions[capability] = false;
     this.record = this.#recompute({
       id: PA32_ID,
       version: "1.0.0",
       title: "PA-32 fixture",
-      source: "bundled",
+      source,
       manifestHash: `sha256:${"0".repeat(64)}`,
       installRevision: "r1",
       state: "enabled",
@@ -253,7 +265,16 @@ class MemoryRegistry {
   }
 
   get(id: string): PluginRecord | undefined {
-    return id === PA32_ID ? this.record : undefined;
+    return id === PA32_ID && !this.#gone ? this.record : undefined;
+  }
+
+  /** MK-2d: the code removed (gone) or installed again (back). */
+  forget(): void {
+    this.#gone = true;
+  }
+
+  restore(): void {
+    this.#gone = false;
   }
 
   async enable(_id: string): Promise<PluginRecord> {
@@ -303,9 +324,24 @@ interface Desktop {
   announced: Uint8Array[];
 }
 
+/** MK-2d: what R3 asked of this desktop, in order: a fake teardown, uninstall and retire that start nothing. */
+interface RemovalCalls {
+  teardown: string[];
+  uninstall: Array<[string, boolean]>;
+  retire: string[];
+  logs: CapturedLog[];
+}
+
+const removalCalls = (): RemovalCalls => ({ teardown: [], uninstall: [], retire: [], logs: [] });
+
 async function desktop(
   name: string,
-  opts: { legacy?: LoroDoc; revoked?: readonly string[] } = {},
+  opts: {
+    legacy?: LoroDoc;
+    revoked?: readonly string[];
+    source?: PluginRecord["source"];
+    calls?: RemovalCalls;
+  } = {},
 ): Promise<Desktop> {
   const dataDir = mkdtempSync(join(tmpdir(), `vf-pa32-${name}-`));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
@@ -326,8 +362,9 @@ async function desktop(
   });
   cleanup.push(() => docs.dispose());
   docs.registerSystemDoc(SETTINGS_ID, "Settings", settings.hostDoc(), settings.hostOwner());
-  const registry = new MemoryRegistry(opts.revoked);
+  const registry = new MemoryRegistry(opts.revoked, opts.source);
   const audit: AuditRow[] = [];
+  const calls = opts.calls;
   const reconciler = new InstallSetReconciler({
     settingsDoc: settings,
     plugins: registry as unknown as PluginRegistryService,
@@ -335,8 +372,18 @@ async function desktop(
       install: async () => {
         throw new Error("this harness installs nothing");
       },
+      uninstall: async (id: string, removeData: boolean) => {
+        calls?.uninstall.push([id, removeData]);
+        registry.forget();
+      },
     } as unknown as RegistryInstallService,
-    teardown: async () => undefined,
+    teardown: async (id: string) => {
+      calls?.teardown.push(id);
+    },
+    retire: (id: string) => {
+      calls?.retire.push(id);
+    },
+    ...(calls !== undefined ? { logger: captureLogger(calls.logs) } : {}),
     restart: () => undefined,
     audit: {
       requiredSystem: async (
@@ -605,5 +652,165 @@ describe("PA-32 across desktops — revocation wins the merge (DS-5b)", () => {
       const raw = d.settings.hostDoc().getMap(SETTINGS_DOC_SECTIONS.INSTALL_SET);
       expect(raw.keys(), `${d.name}'s P7 section`).toEqual([]);
     }
+  });
+});
+
+// --- E10 across desktops: a removal travels (MK-2d; VF-PM 2026-11-11 10:34:14Z) -----------------------------
+//
+// R3 on the harness above: a fake teardown, uninstall and retire that start nothing and record what they were asked
+// (no child, no real data dir). The removal is the door's own path on one desktop (its code gone, then `unpublish`),
+// and reaches the other through the host's merge path.
+
+/** Desktops A and B, each holding the plugin from the registry, with one shared, merged install-set entry. */
+async function registryPair(): Promise<[Desktop, Desktop, RemovalCalls, RemovalCalls]> {
+  const callsA = removalCalls();
+  const callsB = removalCalls();
+  const a = await desktop("A", { source: "registry", calls: callsA });
+  const b = await desktop("B", { source: "registry", calls: callsB });
+  await a.settings.setInstallSetEntry(
+    { pluginId: PA32_ID, source: "registry", version: "1.0.0", enabled: true, grants: [] },
+    "seed",
+  );
+  await settle(a);
+  await reconnect(a, b, "A first");
+  a.audit.length = 0;
+  b.audit.length = 0;
+  return [a, b, callsA, callsB];
+}
+
+/** The uninstall door on this desktop: its own code gone, then the removal published. */
+async function removeHere(d: Desktop): Promise<void> {
+  d.registry.forget();
+  await d.reconciler.unpublish(PA32_ID, "uninstall");
+  await settle(d);
+}
+
+describe("E10 across desktops — a removal travels, data kept (MK-2d)", () => {
+  it("R3: a removal from A removes B's code with data kept, retires it, audits it, and says it once", async () => {
+    const [a, b, callsA, callsB] = await registryPair();
+    await removeHere(a);
+    await deliver(a, b);
+    expect(callsB.teardown).toEqual([PA32_ID]);
+    // the literal `false`: whether data goes is never the doc's
+    expect(callsB.uninstall).toEqual([[PA32_ID, false]]);
+    expect(callsB.retire).toEqual([PA32_ID]);
+    const removal = b.audit.filter((row) => row.action === "plugin.uninstall");
+    expect(removal.length).toBe(1);
+    expect(removal[0]?.attrs).toMatchObject({ origin: "settings-doc", removeData: false });
+    const said = callsB.logs.filter((l) => l.event === "fieldd.install_reconciler.removed");
+    expect(said.map((l) => l.attrs)).toEqual([
+      { pluginId: PA32_ID, reason: "removed-in-settings" },
+    ]);
+    await settle(b);
+    expect(callsB.uninstall.length).toBe(1);
+    // A's own code went through its door, not through R3
+    expect(callsA.uninstall).toEqual([]);
+  });
+
+  for (const order of ["A first", "B first"] as const) {
+    it(`a removal on A and B's concurrent explicit install end as removed on both — merged ${order}`, async () => {
+      const [a, b, , callsB] = await registryPair();
+      await removeHere(a);
+      // B, offline, installs a new version: its stamp saw no removal
+      await b.settings.updateInstallSet(
+        PA32_ID,
+        { identity: { source: "registry", version: "2.0.0" }, enabled: true },
+        "install",
+      );
+      await reconnect(a, b, order);
+      for (const d of [a, b]) {
+        expect(await entryOf(d)).toBeUndefined();
+        expect([...(await d.settings.removedPlugins())]).toEqual([PA32_ID]);
+      }
+      expect(callsB.uninstall).toEqual([[PA32_ID, false]]);
+    });
+  }
+
+  it("two concurrent removals and a reinstall that saw one of them end as removed", async () => {
+    const [a, b, callsA] = await registryPair();
+    await removeHere(a);
+    await removeHere(b);
+    // A installs again, having seen its own removal alone
+    a.registry.restore();
+    await a.reconciler.publish(a.registry.record, "install");
+    await settle(a);
+    await reconnect(a, b, "A first");
+    for (const d of [a, b]) expect(await entryOf(d)).toBeUndefined();
+    expect(callsA.uninstall).toEqual([[PA32_ID, false]]);
+  });
+
+  it("a bundled plugin is never removed by the doc", async () => {
+    const callsA = removalCalls();
+    const callsB = removalCalls();
+    const a = await desktop("A", { calls: callsA });
+    const b = await desktop("B", { calls: callsB });
+    await a.settings.setInstallSetEntry(
+      { pluginId: PA32_ID, source: "bundled", enabled: true, grants: [] },
+      "seed",
+    );
+    await settle(a);
+    await reconnect(a, b, "A first");
+    await a.reconciler.unpublish(PA32_ID, "uninstall");
+    await deliver(a, b);
+    expect([callsB.teardown, callsB.uninstall, callsB.retire]).toEqual([[], [], []]);
+    expect(b.registry.get(PA32_ID)?.source).toBe("bundled");
+  });
+});
+
+describe("E10 on a booted daemon (MK-2d)", () => {
+  it("a removal from another desktop removes the code here and keeps the data, byte for byte", {
+    timeout: 60_000,
+  }, async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-rec-e10-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+    writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+    await mock.start();
+    cleanup.push(() => mock.stop());
+    const registry = await setupRegistry();
+    const seed = new SettingsDocService({ dataDir });
+    await seed.setInstallSetEntry(
+      { pluginId: KV_ID, source: "registry", version: "0.1.0", enabled: true, grants: [] },
+      "another-desktop",
+    );
+    await seed.dispose();
+
+    let first: FielddDaemon | null = await bootstrap({
+      dataDir,
+      controlPort: 0,
+      registryUrl: registry.registryUrl,
+      registryPublicKey: registry.publicKey,
+    });
+    cleanup.push(async () => {
+      if (first !== null) await first.stop();
+    });
+    await until(() => first?.plugins.get(KV_ID) !== undefined, 20_000);
+    const installed = join(dataDir, "plugins", "installed", KV_ID);
+    expect(existsSync(installed)).toBe(true);
+    // the plugin's data: the test's own bytes, in its own temp root
+    const dataFile = join(dataDir, "plugins", KV_ID, "mk-2d.bin");
+    mkdirSync(dirname(dataFile), { recursive: true });
+    const bytes = randomBytes(4096);
+    writeFileSync(dataFile, bytes);
+    await first.stop();
+    first = null;
+
+    // the removal arrives as another desktop's, written into the doc this test owns while fieldd is down
+    const peer = new SettingsDocService({ dataDir });
+    await peer.removeInstallSetEntry(KV_ID, "another-desktop");
+    await peer.dispose();
+
+    const second = await boot(dataDir, registry);
+    await until(() => !existsSync(installed), 20_000);
+    expect(second.plugins.get(KV_ID)).toBeUndefined();
+    expect(readFileSync(dataFile).equals(bytes)).toBe(true);
+    const audit = await auditRecords(dataDir);
+    const removal = audit.filter((r) => r.action === "plugin.uninstall");
+    expect(removal.map((r) => [r.phase, r.outcome ?? null])).toEqual([
+      ["attempt", null],
+      ["outcome", "succeeded"],
+    ]);
+    expect(removal[0]?.attrs).toMatchObject({ origin: "settings-doc", removeData: false });
   });
 });

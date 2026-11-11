@@ -64,6 +64,8 @@ describe("the install-set entry (§16.6) — the PA-32 stamps", () => {
       SETTINGS_DOC_SECTIONS.INSTALL_SET_ENABLED,
       SETTINGS_DOC_SECTIONS.INSTALL_SET_GRANTS,
       SETTINGS_DOC_SECTIONS.INSTALL_SET_REVOCATIONS,
+      // MK-2d (E10's R1): the grow-only removal keys
+      SETTINGS_DOC_SECTIONS.INSTALL_SET_REMOVALS,
     ];
     expect(new Set(sections).size).toBe(sections.length);
     // Loro refuses a root container name holding "/" or NUL.

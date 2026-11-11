@@ -8969,6 +8969,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       teardown: teardownPlugin,
       restart: (id) => void serviceHost?.restartFresh(id).catch(() => undefined),
       audit,
+      // MK-2d (2026-11-11, R3): a removal from another desktop retires the plugin as the uninstall door does
+      retire: (id) => runtimeDiagnostics.retirePlugin(id),
       logger: logger.child({ component: "plugin.install.reconciler" }),
     });
     reconciler.attach();

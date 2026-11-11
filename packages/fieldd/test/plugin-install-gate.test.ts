@@ -247,6 +247,8 @@ describe("the install gate (MK-2c)", () => {
         installSet: async () => ({
           [KV_ID]: { pluginId: KV_ID, source: "registry", enabled: true, grants: [] },
         }),
+        // MK-2d: the reconciler's removal half reads this; nothing here is removed
+        removedPlugins: async () => new Set<string>(),
       } as unknown as SettingsDocService,
       plugins,
       installer,

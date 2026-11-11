@@ -66,6 +66,8 @@ export interface InstallReconcilerConfig {
   restart: (pluginId: string) => void;
   /** LOG-L6: synced intent is still a real mutation on this device. */
   audit: Pick<AuditService, "requiredSystem">;
+  /** MK-2d (R3): the daemon's retire step after an uninstall (the plugin's runtime diagnostics) */
+  retire?: (pluginId: string) => void;
   logger?: Logger;
 }
 
@@ -132,6 +134,48 @@ export class InstallSetReconciler {
         );
       }
     }
+    // MK-2d (2026-11-11; E10's R3, VF-PM 10:34:14Z): the removal half. A registry plugin this desktop holds that the
+    // doc reads as removed (removed on any desktop) is removed here as the uninstall door removes it, data kept.
+    for (const pluginId of await this.cfg.settingsDoc.removedPlugins()) {
+      const record = this.cfg.plugins.get(pluginId);
+      // bundled and dev-linked plugins are never removed by the doc; a sideload never enters it
+      if (record?.source !== "registry") continue;
+      try {
+        await this.removeHere(record);
+      } catch (e) {
+        this.log.warn(
+          "fieldd.install_reconciler.entry_parked",
+          "A removed install-set entry could not be applied; parked",
+          { pluginId, error: e instanceof Error ? e.message : String(e) },
+        );
+      }
+    }
+  }
+
+  /** R3: teardown, the code removed with its data KEPT (the literal `false`: whether data goes is never the doc's,
+   * `plugin-install.ts`'s `uninstall`), retire; audited as the synced install is. */
+  private async removeHere(record: PluginRecord): Promise<void> {
+    const attrs = {
+      origin: "settings-doc",
+      removeData: false,
+      source: record.source,
+      manifestHash: record.manifestHash,
+      artifactSha256: record.registry?.artifactSha256 ?? "unknown",
+    };
+    await this.cfg.audit.requiredSystem(
+      { action: "plugin.uninstall", target: { kind: "plugin", id: record.id }, attrs },
+      async () => {
+        await this.cfg.teardown(record.id);
+        await this.cfg.installer.uninstall(record.id, false);
+        this.cfg.retire?.(record.id);
+      },
+      () => ({ attrs: { origin: "settings-doc", removeData: false } }),
+    );
+    this.log.info(
+      "fieldd.install_reconciler.removed",
+      "A plugin removed on another desktop was removed here; its data stays",
+      { pluginId: record.id, reason: "removed-in-settings" },
+    );
   }
 
   private async applyEntry(entry: InstallSetEntry): Promise<void> {

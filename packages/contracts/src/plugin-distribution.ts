@@ -119,9 +119,11 @@ export const RegistryPluginEntry = z
     history: z.array(RegistryRelease).max(64).default([]),
     /** MK-1 (MK's J1, ruled by James 2026-11-11): the rung it is listed at, v2's own field carried on v1. The SIGNED
      * index entry is the one authority for whether a listed plugin is VibeField's own (R1) or a community one: fieldd
-     * verifies the index's signature over its exact bytes before it parses it (`fieldd/src/plugin-install.ts:118`,
-     * `fetchIndex`), and no copy elsewhere decides. Absent, or a value this reader does not know, reads as community,
-     * never the other way (`registryListedAs`). */
+     * verifies the index's signature over its exact bytes before it parses it (`fieldd/src/plugin-install.ts:177`, in
+     * `fetchSignedIndex`, which `fetchIndex` and the catalog's read go through), and no copy elsewhere decides.
+     * Absent, or a value this reader does not know, reads as community, never the other way (`registryListedAs`).
+     * *Corrected 2026-11-11 (MK-2d): this cited `fieldd/src/plugin-install.ts:118`, `fetchIndex`; MK-2b moved the
+     * verify into `fetchSignedIndex`, which `fetchIndex` calls.* */
     rung: z
       .lazy(() => RegistryRung)
       .optional()
@@ -506,6 +508,9 @@ export const SETTINGS_DOC_SECTIONS = {
   INSTALL_SET_ENABLED: "installSet.enabled",
   INSTALL_SET_GRANTS: "installSet.grants",
   INSTALL_SET_REVOCATIONS: "installSet.revocations",
+  /** MK-2d (2026-11-11, E10's R1): one grow-only key per removal, `[pluginId, uuid] → {at}`, never deleted, so a
+   * removal reaches every desktop and "removed" is told apart from "never published" */
+  INSTALL_SET_REMOVALS: "installSet.removals",
 } as const;
 
 export const GrantDecision = z

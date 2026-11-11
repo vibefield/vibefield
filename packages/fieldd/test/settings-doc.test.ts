@@ -261,3 +261,89 @@ describe("the system settings doc (D29′)", () => {
     expect(await svc.userValues(ID)).toEqual({ public: "value" });
   });
 });
+
+// MK-2d (E10's R1, R2; VF-PM 2026-11-11 10:34:14Z): a removal travels as a grow-only key, and an identity stands only
+// while its removal stamp has seen every removal. Each test writes its own doc in its own temp root.
+describe("a removal across desktops (MK-2d)", () => {
+  const PLUGIN = "vibefield.example";
+  const identity = { source: "registry" as const, version: "1.0.0" };
+  const removalKeys = (svc: SettingsDocService) =>
+    svc.hostDoc().getMap(SETTINGS_DOC_SECTIONS.INSTALL_SET_REMOVALS);
+  const stampOf = (svc: SettingsDocService) =>
+    (
+      svc.hostDoc().getMap(SETTINGS_DOC_SECTIONS.INSTALL_SET_PLUGINS).get(PLUGIN) as
+        | { removalGeneration?: unknown }
+        | undefined
+    )?.removalGeneration;
+
+  it("an uninstall writes one removal key carrying its time alone, and keeps the revocations (R1)", async () => {
+    const svc = make(tempDataDir());
+    await svc.updateInstallSet(
+      PLUGIN,
+      { identity, enabled: true, revoke: ["storage.self"] },
+      "install",
+    );
+    expect(stampOf(svc)).toBe(0);
+    await svc.removeInstallSetEntry(PLUGIN, "uninstall");
+    expect(await svc.installSet()).toEqual({});
+    expect([...(await svc.removedPlugins())]).toEqual([PLUGIN]);
+    const keys = removalKeys(svc).keys();
+    expect(keys.length).toBe(1);
+    expect(JSON.parse(keys[0] as string)[0]).toBe(PLUGIN);
+    const value = removalKeys(svc).get(keys[0] as string) as Record<string, unknown>;
+    expect(Object.keys(value)).toEqual(["at"]);
+    expect(typeof value.at).toBe("number");
+    const revocations = svc.hostDoc().getMap(SETTINGS_DOC_SECTIONS.INSTALL_SET_REVOCATIONS).keys();
+    expect(revocations.length).toBe(1);
+  });
+
+  it("an ensure keeps an entry but never makes one for a removed plugin (R2)", async () => {
+    const svc = make(tempDataDir());
+    await svc.updateInstallSet(PLUGIN, { identity, enabled: true }, "install");
+    await svc.removeInstallSetEntry(PLUGIN, "uninstall");
+    await svc.updateInstallSet(PLUGIN, { ensure: { identity, enabled: true } }, "grants");
+    await svc.updateInstallSet(
+      PLUGIN,
+      { enabled: false, ensure: { identity, enabled: false } },
+      "disable",
+    );
+    expect(await svc.installSet()).toEqual({});
+    expect(stampOf(svc)).toBeUndefined();
+    expect([...(await svc.removedPlugins())]).toEqual([PLUGIN]);
+  });
+
+  it("an explicit install after a removal stands, stamped; the keys only grow", async () => {
+    const svc = make(tempDataDir());
+    await svc.updateInstallSet(PLUGIN, { identity, enabled: true }, "install");
+    await svc.removeInstallSetEntry(PLUGIN, "uninstall");
+    await svc.updateInstallSet(PLUGIN, { identity, enabled: true }, "install");
+    expect(stampOf(svc)).toBe(1);
+    expect((await svc.installSet())[PLUGIN]).toMatchObject({ pluginId: PLUGIN, enabled: true });
+    expect((await svc.installSet())[PLUGIN]).not.toHaveProperty("removalGeneration");
+    expect((await svc.removedPlugins()).size).toBe(0);
+    await svc.removeInstallSetEntry(PLUGIN, "uninstall");
+    expect(removalKeys(svc).keys().length).toBe(2);
+    expect(await svc.installSet()).toEqual({});
+    // the seeding verb stamps as an install does
+    await svc.setInstallSetEntry(
+      { pluginId: PLUGIN, ...identity, enabled: true, grants: [] },
+      "seed",
+    );
+    expect(stampOf(svc)).toBe(2);
+    expect(Object.keys(await svc.installSet())).toEqual([PLUGIN]);
+  });
+
+  it("an identity with no stamp (an older build's) reads as generation 0", async () => {
+    const svc = make(tempDataDir());
+    await svc.updateInstallSet(PLUGIN, { identity, enabled: true }, "install");
+    await svc.removeInstallSetEntry(PLUGIN, "uninstall");
+    // the test's own doc: an older build's identity write, which carries no stamp
+    svc
+      .hostDoc()
+      .getMap(SETTINGS_DOC_SECTIONS.INSTALL_SET_PLUGINS)
+      .set(PLUGIN, { ...identity });
+    svc.hostDoc().commit();
+    expect(await svc.installSet()).toEqual({});
+    expect([...(await svc.removedPlugins())]).toEqual([PLUGIN]);
+  });
+});
