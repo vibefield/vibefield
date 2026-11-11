@@ -6653,6 +6653,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     *Drawn and built 2026-11-11 (MK-4c; VF-PM 13:56:27Z), ‹draft› for James's eye:* Updates' part says its count
     after its word, 4 apart, in the part's own ink and weight, read from the one value the Me menu's row reads;
     while that is 0, or before any read, it says none.
+    *Drawn 2026-11-11 (MK-4c's rider; VF-PM 17:56:02Z), ‹draft›:* its figures are tabular, so §2's Data small
+    holds it (12 · medium · `tabular-nums`), the part's own 12/500.
   - **Discover** (MK-D2, the Shelf): **the featured set** first, while the category is All — the index's `featured`,
     the maintainers' pick (MK-D12) — its picture large beside its words; then **the pegboard's categories**, All and
     then those the listed objects hang under, as the pegboard's own filters read (§8 "The pegboard"), with no
@@ -6784,11 +6786,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       developer's roots, Development ones'.
       - **Its back row** stands at its top, 36 tall, padded 0 10, corners 10: the `chevron` 12 pointing back and
         the tab's word at 12/500 in secondary ink, the ready fill under the pointer. A press or Esc goes back.
+        *Drawn 2026-11-11 (MK-4c's rider; VF-PM 17:54:22Z), ‹draft›:* it stands 8 under the body's top and 14
+        in, so its chevron, padded 10, lines up with the columns' 24; its glyph and its word stand 6 apart.
       - **Its columns**, padded 8 24 24 under the back row, 32 apart: the second 280 wide, the first the rest. In
         a popup narrower than 720 they stack, the second above the first. The body scrolls them together.
       - **The second column's head**: the row's 32 slot with the `plugin` glyph 16 (no picture reaches the
         window yet, so the first column holds no picture and no strip), then the title at 20/600 in primary
         ink, and its source pill (§8 "The plugin source badge") 8 under it.
+        *Corrected 2026-11-11 (MK-4c's rider; VF-PM 17:56:02Z): the title at 20/600 was off §2's ramp, whose
+        Title is 12–15 · semibold, so it stands at 15/600, the Title role's top.* *Drawn 2026-11-11 (MK-4c's
+        rider), ‹draft›:* the slot stands beside the title and its pill, 12 apart, as on Installed's row; two
+        pills stand 8 apart; the title's lines 1.2 apart.
       - **Where its act will stand**, 12 under the head: **Installed** at 12.5/600 in tertiary ink, 32 tall,
         with no ↵ — words, not a control. It is no button, wears no fill under the pointer, takes no stop of
         Tab, and the ↑ ↓ walk never reaches it (VF-PM 13:56:27Z).
@@ -6796,6 +6804,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         primary ink. The first column holds the plugin's own words (the listing's summary, for a plugin in the
         plugin list held alone), then **What it adds**; the second, under the act, **What it can do**, **Made
         by** and **Version**. No **Settings** yet (MK-4c2).
+        *Drawn 2026-11-11 (MK-4c's rider), ‹draft›:* a column's parts stand 20 apart, its own words and its
+        head with its act as its sections do; a section's lines stand 6 apart, at §2's Body (1.45 line height),
+        and a head's lines 1.3 apart; under a power, its Mac note, or its description and whose it is, at
+        12/400 in tertiary ink, Body too.
       - **What it adds**: each object by its pegboard label, or by its title when it hangs nowhere; then its
         tools and its service; or that it adds none. Where each hangs waits for the pegboard's names to reach
         the popup (MK-4d).
