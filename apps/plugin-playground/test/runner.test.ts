@@ -154,18 +154,21 @@ describe("the playground v2: the kind-conformance harness over the repo's kinds 
     });
     const [clock] = objectRows(result);
     // one fixture (no states file: `default`), five modes (it opens; it provides desk.containable),
-    // 21 zooms (the LOD's 20 and its hang), and once at rest by night
+    // 21 zooms (the LOD's 20 and its hang), and once at rest by night; then, at that one fixture,
+    // its agent half answers (its summary, faces and tools): the fifth row
     expect(clock).toMatchObject({ states: 5 * 21 + 1, refusal: null });
     expect(kindRows(result).map((v) => [v.subject, v.status, v.code])).toEqual([
       ["declaration", "pass", "ok"],
       ["program", "pass", "ok"],
       ["program", "note", "object-wgsl-not-compiled"],
       ["default", "pass", "ok"],
+      ["default", "pass", "ok"],
     ]);
     expect(kindRows(result)[3]?.detail).toContain("chip · the opening · prepare · drawRange");
+    expect(kindRows(result)[4]?.detail).toContain("its agent half answered its summary");
     expect(result.summary).toMatchObject({
       states: 106,
-      passed: 3,
+      passed: 4,
       skipped: 1,
       refused: 0,
       exit: 0,
