@@ -17,6 +17,7 @@ import { RpcCallError } from "./native-link";
 import {
   type ImmutablePluginArtifact,
   PluginArtifactCommitIndeterminateError,
+  PluginArtifactSlotMismatchError,
   PluginArtifactStore,
 } from "./plugin-artifact-store";
 import {
@@ -135,8 +136,32 @@ export class RegistryInstallService {
   }
 
   /** Resolve, verify, unpack, and durably publish an immutable candidate slot.
-   * Discovery remains on the old pointer until commit(). */
+   * Discovery remains on the old pointer until commit().
+   *
+   * Item 322: a folder already at the artifact's slot that does not hold the
+   * artifact's files is refused as an artifact mismatch, the kind the window
+   * already has a sentence for. The words name no path on this device, and
+   * that folder is left as it was found. */
   async prepare(params: PluginsInstallParams): Promise<PreparedRegistryInstall> {
+    try {
+      return await this.prepareVerified(params);
+    } catch (error) {
+      if (!(error instanceof PluginArtifactSlotMismatchError)) throw error;
+      this.log.warn(
+        "fieldd.plugin_install.slot_mismatch",
+        "A revision already at the artifact's slot does not hold the artifact's files; refused",
+        { pluginId: error.pluginId, slot: error.slot, where: error.where },
+      );
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the copy of this release already in place does not match the artifact — not installed",
+        false,
+        { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
+      );
+    }
+  }
+
+  private async prepareVerified(params: PluginsInstallParams): Promise<PreparedRegistryInstall> {
     if (params.artifactPath !== undefined)
       throw new RpcCallError(
         "PRECONDITION_FAILED",

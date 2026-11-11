@@ -91,6 +91,25 @@ export class PluginArtifactCommitIndeterminateError extends Error {
   }
 }
 
+/** Item 322 — a folder already at a revision slot does not hold the files the
+ * caller's `prepare` made. That folder is left as it was found (it may be the
+ * current revision); only the private staging copy is removed. */
+export class PluginArtifactSlotMismatchError extends Error {
+  readonly pluginId: string;
+  readonly slot: string;
+  /** The first place the two differ: a path inside the artifact, never one on
+   * this device. */
+  readonly where: string;
+
+  constructor(pluginId: string, slot: string, where: string) {
+    super(`${pluginId}: the revision already at slot ${slot} is not the prepared artifact`);
+    this.name = "PluginArtifactSlotMismatchError";
+    this.pluginId = pluginId;
+    this.slot = slot;
+    this.where = where;
+  }
+}
+
 export interface PluginArtifactStoreTestHooks {
   /** Runs after the temp pointer is fsynced but before its atomic rename. */
   beforeCurrentPublish?(pointer: PluginArtifactPointerV2): void | Promise<void>;
@@ -134,7 +153,13 @@ export class PluginArtifactStore {
   }
 
   /** Publishes immutable bytes into a content-addressed revision slot. The
-   * caller prepares the unpacked artifact inside a private staging root. */
+   * caller prepares the unpacked artifact inside a private staging root.
+   *
+   * Item 322: `prepare` ALWAYS runs. A folder already at the slot names the
+   * artifact only by its own marker, which whoever wrote the folder also
+   * wrote. So it is reused only when it holds exactly what `prepare` made,
+   * file for file and byte for byte; otherwise the stage is refused with
+   * `PluginArtifactSlotMismatchError` and that folder is left as found. */
   async stage(input: {
     pluginId: string;
     artifactSha256: string;
@@ -146,11 +171,6 @@ export class PluginArtifactStore {
     const revisionsRoot = join(pluginRoot, REVISION_DIRECTORY);
     const destination = join(revisionsRoot, slot);
     await mkdir(revisionsRoot, { recursive: true });
-
-    if (await exists(destination)) {
-      await validateRevision(destination, { pluginId, slot, artifactSha256 });
-      return { pluginId, slot, artifactSha256, root: destination, reused: true };
-    }
 
     const staging = join(
       this.installedRoot,
@@ -168,16 +188,23 @@ export class PluginArtifactStore {
       await writeFile(join(staging, PLUGIN_ARTIFACT_MARKER_FILE), `${JSON.stringify(marker)}\n`, {
         mode: 0o600,
       });
+      // The marker is in the comparison too, so an equal folder is a real
+      // directory carrying this exact marker: no separate marker read.
+      const reuseWhatIsThere = async (): Promise<ImmutablePluginArtifact> => {
+        const where = await firstDifference(staging, destination);
+        if (where !== null) throw new PluginArtifactSlotMismatchError(pluginId, slot, where);
+        await rm(staging, { recursive: true, force: true });
+        return { pluginId, slot, artifactSha256, root: destination, reused: true };
+      };
+      if (await exists(destination)) return await reuseWhatIsThere();
       await syncTree(staging);
       try {
         await rename(staging, destination);
       } catch (error) {
-        // Two identical prepares may race. The winner's immutable marker must
-        // match exactly; otherwise this is corruption, not a reusable slot.
+        // Two identical prepares may race. The winner's files must be this
+        // prepare's exactly; otherwise this is corruption, not a reusable slot.
         if (!(await exists(destination))) throw error;
-        await validateRevision(destination, marker);
-        await rm(staging, { recursive: true, force: true });
-        return { pluginId, slot, artifactSha256, root: destination, reused: true };
+        return await reuseWhatIsThere();
       }
       await syncDirectory(revisionsRoot);
       await validateRevision(destination, marker);
@@ -410,6 +437,37 @@ async function validateRevision(
   ) {
     throw new Error(`${expected.pluginId}: immutable plugin revision marker mismatch`);
   }
+}
+
+/** The first place `found` differs from `made`, as a path inside them, or null
+ * when both hold the same directories and the same files with the same bytes.
+ * Anything that is neither a real directory nor a regular file is a
+ * difference. Modes and times are not compared. */
+async function firstDifference(made: string, found: string, inside = ""): Promise<string | null> {
+  const at = (name: string): string => (inside === "" ? name : `${inside}/${name}`);
+  if (!(await lstat(found)).isDirectory()) return inside === "" ? "." : inside;
+  const madeEntries = await readdir(made, { withFileTypes: true });
+  madeEntries.sort((a, b) => (a.name < b.name ? -1 : 1));
+  const foundEntries = new Map(
+    (await readdir(found, { withFileTypes: true })).map((entry) => [entry.name, entry] as const),
+  );
+  for (const entry of madeEntries) {
+    const other = foundEntries.get(entry.name);
+    if (other === undefined) return at(entry.name);
+    foundEntries.delete(entry.name);
+    const madePath = join(made, entry.name);
+    const foundPath = join(found, entry.name);
+    if (entry.isDirectory() && other.isDirectory()) {
+      const deeper = await firstDifference(madePath, foundPath, at(entry.name));
+      if (deeper !== null) return deeper;
+      continue;
+    }
+    if (!entry.isFile() || !other.isFile()) return at(entry.name);
+    if ((await lstat(madePath)).size !== (await lstat(foundPath)).size) return at(entry.name);
+    if (!(await readFile(madePath)).equals(await readFile(foundPath))) return at(entry.name);
+  }
+  const [extra] = [...foundEntries.keys()].sort();
+  return extra === undefined ? null : at(extra);
 }
 
 async function atomicWriteCurrent(
