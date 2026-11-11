@@ -34,12 +34,16 @@ export type RegistryRelease = z.infer<typeof RegistryRelease>;
 // second popup") ------------------------------------------------------------------------------------------------
 //
 // The registry's CI writes the listing from the manifest it rebuilt, never the author (MK-D12's A): its words,
-// its objects and every picture come from the build a person would install. Pictures are paths relative to the
-// index (`ListingPath` holds them there: no URL, no "..", no absolute path), served to the window only through
-// fieldd's cache and main's plugin scheme (MK-E9). Every field but the title (and a picture's day and night, an
-// object's type, label and category) is optional, and every carrier of a listing or a pick catches to undefined: one
-// bad listing must never refuse the whole index (fieldd parses the index whole, `plugin-install.ts`), it just goes
-// unshown. Its bounds are the manifest's own (`PLUGIN_LIMITS`), since the registry writes it from the manifest.
+// its objects and every picture come from the build a person would install. Each picture is a file relative to the
+// index (`ListingPath` holds it there: no URL, no "..", no absolute path) with a pin, `Sha256Pin` as an artifact's:
+// the sha256 of the picture file's bytes as fetched. The index's signature covers the pin, never the bytes a path
+// names, so fieldd hashes the fetched bytes against the pin before it caches or serves them, to the window only
+// through fieldd's cache and main's plugin scheme (MK-E9). Nothing fetches or serves a picture until MK-2 (MK-1b;
+// VF-PM's B1, 2026-11-11 08:48:07Z; MK-2's custody note §5). Every field but the title (and a picture's day
+// and night, a file's path and pin, an object's type, label and category) is optional, and every carrier of a
+// listing or a pick catches to undefined: one bad listing must never refuse the whole index (fieldd parses the index
+// whole, `plugin-install.ts`), it just goes unshown, as does a listing with a picture that has no pin. Its bounds are
+// the manifest's own (`PLUGIN_LIMITS`), since the registry writes it from the manifest.
 
 /** A path relative to the index, as `isSafeRelativePath` holds a manifest's paths. */
 const ListingPath = z
@@ -48,11 +52,20 @@ const ListingPath = z
   .max(512)
   .refine((p) => isSafeRelativePath(`./${p}`), "listing pictures are index-relative paths");
 
+/** One picture file: where it sits beside the index, and the hash its bytes must match. */
+export const RegistryListingFile = z
+  .object({
+    path: ListingPath,
+    sha256: Sha256Pin,
+  })
+  .passthrough();
+export type RegistryListingFile = z.infer<typeof RegistryListingFile>;
+
 /** A picture the registry rendered, by day and by night; the app's theme picks which. */
 export const RegistryListingPicture = z
   .object({
-    day: ListingPath,
-    night: ListingPath,
+    day: RegistryListingFile,
+    night: RegistryListingFile,
   })
   .passthrough();
 export type RegistryListingPicture = z.infer<typeof RegistryListingPicture>;
@@ -79,7 +92,7 @@ export const RegistryListing = z
     summary: z.string().max(PLUGIN_LIMITS.TEXT_MAX).optional(),
     /** the publisher's name as a person reads it (MK-E11's source word); absent says the namespace */
     publisherName: z.string().min(1).max(120).optional(),
-    icon: ListingPath.optional(),
+    icon: RegistryListingFile.optional(),
     /** the set laid out together, as it will sit on a desk (MK-D3, MK-D4) */
     spread: RegistryListingPicture.optional(),
     objects: z.array(RegistryListingObject).max(PLUGIN_LIMITS.OBJECTS_MAX).default([]),

@@ -20,10 +20,19 @@
         "title": "Simulators",
         "summary": "An iPhone, an iPad and a Watch, live on your desk.",
         "publisherName": "VibeField",
-        "icon": "listing/vibefield.simulator/icon.png",
+        "icon": {
+          "path": "listing/vibefield.simulator/icon.png",
+          "sha256": "sha256:572825d8bbb1abec35b7427e1964a13de40fd51bad2ef96c343d5d418923b7c1"
+        },
         "spread": {
-          "day": "listing/vibefield.simulator/spread-day.png",
-          "night": "listing/vibefield.simulator/spread-night.png"
+          "day": {
+            "path": "listing/vibefield.simulator/spread-day.png",
+            "sha256": "sha256:2fcb383ee63623191714a444f6ae55144d8fad05e3a43fdfe14934372f3b48ab"
+          },
+          "night": {
+            "path": "listing/vibefield.simulator/spread-night.png",
+            "sha256": "sha256:16f690d220942a9c2eac105812224eaae5170e8ee3359504c9a9e78dc8ededa9"
+          }
         },
         "objects": [
           {
@@ -31,8 +40,14 @@
             "label": "Phone",
             "category": "devices",
             "stills": {
-              "day": "listing/vibefield.simulator/phone-day.png",
-              "night": "listing/vibefield.simulator/phone-night.png"
+              "day": {
+                "path": "listing/vibefield.simulator/phone-day.png",
+                "sha256": "sha256:af7515a3e9842da419206ed34b72539da10318cc358d48ba7b5e44ddd485c306"
+              },
+              "night": {
+                "path": "listing/vibefield.simulator/phone-night.png",
+                "sha256": "sha256:61b4bac6383c4226c7c994a0f99ef461984db18e014fd0092421eefa5dc29204"
+              }
             }
           },
           {

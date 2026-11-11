@@ -10,8 +10,10 @@ import {
   PluginsCatalogState,
   RegistryIndex,
   RegistryIndexV2,
+  RegistryListingFile,
   RegistryProvenance,
   registryListedAs,
+  Sha256Pin,
 } from "../src/plugin-distribution";
 import { PluginsInstallResult } from "../src/plugin-registry";
 import {
@@ -68,21 +70,53 @@ describe("the registry index carries listings and the maintainers' pick (MK-D12,
 
   it("v1: a picture is an index-relative path; any other drops the listing, not the index", () => {
     type Raw = { plugins: Record<string, { listing: Record<string, unknown> }> };
+    const pin = `sha256:${"a".repeat(64)}`;
     for (const bad of ["https://x/y.png", "../x.png", "/abs.png", "a\\b.png"]) {
       const byIcon = clone(fixture("registry-index-v1.market.json")) as Raw;
-      byIcon.plugins["vibefield.simulator"]!.listing.icon = bad;
+      byIcon.plugins["vibefield.simulator"]!.listing.icon = { path: bad, sha256: pin };
       expect(RegistryIndex.parse(byIcon).plugins["vibefield.simulator"]!.listing).toBeUndefined();
       const bySpread = clone(fixture("registry-index-v1.market.json")) as Raw;
       bySpread.plugins["vibefield.simulator"]!.listing.spread = {
-        day: "listing/a.png",
-        night: bad,
+        day: { path: "listing/a.png", sha256: pin },
+        night: { path: bad, sha256: pin },
       };
       expect(RegistryIndex.parse(bySpread).plugins["vibefield.simulator"]!.listing).toBeUndefined();
     }
     const good = RegistryIndex.parse(fixture("registry-index-v1.market.json"));
-    expect(good.plugins["vibefield.simulator"]!.listing?.icon).toBe(
-      "listing/vibefield.simulator/icon.png",
-    );
+    expect(good.plugins["vibefield.simulator"]!.listing?.icon).toEqual({
+      path: "listing/vibefield.simulator/icon.png",
+      sha256: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+    });
+  });
+
+  it("v1: a picture needs the artifacts' pin; bare, unpinned or wrong-length drops it", () => {
+    expect(RegistryListingFile.shape.sha256).toBe(Sha256Pin);
+    type Pic = { path: string; sha256?: unknown };
+    type Listing = {
+      icon: Pic | string;
+      spread: { day: Pic };
+      objects: Array<{ stills: { night: Pic } }>;
+    };
+    type Raw = { plugins: Record<string, { listing: Listing }> };
+    const sim = (raw: Raw) => raw.plugins["vibefield.simulator"]!.listing;
+    const pictures: Array<(raw: Raw) => Pic> = [
+      (raw) => sim(raw).icon as Pic,
+      (raw) => sim(raw).spread.day,
+      (raw) => sim(raw).objects[0]!.stills.night,
+    ];
+    for (const at of pictures) {
+      for (const pin of [undefined, `sha256:${"a".repeat(63)}`, `sha256:${"a".repeat(65)}`]) {
+        const raw = clone(fixture("registry-index-v1.market.json")) as Raw;
+        if (pin === undefined) delete at(raw).sha256;
+        else at(raw).sha256 = pin;
+        const index = RegistryIndex.parse(raw);
+        expect(index.plugins["vibefield.simulator"]!.listing).toBeUndefined();
+        expect(index.plugins["acme.burndown"]!.listing?.title).toBe("Burndown");
+      }
+    }
+    const bare = clone(fixture("registry-index-v1.market.json")) as Raw;
+    sim(bare).icon = "listing/vibefield.simulator/icon.png";
+    expect(RegistryIndex.parse(bare).plugins["vibefield.simulator"]!.listing).toBeUndefined();
   });
 
   it("v2: types the same listing and pick, as tolerant, and its rung is the same authority", () => {
@@ -134,6 +168,7 @@ describe("the catalog door (MK-D5)", () => {
     const ready = PluginsCatalog.parse(fixture("plugins-catalog.ready.json"));
     expect(ready.checkedAt).toBe(1762823100000);
     expect(ready.plugins.map((p) => p.listedAs)).toEqual(["vibefield", "community"]);
+    expect(ready.plugins[0]!.listing?.icon?.path).toBe("listing/vibefield.simulator/icon.png");
     expect(PluginsCatalog.parse(fixture("plugins-catalog.unconfigured.json")).checkedAt).toBeNull();
     const held = PluginsCatalog.parse(fixture("plugins-catalog.unreachable.json"));
     expect(held.state).toBe("unreachable");
