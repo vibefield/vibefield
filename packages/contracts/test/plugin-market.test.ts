@@ -159,6 +159,7 @@ describe("the catalog door (MK-D5)", () => {
   it("answers its states, its time always said", () => {
     expect(PluginsCatalogState.options).toEqual([
       "unconfigured",
+      "unread",
       "reading",
       "ready",
       "stale",
@@ -170,6 +171,9 @@ describe("the catalog door (MK-D5)", () => {
     expect(ready.plugins.map((p) => p.listedAs)).toEqual(["vibefield", "community"]);
     expect(ready.plugins[0]!.listing?.icon?.path).toBe("listing/vibefield.simulator/icon.png");
     expect(PluginsCatalog.parse(fixture("plugins-catalog.unconfigured.json")).checkedAt).toBeNull();
+    // MK-1c: configured, but nothing held or read yet — a wire state, no list and no time
+    const unread = PluginsCatalog.parse(fixture("plugins-catalog.unread.json"));
+    expect([unread.state, unread.checkedAt, unread.plugins.length]).toEqual(["unread", null, 0]);
     const held = PluginsCatalog.parse(fixture("plugins-catalog.unreachable.json"));
     expect(held.state).toBe("unreachable");
     expect(held.plugins).toHaveLength(1);

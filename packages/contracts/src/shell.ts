@@ -517,17 +517,20 @@ export const APP_PREFERENCE_KEYS = {
    * the same settings doc as every preference, so the person's desktops go quiet together */
   SOUNDS_QUIET_UNTIL: "desktop.soundsQuietUntil",
   /** MK-1 (MK-D6, MK-E3; MK's J1) — Community plugins: off until the person turns it on, synced to their desktops in
-   * the settings doc's app section, and never undone once MK-2 commits it outside the undo history (today every app
-   * preference commits as undoable, `fieldd/src/settings-doc.ts:348`). While it is off a community install is
-   * refused, by fieldd (MK-2). Open, James's call (2026-11-11): whether the "statement seen" flag syncs with it or
-   * stays per desktop; no flag is typed until he rules. From MK-1 the existing setter takes the key; it is inert,
-   * read by nothing, until MK-2. */
+   * the settings doc's app section, and never undone: since MK-2a it commits outside the undo history, under the
+   * `no-undo:app:` origin (`fieldd/src/settings-doc.ts:366`), while every other app preference commits as undoable.
+   * While it is off a community install is refused, by fieldd (MK-2). Open, James's call (2026-11-11): whether the
+   * "statement seen" flag syncs with it or stays per desktop; no flag is typed until he rules. Since MK-2a fieldd
+   * reads it (absent, or anything not a boolean, is off), and its setter refuses a true until the slice that draws the
+   * switch (MK-4) opens it. *Corrected 2026-11-11 (MK-1c, at MK-2a-r): this said every app preference commits as
+   * undoable (`settings-doc.ts:348`) and the key is read by nothing until MK-2; MK-2a made both untrue.* */
   COMMUNITY_PLUGINS: "plugins.community",
 } as const;
 
-/** MK-1 (MK-E3): the preferences no undo may ever change. This is a LIST, which nothing enforces until MK-2: today
- * fieldd commits every app preference as undoable (`fieldd/src/settings-doc.ts:348`); MK-2 commits these outside the
- * undo history so ⌘Z never turns community plugins on. Do not read this constant as the guard. */
+/** MK-1 (MK-E3): the preferences no undo may ever change. This is a LIST: fieldd reads it and commits these outside
+ * the undo history (`fieldd/src/settings-doc.ts:366`, MK-2a), so ⌘Z never turns community plugins on. Do not read
+ * this constant as the guard; the guard is fieldd's. *Corrected 2026-11-11 (MK-1c, at MK-2a-r): this said nothing
+ * enforces it until MK-2, and that fieldd commits every app preference as undoable (`settings-doc.ts:348`).* */
 export const APP_PREFERENCES_NEVER_UNDONE: readonly (typeof APP_PREFERENCE_KEYS)[keyof typeof APP_PREFERENCE_KEYS][] =
   [APP_PREFERENCE_KEYS.COMMUNITY_PLUGINS];
 

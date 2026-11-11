@@ -410,12 +410,16 @@ export type RegistryProvenance = z.infer<typeof RegistryProvenance>;
 // identity). Its state says where the list stands, its time always said and never implied fresh (DESIGN.md §9
 // "Reading the list"); why a read failed goes to Diagnostics and the log, never this shape's words.
 
-/** unconfigured: no build configures a registry (every build until the registry rung, TD §9 TD-4) · reading: a read
- * runs, the held list (if any) shown with its time · ready: read and current · stale: the held list is past its date
- * (v2's `expires`) · unreachable: offline or the host did not answer, the held list shown · refused: a list arrived
- * that VibeField could not use (signature, schema or rollback), nothing new shown. */
+/** unconfigured: no build configures a registry (every build until the registry rung, TD §9 TD-4) · unread: a
+ * registry is configured, but no list is held and none has been read yet (MK-1c; VF-PM 2026-11-11 09:25:04Z) ·
+ * reading: a read runs, the held list (if any) shown with its time · ready: read and current · stale: the held list is
+ * past its date (v2's `expires`) · unreachable: offline or the host did not answer, the held list shown · refused: a
+ * list arrived that VibeField could not use (signature, schema or rollback), nothing new shown.
+ * `unread` is a wire state with NO words for a person: what the window shows for it is MK-4's, and a word the ruled
+ * page did not draw goes to James as a draft, like the others. */
 export const PluginsCatalogState = z.enum([
   "unconfigured",
+  "unread",
   "reading",
   "ready",
   "stale",
