@@ -6676,6 +6676,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **No plugin registry yet** (every build until the registry rung, above): Discover is one state, never a blank
       (§8 "Empty / degraded states") — the words **No plugin registry yet**, saying the plugins that come with
       VibeField are in Installed, with a press that shows them. Installed works without a registry.
+  - **Its states, in the body** (*drawn 2026-11-11, MK-4a; VF-PM 11:40:58Z*): a tab with no rows to show draws one
+    state with the kit's `EmptyState`, centred in the body (§8 "Empty / degraded states"), never a blank; its words are
+    §9 "The plugins' words". Discover's no-registry state carries its one press, **Show installed**, which turns the
+    switch to Installed, and ↵ presses it; the others carry none. While the plugin list is read and none is held,
+    Discover and Updates both say the foot's **Reading the plugin list…** ‹draft›. With no list held and a read that
+    failed, they say the foot's sentence without its time ‹draft›. With a list held but Discover's shelf and Updates'
+    rows not yet built (MK-4a stops there: the shelf waits on its pictures, which reach the window through main's
+    plugin scheme, and on its own numbers, owed below), both say the list's count and offer nothing ‹draft›, a state
+    no build reaches today, since none configures a registry. The last two ‹draft› lines are MK's, for James's eye.
   - **The read on open** (MK-D5): opening the popup is your act, so each opening reads the registry's signed list —
     one read, carrying no identity, on no timer and with no push feed. The list it last read shows at once, with its
     time in the foot ("checked 14:02"), never implied fresh, and the foot says a read is under way until it lands;
@@ -6697,6 +6706,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     syncs the choice, each desktop fetches its own copy; PA-31). Turned off, its
     objects on your desks wear the missing face until it is on again (§8 "The missing face", "plugin off"). A
     built-in plugin turns off and is never removed.
+    *Drawn 2026-11-11 (MK-4a; VF-PM 11:40:58Z, Q4), ‹draft› for James's eye:* a row has a Peek row's shape (§8
+    "Search — the Peek": padding 10 12, corners 14, 2 apart, the hot row in the ready fill). First its picture slot,
+    32 square, corners 8, on the ready fill, holding the `plugin` glyph 16 in tertiary ink until a picture can reach
+    the window (main's plugin scheme, a later MK-4 part; a built-in has no listing picture, so its slot keeps the
+    glyph). Then, 12 after it, the title at 14/600 in primary ink, the source pill 8 after the title (§8 "The plugin
+    source badge"), and under the title its one line at 12/400 in tertiary ink, ellipsised. Built in first, then by
+    title. MK-4a draws the row read only: its switch and its chevron come with its page (MK-4c), and the switch stays
+    in Settings → Plugins until that page leaves (MK-5).
   - **Updates** is what the last read found, its time at its head. Each update says how it changes the set before
     you take it — the objects it adds or removes (MK-D4) — over its notes, with **Update**; one that removes an
     object asks first, because the objects of that kind on your desks would wear the missing face. Nothing installs
@@ -6771,8 +6788,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     *Owed, doc first (MK-4):* the shelf's and the page's own numbers — the grid and its tiles, the featured set, the
     page's two columns, where its Undo and Redo stand, the install card, the bar — and how they give way in a narrow
     popup are drawn at MK-4 and written here before its code (UI_SYSTEM.md). The numbers above are MK-D2's, MK-E1's,
-    §5's, §6's and the Peek's. Studio's catalog mounts the shipping popup over a fixture port (MK-6;
-    `docs/UI_SYSTEM.md`, Catalog fidelity).
+    §5's, §6's and the Peek's. Studio's catalog mounts the shipping popup over a fixture port (MK-4a;
+    `docs/UI_SYSTEM.md`, Catalog fidelity), and MK-6 keeps its gates. *Corrected 2026-11-11 (MK-4a; VF-PM 11:40:58Z,
+    Q7): this gave the catalog's plates to MK-6; MK-4a builds them with their boundary rule.*
   - **Its words** are in §9 "The plugins' words": the tabs, the acts, the sources, the statement, the powers in
     plain words and every state's sentence. Nothing in it names a key, a signature, a hash, a rung, a worker or a
     process, a restart or a reload, a repository's address, a power's id or a daemon (§9, VibeField's insides).
@@ -8815,6 +8833,11 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   registry yet** over "The plugins that come with VibeField are in Installed." with **Show installed**; Updates says
   "Plugins that come with VibeField update with it." ‹draft›; the foot says no time, for nothing was read; and
   **Check plugins for updates** opens Updates on those words, never on a check that failed.
+  *Added 2026-11-11 (MK-4a; VF-PM 11:40:58Z), MK's words, ‹draft›, for James's eye:* with no list held and a read
+  that failed, Discover and Updates say "VibeField couldn't use the plugin list · Diagnostics has the details" or
+  "Offline · no plugin list yet"; with a list held before Discover's shelf is built (a state no build reaches today),
+  they say "‹n› plugins, ‹n› objects". The popup is named "Plugins" to assistive tech, and its close "Close", as the
+  Peek's are.
 - **Community plugins** (MK-D6; MK-E3). Discover's last tile is **Community plugins**, with its switch, over "‹n›
   plugins by other people. VibeField checks each one before it's listed." ‹draft› (the page's "The registry
   reviews…", less the insides; the line MK's lean softened, which James took 2026-11-11 06:48:31Z; it claims the
