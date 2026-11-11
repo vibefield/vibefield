@@ -211,8 +211,8 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
     expect(lines[3]).toMatchObject({ outcome: "succeeded" });
     expect(lines[3]?.reasonCode).toBeUndefined();
     const written = JSON.stringify(lines);
-    expect(written).not.toContain(daemon.shellToken);
-    expect(written).not.toContain(grant.token);
+    expect(written.includes(daemon.shellToken)).toBe(false);
+    expect(written.includes(grant.token)).toBe(false);
   });
 
   it("an ON found in the doc reads true, and the door can still turn it off ((D)'s residue)", async () => {
