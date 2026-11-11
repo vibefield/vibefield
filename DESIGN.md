@@ -30,7 +30,7 @@ Three surface families, one physics:
 
 | Family | Ground rules |
 |---|---|
-| **The field** (canvas + widgets) | Neutral ground, dual-theme. Cards are content-first and may carry their own committed surface (dark card, sky gradient, sticky yellow) in either app theme — exactly like iOS widgets on any wallpaper. |
+| **The field** (canvas + objects) | Neutral ground, dual-theme. Objects are content-first and may carry their own committed surface (dark card, sky gradient, sticky yellow) in either app theme — exactly like iOS widgets on any wallpaper. |
 | **The chrome** (HUD islands, tray, panels, palette) | Floating translucent materials over the field. Dual-theme, near-colorless, hairline-bordered, blurred. |
 | **The control room** (Godview, diagnostics) | May commit to dark — it is a stage, not a document. Its palette still derives from §2 (no bespoke greens). |
 
@@ -44,6 +44,10 @@ edges, the corner"; the left edge's clipboard became the hand at HN-1, at the fo
 (§8 "The hand"), and the right edge's Artifacts moved into the head at HN-8, PL-D1 and PL-D2 (§8 "The
 head"), so the edges left the frame); the HUD islands and the
 tray retired into the line and the pegboard (FR-2, 2026-10-03; DK-13, 2026-10-06).
+
+*Amended 2026-11-11 (track MK; MK-D13 ruled A by James on the page *A Place for Plugins*):* the field's
+row said "canvas + widgets" and "Cards are content-first". What sits on the mat are objects, and a
+plugin's things are objects too, never widgets, which retired at DK-8 (§9 "The plugins' words").
 
 ### 1.1 Godview visual source
 
@@ -270,6 +274,12 @@ Tailwind's amber outside these inks, under 2:1 there). The shell re-projects the
 panes keep their inks in Settings, and by night the glass reads the inks as they are. They are the two the glass
 wears; danger and info take theirs when a word in them first comes onto the glass, DESIGN.md first.
 
+*Amended 2026-11-11 (track MK; MK-D11 ruled A by James on the page *A Place for Plugins*):* a plugin's update
+wears no cyan. Cyan marks one update only, the app's own: an install of VibeField that waits on you
+(AU-D1), so a cyan mark on a plugin's would say the app waits. The Me menu's Plugins… row says a plugin's
+update in words at its end, "1 update" in the row's secondary ink, and nothing of it reaches your face
+(§2.8 I-5; §8 "The Me menu").
+
 ### 2.6 Organizational accents (containers, comments, tags)
 
 Curated set, assigned per object, used as *tint*: `#6366F1 · #EC4899 · #22C55E · #F59E0B ·
@@ -445,6 +455,11 @@ decide every surface a user appears on:
 | **I-3 A neutral ground** | The face sits on the chrome's own materials — no disc, no plate, no wash taken from the emoji. |
 | **I-4 The name makes it certain** | The face is an index. The name sits beside it wherever there is room, and in the accessible name where there isn't. |
 | **I-5 State stays in words** | Linked, offline and "2 waiting" are written beside the face (one badge at most), never painted onto it. The badge's one slot holds the waiting count or, when nothing waits, the update's dot (AU-D1, 2026-10-29): a waiting count outranks the dot, and the face never wears two. The dot is the app's state, not the person's, so I-1 stands. |
+
+*Amended 2026-11-11 (track MK; MK-D11 ruled A by James on the page *A Place for Plugins*):* a
+plugin's update never takes the badge's slot (I-5). The slot stays the waiting count's or the
+app update's dot; a plugin's update is said in words at the end of the Me menu's Plugins… row
+(§8 "The Me menu"), so the face never wears it.
 
 **The sticker** (default): the emoji is its own frame. Figure at 86% of the box. A die-cut
 border in paper white **in both themes** (`--vf-sticker-edge`) — the white edge is what reads
@@ -875,6 +890,12 @@ exception again.
 | Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9). *Retired 2026-11-02 (WI-1, §9's amendment of that day):* no page stands over the field, so the phone wears no scrim, and its Swift copy (`ChromePalette.searchScrim`) and that copy's check went with it. *Returned 2026-11-06 (SE-D3 A, ruled by James on the page The Bands Meter):* the phone's search is a glass sheet over the live field (§8 "The phone's search"), so the phone wears the dim again, alone with no blur, at these two values, fading in 240ms; a tap on it closes search. Its Swift copy comes back as `ChromePalette.searchScrim`, held to `--vf-search-scrim` by its check (SE-2) |
 | Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 75% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands. Its logo (FG-4b): `--vf-wizard-logo-filter`, `invert(1) hue-rotate(180deg)` by day and `none` by night, so the mark is white on smoke and inverted on milk with its colours kept. Its words (FG-O2's judge, and its fix after row 32 at run59b, 2026-10-31): the ramp stops at the glass's own t2, `--vf-wizard-text` (`rgb(28 28 30)` 80% by day, the ramp's t2 by night), t2, t3 and t4 re-projected to it there (`--vf-text-secondary`, `--vf-text-tertiary`, `--vf-text-faint`); a state word takes its glass ink (§2.5), `--vf-ink-healthy` and `--vf-ink-attention` re-projected to `--vf-wizard-ink-healthy` (`#104C1F` by day) and `--vf-wizard-ink-attention` (`#683400` by day), the inks themselves by night; and a quiet button's words stand at t1 on its fill; its panes' words go with its own, so every word on it reads at 4.5:1 (§8) | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C; by day through a 75% milk since FG-O2's judge, 2026-10-31, at a little over half the strength 55% let through). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 | History's sample (track HG, HG-D2 ruled by James 2026-11-08, frost; built at HG-2) | the room itself under ONE filter on its own layer, never a backdrop filter: a blur of `--vf-history-sample-blur` (7px) at a saturation of `--vf-history-sample-saturate` (0.9), the layer at `--vf-history-sample-opacity` (62% by day, 56% by night) over the cover's glass. Frost, never haze (at 3px and 72% the transcript half-reads) and never a skeleton (it loads nothing); drawn once, and again only on a resize or a theme change | behind History's consent card while the index waits for consent (§8 "History", before its past) |
+
+*Added 2026-11-11 (MK-D2):* **the Plugins popup** (§8 "Plugins — the frame's second popup") wears
+two of the rows above and no new material — the *Search popup* shadow, ringed by the strong
+hairline, and the *Search scrim* under it — as the Peek does, so the frame's two popups read as one
+family. Where it opens over Canvas the scrim blurs and dims the live desk, and the desk recedes with
+the frame, as MK-D2 rules (§6 "Plugins").
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -1417,6 +1438,28 @@ the still under it and the frame's chrome, together** in one box the size of the
 at rest that box carries no transform, so it stacks and takes the pointer as if it were not there. Folding, the popup goes at once — what you picked is already opening
 behind it — the scrim fades out over the same 240ms and the window comes forward over the same
 420ms. Reduced motion (M6): no pop and no recede — the scrim and the popup fade in over 120ms.
+
+**Plugins (the frame's second popup; MK-D2, ruled 2026-11-11; MK-4 builds it).** It moves as the
+Peek moves: the popup pops in over 260ms on the island curve, the Peek's pop, fading in with it; the
+scrim fades in over 240ms plain `ease`; folding, the popup goes at once, the scrim fades out over
+the same 240ms and what receded comes forward over 420ms. **What recedes** is what you see, the view
+and the frame together (MK-D2). Over a cover it is the Peek's recede exactly: `.field-recede`
+(`field.tsx`), the one box holding the cover, the still under it and the frame's chrome, recedes to
+`scale(0.98)` about 50% 46% over 420ms on the island curve while the owner's surface is a modal one
+— `search` and `new-spark` today, `plugins` from MK-4 — and the desk's own box never does (DK-15).
+**Over Canvas**, where no cover stands — and no modal surface opened there before this one: the Peek
+opens over Godview and History alone, the New spark sheet over Chat — the view that recedes is the
+live desk (MK-D2: the view and the frame recede to 0.98). There the box holds the frame's chrome and
+no still, and the desk's own box stands outside it, so `plugins` joining the modal rule alone would
+recede the frame and leave the desk at scale 1. Nothing forbids the desk's recede on Canvas: DK-15
+bars a transform on the desk's box only while a cover stands, and the pill's sheet and Settings
+already scale it there (`.field-scene[data-sheet-open]` in `styles/base.css`, 600ms on the island
+curve about its centre). *Owed, doc first (MK-4):* how the desk and the frame recede
+as one, at one duration about one point. Under the scrim the desk is out of reach (the field is
+inert) and nothing freezes: no cover stands, so M5's freeze is not taken, and the desk keeps its own
+idle, as under a sheet. Inside the popup a tab or a plugin's page changes in place, and Install
+grows into the install card (M1); their timings are drawn at MK-4 and written here first. Reduced
+motion (M6): no pop and no recede — the scrim and the popup fade in over 120ms.
 
 **The hand (Cards in Hand; built at HN-1 and HN-4).** Every curve is the table's but one, the deal's arc
 (below). **The deal:** a card leaves its source's box as the card it will be — scaled to the box and turned
@@ -2998,16 +3041,21 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     on Canvas, New terminal ⌘T in Godview and in History), in History the chosen session's **Resume
     this session**, waiting until a session is chosen — **Jump to this session** while it runs here,
     by the room's reading (the line's own until HN-7), on Canvas
-    the four zoom acts, and in Godview **System control**, the one act with no key (GV-D1,
+    the four zoom acts, and in Godview **System control**, the one act of its view with no key
+    (*amended 2026-11-11, MK-D1:* it said "the one act with no key"; GV-D1,
     2026-10-11: it left the instrument bar for the palette — §8 "Godview's head — Stories")
     *(corrected 2026-11-05, LP-6: in a development build only — a production palette lists no
     System control, as HK Q3, James 2026-10-28 "B", made the surface lab development's alone)*;
-    **App** — Settings… ⌘,; then each enabled
+    **App** — Settings… ⌘, · Plugins… · Check plugins for updates, which opens the Plugins popup on
+    Updates: opening it is the read (§8 "Plugins — the frame's second popup"; *amended 2026-11-11,
+    MK-D1, MK-D5, VF-PM's MK-E7; to be built in track MK*); neither has a key; then each enabled
     plugin's palette commands under the plugin's name, one no live handler answers drawn
     "unavailable" and never run. Eyebrows 10px mono capitals in tertiary ink; rows 36, a 16 glyph
     in a 24 column in secondary ink (the zoom acts and System control carry none), 13/500, the
     hot row in the ready
-    fill; a row that waits says why under its name. Typing filters every group; ↑ ↓ move,
+    fill; a row that waits says why under its name, and the App group's Plugins… and Check plugins
+    for updates say where else they live, "Me menu" and "Plugins" (*amended 2026-11-11, MK-D1*).
+    Typing filters every group; ↑ ↓ move,
     Return runs, Esc or the dim closes it. The prose footer ("↵ to run · esc to close") retired
     (F7, F15): the keys are said in the rows. The backdrop dim behind it, no recede.
   - **One surface at a time** (FR-4): the explorer, the zoom's menu and the palette are three of
@@ -3019,7 +3067,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     from FR-4 until then). A change of view folds whichever is open. A sheet folds over its 600ms
     with its shelf still in it — the pill's as a cover rises, the Hub still on its Artifacts shelf,
     and the covered sheet back into the circle's place, also as the cover lowers — and the Hub
-    stays in the sheet that showed it, never moving to the other.
+    stays in the sheet that showed it, never moving to the other. The Plugins popup is in the same
+    value, as `plugins` (§8 "Plugins — the frame's second popup"; *amended 2026-11-11, MK-D2;
+    to be built in track MK*): opening it folds the Peek, the palette, the Me menu and the rest,
+    and each of them folds it.
   - **The right slot is the zoom readout alone**, 16 in, and the pill gives up only the wider of
     the lights' 96 and that slot (FR-4, 2026-10-03: the theme went into the Me menu, FC-D5, F3, and
     Artifacts behind the right notch, FC-D10, F10 — into the pill itself since HN-8, PL-D1).
@@ -3616,7 +3667,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   default window), grown upward on the island curve from its own foot (§6) while **the face stays
   put beneath it, lifted**. Nearest first, from the foot: **you** (the name 13/600 over the login in
   11px mono, under a strong hairline; it opens Settings → Account) · **the update row** (since AU-D4,
-  always once the window knows the desktop's state; below) · **Settings…** `⌘,` · **Theme**
+  always once the window knows the desktop's state; below) · **Settings…** `⌘,` ·
+  **Plugins…** (*amended 2026-11-11, MK-D1*; below) · **Theme**
   — a row whose `sun` (or `moon`, by night) heads a **small segmented control, Light · Dark · Auto**
   (§8's small size): the app's ONE theme control (FC-D5, F3) · **Link Tailscale account…** (only
   while unlinked) — which **starts the link itself** (F16: it no longer opens Account, which the name
@@ -3723,6 +3775,21 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   every row that names Settings → Updates has it to open), on AU-1's view (the version you are on, the ready day,
   the last install's outcome) and its doors (the check's answer, the download); the What's new form waits on AU-6,
   and the copy that can't update itself on AU-7.*
+  *Amended 2026-11-11 (track MK; MK-D1 and MK-D11 ruled A by James on the page *A Place for Plugins*):* **the
+  Plugins… row**, the door to the Plugins popup (§8 "Plugins — the frame's second popup"). It stands **directly
+  above Settings…**, so the menu reads, nearest first: you · the update row · Settings… · **Plugins…** · Theme ·
+  Connect your devices… (while this Mac is not connected) · New user… · then the other users under "Switch to".
+  It wears `plugin` at 18 in the 44px column (§13) and prints no key. It is there in every build, registry or
+  none: until one is configured the popup's Discover says "No plugin registry yet". Choosing it folds the menu, as
+  Settings… does, and opens the popup, one of the frame's open surfaces (§10), so opening the menu folds it in
+  turn. **Keyboard:** Return still lands on Settings… (`data-me-nearest`, AU-D5), never on Plugins…; ↑ from
+  Settings… reaches Plugins…, then Theme, and ↓ the update row, as before. **"1 update"** (MK-D11): once a read
+  found an update (§8 "Plugins — the frame's second popup"), the row ends in "1 update" ("2 updates") in the
+  row's secondary ink (the ink of another user's "N waiting"), and the count falls as you update them. It is
+  words, never a mark: no dot and no cyan (cyan says an install of the app waits on you, AU-D1, §2.5), and
+  nothing on your face, whose badge slot stays the waiting count's or the app update's (§2.8 I-5). Opening the
+  menu reads nothing: the row says what the last read found. *To be built in track MK; until then the menu has
+  no Plugins… row.* Its words are §9 "The plugins' words".
 - **The Connect pane** (Setup pane 4, and every surface that starts the link; track TS, ruled
   2026-10-27 — TS-D1…TS-D8, TS-D12, TS-D13; the record is `draft/thinking-tailscale-onboarding.md`,
   the page *Your Devices, One Field*). The pane keeps its place, the wizard's glass and its fixed
@@ -3975,8 +4042,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   joins the field.** Under the camera is the desk's: the pencil brackets, the laser guides, the
   masking tape, the label tape and the printed rulers are GPU marks in the mat's own inks, lit by
   its Sun and Moon (§2.1). Over it is VibeField's: the bar, its menu, the tools in hand, the
-  pegboard's filters and the line's door are screen-space chrome, lit by nothing and following the
-  theme; they stand over the desk and under the frame (§10) — the head, the line, the hand and the
+  pegboard's filters and its More in Plugins… (*added 2026-11-11, MK-D1*), and the line's door are
+  screen-space chrome, lit by nothing and following the theme; they stand over the desk and under
+  the frame (§10) — the head, the line, the hand and the
   corner are above them (and the edges, until HN-8). A control never dresses as a mark and a mark never becomes a control
   (MC-1), so the desk's ink leaves the bar and the label tape leaves the filters. Every bar is the
   line's glass and a menu grown from it the same piece, firmed to solid (MC-2, FR-7); colour is
@@ -4235,12 +4303,67 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   header and the foot, and the **ring** stands 2 out from `focused.rect` — the object's fit in its
   hang as the last frame drew it, what a press there grabs — never the hang box. ⏎ lays the focused
   one at the view's centre — `handle.tray.lay()`, the tray's own take: one undo step, selected, the
-  board folding as a handed take's does; Esc closes the board; the filters and the board are two
-  stops of Tab. **One surface at a time:** Objects is one of the frame's open surfaces (§10) — it
-  folds the pill's sheet on either shelf (Artifacts' was the right edge's drawer until HN-8), the
-  menus, the cards and the palette, and they fold it; Esc
-  closes it ("Close  Esc"); B toggles it, never while typing and never under a cover. **The tray
-  island and its state are gone** (R21) — the pegboard replaced them.
+  board folding as a handed take's does; Esc closes the board; the filters, the board and
+  "More in Plugins…" (below), while it stands, are three stops of Tab (*amended 2026-11-11, MK-D1*).
+
+  **More in Plugins…** (MK-D1, ruled by James 2026-11-11): the board's door to more objects, one
+  glass pill at its foot — VibeField chrome like the filters, lit by nothing and following the
+  theme. It is **32 tall, corners 16**, padded 0 14, gap 8, on the line's glass (§5) with its
+  hairline and the island shadow: `plugin` at 15, then "More in Plugins…" at 12.5/600, the glyph
+  and the words in primary ink; it hovers and presses as §7's buttons do. Once the board is out its
+  foot stands **100** above the window's foot — the reserve a held object keeps there, the line's
+  88 + 12 (§10; `DESK_HOLD.band`), so y 648…680 at 1180 × 780, 28 clear of the line's top (708) —
+  centred on the filters' centre line (the drawer's); it follows the drawer every frame of its
+  slide, as the filters do, and fades in with them over its last 40%. It is drawn only while the
+  drawer is, and it **steps aside** as ICE's own bar does: while an object is in hand (the anchor's
+  `held`) and while the board hangs nothing (`entries` 0), two facts the filters do not read today.
+  It floats over the board as the board's controls do (above), so the board's last row, scrolled to
+  the end, can stand under it. A press on it is the chrome's, as a press on the filters is, never a
+  click on the dimmed desk. **It opens the Plugins popup on Discover** (§8 "Plugins — the frame's
+  second popup") on the board's chosen category (`tray.category()`; Discover's categories are the
+  pegboard's own, MK-D2) — from All, on Discover's top — and the board folds as the popup opens
+  (one surface at a time, below). *Status 2026-11-11: ruled, to be built.* Its words, and the
+  act's below, are §9 "The plugins' words".
+
+  **After an install** (MK-D8, ruled A by James 2026-11-11; VF-PM's MK-E2 of the same day builds the
+  plugin market page's fallback B): the popup's **Show them on the pegboard** folds the popup and
+  raises the board on **the set's first category in the board's order** (the lay's,
+  `tray.categories()`), with **the set's first object there focused** by its id
+  (`handle.tray.focus(type)`) and ringed, the board holding the keyboard, so ⏎ lays it. Over a
+  covered view the frame goes to Canvas first, where the board is (MK-E14, VF-PM 2026-11-11). A set
+  across categories shows the part under that category; the rest is a filter away. A plugin that
+  adds no objects is offered no such act. An install brings its kinds by a remount on a new engine
+  (DK-9) — or, where a board here already held one of its types faceless, by the window coming back
+  fresh, as an update's does (MK-E6 rules the update's; the install's, and where the popup and its
+  act stand after it, are *owed (MK-4c)*, here and in §8 "Plugins — the frame's second popup" first)
+  — and ICE's focus answers nothing until the board is next laid (petition I37), so the board asks
+  for it again once it hangs the set. *Status 2026-11-11: ruled, to be built.* The set's own token —
+  the board showing only the new set under "Desk things · 4 new", each object over its own
+  category's tape, its × back to every object — waits for ICE's door (a filter by a set of types;
+  ICE 0.17.0's lay filters by one category alone; petition I54, drafted), as the ruled lean itself
+  says: until then the board falls back as above (MK-D8). Whether a plugin from the registry,
+  VibeField's own included, may add objects at all is *open, James's call (MK, 2026-11-11)* (§8
+  "Plugins — the frame's second popup").
+
+  **One object at a time waits** (MK-D9, ruled A by James 2026-11-11: each object its own pegboard
+  switch; not buildable on ICE 0.17.0, VF-PM's MK-E2): until ICE's door, a plugin's objects hang
+  together. Its one switch (Settings → Plugins' today; its
+  row's in the Plugins popup's Installed once that page leaves Settings, MK-D10), turned off, takes
+  every one of them off the board: the desk remounts without their kinds (DK-9), and the board hangs
+  only what the desk draws (ICE I38), so none of them hangs and no filter offers a category of
+  theirs alone (P3c, above); their objects already on a desk wear the missing face, the bar naming
+  them "plugin off" (§8 "The missing face"). No object has a pegboard switch of its own. Hanging
+  only some of a set — a switch per object on its plugin's page, the objects already on a desk
+  drawing as before, the choice syncing with the install set and, like grants, never undone by ⌘Z
+  (VF-PM's MK-E4) — waits for ICE's door (a filter on what the board hangs, apart from what the desk
+  draws): *open, James's call (MK, 2026-11-11)*.
+
+  **One surface at a time:** Objects is one of the frame's open surfaces (§10) — it folds the pill's
+  sheet on either shelf (Artifacts' was the right edge's drawer until HN-8), the menus, the cards,
+  the palette and the Plugins popup (§8 "Plugins — the frame's second popup"; *amended 2026-11-11,
+  MK-D2*), and they fold it; Esc closes it ("Close  Esc"); B toggles it, never while typing and
+  never under a cover. **The tray island and its state are gone** (R21) — the pegboard replaced
+  them.
   *History:* DK-13 (2026-10-06) built the board and deleted the tray island and its state (R21); its
   keyboard path ran on its own walk and scroll and ringed the hang box. *Amended 2026-10-07 (DK-17b,
   ICE `0.15.0-desk.6`, petition I37):* the walk, the scroll and the lay moved onto ICE's doors and the
@@ -4949,26 +5072,72 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   because offline detection can lag by minutes (F-C6-22) and the row must never
   imply promptness. A doc a peer syncs that this device does not hold reads
   "a peer's doc · not held here" — a fact, not an alarm.
-- **The plugin source badge** (P7; spec §20.5 / §5.3): every plugin row labels its
-  source and rung as a FACT in the muted text ramp (`labelCls`), never a warning — no
-  hue (§2.5: color is for honest state, and a source is not a state of concern). A
-  pill (§8 "Pills"), so it reads as a label, not a status. Words: bundled → "Built in",
-  dev-linked → "Development", registry → "Registry" with the publisher appended ("Registry ·
-  ‹publisher›" — the registry publisher is the reviewer), sideload → "Sideloaded" (honest, not
-  alarmed — the word IS the caution).
+- **The plugin source badge** (P7; spec §20.5 / §5.3; *amended 2026-11-11, MK-D13 and MK-E11; it
+  said the registry publisher is the reviewer, which TD-11's `reviewedBy` keeps apart*): every
+  plugin row and page in Plugins… (§8 "Plugins — the frame's second popup") labels its source as a
+  FACT in the muted text ramp (`labelCls`), never a warning — no hue (§2.5: color is for honest
+  state, and a source is not a state of concern). A pill (§8 "Pills"), so it reads as a label, not
+  a status. The word says who made it, decided in this order: bundled → "Built in" (first, so a
+  plugin that comes with VibeField reads Built in, never VibeField) · a registry plugin VibeField
+  publishes → "VibeField" · one anyone else publishes → the publisher's name, with "Community"
+  beside it · dev-linked → "Development" · sideload → "Sideloaded" (honest, not alarmed — the word
+  IS the caution). TD-17 asks every row to label its source, rung and reviewer: the one word stands
+  for the source and its rung, and who reviewed a registry plugin is said on its page ("Reviewed by
+  ‹name›"), never in the pill (§8 "Plugins — the frame's second popup"). No rung's code, signature
+  or repository reaches the screen (§9, VibeField's insides; §9 "The plugins' words"). *Owed at the
+  source (MK):* a dated note on TD-17 and on TD §7, whose every row shows the rung, the reviewer and the build
+  line `built from <repo>@<commit>`, whose R2 rows say "worker-hosted" until PA §27 item 4's probe,
+  and whose switch stands "in Settings → Plugins" (`trust-and-distribution.md`); the reviewer's
+  leaving the row, which MK-D6's why keeps there and the ruled page draws on the plugin's page, is
+  ‹for James›. *To be built by track MK (nothing of it lands before the v0.9.0 tag unless James says
+  so, MK-E13). Until then* the pill stands on Settings → Plugins' rows (`panels/PluginsSection.tsx`,
+  `SOURCE_LABEL`), where a registry row reads "Registry · ‹publisher›". No build configures a
+  registry before the registry rung (TD §9 TD-4), so no row wears it yet. *Known deviation,
+  unreached until then:* the ‹publisher› fieldd records for a registry install is the plugin's
+  repository address (`plugin-install.ts`), which the pill would print. MK-2 records the
+  publisher's namespace in its place (MK-E11; ROADMAP §2's MK block), as the registry rung's index
+  v2 reader will from its `publisher` (`plugin-distribution.ts`), and MK's rows never print the
+  address.
   *Corrected 2026-10-28 (the housekeeping pass), to the shipped words (`panels/PluginsSection.tsx`,
   `SOURCE_LABEL`):* this said a `rounded px-1` chip with no fill and the words "built-in", "dev",
   "registry · reviewed" and "sideload". The catalog's ControlsSection still shows a
   "registry · reviewed" replica, owed to the catalog's slice (it mounts the shipping view).
-- **The updates flow** (P7; spec §5.3.1): a section-top "updates ▸" disclosure that
-  NEVER checks on its own — opening it reveals a "check for updates" action and nothing
-  fetches on mount, on expand, or on a timer (no push feed, no polling; a fetch is a
-  deliberate act). Results render honestly (the empty/degraded rule): a compatible
-  update reads "id · installedVersion → latest.version" (`tabular-nums`) with an
-  "install" action; an incompatible one says WHY from the release's own engine range
-  ("needs app X · contracts Y"), no action; a vanished entry lists "dropped from
-  registry"; an all-clear reads "everything current". The checked time is stated
-  ("checked HH:MM:SS"), never implied fresh.
+- **The updates flow** (P7; spec §5.3.1; *amended 2026-11-11, MK-D5 and MK-E7: split in two*): a
+  fetch is a deliberate act, never a feed — no timer, no push feed, no polling — and the time it
+  was checked is always said, never implied fresh. Two flows keep that law, each in its own words:
+  - **Plugins** (MK-D5): opening Plugins… is the act, and this amends the entry's old "NEVER checks
+    on its own" for that popup alone. Each open reads the registry's signed list once, and the read
+    carries no identity. The list from the last read shows at once with its time ("checked 14:02"),
+    and updates are known from the same read: the popup's Updates and the Me menu row's "1 update"
+    are that read's (§8 "Plugins — the frame's second popup"). The palette's "Check plugins for
+    updates" opens the popup on Updates, and opening it is the read (MK-E7). A plugin may still opt
+    in to its own check when VibeField starts (spec §5.3.1), once that check is built: fieldd
+    checks only when asked (`updatesCheck`), and no MK slice builds it. Until the registry rung (TD §9 TD-4)
+    no build has a registry to read, so Discover says "No plugin registry yet" in every build. A
+    result's words are §9 "The plugins' words": a release that needs a newer VibeField, a plugin
+    gone from the list and a download that didn't match are said in plain words, and their insides
+    ("needs app X · contracts Y", the hash) stay off the popup and go to the log (item 282-6's
+    plugin half, by MK-E12); what replaces James's ruled "dropped from registry" is his to rule
+    (‹for James›; §9 "The plugins' words"). A download that didn't match is logged today
+    (`fieldd.plugin_install.artifact_mismatch`); a read's incompatible and vanished entries are
+    not, since `updatesCheck` hands them only to its caller, and logging them is *owed (MK)*.
+    *To be built by track MK. Until then* Settings → Plugins keeps its section-top "updates ▸"
+    disclosure (`panels/PluginUpdates.tsx`), which never checks on its own: opening it reveals a
+    "check for updates" action, and nothing fetches on mount, on expand or on a timer. A compatible
+    update reads "id · installedVersion → latest.version" (`tabular-nums`) with "install", an
+    incompatible one "needs app X · contracts Y" with no action, a vanished entry "dropped from
+    registry", an all-clear "everything current", under "checked HH:MM:SS". Its ids and engine ranges
+    are VibeField's insides on screen, a known deviation that item 282-6's plugin half pays
+    (MK-E12); "dropped from registry" is James's ruled wording, and its replacement goes to him
+    as a proposal (DECISIONS' insides row), never amended here.
+  - **An agent's own updates** (Settings → Agents' shelf, AR-D22, and an agent's plugins lists on
+    Agent Profiles) keep the old law and their own words: nothing fetches until **Check for
+    updates** is pressed (**Update catalogs…** where the agent's fetch also updates what it
+    installed, and that asks first). The shelf's head says when: "Checked 09:41:20 · 2 updates" ·
+    "… · everything current" · "… · 1 couldn't be checked" · "Not checked yet". A plugins list says
+    "Updates are checked only when you ask" until its first check and "Checked ‹time› · …" after
+    it; where **Update catalogs…** stands, "Catalogs are fetched only when you ask", then "Catalogs
+    fetched ‹time› · …" (`panels/agents/agents-model.ts`, `browse-model.ts`).
 - **Settings → Updates** (track AU, AU-D8 ruled A 2026-10-29; until then **the desktop update card**, WP12d L3c-ii,
   2026-10-15, on Settings → General after Desktop — `build-wp12-updater.md` §13 C3's "for now"): the app's own
   updater, main's, over the host bridge, on a page of its own, **first in Support** (Updates · Diagnostics ·
@@ -5056,20 +5225,48 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the attention ink: "Update VibeField there to connect" (it is behind), "Update this Mac to connect" (this Mac
     is), "Can't connect: another version" (not known which). The section reads the devices apart from the updater,
     so the page still works with the daemon down.
-  - **The foot:** "Updater diagnostics →" and "Plugins update from Settings → Plugins."
+  - **The foot:** "Updater diagnostics →" and "Plugins update from Plugins… in the Me menu." — one plain sentence
+    that points at the popup, whose Updates lists them (§8 "Plugins — the frame's second popup"; *amended
+    2026-11-11, MK-D10:* it said "Plugins update from Settings → Plugins.", which `panels/UpdatesSection.tsx` says
+    until MK builds it).
   - **The advisory UNSUPPORTED line** is a sentence, never a block.
   - **A build with no updater** keeps its sentence under the head: "This build doesn't update itself: only release
     builds carry the identity updates need."
   - **Settings → Diagnostics' "Updater" block** renders the doctor's lines as `SystemSection`'s key/value rows. A support
     bundle's `doctor/status.json` carries the same lines.
-- **The destructive uninstall affordance** (P7; spec §16.5): registry and sideloaded rows
-  carry a **More +** disclosure revealing two buttons — **Uninstall** (keeps data) and **Remove
-  plugin and data** (the destructive variant: the danger tone, `--vf-red` text, visually distinct
-  BEFORE any confirm, §2.5 red = destructive). Each is a two-step confirm with Cancel beside it —
-  a narrow-panel click is never irreversible. The keep-data confirm asks "Uninstall ‹title›?" and
-  says "Plugin data is preserved, so reinstalling can restore its settings."; the destructive
-  confirm asks "Remove ‹title› and its data?", states exactly what dies, and its button says
-  **Remove data**. Red is text-only, never a filled alarm — honesty over dread.
+- **The destructive uninstall affordance** (P7; spec §16.5; *amended 2026-11-11, MK-D10 and MK-D13:
+  uninstalling is **Remove…**, on a plugin's page in Plugins…*) is §8's two-step destructive
+  confirm, the one §2.5, the Me menu's question and Settings → Updates cite. **Remove…** stands on
+  the page of every installed plugin but a Built in one, which turns off and is never removed (the
+  ruled page draws it so); fieldd removes registry installs alone today (`plugin-install.ts`), and
+  sideloads are not built, so what Remove… does for a Development plugin is *open (MK,
+  2026-11-11)*. It asks in place, on the page: "Remove ‹title›?", over "Its settings and data stay
+  on your desktops, so installing it again brings them back. ‹Clock and Ruler› objects on your desks
+  draw as missing on this Mac until then." ("this PC" off the Mac; §9 "The plugins' words"; the
+  ruled page's words, "on this Mac" added while MK-E10 is open; the objects it adds, by name, and a
+  plugin with none names none; whether a registry plugin may add objects at all is *open, James's
+  call (MK, 2026-11-11, MK's J1)*: kinds are R0's alone today, TD §7) — **Cancel** leading and focused,
+  **Remove** trailing. Under them, **Remove it and its data…** in `--vf-red` text (the danger tone,
+  visually distinct BEFORE any confirm, §2.5 red = destructive) is its own two-step: "Remove ‹title›
+  and its data?" states exactly what goes, and its button says **Remove data**, Cancel leading. One
+  click is never irreversible, and red is text-only, never a filled alarm — honesty over dread.
+  **What stays on the desk** (spec §16.5 keeps canvas entities): each of its objects, if it has any
+  (MK's J1, above), stays where it lies and wears ICE's missing face, wordless, while the bar names it
+  "‹name› · plugin gone" (§8 "The missing face"; the desk remounts without its kinds), until it is
+  installed again. *Owed (MK):* with the plugin's record gone, the bar's ‹name› falls back to the
+  type id (`desk-object-words.ts`), an id on screen against §9, VibeField's insides, so what the bar
+  names a removed plugin's object by is still to be said, here first. **Remove… takes it off this
+  desktop** and, today, out of the set your desktops share: a desktop that has not installed it yet
+  no longer will, and one that has keeps it, since the reconciler installs and never removes
+  (`install-reconciler.ts`), though spec §16.6 says dropping an entry uninstalls code everywhere.
+  Whether Remove… also takes the set off your other desktops (their data kept) is *open, James's
+  call (MK, 2026-11-11, MK-E10)*. *To be built by track MK. Until then* Settings → Plugins' registry
+  and sideloaded rows carry a **More +** disclosure revealing **Uninstall** (keeps data) and
+  **Remove plugin and data** (the danger tone), each a two-step confirm with Cancel beside it:
+  "Uninstall ‹title›?" says "Plugin data is preserved, so reinstalling can restore its settings.";
+  "Remove ‹title› and its data?" says what dies, and its button says **Remove data**. *Known
+  deviation, unreached:* a sideloaded row would refuse both, since fieldd uninstalls registry
+  installs alone and builds no sideload yet (`plugin-install.ts`), and would print the refusal.
   *Corrected 2026-10-28 (the housekeeping pass), to the shipped form (`panels/PluginsSection.tsx`,
   `PluginUninstall`):* this said a "···" overflow with "uninstall" and "remove data too", and the
   destructive confirm's words "deletes its settings and stored data — canvas cards it made are
@@ -5077,24 +5274,49 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   data are deleted. Canvas cards it created remain." The desk has no cards: what an uninstall
   leaves of a desk kind's objects is to be verified and then said in the desk's word (objects),
   here first and then in the string.
-- **The settings undo affordance** (P7 D29′; spec §16.6): **Undo** and **Redo** in the Settings
-  dialog's toolbar, beside its close — one pill of two buttons (glyph and word, 11px medium in the
-  muted ramp, `disabled:opacity-30` when there is nothing to reach), titled with their keys (⌘Z,
-  ⇧⌘Z; a focused field keeps its own). Only user-scope keys are on the stack: device and secret
-  keys never are, and a plugin's form says which applies at its foot — "Synced user settings can
-  be undone from the window toolbar." or "Device and secret settings stay on this device and are
-  not part of settings history." The outcome is said in words: "Last synced change undone",
-  "Change restored", "Nothing left to undo", "Nothing left to redo", "Settings history limit
-  reached". No optimistic echo — an applied undo re-gets every row from the daemon.
+  *Paid 2026-11-11 (MK), from spec §16.5 and §8 "The missing face": what stays is said above, in
+  objects; the string follows when MK builds **Remove…**.*
+- **The settings undo affordance** (P7 D29′; spec §16.6; *amended 2026-11-11, MK-E5*): **Undo** and
+  **Redo** in the Settings dialog's toolbar, beside its close — one pill of two buttons (glyph and
+  word, 11px medium in the muted ramp, `disabled:opacity-30` when there is nothing to reach),
+  titled with their keys (⌘Z, ⇧⌘Z; a focused field keeps its own). Only user-scope keys are on the
+  stack: device and secret keys never are. **A plugin's settings** live on its page in Plugins…
+  (MK-D10) and stay on the same history: the page carries the same pair, so a change made there can
+  be undone there or in Settings. The form says which applies at its foot — "Synced settings can be
+  undone here or in Settings." or "Device and secret settings stay on this device and are not part
+  of settings history." Never on it, by D29′'s second law (undo never re-escalates): what is
+  installed and whether it is on, and grants; by MK-E3, the community switch; and, if MK-D9's
+  pegboard switches come (*open, James's call (MK, 2026-11-11)*), which objects hang (MK-E4) — so
+  ⌘Z never brings back a removed plugin or a power, nor turns community plugins on, and Settings →
+  General's note ("plugin grants … are excluded") stays true. The outcome is said in words: "Last
+  synced change undone", "Change restored", "Nothing left to undo", "Nothing left to redo",
+  "Settings history limit reached". No optimistic echo — an applied undo re-gets every row from the
+  daemon.
+  *To be built by track MK. Until then* the form stands on Settings → Plugins
+  (`PluginSettingsForm.tsx`), with "Synced user settings can be undone from the window toolbar." at
+  its foot.
   *Corrected 2026-10-28 (the housekeeping pass), to the shipped form (`panels/SettingsDialog.tsx`,
   `SettingsPanel.tsx`, `PluginSettingsForm.tsx`):* this said compact "undo · redo" text buttons at
   the head of each plugin's settings form, with a right-aligned coverage caption ("covers
   user-scope keys only", "no user-scope keys") and the outcomes "nothing to undo" and "history
   horizon reached".
+- **Settings → Diagnostics' Plugins section** (MK-D10; item 282-6's plugin half, by MK-E12; *added
+  2026-11-11*): each plugin's runtime, one block per plugin under its title, drawn as
+  `SystemSection` draws its rows (§10's template): its controllers (the service's and each
+  renderer's), its behaviors, and the Doctor's issues by severity, an error in `--vf-ink-danger`
+  and a warning in `--vf-ink-attention` (§2.5). Its line, as MK-D10's ruled drawing writes it: "Each
+  plugin's runtime: its controllers, behaviors and the Doctor's issues. Moved here from Settings →
+  Plugins." What it shows is for whoever is fixing VibeField — renderer and document ids, install
+  revisions, commit epochs, a breaker's strikes, fieldd's own sentences — so it lives here alone
+  (§9, VibeField's insides), and Plugins… says a plugin that isn't working in one plain line (§9
+  "The plugins' words"). *To be built by track MK. Until then* Settings → Plugins' **Runtime +**
+  disclosure ("Runtime · N +" while the Doctor has N issues) draws it (`panels/PluginsSection.tsx`,
+  `PluginRuntimeDetails`), its issues in raw red and amber, a known deviation the move pays.
 - **Fact labels — scope and timing** (GT-7, Settings → Terminal; 2026-09-24): a page whose
   settings have DIFFERENT owners says, on each section head, whose a setting is and when it
-  lands — as facts, in the plugin-source-badge recipe (hairline chip, no fill, no hue; 10px
-  uppercase, tertiary ramp). Scope: "This window" (the viewer's own store, GT-D12) · "This
+  lands — as facts, in a hairline chip (no fill, no hue; 10px uppercase, tertiary ramp; *amended
+  2026-11-11, MK-D13:* it said "the plugin-source-badge recipe", which the badge left for a pill
+  on 2026-10-28). Scope: "This window" (the viewer's own store, GT-D12) · "This
   Mac" (a device document every terminal reads) · "Read-only" (a fact, shown so nothing is
   guessed). Timing: "Live" · "New terminals" · "After save" · "Kept, not drawn" on a DASHED
   hairline; "Next ghosttea" — not in the shipped release — DOTTED. Ownership and timing are
@@ -6335,8 +6557,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     then what was said, then the project's; in Live now the plan's (UM-5a, 2026-11-09), then the profile's, then
     the desktop's); a click
     opens a row. **One surface at a time**: the popup is one of the frame's open surfaces, `search`
-    (§10) — the palette, the pill's sheet (a drawer until HN-8), the Me menu, Settings or a change
-    of view fold it, and it folds them; ⌘K over it opens the palette, ⌘F over the palette opens it.
+    (§10) — the palette, the pill's sheet (a drawer until HN-8), the Me menu, Settings, the Plugins
+    popup (§8 "Plugins — the frame's second popup"; *amended 2026-11-11, MK-D2*) or a change of
+    view fold it, and it folds them; ⌘K over it opens the palette, ⌘F over the palette opens it.
   - **Open in the terminals** (P2). A live row — ↵, a click or Open — folds the popup and, in
     Godview, does what the view's own select does: this desktop's run placed as a session with no
     pane is (§8, the deck, GV-D4 — in the focused pane, mirrored there when another pane shows
@@ -6356,6 +6579,181 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     of the window's top and foot (the line's 72, and 24), so it never covers the head or the line.
     Below a 680 popup — a window narrower than 728 — the list and a useful peek no longer both fit:
     **the peek folds and the list fills the popup**.
+- **Plugins — the frame's second popup** (MK-D1…MK-D13, every mark A, ruled by James 2026-11-11 03:41:23Z on the
+  page *A Place for Plugins*, Xy5CTh2M, `draft/plugin-market/round1/`; VF-PM's engineering rulings MK-E1…E9 and
+  MK-E11…E13, 04:30:39Z; MK-E10 is James's call): ONE place for plugins, search's sibling — "Plugins move out of
+  Settings. The Me menu gets a Plugins… row, and it opens a popup of its own: the frame's second popup, built the
+  way search is" (the page). A plugin is usually a set of objects, so its shelf shows sets. It is the frame's, as
+  the Peek is, and it opens over every view, Canvas among them. *Status 2026-11-11: ruled; nothing of it is built.*
+  MK-1, MK-2 and MK-4…MK-6 build it (MK-4 the popup, MK-5 Settings' half, MK-6 its catalog plates and gates; there
+  is no MK-3), MK-7 what waits on ICE's door, and none of it lands before the v0.9.0 tag unless James says so
+  (MK-E13). No build configures a registry today (`fieldd/src/bin.ts` sets none, and `fieldd/src/plugin-install.ts`
+  answers "no plugin registry is configured"), so Discover says **No plugin registry yet** in every build until the
+  registry rung (TD §9 TD-4). fieldd reads index v1 alone; MK types `listing` and `featured` on v1 and v2 alike, and
+  v2's reader stays the registry rung's (MK-E8). *Open, James's call (MK, 2026-11-11):* whether a plugin from the
+  registry, VibeField's own included, may add objects at all, since TD §7 hosts object kinds at R0 alone today. The
+  shelf's design, sets of objects, is ruled; whether a set from the registry may carry objects waits on that call.
+  - **Its doors** (MK-D1): **Plugins…** in the Me menu, directly above Settings… (§8 "The Me menu"); in the palette,
+    **Plugins…** and **Check plugins for updates**, which opens it on Updates (MK-E7; §8 "The head", the palette); and
+    **More in Plugins…**, a glass pill at the pegboard's foot, which opens Discover on the board's category (§8
+    "The pegboard"). Opening it is the read (MK-D5, below). Once a read found an update the Me menu's row ends in
+    "1 update" ("2 updates") in its secondary ink (MK-D11); the face never carries it (I-5), and no plugin update is
+    cyan (AU-D1).
+  - **The popup — 960 × 640** (MK-D2), in the Peek's materials: solid (`--vf-chrome-solid`, FC-D14 — rows to be
+    read), corners 24, ringed by the strong hairline, with the search popup's shadow (§5, *Search popup*), over the
+    search scrim (§5, *Search scrim*: the window blurred 18 and dimmed). It pops in on the island curve, and what
+    you see recedes under it to 0.98, the view and the frame together (§6 "Plugins"; over Canvas the view that
+    recedes is the live desk, MK-D2, and how it recedes with the frame is drawn at MK-4). Nothing under the scrim
+    holds the keyboard while it stands (the field is inert), the keyboard goes back where it was when the popup
+    folds on its own, and a click on the scrim closes it.
+    **Where it stands** (MK-E1): centred in the band between the head and the line's top, 8 clear of each end
+    and 24 clear of each side. The band's top is the window's top 52, the app's drag strip (§10), which holds the
+    head (its controls' foot is 48); at the default 1180 × 780 window the line's top is 708 (the line 52 tall,
+    standing 20 above the window's foot), so the band is 656 tall and the popup stands at 60…700, full
+    size, 110 in from each side. A smaller window clamps it as the Peek's does (K6): its width is
+    min(960, window − 48) and its height min(640, window − 140) — 60 above it (the strip's 52, and 8) and 80 below
+    (the line's 72, and 8) — and a taller one keeps it centred in its band. The Peek's own 24 and 96 are unchanged.
+  - **Top to foot**, the Peek's anatomy (§8 "Search — the Peek"). **The field**: 64 tall, its glyph 18 in tertiary
+    ink 22 in (`plugin` on the ruled page), the words at 20/400 (−0.01em) in primary ink with the select caret, its
+    parts 8 apart, and at its end **close** — a 40 circle, **esc printed under it**. Typed words search the shelf
+    (below). **The field's end** holds the small switch, **Discover · Installed · Updates** (MK-D2, MK-D13), cut as
+    the Peek's: the ready fill as its track, padding 2, corners 10; each part 26 tall, padded 0 10, corners 8, at
+    12/500 in secondary ink, the chosen one solid in primary ink with the hairline and a 1px shadow, changing at
+    once — no thumb travels, as on the Peek's. **Updates** carries its count once a read found any. **The body**
+    scrolls between the field and the foot. **The foot**, 52 tall over a hairline: one sentence at 12/400 in
+    tertiary ink — what the tab holds and when the list was read ("checked 14:02") — and the act the hot tile
+    offers, 32 tall, corners 16, 12.5/600 on the ready fill (14% under the pointer), with **↵ printed on it** in
+    tertiary ink. Its words are in §9 "The plugins' words".
+  - **Discover** (MK-D2, the Shelf): **the featured set** first, while the category is All — the index's `featured`,
+    the maintainers' pick (MK-D12) — its picture large beside its words; then **the pegboard's categories**, All and
+    then those the listed objects hang under, as the pegboard's own filters read (§8 "The pegboard"), with no
+    counts; then **the grid of sets**, VibeField's first, and **the community tile** at its end. The featured set is
+    the hot tile as it opens. What a set says and shows is the index's `listing`, which the registry's CI writes
+    from the manifest it rebuilt (MK-D12; additive, as index v2 is passthrough).
+    - **A set is laid out on the mat** (MK-D3, MK-D4). Its picture is the registry's **spread** — the set laid out
+      together, as it will sit on your desk — with its count on the picture ("3 objects"); a set of more than six
+      shows its first six and "+N" ("+4"). A plugin with no object shows its icon on the mat. The registry renders
+      the spread and one still per object from the build you would install, by day and by night, and the app's theme
+      picks which. **The pictures are content** (§1: colour belongs to content and honest state), so the mat's sage
+      and cream and the objects' own colours stand in them; the chrome around them stays colourless. They reach the
+      screen through fieldd's cache, pinned by their hashes, and main's plugin scheme, never from a remote host and
+      never over JSON-RPC (MK-E9; EL2).
+    - **A set lists under every category one of its objects hangs in**, and **search finds a set by any of its
+      objects' labels** as well as by its title and its words (MK-D4): "watch" finds Simulators, and says it has a
+      Watch (the page's example). While community plugins are off their sets are not searched, and the results say
+      so.
+    - **A tile** says its title, its act (**Install**, or **Installed** once it is), its summary, and its facts:
+      where it comes from — **Built in · VibeField · ‹publisher›**, with **Community** on a community plugin's
+      (MK-D13, MK-E11; §8 "The plugin source badge") — and its categories.
+    - **The community tile** (MK-D6; TD-17) stands at Discover's end, its switch off by default. Turned on the first
+      time, it asks once, in place, with trust-and-distribution §7's statement word for word: "Community plugins run
+      with the app's access. VibeField reviews the first listing and rebuilds every version from source; nothing
+      isolates their code from yours." Then the community's sets join Discover after VibeField's, each naming its
+      maker, and its page its reviewer (TD-17; §8 "The plugin source badge") — never its rung (§9, VibeField's
+      insides; TD-17 and TD §7, which put the rung on the row and the switch in Settings → Plugins, owe their dated
+      amendments at their source). The switch is an app preference that syncs to your desktops, with a flag that the
+      statement was seen; it takes no undo, so ⌘Z never turns it on, and while it is off a community install is
+      refused (MK-E3).
+    - **No plugin registry yet** (every build until the registry rung, above): Discover is one state, never a blank
+      (§8 "Empty / degraded states") — the words **No plugin registry yet**, saying the plugins that come with
+      VibeField are in Installed, with a press that shows them. Installed works without a registry.
+  - **The read on open** (MK-D5): opening the popup is your act, so each opening reads the registry's signed list —
+    one read, carrying no identity, on no timer and with no push feed. The list it last read shows at once, with its
+    time in the foot ("checked 14:02"), never implied fresh, and the foot says a read is under way until it lands;
+    updates are known from the same read, so Updates' count is true when you look. A plugin may still opt in to its
+    own check when VibeField starts (PA §5.3.1), on its page once that check is built: fieldd checks only when asked
+    (`updatesCheck`), and no MK slice builds it (§9 "The plugins' words"). *This amends, for this popup, the
+    updates canon's "never checks on its own" (§8 "The updates flow"): opening it is the act.* **Honest, whatever
+    the read says** (§8 "Empty / degraded states"): offline, the last list stands with its time and Install waits,
+    saying why; a list that has expired is said in the attention ink (§2.5), and installs wait for a newer one
+    (TD-10); a list that cannot be trusted shows nothing new and the last good list stays, with its time and the
+    details in Diagnostics — never a blank, and never a word about signatures (§9, VibeField's insides). A set that
+    needs a newer VibeField says so from its own release's range, and offers no act until VibeField updates (as §8
+    "The updates flow" says of an incompatible update); a plugin the registry turned off, one stopped after it kept
+    failing and one no longer listed each say so on their row, with why and what to do.
+  - **Installed** lists every plugin this desktop has, Built in first: each row its picture small, its title and its
+    source pill, one line — how many objects it adds and where they hang (or what it is, when it adds none) and its
+    version — and **its one switch**, then a chevron to its page. Which of your desktops have it waits on a roster
+    no slice builds (PA §16.6; the device slice carries no plugins), so the row does not say it yet (the install-set
+    syncs the choice, each desktop fetches its own copy; PA-31). Turned off, its
+    objects on your desks wear the missing face until it is on again (§8 "The missing face", "plugin off"). A
+    built-in plugin turns off and is never removed.
+  - **Updates** is what the last read found, its time at its head. Each update says how it changes the set before
+    you take it — the objects it adds or removes (MK-D4) — over its notes, with **Update**; one that removes an
+    object asks first, because the objects of that kind on your desks would wear the missing face. Nothing installs
+    on its own; going back a version (PA §2.2) has no MK slice and no act here yet.
+  - **A plugin's page opens in place** (MK-D2): a press on a tile or a row, or ↵ on the hot one, turns the body to
+    the page, and **‹ Discover** at its top (‹ Installed or ‹ Updates when it opened from there) or Esc goes back.
+    As drawn it holds two columns. **The first is the set, then each object** (MK-D4): the picture — the set's
+    spread, or one object's still — over a strip of the set and then each object alone (a press shows that one), the
+    plugin's own words, what it adds (each object with the category it hangs under, then its tools and its services)
+    and, once it is installed, **its settings** (below). **The second** holds its name and its source,
+    **the one act**, with ↵ printed on it, what it can do — its powers in plain words (§9 "The plugins' words"),
+    each with its own switch once it is installed — who made it and, for a plugin from the registry, who reviewed it
+    (TD-17), its version (and, once that check is built, the switch that lets it check on its own when VibeField
+    starts; above), and **Remove…**. The page never shows a repository, a commit, a hash, a signature, a rung, its
+    own id or a power's id (§9, VibeField's insides).
+    - **Every install asks first** (MK-D7), with one short card: **the install card** (never "the consent card",
+      which names History's card and TD-8's app-update card). Install grows into it where it stood (one element, M1),
+      and it says three things: the objects it adds to your pegboard, each by its small drawing and its label; its
+      powers in plain words; and the desktops it installs on, each by its OS mark and its name, since an install on
+      one desktop reaches your others (the install-set syncs the choice, PA-31). Then Cancel and **Install**, with ↵
+      printed on it. Grants stay granted at install (PA-12) and turn off one by one on the page afterwards.
+    - **Real progress, never a spinner**: the bar moves on the download's bytes, then the steps are said in §9's
+      words, and the act says **Installed** only once it is true. A download that does not match what the registry
+      built is thrown away and nothing is installed (fieldd's `PLUGIN_ARTIFACT_MISMATCH`), said in plain words with
+      a way to try again.
+    - **The acts** (MK-D13): **Install**, then **Installed** (a name survives its flow, §9); **Update** while one
+      waits; **Show them on the pegboard** once a set with objects is installed (below); and **Remove…**, which asks
+      — the two-step destructive confirm of §8 "The destructive uninstall affordance", naming the objects on your
+      desks that will wear the missing face until it is installed again, its data kept unless you choose the red act
+      that removes it too (PA-21). Remove… stands on every installed plugin but a Built in one, as the page draws it
+      (§8 "The destructive uninstall affordance"); fieldd removes registry installs alone today
+      (`fieldd/src/plugin-install.ts`; sideloads are not built yet), so what it does for a Development plugin is
+      *open (MK, 2026-11-11)*. It acts on this desktop; whether it also takes the set off your other desktops, their
+      data kept, is *open, James's call (MK, 2026-11-11; MK-E10)*.
+    - **Its settings** (MK-D10; MK-E12, item 282-6's plugin half): the plugin's settings form leaves Settings for its
+      page, and its runtime detail — its controllers, its behaviors and the Doctor's issues — becomes a Plugins
+      section in Settings → Diagnostics. The form stays on the same undo history as Settings (MK-E5) — the page carries
+      the pair Settings' toolbar has, **Undo** and **Redo** (§8 "The settings undo affordance"), and the form's foot
+      sentence names that pair, no longer the window's toolbar. Settings' note that plugin grants are kept out of
+      its history stays true (`panels/SettingsPanel.tsx`).
+    - **An update brings the window back fresh** when the plugin adds objects (MK-E6): the popup opens again on that
+      plugin's page, saying Installed, and nothing on screen says the window came back (§9: no reload or restart
+      word).
+  - **After install: Show them on the pegboard** (MK-D8 ruled A, B ships; MK-E2). As it ships, the act folds the popup
+    and the board rises on the set's first category with its first object in the keyboard's focus — the pegboard's
+    own category and focus doors (§8 "The pegboard"), and nothing of ICE's insides; over a covered view the frame
+    goes to Canvas first, where the board is (MK-E14, VF-PM 2026-11-11; §8 "The pegboard" says the same). Your
+    other desktops install the set when they are next on: the install-set syncs the choice, never the code (PA-31).
+    The ruled board — just the new set under a token that names it ("Desk things · 4 new"), whose × goes back to
+    every object — waits for ICE's door (a filter by a set of types: ICE 0.17.0's tray filters by category alone;
+    petition I54, drafted), as the ruled lean itself says: until it lands, the board falls back as above (MK-D8).
+  - **One object at a time waits** (MK-D9 ruled A, waiting; MK-E2, MK-E4): each object's own pegboard switch on a
+    plugin's page is not built, and cannot be on ICE 0.17.0 (the tray's lay reads the engine's catalog every tick).
+    It waits for ICE's door and James's word — *open, James's call (MK, 2026-11-11)*. Until then a plugin's objects
+    hang together, and Installed's one switch is the only one that takes its objects off your pegboard. When it is
+    built, the set of hidden objects syncs with the install-set and takes no undo, as grants take none (MK-E4).
+  - **Keys**: the caret is in the field as it opens. **↑ ↓ ← →** walk Discover's tiles, as the page draws them, and
+    ↑ ↓ the rows of Installed and Updates — how ← → share the field's caret is drawn at MK-4 and written here first;
+    **↵** takes the act it is printed on: on Discover the foot's, for the hot tile — Install, which opens its page
+    on the install card, or, once it is installed, its page — on a page the page's own act, and on the install card
+    **Install**; **Esc** answers the nearest first, on the window's capture phase before anything else hears it: an
+    open question (the install card, Remove…'s question, the community statement), then a plugin's page, which goes
+    back to its tab, then the popup, which folds. Over Godview it holds the stage's keys, as the Peek does (QL-D2).
+    **One surface at a time**: the popup is one of the frame's open surfaces, **`plugins`** (§10). Opening it folds
+    the Peek, the palette, the Me menu, the pill's sheet, Objects, the hand raised, every other surface and
+    Settings; any of them, Settings or a change of view folds it. ⌘K over it opens the palette, and ⌘F over it opens
+    the Peek where a view searches.
+  - **Reduced motion** (M6): no pop and no recede — the scrim and the popup fade in over 120ms (§6 "Plugins").
+    *Owed, doc first (MK-4):* the shelf's and the page's own numbers — the grid and its tiles, the featured set, the
+    page's two columns, where its Undo and Redo stand, the install card, the bar — and how they give way in a narrow
+    popup are drawn at MK-4 and written here before its code (UI_SYSTEM.md). The numbers above are MK-D2's, MK-E1's,
+    §5's, §6's and the Peek's. Studio's catalog mounts the shipping popup over a fixture port (MK-6;
+    `docs/UI_SYSTEM.md`, Catalog fidelity).
+  - **Its words** are in §9 "The plugins' words": the tabs, the acts, the sources, the statement, the powers in
+    plain words and every state's sentence. Nothing in it names a key, a signature, a hash, a rung, a worker or a
+    process, a restart or a reload, a repository's address, a power's id or a daemon (§9, VibeField's insides).
 - **The phone's History is one ledger of projects** (PJ-7, 2026-10-14; `thinking-project-places.md`
   §6.3, PJ-D24, PJ-L7): the tab reads the projects every desktop groups alike from ONE door — the
   home's, or another answering desktop's while the home sleeps — and is no longer grouped by desktop
@@ -8347,6 +8745,186 @@ happen, not what might: if the policy read at the quit then holds the install, t
 menu's notice ("…didn't install when VibeField quit. …"). No third button: the box is the quit's (ESR §7.3). The
 product writes these with straight apostrophes, as `update-words.ts` does.
 
+**The plugins' words** (track MK, MK-0; MK-D1…D13 ruled A by James 2026-11-11 03:41:23Z from the page *A Place for
+Plugins*, with VF-PM's engineering rulings MK-E1…E9 and MK-E11…E13 of 04:30:39Z, by which MK-D8 ships its fallback and
+MK-D9 waits; MK-E10 is James's call; added 2026-11-11 ahead of its build, MK-1, MK-2 and MK-4…MK-7's). Where each word
+stands is §8 "Plugins — the frame's second popup". This is the one home of the plugins' words: every other section
+that says one cross-refers here. The page's words stand, less VibeField's insides (the last bullet) and what the code
+or this canon makes untrue (four powers changed below, the clauses nothing builds yet, a version said as `releaseName`
+says it); words the page did not draw are drafted here (MK-0) and marked ‹for James›, owed to him. A plugin's things
+are **objects**, never "widgets" (retired at DK-8) or "kinds" (AO-L8); a plugin's objects are its **set**. ‹plugin› is
+a plugin's title as its manifest writes it, ‹object› an object's pegboard label (`tray.label`), ‹category› the
+pegboard category it hangs under (`tray.category`), ‹desktop› a desktop's name as Tailscale names it, and ‹n› a count.
+**Plugins are VibeField's own:** they add objects to your pegboard, and tools and services to VibeField. Whether a
+listed plugin may bring objects at all is *open, James's call (MK, 2026-11-11)*: built-in and development plugins
+bring them today (trust-and-distribution §7 keeps kinds to R0), and the words below for a listed or community set
+stand for the day one may. An agent's plugins are the agent's, on its page in Settings → Agent Profiles under
+**Extensions**, installed by its own command (AR-D35; VibeField knows no vendor, AR-L1): Plugins never lists them, and
+Extensions never lists VibeField's. **The install card** is this canon's name for the card every install asks first
+with (MK-D7). It is never "the consent card", which names History's card (§8 "History") and trust-and-distribution's
+TD-8 card (the app update's, naming the plugins a new VibeField would leave incompatible); and "consent" is never on
+screen (AO-L8).
+- **The doors** (MK-D1, MK-D11; MK-E7). The Me menu's row is **Plugins…** (glyph `plugin`), directly above
+  **Settings…**; once a read found any, its end says "1 update" or "2 updates" in the row's secondary ink. Nothing
+  goes on the face, whose badge slot is the app's (§2.8 I-5), and never a cyan dot: cyan says an app install waits on
+  you (AU-D1). The palette (⌘K) says **Plugins…**, its small line "Me menu", and **Check plugins for updates** (glyph
+  `reset`), its small line "Plugins", which opens the popup on Updates, for opening it is the read (MK-D5); it wears
+  no "…", as ruled (below). The pegboard's foot says **More in Plugins…**, which opens Discover on the board's
+  category.
+- **The popup** (MK-D2, MK-D4). Its field says "Search plugins and objects…", with **Discover** · **Installed** ·
+  **Updates** at its end, Updates carrying the Me row's count. A set's picture says how many objects it holds, "3
+  objects"; a set of more than six shows its first six and "+‹n›" ("+4" for a set of ten). A set found by one of its
+  objects says which: "Has Watch". A plugin's page opens in place, and esc or its back row (a chevron and
+  **Discover**, or the tab it came from) goes back; its sections are **What it adds** (each ‹object›, "Hangs under
+  ‹category›", then its tools and services), **Settings**, **What it can do**, **Made by** (its maker; for a listed
+  plugin, "Reviewed by ‹name›", who reviewed its first listing) and **Version**.
+- **Reading the list** (MK-D5). Opening the popup reads the plugin list, and the list it already holds shows at once,
+  its time always said and never implied fresh. While a read runs the foot says **Reading the plugin list…**
+  ‹for James› · "showing the list from 14:02" (with no list held yet, **Reading the plugin list…** alone
+  ‹for James›); once read, "12 plugins, 31 objects · checked 14:02", with "· community off" while the switch is
+  off; a list from another day says its day, "checked Nov 6, 14:02" ‹for James›. Offline: "Offline · the list from
+  Nov 6, 14:02", and an Install waits, saying "Installing needs the internet". A list past its date: "The plugin
+  list expired Feb 4 · installs wait for a newer one" ‹for James›. A new list VibeField can't use: "VibeField
+  couldn't use the new plugin list, so nothing new is shown · Diagnostics has the details" ‹for James› (the page
+  said "Reading vibefield/registry…", "The registry's list" and "didn't verify", VibeField's insides).
+- **No plugin registry yet.** It is what every build says until the registry rung (TD §9 TD-4): no build configures a
+  registry, so fieldd's `fetchIndex` refuses a read ("no plugin registry is configured"). Discover says **No plugin
+  registry yet** over "The plugins that come with VibeField are in Installed." with **Show installed**; Updates says
+  "Plugins that come with VibeField update with it." ‹for James›; the foot says no time, for nothing was read; and
+  **Check plugins for updates** opens Updates on those words, never on a check that failed.
+- **Community plugins** (MK-D6; MK-E3). Discover's last tile is **Community plugins**, with its switch, over "‹n›
+  plugins by other people. VibeField reviews each one's first listing and rebuilds every version from its source."
+  ‹for James› (the page's "The registry reviews…", less the insides) and "Off until you turn them on". Turning it on
+  asks once, in place: **Turn on community plugins?**, then
+  trust-and-distribution §7's statement, word for word, "Community plugins run with the app's access. VibeField
+  reviews the first listing and rebuilds every version from source; nothing isolates their code from yours." ·
+  **Cancel** · **Turn on community plugins**. Once seen it is not asked again. While it is off, search says "Community
+  plugins are off, so their objects aren't searched.", and a community install is refused, in words ‹for James›.
+- **The install card** (MK-D7). It asks **Install ‹plugin›?**, then says "It adds ‹n› objects to your pegboard:" with
+  each ‹object›; "It gives your agents ‹n› tools." when it brings tools; "It can:" with its powers in their plain
+  words (below), or "Nothing beyond drawing its own objects" when it asks for none (for a plugin with no object that
+  asks for none, ‹for James›); and "It installs on your ‹n› desktops, because an install on one reaches the others."
+  ‹for James› (the page's "your desktops share one set of plugins" would answer MK-E10, which is open), with each
+  ‹desktop› by name ("It installs on this Mac." while you have one, "this PC" off the Mac, ‹for James›) ·
+  **Cancel** · **Install** ↵. Its powers are granted as it installs (PA-12), and **What it can do** on its page gives
+  each its own switch, to turn off one by one.
+- **Installing, and after** (MK-D8, MK-D13; MK-E2). The act says **Install** and, once true, **Installed** (a name
+  survives its flow); between them "Downloading · 42%" and "Installing ‹n› objects…". Then **Show them on the
+  pegboard** ("Show on the pegboard" for a set of one), over where its objects hang, "Clock, Calendar and Timer hang
+  under Things; Ruler under Tools.", and "mini and studio install it when they're next on." The board opens on the
+  set's first category with its first object focused (MK-D8's fallback, as it ships); the token the ruled lean drew,
+  "Desk things · 4 new", waits for ICE's door (petition I54, drafted), as the ruled lean says (MK-D8). An install that
+  fails names the step that didn't happen, as the update's words do: "VibeField didn't install ‹plugin›. Nothing
+  changed." with **Try again** ‹for James›; why it failed goes to Diagnostics and the log. A plugin that needs a newer
+  VibeField says "Needs 0.10" on its act and "Needs VibeField 0.10 · you're on VibeField 0.9.0" in its line: the
+  version you're on as `releaseName` says it ("The update's words", above; "you're on the Nov 7 nightly" on a
+  nightly), and the one it needs as its `engines.app` floor ‹for James›.
+- **Updates** (MK-D5, MK-D11; MK-E6). The tab's head says "1 update · checked 14:02", or "Everything is up to date ·
+  checked 14:02"; **Update all** while any wait; its foot, **Check again**. A row says "0.6.1 → 0.7.0 · Nov 7", what
+  it changes in the set, "Adds Watch" · "Removes Burndown", and its notes, with **Update**. An update that removes an
+  object asks first, so its act is **Update…** and its card says "Burndown objects on your desks will draw as
+  missing." ‹for James›; while one waits, **Update all** asks too, as **Update all…** ‹for James›. While it runs,
+  "Updating…"; then its row says "Updated to 0.7.0" and the plugin's page **Installed** with the new version. An
+  update to a plugin with objects brings the window back fresh first, and the popup reopens on that plugin's page
+  saying **Installed**: no word says it reloaded or restarted (MK-E6). The tab's note: "Plugins look for updates when
+  you open Plugins. Updates never install on their own. An update that removes an object asks first." ‹for James›
+  (the page's "Nothing installs on its own, and going back a version is always your choice.", less the clause no
+  MK slice builds). A plugin's own
+  look when VibeField starts (MK-D5; PA §5.3.1's per-plugin opt-in) is its page's switch, **Check for updates on its
+  own**, with the note's clause "A plugin's page can also let it look when VibeField starts."; neither shows until
+  that check is built, for fieldd checks only when asked (`updatesCheck`) and no MK slice builds it.
+- **Installed, off and Remove…** (MK-D9, MK-D13; MK-E10). A row says its set and where it hangs, "4 objects · Things,
+  Tools · 1.0.0", or for a set of one "Hangs under Things · 1.0.0", with its switch; a built-in's ends "· comes with
+  VibeField", and its page says "Comes with VibeField. It can be turned off, not removed." A plugin with no object
+  says "No objects · a service and tools" (a built-in, "Comes with VibeField · no object on the desk"). The switch is
+  the plugin's one switch, and its objects hang together: a switch for each object waits for ICE's door and for James
+  — *open, James's call (MK, 2026-11-11)*. An off plugin says "Off · its objects on your desks draw as missing until
+  it's on" ("Off · its service is stopped" with no object), and one that kept crashing, "Stopped after 3 crashes ·
+  turn it on to try again"; one that isn't working, "‹plugin› isn't working right now" with **Try again**, its
+  details in Diagnostics (IS-282-6, ruled; §8 "Settings → Diagnostics' Plugins section"), and while VibeField
+  can't read its plugins, "Reading your plugins…", then "Plugins aren't available right now." with **Try again**
+  (IS-282-2's row, ruled; MK-5 takes both, MK-E12). With the registry rung's list (TD §9 TD-4), one VibeField
+  turned off says why, "VibeField
+  turned it off: it lost cards on macOS 26.1 · a fix is on its way" ‹for James›, and one no longer listed, "No longer
+  listed · it keeps working here, with no more updates" ‹for James›. The tab's foot: "6 plugins, 14 objects · 1 off".
+  **Remove…** asks **Remove ‹plugin›?** · "Its settings and data stay on your desktops, so installing it again brings
+  them back. Clock, Calendar and Ruler objects on your desks draw as missing on this Mac until then." ("this PC" off
+  the Mac; "on this Mac" is added to the page's words while MK-E10 is open, ‹for James›) · **Cancel** · **Remove**,
+  with **Remove it and its data…** under them, which asks **Remove ‹plugin› and its data?** · **Cancel** ·
+  **Remove data**. Remove… acts on this desktop; whether it also takes the set off your other desktops, its data
+  kept, is *open, James's call (MK, 2026-11-11; MK-E10)*.
+- **Sources** (MK-D13; MK-E11). **Built in** (a bundled plugin, decided first) · **VibeField** (a listed plugin
+  VibeField publishes) · the publisher's name otherwise, with **Community** beside it on a community row ·
+  **Development** and **Sideloaded**, as today. Never "Registry", "Registry · ‹publisher›" or "Built by the registry";
+  **No plugin registry yet** is the one place the word stands, as ruled. *Known deviation, owed (MK):* Settings →
+  Plugins' badge says "Registry · ‹publisher›" (`SOURCE_LABEL`, `panels/PluginsSection.tsx`), and Settings' Plugins
+  page describes VibeField's plugins as "Installed extensions and their preferences." (`panels/SettingsDialog.tsx`);
+  both leave with Settings → Plugins (MK-D10).
+- **The powers' plain words** (MK-D7; MK-E12). A power is said as what it lets the plugin do, in one sentence, the
+  same on the install card and on the plugin's page, and never by its id. The core powers a plugin may hold are
+  `PLUGIN_CAPABILITY_ELIGIBILITY`'s (contracts `plugins.ts`), twenty-seven. The page drew sixteen; four are changed
+  here, `workspace.read`, `shell.dialog` and `shell.open` to what the power does and `artifact.publish` to §9 "Apps"'
+  word (the page drew "pages"). Those four and the eleven it did not draw are ‹for James›: `doc.read`, `doc.write`,
+  `index.read`, `approval.respond`, `mcp.consume`, `terminal.attach`, `agent.spawn`, `agent.control`, `shell.windows`,
+  `shell.clipboard` and `shell.webcontents`.
+  - On the desk: `canvas.read` "Read what's on the desk" · `canvas.write` "Change what's on the desk" · `doc.read`
+    "See your desks" · `doc.write` "Make, open, rename and delete desks" · `surface.attach` "Show live windows on the
+    desk" · `surface.browser` "Open web pages in a pane" · `surface.capture` "See other apps' windows", with "macOS
+    asks you once, for Screen Recording" under it.
+  - Your agents: `agent.observe` "See what your agents are doing" · `agent.spawn` "Start your agents and manage their
+    sign-ins" · `agent.control` "Pause or stop what your agents are doing" · `approval.respond` "Answer what your
+    agents ask you to allow" · `mcp.consume` "Use the tools other plugins offer" · `mcp.contribute` "Give your agents
+    tools" · `index.read` "See what your History holds" · `terminal.attach` "Open, use and end your terminal
+    sessions".
+  - Your devices: `workspace.read` "See who you are, your devices, and the apps and services on them" (your name and
+    face are `user.me`'s; the files doors refuse a plugin whatever it holds, by the WHO note in contracts
+    `workspace.ts`) · `artifact.publish` "Publish apps to your devices".
+  - Its own: `storage.self` "Keep its own data" · `background` "Keep running in the background" · `services.provide`
+    "Offer a service to other plugins" · `process.spawn` "Run programs on this Mac" ("this PC" off the Mac) ·
+    `net.outbound` "Reach the internet".
+  - The window: `shell.windows` "Open windows of its own" · `shell.dialog` "Ask you to pick a folder" ·
+    `shell.clipboard` "Use your clipboard" · `shell.open` "Open web links in your browser" · `shell.webcontents` "Show
+    web pages in its own views".
+  - **A power of its own.** One a plugin names itself (`x.‹pluginId›.‹name›`, declared in `contributes.capabilities`)
+    is said by the title the plugin that declares it wrote, its description under it, and "A power of its own, named
+    by ‹plugin›", so the words are never taken for VibeField's; when the plugin asking is not the one that declares
+    it, "A power ‹plugin› names" ‹for James›, ‹plugin› the declaring one. One whose declaring plugin isn't installed
+    has no title to say, and its words are ‹for James›. *Known deviation, owed (MK, MK-E12; item 282-6's plugin
+    half):* Settings → Plugins' Capabilities pane names each power by its id (`panels/PluginCapabilities.tsx`) and
+    says one it can't give in `DENIAL_TEXT`'s words, "not eligible for this entry kind" or "blocked by source policy";
+    its updates say "artifact hash mismatch — discarded" (`installErrorText`, `panels/PluginUpdates.tsx`).
+- **Settings and Diagnostics** (MK-D10; MK-E5, MK-E12). A plugin's settings are said on its page, under **Settings**,
+  as Settings says its own; the page carries Settings' Undo and Redo, so the form's foot no longer sends you to the
+  window toolbar ("Synced user settings can be undone from the window toolbar.", `panels/PluginSettingsForm.tsx`) and
+  says "Synced settings can be undone here or in Settings." ‹for James› (§8 "The settings undo affordance"); where
+  the pair sits on the page is drawn at MK-4 and written in §8 "Plugins — the frame's second popup" first. Settings'
+  undo note stays true ("… plugin grants, and live canvas tuning are excluded.", its "Synced preference history" row,
+  `panels/SettingsPanel.tsx`). Settings → Updates' foot says "Plugins update from Plugins… in the Me menu." ‹for
+  James›. Settings → Diagnostics' **Plugins** section is where a plugin's insides may be read: its id, its controllers
+  and behaviors, the Doctor's issues, under "Each plugin's runtime: its controllers, behaviors and the Doctor's
+  issues. Moved here from Settings → Plugins." (MK-D10's ruled drawing; §8 "Settings → Diagnostics' Plugins
+  section").
+- **The "…"** (the rule in "The update's words", above: an act wears "…" only when it asks a question or opens a
+  window before it completes). **Plugins…** and **More in Plugins…** open the popup. Two acts the rule would give
+  one are bare as ruled: **Check plugins for updates**, which opens the popup on Updates (where the app menu's
+  Check for Updates… wears one, answering in a box), by MK-D1 and MK-E7 ("words as the page drew them"), and
+  **Install**, which asks on the install card, by MK-D13 beside **Remove…**. *Known deviation from the rule, ruled
+  (MK, 2026-11-11):* each changes here first if James says so.
+  **Remove…** and **Remove it and its data…** ask; **Update…** and **Update all…** ask only while an update removes an
+  object. **Show them on the
+  pegboard**, **Update**, **Update all**, **Check again**, **Show installed**, **Try again** and the cards' own
+  **Install**, **Remove** and **Turn on community plugins** complete as pressed and wear none.
+- **Never on screen** (the insides rule, above). Where the list comes from (`vibefield/registry`, a URL), "signed", a
+  hash or "sha256", "Built from ‹repo› at ‹commit›", a rung (R0, R1, R2), "worker-hosted" or "sandboxed" (TD-6: the UI
+  never calls a community plugin sandboxed), a plugin's id or a power's id, a plugin's controllers, workers or
+  processes, and any word that it reloaded or restarted (MK-E6). The page drew some of them
+  ("Reading vibefield/registry…", "signed list from 14:02", "sha256 against the signed list", "Built by the registry",
+  "Checking it matches the registry's build", "The download didn't match the registry's build",
+  "signed with the app", a page foot's plugin id ("vibefield.desk-things · 1.1.0"), Installed's group
+  "From the registry", Discover's "From the community · reviewed by the registry" and a Development row's
+  "reloads when you build"); none ships, and what the two groups say instead is drawn at MK-4 and written here
+  first. They stay in the log, Diagnostics and the code.
+
 *(Godview round 3, built 2026-10-12; its status is §8 the deck's.)*
 **The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —
 "for close button, replace it with a minimize - button … for fill button, replace it with a
@@ -8440,8 +9018,14 @@ VibeField and open it again." (§8 "The status line").
   mat does under its two lights (§2.1).
 - **Placement laws** (Track D + cleanup, 2026-07-21): the window IS the field — chrome floats
   over the desk, there is no app bar; dev-facing diagnostics render as *sections inside the
-  Settings panel* (`SystemSection` is the template) — never as standalone pages. Where each
-  piece of chrome stands is the frame's places below (five until HN-8; four and the hand since).
+  Settings panel* (`SystemSection` is the template) — never as standalone pages. **Settings has
+  no Plugins row** (*amended 2026-11-11, MK-D10; item 282-6's plugin half, by MK-E12*): a
+  plugin's own settings live on its page in Plugins… (§8 "Plugins — the frame's second popup"),
+  and its runtime detail is a Diagnostics section (§8 "Settings → Diagnostics' Plugins
+  section"). *Until MK builds it (nothing of MK lands before the v0.9.0 tag unless James says
+  so, MK-E13), Settings → Plugins stands in the Workspace group (`panels/SettingsDialog.tsx`).*
+  Where each piece of chrome stands is the frame's places below (five until HN-8; four and the
+  hand since).
   *History (folded 2026-10-28, the housekeeping pass):* this bullet also carried the 2026-07-21
   convergence (the note widget wearing CardShell, the Field toolbar dying with the island, the
   System page and app bar removed) and the slot map that grew after it — breadcrumbs, the file
@@ -8484,9 +9068,10 @@ VibeField and open it again." (§8 "The status line").
   under the pill's sheet, as it always lay. **The status line stands over the sheet's dim** — the
   same 61, later in the document — so an honest state stays readable and clickable while a sheet
   is open. Above the frame stand only Settings, the palette, the Peek's scrim and popup (64, §8
-  "Search — the Peek", 2026-10-08), the hand's own card picked up and its scrim (64) and the card
-  being carried (66) — the hand itself stands with the frame, just above the line (63; §8 "The
-  hand") — and the loading veil (and, until
+  "Search — the Peek", 2026-10-08), the Plugins popup and its scrim, at the Peek's 64 (§8
+  "Plugins — the frame's second popup"; *amended 2026-11-11, MK-D2*), the hand's own card picked up
+  and its scrim (64) and the card being carried (66) — the hand itself stands with the frame, just
+  above the line (63; §8 "The hand") — and the loading veil (and, until
   FR-4 opens it above the line, the open Me menu, which grows over the track's left end — *since
   FR-4 it stands with the frame, above the line, and nothing of the frame's is under it*).
   **The active view has ONE owner** — the window's, held in main beside the menu that names it,
@@ -8549,7 +9134,9 @@ VibeField and open it again." (§8 "The status line").
   sheet on either shelf folds the rest, and turning it to its other shelf folds nothing.* *Since
   SP-1c (2026-10-31) the New spark sheet, Chat's create, is one of them too: **`new-spark`** (§8 "The
   New spark sheet").* *Since SP-1d (2026-10-31) @'s list is back, in Chat's composer: **`at`**, which
-  an agent's menu shares (§8 "Chat's composer").* **The
+  an agent's menu shares (§8 "Chat's composer").* *Ruled 2026-11-11 (MK-D2), the Plugins popup
+  joins them at MK-4: **`plugins`** (§8 "Plugins — the frame's second popup"), so opening it folds
+  every other surface and Settings, and any of them, Settings or a change of view folds it.* **The
   app's theme has ONE owner, main's** (FC-D5): Light · Dark · Auto, one value per device kept by the
   shell, Auto following the OS through Electron's `nativeTheme`, and the owner projects what it
   resolves to back into `nativeTheme` — so the window's native chrome, its menus and the page's
@@ -8586,9 +9173,12 @@ VibeField and open it again." (§8 "The status line").
   band 0–26, under the head's controls, which stand over it (the notches left with HN-1 and HN-8)
   — and the safe top keeps its 94, still clear of the head's controls (their foot at 48); and
   **the foot, 88** — the
-  line's reserve, the same 88 a covered view keeps (692): the board's lay ends 88 above the window's
-  foot (I21) so its last row clears the line, and the bar's top never sits below 660 (its foot 8
-  above the line's 708). Between them the bar keeps **16** from each side (built at HN-8,
+  line's reserve, the same 88 a covered view keeps (692): the bar's top never sits below 660 (its
+  foot 8 above the line's 708), while the board's lay runs under the line to 4 above the window's
+  foot, under a 16 px fade (I21; §8 "The pegboard"; *corrected 2026-11-11, MK: this said the lay
+  ends 88 above the window's foot so its last row clears the line, true until the board's bottom
+  strip became 20 px on 2026-11-02*). Between them the bar keeps **16** from each side (built at
+  HN-8,
   2026-10-30; 42 — the notch's 26 + 16 — until the edges left the frame), and
   a held object's reading fit keeps **116** above it (the held bar's foot, 104, + 12) and **100**
   below (the line's 88 + 12, I20). The reserves are measured from the window's edges and hold at
@@ -8692,6 +9282,14 @@ selection bar's Copy (HN-D3), its notch having left with the clipboard's tray (H
 beside the face is not a glyph: it is the badge slot's state (§2.8 I-5, §2.5). The status item's update image — the
 mark with one plain dot, no bang (EDP §6.4, AU-D12) — is generated from the tray master (`tray-master.svg`, by
 `generate-icons.mjs`, as its siblings are), kept exact outside this set (below).
+**Plugins** (track MK; MK-D1 ruled A by James 2026-11-11 on the page *A Place for Plugins*) need no glyph of
+their own either: their doors wear `plugin`, the puzzle piece already in the set — the Me menu's **Plugins…**
+(18, in the 44px column), the palette's **Plugins…** (16; each enabled plugin's commands there already wear it)
+and the pegboard's **More in Plugins…** pill (15; §8 "The pegboard"), and the popup's own field wears it at 18
+(§8 "Plugins — the frame's second popup"). The palette's **Check plugins for updates** wears
+`reset`, as the app's update does. The Settings rail's Plugins row wears it today and retires with
+MK-D10, when that page leaves Settings; the agents' Extensions in Settings → Agent Profiles keep
+wearing it. *To be built in track MK.*
 **`package`** is Artifacts' (PL-D1, PL-D2; built at HN-8; *amended 2026-11-05, MA-D13 (a): the shelf it opens
 says Apps, and the glyph stays, below*): the pill's button and the covered views'
 circle (§8 "The head"), folded into the terminals' title bar with search. It was the right notch's

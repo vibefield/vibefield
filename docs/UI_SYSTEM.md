@@ -237,6 +237,14 @@ The catalog currently mounts these shipping views directly:
   now, this Mac not connected (TS-4's ghost row), filtered (the field's tokens and the button's,
   one state: SE-D2), a typed name's offer, + Filter's menu open, and Everything under Work
   (UM-D28) — never a copy of the Peek's markup
+- *not mounted yet — owed with the popup (MK-4 builds it, MK-6 its plates):* the Plugins popup (MK-D2, ruled
+  2026-11-11; DESIGN.md §8 "Plugins — the frame's second popup"), held to the Peek's rule: the
+  shipping controller over a fixture port, its scrim and popup drawn in the plate that stands for
+  the window and the staged view receding by the product's own rule; a plate per state the ruled
+  page draws — Discover with no registry ("No plugin registry yet") and over a fixture listing, the
+  community tile asking with its statement, a plugin's page, the install card and its progress,
+  Installed, Updates and a narrow window — never a copy of its markup or CSS, and no catalog CSS
+  owning a rule of the popup's
 - the desk's selection bar (DK-11): `SelectionBarView` over fixture selections, a plate per state —
   one object with its kind's own act (drawn by the bar's one path renderer), two ("Send 2 to…"),
   taped ("Lift the tape"), a missing face ("Clock · plugin off"), an act with no glyph and a name
