@@ -2,6 +2,7 @@ import FieldDesign
 import FieldLock
 import FieldSettings
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import FieldHome
@@ -100,6 +101,65 @@ struct WayInScreenTests {
       #expect(glass.slots.count <= 3, "\(step)")
       #expect(shown == acts.count, "\(step): the glass drops an act")
     }
+  }
+
+  /// WI-W2a A (James, 2026-11-11 23:00Z; DESIGN.md §9, ruled that day) — a join that fails keeps its hold and says
+  /// "Couldn’t connect." The network's own reason is VibeField's insides: whatever it says, none of it reaches the
+  /// screen.
+  @Test("WI-W2a: a join that fails says Couldn’t connect., and never the network's own reason")
+  func failedJoin() {
+    for reason in ["the network went away", "tsnet: dial tcp 100.64.0.1:443: i/o timeout", ""] {
+      let s = screen(.joining(login: login, note: reason))
+      #expect(s.words.note == "Couldn’t connect.", "\(reason)")
+      #expect(s.words.hold)
+      let said = [s.words.title, line(s) ?? "", s.words.note ?? ""].joined(separator: " ")
+      #expect(reason.isEmpty || !said.contains(reason), "the reason reached the screen: \(reason)")
+    }
+    #expect(screen(.joining(login: login, note: nil)).words.note == nil, "no failure, no note")
+  }
+
+  /// WI-W4 B (James, 2026-11-11 23:00Z; DESIGN.md §8, WI-L4 amended) — the acts' glass fits what it holds: 18 above
+  /// its first slot, 18 under the last thing it holds, the slots as before. One act 86, two 146, three 182, the
+  /// welcome with its foot 206; a hold holds nothing, and its glass steps away. No glass is taller than the 210 every
+  /// glass was.
+  @Test("WI-W4: the acts' glass fits what it holds, on every step and on the curtain")
+  func glassFits() {
+    func height(_ step: FieldHomeModel.WayInStep) -> CGFloat {
+      WayInView.glassHeight(WayInView.glass(FieldHomeModel.wayInScreen(step, device: .iPhone).acts))
+    }
+    #expect(height(.page(.welcome(failure: nil))) == 206)
+    #expect(height(.lockOffer(.faceID)) == 182)
+    #expect(height(.locked(.faceID)) == 146, "the curtain: its act and its note")
+    #expect(height(.locked(.passcode)) == 86, "the passcode is the method: one act")
+    #expect(height(.tour(0)) == 86)
+    #expect(height(.tour(2)) == 146, "Next, and Tailscale's line")
+    #expect(height(.tour(3)) == 146)
+    #expect(height(.page(.fromCode(desktop: "Studio", login: login))) == 146)
+    #expect(height(.page(.joining(login: login, note: nil))) == 0, "a hold has no glass")
+    #expect(height(.found(name: "James", desktop: "studio")) == 0)
+    // one act is the pill and the glass's two 18s: the pill the glass draws is the wide pill's own height
+    #expect(height(.tour(0)) - 36 == ChromePillStyle.wideHeight)
+    var steps: [FieldHomeModel.WayInStep] = (0...3).map { .tour($0) }
+    steps += [
+      .page(.welcome(failure: nil)), .page(.welcome(failure: nil, expecting: login)),
+      .page(.fromCode(desktop: "Studio", login: login)), .page(.signInAgain(note: nil)),
+      .page(.approval(machine: "iphone-17-pro", adminConsole: nil)), .page(.noDesktops(login: login)),
+      .page(.anotherAccount(current: "a@b", expected: "c@d", from: "Mini", byLink: true)),
+    ]
+    for method in [LockMethod.faceID, .touchID, .passcode] {
+      steps += [.lockOffer(method), .locked(method)]
+    }
+    for step in steps {
+      let h = height(step)
+      #expect(h > 0 && h <= 210, "\(step): \(h)")
+    }
+  }
+
+  /// WI-W2c B (James, 2026-11-11 23:00Z; DESIGN.md §8) — the note under the words wears the line's own ink, so it
+  /// holds where the field's rays cross it.
+  @Test("WI-W2c: the note under the words is in the secondary ink, the line's own")
+  func noteInk() {
+    #expect(WayInView.noteInk == ChromePalette.inkSecondary)
   }
 
   /// An act's own words; approval's row carries Tailscale's machine name, which is not ours to say.
@@ -239,7 +299,7 @@ struct WayInScreenTests {
     let joining = screen(.joining(login: login, note: "the network went away"))
     #expect(joining.words == .init(
       title: "Joining your network…", line: AttributedString("Signed in as me@example.com"),
-      note: "Couldn’t connect — the network went away.", hold: true))
+      note: "Couldn’t connect.", hold: true))
     #expect(joining.acts.isEmpty)
     let looking = screen(.looking(login: login))
     #expect(looking.words.title == "Looking for your computer…")
