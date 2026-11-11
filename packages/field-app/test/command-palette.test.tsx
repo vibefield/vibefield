@@ -8,6 +8,8 @@
  * snapshot and the command registry are mocked at their module seams; the
  * chord's delivery over a focused pane is the godview smoke's row 11e.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createCanvasEngine } from "@vibecook/ice";
 import type { FrameView } from "@vibefield/contracts";
 import { act } from "react";
@@ -348,5 +350,13 @@ describe("the palette (One Frame §7)", () => {
     const { onClose } = mount();
     press(document.body, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("takes no pointer while it folds, so the unseen layer eats no press (item 318)", () => {
+    // read as the field-app suites read a stylesheet (wearing-the-mat, loading-veil-motion): from the package root
+    const css = readFileSync(join(process.cwd(), "src/hud/CommandPalette.css"), "utf8");
+    expect(css).toMatch(
+      /\.vf-palette-layer:not\(\[data-visible\]\)\s*\{\s*pointer-events:\s*none;\s*\}/u,
+    );
   });
 });
