@@ -29,6 +29,12 @@ export const DEFAULT_APP_PREFERENCES: Readonly<AppPreferences> = {
   communityPlugins: false,
 };
 
+/** MK-2c (2026-11-11; D4, VF-PM 08:48:07Z, 10:08:59Z): whether this build draws the Community plugins switch. The
+ * ONE guard both community fences read: the switch's setter refuses an ON while it is false (MK-2a), and the install
+ * gate refuses every community install while it is false, whatever the stored switch says (MK-2c). The slice that
+ * draws the switch (MK-4) turns it true, and from then the gate reads the person's switch (S4). */
+export const COMMUNITY_SWITCH_DRAWN = false;
+
 export function effectiveAppPreferences(values: Readonly<Record<string, unknown>>): AppPreferences {
   const showTray = values[APP_PREFERENCE_KEYS.SHOW_TRAY];
   const backgroundShell = values[APP_PREFERENCE_KEYS.BACKGROUND_SHELL];

@@ -87,9 +87,10 @@ async function setup(options: { shortUpdateDeadlines?: boolean } = {}): Promise<
   buildFixtureRegistry({
     dir: registryDir,
     secretKey: keys.secretKey,
+    // MK-2c: VibeField's own rung, signed by this test's key (the gate refuses a community entry)
     plugins: [
-      { manifestDir: candidateRoot, artifactBytes: candidateRelease.bytes },
-      { manifestDir: oldRoot, artifactBytes: oldRelease.bytes },
+      { manifestDir: candidateRoot, artifactBytes: candidateRelease.bytes, rung: "R1" },
+      { manifestDir: oldRoot, artifactBytes: oldRelease.bytes, rung: "R1" },
     ],
   });
   const daemon = await bootstrap({

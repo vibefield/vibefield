@@ -9,7 +9,9 @@ import {
   type PluginUpdateInfo,
   type RegistryIndex,
   RegistryIndex as RegistryIndexSchema,
+  type RegistryListedAs,
   type RegistryRelease,
+  registryListedAs,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { unpackVfplugin, verifyRegistryIndex } from "@vibefield/plugin-build";
@@ -47,8 +49,17 @@ export interface RegistryInstallConfig {
   /** MK-2b (2026-11-11, MK-D5): how long one registry fetch may take before it answers as unreachable;
    * tests shorten it */
   fetchTimeoutMs?: number;
+  /** MK-2c (2026-11-11, G1): whether a community plugin may install now. Absent, none may. daemon.ts passes
+   * `COMMUNITY_SWITCH_DRAWN && the person's switch`; a test passes its own to an installer it builds. */
+  communityAllowed?: () => Promise<boolean>;
+  /** MK-2c (the floor, VF-PM 10:08:59Z): the held plugin list's `generatedAt`, or null with none held. An index
+   * older than it is refused, as the catalog's own read refuses one (`plugin-catalog.ts`). */
+  indexFloor?: () => Promise<number | null>;
   logger?: Logger;
 }
+
+/** MK-2c (G1): the refusal's reason code, the community switch's own word (MK-2a's audit says it too). */
+export const COMMUNITY_SWITCH_CLOSED = "COMMUNITY_SWITCH_CLOSED";
 
 /** MK-2b (MK-D5): a registry host that does not answer is offline, never a hang. */
 export const REGISTRY_FETCH_TIMEOUT_MS = 20_000;
@@ -66,6 +77,11 @@ export interface PreparedRegistryInstall {
   readonly baseCommitEpoch: number;
   readonly artifact: ImmutablePluginArtifact;
   readonly runtime: PluginRegistryCandidate;
+  /** MK-2c (2026-11-11, G2): the signed entry's verdict, carried in memory from prepare to commit; never re-read
+   * from a file under `<dataDir>` */
+  readonly listedAs: RegistryListedAs;
+  /** the `generatedAt` of the index the entry came from, for a refusal's data */
+  readonly indexGeneratedAt: number;
 }
 
 const sha256hex = (bytes: Buffer): string =>
@@ -116,7 +132,24 @@ export class RegistryInstallService {
    * unit of trust: the signature covers the exact file, never a re-canon). */
   async fetchIndex(): Promise<{ index: RegistryIndex; indexRef: string }> {
     const signed = await this.fetchSignedIndex();
-    return { index: this.parseIndex(signed.bytes), indexRef: signed.indexRef };
+    const index = this.parseIndex(signed.bytes);
+    // MK-2c (2026-11-11; the floor, VF-PM 10:08:59Z): where a list is held, an install's or an updates check's
+    // index is held to it, as the catalog's read is; an equal one passes, and with none held nothing changes
+    const floor = (await this.cfg.indexFloor?.()) ?? null;
+    if (floor !== null && index.generatedAt < floor) {
+      this.log.warn(
+        "fieldd.plugin_install.index_refused",
+        "A plugin list older than the one held was refused",
+        { reason: "rollback", heldGeneratedAt: floor, generatedAt: index.generatedAt },
+      );
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the plugin list is older than the one VibeField holds",
+        false,
+        { pluginKind: "PLUGIN_SOURCE_UNAVAILABLE" },
+      );
+    }
+    return { index, indexRef: signed.indexRef };
   }
 
   /** MK-2b (2026-11-11): a registry is configured only with both its location and its verify key. */
@@ -258,6 +291,17 @@ export class RegistryInstallService {
       throw new RpcCallError("NOT_FOUND", `${params.id} is not in the registry index`, false, {
         pluginKind: "PLUGIN_SOURCE_UNAVAILABLE",
       });
+    // MK-2c (2026-11-11, G1): the signed entry's verdict, read here and nowhere else. A community entry is refused
+    // while community plugins are off, before any version, contract or artifact work (nothing past the index is
+    // fetched). An update is an install, so it meets the same gate.
+    const listedAs = registryListedAs(entry);
+    await this.assertListedAllowed(params.id, listedAs, index.generatedAt);
+    // G2, G4: the signed entry's display copies, carried in memory to the candidate and written beside the slot
+    const publisherName = entry.listing?.publisherName;
+    const signedCopies = {
+      ...(entry.rung !== undefined ? { rung: entry.rung } : {}),
+      ...(publisherName !== undefined ? { publisherName } : {}),
+    };
     const release =
       params.version === undefined
         ? entry.latest
@@ -328,12 +372,18 @@ export class RegistryInstallService {
             { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
           );
         }
-        // §6.3 provenance sidecar — written by fieldd, never by the artifact.
+        // §6.3 provenance sidecar — written by fieldd, never by the artifact. MK-2c (G4): with the signed
+        // entry's display copies, which decide nothing (`RegistryProvenance`); a fresh slot only, as before.
         await rm(join(staging, ".vf-registry.json"), { force: true });
         await writeFile(
           join(staging, ".vf-registry.json"),
           `${JSON.stringify(
-            { indexRef, artifactSha256: release.sha256, publisher: entry.repo },
+            {
+              indexRef,
+              artifactSha256: release.sha256,
+              publisher: entry.repo,
+              ...signedCopies,
+            },
             null,
             2,
           )}\n`,
@@ -345,6 +395,7 @@ export class RegistryInstallService {
         pluginId: params.id,
         root: artifact.root,
         artifactSha256: artifact.artifactSha256,
+        signed: signedCopies,
       });
       return {
         id: params.id,
@@ -353,6 +404,8 @@ export class RegistryInstallService {
         baseCommitEpoch,
         artifact,
         runtime,
+        listedAs,
+        indexGeneratedAt: index.generatedAt,
       };
     } catch (error) {
       await this.artifacts.discard(artifact).catch(() => false);
@@ -368,6 +421,10 @@ export class RegistryInstallService {
       ? candidate.baseCommitEpoch
       : candidate.baseCommitEpoch + 1,
   ): Promise<{ id: string; version: string }> {
+    // MK-2c (2026-11-11, G2): the gate is asked again with the verdict carried from prepare, before the pointer
+    // moves, since the switch can close between the two (the PRC-5c barrier). A refusal here is a plain error, so a
+    // coordinated update recovers its retained old and discards the candidate.
+    await this.assertListedAllowed(candidate.id, candidate.listedAs, candidate.indexGeneratedAt);
     await this.artifacts.commit(candidate.artifact, candidate.baseSlot, commitEpoch);
     try {
       this.log.info("fieldd.plugin_install.installed", "Registry plugin installed", {
@@ -387,6 +444,27 @@ export class RegistryInstallService {
 
   async discard(candidate: PreparedRegistryInstall): Promise<boolean> {
     return await this.artifacts.discard(candidate.artifact);
+  }
+
+  /** MK-2c (2026-11-11, G1): a community plugin installs only while community plugins are allowed; VibeField's
+   * own (`vibefield`, the signed rung R1) always may. */
+  private async assertListedAllowed(
+    pluginId: string,
+    listedAs: RegistryListedAs,
+    generatedAt: number,
+  ): Promise<void> {
+    if (listedAs !== "community") return;
+    if ((await this.cfg.communityAllowed?.()) === true) return;
+    throw new RpcCallError(
+      "PRECONDITION_FAILED",
+      `${pluginId} is a community plugin, and community plugins are off on this desktop`,
+      false,
+      {
+        pluginKind: "PLUGIN_CAPABILITY_DENIED",
+        reasonCode: COMMUNITY_SWITCH_CLOSED,
+        generatedAt,
+      },
+    );
   }
 
   /** Compatibility wrapper until PRC-5c moves prepare before participant

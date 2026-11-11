@@ -61,7 +61,9 @@ async function setup(options: { withUpdate?: boolean } = {}): Promise<{
   // pack the REAL example plugin and publish it into a signed fixture registry
   const { bytes } = await packVfplugin({ rootDir: KV_DIR });
   const keys = generateRegistryKeypair();
-  const releases = [{ manifestDir: KV_DIR, artifactBytes: bytes }];
+  // MK-2c: VibeField's own rung, signed by this test's key; without it the entry reads as community and the gate
+  // refuses it
+  const releases = [{ manifestDir: KV_DIR, artifactBytes: bytes, rung: "R1" as const }];
   if (options.withUpdate === true) {
     const updateRoot = join(registryDir, "kv-0.2.0-source");
     cpSync(KV_DIR, updateRoot, { recursive: true });
@@ -73,7 +75,7 @@ async function setup(options: { withUpdate?: boolean } = {}): Promise<{
     updateManifest.version = "0.2.0";
     writeFileSync(updateManifestPath, `${JSON.stringify(updateManifest, null, 2)}\n`);
     const update = await packVfplugin({ rootDir: updateRoot });
-    releases.unshift({ manifestDir: updateRoot, artifactBytes: update.bytes });
+    releases.unshift({ manifestDir: updateRoot, artifactBytes: update.bytes, rung: "R1" as const });
   }
   buildFixtureRegistry({
     dir: registryDir,

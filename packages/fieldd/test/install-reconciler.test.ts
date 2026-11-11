@@ -54,7 +54,8 @@ async function setupRegistry(): Promise<{ registryUrl: string; publicKey: string
   const keys = generateRegistryKeypair();
   buildFixtureRegistry({
     dir: registryDir,
-    plugins: [{ manifestDir: KV_DIR, artifactBytes: bytes }],
+    // MK-2c: VibeField's own rung, signed by this test's key (the gate refuses a community entry)
+    plugins: [{ manifestDir: KV_DIR, artifactBytes: bytes, rung: "R1" }],
     secretKey: keys.secretKey,
   });
   return {

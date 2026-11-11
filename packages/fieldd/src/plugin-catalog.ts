@@ -107,6 +107,14 @@ export class PluginCatalogService {
     return entry === undefined ? "community" : registryListedAs(entry);
   }
 
+  /** MK-2c (2026-11-11; the floor, VF-PM 10:08:59Z): the held list's `generatedAt`, re-verified, for the installer's
+   * own index reads (`plugin-install.ts`, `fetchIndex`). Null with no file held or a held file refused: neither sets
+   * a floor. */
+  async heldGeneratedAt(): Promise<number | null> {
+    const held = await this.readHeld();
+    return held === null || held === "refused" ? null : held.index.generatedAt;
+  }
+
   private async read(): Promise<PluginsCatalog> {
     let signed: Awaited<ReturnType<PluginCatalogConfig["installer"]["fetchSignedIndex"]>>;
     try {

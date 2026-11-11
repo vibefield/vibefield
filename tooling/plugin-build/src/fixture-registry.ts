@@ -12,7 +12,12 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { RegistryIndex, RegistryPluginEntry, RegistryRelease } from "@vibefield/contracts";
+import type {
+  RegistryIndex,
+  RegistryPluginEntry,
+  RegistryRelease,
+  RegistryRung,
+} from "@vibefield/contracts";
 import { canonicalJson } from "./canonical";
 import { signRegistryIndex } from "./registry-sign";
 
@@ -22,6 +27,10 @@ export interface FixturePlugin {
   manifestDir: string;
   /** the deterministic `.vfplugin` bytes this release pins by sha256 */
   artifactBytes: Buffer;
+  /** MK-2c (2026-11-11): the rung the entry is listed at, signed with the rest of the index. Absent, the entry
+   * carries none and reads as community, as a real registry's unreviewed row does. Read from the plugin that makes
+   * the entry (its newest release, the first given). */
+  rung?: RegistryRung;
 }
 
 export interface BuildFixtureRegistryOptions {
@@ -94,7 +103,7 @@ export function buildFixtureRegistry(
   const now = Date.now();
   const entries = new Map<string, RegistryPluginEntry>();
 
-  for (const { manifestDir, artifactBytes } of opts.plugins) {
+  for (const { manifestDir, artifactBytes, rung } of opts.plugins) {
     const facts = readManifestFacts(manifestDir);
     const artifactName = `${facts.id}@${facts.version}.vfplugin`;
     writeFileSync(join(artifactsDir, artifactName), artifactBytes);
@@ -118,6 +127,7 @@ export function buildFixtureRegistry(
         repo: facts.repository ?? `https://example.test/plugins/${facts.id}`,
         latest: release,
         history: [],
+        ...(rung !== undefined ? { rung } : {}),
       });
     }
   }

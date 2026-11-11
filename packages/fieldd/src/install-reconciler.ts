@@ -6,7 +6,8 @@ import {
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { AuditService } from "./audit-service";
-import type { RegistryInstallService } from "./plugin-install";
+import { RpcCallError } from "./native-link";
+import { COMMUNITY_SWITCH_CLOSED, type RegistryInstallService } from "./plugin-install";
 import type { PluginRegistryService } from "./plugin-registry";
 import type { InstallIdentity, InstallSetChange, SettingsDocService } from "./settings-doc";
 
@@ -72,6 +73,8 @@ export class InstallSetReconciler {
   private readonly log: Logger;
   private inflight: Promise<void> | null = null;
   private queued = false;
+  /** MK-2c (2026-11-11): per plugin id, the index `generatedAt` its community refusal was last said for */
+  private readonly communityRefused = new Map<string, number>();
 
   constructor(private readonly cfg: InstallReconcilerConfig) {
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "plugin.install.reconciler" });
@@ -114,7 +117,14 @@ export class InstallSetReconciler {
       try {
         await this.applyEntry(entry);
       } catch (e) {
-        // §16.6 — parked pending, honestly; the next reconcile retries
+        // §16.6 — parked pending, honestly; the next reconcile retries. MK-2c (2026-11-11, VF-PM 08:48:07Z): a
+        // community entry refused while community plugins are off parks like any other, and is said once per id
+        // per index `generatedAt`, not on every reconcile
+        const refusedAt = communityRefusalAt(e);
+        if (refusedAt !== undefined) {
+          if (this.communityRefused.get(entry.pluginId) === refusedAt) continue;
+          this.communityRefused.set(entry.pluginId, refusedAt);
+        }
         this.log.warn(
           "fieldd.install_reconciler.entry_parked",
           "A desired install-set entry could not be applied; parked",
@@ -395,4 +405,12 @@ export class InstallSetReconciler {
         );
       });
   }
+}
+
+/** MK-2c (2026-11-11): the index `generatedAt` a community refusal names, or undefined for any other error. */
+function communityRefusalAt(error: unknown): number | undefined {
+  if (!(error instanceof RpcCallError)) return undefined;
+  const details = error.details as { reasonCode?: unknown; generatedAt?: unknown } | undefined;
+  if (details?.reasonCode !== COMMUNITY_SWITCH_CLOSED) return undefined;
+  return typeof details.generatedAt === "number" ? details.generatedAt : undefined;
 }

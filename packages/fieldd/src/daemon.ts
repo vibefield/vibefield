@@ -258,6 +258,7 @@ import { type AgentScreens, createAgentScreens } from "./agent-screens";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
 import { AgentWaker, isIdleRow } from "./agent-waker";
 import {
+  COMMUNITY_SWITCH_DRAWN,
   DEFAULT_APP_PREFERENCES,
   effectiveAppPreferences,
   resolveSyncIntent,
@@ -1846,6 +1847,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.registryPublicKey !== undefined
         ? { registryPublicKey: config.registryPublicKey }
         : {}),
+      // MK-2c (2026-11-11, G1, S4): a community plugin installs only once this build draws the switch (MK-4)
+      // and the person's switch is on; until then, never, whatever the stored switch says (D4). Read at each
+      // install, after the settings doc and the catalog below exist.
+      communityAllowed: async () =>
+        COMMUNITY_SWITCH_DRAWN &&
+        effectiveAppPreferences(await settingsDoc.appValues()).communityPlugins,
+      // MK-2c (the floor): an install's or an updates check's index is held to the held list's `generatedAt`
+      indexFloor: (): Promise<number | null> => catalog.heldGeneratedAt(),
       logger: logger.child({ component: "plugin.install" }),
     });
     // Item 279 (S2) — with the installed root withheld, boot leaves it as it finds it.
@@ -7078,7 +7087,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         // way (a sync, a write of the file) can still be turned off here. Every ask is audited,
         // its refusal included (S2): the key, the value asked and the caller's kind; the actor
         // is the ledger's own (a token's id, never the token).
-        const turningOn = parsed.data.value === true;
+        // MK-2c (2026-11-11): the refusal reads the one guard the install gate reads too
+        const refusedOn = parsed.data.value === true && !COMMUNITY_SWITCH_DRAWN;
         await audit.required(
           ctx,
           {
@@ -7092,16 +7102,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             },
           },
           async () => {
-            if (turningOn) return;
+            if (refusedOn) return;
             await settingsDoc.setAppValue(
               parsed.data.key,
               parsed.data.value,
               ctx.clientKind === "shell-main" ? "shell" : "pane",
             );
           },
-          () => (turningOn ? { outcome: "denied", reasonCode: "COMMUNITY_SWITCH_CLOSED" } : {}),
+          () => (refusedOn ? { outcome: "denied", reasonCode: "COMMUNITY_SWITCH_CLOSED" } : {}),
         );
-        if (turningOn) {
+        if (refusedOn) {
           throw new RpcCallError(
             "PRECONDITION_FAILED",
             "community plugins can't be turned on in this build",

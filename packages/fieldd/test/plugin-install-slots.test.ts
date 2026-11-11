@@ -44,7 +44,8 @@ async function release(workRoot: string, version: string) {
   manifest.version = version;
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   const { bytes } = await packVfplugin({ rootDir: root });
-  return { manifestDir: root, artifactBytes: bytes };
+  // MK-2c: VibeField's own rung, signed by the test's key (the gate refuses a community entry)
+  return { manifestDir: root, artifactBytes: bytes, rung: "R1" as const };
 }
 
 describe("PRC-5b registry installer slots", () => {

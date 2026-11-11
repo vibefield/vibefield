@@ -15,6 +15,7 @@ import {
   type PluginRegistryProblem,
   type PluginRegistrySnapshot,
   RegistryProvenance,
+  type RegistryRung,
   SemverString,
   SIGNATURE_SUFFIX,
   validatePluginManifest,
@@ -71,6 +72,19 @@ export interface PluginRegistryCandidate {
   readonly manifest: PluginManifestV1;
   readonly root: string;
   readonly artifactSha256: string;
+}
+
+/** MK-2c (2026-11-11, G2): the slot file's provenance with the signed entry's display copies in place of its own. */
+function withSignedCopies(
+  provenance: RegistryProvenance,
+  signed: { rung?: RegistryRung; publisherName?: string },
+): RegistryProvenance {
+  const { rung: _fileRung, publisherName: _filePublisherName, ...rest } = provenance;
+  return {
+    ...rest,
+    ...(signed.rung !== undefined ? { rung: signed.rung } : {}),
+    ...(signed.publisherName !== undefined ? { publisherName: signed.publisherName } : {}),
+  };
 }
 
 /** Minimal range check for the engine ranges built-ins actually declare:
@@ -614,6 +628,10 @@ export class PluginRegistryService extends EventEmitter {
     pluginId: string;
     root: string;
     artifactSha256: string;
+    /** MK-2c (2026-11-11, G2): the signed entry's display copies, carried in memory from prepare. When given, the
+     * candidate row shows these and not the slot file's, which a reused slot may have written before them (item
+     * 322's family). Display only, as the file's are. */
+    signed?: { rung?: RegistryRung; publisherName?: string };
   }): Promise<PluginRegistryCandidate> {
     const manifestPath = join(input.root, "vibefield.plugin.json");
     let raw: string;
@@ -691,7 +709,8 @@ export class PluginRegistryService extends EventEmitter {
     }
     const record: PluginRecord = {
       ...built,
-      registry: provenance,
+      registry:
+        input.signed === undefined ? provenance : withSignedCopies(provenance, input.signed),
       installRevision: provenance.artifactSha256.slice("sha256:".length),
     };
     const old = this.rows.get(input.pluginId);
