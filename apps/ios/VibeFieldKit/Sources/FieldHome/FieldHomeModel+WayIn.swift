@@ -154,7 +154,8 @@ extension FieldHomeModel {
       return WayInScreen(
         words: .init(
           title: words.welcomeTitle, line: AttributedString(words.welcomeLine),
-          note: failure ?? expecting.map(words.pick) ?? words.welcomeNote),
+          // P1b: a first sign-in's failure is said, never its own text (§9 "The way in", extended 2026-11-11)
+          note: failure.map { _ in words.couldNotConnect } ?? expecting.map(words.pick) ?? words.welcomeNote),
         acts: [
           .primary(words.continueWithTailscale, .continueWithTailscale),
           .secondary(words.scanTheCode, .scanCode, glyph: "qrcode.viewfinder"),
@@ -190,7 +191,8 @@ extension FieldHomeModel {
         words: .init(
           title: "Sign in to Tailscale again.",
           line: AttributedString("\(device.This) can’t reach your desktops until you do. Nothing here is lost."),
-          note: note),
+          // P1b: a sign-in sheet that could not open is said, never its own error
+          note: note.map { _ in words.couldNotConnect }),
         acts: [
           .primary("Sign in again", .signInAgain),
           .link("Use another account", .useAnotherAccount),

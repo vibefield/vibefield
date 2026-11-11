@@ -70,7 +70,8 @@ public enum AccountDisplay {
     switch state {
     case .needsLogin: return "Sign in to Tailscale again to reach your desktops."
     case .needsMachineAuth: return "An admin of your Tailscale network approves new devices."
-    case .failed(let reason): return "Couldn’t connect — \(reason)."
+    // P1b (2026-11-11; DESIGN.md §9 "The way in", extended): the mesh's reason is VibeField's insides, never said
+    case .failed: return "Couldn’t connect."
     case .off, .starting, .up, .stopping, .reconnecting: return nil
     }
   }

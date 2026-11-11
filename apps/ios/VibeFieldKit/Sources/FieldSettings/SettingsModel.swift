@@ -160,7 +160,8 @@ public enum SettingsModel {
     case .connecting: Line("Connecting…")
     case .signInAgain: Line("Sign in to Tailscale again", wantsTheUser: true)
     case .waitingForApproval: Line("Waiting for approval", wantsTheUser: true)
-    case .couldNotConnect(let reason): Line("Couldn’t connect — \(reason).", wantsTheUser: true)
+    // P1b (2026-11-11; §9 "The way in", extended): the mesh's reason is VibeField's insides, never said
+    case .couldNotConnect: Line("Couldn’t connect.", wantsTheUser: true)
     }
   }
 
