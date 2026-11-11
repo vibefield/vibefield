@@ -6741,6 +6741,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     with its own stop of Tab in the rows' order, while ↑ ↓ ↵ and the pointer keep the press's. A row of any other
     source — a plugin from the plugin list, whatever the list says of it, or a Sideloaded one — has no switch, for
     a record's source and id are what its folder can say (item 321). Settings → Plugins keeps its switch until MK-5.
+    *Drawn 2026-11-11 (MK-4c2a's rider; VF-PM 19:05:12Z), ‹draft›:* when fieldd refuses a row's switch, the row's
+    line gives way to §9's words, "Couldn't turn it off. Try again." or "Couldn't turn it on. Try again.", in the
+    attention ink (§2.5, where a refusal is said in it), until the switch is pressed again or fieldd's next snapshot
+    shows it the way it was turning, as a page's refusal line goes too.
   - **Updates** is what the last read found, its time at its head. Each update says how it changes the set before
     you take it — the objects it adds or removes (MK-D4) — over its notes, with **Update**; one that removes an
     object asks first, because the objects of that kind on your desks would wear the missing face. Nothing installs
