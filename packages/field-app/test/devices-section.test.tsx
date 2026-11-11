@@ -6,6 +6,12 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, type ComponentProps, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  followQuitState,
+  getSwitchState,
+  registerSwitchStage,
+  resetSwitchForTests,
+} from "../src/boot/switch";
 import { cardsStore } from "../src/frame/cards/cards-store";
 import { type FieldHost, setHost } from "../src/host";
 import {
@@ -340,6 +346,47 @@ describe("Settings → Devices: the Tailscale card (TS-D1, TS-D2, TS-D4)", () =>
     expect(create).toHaveBeenCalledTimes(1);
     expect(text()).toBe(before);
     expect(text()).not.toContain("quitting");
+  });
+
+  // Item 315 — James, 2026-11-10 19:13:21Z, of New user… pressed here while VibeField quits: "it
+  // should not do anything, ignore the press". With a switch stage registered, as the product's
+  // SwitchLayer registers one, the press moves no switch state, never asks main, and draws nothing.
+  it("ignores New user… pressed while VibeField quits: nothing leaves, main is not asked", async () => {
+    const create = vi.fn(async () => {
+      throw new Error("VibeField is quitting");
+    });
+    host(null, {
+      list: async () => ({
+        attachedUserId: "01J8ZQ7W9K3M5N7P9R1T3V5X7Z",
+        users: [
+          {
+            userId: "01J8ZQ7W9K3M5N7P9R1T3V5X7Z",
+            fuid: 1,
+            name: "James",
+            face: { emoji: "🦊" },
+            resident: true,
+            onboarded: true,
+          },
+        ],
+      }),
+      create,
+    });
+    await mount(client({ link: LINKED() }));
+    await act(flush);
+    await act(async () => button("Use another account")?.click());
+    const before = text();
+    const unregister = registerSwitchStage();
+    followQuitState({ quitting: true });
+    try {
+      await act(async () => button("New user…")?.click());
+      expect(getSwitchState()).toEqual({ kind: "idle" });
+      await act(flush);
+      expect(create).not.toHaveBeenCalled();
+      expect(text()).toBe(before);
+    } finally {
+      unregister();
+      resetSwitchForTests();
+    }
   });
 
   it("keeps the browser's exits while the sign-in waits on the person", async () => {

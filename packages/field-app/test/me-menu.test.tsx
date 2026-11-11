@@ -11,6 +11,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MeMenu, type MeMenuUpdate, MeMenuView, type MeMenuViewProps } from "../src/account/MeMenu";
 import type { AccountMe, AccountPerson } from "../src/account/use-account";
+import { followQuitState } from "../src/boot/switch";
 import { type FieldHost, type FieldUpdatesHost, setHost } from "../src/host";
 import { meUpdateRow } from "../src/panels/update-words";
 
@@ -974,6 +975,42 @@ describe("MeMenu (controller)", () => {
     expect(onOpenChange).toHaveBeenLastCalledWith(true);
     expect(container?.querySelector(".vf-me-notice")?.textContent).toBe(words);
     expect(container?.querySelector('[role="status"]')?.textContent).toBe(words);
+  });
+
+  // Item 315 (James, 2026-11-10: "2. C" at 21:32Z) — once VibeField's quit has gone ahead, a switch and a new user
+  // pressed here do nothing and say nothing: main is never asked, and the menu draws no notice.
+  it("ignores a switch and a new user pressed while VibeField quits: main is not asked, nothing is said", async () => {
+    const onOpenChange = vi.fn();
+    const refuse = async (): Promise<never> => {
+      throw new Error("VibeField is quitting");
+    };
+    const usersSwitch = vi.fn(refuse);
+    const usersCreate = vi.fn(refuse);
+    baseHost({
+      usersList: vi.fn(async () => ({ attachedUserId: "me", users: USERS })),
+      usersSwitch,
+      usersCreate,
+    });
+    await mountController(vi.fn(), { open: true, onOpenChange });
+    followQuitState({ quitting: true });
+    try {
+      await act(async () => {
+        item("Work")?.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        item("New user…")?.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(usersSwitch).not.toHaveBeenCalled();
+      expect(usersCreate).not.toHaveBeenCalled();
+      expect(container?.querySelector(".vf-me-notice")).toBeNull();
+      expect(onOpenChange).not.toHaveBeenCalledWith(true);
+    } finally {
+      followQuitState({});
+    }
   });
 
   it("starts from the last roster read on this host, so a new mount never blinks", async () => {

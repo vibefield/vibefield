@@ -10,7 +10,11 @@ export class PreloadDesktopStateBridge {
   private handler: ((state: DesktopShellState) => void) | null = null;
   private latest: DesktopShellState | null = null;
 
-  constructor(private readonly onRejected: (issueCount: number) => void) {}
+  constructor(
+    private readonly onRejected: (issueCount: number) => void,
+    /** Item 315 — a reader that throws is reported here and the others still run. RED: declared, not called. */
+    readonly onHandlerError: (error: unknown) => void = () => undefined,
+  ) {}
 
   accept(raw: unknown): void {
     const parsed = DesktopShellStateSchema.safeParse(raw);

@@ -25,6 +25,9 @@ export type QuitRefused = "switch" | "new-user";
 export interface QuitLatchOptions {
   /** said once per refusal, for the log (never the person's words) */
   readonly onRefused?: (what: QuitRefused) => void;
+  /** Item 315 — the hold set (true) and its release (false), for the window's desktop state (`quitting`). RED:
+   * declared, never called. */
+  readonly onHeld?: (held: boolean) => void;
 }
 
 export interface QuitLatch {

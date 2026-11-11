@@ -19,6 +19,7 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { followQuitState } from "../src/boot/switch";
 import { type FieldHost, setHost } from "../src/host";
 import { SettingsPanel } from "../src/panels/SettingsPanel";
 
@@ -284,5 +285,71 @@ describe("widgetlab panels", () => {
     await act(async () => undo?.click());
     expect(request).toHaveBeenCalledWith("storage.settings.undo", {});
     expect(container?.textContent).toContain("Last synced change undone");
+  });
+});
+
+// Item 315 (James, 2026-11-10: "2. C" at 21:32Z) — the head of Settings is one of the five places a switch starts.
+// Once VibeField's quit has gone ahead, a face pressed there does nothing and says nothing: main is never asked, and
+// no notice is drawn under the faces.
+describe("the head of Settings while VibeField quits (item 315)", () => {
+  it("ignores a face pressed while VibeField quits: main is not asked, nothing is said", async () => {
+    const usersSwitch = vi.fn(async (): Promise<never> => {
+      throw new Error("VibeField is quitting");
+    });
+    setHost({
+      logger: noopLogger,
+      getConnection: async () => ({ port: 1, token: "test" }),
+      onPrepareClose: () => () => undefined,
+      completeClose: () => undefined,
+      usersList: async () => ({
+        attachedUserId: "me",
+        users: [
+          { userId: "me", fuid: 1, name: "James", resident: true, onboarded: true },
+          {
+            userId: "work",
+            fuid: 2,
+            name: "Work",
+            face: { emoji: "🐙" },
+            resident: true,
+            onboarded: true,
+          },
+        ],
+      }),
+      usersSwitch,
+    } as FieldHost);
+    try {
+      const client = new FielddClient({ url: "ws://127.0.0.1:1", token: "test" });
+      mount(
+        createElement(
+          FielddProvider,
+          { client },
+          createElement(SettingsPanel, { engine: makeEngine(), onClose: () => {} }),
+        ),
+      );
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const face = container?.querySelector<HTMLButtonElement>(
+        'button[aria-label="Switch to Work"]',
+      );
+      expect(face).not.toBeNull();
+      followQuitState({ quitting: true });
+      await act(async () => {
+        face?.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(usersSwitch).not.toHaveBeenCalled();
+      expect(container?.querySelector(".vf-settings-account-notice")).toBeNull();
+    } finally {
+      followQuitState({});
+      setHost({
+        logger: noopLogger,
+        getConnection: async () => ({ port: 1, token: "test" }),
+        onPrepareClose: () => () => undefined,
+        completeClose: () => undefined,
+      });
+    }
   });
 });

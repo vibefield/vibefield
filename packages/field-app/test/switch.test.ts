@@ -10,8 +10,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  followQuitState,
   getSwitchState,
+  isQuitHeld,
   leaveFor,
+  QuitHeldRefusal,
   registerSwitchStage,
   resetSwitchForTests,
   revealArrival,
@@ -21,6 +24,7 @@ import {
   switchReturned,
   switchRevealed,
 } from "../src/boot/switch";
+import { type FieldHost, setHost } from "../src/host";
 
 const KEY = "vf:switch-arrival";
 const WORK: SwitchPersona = {
@@ -207,5 +211,102 @@ describe("the arriving window", () => {
     revealArrival();
     await vi.advanceTimersByTimeAsync(SWITCH_MOTION.revealed + 400);
     expect(getSwitchState()).toEqual({ kind: "idle" });
+  });
+});
+
+// Item 315 (James, 2026-11-10: "it should not do anything, ignore the press" at 19:13:21Z; "2. C" at 21:32Z) — once
+// VibeField's quit has gone ahead (main's desktop state says `quitting`), a switch or a new user pressed in the window
+// neither leaves nor asks main; every door swallows the refusal and says nothing. These rows hold the conductor.
+describe("while VibeField quits (item 315)", () => {
+  /** A host whose logger records what it is told, so a row can hold the one line an ignored press leaves. */
+  function recordingHost(): { lines: Array<{ event: string; attrs: unknown }> } {
+    const lines: Array<{ event: string; attrs: unknown }> = [];
+    const logger: FieldHost["logger"] = {
+      child: () => logger,
+      trace() {},
+      debug() {},
+      info(event, _message, attrs) {
+        lines.push({ event, attrs });
+      },
+      warn(event, _message, attrs) {
+        lines.push({ event, attrs });
+      },
+      error() {},
+      fatal() {},
+      isLevelEnabled: () => true,
+    };
+    setHost({
+      logger,
+      getConnection: async () => ({ port: 1, token: "test" }),
+      onPrepareClose: () => () => undefined,
+      completeClose: () => undefined,
+    } as FieldHost);
+    return { lines };
+  }
+
+  it("follows main's desktop state: quitting sets the hold, false or absent clears it", () => {
+    expect(isQuitHeld()).toBe(false);
+    followQuitState({ quitting: true });
+    expect(isQuitHeld()).toBe(true);
+    followQuitState({ quitting: false });
+    expect(isQuitHeld()).toBe(false);
+    followQuitState({ quitting: true });
+    // an older shell's state has no `quitting` at all: the window is not held
+    followQuitState({});
+    expect(isQuitHeld()).toBe(false);
+  });
+
+  it("refuses a press before it leaves: no state moves and main is never asked", async () => {
+    recordingHost();
+    stage();
+    followQuitState({ quitting: true });
+    const act = vi.fn(async () => undefined);
+    const done = leaveFor(WORK, row().button, act);
+    expect(getSwitchState()).toEqual({ kind: "idle" });
+    await expect(done).rejects.toBeInstanceOf(QuitHeldRefusal);
+    expect(act).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  // The order is today's for any refusal from main: `leaveFor` sets "returning", arms the return's timer and only then
+  // rejects (`switch.ts`, the `catch` after `await act()`), so the rejection arrives while the return plays; the
+  // scene's `switchReturned()` ends it. Item 315 changes what the rejection is, never when it comes.
+  it("brings back a switch already leaving when the hold lands, and its refusal is the quit's", async () => {
+    const { lines } = recordingHost();
+    stage();
+    // main's own failure, not the quit's words: whatever main said, the press is the quit's
+    const mains = new Error("the switch failed for a reason of main's own");
+    const done = leaveFor(WORK, row().button, async () => {
+      followQuitState({ quitting: true }); // the hold lands while main is asked
+      throw mains;
+    });
+    switchLeft();
+    await expect(done).rejects.toBeInstanceOf(QuitHeldRefusal);
+    expect(getSwitchState()).toMatchObject({ kind: "leaving", phase: "returning" });
+    // this press is ignored too, so it leaves the same one line in the log, which alone keeps main's cause
+    expect(lines).toEqual([
+      {
+        event: "renderer.switch.ignored_while_quitting",
+        attrs: { what: "switch", cause: "the switch failed for a reason of main's own" },
+      },
+    ]);
+    switchReturned();
+    expect(getSwitchState()).toEqual({ kind: "idle" });
+  });
+
+  it("logs an ignored press once, with what was pressed: a switch for a person, a new user for none", async () => {
+    const { lines } = recordingHost();
+    stage();
+    followQuitState({ quitting: true });
+    await expect(leaveFor(WORK, null, async () => undefined)).rejects.toBeInstanceOf(
+      QuitHeldRefusal,
+    );
+    await expect(leaveFor(null, null, async () => undefined)).rejects.toBeInstanceOf(
+      QuitHeldRefusal,
+    );
+    expect(lines).toEqual([
+      { event: "renderer.switch.ignored_while_quitting", attrs: { what: "switch" } },
+      { event: "renderer.switch.ignored_while_quitting", attrs: { what: "new-user" } },
+    ]);
   });
 });

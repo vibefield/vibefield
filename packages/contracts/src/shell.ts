@@ -485,6 +485,10 @@ export const DesktopShellState = z
      * status line: null while it is up or coming up; absent from a shell older than item 212, which the window reads
      * as unknown and says nothing of. */
     fieldd: FielddLinkUnavailable.nullable().optional(),
+    /** Item 315 — a person's quit has gone ahead: true from the quit gate's hold until its release, so the window
+     * ignores a switch or a new user pressed meanwhile. Absent from a shell older than item 315, which the window reads
+     * as not quitting. RED: a stub that accepts anything. */
+    quitting: z.unknown().optional(),
   })
   .passthrough();
 export type DesktopShellState = z.infer<typeof DesktopShellState>;

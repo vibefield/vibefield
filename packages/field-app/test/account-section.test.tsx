@@ -5,6 +5,7 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { followQuitState } from "../src/boot/switch";
 import { type FieldHost, setHost } from "../src/host";
 import { AccountSection } from "../src/panels/AccountSection";
 
@@ -455,6 +456,38 @@ describe("AccountSection users switcher", () => {
     // A rejection means no reload is coming, so the row must be pressable again.
     expect(text()).toContain("users.json is locked");
     expect(row("Work")?.disabled).toBe(false);
+  });
+
+  // Item 315 (James, 2026-11-10: "2. C" at 21:32Z) — once VibeField's quit has gone ahead, a switch and a new user
+  // pressed on the Account page do nothing and say nothing: main is never asked and the controls stay as they were.
+  it("ignores a switch and a new user pressed while VibeField quits: main is not asked, nothing is said", async () => {
+    const refuse = async (): Promise<never> => {
+      throw new Error("VibeField is quitting");
+    };
+    const usersSwitch = vi.fn(refuse);
+    const usersCreate = vi.fn(refuse);
+    host(
+      vi.fn(async () => PROFILE),
+      {
+        list: vi.fn(async () => ROSTER),
+        create: usersCreate,
+        switch: usersSwitch,
+      },
+    );
+    await mount(withLink());
+    const before = text();
+    followQuitState({ quitting: true });
+    try {
+      await act(async () => row("Work")?.click());
+      await act(async () => newUser()?.click());
+      expect(usersSwitch).not.toHaveBeenCalled();
+      expect(usersCreate).not.toHaveBeenCalled();
+      expect(text()).toBe(before);
+      expect(row("Work")?.disabled).toBe(false);
+      expect(newUser()?.disabled).toBe(false);
+    } finally {
+      followQuitState({});
+    }
   });
 
   it("renders the block disabled with the honest line when the bridge is absent", async () => {

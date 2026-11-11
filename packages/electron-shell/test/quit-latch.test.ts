@@ -42,6 +42,16 @@ describe("the quit's latch (item 290, D4)", () => {
     expect(() => latch.refuse("new-user")).not.toThrow();
     expect(onRefused).not.toHaveBeenCalled();
   });
+
+  // Item 315 — the window learns of the hold from main's desktop state; the latch says when it is set and released.
+  it("tells the window's state of the hold and of its release, once each, and never of a refusal", () => {
+    const onHeld = vi.fn();
+    const latch = createQuitLatch({ onHeld });
+    latch.hold();
+    expect(() => latch.refuse("switch")).toThrow(QuitRefusalError);
+    latch.release();
+    expect(onHeld.mock.calls).toEqual([[true], [false]]);
+  });
 });
 
 // Item 290 (VF-PM's bound 3, 09:57:55Z) — a switch already starting when the quit's hold lands: its pair answers, and

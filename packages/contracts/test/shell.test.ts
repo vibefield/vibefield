@@ -643,6 +643,22 @@ describe("tray shell commands and app preferences", () => {
     ).toBe(false);
   });
 
+  it("item 315 — a quit that has gone ahead rides the desktop state as one boolean, absent from an older shell", () => {
+    const tray = {
+      availability: "available",
+      placement: "visible",
+      backgroundShellEffective: false,
+      issue: null,
+    };
+    expect(DesktopShellState.parse({ tray, quitting: true }).quitting).toBe(true);
+    expect(DesktopShellState.parse({ tray, quitting: false }).quitting).toBe(false);
+    // a shell older than item 315 says nothing of it, which the window reads as not quitting
+    expect(DesktopShellState.parse({ tray }).quitting).toBeUndefined();
+    // a word or a number is not the quit's truth
+    expect(DesktopShellState.safeParse({ tray, quitting: "yes" }).success).toBe(false);
+    expect(DesktopShellState.safeParse({ tray, quitting: 1 }).success).toBe(false);
+  });
+
   it("BP-1c — the desk browser's sign-ins ride the desktop state as one word, never a path", () => {
     const tray = {
       availability: "available",

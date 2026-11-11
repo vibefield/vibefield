@@ -96,6 +96,29 @@ const listeners = new Set<() => void>();
 let stages = 0;
 let onCovered: (() => void) | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
+/** Item 315 — main's quit has gone ahead (its gate's hold), as the desktop state says it (`quitting`). */
+let quitHeld = false;
+
+/** Item 315 (James, 2026-11-10: "it should not do anything, ignore the press"; "2. C") — a switch or a new user pressed
+ * while VibeField quits. Every door swallows it and draws nothing; it never crosses to main, so its words are never
+ * a person's. */
+export class QuitHeldRefusal extends Error {
+  constructor() {
+    super("VibeField is quitting");
+    this.name = "QuitHeldRefusal";
+  }
+}
+
+/** Item 315 — the desktop state main publishes: `quitting` true from the quit's hold until its release. A state
+ * without the field (an older shell) leaves the window not held. */
+export function followQuitState(desktop: { readonly quitting?: boolean | undefined }): void {
+  quitHeld = desktop.quitting === true;
+}
+
+/** Item 315 — whether this window knows VibeField is quitting. */
+export function isQuitHeld(): boolean {
+  return quitHeld;
+}
 
 function set(next: SwitchState): void {
   state = next;
@@ -227,6 +250,7 @@ export async function leaveFor(
   if (getSwitchState().kind !== "idle") {
     throw new Error("a user switch is already in flight");
   }
+  // Item 315, RED: a held window is not refused here yet. The green refuses before any state is set, and logs it.
   // Nobody here plays a switch (a browser harness, a unit test): nothing to
   // converge, and no scene on the other side to hand a face to — straight to
   // main, which is what a switch was before it had a scene.
@@ -304,4 +328,5 @@ export function resetSwitchForTests(): void {
   disarm();
   state = null;
   onCovered = null;
+  quitHeld = false;
 }

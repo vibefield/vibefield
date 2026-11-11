@@ -21,6 +21,7 @@ import {
   voiceCls,
   type WizardLeaving,
 } from "../src/boot/onboarding/wizard-ui";
+import { followQuitState } from "../src/boot/switch";
 import { cardsStore } from "../src/frame/cards/cards-store";
 import { type FieldHost, type FieldUserProfile, type FieldUserRoster, setHost } from "../src/host";
 import { observeFrames } from "./wizard-frame-fixture";
@@ -796,6 +797,41 @@ describe("Setup Assistant", () => {
       "Couldn't open James's field — a user switch is already in flight.",
     );
     expect(tile("Open James's field")?.disabled).toBe(false);
+  });
+
+  // Item 315 (James, 2026-11-10: "2. C" at 21:32Z) — once VibeField's quit has gone ahead, a tile pressed on the
+  // chooser does nothing and says nothing: main is never asked, no alert is drawn, and the tiles stay as they were.
+  it("ignores a tile pressed on the chooser while VibeField quits: main is not asked, nothing is said", async () => {
+    const usersSwitch = vi.fn(async (): Promise<FieldUserProfile> => {
+      throw new Error("VibeField is quitting");
+    });
+    host(
+      vi.fn(async () => SECOND),
+      {
+        usersList: async () => ({ attachedUserId: SECOND.userId, users: [OWNER, SECOND] }),
+        usersSwitch,
+      },
+    );
+    await mount({
+      fieldd: client({ link: NO_LINK }),
+      onboarding: onboarding({ fuid: 2, setupVariant: "second-user" }),
+      onComplete: vi.fn(),
+    });
+    await click("Back");
+    await settle();
+    followQuitState({ quitting: true });
+    try {
+      await act(async () => {
+        tile("Open James's field")?.click();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(usersSwitch).not.toHaveBeenCalled();
+      expect(container?.querySelector('[role="alert"]')).toBeNull();
+      expect(tile("Open James's field")?.disabled).toBe(false);
+    } finally {
+      followQuitState({});
+    }
   });
 
   it("resumes a second user from users.json the same way as any other (W6)", async () => {

@@ -72,3 +72,51 @@ describe("PreloadDesktopStateBridge", () => {
     expect(handler.mock.calls[1]?.[0]).not.toHaveProperty("fieldd");
   });
 });
+
+// Item 315 — the desktop state has two readers in the window: the field's chrome (ChromeLayer) and the switch's layer,
+// which reads `quitting` to ignore a press while VibeField quits. So the bridge fans out instead of keeping one handler.
+describe("PreloadDesktopStateBridge, many readers (item 315)", () => {
+  it("fans out: each subscriber gets the latest state on subscribe and every state after, and one leaving keeps the other", () => {
+    const bridge = new PreloadDesktopStateBridge(vi.fn());
+    bridge.accept(available);
+    const chrome = vi.fn();
+    const quit = vi.fn();
+    bridge.subscribe(chrome);
+    const leave = bridge.subscribe(quit);
+    expect(chrome).toHaveBeenCalledWith(available);
+    expect(quit).toHaveBeenCalledWith(available);
+    const quitting = { ...available, quitting: true };
+    bridge.accept(quitting);
+    expect(chrome).toHaveBeenLastCalledWith(quitting);
+    expect(quit).toHaveBeenLastCalledWith(quitting);
+    leave();
+    bridge.accept(available);
+    expect(chrome).toHaveBeenLastCalledWith(available);
+    expect(quit).toHaveBeenLastCalledWith(quitting);
+  });
+
+  it("keeps calling the others when one reader throws, and reports the throw", () => {
+    const failed = vi.fn();
+    const bridge = new PreloadDesktopStateBridge(vi.fn(), failed);
+    const broken = new Error("a reader broke");
+    const first = vi.fn(() => {
+      throw broken;
+    });
+    const second = vi.fn();
+    bridge.subscribe(first);
+    bridge.subscribe(second);
+    bridge.accept(available);
+    expect(first).toHaveBeenCalledWith(available);
+    expect(second).toHaveBeenCalledWith(available);
+    expect(failed).toHaveBeenCalledWith(broken);
+  });
+
+  it("holds one entry for a reader subscribed twice", () => {
+    const bridge = new PreloadDesktopStateBridge(vi.fn());
+    const reader = vi.fn();
+    bridge.subscribe(reader);
+    bridge.subscribe(reader);
+    bridge.accept(available);
+    expect(reader).toHaveBeenCalledTimes(1);
+  });
+});

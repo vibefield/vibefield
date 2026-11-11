@@ -340,6 +340,7 @@ export function SwitchLayer({
 }): ReactElement | null {
   const state = useSwitchState();
   useLayoutEffect(() => registerSwitchStage(), []);
+  // Item 315, RED: the layer does not yet read main's desktop state (`followQuitState`).
   useEffect(() => {
     if (ready && state.kind === "arriving" && state.phase === "held") revealArrival();
   }, [ready, state]);
