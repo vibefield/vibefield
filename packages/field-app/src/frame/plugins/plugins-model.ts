@@ -20,14 +20,16 @@ import {
   PAGE_WORDS,
   READING,
   SOURCE_WORDS,
+  SWITCH_WORDS,
 } from "./plugins-words";
 
 // THE PLUGINS POPUP'S MODEL (MK-4a; DESIGN.md §8 "Plugins — the frame's second
 // popup"): its size in a window (MK-E1), what Discover and Updates show for
 // each state of the read, the foot's sentence, Installed's rows from the
-// registry snapshot the window already holds, and (MK-4c) a plugin's page, read
-// only, and the walk of Installed's hot row. Pure: the controller and the tests
-// read the same functions.
+// registry snapshot the window already holds, (MK-4c) a plugin's page and the
+// walk of Installed's hot row, and (MK-4c2a) which plugins carry switches here
+// and where each switch stands. Pure: the controller and the tests read the same
+// functions.
 
 /** The popup as drawn (MK-D2): 960 × 640. */
 export const PLUGINS_SIZE = { width: 960, height: 640 } as const;
@@ -138,6 +140,8 @@ export interface InstalledRow {
   /** "Community", beside a community plugin's publisher */
   readonly community: boolean;
   readonly line: string;
+  /** its one switch: on or off; null when it has none here (MK-4c2a) */
+  readonly onOff: boolean | null;
 }
 
 /** What the signed list says of a plugin: whether VibeField publishes it, its
@@ -198,6 +202,85 @@ function runsService(record: PluginRecord): boolean {
   return record.service !== "none";
 }
 
+/** Whether a plugin's switches stand in Plugins (MK-4c2a; VF-PM 2026-11-11
+ * 18:36:34Z, 2): a Built in or Development plugin's alone. A record's source and
+ * id are what its folder can say (item 321), so a plugin from the plugin list —
+ * whatever the list held says of it, a "VibeField" listing included — and a
+ * Sideloaded one are read only here. Settings → Plugins keeps its switches
+ * until MK-5. The row, the page and every power's switch ask this one function. */
+export function controlsHere(record: PluginRecord): boolean {
+  return record.source === "bundled" || record.source === "dev-linked";
+}
+
+/** A switch's key, never shown: a plugin's one switch, or one of its powers'.
+ * The controller keeps what is under way and what fieldd refused by it. */
+export const switchKey = {
+  one: (id: string): string => `one:${id}`,
+  power: (id: string, capability: string): string => `power:${id}:${capability}`,
+} as const;
+
+/** A switch fieldd refused to move: whose it is (a power's, or the plugin's
+ * own when `capability` is null), and the way it was being turned. */
+export interface Refusal {
+  readonly id: string;
+  readonly capability: string | null;
+  readonly turningOn: boolean;
+}
+
+/** Whether a snapshot shows a refused switch the way it was being turned, so
+ * its refusal is stale and goes (VF-PM 2026-11-11 19:05:12Z, 4; §8 "Installed",
+ * MK-4c2a's rider). A plugin gone from the snapshot, or a switch gone from its
+ * page, keeps nothing to say either. */
+export function refusalStale(refusal: Refusal, snapshot: PluginRegistrySnapshot): boolean {
+  const record = snapshot.plugins.find((plugin) => plugin.id === refusal.id);
+  if (record === undefined) return true;
+  const shown =
+    refusal.capability === null
+      ? switchable(record)
+        ? record.enabled
+        : undefined
+      : powerSwitchOf(record, refusal.capability)?.on;
+  return shown === undefined || shown === refusal.turningOn;
+}
+
+/** Whether its one switch stands: switches here, and a state a switch turns
+ * (on or off; one that isn't working has none, as Settings → Plugins' row). */
+export function switchable(record: PluginRecord): boolean {
+  return controlsHere(record) && (record.state === "enabled" || record.state === "disabled");
+}
+
+/** A power's switch on a plugin's page (MK-4c2a; §8 "Its switches"): what it
+ * shows (`on`) and whether it takes a press (`live`). */
+export interface PowerSwitch {
+  readonly on: boolean;
+  readonly live: boolean;
+}
+
+/** Whether the page can say a power: a core power in its plain words, or one
+ * a plugin names (`x.`), by its declaring plugin's words or MK's. An id that is
+ * neither is never said, so it never has a switch. */
+function sayable(id: string): boolean {
+  return pluginPowerWords(id, { onMac: false }) !== undefined || id.startsWith("x.");
+}
+
+/** The ONE read of a power's switch (VF-PM 2026-11-11 19:05:12Z, 3), which the
+ * page and the controller both ask: null when the page gives it no switch — no
+ * switches here, a power it never asked for or the page can't say, or one it
+ * can't have here (any reason but `revoked`). `on` is what fieldd grants: what
+ * it holds while on, and while off (when fieldd grants it nothing) what it would
+ * hold once on, every power it asked for less one taken back (contracts
+ * `computeEffectiveGrants`). `live` while it is on and working. */
+export function powerSwitchOf(record: PluginRecord, capability: string): PowerSwitch | null {
+  if (!controlsHere(record) || !sayable(capability)) return null;
+  if (!record.requestedCapabilities.includes(capability)) return null;
+  const denied = record.deniedCapabilities.find((entry) => entry.capability === capability);
+  if (denied !== undefined && denied.reason !== "revoked") return null;
+  return {
+    on: record.enabled ? record.grantedCapabilities.includes(capability) : denied === undefined,
+    live: record.enabled && record.state === "enabled",
+  };
+}
+
 function lineOf(record: PluginRecord): string {
   const objects = record.contributions.objects.length;
   const builtIn = record.source === "bundled";
@@ -250,6 +333,7 @@ export function installedRows(
       title: record.title,
       ...sourceOf(record, listed),
       line: lineOf(record),
+      onOff: switchable(record) ? record.enabled : null,
     }));
 }
 
@@ -276,12 +360,16 @@ export interface PageLine {
 
 /** One power on a plugin's page: what it lets the plugin do; under it, a core
  * power's Mac note or a plugin's own power's description; and whose power it
- * is, for a plugin's own. `key` tells powers apart and is never shown. */
+ * is, for a plugin's own. `key` is the power's id: it tells powers apart and
+ * names it to fieldd, and is never shown. MK-4c2a: its switch, on or off (null:
+ * none), and why it can't have it here. */
 export interface PagePower {
   readonly key: string;
   readonly words: string;
   readonly under: string | null;
   readonly whose: string | null;
+  readonly switch: boolean | null;
+  readonly cant: string | null;
 }
 
 /** A plugin's page, read only (MK-4c; DESIGN.md §8 "Read only first", §9
@@ -297,13 +385,23 @@ export interface PluginPage {
   readonly summary: string | null;
   /** What it adds: each object, then its tools and its service, or "No objects" */
   readonly adds: readonly PageLine[];
-  /** What it can do: each power it holds */
+  /** What it can do: each power it holds; with switches here, each it asked for */
   readonly powers: readonly PagePower[];
   /** said under What it can do when it holds none; null when it holds any, named or not */
   readonly nothing: string | null;
   /** Made by; null when the window can name no maker */
   readonly madeBy: string | null;
   readonly version: string;
+  /** its one switch: on or off; null when it has none here (MK-4c2a) */
+  readonly onOff: boolean | null;
+  /** whether its powers' switches take a press: switches here, and it is on */
+  readonly powersLive: boolean;
+  /** said where its switches would stand, when it has none here */
+  readonly readOnly: string | null;
+  /** said under its act, for a Built in plugin with switches: they reach your other desktops */
+  readonly elsewhere: string | null;
+  /** said under What it can do's head while it is off and its powers have switches */
+  readonly offLine: string | null;
 }
 
 /** Made by (§9 MK-4c's block): a Built in plugin's sentence; for a registry
@@ -335,12 +433,47 @@ function addsOf(record: PluginRecord): PageLine[] {
   return adds.length > 0 ? adds : [{ key: "none", words: INSTALLED_LINE.noObject(null) }];
 }
 
-/** What it can do: each power it holds (`grantedCapabilities`), never by its
- * id (§9 "The powers' plain words"). A core power in its plain words, the Mac's
- * note under it on a Mac; a plugin's own power by the title and description its
- * declaring plugin wrote, and whose it is; one whose declaring plugin is not
- * installed here, by MK's words. Powers it asked for and does not hold come
- * back with their switches (MK-4c2). */
+/** A power's words on a page, never its id (§9 "The powers' plain words"): a
+ * core power in its plain words, the Mac's note under it on a Mac; a plugin's
+ * own power by the title and description its declaring plugin wrote, and whose
+ * it is; one whose declaring plugin is not installed here, by MK's words. Any
+ * other id is no power the page can say: null, and it is not said. */
+function powerWords(
+  id: string,
+  record: PluginRecord,
+  declared: ReadonlyMap<string, { title: string; description: string; by: PluginRecord }>,
+  onMac: boolean,
+): Pick<PagePower, "key" | "words" | "under" | "whose"> | null {
+  const core = pluginPowerWords(id, { onMac });
+  if (core !== undefined) {
+    const entry: PluginPowerWords = PLUGIN_POWER_WORDS[id as PluginPowerId];
+    return {
+      key: id,
+      words: core,
+      under: onMac && entry.macNote !== undefined ? entry.macNote : null,
+      whose: null,
+    };
+  }
+  const own = declared.get(id);
+  if (own !== undefined) {
+    return {
+      key: id,
+      words: own.title,
+      under: own.description,
+      whose: pluginOwnPowerLine(own.by.title, own.by.id === record.id),
+    };
+  }
+  if (id.startsWith("x.")) {
+    return { key: id, words: PAGE_WORDS.ownUnknown, under: null, whose: null };
+  }
+  return null;
+}
+
+/** What it can do. A plugin with no switches here lists each power it holds
+ * (`grantedCapabilities`), read only (MK-4c). One with switches here (MK-4c2a,
+ * §8 "Its switches") lists each power it asked for: its switch as
+ * `powerSwitchOf` reads it, and for one it can't have here (any reason but
+ * `revoked`), no switch and why. */
 function powersOf(
   record: PluginRecord,
   snapshot: PluginRegistrySnapshot,
@@ -352,31 +485,20 @@ function powersOf(
       declared.set(power.id, { title: power.title, description: power.description, by: plugin });
     }
   }
+  const switches = controlsHere(record);
+  const ids = switches ? record.requestedCapabilities : record.grantedCapabilities;
   const powers: PagePower[] = [];
-  for (const id of record.grantedCapabilities) {
-    const core = pluginPowerWords(id, { onMac });
-    if (core !== undefined) {
-      const entry: PluginPowerWords = PLUGIN_POWER_WORDS[id as PluginPowerId];
-      powers.push({
-        key: id,
-        words: core,
-        under: onMac && entry.macNote !== undefined ? entry.macNote : null,
-        whose: null,
-      });
+  for (const id of ids) {
+    const said = powerWords(id, record, declared, onMac);
+    if (said === null) continue;
+    if (!switches) {
+      powers.push({ ...said, switch: null, cant: null });
       continue;
     }
-    const own = declared.get(id);
-    if (own !== undefined) {
-      powers.push({
-        key: id,
-        words: own.title,
-        under: own.description,
-        whose: pluginOwnPowerLine(own.by.title, own.by.id === record.id),
-      });
-    } else if (id.startsWith("x.")) {
-      powers.push({ key: id, words: PAGE_WORDS.ownUnknown, under: null, whose: null });
-    }
-    // any other id is no power the page can say, and an id is never shown
+    const denied = record.deniedCapabilities.find((entry) => entry.capability === id);
+    const cant =
+      denied !== undefined && denied.reason !== "revoked" ? SWITCH_WORDS.cant[denied.reason] : null;
+    powers.push({ ...said, switch: powerSwitchOf(record, id)?.on ?? null, cant });
   }
   return powers;
 }
@@ -392,6 +514,11 @@ export function pluginPage(
   const listed = listedFrom(catalog);
   const powers = powersOf(record, snapshot, onMac);
   const objects = record.contributions.objects.length;
+  const switches = controlsHere(record);
+  const onOff = switchable(record) ? record.enabled : null;
+  const powerSwitches = powers.some((power) => power.switch !== null);
+  // whether its powers' switches take a press: `powerSwitchOf`'s `live`, the same for each of them
+  const live = powers.some((power) => powerSwitchOf(record, power.key)?.live === true);
   return {
     id: record.id,
     title: record.title,
@@ -399,15 +526,25 @@ export function pluginPage(
     summary: record.source === "registry" ? (listed.get(record.id)?.summary ?? null) : null,
     adds: addsOf(record),
     powers,
-    // "nothing" is decided by what it holds, not by what the page can say: a held power this build
-    // cannot name is not said, and the page never says it holds none (VF-PM 18:13:11Z, 1)
+    // "nothing" is decided by the list the page reads, not by what it can say: a power this build cannot name is
+    // not said, and the page never says it holds none (VF-PM 18:13:11Z, 1). With switches here, that list is
+    // every power it asked for (MK-4c2a).
     nothing:
-      record.grantedCapabilities.length > 0
+      (switches ? record.requestedCapabilities : record.grantedCapabilities).length > 0
         ? null
         : objects > 0
           ? PAGE_WORDS.nothing
           : PAGE_WORDS.nothingNoObject,
     madeBy: madeByOf(record, listed),
     version: record.version,
+    onOff,
+    powersLive: live,
+    readOnly: switches ? null : SWITCH_WORDS.readOnly,
+    // the install-set carries a Built in plugin's choices, never a Development one's (install-reconciler.ts:369)
+    elsewhere:
+      record.source === "bundled" && (onOff !== null || powerSwitches)
+        ? SWITCH_WORDS.elsewhere
+        : null,
+    offLine: switches && !record.enabled && powerSwitches ? SWITCH_WORDS.off : null,
   };
 }

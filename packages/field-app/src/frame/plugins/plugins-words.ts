@@ -4,6 +4,8 @@
 // its commit message for James's eye. Nothing here names a key, a signature, a hash, a rung, a worker, a process, a
 // restart, a repository's address, a power's id or a daemon (§9, VibeField's insides; James 2026-11-10 00:46Z).
 
+import type { GrantDenialReason } from "@vibefield/contracts";
+
 /** The popup's name to assistive tech (MK's, ‹draft›; the Peek's popup is named "Search"). */
 export const PLUGINS_NAME = "Plugins";
 /** Its close's name (MK's, ‹draft›; the Peek's says "Close search", Settings' "Close settings"). */
@@ -137,6 +139,28 @@ export const PAGE_WORDS = {
   nothingNoObject: "Nothing beyond its own work",
   /** Made by, for a Built in plugin (§9) */
   builtIn: "Comes with VibeField. It can be turned off, not removed.",
+} as const;
+
+/** A plugin's switches (MK-4c2a; DESIGN.md §8 "Its switches", §9 MK-4c2a's block): MK's words, ‹draft›, for James's
+ * eye (VF-PM 2026-11-11 18:36:34Z, 18:39:16Z, 18:43:08Z). A switch is named by what it turns — the plugin's title,
+ * or a power's plain words — and never by its state, which it says as a switch does. Settings → Plugins keeps its own
+ * words until MK-5. */
+export const SWITCH_WORDS = {
+  /** A page of a plugin from the plugin list, or a Sideloaded one: no switches here (item 321). */
+  readOnly: "Its switches aren't here yet.",
+  /** A Built in plugin's page: the install-set carries its choices to your other desktops. */
+  elsewhere: "Turning it off, or a power off, does the same on your other desktops.",
+  /** An off plugin's page, under What it can do. */
+  off: "Turn it on to change what it can do.",
+  /** A power it can't have here, by why (fieldd's reasons; "revoked" is a switch, not a line). */
+  cant: {
+    "entry-kind": "Its kind of plugin can't have this power",
+    "source-policy": "Not allowed for a plugin from its source",
+    host: "Not available on this desktop",
+  } satisfies Record<Exclude<GrantDenialReason, "revoked">, string>,
+  /** A switch fieldd refused to move: never the error's own text. */
+  refused: (turningOn: boolean) =>
+    turningOn ? "Couldn't turn it on. Try again." : "Couldn't turn it off. Try again.",
 } as const;
 
 /** Installed, when no plugin holds every typed word (MK's, ‹draft›; the Peek's "Nothing in your past holds every

@@ -2,7 +2,11 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { PluginRegistrySnapshot, PluginsCatalog } from "@vibefield/contracts";
+import {
+  type PluginRegistrySnapshot,
+  type PluginsCatalog,
+  pluginPowerWords,
+} from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, type ReactElement, useState } from "react";
@@ -14,7 +18,10 @@ import {
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_READ_AT,
+  PLUGINS_FIXTURE_REFUSAL,
   PLUGINS_FIXTURE_SNAPSHOT,
+  PLUGINS_FIXTURE_SWITCHES_SNAPSHOT,
+  type PluginsFixtureActs,
   type PluginsFixtureRead,
   pluginsFixturePort,
 } from "../src/design-system/plugins-fixtures";
@@ -24,13 +31,18 @@ import { getPluginUpdates, resetPluginUpdates } from "../src/frame/plugins/plugi
 import { pluginsLayout } from "../src/frame/plugins/plugins-model";
 import type { PluginsPort } from "../src/frame/plugins/plugins-port";
 import * as words from "../src/frame/plugins/plugins-words";
+import {
+  getPluginRegistrySnapshot,
+  setPluginRegistrySnapshot,
+} from "../src/plugin-host/plugin-registry-store";
 
 // MK-4a — the Plugins popup in a window (DESIGN.md §8 "Plugins — the frame's second popup"): the shipping
 // controller over a fixture port, drawn on the document's body. Each opening reads the list once and never on a
 // re-render (MK-D5; one audit row per opening, `plugin.catalog.refresh`); Esc and the scrim fold it; the keyboard
 // goes to its field and back; every state is said, never a blank. MK-4b adds the Me row's count (every answer the
 // popup takes, and the window's one ask, over a fixture client in a FielddProvider) and the tab a door opens it on.
-// MK-4c adds a plugin's page, read only (it asks fieldd nothing), Installed's hot row and Updates' count.
+// MK-4c adds a plugin's page, read only (it asks fieldd nothing), Installed's hot row and Updates' count. MK-4c2a adds
+// a Built in or Development plugin's switches, each held by the fixture port's recorded calls.
 // No real fieldd, no network, no child.
 
 let host: HTMLDivElement;
@@ -57,6 +69,7 @@ function counting(inner: PluginsPort): {
   return {
     calls,
     port: {
+      ...inner,
       catalog: () => {
         calls.catalog += 1;
         return inner.catalog();
@@ -69,16 +82,48 @@ function counting(inner: PluginsPort): {
   };
 }
 
+/** A port's switches, for a test that presses none: each refuses, so a stray press is never a quiet pass. */
+const NO_SWITCHES: Pick<PluginsPort, "enable" | "disable" | "grant"> = {
+  enable: () => Promise.reject(new Error("no switch is pressed in this test")),
+  disable: () => Promise.reject(new Error("no switch is pressed in this test")),
+  grant: () => Promise.reject(new Error("no switch is pressed in this test")),
+};
+
+/** The requests a port's switches sent, in order (MK-4c2a). */
+function recording(inner: PluginsPort): { port: PluginsPort; acts: string[] } {
+  const acts: string[] = [];
+  return {
+    acts,
+    port: {
+      ...inner,
+      enable: (id) => {
+        acts.push(`enable ${id}`);
+        return inner.enable(id);
+      },
+      disable: (id) => {
+        acts.push(`disable ${id}`);
+        return inner.disable(id);
+      },
+      grant: (id, capability, granted) => {
+        acts.push(`grant ${id} ${capability} ${granted}`);
+        return inner.grant(id, capability, granted);
+      },
+    },
+  };
+}
+
 function Window({
   port,
   snapshot,
   open,
   updates = null,
+  away = false,
 }: {
   port: PluginsPort;
   snapshot: PluginRegistrySnapshot | null;
   open: boolean;
   updates?: number | null;
+  away?: boolean;
 }): ReactElement {
   const [surface, set] = useState<FrameSurface | null>(open ? "plugins" : null);
   setSurface = set;
@@ -93,6 +138,7 @@ function Window({
         port={port}
         snapshot={snapshot}
         updates={updates}
+        away={away}
         now={() => PLUGINS_FIXTURE_NOW}
       />
     </>
@@ -155,6 +201,7 @@ describe("the read on open (MK-D5)", () => {
   it("never lets a late answer for the held list replace the fresh read", async () => {
     let answerHeld: (catalog: PluginsCatalog) => void = () => undefined;
     const port: PluginsPort = {
+      ...NO_SWITCHES,
       catalog: () => new Promise((resolve) => (answerHeld = resolve)),
       refresh: () => Promise.resolve(CATALOG_FIXTURES.ready),
     };
@@ -253,6 +300,7 @@ describe("its states, in the body — never a blank", () => {
     let answer = false;
     let release: (catalog: PluginsCatalog) => void = () => undefined;
     const port: PluginsPort = {
+      ...NO_SWITCHES,
       catalog: () =>
         answer
           ? new Promise<PluginsCatalog>((resolve) => {
@@ -342,6 +390,7 @@ describe("the Me row's count: every answer the popup takes (MK-4b; VF-PM's C1)",
     const heard: number[] = [];
     let answerFresh: (catalog: PluginsCatalog) => void = () => undefined;
     const port: PluginsPort = {
+      ...NO_SWITCHES,
       catalog: () => Promise.resolve(found(1)),
       refresh: () => new Promise((resolve) => (answerFresh = resolve)),
     };
@@ -367,6 +416,7 @@ describe("the Me row's count: every answer the popup takes (MK-4b; VF-PM's C1)",
     const heard: number[] = [];
     let answerHeld: (catalog: PluginsCatalog) => void = () => undefined;
     const port: PluginsPort = {
+      ...NO_SWITCHES,
       catalog: () => new Promise((resolve) => (answerHeld = resolve)),
       refresh: () => Promise.resolve(found(2)),
     };
@@ -389,12 +439,17 @@ describe("the Me row's count: every answer the popup takes (MK-4b; VF-PM's C1)",
 });
 
 /** A window's fieldd as FramePlugins asks it: `plugins.catalog.get` and `refresh` answered by the test. */
-function fielddAnswering(answer: (method: string, call: number) => Promise<unknown>): {
+function fielddAnswering(
+  answer: (method: string, call: number) => Promise<unknown>,
+  status: "ready" | "reconnecting" = "ready",
+): {
   client: FielddClient;
   asked: string[];
 } {
   const asked: string[] = [];
   const client = {
+    status,
+    onStatusChange: () => () => undefined,
     request: vi.fn(async (method: string) => {
       asked.push(method);
       return answer(method, asked.filter((m) => m === method).length);
@@ -524,7 +579,7 @@ const rows = (): HTMLButtonElement[] => [
 const pageTitle = (): string | null =>
   document.body.querySelector(".vf-plugins-page-title")?.textContent ?? null;
 const hotTitle = (): string | null =>
-  document.body.querySelector('.vf-plugins-row[data-hot="true"] .vf-plugins-title')?.textContent ??
+  document.body.querySelector('.vf-plugins-item[data-hot="true"] .vf-plugins-title')?.textContent ??
   null;
 const toInstalled = (): void => act(() => part(words.PLUGINS_TAB_WORDS.installed)?.click());
 
@@ -601,10 +656,10 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first')", () => {
     expect(said?.closest("button")).toBeNull();
     expect(said?.querySelector("button, [tabindex]")).toBeNull();
     expect(said?.hasAttribute("tabindex")).toBe(false);
-    // the page's one control is its back row
+    // the page's controls are its back row and, from MK-4c2a, its switches: nothing else
     const controls = [
       ...document.body.querySelectorAll(".vf-plugins-page button, .vf-plugins-page [tabindex]"),
-    ];
+    ].filter((node) => node.getAttribute("role") !== "switch");
     expect(controls.map((node) => node.className)).toEqual(["vf-plugins-back"]);
     // ↑ ↓ and ↵ on a page walk nothing and press nothing
     press("ArrowDown");
@@ -710,6 +765,302 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first')", () => {
       ).toBe("2");
     } finally {
       resetPluginUpdates();
+    }
+  });
+});
+
+const switches = (): HTMLButtonElement[] => [
+  ...document.body.querySelectorAll<HTMLButtonElement>('.vf-plugins [role="switch"]'),
+];
+/** Installed's row of the plugin titled `title`. */
+const rowOf = (title: string): HTMLLIElement | null =>
+  [...document.body.querySelectorAll<HTMLLIElement>(".vf-plugins-item")].find(
+    (item) => item.querySelector(".vf-plugins-title")?.textContent === title,
+  ) ?? null;
+const rowSwitch = (title: string): HTMLButtonElement | null =>
+  rowOf(title)?.querySelector<HTMLButtonElement>('[role="switch"]') ?? null;
+const pageSwitch = (): HTMLButtonElement | null =>
+  document.body.querySelector<HTMLButtonElement>('.vf-plugins-page-act-row [role="switch"]');
+const powerSwitch = (name: string): HTMLButtonElement | null =>
+  [...document.body.querySelectorAll<HTMLButtonElement>('.vf-plugins-power [role="switch"]')].find(
+    (node) => node.getAttribute("aria-label") === name,
+  ) ?? null;
+const openRow = (title: string): void =>
+  act(() => rowOf(title)?.querySelector<HTMLButtonElement>(".vf-plugins-row")?.click());
+
+/** The same desktop with one plugin turned on or off, as fieldd's next snapshot says it. */
+function turned(
+  snapshot: PluginRegistrySnapshot,
+  id: string,
+  enabled: boolean,
+): PluginRegistrySnapshot {
+  return {
+    ...snapshot,
+    generation: snapshot.generation + 1,
+    plugins: snapshot.plugins.map((plugin) =>
+      plugin.id === id
+        ? {
+            ...plugin,
+            enabled,
+            state: enabled ? ("enabled" as const) : ("disabled" as const),
+            grantedCapabilities: enabled ? plugin.grantedCapabilities : [],
+          }
+        : plugin,
+    ),
+  };
+}
+
+async function mountSwitches(
+  acts: PluginsFixtureActs = "answers",
+  away = false,
+): Promise<{ port: PluginsPort; sent: string[] }> {
+  const { port, acts: sent } = recording(pluginsFixturePort(NO_REGISTRY, acts));
+  act(() =>
+    root.render(
+      <Window port={port} snapshot={PLUGINS_FIXTURE_SWITCHES_SNAPSHOT} open away={away} />,
+    ),
+  );
+  await settle();
+  return { port, sent };
+}
+
+describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
+  it("is one switch on the row and the page: a press sends one request, and neither moves until fieldd's next snapshot", async () => {
+    const { port, sent } = await mountSwitches();
+    toInstalled();
+    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("true");
+    act(() => rowSwitch("Simulators")?.click());
+    await settle();
+    expect(sent).toEqual(["disable vibefield.simulator"]);
+    // fieldd answered; the switch waits for its snapshot
+    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("true");
+    openRow("Simulators");
+    expect(pageSwitch()?.getAttribute("aria-checked")).toBe("true");
+    const off = turned(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator", false);
+    act(() => root.render(<Window port={port} snapshot={off} open />));
+    await settle();
+    expect(pageSwitch()?.getAttribute("aria-checked")).toBe("false");
+    esc();
+    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("false");
+    // the page's switch sends its own one request, the other way
+    openRow("Simulators");
+    act(() => pageSwitch()?.click());
+    await settle();
+    expect(sent).toEqual(["disable vibefield.simulator", "enable vibefield.simulator"]);
+  });
+
+  it("sends nothing for a second press while its request is out", async () => {
+    const { sent } = await mountSwitches("pending");
+    toInstalled();
+    openRow("Simulators");
+    act(() => {
+      pageSwitch()?.click();
+      pageSwitch()?.click();
+    });
+    await settle();
+    act(() => pageSwitch()?.click());
+    await settle();
+    expect(sent).toEqual(["disable vibefield.simulator"]);
+    expect(pageSwitch()?.disabled).toBe(true);
+    expect(pageSwitch()?.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("says a refusal in its own words, never the error's text, and the switch stays where fieldd has it", async () => {
+    const { sent } = await mountSwitches("refuses");
+    toInstalled();
+    act(() => rowSwitch("Simulators")?.click());
+    await settle();
+    expect(sent).toEqual(["disable vibefield.simulator"]);
+    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    expect(line?.textContent).toBe(words.SWITCH_WORDS.refused(false));
+    expect(line?.getAttribute("data-tone")).toBe("attention");
+    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("true");
+    openRow("Simulators");
+    act(() => powerSwitch("Change what's on the desk")?.click());
+    await settle();
+    expect(sent).toEqual([
+      "disable vibefield.simulator",
+      "grant vibefield.simulator canvas.write true",
+    ]);
+    const refusals = [...document.body.querySelectorAll(".vf-plugins-page-refused")].map(
+      (node) => node.textContent,
+    );
+    expect(refusals).toEqual([words.SWITCH_WORDS.refused(false), words.SWITCH_WORDS.refused(true)]);
+    expect(document.body.textContent).not.toContain(PLUGINS_FIXTURE_REFUSAL);
+  });
+
+  it("drops a refusal once fieldd's snapshot shows the switch the way it was being turned (VF-PM 19:05:12Z, 4)", async () => {
+    const { port } = await mountSwitches("refuses");
+    toInstalled();
+    act(() => rowSwitch("Simulators")?.click());
+    await settle();
+    expect(rowOf("Simulators")?.querySelector(".vf-plugins-line")?.textContent).toBe(
+      words.SWITCH_WORDS.refused(false),
+    );
+    // a snapshot that still shows it on keeps the refusal
+    const again = { ...PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, generation: 9 };
+    act(() => root.render(<Window port={port} snapshot={again} open />));
+    await settle();
+    expect(rowOf("Simulators")?.querySelector(".vf-plugins-line")?.textContent).toBe(
+      words.SWITCH_WORDS.refused(false),
+    );
+    // one that shows it off, the way it was being turned, drops it
+    const off = turned(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator", false);
+    act(() => root.render(<Window port={port} snapshot={off} open />));
+    await settle();
+    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    expect(line?.textContent).toBe(words.INSTALLED_LINE.off);
+    expect(line?.hasAttribute("data-tone")).toBe(false);
+    openRow("Simulators");
+    expect(document.body.querySelector(".vf-plugins-page-refused")).toBeNull();
+  });
+
+  it("takes no press anywhere while fieldd isn't answering, and says so on the page", async () => {
+    const { sent } = await mountSwitches("answers", true);
+    toInstalled();
+    expect(switches().length).toBeGreaterThan(0);
+    expect(switches().every((node) => node.disabled)).toBe(true);
+    act(() => {
+      for (const node of switches()) node.click();
+    });
+    openRow("Simulators");
+    act(() => {
+      for (const node of switches()) node.click();
+    });
+    await settle();
+    expect(sent).toEqual([]);
+    expect(bodyText()).toContain(words.PLUGINS_AWAY);
+  });
+
+  it("gives a plugin from the list, or a Sideloaded one, no switch, and nothing on it sends a request (item 321)", async () => {
+    const { port: read, calls } = counting(
+      pluginsFixturePort({ catalog: CATALOG_LISTED, refresh: CATALOG_LISTED }),
+    );
+    const { port, acts: sent } = recording(read);
+    act(() => root.render(<Window port={port} snapshot={PLUGINS_FIXTURE_LISTED_SNAPSHOT} open />));
+    await settle();
+    toInstalled();
+    expect(rowSwitch("Kanban")).toBeNull();
+    expect(rowSwitch("Key-value store")).toBeNull();
+    expect(rowSwitch("Simulators")).not.toBeNull();
+    expect(rowSwitch("Desk clock")).not.toBeNull();
+    openRow("Kanban");
+    expect(pageTitle()).toBe("Kanban");
+    expect(switches()).toEqual([]);
+    expect(bodyText()).toContain(words.SWITCH_WORDS.readOnly);
+    expect(bodyText()).not.toContain(words.SWITCH_WORDS.elsewhere);
+    press("ArrowDown");
+    press("Enter");
+    press(" ");
+    await settle();
+    expect(sent).toEqual([]);
+    expect(calls).toEqual({ catalog: 1, refresh: 1 });
+  });
+
+  it("sends one grant for a power's switch, and none for a power it can't have or on a plugin that is off", async () => {
+    const { sent } = await mountSwitches();
+    toInstalled();
+    openRow("Simulators");
+    expect(powerSwitch("Read what's on the desk")?.getAttribute("aria-checked")).toBe("true");
+    expect(powerSwitch("Change what's on the desk")?.getAttribute("aria-checked")).toBe("false");
+    // a power its kind of plugin can't have: why, and no switch
+    expect(bodyText()).toContain(words.SWITCH_WORDS.cant["entry-kind"]);
+    expect(powerSwitch(pluginPowerWords("process.spawn", { onMac: false }) ?? "")).toBeNull();
+    expect(bodyText()).toContain(words.SWITCH_WORDS.elsewhere);
+    act(() => powerSwitch("Change what's on the desk")?.click());
+    await settle();
+    expect(sent).toEqual(["grant vibefield.simulator canvas.write true"]);
+    // Desk clock, in development and off: its powers wait, and its page never says your other desktops
+    esc();
+    openRow("Desk clock");
+    expect(bodyText()).toContain(words.SWITCH_WORDS.off);
+    expect(bodyText()).not.toContain(words.SWITCH_WORDS.elsewhere);
+    const waiting = [
+      ...document.body.querySelectorAll<HTMLButtonElement>('.vf-plugins-power [role="switch"]'),
+    ];
+    expect(waiting.map((node) => [node.getAttribute("aria-checked"), node.disabled])).toEqual([
+      ["true", true],
+      ["false", true],
+    ]);
+    act(() => {
+      for (const node of waiting) node.click();
+    });
+    await settle();
+    expect(sent).toEqual(["grant vibefield.simulator canvas.write true"]);
+    // its one switch still turns it on
+    expect(pageSwitch()?.disabled).toBe(false);
+  });
+
+  it("names each switch by what it turns, the same on and off", async () => {
+    const { port } = await mountSwitches();
+    toInstalled();
+    expect(rowSwitch("Simulators")?.getAttribute("aria-label")).toBe("Simulators");
+    const off = turned(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator", false);
+    act(() => root.render(<Window port={port} snapshot={off} open />));
+    await settle();
+    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("false");
+    expect(rowSwitch("Simulators")?.getAttribute("aria-label")).toBe("Simulators");
+    act(() =>
+      root.render(<Window port={port} snapshot={PLUGINS_FIXTURE_SWITCHES_SNAPSHOT} open />),
+    );
+    await settle();
+    openRow("Simulators");
+    expect(pageSwitch()?.getAttribute("aria-label")).toBe("Simulators");
+    const names = [
+      ...document.body.querySelectorAll<HTMLButtonElement>('.vf-plugins-power [role="switch"]'),
+    ].map((node) => node.getAttribute("aria-label"));
+    expect(names).toEqual([
+      pluginPowerWords("surface.capture", { onMac: false }),
+      "Read what's on the desk",
+      "Change what's on the desk",
+    ]);
+  });
+
+  it("puts no control inside another: each switch is a stop of Tab of its own, and a row's press is none", async () => {
+    await mountSwitches();
+    toInstalled();
+    const nested = (): Element[] =>
+      [...document.body.querySelectorAll('.vf-plugins button, .vf-plugins [role="switch"]')].filter(
+        (node) => (node.parentElement?.closest('button, [role="switch"]') ?? null) !== null,
+      );
+    expect(nested()).toEqual([]);
+    expect(rows().every((row) => row.tabIndex === -1)).toBe(true);
+    expect(switches().every((node) => node.tabIndex === 0)).toBe(true);
+    // a row with no switch keeps its chevron in its press; a switch row's stands
+    // beside it, no control (VF-PM 19:05:12Z, 2)
+    const chevronIn = (title: string): boolean =>
+      (rowOf(title)?.querySelector(".vf-plugins-row .vf-plugins-chevron") ?? null) !== null;
+    const chevronBeside = (title: string): boolean =>
+      (rowOf(title)?.querySelector(":scope > .vf-plugins-chevron") ?? null) !== null;
+    expect([chevronIn("Key-value store"), chevronBeside("Key-value store")]).toEqual([true, false]);
+    expect([chevronIn("Simulators"), chevronBeside("Simulators")]).toEqual([false, true]);
+    openRow("Simulators");
+    expect(nested()).toEqual([]);
+    expect(switches().length).toBe(4);
+  });
+
+  // last in the file: it sets the window's registry store, which no earlier test reads
+  it("in the frame, takes no press while this window's fieldd client isn't ready", async () => {
+    const before = getPluginRegistrySnapshot();
+    setPluginRegistrySnapshot(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT);
+    try {
+      const { client, asked } = fielddAnswering(
+        async () => CATALOG_FIXTURES.unconfigured,
+        "reconnecting",
+      );
+      act(() => root.render(<FrameWindow client={client} surface="plugins" />));
+      await settle();
+      toInstalled();
+      expect(switches().length).toBeGreaterThan(0);
+      expect(switches().every((node) => node.disabled)).toBe(true);
+      act(() => {
+        for (const node of switches()) node.click();
+      });
+      await settle();
+      expect(asked.filter((method) => !method.startsWith("plugins.catalog."))).toEqual([]);
+    } finally {
+      // the store has no door back to none held: an empty desktop stands for it when none was
+      setPluginRegistrySnapshot(before ?? { generation: 0, problems: [], plugins: [] });
     }
   });
 });

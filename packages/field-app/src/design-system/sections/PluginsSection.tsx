@@ -5,8 +5,9 @@ import { PluginsPlate } from "../PluginsPreview";
 // Plugins (MK-4a; DESIGN.md §8 "Plugins — the frame's second popup"): the
 // frame's second popup as it opens today, on fixture ports — the shipping
 // controller in each state the read can be in, a plugin's page, read only
-// (MK-4c), and Updates carrying the Me row's count. Discover's shelf, Updates'
-// rows and Installed's switch come with later MK-4 parts.
+// (MK-4c), Updates carrying the Me row's count, and (MK-4c2a) a plugin's
+// switches. Discover's shelf, Updates' rows and a plugin's settings come with
+// later MK-4 parts.
 
 export function PluginsSection(): ReactElement {
   return (
@@ -78,6 +79,27 @@ export function PluginsSection(): ReactElement {
       </Specimen>
       <Specimen title="Updates, carrying its count" source="frame/plugins/PluginsView.tsx" bleed>
         <PluginsPlate state="count" />
+      </Specimen>
+      <Specimen
+        title="A plugin's switches — its one switch and its powers', one taken back, one it can't have"
+        source="frame/plugins/PluginsView.tsx · frame/plugins/plugins-model.ts"
+        bleed
+      >
+        <PluginsPlate state="switches" />
+      </Specimen>
+      <Specimen
+        title="A plugin in development, turned off — its powers wait for it"
+        source="frame/plugins/plugins-model.ts"
+        bleed
+      >
+        <PluginsPlate state="switches-off" />
+      </Specimen>
+      <Specimen
+        title="A plugin's switches while VibeField's plugins don't answer"
+        source="frame/plugins/Plugins.tsx"
+        bleed
+      >
+        <PluginsPlate state="switches-away" />
       </Specimen>
     </Section>
   );

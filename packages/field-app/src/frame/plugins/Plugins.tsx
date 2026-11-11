@@ -1,5 +1,5 @@
 import type { FrameView, PluginRegistrySnapshot, PluginsCatalog } from "@vibefield/contracts";
-import { useFielddClient } from "@vibefield/fieldd-client/react";
+import { useFielddClient, useFielddStatus } from "@vibefield/fieldd-client/react";
 import {
   type KeyboardEvent,
   type ReactElement,
@@ -29,7 +29,12 @@ import {
   type PluginsTab,
   pluginPage,
   pluginsLayout,
+  powerSwitchOf,
+  type Refusal,
+  refusalStale,
   shelfState,
+  switchable,
+  switchKey,
   walkHot,
 } from "./plugins-model";
 import { type PluginsPort, pluginsPortOver } from "./plugins-port";
@@ -46,7 +51,14 @@ import { type PluginsPort, pluginsPortOver } from "./plugins-port";
 // plugin's page, read only, from that snapshot and the list this popup already
 // read — no page asks fieldd anything — and ↑ ↓ walk its hot row, kept in
 // sight, ↵ opening its page; Esc goes back from a page before it folds the
-// popup; Updates carries the Me row's count. Installed's switch is MK-4c2's.
+// popup; Updates carries the Me row's count. MK-4c2a: a Built in or
+// Development plugin's one switch, on its row and its page, and its powers'
+// switches (§8 "Its switches"), each a request Settings → Plugins sends today.
+// A switch moves only when fieldd's next snapshot does; while its request is
+// out it takes no press (a second press sends nothing), a refusal is said in
+// §9's words (never the error's text) until a press or fieldd's snapshot shows
+// the switch the way it was turning, and while fieldd isn't answering no switch
+// takes a press. Every other plugin's page reads only (item 321).
 // Its doors (MK-4b) are the Me menu's Plugins… row and the palette's Plugins…
 // and Check plugins for updates, each through ChromeLayer's `openPlugins`; the
 // pegboard's pill is MK-4d's. The catalog mounts this controller over a
@@ -85,6 +97,8 @@ export interface PluginsProps {
   onMac?: boolean;
   /** A plugin whose page each opening starts on, from Installed (a plate's; the product passes none). */
   initialPage?: string | null;
+  /** fieldd isn't answering this window (MK-4c2a): no switch takes a press. A plate passes a fixture's. */
+  away?: boolean;
   now?: () => number;
 }
 
@@ -111,6 +125,7 @@ export function Plugins({
   updates = null,
   onMac = false,
   initialPage = null,
+  away = false,
   now = Date.now,
 }: PluginsProps): ReactElement | null {
   const open = surface === "plugins";
@@ -121,6 +136,12 @@ export function Plugins({
   const [box, setBox] = useState(() => boxOf(container));
   const [page, setPage] = useState<OpenPage | null>(() => pageAt(initialPage));
   const [hot, setHot] = useState(0);
+  // the switches whose request is out, and those fieldd refused, by key (with
+  // whose each is and the way it was turning); the set is also kept in a ref, so
+  // a second press before React renders still sends nothing
+  const underRef = useRef(new Set<string>());
+  const [under, setUnder] = useState<ReadonlySet<string>>(() => new Set());
+  const [refused, setRefused] = useState<ReadonlyMap<string, Refusal>>(() => new Map());
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const returnFocus = useRef<Element | null>(null);
@@ -146,6 +167,7 @@ export function Plugins({
       setQuery("");
       setPage(pageAt(initialPage));
       setHot(0);
+      setRefused(new Map());
       // the last opening's "neither door answered" is not this one's: it says
       // the read until this one's doors answer (a held list stays, shown at once)
       setRead((was) => (was.kind === "away" ? { kind: "asking" } : was));
@@ -275,6 +297,71 @@ export function Plugins({
       : pluginPage(record, catalog, snapshot, onMac);
   }, [page, snapshot, catalog, onMac]);
 
+  // A switch's one request (§8 "Its switches"): none while fieldd isn't
+  // answering or while its last is out; a refusal is kept to say it, and the
+  // switch itself moves only on fieldd's next snapshot (the P5 law).
+  const run = useCallback(
+    (key: string, refusal: Refusal, ask: () => Promise<void>) => {
+      if (away || underRef.current.has(key)) return;
+      underRef.current.add(key);
+      setUnder(new Set(underRef.current));
+      setRefused((was) => {
+        if (!was.has(key)) return was;
+        const next = new Map(was);
+        next.delete(key);
+        return next;
+      });
+      ask()
+        .then(
+          () => undefined,
+          () => setRefused((was) => new Map(was).set(key, refusal)),
+        )
+        .finally(() => {
+          underRef.current.delete(key);
+          setUnder(new Set(underRef.current));
+        });
+    },
+    [away],
+  );
+  const recordOf = useCallback(
+    (id: string) => snapshot?.plugins.find((plugin) => plugin.id === id),
+    [snapshot],
+  );
+  const onTurn = useCallback(
+    (id: string, on: boolean) => {
+      const record = recordOf(id);
+      if (record === undefined || !switchable(record)) return;
+      run(switchKey.one(id), { id, capability: null, turningOn: on }, () =>
+        on ? port.enable(id) : port.disable(id),
+      );
+    },
+    [recordOf, run, port],
+  );
+  // a power's switch moves only where the page gives it one that takes a press
+  // (`powerSwitchOf`, the page's own read): a request for any other is refused here
+  const onTurnPower = useCallback(
+    (id: string, capability: string, on: boolean) => {
+      const record = recordOf(id);
+      if (record === undefined || powerSwitchOf(record, capability)?.live !== true) return;
+      run(switchKey.power(id, capability), { id, capability, turningOn: on }, () =>
+        port.grant(id, capability, on),
+      );
+    },
+    [recordOf, run, port],
+  );
+  // a refusal goes once fieldd's snapshot shows its switch the way it was being
+  // turned (§8 "Installed", MK-4c2a's rider)
+  useEffect(() => {
+    if (snapshot === null) return;
+    setRefused((was) => {
+      const stale = [...was].filter(([, refusal]) => refusalStale(refusal, snapshot));
+      if (stale.length === 0) return was;
+      const next = new Map(was);
+      for (const [key] of stale) next.delete(key);
+      return next;
+    });
+  }, [snapshot]);
+
   const showInstalled = useCallback(() => {
     setTab("installed");
     inputRef.current?.focus({ preventScroll: true });
@@ -361,6 +448,11 @@ export function Plugins({
       page={shown}
       pageFrom={page?.from ?? tab}
       updates={updates}
+      away={away}
+      under={under}
+      refused={refused}
+      onTurn={onTurn}
+      onTurnPower={onTurnPower}
       inputRef={inputRef}
       listRef={listRef}
       onQuery={onQuery}
@@ -389,7 +481,9 @@ const takeCount = (catalog: PluginsCatalog): void => takePluginUpdates(catalog.u
  * count and the window says nothing of it. Updates carries that same count
  * (MK-4c, VF-PM's C1), and a page says the Mac's notes on a Mac (`onMac`:
  * ChromeLayer's `getHost().platform === "darwin"`, the read it makes for the
- * Settings shortcut; with no platform named, no Mac note). */
+ * Settings shortcut; with no platform named, no Mac note). MK-4c2a: its
+ * switches take no press while this window's fieldd client isn't ready
+ * (`useFielddStatus()`). */
 export function FramePlugins({
   view,
   surface,
@@ -408,6 +502,7 @@ export function FramePlugins({
   const snapshot = usePluginRegistrySnapshot();
   const godview = useGodviewFindDoor();
   const updates = usePluginUpdates();
+  const away = useFielddStatus() !== "ready";
   useEffect(() => {
     if (!claimWindowAsk()) return;
     port.catalog().then(
@@ -426,6 +521,7 @@ export function FramePlugins({
       onCatalog={takeCount}
       updates={updates}
       onMac={onMac}
+      away={away}
     />
   );
 }

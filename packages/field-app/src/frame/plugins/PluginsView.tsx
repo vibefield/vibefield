@@ -1,4 +1,4 @@
-import { EmptyState, UiPill } from "@vibefield/design-kit";
+import { EmptyState, UiPill, UiSwitch } from "@vibefield/design-kit";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import type { KeyboardEvent, ReactElement, ReactNode, RefObject } from "react";
 import type {
@@ -7,9 +7,10 @@ import type {
   PluginPage,
   PluginsLayout,
   PluginsTab,
+  Refusal,
   ShelfState,
 } from "./plugins-model";
-import { PLUGINS_TABS } from "./plugins-model";
+import { PLUGINS_TABS, switchKey } from "./plugins-model";
 import {
   NO_REGISTRY,
   noMatchWords,
@@ -23,6 +24,7 @@ import {
   READING,
   READING_YOURS,
   SOURCE_WORDS,
+  SWITCH_WORDS,
 } from "./plugins-words";
 import "./plugins.css";
 
@@ -35,7 +37,11 @@ import "./plugins.css";
 // owns the read, the tab, the page, the hot row and the keyboard. MK-4c: each
 // of Installed's rows is a press that opens its page (the field keeps ↑ ↓ ↵, as
 // the Peek's does, so a row is no stop of Tab), a plugin's page reads only, and
-// Updates carries the Me row's count.
+// Updates carries the Me row's count. MK-4c2a: a Built in or Development
+// plugin's one switch stands on its row, beside the row's press and never inside
+// it, with a stop of Tab of its own, and again on its page beside "Installed";
+// its powers' switches stand at their lines' ends. Each switch is the kit's,
+// named by what it turns and never by its state.
 
 export interface PluginsViewProps {
   open: boolean;
@@ -55,6 +61,14 @@ export interface PluginsViewProps {
   pageFrom: PluginsTab;
   /** Updates' count, the Me row's (null or 0: none) */
   updates: number | null;
+  /** fieldd isn't answering: no switch takes a press */
+  away: boolean;
+  /** the switches whose request is out, by key */
+  under: ReadonlySet<string>;
+  /** the switches fieldd refused, by key, with the way each was turning */
+  refused: ReadonlyMap<string, Refusal>;
+  onTurn: (id: string, on: boolean) => void;
+  onTurnPower: (id: string, capability: string, on: boolean) => void;
   inputRef: RefObject<HTMLInputElement | null>;
   listRef: RefObject<HTMLUListElement | null>;
   onQuery: (query: string) => void;
@@ -97,41 +111,78 @@ function InstalledList({
   rows,
   hot,
   listRef,
+  away,
+  under,
+  refused,
   onOpen,
+  onTurn,
 }: {
   rows: readonly InstalledRow[];
   hot: number;
   listRef: RefObject<HTMLUListElement | null>;
+  away: boolean;
+  under: ReadonlySet<string>;
+  refused: ReadonlyMap<string, Refusal>;
   onOpen: (id: string) => void;
+  onTurn: (id: string, on: boolean) => void;
 }): ReactElement {
   return (
     <ul ref={listRef} className="vf-plugins-list" aria-label={PLUGINS_TAB_WORDS.installed}>
-      {rows.map((row, index) => (
-        <li key={row.id}>
-          <button
-            type="button"
-            tabIndex={-1}
-            className="vf-plugins-row"
+      {rows.map((row, index) => {
+        const turning = refused.get(switchKey.one(row.id))?.turningOn;
+        return (
+          <li
+            key={row.id}
+            className="vf-plugins-item"
             data-hot={index === hot ? "true" : undefined}
-            onClick={() => onOpen(row.id)}
+            data-switch={row.onOff !== null ? "true" : undefined}
           >
-            <span className="vf-plugins-slot" aria-hidden="true">
-              <FieldGlyph name="plugin" size={16} />
-            </span>
-            <span className="vf-plugins-row-text">
-              <span className="vf-plugins-row-head">
-                <span className="vf-plugins-title">{row.title}</span>
-                <UiPill className="vf-plugins-source">{row.source}</UiPill>
-                {row.community && (
-                  <UiPill className="vf-plugins-source">{SOURCE_WORDS.community}</UiPill>
+            <button
+              type="button"
+              tabIndex={-1}
+              className="vf-plugins-row"
+              onClick={() => onOpen(row.id)}
+            >
+              <span className="vf-plugins-slot" aria-hidden="true">
+                <FieldGlyph name="plugin" size={16} />
+              </span>
+              <span className="vf-plugins-row-text">
+                <span className="vf-plugins-row-head">
+                  <span className="vf-plugins-title">{row.title}</span>
+                  <UiPill className="vf-plugins-source">{row.source}</UiPill>
+                  {row.community && (
+                    <UiPill className="vf-plugins-source">{SOURCE_WORDS.community}</UiPill>
+                  )}
+                </span>
+                {turning === undefined ? (
+                  <span className="vf-plugins-line">{row.line}</span>
+                ) : (
+                  <span className="vf-plugins-line" data-tone="attention">
+                    {SWITCH_WORDS.refused(turning)}
+                  </span>
                 )}
               </span>
-              <span className="vf-plugins-line">{row.line}</span>
-            </span>
-            <FieldGlyph name="chevron" size={12} className="vf-plugins-chevron" />
-          </button>
-        </li>
-      ))}
+              {/* a row with no switch keeps its chevron in its press, as MK-4c built it */}
+              {row.onOff === null && (
+                <FieldGlyph name="chevron" size={12} className="vf-plugins-chevron" />
+              )}
+            </button>
+            {row.onOff !== null && (
+              <>
+                <UiSwitch
+                  checked={row.onOff}
+                  disabled={away || under.has(switchKey.one(row.id))}
+                  label={row.title}
+                  className="vf-plugins-switch"
+                  onChange={(on) => onTurn(row.id, on)}
+                />
+                {/* the press is its picture, title and line (§8): this chevron is no control */}
+                <FieldGlyph name="chevron" size={12} className="vf-plugins-chevron" />
+              </>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -153,12 +204,23 @@ function PageSection({ head, children }: { head: string; children: ReactNode }):
 function PageView({
   page,
   from,
+  away,
+  under,
+  refused,
   onBack,
+  onTurn,
+  onTurnPower,
 }: {
   page: PluginPage;
   from: PluginsTab;
+  away: boolean;
+  under: ReadonlySet<string>;
+  refused: ReadonlyMap<string, Refusal>;
   onBack: () => void;
+  onTurn: (id: string, on: boolean) => void;
+  onTurnPower: (id: string, capability: string, on: boolean) => void;
 }): ReactElement {
+  const turning = refused.get(switchKey.one(page.id))?.turningOn;
   return (
     <div className="vf-plugins-page">
       <button
@@ -197,25 +259,68 @@ function PageView({
                 </span>
               </div>
             </div>
-            {/* where its act will stand: words, not a control (VF-PM 13:56:27Z, 4) */}
-            <p className="vf-plugins-page-act">{PAGE_WORDS.installed}</p>
+            <div className="vf-plugins-page-act-row">
+              {/* where its act will stand: words, not a control (VF-PM 13:56:27Z, 4) */}
+              <p className="vf-plugins-page-act">{PAGE_WORDS.installed}</p>
+              {page.onOff !== null && (
+                <UiSwitch
+                  checked={page.onOff}
+                  disabled={away || under.has(switchKey.one(page.id))}
+                  label={page.title}
+                  className="vf-plugins-switch"
+                  onChange={(on) => onTurn(page.id, on)}
+                />
+              )}
+            </div>
+            {turning !== undefined && (
+              <p className="vf-plugins-page-refused">{SWITCH_WORDS.refused(turning)}</p>
+            )}
+            {away && (page.onOff !== null || page.powersLive) && (
+              <p className="vf-plugins-page-note">{PLUGINS_AWAY}</p>
+            )}
+            {page.readOnly !== null && <p className="vf-plugins-page-note">{page.readOnly}</p>}
+            {page.elsewhere !== null && <p className="vf-plugins-page-note">{page.elsewhere}</p>}
           </div>
           <PageSection head={PAGE_WORDS.can}>
+            {page.offLine !== null && <p className="vf-plugins-page-under">{page.offLine}</p>}
             {page.nothing !== null ? (
               <p className="vf-plugins-page-lines">{page.nothing}</p>
             ) : (
               <ul className="vf-plugins-page-lines">
-                {page.powers.map((power) => (
-                  <li key={power.key}>
-                    {power.words}
-                    {power.under !== null && (
-                      <span className="vf-plugins-page-under">{power.under}</span>
-                    )}
-                    {power.whose !== null && (
-                      <span className="vf-plugins-page-under">{power.whose}</span>
-                    )}
-                  </li>
-                ))}
+                {page.powers.map((power) => {
+                  const key = switchKey.power(page.id, power.key);
+                  const powerTurning = refused.get(key)?.turningOn;
+                  return (
+                    <li key={power.key} className="vf-plugins-power">
+                      <span className="vf-plugins-power-text">
+                        {power.words}
+                        {power.under !== null && (
+                          <span className="vf-plugins-page-under">{power.under}</span>
+                        )}
+                        {power.whose !== null && (
+                          <span className="vf-plugins-page-under">{power.whose}</span>
+                        )}
+                        {power.cant !== null && (
+                          <span className="vf-plugins-page-under">{power.cant}</span>
+                        )}
+                        {powerTurning !== undefined && (
+                          <span className="vf-plugins-page-refused">
+                            {SWITCH_WORDS.refused(powerTurning)}
+                          </span>
+                        )}
+                      </span>
+                      {power.switch !== null && (
+                        <UiSwitch
+                          checked={power.switch}
+                          disabled={away || !page.powersLive || under.has(key)}
+                          label={power.words}
+                          className="vf-plugins-switch"
+                          onChange={(on) => onTurnPower(page.id, power.key, on)}
+                        />
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </PageSection>
@@ -235,18 +340,37 @@ function PageView({
 
 export function PluginsView(props: PluginsViewProps): ReactElement {
   const { open, layout, tab, query, shelf, foot, installed, installedFoot, inputRef } = props;
-  const { hot, page, pageFrom, updates, listRef } = props;
+  const { hot, page, pageFrom, updates, listRef, away, under, refused } = props;
   const { onQuery, onTab, onClose, onShowInstalled, onOpenPage, onBack, onKeyDown } = props;
+  const { onTurn, onTurnPower } = props;
   const body =
     page !== null ? (
-      <PageView page={page} from={pageFrom} onBack={onBack} />
+      <PageView
+        page={page}
+        from={pageFrom}
+        away={away}
+        under={under}
+        refused={refused}
+        onBack={onBack}
+        onTurn={onTurn}
+        onTurnPower={onTurnPower}
+      />
     ) : tab === "installed" ? (
       installed === null ? (
         <State title={READING_YOURS} />
       ) : installed.length === 0 && query.trim() !== "" ? (
         <State title={noMatchWords(query)} />
       ) : (
-        <InstalledList rows={installed} hot={hot} listRef={listRef} onOpen={onOpenPage} />
+        <InstalledList
+          rows={installed}
+          hot={hot}
+          listRef={listRef}
+          away={away}
+          under={under}
+          refused={refused}
+          onOpen={onOpenPage}
+          onTurn={onTurn}
+        />
       )
     ) : (
       shelfBody(tab, shelf)

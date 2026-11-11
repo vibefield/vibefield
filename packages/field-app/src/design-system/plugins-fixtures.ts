@@ -6,7 +6,10 @@ import type { PluginsPort } from "../frame/plugins/plugins-port";
 // what the frame supplies — a port answering the two doors as a fieldd would
 // in each state of the read, and the plugins a desktop has. Every value is
 // parsed by the contracts at load, so a fixture that drifts from the wire
-// fails here, never on screen. No fieldd, no network, no child.
+// fails here, never on screen. MK-4c2a: the port also answers a plugin's
+// switches — at once, with a refusal, or never — and moves nothing itself, as
+// fieldd's answer moves nothing: the snapshot a plate or a test hands next
+// does. No fieldd, no network, no child.
 
 /** The clock every plate reads: twelve minutes after its list was read. */
 export const PLUGINS_FIXTURE_READ_AT = 1762823100000;
@@ -97,17 +100,37 @@ export interface PluginsFixtureRead {
   readonly refresh: PluginsCatalog | "fails" | "pending";
 }
 
-export function pluginsFixturePort(read: PluginsFixtureRead): PluginsPort {
+/** How a plate's fixture port answers a switch (MK-4c2a): at once, with a
+ * refusal, or never (the switch stays under way). */
+export type PluginsFixtureActs = "answers" | "refuses" | "pending";
+
+/** The text a fixture's refusal carries: a page never says it (§8 "Its
+ * switches": a refusal is said in §9's words, never the error's own text). */
+export const PLUGINS_FIXTURE_REFUSAL = "fixture refusal: PLUGIN_STATE_CONFLICT at registry row 7";
+
+export function pluginsFixturePort(
+  read: PluginsFixtureRead,
+  acts: PluginsFixtureActs = "answers",
+): PluginsPort {
   const answer = (value: PluginsCatalog | "fails"): Promise<PluginsCatalog> =>
     value === "fails"
       ? Promise.reject(new Error("the fixture's door does not answer"))
       : Promise.resolve(value);
+  const act = (): Promise<void> =>
+    acts === "answers"
+      ? Promise.resolve()
+      : acts === "refuses"
+        ? Promise.reject(new Error(PLUGINS_FIXTURE_REFUSAL))
+        : new Promise<void>(() => undefined);
   return {
     catalog: () => answer(read.catalog),
     refresh: () =>
       read.refresh === "pending"
         ? new Promise<PluginsCatalog>(() => undefined)
         : answer(read.refresh),
+    enable: act,
+    disable: act,
+    grant: act,
   };
 }
 
@@ -135,6 +158,10 @@ function record(fields: {
   service?: "none" | "active";
   /** the powers it holds (MK-4c's page plates) */
   granted?: readonly string[];
+  /** the powers fieldd denies it, and why (MK-4c2a's switch plates) */
+  denied?: readonly { capability: string; reason: string }[];
+  /** the powers it asked for, when not every one it holds and every one denied (an off plugin holds none) */
+  requested?: readonly string[];
   /** powers of its own it declares */
   declares?: readonly Record<string, unknown>[];
   /** tools for your agents it brings */
@@ -144,6 +171,7 @@ function record(fields: {
 }): Record<string, unknown> {
   const enabled = fields.enabled ?? true;
   const granted = fields.granted ?? [];
+  const denied = fields.denied ?? [];
   return {
     id: fields.id,
     version: fields.version,
@@ -155,8 +183,9 @@ function record(fields: {
     state: enabled ? "enabled" : "disabled",
     compatible: true,
     enabled,
-    requestedCapabilities: granted,
+    requestedCapabilities: fields.requested ?? [...granted, ...denied.map((d) => d.capability)],
     grantedCapabilities: granted,
+    deniedCapabilities: denied,
     contributions: {
       objects: fields.objects ?? [],
       commands: [],
@@ -250,6 +279,59 @@ export const PLUGINS_FIXTURE_LISTED_SNAPSHOT = PluginRegistrySnapshot.parse({
         publisher: "acme",
         publisherName: "Someone Else",
       },
+    }),
+  ],
+});
+
+/** The same desktop as its powers' switches show it (MK-4c2a's switch plates):
+ * Simulators, on, holds two powers, had one taken back, and asked for one its
+ * kind of plugin can't have; Desk clock, in development and off, asked for two,
+ * one taken back. Each record says what fieldd's would: an off plugin holds no
+ * power, and every power it asked for is held or denied. */
+export const PLUGINS_FIXTURE_SWITCHES_SNAPSHOT = PluginRegistrySnapshot.parse({
+  generation: 3,
+  problems: [],
+  plugins: [
+    record({
+      id: "vibefield.simulator",
+      title: "Simulators",
+      version: "1.2.0",
+      source: "bundled",
+      objects: [
+        object("Phone", "SimPhone"),
+        object("Tablet", "SimTablet"),
+        object("Watch", "SimWatch", "Apple Watch"),
+      ],
+      granted: ["surface.capture", "canvas.read"],
+      denied: [
+        { capability: "canvas.write", reason: "revoked" },
+        { capability: "process.spawn", reason: "entry-kind" },
+      ],
+      requested: ["surface.capture", "canvas.read", "canvas.write", "process.spawn"],
+    }),
+    record({
+      id: "vibefield.comment-pad",
+      title: "Comment pad",
+      version: "0.1.0",
+      source: "bundled",
+      objects: [object("Comment pad", "commentPad")],
+    }),
+    record({
+      id: "example.desk-clock",
+      title: "Desk clock",
+      version: "0.3.0",
+      source: "dev-linked",
+      enabled: false,
+      objects: [object("Clock", "DeskClock")],
+      denied: [{ capability: "net.outbound", reason: "revoked" }],
+      requested: ["canvas.read", "net.outbound"],
+    }),
+    record({
+      id: "example.kv-service",
+      title: "Key-value store",
+      version: "0.2.0",
+      source: "sideload",
+      service: "active",
     }),
   ],
 });

@@ -217,7 +217,12 @@
    14/600, the source pill 8 after it, and the one line at 12/400 in tertiary
    ink (§8 "Installed", drawn 2026-11-11, ‹draft›). MK-4c: each row is a press
    that opens its page, the hot row and the pointer's in the ready fill, and the
-   `chevron` 12 in tertiary ink at its end, 12 after its text ── */
+   `chevron` 12 in tertiary ink at its end, 12 after its text. MK-4c2a: a Built
+   in or Development plugin's row carries its one switch, the kit's, 12 after its
+   text and 12 before its chevron, beside the press and never inside it; the
+   ready fill is the row's, under the press, the switch and the chevron alike.
+   A row with no switch keeps its chevron inside its press (VF-PM 19:05:12Z, 2):
+   the press then runs to the row's end ── */
 .vf-plugins-list {
   display: grid;
   align-content: start;
@@ -227,10 +232,25 @@
   list-style: none;
 }
 
+.vf-plugins-item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  border-radius: 14px;
+}
+
+.vf-plugins-item:hover,
+.vf-plugins-item[data-hot="true"] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+/* the row's press: its picture, its title and its line (and, on a row with no
+   switch, its chevron) */
 .vf-plugins-row {
   display: flex;
-  width: 100%;
   min-width: 0;
+  flex: 1;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
@@ -243,14 +263,26 @@
   cursor: pointer;
 }
 
-.vf-plugins-row:hover,
-.vf-plugins-row[data-hot="true"] {
-  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+.vf-plugins-switch {
+  flex: none;
 }
 
 .vf-plugins-chevron {
   flex: none;
   color: var(--vf-text-tertiary);
+}
+
+/* a row with a switch: the press ends at its text, the switch 12 after it, and
+   the chevron 12 after the switch, saying where the press goes and no control
+   of its own; the row ends 12 after it */
+.vf-plugins-item[data-switch="true"] > .vf-plugins-row {
+  padding-right: 0;
+  border-radius: 14px 0 0 14px;
+}
+
+.vf-plugins-item > .vf-plugins-chevron {
+  margin-right: 12px;
+  pointer-events: none;
 }
 
 .vf-plugins-slot {
@@ -302,6 +334,11 @@
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* a switch fieldd refused to move: its line says so, in the attention ink (§2.5) */
+.vf-plugins-line[data-tone="attention"] {
+  color: var(--vf-ink-attention);
 }
 
 /* ── a plugin's page, read only (MK-4c; §8 "Read only first", drawn 2026-11-11,
@@ -396,6 +433,30 @@
   gap: 8px;
 }
 
+/* MK-4c2a (§8 "Its switches"): the one switch 12 after "Installed", centred
+   on its 32; under them, 12 apart, a refusal in the attention ink, the away
+   sentence, and the read-only or other-desktops line, each at 12/400 in
+   tertiary ink (§2's Body under-note) */
+.vf-plugins-page-act-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vf-plugins-page-note,
+.vf-plugins-page-refused {
+  display: block;
+  margin: 0;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.vf-plugins-page-refused {
+  color: var(--vf-ink-attention);
+}
+
 /* words, not a control: no fill, no pointer, no focus */
 .vf-plugins-page-act {
   display: flex;
@@ -440,6 +501,18 @@
   font-size: 12px;
   font-weight: 400;
   line-height: 1.45;
+}
+
+/* MK-4c2a: a power's line, its switch at its end 12 after its words */
+.vf-plugins-power {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.vf-plugins-power-text {
+  min-width: 0;
+  flex: 1;
 }
 
 @container (max-width: 719px) {
