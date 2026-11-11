@@ -1374,7 +1374,8 @@ into the fields explorer as every other morph does — 600ms on the island curve
 row staying its head — and the 560ms `cubic-bezier(0.32, 0.72, 0, 1)` it alone carried is gone. The
 head's menus grow from their control on the island curve in 240ms (the zoom's from the readout, the
 palette from the head); the zoom's folds at once, as @'s list does (Chat's composer, §8), and the palette fades out over
-200ms `ease`. Reduced motion fades them in over 120ms at full size.
+200ms `ease`, taking no pointer as it goes (*amended 2026-11-11, item 318*). Reduced motion fades them in
+over 120ms at full size.
 
 **The pill's sheet, on two shelves (PL-D1, PL-D2; built at HN-8).** The explorer is the pill's
 sheet now, and it grows as it did: 600ms on the island curve from the pill — or, under a cover,
