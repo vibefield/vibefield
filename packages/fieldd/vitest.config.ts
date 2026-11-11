@@ -31,11 +31,23 @@ import { defineConfig } from "vitest/config";
 // project-library, workspace-engine, audit-retention), each normally under
 // 0.6 s. 30 s is the ceiling a stall gets; a row whose product has a real
 // bound asserts that bound in its own words, never through this number.
+//
+// Item 317 (2026-11-11): HISTFILE=/dev/null in every worker's process.env (vitest sets it
+// before a file's tests run; the global setup, which only builds, does not get it). These
+// suites birth real `/bin/sh` panes on real PTYs through floors that inherit this process's
+// environment (`...process.env` at each spawn), under the runner's own HOME. macOS's sh is
+// bash, and an interactive bash that took a line saves its history when its PTY goes: 14 of
+// run 294's 16 rewrites of the runner's ~/.bash_history in one `pnpm verify` came from these
+// suites (vf-m2; the other two from field-native's tp_activation, which sets its own). The
+// variable rides the same inherit road HOME does (kill-matrix row 6 reads it in a real pane).
+// A floor on a throwaway HOME drops it (`personEnvironment`), and its shells keep their
+// history inside the box.
 export default defineConfig({
   test: {
     fileParallelism: !process.env["CI"] && process.platform !== "win32",
     globalSetup: ["./test/global-setup.ts"],
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    env: { HISTFILE: "/dev/null" },
   },
 });

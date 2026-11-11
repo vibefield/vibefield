@@ -61,6 +61,9 @@ fn text_engine() -> Arc<Mutex<TextEngine>> {
 
 /// A real session: `/bin/sh` reading a script from its PTY, so the test can
 /// make it PRINT by writing to the PTY. Unix only (WIN-6 rows are the box's).
+/// HISTFILE is /dev/null (item 317): macOS's sh is bash, it is interactive here and the rows
+/// type into it; given no HOME it takes the runner's from the password file, and it would
+/// save its history there when the PTY goes.
 fn spawn_session(source: &DirectSessions) -> Arc<Session> {
     let hub = FrameHub::new(64);
     let session = Session::spawn(
@@ -75,6 +78,7 @@ fn spawn_session(source: &DirectSessions) -> Arc<Session> {
                     ("PATH".into(), "/usr/bin:/bin".into()),
                     ("PS1".into(), "$ ".into()),
                     ("TERM".into(), "xterm".into()),
+                    ("HISTFILE".into(), "/dev/null".into()),
                 ]),
             }),
             cols: 80,
