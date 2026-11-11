@@ -4907,9 +4907,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   not set up yet arrives in Setup, and the face lands on pane 2's. **Refused.** Main's refusal
   plays the leaving backwards — the face goes back to its row, the ground falls, the blur
   lifts, the stage comes forward — and the refusal is said where it always is (the Me menu,
-  the Settings head, the Account page, the chooser). **New user…** leaves the same way to the
-  plain splash, the wordmark and no face, because that is exactly how a new user's window
-  begins. Nothing here is theater: no spinner, and the bar moves on real progress only.
+  the Settings head, the Account page, the chooser). A press made while VibeField quits is
+  ignored: nothing leaves and nothing is said, and a switch already leaving when the quit goes
+  ahead comes back without a word (§9 "The quit's words"; *amended 2026-11-10, item 315*).
+  **New user…** leaves the same way to the plain splash, the wordmark and no face, because that
+  is exactly how a new user's window begins. Nothing here is theater: no spinner, and the bar
+  moves on real progress only.
   Reduced motion (M6): no travel, blur or recede — the face and the words fade in place
   (120ms), the ground rises in 180ms and falls in 120ms.
 - **Empty / degraded states**: a state is rendered, never blank space — the kit's `EmptyState`
@@ -8257,14 +8260,14 @@ Every place that says what a terminal's life is says those two facts, and no pla
 - **While the quit box is up** (*added 2026-11-10, item 290; James ruled D2 "yes" and D4's words at 06:49Z*), the
   status item's **Switch User** and **Try Again** do nothing (on macOS they keep their look, as a status item's
   top-level rows do; elsewhere they are dimmed), and the people under **Switch User** and its **New User…** are
-  dimmed. No new words. A switch or a new user asked for anyway while VibeField quits is refused in one sentence, the
-  reason kept for the log: the Me menu says "Couldn't switch to Lee — VibeField is quitting." or "Couldn't add a user —
-  VibeField is quitting.", the Settings head says the first of them, the chooser says "Couldn't open Lee's field —
-  VibeField is quitting.", and Settings → Account says "VibeField is quitting" (*corrected 2026-11-10, item 314: this
-  named the Me menu and Settings → Account alone, though a refused switch is said wherever §8's "The switch" says a
-  refusal is: the Me menu, the Settings head, the Account page, the chooser*). Settings → Devices' **New user…**
-  pressed while VibeField quits: James ruled at 2026-11-10 19:13:21Z, "it should not do anything, ignore the press".
-  *Not built at this tip: item 315 (2026-11-10)*: today the press plays the leaving and its return and says nothing.
+  dimmed. No new words. **Once the quit goes ahead**, a switch or a new user pressed in the window does nothing and
+  says nothing: the Me menu, the Settings head, Settings → Account, the chooser and Settings → Devices' **New user…**
+  ignore the press, and the window stays still. A switch already leaving when the quit goes ahead comes back and says
+  nothing. The press goes to the log alone. (*James, 2026-11-10: "it should not do anything, ignore the press" at
+  19:13:21Z, of Settings → Devices; and "2. C" at 21:32Z, of the other four, answering item 315's question, whose (c)
+  was "Do nothing and say nothing, like New user… in Settings → Devices." Amended at its source, item 315: from item 290
+  the four said "Couldn't switch to Lee — VibeField is quitting." and its kin, named at every door by item 314, and
+  Settings → Devices played the leaving and its return.*)
 - **The unknown box**, when a pair's sessions can't be read, says that nothing it can't name will end: "VibeField
   couldn't check for running sessions" · "It ends no session it can't name, so quitting now leaves the terminal service
   running. Open VibeField again and quit to stop it." · **Cancel** · **Quit and leave it running**.
