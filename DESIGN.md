@@ -8838,6 +8838,9 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   "Offline · no plugin list yet"; with a list held before Discover's shelf is built (a state no build reaches today),
   they say "‹n› plugins, ‹n› objects". The popup is named "Plugins" to assistive tech, and its close "Close", as the
   Peek's are.
+  *Corrected 2026-11-11 (MK-4a; VF-PM 11:52:03Z): the close's word above is wrong. The Peek's close says "Close
+  search" (`frame/PeekView.tsx`) and Settings' "Close settings" (`panels/SettingsDialog.tsx`), so this one says
+  "Close plugins" ‹draft›, MK's, for James's eye. "Plugins" holds, as the Peek's popup is named "Search".*
 - **Community plugins** (MK-D6; MK-E3). Discover's last tile is **Community plugins**, with its switch, over "‹n›
   plugins by other people. VibeField checks each one before it's listed." ‹draft› (the page's "The registry
   reviews…", less the insides; the line MK's lean softened, which James took 2026-11-11 06:48:31Z; it claims the
