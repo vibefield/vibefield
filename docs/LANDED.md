@@ -46822,8 +46822,144 @@ box's proceed is not measured.
 
 **Owed.**
 - Item 315, waiting on James's answer for the five doors that speak (its plan's §4, put to him by VF-PM after
-  19:45:53Z).
+  19:45:53Z). *Closed 2026-11-11: James answered "2. C" at 21:32Z, and item 315 landed as M282 (LANDED "Item
+  315").*
 - The window rows at this main, before any push.
 - The Mac witness of a refused switch during a real quit.
+
+**Not done, and not claimed:** no row drove a real quit with a press in it, and nothing is pushed.
+
+## Item 315 — a switch or a new user pressed while VibeField quits does nothing and says nothing (M282)
+
+(2026-11-11; three commits, `4636f1f0e`, `d32f8408e` and `e464eb5cc`, on main `7d44b7997`, cut by the RV lead (track
+RV) in `lanes/fg2/vibe-field` and landed by the fixer at 00:58:37Z (main's reflog; the fixer's LANDED_AT 00:58:38Z) by
+fast-forward as M282. Validated by run 296, a9, vf-m2; the packet is `lanes/rv/packets/315/`, the transport
+`lanes/rv/packets/315-m2/`.) It builds James's two words, as DESIGN.md §9 quotes them (`DESIGN.md:8266-8268`): "it
+should not do anything, ignore the press" at 2026-11-10 19:13:21Z, of Settings → Devices' New user…; and "2. C" at
+21:32Z, of the Me menu, the Settings head, Settings → Account and the chooser, answering item 315's question, whose (c)
+was "Do nothing and say nothing, like New user… in Settings → Devices."
+
+**What landed.**
+- The doc (`4636f1f0e`, 14/11 DESIGN.md), amended at its source and dated:
+  - §9's "While the quit box is up" (`DESIGN.md:8260-8270`): once the quit goes ahead, the five doors ignore the press
+    and the window stays still; a switch already leaving comes back and says nothing; the press goes to the log alone.
+    It quotes James's two words and says what the four said from item 290 on. Item 314's mark "*Not built at this
+    tip*" goes.
+  - §8's "The switch", its **Refused.** (`DESIGN.md:4910-4912`), points at §9 in one sentence.
+- The red (`d32f8408e`): thirteen rows red at their own assertions, two guards green on arrival, stubs marked RED in
+  five source files (`shell.ts`, `quit-latch.ts`, `desktop-state.ts`, `switch.ts`, `SwitchScene.tsx`).
+  - contracts `shell.test.ts`: `quitting` rides the desktop state as one boolean, absent from an older shell.
+  - electron-shell: the latch tells of its hold and its release, once each, never of a refusal (`quit-latch.test.ts`);
+    the preload's desktop-state bridge fans out, and a reader that throws is reported while the others still run
+    (`preload-desktop-state.test.ts`).
+  - field-app: `leaveFor` refuses before leaving; a switch already leaving comes back and its refusal is the quit's,
+    logging main's own cause; one log line per ignored press (`switch.test.ts`); the switch's layer reads the quit
+    (`switch-layer-quit.test.tsx`, new); one row per door, Settings → Devices with a switch stage registered.
+- The green (`e464eb5cc`):
+  - contracts: `DesktopShellState.quitting: z.boolean().optional()` (`shell.ts`). It is in no generated file.
+  - main: `QuitLatchOptions.onHeld`, true at `hold()` and false at `release()` (`quit-latch.ts:50`, `:54`).
+    `index.ts` wires it with no rig: `onHeld: () => republishDesktopState?.()` (`:1138`); every publish writes
+    `quitting: quitLatch.held` (`:2450`), the first included; the republish (`:889`, `:2458`, nulled at `:2462`);
+    the quit's hold and release (`:2772`, `:2776`).
+  - preload: the bridge fans out to every reader, and a reader that throws is one log line,
+    `renderer.preload.desktop_state_reader_failed` (`preload/index.ts:145-185`). Before, a throwing reader threw out
+    of the IPC listener.
+  - field-app: `followQuitState` (`switch.ts:114`), read by the switch's layer (`SwitchScene.tsx:347`). `leaveFor`
+    (`:272`) refuses with `QuitHeldRefusal` before anything moves (`:281`), and a refusal from main that comes back
+    once the hold has landed is the quit's too (`:290`, `:313`). The four doors that said a refusal swallow
+    `QuitHeldRefusal`.
+- 23 files, +664 −53. One file added, `switch-layer-quit.test.tsx`.
+
+**What a person sees, by reading.** Nothing was run against Electron.
+- Once VibeField's quit has gone ahead, a person or New user… pressed at any of the five doors does nothing: nothing
+  leaves, main is not asked, and no words are drawn.
+  - The Me menu: `MeMenu.tsx:1141`, `:1157` → `fireAndForget`'s swallow (`:1022`).
+  - The Settings head: `SettingsPanel.tsx:226` → `:233`.
+  - The Account page: `UserSwitcher.tsx:124`, `:162` → `:85`.
+  - The chooser: `UsersPane.tsx:78` → `:85`.
+  - Settings → Devices' New user…: `DevicesSection.tsx:855`, which already swallowed every refusal; `leaveFor` now
+    keeps the window still.
+- A switch that had already left when the quit went ahead comes back as any refusal does (DESIGN.md §8 "The switch")
+  and says nothing.
+- The press goes to the renderer's log, one line, `renderer.switch.ignored_while_quitting`, with `what` ("switch", or
+  "new-user" for a leaving with no person) and, when main was already asked, main's own `cause`, bounded to 512.
+- The status item's rows are unchanged (item 290): a refusal there goes to the log alone (`tray-controller.ts:501-502`
+  → `index.ts:2888`, `desktop.tray.operation_failed`).
+- **The list is closed by `git grep -n leaveFor e464eb5cc -- packages plugins ':!*.test.*' ':!*/test/*'`**, whose
+  output is:
+  - `MeMenu.tsx:22` (the import), `:1141`, `:1157`;
+  - `UserSwitcher.tsx:3`, `:124`, `:162`;
+  - `UsersPane.tsx:5`, `:78`;
+  - `switch.ts:272` (`leaveFor` itself);
+  - `DevicesSection.tsx:20`, `:855`;
+  - `SettingsPanel.tsx:21`, `:226`;
+  - fieldd's `drive/pulls.ts:886`, `:1193`, `:1222`, which are `#leaveForeign`, another name.
+
+**Validation of record** (run 296, `lanes/vf-m2/rv315-296-v-a9-results`, SUMS `87ad8cf8f941b49c`, 45 of 45 OK by
+`shasum -c` in the folder at 01:01Z; its README `75420c4c0a62a9df`; runner `9050d5863499dbfb`, with the accept row's
+one rerun OFF, VF-PM's word at 00:37:01Z; launched at 00:45:32Z, the `.done` `ff52362adaac0eda` at 00:52:51Z):
+- **V ran at `e464eb5cc`**, its bundle's prerequisite `7d44b7997`; the tip's tree `766ce031e078` and the three
+  patch-ids equal to the packet's.
+- V: "verify: exit 0 … 5 min 53 s" (00:46:12Z → 00:52:05Z).
+  - Every COUNT row as expected: contracts 1963 (64 files); electron-shell 2846 | 2 skipped (2848; 185 files);
+    field-app 4695 (338 files); fieldd 3832 | 15 skipped (3847); biome 3557, 73 warnings, 21 infos; temp roots 270 of
+    1151; ios 454 and 112.
+  - The file row: 27 packages, 1004 files at the expected, none off, missing, extra or twice, none not predicted;
+    RV's ten moves and the one added file among them.
+  - "The sum over the count lines: 14714 21", run 294's 14699 21 + 15. dev-runner 483 of 483; cargo 37 lines, the
+    set equal to run 294's, `listener_accept_pressure` 1 passed.
+- **Beside V, as run 296 printed them:**
+  - the bundle read: initial 956.7 → 957.4 KB raw (+0.7) and 254.6 → 254.9 KB gz (+0.3); two lazy chunks renamed,
+    `SettingsPanel` 334.7 KB raw at run 294 and 334.8 KB at run 296;
+  - the biome html read, docs/agent-plane's six lines, and the R23 read, its one WARN line, each EQUAL to run 294's;
+  - gen:check reached once, the tree after verify at porcelain 0;
+  - the typecheck read: 28 projects, 0 error lines, electron-shell's two programs and field-app's one;
+  - native provenance: one Compiling line;
+  - item 317: `~/.bash_history` written 14 times inside V (run 294: 16);
+  - births: 301 seen, one KEPT, `/private/tmp/vf-seam-X3uxXk` (born 00:49:39Z, unclassed: VF-PM's);
+  - the 65 kept dirs and the six kept refs unmoved; the new ref `rv/315-run296` → `e464eb5cc`, kept;
+  - the floor: 12,151 MiB free at the end, V's own use 168 MiB.
+- **S carried by tree 244a989b8429 (run 284's S GREEN).** Not run: IOS, K.
+- On the Mac, through RV's door in `lanes/fg2/vibe-field` (the packet's `rows/`, HOLD 6945–7120), each row on its
+  stage's tree, uncommitted on `7d44b7997`:
+  - the red: contracts `Tests 1 failed | 70 passed (71)` and electron-shell `3 failed | 10 passed (13)` at its first
+    cut; field-app `9 failed | 192 passed (201)` and its typecheck, and biome over the red's 15 files, at the red's
+    own tree;
+  - the green: contracts 71; electron-shell 200 (18 files); field-app 361 (16 files); the typecheck scripts of all 25
+    packages whose programs hold a changed file, 0 errors each; biome over the 22 changed files clean; check:walls in
+    form (b) clean, 270 of 1151;
+  - DESIGN.md's 30 Mac readers, each equal to run 294's: field-app's 27 645, sound 23, the simulator 19.
+
+**The cut.**
+- VF-PM read each diff before any row: the doc at 22:28:07Z; the red at 22:37:33Z; the green at 22:53:28Z.
+  - The shape moved before the red: no new IPC channel, which needs draft/'s spec table; the hold rides the desktop
+    state main already publishes, and the preload's bridge fans out (it held ONE reader; a second replaced the first).
+  - VF-PM's rider at 22:53:28Z: main's own cause rides the ignored press's log line on the two paths where main was
+    asked, held by the mid-flight row; accepted as written at 22:59:19Z.
+  - The first green sequence stopped at biome: the red's new file had one 101-column line, and the rider's signature
+    was rewrapped when it fit in 99. Both fixed in biome's printed form, by hand (VF-PM 00:01:03Z), and the rows that
+    read either file ran again, biome over the red's own files first.
+- Committed on `7d44b7997` under the pre-commit hook at 00:21:28Z to 00:21:30Z (`rv/315`'s reflog), on VF-PM's word
+  of 00:20:59Z, by `lanes/rv/i315/commit-315.sh` (`13b9329b25727e5a`), each commit's index set to its tree by
+  `git read-tree` and checked. Each tree is the tree its rows ran on; no carry.
+- The packet of record is `lanes/rv/packets/315` (SUMS `8506a9915a9b68e8`, 113 files; its bundle requires
+  `7d44b7997` alone). The transport is `lanes/rv/packets/315-m2` (SUMS `e6c405f993b3230e`). VF-PM placed run 296
+  ahead of ob/ui at 00:27:32Z.
+
+**Found along the way.**
+- **The preload's desktop-state bridge held one reader**, and a second subscriber silently replaced the first. The
+  chrome was its only reader until 315.
+- **Item 317** rode on run 296: `~/.bash_history` on vf-m2 was written 14 times inside V.
+
+**Owed.**
+- The chooser passes no person for one missing from its roster (`UsersPane.tsx:79`), so that rare press is logged as
+  "new-user": a known wrong label.
+- The cause on the path with no switch stage is held by no row (VF-PM 22:59:19Z: the product always has a stage).
+- Not traced: the order of the desktop state's send against a later invoke's reply. `preload-users.test.ts`'s bridge
+  row keeps a refusal that wins that race free of the class's name.
+- The Mac's file lists did not read design-kit's program, sound's two, test-env's or the root's. V's typecheck stage
+  ran all 28 projects.
+- Nothing was run against Electron: the window's stillness is read from the code and held at the units.
+- The release run in flight at the land (`42923289865`, attempt 2; VF-PM 00:59:46Z): the push waits on James.
 
 **Not done, and not claimed:** no row drove a real quit with a press in it, and nothing is pushed.

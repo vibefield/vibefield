@@ -695,10 +695,10 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   refusal reached the window with the class's name, by reading; item 314 fixed it.
 - Landed 11-10: **item 314** (`07f41fc86` to `8bbc3d504`, M281, run 294; LANDED "Item 314"): the quit's refusal reaches
   the window in James's words alone, with no class name, and DESIGN.md §9 names the Settings head and the chooser.
+- Landed 11-11: **item 315** (`4636f1f0e` to `e464eb5cc`, M282, run 296; LANDED "Item 315"): once VibeField's quit
+  goes ahead, a switch or a new user pressed at any of the window's five doors does nothing and says nothing, as
+  James ruled; the press goes to the log alone.
 - In flight:
-  - item 315, James's ruling of 11-10 19:13:21Z that Settings → Devices' New user… during a quit "should not do
-    anything, ignore the press": plan accepted (shape A, `lanes/rv/plan/item-315-PLAN.md`), waiting on James's
-    answer for the five doors that speak.
   - the sibling lanes, filed by James on 11-06: puppeteer #64 rv/pup-monitor (#84, #81, #9) and #65
     rv/pup-claude-a (#1, #61, #4, #3, #5a, #64, #62, #63) MERGED, #66 rv/pup-views-a (#38, #39, #106, #107, #40,
     #105) open; ghosttea #102 rv/ghosttea (#115, #37 G-A, #92, #113, #94) MERGED. Their releases and the EL8 pins
