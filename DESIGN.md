@@ -5317,13 +5317,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the head of each plugin's settings form, with a right-aligned coverage caption ("covers
   user-scope keys only", "no user-scope keys") and the outcomes "nothing to undo" and "history
   horizon reached".
-  *Drawn 2026-11-11 (MK-4c2b; VF-PM 19:40:52Z, 19:44:12Z), ‹draft›:* the page's pair (§8 "Plugins — the frame's
-  second popup", Its settings) stands on the same history and reaches what Settings' reaches: the last synced change
-  made on this desktop, which may be another plugin's setting or a preference such as Play sounds, since fieldd
-  keeps one history for them all (`fieldd/src/settings-doc.ts`). A page whose plugin keeps no setting in that
-  history has no pair. While its plugin is off, the page's pair takes no press, beside the line that says to turn
-  it on; Settings' pair still does. The page's pair has no keys yet: who owns ⌘Z while the popup is open is not
-  traced.
+  *Drawn 2026-11-11 (MK-4c2b), corrected the same day (James's MK-O6 pick, 22:34:31Z: "No Undo on plugin pages
+  until it is per plugin"), ‹draft›:* a plugin's page in Plugins… has no Undo and no Redo until there is a history
+  for each plugin. Settings' pair reaches a change made on that page, since fieldd keeps one history for them all
+  (`fieldd/src/settings-doc.ts`): the last synced change made on this desktop, which may be another plugin's setting
+  or a preference such as Play sounds. The pair this paragraph first drew on the page left whole.
 - **Settings → Diagnostics' Plugins section** (MK-D10; item 282-6's plugin half, by MK-E12; *added
   2026-11-11*): each plugin's runtime, one block per plugin under its title, drawn as
   `SystemSection` draws its rows (§10's template): its controllers (the service's and each
@@ -6856,15 +6854,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - A Built in plugin's page says, 12 under its act at 12/400 in tertiary ink, that its switches reach your
         other desktops: the install-set carries a Built in plugin's choices, and never a Development one's, so a
         Development plugin's page does not say it.
-    - **Its settings** (*drawn 2026-11-11, MK-4c2b; VF-PM 19:40:52Z, 19:44:12Z*; ‹draft› for James's eye, its words
-      in §9 "The plugins' words"): a Built in or Development plugin's page carries the settings form when the plugin
-      declares a setting. Any other page carries none, and its settings stay in Settings → Plugins until MK-5.
+    - **Its settings** (*drawn 2026-11-11, MK-4c2b; VF-PM 19:40:52Z*; ‹draft› for James's eye, its words in §9 "The
+      plugins' words"; *corrected the same day, James's MK-O6 pick, 22:34:31Z: "No Undo on plugin pages until it is
+      per plugin". The Undo and Redo first drawn here, on Settings' one history, left whole*): a Built in or
+      Development plugin's page carries the settings form when the plugin declares a setting. Any other page carries
+      none, and its settings stay in Settings → Plugins until MK-5.
       - **Where:** **Settings** is a section of the first column, 20 after **What it adds**, its head at 12/600 in
-        secondary ink as the others'. When the plugin declares a setting kept in the synced history, **Undo** and
-        **Redo** stand at the head's end, right-aligned, drawn as Settings' toolbar pair is (§8 "The settings undo
-        affordance": one pill of two buttons, glyph and word, 11px medium in the muted ramp, at 30% when there is
-        nothing to reach). They have no keys yet, and their titles name none. A plugin whose settings are all
-        kept on this desktop alone has no pair (VF-PM 19:40:52Z): nothing of it is on the history.
+        secondary ink as the others'. It has no Undo and no Redo: going back on a change stays in Settings, whose
+        Undo reaches the last synced change made on this desktop, one made on this page included.
       - **Each setting** is a row, the first 6 under the head and the rest 12 apart: its title at 13/400 in primary
         ink and its description under it at 12/400 in tertiary ink, both the plugin's own words, and its control at
         the row's end, 12 after its words. A yes-or-no takes the kit's switch, a choice a menu, words or a number a
@@ -6873,18 +6870,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         unchanged.
       - It shows none of Settings' insides: no mark for where a setting is kept or that it is the default, no
         setting's id, and no **Reset**. Going back to a default stays in Settings → Plugins (MK-4c2's C2).
-      - **The foot**, 12 under the last row at 12/400 in tertiary ink, says which history applies, in §8 "The
-        settings undo affordance"'s two sentences.
-      - **While it is off**, each setting shows its value and takes no input, and the pair takes no press. A line
-        6 under the head, at 12/400 in tertiary ink, says how to change them.
-      - **Under way**, a setting keeps its value and takes no input until fieldd answers, and the pair takes no
-        press while one is out; nothing spins. **Refused**, one line under the setting, or under the head for the
-        pair, at 12/400 in the attention ink (§2.5), says it couldn't, never the error's own text; a secret typed
-        and refused stays in its masked field. **Away**, nothing takes input, and the page says the popup's away
-        sentence (Its switches).
-      - An applied Undo or Redo says its outcome under the head, at 12/400 in tertiary ink, in §8's words, and reads
-        every setting again. Nothing re-reads on its own while the page is open: a change made in Settings or on
-        another desktop shows at the page's next opening.
+      - **The foot**, 12 under the last row at 12/400 in tertiary ink: when a setting is kept in the synced history,
+        that Settings can undo it; otherwise §8 "The settings undo affordance"'s device sentence (its words in §9).
+      - **While it is off**, each setting shows its value and takes no input. A line 6 under the head, at 12/400 in
+        tertiary ink, says how to change them.
+      - **Under way**, a setting keeps its value and takes no input until fieldd answers; nothing spins.
+        **Refused**, one line under the setting, at 12/400 in the attention ink (§2.5), says it couldn't, never the
+        error's own text; a secret typed and refused stays in its masked field. **Away**, nothing takes input, and
+        the page says the popup's away sentence (Its switches).
+      - A setting is read as the page opens and again after its own change. Nothing re-reads on its own while the
+        page is open: a change made in Settings, its Undo included, or on another desktop shows at the page's next
+        opening.
   - **After install: Show them on the pegboard** (MK-D8 ruled A, B ships; MK-E2). As it ships, the act folds the popup
     and the board rises on the set's first category with its first object in the keyboard's focus — the pegboard's
     own category and focus doors (§8 "The pegboard"), and nothing of ICE's insides; over a covered view the frame
@@ -9077,17 +9073,16 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   - *Kept, dated 2026-11-11 (VF-PM 18:36:34Z, ruling 10):* Settings → Plugins keeps its own words until MK-5 —
     "Enable ‹plugin›" and "Disable ‹plugin›" on its switch (`panels/PluginsSection.tsx`), `DENIAL_TEXT`'s reasons
     (`panels/PluginCapabilities.tsx`) and an error's own text. MK-4c2a changes nothing there.
-  *Added 2026-11-11 (MK-4c2b; VF-PM 19:40:52Z, 19:44:12Z), MK's words, ‹draft›, for James's eye:*
-  - A page's settings stand under **Settings**, with **Undo** and **Redo** when a setting is in the synced history.
+  *Added 2026-11-11 (MK-4c2b; VF-PM 19:40:52Z), MK's words, ‹draft›, for James's eye; corrected the same day
+  (James's MK-O6 pick, 22:34:31Z): the page's Undo and Redo left, with "Couldn't undo that. Try again.", "Couldn't
+  redo that. Try again." and the page's use of §8's five outcomes, which stay Settings' own:*
+  - A page's settings stand under **Settings**.
   - An off plugin's page says, under Settings, "Turn it on to change its settings."
-  - A setting that couldn't be saved says "Couldn't save that. Try again."; an Undo or Redo that couldn't run says
-    "Couldn't undo that. Try again." or "Couldn't redo that. Try again."
+  - A setting that couldn't be saved says "Couldn't save that. Try again."
   - A secret that is kept says "Saved" in its empty field; the page never shows what is kept.
   - A choice with nothing chosen yet says "Choose…" (Settings' word).
   - A setting the page can't draw says "This setting can't be changed here."
-  - Undo and Redo say §8's outcomes: "Last synced change undone", "Change restored", "Nothing left to undo",
-    "Nothing left to redo", "Settings history limit reached".
-  - The foot says "Synced settings can be undone here or in Settings." when a setting is in the synced history, and
+  - The foot says "Synced settings can be undone in Settings." when a setting is in the synced history, and
     otherwise "Device and secret settings stay on this device and are not part of settings history." (§8's).
   - *Kept, dated 2026-11-11 (VF-PM 19:40:52Z):* Settings → Plugins keeps its own form and words until MK-5: its
     "user", "device", "secret" and "default" marks, **Reset**, "Unsupported schema", "•••• set", "This plugin
