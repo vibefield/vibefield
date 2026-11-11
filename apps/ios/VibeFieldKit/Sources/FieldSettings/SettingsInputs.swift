@@ -106,10 +106,13 @@ public struct SettingsDesktop: Identifiable, Equatable, Sendable {
   /// desktop the phone cannot read (its board incompatible, or its door refused the field); nil is "not said yet" —
   /// not hearing, or not on the home's board yet — which is not a refusal, the same posture as `servesTerminals`.
   public let watchable: Bool?
+  /// IOS-10c — the agents the home's catalog offers, for the home's page alone; nil for every other desktop, and for
+  /// the home before its catalog answers, so no page draws an empty section.
+  public let agents: [SettingsAgent]?
 
   public init(
     id: String, name: String, platform: String?, reach: Reach, isHome: Bool, servesTerminals: Bool?,
-    watchable: Bool? = nil
+    watchable: Bool? = nil, agents: [SettingsAgent]? = nil
   ) {
     self.id = id
     self.name = name
@@ -118,6 +121,7 @@ public struct SettingsDesktop: Identifiable, Equatable, Sendable {
     self.isHome = isHome
     self.servesTerminals = servesTerminals
     self.watchable = watchable
+    self.agents = agents
   }
 
   public var isAsleep: Bool {
@@ -169,8 +173,52 @@ public struct SettingsActions {
   }
 }
 
+/// IOS-10c — one agent on the home desktop's page (agents, a read-only glance: James on the page Settings in a
+/// Pocket, 2026-11-11; VF-PM's (a), the home's page alone): the home catalog's name for it, its mark key, and the
+/// profiles that hold a sign-in for it, in the home's order. Settings draws what it is handed and reads nothing.
+public struct SettingsAgent: Identifiable, Equatable, Sendable {
+  /// One profile's sign-in for the agent, as its personas last said it.
+  public enum SignIn: Equatable, Sendable {
+    case signedIn
+    /// Its login pane is open.
+    case signingIn
+    case notSignedIn
+    /// No persona of it has been verified yet.
+    case notRead
+  }
+
+  /// A profile that holds a sign-in for the agent.
+  public struct Profile: Equatable, Sendable {
+    public let label: String
+    public let signIn: SignIn
+
+    public init(label: String, signIn: SignIn) {
+      self.label = label
+      self.signIn = signIn
+    }
+  }
+
+  /// The catalog id, never compared to a literal (R23b).
+  public let id: String
+  public let name: String
+  /// The catalog's mark key: what the home's drawing of agent marks is asked for (`SettingsAgentMark`).
+  public let mark: String
+  public let profiles: [Profile]
+
+  public init(id: String, name: String, mark: String, profiles: [Profile]) {
+    self.id = id
+    self.name = name
+    self.mark = mark
+    self.profiles = profiles
+  }
+}
+
 /// Words said in more than one place, written once.
 public enum SettingsWords {
+  /// IOS-10c — the home desktop's Agents section: its head and foot (the foot ‹draft› for James).
+  public static let agentsHead = "Agents"
+  public static let agentsFoot = "Sign in and manage agents on this desktop."
+
   /// The sign-out confirmation, wherever Sign out is asked for (the corner's
   /// menu and Settings › Account).
   public static func signOutTitle(login: String?) -> String {

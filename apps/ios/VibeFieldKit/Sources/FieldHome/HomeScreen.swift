@@ -3452,6 +3452,9 @@ public struct HomeScreen: View {
           confirmSignOut()
         })
     )
+    // IOS-10c — the home's agents wear the kit's drawn marks where the build carries them (`AgentGlyph`); Settings
+    // knows no vendor glyph of its own.
+    .environment(\.settingsAgentMark, SettingsAgentMark { mark in AnyView(AgentGlyph(mark: mark, letterSize: 15)) })
     .presentationDetents([.large])
     .presentationDragIndicator(.hidden)
     .presentationCornerRadius(40)
@@ -3522,7 +3525,9 @@ public struct HomeScreen: View {
       } ?? [],
       isHearing: link?.isHearing ?? false,
       machineName: mesh.machineName,
-      adminConsole: mesh.adminConsoleURL)
+      adminConsole: mesh.adminConsoleURL,
+      // IOS-10c — the meters' reading is the home's: its agents go to Settings only while it is this home's.
+      homeAgents: meters.reading.home == home ? FieldHomeModel.settingsAgents(meters.reading) : nil)
   }
 
   // MARK: - Attachment

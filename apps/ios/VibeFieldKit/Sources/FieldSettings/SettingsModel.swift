@@ -18,6 +18,32 @@ public enum SettingsModel {
     }
   }
 
+  // MARK: - IOS-10c: the home desktop's agents
+
+  /// The words under an agent on the home's page (‹draft› for James, DESIGN.md §8 "The phone's Settings", amended
+  /// 2026-11-11): one profile says its word alone; several say each profile's name with its word, in the home's
+  /// order; an agent no profile holds a sign-in for is not signed in.
+  public static func agentSignIns(_ agent: SettingsAgent) -> String {
+    switch agent.profiles.count {
+    case 0:
+      return "Not signed in"
+    case 1:
+      let word = signInWord(agent.profiles[0].signIn)
+      return word.prefix(1).uppercased() + word.dropFirst()
+    default:
+      return agent.profiles.map { "\($0.label) \(signInWord($0.signIn))" }.joined(separator: " · ")
+    }
+  }
+
+  private static func signInWord(_ signIn: SettingsAgent.SignIn) -> String {
+    switch signIn {
+    case .signedIn: "signed in"
+    case .signingIn: "signing in…"
+    case .notSignedIn: "not signed in"
+    case .notRead: "not read yet"
+    }
+  }
+
   // MARK: - The head
 
   /// Under the name at the head of Settings: the login while all is well, and

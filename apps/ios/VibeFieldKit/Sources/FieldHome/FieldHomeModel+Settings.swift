@@ -27,19 +27,22 @@ extension FieldHomeModel {
     asleep: [AsleepDesktop],
     isHearing: Bool,
     machineName: String?,
-    adminConsole: URL?
+    adminConsole: URL?,
+    homeAgents: [SettingsAgent]? = nil
   ) -> SettingsAccount {
     let live = (login?.isEmpty ?? true) ? nil : login
     let remembered = (rememberedLogin?.isEmpty ?? true) ? nil : rememberedLogin
     let account = live ?? remembered
     let standing = settingsStanding(meshState: meshState, account: account)
 
+    // IOS-10c — the home's agents ride the home's row alone: every other desktop's page has no Agents section.
     var rows: [SettingsDesktop] = desktops.map { desktop in
-      SettingsDesktop(
+      let isHome = desktop.deviceId == home
+      return SettingsDesktop(
         id: desktop.deviceId, name: desktop.name, platform: desktop.platform,
-        reach: reach(desktop, isHearing: isHearing), isHome: desktop.deviceId == home,
+        reach: reach(desktop, isHearing: isHearing), isHome: isHome,
         servesTerminals: desktop.publishesTerminalDoors,
-        watchable: watchable(desktop, isHearing: isHearing))
+        watchable: watchable(desktop, isHearing: isHearing), agents: isHome ? homeAgents : nil)
     }
     let listed = Set(desktops.map(\.deviceId))
     rows += asleep
@@ -109,6 +112,38 @@ extension FieldHomeModel {
       case .noDoor, .connecting, .reconnecting: nil
       }
     return .wantsYou(text, reason: reason)
+  }
+
+  // MARK: - IOS-10c: the home's agents on its page
+
+  /// The home's agents, from the meters' own reading of it (`agent.catalog` and `agents.profileSets.list`, read
+  /// through the home's door): every agent its catalog offers (`MeterCatalog.offered`), in the catalog's order, by
+  /// the catalog's name and mark key, with each kept profile that holds a sign-in for it. Nil until the home answers,
+  /// and for a home that offers none, so the page never draws an empty section. No agent id is a literal (R23b).
+  static func settingsAgents(_ reading: MetersReading) -> [SettingsAgent]? {
+    guard reading.connected else { return nil }
+    let kept = reading.sets.filter { !$0.draft }
+    let agents = reading.catalog
+      .filter { MeterCatalog.offered.contains($0.status) }
+      .map { row in
+        SettingsAgent(
+          id: row.id, name: row.label, mark: row.mark ?? row.id,
+          profiles: kept.compactMap { set in
+            let personas = set.personas.filter { $0.provider == row.id }
+            guard !personas.isEmpty else { return nil }
+            return SettingsAgent.Profile(label: set.label, signIn: signIn(personas))
+          })
+      }
+    return agents.isEmpty ? nil : agents
+  }
+
+  /// One profile's sign-in for an agent, from its personas: signed in when one is, else signing in while a login pane
+  /// is open, else not read while no persona has been verified, else not signed in.
+  static func signIn(_ personas: [AgentPersona]) -> SettingsAgent.SignIn {
+    if personas.contains(where: { $0.identity?.loggedIn == true }) { return .signedIn }
+    if personas.contains(where: \.signingIn) { return .signingIn }
+    if personas.allSatisfy({ $0.identity == nil }) { return .notRead }
+    return .notSignedIn
   }
 }
 

@@ -12,7 +12,8 @@ import SwiftUI
 /// (FW-R6, DS-L4; James's ruling of 2026-10-31 22:08Z): its agent catalog and
 /// profile sets, its History's index, its VibeField version (the roster's
 /// `appVersion`). Its running agents are the Field's, read through the home
-/// (PG-L4.6), never here.
+/// (PG-L4.6), never here. IOS-10c read the first for the home's own page:
+/// its Agents, and each one's sign-ins (`SettingsDesktop.agents`).
 struct DesktopPage: View {
   let desktop: SettingsDesktop
   let standing: SettingsAccount.Standing
@@ -40,6 +41,24 @@ struct DesktopPage: View {
       }
       .chromeRows()
       .opacity(desktop.isAsleep ? 0.62 : 1)
+      // IOS-10c — the home's agents, as its catalog and profiles say them. Only the home's row carries them, so every
+      // other desktop's page has no section, and none is ever empty (VF-PM 23:20:56Z).
+      if let agents = desktop.agents, !agents.isEmpty {
+        Section {
+          ForEach(agents) { agent in
+            HStack(spacing: 12) {
+              SettingsAgentMarkTile(mark: agent.mark, name: agent.name)
+              ChromeRow(agent.name, detail: SettingsModel.agentSignIns(agent))
+            }
+            .accessibilityElement(children: .combine)
+          }
+        } header: {
+          ChromeListHead(SettingsWords.agentsHead, tags: [FactTag("Read-only")])
+        } footer: {
+          ChromeListFoot(SettingsWords.agentsFoot)
+        }
+        .chromeRows()
+      }
       // Its abilities while it answers: one dialing, refused or incompatible
       // says so in its head and is not asked for anything (DS-L9).
       if desktop.reach == .connected {
