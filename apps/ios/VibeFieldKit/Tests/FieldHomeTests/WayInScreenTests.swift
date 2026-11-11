@@ -210,10 +210,12 @@ struct WayInScreenTests {
         + "VibeField runs no session relay.")
   }
 
-  @Test("the welcome's note: the account a code named, or why a first sign-in failed")
+  @Test("the welcome's note: the account a code named, or Couldn’t connect. when a first sign-in failed")
   func welcomeNote() {
     #expect(screen(.welcome(failure: nil, expecting: login)).words.note == "At Tailscale, pick me@example.com.")
-    #expect(screen(.welcome(failure: "the network went away", expecting: login)).words.note == "the network went away")
+    // P1b (2026-11-11, W2a's sentence by James's rule of 10 Nov): a failure is said, its own text never
+    #expect(screen(.welcome(failure: "the network went away", expecting: login)).words.note == "Couldn’t connect.")
+    #expect(screen(.welcome(failure: "the network went away")).words.note == "Couldn’t connect.")
   }
 
   @Test("opened from the desktop's code: the desktop that sent you, the account named, Not yours? Start over")
@@ -336,6 +338,9 @@ struct WayInScreenTests {
     #expect(line(s) == "This iPhone can’t reach your desktops until you do. Nothing here is lost.")
     #expect(s.picture == .face)
     #expect(s.acts == [.primary("Sign in again", .signInAgain), .link("Use another account", .useAnotherAccount)])
+    // P1b: a sign-in sheet that could not open is said, its own error never
+    #expect(s.words.note == nil)
+    #expect(screen(.signInAgain(note: "The operation couldn’t be completed.")).words.note == "Couldn’t connect.")
   }
 
   @Test("Another account?: TS-7b's words; a code by link leads with Keep this account (EL7)")

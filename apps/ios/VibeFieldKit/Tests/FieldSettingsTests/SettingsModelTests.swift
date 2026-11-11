@@ -182,9 +182,10 @@ struct SettingsModelTests {
     #expect(SettingsModel.tailscaleState(.connecting) == .init("Connecting…"))
     #expect(SettingsModel.tailscaleState(.signInAgain) == .init("Sign in to Tailscale again", wantsTheUser: true))
     #expect(SettingsModel.tailscaleState(.waitingForApproval) == .init("Waiting for approval", wantsTheUser: true))
+    // P1b (2026-11-11, W2a's sentence by James's rule of 10 Nov): the mesh's reason is never said
     #expect(
       SettingsModel.tailscaleState(.couldNotConnect("the network went away"))
-        == .init("Couldn’t connect — the network went away.", wantsTheUser: true))
+        == .init("Couldn’t connect.", wantsTheUser: true))
     #expect(SettingsModel.tailscaleFoot(.connected, device: .iPhone) == .init("While you’re signed in, this iPhone stays connected by itself."))
     #expect(SettingsModel.tailscaleFoot(.signInAgain, device: .iPhone).wantsTheUser)
     for standing: SettingsAccount.Standing in [.connected, .connecting, .signInAgain, .waitingForApproval] {

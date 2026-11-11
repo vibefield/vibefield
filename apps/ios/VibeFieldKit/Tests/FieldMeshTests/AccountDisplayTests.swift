@@ -65,7 +65,9 @@ struct AccountDisplayTests {
   func notice() {
     #expect(AccountDisplay.notice(state: .needsLogin) == "Sign in to Tailscale again to reach your desktops.")
     #expect(AccountDisplay.notice(state: .needsMachineAuth) == "An admin of your Tailscale network approves new devices.")
-    #expect(AccountDisplay.notice(state: .failed("boom")) == "Couldn’t connect — boom.")
+    // P1b (2026-11-11, W2a's sentence by James's rule of 10 Nov): the mesh's reason is never said
+    #expect(AccountDisplay.notice(state: .failed("boom")) == "Couldn’t connect.")
+    #expect(AccountDisplay.notice(state: .failed("tsnet: dial tcp 100.64.0.1:443: i/o timeout")) == "Couldn’t connect.")
     for state: MeshModel.State in [.off, .starting, .up, .stopping, .reconnecting("x")] {
       #expect(AccountDisplay.notice(state: state) == nil)
     }
