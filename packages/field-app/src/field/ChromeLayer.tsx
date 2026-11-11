@@ -188,6 +188,19 @@ export function ChromeLayer({
     },
     [onSurfaceChange, setShowSettings],
   );
+  // MK-4b — the Plugins popup's one way in (DESIGN.md §9 "The doors"): the Me
+  // menu's Plugins… opens it on Discover, the palette's Plugins… too, and its
+  // Check plugins for updates on Updates (MK-E7). Every door calls this; nothing
+  // else outside the popup's own files hands the frame `plugins`.
+  const [pluginsOpenOn, setPluginsOpenOn] = useState<"discover" | "updates">("discover");
+  const openPlugins = useCallback(
+    (tab: "discover" | "updates") => {
+      setPluginsOpenOn(tab);
+      onSurfaceChange("plugins");
+    },
+    [onSurfaceChange],
+  );
+  const openPluginsOnDiscover = useCallback(() => openPlugins("discover"), [openPlugins]);
   // AO-6b — the limit moment's Add a profile…, handed to the cover while
   // Settings is closed (AO-6b3): an open panel takes no new page, so the
   // moment would retire without its form ever showing
@@ -312,7 +325,7 @@ export function ChromeLayer({
 
   // The palette's frame acts, run through the frame's own doors: the view's
   // one owner, the line's create, History's door for its chosen session (HN-7),
-  // the head's zoom, Settings.
+  // the head's zoom, Settings, the Plugins popup (MK-4b).
   const runFrameAct = useCallback(
     (run: FrameActRun) => {
       switch (run.kind) {
@@ -333,9 +346,12 @@ export function ChromeLayer({
           return;
         case "settings":
           openSettings("general");
+          return;
+        case "plugins":
+          openPlugins(run.tab);
       }
     },
-    [head, openSettings],
+    [head, openSettings, openPlugins],
   );
   const closePalette = useCallback(
     () => onSurfaceChange(foldSurface(surface, "palette")),
@@ -438,9 +454,16 @@ export function ChromeLayer({
       {/* PLUGINS — THE FRAME'S SECOND POPUP (MK-4a; DESIGN.md §8 "Plugins —
           the frame's second popup"): drawn on the document's body over the
           search scrim, as the Peek is, so the view and the frame recede
-          under it. One of the frame's open surfaces (`plugins`). Nothing
-          opens it yet: its doors are MK-4b's and MK-4d's. */}
-      <FramePlugins view={view} surface={surface} onSurfaceChange={onSurfaceChange} />
+          under it. One of the frame's open surfaces (`plugins`). Its doors
+          (MK-4b) are the Me menu's Plugins… and the palette's two acts, each
+          through `openPlugins` above, which says the tab it opens on; the
+          pegboard's pill is MK-4d's. */}
+      <FramePlugins
+        view={view}
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        openOn={pluginsOpenOn}
+      />
 
       {/* THE HAND (track HN; DESIGN.md §8 "The hand", §10): every copy is a
           card at the window's foot, fanned like a hand you hold — the
@@ -482,6 +505,7 @@ export function ChromeLayer({
           open={meOpen}
           onOpenChange={onMeOpenChange}
           onOpenSettings={openSettings}
+          onOpenPlugins={openPluginsOnDiscover}
           // AU-2 — the update row: null where no updater runs (R1), absent
           // until the desktop's state arrives (no row yet)
           update={

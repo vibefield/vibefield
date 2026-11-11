@@ -1,6 +1,7 @@
 import type { FrameView } from "@vibefield/contracts";
 import type { GlyphName } from "@vibefield/design-kit/glyphs";
 import { createActOf } from "./line-model";
+import { PLUGINS_DOOR } from "./plugins/plugins-words";
 import { FRAME_VIEWS, type ViewKeys, viewKeyLabel } from "./views";
 import { ZOOM_ACTS, type ZoomAct, zoomKeyLabel } from "./zoom";
 
@@ -12,7 +13,9 @@ import { ZOOM_ACTS, type ZoomAct, zoomKeyLabel } from "./zoom";
 // System control is the one act with no table and no key: it was the
 // instrument bar's last tool, and the palette is where it went (GV-D1).
 // History's chosen session — Resume, or Jump to — is the other with no key: it
-// was the line's create until HN-7, and the palette's History row since.
+// was the line's create until HN-7, and the palette's History row since. The
+// App group's Plugins… and Check plugins for updates (MK-4b; DESIGN.md §9 "The
+// doors") have none either, and say where else they live under their names.
 
 export type FrameActRun =
   | { readonly kind: "view"; readonly view: FrameView }
@@ -20,7 +23,8 @@ export type FrameActRun =
   | { readonly kind: "chosen-session" }
   | { readonly kind: "zoom"; readonly act: ZoomAct }
   | { readonly kind: "system-control" }
-  | { readonly kind: "settings" };
+  | { readonly kind: "settings" }
+  | { readonly kind: "plugins"; readonly tab: "discover" | "updates" };
 
 export interface FrameAct {
   readonly id: string;
@@ -33,6 +37,8 @@ export interface FrameAct {
   readonly waits: string | null;
   /** More words it answers to when typed ("zoom" for Actual size). */
   readonly terms?: string;
+  /** Its small line under the name when it waits for nothing: where else the act lives (MK-4b). */
+  readonly sub?: string;
   readonly run: FrameActRun;
 }
 
@@ -145,6 +151,24 @@ export function frameActGroups(
       key: keys === "mac" ? "⌘," : "Ctrl+,",
       waits: null,
       run: { kind: "settings" },
+    },
+    {
+      id: "plugins",
+      name: PLUGINS_DOOR.name,
+      glyph: "plugin",
+      key: null,
+      waits: null,
+      sub: PLUGINS_DOOR.nameWhere,
+      run: { kind: "plugins", tab: "discover" },
+    },
+    {
+      id: "plugins-updates",
+      name: PLUGINS_DOOR.check,
+      glyph: "reset",
+      key: null,
+      waits: null,
+      sub: PLUGINS_DOOR.checkWhere,
+      run: { kind: "plugins", tab: "updates" },
     },
   ];
   return [

@@ -58,7 +58,8 @@ export type FrameSurface =
    * composer", §10): the agents to start and the sessions running in the spark's profiles. */
   | "at"
   /** Plugins — the frame's second popup over the search scrim (MK-4a; `plugins/Plugins.tsx`;
-   * DESIGN.md §8 "Plugins — the frame's second popup"). Its doors are MK-4b's and MK-4d's. */
+   * DESIGN.md §8 "Plugins — the frame's second popup"). Its doors (MK-4b) are the Me menu's Plugins… and the
+   * palette's two acts, through ChromeLayer's `openPlugins`; the pegboard's pill is MK-4d's. */
   | "plugins";
 
 /** What a surface's own close asks of the owner: fold it if it is the one

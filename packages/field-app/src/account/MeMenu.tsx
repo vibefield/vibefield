@@ -21,6 +21,8 @@ import {
 } from "react";
 import { leaveFor, QuitHeldRefusal } from "../boot/switch";
 import { roundButtonCls } from "../field/theme-constants";
+import { usePluginUpdates } from "../frame/plugins/plugins-count";
+import { PLUGINS_DOOR, updatesWords } from "../frame/plugins/plugins-words";
 import { getHost } from "../host";
 import { errorText, NO_FLOW, type UpdatesFlow, useUpdateRestart } from "../panels/update-flow";
 import {
@@ -104,6 +106,11 @@ export interface MeMenuViewProps {
   onOpenChange: (open: boolean) => void;
   /** Settings… opens Settings on General, as ⌘, does. */
   onOpenSettings: () => void;
+  /** Plugins… (MK-4b; DESIGN.md §8 "The Me menu") opens the frame's Plugins popup on Discover. */
+  onOpenPlugins: () => void;
+  /** What the last read of the plugin list found to update: the row ends in "1 update" ("2 updates") once it is
+   * above 0. Absent or null: nothing read in this window yet, and the row says no count. */
+  pluginUpdates?: number | null | undefined;
   /** Your name and login open Settings → Account. */
   onOpenAccount: () => void;
   /** Connect your devices… (offered only while this Mac is not connected)
@@ -147,7 +154,11 @@ const ASK_WIDTH = 320;
  * size the panel grows from, at its own foot. */
 const SEED = 56;
 
-function MenuIcon({ name }: { name: "gear" | "person" | "link" | "sun" | "moon" }): ReactElement {
+function MenuIcon({
+  name,
+}: {
+  name: "gear" | "plugin" | "person" | "link" | "sun" | "moon";
+}): ReactElement {
   return <FieldGlyph name={name} size={18} />;
 }
 
@@ -191,6 +202,8 @@ export function MeMenuView({
   open,
   onOpenChange,
   onOpenSettings,
+  onOpenPlugins,
+  pluginUpdates = null,
   onOpenAccount,
   onLink,
   onSwitch,
@@ -593,6 +606,31 @@ export function MeMenuView({
       ),
     });
   }
+  // MK-4b (MK-D1, MK-D11; DESIGN.md §8 "The Me menu"): Plugins…, directly above
+  // Settings…, in every build. It folds the menu as Settings… does and holds no
+  // `data-me-nearest`, so Return still lands on Settings… (AU-D5). Once a read
+  // found updates it ends in "1 update" in the ink of another user's "N waiting":
+  // words, never a mark, and nothing on the face (§2.8 I-5).
+  const updatesEnd = pluginUpdates === null ? null : updatesWords(pluginUpdates);
+  rows.push({
+    key: "plugins",
+    node: (delay) => (
+      <button
+        type="button"
+        role="menuitem"
+        className="vf-me-row"
+        tabIndex={-1}
+        style={{ "--vf-me-delay": `${delay}ms` } as CSSProperties}
+        onClick={() => act(onOpenPlugins)}
+      >
+        <span className="vf-me-slot vf-me-icon">
+          <MenuIcon name="plugin" />
+        </span>
+        <span className="vf-me-row-label">{PLUGINS_DOOR.name}</span>
+        {updatesEnd !== null && <span className="vf-me-row-end">{updatesEnd}</span>}
+      </button>
+    ),
+  });
   rows.push({
     key: "settings",
     node: (delay) => (
@@ -878,6 +916,7 @@ export function MeMenu({
   open,
   onOpenChange,
   onOpenSettings,
+  onOpenPlugins,
   update,
   shortcut,
   className,
@@ -886,6 +925,8 @@ export function MeMenu({
   onOpenChange: (open: boolean) => void;
   /** `whats-new` (AU-6, LC-7): Settings → Updates, at the release's notes */
   onOpenSettings: (page: "general" | "account" | "updates" | "whats-new") => void;
+  /** Plugins… (MK-4b): the frame's Plugins popup on Discover. The row's count is the window's last read. */
+  onOpenPlugins: () => void;
   /** AU-2 — the desktop's update projection (`desktopState.update`): `null`
    * where no updater runs, absent until the window knows the desktop's state
    * (no row then). */
@@ -894,6 +935,8 @@ export function MeMenu({
   className?: string;
 }): ReactElement | null {
   const account = useAccountSnapshot();
+  // MK-4b: what the window's last read of the plugin list found (opening the menu reads nothing).
+  const pluginUpdates = usePluginUpdates();
   // The app's ONE theme (FC-D5): the same store Settings → Appearance reads.
   const theme = useAppTheme();
   // TS-2 — the link's one machinery: the hand-off (F16) lives there now, shared
@@ -1128,6 +1171,8 @@ export function MeMenu({
       open={open}
       onOpenChange={onMenuOpenChange}
       onOpenSettings={() => onOpenSettings("general")}
+      onOpenPlugins={onOpenPlugins}
+      pluginUpdates={pluginUpdates}
       onOpenAccount={() => onOpenSettings("account")}
       onLink={beginLink}
       onSwitch={

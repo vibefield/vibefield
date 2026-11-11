@@ -127,14 +127,14 @@ describe("the palette's table of the frame's acts (One Frame §7)", () => {
       group.acts.map((act) => `${act.name}${act.key === null ? "" : ` ${act.key}`}`),
     ]);
 
-  it("lists Views ⌘1–⌘4, Canvas's create and its zoom, and Settings — every act with its key", () => {
+  it("lists Views ⌘1–⌘4, Canvas's create and its zoom, and Settings and Plugins — every act with its key", () => {
     expect(rows("canvas", "mac")).toEqual([
       ["Views", ["Canvas ⌘1", "Godview ⌘2", "History ⌘3", "Chat ⌘4"]],
       [
         "On this view",
         ["Objects B", "Zoom in ⌘+", "Zoom out ⌘−", "Zoom to fit ⇧1", "Actual size ⌘0"],
       ],
-      ["App", ["Settings… ⌘,"]],
+      ["App", ["Settings… ⌘,", "Plugins…", "Check plugins for updates"]],
     ]);
   });
 
@@ -249,7 +249,7 @@ describe("the palette's table of the frame's acts (One Frame §7)", () => {
           "Actual size Ctrl+0",
         ],
       ],
-      ["App", ["Settings… Ctrl+,"]],
+      ["App", ["Settings… Ctrl+,", "Plugins…", "Check plugins for updates"]],
     ]);
   });
 });

@@ -181,6 +181,7 @@ function mount(door: LineViewDoor | null = null): void {
           open={surface === "me"}
           onOpenChange={(open) => setSurface(open ? "me" : foldSurface(surface, "me"))}
           onOpenSettings={() => undefined}
+          onOpenPlugins={() => undefined}
           onOpenAccount={() => undefined}
           onLink={() => undefined}
         />

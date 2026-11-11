@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 import type { PluginRegistrySnapshot, PluginsCatalog } from "@vibefield/contracts";
+import type { FielddClient } from "@vibefield/fieldd-client";
+import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CATALOG_FIXTURES,
   PLUGINS_FIXTURE_NOW,
@@ -12,7 +14,8 @@ import {
   pluginsFixturePort,
 } from "../src/design-system/plugins-fixtures";
 import type { FrameSurface } from "../src/frame/frame-surface";
-import { Plugins } from "../src/frame/plugins/Plugins";
+import { FramePlugins, Plugins } from "../src/frame/plugins/Plugins";
+import { getPluginUpdates, resetPluginUpdates } from "../src/frame/plugins/plugins-count";
 import { pluginsLayout } from "../src/frame/plugins/plugins-model";
 import type { PluginsPort } from "../src/frame/plugins/plugins-port";
 import * as words from "../src/frame/plugins/plugins-words";
@@ -20,7 +23,9 @@ import * as words from "../src/frame/plugins/plugins-words";
 // MK-4a — the Plugins popup in a window (DESIGN.md §8 "Plugins — the frame's second popup"): the shipping
 // controller over a fixture port, drawn on the document's body. Each opening reads the list once and never on a
 // re-render (MK-D5; one audit row per opening, `plugin.catalog.refresh`); Esc and the scrim fold it; the keyboard
-// goes to its field and back; every state is said, never a blank. No fieldd, no network, no child.
+// goes to its field and back; every state is said, never a blank. MK-4b adds the Me row's count (every answer the
+// popup takes, and the window's one ask, over a fixture client in a FielddProvider) and the tab a door opens it on.
+// No real fieldd, no network, no child.
 
 let host: HTMLDivElement;
 let root: Root;
@@ -317,5 +322,173 @@ describe("the frame's popup", () => {
       `${height}px`,
       `${top}px`,
     ]);
+  });
+});
+
+/** A catalog that found `updates` to install (the fixtures' lists find none). */
+const found = (updates: number): PluginsCatalog => ({ ...CATALOG_FIXTURES.ready, updates });
+
+describe("the Me row's count: every answer the popup takes (MK-4b; VF-PM's C1)", () => {
+  it("hears every answer the popup takes, in the order it takes them", async () => {
+    const heard: number[] = [];
+    let answerFresh: (catalog: PluginsCatalog) => void = () => undefined;
+    const port: PluginsPort = {
+      catalog: () => Promise.resolve(found(1)),
+      refresh: () => new Promise((resolve) => (answerFresh = resolve)),
+    };
+    act(() =>
+      root.render(
+        <Plugins
+          surface="plugins"
+          onSurfaceChange={() => undefined}
+          port={port}
+          snapshot={PLUGINS_FIXTURE_SNAPSHOT}
+          onCatalog={(catalog) => heard.push(catalog.updates)}
+        />,
+      ),
+    );
+    await settle();
+    expect(heard).toEqual([1]);
+    await act(async () => answerFresh(found(2)));
+    await settle();
+    expect(heard).toEqual([1, 2]);
+  });
+
+  it("never hears a held list's late answer, which the popup does not take", async () => {
+    const heard: number[] = [];
+    let answerHeld: (catalog: PluginsCatalog) => void = () => undefined;
+    const port: PluginsPort = {
+      catalog: () => new Promise((resolve) => (answerHeld = resolve)),
+      refresh: () => Promise.resolve(found(2)),
+    };
+    act(() =>
+      root.render(
+        <Plugins
+          surface="plugins"
+          onSurfaceChange={() => undefined}
+          port={port}
+          snapshot={PLUGINS_FIXTURE_SNAPSHOT}
+          onCatalog={(catalog) => heard.push(catalog.updates)}
+        />,
+      ),
+    );
+    await settle();
+    await act(async () => answerHeld(found(7)));
+    await settle();
+    expect(heard).toEqual([2]);
+  });
+});
+
+/** A window's fieldd as FramePlugins asks it: `plugins.catalog.get` and `refresh` answered by the test. */
+function fielddAnswering(answer: (method: string, call: number) => Promise<unknown>): {
+  client: FielddClient;
+  asked: string[];
+} {
+  const asked: string[] = [];
+  const client = {
+    request: vi.fn(async (method: string) => {
+      asked.push(method);
+      return answer(method, asked.filter((m) => m === method).length);
+    }),
+  } as unknown as FielddClient;
+  return { client, asked };
+}
+
+function FrameWindow({
+  client,
+  surface,
+  openOn,
+}: {
+  client: FielddClient;
+  surface: FrameSurface | null;
+  openOn?: "discover" | "updates";
+}): ReactElement {
+  return (
+    <FielddProvider client={client}>
+      <FramePlugins
+        view="canvas"
+        surface={surface}
+        onSurfaceChange={() => undefined}
+        {...(openOn === undefined ? {} : { openOn })}
+      />
+    </FielddProvider>
+  );
+}
+
+describe("the frame's popup: its doors' tab and the window's one ask (MK-4b)", () => {
+  beforeEach(() => {
+    // the count is one value per window: each test starts it as a window does
+    resetPluginUpdates();
+  });
+  afterEach(() => {
+    resetPluginUpdates();
+  });
+
+  it("asks fieldd once as the window opens, for the list it holds and never a read, and counts it", async () => {
+    const { client, asked } = fielddAnswering(async () => found(2));
+    act(() => root.render(<FrameWindow client={client} surface={null} />));
+    await settle();
+    expect(asked).toEqual(["plugins.catalog.get"]);
+    expect(getPluginUpdates()).toBe(2);
+    // the frame mounting again in the same window asks nothing more
+    act(() => root.unmount());
+    root = createRoot(host);
+    act(() => root.render(<FrameWindow client={client} surface={null} />));
+    await settle();
+    expect(asked).toEqual(["plugins.catalog.get"]);
+  });
+
+  it("an early answer to the window's ask is replaced by the popup's", async () => {
+    const { client } = fielddAnswering(async (method, call) =>
+      method === "plugins.catalog.get" && call === 1 ? found(5) : found(1),
+    );
+    act(() => root.render(<FrameWindow client={client} surface={null} />));
+    await settle();
+    expect(getPluginUpdates()).toBe(5);
+    act(() => root.render(<FrameWindow client={client} surface="plugins" />));
+    await settle();
+    expect(getPluginUpdates()).toBe(1);
+  });
+
+  it("a late answer to the window's ask never replaces the popup's", async () => {
+    let answerAsk: (catalog: PluginsCatalog) => void = () => undefined;
+    const { client } = fielddAnswering((method, call) =>
+      method === "plugins.catalog.get" && call === 1
+        ? new Promise((resolve) => (answerAsk = resolve))
+        : Promise.resolve(found(1)),
+    );
+    act(() => root.render(<FrameWindow client={client} surface={null} />));
+    await settle();
+    act(() => root.render(<FrameWindow client={client} surface="plugins" />));
+    await settle();
+    expect(getPluginUpdates()).toBe(1);
+    await act(async () => answerAsk(found(5)));
+    await settle();
+    expect(getPluginUpdates()).toBe(1);
+  });
+
+  it("an ask that fails leaves no count, and throws nothing", async () => {
+    const { client, asked } = fielddAnswering(async () => {
+      throw new Error("the fixture's fieldd does not answer");
+    });
+    act(() => root.render(<FrameWindow client={client} surface={null} />));
+    await settle();
+    expect(asked).toEqual(["plugins.catalog.get"]);
+    expect(getPluginUpdates()).toBeNull();
+  });
+
+  it("opens on the tab its door asked for: Updates for Check plugins for updates, else Discover (MK-E7)", async () => {
+    const { client } = fielddAnswering(async () => CATALOG_FIXTURES.unconfigured);
+    act(() => root.render(<FrameWindow client={client} surface={null} openOn="discover" />));
+    await settle();
+    act(() => root.render(<FrameWindow client={client} surface="plugins" openOn="updates" />));
+    await settle();
+    expect(chosen()).toBe(words.PLUGINS_TAB_WORDS.updates);
+    expect(bodyText()).toBe(words.NO_REGISTRY.updates);
+    act(() => root.render(<FrameWindow client={client} surface={null} openOn="updates" />));
+    await settle();
+    act(() => root.render(<FrameWindow client={client} surface="plugins" openOn="discover" />));
+    await settle();
+    expect(chosen()).toBe(words.PLUGINS_TAB_WORDS.discover);
   });
 });

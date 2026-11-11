@@ -2,7 +2,12 @@ import type { FrameView } from "@vibefield/contracts";
 import { type KeyboardEvent, type ReactElement, useMemo, useState } from "react";
 import { frameActGroups } from "../frame/palette-acts";
 import type { ViewKeys } from "../frame/views";
-import { CommandPaletteView, filterPalette, type PaletteGroup } from "../hud/CommandPalette";
+import {
+  CommandPaletteView,
+  filterPalette,
+  type PaletteGroup,
+  paletteRowOf,
+} from "../hud/CommandPalette";
 
 // The palette's fixture ADAPTER (One Frame FR-3, §7): the production view on
 // the frame's own acts — built by the product's table for the view, History's
@@ -62,14 +67,7 @@ export function CommandPalettePreview({
       ...frameActGroups(view, keys, historyWaits, historyLive).map((group) => ({
         id: group.id,
         eyebrow: group.eyebrow,
-        rows: group.acts.map((act) => ({
-          id: act.id,
-          name: act.name,
-          glyph: act.glyph,
-          key: act.key,
-          waits: act.waits,
-          ...(act.terms === undefined ? {} : { terms: act.terms }),
-        })),
+        rows: group.acts.map(paletteRowOf),
       })),
       ...FIXTURE_COMMANDS,
     ],

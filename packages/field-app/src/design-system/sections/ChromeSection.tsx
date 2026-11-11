@@ -14,7 +14,7 @@ import {
 } from "../account-fixtures";
 import { Section, Specimen } from "../catalog-ui";
 
-const ME_STATES = ["Three users", "Waiting", "One user · offline"] as const;
+const ME_STATES = ["Three users", "Waiting", "Plugin updates", "One user · offline"] as const;
 type MeState = (typeof ME_STATES)[number];
 
 /** AU-2 — the update row's states, in the page's groups (the fixtures'). */
@@ -154,6 +154,7 @@ export function ChromeSection({
                 if (nextOpen) setSurface(null);
               }}
               onOpenSettings={() => undefined}
+              onOpenPlugins={() => undefined}
               onOpenAccount={() => undefined}
               onLink={() => undefined}
               onSwitch={() => undefined}
@@ -527,6 +528,9 @@ export function ChromeSection({
               open={meSpecimenOpen}
               onOpenChange={setMeSpecimenOpen}
               onOpenSettings={() => undefined}
+              onOpenPlugins={() => undefined}
+              // MK-4b (C3): the count reaches the plate through the view's prop alone
+              pluginUpdates={meState === "Plugin updates" ? 2 : null}
               onOpenAccount={() => undefined}
               onLink={() => undefined}
               onSwitch={() => undefined}
@@ -538,7 +542,9 @@ export function ChromeSection({
         </div>
         <p className="vf-ds-stage-caption">
           Your face, where the Settings gear was. The menu grows above it on the island curve, and
-          your face never moves — click it again to fold the menu back.
+          your face never moves — click it again to fold the menu back. Plugins… stands directly
+          above Settings…; once a read found updates it ends in words, “2 updates” in Plugin
+          updates, in the ink of another user’s “N waiting”, and nothing reaches your face.
         </p>
       </Specimen>
 

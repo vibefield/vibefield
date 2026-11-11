@@ -173,7 +173,12 @@ async function mountBoth(): Promise<void> {
     createElement(
       FielddProvider,
       { client: fieldd() },
-      createElement(MeMenu, { open: true, onOpenChange: () => undefined, onOpenSettings: vi.fn() }),
+      createElement(MeMenu, {
+        open: true,
+        onOpenChange: () => undefined,
+        onOpenSettings: vi.fn(),
+        onOpenPlugins: () => undefined,
+      }),
       createElement(AppearanceSection),
     ),
   );

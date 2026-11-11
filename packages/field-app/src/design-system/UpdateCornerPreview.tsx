@@ -46,6 +46,7 @@ export function UpdateFacePlate({ state }: { state: UpdateFaceState }): ReactEle
         open={false}
         onOpenChange={() => undefined}
         onOpenSettings={() => undefined}
+        onOpenPlugins={() => undefined}
         onOpenAccount={() => undefined}
         onLink={() => undefined}
         update={menuUpdateOf(fixture, false)}
@@ -82,6 +83,7 @@ export function UpdateMenuPlate({
           open={open}
           onOpenChange={setOpen}
           onOpenSettings={() => undefined}
+          onOpenPlugins={() => undefined}
           onOpenAccount={() => undefined}
           onLink={() => undefined}
           onSwitch={() => undefined}

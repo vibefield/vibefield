@@ -1,4 +1,4 @@
-import type { FrameView, PluginRegistrySnapshot } from "@vibefield/contracts";
+import type { FrameView, PluginRegistrySnapshot, PluginsCatalog } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type KeyboardEvent,
@@ -15,6 +15,7 @@ import { usePluginRegistrySnapshot } from "../../plugin-host/plugin-registry-sto
 import { useGodviewFindDoor } from "../find-door";
 import { type FrameSurface, foldSurface } from "../frame-surface";
 import { PluginsView } from "./PluginsView";
+import { claimWindowAsk, primePluginUpdates, takePluginUpdates } from "./plugins-count";
 import {
   catalogFoot,
   installedFoot,
@@ -35,9 +36,11 @@ import { type PluginsPort, pluginsPortOver } from "./plugins-port";
 // person's act — no timer, no retry). Esc on the window's capture phase and a
 // click on the scrim fold it; the keyboard goes back where it was. Installed
 // reads the registry snapshot the window already holds, read only (MK-4c
-// brings its switch and its page). Nothing in the product opens it yet: its
-// doors are MK-4b's and MK-4d's. The catalog mounts this controller over a
-// fixture port (`design-system/PluginsPreview.tsx`).
+// brings its switch and its page). Its doors (MK-4b) are the Me menu's
+// Plugins… row and the palette's Plugins… and Check plugins for updates, each
+// through ChromeLayer's `openPlugins`; the pegboard's pill is MK-4d's. The
+// catalog mounts this controller over a fixture port
+// (`design-system/PluginsPreview.tsx`).
 
 function boxOf(container: HTMLElement | null | undefined): { width: number; height: number } {
   if (container !== null && container !== undefined) {
@@ -64,6 +67,8 @@ export interface PluginsProps {
   initialTab?: PluginsTab;
   /** Over Godview the stage holds its keys while the popup stands (QL-D2). */
   holdKeys?: (() => () => void) | undefined;
+  /** Every answer the popup takes, in the order it takes them (MK-4b: the Me row's count). A plate passes none. */
+  onCatalog?: ((catalog: PluginsCatalog) => void) | undefined;
   now?: () => number;
 }
 
@@ -77,6 +82,7 @@ export function Plugins({
   takeFocus = true,
   initialTab = "discover",
   holdKeys,
+  onCatalog,
   now = Date.now,
 }: PluginsProps): ReactElement | null {
   const open = surface === "plugins";
@@ -87,6 +93,12 @@ export function Plugins({
   const [box, setBox] = useState(() => boxOf(container));
   const inputRef = useRef<HTMLInputElement>(null);
   const returnFocus = useRef<Element | null>(null);
+  // The read below runs once per opening; whoever hears its answers may change
+  // without starting another read.
+  const heard = useRef(onCatalog);
+  useLayoutEffect(() => {
+    heard.current = onCatalog;
+  }, [onCatalog]);
 
   const fold = useCallback(
     () => onSurfaceChange(foldSurface(surface, "plugins")),
@@ -126,7 +138,10 @@ export function Plugins({
     port.catalog().then(
       (catalog) => {
         heldAnswered = true;
-        if (current && !fresh) setRead({ kind: "answered", catalog });
+        if (current && !fresh) {
+          setRead({ kind: "answered", catalog });
+          heard.current?.(catalog);
+        }
       },
       () => {
         heldAnswered = true;
@@ -141,6 +156,7 @@ export function Plugins({
         if (!current) return;
         setRead({ kind: "answered", catalog });
         setReading(false);
+        heard.current?.(catalog);
       },
       () => {
         refreshFailed = true;
@@ -249,29 +265,49 @@ export function Plugins({
   );
 }
 
+/** The Me row's count takes every answer the popup takes. */
+const takeCount = (catalog: PluginsCatalog): void => takePluginUpdates(catalog.updates);
+
 /** The popup as the frame holds it (ChromeLayer): over this window's fieldd
  * client and the registry snapshot FieldView feeds, holding Godview's keys
- * while it stands there (QL-D2). */
+ * while it stands there (QL-D2). It opens on the tab its door asked for
+ * (`openOn`: the palette's Check plugins for updates asks for Updates, MK-E7).
+ * As the window opens it asks fieldd once for the list fieldd already holds,
+ * so the Me menu's row says what the last read found (MK-4b's ‹draft› line in
+ * DESIGN.md §8 "The Me menu"; VF-PM's C1): never the registry, on no timer,
+ * once per window; an answer that fails or comes late leaves the row with no
+ * count and the window says nothing of it. */
 export function FramePlugins({
   view,
   surface,
   onSurfaceChange,
+  openOn = "discover",
 }: {
   view: FrameView;
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
+  openOn?: PluginsTab;
 }): ReactElement | null {
   const fieldd = useFielddClient();
   const port = useMemo(() => pluginsPortOver(fieldd), [fieldd]);
   const snapshot = usePluginRegistrySnapshot();
   const godview = useGodviewFindDoor();
+  useEffect(() => {
+    if (!claimWindowAsk()) return;
+    port.catalog().then(
+      (catalog) => primePluginUpdates(catalog.updates),
+      () => undefined,
+    );
+  }, [port]);
   return (
     <Plugins
       surface={surface}
       onSurfaceChange={onSurfaceChange}
       port={port}
       snapshot={snapshot}
+      initialTab={openOn}
       holdKeys={view === "godview" ? godview?.holdKeys : undefined}
+      onCatalog={takeCount}
     />
   );
 }

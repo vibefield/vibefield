@@ -44,6 +44,7 @@ export function CornerPlate({
           open={open}
           onOpenChange={setOpen}
           onOpenSettings={() => undefined}
+          onOpenPlugins={() => undefined}
           onOpenAccount={() => undefined}
           onLink={() => undefined}
           onSwitch={() => undefined}

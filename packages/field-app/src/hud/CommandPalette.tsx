@@ -13,7 +13,7 @@ import {
   useState,
 } from "react";
 import { chosenSessionWaits, useHistoryLineDoor } from "../frame/line-door";
-import { type FrameActRun, frameActGroups } from "../frame/palette-acts";
+import { type FrameAct, type FrameActRun, frameActGroups } from "../frame/palette-acts";
 import { useSystemControlDoor } from "../frame/system-control-door";
 import type { ViewKeys } from "../frame/views";
 import { invoke as invokeCommand, isCommandBound } from "../plugin-host/command-registry";
@@ -50,12 +50,25 @@ export interface PaletteRow {
   readonly glyph: GlyphName | null;
   /** The key, said at the row's end; null where there is none. */
   readonly key: string | null;
-  /** A small line under the name: a command's description. */
+  /** A small line under the name: a command's description, or where else a frame act lives. */
   readonly sub?: string;
   /** Why it cannot run, said under its name; null when it can. */
   readonly waits: string | null;
   /** More words it answers to when typed. */
   readonly terms?: string;
+}
+
+/** A frame act as the palette draws it: the controller's rows and the catalog's plate are both built here. */
+export function paletteRowOf(act: FrameAct): PaletteRow {
+  return {
+    id: act.id,
+    name: act.name,
+    glyph: act.glyph,
+    key: act.key,
+    waits: act.waits,
+    ...(act.terms === undefined ? {} : { terms: act.terms }),
+    ...(act.sub === undefined ? {} : { sub: act.sub }),
+  };
 }
 
 export interface PaletteGroup {
@@ -320,14 +333,7 @@ export function CommandPalette({
     const out: PaletteGroup[] = acts.map((group) => ({
       id: group.id,
       eyebrow: group.eyebrow,
-      rows: group.acts.map((act) => ({
-        id: act.id,
-        name: act.name,
-        glyph: act.glyph,
-        key: act.key,
-        waits: act.waits,
-        ...(act.terms === undefined ? {} : { terms: act.terms }),
-      })),
+      rows: group.acts.map(paletteRowOf),
     }));
     const byPlugin = new Map<string, PaletteRow[]>();
     const titles = new Map<string, string>();

@@ -668,29 +668,63 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
-  it("opens Plugins from nowhere in the product yet — only its own files and the catalog set its surface (MK-4a)", () => {
-    // VF-PM 2026-11-11 11:40:58Z, ruling 6: MK-4a builds the popup and no door to it; the Me menu's row,
-    // the palette's acts and the pegboard's pill are MK-4b's and MK-4d's. A call that hands the frame's
-    // owner the `plugins` surface, or a state that starts on it, outside frame/plugins/ and the catalog
-    // is a door.
+  it("opens Plugins only through ChromeLayer's openPlugins — every door calls it, and no door holds a surface call (MK-4b)", () => {
+    // VF-PM 2026-11-11 11:40:58Z, ruling 6 (MK-4a: no door) and 13:12:35Z, 3 (MK-4b: its doors). A call that hands
+    // the frame's owner the `plugins` surface, or a state that starts on it, outside frame/plugins/ and the catalog
+    // is a door's. There is exactly one, held both ways: it sits inside ChromeLayer's `openPlugins`, which the Me
+    // menu's Plugins… and the palette's two acts reach, and the doors' own files hand the frame nothing.
     const sets = /(?:[Ss]urface\w*\(|<FrameSurface[^>]*>\()\s*"plugins"/u;
     const files = (readdirSync(join(PACKAGE_ROOT, "src"), { recursive: true }) as string[])
       .map((name) => name.split("\\").join("/"))
       .filter((name) => /\.tsx?$/u.test(name))
       .filter((name) => !name.startsWith("frame/plugins/") && !name.startsWith("design-system/"));
     expect(files.length).toBeGreaterThan(100);
-    expect(files.filter((name) => sets.test(source(name)))).toEqual([]);
+    expect(files.filter((name) => sets.test(source(name)))).toEqual(["field/ChromeLayer.tsx"]);
+    const chrome = source("field/ChromeLayer.tsx");
+    const lines = chrome.split("\n");
+    const hits = lines.flatMap((line, index) => (sets.test(line) ? [index] : []));
+    expect(hits).toHaveLength(1);
+    // the one line stands between `openPlugins`'s opening and its close
+    const opens = lines.findIndex((line) => line.includes("const openPlugins = useCallback("));
+    const closes = lines.findIndex((line, index) => index > opens && /^ {2}\);$/u.test(line));
+    expect(opens).toBeGreaterThan(-1);
+    expect(hits[0]).toBeGreaterThan(opens);
+    expect(hits[0]).toBeLessThan(closes);
+    // every door reaches it, and the popup opens on the tab its door asked for
+    expect(chrome).toMatch(/onOpenPlugins=\{openPluginsOnDiscover\}/u);
+    expect(chrome).toMatch(/case "plugins":\s*openPlugins\(run\.tab\)/u);
+    expect(chrome).toMatch(/openOn=\{pluginsOpenOn\}/u);
+    for (const name of ["account/MeMenu.tsx", "frame/palette-acts.ts", "hud/CommandPalette.tsx"]) {
+      expect(source(name), name).not.toContain("onSurfaceChange(");
+      expect(source(name), name).not.toMatch(sets);
+    }
     expect(source("design-system/PluginsPreview.tsx")).toMatch(sets);
+  });
+
+  it("lets the Me menu take only the doors' words and the row's count from frame/plugins/ (MK-4b)", () => {
+    // VF-PM 2026-11-11 13:12:35Z, 4: account → frame is not a new direction (account/use-link-door.ts:3–5), and
+    // the Me menu takes two modules of the popup's and nothing else: never its controller, its view or its port.
+    const taken = [
+      ...source("account/MeMenu.tsx").matchAll(/from "(\.\.\/frame\/plugins\/[^"]+)"/gu),
+    ]
+      .map((match) => match[1])
+      .sort();
+    expect(taken).toEqual(["../frame/plugins/plugins-count", "../frame/plugins/plugins-words"]);
   });
 
   it('pins every line outside Plugins\' own files that names "plugins" — a new one is read before it lands (MK-4a)', () => {
     // VF-PM 2026-11-11 12:29:46Z: the regex above misses a toggle, a chord's row or a kind, so every line of src
     // outside frame/plugins/ and design-system/ that holds the literal "plugins" is pinned here by file. Each is
-    // Settings' own page, Agents' own list, or the frame's surface and modal rule. A new line anywhere is a red
-    // that makes someone read it: a door to the popup is MK-4b's and MK-4d's.
+    // Settings' own page, Agents' own list, the frame's surface and modal rule, or one of MK-4b's doors: the
+    // palette's run kind, act and two runs, ChromeLayer's surface call and case, and the Me menu's row key (VF-PM
+    // 13:03:43Z: the table grows only by MK-4b's own lines). A new line anywhere is a red that makes someone read
+    // it: the pegboard's door is MK-4d's.
     const PINNED: Readonly<Record<string, number>> = {
+      "account/MeMenu.tsx": 1,
       "field.tsx": 1,
+      "field/ChromeLayer.tsx": 2,
       "frame/frame-surface.ts": 1,
+      "frame/palette-acts.ts": 4,
       "panels/SettingsDialog.tsx": 3,
       "panels/SettingsPanel.tsx": 1,
       "panels/agents/ExtensionsView.tsx": 4,

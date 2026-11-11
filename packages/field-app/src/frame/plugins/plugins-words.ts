@@ -58,6 +58,24 @@ export const NO_LIST = {
   refused: "VibeField couldn't use the plugin list · Diagnostics has the details",
 } as const;
 
+/** The popup's doors (MK-4b; DESIGN.md §9 "The doors", James's ruled page): the Me menu's row and the palette's two
+ * acts say these, and import them from here rather than spell them. */
+export const PLUGINS_DOOR = {
+  /** The Me menu's row and the palette's act. */
+  name: "Plugins…",
+  /** The palette's act that opens the popup on Updates; no "…", as ruled (§9 "The '…'"). */
+  check: "Check plugins for updates",
+  /** The palette's small line under Plugins…: where else it lives. */
+  nameWhere: "Me menu",
+  /** The palette's small line under Check plugins for updates. */
+  checkWhere: "Plugins",
+} as const;
+
+/** The Me menu row's end once a read found updates: "1 update", "2 updates" (§9 "The doors"); none at 0. */
+export function updatesWords(count: number): string | null {
+  return count > 0 ? plural(count, "update", "updates") : null;
+}
+
 /** The window's fieldd did not answer either door: IS-282-2's ruled words (§9 "Installed, off and Remove…"); its
  * Try again is MK-5's (MK-E12). */
 export const PLUGINS_AWAY = "Plugins aren't available right now.";

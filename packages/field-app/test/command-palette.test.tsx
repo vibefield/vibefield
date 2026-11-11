@@ -149,7 +149,27 @@ describe("the palette (One Frame §7)", () => {
       "Actual size ⌘0",
       "# App",
       "Settings… ⌘,",
+      "Plugins…",
+      "Check plugins for updates",
     ]);
+  });
+
+  it("says where Plugins… and Check plugins for updates also live, wears their glyphs, and runs each on its tab (MK-4b)", () => {
+    // DESIGN.md §9 "The doors": the small lines "Me menu" and "Plugins"; no key; Check plugins for updates opens Updates
+    const { onAct } = mount();
+    const plugins = $('[data-row="plugins"]');
+    const check = $('[data-row="plugins-updates"]');
+    expect(plugins?.querySelector(".vf-menu-label small")?.textContent).toBe("Me menu");
+    expect(check?.querySelector(".vf-menu-label small")?.textContent).toBe("Plugins");
+    expect(plugins?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("plugin");
+    expect(check?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("reset");
+    expect(plugins?.querySelector(".vf-menu-key")).toBeNull();
+    expect(check?.querySelector(".vf-menu-key")).toBeNull();
+    act(() => (plugins as HTMLButtonElement).click());
+    expect(onAct).toHaveBeenLastCalledWith({ kind: "plugins", tab: "discover" });
+    act(() => (check as HTMLButtonElement).click());
+    expect(onAct).toHaveBeenLastCalledWith({ kind: "plugins", tab: "updates" });
+    expect(onAct).toHaveBeenCalledTimes(2);
   });
 
   it("follows the view: Godview's New terminal and System control, and no zoom off Canvas", () => {

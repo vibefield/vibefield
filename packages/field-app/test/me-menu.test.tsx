@@ -12,6 +12,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MeMenu, type MeMenuUpdate, MeMenuView, type MeMenuViewProps } from "../src/account/MeMenu";
 import type { AccountMe, AccountPerson } from "../src/account/use-account";
 import { followQuitState } from "../src/boot/switch";
+import {
+  getPluginUpdates,
+  resetPluginUpdates,
+  takePluginUpdates,
+} from "../src/frame/plugins/plugins-count";
 import { type FieldHost, type FieldUpdatesHost, setHost } from "../src/host";
 import { meUpdateRow } from "../src/panels/update-words";
 
@@ -53,10 +58,13 @@ afterEach(async () => {
   root = null;
   container?.remove();
   container = null;
+  // MK-4b: the Me row's count is one per window; no test leaves one behind, red or green
+  resetPluginUpdates();
 });
 
 type Spies = {
   onOpenSettings: ReturnType<typeof vi.fn>;
+  onOpenPlugins: ReturnType<typeof vi.fn>;
   onOpenAccount: ReturnType<typeof vi.fn>;
   onLink: ReturnType<typeof vi.fn>;
   onSwitch: ReturnType<typeof vi.fn>;
@@ -71,6 +79,7 @@ async function mountView(
 ): Promise<Spies> {
   const spies: Spies = {
     onOpenSettings: vi.fn(),
+    onOpenPlugins: vi.fn(),
     onOpenAccount: vi.fn(),
     onLink: vi.fn(),
     onSwitch: vi.fn(),
@@ -83,6 +92,7 @@ async function mountView(
       me: ME,
       others: OTHERS,
       onOpenSettings: spies.onOpenSettings,
+      onOpenPlugins: spies.onOpenPlugins,
       onOpenAccount: spies.onOpenAccount,
       onLink: spies.onLink,
       onSwitch: spies.onSwitch,
@@ -128,7 +138,7 @@ describe("MeMenuView", () => {
     expect(container?.querySelector(".vf-me-badge")).toBeNull();
   });
 
-  it("opens on the face and reads bottom-up: people, New user…, Settings…, then you", async () => {
+  it("opens on the face and reads bottom-up: people, New user…, Plugins…, Settings…, then you", async () => {
     const spies = await mountView();
     await act(async () => face().click());
     expect(spies.onOpenChange).toHaveBeenLastCalledWith(true);
@@ -136,18 +146,19 @@ describe("MeMenuView", () => {
     expect(container?.querySelector(".vf-me")?.hasAttribute("data-open")).toBe(true);
     expect(menu().hasAttribute("inert")).toBe(false);
     const labels = items().map((node) => node.textContent ?? "");
-    expect(labels).toHaveLength(5);
+    expect(labels).toHaveLength(6);
     expect(labels[0]).toContain("Work");
     expect(labels[1]).toContain("Sandbox");
     expect(labels[2]).toContain("New user…");
-    expect(labels[3]).toContain("Settings…");
+    expect(labels[3]).toContain("Plugins…");
+    expect(labels[4]).toContain("Settings…");
     // New user… wears a person, not a plus (One Frame FR-3: one plus on screen).
     expect(item("New user…")?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe(
       "person",
     );
     // You are the row nearest the face: the name, then the login.
-    expect(labels[4]).toContain("James");
-    expect(labels[4]).toContain("james@example.com");
+    expect(labels[5]).toContain("James");
+    expect(labels[5]).toContain("james@example.com");
     // The face never moves: a second click on it folds the menu.
     await act(async () => face().click());
     expect(spies.onOpenChange).toHaveBeenLastCalledWith(false);
@@ -162,7 +173,10 @@ describe("MeMenuView", () => {
     });
     expect(document.activeElement).toBe(item("Settings…"));
     await key(document.activeElement as Element, "ArrowUp");
+    expect(document.activeElement).toBe(item("Plugins…"));
+    await key(document.activeElement as Element, "ArrowUp");
     expect(document.activeElement).toBe(item("New user…"));
+    await key(document.activeElement as Element, "ArrowDown");
     await key(document.activeElement as Element, "ArrowDown");
     await key(document.activeElement as Element, "ArrowDown");
     expect(document.activeElement).toBe(item("James"));
@@ -192,6 +206,7 @@ describe("MeMenuView", () => {
       me: ME,
       others: OTHERS,
       onOpenSettings: vi.fn(),
+      onOpenPlugins: vi.fn(),
       onOpenAccount: vi.fn(),
       onLink: vi.fn(),
       onOpenChange: vi.fn(),
@@ -221,6 +236,63 @@ describe("MeMenuView", () => {
   it("names your row without a stray comma while the link is still loading", async () => {
     await mountView({ me: { ...ME, detail: "" } }, true);
     expect(item("James")?.getAttribute("aria-label")).toBe("James — account settings");
+  });
+
+  it("stands Plugins… directly above Settings…, wearing `plugin` and no key; Return still lands on Settings… (MK-4b)", async () => {
+    // DESIGN.md §8 "The Me menu" (MK-D1): nearest first, Settings… · Plugins… · …; its glyph at 18 (§13)
+    await mountView();
+    await act(async () => {
+      face().dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    });
+    const rows = items();
+    const plugins = item("Plugins…");
+    expect(plugins).toBeDefined();
+    expect(rows.indexOf(plugins as HTMLElement)).toBe(
+      rows.indexOf(item("Settings…") as HTMLElement) - 1,
+    );
+    expect(plugins?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("plugin");
+    expect(plugins?.querySelector("kbd")).toBeNull();
+    expect(plugins?.hasAttribute("data-me-nearest")).toBe(false);
+    expect(plugins?.textContent).toBe("Plugins…");
+    // AU-D5: the keyboard lands on Settings…, and ↑ reaches Plugins…
+    expect(document.activeElement).toBe(item("Settings…"));
+    await key(document.activeElement as Element, "ArrowUp");
+    expect(document.activeElement).toBe(plugins);
+  });
+
+  it("folds the menu and opens Plugins once on a press, as Settings… does (MK-4b)", async () => {
+    const spies = await mountView({}, true);
+    await act(async () => item("Plugins…")?.click());
+    expect(spies.onOpenPlugins).toHaveBeenCalledTimes(1);
+    expect(spies.onOpenSettings).not.toHaveBeenCalled();
+    expect(spies.onOpenChange).toHaveBeenLastCalledWith(false);
+    expect(document.activeElement).toBe(face());
+  });
+
+  it("ends in “1 update” once a read found one, in the ink of another user's “N waiting”; nothing on the face (MK-D11)", async () => {
+    await mountView({ pluginUpdates: 1 }, true);
+    const plugins = item("Plugins…");
+    expect(plugins?.textContent).toBe("Plugins…1 update");
+    expect(plugins?.querySelector(".vf-me-row-end")?.textContent).toBe("1 update");
+    // words, never a mark: no dot in the row, no badge on the face (§2.8 I-5, §2.5: no cyan)
+    expect(plugins?.querySelector(".vf-me-waiting-dot")).toBeNull();
+    expect(container?.querySelector(".vf-me-badge")).toBeNull();
+  });
+
+  it("says “2 updates” for two, and no count at all for none or before any read (MK-D11)", async () => {
+    await mountView({ pluginUpdates: 2 }, true);
+    expect(item("Plugins…")?.querySelector(".vf-me-row-end")?.textContent).toBe("2 updates");
+    await act(async () => root?.unmount());
+    container?.remove();
+    for (const pluginUpdates of [0, null, undefined]) {
+      await mountView(pluginUpdates === undefined ? {} : { pluginUpdates }, true);
+      expect(item("Plugins…")?.textContent, String(pluginUpdates)).toBe("Plugins…");
+      expect(item("Plugins…")?.querySelector(".vf-me-row-end"), String(pluginUpdates)).toBeNull();
+      await act(async () => root?.unmount());
+      container?.remove();
+    }
+    root = null;
+    container = null;
   });
 
   it("goes into the menu on an arrow from the face, opening it first", async () => {
@@ -311,6 +383,7 @@ describe("MeMenuView", () => {
     expect(container?.textContent).not.toContain("Switch to");
     expect(items().map((node) => node.textContent?.trim())).toEqual([
       "New user…",
+      "Plugins…",
       "Settings…⌘,",
       expect.stringContaining("James"),
     ]);
@@ -372,10 +445,12 @@ describe("MeMenuView", () => {
     expect(
       options.find((button) => button.getAttribute("aria-pressed") === "true")?.textContent,
     ).toBe("Auto");
-    // Nearest first: Theme stands just above Settings…, the nearest act.
+    // Nearest first: Plugins… stands just above Settings…, the nearest act, and Theme just above
+    // Plugins… (MK-D1).
     const rows = Array.from(container?.querySelectorAll(".vf-me-list > *") ?? []);
     const at = (node: Element | null | undefined): number => rows.indexOf(node as Element);
-    expect(at(container?.querySelector("[data-me-theme]"))).toBe(at(item("Settings…")) - 1);
+    expect(at(container?.querySelector("[data-me-theme]"))).toBe(at(item("Plugins…")) - 1);
+    expect(at(item("Plugins…"))).toBe(at(item("Settings…")) - 1);
     // The row's mark says what Auto resolves to.
     expect(
       container?.querySelector("[data-me-theme] [data-glyph]")?.getAttribute("data-glyph"),
@@ -392,6 +467,8 @@ describe("MeMenuView", () => {
     face().focus();
     await key(face(), "ArrowUp");
     expect(document.activeElement).toBe(item("Settings…"));
+    await key(document.activeElement as Element, "ArrowUp");
+    expect(document.activeElement).toBe(item("Plugins…"));
     await key(document.activeElement as Element, "ArrowUp");
     const held = document.activeElement as HTMLElement;
     expect(held.closest("[data-me-theme]")).not.toBeNull();
@@ -410,6 +487,7 @@ describe("MeMenuView", () => {
     await mountView({ theme: { preference: "dark", resolved: "dark" }, onThemeChange });
     face().focus();
     await key(face(), "ArrowUp");
+    await key(document.activeElement as Element, "ArrowUp");
     await key(document.activeElement as Element, "ArrowUp");
     expect((document.activeElement as HTMLElement).textContent).toBe("Dark");
     await key(document.activeElement as Element, "End");
@@ -513,6 +591,7 @@ describe("MeMenuView — the update row, the dot and the question (AU-2)", () =>
   ): Promise<UpdateSpies> {
     const spies: UpdateSpies = {
       onOpenSettings: vi.fn(),
+      onOpenPlugins: vi.fn(),
       onOpenAccount: vi.fn(),
       onLink: vi.fn(),
       onSwitch: vi.fn(),
@@ -535,6 +614,7 @@ describe("MeMenuView — the update row, the dot and the question (AU-2)", () =>
           setOpen(next);
         },
         onOpenSettings: spies.onOpenSettings,
+        onOpenPlugins: spies.onOpenPlugins,
         onOpenAccount: spies.onOpenAccount,
         onLink: spies.onLink,
         onSwitch: spies.onSwitch,
@@ -562,10 +642,11 @@ describe("MeMenuView — the update row, the dot and the question (AU-2)", () =>
       face().dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
     });
     const labels = items().map((node) => node.textContent ?? "");
-    expect(labels).toHaveLength(6);
-    expect(labels[3]).toContain("Settings…");
-    expect(labels[4]).toBe("Check for updatesYou're on the Oct 27 nightly");
-    expect(labels[5]).toContain("James");
+    expect(labels).toHaveLength(7);
+    expect(labels[3]).toContain("Plugins…");
+    expect(labels[4]).toContain("Settings…");
+    expect(labels[5]).toBe("Check for updatesYou're on the Oct 27 nightly");
+    expect(labels[6]).toContain("James");
     const list = container?.querySelector(".vf-me-list");
     expect(list?.lastElementChild?.classList.contains("vf-me-you")).toBe(true);
     // the keyboard lands on Settings… — never the row nearer it, so a double Return never restarts
@@ -857,9 +938,11 @@ describe("MeMenu (controller)", () => {
     {
       open = false,
       onOpenChange = () => undefined,
+      client = fieldd(),
     }: {
       open?: boolean;
       onOpenChange?: (open: boolean) => void;
+      client?: FielddClient;
     } = {},
   ): Promise<typeof onOpenSettings> {
     container = document.createElement("div");
@@ -869,8 +952,13 @@ describe("MeMenu (controller)", () => {
       root?.render(
         createElement(
           FielddProvider,
-          { client: fieldd() },
-          createElement(MeMenu, { open, onOpenChange, onOpenSettings }),
+          { client },
+          createElement(MeMenu, {
+            open,
+            onOpenChange,
+            onOpenSettings,
+            onOpenPlugins: () => undefined,
+          }),
         ),
       );
       await Promise.resolve();
@@ -925,7 +1013,12 @@ describe("MeMenu (controller)", () => {
         createElement(
           FielddProvider,
           { client },
-          createElement(MeMenu, { open, onOpenChange, onOpenSettings }),
+          createElement(MeMenu, {
+            open,
+            onOpenChange,
+            onOpenSettings,
+            onOpenPlugins: () => undefined,
+          }),
         ),
       );
       await Promise.resolve();
@@ -944,6 +1037,19 @@ describe("MeMenu (controller)", () => {
       onboarded: true,
     },
   ];
+
+  it("says the window's last read of the plugin list on Plugins…, and reads nothing as the menu opens (MK-4b)", async () => {
+    // the store is one value per window: this test starts it as a window does
+    resetPluginUpdates();
+    baseHost({ usersList: vi.fn(async () => ({ attachedUserId: "me", users: USERS })) });
+    const client = fieldd();
+    takePluginUpdates(2);
+    expect(getPluginUpdates()).toBe(2);
+    await mountController(vi.fn(), { open: true, client });
+    expect(item("Plugins…")?.querySelector(".vf-me-row-end")?.textContent).toBe("2 updates");
+    const asked = vi.mocked(client.request).mock.calls.map(([method]) => String(method));
+    expect(asked.filter((method) => method.startsWith("plugins."))).toEqual([]);
+  });
 
   it("draws the attached user's face from the roster, dealt when none is written", async () => {
     baseHost({ usersList: vi.fn(async () => ({ attachedUserId: "me", users: USERS })) });
@@ -1221,6 +1327,7 @@ describe("MeMenu (controller)", () => {
               setState((current) => ({ ...current, open: next }));
             },
             onOpenSettings,
+            onOpenPlugins: () => undefined,
             update: state.update,
           }),
         );

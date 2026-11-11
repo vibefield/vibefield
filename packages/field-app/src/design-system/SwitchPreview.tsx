@@ -131,6 +131,7 @@ export function SwitchPreview(): ReactElement {
             if (!next) setNotice(null);
           }}
           onOpenSettings={() => undefined}
+          onOpenPlugins={() => undefined}
           onOpenAccount={() => undefined}
           onLink={() => undefined}
           onSwitch={(userId, from) => {

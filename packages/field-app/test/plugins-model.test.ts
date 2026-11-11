@@ -268,6 +268,7 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
     [PLUGINS_FIXTURE_READ_AT, PLUGINS_FIXTURE_NOW],
     [PLUGINS_FIXTURE_READ_AT, PLUGINS_FIXTURE_NOW + 7 * 24 * 60 * 60_000],
   ],
+  updatesWords: [[0], [1], [2]],
 };
 
 /** The strings a value says: strings as they are, objects and arrays by their
@@ -313,5 +314,17 @@ describe("the popup's words (§9; James 2026-11-10 00:46Z: no insides)", () => {
     expect(out.length).toBeGreaterThan(30);
     const ruled = out.join("\n").replaceAll(words.NO_REGISTRY.title, "");
     expect(ruled).not.toMatch(/registry|signature|\bkeys?\b|hash|daemon|worker|restart|reload/i);
+  });
+
+  it("says the doors as §9 holds them, and a count only once a read found one (MK-4b)", () => {
+    expect(words.PLUGINS_DOOR).toEqual({
+      name: "Plugins…",
+      check: "Check plugins for updates",
+      nameWhere: "Me menu",
+      checkWhere: "Plugins",
+    });
+    expect(words.updatesWords(0)).toBeNull();
+    expect(words.updatesWords(1)).toBe("1 update");
+    expect(words.updatesWords(2)).toBe("2 updates");
   });
 });
