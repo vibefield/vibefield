@@ -4879,6 +4879,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *Amended 2026-11-05 (IOS-13a; VF-PM 02:29Z):* the welcome's glass ends with **Privacy Policy · Support** (12,
   `inkTertiary`, two links), under its link. Only the welcome carries them, so WI-L4's three places stand and nothing
   moves.
+  *Amended 2026-11-11 (James on the page The Way In, 23:00Z: WI-W2c B and WI-W4 B, so WI-L4 is amended):* a note
+  under the words is 12 in `inkSecondary`, the line's own ink, so it holds where the field's rays cross it; only size
+  tells the line from the note. The glass's legal line keeps `inkTertiary`. The acts' glass fits what it holds, on
+  every step and on the curtain: 18 above its first slot and 18 under the last thing it holds, with the slots as
+  before (the primary 50; a second 50 under a gap of 10; a link or a note at least 22 under a gap of 14; the
+  welcome's foot under a gap of 10). So a glass with one act is 86 tall, with two 146 (the curtain's: its act and
+  its note), with three 182 while the third is one line, and the welcome's, with its foot, about 206, where every
+  glass was 210. The primary keeps the glass's first slot; the glass's top moves with what it holds.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -7744,6 +7752,11 @@ with Touch ID, so the two sentences iOS shows for VibeField say "this device".)*
 With no passcode set the phone cannot lock: the way in offers nothing and has two steps, and a lock that was on
 stands down (VibeField opens, the switch is off and the no-passcode foot shows), since a lock that cannot ask must
 not hold the door.
+*Ruled 2026-11-11 (James on the page The Way In, 23:00Z: WI-W2a A, WI-W2b A and WI-W2d A; review finding L5 of
+2 Nov):* a join that fails keeps its hold and says, as its note, "Couldn’t connect." and nothing more: the network's
+own reason is VibeField's insides, and it stays off the screen. How it works' first three pages move on with
+**Next**; the fourth names its own act. The drafts above are ruled as written: the Touch ID swap, the words for a
+phone with only a passcode, and the reason iOS shows with their ask.
 
 **The phone's legal words** (track IOS, IOS-13a, 2026-11-05, from the 0.9 launch's "Fix what App Review would
 reject"; where each word stands is §8 "The phone's Settings" and "The phone's way in").
