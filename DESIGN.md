@@ -7664,7 +7664,8 @@ so the page's words stand clear and the tabs and search it keeps are not dimmed 
 2026-10-29 10:51:56Z). The corner moves with the pages:
 under the name "waiting for approval", "couldn’t connect", "signing out"; its notices "Sign in to
 Tailscale again to reach your desktops.", "An admin of your Tailscale network approves new devices.",
-"Couldn’t connect — ‹reason›."; its menu row **Continue with Tailscale** with no account and **Sign in
+"Couldn’t connect — ‹reason›." *(Since 2026-11-11, "Couldn’t connect." with no reason: "The way in",
+extended that day.)*; its menu row **Continue with Tailscale** with no account and **Sign in
 again** with one; its desktops each wear their OS mark. While the welcome stands, the corner steps
 aside on the Field tab, so its one act is said once. *Added with TS-7b (Q2 A):* the welcome also offers
 **Scan the code on your Mac** — the phone's reader for the Mac's Add your phone code, which tells it the
@@ -7757,6 +7758,12 @@ not hold the door.
 own reason is VibeField's insides, and it stays off the screen. How it works' first three pages move on with
 **Next**; the fourth names its own act. The drafts above are ruled as written: the Touch ID swap, the words for a
 phone with only a passcode, and the reason iOS shows with their ask.
+*Extended 2026-11-11 (VF-PM 23:16:47Z, by James's rule of 10 Nov 00:46Z that VibeField's insides stay off the
+screen):* the same sentence, "Couldn’t connect.", with no reason, wherever a failure's own text stood: the corner's
+notice (TS-7's "Couldn’t connect — ‹reason›." in "The phone's door"), the state on Tailscale's card in Settings ›
+Account (§8 "The phone's Settings" takes §9's words), the welcome's note when a first sign-in fails, and the note
+under **Sign in to Tailscale again.** when its sign-in sheet could not open. A reason may go to the log, as ids and
+codes; it is never said.
 
 **The phone's legal words** (track IOS, IOS-13a, 2026-11-05, from the 0.9 launch's "Fix what App Review would
 reject"; where each word stands is §8 "The phone's Settings" and "The phone's way in").
