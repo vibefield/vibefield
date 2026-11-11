@@ -8907,6 +8907,20 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   which asks **Remove ‹plugin› and its data?** · **Cancel** · **Remove data**. Remove… takes the set off every
   desktop, its settings and data kept, and **Remove it and its data…** "stays the separate red, two-step act"
   (MK-E10, the lean's words).
+  *Added 2026-11-11 (MK-4a's code; VF-PM 12:07:40Z), MK's words, ‹draft›, for James's eye:*
+  - Installed's line, until the plugin's page (MK-4c), says no place: "3 objects · 1.2.0", "1 object · 0.1.0". It
+    differs from the ruled line above, which says where a set hangs ("4 objects · Things, Tools · 1.0.0"; "Hangs under
+    Things · 1.0.0"), for those names are the pegboard's and the popup does not read them yet. A built-in's keeps its
+    version before its end, "3 objects · 1.2.0 · comes with VibeField".
+  - A plugin with no object and one of the two says "No objects · a service" or "No objects · tools", and with
+    neither, "No objects".
+  - One of a thing is said as one: "1 plugin", "1 object".
+  - Words typed in the field filter Installed by a plugin's name and its objects' names; when no plugin holds every
+    word, "None of your plugins matches “‹words›”."
+  - A list past its date says no date, "The plugin list expired · installs wait for a newer one", in the attention
+    ink, for the plugin list VibeField holds carries no expiry yet, and fieldd sends no such state.
+  - To assistive tech, the switch is named "Discover · Installed · Updates", the field by its words, "Search plugins
+    and objects…", and Installed's list "Installed".
 - **Sources** (MK-D13; MK-E11). **Built in** (a bundled plugin, decided first) · **VibeField** (a listed plugin
   VibeField publishes) · the publisher's name otherwise, with **Community** beside it on a community row ·
   **Development** and **Sideloaded**, as today. Never "Registry", "Registry · ‹publisher›" or "Built by the registry";
