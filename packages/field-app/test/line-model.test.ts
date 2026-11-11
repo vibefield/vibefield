@@ -97,7 +97,7 @@ describe("the snapshot (HN-D2; SNAP-D3)", () => {
     expect(snapshotKey("mac")).toBe("⌃⌘A");
     expect(snapshotKey("other")).toBe("Alt+A");
     expect(SNAPSHOT_NO_DOOR).toBe("no capture here");
-    expect(SNAPSHOT_NO_HELPER).toBe("no capture helper on this platform");
+    expect(SNAPSHOT_NO_HELPER).toBe("snapshots aren't available on this computer");
   });
 
   it("says every refusal the capture door can give in the Snap tile's words, else the tool's own reason", () => {
@@ -114,8 +114,8 @@ describe("the snapshot (HN-D2; SNAP-D3)", () => {
       "capture-failed": own,
       "no-displays": own,
       "write-failed": own,
-      "unsupported-platform": "Not captured — no capture helper on this platform",
-      "helper-missing": "Not captured — no capture helper on this platform",
+      "unsupported-platform": "Not captured — snapshots aren't available on this computer",
+      "helper-missing": "Not captured — snapshots aren't available on this computer",
       busy: "Not captured — one capture at a time",
       "helper-spawn-failed": own,
       "helper-timeout": own,
@@ -316,7 +316,7 @@ describe("what the deck lends the line (FR-2)", () => {
     });
     expect(newTerminalOutcome({ state: "no-pane" })).toEqual({
       state: "refused",
-      reason: "no pane to open it in — open one in the deck first",
+      reason: "no pane to open it in — open a terminal in Godview first",
     });
   });
 });

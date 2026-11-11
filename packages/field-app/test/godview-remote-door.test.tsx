@@ -499,6 +499,15 @@ describe("select routes by source", () => {
     expect(ackText(view)).toBe("rosetta attached from studio");
   });
 
+  it("another desktop's run with no pane to attach to says so in Godview's words: open a terminal first (IS-282-7)", async () => {
+    const door = fakeDoor(null, LOCAL_ROWS, [peerRow("run-s1", { terminalSessionId: "pty-s1" })]);
+    door.attach.mockResolvedValueOnce({ state: "no-pane" });
+    const view = await mountMonitor(door);
+    await act(async () => remoteRows(view)[0]?.click());
+    expect(door.attach).toHaveBeenCalledTimes(1);
+    expect(ackText(view)).toBe("no pane to attach to — open a terminal first");
+  });
+
   it("a LOCAL row asks the door to MOUNT its PTY — never to attach (the split-routing test)", async () => {
     const door = fakeDoor();
     const view = await mountMonitor(door);

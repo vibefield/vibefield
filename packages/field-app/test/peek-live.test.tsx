@@ -286,7 +286,7 @@ describe("the rows and the words (`peek-live.ts`)", () => {
         rows,
         status: { reachable: false, detail: "no deck", checkedAt: CHECKED_AT },
       }),
-    ).toBe("1 live session, waiting first · transcript search off — no deck");
+    ).toBe("1 live session, waiting first · search isn't available right now");
     expect(liveFoot({ ...base, feed: { kind: "connecting" }, query: "", rows: [] })).toBe(
       "Asking what runs…",
     );
@@ -300,7 +300,12 @@ describe("the rows and the words (`peek-live.ts`)", () => {
     ).toBe("What runs could not be read — fieldd refused");
     expect(
       liveIndexWords({ ...READY, readiness: "building", progress: { done: 2, total: 5 } }),
-    ).toBe("indexing · 40%");
+    ).toBe("search is getting ready · 40%");
+    // with no count yet, and stopped: the same plain words (IS-282-7)
+    expect(liveIndexWords({ ...READY, readiness: "building" })).toBe("search is getting ready");
+    expect(liveIndexWords({ ...READY, readiness: "failed" })).toBe(
+      "search isn't available right now",
+    );
     expect(liveNone({ kind: "live" }, "word", false)).toBe(
       "No live session holds every word of “word”.",
     );

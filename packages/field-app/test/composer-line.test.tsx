@@ -417,10 +417,12 @@ describe("the snapshot (HN-D2; SNAP's door on the line)", () => {
       tool.answer({ status: "error", code: "helper-missing", message: "no helper was built" }),
     );
     expect(q(".vf-line-note").textContent).toBe(
-      "Not captured — no capture helper on this platform",
+      "Not captured — snapshots aren't available on this computer",
     );
     expect(snapshot().getAttribute("aria-disabled")).toBe("true");
-    expect(snapshot().getAttribute("title")).toBe("Snapshot — no capture helper on this platform");
+    expect(snapshot().getAttribute("title")).toBe(
+      "Snapshot — snapshots aren't available on this computer",
+    );
     act(() => snapshot().click());
     expect(tool.asked()).toBe(1);
     // ⌃⌘A, run by main once the helper is built, kept a still: the hand's subscription notes it
@@ -459,7 +461,9 @@ describe("the snapshot (HN-D2; SNAP's door on the line)", () => {
     act(() => {
       noteCapture({ status: "error", code: "busy", message: "one capture at a time" });
     });
-    expect(snapshot().getAttribute("title")).toBe("Snapshot — no capture helper on this platform");
+    expect(snapshot().getAttribute("title")).toBe(
+      "Snapshot — snapshots aren't available on this computer",
+    );
   });
 });
 
@@ -811,12 +815,12 @@ describe("the create's keys (DESIGN.md §10; One Frame §11)", () => {
   it("says a new terminal cannot open while the deck has no connection", async () => {
     mount("godview", { door: null });
     expect(create().getAttribute("aria-disabled")).toBe("true");
-    expect(create().getAttribute("title")).toBe("New terminal — the deck is not connected yet");
+    expect(create().getAttribute("title")).toBe("New terminal — terminals aren't ready yet");
     await act(async () => {
       press(document.body, { key: "t", metaKey: true });
     });
     expect(q(".vf-line-note").textContent).toBe(
-      "Terminal could not be opened — the deck is not connected yet",
+      "Terminal could not be opened — terminals aren't ready yet",
     );
   });
 });

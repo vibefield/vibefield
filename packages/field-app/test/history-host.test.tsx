@@ -849,7 +849,7 @@ describe("the acts", () => {
     // no deck came in the bound
     expect(
       await newTerminalIn({ ...depsOf(client, door), deck: async () => null, unplaced }, "/w"),
-    ).toEqual({ state: "refused", reason: "the deck is not connected yet" });
+    ).toEqual({ state: "refused", reason: "terminals aren't ready yet" });
     expect(unplaced).toHaveBeenLastCalledWith("terminal");
     // a deck that throws as it births
     const throwing = {

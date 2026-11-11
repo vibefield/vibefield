@@ -3,7 +3,7 @@
  * DK-9, DK-11 — THE BAR'S WORDS FOR AN OBJECT (field/desk/desk-object-words.ts; DK-D18 as amended: ICE's missing
  * face is the one face, and the selection bar prints the type's name; DESIGN.md §8 "The missing face", R12, R24).
  * What the chrome says of an object — its human name, and why the desk draws it as missing, in one of FIVE words:
- * "plugin off" (disabled) · "plugin gone" (uninstalled) · "no kind" (never registered) · "remount to draw it"
+ * "plugin off" (disabled) · "plugin gone" (uninstalled) · "can't draw here" (never registered) · "reload to draw it"
  * (its plugin on, the desk mounted without its kind — I25) · "can't draw" (its kind faulted — I24); nothing more
  * when its kind draws it.
  */
@@ -61,22 +61,22 @@ describe("the bar's words for an object (DK-9, DK-11)", () => {
     });
   });
 
-  it('a type this build never registered — a ghost stub\'s, no kind and no plugin: "no kind", by its type', () => {
+  it("a type this build never registered — a ghost stub's, no kind and no plugin: \"can't draw here\", by its type", () => {
     expect(objectWords("vendor.elsewhere.dial", { ...facts, kinded: false })).toEqual({
       type: "vendor.elsewhere.dial",
       title: "vendor.elsewhere.dial",
-      state: "no kind",
-      label: "vendor.elsewhere.dial · no kind",
+      state: "can't draw here",
+      label: "vendor.elsewhere.dial · can't draw here",
     });
   });
 
-  it('its plugin ON but the desk mounted without its kind (I25): "remount to draw it" — turned on again, or new to this engine', () => {
+  it('its plugin ON but the desk mounted without its kind (I25): "reload to draw it" — turned on again, or new to this engine', () => {
     // on again: the record enabled, the mount's off set still holding it
     expect(objectWords(CLOCK, { ...facts, off: new Set([CLOCK]) }).label).toBe(
-      "Clock · remount to draw it",
+      "Clock · reload to draw it",
     );
     // new to this engine: enabled, and no kind in its catalog
-    expect(objectWords(CLOCK, { ...facts, kinded: false }).state).toBe("remount to draw it");
+    expect(objectWords(CLOCK, { ...facts, kinded: false }).state).toBe("reload to draw it");
   });
 
   it("a kind the desk refused or quarantined (I24): \"can't draw\" — never the desk's raw fault", () => {

@@ -1707,7 +1707,19 @@ describe("the monitor stage", () => {
     expect(ackText(host)).toBe("terminal could not be opened — terminal capacity reached");
     door.createTerminal.mockResolvedValueOnce({ state: "no-pane" });
     await expect(createAt()).resolves.toEqual({ opened: false });
-    expect(ackText(host)).toContain("no pane");
+    expect(ackText(host)).toBe("no pane to open a terminal in — open a terminal in Godview first");
+  });
+
+  it("says a session with no pane to mount into in Godview's words: open a terminal first (IS-282-7)", async () => {
+    const door = fakeDoor();
+    door.mountLocal.mockResolvedValueOnce({ state: "no-pane" });
+    const host = await mountMonitor("list", door);
+    const row = [...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-list-row")].find(
+      (candidate) => candidate.textContent?.includes("vibe-field"),
+    );
+    await act(async () => row?.click());
+    expect(door.mountLocal).toHaveBeenCalledTimes(1);
+    expect(ackText(host)).toBe("no pane to mount into — open a terminal first");
   });
 
   it("wears the head where the instrument bar stood, and nothing the bar held beside the views (GV-D1)", async () => {

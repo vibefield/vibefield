@@ -50,17 +50,17 @@ describe("describePane", () => {
     });
   });
 
-  it("gives a nonzero code the red of §2.5, and states the code", () => {
+  it("gives a nonzero code the red of §2.5, and says it exited with an error — never the code (IS-282-7)", () => {
     expect(describePane(session({ id: "a", exited: true, exitCode: 127 }))).toEqual({
-      label: "exited · 127",
+      label: "exited with an error",
       color: "var(--vf-red)",
     });
   });
 
-  it("names the signal when one ended it", () => {
+  it("says a signal's ending as the page's \"ended\", in red — never the signal's name (IS-282-7)", () => {
     expect(
       describePane(session({ id: "a", exited: true, exitCode: null, exitSignal: "SIGKILL" })),
-    ).toEqual({ label: "ended · SIGKILL", color: "var(--vf-red)" });
+    ).toEqual({ label: "ended", color: "var(--vf-red)" });
   });
 
   it("admits it does not know how a session ended rather than inventing a code", () => {

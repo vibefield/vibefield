@@ -726,8 +726,9 @@ describe("the sync dot and the tiles' sync words (C6-4, UA-D7)", () => {
     const dot = $("[data-sync-dot]") as HTMLElement;
     expect(dot.dataset.dot).toBe("muted");
     // F-C6-22 honesty: the words say what we knew and when — never "up to date".
-    expect(dot.title).toContain("offline");
-    expect(dot.title).toContain("last exchange");
+    expect(dot.title).toMatch(
+      /^One of your devices is offline — not everything here has reached it — last exchange /u,
+    );
   });
 
   it("shows the attention dot for the needs-attention states", () => {
@@ -739,7 +740,19 @@ describe("the sync dot and the tiles' sync words (C6-4, UA-D7)", () => {
     mount();
     const dot = $("[data-sync-dot]") as HTMLElement;
     expect(dot.dataset.dot).toBe("attention");
-    expect(dot.title).toContain("unknown-doc");
+    // the decline's own reason stays inside; the status names no peer, so none is said (IS-282-7)
+    expect(dot.title).toMatch(
+      /^One of your devices didn't take the latest changes — last exchange /u,
+    );
+    expect(dot.title).not.toContain("unknown-doc");
+  });
+
+  it("says a field parted by compaction as catching up, in attention (IS-282-7)", () => {
+    act(() => setDocSyncStatuses([syncStatus({ docId: DOC_A, state: "epoch-stale" })]));
+    mount();
+    const dot = $("[data-sync-dot]") as HTMLElement;
+    expect(dot.dataset.dot).toBe("attention");
+    expect(dot.title).toMatch(/^Catching up with your other devices — last exchange /u);
   });
 
   it("counts what pending waits on", () => {
@@ -747,7 +760,9 @@ describe("the sync dot and the tiles' sync words (C6-4, UA-D7)", () => {
       setDocSyncStatuses([syncStatus({ docId: DOC_A, state: "pending", pendingRecords: 3 })]),
     );
     mount();
-    expect(($("[data-sync-dot]") as HTMLElement).title).toContain("3 records");
+    expect(($("[data-sync-dot]") as HTMLElement).title).toMatch(
+      /^Waiting on 3 changes from another device — last exchange /u,
+    );
   });
 
   it("keeps the dot to the CURRENT field; the others speak through their tiles", () => {

@@ -659,6 +659,38 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     expect(pop()).toBeNull();
   });
 
+  /** The foot has left `before` and is not the ask in flight: an answer, or a refusal, has come. */
+  const settledFrom = (before: string): boolean =>
+    foot() !== before && foot() !== "Searching your past…";
+
+  it("says, where the list would be, an index with no answer and a door that refused — in Search's words (IS-282-7)", async () => {
+    const building = fixture("index-search-result.building.json");
+    const client = fieldd((params) => {
+      if (params["q"] === "zeppelin") return ANSWERED([]);
+      if (params["q"] === "catalog building") return building;
+      if (params["q"] === "refused") throw new Error("the agent index answered 500");
+      return ANSWERED(CATALOG_HITS);
+    });
+    mount(client);
+    await openHistory();
+    const input = await openPeek();
+    // an answer with nothing in it first, so the list is empty when the index cannot answer
+    typeInto(input, "zeppelin");
+    await until(() => (foot() === "0 sessions · 0 lines matched" ? true : null), "the answer");
+    const answered = foot();
+    typeInto(input, "catalog building");
+    await until(() => (settledFrom(answered) ? true : null), "the unanswered foot");
+    expect(pop()?.querySelector(".vf-peek-none")?.textContent).toBe(
+      "Search is getting ready · 21%.",
+    );
+    const unanswered = foot();
+    typeInto(input, "refused");
+    await until(() => (settledFrom(unanswered) ? true : null), "the refusal");
+    expect(pop()?.querySelector(".vf-peek-none")?.textContent).toBe(
+      "Search isn't available right now.",
+    );
+  });
+
   it("says what it found in words: nothing matching, an index with no answer (keeping what it showed), a door that refused — and an open quote asks nothing", async () => {
     const building = fixture("index-search-result.building.json");
     const client = fieldd((params) => {
@@ -677,13 +709,15 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     );
     await searchCatalog(input);
     // unanswered: the rows it showed stay, and the foot says why
+    const answered = foot();
     typeInto(input, "catalog building");
-    await until(() => (foot().startsWith("No answer yet") ? true : null), "the unanswered foot");
-    expect(foot()).toBe("No answer yet — the index is being built · 21%");
+    await until(() => (settledFrom(answered) ? true : null), "the unanswered foot");
+    expect(foot()).toBe("Search is getting ready · 21%");
     expect(options()).toHaveLength(2);
+    const unanswered = foot();
     typeInto(input, "refused");
-    await until(() => (foot().startsWith("Search could not") ? true : null), "the refusal");
-    expect(foot()).toBe("Search could not ask the index — the agent index answered 500");
+    await until(() => (settledFrom(unanswered) ? true : null), "the refusal");
+    expect(foot()).toBe("Search isn't available right now");
     // a quote still open asks nothing
     const asked = client.calls.filter((call) => call.method === "index.search").length;
     typeInto(input, '"cargo te');

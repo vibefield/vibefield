@@ -174,11 +174,21 @@ describe("the foot and the empty body say what is listed, in numbers and in word
 
   it("an index with no answer says why — never 'no matches'", () => {
     const building = IndexSearchResult.parse(fixture("index-search-result.building.json"));
-    expect(peekFoot({ kind: "answer", result: building }, [])).toMatch(
-      /^No answer yet — the index is being built · 21%$/u,
+    expect(peekFoot({ kind: "answer", result: building }, [])).toBe(
+      "Search is getting ready · 21%",
+    );
+    // building with no count yet, and an index that stopped: its own detail stays off (IS-282-7)
+    const counting = { ...building, state: { readiness: "building" as const } };
+    expect(peekFoot({ kind: "answer", result: counting }, [])).toBe("Search is getting ready");
+    const stopped = {
+      ...building,
+      state: { readiness: "failed" as const, detail: "the index stopped" },
+    };
+    expect(peekFoot({ kind: "answer", result: stopped }, [])).toBe(
+      "Search isn't available right now",
     );
     expect(peekFoot({ kind: "failed", reason: "fieldd is not answering" }, [])).toBe(
-      "Search could not ask the index — fieldd is not answering",
+      "Search isn't available right now",
     );
   });
 

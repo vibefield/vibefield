@@ -325,7 +325,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     ).not.toBeNull();
     expect(
       importing?.querySelector('.vf-views-cell[data-view="history"]')?.getAttribute("aria-label"),
-    ).toBe("History, importing");
+    ).toBe("History, reading");
     // One Frame FR-2, LN-D1: the line — live on its real controller over the
     // frame's field (the track at its left end), and a plate per state the Cards
     // in Hand page draws for it, the last Godview's keys as Windows prints them.

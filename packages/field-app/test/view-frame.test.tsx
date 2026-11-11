@@ -297,7 +297,7 @@ describe('History\'s arc (AO-4b; DESIGN.md §6 "the arc", §8 the views track)',
   it("turns on History's cell while History imports, and the cell says so", async () => {
     await mountWith(status("backfilling", { readiness: "building", canonicalReady: false }));
     expect(arc()).not.toBeNull();
-    expect(cell("history").getAttribute("aria-label")).toBe("History, importing");
+    expect(cell("history").getAttribute("aria-label")).toBe("History, reading");
     // no number, no badge: the cell is otherwise unchanged and still presses
     expect(cell("history").textContent).toBe("⌘3");
     expect(cell("history").title).toBe("History  ⌘3");

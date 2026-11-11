@@ -608,8 +608,8 @@ describe("the Canvas stage mounts the desk", () => {
     expect(door?.words("vibefield.comment-pad")).toMatchObject({ state: "plugin off" });
     expect(door?.words("desk.note")).toMatchObject({ state: null });
     expect(door?.words("vendor.absent.thing")).toMatchObject({
-      state: "no kind",
-      label: "vendor.absent.thing · no kind",
+      state: "can't draw here",
+      label: "vendor.absent.thing · can't draw here",
     });
   });
 
