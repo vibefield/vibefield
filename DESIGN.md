@@ -6640,6 +6640,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *Amended 2026-11-06 (track UM; UM-D26 A, ruled by James on the page The Bands Meter):* **Agent Profiles is a sheet
   of its own** in Settings' materials, opened from the corner's Me menu and from the profile token's menu (§8 "The
   phone's corner"), never a page of this root, which gains no row for it.
+  *Amended 2026-11-11 (IOS-10c; James on the page Settings in a Pocket, 23:00Z: agents, a read-only glance; VF-PM
+  23:20:56Z: the home desktop's page alone, for now):* the home's page gains **Agents**, under **This desktop**,
+  headed with **Read-only**. It has one row for each agent the home's catalog offers (`supported` or `preview`), in
+  the catalog's order: the agent's mark on a 28 tile (the kit's drawn glyph where the build carries one, its letter
+  otherwise), its name, and under it its sign-ins, from the home's profiles. ‹draft for James: one profile says
+  **Signed in**, **Signing in…**, **Not signed in** or **Not read yet**; several say each profile's name with its
+  word, joined by " · "; an agent no profile holds says **Not signed in**. The foot: "Sign in and manage agents on
+  this desktop."› Its usage stays on the Agent Profiles sheet, one tap from the corner. Every other desktop's page
+  has no Agents section at all, since the phone reads agents only through its home; reading every desktop's is a
+  later slice, its design first. The section stands only once the home's catalog has answered, never empty.
 - **The phone's corner — your face, held, and Agent Profiles** (track UM, ruled 2026-11-06 from the page *The Bands
   Meter*: UM-D24, UM-D25 and UM-D26 A; UM-D8 and UM-D12 carried A at the leans; the drawing is
   `draft/profile-meters/round4/src/p4f-frames.js` and `round4.css`, the bloom's numbers `p3c-phone.js`). The account
