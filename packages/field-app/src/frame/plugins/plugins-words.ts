@@ -21,10 +21,10 @@ export const PLUGINS_TAB_WORDS = {
 /** The switch's name to assistive tech: its three parts, as §8 writes the switch. */
 export const PLUGINS_SWITCH_NAME = "Discover · Installed · Updates";
 
-/** No build configures a registry (§9 "No plugin registry yet"; Q5 is James's: this one module changes if he
- * answers). */
+/** No build configures a plugin list (§9 "Nothing to discover yet", ‹draft›; James's MK-O5 pick: the popup never
+ * says "registry"). */
 export const NO_REGISTRY = {
-  title: "No plugin registry yet",
+  title: "Nothing to discover yet",
   description: "The plugins that come with VibeField are in Installed.",
   act: "Show installed",
   updates: "Plugins that come with VibeField update with it.",

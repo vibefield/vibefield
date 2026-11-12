@@ -16,13 +16,9 @@ export function PluginsSection(): ReactElement {
       index="11b"
       eyebrow="Plugins"
       title="The frame's second popup"
-      description="One place for plugins, built the way search is: the same materials over the same scrim, its field, its switch and its foot. Each opening shows the plugin list VibeField holds at once and reads it once. Installed lists what this desktop has. No build configures a registry yet, so Discover says so and offers Installed."
+      description="One place for plugins, built the way search is: the same materials over the same scrim, its field, its switch and its foot. Each opening shows the plugin list VibeField holds at once and reads it once. Installed lists what this desktop has. No build configures a plugin list yet, so Discover says there is nothing to discover and offers Installed."
     >
-      <Specimen
-        title="Discover — no plugin registry yet"
-        source="frame/plugins/PluginsView.tsx"
-        bleed
-      >
+      <Specimen title="Discover — no plugin list yet" source="frame/plugins/PluginsView.tsx" bleed>
         <PluginsPlate state="no-registry" />
       </Specimen>
       <Specimen

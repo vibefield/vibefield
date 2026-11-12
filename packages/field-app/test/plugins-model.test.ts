@@ -844,7 +844,7 @@ function said(
 }
 
 describe("the popup's words (§9; James 2026-11-10 00:46Z: no insides)", () => {
-  it("names no key, signature, hash, daemon, worker, restart or reload, and no registry but the ruled one", () => {
+  it("names no key, signature, hash, daemon, worker, restart, reload or registry", () => {
     const out: string[] = [];
     const uncalled: string[] = [];
     const used = new Set<string>();
@@ -852,8 +852,9 @@ describe("the popup's words (§9; James 2026-11-10 00:46Z: no insides)", () => {
     expect(uncalled).toEqual([]);
     expect(Object.keys(SAMPLES).filter((path) => !used.has(path))).toEqual([]);
     expect(out.length).toBeGreaterThan(30);
-    const ruled = out.join("\n").replaceAll(words.NO_REGISTRY.title, "");
-    expect(ruled).not.toMatch(/registry|signature|\bkeys?\b|hash|daemon|worker|restart|reload/i);
+    // no exemption: James's MK-O5 pick took the last word that said it (§9, Sources)
+    const all = out.join("\n");
+    expect(all).not.toMatch(/registry|signature|\bkeys?\b|hash|daemon|worker|restart|reload/i);
   });
 
   it("says the doors as §9 holds them, and a count only once a read found one (MK-4b)", () => {
