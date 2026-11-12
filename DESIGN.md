@@ -2207,7 +2207,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - where fieldd was not listening while Vela moved (a restart mid-turn; written only on that evidence): "Part of
       this conversation happened while VibeField restarted — it's in Vela's terminal";
     - where a line failed its check and was not served: "Part of this conversation couldn't be checked, so it isn't
-      shown", said once, at the flow's top.
+      shown", said once, at the flow's top;
+    - where a turn of Vela's ended before it finished, for any failure alike (the agent's own word for why stays
+      inside): "Vela couldn't finish — what happened is in Vela's terminal", where the turn ended (item 230).
   - **Your bubble's receipt** (TH-Q4 (a); PC-L1, one Chat: §9 "Chat on the phone"'s words): 11.5 regular in tertiary
     ink, 6 under the bubble at its right. Your words are queued to the spark's input (Send, §8 "Chat's composer"),
     never pasted, and land at its next idle moment:
@@ -10414,7 +10416,11 @@ field gives them, and “q” what was typed.
   what it touched. VibeField's own: "VibeField told Vela: ‹what it told›" · "You answered Vela: Yes" · "Vela told you:
   the build is green"; an act this build does not know is drawn in its own words.
 - The honest lines (TH-1): "Earlier messages are in Vela's terminal" · "Part of this conversation happened while
-  VibeField restarted — it's in Vela's terminal" · "Part of this conversation couldn't be checked, so it isn't shown".
+  VibeField restarted — it's in Vela's terminal" · "Part of this conversation couldn't be checked, so it isn't shown" ·
+  "Vela couldn't finish — what happened is in Vela's terminal".
+  - *Amended 2026-11-12 (item 230; James, 06:20:23Z, "Couldn't finish"):* a turn that ended before it finished says
+    the fourth line where it ended, for every failure alike. Why it failed is the agent's own word and stays inside
+    (§9 "Voice"); a reason waits on a word of the agent runtime's own that names no vendor (item 230, queued).
 - Your bubble's receipt (TH-1; the phone's words, "Chat on the phone" above, with Chat's straight apostrophes):
   "Waking Vela…" · "Queued" · "Queued · Vela is busy; it lands when it's done" · "Queued · it lands after you answer
   Vela" · "Delivered" · "Not delivered: Vela's session ended" · "Vela may not have it: look in its pane".
