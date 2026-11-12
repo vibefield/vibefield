@@ -5,7 +5,8 @@ import SwiftUI
 
 /// Settings › Terminal (IOS-10a): the terminal's look on this phone, in the
 /// chrome family's voice and the desktop's words (its Terminal › Look tab:
-/// Theme, Background opacity, Effects, Animate effects).
+/// Theme, Background opacity, Effects, Animate effects), under the preview
+/// that tab opens on (item 358, `TerminalLookPreview`).
 ///
 /// It was the terminal settings sheet (D-i8), drawn in the godview mono, and
 /// the phone's only settings; Settings pushes it now, and the card's `···`
@@ -35,6 +36,15 @@ public struct TerminalSettingsPage: View {
 
   public var body: some View {
     List {
+      // Item 358 — the page opens on its preview, as the desktop's Look does: a picture on the sheet's paper, no tile
+      Section {
+        TerminalLookPreview(appearance: appearance)
+          .listRowInsets(EdgeInsets())
+          .listRowBackground(Color.clear)
+          .listRowSeparator(.hidden)
+      } header: {
+        ChromeListHead("Preview")
+      }
       Section {
         NavigationLink(value: TerminalSettingsRoute.theme) {
           ChromeRow("Theme", value: TerminalSettingsModel.themeName(of: appearance))
