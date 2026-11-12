@@ -1403,7 +1403,7 @@ public struct HomeScreen: View {
   @ViewBuilder private var appsShelfLayer: some View {
     if appsDoor.shelfOpen {
       AppsShelfView(
-        reading: apps.reading, door: appsDoor, here: Self.appsHere, zoom: appsZoom, safeTop: safeTop,
+        reading: apps.reading, door: appsDoor, here: Self.appsHere, zoom: appsZoom,
         onOpen: { openApp($0) }, onAbout: { appsAboutApp = $0 })
     }
   }

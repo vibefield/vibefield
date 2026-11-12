@@ -166,7 +166,6 @@ struct AppsShelfView: View {
   let door: AppsDoorModel
   let here: String
   let zoom: Namespace.ID
-  let safeTop: CGFloat
   let onOpen: (IndexAppRow) -> Void
   let onAbout: (IndexAppRow) -> Void
 
@@ -209,7 +208,7 @@ struct AppsShelfView: View {
         }
       }
       .padding(.horizontal, AppsShelfChrome.side)
-      .padding(.top, safeTop + Self.headGap)
+      .padding(.top, AppsShelfChrome.topInset)
       .padding(.bottom, AppsShelfChrome.cardShowing + Self.groupGap)
     }
     .scrollIndicators(.hidden)

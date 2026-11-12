@@ -63,8 +63,8 @@ enum AppIcon {
 /// The shelf, at the bar's measure.
 enum AppsShelfChrome {
   static let side: CGFloat = AppBar.margin
-  /// RED, item 273: a stub.
-  static let topInset: CGFloat = 0
+  /// Under the safe area, which the shelf's scroll view already insets (item 273).
+  static let topInset: CGFloat = 14
   static let searchHeight: CGFloat = 48
   static let across = 4
   static let icon: CGFloat = 60
