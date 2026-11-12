@@ -1115,6 +1115,11 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
     at six sites;
   - the Last run row reads the host's own days.
   - vf-m2's first verifies, run220 and run221, were host findings: Xcode 26.3's ld against the CLT 27.2 default SDK.
+- Landed 11-12: **items 340 and 349** (`bdf8c2d6b` → `dd121277c`, 2 commits, M289, carried onto IOS's records
+  `c2ee1a7ab`; LANDED "Items 340 and 349"): a test holds `app.setName("VibeField")`, which names the macOS keychain
+  item "VibeField Safe Storage"; `package:dir`'s note says a hand-opened build makes that item with an ad-hoc
+  signature. Open: P1 on the old mini (after James's word for the display and his pick on j-mini-keychain-el8) and
+  j-340-keychain (§6).
 
 **EL8 — the pins** · vibe-field-5c (template lane `hl-el8-0724`) · law DECISIONS TB, the manifests
 - Landed: ghosttea 0.13.7 + truffle 0.7.23 (`5ba36785b`); truffle 0.7.24, the split (`af3f3078f`, DECISIONS TB (a)).
@@ -1390,6 +1395,7 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
 | LOG | LOG-39 (beta list) · LOG-V5 (rides Windows) · LOG-V8 retention (James's product call) · LOG-V7 optional | the beta checklist | `specs/logging-and-diagnostics.md` |
 | SNAP | live checks (§5) · a still onto the desk as a `desk.photo` dragged from the tray → SNAP-2 under `surface.capture` → SNAP-4 (Windows round) · the perf review's leads | a SNAP lane | `thinking-screenshot-tool.md`, `draft/reviews/screenshot-performance-2026-09-24.md` |
 | WIN | WIN-5 visual · WIN-7 live mesh (`TRUFFLE_TEST_AUTHKEY` via TS-1's authKey) · WIN-8 = RM-4's Windows leg (Azure signing, EDP-39) · WIN-D6…D9 (James) · residue: the win32-gated concurrent-edit doc-sync rows (their skip text claims coverage behind `TRUFFLE_TEST_AUTHKEY`), group-kill → Job Objects, snapshot-prune EBUSY (`doc-service.ts`) · LSF §18's Windows rows (LSF-3/3C/6; the LSF-3C spike's re-run reads `draft/archive/executed/specs/live-surfaces-agent-browser-spike.md`), PRC-5's Windows filesystem, M11, predesign-03 §6's coexistence ask, SNAP-4 ride it · a pipe-name squatter makes field-native fail closed (deliberate) | a Windows leg on the release rails | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` |
+| Item 349 (a) | an app name of its own for packages that are not Developer ID signed (`package:dir`, a lane's rehearsal), so one never shares "VibeField Safe Storage" or the userData with an installed signed build; BP-D6 is the precedent | after 0.9 (VF-PM, 2026-11-12) | LANDED "Items 340 and 349" |
 
 ## 5 Owed by James — live surfaces only
 
@@ -1501,6 +1507,7 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
 **Release rails**
 - BP R3: the pane says a permission refusal; Clear browsing data empties the desk profile's cookies (smoke:canvas, the mini) — LANDED "BP-1".
 - BP R4 = BP-D7: row 31 `smoke:profile` on the signed package, RED until BP-D9's fix (J4 done) — LANDED "BP-1b".
+- James's nightly asks for "VibeField Safe Storage": an item a differently signed VibeField made, unproven; his choice is j-340-keychain, and P1 (the keychain probe on the old mini, two signed nightlies on a run keychain) waits on his word for the display and his pick on j-mini-keychain-el8 — LANDED "Items 340 and 349".
 - Desk sign-ins are lost at restart in dev and every smoke (`session.fromPath` outside userData) — LANDED "BP-1b"; closes with BP-D9.
 - D11's signing-only measurement; W11's PTY clause rides it — `build-wp12-updater.md` :365.
 - The freeway host's live witness in a package (round 3) — LANDED "FW (packaging) — the freeway host ships in the package".

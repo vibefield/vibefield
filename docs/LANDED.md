@@ -47888,3 +47888,86 @@ at 09:49:54Z, read whole by VF-PM and reported GREEN and ACCEPTED at 09:55:54Z; 
 
 **Not done, and not claimed:** nothing of this ran on a phone; no archive was made, signed or uploaded; no Swift row ran
 on this Mac; and nothing here is pushed.
+
+## Items 340 and 349 — the app's name, which names its keychain item, is held; `package:dir` says what a hand-opened build makes (M289)
+
+**Items 340 and 349 (two commits, `bdf8c2d6b` → `dd121277c`, M289, 2026-11-12).**
+- Cut on main `76fb404dc` as `5aa03deb4` and `03a39099a` (lane `lp/340-app-name`).
+- Carried object-only onto IOS's records commit `c2ee1a7ab` (VF-PM, 11:11:03Z): merge-tree, then `commit-tree` with
+  each commit's author, committer, both dates and raw message, both dates kept (VF-PM, 11:13:27Z). So the write named
+  the rehearsed tip.
+- The fixer landed it in one gap with RB-1's records and their errata: main `c841f8b7c`, LANDED_AT 11:32:44Z, a
+  fast-forward of `05bfd0944`.
+- VF-PM gave item 340 at 08:10:15Z: the macOS prompt for "VibeField Safe Storage" that James met on his installed
+  `nightly-20261110.1`.
+
+**What changed.**
+- `packages/electron-shell/test/app-name.test.ts`, new. It holds `app.setName("VibeField")` (`main/index.ts:3157`):
+  - one call in electron-shell's source, as a column-0 statement above `const hasInstanceLock` (whose branch boots and
+    awaits `whenReady`);
+  - no top-level `await` before it;
+  - its literal is `release-identity.json`'s frozen productName.
+  - Electron 43.1.1 names the keychain item from it, once, after the main script's synchronous run:
+    `PostCreateMainMessageLoop` sets `app_name + " Safe Storage"` from `Browser::GetName()`, which returns
+    `app.setName`'s value first. This was read at Electron's v43.1.1 source.
+  - It has no red: the code already held every check (VF-PM, 10:15:10Z). Its proof that it bites is its own table of
+    seven refused mutations: indented in a block, made twice, below the boot, after a top-level await, another
+    literal, behind a condition, and named by a variable.
+- `apps/desktop/package.json`: a `"//package:dir"` key above `package:dir`.
+  - It says the build is unsigned, then re-signed ad hoc by @electron/fuses, with the EnableCookieEncryption fuse on.
+  - Opened by hand under a real account, it makes the item there, trusted by its ad-hoc signature, and every
+    Developer ID build then asks for it.
+  - So nobody, person or agent, opens one under a real account's HOME. This is item 349, (b) for 0.9 (VF-PM,
+    10:15:10Z), worded with no person named (VF-PM, 10:17:32Z).
+
+**The reading** (item 340's plan, `lanes/launch/item-340/PLAN.md`; no product code for 0.9, VF-PM, 10:11:44Z):
+- **Only a packaged copy keeps a key.**
+  - Electron encrypts cookies only for a persistent session, and only with the EnableCookieEncryption fuse on
+    (`network_context_service.cc`).
+  - Our fuse is flipped on the packaged copy alone (`after-pack.mjs`, `fuse-matrix.mjs`).
+  - No code of ours calls `safeStorage`.
+  - So `pnpm dev`, the unpackaged smokes and the old mini's V rows share the item's name but never touch the item.
+- **No launcher of ours starts a cookie-encrypting packaged VibeField under the person's HOME:**
+  - `smoke:update` runs under the run's HOME;
+  - `smoke:profile` runs on a run keychain;
+  - `smoke:bundled` is unpackaged;
+  - nothing launches `package:dir`'s build.
+- **The mechanism left** is a hand launch of a build that is not Developer ID signed, or of an older nightly signed
+  some other way. It is unproven: nobody reads James's keychain.
+- **A fresh install makes the item itself,** with no dialog. BP-1b's U2 measured it on the old mini on 10-26, on a run
+  keychain.
+
+**Verified** on this Mac, through the door, at `76fb404dc`:
+- biome;
+- vitest `app-name.test.ts`: "Tests 11 passed (11)";
+- electron-shell's `typecheck` (both programs): 0 errors;
+- check:walls;
+- check-agent-catalog `--enforce --literals`;
+- check-retired-names;
+- biome on `package.json`.
+The rows are `lanes/launch/item-340/packets/land-340-349/rows.tsv` (SHA256SUMS `106b7d77b184102b`). The carry is
+`packets/land-340-349-on-c2ee1a7ab/` (`8f82c51607b33b34`):
+- patch-ids equal (`7813ffac281b18e3`, `3f51fee3f25d4fb2`);
+- main..tip named c2ee1a7ab's three docs and the pair's two paths alone.
+No smoke row ran.
+
+**Found.**
+- No main-tracked page described `package:dir`, so the note sits beside the command, as `"//package:stage"` and
+  `"//smoke:update"` do.
+- The nightly releases are public. P1's pre-read fetched `releases.atom` and two `latest-mac.yml` files with no
+  credential (HTTP 200). The feed's nightlies end at `nightly-20261110.1`.
+- P1's pre-read first stopped on the lane's own bug. zsh read an unquoted `=https` as its `=command` expansion, so
+  curl never ran, and the row's "not public?" line misnamed the cause. Quoted, the second run fetched.
+- The support page's step 6 calls the item "the key for the desk browser's cookies", but no 0.9 Mac app ships that
+  pane. The line goes to the site lead at the page's next cut.
+
+**Owed.**
+- P1, the keychain probe on the old mini (`lanes/launch/item-340/P1-BRIEF.md`, `p1-keychain-probe.mjs`). Two signed
+  nightlies, fetched with no credential, run in update order on a run HOME and run keychain. It answers when the key is
+  first fetched, and whether a later Developer ID build opens the item without a prompt. It waits on James's word
+  for the display, and on his pick on the board's j-mini-keychain-el8: the old mini's login keychain file was written
+  during the mint's phone-kit block (11:25–11:28Z), and no run that touches a keychain or a simulator is armed there
+  until he picks. P1b, an ad-hoc copy that would raise the dialog, is not placed.
+- James's choice on the board, j-340-keychain: unanswered.
+- Item 349 (a), an app name of its own for packages that are not Developer ID signed: after 0.9, not started.
+- The smoke rows at this land.
