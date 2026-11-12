@@ -18,7 +18,8 @@ struct AppsHonest: Equatable {
   let detail: String?
   let act: Act?
 
-  /// An app that could open, on a phone that cannot run it yet. Interim, ‹for James› (§9 "About").
+  /// An app that could open, on a phone that cannot run it yet (§9 "About").
+  /// Ruled 2026-11-12 (James, 03:38:38Z, PM board): kept. Item 273.
   static let cannotRunYet = "This app can't run here yet"
 
   static func of(_ app: IndexAppRow, sources: [IndexAppsSource], here: String) -> AppsHonest {

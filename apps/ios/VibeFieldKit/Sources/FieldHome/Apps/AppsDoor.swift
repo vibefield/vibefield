@@ -178,7 +178,7 @@ struct AppsDrop: Equatable {
   var head: String {
     switch say {
     case .one: "New app"
-    // interim words, ‹for James›
+    // Ruled 2026-11-12 (James, 03:38:38Z, PM board): kept. Item 273.
     case .burst(let count): "\(count) new apps"
     }
   }

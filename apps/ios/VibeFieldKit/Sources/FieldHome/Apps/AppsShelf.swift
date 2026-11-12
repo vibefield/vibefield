@@ -84,13 +84,15 @@ struct AppsShelf: Equatable {
     away = Set(newest.filter { MadeAppFacts.away(MadeAppFacts.source(of: $0, in: sources)) }.map(\.appKey))
   }
 
-  /// The last group's head, interim, ‹for James›: §9 has no word for it.
+  /// The last group's head. Ruled 2026-11-12 (James, 03:38:38Z, PM board): kept. Item 273.
   static let noProjectHead = "No project"
-  /// What the shelf says when the walk stopped at the phone's bound, interim, ‹for James›.
+  /// What the shelf says when the walk stopped at the phone's bound.
+  /// Ruled 2026-11-12 (James, 03:38:38Z, PM board): kept. Item 273.
   static let clippedLine = "Not every app is shown here"
 
-  /// What a shelf with no apps says. Off is the home's own words (§9); the waiting line and the empty one are interim,
-  /// ‹for James›. A library still reading says so per desktop (`readingLines`).
+  /// What a shelf with no apps says. Off is the home's own words (§9). The waiting line and the empty one:
+  /// Ruled 2026-11-12 (James, 03:38:38Z, PM board): kept. Item 273.
+  /// A library still reading says so per desktop (`readingLines`).
   static func emptyLine(phase: AppsFeed.Phase, here: String) -> String? {
     switch phase {
     case .off: "This phone isn't connected to its home desktop"

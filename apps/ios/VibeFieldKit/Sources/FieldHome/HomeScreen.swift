@@ -127,7 +127,7 @@ public struct HomeScreen: View {
   @State private var meters = MetersFeed()
   /// MA-6c — the apps your agents made, through the home (the same door as the meters), for the strip and the group.
   @State private var apps = AppsFeed()
-  /// The word for the home when the roster names none (interim, ‹for James›).
+  /// The word for the home when the roster names none. Ruled 2026-11-12 (James, 03:38:38Z, PM board): kept. Item 273.
   private static let appsHere = "Your desktop"
   /// MA-6d — the door to the apps: the account's ledger, the drop, the pull and the first peek.
   @State private var appsDoor = AppsDoorModel(store: HomeScreen.appsCuesStore)
