@@ -7051,7 +7051,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       would stand 1.3 under it; whether it stands 4 under each phone's own island is James's, open, with the Stories
       row's (§8 "The phone's Stories row"). It grows down out of the island on §6's island curve (560ms) and goes
       back into it (360ms). One drop shows at a time, and a burst of new apps within 4 s becomes one drop that
-      counts them (its words ‹for James›, §9). It is not shown while the search sheet is open, over the account
+      counts them ("‹n› new apps", §9). It is not shown while the search sheet is open, over the account
       menu, or while an app is open. *(Amended 2026-11-06, SE-D3: this said "on search", which was a page until the
       sheet.)*
     - **The dot.** While an app you have not seen waits, search's circle wears a **10** dot of `--vf-cyan`
@@ -7066,7 +7066,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **The shelf** (MA-D9 A): App Library's grammar at the bar's measure, on paper (`ChromePalette.paper`), 21 from
     the sides, as the bar stands (`AppBar.margin`). The page drew it 20 from the sides, History's lists'
     (`HistoryParts.sidePadding`); the record's measure stands.
-    - The search field at the top: **48** tall, glass, "Search apps".
+    - The search field at the top: **48** tall, glass, "Search apps", **14** under the safe area, which the shelf's
+      scroll view already insets (76 on an iPhone 17 Pro, whose safe area is 62).
+      *Amended 2026-11-12 (item 273; James, "fix it now", 02:49:17Z):* as built at M272 the shelf padded its top
+      by the safe area again, so the field started at 138 (run 278's stills). The page drew the field at the safe
+      area's foot, 0 under it. Ruled 2026-11-12 (James, 03:33:16Z): 14, over the page's 0.
     - **Recent**, four across: each icon 60, its name under it in 11/13, at most two lines, 14 between rows.
     - **Kept**, in the same grid.
     - **Projects** as folders, two across, 16 between rows and 14 between columns. Each is a square tile of the
@@ -7882,21 +7886,26 @@ of an app's recorded hosted link, claude.ai today, and never says whose account.
 him and are not invented here.
 - **The door and the cues.** The first peek teaches "Pull down anytime for your apps". A pull short of the threshold
   reads "Pull down for your apps" (the ruled page's words), and past it "Release for your apps". A new one says **New
-  app** and its name. A burst of new apps within 4 s is one drop that counts them, its words ‹for James: "‹n› new
-  apps"›. VoiceOver says search's dot as "a new app".
+  app** and its name. A burst of new apps within 4 s is one drop that counts them, its words "‹n› new apps".
+  *Ruled 2026-11-12 (James, 03:38:38Z, the PM board): kept.* VoiceOver says search's dot as "a new app".
 - **The groups.** The phone's are **Recent**, **Kept** and **Projects**. Search's strip is **Apps**, with **All
   apps**, and search's placeholder is **Search**: the bar's field said "Search sessions", a word no line here held.
   *Amended 2026-11-06 (the lead's ruling 24, ‹for James›): recent searches retire from search; the sheet's one
   Recent is MA-D7's apps strip.* The shelf's field says "Search apps" (the page's). The desktop's
   groups are **Live**, the Hub's header, and **From your agents**.
 - **The foot** counts what is true: "142 apps on 2 desktops · mini is asleep — 23 of its apps wait for it".
+- **The phone's own words**, as MA-6e built them: the answering desktop when the phone's list of desktops names
+  none, "Your desktop"; search's strip, "All apps"; the group of apps with no project, "No project"; an empty
+  shelf, "Your agents haven't made an app yet"; while the phone waits for its first list, "Reading your apps"; and
+  when the phone stops reading at ten pages, "Not every app is shown here". *Ruled 2026-11-12 (James, 03:38:38Z,
+  the PM board): kept.*
 - **The acts.** An app's acts are **Open**, **Keep** (or **Stop keeping**), **Versions**, **About this app**, **Hide
   from Apps**, **Reload**, **Open on ‹desktop›**, **Open in ‹host›** (only with a hosted link) and, for a live app,
   **Copy link**.
 - **About** says "Made by ‹agent›", its session and project, "on ‹desktop›" and its date, and opens the session in
   History. Before an app has a preview it says "No preview yet — it's drawn the first time the app opens".
-  ‹for James: the line for a capture that failed›. ‹for James: the line for an app this phone cannot run yet,
-  before MA-5›.
+  ‹for James: the line for a capture that failed›. Before MA-5, an app this phone cannot run yet says "This app
+  can't run here yet". *Ruled 2026-11-12 (James, 03:38:38Z, the PM board): kept.*
 - **The states.** "Opening on ‹desktop›…" (late: nothing for 120ms, then a fade) · "‹desktop› is asleep", over
   "This app runs on ‹desktop›. It opens when ‹desktop› wakes.", with **Open in ‹host›** when it has a hosted link ·
   "Can't reach ‹desktop›" with its reason · "This page wasn't kept", with the hosted link · "Its 3 other files
