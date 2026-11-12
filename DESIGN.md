@@ -8257,28 +8257,56 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   page's (an iPhone 17 Pro, 402 × 874) and the record's (`draft/thinking-mini-apps.md` §5); where the two differ, the
   record's stand. Its words are §9 "Apps".
   - **The door, above every tab** (MA-D7 A): pull down from the top.
-    - **On History and Chat** the root list overscrolls past its large title. A pushed screen (a project, a session)
-      keeps its own scroll.
-    - **On Field** it is a downward drag that begins in the Stories row's band (its reserve, 108 on an island phone,
-      §8 "The phone's Stories row"), outside a circle, once it has travelled 12 down and more than twice as far down
-      as across. Every other touch stays the swarm's and the circles' (P6, on a device).
+    - **One pull on every tab** (item 348; James, 2026-11-12 10:20:48Z: "i want unified and same pull down behavior
+      cross the 3 views"). It is a downward drag, read from the finger's travel: it begins once it has travelled 12
+      down and more than twice as far down as across. Where it may start:
+      - **On Field's swarm**, anywhere but on a bubble (James, 10:19:00Z: "Anywhere but a bubble"). A finger on a
+        bubble moves it, as before; a hold on empty ground still creates, and a hold that has bloomed is the
+        bloom's. A drag that starts on a view circle pulls, and a tap on it still picks.
+      - **On another Godview view** (the list, the rain, the timeline, the spend), in the Stories row's band, down to
+        its reserve (108 on an island phone, §8 "The phone's Stories row"): under the row those views scroll and
+        scrub with the same drag. ‹for James›: whether they take the whole page as the swarm does.
+      - **On History and Chat**, anywhere on the root while its list stands at its top (within 1); a list scrolled
+        down scrolls. While the pull has the finger the list under it does not scroll. An empty Chat's night has no
+        list, so it pulls from anywhere. A pushed screen (a project, a session, a thread) keeps its own scroll.
+      *Corrected 2026-11-12 (item 348):* this said that on History and Chat "the root list overscrolls past its
+      large title", and that on Field the drag "begins in the Stories row's band … outside a circle". On James's
+      iPhone 14 Pro that band left the row's two ends and the 10 between its five circles: three drags of his were
+      refused by the rule as written (the trace is in the item's commit). The lists' overscroll was the system's
+      rubber band, so the two pulls never had one depth.
     - A drag that starts on the status bar is the system's (Notification Center), never the door's.
-    - **As you pull**, the tab follows the finger, and the four Recent icons pour out of the island at 36 toward a
-      row 50 apart, with a line fading in under them: "Pull down for your apps".
+    - **As you pull**, the screen is one card (James, 10:20:48Z: "when dragging, the current view should already
+      start scale down and moving down like a rounded card as their final form, the card should also has nice drop
+      shadow"; 10:21:36Z: "maybe 3 same card container contains the 3 different views"). The card is the whole
+      screen as it stands, the tab and the bar together, drawn smaller and lower and never laid out again, so
+      nothing moves inside it (his 10:32:55Z: "the card and its view should feel as a whole, not seperate"). Its top
+      follows the finger. In step with the travel it shrinks toward **0.92** about the screen's top centre and its
+      top corners round toward **44**, both whole at the commit; its shadow, its edge and its grabber come in with
+      them. The four Recent icons pour out of the island at 36 toward a row 50 apart, with a line fading in under
+      them: "Pull down for your apps".
+    - **The card's shadow** is two, cast up and about it onto the shelf (the kit's `AppsShelfChrome.cardShadow` and
+      `cardContact`; the phone's alone, so no CSS token): its **lift**, `0 -6px 64px`, black at 30% by day and 60% by
+      night, and its **contact**, `0 -1px 10px`, black at 16% by day and 45% by night. Its **edge** is a hairline, 1,
+      in the ink at 10%, so a white page reads as a card on the white shelf. Its **grabber**, 40 × 5, stands 8 under
+      the card's top: the ink at 30% over the paper at 55%, so it shows on a dark page (Chat's night) as on a light
+      one. James, 10:50:05Z, of the shadow and the grabber on his phone: "Both good".
     - **At 132** a light haptic ticks (impact `.light`, as `InputHaptics` names it) and the line reads "Release for
-      your apps". Past 132 the tab follows at a third of the finger's travel: the rubber band is a linear factor on
-      the drag, not a curve.
+      your apps". Past 132 the card's top follows at a third of the finger's travel: the rubber band is a linear
+      factor on the drag, not a curve.
     - **Let go** at or past 132 and the shelf opens. Short of it, everything springs back on the bar's own spring
       (`AppBar.motion`, the system spring the bar's glass moves and morphs on: response 0.42, damping 0.84), so §6
       gains no curve.
-    - **Open**, the bar steps aside, the tab recedes to a card at the foot (at 0.92, 106 of it showing, its top
-      corners 44, a grabber 40 × 5 at 30%), and the shelf fills the screen. Pushing the card up, or tapping it, goes
-      back.
+    - **Open**, the card stands at the foot (at 0.92, 106 of it above the home indicator's inset, its top corners
+      44, its grabber 40 × 5), and the shelf fills the screen. The bar has gone with the card and takes no touch.
+      Pushing the card up, or tapping it, goes back.
       *Amended 2026-11-12 (the phone's bands; James's screenshot, VF-PM 01:42:37Z):* the card's clip stands only
       while the tab is receded. Closed, the tab clips nothing: the field is full-bleed (PG-4t's stage), under the
       status bar and the home indicator. As built at M272 the clip stood closed too, at radius 0. It cut every page
       at the safe area, so the field ended in two bands and the Stories row lost its top edge. Open, the card keeps
       what was ruled and photographed: its top corners 44, at 0.92, 106 of it showing.
+      *Corrected 2026-11-12 (item 348):* open, the card was the tab cut at the safe area's top line, and "the bar
+      steps aside" was the bar fading where it stood. The card is the screen itself now, bar and all, so its top is
+      the screen's top and the status bar's band of the page is the card's first rows.
     - **Search opens on Apps as well.** Before you type, a strip headed **Apps** stands above History's search: the
       Recent row and **All apps**, in the secondary ink (`--vf-select` is the selection ring's alone, §2; *ruled
       2026-11-12, James, 06:07:01Z, the PM board*). The place is one tap from a control that is always on screen, and
@@ -8307,9 +8335,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       the search field, and is said "a new app". An app is seen once it has shown on the open shelf, or been opened.
       The ledger is the account's, kept on the phone and cleared at sign-out, and its first reading is no news, as
       Chat's notes are.
-    - **The first peek.** Once per account per phone, when the first app reaches it, the current root tab slides
-      down **136** with no sheet open, to show the shelf's edge: the four Recent icons and "Pull down anytime for
-      your apps". It stands **1.8 s** and springs back on the bar's spring.
+    - **The first peek.** Once per account per phone, when the first app reaches it, the card stands **136** down
+      with no sheet open, as it is at the commit (0.92, its top corners 44, under its shadow), to show the shelf's
+      edge: the four Recent icons and "Pull down anytime for your apps". It stands **1.8 s** and springs back on the
+      bar's spring. *Corrected 2026-11-12 (item 348): this said "the current root tab slides down 136".*
   - **The shelf** (MA-D9 A): App Library's grammar at the bar's measure, on paper (`ChromePalette.paper`), 21 from
     the sides, as the bar stands (`AppBar.margin`). The page drew it 20 from the sides, History's lists'
     (`HistoryParts.sidePadding`); the record's measure stands.
