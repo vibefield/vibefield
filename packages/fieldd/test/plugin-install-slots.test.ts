@@ -170,4 +170,55 @@ describe("PRC-5b registry installer slots", () => {
     expect(existsSync(join(installedRoot, KV_ID, PLUGIN_CURRENT_POINTER_FILE))).toBe(false);
     expect(plugins.get(KV_ID)).toBeUndefined();
   });
+
+  // Item 279 (S2) — the installer's side. A folder under the installed root that VibeField's own
+  // install did not publish (a manifest and a provenance file, no pointer) is not an install. An
+  // install over it is a first install, at epoch 1, and that folder is never copied into a
+  // revision. It is laid after the registry's first walk, so this row holds the installer alone.
+  it("item 279: an install over a flat folder is a first install, and the folder is not made a revision", async () => {
+    const dataDir = temp("vf-install-slots-data-");
+    const registryDir = temp("vf-install-slots-registry-");
+    const releaseWork = temp("vf-install-slots-releases-");
+    const installedRoot = join(dataDir, "plugins", "installed");
+    mkdirSync(installedRoot, { recursive: true });
+
+    const only = await release(releaseWork, "0.1.0");
+    const keys = generateRegistryKeypair();
+    buildFixtureRegistry({ dir: registryDir, secretKey: keys.secretKey, plugins: [only] });
+
+    const plugins = new PluginRegistryService({
+      dataDir,
+      roots: { bundled: [], devLinked: [], installed: [installedRoot] },
+    });
+    cleanup.push(() => plugins.dispose());
+    await plugins.refresh();
+    const installer = new RegistryInstallService({
+      dataDir,
+      plugins,
+      registryUrl: pathToFileURL(join(registryDir, "index.json")).href,
+      registryPublicKey: keys.publicKey,
+    });
+
+    // the flat folder: the release's manifest, and a provenance file naming a hash that is not
+    // the release's; no pointer. Written file by file, since the plugin's source folder holds a
+    // node_modules of links.
+    const flat = join(installedRoot, KV_ID);
+    const flatSlot = "c".repeat(64);
+    mkdirSync(flat);
+    cpSync(join(only.manifestDir, "vibefield.plugin.json"), join(flat, "vibefield.plugin.json"));
+    const provenance = { artifactSha256: `sha256:${flatSlot}` };
+    writeFileSync(join(flat, ".vf-registry.json"), `${JSON.stringify(provenance)}\n`);
+
+    const first = await installer.prepare({ id: KV_ID, version: "0.1.0" });
+    expect(first.baseSlot).toBeNull();
+    expect(first.baseCommitEpoch).toBe(0);
+    expect(existsSync(join(flat, PLUGIN_CURRENT_POINTER_FILE))).toBe(false);
+    expect(existsSync(join(flat, "revisions", flatSlot))).toBe(false);
+
+    await installer.commit(first);
+    expect(plugins.get(KV_ID)?.installRevision).toBe(first.artifact.slot);
+    expect(plugins.commitEpoch(KV_ID)).toBe(1);
+    // the flat manifest is still there, and nothing reads it
+    expect(existsSync(join(flat, "vibefield.plugin.json"))).toBe(true);
+  });
 });
