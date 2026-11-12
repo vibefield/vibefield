@@ -88,7 +88,9 @@ export type SupervisorLifecycleEventName =
   | "fieldd.supervisor.incumbent_gone"
   | "fieldd.supervisor.incumbent_answered_late"
   // item 212 (RV #67) — an OWNED fieldd silent past the wedge bound, ended by the child-only ladder
-  | "fieldd.supervisor.wedge_killed";
+  | "fieldd.supervisor.wedge_killed"
+  // ESP-18 (item 341) — `spawnEnvironment` rejected or did not answer in time; the spawn went on without it
+  | "fieldd.supervisor.spawn_environment_unavailable";
 
 /** Item 212 (RV #67) — the liveness watch's numbers (liveness.ts; FIELDD_LIVENESS are the house's): an ask every
  * `intervalMs`, `missThreshold` misses in a row to `unresponsive`, and `confirmMs` of reply silence to `wedged`. */
@@ -137,6 +139,16 @@ export interface FielddSupervisorOptions {
   /** Base environment for the child, caller-curated (the explicit-allowlist
    * law lives at the call site); the supervisor adds only FIELDD_* config. */
   environment: Readonly<Record<string, string | undefined>>;
+  /** ESP-18 (item 341) — keys asked for at SPAWN time, never when the supervisor is built and never on an adoption:
+   * awaited right before each spawn, after the adopt-or-replace decision, and merged over `environment`. The
+   * supervisor's own FIELDD_* keys (the data root, the user, the build, the ports) are set after it, so its answer
+   * can never override them. A hook that rejects, or has not answered within `spawnEnvironmentMs`, is said once
+   * (`fieldd.supervisor.spawn_environment_unavailable`: the reason and the wait, never a value) and the spawn goes
+   * on with `environment` alone. A spawn never fails because this could not be asked. */
+  spawnEnvironment?: () => Promise<Readonly<Record<string, string>>>;
+  /** How long a spawn waits on `spawnEnvironment` before it goes on without it (default 5 s; the person's PATH,
+   * its one caller, keeps its own 3 s ceiling inside this). */
+  spawnEnvironmentMs?: number;
   nativeExecutable?: string;
   allowedOrigins?: readonly string[];
   /** undefined = daemon default (registry port); 0 = ephemeral (test isolation) */

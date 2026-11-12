@@ -88,6 +88,12 @@ export function buildSupervisor(opts: {
    * variables below; this process's by default. AR-7: the godview smoke hands
    * its person's (testing/typed-agent.ts) — nothing else passes one. */
   environment?: Readonly<Record<string, string>>;
+  /** ESP-18 (item 341) — the person's PATH, as `resolvePersonPath` answers it
+   * (login-shell.ts), asked for when a pair is SPAWNED: it becomes the
+   * supervisor's `spawnEnvironment` in `production` alone, so the window and an
+   * adoption never wait on it. Every other mode keeps the PATH it was launched
+   * with. SLICE 2 (red): not applied yet. */
+  personPath?: () => Promise<string | undefined>;
 }): FielddSupervisor {
   // Env overrides still win — they are how smoke harnesses and a developer
   // testing a packaged layout redirect the daemon — but the DEFAULT now comes
