@@ -2,9 +2,11 @@
 /// 2026-11-12: Notifications is drawn in TestFlight and development builds only, and the build submitted for App
 /// Review draws neither it nor Developer).
 ///
-/// This file is the ONE place `VF_TESTFLIGHT` is read. Only the TestFlight archive passes it (`testflight.sh archive
-/// N testflight`, as `-DVF_TESTFLIGHT` in `OTHER_SWIFT_FLAGS`), so a Release build without it is the review build,
-/// and a slip can only draw too little.
+/// `VF_TESTFLIGHT` stands in two kinds of place. Here it decides `current`, the build's kind, the one value the rows
+/// read at run time. Everywhere else in the kit it is a compile gate, `#if DEBUG || VF_TESTFLIGHT`, around code only
+/// TestFlight and development builds carry, so the review build carries none of it. Only the TestFlight archive
+/// passes it (`testflight.sh archive N testflight`, as `-DVF_TESTFLIGHT` in `OTHER_SWIFT_FLAGS`), so a Release build
+/// without it is the review build, and a slip can only draw too little.
 public enum SettingsBuild: Sendable, Equatable {
   case review
   case testFlight
