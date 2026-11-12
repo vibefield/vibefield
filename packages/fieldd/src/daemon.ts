@@ -1632,12 +1632,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // normal empty state, so create it rather than report it as a problem
     const installedRoot = join(config.dataDir, ...LAYOUT.PLUGINS_INSTALLED_DIR);
     mkdirSync(installedRoot, { recursive: true });
+    // Item 279 (S2) — the installed root is read only once a signed plugin list is configured (a
+    // registry verify key). Until then it is withheld from the registry, so nothing put there
+    // loads or is reported, and boot leaves the folder as it finds it.
+    const listKeyed = config.registryPublicKey !== undefined;
+    if (!listKeyed) {
+      logger.info("fieldd.plugin_registry.installed_withheld", "installed plugins not loaded", {
+        reason: "registry_unconfigured",
+      });
+    }
     const plugins = new PluginRegistryService({
       dataDir: config.dataDir,
       roots: {
         bundled: config.pluginRoots?.bundled ?? [],
         devLinked: config.pluginRoots?.devLinked ?? [],
-        installed: [installedRoot],
+        ...(listKeyed ? { installed: [installedRoot] } : {}),
       },
       ...(config.bundledTrust !== undefined ? { bundledTrust: config.bundledTrust } : {}),
     });
@@ -1806,7 +1815,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         : {}),
       logger: logger.child({ component: "plugin.install" }),
     });
-    await installer.recover();
+    // Item 279 (S2) — with the installed root withheld, boot leaves it as it finds it.
+    if (listKeyed) await installer.recover();
     const emitPluginLog =
       config.pluginLog ??
       ((record: PluginServiceLogRecord): void => {

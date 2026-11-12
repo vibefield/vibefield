@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import {
-  copyFile,
   lstat,
   mkdir,
   open,
@@ -22,8 +21,8 @@ import { isWellFormedPluginId } from "@vibefield/contracts";
 //
 // Staging is a hidden sibling under `installed/`. A revision directory is
 // synced and atomically renamed into place before the small current pointer can
-// move. Registry discovery follows only the pointer (or a legacy flat root), so
-// an interrupted candidate is never accidentally current.
+// move. Registry discovery follows only the pointer, so an interrupted candidate
+// is never accidentally current, and a folder with no pointer is no install.
 
 export const PLUGIN_CURRENT_POINTER_FILE = ".vf-current.json";
 export const PLUGIN_ARTIFACT_MARKER_FILE = ".vf-artifact.json";
@@ -75,7 +74,7 @@ export interface ResolvedPluginArtifact {
 export interface InstalledPluginArtifactSelection {
   root: string;
   commitEpoch: number;
-  pointer: PluginArtifactPointerV2 | null;
+  pointer: PluginArtifactPointerV2;
 }
 
 /** The rename completed, so callers may not infer that the old pointer is
@@ -291,32 +290,6 @@ export class PluginArtifactStore {
     return removed;
   }
 
-  /** Migrate one P7 flat install into its first immutable slot without changing
-   * the selected bytes. Legacy files remain as an ignored recovery copy. */
-  async adoptLegacy(pluginId: string): Promise<ResolvedPluginArtifact | null> {
-    const current = await this.current(pluginId);
-    if (current !== null) return current;
-    const legacyRoot = this.pluginRoot(pluginId);
-    if (!(await exists(join(legacyRoot, "vibefield.plugin.json")))) return null;
-
-    const manifest = parseJson(await readFile(join(legacyRoot, "vibefield.plugin.json"), "utf8"));
-    if ((manifest as { id?: unknown }).id !== pluginId) {
-      throw new Error(`${pluginId}: legacy manifest id does not match its installed directory`);
-    }
-    const provenance = parseJson(await readFile(join(legacyRoot, ".vf-registry.json"), "utf8"));
-    const artifactSha256 = (provenance as { artifactSha256?: unknown }).artifactSha256;
-    if (typeof artifactSha256 !== "string" || !SHA256.test(artifactSha256)) {
-      throw new Error(`${pluginId}: legacy install has no valid artifact sha256 provenance`);
-    }
-    const staged = await this.stage({
-      pluginId,
-      artifactSha256,
-      prepare: async (stagingRoot) => copyLegacyTree(legacyRoot, stagingRoot),
-    });
-    await this.commit(staged, null, 1);
-    return await this.current(pluginId);
-  }
-
   async uninstall(pluginId: string): Promise<void> {
     await rm(this.pluginRoot(pluginId), { recursive: true, force: true });
     await syncDirectory(this.installedRoot);
@@ -331,9 +304,8 @@ export class PluginArtifactStore {
   }
 }
 
-/** Registry discovery helper: pointer layout first, legacy flat layout only
- * when no pointer exists. An invalid pointer is fatal rather than falling back
- * to possibly stale legacy bytes. */
+/** Registry discovery helper: the pointer selects the root. A folder with no
+ * pointer is no install, whatever else lies in it; an invalid pointer is fatal. */
 export async function resolveInstalledArtifactRoot(
   installedRoot: string,
   pluginDirectoryName: string,
@@ -342,24 +314,19 @@ export async function resolveInstalledArtifactRoot(
 }
 
 /** Registry discovery with the durable logical epoch retained for coordinator
- * reconstruction. A legacy flat install predates epochs and is epoch 1. */
+ * reconstruction. */
 export async function resolveInstalledArtifact(
   installedRoot: string,
   pluginDirectoryName: string,
 ): Promise<InstalledPluginArtifactSelection | null> {
   const store = new PluginArtifactStore(installedRoot);
   const current = await store.current(pluginDirectoryName);
-  if (current !== null) {
-    return {
-      root: current.root,
-      commitEpoch: current.pointer.commitEpoch,
-      pointer: current.pointer,
-    };
-  }
-  const legacyRoot = store.pluginRoot(pluginDirectoryName);
-  return (await exists(join(legacyRoot, "vibefield.plugin.json")))
-    ? { root: legacyRoot, commitEpoch: 1, pointer: null }
-    : null;
+  if (current === null) return null;
+  return {
+    root: current.root,
+    commitEpoch: current.pointer.commitEpoch,
+    pointer: current.pointer,
+  };
 }
 
 function assertPluginId(pluginId: string): void {
@@ -499,28 +466,6 @@ async function atomicWriteCurrent(
     await rm(temp, { force: true }).catch(() => undefined);
     if (published) throw new PluginArtifactCommitIndeterminateError(pointer.pluginId, error);
     throw error;
-  }
-}
-
-async function copyLegacyTree(source: string, destination: string): Promise<void> {
-  for (const entry of await readdir(source, { withFileTypes: true })) {
-    if (
-      entry.name === REVISION_DIRECTORY ||
-      entry.name === PLUGIN_CURRENT_POINTER_FILE ||
-      entry.name.startsWith(`${PLUGIN_CURRENT_POINTER_FILE}.tmp-`)
-    ) {
-      continue;
-    }
-    const from = join(source, entry.name);
-    const to = join(destination, entry.name);
-    if (entry.isSymbolicLink()) throw new Error("legacy plugin root contains a symbolic link");
-    if (entry.isDirectory()) {
-      await mkdir(to);
-      await copyLegacyTree(from, to);
-      continue;
-    }
-    if (!entry.isFile()) throw new Error("legacy plugin root contains a non-file entry");
-    await copyFile(from, to);
   }
 }
 

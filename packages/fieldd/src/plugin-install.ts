@@ -211,9 +211,6 @@ export class RegistryInstallService {
       );
     }
 
-    // P7 flat installs are copied into their first immutable revision before
-    // an update. The old live bytes remain selected throughout preparation.
-    await this.artifacts.adoptLegacy(params.id);
     const base = await this.artifacts.current(params.id);
     const baseSlot = base?.pointer.slot ?? null;
     const baseCommitEpoch = base?.pointer.commitEpoch ?? 0;

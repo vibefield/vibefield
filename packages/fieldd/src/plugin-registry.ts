@@ -588,7 +588,7 @@ export class PluginRegistryService extends EventEmitter {
   }
 
   /** DAEMON-INTERNAL: epoch paired atomically with the selected artifact.
-   * Bundled/dev/legacy roots begin at epoch 1. */
+   * Bundled and dev-linked roots begin at epoch 1. */
   commitEpoch(id: string): number | undefined {
     return this.commitEpochs.get(id);
   }
