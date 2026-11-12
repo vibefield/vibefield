@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CONTRACTS_VERSION } from "@vibefield/contracts";
+import { CONTRACTS_VERSION, SOCKET_ALIAS_PARENT_ENV } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   assertDataRootUsable,
@@ -473,6 +473,15 @@ describe("spawn: no adoptable fieldd exists", () => {
 });
 
 describe("the sun_path guard (slice-0 finding 4)", () => {
+  // > Correction (2026-11-12, item 345): these rows said an over-long data root
+  // > is refused. Under the endpoint law such a root binds through the short
+  // > alias, `<parent>/vf-<uid>/<scope>`, and fits, so the guard passes it; it
+  // > refuses only a home over budget EVEN through the alias. The refusing arm
+  // > names a long alias parent (`LONG_PARENT`, never made: the guard measures
+  // > strings) in the environment the supervisor hands fieldd, which is where
+  // > the guard reads it.
+  const LONG_PARENT = `/tmp/${"p".repeat(80)}`;
+
   // WIN-D1 — this row drives a REAL supervisor, whose guard reads the host
   // platform with no seam to inject one, so on win32 it can only witness the
   // early return: the guard no-ops, the fixture spawns, and the assertion fails
@@ -480,7 +489,7 @@ describe("the sun_path guard (slice-0 finding 4)", () => {
   // proves BOTH arms explicitly, and the refusal-before-spawn behavior it adds
   // is a unix-only mechanism (there is no byte budget on a pipe name).
   it.skipIf(process.platform === "win32")(
-    "an over-long data root rejects data-root-too-long BEFORE any spawn",
+    "a home over budget even through the alias rejects data-root-too-long BEFORE any spawn",
     async () => {
       const root = h.mkLongRoot();
       const sentinel = join(root, "spawned-anyway");
@@ -493,7 +502,7 @@ describe("the sun_path guard (slice-0 finding 4)", () => {
             command: process.execPath,
             args: ["--eval", `require("node:fs").writeFileSync(${JSON.stringify(sentinel)}, "x")`],
           },
-          environment: {},
+          environment: { [SOCKET_ALIAS_PARENT_ENV]: LONG_PARENT },
           shutdownPolicy: "leave-running",
           readinessDeadlineMs: 2000,
           onEvent: (event) => logs.push(event),
@@ -515,7 +524,10 @@ describe("the sun_path guard (slice-0 finding 4)", () => {
 
   it("the budget is a unix law — win32 endpoints are pipes, not paths (WIN-D1)", () => {
     const root = h.mkLongRoot();
-    expect(() => assertDataRootUsable(root, "win32")).not.toThrow();
-    expect(() => assertDataRootUsable(root, "darwin")).toThrow(SupervisorError);
+    const over = { aliasParent: LONG_PARENT };
+    expect(() => assertDataRootUsable(root, "win32", over)).not.toThrow();
+    expect(() => assertDataRootUsable(root, "darwin", over)).toThrow(SupervisorError);
+    // item 345: the same long root under the product's parent binds through the alias, and fits
+    expect(() => assertDataRootUsable(root, "darwin")).not.toThrow();
   });
 });

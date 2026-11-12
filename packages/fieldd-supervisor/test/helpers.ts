@@ -12,6 +12,12 @@ import type { FielddSupervisor, FielddSupervisorEvent } from "../src/index";
 // SIGKILLed. All temp roots are SHORT (`mkdtempSync(tmpdir()/vfsup-)`) so they
 // stay well under the sun_path guard — the one over-long root is minted
 // deliberately by `mkLongRoot()`.
+//
+// > Correction (2026-11-12, item 345): an over-long root is no longer refused by
+// > itself. The endpoint law takes a root over the sun_path line through a short
+// > alias (`<parent>/vf-<uid>/<scope>`), where every socket fits; the guard now
+// > refuses only a home over budget EVEN through the alias, which a test makes
+// > by naming a long alias parent (spawn.test.ts's guard rows).
 
 const DEFAULT_TOKEN = "shell-token-0123456789abcdefghij";
 
@@ -27,7 +33,9 @@ export interface Harness {
   /** A short temp data root, tracked for removal. */
   mkRoot(): string;
   /** A data root nested deeply enough that native/run/mgmt.sock overflows the
-   * sun_path safety margin (for the data-root-too-long guard). */
+   * sun_path safety margin. *Corrected 2026-11-12 (item 345):* this said "for
+   * the data-root-too-long guard"; such a root now binds through the short
+   * alias and passes the guard, which refuses it only under a long alias parent. */
   mkLongRoot(): string;
   /** Boot a real product server on an ephemeral port. `verify` defaults to
    * accepting exactly `token`; pass `verify: () => null` for a foreign listener.
