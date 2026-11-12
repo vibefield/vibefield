@@ -340,6 +340,17 @@ struct AppsShelfView: View {
   }
 }
 
+/// The receded card's clip (DESIGN.md §8 "The phone's Apps", amended 2026-11-12). STUB for the red: the pages' bounds
+/// in both states, as M272 built it.
+enum AppsCardClip {
+  static func shape(open: Bool) -> some Shape {
+    UnevenRoundedRectangle(
+      topLeadingRadius: open ? AppsShelfChrome.cardRadius : 0,
+      topTrailingRadius: open ? AppsShelfChrome.cardRadius : 0,
+      style: .continuous)
+  }
+}
+
 /// The tab receded to a card at the foot, 106 of it showing. Pushing it up, or tapping it, goes back.
 struct AppsRecededCard: ViewModifier {
   let open: Bool
