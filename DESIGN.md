@@ -7885,7 +7885,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Under **This phone**, **Appearance** is the Mac's three, **Light · Dark · Auto**, worn by the window,
   so the field, History and every sheet change with it; **Terminal** is the terminal sheet re-voiced
   in the desktop's Look words (Theme, its 602 searchable; Background opacity; Font size; Effects, each
-  with its licence; Animate effects). **About** gives the version, your desktops, Acknowledgements,
+  with its licence; Animate effects).
+  *Amended 2026-11-12 (item 358; James, 17:50:31Z: "it is missing the preview window"):* **Terminal** opens on a
+  **Preview**, as the desktop's Look does (GT-7, "The terminal preview is Godview in miniature"): the phone's live
+  card in miniature. Back to front: a depiction of the field (the sheet's paper and a few bodies as circles); the
+  terminal's own ground over it (`TerminalGround`: the theme's background at the chosen opacity), so the opacity is
+  seen and not only read; stand-in lines of terminal text at the chosen size, in the theme's own colours with its
+  cursor (the desktop preview's shell lines, so the two show one screen). One panel at the list's width, 176 pt
+  tall, the card's corner, above Look, under the head **Preview**. It is a picture: one accessibility element that
+  says the theme, the size and the opacity, and it takes no touch. Its caption names the theme and the size and says
+  what the picture is not: **Sample text** (a real terminal's text keeps its desktop's type and colours, as the
+  foot says), and **effects not drawn** while any is on (they are the renderer's, over a real terminal).
+  **About** gives the version, your desktops, Acknowledgements,
   and Tailscale's trademark line, which left the terminal sheet's foot (§13). The corner's
   **Settings…** opens the root and *you* open Account; the card's `···` menu's **Terminal look…**
   opens Terminal, Settings one step back.
