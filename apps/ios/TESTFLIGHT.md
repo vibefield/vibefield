@@ -66,7 +66,7 @@ still signs with Xcode's account, as archives 1–5 did. See
 | Marketing version | `0.1` |
 | Minimum iPhone / iPad OS | `18.1` |
 | Swift dependencies | Ghosttea `0.14.0` (exact) · Truffle `0.7.26` (exact; the two agree since ghosttea 0.14.0 declares truffle 0.7.26; the desktop's truffle is 0.7.27). *Corrected 2026-11-07 (EL8-TRUFFLE's review): this said "Ghosttea `0.13.7` (exact) · Truffle `0.7.23` (exact)", true until the EL8 of 2026-11-02.* *Corrected 2026-10-27, the EL8 to ghosttea 0.13.7 with truffle 0.7.23: this said "Ghosttea `0.13.6` (exact) · Truffle `0.7.22` (exact)", true from 2026-10-26. Corrected 2026-10-26, the EL8 to ghosttea 0.13.6: this said "Ghosttea `0.13.5` (exact)", true earlier that day. Corrected 2026-10-26, the EL8 to ghosttea 0.13.5: this said "Ghosttea `0.13.4` (exact)", true earlier that day. Corrected 2026-10-26, the EL8 to ghosttea 0.13.4: this said "Ghosttea `0.13.1` (exact) · Truffle `0.7.19` (exact)", true from 2026-10-23. Corrected 2026-10-23, the EL8 to ghosttea 0.13.1: this said "Ghosttea `0.10.1` (exact) · Truffle by the path package `VibeFieldKit/.window/truffle`, at the tag `truffle-v0.7.19`", true from the RFC 025 window until then; and before that, "Truffle `0.7.12` (exact pins)".* |
-| Distribution | App Store Connect: internal TestFlight (`ExportOptions.plist`), or the App Store and external TestFlight (`ExportOptions-AppStore.plist`) |
+| Distribution | App Store Connect: internal TestFlight (`ExportOptions.plist`), or the App Store and external TestFlight (`ExportOptions-AppStore.plist`); from build 7, two archives of the same code per release, `review` and `testflight` (below) |
 
 The team must have an active Apple Developer Program membership. In Xcode >
 Settings > Apple Accounts, sign in to an account with access to that team and
@@ -113,16 +113,26 @@ Run from the repository root:
 export ASC_KEY_ID=XXXXXXXXXX
 export ASC_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
-# Builds 1–5 are archived on this Mac; 1 and 3 are uploaded. The next archive is 6.
-# The archive signs with Xcode's account; the key is read at upload only.
-bash apps/ios/scripts/testflight.sh archive 6
+# Each release is two archives of the same code, each with its own build number:
+# the review build for App Review, and the TestFlight build with TestFlight's own
+# rows. The archive signs with Xcode's account; the key is read at upload only.
+bash apps/ios/scripts/testflight.sh archive 7 review
+bash apps/ios/scripts/testflight.sh archive 8 testflight
 
 # Stop the agents running as you (the helper refuses while one runs), then upload
-# that exact archive for internal TestFlight only (the default) ...
-bash apps/ios/scripts/testflight.sh upload 6
-# ... or for the App Store and external TestFlight.
-bash apps/ios/scripts/testflight.sh upload 6 store
+# the review archive for the App Store and external TestFlight ...
+bash apps/ios/scripts/testflight.sh upload 7 store
+# ... and the TestFlight archive for internal TestFlight only.
+bash apps/ios/scripts/testflight.sh upload 8 internal
 ```
+
+*Corrected 2026-11-12 (RB-1; James on the Settings page, developer-builds "two" and
+notifications-review "hide"):* this block showed one archive per release, `archive 6`,
+then `upload 6` or `upload 6 store`. Build 6 is ruled to be archived from main before
+archive kinds land (VF-PM, 2026-11-12): one archive, uploaded with `upload 6 store` for
+App Review and internal TestFlight alike, and that command stays good after kinds land:
+an archive with no kind goes to the store when its app carries no TestFlight-only page.
+From build 7 the helper takes a kind, so the two numbers are 7 and 8.
 
 *Corrected 2026-11-05 (LP-4):* this block said "Builds 1–3 are archived and build 3
 is uploaded. Use 4, 5, ... for new builds" and showed `archive 4` / `upload 4`.
@@ -134,6 +144,21 @@ For build N, the archive is `apps/ios/build/testflight/VibeField-N.xcarchive`. L
 upload output are beside it, under the gitignored `build/` directory. A
 completed archive is never overwritten. Xcode may increase the uploaded build
 number to avoid conflicts; App Store Connect displays the final number.
+
+There are two kinds of archive, chosen at archive time (RB-1, 2026-11-12):
+
+| Kind | Built with | What it draws |
+| --- | --- | --- |
+| `review` | no extra condition | no TestFlight-only row (Notifications): the build App Review sees |
+| `testflight` | `-DVF_TESTFLIGHT` in `OTHER_SWIFT_FLAGS` | TestFlight's own rows, read in `SettingsBuild.swift` alone |
+
+The kind is written beside the archive as `VibeField-N.kind`. After each archive the
+helper counts the TestFlight-only pages in its app: a review archive must carry none,
+and a TestFlight archive must carry them. `upload N store` takes only a `review`
+archive whose app carries none of them, so the bytes sent to App Review decide. An
+archive made before kinds has no `.kind`: it uploads `internal`, and `store` when its
+app carries none of them (so `upload 6 store` stays good). A `testflight` archive
+never goes to `store`.
 
 There are two exports of the same archive, chosen at upload:
 

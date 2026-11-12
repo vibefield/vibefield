@@ -11,14 +11,22 @@ action="${1:-help}"
 
 usage() {
   cat <<'USAGE'
-Usage: bash apps/ios/scripts/testflight.sh archive BUILD_NUMBER
+Usage: bash apps/ios/scripts/testflight.sh archive BUILD_NUMBER review|testflight
        bash apps/ios/scripts/testflight.sh upload BUILD_NUMBER [internal|store]
 
-  archive 6          Build a signed Release archive for a physical iPhone/iPad.
-  upload 6           Upload that archive for internal TestFlight only
-                     (ExportOptions.plist: testFlightInternalTestingOnly).
-  upload 6 store     Upload it for the App Store and external TestFlight
-                     (ExportOptions-AppStore.plist). Same archive, other export.
+  archive 7 review      Build a signed Release archive for App Review: it draws
+                        no TestFlight-only row (Notifications), as James ruled
+                        (the Settings page, 2026-11-12).
+  archive 8 testflight  The same code with VF_TESTFLIGHT set, so TestFlight's
+                        own rows are compiled in. Each archive has its own number.
+  upload 7 store        Upload a review archive, or one made before kinds (build
+                        6), for the App Store and external TestFlight
+                        (ExportOptions-AppStore.plist). It refuses a testflight
+                        archive, and any archive whose app carries a
+                        TestFlight-only page: the app's bytes decide.
+  upload 8              Upload an archive for internal TestFlight only
+                        (ExportOptions.plist: testFlightInternalTestingOnly).
+                        Either kind; an archive made before kinds too.
 
 Authentication: `archive` signs with Xcode's signed-in account (as archives 1-5
 did); `upload` uses an App Store Connect API key.
@@ -84,9 +92,21 @@ fi
 
 export_kind="internal"
 export_options="$ios_root/ExportOptions.plist"
-if [[ "$action" == archive && $# -ne 2 ]]; then
-  echo "archive takes only a build number; the export (internal or store) is chosen at upload." >&2
-  exit 2
+archive_kind=""
+if [[ "$action" == archive ]]; then
+  if [[ $# -ne 3 ]]; then
+    echo "archive takes a build number and a kind: review (for App Review) or testflight (TestFlight's own rows)." >&2
+    echo "The export (internal or store) is chosen at upload." >&2
+    exit 2
+  fi
+  archive_kind="$3"
+  case "$archive_kind" in
+    review | testflight) ;;
+    *)
+      echo "Choose the archive's kind: review (for App Review) or testflight (TestFlight's own rows)." >&2
+      exit 2
+      ;;
+  esac
 fi
 if [[ "$action" == upload ]]; then
   if [[ $# -gt 3 ]]; then
@@ -113,7 +133,33 @@ fi
 build_number="$2"
 output="$ios_root/build/testflight"
 archive="$output/VibeField-$build_number.xcarchive"
+# The archive's kind, written once beside it when the archive succeeds (RB-1).
+kind_file="$output/VibeField-$build_number.kind"
 mkdir -p "$output"
+
+# What a review archive must not carry (RB-1; RB-2 adds Developer's): each TestFlight-only
+# page's type name, which Swift's reflection metadata keeps in a Release build, and one
+# literal of its words, longer than Swift's 15-byte inline strings so it is a C string.
+markers=(
+  "NotificationsPage"
+  "A title and nothing more: what your agents said stays on your desktop."
+)
+# Prints "<total> (<marker> <count>; ...)" for the archive's app, every file in it read.
+count_markers() {
+  local app m n total=0 each=""
+  app="$(find "$1/Products/Applications" -maxdepth 1 -name '*.app' -print -quit 2>/dev/null)"
+  if [[ -z "$app" ]]; then
+    echo "unread (no app in the archive)"
+    return 1
+  fi
+  for m in "${markers[@]}"; do
+    # grep finds nothing in a clean app and exits 1; under pipefail that must not end the helper.
+    n="$({ LC_ALL=C grep -raoF -- "$m" "$app" || true; } | wc -l | tr -d ' ')"
+    each+="${each:+; }${m:0:24} $n"
+    total=$((total + n))
+  done
+  echo "$total ($each)"
+}
 
 # Every refusal that needs no key comes before the keychain is asked.
 agents_override="revoke-the-key-afterwards"
@@ -126,7 +172,7 @@ case "${VIBEFIELD_ASC_AGENTS_RUNNING:-}" in
 esac
 case "$action" in
   archive)
-    if [[ -e "$archive" ]]; then
+    if [[ -e "$archive" || -e "$kind_file" ]]; then
       echo "Archive already exists: $archive. Choose a new build number." >&2
       exit 1
     fi
@@ -149,6 +195,31 @@ case "$action" in
     if [[ "$archive_id" != com.jamesyong.vibefield.ios || "$archive_team" != 9F79X9D26S ]]; then
       echo "The archive's bundle ID or signing team does not match VibeField." >&2
       exit 1
+    fi
+    # The store gate (RB-1): App Review gets a review archive, or one made before kinds (build 6, VF-PM
+    # 2026-11-12), and either way its app's bytes decide. A testflight archive never goes to the store.
+    if [[ "$export_kind" == store ]]; then
+      recorded_kind="$(cat "$kind_file" 2>/dev/null || true)"
+      case "$recorded_kind" in
+        review) ;;
+        "") echo "Build $build_number's archive was made before archive kinds: its app's bytes decide." ;;
+        *)
+          echo "upload $build_number store takes a review archive;" \
+            "build $build_number's kind is $recorded_kind." >&2
+          echo "Make a review archive under a build number not used yet, and upload that one." >&2
+          exit 1
+          ;;
+      esac
+      found="$(count_markers "$archive")" || {
+        echo "The archive's app could not be read for TestFlight-only pages: $found" >&2
+        exit 1
+      }
+      if [[ "${found%% *}" != 0 ]]; then
+        echo "This ${recorded_kind:+review }archive carries a TestFlight-only page: $found." \
+          "It is not sent to App Review." >&2
+        exit 1
+      fi
+      echo "The ${recorded_kind:+review }archive carries no TestFlight-only page: $found."
     fi
     ;;
 esac
@@ -346,6 +417,13 @@ case "$action" in
     # Ghosttea's pinned Metal build plugin requires this existing CLI trust flag.
     # shellcheck disable=SC2016 # `$(inherited)` is Xcode's build-setting syntax, kept literal.
     swift_flags='$(inherited)'
+    if [[ "$archive_kind" == testflight ]]; then
+      # RB-1: the one build condition TestFlight's own rows are compiled under (SettingsBuild.swift).
+      swift_flags+=' -DVF_TESTFLIGHT'
+      echo "Archiving for TestFlight: VF_TESTFLIGHT is set, so TestFlight's own rows are compiled in."
+    else
+      echo "Archiving for App Review: no TestFlight-only row is compiled in."
+    fi
     if [[ "$(xcodebuild -version)" == *"Build version 17F113"* ]]; then
       # Swift 6.3.3 crashes in LoadableByAddress when optimizing GhostteaTruffle.
       # Disable only its reg2mem transform; keep -O, WMO, and the public ABI.
@@ -362,8 +440,25 @@ case "$action" in
       ${auth[@]+"${auth[@]}"} \
       "CURRENT_PROJECT_VERSION=$build_number" "OTHER_SWIFT_FLAGS=$swift_flags" archive \
       2>&1 | redact_key | tee "$output/archive-$build_number.log"
-    echo "Archive ready: $archive"
-    echo "Upload: bash $ios_root/scripts/testflight.sh upload $build_number [internal|store]"
+    printf '%s\n' "$archive_kind" >"$kind_file"
+    found="$(count_markers "$archive")" || {
+      echo "Archive ready: $archive ($archive_kind), but its app could not be read for TestFlight-only pages: $found" >&2
+      exit 1
+    }
+    echo "Archive ready: $archive ($archive_kind). TestFlight-only pages in its app: $found."
+    if [[ "$archive_kind" == review && "${found%% *}" != 0 ]]; then
+      echo "This review archive carries a TestFlight-only page, so upload store will refuse it." >&2
+      exit 1
+    fi
+    if [[ "$archive_kind" == testflight && "${found%% *}" == 0 ]]; then
+      echo "This TestFlight archive carries none of TestFlight's own pages: VF_TESTFLIGHT did not reach them." >&2
+      exit 1
+    fi
+    if [[ "$archive_kind" == review ]]; then
+      echo "Upload: bash $ios_root/scripts/testflight.sh upload $build_number store"
+    else
+      echo "Upload: bash $ios_root/scripts/testflight.sh upload $build_number internal"
+    fi
     ;;
   upload)
     # The internal export keeps its historical paths (upload-N); the store export is named.

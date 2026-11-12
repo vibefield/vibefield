@@ -215,10 +215,12 @@ boundary. Releases run in James's own account, with every agent CLI, VibeField a
 the upload (TESTFLIGHT.md):
 
 ```sh
-# From the repository root. N = the next unused build number (TESTFLIGHT.md names the last).
-bash apps/ios/scripts/testflight.sh archive N
-bash apps/ios/scripts/testflight.sh upload N          # internal TestFlight only
-bash apps/ios/scripts/testflight.sh upload N store    # the App Store and external TestFlight
+# From the repository root. Two archives of the same code per release, each its own
+# unused build number (TESTFLIGHT.md names them): the review build, then TestFlight's.
+bash apps/ios/scripts/testflight.sh archive N review       # what App Review sees
+bash apps/ios/scripts/testflight.sh archive M testflight   # with TestFlight's own rows
+bash apps/ios/scripts/testflight.sh upload N store         # the App Store and external TestFlight
+bash apps/ios/scripts/testflight.sh upload M internal      # internal TestFlight only
 ```
 
 **The splash** (FieldSplash; DESIGN.md §8 "The phone's splash") is vibefield-splash's iPhone look
