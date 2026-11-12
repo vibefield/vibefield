@@ -1,4 +1,5 @@
 import FieldMesh
+import FieldSettings
 import Foundation
 import Testing
 
@@ -8,7 +9,9 @@ import Testing
 /// 2026-11-12 18:06:27Z): every act that would reach this phone's real account, its lock, the code reader or Safari is
 /// held while a demo stands, and made when none does; the page moves and the curtain's Unlock are made either way; and
 /// whether a demo stands is the home's own `LaunchFixtures` value. Each held row asserts the outcome first, so a
-/// dispatcher that does nothing at all is red.
+/// dispatcher that does nothing at all is red. RB-2c0 — a link that opens VibeField while a state is stored lands in
+/// that open: the state stands for it and the link is held (James on the card j-rb2-d5-demo-ends, 2026-11-12
+/// 21:44:36.025Z, A: "a state lasts one open"; VF-PM 21:59:10Z).
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("under a demo the way in's acts reach nothing real; with none they do")
@@ -49,6 +52,13 @@ struct DemoActsTests {
     let d = dispatch(demo, made)
     let outcomes = acts.map { d.perform($0) }
     return (outcomes, made.calls)
+  }
+
+  /// A defaults domain of the row's own, and its removal when the row ends.
+  private func store() throws -> (defaults: UserDefaults, done: () -> Void) {
+    let name = "vibefield.tests.demo-acts.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: name))
+    return (defaults, { defaults.removePersistentDomain(forName: name) })
   }
 
   @Test("Continue with Tailscale and Sign in again open no sign-in under a demo")
@@ -140,5 +150,20 @@ struct DemoActsTests {
     let stands = values.map { $0.demoStands }
     #expect(answers == [true, true, false])
     #expect(answers == stands)
+  }
+
+  @Test("a link that opens VibeField under a stored state is held there, and the next open is your own")
+  func linkUnderAStoredState() throws {
+    let (d, done) = try store()
+    defer { done() }
+    d.set("another", forKey: DeveloperChoices.accountKey)
+    let launch = LaunchFixtures.read(arguments: [], defaults: d)
+    #expect(launch == LaunchFixtures(demoField: false, account: "another"))
+    let made = Made()
+    let arrived = dispatch(launch, made).receive(code, arrival: .link)
+    #expect(arrived == .heldUnderDemo)
+    #expect(made.calls == [])
+    let next = LaunchFixtures.read(arguments: [], defaults: d)
+    #expect(next == .off)
   }
 }
