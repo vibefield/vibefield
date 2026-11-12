@@ -48165,3 +48165,98 @@ sha256 `96b38d5a5cff6b6d…`, 10,982 B).
 **Not done, and not claimed:** the notices row's measure on the two Windows VT libraries (VibeField's release builds
 mac-arm64 alone); Option as Alt; whether the 1.4 library carried Zig's UBSan runtime; any smoke on 0.15.0; the kit's
 FieldSettingsTests at the carried tree.
+
+## LP Q3.2 and item 334 — the Mac's About carries the phone's foot; Add your phone says "on your computer" (M291)
+
+**The Mac's About foot (LP Q3.2) and item 334 (six commits, `ef063c647` → `cdfc4b253`, M291, 2026-11-12).**
+- Cut on main `864d7aca3` as `270bf8cb5` … `ea6dfdd49` (lane `lanes/launch/mac-about-line`, branch `lp/mac-about`).
+- Carried object-only onto the ghosttea EL8 `77ef95f50` (M290), with the 340/349 records on top (`dcab5b435` →
+  `2b6f5a2a3`), by `carry-land.sh` (sha256 `f2e3f75a07a0bf51`):
+  - per commit, `merge-tree` (all seven exited 0), then `commit-tree` with its author, committer, both dates and raw
+    message;
+  - every patch-id equal, `-U0` and plain;
+  - the rehearsal and the write were one door row each (HOLD 9586–9589), on VF-PM's conditional word (12:09:50Z),
+    given when the EL8 landed (16:10:54Z). The write made `lp/land-334-340r-on-77ef95f50` = `2b6f5a2a3`, the
+    rehearsed tip.
+- The fixer held it once (below), then landed it: main `2b6f5a2a3`, LANDED_AT 16:26:15Z (VF-PM, 16:32:21Z), before
+  M292 (item 341, `47f8d4732`).
+
+**What changed.**
+- LP Q3.2, the Mac's About. James's picks on the board, 2026-11-12: dk-mac-about-line at 05:18:50Z, and
+  j-mac-about-tm, "(b) Both lines, as on the phone", at 05:43:23Z.
+  - DESIGN.md §9 "The phone's legal words" (`:7819–7821`): the Mac's About panel (VibeField › About VibeField)
+    carries the phone's foot under the version, Tailscale's trademark line and then the non-affiliation line, word
+    for word. It makes §13's "as the desktop's does" (`:8831–8835`) true.
+  - `packages/electron-shell/src/main/about-panel.ts`, new: `aboutPanelOptions(version, buildId)`, AU-4's options
+    moved out of `index.ts` unchanged (the name, the version, the build id's commit). Its `credits` carry the two
+    lines, `ABOUT_TRADEMARK` and `ABOUT_NOT_AFFILIATED`. `index.ts` calls it in the darwin branch.
+  - `test/about-panel.test.ts`, new: the name, the version, the commit and the credits, held to DESIGN.md's two lines.
+  - Electron main's TypeScript only: field-native, the sidecar pins and `apps/desktop/native` are untouched.
+- Item 334, the Mac's Add your phone:
+  - DESIGN.md §8 "Add your phone" (`:3762`, with a dated note at `:3771–3773`): "…then open it and choose **Scan the
+    code on your computer**", where it said "on your Mac". The phone's button has said "computer" since WI-1
+    (2026-11-02, `ed16b8ba9` and `6d300aa2e`). §9 was amended for it, but §8's Mac-side quote kept the old name.
+  - `packages/field-app/src/account/door/add-phone-code.tsx:44` says it. It is the one component behind the Connect
+    pane's Add your phone and Settings › Devices' Add a device.
+  - `test/devices-section.test.tsx`, the TS-7b row (`:502`): it contains "Scan the code on your computer", never "Scan
+    the code on your Mac".
+  - TestFlight's words stay until the App Store listing is public (James's add-phone-store pick, 05:56:25Z). The label
+    "Scan with VibeField on your iPhone." is untouched.
+
+**Verified.**
+- On this Mac, through the door, at the cut:
+  - the Mac About rows, on `374c8551a` with the green staged (HOLD 8996–9069): electron-shell's nine, 163 passed;
+    contracts' devices, 11; field-app's build-edges and DESIGN.md's 27 readers, 416 and 232; sound's design-md, 23;
+    plugins/simulator's attach and design, 19; electron-shell's `typecheck`, 0 errors; check:walls;
+    check-agent-catalog `--enforce --literals`; check-retired-names;
+  - 334's rows, on `e366cf882` with the green staged (HOLD 9127–9227): field-app's 45 files once each (295, 388 and
+    397 passed); sound, 23; simulator, 19; field-app's and electron-shell's `typecheck`, 0 errors; the same three
+    checks.
+- On the old mini, run334 at `ea6dfdd49` on `864d7aca3` (`.done` `81c4620a785c0f0b`, 12:03:04Z; VF-PM, 12:05:13Z):
+  fieldd's six DESIGN.md readers, 200 of 200 in 6 files (8, 106, 12, 7, 43, 24); smoke-first-run, 55 of 55; the
+  Keychains unmoved (8 → 8). The packet is `lanes/launch/mac-about-line/packets/v-mac-about-334` (SHA256SUMS
+  `034baf6e9c613c83`).
+- At the carried text, `2b6f5a2a3` (DESIGN.md blob `252721ca2e0b`), after the hold:
+  - **Run**, in the lane, detached at the tip, each row once through the door (`tip-readers.sh` `9583e420fc66b837`,
+    HOLD 9592–9607): field-app's 27 DESIGN.md readers, 14 files 414 passed and 13 files 232 passed; sound's
+    design-md, 23; plugins/simulator's attach and design, 19. The lane went back to `lp/mac-about`, clean.
+  - **Proved by literal, not run**: fieldd's six and smoke-first-run (`proof-tip-2b6f/PROOF.txt`, sha256
+    `f93200714c0d6833`, HOLD 9600/9601). It takes every string the seven assert of DESIGN.md from the test source
+    and the src constants it names (the twelve needs-words facts are evaluated from fieldd's `words.ts`), and checks
+    each in the carried blob with the test's own normalization. smoke-first-run's slice is cut by its own regex, and
+    its captures [2, 1, 6] equal `FIRST_RUN.frozen`. 23 of 23; source literals 10 of 10; coverage 14 of 14 (every
+    DESIGN.md read in the seven and in their relative imports is a covered site).
+
+**Found.**
+- **The hold** (VF-PM, 16:16:05Z). VF-PM's GO to the fixer said the base moves since run334 touched none of the
+  eight paths but ROADMAP. That was VF-PM's own false claim: they touch DESIGN.md (`864d7aca3..77ef95f50`: 47/14,
+  item 273's `2a66e06d3` and `76fb404dc`, RB-1's `88d0ccb16`) and LANDED. The carry's own output had named it ("NEWBASE
+  over 864d7aca3 touches the six's paths: DESIGN.md"). The fixer held, and the readers above were run and proved at
+  the carried text.
+- Main's DESIGN.md hunks and ours never meet. The nearest pair is 14 lines apart, in §9. The eight slices the Mac's
+  readers cut by a heading or a range read the same bytes at the tip and on main.
+- `apps/ios/TESTFLIGHT.md` kept the same old quote, "Scan the code on your Mac" (item 347). It is corrected on main
+  (`:408–409`).
+
+**Errata** (VF-PM, 16:32:21Z; corrected here, at the record of the commits that carry them).
+- `ef063c647` says §13's line "is false at this commit's parent `864d7aca3`". On main its parent is `77ef95f50`. The
+  reading was made at `864d7aca3`, the cut's base, and holds at `77ef95f50` too: `index.ts` is the same file there,
+  and `about-panel.ts` does not exist.
+- The six's DESIGN.md cites are numbered at the cut. On main (`2b6f5a2a3`; main through `82e166608` leaves it alone):
+  - `ef063c647`: `:7800–7802` is `:7819–7821`, and `:8796–8800` is `:8831–8835`;
+  - `8b6f49b77`: `:3762` and `:3771–3773` are unmoved; `:7711` (§9's WI amendment) is `:7728`; `:7694` (§9's TS-7b
+    line) is `:7711`. The cut's `:7711` and main's name different lines.
+  - Their code cites hold, since main moved none of those files: `add-phone-code.tsx:44`,
+    `devices-section.test.tsx:502` and `:508`, `connect.tsx:674`, `DevicesSection.tsx:677`.
+- `PROOF.txt` labels spark-transcripts' site `:129`, the first line naming `UNREADABLE_WORDS.transcripts` (a doc
+  comment). The assertion is `:339`.
+- LAUNCH's report of 16:24:30Z said field-app's DESIGN.md readers import no ghosttea. That is false. `app1.log` and
+  `app2.log` each hold 227 sourcemap lines, 40 of them naming `@vibecook+ghosttea-react@0.14.0` (108 name
+  puppeteer-views 0.4.0). Those readers render ghosttea-react. In the lane they ran on its 0.14.0, the install of
+  `864d7aca3`'s lock; the tip's lock is 0.15.0.
+
+**Owed.**
+- **The gap**: no row has run field-app's 27 DESIGN.md readers on ghosttea 0.15.0 at this DESIGN.md text. It is owed
+  at the next whole V on the old mini (VF-PM, 16:32:21Z). fieldd's six and smoke-first-run have no run at the landed
+  text either (proved, not run); a whole V runs them.
+- James's eye: VibeField › About VibeField, and the Mac's Add your phone, in the first signed build that carries them.

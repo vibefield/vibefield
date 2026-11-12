@@ -1329,6 +1329,9 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
        `7a7f22623`, LANDED "IOS-13a"). The record lists VibeField's own rosetta row, and About draws only the parts
        others made: LANDED 2026-11-08 (item 259, M236 `83cf67316`). Owed: item 184, the font rows' version and names
        (James's eye);
+     - the Mac's About carries the phone's two lines under the version, Tailscale's trademark line and then the
+       non-affiliation line (LP Q3.2; James's picks dk-mac-about-line and j-mac-about-tm, 2026-11-12): LANDED
+       2026-11-12 (M291 `b49172c9c`, LANDED "LP Q3.2 and item 334"); owed: James's eye on the first signed build;
      - Tailscale's log upload ships on in build 6, declared (James, 2026-11-07 07:11Z; it was owed off): the
        privacy manifest LANDED (`aa1f10bbb`, LANDED "LP's privacy manifest"). Off stays a truffle Swift option;
      - iPad: one window in v1: LANDED (M144). Its words in Settings and the way in ("this iPad", `DeviceWord`):
@@ -1343,7 +1346,8 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
      - the marks' permission emails (James);
      - the review Mac, the review identity and the filmed video (LP-D5, D6; `draft/launch/review-mac-runbook.md`);
      - external TestFlight through Beta App Review;
-     - the Mac's add-phone door naming the App Store.
+     - the Mac's add-phone door naming the App Store. Until the listing is public it names the phone's button as the
+       phone does, "Scan the code on your computer" (item 334): LANDED 2026-11-12 (M291 `cdfc4b253`).
    - **The first launch's lineup** (James, 2026-11-09; DECISIONS "FL"; LANDED "FL-1"): the browser pane, the notebook
      and the comment pad's hook are out; the note, the print, the mini mat and the whiteboard ship. Owed through the
      betas: a desk picture card reaching an agent (`copy-to-hand.ts` sets `paste: ""`), several images dropped landing
@@ -1514,6 +1518,7 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
 **Release rails**
 - BP R3: the pane says a permission refusal; Clear browsing data empties the desk profile's cookies (smoke:canvas, the mini) — LANDED "BP-1".
 - BP R4 = BP-D7: row 31 `smoke:profile` on the signed package, RED until BP-D9's fix (J4 done) — LANDED "BP-1b".
+- field-app's 27 DESIGN.md readers have no run on ghosttea 0.15.0 at M291's DESIGN.md text (they ran at `2b6f5a2a3` on 0.14.0), nor fieldd's six and smoke-first-run (proved by literal, not run): the next whole V on the old mini — LANDED "LP Q3.2 and item 334".
 - James's nightly asks for "VibeField Safe Storage": an item a differently signed VibeField made, unproven; his choice is j-340-keychain, and P1 (the keychain probe on the old mini, two signed nightlies on a run keychain) waits on his word for the display and his pick on j-mini-keychain-el8 — LANDED "Items 340 and 349".
 - Desk sign-ins are lost at restart in dev and every smoke (`session.fromPath` outside userData) — LANDED "BP-1b"; closes with BP-D9.
 - D11's signing-only measurement; W11's PTY clause rides it — `build-wp12-updater.md` :365.
