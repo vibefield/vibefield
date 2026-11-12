@@ -7720,9 +7720,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     chrome (`menuSurface`) ringed by `ruleStrong`, and `code` takes the mono and no ground: the panel is `fill`, and
     a fill on a fill is no boundary (the room's own rule). Words that are nothing but space say so (`(no words)`,
     `(an empty prompt)`); words that read into no block stand as typed. Not ported from the room: tables (they stand
-    as their source lines), strike, rules, a heading's level, the code bar (language, copy) and syntax colours, the
-    long-message excerpt (the phone's words are already cut at 2,000 units, with `clipped · 14 KB on studio` under
-    them), and search terms marked inside the words (the phone lights the row). It was plain text.
+    as their source lines), strike, rules, a heading's level, the code bar (language, copy) and syntax colours, and
+    search terms marked inside the words (the phone lights the row). It was plain text. *Corrected 2026-11-12
+    (362f): this list named the room's long-message excerpt, "the phone's words are already cut at 2,000 units".
+    A cut at 2,000 units is no bound on lines, and the direct read is about to bring a message whole; the excerpt
+    is ported, below.*
   - **Between two replies it folds what the agent did into one group, and each thing in it keeps its own form**
     (362e), by the room's rule (`buildSegments`, then `activityPlan`). A group holds, in the order they happened,
     the tool lines, the thoughts, the session's notices, its summaries and its team messages. It is closed until
@@ -7758,6 +7760,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     names the way a document is read. It was: a direct read lost under an open document left the newest forty rows
     where two hundred and the pages above them had been, and a direct read coming back did the same to the pages
     read the other way.
+  - **A long message is its opening, and the whole is one press away** (362f). The room's excerpt rule, as it is
+    written (`messageExcerpt`): a prompt or a reply longer than 2,400 characters or 32 lines is drawn to that
+    bound, cut back to a paragraph, a line or a word where one falls in the bound's last quarter, never through a
+    character, and never ending on a heading or an opening fence whose body it left out. Under it stands `View
+    full message` (12.5 pt medium in `inkTertiary`, a 30 pt target), which opens the message on a sheet of its
+    own, as the phone's other sheets (the large detent, the grabber, 40 pt corners, `paper`): who said it and
+    when, `Done`, and the words at the document's measure, laid out a block at a time as the page is read, and
+    selectable. Where the desktop cut the words the document holds, the sheet says so at its foot as the document
+    does (`clipped · 14 KB on studio`). The rule is the view's and holds however the document is read. The room
+    lowers the bound further to fit its window; that is its layout and is not kept.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
