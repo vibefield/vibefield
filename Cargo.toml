@@ -343,7 +343,10 @@ truffle-core = "=0.7.27"
 # EL8 (2026-11-02): 0.14.0 adopts Ghostty 1.4 and routed recovery/copy. All Ghosttea planes
 # move together; the matching Swift Truffle pin is 0.7.26, with desktop core/sidecars still 0.7.24.
 # (*2026-11-07:* the desktop core and sidecars moved to 0.7.27, the truffle-core note above; Swift stays 0.7.26.)
-ghosttea = "=0.14.0"
+# EL8 (2026-11-12): 0.15.0 adopts libghostty-vt 1.0 (Ghostty 0fa3d577) on every Ghosttea plane, together. The
+# Swift Truffle pin stays 0.7.26, which 0.15.0 declares too. Tag v0.15.0 = 8f5b3d12. Cargo.lock moves by the six
+# crates alone: 0.15.0 allows rustix 1.1.6 and does not require it, so this graph keeps 1.1.4 (item 331).
+ghosttea = "=0.15.0"
 # RETIRED 2026-09-14 (TM-1): `ghosttea-truffle = "=0.11.1"`, GT-4's mesh half of
 # the terminal floor. It served TSP1 against an IN-PROCESS session registry
 # (`TruffleTerminalMesh::serve` takes ghosttea's `Registry` by value), which is

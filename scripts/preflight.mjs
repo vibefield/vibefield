@@ -162,6 +162,7 @@ const PIN_EXPECTATIONS = [
   // Desktop Rust and sidecars stay together at 0.7.24; the Swift plane has no sidecar. Both rows remain exact.
   // 0.7.24 → 0.7.27 on 2026-11-07 (the Drive's EL8-TRUFFLE): the crate and the five npm sidecars (protocols 12
   // and 13) move together; the Swift row stays 0.7.26, which ghosttea 0.14.0 declares exact.
+  // 2026-11-12 (the EL8 to ghosttea 0.15.0): the Swift row stays 0.7.26, which ghosttea 0.15.0 declares exact too.
   // The Swift row stands aside while the dev overlay links truffle and renders it nil (RD-3).
   // Cargo.toml's closure note carries every event and every place they touched.
   {
@@ -173,7 +174,7 @@ const PIN_EXPECTATIONS = [
     file: "apps/ios/VibeFieldKit/Package.swift",
     re: /^let truffleRelease: Version\? = "0\.7\.26"$/m,
     label:
-      'let truffleRelease: Version? = "0.7.26" (matches Ghosttea 0.14.0; desktop Rust/sidecar at 0.7.27)',
+      'let truffleRelease: Version? = "0.7.26" (matches Ghosttea 0.15.0; desktop Rust/sidecar at 0.7.27)',
     overlay: "truffle",
   },
   // The FINAL 0.16.0 on `latest` since PORTALS PT-6b (M24 LT1–LT5; LT5 — I52 — the reference
@@ -198,37 +199,38 @@ const PIN_EXPECTATIONS = [
   // 0.13.6 → 0.13.7 on 2026-10-27 (the EL8 with truffle 0.7.23, ghosttea #96's Windows C runtime): the same six again.
   // 0.13.7 → 0.13.8 on 2026-11-02: owner-atomic release and correlated terminal creation (GV lifecycle).
   // 0.13.8 → 0.14.0 on 2026-11-02: Ghostty 1.4 migration and verified Swift Truffle 0.7.26.
-  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.14\.0"\s*$/m, label: 'ghosttea = "=0.14.0"' },
+  // 0.14.0 → 0.15.0 on 2026-11-12: libghostty-vt 1.0 (Ghostty 0fa3d577) on every plane; protocol 1.19.
+  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.15\.0"\s*$/m, label: 'ghosttea = "=0.15.0"' },
   // TM-1 (2026-09-14): the ghosttea-truffle row is GONE with the crate — the TSP1
   // adapter left the floor (`thinking-terminal-mesh-cells.md`, TM-D1 ruled T), so
   // there is no second ghosttea consumer to keep in lockstep; the ghosttea row
   // alone carries truffle-core's version agreement now.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-client":\s*0\.14\.0\s*$/m,
-    label: '"@vibecook/ghosttea-client": 0.14.0',
+    re: /"@vibecook\/ghosttea-client":\s*0\.15\.0\s*$/m,
+    label: '"@vibecook/ghosttea-client": 0.15.0',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-electron":\s*0\.14\.0\s*$/m,
-    label: '"@vibecook/ghosttea-electron": 0.14.0',
+    re: /"@vibecook\/ghosttea-electron":\s*0\.15\.0\s*$/m,
+    label: '"@vibecook/ghosttea-electron": 0.15.0',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-react":\s*0\.14\.0\s*$/m,
-    label: '"@vibecook/ghosttea-react": 0.14.0',
+    re: /"@vibecook\/ghosttea-react":\s*0\.15\.0\s*$/m,
+    label: '"@vibecook/ghosttea-react": 0.15.0',
     package: "@vibecook/ghosttea-react",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-protocol":\s*0\.14\.0\s*$/m,
-    label: '"@vibecook/ghosttea-protocol": 0.14.0',
+    re: /"@vibecook\/ghosttea-protocol":\s*0\.15\.0\s*$/m,
+    label: '"@vibecook/ghosttea-protocol": 0.15.0',
   },
   // The EL8 to 0.13.1 (2026-10-22/23): terminal-perf's frame reader joins the event (it had no row; the lock held 0.10.1).
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-frame":\s*0\.14\.0\s*$/m,
-    label: '"@vibecook/ghosttea-frame": 0.14.0',
+    re: /"@vibecook\/ghosttea-frame":\s*0\.15\.0\s*$/m,
+    label: '"@vibecook/ghosttea-frame": 0.15.0',
   },
   // RD-5a (2026-10-14): rosetta's TypeScript packages are exact registry pins,
   // published from the revision the lock still pins for rosettad's build. Anchored

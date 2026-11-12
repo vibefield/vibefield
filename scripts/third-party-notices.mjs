@@ -1593,6 +1593,10 @@ export const GHOSTTY_VT_LIBRARIES = {
  */
 export const GHOSTTY_VT_BUNDLED = {
   "83fb95624b0439ee660c2679b43b38c8b63769cd": ["simdutf", "highway", "wuffs", "compiler_rt"],
+  // libghostty-vt 1.0 (ghosttea 0.15.0), measured 2026-11-12: `ar -t` and `nm -gU` on the published bundle, and
+  // `ar -t` on each slice of GhostteaAppleNative 6a3c4add4331 (the six library objects). Its Zig unit also defines
+  // Zig's UBSan runtime (`__ubsan_handle_*`).
+  "0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec": ["simdutf", "highway", "wuffs", "compiler_rt"],
 };
 
 /** The rows for what Ghostty VT's library carries at `commit`, or the gap that says it is not measured. */

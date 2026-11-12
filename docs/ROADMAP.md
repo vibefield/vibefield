@@ -1620,8 +1620,8 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
 
 | Plane | Pin (the manifests) | Note |
 |---|---|---|
-| truffle | `truffle-core = "=0.7.27"` (Cargo.toml) + the five npm sidecars 0.7.27 (protocol 13) · Swift exact 0.7.26 (Package.swift's `truffleRelease`; lock `release.swift`), which ghosttea 0.14.0 declares | the split, DECISIONS TB (a), `af3f3078f`; EL8-TRUFFLE (track DR, 2026-11-07) moved cargo and npm to 0.7.27; Swift rejoins at the first ghosttea declaring 0.7.27 |
-| ghosttea | 0.14.0 on cargo (`=0.14.0`), npm and Swift | the EL8 of 11-02 (LANDED "EL8 — Ghostty 1.4"); no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
+| truffle | `truffle-core = "=0.7.27"` (Cargo.toml) + the five npm sidecars 0.7.27 (protocol 13) · Swift exact 0.7.26 (Package.swift's `truffleRelease`; lock `release.swift`), which ghosttea 0.15.0 declares, as 0.14.0 did | the split, DECISIONS TB (a), `af3f3078f`; EL8-TRUFFLE (track DR, 2026-11-07) moved cargo and npm to 0.7.27; Swift rejoins at the first ghosttea declaring 0.7.27 |
+| ghosttea | 0.15.0 on cargo (`=0.15.0`), npm and Swift: libghostty-vt 1.0 (Ghostty `0fa3d577`) | the EL8 of 11-12 (0.14.0's: 11-02, LANDED "EL8 — Ghostty 1.4"); no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
 | ICE | `@vibecook/ice` 0.17.0 exact (overrides row) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | EL8 |
 | puppeteer | `@vibefield/puppeteer-*` 0.4.0 exact (the lock's `e6e4753de`) | the EL8 of 11-10 (LANDED "EL8 — puppeteer 0.4.0"; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate |
 | rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.5 exact · the kit's `RosettaClient` 0.1.5 exact (`let rosettaRelease`) · rosettad built from `../rosetta-pin` at `811e554c6` (protocol and store schema 30) | EL8 11-08 (`68b80fb95`, M230; 0.1.4 at `a8ab1f13f`, 11-07); npm, Swift and the daemon archives released (v0.1.5); adopting the archives remains RD-D7; the Swift row is PAID on vf-m2 by item 257 (M233 `b3a5930b2`); its exact-tree witness stays the old mini's |

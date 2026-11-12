@@ -185,7 +185,7 @@ struct AppReviewTests {
     let doc = try fixture()
     let ghosttea = try part("ghosttea", in: doc)
     let sparks = try part("Sparks from Fire (shader)", in: doc)
-    #expect(Acknowledgements.row(ghosttea) == .init(title: "ghosttea", detail: "0.14.0", value: "MIT"))
+    #expect(Acknowledgements.row(ghosttea) == .init(title: "ghosttea", detail: "0.15.0", value: "MIT"))
     #expect(Acknowledgements.row(sparks) == .init(title: "Sparks from Fire (shader)", detail: nil, value: "CC-BY-3.0"))
   }
 

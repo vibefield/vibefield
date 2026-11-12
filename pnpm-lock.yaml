@@ -43,11 +43,11 @@ catalogs:
 overrides:
   loro-crdt: ^1.13.8
   '@vibecook/ice': 0.17.0
-  '@vibecook/ghosttea-client': 0.14.0
-  '@vibecook/ghosttea-electron': 0.14.0
-  '@vibecook/ghosttea-react': 0.14.0
-  '@vibecook/ghosttea-protocol': 0.14.0
-  '@vibecook/ghosttea-frame': 0.14.0
+  '@vibecook/ghosttea-client': 0.15.0
+  '@vibecook/ghosttea-electron': 0.15.0
+  '@vibecook/ghosttea-react': 0.15.0
+  '@vibecook/ghosttea-protocol': 0.15.0
+  '@vibecook/ghosttea-frame': 0.15.0
   '@vibefield/rosetta-protocol': 0.1.5
   '@vibefield/rosetta-room': 0.1.5
   '@vibefield/puppeteer-runtime': 0.4.0
@@ -303,8 +303,8 @@ importers:
   packages/electron-shell:
     dependencies:
       '@vibecook/ghosttea-electron':
-        specifier: 0.14.0
-        version: 0.14.0(electron@43.1.1)
+        specifier: 0.15.0
+        version: 0.15.0(electron@43.1.1)
       '@vibefield/audit':
         specifier: workspace:*
         version: link:../audit
@@ -346,8 +346,8 @@ importers:
         specifier: 'catalog:'
         version: 24.13.3
       '@vibecook/ghosttea-client':
-        specifier: 0.14.0
-        version: 0.14.0
+        specifier: 0.15.0
+        version: 0.15.0
       '@vibefield/fieldd':
         specifier: workspace:*
         version: link:../fieldd
@@ -385,11 +385,11 @@ importers:
   packages/field-app:
     dependencies:
       '@vibecook/ghosttea-protocol':
-        specifier: 0.14.0
-        version: 0.14.0
+        specifier: 0.15.0
+        version: 0.15.0
       '@vibecook/ghosttea-react':
-        specifier: 0.14.0
-        version: 0.14.0(react@19.2.7)
+        specifier: 0.15.0
+        version: 0.15.0(react@19.2.7)
       '@vibecook/ice':
         specifier: 0.17.0
         version: 0.17.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -506,8 +506,8 @@ importers:
         specifier: 2.2.0
         version: 2.2.0
       '@vibecook/ghosttea-client':
-        specifier: 0.14.0
-        version: 0.14.0
+        specifier: 0.15.0
+        version: 0.15.0
       '@vibecook/mille':
         specifier: link:../../../mille-pin/packages/mille
         version: link:../../../mille-pin/packages/mille
@@ -978,11 +978,11 @@ importers:
   tooling/terminal-perf:
     dependencies:
       '@vibecook/ghosttea-client':
-        specifier: 0.14.0
-        version: 0.14.0
+        specifier: 0.15.0
+        version: 0.15.0
       '@vibecook/ghosttea-frame':
-        specifier: 0.14.0
-        version: 0.14.0
+        specifier: 0.15.0
+        version: 0.15.0
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -2318,28 +2318,28 @@ packages:
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
-  '@vibecook/ghosttea-client@0.14.0':
-    resolution: {integrity: sha512-TIwxUuim0ijh8TcuByy3E27SoTiqAwu4lkL2DqMVULunBWa8YGrTeKxp0MglY4z1s7muv7jEIEtsWP2LLklYNw==}
+  '@vibecook/ghosttea-client@0.15.0':
+    resolution: {integrity: sha512-xyobQC27joOnFgBpYkPGfY+YvYVOvzj/oLGzizokQrlKfvogBJGhcFTY4EdElCxayV4GESgQ3lnFJ11Y9+3iSg==}
     engines: {node: '>=22'}
 
-  '@vibecook/ghosttea-electron@0.14.0':
-    resolution: {integrity: sha512-I0H41Cr1n21GDf1OaNTBY8KzfNVxOBbtNYGdN8+o7I+oP7oKQpb1DDDiDuRwBi4+mvlSekBIIIEm/cRyFiQ5Jg==}
+  '@vibecook/ghosttea-electron@0.15.0':
+    resolution: {integrity: sha512-ORKxtgyGFj8iFEPVDiCUCFFr/HRuSeWxiZckWOG4c0kNC6xey3MrpNYUAyF8ZbckkAhUGVOkIaIvw7RB9sb38w==}
     peerDependencies:
       electron: '>=35'
 
-  '@vibecook/ghosttea-frame@0.14.0':
-    resolution: {integrity: sha512-uQY268rMUUppjTdpSAgueYK49noCzAAXhCqPvbve6x3fY2gZqeJSJvETRRZ9h9Bj/P8NHOprjoAa3yCLLVm8Ig==}
+  '@vibecook/ghosttea-frame@0.15.0':
+    resolution: {integrity: sha512-hThn9AvqnxqmzgI20Ipl3Fx6ddC6srQ0tUnFYczfwEe5dpOBVNQhkaDbK5ZSjIv+G23nH9eibh/sVCp3tTU6Rw==}
 
-  '@vibecook/ghosttea-protocol@0.14.0':
-    resolution: {integrity: sha512-hSBZQArvOyboHPkHr3Q37oyYat49gNC2dgeLubARuvnNI1n6e+soup+UPEwMLqL8PmNFMbpmCvmJSGqdWuOjQw==}
+  '@vibecook/ghosttea-protocol@0.15.0':
+    resolution: {integrity: sha512-tXgXjXxYH2DFd9rtqr10t3RdXuKG/c4DXhP/Nc4xlN6sf1HYZX+8TZxExOSarfFpeak1zdjd6cn/t88eUquvRA==}
 
-  '@vibecook/ghosttea-react@0.14.0':
-    resolution: {integrity: sha512-rmS3Ul2NDlp+tJ51jj5QYOohCRQ5yFihfulg/Gg0R4B2LTvL8ZMcyAVcm3RomQwflbahZGJJHRDTLeoodS25Rw==}
+  '@vibecook/ghosttea-react@0.15.0':
+    resolution: {integrity: sha512-9e0BvLSJWFYKhGSlvGAW9u1SjQ/YjCNZPXrkTf5g27ZuaeoWazL7RUQ4f4hzLtzWWZ9kjetcEXyastUDTuF4rw==}
     peerDependencies:
       react: '>=19'
 
-  '@vibecook/ghosttea@0.14.0':
-    resolution: {integrity: sha512-BznRgUQf4xbOSlDyNMEsTsxNvq0H4h1GFTMKDQ9OGjBjA6FXAsoHTKUCdY0LQKMTDYvc8nXzv2VNrnhHzNocYg==}
+  '@vibecook/ghosttea@0.15.0':
+    resolution: {integrity: sha512-fVmNsncrsPOmdA7aJY/+c+QenuuV7cWBQ3DFV7qLAJZjGqwWhHFcGE/Xsjv+WUMsvXy0wh0V/CFtKWqCU4SttA==}
 
   '@vibecook/ice@0.17.0':
     resolution: {integrity: sha512-AGhN2AQyOLzVSY3ZuiuSFU8nLpIsVB6+OHyoxry2KROmQcKFI9YTZYJCjVUwab4nwifzIJIu+eKHSIN7Ii6yAA==}
@@ -5256,30 +5256,30 @@ snapshots:
     dependencies:
       '@types/node': 24.13.3
 
-  '@vibecook/ghosttea-client@0.14.0':
+  '@vibecook/ghosttea-client@0.15.0':
     dependencies:
-      '@vibecook/ghosttea-protocol': 0.14.0
+      '@vibecook/ghosttea-protocol': 0.15.0
 
-  '@vibecook/ghosttea-electron@0.14.0(electron@43.1.1)':
+  '@vibecook/ghosttea-electron@0.15.0(electron@43.1.1)':
     dependencies:
-      '@vibecook/ghosttea-client': 0.14.0
-      '@vibecook/ghosttea-protocol': 0.14.0
+      '@vibecook/ghosttea-client': 0.15.0
+      '@vibecook/ghosttea-protocol': 0.15.0
       electron: 43.1.1(supports-color@7.2.0)
 
-  '@vibecook/ghosttea-frame@0.14.0': {}
+  '@vibecook/ghosttea-frame@0.15.0': {}
 
-  '@vibecook/ghosttea-protocol@0.14.0': {}
+  '@vibecook/ghosttea-protocol@0.15.0': {}
 
-  '@vibecook/ghosttea-react@0.14.0(react@19.2.7)':
+  '@vibecook/ghosttea-react@0.15.0(react@19.2.7)':
     dependencies:
-      '@vibecook/ghosttea': 0.14.0
-      '@vibecook/ghosttea-frame': 0.14.0
-      '@vibecook/ghosttea-protocol': 0.14.0
+      '@vibecook/ghosttea': 0.15.0
+      '@vibecook/ghosttea-frame': 0.15.0
+      '@vibecook/ghosttea-protocol': 0.15.0
       react: 19.2.7
 
-  '@vibecook/ghosttea@0.14.0':
+  '@vibecook/ghosttea@0.15.0':
     dependencies:
-      '@vibecook/ghosttea-protocol': 0.14.0
+      '@vibecook/ghosttea-protocol': 0.15.0
 
   '@vibecook/ice@0.17.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
