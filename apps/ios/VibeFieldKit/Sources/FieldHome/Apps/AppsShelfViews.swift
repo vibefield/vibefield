@@ -340,14 +340,21 @@ struct AppsShelfView: View {
   }
 }
 
-/// The receded card's clip (DESIGN.md §8 "The phone's Apps", amended 2026-11-12). STUB for the red: the pages' bounds
-/// in both states, as M272 built it.
+/// The receded card's clip (DESIGN.md §8 "The phone's Apps", amended 2026-11-12). The pages' bounds are the safe area,
+/// and the field draws past them to the screen's edges (PG-4t). So, closed, the clip reaches `reach` past the bounds on
+/// every side and cuts nothing. Open, it is the card M272 built: the bounds, its top corners rounded at 44. It is one
+/// shape both ways, so the radius and the reach move together on the bar's spring, and the pages keep their identity.
 enum AppsCardClip {
+  /// Past the bounds while closed: more than any safe-area inset (62 and 34 on an iPhone 17 Pro).
+  static let reach: CGFloat = 200
+
   static func shape(open: Bool) -> some Shape {
     UnevenRoundedRectangle(
       topLeadingRadius: open ? AppsShelfChrome.cardRadius : 0,
       topTrailingRadius: open ? AppsShelfChrome.cardRadius : 0,
-      style: .continuous)
+      style: .continuous
+    )
+    .inset(by: open ? 0 : -reach)
   }
 }
 
@@ -365,12 +372,8 @@ struct AppsRecededCard: ViewModifier {
 
   func body(content: Content) -> some View {
     content
-      .clipShape(
-        UnevenRoundedRectangle(
-          topLeadingRadius: open ? AppsShelfChrome.cardRadius : 0,
-          topTrailingRadius: open ? AppsShelfChrome.cardRadius : 0,
-          style: .continuous)
-      )
+      // closed, it cuts nothing: the field stays full-bleed under the status bar and the home indicator
+      .clipShape(AppsCardClip.shape(open: open))
       .allowsHitTesting(!open)
       .overlay(alignment: .top) {
         if open {
