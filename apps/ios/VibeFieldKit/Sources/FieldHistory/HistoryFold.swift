@@ -339,9 +339,14 @@ extension FieldHistoryModel {
   /// The room's run vocabulary, transcribed: which families are LOOKS (the
   /// rest are acts; acts lead the sentence), the noun per family (one, many),
   /// and the verb a ladder line opens with.
+  ///
+  /// Item 362e — `shell` is a LOOK, as the room's `FAMILY_CLASS` has it (rosetta's clients/room,
+  /// lib/transcript/vocabulary.ts: "running a command is looking at the world", decided 2026-09-01). This set left
+  /// it out, so the phone led a run's sentence with its commands where the room leads with the work product. The
+  /// room is the reference; the phone keeps no second vocabulary.
   static let lookFamilies: Set<String> = [
     "file_read", "file_list", "file_search", "code_lookup", "web_search", "web_fetch", "web_navigate",
-    "tool_discovery",
+    "tool_discovery", "shell",
   ]
   static let familyNoun: [String: (String, String)] = [
     "file_read": ("read", "reads"), "file_list": ("listing", "listings"),

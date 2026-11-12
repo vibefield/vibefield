@@ -218,7 +218,14 @@ struct HistoryFoldTests {
       ("file_read", "a.ts"), ("file_search", "q"), ("file_change", "vibefield.ts"), ("file_change", "glyphs.svg"),
       ("shell", "pnpm build"), ("file_read", "b.ts"), ("shell", "pnpm specimen"),
     ]
-    #expect(FieldHistoryModel.runSummary(lines: lines, thoughts: 1) == "2 edits · vibefield.ts, glyphs.svg · 2 commands · 2 reads · 1 search")
+    // item 362e: a command is a look (the room's FAMILY_CLASS), so it sits with the looks, by count then first seen
+    #expect(FieldHistoryModel.runSummary(lines: lines, thoughts: 1) == "2 edits · vibefield.ts, glyphs.svg · 2 reads · 2 commands · 1 search")
+    // and every family the room calls a look is one here, no more and no fewer
+    #expect(
+      FieldHistoryModel.lookFamilies == [
+        "file_read", "file_list", "file_search", "code_lookup", "web_search", "web_fetch", "web_navigate",
+        "tool_discovery", "shell",
+      ])
     #expect(FieldHistoryModel.runSummary(lines: [], thoughts: 2) == "2 thoughts")
     #expect(FieldHistoryModel.runSummary(lines: [], thoughts: 0) == "")
     #expect(FieldHistoryModel.splitPath("design-kit/src/icons/vibefield.ts", family: "file_read") == ("src/icons/", "vibefield.ts"))
