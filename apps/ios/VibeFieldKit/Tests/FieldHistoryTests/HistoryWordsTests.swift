@@ -132,3 +132,118 @@ struct HistoryWordsTests {
     #expect(HistoryWords.prompt == onPanel, "a prompt differs from a reply only by its panel")
   }
 }
+
+/// Item 362f (James, 2026-11-12 18:40:35Z, of the phone's History session view against the desktop's: "i think all
+/// message type and views are different from desktop, needs thorough audit") — a long message is drawn to the
+/// room's bound, and the whole is one press away. The rule is the room's `messageExcerpt` (rosetta at the pin,
+/// clients/room/src/components/transcript/message-preview.ts), ported as it is written.
+///
+/// Every text wanted below is what that function itself answers for the same input: each was computed by it on
+/// 2026-11-12, and the port was run on the same inputs beside it. Texts are built here, so no fixture is added.
+@Suite("item 362f — a long message is its opening, by the room's excerpt rule")
+struct HistoryExcerptTests {
+  private typealias Excerpt = HistoryWords.Excerpt
+
+  private func times(_ piece: String, _ count: Int) -> String { String(repeating: piece, count: count) }
+
+  /// `count` words with one space between: `word word … word`.
+  private func words(_ count: Int) -> String { times("word ", count - 1) + "word" }
+
+  @Test("a message within 2,400 characters and 32 lines is whole")
+  func withinTheBoundIsWhole() {
+    let short = "A reply.\n\nWith two paragraphs."
+    #expect(HistoryWords.excerpt(short) == Excerpt(text: short, omitted: false))
+    let edge = times("a", 2_400)
+    #expect(HistoryWords.excerpt(edge) == Excerpt(text: edge, omitted: false))
+    let lines = Array(repeating: "row", count: 32).joined(separator: "\n")
+    #expect(HistoryWords.excerpt(lines) == Excerpt(text: lines, omitted: false))
+    #expect(HistoryWords.excerpt("") == Excerpt(text: "", omitted: false))
+  }
+
+  @Test("past 2,400 characters with no break to cut at, it is the first 2,400")
+  func cutAtTheBound() {
+    #expect(HistoryWords.excerpt(times("a", 2_401)) == Excerpt(text: times("a", 2_400), omitted: true))
+  }
+
+  @Test("the cut moves back to the last whole word, at a space or a tab, and the space goes")
+  func cutAtAWord() {
+    #expect(HistoryWords.excerpt(times("word ", 600)) == Excerpt(text: words(480), omitted: true))
+    #expect(
+      HistoryWords.excerpt(times("word\t", 600)) == Excerpt(text: times("word\t", 479) + "word", omitted: true))
+  }
+
+  @Test("a paragraph break in the bound's last quarter is where it cuts, before a later line or word")
+  func cutAtAParagraph() {
+    let text = times("word ", 400) + "\n\n" + times("word ", 200)
+    #expect(HistoryWords.excerpt(text) == Excerpt(text: words(400), omitted: true))
+  }
+
+  @Test("a paragraph break before the last quarter is passed over for a line break inside it")
+  func cutAtALine() {
+    let text = times("word ", 100) + "\n\n" + times("word ", 300) + "\n" + times("word ", 200)
+    #expect(HistoryWords.excerpt(text) == Excerpt(text: times("word ", 100) + "\n\n" + words(300), omitted: true))
+  }
+
+  @Test("past 32 lines it stops at the line bound, then cuts back to the line before")
+  func cutAtTheLineBound() {
+    let rows = Array(repeating: "row", count: 40).joined(separator: "\n")
+    let kept = Array(repeating: "row", count: 31).joined(separator: "\n")
+    #expect(HistoryWords.excerpt(rows) == Excerpt(text: kept, omitted: true))
+  }
+
+  @Test("a character of two units is never cut through")
+  func neverThroughACharacter() {
+    let got = HistoryWords.excerpt("a" + times("😀", 1_300))
+    #expect(got == Excerpt(text: "a" + times("😀", 1_199), omitted: true))
+    #expect(got.text.utf16.count == 2_399)
+  }
+
+  @Test("it does not end on a heading whose body was left out")
+  func noDanglingHeading() {
+    let text = times("word ", 470) + "\n\n## The details\n\n" + times("y", 3_000)
+    #expect(HistoryWords.excerpt(text) == Excerpt(text: words(470), omitted: true))
+  }
+
+  @Test("it does not end on an opening fence whose code was left out")
+  func noDanglingFence() {
+    let text = times("word ", 470) + "\n```swift\n" + times("y", 3_000)
+    #expect(HistoryWords.excerpt(text) == Excerpt(text: words(470), omitted: true))
+    let tildes = times("word ", 470) + "\n~~~\n" + times("y", 3_000)
+    #expect(HistoryWords.excerpt(tildes) == Excerpt(text: words(470), omitted: true))
+  }
+
+  @Test("a heading that is all that fits stays")
+  func aHeadingAloneStays() {
+    let text = "# " + times("T", 1_900) + "\n\n" + times("z", 3_000)
+    #expect(HistoryWords.excerpt(text) == Excerpt(text: "# " + times("T", 1_900), omitted: true))
+  }
+
+  @Test("the room's pattern, to the letter: a bare # line and the one line after it go together")
+  func theBareHeadingLine() {
+    let text = times("word ", 470) + "\n#\ntail words\n\n" + times("y", 3_000)
+    #expect(HistoryWords.excerpt(text) == Excerpt(text: words(470), omitted: true))
+  }
+
+  @Test("four spaces in, or seven #, is no heading: the line stays")
+  func notAHeading() {
+    let indented = times("word ", 470) + "\n    # not a heading\n\n" + times("y", 3_000)
+    #expect(
+      HistoryWords.excerpt(indented)
+        == Excerpt(text: times("word ", 470) + "\n    # not a heading", omitted: true))
+    let seven = times("word ", 470) + "\n####### seven\n\n" + times("y", 3_000)
+    #expect(HistoryWords.excerpt(seven) == Excerpt(text: times("word ", 470) + "\n####### seven", omitted: true))
+  }
+
+  @Test("a smaller allowance is honoured, a larger one is the room's 2,400, and none at all is no words")
+  func theAllowance() {
+    #expect(HistoryWords.excerpt(times("word ", 600), budget: 100) == Excerpt(text: words(20), omitted: true))
+    #expect(HistoryWords.excerpt(times("word ", 600), budget: 5_000) == Excerpt(text: words(480), omitted: true))
+    #expect(HistoryWords.excerpt("words", budget: -5) == Excerpt(text: "", omitted: true))
+  }
+
+  @Test("the bound is the room's: 2,400 characters and 32 lines")
+  func theRoomsFigures() {
+    #expect(HistoryWords.excerptCharacters == 2_400)
+    #expect(HistoryWords.excerptLines == 32)
+  }
+}

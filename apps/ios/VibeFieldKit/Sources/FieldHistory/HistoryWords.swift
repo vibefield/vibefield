@@ -44,4 +44,17 @@ enum HistoryWords {
   /// with 3 of leading, `code` and fenced code at 12, blocks 8 apart.
   static let member = ChatMarkdownMeasure(
     size: 13, lineSpacing: 3, codeSize: 12, codeLineSpacing: 3, blockGap: 8, top: 0, onPanel: false)
+
+  // Item 362f (red) — the names `HistoryExcerptTests` calls. The rule is not written yet: every message is whole.
+  static let excerptCharacters = 2_400
+  static let excerptLines = 32
+
+  struct Excerpt: Equatable {
+    let text: String
+    let omitted: Bool
+  }
+
+  static func excerpt(_ text: String, budget: Int = excerptCharacters) -> Excerpt {
+    Excerpt(text: text, omitted: false)
+  }
 }
