@@ -211,6 +211,23 @@ extension FieldHistoryModel {
     }
   }
 
+  // Item 364 (red) — the names the rows call. `lastDays(_:now:in:)` does not read the calendar it is handed yet;
+  // `formattedDays` is the days as they are formatted today, in a calendar.
+  static func lastDays(_ count: Int, now: Date, in calendar: Calendar) -> [String] {
+    lastDays(count, now: now)
+  }
+
+  static func formattedDays(_ count: Int, now: Date, in calendar: Calendar) -> [String] {
+    let formatter = DateFormatter()
+    formatter.calendar = calendar
+    formatter.timeZone = calendar.timeZone
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyy-MM-dd"
+    return (0..<max(count, 0)).reversed().compactMap { back in
+      calendar.date(byAdding: .day, value: -back, to: now).map(formatter.string)
+    }
+  }
+
   /// The 53 weeks of 7 ending today, each day 0…4 by its share of the busiest
   /// day — the index's own count in the record's levels.
   static func ribbon(from heatmap: [IndexHeatmapDay], now: Date) -> [[Int]] {

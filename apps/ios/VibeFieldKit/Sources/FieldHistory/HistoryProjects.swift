@@ -94,12 +94,16 @@ public final class HistoryProjects {
   @ObservationIgnored private var sessionsWalkedAt: [String: Date] = [:]
   @ObservationIgnored private var paused = false
   @ObservationIgnored private var closed = false
+  /// Item 364 (red) — how many times the ledger was folded: once for every answer, on the main actor.
+  @ObservationIgnored private(set) var foldsPublished = 0
 
   public init(
     source: String?, door: (any HistoryDoor)?, ownsDoor: Bool = false, cache: HistoryCache? = nil,
     roster: [FieldHistoryModel.RosterDesktop] = [], now: @escaping @MainActor () -> Date = { Date() },
-    indexRecheck: Duration = .seconds(HistoryReads.indexRecheckSeconds), wantsFigures: Bool = false
+    indexRecheck: Duration = .seconds(HistoryReads.indexRecheckSeconds), wantsFigures: Bool = false,
+    foldEvery: Duration = .zero, keepEvery: Duration = .zero
   ) {
+    // item 364 (red): `foldEvery` and `keepEvery` are named and not yet obeyed
     self.wantsFigures = wantsFigures
     self.source = source
     self.door = door
@@ -591,7 +595,36 @@ public final class HistoryProjects {
 
   // MARK: The values
 
+  // Item 364 (red) — the names `HistoryLedgerFoldTests` calls. The fold over a snapshot is not written yet: `folded`
+  // answers the ledger that stands, so the row that holds it to the fold as it was is red.
+  struct LedgerInputs: Sendable {
+    var order: [String]
+    var summaries: [String: ProjectSummary]
+    var sessionsByKey: [String: [IndexSessionRow]]
+    var figures: [String: ProjectFiguresResult]
+    var agentCounts: [String: [String: Int]]?
+    var sources: [CatalogSource]
+    var roster: [FieldHistoryModel.RosterDesktop]
+    var source: String?
+    var ledger: HistoryCorpus
+    var clock: Date
+  }
+
+  var ledgerInputs: LedgerInputs {
+    LedgerInputs(
+      order: order, summaries: summaries, sessionsByKey: sessionsByKey, figures: figures, agentCounts: agentCounts,
+      sources: sources, roster: roster, source: source, ledger: corpus, clock: now())
+  }
+
+  nonisolated static func changed(_ inputs: LedgerInputs) -> HistoryCorpus? {
+    let ledger = folded(inputs)
+    return ledger == inputs.ledger ? nil : ledger
+  }
+
+  nonisolated static func folded(_ inputs: LedgerInputs) -> HistoryCorpus { inputs.ledger }
+
   private func rebuild() {
+    foldsPublished += 1
     let clock = now()
     let desktops = FieldHistoryModel.desktops(sources: sources, roster: roster, now: clock)
     var projects: [HistoryProject] = []

@@ -81,7 +81,9 @@ public final class HistoryCache: @unchecked Sendable {
 
   // MARK: Ledgers
 
-  public func keepLedger(_ corpus: HistoryCorpus, device: String, readAt: Date = Date()) {
+  /// Item 364 (red) — `order` is named and not yet obeyed: a ledger asked for earlier still replaces a later one,
+  /// and one asked for before a clear is still written after it.
+  public func keepLedger(_ corpus: HistoryCorpus, device: String, readAt: Date = Date(), order: UInt64? = nil) {
     var trimmed = corpus
     trimmed.documents = [:]
     trimmed.hits = []
