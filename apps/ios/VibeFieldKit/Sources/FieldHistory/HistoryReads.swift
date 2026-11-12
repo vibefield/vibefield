@@ -83,6 +83,12 @@ public enum HistoryReads {
 
   static let logger = Logger(subsystem: "com.jamesyong.vibefield.kit", category: "history")
 
+  // Item 362b (red) — the names `HistoryEarlierTests` calls, answering nothing yet: no bound, and no row that is a
+  // message. The walk and its figures are the next commit's.
+  public static let earlierMessages = 0
+  public static let earlierPages = 0
+  static func isMessage(_ row: IndexTimelineRow) -> Bool { false }
+
   /// A reader's line on the device: the unified log at the default level, every argument public (a count and
   /// ordinals, never a row's text), so Console shows it without Include Info.
   public static func log(_ line: String) {
@@ -153,6 +159,8 @@ public final class HistoryDesktopReader: Identifiable {
   /// Sessions whose document is being read right now (the route shows a
   /// reading note, never a blank).
   public private(set) var reading: Set<String> = []
+  /// Item 362b (red) — never filled yet.
+  public private(set) var readingEarlier: Set<String> = []
   /// The door's last refusal, in its own words, for the record.
   public private(set) var failure: String?
   /// SE-P1 (SE-D4 A) — Live now's last answer from this desktop's index: the words asked over its live runs' own

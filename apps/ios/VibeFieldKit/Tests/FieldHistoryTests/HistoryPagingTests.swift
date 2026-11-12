@@ -188,3 +188,219 @@ struct HistoryPagingTests {
     projects.close()
   }
 }
+
+// MARK: - Item 362b
+
+/// A door whose session is pages of rows: the newest first, each page above asked by the cursor of the one below
+/// it (the next page's number).
+@MainActor
+private final class TimelineDoor: HistoryDoor {
+  var pages: [[JSONValue]] = []
+  /// The cursor of every `index.timeline` asked, in order (nil: the head).
+  var cursors: [String?] = []
+  /// Every answer carries this cursor, whatever was asked (a door that goes round).
+  var roundCursor: String?
+  /// How long a page above takes to answer, so two asks can meet.
+  var earlierTakes = Duration.zero
+  private var inFlight = 0
+  private(set) var mostInFlight = 0
+
+  func call(_ method: String, params: JSONValue?) async throws -> JSONValue {
+    switch method {
+    case "index.session":
+      return try Fixture.json("index-session.valid")
+    case "index.timeline":
+      let cursor = params?["cursor"]?.stringValue
+      cursors.append(cursor)
+      inFlight += 1
+      mostInFlight = max(mostInFlight, inFlight)
+      defer { inFlight -= 1 }
+      if cursor != nil, earlierTakes > .zero { try? await Task.sleep(for: earlierTakes) }
+      let at = cursor.flatMap { Int($0) } ?? 0
+      var page: [String: JSONValue] = [
+        "sessionId": .string("s1"), "entries": .array(at < pages.count ? pages[at] : []), "watermark": .string("w1"),
+      ]
+      if let roundCursor {
+        page["nextCursor"] = .string(roundCursor)
+      } else if at + 1 < pages.count {
+        page["nextCursor"] = .string(String(at + 1))
+      }
+      return .object(page)
+    default:
+      throw FieldProductError(kind: "NOT_FOUND", message: method)
+    }
+  }
+
+  func tail(
+    _ method: String, params: JSONValue?, shape: SubscriptionShape,
+    onSnapshot: @escaping @MainActor (JSONValue) -> Void,
+    onDelta: @escaping @MainActor (JSONValue) -> Void
+  ) async throws -> HistoryTailHandle {
+    HistoryTailHandle {}
+  }
+
+  func close() {}
+
+  func earlierAsks() -> [String] { cursors.compactMap { $0 } }
+}
+
+/// A row of a kind, numbered down the session (a larger ordinal is newer).
+private func timelineRow(_ id: String, _ ordinal: Int, _ kind: String, group: String? = nil, text: String? = "words")
+  -> JSONValue
+{
+  var fields: [String: JSONValue] = [
+    "timelineId": .string(id), "sessionId": .string("s1"), "ordinal": .int(Int64(ordinal)), "kind": .string(kind),
+    "at": .int(1_759_000_000_000 + Int64(ordinal) * 1_000),
+    "group": .object(["id": .string("g"), "kind": .string(group ?? (kind == "user" ? "human_turn" : "agent_cycle"))]),
+  ]
+  if let text { fields["text"] = .string(text) }
+  return .object(fields)
+}
+
+@MainActor
+private func opened(_ door: TimelineDoor) async -> HistoryDesktopReader {
+  let reader = HistoryDesktopReader(deviceId: "dev-1", name: "studio", door: door)
+  reader.start()
+  reader.need(.session(device: "dev-1", id: "s1"))
+  await settle("the document") { reader.corpus.document("s1") != nil }
+  return reader
+}
+
+/// Item 362b (James, 2026-11-12 18:40:35Z, of the phone's History session view: "it does not load message
+/// progressively like desktop") — the rows above a document's top are read as the reader nears it, by the room's
+/// rule (rosetta `lib/transcript/history-window.ts`): on until they hold six messages, in at most five asks; one
+/// read at a time; and nothing that asks in a loop.
+@Suite("item 362b — the rows above a session's document are read in as the reader nears its top")
+struct HistoryEarlierTests {
+  @Test("one approach reads on until six messages are held: a page of thoughts alone does not end it")
+  @MainActor
+  func untilSixMessages() async throws {
+    let door = TimelineDoor()
+    door.pages = [
+      [timelineRow("u9", 90, "user"), timelineRow("a9", 91, "agent")],
+      [timelineRow("t1", 80, "thinking"), timelineRow("t2", 81, "thinking"), timelineRow("t3", 82, "thinking")],
+      [
+        timelineRow("u7", 70, "user"), timelineRow("a7", 71, "agent"), timelineRow("u8", 72, "user"),
+        timelineRow("a8", 73, "agent"),
+      ],
+      [timelineRow("u6", 60, "user"), timelineRow("a6", 61, "agent")],
+      [timelineRow("u5", 50, "user")],
+    ]
+    let reader = await opened(door)
+    #expect(HistoryReads.earlierMessages == 6 && HistoryReads.earlierPages == 5)
+    reader.need(.older(device: "dev-1", session: "s1"))
+    #expect(reader.readingEarlier.contains("s1"), "the read is said while it runs")
+    await settle("the read's end") { !reader.readingEarlier.contains("s1") }
+    #expect(door.earlierAsks() == ["1", "2", "3"], "four and two make six: the fourth page above is left")
+    let document = try #require(reader.corpus.document("s1"))
+    #expect(document.nextCursor == "4")
+    #expect(document.turns.first?.id == "u6")
+    reader.close()
+  }
+
+  @Test("an approach asks at most five pages, however little they hold")
+  @MainActor
+  func atMostFivePages() async throws {
+    let door = TimelineDoor()
+    door.pages = [[timelineRow("u9", 90, "user")]] + (1...7).map { [timelineRow("t\($0)", 90 - $0, "thinking")] }
+    let reader = await opened(door)
+    reader.need(.older(device: "dev-1", session: "s1"))
+    await settle("the read's end") { !reader.readingEarlier.contains("s1") }
+    #expect(door.earlierAsks() == ["1", "2", "3", "4", "5"])
+    #expect(reader.corpus.document("s1")?.nextCursor == "6")
+    reader.close()
+  }
+
+  @Test("the session's start ends the read, and nothing is asked past it")
+  @MainActor
+  func theStart() async throws {
+    let door = TimelineDoor()
+    door.pages = [[timelineRow("u9", 90, "user")], [timelineRow("u8", 80, "user")]]
+    let reader = await opened(door)
+    reader.need(.older(device: "dev-1", session: "s1"))
+    await settle("the read's end") { !reader.readingEarlier.contains("s1") }
+    #expect(door.earlierAsks() == ["1"])
+    #expect(reader.corpus.document("s1")?.nextCursor == nil)
+    reader.need(.older(device: "dev-1", session: "s1"))
+    #expect(reader.readingEarlier.isEmpty)
+    #expect(door.earlierAsks() == ["1"])
+    reader.close()
+  }
+
+  @Test("a door that answers the cursor it was asked is asked once, and its cursor is never asked by itself again")
+  @MainActor
+  func aDoorThatGoesRound() async throws {
+    let door = TimelineDoor()
+    door.pages = [[timelineRow("u9", 90, "user")], [timelineRow("t1", 80, "thinking")]]
+    door.roundCursor = "1"
+    let reader = await opened(door)
+    reader.need(.older(device: "dev-1", session: "s1"))
+    await settle("the read's end") { !reader.readingEarlier.contains("s1") }
+    #expect(door.earlierAsks() == ["1"], "not followed round")
+    let cursor = reader.corpus.document("s1")?.nextCursor
+    #expect(cursor == "1")
+    // the view's half: a read that left the cursor where it was marks it, and the top stops asking
+    let follow = HistoryFollow(landed: false)
+    #expect(follow.asksEarlier(nearTop: true, cursor: cursor, stalled: nil, awake: true, reading: false))
+    #expect(follow.asksEarlier(nearTop: true, cursor: cursor, stalled: "1", awake: true, reading: false) == false)
+    reader.close()
+  }
+
+  @Test("one read a session at a time: a second approach while one is in flight asks nothing")
+  @MainActor
+  func oneAtATime() async throws {
+    let door = TimelineDoor()
+    door.pages = [[timelineRow("u9", 90, "user")], [timelineRow("u8", 80, "user")]]
+    door.earlierTakes = .milliseconds(60)
+    let reader = await opened(door)
+    reader.need(.older(device: "dev-1", session: "s1"))
+    reader.need(.older(device: "dev-1", session: "s1"))
+    reader.need(.older(device: "dev-1", session: "s1"))
+    await settle("the read's end") { !reader.readingEarlier.contains("s1") }
+    #expect(door.earlierAsks() == ["1"])
+    #expect(door.mostInFlight == 1)
+    reader.close()
+  }
+
+  @Test("the top asks by itself only near it, with rows above, an answering desktop, no read running and a cursor that moved")
+  func whenTheTopAsks() {
+    let follow = HistoryFollow(landed: false)
+    #expect(HistoryFollow.nearTop(offset: 600, container: 600))
+    #expect(HistoryFollow.nearTop(offset: 601, container: 600) == false)
+    #expect(follow.asksEarlier(nearTop: true, cursor: "c", stalled: nil, awake: true, reading: false))
+    #expect(follow.asksEarlier(nearTop: false, cursor: "c", stalled: nil, awake: true, reading: false) == false)
+    #expect(follow.asksEarlier(nearTop: true, cursor: nil, stalled: nil, awake: true, reading: false) == false)
+    #expect(follow.asksEarlier(nearTop: true, cursor: "c", stalled: nil, awake: false, reading: false) == false)
+    #expect(follow.asksEarlier(nearTop: true, cursor: "c", stalled: nil, awake: true, reading: true) == false)
+    #expect(follow.asksEarlier(nearTop: true, cursor: "c", stalled: "c", awake: true, reading: false) == false)
+    #expect(follow.asksEarlier(nearTop: true, cursor: "d", stalled: "c", awake: true, reading: false))
+    // a document a search landed in opens near its top: nothing is read in under the landing until a finger moves
+    var landed = HistoryFollow(landed: true)
+    #expect(landed.asksEarlier(nearTop: true, cursor: "c", stalled: nil, awake: true, reading: false) == false)
+    landed.dragged()
+    #expect(landed.asksEarlier(nearTop: true, cursor: "c", stalled: nil, awake: true, reading: false))
+  }
+
+  @Test("the rule at the top says where the rows above stand")
+  func theTopsWords() {
+    #expect(HistoryFollow.head(hasEarlier: false, reading: false, awake: true) == .start)
+    #expect(HistoryFollow.head(hasEarlier: false, reading: true, awake: false) == .start)
+    #expect(HistoryFollow.head(hasEarlier: true, reading: false, awake: true) == .earlier)
+    #expect(HistoryFollow.head(hasEarlier: true, reading: true, awake: true) == .reading)
+    #expect(HistoryFollow.head(hasEarlier: true, reading: false, awake: false) == .asleep)
+  }
+
+  @Test("a message is a person's prompt, or a reply with words or an attachment: never a parent's invocation or a tool")
+  func whatAMessageIs() throws {
+    func message(_ kind: String, group: String? = nil, text: String? = "words") throws -> Bool {
+      HistoryReads.isMessage(try IndexTimelineRow(json: timelineRow("r", 1, kind, group: group, text: text)))
+    }
+    #expect(try message("user"))
+    #expect(try message("user", group: "parent_invocation") == false)
+    #expect(try message("agent"))
+    #expect(try message("agent", text: nil) == false)
+    #expect(try message("agent", text: "") == false)
+    #expect(try message("thinking") == false)
+    #expect(try message("tool_use", text: nil) == false)
+  }
+}

@@ -105,3 +105,20 @@ struct HistoryFollow: Equatable, Sendable {
     }
   }
 }
+
+// Item 362b (red) — the names `HistoryEarlierTests` calls, answering nothing yet: a top that is never near, that
+// never asks, and a rule that only ever says the session's start. The rule is the next commit's.
+extension HistoryFollow {
+  enum Head: Equatable, Sendable {
+    case start
+    case earlier
+    case reading
+    case asleep
+  }
+
+  static func nearTop(offset: CGFloat, container: CGFloat) -> Bool { false }
+
+  func asksEarlier(nearTop: Bool, cursor: String?, stalled: String?, awake: Bool, reading: Bool) -> Bool { false }
+
+  static func head(hasEarlier: Bool, reading: Bool, awake: Bool) -> Head { .start }
+}
