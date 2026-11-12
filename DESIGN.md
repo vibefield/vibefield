@@ -7671,8 +7671,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     follows the desktop's rule (`now` under ninety seconds, then minutes, hours up to a day, `yesterday` for the day
     after, then days), so a project reads `12h` on both. **The agents** stand at the row's right as on the desktop:
     at most three marks at 15 pt, the lead first and darkest, then `+N`, counted over the project's top-level
-    sessions (the listing the desktop counts from). An agent wears its own mark where the phone keeps one (LP-4:
-    Claude's and Codex's) and its letter on History's chip otherwise. The ledger opens ranked by the most recent, as
+    sessions (the listing the desktop counts from). An agent wears its own mark, and its letter on History's chip
+    where the phone has none (ACP; Pi while item 360 holds its mark; an id no catalog names). *Corrected 2026-11-12
+    (item 359):* this said "where the phone keeps one (LP-4: Claude's and Codex's)"; James overturned that ruling
+    the same day (§13, the vendor marks). The ledger opens ranked by the most recent, as
     the desktop's does; `spend` ranks by lifetime cost, and the ledger's foot says which measure the wash is scaled
     to and to which project.
   - **What stays the phone's:** the path never shows (PJ-L9: a path stays on its desktop), and the desktop row's
@@ -10745,7 +10747,22 @@ drawer, until HN-8 retired them, §8) — and, on the desk, two named exceptions
 `vibefield-icon-collection-v2`, 2026-11-03, superseding the previous masters; reviewed
 source pixels and recipe in `apps/desktop/packaging/icon-source`, packaging mapping in
 `icon-collection.mjs`), the three vendor marks (AR-L1; the phone keeps two of them, Claude's and Codex's, since LP-4,
-2026-11-05 — every other agent wears its letter there, in the swarm and on the card),
+2026-11-05 — every other agent wears its letter there, in the swarm and on the card. *Corrected 2026-11-12 (item 359;
+James, 17:50:31Z: "overturn this ruling, bring back those icons now, i see many other apps on app store do the same
+thing and they are fine"; at its source):* the two-mark ruling (DECISIONS LP-D7, built by LP-4, M144) is overturned.
+On the phone's card, lists, search, Settings and History, every agent the catalog offers a phone wears its own mark:
+template imagesets written from the path data the godview's toolkit carries (`agentMark`, puppeteer-view-sdk; Lobe
+Icons, `@lobehub/icons-static-svg` 1.94.0, the set History's room draws too), by the recipe that wrote Codex's.
+Eight today. LP-4 had removed one from the card, Grok's, which is restored; Kimi's, OpenCode's, Hermes',
+Antigravity's and Copilot's are NEW to the card (before LP-4 they were tiles of the swarm's atlas alone). Pi's is
+held (item 360: the set's `pi` icon is not yet read to be the coding agent's and not Inflection's assistant's), so
+Pi wears its letter, as does ACP, a protocol with no mark. The phone's swarm still draws two until item 359's second
+step, which keeps LP-D7's other half ("the unused ones leave the bundle"): the atlas regains the cleared agents'
+tiles and no neighbour's. "Three" was the card's count when this was written; the toolkit carries nine paths, read
+2026-11-12. The phone's and
+the Mac's About still say VibeField "isn't affiliated with or endorsed by Anthropic or OpenAI" (§9), the two makers
+that line names; item 359 changes neither line, and whether it should name the other marks' makers is not decided
+here),
 the OS marks the device chip wears (Windows' and Linux's are Simple Icons, drawn inline in
 `os-marks.tsx` — the test's one other allowed file; James, DS-3: "do not use texts, use OS icons
 instead"), the file-tree family (§8), **the living mark**
