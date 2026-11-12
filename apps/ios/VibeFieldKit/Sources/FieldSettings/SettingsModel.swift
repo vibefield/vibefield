@@ -239,9 +239,12 @@ public enum SettingsModel {
 
   /// RB-1 — This phone's rows, in order (DESIGN.md §8 "The phone's Settings", amended 2026-11-12): Appearance,
   /// Terminal, then Notifications in every build but the review build (`SettingsBuild`), then Lock where a lock is
-  /// held (WI-3). RB-1's red: a stub that leaves Notifications out.
+  /// held (WI-3). The root draws This phone from it.
   public static func thisPhoneRows(build: SettingsBuild, hasLock: Bool) -> [SettingsRoute] {
     var rows: [SettingsRoute] = [.appearance, .terminal]
+    #if DEBUG || VF_TESTFLIGHT
+      if build.drawsNotifications { rows.append(.notifications) }
+    #endif
     if hasLock { rows.append(.lock) }
     return rows
   }

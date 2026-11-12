@@ -4,27 +4,112 @@
 #if DEBUG || VF_TESTFLIGHT
   import FieldDesign
   import SwiftUI
+  import UIKit
 
-  /// RB-1's red: a stub. The green draws the preview, its caption, Tell me when with its three switches drawn and
-  /// disabled, and the foot.
+  /// What a notification will look like, the place it will be set, and why nothing is set yet: no push exists, so the
+  /// three switches are drawn and disabled, and the foot says how the phone tells you until then.
   struct NotificationsPage: View {
-    var body: some View { EmptyView() }
+    var body: some View {
+      List {
+        Section {
+          preview
+        } footer: {
+          ChromeListFoot(SettingsWords.notificationsCaption)
+        }
+        .chromeRows()
+        Section {
+          wish(SettingsWords.notifyNeedsYou, detail: SettingsWords.notifyNeedsYouDetail, on: true)
+          wish(SettingsWords.notifyFinishes, on: false)
+          wish(SettingsWords.notifyAsleep, on: false)
+        } header: {
+          ChromeListHead(SettingsWords.tellMeWhen, tags: [FactTag("Not yet", line: .dotted)])
+        } footer: {
+          Text(foot)
+            .font(ChromeListType.detail)
+            .foregroundStyle(ChromePalette.inkTertiary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .chromeRows()
+      }
+      .chromeList()
+      .navigationTitle(SettingsWords.notificationsRow)
+      .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// The plain icon over VIBEFIELD · now, and a desktop's title line: a picture of a notification, never one.
+    private var preview: some View {
+      HStack(alignment: .top, spacing: 12) {
+        if let icon = appIcon {
+          Image(uiImage: icon)
+            .resizable()
+            .frame(width: 38, height: 38)
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay {
+              RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(ChromePalette.cardHairline, lineWidth: 0.5)
+            }
+            .accessibilityHidden(true)
+        }
+        VStack(alignment: .leading, spacing: 2) {
+          HStack {
+            Text(SettingsWords.previewApp)
+              .font(ChromeListType.detail.weight(.semibold))
+              .foregroundStyle(ChromePalette.inkSecondary)
+            Spacer(minLength: 8)
+            Text(SettingsWords.previewWhen)
+              .font(ChromeListType.detail)
+              .foregroundStyle(ChromePalette.inkTertiary)
+          }
+          Text("\(Text(SettingsWords.previewDesktop).fontWeight(.semibold)) · \(SettingsWords.previewLine)")
+            .font(ChromeListType.row)
+            .foregroundStyle(ChromePalette.ink)
+        }
+      }
+      .padding(.vertical, 6)
+      .accessibilityElement(children: .combine)
+    }
+
+    /// One wish, drawn and disabled: the place is reserved and nothing is promised.
+    private func wish(_ title: String, detail: String? = nil, on: Bool) -> some View {
+      Toggle(isOn: .constant(on)) {
+        ChromeRow(title, detail: detail)
+      }
+      .disabled(true)
+    }
+
+    /// §9's foot, its first sentence set apart.
+    private var foot: AttributedString {
+      var words = AttributedString(SettingsWords.notificationsFoot(DeviceWord.current))
+      if let lead = words.range(of: SettingsWords.notificationsFootLead) {
+        words[lead].font = ChromeListType.detail.weight(.semibold)
+      }
+      return words
+    }
+
+    /// The app's own icon, as About draws it (`SettingsModel.iconName`).
+    private var appIcon: UIImage? {
+      SettingsModel.iconName(info: Bundle.main.infoDictionary).flatMap { UIImage(named: $0) }
+    }
   }
 
   extension SettingsWords {
     /// RB-1 (DESIGN.md §9 "Notifications, before push"): the row, the preview, its caption, the group and its three
-    /// switches, and the foot. RB-1's red: stubs, so the words test fails at its own assertions.
-    static let notificationsRow = ""
-    static let previewApp = ""
-    static let previewWhen = ""
-    static let previewDesktop = ""
-    static let previewLine = ""
-    static let notificationsCaption = ""
-    static let tellMeWhen = ""
-    static let notifyNeedsYou = ""
-    static let notifyNeedsYouDetail = ""
-    static let notifyFinishes = ""
-    static let notifyAsleep = ""
-    static func notificationsFoot(_ device: DeviceWord) -> String { "" }
+    /// switches, and the foot, whose first sentence is set apart.
+    static let notificationsRow = "Notifications"
+    static let previewApp = "VIBEFIELD"
+    static let previewWhen = "now"
+    static let previewDesktop = "studio"
+    static let previewLine = "An agent is waiting on you"
+    static let notificationsCaption = "A title and nothing more: what your agents said stays on your desktop."
+    static let tellMeWhen = "Tell me when"
+    static let notifyNeedsYou = "An agent needs you"
+    static let notifyNeedsYouDetail = "An approval or a question"
+    static let notifyFinishes = "A session finishes"
+    static let notifyAsleep = "A desktop goes to sleep"
+    static let notificationsFootLead = "Not built yet."
+    static func notificationsFoot(_ device: DeviceWord) -> String {
+      "\(notificationsFootLead) When it is, a desktop tells \(device.this) only that something happened, never what "
+        + "your agents said. Until then, the orange count on the Field tab is how \(device.this) tells you."
+    }
   }
 #endif

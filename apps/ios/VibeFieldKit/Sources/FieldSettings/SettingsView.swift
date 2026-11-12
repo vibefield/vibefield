@@ -73,17 +73,9 @@ public struct SettingsView: View {
         desktops
       }
       Section {
-        NavigationLink(value: SettingsRoute.appearance) {
-          ChromeRow("Appearance", lead: .glyph(.sun), value: look.word)
-        }
-        NavigationLink(value: SettingsRoute.terminal) {
-          ChromeRow("Terminal", lead: .glyph(.terminal), value: terminal.shownThemeName)
-        }
-        if let lock {
-          // WI-3 — the desk's shut padlock (§13 `tape`, the phone's `lock`), and whether it is on
-          NavigationLink(value: SettingsRoute.lock) {
-            ChromeRow(LockWords.row, lead: .glyph(.lock), value: LockWords.rowValue(isOn: lock.isOn))
-          }
+        // RB-1 — the rows, in order, as `SettingsModel.thisPhoneRows` decides them for this build
+        ForEach(SettingsModel.thisPhoneRows(build: .current, hasLock: lock != nil), id: \.self) { route in
+          thisPhoneRow(route)
         }
       } header: {
         ChromeListHead(DeviceWord.current.This)
@@ -100,6 +92,41 @@ public struct SettingsView: View {
     .navigationTitle("Settings")
     .navigationBarTitleDisplayMode(.large)
     .toolbar { closeItem }
+  }
+
+  /// One of This phone's rows (`SettingsModel.thisPhoneRows`).
+  @ViewBuilder
+  private func thisPhoneRow(_ route: SettingsRoute) -> some View {
+    switch route {
+    case .appearance:
+      NavigationLink(value: SettingsRoute.appearance) {
+        ChromeRow("Appearance", lead: .glyph(.sun), value: look.word)
+      }
+    case .terminal:
+      NavigationLink(value: SettingsRoute.terminal) {
+        ChromeRow("Terminal", lead: .glyph(.terminal), value: terminal.shownThemeName)
+      }
+    #if DEBUG || VF_TESTFLIGHT
+      case .notifications:
+        // RB-1 — §13's `message`, tagged Not yet dotted: no push exists, so the row promises nothing
+        NavigationLink(value: SettingsRoute.notifications) {
+          HStack(spacing: 8) {
+            ChromeRow(SettingsWords.notificationsRow, lead: .glyph(.message))
+            FactTag("Not yet", line: .dotted)
+          }
+          .accessibilityElement(children: .combine)
+        }
+    #endif
+    case .lock:
+      if let lock {
+        // WI-3 — the desk's shut padlock (§13 `tape`, the phone's `lock`), and whether it is on
+        NavigationLink(value: SettingsRoute.lock) {
+          ChromeRow(LockWords.row, lead: .glyph(.lock), value: LockWords.rowValue(isOn: lock.isOn))
+        }
+      }
+    default:
+      EmptyView()
+    }
   }
 
   /// Headed by you: your face, your name and your login, which open Account.

@@ -10,10 +10,18 @@ public enum SettingsBuild: Sendable, Equatable {
   case testFlight
   case development
 
-  /// The build this binary is. RB-1's red: a stub, so the tests fail at their own assertions; the green reads
-  /// `DEBUG`, then `VF_TESTFLIGHT`.
-  public static let current: SettingsBuild = .review
+  /// The build this binary is: a development build wherever `DEBUG` is set (every Debug build, and every test), else
+  /// a TestFlight build where its archive passed `VF_TESTFLIGHT`, else the review build.
+  public static let current: SettingsBuild = {
+    #if DEBUG
+      return .development
+    #elseif VF_TESTFLIGHT
+      return .testFlight
+    #else
+      return .review
+    #endif
+  }()
 
-  /// Whether This phone draws Notifications, dotted Not yet: every build but the review build. RB-1's red: a stub.
-  public var drawsNotifications: Bool { false }
+  /// Whether This phone draws Notifications, dotted Not yet: every build but the review build.
+  public var drawsNotifications: Bool { self != .review }
 }
