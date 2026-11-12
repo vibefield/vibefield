@@ -25,7 +25,7 @@ struct ChatInkMark: TextAttribute {
   var corners: CGFloat { kind == .chip ? 6 : 5 }
 }
 
-enum ChatInk {
+public enum ChatInk {
   /// Your words in runs: a chip's (`true`) where a span says so. Spans out of order, overlapping or past the words
   /// (`composeChipsFit`'s rule) give one run of the words alone.
   static func runs(_ text: String, chips: [SparkTranscriptChip]) -> [(words: String, chip: Bool)] {
@@ -49,7 +49,7 @@ enum ChatInk {
   }
 
   /// Your words, inked: drawn with `.textRenderer(ChatInkRenderer())`, or the chips are words on nothing.
-  static func text(_ text: String, chips: [SparkTranscriptChip]) -> Text {
+  public static func text(_ text: String, chips: [SparkTranscriptChip]) -> Text {
     var index = 0
     return runs(text, chips: chips).reduce(Text(verbatim: "")) { inked, run in
       guard run.chip else { return Text("\(inked)\(Text(verbatim: run.words))") }
@@ -68,8 +68,10 @@ enum ChatInk {
 }
 
 /// Draws each marked run's box (its runs on one line joined, padded 1 above and below), then the glyphs over them.
-struct ChatInkRenderer: TextRenderer {
-  func draw(layout: Text.Layout, in context: inout GraphicsContext) {
+public struct ChatInkRenderer: TextRenderer {
+  public init() {}
+
+  public func draw(layout: Text.Layout, in context: inout GraphicsContext) {
     for line in layout {
       var boxes: [(mark: ChatInkMark, box: CGRect)] = []
       for run in line {

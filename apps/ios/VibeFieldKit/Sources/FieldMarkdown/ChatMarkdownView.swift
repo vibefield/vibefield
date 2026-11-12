@@ -8,15 +8,19 @@ import SwiftUI
 // code is the same mono at 1.45 on the fill, corners 10, padded 10 12, scrolling within itself; a list's marker stands
 // in a column of 24; a quote is set in by 10 behind a 2-wide strong hairline, in secondary ink. Blocks stand 10 apart.
 
-struct ChatMarkdownView: View {
+public struct ChatMarkdownView: View {
   let blocks: [ChatMarkdownBlock]
+
+  public init(blocks: [ChatMarkdownBlock]) {
+    self.blocks = blocks
+  }
 
   static let size: CGFloat = 17
   /// 17 at 1.35: SF's own line at 17 is about 20.3, so the lines gain 2.7.
   static let lineSpacing: CGFloat = 2.7
   static let blockGap: CGFloat = 10
 
-  var body: some View {
+  public var body: some View {
     ChatMarkdownBlocks(blocks: blocks)
       .font(ChromeType.sans(Self.size))
       .foregroundStyle(ChromePalette.ink)

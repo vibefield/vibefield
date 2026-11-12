@@ -329,6 +329,10 @@ let package = Package(
     // `clock.json`, vendored with the splash at its pin, which `pnpm check:ios-fixtures` holds it to:
     // no contracts directory carries it), and both looks drawn on this device's GPU, the dust among them.
     .testTarget(name: "FieldSplashTests", dependencies: ["FieldSplash"], resources: [.copy("Fixtures")]),
+    // Item 362 (R2, VF-PM 2026-11-12 19:00:50Z, on the IOS lane's read) — a spark's words drawn (`ChatMarkdownView`,
+    // `ChatInk`), moved out of FieldHome so the History tab can draw a recorded reply with the same view: FieldHome
+    // depends on FieldHistory, so History could not reach them where they stood.
+    .target(name: "FieldMarkdown", dependencies: ["FieldDesign", "FieldProduct"]),
     // The History tab (IOS-9b, H-D4): the ledger, a project, a session's
     // document and search — chrome family only, over VALUES (`HistoryCorpus`)
     // that today only the mock fills (`-vf-mock`) and the index reads will.
@@ -346,6 +350,7 @@ let package = Package(
         "FieldDesign",
         "FieldAgents",
         "FieldProduct",
+        "FieldMarkdown",
         // SP-7b D6 — the session read by grant, over the netstack the composition injects (7b-2)
         .product(name: "RosettaClient", package: "rosetta"),
       ],
@@ -380,7 +385,7 @@ let package = Package(
       dependencies: [
         "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal", "FieldInput",
         "FieldSwarm", "FieldHistory", "FieldWorkspace", "FieldProduct", "FieldFreeway",
-        "FieldRoutedTerminal", "FieldSettings", "FieldSplash", "FieldLock",
+        "FieldRoutedTerminal", "FieldSettings", "FieldSplash", "FieldLock", "FieldMarkdown",
       ],
       // IOS-12b — `Fixtures`: the contracts' own sparks and needs lists, which Chat's demo door answers under
       // `-vf-mock` (`ChatFixtureDoor`, DEBUG only); `pnpm check:ios-fixtures` keeps them byte for byte.
