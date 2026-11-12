@@ -7746,6 +7746,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     message is `Team update` whoever sent it, and a notice says its type and its words. It was: a thought counted
     and its words dropped, and a notice, a summary and a team message each drawn as a tool line (`Note`, `Summary`,
     `Message`).
+  - **It keeps what it has shown** (item 366; the first slice of 362f). A session is read straight from the
+    desktop's index when the phone can reach it and through the home desktop when it cannot, and the way can change
+    while the document is open. When it does, the rows on the page stay. The new way's rows stand for everything
+    from its oldest row on; the rows above them stay where they were, in order; and an older page that brings one
+    of them again adds nothing. Your place and every group you opened are where you left them, because a row's
+    name is the same on both ways. Rows go only on evidence that the record itself changed: when the new way's
+    rows share none with what is held and are not simply newer than all of it, the session was rewritten on the
+    desktop and the document is read again from its end, as it always was; when they are newer than all of it, the
+    rows between are read in or the older ones dropped, by the rule a reset tail already follows. Nothing on screen
+    names the way a document is read. It was: a direct read lost under an open document left the newest forty rows
+    where two hundred and the pages above them had been, and a direct read coming back did the same to the pages
+    read the other way.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
