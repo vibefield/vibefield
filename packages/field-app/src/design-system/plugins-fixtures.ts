@@ -110,12 +110,18 @@ export type PluginsFixtureActs = "answers" | "refuses" | "pending";
  * switches": a refusal is said in §9's words, never the error's own text). */
 export const PLUGINS_FIXTURE_REFUSAL = "fixture refusal: PLUGIN_STATE_CONFLICT at registry row 7";
 
+/** The text a fixture's refused read carries (MK-4c2b, Unread): a made-up phrase a page never
+ * says. */
+export const PLUGINS_FIXTURE_READ_REFUSAL = "fixture read refusal: SETTING_UNREADABLE at row 4";
+
 /** One setting a fixture's fieldd keeps (MK-4c2b): a value, or, for a secret, only whether one is kept. A key it
  * keeps nothing for answers unset, and the page shows the declared default. */
 export interface PluginsFixtureSetting {
   readonly value?: unknown;
   readonly secret?: boolean;
   readonly kept?: boolean;
+  /** fieldd refuses to read it (§8 Its settings, Unread), with the made-up text above */
+  readonly unread?: boolean;
 }
 
 /** What a fixture's fieldd keeps of each plugin's settings, by plugin and key. */
@@ -155,6 +161,7 @@ export function pluginsFixturePort(
     grant: act,
     settingsGet: async (id, key) => {
       const entry = kept.get(`${id}/${key}`);
+      if (entry?.unread === true) throw new Error(PLUGINS_FIXTURE_READ_REFUSAL);
       if (entry?.secret === true) {
         return SettingsGetResult.parse({ isSet: entry.kept === true, secret: true });
       }
@@ -485,5 +492,15 @@ export const PLUGINS_FIXTURE_SETTINGS: PluginsFixtureSettings = {
     showFrame: { value: false },
     phone: { value: "iPhone 17 Pro" },
     token: { secret: true, kept: true },
+  },
+};
+
+/** The unread plate's fieldd (MK-4c2b, Unread): the settings plates' own, with Simulators' frame
+ * rate one it refuses to read. */
+export const PLUGINS_FIXTURE_SETTINGS_UNREAD: PluginsFixtureSettings = {
+  ...PLUGINS_FIXTURE_SETTINGS,
+  "vibefield.simulator": {
+    ...PLUGINS_FIXTURE_SETTINGS["vibefield.simulator"],
+    frameRate: { unread: true },
   },
 };

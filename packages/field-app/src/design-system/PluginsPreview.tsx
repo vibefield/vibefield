@@ -10,6 +10,7 @@ import {
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_SETTINGS,
   PLUGINS_FIXTURE_SETTINGS_SNAPSHOT,
+  PLUGINS_FIXTURE_SETTINGS_UNREAD,
   PLUGINS_FIXTURE_SNAPSHOT,
   PLUGINS_FIXTURE_SWITCHES_SNAPSHOT,
   type PluginsFixtureRead,
@@ -33,6 +34,8 @@ import {
 // a plugin's settings: a Built in plugin's page with one setting of each kind,
 // a Development plugin's while it is off, and a Built in plugin's whose settings
 // all stay on this desktop. No Undo and no Redo on any of them (James's MK-O6).
+// And the same Built in page with one setting fieldd refuses to read (§8 Its
+// settings, Unread), whose words are James's pick.
 
 export type PluginsPlateState =
   | "no-registry"
@@ -50,7 +53,8 @@ export type PluginsPlateState =
   | "switches-away"
   | "settings"
   | "settings-off"
-  | "settings-here";
+  | "settings-here"
+  | "settings-unread";
 
 const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   "no-registry": {
@@ -84,6 +88,10 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
     catalog: CATALOG_FIXTURES.unconfigured,
     refresh: CATALOG_FIXTURES.unconfigured,
   },
+  "settings-unread": {
+    catalog: CATALOG_FIXTURES.unconfigured,
+    refresh: CATALOG_FIXTURES.unconfigured,
+  },
 };
 
 /** The page a plate opens on, from Installed. */
@@ -96,6 +104,7 @@ const PLATE_PAGES: Readonly<Partial<Record<PluginsPlateState, string>>> = {
   settings: "vibefield.simulator",
   "settings-off": "example.desk-clock",
   "settings-here": "vibefield.comment-pad",
+  "settings-unread": "vibefield.simulator",
 };
 
 /** The plugins a plate's desktop has. */
@@ -115,7 +124,11 @@ export function PluginsPlate({ state }: { state: PluginsPlateState }): ReactElem
   const [surface, setSurface] = useState<FrameSurface | null>("plugins");
   const [plate, setPlate] = useState<HTMLDivElement | null>(null);
   const [port] = useState(() =>
-    pluginsFixturePort(PLATE_READS[state], "answers", PLUGINS_FIXTURE_SETTINGS),
+    pluginsFixturePort(
+      PLATE_READS[state],
+      "answers",
+      state === "settings-unread" ? PLUGINS_FIXTURE_SETTINGS_UNREAD : PLUGINS_FIXTURE_SETTINGS,
+    ),
   );
   const now = useCallback(() => PLUGINS_FIXTURE_NOW, []);
   const tab = plateTab(state);

@@ -8,9 +8,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   CATALOG_FIXTURES,
   PLUGINS_FIXTURE_NOW,
+  PLUGINS_FIXTURE_READ_REFUSAL,
   PLUGINS_FIXTURE_REFUSAL,
   PLUGINS_FIXTURE_SETTINGS,
   PLUGINS_FIXTURE_SETTINGS_SNAPSHOT,
+  PLUGINS_FIXTURE_SETTINGS_UNREAD,
   type PluginsFixtureActs,
   type PluginsFixtureRead,
   pluginsFixturePort,
@@ -25,7 +27,7 @@ import { PluginSettingsForm } from "../src/panels/PluginSettingsForm";
 // settings, each read as the page opens and after its own change, over the two requests Settings
 // → Plugins sends today, with the same parameters (C3: both forms mounted over recording clients);
 // no reset, undo or redo (C2); no section and no request on a page that reads only (U2); the off,
-// under way, refused and away states. No real fieldd, no network, no child.
+// under way, refused, unread and away states. No real fieldd, no network, no child.
 
 const NO_REGISTRY: PluginsFixtureRead = {
   catalog: CATALOG_FIXTURES.unconfigured,
@@ -85,6 +87,9 @@ function recording(inner: PluginsPort): { port: PluginsPort; sent: Sent[] } {
 
 const fixture = (acts: PluginsFixtureActs = "answers"): PluginsPort =>
   pluginsFixturePort(NO_REGISTRY, acts, PLUGINS_FIXTURE_SETTINGS);
+/** The unread plate's fieldd: Simulators' frame rate is one it refuses to read. */
+const unreadFixture = (): PluginsPort =>
+  pluginsFixturePort(NO_REGISTRY, "answers", PLUGINS_FIXTURE_SETTINGS_UNREAD);
 
 /** A read, its answer, the render it moves and the read that render starts: a few rounds, each
  * in act. */
@@ -405,6 +410,72 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
     expect(sent).toEqual(allGets());
     expect(switchOf(FRAME)?.getAttribute("aria-checked")).toBe("false");
     expect(switchOf(FRAME)?.disabled).toBe(false);
+  });
+
+  it("a setting fieldd refuses to read says §9's words under it, never the error's own text, and takes no input", async () => {
+    const { port, sent } = recording(unreadFixture());
+    await openPage(port, SIMULATORS);
+    expect(refusedLine(RATE)).toBe(words.SETTINGS_WORDS.unread);
+    expect(document.body.textContent?.includes(PLUGINS_FIXTURE_READ_REFUSAL)).toBe(false);
+    expect(fieldOf(RATE)?.disabled).toBe(true);
+    // a key dispatched to the field reaches the row, which has nothing read to send from
+    typeInto(fieldOf(RATE), "45");
+    await enter(fieldOf(RATE));
+    expect(sets(sent)).toEqual([]);
+    expect(gets(sent, "frameRate")).toBe(1);
+    // the other settings were read, and take input
+    expect(refusedLine(FRAME)).toBeNull();
+    expect(switchOf(FRAME)?.disabled).toBe(false);
+  });
+
+  it("a setting fieldd refused to read is read again when fieldd answers after being away, and its line goes", async () => {
+    const inner = fixture();
+    let refusing = true;
+    const { port, sent } = recording({
+      ...inner,
+      settingsGet: (id, key) => {
+        if (refusing && key === "frameRate") {
+          return Promise.reject(new Error(PLUGINS_FIXTURE_READ_REFUSAL));
+        }
+        return inner.settingsGet(id, key);
+      },
+    });
+    await openPage(port, SIMULATORS);
+    expect(refusedLine(RATE)).toBe(words.SETTINGS_WORDS.unread);
+    refusing = false;
+    await openPage(port, SIMULATORS, true);
+    await openPage(port, SIMULATORS);
+    expect(refusedLine(RATE)).toBeNull();
+    expect([fieldOf(RATE)?.value, fieldOf(RATE)?.disabled]).toEqual(["30", false]);
+    expect(gets(sent, "frameRate")).toBe(2);
+    // the settings that were read are not read again (S1)
+    expect(gets(sent, "showFrame")).toBe(1);
+  });
+
+  it("a setting whose read after its own change is refused takes no input, and a second change sends nothing", async () => {
+    const inner = fixture();
+    let reads = 0;
+    const { port, sent } = recording({
+      ...inner,
+      settingsGet: (id, key) => {
+        if (key === "frameRate") {
+          reads += 1;
+          if (reads === 2) return Promise.reject(new Error(PLUGINS_FIXTURE_READ_REFUSAL));
+        }
+        return inner.settingsGet(id, key);
+      },
+    });
+    await openPage(port, SIMULATORS);
+    typeInto(fieldOf(RATE), "45");
+    await enter(fieldOf(RATE));
+    expect(sets(sent)).toEqual([{ what: "set", id: SIMULATORS, key: "frameRate", value: 45 }]);
+    expect(refusedLine(RATE)).toBe(words.SETTINGS_WORDS.unread);
+    expect(fieldOf(RATE)?.disabled).toBe(true);
+    // a dispatched change reaches the row, which sends nothing while its read is refused
+    typeInto(fieldOf(RATE), "50");
+    await enter(fieldOf(RATE));
+    expect(sets(sent)).toHaveLength(1);
+    expect(gets(sent, "frameRate")).toBe(2);
   });
 
   it("a page that reads only — a plugin from the list, or a Sideloaded one — has no Settings section and asks fieldd nothing (U2)", async () => {

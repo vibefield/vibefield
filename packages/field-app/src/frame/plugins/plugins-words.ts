@@ -174,6 +174,9 @@ export const SETTINGS_WORDS = {
   off: "Turn it on to change its settings.",
   /** A setting fieldd refused to keep: never the error's own text. */
   refused: "Couldn't save that. Try again.",
+  /** A setting fieldd refused to read: never the error's own text, and no "Try again", since only
+   * the page's next opening reads it again (§8 Its settings, Unread; ‹draft›, James's pick). */
+  unread: "Couldn't load this setting.",
   /** A kept secret's empty field: it never shows what is kept. */
   saved: "Saved",
   /** A choice with nothing chosen yet (Settings' word, quoted). */

@@ -13,8 +13,10 @@ import { SETTINGS_WORDS } from "./plugins-words";
 // answering then) and after its own change; nothing re-reads on its own (S1). A control takes no
 // input while the plugin is off, while its request is out, or while fieldd isn't answering. A
 // refusal is said in §9's words under the setting, never the error's own text; a secret typed and
-// refused stays in its masked field, and fieldd never sends a window what is kept. Settings →
-// Plugins keeps its own form until MK-5.
+// refused stays in its masked field, and fieldd never sends a window what is kept. A setting fieldd
+// refuses to read says so under it in §9's words and takes no input (Unread): a failed read sets no
+// `readFor`, so it is read again at the page's next opening or once fieldd answers after being
+// away, and nothing retries it on its own. Settings → Plugins keeps its own form until MK-5.
 
 interface RowProps {
   id: string;
@@ -34,6 +36,7 @@ function SettingRow({ id, setting: given, port, live, away }: RowProps): ReactEl
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState(false);
+  const [unread, setUnread] = useState(false);
   const [reads, setReads] = useState(0);
   // a second press before React renders still sends nothing
   const busyRef = useRef(false);
@@ -50,10 +53,13 @@ function SettingRow({ id, setting: given, port, live, away }: RowProps): ReactEl
       (answer) => {
         if (!current) return;
         readFor.current = reads;
+        setUnread(false);
         setGot(answer);
         setDraft(settingDraft(setting, answer));
       },
-      () => undefined,
+      () => {
+        if (current) setUnread(true);
+      },
     );
     return () => {
       current = false;
@@ -62,7 +68,8 @@ function SettingRow({ id, setting: given, port, live, away }: RowProps): ReactEl
 
   const send = useCallback(
     (value: unknown) => {
-      if (busyRef.current || !live || away) return;
+      // nothing is sent while a read is refused, even over a value an earlier read showed (Unread)
+      if (busyRef.current || !live || away || unread) return;
       busyRef.current = true;
       setBusy(true);
       setRefused(false);
@@ -77,7 +84,7 @@ function SettingRow({ id, setting: given, port, live, away }: RowProps): ReactEl
           setBusy(false);
         });
     },
-    [port, id, setting.key, live, away],
+    [port, id, setting.key, live, away, unread],
   );
 
   const sendDraft = useCallback(() => {
@@ -86,7 +93,8 @@ function SettingRow({ id, setting: given, port, live, away }: RowProps): ReactEl
     if (out !== null) send(out.value);
   }, [got, setting, draft, send]);
 
-  const still = !live || away || busy || got === null;
+  // a refused read takes the control's input away, whatever an earlier read still shows (§8 Unread)
+  const still = !live || away || busy || got === null || unread;
   let control: ReactElement;
   if (setting.kind === "switch") {
     control = (
@@ -154,6 +162,7 @@ function SettingRow({ id, setting: given, port, live, away }: RowProps): ReactEl
           <span className="vf-plugins-page-under">{setting.description}</span>
         )}
         {refused && <span className="vf-plugins-page-refused">{SETTINGS_WORDS.refused}</span>}
+        {unread && <span className="vf-plugins-page-refused">{SETTINGS_WORDS.unread}</span>}
       </span>
       {control}
     </li>

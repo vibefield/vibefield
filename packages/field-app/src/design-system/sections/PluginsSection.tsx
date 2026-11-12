@@ -122,6 +122,13 @@ export function PluginsSection(): ReactElement {
       >
         <PluginsPlate state="settings-here" />
       </Specimen>
+      <Specimen
+        title="A plugin's settings — one VibeField couldn't load"
+        source="frame/plugins/PluginSettings.tsx · frame/plugins/plugins-words.ts"
+        bleed
+      >
+        <PluginsPlate state="settings-unread" />
+      </Specimen>
     </Section>
   );
 }
