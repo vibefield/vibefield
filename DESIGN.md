@@ -7701,6 +7701,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     rows above stand: `Earlier` (a press reads them too) · `Reading earlier…` · `Earlier · needs studio` while their
     desktop does not answer · `Session start · Sat 12 Sep` at the record's top. The room's pull to reveal is not
     kept: on a phone the rows land by themselves. A document a search landed in reads nothing in until you move it.
+  - **Time cuts it into sittings** (362c), by the room's rule: a new sitting begins before a row that comes fifteen
+    minutes or more after the row before it, or on another calendar day of this phone's. Each sitting opens with the
+    room's pill, centred, 26 pt high on `fill`, 11.5 pt medium in `inkTertiary` with its trailing words in
+    `inkFaint`: `Mon 31 Aug` where the day turned, `Tue 1 Sep · 00:02` `after 44m` where a pause crossed a day, and
+    `12:31` `after 12h 18m` inside one. The day is `Today`, `Yesterday`, or named, and wears its year only when it is
+    not this one (`24 Aug 2025`); a pause is said to the minute, and from two days on as `2d 3h`. A reply the cut
+    falls inside continues under the pill with no second head, and a run never crosses a pill. A session of one
+    sitting has no pill. It was one pill before a prompt sixty minutes or more after the turn before it, with no day.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
