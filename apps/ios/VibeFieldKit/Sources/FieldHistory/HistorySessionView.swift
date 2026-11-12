@@ -32,6 +32,8 @@ struct HistorySessionView: View {
 
   @Environment(\.colorScheme) private var scheme
   @State private var expanded: Set<String> = []
+  /// Item 362f — the message whose whole text is open on its own sheet.
+  @State private var whole: HistoryWholeMessage?
   @State private var atEnd = false
   /// Item 362a — whether the document keeps its foot in view, and where it opened.
   @State private var follow: HistoryFollow
@@ -188,6 +190,13 @@ struct HistorySessionView: View {
           }
           .accessibilityLabel("More")
         }
+      }
+      .sheet(item: $whole) { message in
+        HistoryMessageView(message: message)
+          .presentationDetents([.large])
+          .presentationDragIndicator(.visible)
+          .presentationCornerRadius(40)
+          .presentationBackground(ChromePalette.paper)
       }
       .onAppear { onNeed(.session(device: corpus.deviceId, id: document.id)) }
       .onChange(of: litAnchor, initial: true) { _, anchor in
@@ -358,29 +367,33 @@ struct HistorySessionView: View {
         responseHead(turn)
       }
       ForEach(turn.segments) { segment in
-        segmentView(segment)
+        segmentView(segment, in: turn)
       }
     }
     .padding(.top, turn.dayPill == nil ? 30 : 0)
   }
 
   private func prompt(_ turn: HistoryTurn) -> some View {
-    HistoryWordsView(text: turn.prompt, blank: "(an empty prompt)", measure: HistoryWords.prompt)
-      .equatable()
-      .padding(.horizontal, 15)
-      .padding(.top, 11)
-      .padding(.bottom, 12)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(ChromePalette.fill))
-      .overlay {
-        if let anchor = turn.promptAnchor, litAnchor == anchor {
-          RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ChromePalette.attention, lineWidth: 1.5)
-        }
+    HistoryExcerptView(
+      text: turn.prompt, blank: "(an empty prompt)", measure: HistoryWords.prompt,
+      lead: "You, at \(turn.at)",
+      open: {
+        whole = HistoryWholeMessage(
+          id: "prompt-\(turn.id)", who: "You", at: turn.at, text: turn.prompt, cut: turn.promptClipped)
       }
-      .id(turn.promptAnchor ?? "prompt-\(turn.id)")
-      // one element, as the one Text it was: the blocks are not read out piece by piece
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel("You, at \(turn.at): \(turn.prompt)")
+    )
+    .equatable()
+    .padding(.horizontal, 15)
+    .padding(.top, 11)
+    .padding(.bottom, 12)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(ChromePalette.fill))
+    .overlay {
+      if let anchor = turn.promptAnchor, litAnchor == anchor {
+        RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ChromePalette.attention, lineWidth: 1.5)
+      }
+    }
+    .id(turn.promptAnchor ?? "prompt-\(turn.id)")
   }
 
   private func responseHead(_ turn: HistoryTurn) -> some View {
@@ -407,22 +420,27 @@ struct HistorySessionView: View {
   }
 
   @ViewBuilder
-  private func segmentView(_ segment: HistorySegment) -> some View {
+  private func segmentView(_ segment: HistorySegment, in turn: HistoryTurn) -> some View {
     switch segment {
     case .prose(let id, let at, let text, let anchor):
-      HistoryWordsView(text: text, blank: "(no words)", measure: HistoryWords.reply)
-        .equatable()
-        .padding(.vertical, 6)
-        .padding(.horizontal, 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-          RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(ChromePalette.attention.opacity(0.14))
-            .opacity(anchor != nil && litAnchor == anchor ? 1 : 0)
+      HistoryExcerptView(
+        text: text, blank: "(no words)", measure: HistoryWords.reply,
+        lead: "\(document.agentName), at \(at)",
+        open: {
+          whole = HistoryWholeMessage(
+            id: id, who: document.agentName, at: at, text: text, cut: cutNote(under: id, in: turn))
         }
-        .id(anchor ?? id)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(document.agentName), at \(at): \(text)")
+      )
+      .equatable()
+      .padding(.vertical, 6)
+      .padding(.horizontal, 4)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+          .fill(ChromePalette.attention.opacity(0.14))
+          .opacity(anchor != nil && litAnchor == anchor ? 1 : 0)
+      }
+      .id(anchor ?? id)
     case .ledger(let id, let summary, let duration, let failed, let isLive, let lines):
       ledger(id: id, summary: summary, duration: duration, failed: failed, isLive: isLive, lines: lines)
     case .attachment(_, _, let label):
@@ -471,18 +489,18 @@ struct HistorySessionView: View {
   /// SP-6 — the honest-state line under a text the door cut: `clipped · 14 KB
   /// on studio`, the record's voice, never a body that reads as whole.
   private func clippedNote(_ words: String) -> some View {
-    HStack(spacing: 6) {
-      Image(systemName: "scissors")
-        .font(.system(size: 10.5, weight: .medium))
-      Text(words)
-        .font(ChromeType.sans(11.5))
-        .monospacedDigit()
-        .lineLimit(1)
+    HistoryCutNote(words: words)
+      .padding(.horizontal, 4)
+      .padding(.vertical, 2)
+  }
+
+  /// Item 362f — the note under a reply whose words the desktop cut, for the message's own sheet: the fold puts
+  /// it right after the reply, under the reply's id (`HistoryFold.segments`). Read when the sheet is asked for.
+  private func cutNote(under id: String, in turn: HistoryTurn) -> String? {
+    for segment in turn.segments {
+      if case .clipped(let cutId, let words) = segment, cutId == "\(id)/clipped" { return words }
     }
-    .foregroundStyle(ChromePalette.inkFaint)
-    .padding(.horizontal, 4)
-    .padding(.vertical, 2)
-    .accessibilityLabel(words)
+    return nil
   }
 
   /// SP-6 — what the phone does not carry, said: `image shot.png on studio`.
@@ -688,6 +706,45 @@ struct HistorySessionView: View {
     }
     .frame(minHeight: 26)
     .accessibilityElement(children: .combine)
+  }
+}
+
+/// Item 362f — a prompt's or a reply's words under the room's excerpt rule: the words to the bound, and `View full
+/// message` under them when there are more. The words drawn are one element to a reader of the screen, as they
+/// were (the blocks are not read out piece by piece): who and when (`lead`), then those words; the control is its
+/// own. Equatable on what it draws, so the bound is not worked out again when the document's scroll state changes.
+private struct HistoryExcerptView: View, Equatable {
+  let text: String
+  let blank: String
+  let measure: ChatMarkdownMeasure
+  let lead: String
+  let open: () -> Void
+
+  nonisolated static func == (a: HistoryExcerptView, b: HistoryExcerptView) -> Bool {
+    a.text == b.text && a.blank == b.blank && a.measure == b.measure && a.lead == b.lead
+  }
+
+  var body: some View {
+    let excerpt = HistoryWords.excerpt(text)
+    VStack(alignment: .leading, spacing: 4) {
+      HistoryWordsView(text: excerpt.text, blank: blank, measure: measure)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(lead): \(excerpt.text)")
+      if excerpt.omitted {
+        Button(action: open) {
+          HStack(spacing: 5) {
+            Text("View full message")
+            Image(systemName: "arrow.up.right")
+              .font(.system(size: 9.5, weight: .semibold))
+          }
+          .font(ChromeType.sans(12.5, .medium))
+          .foregroundStyle(ChromePalette.inkTertiary)
+          .frame(minHeight: 30)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+      }
+    }
   }
 }
 

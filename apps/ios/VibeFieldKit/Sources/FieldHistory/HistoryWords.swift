@@ -45,16 +45,106 @@ enum HistoryWords {
   static let member = ChatMarkdownMeasure(
     size: 13, lineSpacing: 3, codeSize: 12, codeLineSpacing: 3, blockGap: 8, top: 0, onPanel: false)
 
-  // Item 362f (red) — the names `HistoryExcerptTests` calls. The rule is not written yet: every message is whole.
+  // MARK: - The excerpt (item 362f)
+
+  /// The room's `MESSAGE_PREVIEW_CHARACTERS` and `MESSAGE_PREVIEW_LINES` (rosetta at the pin, clients/room/src/
+  /// components/transcript/message-preview.ts): the bound of a message's words in the document.
   static let excerptCharacters = 2_400
   static let excerptLines = 32
 
+  /// A message's words as the document draws them: all of them, or their opening with the rest left out.
   struct Excerpt: Equatable {
     let text: String
     let omitted: Bool
   }
 
+  /// The room's `messageExcerpt`, ported as it is written, over UTF-16 units as JavaScript counts them.
+  ///
+  /// The allowance is `budget` (never more than `excerptCharacters`) or the first `excerptLines` lines, whichever
+  /// ends first. A text within it is whole. Otherwise the cut moves back to a paragraph break, else a line break,
+  /// else a space or a tab: the first of those, in that order, that falls in the allowance's last quarter. It
+  /// never splits a surrogate pair; the trailing space goes; and the excerpt does not finish on a heading or an
+  /// opening fence whose content was left out (a heading that is all there is stays).
   static func excerpt(_ text: String, budget: Int = excerptCharacters) -> Excerpt {
-    Excerpt(text: text, omitted: false)
+    let units = Array(text.utf16)
+    var end = min(units.count, max(0, budget), excerptCharacters)
+    var lines = 1
+    for at in 0..<end where units[at] == 0x0A {
+      lines += 1
+      if lines > excerptLines {
+        end = at
+        break
+      }
+    }
+    if end == units.count { return Excerpt(text: text, omitted: false) }
+
+    let prefix = units[0..<end]
+    var paragraph = -1
+    var at = end - 2
+    while at >= 0 {
+      if prefix[at] == 0x0A, prefix[at + 1] == 0x0A {
+        paragraph = at
+        break
+      }
+      at -= 1
+    }
+    let line = prefix.lastIndex(of: 0x0A) ?? -1
+    let word = max(prefix.lastIndex(of: 0x20) ?? -1, prefix.lastIndex(of: 0x09) ?? -1)
+    if let boundary = [paragraph, line, word].first(where: { Double($0) >= Double(end) * 0.75 }) { end = boundary }
+    if end > 0, UTF16.isLeadSurrogate(units[end - 1]) { end -= 1 }
+
+    var kept = trimmedEnd(units[0..<end])
+    // the room's loop: while its pattern matches past the text's first unit
+    while let match = dangling(kept), match > 0 {
+      let before = trimmedEnd(kept[0..<match])
+      if before.isEmpty { break }
+      kept = before
+    }
+    return Excerpt(text: String(decoding: kept, as: UTF16.self), omitted: true)
+  }
+
+  /// JavaScript's white space and line terminators: what `trimEnd` drops and `\s` matches.
+  private static func isSpace(_ unit: UInt16) -> Bool {
+    switch unit {
+    case 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0xA0, 0x1680, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF: true
+    case 0x2000...0x200A: true
+    default: false
+    }
+  }
+
+  private static func trimmedEnd(_ units: ArraySlice<UInt16>) -> [UInt16] {
+    var end = units.endIndex
+    while end > units.startIndex, isSpace(units[end - 1]) { end -= 1 }
+    return Array(units[units.startIndex..<end])
+  }
+
+  /// Where the room's `dangling` pattern first matches, as `RegExp.exec` answers its index; nil when it does not.
+  /// The pattern is anchored to the text's end and starts at the text's start or at a newline, so it is tried at
+  /// each line's start in turn; the index is that newline's (0 for the first line).
+  private static func dangling(_ units: [UInt16]) -> Int? {
+    var start = 0
+    while true {
+      if dangles(units, from: start) { return max(0, start - 1) }
+      guard let newline = units[start...].firstIndex(of: 0x0A) else { return nil }
+      start = newline + 1
+    }
+  }
+
+  /// The pattern from one line's start: up to three spaces, then a heading (`#` to `######`, white space, and no
+  /// newline after that white space) or a fence (three or more backticks or tildes, and no newline after). The
+  /// heading's white space is the pattern's `\s+`, which takes newlines: a bare `#` line, blank lines and one
+  /// last line match together, as they do in the room.
+  private static func dangles(_ units: [UInt16], from start: Int) -> Bool {
+    var at = start
+    while at < units.count, at - start < 3, units[at] == 0x20 { at += 1 }
+    let rest = units[at...]
+    let hashes = rest.prefix { $0 == 0x23 }.count
+    if (1...6).contains(hashes) {
+      let after = rest.dropFirst(hashes)
+      let space = after.prefix(while: isSpace).count
+      if space > 0, !after.dropFirst(space).contains(0x0A) { return true }
+    }
+    let fence = max(rest.prefix { $0 == 0x60 }.count, rest.prefix { $0 == 0x7E }.count)
+    return fence >= 3 && !rest.contains(0x0A)
   }
 }
