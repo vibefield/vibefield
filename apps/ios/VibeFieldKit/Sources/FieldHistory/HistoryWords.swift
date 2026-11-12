@@ -39,4 +39,9 @@ enum HistoryWords {
   /// and `code` takes no ground (the room's rule: a fill on a fill is no boundary).
   static let prompt = ChatMarkdownMeasure(
     size: 15, lineSpacing: 4, codeSize: 13, codeLineSpacing: 3.4, blockGap: 10, top: 0, onPanel: true)
+
+  /// Item 362e — a group's member, opened (a thought, a notice, a summary, a team message): the group's pitch, 13
+  /// with 3 of leading, `code` and fenced code at 12, blocks 8 apart.
+  static let member = ChatMarkdownMeasure(
+    size: 13, lineSpacing: 3, codeSize: 12, codeLineSpacing: 3, blockGap: 8, top: 0, onPanel: false)
 }

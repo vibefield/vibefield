@@ -133,8 +133,11 @@ struct HistoryFoldTests {
       Issue.record("the fourth segment is the collaboration's run")
       return
     }
-    #expect(messageLines.first?.verb == "Message" && messageLines.first?.object == "design docs updated")
-    #expect(message == "message · design docs updated")
+    // item 362e: a team message is a member of its own kind under the room's head (it was a tool-shaped line,
+    // `Message`, under the fallback sentence `message · design docs updated`)
+    #expect(messageLines.first?.verb == "Team update" && messageLines.first?.object == "design docs updated")
+    #expect(messageLines.first?.kind == .team)
+    #expect(message == "1 team update")
     // every anchor the stepper can walk, in reading order
     #expect(document.anchors == ["t0", "t2"])
   }

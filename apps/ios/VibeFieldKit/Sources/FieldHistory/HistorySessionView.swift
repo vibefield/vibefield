@@ -181,7 +181,7 @@ struct HistorySessionView: View {
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
           Menu {
-            Button("Open every run") { expanded = Set(document.turns.flatMap { $0.segments.map(\.id) }) }
+            Button("Open every run") { expanded.formUnion(FieldHistoryModel.everyRun(document)) }
             Button("Copy session id") { UIPasteboard.general.string = document.id }
           } label: {
             Image(systemName: "ellipsis")
@@ -429,10 +429,43 @@ struct HistorySessionView: View {
       placeholder(label ?? "attachment on \(corpus.desktop)")
     case .clipped(_, let words):
       clippedNote(words)
-    case .request:
-      // item 362e (red): the fold makes none yet, and nothing draws one
-      EmptyView()
+    case .request(_, let question, let words, let result, let failed):
+      request(question: question, words: words, result: result, failed: failed)
     }
+  }
+
+  /// Item 362e — a question to the reader, or a request for permission: alone between groups and open, on a
+  /// hairline card, because the session stopped there for a person (the room's `request` block).
+  private func request(question: Bool, words: String, result: String, failed: Bool) -> some View {
+    HStack(alignment: .top, spacing: 8) {
+      Image(systemName: question ? "questionmark.circle" : "hand.raised")
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(failed ? ChromePalette.red : ChromePalette.inkTertiary)
+        .frame(width: 14)
+        .padding(.top, 2)
+      VStack(alignment: .leading, spacing: 3) {
+        Text(question ? "Question" : "Permission requested")
+          .font(ChromeType.sans(12.5, .medium))
+          .foregroundStyle(ChromePalette.inkTertiary)
+        if !words.isEmpty {
+          Text(verbatim: words)
+            .font(ChromeType.sans(13))
+            .foregroundStyle(ChromePalette.inkSecondary)
+            .multilineTextAlignment(.leading)
+        }
+        if !result.isEmpty {
+          Text(verbatim: result)
+            .font(ChromeType.sans(11.5))
+            .foregroundStyle(failed ? ChromePalette.red : ChromePalette.inkFaint)
+        }
+      }
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ChromePalette.cardHairline, lineWidth: 0.5))
+    .padding(.vertical, 4)
+    .accessibilityElement(children: .combine)
   }
 
   /// SP-6 — the honest-state line under a text the door cut: `clipped · 14 KB
@@ -522,7 +555,11 @@ struct HistorySessionView: View {
       if open {
         VStack(alignment: .leading, spacing: 0) {
           ForEach(lines) { line in
-            ledgerLine(line)
+            if line.kind == nil {
+              ledgerLine(line)
+            } else {
+              memberLine(line)
+            }
           }
         }
         .padding(.leading, 12)
@@ -533,6 +570,88 @@ struct HistorySessionView: View {
       }
     }
     .padding(.vertical, 4)
+  }
+
+  /// Item 362e — a member of a group that is not a tool line: a thought, a session notice, a summary, a
+  /// compaction, a team message. One line: what it is and its first words. Where its words say more it is a button
+  /// with a chevron and opens in place; the words are built only while it is open, and nothing opens members in
+  /// bulk (`FieldHistoryModel.everyRun`).
+  @ViewBuilder
+  private func memberLine(_ line: HistoryLedgerLine) -> some View {
+    let key = FieldHistoryModel.memberKey(line.id)
+    let open = expanded.contains(key)
+    VStack(alignment: .leading, spacing: 0) {
+      if line.words == nil {
+        memberHead(line, open: nil)
+      } else {
+        Button {
+          withAnimation(FieldMotion.ease(0.3)) {
+            if open { expanded.remove(key) } else { expanded.insert(key) }
+          }
+        } label: {
+          memberHead(line, open: open)
+        }
+        .buttonStyle(HistoryRowStyle(radius: 6))
+        .accessibilityValue(open ? "expanded" : "collapsed")
+      }
+      if open, let words = line.words {
+        VStack(alignment: .leading, spacing: 4) {
+          if line.kind == .compaction {
+            Text("Agent-generated context for continuing this session.")
+              .font(ChromeType.sans(11.5))
+              .foregroundStyle(ChromePalette.inkFaint)
+          }
+          HistoryWordsView(text: words, blank: "", measure: HistoryWords.member)
+            .equatable()
+          if let clipped = line.clipped { clippedNote(clipped) }
+        }
+        .padding(.leading, 22)
+        .padding(.trailing, 4)
+        .padding(.bottom, 6)
+        .transition(.opacity)
+      }
+    }
+  }
+
+  private func memberHead(_ line: HistoryLedgerLine, open: Bool?) -> some View {
+    HStack(spacing: 8) {
+      Image(systemName: memberSymbol(line))
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(line.state == .failed ? ChromePalette.red : ChromePalette.inkFaint)
+        .frame(width: 14)
+      Text(line.verb)
+        .font(ChromeType.sans(12.5, .medium))
+        .foregroundStyle(line.state == .failed ? ChromePalette.red : ChromePalette.inkTertiary)
+        .lineLimit(1)
+        .fixedSize()
+      Text(verbatim: line.object)
+        .font(ChromeType.sans(12.5))
+        .foregroundStyle(ChromePalette.inkSecondary)
+        .lineLimit(1)
+        .truncationMode(.tail)
+      Spacer(minLength: 6)
+      if let open {
+        Image(systemName: "chevron.right")
+          .font(.system(size: 9, weight: .semibold))
+          .rotationEffect(.degrees(open ? 90 : 0))
+          .foregroundStyle(ChromePalette.inkFaint)
+      }
+    }
+    .frame(minHeight: 26)
+    .contentShape(Rectangle())
+    .accessibilityElement(children: .combine)
+  }
+
+  private func memberSymbol(_ line: HistoryLedgerLine) -> String {
+    if line.state == .failed { return "xmark.circle" }
+    switch line.kind {
+    case .thought: return "ellipsis.bubble"
+    case .notice: return "info.circle"
+    case .summary: return "text.alignleft"
+    case .compaction: return "arrow.down.right.and.arrow.up.left"
+    case .team: return "person.2"
+    case nil: return "pencil.line"
+    }
   }
 
   private func ledgerLine(_ line: HistoryLedgerLine) -> some View {

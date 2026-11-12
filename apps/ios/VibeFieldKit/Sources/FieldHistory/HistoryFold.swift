@@ -674,21 +674,33 @@ extension FieldHistoryModel {
     return "\(bytes) B"
   }
 
-  /// A reply's rows as segments: prose paragraphs, attachments as placeholders,
-  /// and everything else folded into runs between them.
+  /// A reply's rows as segments, by the room's rule (rosetta's clients/room: `buildSegments` in
+  /// lib/transcript/turns.ts, then `activityPlan` in components/transcript/activity-plan.ts). Speech is the
+  /// boundary: a reply with words or an attachment closes the group before it, and everything between two of them
+  /// (tool lines, thoughts, notices, summaries, team messages) is ONE group, in order.
+  ///
+  /// Item 362e (James, 2026-11-12 18:40:35Z: "i think all message type and views are different from desktop, needs
+  /// thorough audit"):
+  /// - a blank agent row said nothing, so it closes nothing and is not drawn (it was `(no words)`, and it cut the
+  ///   group in two);
+  /// - a question to the reader and a request for permission stand alone between groups (the room's `request`
+  ///   block): the session stopped there for a person.
   static func segments(_ body: [IndexTimelineRow], desktop: String) -> [HistorySegment] {
     var out: [HistorySegment] = []
     var run: [IndexTimelineRow] = []
     func flush() {
-      guard !run.isEmpty else { return }
-      out.append(ledger(run))
+      if let group = ledger(run, desktop: desktop) { out.append(group) }
       run.removeAll()
     }
     for row in body {
       switch row.kind {
       case "agent":
+        let words = said(row.text) != nil || row.textClipped
+        guard words || !row.attachments.isEmpty else { continue }
         flush()
-        out.append(.prose(id: row.timelineId, at: clockSeconds(row.at), text: row.text ?? "", anchor: row.timelineId))
+        if words {
+          out.append(.prose(id: row.timelineId, at: clockSeconds(row.at), text: row.text ?? "", anchor: row.timelineId))
+        }
         if row.textClipped {
           out.append(.clipped(id: "\(row.timelineId)/clipped", words: clippedWords(byteLen: row.textByteLen, desktop: desktop)))
         }
@@ -700,6 +712,9 @@ extension FieldHistoryModel {
         // as prose so nothing is dropped
         flush()
         out.append(.prose(id: row.timelineId, at: clockSeconds(row.at), text: row.text ?? "", anchor: row.timelineId))
+      case "tool_use" where row.tool?.family == "question", "notice" where row.notice == "permission_requested":
+        flush()
+        out.append(request(row))
       default:
         run.append(row)
       }
@@ -708,52 +723,154 @@ extension FieldHistoryModel {
     return out
   }
 
-  /// A run of tool, thought, notice, summary and collaboration rows, folded.
-  static func ledger(_ rows: [IndexTimelineRow]) -> HistorySegment {
+  /// A question to the reader, or a request for permission, as the block that stands alone.
+  static func request(_ row: IndexTimelineRow) -> HistorySegment {
+    guard let tool = row.tool else {
+      return .request(id: row.timelineId, question: false, words: said(row.text) ?? "", result: "", failed: false)
+    }
+    let result = tool.result ?? (tool.failed ? (tool.failure ?? "failed") : "")
+    return .request(
+      id: row.timelineId, question: true, words: tool.object ?? tool.name, result: result, failed: tool.failed)
+  }
+
+  /// A group: the rows between two replies, each a member in its own form, under the room's head.
+  ///
+  /// Item 362e — a thought is a line with its first words and opens to all of them (it was only counted); a
+  /// notice, a summary and a team message are members of their own kind (each was a tool-shaped line: `Note`,
+  /// `Summary`, `Message`); a compaction's recap is its own member, always. A blank thought and a blank summary
+  /// are not drawn (the room's `thinkingSegment` and `summarySegment`). nil: nothing of these rows is drawn.
+  ///
+  /// The head is the room's (`summarizeActivity`): the tool nouns, then `N thought(s)`, `N context event(s)` (a
+  /// notice, a summary, a compaction) and `N team update(s)`, each where it first appeared; a runtime error
+  /// counts with the failed tools.
+  ///
+  /// What the desktop's row does not carry is not guessed (the door's road; the whole entry has each of these):
+  /// no native ids, so a compaction's boundary notice is never paired away by standing next to its recap; no team
+  /// event's kind, channel or sender, so a team message is the room's catch-all, `Team update`; no notice fields
+  /// beyond its type and its words.
+  static func ledger(_ rows: [IndexTimelineRow], desktop: String) -> HistorySegment? {
     var lines: [HistoryLedgerLine] = []
-    var summaryLines: [(family: String, object: String)] = []
-    var thoughts = 0
+    var tools: [(family: String, object: String)] = []
+    var names: [String] = []
+    var counts: [String: Int] = [:]
     var failed = 0
     var isLive = false
+    func count(_ name: String) {
+      if counts[name] == nil { names.append(name) }
+      counts[name, default: 0] += 1
+    }
     for row in rows {
       switch row.kind {
       case "tool_use":
         guard let tool = row.tool else { continue }
         let line = ledgerLine(row, tool: tool)
         lines.append(line)
-        summaryLines.append((tool.family, line.object))
+        tools.append((tool.family, line.object))
         if tool.failed { failed += 1 }
         if line.state == .running { isLive = true }
       case "thinking":
-        thoughts += 1
+        guard let words = said(row.text) else { continue }
+        lines.append(member(row, .thought, verb: "Thought", lead: firstLine(words), words: words, desktop: desktop))
+        count("thought")
       case "notice":
-        lines.append(HistoryLedgerLine(id: row.timelineId, verb: "Note", object: noticeWords(row), result: "", state: .ok))
+        let words = noticeWords(row)
+        let state: HistoryLedgerLine.State = row.notice == "runtime_error" ? .failed : .ok
+        lines.append(
+          member(
+            row, .notice, verb: "Session notice", lead: firstLine(words), words: words, state: state,
+            desktop: desktop))
+        count("context event")
+        if state == .failed { failed += 1 }
       case "summary":
-        lines.append(HistoryLedgerLine(id: row.timelineId, verb: "Summary", object: row.summaryPurpose ?? "summary", result: "", state: .ok))
+        if row.summaryPurpose == "compaction" {
+          lines.append(
+            member(
+              row, .compaction, verb: "Context compacted", lead: "summary", words: said(row.text), desktop: desktop))
+        } else {
+          guard let words = said(row.text) else { continue }
+          let purpose = row.summaryPurpose.map { $0.replacingOccurrences(of: "_", with: " ") }
+          let verb = purpose.map { "\($0.prefix(1).uppercased())\($0.dropFirst()) summary" } ?? "Summary"
+          lines.append(member(row, .summary, verb: verb, lead: "", words: words, desktop: desktop))
+        }
+        count("context event")
       case "collaboration":
-        lines.append(HistoryLedgerLine(id: row.timelineId, verb: "Message", object: row.text ?? "", result: "", state: .ok))
+        let words = said(row.text)
+        let lead = words.map { firstLine($0) } ?? ""
+        lines.append(member(row, .team, verb: "Team update", lead: lead, words: words, desktop: desktop))
+        count("team update")
       default:
         lines.append(HistoryLedgerLine(id: row.timelineId, verb: row.kind, object: row.text ?? "", result: "", state: .ok))
       }
     }
+    guard !lines.isEmpty else { return nil }
     let stamps = rows.compactMap(\.at)
     let span = stamps.isEmpty ? 0 : stamps.max()! - stamps.min()!
     let duration = isLive ? "\(spanText(span)) → …" : spanText(span)
-    var summary = runSummary(lines: summaryLines, thoughts: thoughts)
+    var head = [runSummary(lines: tools, thoughts: 0)].filter { !$0.isEmpty }
+    head += names.map { name in
+      let total = counts[name] ?? 0
+      return "\(total) \(name)\(total == 1 ? "" : "s")"
+    }
+    var summary = head.joined(separator: " · ")
     if summary.isEmpty { summary = lines.first.map { "\($0.verb.lowercased()) · \($0.object)" } ?? "a run" }
     return .ledger(id: rows.first?.timelineId ?? "run", summary: summary, duration: duration, failed: failed, isLive: isLive, lines: lines)
   }
 
-  /// A notice's words: its type as a sentence, its text when it has one.
-  static func noticeWords(_ row: IndexTimelineRow) -> String {
-    let type = (row.notice ?? "notice").replacingOccurrences(of: "_", with: " ")
-    return row.text.map { "\(type): \($0)" } ?? type
+  /// A member of a group that is not a tool line. It opens only when its words say more than its line does, or
+  /// when the desktop cut them (the cut is said under them).
+  static func member(
+    _ row: IndexTimelineRow, _ kind: HistoryLedgerLine.Kind, verb: String, lead: String, words: String?,
+    state: HistoryLedgerLine.State = .ok, desktop: String
+  ) -> HistoryLedgerLine {
+    let more = words.flatMap { $0 == lead && !row.textClipped ? nil : $0 }
+    return HistoryLedgerLine(
+      id: row.timelineId, verb: verb, object: lead, result: "", state: state, kind: kind, words: more,
+      clipped: more != nil && row.textClipped ? clippedWords(byteLen: row.textByteLen, desktop: desktop) : nil)
   }
 
-  // Item 362e (red) — the names `HistoryGroupTests` calls, answering nothing yet.
-  static func firstLine(_ text: String, max: Int = 120) -> String { text }
-  static func memberKey(_ id: String) -> String { id }
-  static func everyRun(_ document: HistoryDocument) -> Set<String> { [] }
+  /// The words, when there are any but space.
+  static func said(_ text: String?) -> String? {
+    guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+    return text
+  }
+
+  /// The first line, clamped: the room's `firstLine` (lib/transcript/vocabulary.ts), "every ledger line is one
+  /// line by construction".
+  static func firstLine(_ text: String, max: Int = 120) -> String {
+    let first = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first
+    let line = (first.map(String.init) ?? "").trimmingCharacters(in: .whitespaces)
+    return line.count > max ? "\(line.prefix(max - 1))…" : line
+  }
+
+  /// A notice's words in the room's shape (`noticeText`), from what the row carries: a command's output as it
+  /// stands, and for every other notice its type as words with its text after ` · ` (`runtime error · the socket
+  /// closed`, `context compacted · the context was full`, `model changed`). It was `type: text`.
+  static func noticeWords(_ row: IndexTimelineRow) -> String {
+    let text = said(row.text)
+    let type: String
+    switch row.notice {
+    case "command_output": return text ?? "command output"
+    case "async_task": type = "background task"
+    case "compaction": type = "context compacted"
+    case let other: type = (other ?? "notice").replacingOccurrences(of: "_", with: " ")
+    }
+    return text.map { "\(type) · \($0)" } ?? type
+  }
+
+  /// The key a member's open state is kept under: never a group's (a group's id is its first row's).
+  static func memberKey(_ id: String) -> String { "m/\(id)" }
+
+  /// What `Open every run` opens: every group, and no member. A member's words exist on the page only while that
+  /// member is open, so nothing lays out a group's worth of them at once.
+  static func everyRun(_ document: HistoryDocument) -> Set<String> {
+    var ids: Set<String> = []
+    for turn in document.turns {
+      for segment in turn.segments {
+        if case .ledger(let id, _, _, _, _, _) = segment { ids.insert(id) }
+      }
+    }
+    return ids
+  }
 
   // MARK: - Search
 
