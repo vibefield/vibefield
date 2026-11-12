@@ -7034,9 +7034,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       at the safe area, so the field ended in two bands and the Stories row lost its top edge. Open, the card keeps
       what was ruled and photographed: its top corners 44, at 0.92, 106 of it showing.
     - **Search opens on Apps as well.** Before you type, a strip headed **Apps** stands above History's search: the
-      Recent row and **All apps**. The place is one tap from a control that is always on screen, and typed words
-      match apps' titles too. *Amended 2026-11-06 (the lead's ruling 24, ‹for James›): recent searches retire from
-      search; the sheet's one Recent is MA-D7's apps strip.*
+      Recent row and **All apps**, in the secondary ink (`--vf-select` is the selection ring's alone, §2; *ruled
+      2026-11-12, James, 06:07:01Z, the PM board*). The place is one tap from a control that is always on screen, and
+      typed words match apps' titles too. *Amended 2026-11-06 (the lead's ruling 24, ‹for James›): recent searches
+      retire from search; the sheet's one Recent is MA-D7's apps strip.*
       *Amended 2026-11-06 (SE-D3 A and SE-D4 A, ruled by James on the page The Bands Meter; MA's lead's placement;
       ‹for James: MA-D7's strip placement, agreed with MA's lead 2026-11-06›):*
       search is a glass sheet over the field now (§8 "The phone's search"), so the strip stands in the sheet. Before
@@ -7075,9 +7076,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **Kept**, in the same grid.
     - **Projects** as folders, two across, 16 between rows and 14 between columns. Each is a square tile of the
       inset fill (`ChromePalette.fill`, corners 28, 13 in) holding three icons at 62 and a cluster of the next four
-      at 27, its name under it at 13/600 in the project's ink ‹for James: §2.9 says an ink is never text, and by day
-      it is 3.3–4.3:1 against white; the page drew the name in the ink. A second exception, or the name in the
-      primary ink beside the folder mark?›. A folder opens in place.
+      at 27, its name under it at 13/600 in the primary ink. *Ruled 2026-11-12 (James, 06:07:01Z, the PM board): the
+      primary ink, over the page's project ink, since §2.9 says an ink is never text.* A folder opens in place.
     - A group's head is its name at 20/650 with its count at 13 in the tertiary ink.
     - The foot says what is true (§9).
   - **The icon** (MA-D10 B): a squircle at iOS's continuous corner (22.5% of its side) holding the app's preview,
@@ -7088,8 +7088,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       never held), the icon is the fallback, §2.9's one exception. By day the squircle is filled with its project's
       ink behind its title's initial in white. By night it is the dark tile, `#232326`, with the initial in the ink.
       No glyph (§13).
-    - A live app wears a **12** green dot (`--vf-green`, §2.5's healthy); an app you have not opened, a cyan one.
-      The dot sits at the squircle's top right, 3 outside it, ringed 2 in the paper.
+    - A live app wears a **12** green dot (`--vf-green`, §2.5's healthy); an app that came new and you have not
+      opened yet, a cyan one, so the first reading's apps wear none. *Ruled 2026-11-12 (James, 06:07:07Z, the PM
+      board): the narrow reading.* The dot sits at the squircle's top right, 3 outside it, ringed 2 in the paper.
     - An asleep desktop's apps stand at 45%.
     - A long press opens the system's context menu over the preview: Open, Keep, Versions, About, Hide.
   - **The open app** (MA-D11 A, MA-D12 A): it zooms out of its icon (iOS 18's `navigationTransition(.zoom)`) and

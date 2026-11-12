@@ -47642,3 +47642,75 @@ VF-PM reported it GREEN at 04:41:23Z):
 
 **Not done, and not claimed:** no smoke, no landing table and no app run; no registry configured anywhere, and no
 plugin folder staged, placed or loaded to show any of it (rule 16); `census:assert` not run; nothing pushed.
+
+## Item 273 — the phone's Apps shelf counts the safe area once, its search field 14 under it as James ruled (M287)
+
+**Item 273 (four commits, `2a66e06d3` → `43492a05d`, M287, 2026-11-12).** Cut on main `a71a52777` (the iOS stack's
+land) by VF-PM's word (04:12:15Z), carried onto `9bbe345ad` (M286) by identity, and reworded there with the same four
+trees, so the messages name stack commits by role (VF-PM, 08:55:02Z). James typed "fix it now"
+(02:49:17Z) and "i choose 14pt gap" (03:33:16Z) in ma-6's session. The fixer landed it 35 s into a gap in James's QA run
+(DOWN 09:32:44Z, landed 09:33:19Z, the app up again 09:34:36Z), on his pick "Short gaps on request" (his answer in
+VF-PM's dialog, about 09:13:39Z).
+
+**What changed.**
+- The shelf's search field starts 14 under the safe area: 76 on an iPhone 17 Pro, where it started at 138.
+  `AppsShelfView` padded its top by `safeTop + headGap` inside a ScrollView that already sits under the safe area,
+  so the safe area counted twice. The padding is now `AppsShelfChrome.topInset`. The view takes no `safeTop`, and its
+  one caller drops the argument.
+- DESIGN.md §8 says where the field starts: 14, James's ruling, over the page's 0 (*Apps in a Pocket* drew the field
+  at the safe area's foot). He ruled from run 278's still with the shelf's band moved up 62 and 76 pt (the stills
+  page's #gap), not from a build.
+- The shelf's words, kept by James on the PM board (03:38:38Z). §9's two markers flip with the words written in, and
+  §9 gains one line for the six it did not hold (rule 28). The kit's comments stop calling the words interim.
+- Petition status: none moved.
+
+**Verified** (run315, a9, the old mini: Xcode 27.2, the iPhone 17 simulator; `lanes/ts6/ma273-315-a9-results/`,
+`SUMS-mini-ma273-315` `500bac2409f0e465`, .done `d32324f21025ec05`), at `d451092c9` on `a71a52777`:
+- R at `5f1fb1450`: RED AS READ. An assertion red at AppsChromeTests.swift:96 (`inset == 14` against the stub's 0);
+  the other nine pass.
+- K: GREEN-BUT-167, 2444 tests in 375 suites (run313's 2443 plus `shelfTopInset`), FieldHomeTests 705 in 87. The
+  one ✘ is item 167.
+- App Debug: GREEN, its 2 warnings run313's, 0 in this stack's six Swift files.
+- V-1 to V-4 GREEN: preflight, the catalog, the walls, retired, the iOS fixtures.
+- V-5: fieldd's six DESIGN.md readers, 6 files, 200 tests.
+- V-6: DESIGN.md's 30 Mac readers, moved to the mini by VF-PM (04:51:52Z). field-app 27/646, sound 1/23 and
+  plugins/simulator 2/19, each as wanted.
+- The ten stills, 10 of 10 SHOT (`lw/stills`, `SUMS-stills` `541bbbd009c076e5`), show the Field and not the shelf.
+  The still witness is owed (item 343); the fix is held by its rows.
+- The carry: patch-ids equal, plain and -U0; range-diff 4 of 4 `=`; each commit differs from its counterpart only in
+  M286's seven paths; the tip's tree is the merge-tree's (`lanes/ma-6/packet-273-land/PROOF-carry-9bbe345ad.txt`).
+  The reword keeps each commit's tree, parent order and patch-id (`lanes/ma-6/packet-273-land-r2/PROOF-reword.txt`).
+- Not run: smoke-first-run, DESIGN.md's 37th reader, owed at this land (rule 12); a phone.
+
+**Found.**
+- The 14 was the lane's, set by no ruling: the page drew 0. It was found while writing DESIGN.md's line, and James
+  ruled 14 from the pictures.
+- The stills page first marked the band from 76 to 138 pt. The second 62 sits at 62 to 124; that was said when James
+  asked.
+- The 30 Mac readers could not run in the lane, because its install predated `ac1aec3f2`. A re-install would have
+  taken the SSD under its line (10,630 MiB), so VF-PM moved them to the mini.
+- run315's ten stills show the Field, not the shelf. The stills' door opens the shelf once, from `.task`
+  (HomeScreen.swift:1304), and only if `mock` is set (`:1463`); `mock` is set in the outer body's `.onAppear`
+  (`:2322`). That is a latent order race in Debug-only code, cause not proven: item 343. The same three arguments
+  opened the shelf in run 278 (vf-m2, Xcode 26.3). It was found by looking at the images, after a first measure of
+  them read the field's fill as the paper.
+- The reword's first run stopped on its own check. Its message files, made with `git log --format=%B`, ended in one
+  newline too many; it left four unreachable objects and no ref. The second run made the stack.
+- run315's KEPT RED is a host event that reaches no row: six leftover temp roots of earlier runs under /private/tmp were
+  emptied at 08:00:03–06Z, the old mini's local midnight, by something on that host that is unattributed (the runner
+  holds no delete and reads that folder only), and ios/ipad-pass's du fell 1020 KiB with its 13986 files equal; VF-PM
+  classed it at 09:29:10Z after the landing operator held the GO that had understated it.
+
+**James's rulings of 2026-11-12 on MA-6's owed rows** (the PM board, relayed by VF-PM): the inks, both as built
+(06:07:01Z); the cyan mark's narrow reading (06:07:07Z); the ten-page walk and the re-walk at every ping, both kept
+(06:07:27Z). With the words (03:38:38Z), they answer LANDED "MA-6e"'s Owed lines on the words, the §8 question and
+the limits, and "MA-6 (6a–6d + the gate)"'s on the limits.
+
+**Owed.**
+- smoke-first-run at this land (rule 12).
+- The still witness of item 273: item 343, on James's pick j-ma-stills-door (VF-PM's lean: after 0.9, his phone's
+  next build is the witness).
+- The two test names that still say "interim" (AppsOpenTests.swift:48, AppsShelfStandingTests.swift:152): a later
+  change, on VF-PM's word.
+- James's device rows (P6), as LANDED "MA-6e" lists them.
+- `gate:landing` at this land, on James's word. The stack moves no code a desktop smoke runs.
