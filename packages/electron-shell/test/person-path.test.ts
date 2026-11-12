@@ -54,12 +54,14 @@ function fakeSpawn(answer: Exit | "never" | "throw") {
   return { spawn, calls, kills: () => kills };
 }
 
-/** The resolve's log, kept. */
+type Said = { event: string; message: string; attrs: Record<string, unknown> | undefined };
+
+/** The resolve's log, kept whole: each event's name, its words and its attributes. */
 function fakeLog() {
-  const events: { event: string; attrs: Record<string, unknown> | undefined }[] = [];
+  const events: Said[] = [];
   const log: loginShell.PersonPathLog = {
-    info: (event, _message, attrs) => {
-      events.push({ event, attrs });
+    info: (event, message, attrs) => {
+      events.push({ event, message, attrs });
     },
   };
   return { log, events };
@@ -301,6 +303,27 @@ describe("resolvePersonPath — the resolve", () => {
     expect(keys.every((key) => ["dirs", "ms", "source", "why"].includes(key))).toBe(true);
     expect(JSON.stringify(said.events).includes("sentinel-341")).toBe(false);
   });
+
+  it("a failed shell says only a reason code: no error text, no stdout, no throw", async () => {
+    const said = fakeLog();
+    const threw: loginShell.PersonPathSpawn = () => {
+      throw new Error("sentinel-341: spawn EACCES");
+    };
+    const rejected: loginShell.PersonPathSpawn = () => ({
+      done: Promise.reject(new Error("sentinel-341: spawn ENOENT")),
+      killGroup: () => undefined,
+    });
+    const exited = fakeSpawn({ code: 1, stdout: `${M}/sentinel-341/bin${M} sentinel-341 said` });
+    const answers = [
+      await resolvePersonPath(options({ spawn: threw, log: said.log })),
+      await resolvePersonPath(options({ spawn: rejected, log: said.log })),
+      await resolvePersonPath(options({ spawn: exited.spawn, log: said.log })),
+    ];
+    const whys = answers.map((answer) => answer?.why).join(",");
+    expect(whys === "spawn-failed,spawn-failed,exit").toBe(true);
+    expect(said.events.length === 3).toBe(true);
+    expect(JSON.stringify(said.events).includes("sentinel-341")).toBe(false);
+  });
 });
 
 describe("personPathOnce — one answer per shell process", () => {
@@ -332,7 +355,10 @@ describe.skipIf(!zsh)("the real /bin/zsh, with nothing of anyone's read", () => 
     const home = tempDir("vf-person-path-");
     const stub = join(home, "stub-bin");
     mkdirSync(stub);
-    // the global rc files are off (no path_helper), so the PATH is launchd's plus the stub's
+    // the global rc files are off (no path_helper), so the PATH is launchd's plus the stub's. One
+    // file comes before this row's own `.zshenv` and GLOBAL_RCS cannot skip it: /etc/zshenv. A
+    // host that has one reads it here (a system file, never the person's); the Mac this row was
+    // first run on has none (2026-11-12)
     writeFileSync(join(home, ".zshenv"), "unsetopt GLOBAL_RCS\n");
     writeFileSync(
       join(home, ".zshrc"),
@@ -388,5 +414,16 @@ describe.skipIf(!sh)("spawnPersonPathChild — the production spawn", () => {
     expect(/^x*$/.test(exit.stdout)).toBe(true);
     expect(exit.code === null).toBe(true);
     expect(took < 2_500).toBe(true);
+  }, 10_000);
+
+  it("gives the child no stdin: its first read meets the end at once", async () => {
+    // a piped stdin (the spawn's default) would hold this read open until the row's timeout
+    const child = spawnPersonPathChild(
+      "/bin/sh",
+      ["-c", "if read -r line; then printf got; else printf eof; fi"],
+      { PATH: LAUNCHD_PATH },
+    );
+    const exit = await child.done;
+    expect(exit.stdout === "eof" && exit.code === 0).toBe(true);
   }, 10_000);
 });

@@ -11,10 +11,10 @@ import {
 import { createHarness, FIXTURE_READY, type Harness } from "./helpers";
 
 // ESP-18 (item 341) — `spawnEnvironment`: keys a SPAWN asks for (a packaged app's person's PATH), merged over
-// `environment` right before the child is spawned. An adoption never asks; the supervisor's own keys always win; and
-// a hook that rejects or does not answer in time costs the spawn nothing but one event, which carries no value. The
-// fixture is FIXTURE_READY after it writes the few keys a row reads to ENV_OUT. The rows assert by booleans: a red
-// prints no environment (item 320).
+// `environment` right before the child is spawned. An adoption never asks; the supervisor's own keys always win; no
+// daemon-prefixed key (FIELD_, FIELDD_, VIBEFIELD_, VF_) ever comes through it; and a hook that rejects or does not
+// answer in time costs the spawn nothing but one event, which carries no value. The fixture is FIXTURE_READY after
+// it writes the few keys a row reads to ENV_OUT. The rows assert by booleans: a red prints no environment (item 320).
 
 let h: Harness;
 beforeEach(() => {
@@ -28,10 +28,19 @@ const LAUNCHED = "/usr/bin:/bin";
 const ASKED = "/sentinel-341/bin:/usr/bin:/bin";
 const UNAVAILABLE: SupervisorLifecycleEventName = "fieldd.supervisor.spawn_environment_unavailable";
 
+/** One key under each daemon prefix, none of which the supervisor sets itself. */
+const PREFIXED = [
+  "FIELD_SENTINEL_341",
+  "FIELDD_SENTINEL_341",
+  "VIBEFIELD_SENTINEL_341",
+  "VF_SENTINEL_341",
+];
+const ENV_KEYS = ["PATH", "HOOK_MARK", "FIELDD_DATA_DIR", "FIELDD_USER_ROOT", ...PREFIXED];
+
 /** FIXTURE_READY, after it writes the keys a row reads (and only those) to ENV_OUT. */
 const FIXTURE_ENV = `
 import { writeFileSync as writeEnvKeys } from "node:fs";
-const envKeys = ["PATH", "HOOK_MARK", "FIELDD_DATA_DIR", "FIELDD_USER_ROOT"];
+const envKeys = ${JSON.stringify(ENV_KEYS)};
 writeEnvKeys(
   process.env.ENV_OUT,
   JSON.stringify(Object.fromEntries(envKeys.map((key) => [key, process.env[key] ?? null]))),
@@ -150,6 +159,26 @@ describe("spawnEnvironment — keys a spawn asks for (ESP-18, item 341)", () => 
     expect(asked === 1).toBe(true);
     expect(keys["PATH"] === ASKED).toBe(true);
     expect(keys["FIELDD_DATA_DIR"] === root && keys["FIELDD_USER_ROOT"] === root).toBe(true);
+  });
+
+  it("its answer never puts a daemon-prefixed key into fieldd's environment", async () => {
+    const root = h.mkRoot();
+    const events: FielddSupervisorEvent[] = [];
+    let asked = 0;
+    await ensureSpawned(root, events, {
+      spawnEnvironment: async () => {
+        asked += 1;
+        return {
+          PATH: ASKED,
+          HOOK_MARK: "asked",
+          ...Object.fromEntries(PREFIXED.map((key) => [key, "from-the-hook"])),
+        };
+      },
+    });
+    const keys = spawnedWith(root);
+    expect(asked === 1).toBe(true);
+    expect(keys["PATH"] === ASKED && keys["HOOK_MARK"] === "asked").toBe(true);
+    expect(PREFIXED.every((key) => keys[key] === null)).toBe(true);
   });
 
   it("a rejecting hook: the spawn goes on with `environment`, one event, no value", async () => {
