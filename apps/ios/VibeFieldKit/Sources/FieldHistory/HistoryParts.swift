@@ -104,8 +104,9 @@ public struct AgentMark: View {
 
 /// Item 353 — how History draws an agent's own mark. History knows no vendor glyph (AR-L1); the glyphs are the
 /// home's (`AgentGlyph`, the asset catalog's), so the home hands its drawing in through the environment, as it does
-/// for Settings (`SettingsAgentMark`). Without one, and for an agent the home draws no mark for (LP-4 keeps two
-/// vendors' on the phone), the agent's letter stands on its chip, as it always did.
+/// for Settings (`SettingsAgentMark`). Without one, and for an agent the home draws no mark for (ACP, an id no
+/// catalog knows; until item 359, 2026-11-12, every agent but Claude Code and Codex, under LP-4), the agent's letter
+/// stands on its chip, as it always did.
 public struct HistoryAgentGlyph: Sendable {
   /// The mark for an agent's id (a session's `provider`), fitted to a square of the size given; nil where the home
   /// draws none for it.

@@ -2,9 +2,11 @@ import FieldDesign
 import SwiftUI
 
 /// IOS-10c — how the home desktop's page draws an agent's mark. Settings knows no vendor glyph (AR-L1): the drawn
-/// glyphs are FieldHome's (`AgentGlyph`, the asset catalog's two since LP-4), so the home hands its drawing in through
+/// glyphs are FieldHome's (`AgentGlyph`, the asset catalog's), so the home hands its drawing in through
 /// the environment. Without one, the agent's letter stands in History's recipe (`AgentMark`), so a mark is never
 /// blank.
+/// *Corrected 2026-11-12 (item 359; at its source):* this said "the asset catalog's two since LP-4". The catalog
+/// holds every catalog agent's mark again (James overturned LP-4's two-mark ruling, 2026-11-12 17:50:31Z).
 public struct SettingsAgentMark: Sendable {
   public let draw: @MainActor @Sendable (String) -> AnyView
 

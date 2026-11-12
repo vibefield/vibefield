@@ -1030,7 +1030,7 @@ public struct HomeScreen: View {
       HistoryAgentGlyph { [catalog = link?.catalog ?? .empty] provider, size in
         let agent = AgentProvider(rawValue: provider)
         let mark = agent.markKey(with: catalog.entry(for: agent))
-        // LP-4 keeps two vendors' marks on the phone; an agent with none keeps History's own letter chip
+        // an agent the asset catalog draws no mark for (ACP, an id no catalog knows) keeps History's own letter chip
         guard AgentGlyph.drawnAsset(for: mark) != nil else { return nil }
         return AnyView(AgentGlyph(mark: mark).frame(width: size, height: size))
       }

@@ -27,14 +27,29 @@ struct BubbleGlyph: View {
   }
 }
 
-/// Vendor glyphs. SVG geometry ships as template assets from LobeHub Lobe
-/// Icons v5.14.0 (MIT) — the same set the desktop godview embeds — so the
-/// two surfaces draw identical marks.
+/// Vendor glyphs. SVG geometry ships as template assets from Lobe Icons
+/// (`@lobehub/icons-static-svg` 1.94.0, MIT), the same set the desktop embeds
+/// (the godview's toolkit, `agentMark`, and History's room), so the surfaces
+/// draw identical marks.
 ///
-/// LP-4 (2026-11-05, the 0.9 launch): the folder keeps Claude's and Codex's
-/// marks only — the two vendor logos James kept for v1. Grok's left it (a
-/// third party's trademark the app has no leave to draw), so Grok wears its
-/// letter here as it does in the swarm (`MarksAtlas`' `kept`).
+/// Item 359 (James, 2026-11-12 17:50:31Z: "overturn this ruling, bring back
+/// those icons now, i see many other apps on app store do the same thing and
+/// they are fine"; DECISIONS LP-D7, built by LP-4): every agent the catalog
+/// offers a phone has its own mark in the folder, written from the toolkit's
+/// path data by the recipe that wrote Codex's (every path argument separated:
+/// Xcode misreads compact arc flags). Eight today: Grok's is restored, and
+/// Kimi's, OpenCode's, Hermes', Antigravity's and Copilot's are new to the
+/// card, which never had them. Pi's is HELD (item 360: the set's `pi` icon is
+/// not yet read to be the coding agent's), so Pi wears its letter; so does
+/// ACP, a protocol with no mark.
+///
+/// *Corrected 2026-11-12 (item 359; at its source):* this said the mark set
+/// was "Lobe Icons v5.14.0"; the notices and the toolkit name
+/// `@lobehub/icons-static-svg` 1.94.0. And from LP-4 (2026-11-05, the 0.9
+/// launch) until item 359 the folder kept Claude's and Codex's marks only,
+/// "the two vendor logos James kept for v1", with Grok's removed and every
+/// other agent wearing its letter; that ruling is the one he overturned. The
+/// swarm's atlas (`MarksAtlas`' `kept`) is item 359's second step.
 ///
 /// A mark with no drawn glyph wears its LETTER, which is the reference's own
 /// fallback (`AgentIcon.tsx`): an agent you can see and read, rather than one
@@ -46,8 +61,9 @@ struct BubbleGlyph: View {
 /// Until AC-5 that answer was `AgentProvider.hasDrawnMark`, a three-vendor list
 /// in code that had to agree with this folder by hand — a roster of its own. It
 /// is also NOT the swarm's atlas: `MarksAtlas` tiles nine marks and this folder
-/// held three glyphs (two since LP-4), so "the atlas has a tile" would have sent
-/// six agents to an image that is not here and drawn them as nothing.
+/// held three glyphs then (two under LP-4, eight since item 359), so "the atlas
+/// has a tile" would have sent six agents to an image that was not here and
+/// drawn them as nothing.
 struct AgentGlyph: View {
   let mark: String
   /// The letter's size. A drawn mark fits whatever frame it is given; the
