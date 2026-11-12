@@ -289,6 +289,43 @@ export function judgePictured(
   return problems;
 }
 
+/** Item 327 — what the desk said when a wait ran out: counts, booleans and data-attributes only, never an object's
+ * text, since a red's line travels. Read by `DESK_FACTS`, said by `deskFactsWords`. */
+export interface DeskFacts {
+  readonly count: number | null;
+  readonly locked: boolean | null;
+  readonly gesturing: boolean | null;
+  readonly editing: boolean | null;
+  /** whether the anchor has a box to stand by */
+  readonly box: boolean | null;
+  readonly held: boolean | null;
+  readonly bar: {
+    readonly shown: string | null;
+    readonly face: string | null;
+    readonly open: boolean;
+    readonly traveling: boolean;
+  } | null;
+  /** the desk's editor holds the focus */
+  readonly writing: boolean | null;
+  readonly frames: number | null;
+}
+
+/** Item 327 — the desk's facts in words: the fixed keys in a fixed order, a data-attribute only when it is one word,
+ * and nothing else it is handed. RED: a stub. */
+export function deskFactsWords(facts: Readonly<Record<string, unknown>> | null): string {
+  void facts;
+  return "";
+}
+
+/** Item 327 — `select()`'s press took the selection its row's bar asks next: `want` (1, or one more under ⇧) against
+ * the anchor's count read after the press. RED: a stub. */
+export function judgeSelectionTook(type: string, want: number, got: number | null): string | null {
+  void type;
+  void want;
+  void got;
+  return null;
+}
+
 /** HN-3's rows (above). Returns the problems, each in words. */
 export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
   const { win, say } = d;

@@ -8,10 +8,12 @@ import {
   type CopiedSeen,
   type CopyRecorded,
   copiedToMain,
+  deskFactsWords,
   judgeBarStayed,
   judgeCard,
   judgePictured,
   judgeSelectionKept,
+  judgeSelectionTook,
   judgeStill,
   NOTE_LINE,
   NOTE_TITLE,
@@ -205,5 +207,76 @@ describe("the bar stands through a Copy (HN-D3: nothing waits on the line, so it
         1000,
       ),
     ).toEqual([]);
+  });
+});
+
+const FACTS = {
+  count: 1,
+  locked: false,
+  gesturing: false,
+  editing: false,
+  box: true,
+  held: false,
+  bar: { shown: "true", face: "selection", open: false, traveling: false },
+  writing: false,
+  frames: 812,
+};
+
+describe("item 327: the desk's facts at a wait's end — counts, booleans and data-attributes, never an object's text", () => {
+  it("says the fixed keys in their fixed order", () => {
+    expect(deskFactsWords(FACTS)).toBe(
+      "count=1 locked=false gesturing=false editing=false box=true held=false bar.shown=true " +
+        "bar.face=selection bar.open=false bar.traveling=false writing=false frames=812",
+    );
+  });
+
+  it("drops a key it does not know, and says ? for a value that is not a count, a boolean or one word", () => {
+    const words = deskFactsWords({
+      ...FACTS,
+      text: NOTE_LINE,
+      count: NOTE_TITLE,
+      bar: { ...FACTS.bar, face: NOTE_TITLE },
+    });
+    expect(words).toBe(
+      "count=? locked=false gesturing=false editing=false box=true held=false bar.shown=true " +
+        "bar.face=? bar.open=false bar.traveling=false writing=false frames=812",
+    );
+    expect(words).not.toContain("Ship");
+  });
+
+  it("says an anchor's and a bar's absence as none, and no desk at all as such", () => {
+    const bare = {
+      ...FACTS,
+      count: null,
+      locked: null,
+      gesturing: null,
+      editing: null,
+      box: null,
+      bar: null,
+    };
+    expect(deskFactsWords(bare)).toBe(
+      "count=none locked=none gesturing=none editing=none box=none held=false bar=none " +
+        "writing=false frames=812",
+    );
+    expect(deskFactsWords(null)).toBe("no desk");
+  });
+});
+
+describe("item 327: select()'s press took the selection its row's bar asks next", () => {
+  it("passes a press that took its count, alone and under ⇧", () => {
+    expect(judgeSelectionTook("desk.board", 1, 1)).toBeNull();
+    expect(judgeSelectionTook("desk.note", 2, 2)).toBeNull();
+  });
+
+  it("names a press that took nothing, one under ⇧ that added nothing, and a desk with no anchor", () => {
+    expect(judgeSelectionTook("desk.board", 1, 0)).toBe(
+      "the press on desk.board took no selection: count 0, not 1",
+    );
+    expect(judgeSelectionTook("desk.note", 2, 1)).toBe(
+      "the press on desk.note took no selection: count 1, not 2",
+    );
+    expect(judgeSelectionTook("desk.board", 1, null)).toBe(
+      "the press on desk.board took no selection: count none, not 1",
+    );
   });
 });
