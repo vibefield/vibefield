@@ -602,6 +602,9 @@ impl DoorHandle {
 
 pub struct DoorUnit {
     shared: Arc<Shared>,
+    /// Item 345: the keeper, run before each unix bind (win32's door is a pipe, with nothing to keep).
+    #[cfg_attr(not(unix), allow(dead_code))]
+    socket_home: crate::config::SocketHome,
     tasks: Mutex<Vec<tokio::task::JoinHandle<()>>>,
 }
 
@@ -627,6 +630,7 @@ impl DoorUnit {
                 subscribers: watch::channel(0).0,
                 refusals: Mutex::new(HashMap::new()),
             }),
+            socket_home: config.socket_home(),
             tasks: Mutex::new(Vec::new()),
         }
     }
@@ -656,7 +660,10 @@ impl NativeService for DoorUnit {
             anyhow::bail!("data root is not valid UTF-8, which the endpoint contract requires");
         };
         // replace-stale-then-bind (the external-mode law), then 0600: the run dir is 0700 already, and the socket
-        // is held to its owner as well
+        // is held to its owner as well. Item 345: the keeper first.
+        self.socket_home
+            .ensure("door")
+            .map_err(|refusal| anyhow::anyhow!("the socket home was refused: {refusal}"))?;
         let mut listener = crate::local_ipc::bind(&endpoint)?;
         std::fs::set_permissions(&endpoint, std::fs::Permissions::from_mode(0o600))?;
         let shared = self.shared.clone();

@@ -263,7 +263,13 @@ import {
 } from "./app-preferences";
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
-import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint, splitPathList } from "./boot-env";
+import {
+  ensureNativeSocketDir,
+  nativeAlive,
+  nativeEndpoint,
+  nativeMgmtEndpoint,
+  splitPathList,
+} from "./boot-env";
 import { openSwarmReplay } from "./debug/swarm-replay";
 import { canonicalTailnetDnsName, DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
@@ -985,6 +991,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   const native = new NativeLink({
     // WIN-D1: path on unix, pipe name on win32 — one law, boot-env owns it
     socketPath: nativeMgmtEndpoint(config.dataDir),
+    // Item 345: the socket alias's keeper before every dial (a root that fits touches nothing)
+    beforeDial: () => ensureNativeSocketDir(config.dataDir, logger),
     pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE),
     bootId,
     ...(config.userId !== undefined ? { userId: config.userId } : {}),
@@ -1000,7 +1008,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   let windowPresent: (() => boolean) | null = null;
   const supervisor = new NativeSupervisor({
     link: native,
-    probeAlive: () => nativeAlive(nativeMgmtEndpoint(config.dataDir)),
+    // Item 345: the probe dials too, so the keeper runs first. A refused home reads as not alive, said once in
+    // the log; field-native's own boot then refuses in its own words.
+    probeAlive: async () => {
+      try {
+        ensureNativeSocketDir(config.dataDir, logger);
+      } catch (error) {
+        logger.warn("fieldd.socket_alias.refused", "The socket home was refused before a probe", {
+          refusal: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+      return await nativeAlive(nativeMgmtEndpoint(config.dataDir));
+    },
     ...(config.nativeSpawner !== undefined ? { spawnNative: config.nativeSpawner } : {}),
     killNative: (pid, signal) => {
       try {
@@ -1568,6 +1588,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // doc sync down silently rather than loudly. (`socketPath` is the option's
       // pre-pipe name, shared with NativeLink; it carries an ENDPOINT.)
       socketPath: nativeEndpoint(config.dataDir, SOCKETS.MESHDATA),
+      // Item 345: the keeper before every dial
+      beforeDial: () => ensureNativeSocketDir(config.dataDir, logger),
       pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE),
       bootId,
       logger: logger.child({ component: "mesh.lane" }),
@@ -2193,6 +2215,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       releasesFile: join(config.dataDir, ...LAYOUT.TERMINAL_RELEASES_FILE),
       link: native,
       logger: logger.child({ component: "terminal.service" }),
+      // Item 345: the keeper before every dial of a local cell's sockets
+      beforeDial: () => ensureNativeSocketDir(config.dataDir, logger),
       ...(config.terminalBirthWaitMs !== undefined
         ? { birthWaitMs: config.terminalBirthWaitMs }
         : {}),

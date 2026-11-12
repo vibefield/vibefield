@@ -69,7 +69,8 @@ fn io(path: &str, error: &std::io::Error) -> AliasRefusal {
     AliasRefusal::Io(format!("{path}: {error}"))
 }
 
-fn own_uid() -> u32 {
+/// This process's uid: the owner the keeper wants, and the uid the endpoint law derives the alias from.
+pub(crate) fn own_uid() -> u32 {
     // SAFETY: getuid takes nothing and cannot fail.
     unsafe { libc::getuid() }
 }

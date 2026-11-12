@@ -76,6 +76,9 @@ export class RpcCallError extends Error {
 
 export interface NativeLinkOptions {
   socketPath: string;
+  /** Item 345 — run before EVERY dial: the socket alias's keeper (boot-env's `ensureNativeSocketDir`). A refusal
+   * throws, and the dial fails with it; a root that fits makes it a no-op. */
+  beforeDial?: () => void;
   pairingFile: string;
   /** fieldd's per-process boot id (stable across reconnects within one boot) */
   bootId: string;
@@ -565,6 +568,7 @@ export class NativeLink extends EventEmitter {
   }
 
   private async openSocket(): Promise<Socket> {
+    this.opts.beforeDial?.();
     return await new Promise<Socket>((resolve, reject) => {
       const sock = createConnection(this.opts.socketPath);
       this.connectingSock = sock;

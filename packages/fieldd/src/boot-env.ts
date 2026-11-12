@@ -1,7 +1,9 @@
 import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { delimiter, posix, win32 } from "node:path";
-import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
+import { pipeEndpointFor, SOCKETS, unixEndpointFor } from "@vibefield/contracts";
+import type { Logger } from "@vibefield/logging";
+import { ensureSocketDirOutcome } from "@vibefield/users";
 
 // The environment fieldd's entry point is born into (bin.ts is a thin caller):
 // the platform-shaped data-root default, the PATH-style list reader, and the
@@ -58,18 +60,40 @@ export function nativeEndpoint(
   dataRoot: string,
   socketFile: string,
   platform = process.platform,
+  uid = process.getuid?.() ?? 0,
 ): string {
-  // posix.join, not host join: on a Windows test host the unix arm would
-  // otherwise backslash the path (the win32 arm returns a pipe name). On the
-  // real host this equals the joined LAYOUT path field-native binds.
+  // Item 345: the unix arm is the endpoint law itself (contracts' `unixEndpointFor`, field-native's
+  // `unix_endpoint_for` its twin): the run-dir path for a root whose worst socket path fits sun_path, the short
+  // alias `/tmp/vf-<uid>/<scope>/<file>` for a root over the line. It joins with "/" alone, so a Windows test host
+  // never backslashes the unix arm. This derives; every dial runs `ensureNativeSocketDir` first.
   return platform === "win32"
     ? pipeEndpointFor(dataRoot, socketFile)
-    : posix.join(dataRoot, ...LAYOUT.NATIVE_RUN_DIR, socketFile);
+    : unixEndpointFor(uid, dataRoot, socketFile);
 }
 
 /** The management channel — the endpoint fieldd's NativeLink dials. */
 export function nativeMgmtEndpoint(dataRoot: string, platform = process.platform): string {
   return nativeEndpoint(dataRoot, SOCKETS.MGMT, platform);
+}
+
+/** Item 345 — run before EVERY dial of a field-native socket: the alias's keeper (users' `ensureSocketDirOutcome`)
+ * for this root. A root that fits touches nothing, and win32's pipes have nothing to keep. A refusal throws the
+ * keeper's UsersError (its words name the alias and its mode, never the data root), and the dial fails with it. A
+ * link pointing elsewhere was replaced: one warning line, naming the alias alone. */
+export function ensureNativeSocketDir(
+  dataRoot: string,
+  logger: Pick<Logger, "warn">,
+  platform = process.platform,
+): void {
+  if (platform === "win32") return;
+  const outcome = ensureSocketDirOutcome(dataRoot);
+  if (outcome.replaced) {
+    logger.warn(
+      "fieldd.socket_alias.replaced",
+      "A socket alias pointed elsewhere and was replaced by a rename inside its own folder",
+      { alias: outcome.dir },
+    );
+  }
 }
 
 /** Is the native plane already listening? The CONNECT ATTEMPT is the probe, on

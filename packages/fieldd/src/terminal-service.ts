@@ -275,6 +275,9 @@ export interface TerminalServiceOptions {
   releasesFile?: string | undefined;
   link: TerminalLink;
   logger?: Logger;
+  /** Item 345 — run before EVERY dial of a cell's sockets: the socket alias's keeper (boot-env's
+   * `ensureNativeSocketDir`). A refusal fails the dial; its words go to the log, never into a reply. */
+  beforeDial?: () => void;
   /** injectable for tests; production = the user's login shell */
   defaultShell?: () => string;
   /** Test seam for the unresponsive-floor classification; production leaves it
@@ -2458,6 +2461,7 @@ export class TerminalService {
       { clientBuild: "vibefield-fieldd", connectTimeoutMs: timeoutMs, requestTimeoutMs: timeoutMs },
     );
     try {
+      this.opts.beforeDial?.();
       await client.connect();
       const sessions = await client.listSessions();
       return sessions.filter((session) => !session.exited).map((session) => session.id);
@@ -2723,6 +2727,21 @@ export class TerminalService {
   private async openClient(cell: CellTarget): Promise<GhostteaAutomationClient> {
     const { key, endpoints } = cell;
     this.dropClient(key);
+    try {
+      this.opts.beforeDial?.();
+    } catch (error) {
+      // Item 345: the keeper refused the socket home. Its words (the alias, a mode) go to the log alone; the reply is
+      // the terminal's existing unavailable state, with no path in it.
+      this.logger.warn(
+        "fieldd.socket_alias.refused",
+        "The socket home was refused before a cell dial",
+        { refusal: errorMessage(error) },
+      );
+      throw new RpcCallError("UNAVAILABLE", "the terminal control socket is unreachable", true, {
+        service: "terminal",
+        state: "unreachable",
+      });
+    }
     const client = new GhostteaAutomationClient(
       {
         controlSocket: endpoints.controlSocket,

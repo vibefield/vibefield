@@ -31,6 +31,9 @@ import { ackMacMatches, computeAckMac, computePairingMac, newPairingNonce } from
 
 export interface MeshLaneLinkOptions {
   socketPath: string;
+  /** Item 345 — run before EVERY dial: the socket alias's keeper (boot-env's `ensureNativeSocketDir`). A refusal
+   * throws, and the dial fails with it; a root that fits makes it a no-op. */
+  beforeDial?: () => void;
   pairingFile: string;
   /** fieldd's per-process boot id, as used for the mgmt hello (§4.1) */
   bootId: string;
@@ -304,6 +307,8 @@ export class MeshLaneLink extends EventEmitter {
 
   #open(): Promise<Socket> {
     return new Promise<Socket>((resolve, reject) => {
+      // a refusal thrown here rejects this promise: the dial fails with the keeper's own words
+      this.opts.beforeDial?.();
       const sock = createConnection(this.opts.socketPath);
       let settled = false;
       const finish = (fn: () => void) => {

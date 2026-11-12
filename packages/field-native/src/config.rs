@@ -233,6 +233,65 @@ pub struct MeshProbeIdentity {
     pub device_name: String,
 }
 
+/// Item 345 — a root's socket home, as a unit holds it: `ensure` runs before each bind. On unix it is the alias's
+/// keeper (`socket_alias::ensure_outcome`), with one warning line when a link pointing elsewhere was replaced; on
+/// win32, whose endpoints are pipes, there is nothing to keep. A refusal's words name the alias and its mode, never
+/// the data root or the run dir.
+#[derive(Clone, Debug)]
+#[cfg_attr(not(unix), allow(dead_code))]
+pub struct SocketHome {
+    data_root: Option<String>,
+    alias_parent: String,
+}
+
+impl SocketHome {
+    /// Make the home usable before a bind. `plane` names the binder in the warning line.
+    pub fn ensure(&self, plane: &'static str) -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            let Some(root) = self.data_root.as_deref() else {
+                return Err(
+                    "the data root is not valid UTF-8, which the endpoint contract requires".into(),
+                );
+            };
+            let uid = crate::socket_alias::own_uid();
+            let outcome = crate::socket_alias::ensure_outcome(uid, root, &self.alias_parent)
+                .map_err(|refusal| refusal.to_string())?;
+            if outcome.replaced {
+                tracing::warn!(
+                    event = "field_native.socket_alias.replaced",
+                    component = "socket_alias",
+                    plane,
+                    alias = %outcome.dir,
+                    "A socket alias pointed elsewhere; it was replaced inside its own folder"
+                );
+            }
+            Ok(())
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = plane;
+            Ok(())
+        }
+    }
+
+    /// The longest endpoint any plane can bind for this root (the cells' names at the largest ordinal, under the
+    /// law's directory), or `None` on win32 or for a non-UTF-8 root: what the terminal unit measures before it takes
+    /// a cell number.
+    pub fn worst_endpoint(&self) -> Option<String> {
+        #[cfg(unix)]
+        {
+            let root = self.data_root.as_deref()?;
+            let uid = crate::socket_alias::own_uid();
+            Some(crate::endpoints::worst_unix_endpoint(uid, root, &self.alias_parent))
+        }
+        #[cfg(not(unix))]
+        {
+            None
+        }
+    }
+}
+
 /// A binary cargo and the packaged app place beside this executable. Sibling first (the
 /// packaged and `cargo run` layout), then one level up: an EMBEDDED test's current_exe lives in
 /// target/debug/deps/ while cargo puts bin targets in target/debug/. Existence-checked, so a
@@ -489,9 +548,18 @@ impl NativeConfig {
         let root = self.data_dir.to_str()?;
         Some(crate::endpoints::pipe_endpoint_for(root, socket_file))
     }
+    /// Item 345: the unix arm is the endpoint law (`endpoints::unix_endpoint_for`): today's run-dir path for a root
+    /// whose worst socket path fits sun_path, the short alias `/tmp/vf-<uid>/<scope>/<file>` for a root over the
+    /// line. It derives; every bind runs `socket_home().ensure(..)` first.
     #[cfg(not(windows))]
     fn local_endpoint_for_file(&self, socket_file: &str) -> Option<String> {
-        self.run_dir().join(socket_file).to_str().map(str::to_owned)
+        let root = self.data_dir.to_str()?;
+        Some(crate::endpoints::unix_endpoint_for(
+            crate::socket_alias::own_uid(),
+            root,
+            socket_file,
+            &self.alias_parent(),
+        ))
     }
 
     #[cfg(windows)]
@@ -500,8 +568,27 @@ impl NativeConfig {
         Some(crate::endpoints::pipe_endpoint_for(root, socket_file))
     }
     #[cfg(not(windows))]
-    fn local_endpoint(&self, _socket_file: &str, segments: &[&str]) -> Option<String> {
-        self.join_layout(segments).to_str().map(str::to_owned)
+    fn local_endpoint(&self, socket_file: &str, _segments: &[&str]) -> Option<String> {
+        // Item 345: every LAYOUT socket row is `native/run/<file>` (contracts pins it), so the law's one directory
+        // replaces the per-row join; the segments stay in the signature for the win32 arm's twin.
+        self.local_endpoint_for_file(socket_file)
+    }
+
+    /// Item 345 — where a root over the line keeps its socket alias: the test seam when set, else `/tmp`.
+    fn alias_parent(&self) -> String {
+        self.socket_alias_parent
+            .as_deref()
+            .and_then(Path::to_str)
+            .unwrap_or(crate::endpoints::SOCKET_ALIAS_PARENT)
+            .to_owned()
+    }
+
+    /// Item 345 — this root's socket home, as a unit holds it to run the keeper before each of its binds.
+    pub fn socket_home(&self) -> SocketHome {
+        SocketHome {
+            data_root: self.data_dir.to_str().map(str::to_owned),
+            alias_parent: self.alias_parent(),
+        }
     }
     /// truffle node state (device identity + tsnet keys) — mesh identity lives
     /// in the longer-lived plane and survives fieldd restarts (design-02 §2.4).

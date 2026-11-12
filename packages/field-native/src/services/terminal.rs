@@ -1157,6 +1157,22 @@ async fn supervise_class(shared: Arc<Shared>, config: NativeConfig, class: Termi
                 }
             }
         }
+        // Item 345 — the cells' budget, read BEFORE a number is taken: a home no cell can bind in is a config dead
+        // end, said once and never retried (a crash loop would take three numbers to learn what this reads now).
+        // Isolation's solos follow a class host that passed here, under the same immutable config.
+        if let Some(detail) = socket_home_over_budget(&config) {
+            shared.set_class_state(class, ClassPlaneState::Failed(detail));
+            park_with_solos(
+                &shared,
+                &mut cells,
+                &mut report_rx,
+                &mut occupancy,
+                &mut stopping,
+                &mut exact_in_window,
+            )
+            .await;
+            break 'life;
+        }
         starts.push(now);
         let instance = shared.alloc_instance();
         let (reap_tx, reap_rx) = watch::channel(false);
@@ -1617,6 +1633,21 @@ fn note_cell_crash(
 
 /// Resolve one cell's spawn inputs and start its generation task. The Err is
 /// the class-plane state to surface — config-shaped dead ends, not crashes.
+/// Item 345 — the cells' budget: the longest endpoint any cell of this root can bind (both names at the largest
+/// ordinal, under the law's directory: the real run dir, or the alias). Over sun_path, the detail names that path and
+/// its bytes. Every home fits through the alias, so only an alias home itself over budget (a test's long parent)
+/// reaches the dead end.
+fn socket_home_over_budget(config: &NativeConfig) -> Option<String> {
+    let worst = config.socket_home().worst_endpoint()?;
+    let max = crate::endpoints::SUN_PATH_MAX_BYTES;
+    (worst.len() > max).then(|| {
+        format!(
+            "the terminal's socket home is over the sun_path limit: {worst} is {} bytes (> {max})",
+            worst.len()
+        )
+    })
+}
+
 fn spawn_cell_task(
     shared: &Arc<Shared>,
     config: &NativeConfig,
@@ -1630,6 +1661,11 @@ fn spawn_cell_task(
             "the field-terminal-host binary cannot be located beside this executable".into(),
         ));
     };
+    // Item 345 — the keeper before every cell's bind: a refusal is a config dead end, in the keeper's own words.
+    config
+        .socket_home()
+        .ensure("terminal")
+        .map_err(ClassPlaneState::Failed)?;
     let (Some(control), Some(frame)) = (
         config.terminal_cell_control_endpoint(instance),
         config.terminal_cell_frame_endpoint(instance),

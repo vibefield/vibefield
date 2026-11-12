@@ -1,5 +1,14 @@
-import { join, posix } from "node:path";
-import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
+import { join } from "node:path";
+import {
+  LAYOUT,
+  longestSocketFile,
+  pipeEndpointFor,
+  SOCKETS,
+  SUN_PATH_MAX_BYTES,
+  socketPathBytes,
+  unixEndpointFor,
+  worstUnixEndpoint,
+} from "@vibefield/contracts";
 import { SupervisorError } from "./types";
 
 /** Run-file layout under the data root (design-02 §3.6) — LAYOUT segments only
@@ -32,12 +41,13 @@ export function nativeMgmtEndpoint(
   // this unix arm is reachable from a win32 test host, where the host join would
   // hand back `\data\vf\native\run\mgmt.sock` and quietly pass a byte-for-byte
   // claim it had broken. On a real unix host the two joins are identical.
-  // Item 345, S1: `uid` is the unix law's input; S2 makes the unix arm `unixEndpointFor(uid, dataRoot,
-  // SOCKETS.MGMT)` with the alias ensured first.
-  void uid;
+  // Item 345: the unix arm is the endpoint law itself (contracts' `unixEndpointFor`): today's joined path for a root
+  // whose worst socket path fits sun_path, the short alias `/tmp/vf-<uid>/<scope>/mgmt.sock` for a root over the
+  // line. It joins with "/" alone, so the win32 test host's claim above still holds. This derives; the planes that
+  // bind and dial run the keeper first.
   return platform === "win32"
     ? pipeEndpointFor(dataRoot, SOCKETS.MGMT)
-    : posix.join(dataRoot, ...LAYOUT.MGMT_SOCKET);
+    : unixEndpointFor(uid, dataRoot, SOCKETS.MGMT);
 }
 
 /** @deprecated the name predates named pipes — call `nativeMgmtEndpoint`. */
@@ -45,13 +55,14 @@ export const nativeSocketPath = nativeMgmtEndpoint;
 
 // sun_path is 104 bytes on macOS (108 on Linux); a longer socket path makes
 // field-native's bind fail SILENTLY downstream (pairing file appears, socket
-// never does, fieldd times out generic — slice-0 finding 4). The check walks
-// EVERY socket-bearing LAYOUT row — the 2026-08-05 dev-root regression got
-// through because the old guard measured only mgmt.sock, the SHORTEST name,
-// while terminal-control.sock (12 bytes longer) blew the ceiling unchecked.
-// 103 = 104 - NUL, the exact macOS strlen limit libuv and std enforce.
-const SUN_PATH_MAX_BYTES = 103;
-
+// never does, fieldd times out generic — slice-0 finding 4). 103 = 104 - NUL,
+// the exact macOS strlen limit libuv and std enforce.
+// > Correction (2026-11-12, item 345): this guard walked LAYOUT's bare `.sock` names, but the cells bind
+// > `termframe.<N>.sock`, so a root it passed could hold no cell (the `fresh` dev root: 103 measured, 105 bound).
+// > It now measures, once, the worst endpoint the law binds: the longest file (the cells' names at the largest
+// > ordinal) under the directory the law names, the real run dir or the alias. Under the alias every home fits, so
+// > it refuses only an alias home itself over budget (a test's long parent), and its words name the alias, not the
+// > data root.
 export function assertDataRootUsable(
   dataRoot: string,
   platform = process.platform,
@@ -60,20 +71,15 @@ export function assertDataRootUsable(
   // WIN-D1: on win32 the endpoints are named pipes, not socket files — there is
   // no sun_path and this byte budget would refuse perfectly valid data roots
   // (a stock profile path already clears 103 bytes). The guard is a unix law.
-  // Item 345, S1: `opts` is unread; S2 measures `worstUnixEndpoint(uid, dataRoot, aliasParent)` once.
-  void opts;
   if (platform === "win32") return;
-  for (const segments of Object.values(LAYOUT)) {
-    const last = segments[segments.length - 1];
-    if (typeof last !== "string" || !last.endsWith(".sock")) continue;
-    const sock = join(dataRoot, ...segments);
-    const bytes = Buffer.byteLength(sock, "utf8");
-    if (bytes > SUN_PATH_MAX_BYTES) {
-      throw new SupervisorError(
-        "data-root-too-long",
-        `data root makes ${last} ${bytes} bytes ` +
-          `(> ${SUN_PATH_MAX_BYTES}, the OS sun_path limit): ${sock}`,
-      );
-    }
+  const uid = opts.uid ?? process.getuid?.() ?? 0;
+  const worst = worstUnixEndpoint(uid, dataRoot, opts.aliasParent);
+  const bytes = socketPathBytes(worst);
+  if (bytes > SUN_PATH_MAX_BYTES) {
+    throw new SupervisorError(
+      "data-root-too-long",
+      `the socket home makes ${longestSocketFile()} ${bytes} bytes ` +
+        `(> ${SUN_PATH_MAX_BYTES}, the OS sun_path limit): ${worst}`,
+    );
   }
 }

@@ -49,6 +49,9 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::sync::Arc;
 
+/// Item 345 — how often a running floor runs the socket alias's keeper again (PLAN-345-r2's 60 s re-check).
+const SOCKET_HOME_RECHECK: std::time::Duration = std::time::Duration::from_secs(60);
+
 pub struct RunningDaemon {
     /// The mgmt channel's endpoint under the WIN-D1 law: a socket path on
     /// unix, a `\\.\pipe\` name on windows. A String, not a PathBuf — a pipe
@@ -85,6 +88,8 @@ pub struct RunningDaemon {
     freeway_feeds: Vec<tokio::task::JoinHandle<()>>,
     /// AL-8a: the floor's own orphan bound. Held so shutdown can abort it.
     orphan_bound: tokio::task::JoinHandle<()>,
+    /// Item 345: the socket home's 60 s re-check. Held so shutdown can abort it.
+    socket_home_recheck: tokio::task::JoinHandle<()>,
     manager: Arc<manager::NativeServiceManager>,
     logging: Option<logging::NativeLogging>,
 }
@@ -100,6 +105,7 @@ impl RunningDaemon {
         self.health_refresh.abort();
         self.lane_transport.abort();
         self.orphan_bound.abort();
+        self.socket_home_recheck.abort();
         // Before stop_all: the terminal unit's G7 drain is the authority on the
         // session registry from here on, and a pump still reconciling would
         // only publish inventory nobody is subscribed to any more.
@@ -264,6 +270,12 @@ pub async fn bootstrap_with_logging(
         }
     });
 
+    // Item 345 — the socket home is made usable before this floor's first bind: the keeper, whose refusal ends the
+    // boot in its own words (the alias and its mode, never the data root). A root that fits touches nothing.
+    let socket_home = config.socket_home();
+    socket_home
+        .ensure("mgmt")
+        .map_err(|refusal| anyhow::anyhow!("the socket home was refused: {refusal}"))?;
     let mgmt_endpoint = config
         .mgmt_endpoint()
         .context("data root is not valid UTF-8, which the endpoint contract requires")?;
@@ -288,6 +300,26 @@ pub async fn bootstrap_with_logging(
     let (orphan_span, orphan_poll) = orphan::timings(config.orphan_idle_override);
     let orphan_bound = orphan::spawn(state.clone(), orphan_span, orphan_poll);
 
+    // Item 345 — the 60 s re-check: the keeper again, so a folder or link changed under a running floor is said in
+    // the log (and a link moved elsewhere is put back) rather than found at the next bind. Spawned after the last
+    // fallible step of the boot, so a failed boot leaves no task behind.
+    let socket_home_recheck = tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(SOCKET_HOME_RECHECK);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        ticker.tick().await; // the first tick is now, and the keeper ran before the bind
+        loop {
+            ticker.tick().await;
+            if let Err(refusal) = socket_home.ensure("recheck") {
+                tracing::warn!(
+                    event = "field_native.socket_alias.refused",
+                    component = "socket_alias",
+                    refusal = %refusal,
+                    "The socket home's re-check was refused"
+                );
+            }
+        }
+    });
+
     let server = tokio::spawn(mgmt::serve(listener, state.clone()));
 
     Ok(RunningDaemon {
@@ -305,6 +337,7 @@ pub async fn bootstrap_with_logging(
         terminal_inventory,
         freeway_feeds,
         orphan_bound,
+        socket_home_recheck,
         manager: mgr,
         logging,
     })

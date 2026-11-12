@@ -15,9 +15,13 @@ import {
   LAYOUT,
   LAYOUT_VERSION,
   LayoutStamp,
+  longestSocketFile,
+  SUN_PATH_MAX_BYTES,
+  socketPathBytes,
   USERS_FILE_VERSION,
   type UserRecord,
   UsersFile,
+  worstUnixEndpoint,
 } from "@vibefield/contracts";
 import { createPrivateDir, durableRename } from "@vibefield/logging";
 import { UsersError } from "./errors";
@@ -326,12 +330,13 @@ export async function mutateUsersFile(
   });
 }
 
-// UA-D9's mint-time assertion for CREATED users (UA-5): walk every
-// socket-bearing LAYOUT row under the root the new fuid would own. The
-// supervisor's spawn guard would catch the overflow later; a create refuses
-// BEFORE any directory exists, naming the socket. 103 = macOS sun_path − NUL.
-const SUN_PATH_MAX_BYTES = 103;
-
+// UA-D9's mint-time assertion for CREATED users (UA-5): the supervisor's spawn
+// guard would catch the overflow later; a create refuses BEFORE any directory
+// exists, naming the socket. 103 = macOS sun_path − NUL.
+// > Correction (2026-11-12, item 345): this walked LAYOUT's bare `.sock` names under the new root, but the cells bind
+// > `termframe.<N>.sock`. It now measures, once, the worst endpoint the law binds for the new user's root (the real
+// > run dir, or the alias for a root over the line), as fieldd-supervisor's `assertDataRootUsable` does. Under the
+// > alias every home fits, so it refuses only an alias home itself over budget, naming the alias, not the root.
 export function assertUserRootBudget(
   rootReal: string,
   fuid: number,
@@ -340,21 +345,17 @@ export function assertUserRootBudget(
 ): void {
   // WIN-D1: named pipes carry no sun_path budget — the guard is a unix law
   // (see fieldd-supervisor/src/paths.ts, the spawn-time twin of this check).
-  // Item 345, S1: `opts` (the uid and alias-parent seams) is unread; S2 measures `worstUnixEndpoint` once.
-  void opts;
   if (platform === "win32") return;
   const userRoot = join(rootReal, ...LAYOUT.USERS_DIR, String(fuid));
-  for (const segments of Object.values(LAYOUT)) {
-    const last = segments[segments.length - 1];
-    if (typeof last !== "string" || !last.endsWith(".sock")) continue;
-    const sock = join(userRoot, ...segments);
-    const bytes = Buffer.byteLength(sock, "utf8");
-    if (bytes > SUN_PATH_MAX_BYTES) {
-      throw new UsersError(
-        "user-root-too-long",
-        `users/${fuid} makes ${last} ${bytes} bytes (> ${SUN_PATH_MAX_BYTES}, the OS sun_path limit): ${sock}`,
-      );
-    }
+  const uid = opts.uid ?? process.getuid?.() ?? 0;
+  const worst = worstUnixEndpoint(uid, userRoot, opts.aliasParent);
+  const bytes = socketPathBytes(worst);
+  if (bytes > SUN_PATH_MAX_BYTES) {
+    throw new UsersError(
+      "user-root-too-long",
+      `users/${fuid} makes ${longestSocketFile()} ${bytes} bytes ` +
+        `(> ${SUN_PATH_MAX_BYTES}, the OS sun_path limit): ${worst}`,
+    );
   }
 }
 

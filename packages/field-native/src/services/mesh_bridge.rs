@@ -606,6 +606,8 @@ pub struct MeshBridge {
     /// WIN-D1 endpoint (path on unix, pipe name on win32); `None` = the data
     /// root is not the UTF-8 the contract requires, reported at start.
     endpoint: Option<String>,
+    /// Item 345: the keeper, run before each bind.
+    socket_home: crate::config::SocketHome,
     secret: [u8; 32],
     shared: Arc<Shared>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -615,6 +617,7 @@ impl MeshBridge {
     pub fn new(config: &NativeConfig, secret: [u8; 32], ping: UnboundedSender<()>) -> Self {
         Self {
             endpoint: config.meshdata_endpoint(),
+            socket_home: config.socket_home(),
             secret,
             shared: Arc::new(Shared {
                 health: Mutex::new(UnitHealth {
@@ -661,7 +664,10 @@ impl NativeService for MeshBridge {
         // replace-stale-then-bind: the endpoint is stable across fieldd
         // restarts (external-mode law), so a leftover node from a killed daemon
         // must not make a fresh one unbindable. local_ipc unlinks on unix and
-        // adds the squat guard + CurrentUserOnly DACL on windows.
+        // adds the squat guard + CurrentUserOnly DACL on windows. Item 345: the keeper first.
+        self.socket_home
+            .ensure("meshdata")
+            .map_err(|refusal| anyhow::anyhow!("the socket home was refused: {refusal}"))?;
         let mut listener = local_ipc::bind(&endpoint)?;
         let shared = self.shared.clone();
         let secret = self.secret;

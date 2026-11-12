@@ -41,8 +41,14 @@ async function main(): Promise<void> {
   );
   const { pairLogRoot, resolvePlatformLogRoot } = await import("@vibefield/logging");
   const { ensureUsersRoot, rootAboveUserRoot } = await import("@vibefield/users");
-  const { defaultDataRoot, nativeAlive, nativeMgmtEndpoint, outliveStdioReaders, splitPathList } =
-    await import("./boot-env");
+  const {
+    defaultDataRoot,
+    ensureNativeSocketDir,
+    nativeAlive,
+    nativeMgmtEndpoint,
+    outliveStdioReaders,
+    splitPathList,
+  } = await import("./boot-env");
   // AL-1 — before anything writes: this process outlives the shell that reads its stdio (boot-env.ts).
   outliveStdioReaders();
   // PG-9 S4c — DEBUG, development only: a recorded synthetic swarm for this desktop's boards. A
@@ -179,7 +185,21 @@ async function main(): Promise<void> {
           child.unref();
           return child.pid;
         };
-  if (spawnNative !== undefined && !(await nativeAlive(mgmtEndpoint))) {
+  // Item 345 — the probe dials, so the socket alias's keeper runs first. This is before fieldd's logger exists, so
+  // its two lines go to stderr as this entry's other early lines do; a refused home reads as not alive, and
+  // field-native's own boot then refuses in its own words. Neither line names the data root.
+  let homeUsable = true;
+  try {
+    ensureNativeSocketDir(dataDir, {
+      warn: (event, message, attrs) =>
+        process.stderr.write(`fieldd: ${event}: ${message} ${JSON.stringify(attrs ?? {})}\n`),
+    });
+  } catch (error) {
+    homeUsable = false;
+    const refusal = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`fieldd: the socket home was refused before the boot probe: ${refusal}\n`);
+  }
+  if (spawnNative !== undefined && !(homeUsable && (await nativeAlive(mgmtEndpoint)))) {
     nativePid = spawnNative();
   }
 
