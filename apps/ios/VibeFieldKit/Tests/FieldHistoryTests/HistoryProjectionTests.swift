@@ -339,3 +339,84 @@ private let attachment: [String: JSONValue] = [
     #expect(row.tool?.durationMs == 2_500)
   }
 }
+
+/// Item 362f (James, 2026-11-12 18:40:35Z: "i think all message type and views are different from desktop, needs
+/// thorough audit") — beyond the row. Read straight from the desktop the phone holds the whole entry; the row it
+/// projects stays the door's row (the pairs above), and what the entry says beyond it is kept beside it. These rows
+/// hold the first such thing: the body's whole words, where the row's were cut.
+@Suite("item 362f — what an entry carries beyond its row")
+struct HistoryLineDetailTests {
+  private func agent(_ text: JSONValue) -> JSONValue {
+    entry(["body": .object(["type": .string("agent"), "text": text, "attachments": .array([])])])
+  }
+
+  /// About `units` UTF-16 units of words.
+  private func long(_ units: Int) -> String { String(repeating: "word ", count: units / 5) }
+
+  @Test("words within the door's bound leave nothing beyond the row")
+  func shortWordsHaveNoDetail() throws {
+    let raw = agent(inline("a short reply"))
+    let row = try #require(HistoryProjection.row(entry: raw))
+    #expect(HistoryProjection.detail(entry: raw, beside: row) == nil)
+    #expect(HistoryProjection.projected(entry: raw) == HistoryProjected(row: row, detail: nil))
+  }
+
+  @Test("words the row cut are whole beyond it, and the row is still the door's")
+  func cutWordsAreWholeBeyondTheRow() throws {
+    let text = long(5_000)
+    let raw = agent(inline(text))
+    let row = try #require(HistoryProjection.row(entry: raw))
+    #expect(row.textClipped)
+    #expect(row.text?.utf16.count == HistoryProjection.textChars)
+    let detail = try #require(HistoryProjection.detail(entry: raw, beside: row))
+    #expect(detail.row == row)
+    #expect(detail.whole?.text == text)
+    #expect(detail.whole?.textClipped == false)
+    #expect(detail.whole?.timelineId == row.timelineId)
+    #expect(HistoryProjection.projected(entry: raw) == HistoryProjected(row: row, detail: detail))
+  }
+
+  @Test("a text that is a file on the desktop has no whole here: its row keeps its size")
+  func aMemberTextHasNoWhole() throws {
+    let member: JSONValue = .object([
+      "type": .string("member"), "preview": .string(long(2_500)), "byte_len": .int(90_000),
+    ])
+    let raw = agent(member)
+    let row = try #require(HistoryProjection.row(entry: raw))
+    #expect(row.textClipped)
+    #expect(row.textByteLen == 90_000)
+    #expect(HistoryProjection.detail(entry: raw, beside: row) == nil)
+  }
+
+  @Test("an inline text past the phone's own ceiling keeps the row's cut; one at the ceiling is whole")
+  func theCeilingHolds() throws {
+    let past = agent(inline(long(HistoryProjection.wholeChars + 5)))
+    let pastRow = try #require(HistoryProjection.row(entry: past))
+    #expect(HistoryProjection.detail(entry: past, beside: pastRow) == nil)
+    let edge = agent(inline(String(repeating: "a", count: HistoryProjection.wholeChars)))
+    let edgeRow = try #require(HistoryProjection.row(entry: edge))
+    let whole = HistoryProjection.detail(entry: edge, beside: edgeRow)?.whole
+    #expect(whole?.text?.utf16.count == HistoryProjection.wholeChars)
+  }
+
+  @Test("a detail speaks only for the row it was made beside")
+  func aDetailSpeaksForItsOwnRow() throws {
+    let text = long(5_000)
+    let raw = agent(inline(text))
+    let row = try #require(HistoryProjection.row(entry: raw))
+    let detail = try #require(HistoryProjection.detail(entry: raw, beside: row))
+    let details = [row.timelineId: detail]
+    #expect(HistoryLineDetail.applied([row], details).first?.text == text)
+    // the door sends another row under the same id: the detail is silent, and is not kept
+    let other = try #require(HistoryProjection.row(entry: agent(inline("rewritten"))))
+    #expect(other.timelineId == row.timelineId)
+    #expect(HistoryLineDetail.applied([other], details) == [other])
+    #expect(HistoryLineDetail.live(details, over: [other.timelineId: other]).isEmpty)
+    #expect(HistoryLineDetail.live(details, over: [row.timelineId: row]).count == 1)
+  }
+
+  @Test("the phone's ceiling is rosetta's inline bound, 32 KiB")
+  func theCeiling() {
+    #expect(HistoryProjection.wholeChars == 32_768)
+  }
+}

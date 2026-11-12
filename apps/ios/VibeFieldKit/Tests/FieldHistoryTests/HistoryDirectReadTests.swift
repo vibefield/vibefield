@@ -299,12 +299,16 @@ private func unavailable(_ state: String, device: String? = nil) -> FieldProduct
 
 /// Item 366 — a row as the door gives it (`IndexTimelineRow`), named as the direct read's `row(_:)` names it: a
 /// row's name is the same on both ways.
-private func doorRow(_ ordinal: Int, id: String? = nil) -> FieldProduct.JSONValue {
-  .object([
+private func doorRow(
+  _ ordinal: Int, id: String? = nil, text: String = "row", clipped: Bool = false
+) -> FieldProduct.JSONValue {
+  var row: [String: FieldProduct.JSONValue] = [
     "timelineId": .string(id ?? "r\(ordinal)"), "sessionId": .string("s1"), "ordinal": .int(Int64(ordinal)),
     "kind": .string("agent"), "at": .int(3_600_000),
-    "group": .object(["id": .string("cycle-\(ordinal)"), "kind": .string("agent_cycle")]), "text": .string("row"),
-  ])
+    "group": .object(["id": .string("cycle-\(ordinal)"), "kind": .string("agent_cycle")]), "text": .string(text),
+  ]
+  if clipped { row["textClipped"] = .bool(true) }
+  return .object(row)
 }
 
 private func doorPage(_ rows: [FieldProduct.JSONValue], next: String? = nil) -> FieldProduct.JSONValue {
@@ -673,6 +677,61 @@ private func hundredByTheDoor(_ params: FieldProduct.JSONValue?) -> FieldProduct
     rig.sockets.latest?.close()
     guard await reached("the door's tail", { rig.door.asked.contains("index.session.subscribe") }) else { return }
     #expect(ids(reader) == (61...100).map { "n\($0)" }, "rows of the record that was rewritten are not kept beside it")
+    reader.close()
+  }
+
+  // MARK: - Read straight from the desktop, a message is whole (item 362f)
+
+  /// The words of the document's last reply, and whether a cut mark stands in the document.
+  private func reply(_ reader: HistoryDesktopReader) -> (text: String?, cut: Bool) {
+    let segments = reader.corpus.document("s1")?.turns.flatMap(\.segments) ?? []
+    var text: String?
+    var cut = false
+    for segment in segments {
+      if case .prose(_, _, let words, _) = segment { text = words }
+      if case .clipped = segment { cut = true }
+    }
+    return (text, cut)
+  }
+
+  /// Item 362f — the door cuts a reply's words at 2,000 units; read straight from the desktop the entry has them
+  /// all, and the document shows them all with no cut mark under them.
+  @Test func aReplyTheDoorWouldCutIsWholeOnTheDirectRead() async {
+    let rig = Rig()
+    let reader = rig.reader()
+    let whole = String(repeating: "word ", count: 1_000)
+    guard await rig.open(reader, rows: [row(5, whole)]) else { return }
+    let shown = reply(reader)
+    #expect(shown.text == whole, "\(shown.text?.utf16.count ?? 0) of 5000 units are on the page")
+    #expect(shown.cut == false, "no cut mark stands under words that are whole")
+    reader.close()
+  }
+
+  /// The whole stays when the direct read is lost and the door sends the very row the entry projects to.
+  @Test func theWholeStaysWhenTheDoorReadsOnWithTheSameRow() async {
+    let rig = Rig()
+    let whole = String(repeating: "word ", count: 1_000)
+    let cutAtTheDoor = String(whole.prefix(2_000))
+    rig.door.timeline = { _ in doorPage([doorRow(5, text: cutAtTheDoor, clipped: true)]) }
+    let reader = rig.reader(deadline: .milliseconds(30))
+    guard await rig.open(reader, rows: [row(5, whole)]) else { return }
+    rig.sockets.latest?.close()
+    guard await reached("the door's tail", { rig.door.asked.contains("index.session.subscribe") }) else { return }
+    let shown = reply(reader)
+    #expect(shown.text == whole, "the door sent the row this entry projects to: its whole words stay")
+    #expect(shown.cut == false)
+    reader.close()
+  }
+
+  /// And it goes when the door's row under that id is another row: the door's words stand, as the door sent them.
+  @Test func theWholeGoesWhenTheDoorsRowIsAnother() async {
+    let rig = Rig()
+    rig.door.timeline = { _ in doorPage([doorRow(5, text: "rewritten on the desktop")]) }
+    let reader = rig.reader(deadline: .milliseconds(30))
+    guard await rig.open(reader, rows: [row(5, String(repeating: "word ", count: 1_000))]) else { return }
+    rig.sockets.latest?.close()
+    guard await reached("the door's tail", { rig.door.asked.contains("index.session.subscribe") }) else { return }
+    #expect(reply(reader).text == "rewritten on the desktop")
     reader.close()
   }
 
