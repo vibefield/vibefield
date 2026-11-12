@@ -31,6 +31,35 @@ extension View {
   }
 }
 
+/// What a root list tells the door, from where it stands and how it moves (item 348; James, 2026-11-12 11:20:08Z:
+/// "if i'm still scrolling the history items, it should not trigger the pull down, only when i scroll all the way top
+/// i can pull down"). The list gives the pull only to a finger that came down while it rested at its top. A list
+/// still moving, or caught in flight, keeps the touch, even where its flight has reached the top.
+struct TopStand: Equatable {
+  /// Where the list stands now.
+  private var atTop = true
+  /// Whether the touch that is down, or the next one, is the door's to take.
+  private(set) var gives = true
+
+  /// The list moved, by a finger or on its own.
+  mutating func place(atTop: Bool, resting: Bool) {
+    // item 348 (red): a stub, the rule as it stood: the list gives the pull wherever it is at its top
+    self.atTop = atTop
+    gives = atTop
+  }
+
+  /// A finger came down, on a list at rest or on one in flight.
+  mutating func touched(inFlight: Bool) {}
+
+  /// The finger let go and the list runs on, or it moves by itself.
+  mutating func flies() {}
+
+  /// The list came to rest.
+  mutating func rests() {
+    gives = atTop
+  }
+}
+
 private struct ReadsTopPull: ViewModifier {
   @Environment(\.topPull) private var pull
 
