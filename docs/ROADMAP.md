@@ -1105,19 +1105,25 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
 - Landed 11-12: **item 322** (`2b6c966a6` → `864d7aca3`, 4 commits, M286, run 314, an ff of `a3362a7ed`; LANDED "Item
   322"): fieldd's installer compares a release's folder already in place with the verified bytes, and refuses one
   that differs.
-- In flight: item 279's S2 on `ob/plugin-fail-closed`, re-pointed to `864d7aca3`: the installed-plugins folder loads
-  nothing until a signed list is configured. Its conditions A (the smokes) and B (the test rows) were traced by
-  reading at `a61185b30`; their two addenda go to VF-PM before any cut.
+- Landed 11-12: **item 279's S2** (`c8d84f53f` → `82e166608`, 4 commits, M293, run279, an ff of `47f8d4732` with
+  fa's two commits under it; LANDED "Item 279, S2"): with no list key configured, which is every build today, fieldd
+  reads nothing under the installed-plugins folder; a folder with no pointer is not a plugin, and adoption is gone.
+  Not re-run at the landed tip: fieldd's suite with 279 on ghosttea 0.15.0 and beside item 341 is owed at the next
+  whole V on the old mini.
 - In flight: the desk tools for Codex and Grok, upstream in puppeteer (seven commits in OB's clone
   `lanes/ob-build/puppeteer`). James on the PM board: `j-ob-desk-tools-puppeteer` "A. Release puppeteer first (push,
   PR and tag on my word), then a pin bump, so all three have desk tools at 0.9" (03:30:27.940Z) and `j-pup-041` "A.
   Release 0.4.1 now; the desk tools come in 0.4.2 (Recommended: the bands and spend words reach the app sooner)"
-  (05:12:14.356Z). 0.4.1 merged; its release runs. Then the seven are re-cut onto it and their rows run; the push,
-  PR and tag are James's word; then an EL8.
-- Next: S2, then S3 (a verified load, once a list is configured) on VF-PM's order; item 321 after its reads
-  (`lanes/ob-build/studies/item-321-s5-reads-2026-11-11.md`).
-- Owed: the landing table over main as it stands after these records (its code at `864d7aca3`), before any push, on
-  James's word by name; item 322's two items for James's eye (LANDED "Item 322"); item 330, on MK's side.
+  (05:12:14.356Z). The seven are re-cut onto v0.4.1 (`e940419d`) as `ob/foundations` `dd0257747b12`; typecheck (24
+  of 25 projects), prettier, four repository checks and five test files ran green on the Mac, and six changed test
+  files have the PR's CI as their first run (`lanes/ob-build/pup-ready/READY.md`). The push waits on James's card
+  `j-pup-desk-tools-push` (open, per VF-PM, 16:53Z); the push, PR and tag are his hand; then an EL8.
+- Next: S3 (a verified load, once a list is configured), with item 333's fix (a parked install-set entry is never
+  removed), on VF-PM's order, after the 0.9 tag; item 321 on James's card `j-321-design` (open, per VF-PM; its note,
+  `lanes/ob-build/ITEM-321-DESIGN-NOTE.v0.2.md`: the connection handed once per page, then one claim for the whole
+  bridge).
+- Owed: the whole V named above; the landing table over main, before any push, on James's word by name; item 322's
+  two items for James's eye (LANDED "Item 322") and S2's one (LANDED "Item 279, S2"); item 330, on MK's side.
 
 **Release rails — WP12 · TD · BP · FW packaging · RD** · prod-builder (resting) · law `specs/build-wp12-updater.md`,
 `specs/trust-and-distribution.md`, the three `specs/electron-*.md` + `electron-packaging-implementation-plan.md`,
@@ -1734,7 +1740,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | ES — Chat's empty state | ACTIVE since 11-08 (ES-D1…D7 ruled at the leans); ES-1 + ES-2 landed 11-08 (M226 `6b8a4b09f`), ES-3 + ES-4 landed 11-08 (M238 `2c34727a3`), ES-4 (role) landed 11-09 (M241 `7d7019a23`), ES-6 landed 11-09 (M260 `f3cbbc469`), ES-Q1 + ES-5a to 5d landed 11-09 (M270 `e6de35f09`) | DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`) | 5e (a device and James); ES-6's first real window (row 36) |
 | HG — History's first view and its waits | ACTIVE since 11-08 (HG-D1…D6, HG-W1…W5 and HG-L1 ruled at the leans); HG-1 + HG-2 landed 11-08 (M235 `3264c54f1`); items 263 + 264 landed 11-08 (M239 `9d2b8d03d`); item 267 landed 11-09 (M242 `519132f1a`) | DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and `9ByDzaNGQaijgSHW6GrZUb`) | HG-3 (rosetta's `waitMark`, RO-40) → rosetta-room 0.1.6's EL8 → HG-4, History's holds in the living mark |
 | NR — native re-arm | ACTIVE since 11-08 (opened by VF-PM 19:53Z, Q1–Q5 answered); S0–S2 landed 11-08 (M240 `33162a078`) | `draft/thinking-native-replay-rearm.md`; DECISIONS NR | S3 with the integration lane after EL8-TRUFFLE; the named follow-ups (LANDED "NR S0 + S1 + S2", Not this entry) |
-| OB — Objects at Work | ACTIVE since 11-09, the plugin folders first since 11-11; item 322 landed 11-12 (M286 `864d7aca3`, run 314) | `draft/thinking-objects-at-work.md`; `lanes/ob-build/ITEMS-279-321-322-PLAN.md`; DECISIONS "items 279 · 321 · 322" | item 279's S2, then S3; item 321; the desk tools in puppeteer 0.4.2 |
+| OB — Objects at Work | ACTIVE since 11-09, the plugin folders first since 11-11; item 322 landed 11-12 (M286 `864d7aca3`, run 314); item 279's S2 landed 11-12 (M293 `82e166608`, run279) | `draft/thinking-objects-at-work.md`; `lanes/ob-build/ITEMS-279-321-322-PLAN.md`; DECISIONS "items 279 · 321 · 322" | S3 with item 333, after the 0.9 tag; item 321; the desk tools in puppeteer 0.4.2 |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | — |
 
 **Retired and superseded tracks**

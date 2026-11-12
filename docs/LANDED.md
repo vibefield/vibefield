@@ -48349,3 +48349,160 @@ FieldSettingsTests at the carried tree.
 - electron-shell's and fieldd-supervisor's suites on the merged tree, its five index-reading tests among them, in
   item 345's packet v3 on the old mini.
 - A nightly carrying 341, and James's eye on it: the agents found, sign-in working, Godview launching.
+
+## Item 279, S2 — the installed-plugins folder loads nothing until a signed plugin list is configured (M293)
+
+(2026-11-12; four commits, `c8d84f53f` to `82e166608`, on `57d1e8ad4`. Cut by ob-foundation (track OB) in
+`lanes/ob-plug/vibe-field` on the branch `ob/plugin-fail-closed` as `975832fae` to `fb6a9a4d9` on M286's records
+`9bbe345ad`, each under the pre-commit hook on VF-PM's word. Carried by plumbing onto `57d1e8ad4` and landed by the
+fixer by fast-forward to that tip, by sha, at 17:13:11Z (main's reflog), the fourth land of one app-closed stretch.
+Validated by run279, a9, on the old mini, at `fb6a9a4d9` on `9bbe345ad`: fieldd's vitest alone and the named readers
+outside it. The packet is `lanes/ob-plug/packets/i279-s2-v1/`.)
+The item is OB's by James's pick on the page *James's Rulings Docket*
+(https://claude.ai/artifact/6xovbEgmuvMnzKPuWZcFz6, db `decisions`, `cu-owners`: "OB's session takes 279, 321, 322",
+2026-11-11 22:47:10.131Z). The change is covered by his pick on the PM board, `j-ob-q4-installed-folder`: "A. Nothing
+I use lives there. Go ahead." (03:35:03.057Z; VF-PM, 08:03:32Z: "His A on j-ob-q4-installed-folder (03:35:03.057Z)
+covers the change."). His word for the land, relayed and not read by me: in the QA agent's dialog in session
+vibe-field-a9, to "A fourth finished change, the plugin custody fix (item 279) … needs the desktop app closed for
+about 5 minutes. When may it land?", he picked "Now" at 17:06:27Z (that agent to VF-PM at 17:08Z; VF-PM to me).
+
+**What landed.** Eight files under `packages/fieldd`, +188 −123. Lines are at `82e166608`.
+- The registry's red (`c8d84f53f`, from `975832fae`; `test/plugin-registry.test.ts` +16): "a manifest folder with no
+  pointer under the installed root yields no row and no problem".
+- The installer's red (`38d3bd7a2`, from `d9c9b7c39`; `test/plugin-install-slots.test.ts` +51): "item 279: an
+  install over a flat folder is a first install, and the folder is not made a revision".
+- The boot's red (`ec2374655`, from `53d50be95`; `test/plugin-install.test.ts` +91), two rows in "item 279 — with no
+  list key, boot leaves the installed folder alone": a published install in the folder gives no row and no problem
+  without a key and is a row with one; an unpublished staging folder is left as found without a key and removed with
+  one. Each row boots fieldd in-process, twice, on a temp data folder the test makes and removes.
+- The green (`82e166608`, from `fb6a9a4d9`; five files):
+  - **The daemon** (`src/daemon.ts` +12 −2). With no `registryPublicKey` in its config, fieldd hands its plugin
+    registry no installed root (`:1638`, `:1649`) and does not run the installer's `recover()` (`:1819`). A keyless
+    boot reads nothing under `<dataDir>/plugins/installed` and leaves the folder as it finds it; the folder is still
+    made at boot. One boot line is logged when the root is withheld (`:1640`):
+    `fieldd.plugin_registry.installed_withheld`, "installed plugins not loaded", `{ reason: "registry_unconfigured" }`,
+    with no path and no key word.
+  - **The store** (`src/plugin-artifact-store.ts` +12 −67). Discovery follows the pointer alone:
+    `resolveInstalledArtifact` (`:318`) returns null for a plugin folder with no current pointer. The flat-folder
+    branch, `adoptLegacy` and its copier `copyLegacyTree` are removed. `src/plugin-registry.ts` +1 −1 follows.
+  - **The installer** (`src/plugin-install.ts` +0 −3). `prepare` no longer adopts a flat folder before it reads its
+    base.
+  - **The store's rows** (`test/plugin-artifact-store.test.ts` +5 −50). Two retitled: "adopts a flat install, stages
+    privately, then flips one small pointer" is now "stages privately, then flips one small pointer" (re-based to
+    start from a staged revision), and "an invalid published pointer fails closed instead of falling back to legacy"
+    is now "an invalid published pointer fails closed, whatever lies beside it". **Two removed, item 322's rider
+    rows, with the adoption road they covered:** "adoption refuses a folder at the flat install's slot that is not
+    its files" and "finishes an adoption cut short before its pointer when the files are the same". M286's entry
+    ("Item 322") stays as written; this line is where their removal is recorded.
+- No build configures a list key (the S2 plan, `bin.ts:186-211`, and a search on 11-12 for `registryPublicKey`,
+  `REGISTRY_PUBLIC_KEY` and `REGISTRY_URL` outside fieldd's `daemon.ts` and `plugin-install.ts`: no hit). So in every
+  build the installed folder now loads nothing.
+
+**For James's eye** (in the green's message; VF-PM, 08:03:32Z: "The James sentence is the cut plan's, and it is true
+of the code."; VF-PM carries it to the board):
+- "A plugin put in VibeField's installed-plugins folder by anything other than VibeField's own install now does
+  nothing until a signed plugin list is set up, and no build sets one up yet."
+
+**What a person sees, by reading the code.** Nothing was run in an app.
+- Nothing new is drawn and no new text reaches a person. A plugin that is not loaded is not in Settings' list. A
+  desk thing of its kind wears the words the desk already has for a missing plugin (the S2 plan's §3).
+- With no key, no problem line can come from that folder: it is not read.
+
+**Not closed by this, by design.**
+- With a key configured, a folder that carries a pointer is still loaded as it lies; the bytes are not compared at
+  load. That is S3, on VF-PM's order.
+- Item 321 (a window's connection stays askable for the page's life): its design note is
+  `lanes/ob-build/ITEM-321-DESIGN-NOTE.v0.2.md`, by reading only; nothing is cut before James's pick.
+- Item 275 is held and was not touched.
+
+**Validation of record** (run279, `lanes/ts6/run279-a9-results`; its `.done`, `verdict/mini-v279.done`,
+`a99ac634beaa8108`, 13:06:50Z; placed 13:00:59Z; VF-PM reported it GREEN and accepted at 13:09:49Z). From the
+`.done` and `lw/summary.txt`:
+- The arm: the packet copy's SHA256SUMS `3e993a34065def30`, 48 lines all OK; the bundle `8c4a70547bd50297`, 10148 B,
+  its one prerequisite `9bbe345ad` present; one new ref, `ob/plugin-fail-closed-run279` → `fb6a9a4d9`, kept; the
+  tip's tree `b3e59af71f7e`, the whole diff's patch-id and each commit's patch-id and tree equal to the packet's. One
+  install (`pnpm install --frozen-lockfile`, exit 0, "Done in 813ms using pnpm v11.13.1", 'downloaded' 0);
+  `siblings:build` exit 0 in 2 s, no Compiling line.
+- The reds, each at its own assertions and none elsewhere (their logs stay on the mini, items 320 and 321):
+  - R1 at `975832fae`, the registry's test alone: `Tests 1 failed | 14 passed (15)`;
+  - R2 at `d9c9b7c39`, the installer's slots test alone: `Tests 1 failed | 2 passed (3)`;
+  - R3 at `53d50be95`, the install test alone: `Tests 2 failed | 5 passed (7)`;
+  - R4 at `53d50be95`, the three files together: `Tests 4 failed | 21 passed (25)`.
+- V at `fb6a9a4d9`, fieldd's suite whole, 13:02:05Z to 13:04:12Z, GREEN: `Test Files 271 passed | 5 skipped (276)`
+  and `Tests 3841 passed | 15 skipped (3856)`, as the packet predicted (run 314's 3839, plus four, less the two
+  rider rows); 276 of 276 files at the expected count, the store's test 13.
+- The readers outside fieldd, at `fb6a9a4d9`, each GREEN: field-app's five files 28; electron-shell's
+  `staged-serving-seam` 7; fieldd-client's four files 23; fieldd-supervisor's suite 94 in 13 files.
+- Beside them, as the `.done` says: kept births 0; the 346 kept entries and the kept refs unmoved; the history
+  files equal at the arm and in fin, stat only. No fieldd or field-native process was left (VF-PM, 13:09:49Z; the
+  summary's lines for R1 and R2 say 0, the rest I did not read). No cargo test,
+  no xcodebuild, no simulator. `packages/electron-shell/dist` on the mini was built at `e8ad39b03`, not at this tip
+  (a reading in the `.done`; O2 reads it).
+- On the Mac, through the door, seventeen rows, each exit 0 (the packet's README has the table and the logs): fieldd's
+  typecheck and `biome check .` at each of the four trees (3557 files, 74 warnings, 21 infos, each); at
+  `fb6a9a4d9`, electron-shell's two programs, field-app, fieldd-client, fieldd-supervisor, plugin-runtime,
+  `apps/plugin-playground` and `tooling/terminal-perf`, each 0 error lines; `check:walls`' four node commands and
+  `check:retired`, clean.
+
+**The gap, as it stands.**
+- **Item 279 was not re-run at the landed tip.** run279 ran `fb6a9a4d9` on `9bbe345ad`. The landed tree is that
+  stack on `57d1e8ad4`, which has the EL8 to ghosttea 0.15.0 (M290), item 334 (M291), item 341 (M292), item 355 and
+  the EL8's records under it.
+- What stands for the landed tree: the base moved none of the stack's eight paths, the eight blobs at `82e166608`
+  are the eight at `fb6a9a4d9`, and nothing under `packages/fieldd` moved between `9bbe345ad` and `47f8d4732` (an
+  empty numstat, read 17:08:47Z). Item 355 then changed one fieldd test file, not one of the eight.
+- **Owed at the next whole V on the old mini:** fieldd's suite with 279 on ghosttea 0.15.0 and beside item 341.
+  Item 341 changed `packages/fieldd-supervisor/src/supervisor.ts` and `types.ts` and electron-shell's `main/index.ts`
+  and `fieldd.ts` (VF-PM, 17:07:55Z); run279's O4 ran the supervisor's suite at the old base, not at 341's.
+
+**The cut.**
+- The plan and the cut plan: `lanes/ob-build/ITEM-279-S2-PLAN.md` and `lanes/ob-build/ITEM-279-S2-CUT-PLAN.md`
+  (accepted by VF-PM at 06:41:31Z, with "the four commits are made under the pre-commit hook, never bypassed").
+  VF-PM read each commit's staged diff and message before its word (`lanes/ob-plug/logs/s2-c1.log` to `s2-c4.log`).
+- The packet of record, `lanes/ob-plug/packets/i279-s2-v1`, sealed at 10:56:09Z on VF-PM's word of 10:55:12Z:
+  SHA256SUMS `3e993a34065def30`; README `d66d4073701d92a1`; the bundle `8c4a70547bd50297`, requiring `9bbe345ad`
+  alone.
+- The carry: `lanes/ob-plug/rows/carry-279-s2.sh` (sha256 `49f3e5807afb8037`…, 134 lines; read whole by VF-PM,
+  13:14:16Z), object-only: per commit, `git merge-tree --write-tree` with the commit's own parent as the base, exit 0
+  required, then `git commit-tree` with the old author, committer, dates and raw message. Two rehearsals, each one
+  door row, each "rehearse identical" with no ref written:
+  - onto `c841f8b7c`, 13:15:17Z to 13:15:20Z (`lanes/ob-plug/logs/carry-279-s2-rehearse-c841f8b7c.log`);
+  - onto `57d1e8ad4`, 17:10:42Z to 17:10:45Z, on VF-PM's word of 17:09:53Z
+    (`lanes/ob-plug/logs/carry-279-s2-rehearse-57d1e8ad4.log`): each commit equal by -U0 patch-id, raw message,
+    author and dates; the tip different from its base in the stack's eight paths alone; the base-move numstat empty;
+    all eight blobs EQUAL; every ref and HEAD unmoved.
+- **Rehearse only** (VF-PM's ruling, 17:09:11Z): the script's land mode was not run and wrote no ref. Its base was
+  not yet main (fa's two commits, the EL8's records `c7ce45b48` and item 355 `57d1e8ad4`, landed under this stack in
+  the same fast-forward), and the carried commits are fixed by their inputs, so the tip the rehearsal printed is the
+  commit the fixer fast-forwarded main to: `47f8d4732` → `82e166608`.
+- The land, from the fixer's report to VF-PM at 17:13Z (VF-PM to me, 17:17:38Z; not read by me): the pair
+  `landing/m290-land.zsh` (`91a35b5df839ca50`) and its inner (`2400b1970e2f91ad`), at the door 17:13:10Z, "Updating
+  47f8d4732..82e166608, Fast-forward", 11 files, +425 −131, exit 0; its measure `m290-measure.sh` at 17:12:40Z (tree
+  `fda9f91b9af3`, diff `9e34fc16cc791bac`). Main's reflog, read by me: the fast-forward at 17:13:11Z.
+- The stretch's lands (VF-PM, 17:17:38Z): M290, the EL8 to ghosttea 0.15.0 (`77ef95f50`); M291, LP's Mac About with
+  item 334 and the 340/349 records (`2b6f5a2a3`); M292, item 341 (`47f8d4732`); M293, this land (`82e166608`), which
+  also carried fa's EL8 records (`c7ce45b48`) and item 355 (`57d1e8ad4`).
+
+**Found along the way.**
+- **Item 333** (opened by VF-PM, 03:56:52Z, from the S2 plan's third finding; the read is
+  `lanes/ob-build/studies/item-333-parked-install-set-entry-2026-11-12.md`): an install-set entry for a
+  registry-source plugin that has no row is retried at each boot and never removed, since `plugins.uninstall` stops
+  at "no such plugin" before it unpublishes. With no key, no registry-source row can now be drawn, so no new entry
+  can be written. RULED by VF-PM: its fix rides with S3, after the 0.9 tag.
+- **A correction to the cut plan's §3**, already in the packet's README: `swarm-replay-packaged` is not a skipped
+  file; it runs in V.
+- **One harness refusal** (13:11:41Z): a read-only command of mine was denied by Claude Code's removal check and was
+  not reissued in any form (VF-PM, 13:14:16Z). What it would have read, the rehearsal printed.
+- **Two slips of mine before the packet,** disclosed to VF-PM then: the 09:02:53Z launch's gate lacked its exit, and
+  one gated sum command ran during a hold.
+- **A wrong count of mine:** I told VF-PM the carry script was 121 lines without counting it; it is 134.
+
+**Owed.**
+- The whole V above, on the old mini.
+- S3 (a verified load, once a list is configured) with item 333's fix, on VF-PM's order, after the 0.9 tag.
+- Item 321, on James's pick.
+- The landing table over main, before any push, on James's word by name.
+
+**Not done, and not claimed:** no smoke, no landing table and no app run; no list key configured anywhere, and no
+plugin folder staged, placed or loaded to show any of it (rule 16); no data folder listed or read (rule 48);
+`census:assert` not run; nothing pushed.
