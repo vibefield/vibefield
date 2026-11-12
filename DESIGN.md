@@ -6769,15 +6769,21 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     starts; above), and **Remove…**. The page never shows a repository, a commit, a hash, a signature, a rung, its
     own id or a power's id (§9, VibeField's insides).
     - **Every install asks first** (MK-D7), with one short card: **the install card** (never "the consent card",
-      which names History's card and TD-8's app-update card). Install grows into it where it stood (one element, M1),
-      and it says three things: the objects it adds to your pegboard, each by its small drawing and its label; its
-      powers in plain words; and the desktops it installs on, each by its OS mark and its name, since an install on
-      one desktop reaches your others (the install-set syncs the choice, PA-31). Then Cancel and **Install**, with ↵
-      printed on it. Grants stay granted at install (PA-12) and turn off one by one on the page afterwards.
-    - **Real progress, never a spinner**: the bar moves on the download's bytes, then the steps are said in §9's
-      words, and the act says **Installed** only once it is true. A download that does not match what the registry
-      built is thrown away and nothing is installed (fieldd's `PLUGIN_ARTIFACT_MISMATCH`), said in plain words with
-      a way to try again.
+      which names History's card and TD-8's app-update card). Install downloads the plugin first, its act saying
+      how far, and then grows into the card where it stood (one element, M1). It says three things: the objects it
+      adds to your pegboard, each by its small drawing and its label, and its powers in plain words, both read from
+      the plugin just downloaded; and the desktops it installs on, each by its OS mark and its name, since an
+      install on one desktop reaches your others (the install-set syncs the choice, PA-31). Then Cancel, which goes
+      back to **Install** and throws the download away, and **Install**, with ↵ printed on it. Grants stay granted
+      at install (PA-12) and turn off one by one on the page afterwards.
+      *Changed 2026-11-12 (James's MK-O2 pick, 2026-11-11 22:33:48Z: "A2: after the download, from the real
+      files"):* MK-D7 drew the card before the download.
+    - **Real progress, never a spinner**: the bar moves on the download's bytes before the card, then, after the
+      card's **Install**, the steps are said in §9's words, and the act says **Installed** only once it is true. A
+      download that does not match what the registry built is thrown away and nothing is installed (fieldd's
+      `PLUGIN_ARTIFACT_MISMATCH`), said in plain words with a way to try again. So is a card whose plugin changed on
+      this computer before its **Install**, or that waited longer than fifteen minutes.
+      *Changed 2026-11-12 (MK-O2, as above):* the bar ran on to the steps with no card between them.
     - **The acts** (MK-D13): **Install**, then **Installed** (a name survives its flow, §9); **Update** while one
       waits; **Show them on the pegboard** once a set with objects is installed (below); and **Remove…**, which asks
       — the two-step destructive confirm of §8 "The destructive uninstall affordance", naming the objects on your
@@ -8993,6 +8999,9 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   name ("It installs on this Mac." while you have one, "this PC" off the Mac, ‹draft›) ·
   **Cancel** · **Install** ↵. Its powers are granted as it installs (PA-12), and **What it can do** on its page gives
   each its own switch, to turn off one by one.
+  *Added 2026-11-12 (James's MK-O2 pick, 2026-11-11 22:33:48Z: "A2: after the download, from the real files"):* the
+  card stands after the download, so the objects, tools and powers it names are the downloaded plugin's own.
+  **Cancel** throws the download away and says nothing; the act says **Install** again.
 - **Installing, and after** (MK-D8, MK-D13; MK-E2). The act says **Install** and, once true, **Installed** (a name
   survives its flow); between them "Downloading · 42%" and "Installing ‹n› objects…". Then **Show them on the
   pegboard** ("Show on the pegboard" for a set of one), over where its objects hang, "Clock, Calendar and Timer hang
@@ -9004,6 +9013,10 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   and the log. A plugin that needs a newer VibeField says "Needs 0.10" on its act and "Needs VibeField 0.10 · you're
   on VibeField 0.9.0" in its line: the version you're on as `releaseName` says it ("The update's words", above;
   "you're on the Nov 7 nightly" on a nightly), and the one it needs as its `engines.app` floor ‹draft›.
+  *Added 2026-11-12 (MK-O2, as above):* the card stands between the two words: "Downloading · 42%", then the card,
+  then, after its **Install**, "Installing ‹n› objects…". A card whose plugin changed before its **Install**, or that
+  waited longer than fifteen minutes, ends as a failed install does, "VibeField didn't install ‹plugin›. Nothing
+  changed." with **Try again**, which downloads it again. No new word.
 - **Updates** (MK-D5, MK-D11; MK-E6). The tab's head says "1 update · checked 14:02", or "Everything is up to date ·
   checked 14:02"; **Update all** while any wait; its foot, **Check again**. A row says "0.6.1 → 0.7.0 · Nov 7", what
   it changes in the set, "Adds Watch" · "Removes Burndown", and its notes, with **Update**. An update that removes an
