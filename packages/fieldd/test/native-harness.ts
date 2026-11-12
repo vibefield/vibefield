@@ -288,15 +288,18 @@ export const ROW_END_IO: RowEndIo = {
   remove: removeTempRoot,
 };
 
-/** Item 363 — end a row that spawned real floors. terminal-seam and two-pairs end their rows here.
+/** Item 363 — end a row that spawned real floors (terminal-seam and two-pairs end their rows here), in the one order
+ * that leaves nothing behind: the row's stops, each error-isolated; then every floor's tree killed and its exit
+ * awaited, each for at most `boundMs`; then every root swept of what outlives a floor (its terminal cells, item 196);
+ * and only then every root removed. A floor still running at the bound fails the row by its name, after its root has
+ * been swept and removed, so the suite does not hang on it.
  *
- * THE RED keeps today's order, as those two files ended a row before: the stops, then the roots removed, then each
- * floor killed with nobody awaiting its exit, and no root swept. A floor or a terminal cell still alive when its root
- * goes writes the root back: run345v3 kept two `/tmp/vf-seam-*` that way. */
+ * The order is the fix. A floor or a cell alive when its root is removed writes the root back: run345v3 kept two
+ * `/tmp/vf-seam-*` that way. `killDaemonTree` itself stops waiting at 3 s, so the bound is the smaller of the two. */
 export async function endRow(
   row: RowEnd,
   io: RowEndIo = ROW_END_IO,
-  _boundMs = 5_000,
+  boundMs = 5_000,
 ): Promise<void> {
   for (const stop of [...row.stops].reverse()) {
     try {
@@ -305,8 +308,27 @@ export async function endRow(
       /* already stopped */
     }
   }
+  const stuck: string[] = [];
+  await Promise.all(
+    row.floors.map(async ({ name, child }) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        io.killTree(child),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, boundMs);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (child.exitCode === null && child.signalCode === null) stuck.push(name);
+    }),
+  );
+  for (const root of row.roots) await io.sweep(root);
   for (const root of row.roots) io.remove(root);
-  for (const { child } of row.floors) void io.killTree(child);
+  if (stuck.length > 0) {
+    throw new Error(
+      `item 363: ${stuck.join(" and ")} did not exit within ${boundMs} ms of its kill; its root was swept and removed after the bound`,
+    );
+  }
 }
 
 /** `waitForEndpoint` for the management plane — the gate every native suite

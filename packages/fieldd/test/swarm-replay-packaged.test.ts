@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { FIELDD_DEBUG_SWARM_CORPUS_ENV } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { bundleFielddBin } from "./fieldd-bin-bundle";
-import { runAliasParentEnv } from "./native-harness";
+import { killDaemonTree, runAliasParentEnv } from "./native-harness";
 
 const CORPUS = join(
   import.meta.dirname,
@@ -102,9 +102,8 @@ describe("PG-9 S4c — a packaged fieldd refuses the debug swarm", () => {
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
-    cleanup.push(() => {
-      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-    });
+    // Item 363: the bundled fieldd's exit is awaited before its folder goes (cleanup runs in reverse).
+    cleanup.push(() => killDaemonTree(child));
     const exit = await exitWithin(child, 10_000);
 
     expect(exit.stderr, "the refusal names the variable and the package").toMatch(

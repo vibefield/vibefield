@@ -35,6 +35,7 @@ import {
   rosettadAllowOrigins,
   rosettadUnconfigured,
 } from "../src/rosettad-supervisor";
+import { killDaemonTree } from "./native-harness";
 
 const FAKE = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-rosettad.mjs");
 
@@ -72,9 +73,8 @@ let strays: ChildProcess[] = [];
 afterEach(async () => {
   for (const s of sups) await s.stop();
   sups = [];
-  for (const p of strays) {
-    if (p.exitCode === null && p.signalCode === null) p.kill("SIGKILL");
-  }
+  // Item 363: a stray rosettad writes under its root until it is gone, so its exit is awaited before the removal.
+  await Promise.all(strays.map((p) => killDaemonTree(p)));
   strays = [];
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
   dirs = [];
