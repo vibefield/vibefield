@@ -41,7 +41,7 @@ export function AddPhoneCode({
       <SignInQr text={code} label={ADD_PHONE_CODE_LABEL} />
       <p className={className}>
         {ADD_PHONE_CODE_LABEL}. Get VibeField from TestFlight first, then open it and choose{" "}
-        <strong>Scan the code on your Mac</strong>. The same code tells it to expect{" "}
+        <strong>Scan the code on your computer</strong>. The same code tells it to expect{" "}
         <span className="font-mono">{login}</span>.
       </p>
     </div>
