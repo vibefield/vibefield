@@ -3782,7 +3782,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   above Settings…**, so the menu reads, nearest first: you · the update row · Settings… · **Plugins…** · Theme ·
   Connect your devices… (while this Mac is not connected) · New user… · then the other users under "Switch to".
   It wears `plugin` at 18 in the 44px column (§13) and prints no key. It is there in every build, registry or
-  none: until one is configured the popup's Discover says "No plugin registry yet". Choosing it folds the menu, as
+  none: until one is configured the popup's Discover says "Nothing to discover yet". Choosing it folds the menu, as
   Settings… does, and opens the popup, one of the frame's open surfaces (§10), so opening the menu folds it in
   turn. **Keyboard:** Return still lands on Settings… (`data-me-nearest`, AU-D5), never on Plugins…; ↑ from
   Settings… reaches Plugins…, then Theme, and ↓ the update row, as before. **"1 update"** (MK-D11): once a read
@@ -5124,7 +5124,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     updates" opens the popup on Updates, and opening it is the read (MK-E7). A plugin may still opt
     in to its own check when VibeField starts (spec §5.3.1), once that check is built: fieldd
     checks only when asked (`updatesCheck`), and no MK slice builds it. Until the registry rung (TD §9 TD-4)
-    no build has a registry to read, so Discover says "No plugin registry yet" in every build. A
+    no build has a registry to read, so Discover says "Nothing to discover yet" in every build. A
     result's words are §9 "The plugins' words": a release that needs a newer VibeField, a plugin
     gone from the list and a download that didn't match are said in plain words, and their insides
     ("needs app X · contracts Y", the hash) stay off the popup and go to the log (item 282-6's
@@ -6614,7 +6614,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   MK-1, MK-2 and MK-4…MK-6 build it (MK-4 the popup, MK-5 Settings' half, MK-6 its catalog plates and gates; there
   is no MK-3), MK-7 what waits on ICE's door, and none of it lands before the v0.9.0 tag unless James says so
   (MK-E13). No build configures a registry today (`fieldd/src/bin.ts` sets none, and `fieldd/src/plugin-install.ts`
-  answers "no plugin registry is configured"), so Discover says **No plugin registry yet** in every build until the
+  answers "no plugin registry is configured"), so Discover says **Nothing to discover yet** in every build until the
   registry rung (TD §9 TD-4). fieldd reads index v1 alone; MK types `listing` and `featured` on v1 and v2 alike, and
   v2's reader stays the registry rung's (MK-E8). **Every plugin from the registry may add objects**, VibeField's own
   and community plugins alike, a community plugin's only once community plugins are turned on (MK's J1, ruled by
@@ -6693,8 +6693,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       amendments at their source). The switch is an app preference that syncs to your desktops, with a flag that the
       statement was seen; it takes no undo, so ⌘Z never turns it on, and while it is off a community install is
       refused (MK-E3).
-    - **No plugin registry yet** (every build until the registry rung, above): Discover is one state, never a blank
-      (§8 "Empty / degraded states") — the words **No plugin registry yet**, saying the plugins that come with
+    - **Nothing to discover yet** (every build until the registry rung, above): Discover is one state, never a blank
+      (§8 "Empty / degraded states") — the words **Nothing to discover yet**, saying the plugins that come with
       VibeField are in Installed, with a press that shows them. Installed works without a registry.
   - **Its states, in the body** (*drawn 2026-11-11, MK-4a; VF-PM 11:40:58Z*): a tab with no rows to show draws one
     state with the kit's `EmptyState`, centred in the body (§8 "Empty / degraded states"), never a blank; its words are
@@ -8955,11 +8955,13 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   list expired Feb 4 · installs wait for a newer one" ‹draft›. A new list VibeField can't use: "VibeField
   couldn't use the new plugin list, so nothing new is shown · Diagnostics has the details" ‹draft› (the page
   said "Reading vibefield/registry…", "The registry's list" and "didn't verify", VibeField's insides).
-- **No plugin registry yet.** It is what every build says until the registry rung (TD §9 TD-4): no build configures a
-  registry, so fieldd's `fetchIndex` refuses a read ("no plugin registry is configured"). Discover says **No plugin
-  registry yet** over "The plugins that come with VibeField are in Installed." with **Show installed**; Updates says
+- **Nothing to discover yet.** It is what every build says until the registry rung (TD §9 TD-4): no build configures a
+  registry, so fieldd's `fetchIndex` refuses a read ("no plugin registry is configured"). Discover says **Nothing to
+  discover yet** over "The plugins that come with VibeField are in Installed." with **Show installed**; Updates says
   "Plugins that come with VibeField update with it." ‹draft›; the foot says no time, for nothing was read; and
   **Check plugins for updates** opens Updates on those words, never on a check that failed.
+  *Changed 2026-11-12 (James's MK-O5 pick, 2026-11-11 22:34:14Z: "Rewrite without 'registry'"), ‹draft› for his
+  eye:* the title said "No plugin registry yet", the one place the popup said the word.
   *Added 2026-11-11 (MK-4a; VF-PM 11:40:58Z), MK's words, ‹draft›, for James's eye:* with no list held and a read
   that failed, Discover and Updates say "VibeField couldn't use the plugin list · Diagnostics has the details" or
   "Offline · no plugin list yet"; with a list held before Discover's shelf is built (a state no build reaches today),
@@ -9097,7 +9099,7 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
 - **Sources** (MK-D13; MK-E11). **Built in** (a bundled plugin, decided first) · **VibeField** (a listed plugin
   VibeField publishes) · the publisher's name otherwise, with **Community** beside it on a community row ·
   **Development** and **Sideloaded**, as today. Never "Registry", "Registry · ‹publisher›" or "Built by the registry";
-  **No plugin registry yet** is the one place the word stands, as ruled. *Known deviation, owed (MK):* Settings →
+  no word in the popup says it (James's MK-O5 pick). *Known deviation, owed (MK):* Settings →
   Plugins' badge says "Registry · ‹publisher›" (`SOURCE_LABEL`, `panels/PluginsSection.tsx`), and Settings' Plugins
   page describes VibeField's plugins as "Installed extensions and their preferences." (`panels/SettingsDialog.tsx`);
   both leave with Settings → Plugins (MK-D10).
