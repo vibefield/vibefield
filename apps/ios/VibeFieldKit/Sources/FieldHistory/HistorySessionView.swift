@@ -328,8 +328,10 @@ struct HistorySessionView: View {
       HStack {
         Spacer()
         HStack(spacing: 6) {
-          Text(pill.time)
-          Text(pill.after).foregroundStyle(ChromePalette.inkFaint)
+          Text(pill.lead)
+          if let after = pill.after {
+            Text(after).foregroundStyle(ChromePalette.inkFaint)
+          }
         }
         .font(ChromeType.sans(11.5, .medium))
         .monospacedDigit()
@@ -351,7 +353,7 @@ struct HistorySessionView: View {
       ForEach(Array(turn.promptAttachments.enumerated()), id: \.offset) { _, words in
         placeholder(words)
       }
-      if !turn.segments.isEmpty {
+      if !turn.segments.isEmpty, !turn.continues {
         responseHead(turn)
       }
       ForEach(turn.segments) { segment in

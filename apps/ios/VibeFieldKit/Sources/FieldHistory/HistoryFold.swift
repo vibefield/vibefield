@@ -29,9 +29,10 @@ extension FieldHistoryModel {
   /// Item 353 — the days one bar holds: two, so the fifteen bars are the last thirty days, the desktop's activity
   /// shape (the room's `recentTokenBuckets`). They were the last fifteen days, one each.
   public static let sparkBarDays = 2
-  /// A turn whose prompt came this long after the previous turn ended wears a
-  /// day pill (`11:31 · after 1h 19m`), the record's gap.
-  public static let dayPillAfterMinutes = 60
+  /// Item 362c — a silence this long or longer starts a new SITTING: the room's own figure (rosetta
+  /// `lib/transcript/sittings.ts`, `SITTING_PAUSE_MS`), "the reader left and came back". It was sixty minutes,
+  /// between turns only, and no day.
+  public static let sittingPauseMinutes = 15
 
   // MARK: - Words
 
@@ -413,15 +414,25 @@ extension FieldHistoryModel {
         groups[groups.count - 1].body.append(row)
       }
     }
+    // Item 362c — the room's two cuts (`document-plan.ts`): the rows fold into turns, and time cuts them into
+    // sittings. The cuts do not nest, so a turn the time cuts is drawn in parts: a part that opens a sitting wears
+    // its pill, and a part after the first continues the same reply without a second head. A run never straddles a
+    // pill: the body is folded sitting by sitting.
+    let cut = sittings(ordered, now: now)
+    var sittingOf: [String: Int] = [:]
+    for (index, sitting) in cut.enumerated() {
+      for id in sitting.rowIds { sittingOf[id] = index }
+    }
     var turns: [HistoryTurn] = []
-    var previousEnd: Int64?
+    var drawnSitting = -1
+    /// The pill of the sitting a part opens; nil inside a sitting, and for a session of one sitting.
+    func pill(opening index: Int) -> HistoryDayPill? {
+      defer { drawnSitting = index }
+      guard index != drawnSitting, cut.count > 1, cut.indices.contains(index) else { return nil }
+      return cut[index].pill
+    }
     for (index, group) in groups.enumerated() {
       let at = group.prompt?.at ?? group.body.first?.at
-      var pill: HistoryDayPill?
-      if let at, let previousEnd, at - previousEnd >= Int64(dayPillAfterMinutes) * 60_000 {
-        pill = HistoryDayPill(time: clock(at), after: "after \(gapText(at - previousEnd))")
-      }
-      let segments = self.segments(group.body, desktop: desktop)
       let agentRows = group.body.filter { $0.kind != "user" }
       let model = agentRows.compactMap(\.model).first ?? ""
       let effort = agentRows.compactMap(\.effort).first
@@ -433,19 +444,51 @@ extension FieldHistoryModel {
         span.map { isLive ? "\(spanText($0)) → …" : spanText($0) },
         tokens > 0 ? tokensWord(tokens).figure + tokensWord(tokens).unit : nil,
       ].compactMap { $0 }.joined(separator: " · ")
+      let head = [model.isEmpty ? nil : model, effort].compactMap { $0 }.joined(separator: " · ")
       let promptAttachments = group.prompt?.attachments.map { attachmentWords($0, desktop: desktop) } ?? []
       let promptClipped = group.prompt.flatMap { prompt -> String? in
         prompt.textClipped ? clippedWords(byteLen: prompt.textByteLen, desktop: desktop) : nil
       }
-      turns.append(
+      let turnId = group.prompt?.timelineId ?? group.body.first?.timelineId ?? "turn-\(index)"
+      // the body, cut wherever the sitting changes under it
+      var slices: [(sitting: Int, rows: [IndexTimelineRow])] = []
+      for row in group.body {
+        let sitting = sittingOf[row.timelineId] ?? 0
+        if let last = slices.last, last.sitting == sitting {
+          slices[slices.count - 1].rows.append(row)
+        } else {
+          slices.append((sitting, [row]))
+        }
+      }
+      let opens = group.prompt.map { sittingOf[$0.timelineId] ?? 0 }
+      /// The prompt and what stands with it: on the first part, or alone when its reply began in a later sitting.
+      func opener(_ segments: [HistorySegment], sitting: Int, headed: Bool) -> HistoryTurn {
         HistoryTurn(
-          id: group.prompt?.timelineId ?? group.body.first?.timelineId ?? "turn-\(index)",
-          at: clockSeconds(at), dayPill: pill, prompt: group.prompt?.text ?? "",
-          promptAnchor: group.prompt?.timelineId,
-          model: [model.isEmpty ? nil : model, effort].compactMap { $0 }.joined(separator: " · "),
-          facts: facts, isLive: isLive, segments: segments, promptAttachments: promptAttachments,
-          promptClipped: promptClipped))
-      previousEnd = stamps.max() ?? at ?? previousEnd
+          id: turnId, at: clockSeconds(at), dayPill: pill(opening: sitting), prompt: group.prompt?.text ?? "",
+          promptAnchor: group.prompt?.timelineId, model: headed ? head : "", facts: headed ? facts : "",
+          isLive: headed && isLive, segments: segments, promptAttachments: promptAttachments,
+          promptClipped: promptClipped)
+      }
+      guard let first = slices.first else {
+        turns.append(opener([], sitting: opens ?? 0, headed: true))
+        continue
+      }
+      let promptStandsAlone = opens.map { $0 != first.sitting } ?? false
+      if promptStandsAlone, let opens { turns.append(opener([], sitting: opens, headed: false)) }
+      for (part, slice) in slices.enumerated() {
+        let segments = self.segments(slice.rows, desktop: desktop)
+        if part == 0, !promptStandsAlone {
+          turns.append(opener(segments, sitting: slice.sitting, headed: true))
+          continue
+        }
+        // the head stands once per reply: on its first part
+        let headed = part == 0
+        turns.append(
+          HistoryTurn(
+            id: slice.rows.first?.timelineId ?? "\(turnId):\(part)", at: clockSeconds(slice.rows.first?.at),
+            dayPill: pill(opening: slice.sitting), prompt: "", model: headed ? head : "",
+            facts: headed ? facts : "", isLive: headed && isLive, segments: segments, continues: !headed))
+      }
     }
     return HistoryDocument(
       id: header.sessionId, projectId: header.projectId ?? "",
@@ -456,13 +499,93 @@ extension FieldHistoryModel {
       liveSince: liveSince, nextCursor: nextCursor, watermark: watermark)
   }
 
-  /// `1h 19m` · `3h` · `2d` — the day pill's gap.
-  static func gapText(_ ms: Int64) -> String {
-    let minutes = Int(ms / 60_000)
+  // MARK: Sittings (item 362c)
+
+  /// One sitting: the rows read in one stay, and the pill that opens it.
+  struct Sitting: Equatable {
+    let rowIds: [String]
+    /// The pill's words; nil when the cut names nothing (a first sitting whose rows carry no stamp).
+    let pill: HistoryDayPill?
+  }
+
+  /// The rows (oldest first) cut into sittings by the room's rule (`sittings.ts`): a new one before any row whose
+  /// calendar day, on this phone, differs from the previous stamped row's, or that comes `sittingPauseMinutes` or
+  /// more after it. A row with no stamp never cuts (a missing stamp is not evidence that the reader left), and a
+  /// stamp that runs backwards is never a pause. As the room's code stands, the first row's stamp is the one the
+  /// rule starts from: rows after an unstamped first row are one sitting.
+  static func sittings(_ rows: [IndexTimelineRow], now: Date) -> [Sitting] {
+    struct Open {
+      var rows: [IndexTimelineRow]
+      var resumedAt: Int64?
+      var pauseMs: Int64?
+      var dayChanged: Bool
+    }
+    var open: [Open] = []
+    var previousAt: Int64?
+    for row in rows {
+      guard !open.isEmpty else {
+        open.append(Open(rows: [row], resumedAt: nil, pauseMs: nil, dayChanged: true))
+        previousAt = row.at
+        continue
+      }
+      guard let at = row.at, let previous = previousAt else {
+        open[open.count - 1].rows.append(row)
+        continue
+      }
+      let gap = at - previous
+      let pauseMs = gap >= Int64(sittingPauseMinutes) * 60_000 ? gap : nil
+      let dayChanged = !calendar.isDate(date(at), inSameDayAs: date(previous))
+      if pauseMs == nil, !dayChanged {
+        open[open.count - 1].rows.append(row)
+      } else {
+        // the time is what the reader resumed at, so it is said only when there was something to resume from
+        open.append(Open(rows: [row], resumedAt: pauseMs == nil ? nil : at, pauseMs: pauseMs, dayChanged: dayChanged))
+      }
+      previousAt = at
+    }
+    return open.map { sitting in
+      let started = sitting.rows.compactMap(\.at).min()
+      return Sitting(
+        rowIds: sitting.rows.map(\.timelineId),
+        pill: pillWords(
+          day: started.map { sittingDay($0, now: now) }, dayChanged: sitting.dayChanged,
+          resumedAt: sitting.resumedAt, pauseMs: sitting.pauseMs))
+    }
+  }
+
+  /// The room's pill (`DayPill.tsx` `pillText`): `Mon 31 Aug` for a day cut, `Tue 1 Sep · 00:02` and `after 44m`
+  /// when a pause crossed a day, `12:31` and `after 12h 18m` within one.
+  static func pillWords(day: String?, dayChanged: Bool, resumedAt: Int64?, pauseMs: Int64?) -> HistoryDayPill? {
+    let after = pauseMs.map { "after \(pauseText($0))" }
+    let resumed = resumedAt.map { clock($0) }
+    if dayChanged, let day {
+      return HistoryDayPill(lead: resumed.map { "\(day) · \($0)" } ?? day, after: after)
+    }
+    if let resumed { return HistoryDayPill(lead: resumed, after: after) }
+    return nil
+  }
+
+  /// `Today` · `Yesterday` · `Mon 31 Aug`, and the year only when it is not this one: `24 Aug 2025` (the room's
+  /// `sittingDayLabel`).
+  static func sittingDay(_ ms: Int64, now: Date) -> String {
+    let then = date(ms)
+    guard calendar.component(.year, from: then) == calendar.component(.year, from: now) else {
+      let formatter = DateFormatter()
+      formatter.calendar = calendar
+      formatter.locale = Locale(identifier: "en_US_POSIX")
+      formatter.dateFormat = "d MMM yyyy"
+      return formatter.string(from: then)
+    }
+    return dayHeader(ms, now: now)
+  }
+
+  /// `44m` · `12h 18m` · `2d 3h` — a pause to the minute, the room's `duration`.
+  static func pauseText(_ ms: Int64) -> String {
+    let minutes = max(0, Int((Double(ms) / 60_000).rounded(.toNearestOrAwayFromZero)))
     if minutes < 60 { return "\(minutes)m" }
     let hours = minutes / 60
-    if hours < 24 { return minutes % 60 == 0 ? "\(hours)h" : "\(hours)h \(String(format: "%02d", minutes % 60))m" }
-    return "\(hours / 24)d"
+    if hours < 48 { return "\(hours)h \(String(format: "%02d", minutes % 60))m" }
+    return "\(hours / 24)d \(hours % 24)h"
   }
 
   /// `image shot.png on studio` — the placeholder's words (H-D9: not relayed);
@@ -658,23 +781,4 @@ extension FieldHistoryModel.SearchKind {
     case .replies: who == .agent
     }
   }
-}
-
-// Item 362c (red) — the names `HistorySittingTests` calls, answering nothing yet: every row in one sitting, no day
-// and no pause said. The room's rule is the next commit's.
-extension FieldHistoryModel {
-  public static let sittingPauseMinutes = 60
-
-  struct Sitting: Equatable {
-    let rowIds: [String]
-    let pill: HistoryDayPill?
-  }
-
-  static func sittings(_ rows: [IndexTimelineRow], now: Date) -> [Sitting] {
-    [Sitting(rowIds: rows.map(\.timelineId), pill: nil)]
-  }
-
-  static func sittingDay(_ ms: Int64, now: Date) -> String { "" }
-
-  static func pauseText(_ ms: Int64) -> String { "" }
 }

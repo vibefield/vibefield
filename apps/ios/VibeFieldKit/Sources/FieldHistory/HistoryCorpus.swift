@@ -449,7 +449,7 @@ public struct HistoryDocument: Identifiable, Equatable, Sendable, Codable {
 public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
   public let id: String
   public let at: String
-  /// A day pill before the prompt, when the gap earned one: `11:31 · after 1h 19m`.
+  /// The pill of the sitting this part opens (item 362c): `Tue 1 Sep · 00:02` `after 44m`.
   public let dayPill: HistoryDayPill?
   public let prompt: String
   /// The hit id that lands on this prompt, if search found it here.
@@ -464,11 +464,13 @@ public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
   /// SP-6 — the words under a prompt the door cut at its bound (`clipped ·
   /// 14 KB on studio`); nil for a prompt carried whole.
   public let promptClipped: String?
+  /// Item 362c — a later part of a reply that time cut: the same response, so no second head stands over it.
+  public let continues: Bool
 
   public init(
     id: String, at: String, dayPill: HistoryDayPill? = nil, prompt: String, promptAnchor: String? = nil,
     model: String, facts: String, isLive: Bool = false, segments: [HistorySegment],
-    promptAttachments: [String] = [], promptClipped: String? = nil
+    promptAttachments: [String] = [], promptClipped: String? = nil, continues: Bool = false
   ) {
     self.id = id
     self.at = at
@@ -481,16 +483,20 @@ public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
     self.segments = segments
     self.promptAttachments = promptAttachments
     self.promptClipped = promptClipped
+    self.continues = continues
   }
 }
 
-/// The gap between turns, said once: the clock and how long it had been.
+/// Item 362c — where time cut the document, said once: the day when it turned, the clock when the reader came
+/// back, and how long it had been (the room's pill). It was the clock and the gap between two turns.
 public struct HistoryDayPill: Equatable, Sendable, Codable {
-  public let time: String
-  public let after: String
+  /// `Mon 31 Aug` · `Tue 1 Sep · 00:02` · `12:31`
+  public let lead: String
+  /// `after 44m`; nil for a day that turned without a pause.
+  public let after: String?
 
-  public init(time: String, after: String) {
-    self.time = time
+  public init(lead: String, after: String? = nil) {
+    self.lead = lead
     self.after = after
   }
 }
@@ -733,7 +739,7 @@ extension HistoryCorpus {
                 anchor: "h3"),
             ]),
           HistoryTurn(
-            id: "t3", at: "11:31:08", dayPill: .init(time: "11:31", after: "after 1h 19m"),
+            id: "t3", at: "11:31:08", dayPill: .init(lead: "11:31", after: "after 1h 19m"),
             prompt: "Run the specimen against the real worktree rows and tell me which ones still go to mush.",
             model: "claude-opus-5 · high", facts: "16m → …", isLive: true,
             segments: [
@@ -756,16 +762,4 @@ extension HistoryCorpus {
     ],
     // PJ-7 — the mock's one desktop, as the ledger's marks draw it
     desktops: [HistoryDevice(id: "dev-1", name: "studio", platform: "darwin", asleep: false, readAt: "11:42", isHome: true)])
-}
-
-// Item 362c (red) — the names `HistorySittingTests` calls, over the shapes as they stand: a pill made of a lead is
-// still the clock and the gap, and no part of a reply continues another. The shapes are the next commit's.
-extension HistoryDayPill {
-  public init(lead: String, after: String? = nil) {
-    self.init(time: lead, after: after ?? "")
-  }
-}
-
-extension HistoryTurn {
-  public var continues: Bool { false }
 }
