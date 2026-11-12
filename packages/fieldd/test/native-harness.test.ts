@@ -4,6 +4,8 @@
 // and as nothing at all here. An explicit `platform` argument is the whole point
 // of the signatures; this is what exercises it. And where the suites' own build
 // lands: in the checkout's own target, the one `nativeBinPath` reads.
+import type { ChildProcess } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,10 +13,12 @@ import { pipeEndpointFor, SOCKETS, TerminalRouteSnapshot } from "@vibefield/cont
 import { afterEach, describe, expect, it } from "vitest";
 import {
   endProcessesUnder,
+  endRow,
   floorEvidence,
   nativeBinPath,
   nativeBuildEnv,
   nativeEndpoint,
+  type RowEndIo,
   shortTmpRoot,
   waitWithEvidence,
 } from "./native-harness";
@@ -366,5 +370,65 @@ describe("a stalled real-floor wait says which step stalled", () => {
     expect((error as Error).message).toBe(
       "nothing did not hold within 1 ms\nthe row reported nothing it saw\nno floor scene was recorded for this row",
     );
+  });
+});
+
+describe("item 363 — a row with real floors ends in one order: stops, floors gone, roots swept, then removed", () => {
+  const ROOT = "/tmp/vf-seam-AbCdEf";
+
+  /** A stand-in floor: its exit comes `after` ms after its kill, or never when `after` is null. Nothing is spawned.
+   * The order is read as data, because the race itself cannot be made to happen on demand. */
+  function floorAndIo(after: number | null, log: string[]) {
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+    });
+    const io: RowEndIo = {
+      killTree: () => {
+        log.push("kill");
+        return new Promise<void>((resolve) => {
+          if (after === null) return;
+          setTimeout(() => {
+            child.signalCode = "SIGKILL";
+            log.push("exit");
+            resolve();
+          }, after);
+        });
+      },
+      sweep: async (root) => {
+        log.push(`sweep ${root}`);
+      },
+      remove: (root) => {
+        log.push(`remove ${root}`);
+      },
+    };
+    return { floor: { name: "the seam's floor", child: child as unknown as ChildProcess }, io };
+  }
+
+  it("runs the row's stops in reverse, then kills each floor and awaits its exit, then sweeps, then removes", async () => {
+    const log: string[] = [];
+    const { floor, io } = floorAndIo(5, log);
+    const stops = [
+      () => void log.push("stop first pushed"),
+      () => void log.push("stop last pushed"),
+    ];
+    await endRow({ stops, floors: [floor], roots: [ROOT] }, io);
+    expect(log).toEqual([
+      "stop last pushed",
+      "stop first pushed",
+      "kill",
+      "exit",
+      `sweep ${ROOT}`,
+      `remove ${ROOT}`,
+    ]);
+  });
+
+  it("fails the row by the floor's name when it outlives the bound, and still sweeps and then removes its root", async () => {
+    const log: string[] = [];
+    const { floor, io } = floorAndIo(null, log);
+    await expect(endRow({ stops: [], floors: [floor], roots: [ROOT] }, io, 20)).rejects.toThrow(
+      /the seam's floor did not exit within 20 ms/,
+    );
+    expect(log).toEqual(["kill", `sweep ${ROOT}`, `remove ${ROOT}`]);
   });
 });

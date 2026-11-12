@@ -6,35 +6,37 @@
 // this possible at all — the fixed 9410/9411 were the accidental machine-wide
 // mutex V5 named, and this test is the mutex's tombstone.
 import { type ChildProcess, spawn } from "node:child_process";
-import { rmSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { statSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { UserRecord } from "@vibefield/contracts";
 import { createUser, mintLockedUsersFile, userRootFor, usersFilePath } from "@vibefield/users";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
-import { nativeBinPath, shortTmpRoot, waitForMgmtEndpoint } from "./native-harness";
+import {
+  endRow,
+  nativeBinPath,
+  type RowFloor,
+  shortTmpRoot,
+  waitForMgmtEndpoint,
+} from "./native-harness";
 import { helloAs, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BIN = nativeBinPath(ROOT);
 
-let children: ChildProcess[] = [];
+let floors: RowFloor[] = [];
+let roots: string[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
 
 afterEach(async () => {
-  const fns = cleanup.reverse();
+  // Item 363: the row's end is native-harness's endRow.
+  const row = { stops: cleanup, floors, roots };
   cleanup = [];
-  for (const fn of fns) {
-    try {
-      await fn();
-    } catch {
-      /* already-stopped is fine */
-    }
-  }
-  for (const c of children) c.kill("SIGKILL");
-  children = [];
+  floors = [];
+  roots = [];
+  await endRow(row);
 });
 
 async function spawnNativeAt(dataDir: string): Promise<ChildProcess> {
@@ -47,7 +49,7 @@ async function spawnNativeAt(dataDir: string): Promise<ChildProcess> {
     },
     stdio: "ignore",
   });
-  children.push(child);
+  floors.push({ name: `the floor of users/${basename(dataDir)}`, child });
   await waitForMgmtEndpoint(dataDir, 15_000);
   return child;
 }
@@ -81,7 +83,7 @@ async function health(daemon: FielddDaemon): Promise<unknown> {
 describe("UA-5 — two resident pairs on one machine", () => {
   it("no port/socket/store collision, both answer concurrently, users.json untouched", async () => {
     const vfRoot = shortTmpRoot("vf-2p-");
-    cleanup.push(() => rmSync(vfRoot, { recursive: true, force: true }));
+    roots.push(vfRoot);
     const { file } = mintLockedUsersFile(vfRoot);
     const first = file.users[0];
     if (first === undefined) throw new Error("mint produced no user");

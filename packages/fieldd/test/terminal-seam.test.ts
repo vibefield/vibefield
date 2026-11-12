@@ -4,8 +4,7 @@
 // ticket attaches an external ghosttea client, the epoch path accepts
 // automation input, and terminate runs the real ladder. This is the seam half
 // of the spec's §9 NF-3 gate; the kill matrix proper is NF-4.
-import { type ChildProcess, spawn } from "node:child_process";
-import { rmSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
@@ -14,8 +13,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddConfig, type FielddDaemon } from "../src/index";
 import {
+  endRow,
   type FloorScene,
   nativeBinPath,
+  type RowFloor,
   shortTmpRoot,
   waitForMgmtEndpoint,
   waitWithEvidence,
@@ -31,7 +32,8 @@ const SHELL =
     ? (process.env["COMSPEC"] ?? "C:\\Windows\\System32\\cmd.exe")
     : "/bin/cat";
 
-let children: ChildProcess[] = [];
+let floors: RowFloor[] = [];
+let roots: string[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
 /** Item 68 — the row's latest daemon over its floor, for every wait's evidence (`boot` sets it), and when each floor
  * was spawned. */
@@ -41,24 +43,19 @@ const spawnedAt = new Map<string, number>();
 afterEach(async () => {
   scene = undefined;
   spawnedAt.clear();
-  // error-isolated: a rejecting cleanup must not leak the daemons behind it
-  const fns = cleanup.reverse();
+  // Item 363: the row's end is native-harness's endRow (its stops error-isolated, so a rejecting cleanup does not
+  // leak the daemons behind it).
+  const row = { stops: cleanup, floors, roots };
   cleanup = [];
-  for (const fn of fns) {
-    try {
-      await fn();
-    } catch {
-      /* already-stopped is fine */
-    }
-  }
-  for (const c of children) c.kill("SIGKILL");
-  children = [];
+  floors = [];
+  roots = [];
+  await endRow(row);
 });
 
 async function spawnNative(): Promise<string> {
   // the short-root rule (and why unix keeps /tmp) lives in native-harness.ts
   const dir = shortTmpRoot("vf-seam-");
-  cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+  roots.push(dir);
   spawnedAt.set(dir, Date.now());
   const child = spawn(BIN, [], {
     env: {
@@ -69,7 +66,7 @@ async function spawnNative(): Promise<string> {
     },
     stdio: "ignore",
   });
-  children.push(child);
+  floors.push({ name: "the seam's floor", child });
   await waitForMgmtEndpoint(dir, 15_000);
   return dir;
 }

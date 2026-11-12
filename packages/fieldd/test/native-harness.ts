@@ -261,6 +261,54 @@ export function removeTempRoot(dir: string): void {
   }
 }
 
+/** Item 363 — one floor of a row: the process, and the name a stuck exit is reported by. */
+export interface RowFloor {
+  readonly name: string;
+  readonly child: ChildProcess;
+}
+
+/** Item 363 — what a row leaves to its end: its own stops (daemons, sockets, clients; in the order pushed, run in
+ * reverse), the floors it spawned, and the harness temp roots they lived under. */
+export interface RowEnd {
+  readonly stops: ReadonlyArray<() => void | Promise<void>>;
+  readonly floors: readonly RowFloor[];
+  readonly roots: readonly string[];
+}
+
+/** The three acts a row's end is made of; native-harness.test.ts hands a recording one. */
+export interface RowEndIo {
+  killTree(child: ChildProcess): Promise<void>;
+  sweep(root: string): Promise<void>;
+  remove(root: string): void;
+}
+
+export const ROW_END_IO: RowEndIo = {
+  killTree: killDaemonTree,
+  sweep: (root) => endProcessesUnder(root),
+  remove: removeTempRoot,
+};
+
+/** Item 363 — end a row that spawned real floors. terminal-seam and two-pairs end their rows here.
+ *
+ * THE RED keeps today's order, as those two files ended a row before: the stops, then the roots removed, then each
+ * floor killed with nobody awaiting its exit, and no root swept. A floor or a terminal cell still alive when its root
+ * goes writes the root back: run345v3 kept two `/tmp/vf-seam-*` that way. */
+export async function endRow(
+  row: RowEnd,
+  io: RowEndIo = ROW_END_IO,
+  _boundMs = 5_000,
+): Promise<void> {
+  for (const stop of [...row.stops].reverse()) {
+    try {
+      await stop();
+    } catch {
+      /* already stopped */
+    }
+  }
+  for (const root of row.roots) io.remove(root);
+  for (const { child } of row.floors) void io.killTree(child);
+}
+
 /** `waitForEndpoint` for the management plane — the gate every native suite
  * opens with, since fieldd's first act is to pair over it. */
 export function waitForMgmtEndpoint(
