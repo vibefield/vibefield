@@ -8287,9 +8287,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - **On another Godview view** (the list, the rain, the timeline, the spend), in the Stories row's band, down to
         its reserve (108 on an island phone, §8 "The phone's Stories row"): under the row those views scroll and
         scrub with the same drag. ‹for James›: whether they take the whole page as the swarm does.
-      - **On History and Chat**, anywhere on the root while its list stands at its top (within 1); a list scrolled
-        down scrolls. While the pull has the finger the list under it does not scroll. An empty Chat's night has no
-        list, so it pulls from anywhere. A pushed screen (a project, a session, a thread) keeps its own scroll.
+      - **On History and Chat**, anywhere on the root, for a finger that comes down while its list rests at its top
+        (within 1). A list scrolled down scrolls; so does one still moving, or caught in flight, even where its
+        flight has reached the top (James, 11:20:08Z: "if i'm still scrolling the history items, it should not
+        trigger the pull down, only when i scroll all the way top i can pull down"). While the pull has the finger
+        the list under it does not scroll. An empty Chat's night has no list, so it pulls from anywhere. A pushed
+        screen (a project, a session, a thread) keeps its own scroll.
       *Corrected 2026-11-12 (item 348):* this said that on History and Chat "the root list overscrolls past its
       large title", and that on Field the drag "begins in the Stories row's band … outside a circle". On James's
       iPhone 14 Pro that band left the row's two ends and the 10 between its five circles: three drags of his were
