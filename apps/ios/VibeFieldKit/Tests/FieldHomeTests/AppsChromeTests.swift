@@ -89,4 +89,10 @@ struct AppsChromeTests {
     #expect(AppsGlassRow.foldedHeight == 30 && AppsGlassRow.foldedName == 13)
     #expect(AppsGlassRow.reducedFade == 0.14)
   }
+
+  @Test("item 273: the shelf's content starts 14 under the safe area its scroll view already insets; the still is the witness")
+  func shelfTopInset() {
+    let inset = AppsShelfChrome.topInset
+    #expect(inset == 14)
+  }
 }
