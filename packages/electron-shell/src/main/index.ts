@@ -6,7 +6,6 @@ import {
   APP_PREFERENCE_KEYS,
   AppPreferences,
   CONTRACTS_VERSION,
-  commitOfBuildId,
   DESKTOP_APP_ID,
   type DesktopShellState,
   DesktopShellState as DesktopShellStateSchema,
@@ -64,6 +63,7 @@ import {
   session,
   shell,
 } from "electron";
+import { aboutPanelOptions } from "./about-panel";
 import { applyDevelopmentDockIcon } from "./app-branding";
 import { installAppMenu } from "./app-menu";
 import type { AppMenuState } from "./app-menu-model";
@@ -2581,16 +2581,10 @@ async function main(
   // delay and a resume checks when the last check is stale (EDP §11.2, no interval stays alive). The apply waits for
   // WP12c's gate — nothing installs on a quit.
   const updateIdentity = readUpdateIdentity(resources);
-  // AU-4 (AU-G9) — About names the version and the commit its build id records: "Version 0.1.0-nightly.20261027
-  // (84509d6)". With no staged build id (development, a stage before WP12c) the commit is left to macOS. macOS only:
-  // the one app menu that carries About.
+  // AU-4 (AU-G9) and LP (Q3.2) — About's options come from about-panel.ts. macOS only: the one app menu that
+  // carries About.
   if (process.platform === "darwin") {
-    const commit = commitOfBuildId(updateIdentity?.buildId);
-    app.setAboutPanelOptions({
-      applicationName: "VibeField",
-      applicationVersion: app.getVersion(),
-      ...(commit !== undefined ? { version: commit } : {}),
-    });
+    app.setAboutPanelOptions(aboutPanelOptions(app.getVersion(), updateIdentity?.buildId));
   }
   // WP12c (L2b-ii, build-wp12-updater.md §10) — the apply's port: the census and the consented stop through the held
   // coordinator (from the stop on, nothing may start fieldd), Squirrel staged only after the stop, the quit flow's
