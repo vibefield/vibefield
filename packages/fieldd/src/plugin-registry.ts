@@ -120,6 +120,11 @@ export function contractsRangeSatisfied(version: string, range: string): boolean
 const sha256 = (text: string): string =>
   `sha256:${createHash("sha256").update(text).digest("hex")}`;
 
+/** A row's `manifestHash`: §9.2 canonicalize-then-hash, the emitter's own form. MK-O2 (2026-11-12): the installer
+ * holds a candidate's row to the manifest inside its verified artifact by this same hash. */
+export const manifestHashOf = (manifest: PluginManifestV1): string =>
+  sha256(canonicalJson(manifest));
+
 const summary = (kind: PluginErrorSummary["kind"], message: string): PluginErrorSummary => ({
   kind,
   message: message.slice(0, 500),
@@ -489,7 +494,7 @@ export class PluginRegistryService extends EventEmitter {
 
     const m: PluginManifestV1 = validation.manifest;
     collectContributes?.(m.id, m.contributes);
-    const hash = sha256(canonicalJson(m)); // §9.2 canonicalize-then-hash, the emitter's own form
+    const hash = manifestHashOf(m); // §9.2 canonicalize-then-hash, the emitter's own form
     const platforms = m.engines.platforms;
     const platformOk = platforms === undefined || platforms.includes(process.platform as "darwin");
     // engines.app is unchecked in P2 — fieldd does not know the app's version

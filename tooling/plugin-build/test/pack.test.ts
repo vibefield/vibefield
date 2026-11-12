@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
-import { packVfplugin, unpackVfplugin, VfpluginError } from "../src/pack";
+import { packVfplugin, readVfpluginEntry, unpackVfplugin, VfpluginError } from "../src/pack";
 import { tempDir } from "./temp-dir";
 
 // A minimal §5.2 bundle written to a fresh temp dir. Content is fixed so
@@ -243,5 +243,49 @@ describe("unpackVfplugin — hostile-entry refusals (the install security seam)"
     ]);
     await expect(unpackVfplugin(zip, dest)).rejects.toMatchObject({ code: "path-traversal" });
     expect(existsSync(join(dest, "good.txt"))).toBe(false);
+  });
+});
+
+// MK-O2 (2026-11-12): fieldd reads the install card's manifest from the
+// hash-checked bytes in memory, with every check the unpacker makes, never
+// from a copy on disk.
+describe("readVfpluginEntry — one entry, in memory", () => {
+  const data = Buffer.from("payload");
+  const refusal = (bytes: Buffer, name: string): string | undefined => {
+    try {
+      readVfpluginEntry(bytes, name);
+    } catch (error) {
+      return error instanceof VfpluginError ? error.code : "not a VfpluginError";
+    }
+    return undefined;
+  };
+
+  it("reads a packed bundle's manifest byte for byte, and writes nothing", async () => {
+    const { bytes } = await packVfplugin({ rootDir: writeBundle(BUNDLE) });
+    const manifest = readVfpluginEntry(bytes, "vibefield.plugin.json");
+    expect(manifest?.equals(Buffer.from(BUNDLE["vibefield.plugin.json"] as string))).toBe(true);
+    expect(existsSync(resolve(sep, "vfplugin-in-memory"))).toBe(false);
+  });
+
+  it("answers null for a name the container does not hold", async () => {
+    const { bytes } = await packVfplugin({ rootDir: writeBundle(BUNDLE) });
+    expect(readVfpluginEntry(bytes, "dist/missing.js")).toBeNull();
+  });
+
+  it("refuses what the unpacker refuses: a traversal, a symlink, a CRC that does not match", () => {
+    const traversal = buildZip([{ name: "../escape.txt", data }]);
+    const symlink = buildZip([{ name: "link", data, externalAttrs: 0xa1ff0000 }]);
+    const badCrc = buildZip([{ name: "ok.txt", data, crc: 0xdeadbeef }]);
+    expect(refusal(traversal, "../escape.txt")).toBe("path-traversal");
+    expect(refusal(symlink, "link")).toBe("symlink");
+    expect(refusal(badCrc, "ok.txt")).toBe("crc-mismatch");
+  });
+
+  it("checks the whole container first: a hostile entry elsewhere refuses the read", () => {
+    const zip = buildZip([
+      { name: "vibefield.plugin.json", data },
+      { name: "../escape.txt", data },
+    ]);
+    expect(refusal(zip, "vibefield.plugin.json")).toBe("path-traversal");
   });
 });

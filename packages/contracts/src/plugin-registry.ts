@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { SemverString } from "./envelope";
-import { RegistryProvenance } from "./plugin-distribution";
+import { PluginsInstallCandidate, RegistryProvenance } from "./plugin-distribution";
 import { DeniedCapability } from "./plugin-runtime";
 import {
   BehaviorContribution,
@@ -218,6 +218,21 @@ export const PluginsInstallResult = z.union([
   z.object({ id: PluginId }).passthrough(),
 ]);
 export type PluginsInstallResult = z.infer<typeof PluginsInstallResult>;
+
+/** MK-O2 (2026-11-12): what plugins.install.prepare answers: the candidate's handle and its row, the row the registry
+ * would load, built from the downloaded files once fieldd held them to the manifest inside the bytes the signed list
+ * pins. The install card is read from it. Nothing is installed until plugins.install.commit, which answers as
+ * plugins.install does. Named shape + explicit annotation, as PluginRegistrySnapshot's: the inferred type of an
+ * object holding a PluginRecord passes tsc's serialization cap (TS7056). */
+const PluginsInstallPrepareResultShape = {
+  candidate: PluginsInstallCandidate,
+  record: PluginRecord,
+};
+export const PluginsInstallPrepareResult: z.ZodObject<
+  typeof PluginsInstallPrepareResultShape,
+  "passthrough"
+> = z.object(PluginsInstallPrepareResultShape).passthrough();
+export type PluginsInstallPrepareResult = z.infer<typeof PluginsInstallPrepareResult>;
 
 // --- P8b: approved plugin module URLs (ESP §8.4) ------------------------------
 //

@@ -1664,6 +1664,30 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // MK-O2 (2026-11-12) — the install card's doors (DESIGN.md §8 "Every install asks first"): prepare downloads and
+  // stages a plugin this desktop does not have and answers its row for the card; commit installs what the card
+  // showed; discard throws it away. plugins.manage like plugins.install, and local like it.
+  defineMethod({
+    surface: "product",
+    method: "plugins.install.prepare",
+    scope: "plugins.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.install.commit",
+    scope: "plugins.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.install.discard",
+    scope: "plugins.manage",
+    idempotent: true,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "plugins.uninstall",

@@ -143,7 +143,10 @@ import {
   PluginsEnableParams,
   PluginsGetParams,
   PluginsGrantsSetParams,
+  PluginsInstallCommitParams,
+  PluginsInstallDiscardParams,
   PluginsInstallParams,
+  PluginsInstallPrepareParams,
   PluginsOpenRendererSessionParams,
   type PluginsOpenRendererSessionResult,
   PluginsReloadParams,
@@ -341,6 +344,7 @@ import {
 import { PeerLink } from "./peer-link";
 import { PluginCatalogService } from "./plugin-catalog";
 import { RegistryInstallService } from "./plugin-install";
+import { InstallCards } from "./plugin-install-cards";
 import { PluginModuleAuthority } from "./plugin-modules";
 import { PluginRegistryService } from "./plugin-registry";
 import { PluginRuntimeDiagnostics } from "./plugin-runtime-diagnostics";
@@ -6828,6 +6832,121 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         },
       );
       return result.record;
+    });
+    // MK-O2 (2026-11-12) — the install card's doors (DESIGN.md §8 "Every install asks first"). prepare downloads,
+    // verifies and stages a plugin this desktop does not have, holds it for its card, and answers its row; commit
+    // installs what the card showed; discard throws it away. Each is audited with ids, fields and reason codes
+    // alone. An update keeps plugins.install's one press, and an install arriving from another desktop shows no
+    // card (the reconciler calls the installer itself). commit and discard take their card only inside the effect,
+    // once the attempt row is written: an audit that fails before any effect leaves the card waiting.
+    const installCards = new InstallCards((prepared) => installer.discard(prepared));
+    api.register("plugins.install.prepare", async (ctx, params) => {
+      const parsed = PluginsInstallPrepareParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { id, version? }", false);
+      const { id, version } = parsed.data;
+      return await audit.required(
+        ctx,
+        {
+          action: "plugin.install.prepare",
+          target: { kind: "plugin", id },
+          attrs: { requestedVersion: version ?? "latest", source: "registry" },
+        },
+        async () => {
+          if (plugins.get(id) !== undefined)
+            throw new RpcCallError(
+              "PRECONDITION_FAILED",
+              "This plugin is already installed.",
+              false,
+            );
+          const prepared = await installer.prepare({
+            id,
+            ...(version !== undefined ? { version } : {}),
+          });
+          const candidate = await installCards.hold(prepared);
+          return { candidate, record: prepared.runtime.record };
+        },
+        ({ candidate, record }) => ({
+          attrs: {
+            candidate,
+            version: record.version,
+            manifestHash: record.manifestHash,
+            artifactSha256: record.registry?.artifactSha256 ?? "unknown",
+          },
+        }),
+      );
+    });
+    api.register("plugins.install.commit", async (ctx, params) => {
+      const parsed = PluginsInstallCommitParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { candidate }", false);
+      const { candidate } = parsed.data;
+      const waiting = installCards.peek(candidate);
+      const result = await audit.required(
+        ctx,
+        {
+          action: "plugin.install",
+          target: { kind: "plugin", id: waiting?.id ?? "unknown-candidate" },
+          attrs: { candidate, source: "registry", card: true },
+        },
+        async () => {
+          const prepared = installCards.take(candidate);
+          if (prepared === undefined)
+            throw new RpcCallError(
+              "NOT_FOUND",
+              "This install took too long. Press Install again.",
+              false,
+            );
+          try {
+            await installer.commit(prepared);
+          } catch (error) {
+            await installer.discard(prepared).catch(() => false);
+            throw error;
+          }
+          const record = plugins.get(prepared.id);
+          if (record?.enabled === true && record.service !== "none")
+            void serviceHost?.restartFresh(prepared.id).catch(() => undefined);
+          if (record !== undefined) void reconciler?.publish(record, "install"); // §16.6
+          return { record: record ?? { id: prepared.id } };
+        },
+        ({ record }) => {
+          const installed = record as {
+            version?: string;
+            manifestHash?: string;
+            registry?: { artifactSha256?: string; publisher?: string };
+          };
+          return {
+            attrs: {
+              version: installed.version ?? "unknown",
+              manifestHash: installed.manifestHash ?? "unknown",
+              artifactSha256: installed.registry?.artifactSha256 ?? "unknown",
+              publisher: installed.registry?.publisher ?? "unknown",
+            },
+          };
+        },
+      );
+      return result.record;
+    });
+    api.register("plugins.install.discard", async (ctx, params) => {
+      const parsed = PluginsInstallDiscardParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { candidate }", false);
+      const { candidate } = parsed.data;
+      const waiting = installCards.peek(candidate);
+      return await audit.required(
+        ctx,
+        {
+          action: "plugin.install.cancel",
+          target: { kind: "plugin", id: waiting?.id ?? "unknown-candidate" },
+          attrs: { candidate },
+        },
+        async () => {
+          const prepared = installCards.take(candidate);
+          if (prepared !== undefined) await installer.discard(prepared).catch(() => false);
+          return { discarded: prepared !== undefined };
+        },
+        ({ discarded }) => ({ attrs: { discarded } }),
+      );
     });
     api.register("plugins.uninstall", async (ctx, params) => {
       const parsed = PluginsUninstallParams.safeParse(params);

@@ -341,20 +341,16 @@ function isSymlinkAttrs(externalAttrs: number): boolean {
   return ((externalAttrs >>> 16) & 0xf000) === 0xa000;
 }
 
-/**
- * Unpack a `.vfplugin` produced by {@link packVfplugin} into `destDir`,
- * validating the container and refusing any entry that would escape it.
- *
- * The central directory is authoritative; each entry's local header is
- * cross-checked (signature + name) and its stored CRC-32 must match the
- * bytes written. Absolute paths, `..` traversal, backslash names, directory
- * entries, and symlink modes are refused before any write. Round-trips the
- * writer byte-for-byte.
- */
-export async function unpackVfplugin(
-  bytes: Buffer,
-  destDir: string,
-): Promise<UnpackVfpluginResult> {
+interface CheckedEntry {
+  target: string;
+  name: string;
+  data: Buffer;
+}
+
+// Every entry of a container, each checked as unpackVfplugin's comment below
+// says, the whole container before any caller sees one. `resolvedDest` is
+// where they would be written, for the escape check; nothing is written here.
+function checkedEntries(bytes: Buffer, resolvedDest: string): CheckedEntry[] {
   const eocd = findEocd(bytes);
   const total = bytes.readUInt16LE(eocd + 10);
   const centralSize = bytes.readUInt32LE(eocd + 12);
@@ -362,8 +358,7 @@ export async function unpackVfplugin(
   if (centralOffset + centralSize > eocd || centralOffset > bytes.length)
     throw new VfpluginError("central directory out of bounds", "malformed");
 
-  const resolvedDest = resolve(destDir);
-  const written: { target: string; name: string; data: Buffer }[] = [];
+  const written: CheckedEntry[] = [];
 
   let p = centralOffset;
   for (let i = 0; i < total; i++) {
@@ -423,6 +418,24 @@ export async function unpackVfplugin(
 
     written.push({ target, name, data: Buffer.from(data) });
   }
+  return written;
+}
+
+/**
+ * Unpack a `.vfplugin` produced by {@link packVfplugin} into `destDir`,
+ * validating the container and refusing any entry that would escape it.
+ *
+ * The central directory is authoritative; each entry's local header is
+ * cross-checked (signature + name) and its stored CRC-32 must match the
+ * bytes written. Absolute paths, `..` traversal, backslash names, directory
+ * entries, and symlink modes are refused before any write. Round-trips the
+ * writer byte-for-byte.
+ */
+export async function unpackVfplugin(
+  bytes: Buffer,
+  destDir: string,
+): Promise<UnpackVfpluginResult> {
+  const written = checkedEntries(bytes, resolve(destDir));
 
   // All entries validated before any write: a container that fails halfway
   // never leaves a partial install on disk.
@@ -434,4 +447,19 @@ export async function unpackVfplugin(
   return {
     entries: written.map((w) => w.name).sort((a, b) => bytewise(Buffer.from(a), Buffer.from(b))),
   };
+}
+
+/**
+ * MK-O2 (2026-11-12): one entry of a `.vfplugin`, read in memory and never
+ * written. The whole container is checked first, every entry as
+ * {@link unpackVfplugin} checks it, so a container that would not unpack is
+ * refused here too. Null when it holds no entry by that name. fieldd reads an
+ * artifact's manifest this way, from the bytes the signed list pins, never
+ * from a copy on disk.
+ */
+export function readVfpluginEntry(bytes: Buffer, name: string): Buffer | null {
+  // A stand-in root: the escape check needs one, and nothing is written to it.
+  const entries = checkedEntries(bytes, resolve(sep, "vfplugin-in-memory"));
+  const entry = entries.find((e) => e.name === name);
+  return entry === undefined ? null : entry.data;
 }

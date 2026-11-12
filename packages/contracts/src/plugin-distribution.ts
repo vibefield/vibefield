@@ -357,6 +357,35 @@ export const PluginsInstallParams = z
   .passthrough();
 export type PluginsInstallParams = z.infer<typeof PluginsInstallParams>;
 
+/** MK-O2 (2026-11-12): the install card's doors (DESIGN.md §8 "Every install asks first"). `prepare` downloads,
+ * verifies and stages a plugin this desktop does not have, and answers its row, which the card is read from; `commit`
+ * installs what the card showed; `discard` throws the download away. The candidate is fieldd's opaque handle, held in
+ * its memory for fifteen minutes. It is not a secret: a caller that may use these doors may install directly. */
+export const PluginsInstallCandidate = z.string().regex(/^[0-9a-f]{32}$/);
+export type PluginsInstallCandidate = z.infer<typeof PluginsInstallCandidate>;
+
+export const PluginsInstallPrepareParams = z
+  .object({
+    id: PluginId,
+    version: SemverString.optional(),
+  })
+  .passthrough();
+export type PluginsInstallPrepareParams = z.infer<typeof PluginsInstallPrepareParams>;
+
+export const PluginsInstallCommitParams = z
+  .object({ candidate: PluginsInstallCandidate })
+  .passthrough();
+export type PluginsInstallCommitParams = z.infer<typeof PluginsInstallCommitParams>;
+
+export const PluginsInstallDiscardParams = z
+  .object({ candidate: PluginsInstallCandidate })
+  .passthrough();
+export type PluginsInstallDiscardParams = z.infer<typeof PluginsInstallDiscardParams>;
+
+/** false when the handle held nothing: never prepared, already committed, discarded, or past its fifteen minutes */
+export const PluginsInstallDiscardResult = z.object({ discarded: z.boolean() }).passthrough();
+export type PluginsInstallDiscardResult = z.infer<typeof PluginsInstallDiscardResult>;
+
 export const PluginsUninstallParams = z
   .object({
     id: PluginId,

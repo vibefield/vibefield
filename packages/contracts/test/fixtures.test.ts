@@ -270,11 +270,16 @@ import {
 import {
   BundledPluginIndex,
   PluginsCatalog,
+  PluginsInstallDiscardResult,
   RegistryIndex,
   RegistryIndexV2,
   RegistryProvenance,
 } from "../src/plugin-distribution";
-import { PluginRegistrySnapshot, PluginsInstallResult } from "../src/plugin-registry";
+import {
+  PluginRegistrySnapshot,
+  PluginsInstallPrepareResult,
+  PluginsInstallResult,
+} from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
 import {
   ProjectChangesDelta,
@@ -605,6 +610,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "registry-index-v1": RegistryIndex,
   "plugins-catalog": PluginsCatalog,
   "plugins-install-result": PluginsInstallResult,
+  // MK-O2 (2026-11-12): the install card's prepare answer (a handle and the candidate's row) and its discard's
+  "plugins-install-prepare-result": PluginsInstallPrepareResult,
+  "plugins-install-discard-result": PluginsInstallDiscardResult,
   "registry-provenance": RegistryProvenance,
   "update-policy": UpdatePolicy,
   // WP12a (build-wp12-updater.md D4): the channel heads every release carries (refusals in trust-root.test.ts).

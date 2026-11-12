@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   CONTRACTS_VERSION,
+  PLUGIN_LIMITS,
   type PluginsInstallParams,
   type PluginsUpdatesCheckResult,
   type PluginUpdateInfo,
@@ -13,9 +14,10 @@ import {
   type RegistryListedAs,
   type RegistryRelease,
   registryListedAs,
+  validatePluginManifest,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import { unpackVfplugin, verifyRegistryIndex } from "@vibefield/plugin-build";
+import { readVfpluginEntry, unpackVfplugin, verifyRegistryIndex } from "@vibefield/plugin-build";
 import { RpcCallError } from "./native-link";
 import {
   type ImmutablePluginArtifact,
@@ -25,6 +27,7 @@ import {
 } from "./plugin-artifact-store";
 import {
   contractsRangeSatisfied,
+  manifestHashOf,
   type PluginRegistryCandidate,
   type PluginRegistryService,
 } from "./plugin-registry";
@@ -89,6 +92,39 @@ export interface PreparedRegistryInstall {
   readonly listedAs: RegistryListedAs;
   /** the `generatedAt` of the index the entry came from, for a refusal's data */
   readonly indexGeneratedAt: number;
+  /** MK-O2 (2026-11-12): the canonical hash of the manifest inside the bytes the signed list pins, read in memory. The
+   * candidate's row, which the install card is read from, is held to it at prepare and again at commit. */
+  readonly pinnedManifestHash: string;
+}
+
+const MANIFEST_FILE = "vibefield.plugin.json";
+
+/** MK-O2: a manifest's canonical hash (the row's own `manifestHash`), or null when it does not parse and validate */
+function hashOfManifestBytes(bytes: Buffer): string | null {
+  if (bytes.length > PLUGIN_LIMITS.MANIFEST_MAX_BYTES) return null;
+  try {
+    const validation = validatePluginManifest(JSON.parse(bytes.toString("utf8")));
+    return validation.ok ? manifestHashOf(validation.manifest) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** MK-O2: the hash of the manifest a `.vfplugin` carries, read in memory and never written. Null when it carries
+ * none that validates: the steps after refuse such an artifact as they always have. */
+function pinnedManifestHashOf(artifactBytes: Buffer): string | null {
+  try {
+    const raw = readVfpluginEntry(artifactBytes, MANIFEST_FILE);
+    return raw === null ? null : hashOfManifestBytes(raw);
+  } catch {
+    return null;
+  }
+}
+
+/** MK-O2: the hash of the manifest in a revision slot on disk, read at most its cap, or null */
+async function slotManifestHash(root: string): Promise<string | null> {
+  const read = await readFileCapped(join(root, MANIFEST_FILE), PLUGIN_LIMITS.MANIFEST_MAX_BYTES);
+  return read.ok ? hashOfManifestBytes(read.bytes) : null;
 }
 
 const sha256hex = (bytes: Buffer): string =>
@@ -369,6 +405,9 @@ export class RegistryInstallService {
         { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
       );
     }
+    // MK-O2 (2026-11-12): the manifest inside the bytes the signed list pins, read in memory and never from a copy on
+    // disk. The candidate's row, which the install card is read from, is held to it below and again at commit.
+    const pinnedManifestHash = pinnedManifestHashOf(artifactBytes);
 
     const base = await this.artifacts.current(params.id);
     const baseSlot = base?.pointer.slot ?? null;
@@ -430,6 +469,8 @@ export class RegistryInstallService {
         artifactSha256: artifact.artifactSha256,
         signed: signedCopies,
       });
+      if (pinnedManifestHash === null || runtime.record.manifestHash !== pinnedManifestHash)
+        throw this.cardMismatch(params.id, "prepare");
       return {
         id: params.id,
         version: release.version,
@@ -439,6 +480,7 @@ export class RegistryInstallService {
         runtime,
         listedAs,
         indexGeneratedAt: index.generatedAt,
+        pinnedManifestHash,
       };
     } catch (error) {
       await this.artifacts.discard(artifact).catch(() => false);
@@ -454,6 +496,11 @@ export class RegistryInstallService {
       ? candidate.baseCommitEpoch
       : candidate.baseCommitEpoch + 1,
   ): Promise<{ id: string; version: string }> {
+    // MK-O2 (2026-11-12): the slot's manifest is held to the pinned one again before the pointer moves. A person's
+    // install card can stand between prepare and commit, and the slot is a folder a process running as the same user
+    // can write. A refusal here is a plain error, as the gate's below is.
+    if ((await slotManifestHash(candidate.artifact.root)) !== candidate.pinnedManifestHash)
+      throw this.cardMismatch(candidate.id, "commit");
     // MK-2c (2026-11-11, G2): the gate is asked again with the verdict carried from prepare, before the pointer
     // moves, since the switch can close between the two (the PRC-5c barrier). A refusal here is a plain error, so a
     // coordinated update recovers its retained old and discards the candidate.
@@ -477,6 +524,22 @@ export class RegistryInstallService {
 
   async discard(candidate: PreparedRegistryInstall): Promise<boolean> {
     return await this.artifacts.discard(candidate.artifact);
+  }
+
+  /** MK-O2 (2026-11-12): a candidate whose manifest on disk is not the one inside its verified artifact is refused,
+   * in words that name no path. */
+  private cardMismatch(pluginId: string, at: "prepare" | "commit"): RpcCallError {
+    this.log.warn(
+      "fieldd.plugin_install.card_mismatch",
+      "The candidate's manifest on disk is not the one inside the verified artifact; refused",
+      { pluginId, at },
+    );
+    return new RpcCallError(
+      "PRECONDITION_FAILED",
+      "Couldn't install this plugin. Nothing was changed.",
+      false,
+      { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
+    );
   }
 
   /** MK-2c (2026-11-11, G1): a community plugin installs only while community plugins are allowed; VibeField's
