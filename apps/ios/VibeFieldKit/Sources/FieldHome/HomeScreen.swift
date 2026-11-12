@@ -132,8 +132,10 @@ public struct HomeScreen: View {
   /// MA-6d — the door to the apps: the account's ledger, the drop, the pull and the first peek.
   @State private var appsDoor = AppsDoorModel(store: HomeScreen.appsCuesStore)
   /// A drag on Field: undecided (nil), the door's (true) or the swarm's (false), said once.
-  @State private var appsFieldDrag: Bool?
-  @State private var appsWidth: CGFloat = 402
+  /// The drag that is down on a tab: undecided (nil), the door's (true) or the page's own (false), said once.
+  @State private var appsPulling: Bool?
+  /// Item 348 — whether the swarm has taken the finger: a pull never starts on a bubble.
+  @State private var swarmTouch = SwarmTouch()
   @State private var appsHeight: CGFloat = 874
   /// MA-6e — the previews this phone holds, by digest.
   @State private var appsPreviews = AppsPreviews(directory: HomeScreen.appsPreviewsDirectory)
@@ -495,7 +497,8 @@ public struct HomeScreen: View {
         // Q4 (a): the bloom opens the launch sheet on that desktop and profile
         beginCreate(fieldContext(desktop: choice.desktop, profileSet: choice.profile))
       },
-      recede: GodviewRecede.swarm(bubbles, lens: lens.recedeLens)
+      recede: GodviewRecede.swarm(bubbles, lens: lens.recedeLens),
+      touch: swarmTouch
     ) {
       chrome
     }
@@ -940,15 +943,19 @@ public struct HomeScreen: View {
       .onChange(of: history.path) { history.barMinimized = false }
   }
 
-  /// The pages, the pull's follow and the card they recede to, over the shelf.
+  /// The pages in their one card, which the pull moves and the open shelf recedes, over the shelf.
   private var tabPages: some View {
     ZStack {
       fieldTab.page(visible: selectedTab == .field)
       historyTab.page(visible: selectedTab == .history)
       chatTab.page(visible: selectedTab == .chat)
     }
-    .modifier(AppsPullFollow(door: appsDoor, onField: selectedTab == .field))
-    .modifier(AppsRecededCard(open: appsDoor.shelfOpen, screen: appsHeight, onBack: { closeAppsShelf() }))
+    // the door's drag is the card's alone: a list under it stops scrolling for as long as it lasts
+    .scrollDisabled(appsPulling == true)
+    .simultaneousGesture(appsPull, including: appsCalm ? .all : .subviews)
+    // the bar is in the card with its pages: the screen recedes as one picture
+    .overlay { barWhileNoShelf }
+    .modifier(AppsCard(door: appsDoor, bounds: appsHeight, safeTop: safeTop, onBack: { closeAppsShelf() }))
     .background { appsShelfLayer }
   }
 
@@ -959,7 +966,6 @@ public struct HomeScreen: View {
       .background { metersHooks }
       .background { appsHooks }
       .overlay(alignment: .top) { appsPour }
-      .overlay { barWhileNoShelf }
       .overlay { faceHoldOverlay }
       .overlay(alignment: .bottom) { chatNoteOverlay }
       .overlay(alignment: .top) { appsDropOverlay }
@@ -1004,7 +1010,6 @@ public struct HomeScreen: View {
   private var fieldTab: some View {
     stage
       .ignoresSafeArea(.container, edges: [.top, .bottom])
-      .simultaneousGesture(appsFieldPull, including: appsCalm ? .all : .subviews)
   }
 
   private var historyTab: some View {
@@ -1012,7 +1017,7 @@ public struct HomeScreen: View {
       historyDesktops.need(need)
     }
     .environment(\.historyActs, historyActs)
-    .environment(\.topPull, appsTopPull)
+    .environment(\.topPull, TopPull(atTop: { [appsDoor] atTop in appsDoor.historyAtTop = atTop }))
     .safeAreaInset(edge: .bottom, spacing: 0) {
       Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing || slotProject != nil || slotSession != nil))
     }
@@ -1031,7 +1036,7 @@ public struct HomeScreen: View {
       paneOpens: { key in bubbles.contains { $0.runKey == key } },
       nightRuns: chatNightRuns
     )
-    .environment(\.topPull, appsTopPull)
+    .environment(\.topPull, TopPull(atTop: { [appsDoor] atTop in appsDoor.chatAtTop = atTop }))
     .safeAreaInset(edge: .bottom, spacing: 0) {
       // a thread's composer takes the bar's place: no clearance under it
       Color.clear.frame(height: chatThread == nil ? AppBar.clearance(homeInset: homeInset, stepper: false) : 0)
@@ -1286,11 +1291,10 @@ public struct HomeScreen: View {
     AppsStripContent.of(reading: apps.reading, opened: appsDoor.cues.opened, here: Self.appsHere)?.recent ?? []
   }
 
-  /// The door's readings, its two timers and the screen's width for the Stories row's circles.
+  /// The door's readings, its two timers and the screen's height for the receded card.
   private var appsHooks: some View {
     GeometryReader { geo in
       Color.clear
-        .onChange(of: geo.size.width, initial: true) { _, width in appsWidth = width }
         .onChange(of: geo.size.height, initial: true) { _, height in appsHeight = height }
     }
     .onAppear { appsDoor.haptic = { InputHaptics.arm() } }
@@ -1344,30 +1348,31 @@ public struct HomeScreen: View {
     .ignoresSafeArea(.container, edges: .top)
   }
 
-  /// History's and Chat's root lists, overscrolled past their tops.
-  private var appsTopPull: TopPull {
-    let calm = appsCalm
-    return TopPull(
-      moved: { depth in if calm { appsDoor.moved(to: depth) } },
-      released: { finishAppsPull() })
+  /// What a drag on the tab that stands starts on (item 348).
+  private var appsGround: AppsPull.Ground {
+    switch selectedTab {
+    case .field:
+      godviewView == .swarm
+        ? .swarm(taken: swarmTouch.isTaken || faceHold.held != nil)
+        : .band(reserve: GodviewStories.reserve(safeTop: safeTop))
+    case .history: .list(atTop: appsDoor.historyAtTop)
+    case .chat: .list(atTop: appsDoor.chatAtTop)
+    }
   }
 
-  /// Field's pull: decided once, then the finger's. Every other touch stays the swarm's and the circles'.
-  private var appsFieldPull: some Gesture {
+  /// The pull, the same on every tab: decided once, then the finger's. A drag it does not take stays the page's.
+  private var appsPull: some Gesture {
     DragGesture(minimumDistance: 1, coordinateSpace: .global)
       .onChanged { value in
-        if appsFieldDrag == nil, AppsPull.fieldDecides(value.translation) {
-          let onCircle = AppsPull.onCircle(
-            start: value.startLocation, count: GodviewViewChoice.shown.count, width: appsWidth, safeTop: safeTop)
-          appsFieldDrag = AppsPull.fieldBegins(
-            start: value.startLocation, translation: value.translation, safeTop: safeTop,
-            reserve: GodviewStories.reserve(safeTop: safeTop), onCircle: onCircle)
+        if appsPulling == nil, AppsPull.decides(value.translation) {
+          appsPulling = AppsPull.begins(
+            start: value.startLocation, translation: value.translation, safeTop: safeTop, ground: appsGround)
         }
-        if appsFieldDrag == true { appsDoor.moved(to: value.translation.height) }
+        if appsPulling == true { appsDoor.moved(to: value.translation.height) }
       }
       .onEnded { _ in
-        if appsFieldDrag == true { finishAppsPull() }
-        appsFieldDrag = nil
+        if appsPulling == true { finishAppsPull() }
+        appsPulling = nil
       }
   }
 

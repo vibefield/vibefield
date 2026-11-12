@@ -14,7 +14,7 @@ enum AppsPull {
   static let commit: CGFloat = 132
   /// Past `commit` the tab follows at this share of the finger's travel: a linear factor, not a curve.
   static let rubber: CGFloat = 1.0 / 3.0
-  /// On Field: the drag begins once it has travelled this far down, more than `startRatio` times as far as across.
+  /// The drag begins once it has travelled this far down, more than `startRatio` times as far as across.
   static let startTravel: CGFloat = 12
   static let startRatio: CGFloat = 2
   /// The Recent icons pour out of the island at this size, toward a row this far apart.
@@ -46,13 +46,74 @@ enum AppsPull {
 
   static func opens(releasedAt drag: CGFloat) -> Bool { drag >= commit }
 
-  /// Whether a drag on Field is the door's: it starts below the status bar (above it is the system's), inside the
-  /// Stories row's band, outside a circle, and has gone far enough down.
-  static func fieldBegins(
-    start: CGPoint, translation: CGSize, safeTop: CGFloat, reserve: CGFloat, onCircle: Bool
-  ) -> Bool {
-    guard start.y >= safeTop, start.y <= reserve, !onCircle else { return false }
+  /// What a drag starts on (item 348).
+  enum Ground: Equatable {
+    /// Field's swarm: any start but one the swarm has taken (a finger on a bubble, a hold that opened).
+    case swarm(taken: Bool)
+    /// Another Godview view, which scrolls or scrubs under the row: the Stories row's band, down to its reserve.
+    case band(reserve: CGFloat)
+    /// History's or Chat's root: while its list stands at its top.
+    case list(atTop: Bool)
+  }
+
+  /// Whether a drag is the door's: it starts below the status bar (above it is the system's), on ground that gives
+  /// it, and has gone far enough down.
+  static func begins(start: CGPoint, translation: CGSize, safeTop: CGFloat, ground: Ground) -> Bool {
+    guard start.y >= safeTop else { return false }
+    switch ground {
+    case .swarm(let taken): if taken { return false }
+    case .band(let reserve): if start.y > reserve { return false }
+    case .list(let atTop): if !atTop { return false }
+    }
     return translation.height >= startTravel && translation.height > startRatio * abs(translation.width)
+  }
+
+  /// How far along the pull is, 0 at rest to 1 at the commit.
+  static func progress(_ drag: CGFloat) -> CGFloat { min(1, max(0, drag) / commit) }
+
+  /// The one card the three tabs and their bar stand in (item 348): the whole screen, drawn smaller and lower, never
+  /// laid out again. Whole at rest, at the foot while the shelf is open, and on its way from the one to the other
+  /// while it is pulled.
+  struct Card: Equatable {
+    /// About the screen's top.
+    var scale: CGFloat
+    /// Its top, from the screen's.
+    var offset: CGFloat
+    /// Its top corners.
+    var radius: CGFloat
+    /// How much of its shadow and its grabber shows, 0 to 1.
+    var shade: Double
+
+    /// Whole: the screen as it is.
+    static let rest = Card(scale: 1, offset: 0, radius: 0, shade: 0)
+
+    /// At the foot, `cardShowing` of it above the home indicator's inset. `bounds` is the pages' height, the safe
+    /// area's.
+    static func receded(bounds: CGFloat, safeTop: CGFloat) -> Card {
+      Card(
+        scale: AppsShelfChrome.cardScale, offset: max(0, safeTop) + AppsShelfChrome.cardOffset(screen: bounds),
+        radius: AppsShelfChrome.cardRadius, shade: 1)
+    }
+
+    /// Pulled `drag` down: its top follows the finger while it shrinks and rounds toward the receded card, whose
+    /// scale and corners it has at the commit.
+    static func pulled(_ drag: CGFloat) -> Card {
+      guard drag > 0 else { return rest }
+      let p = AppsPull.progress(drag)
+      return Card(
+        scale: 1 - (1 - AppsShelfChrome.cardScale) * p, offset: AppsPull.offset(drag),
+        radius: AppsShelfChrome.cardRadius * p, shade: Double(p))
+    }
+
+    /// The first peek: the card as at the commit, `AppsPeek.offset` down.
+    static let peek = Card(
+      scale: AppsShelfChrome.cardScale, offset: AppsPeek.offset, radius: AppsShelfChrome.cardRadius, shade: 1)
+
+    static func standing(open: Bool, peeking: Bool, drag: CGFloat, bounds: CGFloat, safeTop: CGFloat) -> Card {
+      if open { return receded(bounds: bounds, safeTop: safeTop) }
+      if peeking { return peek }
+      return pulled(drag)
+    }
   }
 
   /// Where the `index`th of `count` icons lands, from the row's centre.
@@ -235,34 +296,4 @@ enum AppsDot {
   static let inset: CGFloat = 12
   /// Ringed in the bar's glass.
   static let ring: CGFloat = 2
-}
-
-// Item 348 (red) — the one pull's rule and the one card's form, as stubs: no ground gives the pull, and the card never
-// leaves its rest. AppsCardTests' rows compile against them and fail at their assertions.
-extension AppsPull {
-  /// What a drag starts on.
-  enum Ground: Equatable {
-    case swarm(taken: Bool)
-    case band(reserve: CGFloat)
-    case list(atTop: Bool)
-  }
-
-  static func begins(start: CGPoint, translation: CGSize, safeTop: CGFloat, ground: Ground) -> Bool { false }
-
-  /// The tab as the one card the three pages stand in.
-  struct Card: Equatable {
-    var scale: CGFloat
-    var offset: CGFloat
-    var radius: CGFloat
-    var shade: Double
-
-    static let rest = Card(scale: 1, offset: 0, radius: 0, shade: 0)
-    static let peek = rest
-
-    static func receded(bounds: CGFloat, safeTop: CGFloat) -> Card { rest }
-
-    static func pulled(_ drag: CGFloat) -> Card { rest }
-
-    static func standing(open: Bool, peeking: Bool, drag: CGFloat, bounds: CGFloat, safeTop: CGFloat) -> Card { rest }
-  }
 }

@@ -245,26 +245,21 @@ struct AppsDoorModelTests {
 
   // MARK: - The geometry
 
-  @Test("a drag on Field is decided once it has gone 12 either way")
+  @Test("a drag is decided once it has gone 12 either way")
   func decides() {
-    #expect(AppsPull.fieldDecides(CGSize(width: 1, height: 11)) == false)
-    #expect(AppsPull.fieldDecides(CGSize(width: 0, height: 12)))
-    #expect(AppsPull.fieldDecides(CGSize(width: 13, height: 8)))
-    #expect(AppsPull.fieldDecides(CGSize(width: -13, height: 8)))
+    #expect(AppsPull.decides(CGSize(width: 1, height: 11)) == false)
+    #expect(AppsPull.decides(CGSize(width: 0, height: 12)))
+    #expect(AppsPull.decides(CGSize(width: 13, height: 8)))
+    #expect(AppsPull.decides(CGSize(width: -13, height: 8)))
   }
 
-  @Test("a touch on a Stories circle is the circle's, and between them it is not")
-  func onCircle() throws {
-    let lefts = GodviewStories.circleMinX(count: 3, width: 402)
-    let first = try #require(lefts.first)
-    let top = GodviewStories.top(safeTop: 59)
-    let side = GodviewStories.circle
-    let on = CGPoint(x: first + side / 2, y: top + side / 2)
-    let between = CGPoint(x: first + side + GodviewStories.gap / 2, y: top + side / 2)
-    let under = CGPoint(x: first + side / 2, y: top + side + 1)
-    #expect(AppsPull.onCircle(start: on, count: 3, width: 402, safeTop: 59))
-    #expect(AppsPull.onCircle(start: between, count: 3, width: 402, safeTop: 59) == false)
-    #expect(AppsPull.onCircle(start: under, count: 3, width: 402, safeTop: 59) == false)
+  @Test("with no list to say otherwise, History's and Chat's roots stand at their tops")
+  func rootsStartAtTheirTops() {
+    let model = AppsDoorModel(store: nil)
+    let history = model.historyAtTop
+    let chat = model.chatAtTop
+    #expect(history)
+    #expect(chat)
   }
 
   @Test("the drop stands 4 under the island's foot, or under a higher safe line")

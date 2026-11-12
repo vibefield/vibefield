@@ -339,28 +339,93 @@ struct AppsShelfView: View {
   }
 }
 
-/// The receded card's clip (DESIGN.md §8 "The phone's Apps", amended 2026-11-12). The pages' bounds are the safe area,
-/// and the field draws past them to the screen's edges (PG-4t). So, closed, the clip reaches `reach` past the bounds on
-/// every side and cuts nothing. Open, it is the card M272 built: the bounds, its top corners rounded at 44. It is one
-/// shape both ways, so the radius and the reach move together on the bar's spring, and the pages keep their identity.
-enum AppsCardClip {
-  /// Past the bounds while closed: more than any safe-area inset (62 and 34 on an iPhone 17 Pro).
+/// The card's outline (DESIGN.md §8 "The phone's Apps"). The pages' bounds are the safe area, and the field draws
+/// past them to the screen's edges (PG-4t). At rest the outline reaches `reach` past the bounds on every side and cuts
+/// nothing. As a card it is the whole screen: from the screen's top, `top` above the bounds, its top corners rounded.
+/// *(Corrected 2026-11-12, item 348: open, this cut the pages at their bounds, the safe area's top. The card is the
+/// screen itself now, so its top is the screen's.)*
+struct AppsCardShape: Shape {
+  /// Past the bounds while whole: more than any safe-area inset (62 and 34 on an iPhone 17 Pro).
   static let reach: CGFloat = 200
 
-  static func shape(open: Bool) -> some Shape {
-    UnevenRoundedRectangle(
-      topLeadingRadius: open ? AppsShelfChrome.cardRadius : 0,
-      topTrailingRadius: open ? AppsShelfChrome.cardRadius : 0,
-      style: .continuous
-    )
-    .inset(by: open ? 0 : -reach)
+  var radius: CGFloat
+  /// The screen's top above the bounds: the safe area's top inset.
+  let top: CGFloat
+  /// Whole: nothing is cut.
+  let whole: Bool
+
+  init(card: AppsPull.Card, safeTop: CGFloat) {
+    radius = card.radius
+    top = max(0, safeTop)
+    whole = card == .rest
+  }
+
+  var animatableData: CGFloat {
+    get { radius }
+    set { radius = newValue }
+  }
+
+  func path(in rect: CGRect) -> Path {
+    let reach = Self.reach
+    let reached =
+      whole
+      ? rect.insetBy(dx: -reach, dy: -reach)
+      : CGRect(x: rect.minX, y: rect.minY - top, width: rect.width, height: rect.height + top + reach)
+    return UnevenRoundedRectangle(topLeadingRadius: radius, topTrailingRadius: radius, style: .continuous)
+      .path(in: reached)
   }
 }
 
-/// The tab receded to a card at the foot, 106 of it showing. Pushing it up, or tapping it, goes back.
-struct AppsRecededCard: ViewModifier {
-  let open: Bool
-  let screen: CGFloat
+/// Where the card is drawn: smaller about the screen's top centre, and lower. For drawing only (`ignoredByLayout`):
+/// the pages keep the screen's own safe area and their own layout while the card moves, so the card and what is in it
+/// are one picture. A transform the layout reads (`offset`, `scaleEffect`) moves the pages out of the status bar's
+/// inset and lays them out again inside the card, at every step of the finger (James's screenshot, 2026-11-12).
+struct AppsCardPlace: GeometryEffect {
+  var scale: CGFloat
+  var offset: CGFloat
+  let top: CGFloat
+
+  var animatableData: AnimatablePair<CGFloat, CGFloat> {
+    get { AnimatablePair(scale, offset) }
+    set {
+      scale = newValue.first
+      offset = newValue.second
+    }
+  }
+
+  func effectValue(size: CGSize) -> ProjectionTransform {
+    let place = CGAffineTransform(translationX: size.width / 2, y: offset - top)
+      .scaledBy(x: scale, y: scale)
+      .translatedBy(x: -size.width / 2, y: top)
+    return ProjectionTransform(place)
+  }
+}
+
+extension AppsShelfChrome {
+  /// The card's lift off the shelf, cast up and about it: `0 -6px 64px`, black at 30% by day and 60% by night.
+  static let cardShadow = ChromeShadow(color: cardShade(day: 0.30, night: 0.60), radius: 32, y: -6)
+  /// Its contact with the shelf, close about its edge: `0 -1px 10px`, black at 16% by day and 45% by night.
+  static let cardContact = ChromeShadow(color: cardShade(day: 0.16, night: 0.45), radius: 5, y: -1)
+  /// Its edge, a hairline in the ink at 10%, so a white page reads as a card on the white shelf.
+  static let cardEdgeOpacity: Double = 0.10
+  static let cardEdge: CGFloat = 1
+  /// Under the grabber's ink, the paper at 55%: the grabber shows on a dark page (Chat's night) as on a light one.
+  static let grabberUnder: Double = 0.55
+
+  private static func cardShade(day: CGFloat, night: CGFloat) -> Color {
+    Color(UIColor { traits in UIColor(white: 0, alpha: traits.userInterfaceStyle == .dark ? night : day) })
+  }
+}
+
+/// The one card the three tabs and their bar stand in (item 348). At rest it is the whole screen. Pulled, it follows
+/// the finger down while it shrinks and rounds toward the card at the foot, under its shadow. Open, it is that card,
+/// 106 of it showing: pushing it up, or tapping it, goes back. It reads the door's model in its own body, so a pull
+/// redraws the card and not the home screen.
+struct AppsCard: ViewModifier {
+  let door: AppsDoorModel
+  /// The pages' height, the safe area's.
+  let bounds: CGFloat
+  let safeTop: CGFloat
   let onBack: () -> Void
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -370,23 +435,54 @@ struct AppsRecededCard: ViewModifier {
   private static let back: CGFloat = 12
 
   func body(content: Content) -> some View {
+    let open = door.shelfOpen
+    let card = AppsPull.Card.standing(
+      open: open, peeking: door.peeking, drag: door.drag, bounds: bounds, safeTop: safeTop)
+    let shape = AppsCardShape(card: card, safeTop: safeTop)
+    let lift = AppsShelfChrome.cardShadow
+    let contact = AppsShelfChrome.cardContact
     content
-      // closed, it cuts nothing: the field stays full-bleed under the status bar and the home indicator
-      .clipShape(AppsCardClip.shape(open: open))
-      .allowsHitTesting(!open)
-      .overlay(alignment: .top) {
-        if open {
-          Capsule()
-            .fill(ChromePalette.ink.opacity(AppsShelfChrome.grabberOpacity))
-            .frame(width: AppsShelfChrome.grabberWidth, height: AppsShelfChrome.grabberHeight)
-            .padding(.top, Self.grabberTop)
-            .accessibilityHidden(true)
+      // at rest it cuts nothing: the field stays full-bleed under the status bar and the home indicator
+      .clipShape(shape)
+      .background {
+        if card.shade > 0 {
+          // the pages' own ground, so the field's dissolve under the Stories row shows what it shows at rest
+          shape
+            .fill(FieldPalette.panelBackground)
+            .shadow(color: contact.color, radius: contact.radius, y: contact.y)
+            .shadow(color: lift.color, radius: lift.radius, y: lift.y)
+            .opacity(card.shade)
         }
       }
       .overlay {
+        if card.shade > 0 {
+          shape
+            .stroke(ChromePalette.ink.opacity(AppsShelfChrome.cardEdgeOpacity), lineWidth: AppsShelfChrome.cardEdge)
+            .opacity(card.shade)
+            .allowsHitTesting(false)
+        }
+      }
+      .allowsHitTesting(!open)
+      .overlay(alignment: .top) {
+        if card.shade > 0 {
+          Capsule()
+            .fill(ChromePalette.ink.opacity(AppsShelfChrome.grabberOpacity))
+            .background(Capsule().fill(ChromePalette.paper.opacity(AppsShelfChrome.grabberUnder)))
+            .frame(width: AppsShelfChrome.grabberWidth, height: AppsShelfChrome.grabberHeight)
+            // from the card's top, which is the screen's
+            .offset(y: Self.grabberTop - max(0, safeTop))
+            .opacity(card.shade)
+            .accessibilityHidden(true)
+        }
+      }
+      .modifier(AppsCardPlace(scale: card.scale, offset: card.offset, top: max(0, safeTop)).ignoredByLayout())
+      // the card is drawn at the foot and laid out where it was, so what takes its touches stands here, at the foot
+      .overlay(alignment: .bottom) {
         if open {
           Color.clear
+            .frame(height: AppsShelfChrome.cardShowing)
             .contentShape(Rectangle())
+            .ignoresSafeArea(.container, edges: .bottom)
             .onTapGesture(perform: onBack)
             .gesture(
               DragGesture(minimumDistance: Self.back).onEnded { value in
@@ -399,9 +495,8 @@ struct AppsRecededCard: ViewModifier {
             .accessibilityAction(.default, onBack)
         }
       }
-      .scaleEffect(open ? AppsShelfChrome.cardScale : 1, anchor: .top)
-      .offset(y: open ? AppsShelfChrome.cardOffset(screen: screen) : 0)
       .animation(reduceMotion ? nil : AppBar.motion, value: open)
+      .animation(reduceMotion ? nil : AppBar.motion, value: door.peeking)
   }
 }
 
@@ -560,20 +655,4 @@ extension View {
       navigationTransition(.zoom(sourceID: sourceID, in: zoom))
     }
   }
-}
-
-// Item 348 (red) — the card's outline and where it is drawn, as stubs: the outline is the bounds, and the card is
-// drawn where it lies.
-struct AppsCardShape: Shape {
-  init(card: AppsPull.Card, safeTop: CGFloat) {}
-
-  func path(in rect: CGRect) -> Path { Path(rect) }
-}
-
-struct AppsCardPlace: GeometryEffect {
-  var scale: CGFloat
-  var offset: CGFloat
-  let top: CGFloat
-
-  func effectValue(size: CGSize) -> ProjectionTransform { ProjectionTransform(.identity) }
 }

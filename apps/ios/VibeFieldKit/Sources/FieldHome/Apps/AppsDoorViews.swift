@@ -6,21 +6,6 @@ import SwiftUI
 // that drops from it, and search's dot. Each reads the door's model in its own body, so a pull redraws these and not
 // the home screen. How a real pull feels on a device is owed to James (P6).
 
-/// The page follows the pull on Field, and stands aside for the first peek. History's and Chat's lists follow by their
-/// own overscroll, so those pages do not move here.
-struct AppsPullFollow: ViewModifier {
-  let door: AppsDoorModel
-  let onField: Bool
-
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-  func body(content: Content) -> some View {
-    content
-      .offset(y: door.peeking ? AppsPeek.offset : onField ? AppsPull.offset(door.drag) : 0)
-      .animation(reduceMotion ? nil : AppBar.motion, value: door.peeking)
-  }
-}
-
 /// The four Recent icons, out of the island and toward their row, and the line under them.
 struct AppsPourLayer: View {
   let door: AppsDoorModel

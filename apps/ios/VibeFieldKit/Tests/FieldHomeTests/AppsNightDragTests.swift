@@ -3,32 +3,38 @@ import Testing
 
 @testable import FieldHome
 
-/// MA-6e — an empty Chat has no list to overscroll: ES-5c's night stands in its place, so the night feeds the pull from
-/// a drag of its own (VF-PM, 2026-11-09 15:07Z). This row holds the seam, the value the drag feeds. No unit row can
-/// drive a SwiftUI gesture; the finger itself is James's, on a device (P6).
+/// Item 348 — an empty Chat has no list: ES-5c's night stands in its place. The night takes the one pull every tab
+/// takes (DESIGN.md §8 "The phone's Apps": "One pull on every tab"), from anywhere on it, because a page with no list
+/// stands at its top. This row holds the seam, the values the drag feeds. No unit row can drive a SwiftUI gesture; the
+/// finger itself is James's, on his phone.
+/// *(Corrected 2026-11-12, item 348: this suite held `AppsNightDrag`, the drag of its own the night had while History's
+/// and Chat's pulls were their lists' overscroll, MA-6e, VF-PM 2026-11-09 15:07Z.)*
 ///
 /// No key path, no `try` and no `mutating` call inside an #expect/#require argument: hoisted into a `let` first.
 @MainActor
-@Suite("MA-6e — the empty Chat's night reads the pull, at the seam")
+@Suite("item 348 — the empty Chat's night takes the one pull, at the seam")
 struct AppsNightDragTests {
-  @Test("the night's seam: the value a drag feeds reads 132 and answers opens; the finger is James's P6")
+  @Test("the night's seam: a drag down on it is the door's, reads 132 and answers opens; the finger is James's")
   func nightSeam() {
-    var drag = AppsNightDrag()
-    let depth = drag.changed(CGSize(width: 0, height: 132))
-    #expect(depth == 132)
     let model = AppsDoorModel(store: nil)
-    model.moved(to: depth ?? 0)
-    let ended = drag.ended()
-    #expect(ended)
+    let atTop = model.chatAtTop
+    #expect(atTop, "no list has said otherwise")
+
+    let down = CGSize(width: 0, height: 132)
+    let decided = AppsPull.decides(down)
+    #expect(decided)
+    let begins = AppsPull.begins(
+      start: CGPoint(x: 200, y: 400), translation: down, safeTop: 59, ground: .list(atTop: atTop))
+    #expect(begins)
+    model.moved(to: down.height)
     let opens = model.released()
     #expect(opens)
 
-    var sideways = AppsNightDrag()
-    let first = sideways.changed(CGSize(width: 40, height: 5))
-    #expect(first == nil)
-    let after = sideways.changed(CGSize(width: 40, height: 140))
-    #expect(after == nil)
-    let endedSideways = sideways.ended()
-    #expect(endedSideways == false)
+    let across = CGSize(width: 40, height: 5)
+    let decidedAcross = AppsPull.decides(across)
+    #expect(decidedAcross)
+    let sideways = AppsPull.begins(
+      start: CGPoint(x: 200, y: 400), translation: across, safeTop: 59, ground: .list(atTop: atTop))
+    #expect(sideways == false, "a drag across is the night's own")
   }
 }

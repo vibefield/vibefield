@@ -28,9 +28,6 @@ struct ChatNightView: View {
 
   @State private var night = HatchNightHandle()
   @State private var arrived = false
-  /// MA-6e: the night has no list to overscroll, so the pull down to the apps is a drag of its own.
-  @State private var pull = AppsNightDrag()
-  @Environment(\.topPull) private var topPull
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
@@ -46,19 +43,7 @@ struct ChatNightView: View {
     }
     .contentShape(Rectangle())
     .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in night.wake() })
-    .simultaneousGesture(appsPull)
     .onAppear { arrived = true }
-  }
-
-  /// MA-6e (VF-PM, 2026-11-09 15:07Z): the door to the apps, beside `night.wake()`. Its seam is `AppsNightDrag`.
-  private var appsPull: some Gesture {
-    DragGesture(minimumDistance: 1, coordinateSpace: .global)
-      .onChanged { value in
-        if let depth = pull.changed(value.translation) { topPull?.moved(depth) }
-      }
-      .onEnded { _ in
-        if pull.ended() { topPull?.released() }
-      }
   }
 
   /// §5: behind the words a hush of the night, so no star crosses them.

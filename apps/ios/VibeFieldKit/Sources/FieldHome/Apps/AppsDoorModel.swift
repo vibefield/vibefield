@@ -26,6 +26,9 @@ final class AppsDoorModel {
   @ObservationIgnored private var account: String?
   @ObservationIgnored var clock: @MainActor () -> Date = { Date() }
   @ObservationIgnored var haptic: @MainActor () -> Void = {}
+  /// Whether History's and Chat's root lists stand at their tops, as each says (`TopPull`): what their pull waits for.
+  @ObservationIgnored var historyAtTop = true
+  @ObservationIgnored var chatAtTop = true
 
   init(store: AppsCuesStore?) {
     self.store = store
@@ -151,40 +154,9 @@ final class AppsDoorModel {
 }
 
 extension AppsPull {
-  /// Whether a drag on Field has gone far enough, either way, for `fieldBegins` to say yes or no, once.
-  static func fieldDecides(_ translation: CGSize) -> Bool {
+  /// Whether a drag has gone far enough, either way, for `begins` to say yes or no, once.
+  static func decides(_ translation: CGSize) -> Bool {
     translation.height >= startTravel || abs(translation.width) >= startTravel
-  }
-
-  /// Whether a touch is on one of the Stories row's circles.
-  static func onCircle(start: CGPoint, count: Int, width: CGFloat, safeTop: CGFloat) -> Bool {
-    let top = GodviewStories.top(safeTop: safeTop)
-    guard start.y >= top, start.y <= top + GodviewStories.circle else { return false }
-    return GodviewStories.circleMinX(count: count, width: width).contains {
-      start.x >= $0 && start.x <= $0 + GodviewStories.circle
-    }
-  }
-}
-
-/// What an empty Chat's night feeds the pull: it has no list to overscroll (ES-5c stands it in the list's place), so a
-/// drag of its own is decided once, as Field's is: 12 of travel, and more than twice as far down as across.
-struct AppsNightDrag {
-  /// Undecided (nil), the door's (true) or the night's own (false), said once.
-  private var decided: Bool?
-
-  /// The depth to feed the pull, while the drag is the door's.
-  mutating func changed(_ translation: CGSize) -> CGFloat? {
-    if decided == nil, AppsPull.fieldDecides(translation) {
-      decided =
-        translation.height >= AppsPull.startTravel && translation.height > AppsPull.startRatio * abs(translation.width)
-    }
-    return decided == true ? translation.height : nil
-  }
-
-  /// Whether the drag that ended was the door's: then the pull lets go.
-  mutating func ended() -> Bool {
-    defer { decided = nil }
-    return decided == true
   }
 }
 

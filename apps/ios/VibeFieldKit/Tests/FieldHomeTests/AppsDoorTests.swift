@@ -11,15 +11,7 @@ import Testing
 /// kit trap, and run263's compile error).
 @Suite("MA-6d — the door: the pull, the peek, the cues, the drop")
 struct AppsDoorTests {
-  private static let band = (safeTop: CGFloat(59), reserve: CGFloat(108))
-
-  private static func begins(
-    y: CGFloat = 80, down: CGFloat = 40, across: CGFloat = 0, onCircle: Bool = false
-  ) -> Bool {
-    AppsPull.fieldBegins(
-      start: CGPoint(x: 200, y: y), translation: CGSize(width: across, height: down), safeTop: band.safeTop,
-      reserve: band.reserve, onCircle: onCircle)
-  }
+  // Where the pull begins is AppsCardTests' (item 348: one rule for every tab).
 
   // MARK: - The pull
 
@@ -60,18 +52,6 @@ struct AppsDoorTests {
     #expect(AppsPull.opens(releasedAt: 131.9) == false)
     #expect(AppsPull.opens(releasedAt: 132))
     #expect(AppsPull.opens(releasedAt: 200))
-  }
-
-  @Test("on Field the door takes a drag from the Stories band, off a circle, far enough and mostly down")
-  func fieldBegins() {
-    #expect(Self.begins())
-    #expect(Self.begins(y: 40) == false, "the status bar's is the system's")
-    #expect(Self.begins(y: 120) == false, "below the band is the swarm's")
-    #expect(Self.begins(onCircle: true) == false, "a circle keeps its touch")
-    #expect(Self.begins(down: 11) == false, "not yet 12 down")
-    #expect(Self.begins(down: 12))
-    #expect(Self.begins(down: 40, across: 20) == false, "not more than twice as far down as across")
-    #expect(Self.begins(down: 41, across: 20))
   }
 
   @Test("the four icons land 50 apart about the middle; one lands in it")

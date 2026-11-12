@@ -21,6 +21,8 @@ import UIKit
 ///
 /// SE-2 — `recede` is the lens's (DESIGN.md §8 "The phone's profile token"): the bodies the host recedes draw at its
 /// weights, stepping there at its pace (`SwarmRecede`); nil, every body at 1.
+///
+/// Item 348 — `touch` tells a host that shares the finger (the pull down to the apps) whether the swarm has taken it.
 public struct SwarmField<Chrome: View>: View {
   private let bubbles: [FieldBubble]
   private let parameters: SwarmParameters
@@ -30,6 +32,7 @@ public struct SwarmField<Chrome: View>: View {
   private let bloom: BloomMenu?
   private let onBloom: ((BloomChoice) -> Void)?
   private let recede: SwarmRecede?
+  private let touch: SwarmTouch?
   private let chrome: Chrome
 
   @State private var stage = SwarmStage()
@@ -48,6 +51,7 @@ public struct SwarmField<Chrome: View>: View {
     bloom: BloomMenu? = nil,
     onBloom: ((BloomChoice) -> Void)? = nil,
     recede: SwarmRecede? = nil,
+    touch: SwarmTouch? = nil,
     @ViewBuilder chrome: () -> Chrome
   ) {
     self.bubbles = bubbles
@@ -58,6 +62,7 @@ public struct SwarmField<Chrome: View>: View {
     self.bloom = bloom
     self.onBloom = onBloom
     self.recede = recede
+    self.touch = touch
     self.chrome = chrome()
   }
 
@@ -104,6 +109,7 @@ public struct SwarmField<Chrome: View>: View {
         stage.onCreate = holdCompleted
         stage.reducedMotion = reduceMotion
         stage.recede = recede
+        touch?.read = { [stage, bloomHost] in stage.holdsBody || bloomHost.bloom != nil }
         stage.setBounds(proxy.size)
         bloomHost.field = BloomSize(w: proxy.size.width, h: proxy.size.height)
         bloomHost.menu = bloom
@@ -291,4 +297,15 @@ private struct UnavailableFieldView: View {
     .allowsHitTesting(false)
     .accessibilityElement(children: .combine)
   }
+}
+
+/// Whether the swarm has taken the finger that is down on it: it is on a body, or its hold has bloomed. For a host
+/// that shares the finger (item 348: the pull down to the apps starts anywhere on the field but on a bubble).
+@MainActor
+public final class SwarmTouch {
+  var read: @MainActor () -> Bool = { false }
+
+  public init() {}
+
+  public var isTaken: Bool { read() }
 }

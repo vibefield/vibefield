@@ -1,18 +1,15 @@
 import SwiftUI
 
-/// MA-6d — a root list's overscroll past its top, handed to whoever holds the door above the tabs (DESIGN.md §8 "The
-/// phone's Apps"). The depth is the list's own, the system's rubber band; only the root lists read it, so a pushed
-/// screen keeps its own scroll.
+/// MA-6d — a root list tells whoever holds the door above the tabs whether it stands at its top (DESIGN.md §8 "The
+/// phone's Apps"): there, a drag down is the door's. Only the root lists say it, so a pushed screen keeps its own
+/// scroll. *(Corrected 2026-11-12, item 348: this handed the door the list's own overscroll, the system's rubber
+/// band, as the pull's depth. The pull is the finger's travel on every tab now, so the list says only where it
+/// stands.)*
 public struct TopPull: Sendable {
-  public var moved: @MainActor @Sendable (CGFloat) -> Void
-  public var released: @MainActor @Sendable () -> Void
+  public var atTop: @MainActor @Sendable (Bool) -> Void
 
-  public init(
-    moved: @escaping @MainActor @Sendable (CGFloat) -> Void,
-    released: @escaping @MainActor @Sendable () -> Void
-  ) {
-    self.moved = moved
-    self.released = released
+  public init(atTop: @escaping @MainActor @Sendable (Bool) -> Void) {
+    self.atTop = atTop
   }
 }
 
@@ -28,7 +25,7 @@ extension EnvironmentValues {
 }
 
 extension View {
-  /// On a root list's `ScrollView`: while the finger is on it, its overscroll goes to `\.topPull`.
+  /// On a root list's `ScrollView`: whether it stands at its top goes to `\.topPull`.
   public func readsTopPull() -> some View {
     modifier(ReadsTopPull())
   }
@@ -36,19 +33,18 @@ extension View {
 
 private struct ReadsTopPull: ViewModifier {
   @Environment(\.topPull) private var pull
-  @State private var interacting = false
+
+  /// Within this of its top the list stands at it.
+  private static let near: CGFloat = 1
 
   func body(content: Content) -> some View {
     content
-      .onScrollGeometryChange(for: CGFloat.self) { geometry in
-        max(0, -(geometry.contentOffset.y + geometry.contentInsets.top))
-      } action: { _, over in
-        if interacting { pull?.moved(over) }
+      .onScrollGeometryChange(for: Bool.self) { geometry in
+        geometry.contentOffset.y + geometry.contentInsets.top <= Self.near
+      } action: { _, atTop in
+        pull?.atTop(atTop)
       }
-      .onScrollPhaseChange { _, phase in
-        let now = phase == .interacting
-        if interacting, !now { pull?.released() }
-        interacting = now
-      }
+      // a list that leaves (an empty Chat stands its night in the list's place) leaves its page at its top
+      .onDisappear { pull?.atTop(true) }
   }
 }
