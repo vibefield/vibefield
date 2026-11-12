@@ -132,6 +132,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     // Item 345: measured under the parent fieldd will use, read from the SAME base its spawn hands it
     // (`spawnFieldd`'s env is `opts.environment` plus FIELDD_* config, never this process's): a harness's own
     // folder, or the product's `/tmp`. A relative or empty value refuses here as fieldd would.
+    // Item 341's asked keys sit between `opts.environment` and FIELDD_*; none has a daemon prefix.
     assertDataRootUsable(opts.dataRoot, process.platform, {
       aliasParent: socketAliasParentFrom(opts.environment[SOCKET_ALIAS_PARENT_ENV]),
     });
