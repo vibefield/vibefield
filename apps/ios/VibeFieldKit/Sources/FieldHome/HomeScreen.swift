@@ -1012,12 +1012,20 @@ public struct HomeScreen: View {
       .ignoresSafeArea(.container, edges: [.top, .bottom])
   }
 
+  /// Item 350 — History's and Chat's heads stand in the Stories row's band, and their roots clear the bar, by the
+  /// screen's own measures.
+  private func rootHead(stepper: Bool) -> RootHead {
+    GodviewStories.rootHead(safeTop: safeTop, homeInset: homeInset, stepper: stepper)
+  }
+
   private var historyTab: some View {
     HistoryLedgerView(history: historyDesktops, router: history) { need in
       historyDesktops.need(need)
     }
     .environment(\.historyActs, historyActs)
     .environment(\.topPull, TopPull(atTop: { [appsDoor] atTop in appsDoor.historyAtTop = atTop }))
+    .environment(
+      \.rootHead, rootHead(stepper: history.stepperShowing || slotProject != nil || slotSession != nil))
     .safeAreaInset(edge: .bottom, spacing: 0) {
       Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing || slotProject != nil || slotSession != nil))
     }
@@ -1037,6 +1045,7 @@ public struct HomeScreen: View {
       nightRuns: chatNightRuns
     )
     .environment(\.topPull, TopPull(atTop: { [appsDoor] atTop in appsDoor.chatAtTop = atTop }))
+    .environment(\.rootHead, rootHead(stepper: false))
     .safeAreaInset(edge: .bottom, spacing: 0) {
       // a thread's composer takes the bar's place: no clearance under it
       Color.clear.frame(height: chatThread == nil ? AppBar.clearance(homeInset: homeInset, stepper: false) : 0)

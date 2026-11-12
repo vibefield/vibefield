@@ -46,8 +46,17 @@ public struct HistoryLedgerView: View {
       }
       .foldsBar(router)
       .readsTopPull()
+      // Item 350 (James, 2026-11-12): the root's title stands in the band Field's Stories row stands in, on the
+      // page's paper, and the ledger scrolls under it. The system's bar is hidden here; its name stays for a pushed
+      // screen's back button.
+      .underRootHead {
+        RootHeadRow("History")
+          .frame(maxWidth: .infinity)
+          .background(ChromePalette.paper)
+      }
       .background(ChromePalette.paper.ignoresSafeArea())
       .navigationTitle("History")
+      .toolbar(.hidden, for: .navigationBar)
       .navigationDestination(for: HistoryRouter.Route.self) { route in
         destination(route)
       }

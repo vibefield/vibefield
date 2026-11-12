@@ -185,7 +185,6 @@ struct ChatPage: View {
 
   // ES-5c — typed apart, so `body`'s long chain has no conditional of implicit members to solve
   private var barScheme: ColorScheme? { nightStands ? .dark : nil }
-  private var barBackground: Visibility { nightStands ? .hidden : .automatic }
   private var sparkleInk: Color { nightStands ? ChromePalette.nightInkPrimary : ChromePalette.ink }
 
   /// ES-5c — what stands on the stage: the night, or the list on its paper.
@@ -198,29 +197,40 @@ struct ChatPage: View {
     }
   }
 
+  /// Item 350 — the root's head: "Chat" and, at its right, New spark's door (IOS-12f, Q1), in the night's ink on the
+  /// night, which shows through it, and on the list's paper over the list.
+  private var rootHead: some View {
+    RootHeadRow(ChatWords.title, ink: sparkleInk) {
+      Button {
+        carried = nil
+        newSpark = true
+      } label: {
+        FieldGlyph(.sparkle, size: 22)
+          .foregroundStyle(sparkleInk)
+          .frame(width: 44, height: 44)
+          .contentShape(Rectangle())
+      }
+      .accessibilityLabel(NewSparkWords.title)
+      // the glyph's right edge on the lists' margin
+      .padding(.trailing, RootHead.side - 11)
+    }
+    .frame(maxWidth: .infinity)
+    .background {
+      if !nightStands { ChromePalette.paper }
+    }
+  }
+
   var body: some View {
     NavigationStack(path: path) {
       // IOS-12e (§2.10): Chat's list is one stage; a row's face moves on it while its spark works
       SparkStageHost { nightOrList }
+      // Item 350 (James, 2026-11-12): "Chat" and its ✦ stand in the band Field's Stories row stands in. The system's
+      // bar is hidden here; its name stays for a thread's back button.
+      .underRootHead { rootHead }
       .navigationTitle(ChatWords.title)
-      // ES-5c (§8): the status bar, "Chat" and its ✦ wear the night's ink, and the bar floats clear on it
+      .toolbar(.hidden, for: .navigationBar)
+      // ES-5c (§8): the status bar wears the night's ink
       .toolbarColorScheme(barScheme, for: .navigationBar)
-      .toolbarBackground(barBackground, for: .navigationBar)
-      // IOS-12f (Q1) — New spark's door at the title's right, as the Mac's create stands in Chat's line
-      .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button {
-            carried = nil
-            newSpark = true
-          } label: {
-            FieldGlyph(.sparkle, size: 22)
-              .foregroundStyle(sparkleInk)
-              .frame(width: 44, height: 44)
-              .contentShape(Rectangle())
-          }
-          .accessibilityLabel(NewSparkWords.title)
-        }
-      }
       .navigationDestination(for: String.self) { spark in
         if let entry = entries.first(where: { $0.spark.id == spark }) {
           ChatThreadView(
