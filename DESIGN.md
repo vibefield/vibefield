@@ -7814,6 +7814,9 @@ reject"; where each word stands is §8 "The phone's Settings" and "The phone's w
 - A text a part names that the file doesn't carry is named, never dropped: "This text isn’t in the build: ‹its id›."
 - Under Tailscale's trademark line in About: "VibeField names agents such as Claude Code and Codex to tell sessions
   apart. It isn’t affiliated with or endorsed by Anthropic or OpenAI."
+- On the Mac, the About panel (VibeField › About VibeField) carries the same foot under the version: Tailscale's
+  trademark line, then the line above, word for word. *(LP Q3.2: James's picks on the board, 2026-11-12:
+  dk-mac-about-line at 05:18:50Z and j-mac-about-tm, "(b) Both lines, as on the phone", at 05:43:23Z.)*
 - The device is named as its platform names it, read when VibeField runs: "this iPhone", "this iPad", and "this
   device" where it is neither. This is the bible's §7 platform label, with LP-4's "this device" for iOS's own lock
   prompts as the fallback. It is a substitution, never a rewording: wherever Settings or the way in said "this phone",
