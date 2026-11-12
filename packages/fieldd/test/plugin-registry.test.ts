@@ -474,3 +474,19 @@ describe("PluginRegistryService — snapshot sanitization", () => {
     expect(json).not.toContain("/Users/");
   });
 });
+
+// Item 279 (S2): an installed root holds what VibeField's own install wrote, a revision under a
+// pointer. A folder that carries a manifest and no pointer is not an install, so it is no row and
+// no problem.
+describe("item 279 — the installed folder", () => {
+  it("a manifest folder with no pointer under the installed root yields no row and no problem", async () => {
+    const installed = makeDataDir();
+    writePluginDir(installed, "vibefield.fixture.flat", validManifest("vibefield.fixture.flat"));
+    const svc = newService({ bundled: [], devLinked: [], installed: [installed] });
+    await svc.refresh();
+
+    const snapshot = svc.snapshot();
+    expect(snapshot.plugins.map((p) => p.id)).toEqual([]);
+    expect(snapshot.problems).toEqual([]);
+  });
+});
