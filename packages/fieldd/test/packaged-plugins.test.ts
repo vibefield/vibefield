@@ -38,6 +38,7 @@ import { FielddClient } from "@vibefield/fieldd-client";
 import { generateRegistryKeypair } from "@vibefield/plugin-build";
 import { afterEach, describe, expect, it } from "vitest";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { runAliasParentEnv } from "./native-harness";
 
 const RESOURCES = process.env["FIELDD_TEST_PLUGINS_PACKAGE"];
 const exe = (name: string): string => (process.platform === "win32" ? `${name}.exe` : name);
@@ -120,6 +121,7 @@ async function packagedRegistry(plugins: {
       PATH: "/usr/bin:/bin",
       HOME: home,
       TMPDIR: tmpdir(),
+      ...runAliasParentEnv(),
       FIELDD_DATA_DIR: root,
       FIELDD_USER_ROOT: root,
       FIELDD_CONTROL_PORT: "0",

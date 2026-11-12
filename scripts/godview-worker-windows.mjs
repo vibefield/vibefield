@@ -70,7 +70,7 @@ async function startDevServer(lines) {
 }
 
 function runLab(env, lines) {
-  return withLabProfile(async ({ directory, id }) => {
+  return withLabProfile(async ({ directory, id, aliasEnv }) => {
     const result = await new Promise((done, fail) => {
       const child = spawn(
         "pnpm",
@@ -85,7 +85,13 @@ function runLab(env, lines) {
         ],
         {
           cwd: join(repoRoot, "apps", "desktop"),
-          env: { ...process.env, TMPDIR: "/tmp", VF_GODVIEW_LAB: "worker-windows", ...env },
+          env: {
+            ...process.env,
+            TMPDIR: "/tmp",
+            VF_GODVIEW_LAB: "worker-windows",
+            ...env,
+            ...aliasEnv,
+          },
           stdio: ["ignore", "pipe", "pipe"],
         },
       );

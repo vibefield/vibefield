@@ -72,6 +72,7 @@ import {
 } from "./agent-gateway-floor";
 import { bundleAgentShim } from "./agent-shim-bundle";
 import { BIN_BUILD_STEP, bundleFielddBin } from "./fieldd-bin-bundle";
+import { runAliasParentEnv } from "./native-harness";
 
 const PACKAGE_ROOT = join(import.meta.dirname, "..");
 
@@ -307,6 +308,7 @@ process.exit(99);
         {
           PATH: process.env["PATH"] ?? "/usr/bin:/bin",
           HOME: home,
+          ...runAliasParentEnv(),
           FIELDD_DATA_DIR: data,
           FIELDD_USER_ROOT: join(data, "users", "1"),
           FIELDD_CONTROL_PORT: "0",
@@ -376,6 +378,7 @@ process.exit(99);
           PATH: process.env["PATH"] ?? "/usr/bin:/bin",
           HOME: home,
           PUPPETEER_SHIM_NAME: TYPED_COMMAND,
+          ...runAliasParentEnv(),
           FIELDD_DATA_DIR: data,
           FIELDD_CONTROL_PORT: "0",
         },
@@ -414,6 +417,7 @@ process.exit(99);
         {
           PATH: process.env["PATH"] ?? "/usr/bin:/bin",
           HOME: dir,
+          ...runAliasParentEnv(),
           FIELDD_DATA_DIR: data,
           FIELDD_CONTROL_PORT: "0",
         },

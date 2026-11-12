@@ -133,3 +133,37 @@ fn unix_endpoint_law_matches_the_cross_language_fixture() {
         );
     }
 }
+
+/// Item 345, the seam slice — the alias parent's ONE reading, the twin of contracts' `socketAliasParentFrom`: unset is
+/// the product's (`None`), an absolute value is taken, and a relative, empty or non-UTF-8 one is refused, never a
+/// fallback to `/tmp`. The refusal names the variable, never the value.
+#[test]
+fn the_alias_parent_seam_takes_an_absolute_value_and_refuses_the_rest() {
+    use field_native::endpoints::socket_alias_parent_from as from;
+    use std::ffi::OsStr;
+    let name = field_native::registries::SOCKET_ALIAS_PARENT_ENV;
+    assert_eq!(name, "FIELD_SOCKET_ALIAS_PARENT");
+    assert_eq!(from(None), Ok(None));
+    assert_eq!(
+        from(Some(OsStr::new("/tmp/vfa-abc123"))),
+        Ok(Some(std::path::PathBuf::from("/tmp/vfa-abc123")))
+    );
+    for refused in ["vfa-abc123", "", "./vfa"] {
+        let refusal =
+            from(Some(OsStr::new(refused))).expect_err("a relative or empty parent is refused");
+        assert_eq!(
+            refusal,
+            format!("{name} must be an absolute path when it is set")
+        );
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        let refusal =
+            from(Some(OsStr::from_bytes(b"/tmp/\xff"))).expect_err("non-UTF-8 is refused");
+        assert_eq!(
+            refusal,
+            format!("{name} must be valid UTF-8 when it is set")
+        );
+    }
+}

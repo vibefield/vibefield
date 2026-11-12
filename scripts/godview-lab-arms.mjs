@@ -17,6 +17,7 @@ import {
 } from "node:fs";
 import { loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
+import { aliasParentEnv, makeRunAliasParent, removeRunAliasParent } from "./run-alias-parent.mjs";
 
 /** Keep in step with `DEFAULT_WARMUP_RECIPE` in electron-shell's godview-perf-lab.ts. */
 export const WARMUP_RECIPE = "n=10,duration=1500,seed=9,markerQuietMs=50";
@@ -141,14 +142,22 @@ export async function modelStreams(root, dir, recipes, logPath) {
 }
 
 /** Every process owns a fresh Chromium profile, removed only after it closes.
- * Daemon-root isolation alone does not isolate Chromium's persistent caches. */
+ * Daemon-root isolation alone does not isolate Chromium's persistent caches.
+ * Item 345: and its own socket alias parent (`aliasEnv`, for the pair's
+ * environment), removed by this maker alone once the run is over, so a lab or
+ * smoke run leaves no link in the account's `/tmp/vf-<uid>/`. */
 export async function withLabProfile(run) {
   const directory = mkdtempSync(join(tmpdir(), "vf-godview-profile-"));
+  const aliasParent = makeRunAliasParent();
   try {
     const id = createHash("sha256").update(realpathSync(directory)).digest("hex");
-    return await run({ directory, id });
+    return await run({ directory, id, aliasEnv: aliasParentEnv(aliasParent) });
   } finally {
     rmSync(directory, { recursive: true, force: true });
+    const left = removeRunAliasParent(aliasParent);
+    if (left !== null) {
+      process.stderr.write(`godview lab: left its socket alias parent: ${left}\n`);
+    }
   }
 }
 
@@ -184,7 +193,7 @@ export function echoedLabLine(line) {
 export async function launchLab({ root, env, reportPath, logPath, echo, prefix }) {
   assertLabBuilt(root);
   const binaries = nativeBinaries(root);
-  return withLabProfile(async ({ directory, id }) => {
+  return withLabProfile(async ({ directory, id, aliasEnv }) => {
     const code = await new Promise((done, fail) => {
       const child = spawn(
         "pnpm",
@@ -203,6 +212,7 @@ export async function launchLab({ root, env, reportPath, logPath, echo, prefix }
             ...process.env,
             TMPDIR: "/tmp",
             ...env,
+            ...aliasEnv,
             // Every arm runs its own built hosts, even with parent overrides.
             FIELDD_BIN: join(root, "packages", "fieldd", "dist", "bin.cjs"),
             FIELDD_NATIVE_BIN: binaries.native,

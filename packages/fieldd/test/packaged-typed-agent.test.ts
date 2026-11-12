@@ -65,6 +65,7 @@ import { readRecord, teardownFloors, windowAt } from "./agent-gateway-floor";
 import {
   killDaemonTree,
   removeTempRoot,
+  runAliasParentEnv,
   shortTmpRoot,
   waitForMgmtEndpoint,
 } from "./native-harness";
@@ -314,6 +315,7 @@ async function packagedPair(staging: TypedAgentStaging): Promise<Pair> {
   const native = spawn(nativeBin, [], {
     env: {
       ...person,
+      ...runAliasParentEnv(),
       FIELD_NATIVE_DATA_DIR: dataDir,
       FIELD_LOG_DIR: logs,
       FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",
@@ -324,6 +326,7 @@ async function packagedPair(staging: TypedAgentStaging): Promise<Pair> {
   await waitForMgmtEndpoint(dataDir, 30_000);
   const env = {
     ...person,
+    ...runAliasParentEnv(),
     FIELDD_USER_ROOT: dataDir,
     FIELDD_CONTROL_PORT: "0",
     FIELDD_DATA_PORT: "0",

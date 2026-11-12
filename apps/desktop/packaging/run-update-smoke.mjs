@@ -52,6 +52,11 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  aliasParentEnv,
+  makeRunAliasParent,
+  removeRunAliasParent,
+} from "../../../scripts/run-alias-parent.mjs";
 import { leftByRun, listRunProcesses, SMOKE_RUN_ENV } from "./smoke-daemons.mjs";
 import {
   buildRun,
@@ -540,8 +545,13 @@ async function oneRun(name, { root, keys, trustRoot, zip, current }) {
   const started = Date.now();
   const log = join(runRoot, "app.log");
   const out = [];
+  // Item 345: this run's own socket alias parent (its fieldd root, under tmpdir(), is over the sun_path line)
+  const aliasParent = makeRunAliasParent();
   const child = spawn(exe, ["--allow-dev-trust", `--user-data-dir=${profile}`], {
-    env: appEnv(process.env, { home, fieldd, origin: server.origin, mark }),
+    env: {
+      ...appEnv(process.env, { home, fieldd, origin: server.origin, mark }),
+      ...aliasParentEnv(aliasParent),
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   child.stdout.on("data", (chunk) => out.push(chunk));
@@ -647,6 +657,9 @@ async function oneRun(name, { root, keys, trustRoot, zip, current }) {
   writeFileSync(log, Buffer.concat(out));
   const row = await leftByRun(mark);
   const still = listRunProcesses(mark);
+  // the run's pair is reaped: its maker removes the alias parent, or leaves it and says why
+  const aliasLeft = removeRunAliasParent(aliasParent);
+  if (aliasLeft !== null) say("SMOKE_UPDATE_ALIAS_PARENT_LEFT", { run: name, reason: aliasLeft });
   say("SMOKE_DAEMONS", {
     ...row,
     expected:

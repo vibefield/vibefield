@@ -2097,6 +2097,13 @@ export const FIELDD_TRUST_ROOT_KEYS_ENV = "FIELDD_TRUST_ROOT_KEYS" as const;
  * corpus once, then holds its last state (rows alive and quiet); restart fieldd to replay. A packaged fieldd refuses
  * to boot under it, and the shell blanks it for a packaged fieldd. TS-only, like the two above. */
 export const FIELDD_DEBUG_SWARM_CORPUS_ENV = "FIELDD_DEBUG_SWARM_CORPUS" as const;
+/** Item 345 — a HARNESS seam both planes read: the folder in which a root over the sun_path line keeps its socket
+ * alias. Unset is endpoints.ts's `SOCKET_ALIAS_PARENT` (`/tmp`), the product's only value, and nothing in the product
+ * sets it. Tests, smokes and lab runs set it to a short folder each run makes and removes (`/tmp/vfa-XXXXXX`: under
+ * a `tmpdir()` root no alias fits sun_path), so no run leaves a link in the account's `/tmp/vf-<uid>/`. A set value
+ * must be absolute (`socketAliasParentFrom` refuses anything else), and a plane booted with it set says so in one
+ * log line. Its `FIELD_` prefix keeps it out of every agent PTY (EL7). Reaches Rust by generation. */
+export const SOCKET_ALIAS_PARENT_ENV = "FIELD_SOCKET_ALIAS_PARENT" as const;
 
 /** PA-29 / plugin spec §11.6 — the host-singleton externals list. React,
  * ReactDOM, ICE/strata (and the desk's four entries), Loro, and the SDK runtime

@@ -17,6 +17,7 @@ import { PROTOCOL_VERSION } from "@vibefield/rosetta-protocol/protocol-version";
 import { afterEach, describe, expect, it } from "vitest";
 import { type RosettadHealth, rosettadUnconfigured } from "../src/rosettad-supervisor";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { runAliasParentEnv } from "./native-harness";
 
 const PACKAGE = process.env["FIELDD_TEST_HISTORY_PACKAGE"];
 const exe = (name: string): string => (process.platform === "win32" ? `${name}.exe` : name);
@@ -80,6 +81,7 @@ async function packagedFieldd(rosettad: string | null): Promise<{
       PATH: "/usr/bin:/bin",
       HOME: home,
       TMPDIR: tmpdir(),
+      ...runAliasParentEnv(),
       FIELDD_DATA_DIR: root,
       FIELDD_USER_ROOT: root,
       FIELDD_CONTROL_PORT: "0",

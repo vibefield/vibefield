@@ -12,8 +12,9 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "nod
 import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
-import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
+import { SOCKET_ALIAS_PARENT_ENV, SOCKETS } from "@vibefield/contracts";
 import { cargoBinaries } from "../../../scripts/cargo-target.mjs";
+import { nativeEndpoint as lawEndpoint } from "../src/boot-env";
 import type { NativeLink } from "../src/native-link";
 
 /** The cargo artifact for `-p field-native`: where the suites' build under
@@ -68,16 +69,25 @@ export function shortTmpRoot(prefix: string, platform: NodeJS.Platform = process
 }
 
 /** The endpoint field-native binds for one of the `SOCKETS` names under
- * `dataDir` — the WIN-D1 law, from the test side: the LAYOUT path joined under
- * the root on unix, a root-scoped named pipe on win32. */
+ * `dataDir` — the WIN-D1 law, from the test side: a root-scoped named pipe on
+ * win32; on unix, item 345's law (boot-env's own derivation, under the run's
+ * socket alias parent from the environment), so a root over the sun_path line
+ * dials the alias the floor bound through. *Corrected 2026-11-12 (the seam
+ * slice):* this was the LAYOUT path joined under the root, which on such a
+ * root names a path no floor can bind. */
 export function nativeEndpoint(
   dataDir: string,
   socketFile: string,
   platform: NodeJS.Platform = process.platform,
 ): string {
-  return platform === "win32"
-    ? pipeEndpointFor(dataDir, socketFile)
-    : join(dataDir, ...LAYOUT.NATIVE_RUN_DIR, socketFile);
+  return lawEndpoint(dataDir, socketFile, platform);
+}
+
+/** Item 345, the seam slice: the run's own socket alias parent (alias-parent-env.ts) as an environment entry, for a
+ * pair a row starts from an environment that is not this process's (a person's, a shell's); none on win32. */
+export function runAliasParentEnv(): Record<string, string> {
+  const parent = process.env[SOCKET_ALIAS_PARENT_ENV];
+  return parent === undefined ? {} : { [SOCKET_ALIAS_PARENT_ENV]: parent };
 }
 
 /** Wait until `endpoint` accepts a connection, or throw at the deadline.

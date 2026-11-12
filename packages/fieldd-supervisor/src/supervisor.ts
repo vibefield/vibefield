@@ -1,5 +1,10 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import type { ProductInfo, ShellLeaveReason } from "@vibefield/contracts";
+import {
+  type ProductInfo,
+  type ShellLeaveReason,
+  SOCKET_ALIAS_PARENT_ENV,
+  socketAliasParentFrom,
+} from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FIELDD_LIVENESS, type LivenessWatch, watchLiveness } from "./liveness";
 import { assertDataRootUsable } from "./paths";
@@ -124,7 +129,12 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
   }
 
   async function run(signal: AbortSignal): Promise<FielddHandle> {
-    assertDataRootUsable(opts.dataRoot);
+    // Item 345: measured under the parent fieldd will use, read from the SAME base its spawn hands it
+    // (`spawnFieldd`'s env is `opts.environment` plus FIELDD_* config, never this process's): a harness's own
+    // folder, or the product's `/tmp`. A relative or empty value refuses here as fieldd would.
+    assertDataRootUsable(opts.dataRoot, process.platform, {
+      aliasParent: socketAliasParentFrom(opts.environment[SOCKET_ALIAS_PARENT_ENV]),
+    });
     throwIfAborted(signal);
 
     const first = await adoptProbe(opts.adoptProbeMs ?? ADOPT_PROBE_MS, signal);

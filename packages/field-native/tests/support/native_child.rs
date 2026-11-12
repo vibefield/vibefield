@@ -4,6 +4,7 @@
 //! `resource_governance.rs` unchanged (item 198), with the limit now the caller's.
 #![allow(dead_code)] // each test binary uses a different subset
 
+use field_native::registries::SOCKET_ALIAS_PARENT_ENV;
 use field_native::rlimit::TEST_NO_RLIMIT_ENV;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -11,8 +12,65 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 use tokio::net::UnixStream;
 
+/// Item 345, the seam slice — a short socket alias parent this RUN owns (`/tmp/vfa-XXXXXX`), handed to the child as
+/// `SOCKET_ALIAS_PARENT_ENV`: a root over the sun_path line keeps its alias here, never in the account's
+/// `/tmp/vf-<uid>/`. It is under `/tmp` because no alias fits under a `tmpdir()` root. Its drop removes exactly the
+/// folder it made, and only while that is still a directory directly under `/tmp`, named `vfa-`, and this uid's;
+/// anything else is left and said. Nothing sweeps `/tmp/vfa-*`.
+pub struct RunAliasParent {
+    path: PathBuf,
+}
+
+impl RunAliasParent {
+    pub fn make() -> Self {
+        let mut template = *b"/tmp/vfa-XXXXXX\0";
+        // SAFETY: a writable, NUL-terminated template, as mkdtemp requires; it rewrites the Xs in place and makes
+        // the folder 0700.
+        let made = unsafe { libc::mkdtemp(template.as_mut_ptr().cast()) };
+        assert!(
+            !made.is_null(),
+            "mkdtemp under /tmp failed: {}",
+            std::io::Error::last_os_error()
+        );
+        let path = std::str::from_utf8(&template[..template.len() - 1]).expect("an ASCII path");
+        Self {
+            path: PathBuf::from(path),
+        }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for RunAliasParent {
+    fn drop(&mut self) {
+        use std::os::unix::fs::MetadataExt;
+        let named = self.path.parent() == Some(Path::new("/tmp"))
+            && self
+                .path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("vfa-"));
+        // SAFETY: getuid has no preconditions and cannot fail.
+        let uid = unsafe { libc::getuid() };
+        let own = std::fs::symlink_metadata(&self.path)
+            .is_ok_and(|found| found.is_dir() && found.uid() == uid);
+        if named && own {
+            let _ = std::fs::remove_dir_all(&self.path);
+        } else {
+            eprintln!(
+                "left the run's socket alias parent {}: not a /tmp/vfa- folder of this uid",
+                self.path.display()
+            );
+        }
+    }
+}
+
 pub struct NativeProcess {
     child: Option<Child>,
+    /// Dropped after `Drop::drop` has stopped the child.
+    _alias_parent: RunAliasParent,
 }
 
 impl NativeProcess {
@@ -20,9 +78,11 @@ impl NativeProcess {
     /// child — the inherited-limit condition, reproduced without touching this
     /// test process (whose limit its sibling tests are also using).
     pub fn spawn(data_dir: &Path, log_root: &Path, sabotage: bool, soft_limit: u64) -> Self {
+        let alias_parent = RunAliasParent::make();
         let mut command = Command::new(env!("CARGO_BIN_EXE_field-native"));
         command
             .env("FIELD_NATIVE_DATA_DIR", data_dir)
+            .env(SOCKET_ALIAS_PARENT_ENV, alias_parent.path())
             .env("FIELD_LOG_DIR", log_root)
             .env("FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE", "1")
             .env_remove("FIELD_NATIVE_MESH")
@@ -56,7 +116,10 @@ impl NativeProcess {
             });
         }
         let child = command.spawn().expect("spawn field-native");
-        Self { child: Some(child) }
+        Self {
+            child: Some(child),
+            _alias_parent: alias_parent,
+        }
     }
 
     pub fn id(&self) -> u32 {

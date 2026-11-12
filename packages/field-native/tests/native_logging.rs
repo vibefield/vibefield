@@ -16,14 +16,24 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::time::timeout_at;
 
+// Item 345, the seam slice: the run's own socket alias parent, `RunAliasParent`, comes from the shared support.
+#[path = "support/native_child.rs"]
+mod native_child;
+use field_native::registries::SOCKET_ALIAS_PARENT_ENV;
+use native_child::RunAliasParent;
+
 struct NativeProcess {
     child: Option<Child>,
+    /// Dropped after `Drop::drop` has stopped the child.
+    _alias_parent: RunAliasParent,
 }
 
 impl NativeProcess {
     fn spawn(data_dir: &Path, log_root: &Path, sidecar: &Path) -> Self {
+        let alias_parent = RunAliasParent::make();
         let child = Command::new(env!("CARGO_BIN_EXE_field-native"))
             .env("FIELD_NATIVE_DATA_DIR", data_dir)
+            .env(SOCKET_ALIAS_PARENT_ENV, alias_parent.path())
             .env("FIELD_LOG_DIR", log_root)
             .env("FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE", "1")
             .env_remove("FIELD_NATIVE_ALLOW_LOG_FILTER")
@@ -35,7 +45,10 @@ impl NativeProcess {
             .stderr(Stdio::piped())
             .spawn()
             .expect("spawn field-native");
-        Self { child: Some(child) }
+        Self {
+            child: Some(child),
+            _alias_parent: alias_parent,
+        }
     }
 
     fn id(&self) -> u32 {

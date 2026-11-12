@@ -1,13 +1,28 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { isPipeEndpoint, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
+import {
+  isPipeEndpoint,
+  pipeEndpointFor,
+  SOCKET_ALIAS_PARENT_ENV,
+  SOCKETS,
+  unixAliasScope,
+} from "@vibefield/contracts";
 import { build } from "esbuild";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
-import { defaultDataRoot, nativeAlive, nativeMgmtEndpoint, splitPathList } from "../src/boot-env";
+import {
+  defaultDataRoot,
+  ensureNativeSocketDir,
+  nativeAlive,
+  nativeEndpoint,
+  nativeMgmtEndpoint,
+  noteSocketAliasParent,
+  socketAliasParent,
+  splitPathList,
+} from "../src/boot-env";
 
 // WIN-3 (thinking-windows-port §4.3/§4.4) — the four decisions fieldd's entry
 // point makes before anything exists. Each is platform-parameterized rather than
@@ -121,6 +136,55 @@ describe("the native mgmt endpoint (WIN-D1)", () => {
     // spawned a second field-native.
     expect(existsSync(nativeMgmtEndpoint("C:\\vf\\a", "win32"))).toBe(false);
   });
+});
+
+// Item 345, the seam slice — the derivation and the keeper read ONE parent from the environment they are handed (an
+// env object here, never this process's), so a harness's long root dials and links under the harness's own folder.
+describe("the socket alias parent (item 345, the seam slice)", () => {
+  const LONG = `/Users/${"b".repeat(40)}/Library/Application Support/VibeField/users/1`;
+
+  it("puts a long root's endpoint under the parent the environment names", () => {
+    const env = { [SOCKET_ALIAS_PARENT_ENV]: "/tmp/vfa-row" };
+    expect(socketAliasParent({})).toBe("/tmp");
+    expect(socketAliasParent(env)).toBe("/tmp/vfa-row");
+    expect(nativeEndpoint(LONG, SOCKETS.MGMT, "darwin", 501, env)).toBe(
+      `/tmp/vfa-row/vf-501/${unixAliasScope(LONG)}/mgmt.sock`,
+    );
+    expect(() => socketAliasParent({ [SOCKET_ALIAS_PARENT_ENV]: "relative" })).toThrow(
+      SOCKET_ALIAS_PARENT_ENV,
+    );
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "makes the keeper's link under that parent, and says a set parent once with no path",
+    () => {
+      // the row's own parent and root, each removed below by this row
+      const parent = mkdtempSync("/tmp/vfa-");
+      const base = mkdtempSync(join(tmpdir(), "vf-boot-env-alias-a-root-over-the-line-"));
+      try {
+        // over the sun_path line under any tmpdir(), CI's short /tmp included
+        const root = join(base, "r".repeat(60), "users", "1");
+        mkdirSync(join(root, "native", "run"), { recursive: true });
+        const env = { [SOCKET_ALIAS_PARENT_ENV]: parent };
+        const warned: string[] = [];
+        ensureNativeSocketDir(root, { warn: (event) => warned.push(event) }, "darwin", env);
+        const uid = process.getuid?.() ?? 0;
+        expect(readlinkSync(`${parent}/vf-${uid}/${unixAliasScope(root)}`)).toBe(
+          join(root, "native", "run"),
+        );
+        expect(warned).toEqual([]);
+        const said: unknown[][] = [];
+        noteSocketAliasParent({ info: (...line: unknown[]) => said.push(line) }, env);
+        expect(said).toEqual([["fieldd.socket_alias.parent_overridden", expect.any(String)]]);
+        expect(JSON.stringify(said)).not.toContain(parent);
+        noteSocketAliasParent({ info: (...line: unknown[]) => said.push(line) }, {});
+        expect(said).toHaveLength(1);
+      } finally {
+        rmSync(parent, { recursive: true, force: true });
+        rmSync(base, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe("nativeAlive is a connect probe, not a stat (WIN-3)", () => {

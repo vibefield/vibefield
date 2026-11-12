@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { FIELDD_DEBUG_SWARM_CORPUS_ENV } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { bundleFielddBin } from "./fieldd-bin-bundle";
+import { runAliasParentEnv } from "./native-harness";
 
 const CORPUS = join(
   import.meta.dirname,
@@ -89,6 +90,7 @@ describe("PG-9 S4c — a packaged fieldd refuses the debug swarm", () => {
         PATH: "/usr/bin:/bin",
         HOME: home,
         TMPDIR: tmpdir(),
+        ...runAliasParentEnv(),
         FIELDD_DATA_DIR: root,
         FIELDD_CONTROL_PORT: "0",
         FIELDD_DATA_PORT: "0",

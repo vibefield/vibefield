@@ -39,7 +39,9 @@ export default defineConfig({
     // Tests that inspect smoke markers opt in exactly as the Electron rig does.
     environmentOptions: { happyDOM: { url: "http://localhost:3000/?godviewMarkers=1" } },
     include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
-    setupFiles: ["./test/setup.ts"],
+    // Item 345: rows that boot fieldd in-process get the run's own socket alias parent
+    globalSetup: ["./test/alias-parent-global.ts"],
+    setupFiles: ["./test/setup.ts", "./test/alias-parent-env.ts"],
     // Item 213: the worker's late ack to a progress report (`[vitest-worker]: Timeout calling "onTaskUpdate"`) reds a run
     // whose every test passed when a row holds the worker's loop past 60 s, as design-system.test.tsx's whole-catalog
     // render does on a loaded runner. This runner drops that one rejection; the file says why and when it retires.

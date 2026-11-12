@@ -12,15 +12,17 @@ import {
   PIPE_SOCKET_NAMES,
   pipeEndpointFor,
   pipeScope,
+  SOCKET_ALIAS_PARENT,
   SUN_PATH_MAX_BYTES,
   socketAliasFor,
+  socketAliasParentFrom,
   socketPathBytes,
   unixAliasScope,
   unixEndpointFor,
   unixSocketDir,
   worstUnixEndpoint,
 } from "../src/endpoints";
-import { LAYOUT, SOCKETS } from "../src/registries";
+import { LAYOUT, SOCKET_ALIAS_PARENT_ENV, SOCKETS } from "../src/registries";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -171,5 +173,30 @@ describe("unix endpoint law (item 345)", () => {
       if (typeof last !== "string" || !last.endsWith(".sock")) continue;
       expect(segments.slice(0, -1)).toEqual([...LAYOUT.NATIVE_RUN_DIR]);
     }
+  });
+});
+
+// Item 345, the seam slice — the alias parent's ONE reading (the Rust twin is `socket_alias_parent_from`, R1's
+// seam row): unset is the product's `/tmp`; a harness's own folder is taken; anything else refuses, never a fallback.
+describe("the socket alias parent's seam (item 345, the seam slice)", () => {
+  it("is the product's /tmp when unset, and a harness's own folder when set", () => {
+    expect(SOCKET_ALIAS_PARENT_ENV).toBe("FIELD_SOCKET_ALIAS_PARENT");
+    expect(socketAliasParentFrom(undefined)).toBe(SOCKET_ALIAS_PARENT);
+    expect(socketAliasParentFrom("/tmp/vfa-abc123")).toBe("/tmp/vfa-abc123");
+  });
+
+  it("refuses a relative or empty value, naming the variable and never the value", () => {
+    for (const raw of ["vfa-abc123", "", "./vfa"]) {
+      expect(() => socketAliasParentFrom(raw)).toThrow(
+        `${SOCKET_ALIAS_PARENT_ENV} must be an absolute path when it is set`,
+      );
+    }
+  });
+
+  it("moves a long root's alias under the harness's folder, and never a root that fits", () => {
+    const parent = socketAliasParentFrom("/tmp/vfa-abc123");
+    const long = `/Users/${"a".repeat(40)}/Library/Application Support/VibeField/users/1`;
+    expect(unixSocketDir(501, long, parent)).toBe(`/tmp/vfa-abc123/vf-501/${unixAliasScope(long)}`);
+    expect(unixSocketDir(501, "/tmp/vf-short", parent)).toBe(nativeRunDirFor("/tmp/vf-short"));
   });
 });

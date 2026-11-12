@@ -273,6 +273,14 @@ pub async fn bootstrap_with_logging(
     // Item 345 — the socket home is made usable before this floor's first bind: the keeper, whose refusal ends the
     // boot in its own words (the alias and its mode, never the data root). A root that fits touches nothing.
     let socket_home = config.socket_home();
+    if config.socket_alias_parent.is_some() {
+        // Said once, with no path: a product launch that was handed the harness seam is visible in its log.
+        tracing::info!(
+            event = "field_native.socket_alias.parent_overridden",
+            component = "socket_alias",
+            "The socket alias's parent is a harness's own, not the product's"
+        );
+    }
     socket_home
         .ensure("mgmt")
         .map_err(|refusal| anyhow::anyhow!("the socket home was refused: {refusal}"))?;

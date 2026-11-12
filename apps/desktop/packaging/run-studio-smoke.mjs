@@ -15,6 +15,11 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { constants, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  aliasParentEnv,
+  makeRunAliasParent,
+  removeRunAliasParent,
+} from "../../../scripts/run-alias-parent.mjs";
 import { leftByRun, leftNames, SMOKE_RUN_ENV } from "./smoke-daemons.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -42,12 +47,19 @@ process.stdout.write(
   `SMOKE_STUDIO_ROOT ${JSON.stringify({ root, user: JSON.parse(minted.stdout) })}\n`,
 );
 
+// Item 345: the run's own socket alias parent: a smoke is a harness, never a person's root, whatever its root's length
+const aliasParent = makeRunAliasParent();
 const child = spawn(
   process.execPath,
   [join(repoRoot, "tooling", "dev-runner", "src", "cli.mjs"), "--studio-physical"],
   {
     cwd: repoRoot,
-    env: { ...process.env, VIBEFIELD_DEV_ROOT: root, [SMOKE_RUN_ENV]: mark },
+    env: {
+      ...process.env,
+      ...aliasParentEnv(aliasParent),
+      VIBEFIELD_DEV_ROOT: root,
+      [SMOKE_RUN_ENV]: mark,
+    },
     stdio: "inherit",
   },
 );
@@ -65,6 +77,10 @@ const settle = async (code) => {
   }
   const ok = code === 0 && daemons.left.length === 0;
   if (ok) rmSync(root, { recursive: true, force: true });
+  const aliasLeft = removeRunAliasParent(aliasParent);
+  if (aliasLeft !== null) {
+    process.stderr.write(`run-studio-smoke: left its socket alias parent: ${aliasLeft}\n`);
+  }
   process.stdout.write(
     `SMOKE_STUDIO_ROOT_REMOVED ${JSON.stringify({ root, removed: !existsSync(root), kept: !ok })}\n`,
   );

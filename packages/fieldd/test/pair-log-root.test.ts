@@ -25,6 +25,7 @@ import { dirname, join } from "node:path";
 import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { runAliasParentEnv } from "./native-harness";
 
 let cleanup: Array<() => void | Promise<void>> = [];
 
@@ -118,6 +119,7 @@ describe("item 78 — two users' fieldds under one platform log root both log, e
           PATH: "/usr/bin:/bin",
           HOME: home,
           TMPDIR: tmpdir(),
+          ...runAliasParentEnv(),
           FIELDD_USER_ROOT: userRoot,
           FIELDD_USER_ID: `01JTESTUSER00000000000000${fuid}`,
           FIELDD_CONTROL_PORT: "0",

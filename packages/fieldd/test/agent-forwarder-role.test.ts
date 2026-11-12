@@ -54,6 +54,7 @@ import {
   bundleAgentForwarder,
 } from "./agent-forwarder-bundle";
 import { bundleFielddBin } from "./fieldd-bin-bundle";
+import { runAliasParentEnv } from "./native-harness";
 
 const PACKAGE_ROOT = join(import.meta.dirname, "..");
 
@@ -258,6 +259,7 @@ describe("`node bin.cjs --vibefield-role=agent-forwarder …` — what a package
           PATH: process.env["PATH"] ?? "/usr/bin:/bin",
           HOME: dir,
           VF_ROW_TOKEN: token,
+          ...runAliasParentEnv(),
           FIELDD_DATA_DIR: data,
           FIELDD_CONTROL_PORT: "0",
         },
@@ -298,6 +300,7 @@ describe("`node bin.cjs --vibefield-role=agent-forwarder …` — what a package
           // its 250 ms default is a loaded host's to miss, and a late relay is dropped in silence
           PUPPETEER_STATUSLINE_TIMEOUT_MS: "5000",
           VF_ROW_TOKEN: token,
+          ...runAliasParentEnv(),
           FIELDD_DATA_DIR: data,
           FIELDD_CONTROL_PORT: "0",
         },
@@ -334,6 +337,7 @@ process.exit(99);
         {
           PATH: process.env["PATH"] ?? "/usr/bin:/bin",
           HOME: dir,
+          ...runAliasParentEnv(),
           FIELDD_DATA_DIR: data,
           FIELDD_CONTROL_PORT: "0",
         },
@@ -370,6 +374,7 @@ process.exit(99);
           PATH: process.env["PATH"] ?? "/usr/bin:/bin",
           HOME: dir,
           VF_ROW_TOKEN: "missing-row-token",
+          ...runAliasParentEnv(),
           FIELDD_DATA_DIR: data,
           FIELDD_CONTROL_PORT: "0",
         },

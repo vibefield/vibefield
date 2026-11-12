@@ -268,6 +268,7 @@ import {
   nativeAlive,
   nativeEndpoint,
   nativeMgmtEndpoint,
+  noteSocketAliasParent,
   splitPathList,
 } from "./boot-env";
 import { openSwarmReplay } from "./debug/swarm-replay";
@@ -973,6 +974,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     return loggingClosePromise;
   };
   logger.info("fieldd.lifecycle.boot_started", "fieldd boot started");
+  // Item 345 — the alias's parent, read once before anything dials: a bad value ends the boot (its logging closed
+  // first), and a set one is said in one line.
+  try {
+    noteSocketAliasParent(logger);
+  } catch (error) {
+    await closeLogging();
+    throw error;
+  }
   const tokens = new TokenService();
   const audit = new AuditService({
     dataDir: config.dataDir,

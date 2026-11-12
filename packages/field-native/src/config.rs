@@ -213,8 +213,10 @@ pub struct NativeConfig {
     /// nothing in the product sets it.
     #[doc(hidden)]
     pub mesh_probe: Option<MeshProbeIdentity>,
-    /// Item 345 TEST SEAM — where a root over the sun_path line keeps its socket alias. `None` (every constructor)
-    /// is `endpoints::SOCKET_ALIAS_PARENT`; no env var reads it.
+    /// Item 345 TEST SEAM — where a root over the sun_path line keeps its socket alias. `None` is
+    /// `endpoints::SOCKET_ALIAS_PARENT`. *Corrected 2026-11-12 (the seam slice):* this said "no env var reads it";
+    /// `from_env` now reads `registries::SOCKET_ALIAS_PARENT_ENV` (a harness seam the product never sets), and the
+    /// test constructors leave it `None` for a row to set.
     #[doc(hidden)]
     pub socket_alias_parent: Option<PathBuf>,
 }
@@ -348,6 +350,11 @@ impl NativeConfig {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
+        // Item 345 — a harness's own alias parent; a relative, empty or non-UTF-8 value fails the config load.
+        let socket_alias_parent = crate::endpoints::socket_alias_parent_from(
+            std::env::var_os(crate::registries::SOCKET_ALIAS_PARENT_ENV).as_deref(),
+        )
+        .map_err(anyhow::Error::msg)?;
         Ok(Self {
             data_dir,
             log_root,
@@ -362,7 +369,7 @@ impl NativeConfig {
             allowed_origins,
             mesh_start_timeout: None,
             mesh_probe: None,
-            socket_alias_parent: None,
+            socket_alias_parent,
         })
     }
 

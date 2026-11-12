@@ -45,6 +45,7 @@ import {
   nativeBinPath,
   nativeEndpoint,
   removeTempRoot,
+  runAliasParentEnv,
   shortTmpRoot,
   waitForMgmtEndpoint,
   waitWithEvidence,
@@ -254,6 +255,7 @@ describe.skipIf(ZSH === undefined)(
         floor = spawn(BIN, [], {
           env: {
             ...environment,
+            ...runAliasParentEnv(),
             FIELD_NATIVE_DATA_DIR: dataDir,
             FIELD_LOG_DIR: join(dataDir, "logs"),
             FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE: "1",

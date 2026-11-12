@@ -17,7 +17,7 @@
 // field-native/src/endpoints.rs and pinned to this one by
 // fixtures/endpoint.vector.json — the layout.vector.json pattern (EL9).
 
-import { APP_ID, LAYOUT, SOCKETS } from "./registries";
+import { APP_ID, LAYOUT, SOCKET_ALIAS_PARENT_ENV, SOCKETS } from "./registries";
 
 // APP_ID doubles as the pipe-name brand — one authority, and a change to it is
 // a deliberate event the endpoint vector catches (it would orphan every running
@@ -114,6 +114,19 @@ export const CELL_INSTANCE_MAX = 4_294_967_295;
 
 /** Where the aliases of roots over the line live: one 0700 folder per uid. */
 export const SOCKET_ALIAS_PARENT = "/tmp";
+
+/** The alias's parent from `SOCKET_ALIAS_PARENT_ENV`'s raw value, the ONE reading both TS planes make (fieldd's
+ * boot-env, the supervisor's guard); the Rust twin is `socket_alias_parent_from`. Unset is the product's `/tmp`. A
+ * set value must be absolute: a relative or empty one throws, and never falls back to `/tmp`, because a harness
+ * whose seam silently fell back would leave its links in the account's own folder. The message names the variable,
+ * never the value. */
+export function socketAliasParentFrom(raw: string | undefined): string {
+  if (raw === undefined) return SOCKET_ALIAS_PARENT;
+  if (!raw.startsWith("/")) {
+    throw new Error(`${SOCKET_ALIAS_PARENT_ENV} must be an absolute path when it is set`);
+  }
+  return raw;
+}
 
 /** The bytes a socket path costs `sun_path` (UTF-8, as the kernel counts them). */
 export function socketPathBytes(path: string): number {

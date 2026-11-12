@@ -1,7 +1,13 @@
 import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { delimiter, posix, win32 } from "node:path";
-import { pipeEndpointFor, SOCKETS, unixEndpointFor } from "@vibefield/contracts";
+import {
+  pipeEndpointFor,
+  SOCKET_ALIAS_PARENT_ENV,
+  SOCKETS,
+  socketAliasParentFrom,
+  unixEndpointFor,
+} from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import { ensureSocketDirOutcome } from "@vibefield/users";
 
@@ -61,14 +67,40 @@ export function nativeEndpoint(
   socketFile: string,
   platform = process.platform,
   uid = process.getuid?.() ?? 0,
+  env: NodeJS.ProcessEnv = process.env,
 ): string {
   // Item 345: the unix arm is the endpoint law itself (contracts' `unixEndpointFor`, field-native's
   // `unix_endpoint_for` its twin): the run-dir path for a root whose worst socket path fits sun_path, the short
-  // alias `/tmp/vf-<uid>/<scope>/<file>` for a root over the line. It joins with "/" alone, so a Windows test host
-  // never backslashes the unix arm. This derives; every dial runs `ensureNativeSocketDir` first.
+  // alias `<parent>/vf-<uid>/<scope>/<file>` for a root over the line, under the SAME parent the keeper uses. It
+  // joins with "/" alone, so a Windows test host never backslashes the unix arm. This derives; every dial runs
+  // `ensureNativeSocketDir` first.
   return platform === "win32"
     ? pipeEndpointFor(dataRoot, socketFile)
-    : unixEndpointFor(uid, dataRoot, socketFile);
+    : unixEndpointFor(uid, dataRoot, socketFile, socketAliasParent(env));
+}
+
+/** Item 345, the seam slice — the alias's parent for this process: contracts' `socketAliasParentFrom` over
+ * `SOCKET_ALIAS_PARENT_ENV`. Unset is the product's `/tmp`; a harness (tests, smokes, lab runs) sets a short folder
+ * of its own run's. Both the derivation above and the keeper below read it here, so they can never name two
+ * parents. A relative or empty value throws. */
+export function socketAliasParent(env: NodeJS.ProcessEnv = process.env): string {
+  return socketAliasParentFrom(env[SOCKET_ALIAS_PARENT_ENV]);
+}
+
+/** Item 345 — fieldd's boot reads the parent ONCE before anything dials: a relative or empty value throws and ends
+ * the boot, and a set value is said in one log line with no path, so a product launch handed the harness seam is
+ * visible in its log. */
+export function noteSocketAliasParent(
+  logger: Pick<Logger, "info">,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  socketAliasParent(env);
+  if (env[SOCKET_ALIAS_PARENT_ENV] !== undefined) {
+    logger.info(
+      "fieldd.socket_alias.parent_overridden",
+      "The socket alias's parent is a harness's own, not the product's",
+    );
+  }
 }
 
 /** The management channel — the endpoint fieldd's NativeLink dials. */
@@ -84,9 +116,10 @@ export function ensureNativeSocketDir(
   dataRoot: string,
   logger: Pick<Logger, "warn">,
   platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
 ): void {
   if (platform === "win32") return;
-  const outcome = ensureSocketDirOutcome(dataRoot);
+  const outcome = ensureSocketDirOutcome(dataRoot, { parent: socketAliasParent(env) });
   if (outcome.replaced) {
     logger.warn(
       "fieldd.socket_alias.replaced",

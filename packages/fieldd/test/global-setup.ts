@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { TestProject } from "vitest/node";
+import { setupRunAliasParent } from "../../../scripts/run-alias-parent.mjs";
 import { nativeBinPath, nativeBuildEnv } from "./native-harness";
 
 declare module "vitest" {
@@ -12,6 +13,10 @@ declare module "vitest" {
      * share and no single row owns (the files-host bundle, `files-host-bundle.ts`). A row's own root is the row's
      * to remove (its afterEach); a root here outlives every row of a file but never the run. */
     fielddRunRoot: string;
+    /** Item 345: the run's own socket alias parent, `/tmp/vfa-XXXXXX`, made here and removed at the teardown by its
+     * maker alone; "" on win32, whose endpoints are pipes. `alias-parent-env.ts` puts it in each worker's
+     * environment. */
+    socketAliasParent: string;
   }
 }
 
@@ -82,5 +87,14 @@ export async function setup(project: TestProject): Promise<() => void> {
   // Made only once the build is green, so a red setup leaves nothing behind.
   const runRoot = mkdtempSync(join(tmpdir(), "vf-fieldd-run-"));
   project.provide("fielddRunRoot", runRoot);
-  return () => rmSync(runRoot, { recursive: true, force: true, maxRetries: 3 });
+  // Item 345, the seam slice: the run's own socket alias parent and the witness (scripts/run-alias-parent.mjs). The
+  // teardown removes it and throws, in counts alone, if the run left a link in the account's /tmp/vf-<uid>/.
+  const aliasTeardown = setupRunAliasParent(
+    (parent) => project.provide("socketAliasParent", parent),
+    "fieldd run",
+  );
+  return () => {
+    rmSync(runRoot, { recursive: true, force: true, maxRetries: 3 });
+    aliasTeardown();
+  };
 }

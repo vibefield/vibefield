@@ -57,6 +57,11 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  aliasParentEnv,
+  makeRunAliasParent,
+  removeRunAliasParent,
+} from "../../../scripts/run-alias-parent.mjs";
 import { leftByRun, listRunProcesses, SMOKE_RUN_ENV } from "./smoke-daemons.mjs";
 
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -419,8 +424,13 @@ async function main(argv) {
     const bStart = Date.now();
     const launch = phaseBLaunch({ home: dataRoot, keyClass });
     const out = [];
+    // Item 345: phase B's own socket alias parent (phase A's run-smoke.mjs makes and removes its own)
+    const aliasParent = makeRunAliasParent();
     const child = spawn(exe, launch.args, {
-      env: appEnv(process.env, { home, fieldd: launch.fieldd, mark }),
+      env: {
+        ...appEnv(process.env, { home, fieldd: launch.fieldd, mark }),
+        ...aliasParentEnv(aliasParent),
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
     child.stdout.on("data", (c) => out.push(c));
@@ -453,6 +463,9 @@ async function main(argv) {
     writeFileSync(join(run, "phase-b.log"), Buffer.concat(out));
     const daemons = await leftByRun(mark);
     const still = listRunProcesses(mark);
+    // phase B's pair is reaped: its maker removes the alias parent, or leaves it and says why
+    const aliasLeft = removeRunAliasParent(aliasParent);
+    if (aliasLeft !== null) say("SMOKE_PROFILE_ALIAS_PARENT_LEFT", { reason: aliasLeft });
     say("SMOKE_DAEMONS", {
       ...daemons,
       expected: "production leaves fieldd and the floor running; the row stops them",

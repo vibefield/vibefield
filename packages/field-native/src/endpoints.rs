@@ -87,6 +87,24 @@ pub const CELL_INSTANCE_MAX: u32 = u32::MAX;
 /// Where the aliases of roots over the line live: one 0700 folder per uid.
 pub const SOCKET_ALIAS_PARENT: &str = "/tmp";
 
+/// The alias's parent from `SOCKET_ALIAS_PARENT_ENV`'s raw value; the TS twin is `socketAliasParentFrom`. `None` is
+/// unset, the product's `/tmp`. A set value must be absolute UTF-8: anything else is refused, never a fallback to
+/// `/tmp`, because a harness whose seam silently fell back would leave its links in the account's own folder. The
+/// refusal names the variable, never the value.
+pub fn socket_alias_parent_from(
+    raw: Option<&std::ffi::OsStr>,
+) -> Result<Option<std::path::PathBuf>, String> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let name = crate::registries::SOCKET_ALIAS_PARENT_ENV;
+    match raw.to_str() {
+        Some(value) if value.starts_with('/') => Ok(Some(std::path::PathBuf::from(value))),
+        Some(_) => Err(format!("{name} must be an absolute path when it is set")),
+        None => Err(format!("{name} must be valid UTF-8 when it is set")),
+    }
+}
+
 fn trim_trailing_slashes(root: &str) -> &str {
     let mut trimmed = root;
     while trimmed.len() > 1 && trimmed.ends_with('/') {

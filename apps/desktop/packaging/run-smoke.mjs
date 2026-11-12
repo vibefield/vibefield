@@ -21,6 +21,11 @@ import { createRequire } from "node:module";
 import { constants } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  aliasParentEnv,
+  makeRunAliasParent,
+  removeRunAliasParent,
+} from "../../../scripts/run-alias-parent.mjs";
 import { leftByRun, leftNames, SMOKE_RUN_ENV } from "./smoke-daemons.mjs";
 import { mintSmokeHome } from "./smoke-profile.mjs";
 
@@ -29,10 +34,12 @@ const electronPath = createRequire(import.meta.url)("electron");
 const home = mintSmokeHome();
 const mark = basename(home.dir);
 const keepRoot = process.env["VF_SMOKE_KEEP_ROOT"] === "1";
+// Item 345: the run's own socket alias parent, so the smoke's pair leaves no link in the account's /tmp/vf-<uid>/
+const aliasParent = makeRunAliasParent();
 
 const child = spawn(electronPath, [desktopRoot, home.arg, ...process.argv.slice(2)], {
   cwd: desktopRoot,
-  env: { ...process.env, [SMOKE_RUN_ENV]: mark },
+  env: { ...process.env, ...aliasParentEnv(aliasParent), [SMOKE_RUN_ENV]: mark },
   stdio: "inherit",
 });
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
@@ -49,6 +56,11 @@ const settle = async (code) => {
   }
   const settled = home.settle({ code, keepRoot });
   process.stdout.write(`SMOKE_PROFILE_REMOVED ${JSON.stringify(settled)}\n`);
+  // the pair is gone: its maker removes the alias parent, or leaves it and says why
+  const aliasLeft = removeRunAliasParent(aliasParent);
+  if (aliasLeft !== null) {
+    process.stderr.write(`run-smoke: left its socket alias parent: ${aliasLeft}\n`);
+  }
   // a home kept for its data root (a red run's logs, phase A's board) is the run's choice, never a leak
   const clean = (settled.removed || settled.kept !== undefined) && daemons.left.length === 0;
   process.exit(clean ? code : code === 0 ? 1 : code);

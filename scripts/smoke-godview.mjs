@@ -33,7 +33,7 @@ const marker = "SMOKE_GODVIEW ";
 const electron = createRequire(join(desktop, "package.json"))("electron");
 
 try {
-  process.exitCode = await withLabProfile(async ({ directory, id }) => {
+  process.exitCode = await withLabProfile(async ({ directory, id, aliasEnv }) => {
     const mark = basename(directory);
     const verdicts = [];
     const result = await new Promise((done, fail) => {
@@ -49,7 +49,8 @@ try {
         ],
         {
           cwd: desktop,
-          env: { ...process.env, [SMOKE_RUN_ENV]: mark },
+          // item 345: the run's own socket alias parent (withLabProfile made it and removes it)
+          env: { ...process.env, ...aliasEnv, [SMOKE_RUN_ENV]: mark },
           stdio: ["ignore", "pipe", "pipe"],
         },
       );

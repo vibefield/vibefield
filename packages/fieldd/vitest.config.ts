@@ -46,6 +46,8 @@ export default defineConfig({
   test: {
     fileParallelism: !process.env["CI"] && process.platform !== "win32",
     globalSetup: ["./test/global-setup.ts"],
+    // Item 345: the run's own socket alias parent in every worker's environment (test/alias-parent-env.ts)
+    setupFiles: ["./test/alias-parent-env.ts"],
     testTimeout: 30_000,
     hookTimeout: 30_000,
     env: { HISTFILE: "/dev/null" },
