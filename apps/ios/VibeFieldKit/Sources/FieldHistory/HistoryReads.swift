@@ -71,6 +71,12 @@ public enum HistoryReads {
   /// the head: 240 rows, so a reset's newest `INDEX_TAILNET_LIMITS.MAX_ROWS` (100) and a hole of up to 140
   /// rows below them close. Past them the rows below the last page read are dropped, and the log says so.
   public static let fillPages = 6
+  /// Item 362b — an approach to a document's top reads pages on until they hold this many MESSAGES (a prompt, or a
+  /// reply with words or an attachment), so a page of nothing but tool rows does not land as "earlier" with no
+  /// message in it: the room's rule and figure (rosetta `lib/transcript/history-window.ts`, six primary messages)…
+  public static let earlierMessages = 6
+  /// …in at most this many asks of `pageRows`, the room's hard bound for enormous tool runs: 200 rows an approach.
+  public static let earlierPages = 5
   /// SE-P1 — the most live runs one Live now ask names: the contract's own bound on `nativeSessionIds`
   /// (`IndexSearchParams`, `.max(256)`); a field past it is asked for its first runs, in the field's order.
   public static let liveRuns = 256
@@ -83,11 +89,15 @@ public enum HistoryReads {
 
   static let logger = Logger(subsystem: "com.jamesyong.vibefield.kit", category: "history")
 
-  // Item 362b (red) — the names `HistoryEarlierTests` calls, answering nothing yet: no bound, and no row that is a
-  // message. The walk and its figures are the next commit's.
-  public static let earlierMessages = 0
-  public static let earlierPages = 0
-  static func isMessage(_ row: IndexTimelineRow) -> Bool { false }
+  /// Item 362b — a row the reader came for: a prompt of a person's (never a parent agent's invocation), or a reply
+  /// that carries words or an attachment (the room's `isPrimaryMessage`, by the row's projected facts).
+  static func isMessage(_ row: IndexTimelineRow) -> Bool {
+    switch row.kind {
+    case "user": row.groupKind != "parent_invocation"
+    case "agent": !(row.text ?? "").isEmpty || !row.attachments.isEmpty
+    default: false
+    }
+  }
 
   /// A reader's line on the device: the unified log at the default level, every argument public (a count and
   /// ordinals, never a row's text), so Console shows it without Include Info.
@@ -159,7 +169,8 @@ public final class HistoryDesktopReader: Identifiable {
   /// Sessions whose document is being read right now (the route shows a
   /// reading note, never a blank).
   public private(set) var reading: Set<String> = []
-  /// Item 362b (red) — never filled yet.
+  /// Item 362b — sessions whose earlier rows are being read right now: one read a session at a time, and the rule
+  /// at the document's top says so.
   public private(set) var readingEarlier: Set<String> = []
   /// The door's last refusal, in its own words, for the record.
   public private(set) var failure: String?
@@ -383,34 +394,52 @@ public final class HistoryDesktopReader: Identifiable {
     }
   }
 
+  /// Item 362b — the rows above the document's top, read on until they hold `earlierMessages` messages, in at most
+  /// `earlierPages` asks. One read a session at a time; a cursor that does not advance ends it (a door that goes
+  /// round is not followed), and so does the session's start.
   private func readOlder(_ sessionId: String) {
-    guard let door, !closed, let cursor = cursors[sessionId], tasks["older/\(sessionId)"] == nil else { return }
+    guard let door, !closed, cursors[sessionId] != nil, tasks["older/\(sessionId)"] == nil else { return }
+    readingEarlier.insert(sessionId)
     if let direct = directRead, direct.session == sessionId {
-      readOlderDirectly(sessionId, cursor: cursor, through: direct.read)
+      readOlderDirectly(sessionId, through: direct.read)
       return
     }
     tasks["older/\(sessionId)"] = Task { [weak self] in
       guard let self else { return }
-      defer { tasks["older/\(sessionId)"] = nil }
-      do {
-        let page = try await door.call(
-          "index.timeline",
-          params: .object([
-            "sessionId": .string(sessionId), "cursor": .string(cursor),
-            "limit": .int(Int64(HistoryReads.pageRows)),
-          ])
-        ).decode(IndexTimelineResult.self)
-        guard !Task.isCancelled else { return }
-        for row in page.entries { rows[sessionId, default: [:]][row.timelineId] = row }
-        cursors[sessionId] = page.nextCursor
-        rebuildDocument(sessionId)
-      } catch {
-        // the session was rewritten under the cursor: the head is read again
-        if let refusal = error as? FieldProductError, refusal.kind == "PRECONDITION_FAILED" {
-          reopen(sessionId)
+      defer {
+        tasks["older/\(sessionId)"] = nil
+        readingEarlier.remove(sessionId)
+      }
+      var messages = 0
+      for _ in 0..<HistoryReads.earlierPages {
+        guard let cursor = cursors[sessionId] else { return }
+        do {
+          let page = try await door.call(
+            "index.timeline",
+            params: .object([
+              "sessionId": .string(sessionId), "cursor": .string(cursor),
+              "limit": .int(Int64(HistoryReads.pageRows)),
+            ])
+          ).decode(IndexTimelineResult.self)
+          guard !Task.isCancelled else { return }
+          var held = rows[sessionId] ?? [:]
+          for row in page.entries {
+            if held[row.timelineId] == nil, HistoryReads.isMessage(row) { messages += 1 }
+            held[row.timelineId] = row
+          }
+          rows[sessionId] = held
+          cursors[sessionId] = page.nextCursor
+          rebuildDocument(sessionId)
+          if page.nextCursor == cursor || messages >= HistoryReads.earlierMessages { return }
+        } catch {
+          // the session was rewritten under the cursor: the head is read again
+          if let refusal = error as? FieldProductError, refusal.kind == "PRECONDITION_FAILED" {
+            reopen(sessionId)
+            return
+          }
+          refused(error)
           return
         }
-        refused(error)
       }
     }
   }
@@ -555,13 +584,23 @@ public final class HistoryDesktopReader: Identifiable {
     rebuildDocument(sessionId)
   }
 
-  private func readOlderDirectly(_ sessionId: String, cursor: String, through read: HistoryDirectRead) {
+  /// Item 362b — the same walk over rosetta's own pages: each is revealed under the subscription, which lands its
+  /// rows and its cursor here before the next is asked.
+  private func readOlderDirectly(_ sessionId: String, through read: HistoryDirectRead) {
     tasks["older/\(sessionId)"] = Task { [weak self] in
-      let revealed = await read.older(cursor: cursor)
-      guard let self else { return }
-      tasks["older/\(sessionId)"] = nil
-      // the revealed rows landed before the page's cursor was the document's
-      if revealed { rebuildDocument(sessionId) }
+      var messages = 0
+      for _ in 0..<HistoryReads.earlierPages {
+        guard let self, let cursor = self.cursors[sessionId] else { break }
+        let before = Set((self.rows[sessionId] ?? [:]).keys)
+        guard await read.older(cursor: cursor) else { break }
+        // the revealed rows landed before the page's cursor was the document's
+        self.rebuildDocument(sessionId)
+        messages += (self.rows[sessionId] ?? [:]).values
+          .filter { !before.contains($0.timelineId) && HistoryReads.isMessage($0) }.count
+        if self.cursors[sessionId] == cursor || messages >= HistoryReads.earlierMessages { break }
+      }
+      self?.tasks["older/\(sessionId)"] = nil
+      self?.readingEarlier.remove(sessionId)
     }
   }
 

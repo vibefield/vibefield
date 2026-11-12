@@ -46,9 +46,23 @@ struct HistoryFollow: Equatable, Sendable {
     var away: Bool
   }
 
+  /// Item 362b — what the rule at the document's top says.
+  enum Head: Equatable, Sendable {
+    /// Nothing is above: `Session start · Sat 12 Sep`.
+    case start
+    /// Rows are above and none is being read: `Earlier`, which a press reads too.
+    case earlier
+    /// Rows above are being read: `Reading earlier…`.
+    case reading
+    /// Rows are above and their desktop does not answer: `Earlier · needs studio`.
+    case asleep
+  }
+
   let opening: Opening
   /// The document keeps its foot in view.
   private(set) var following: Bool
+  /// A finger has moved this page at least once.
+  private(set) var touched = false
   /// A page above was asked for and has not settled: what it adds lands above the reader's place.
   private(set) var holding = false
 
@@ -59,7 +73,10 @@ struct HistoryFollow: Equatable, Sendable {
   }
 
   /// A finger moved the page: the following stops at once, wherever the page is.
-  mutating func dragged() { following = false }
+  mutating func dragged() {
+    following = false
+    touched = true
+  }
 
   /// The page came to rest: at the foot it follows, off it it does not.
   mutating func rested(atFoot: Bool) { following = atFoot }
@@ -91,6 +108,27 @@ struct HistoryFollow: Equatable, Sendable {
   /// Which edge a change in height leaves alone.
   var growth: Growth { following || holding ? .foot : .head }
 
+  // MARK: Earlier rows (item 362b)
+
+  /// Within one screen of the document's top (the room's distance: `scrollTop <= clientHeight`).
+  static func nearTop(offset: CGFloat, container: CGFloat) -> Bool { offset <= container }
+
+  /// Whether the rows above are asked for now, by themselves: the reader is within a screen of the top, rows are
+  /// above (`cursor`), their desktop answers, and none is being read. A cursor a finished read left where it was
+  /// (`stalled`) is never asked by itself again, so nothing asks in a loop at the top of a page that will not grow;
+  /// a press on `Earlier` still asks. A document a search landed in waits for a finger, so the landing stays put.
+  func asksEarlier(nearTop: Bool, cursor: String?, stalled: String?, awake: Bool, reading: Bool) -> Bool {
+    guard let cursor, nearTop, awake, !reading else { return false }
+    guard opening == .end || touched else { return false }
+    return cursor != stalled
+  }
+
+  static func head(hasEarlier: Bool, reading: Bool, awake: Bool) -> Head {
+    guard hasEarlier else { return .start }
+    if reading { return .reading }
+    return awake ? .earlier : .asleep
+  }
+
   static func words(_ pill: Pill) -> String {
     switch pill {
     case .arrivals(let count): "\(count) new"
@@ -104,21 +142,4 @@ struct HistoryFollow: Equatable, Sendable {
     case .latest: "Scroll to the latest row"
     }
   }
-}
-
-// Item 362b (red) — the names `HistoryEarlierTests` calls, answering nothing yet: a top that is never near, that
-// never asks, and a rule that only ever says the session's start. The rule is the next commit's.
-extension HistoryFollow {
-  enum Head: Equatable, Sendable {
-    case start
-    case earlier
-    case reading
-    case asleep
-  }
-
-  static func nearTop(offset: CGFloat, container: CGFloat) -> Bool { false }
-
-  func asksEarlier(nearTop: Bool, cursor: String?, stalled: String?, awake: Bool, reading: Bool) -> Bool { false }
-
-  static func head(hasEarlier: Bool, reading: Bool, awake: Bool) -> Head { .start }
 }

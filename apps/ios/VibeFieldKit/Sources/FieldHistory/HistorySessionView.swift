@@ -25,6 +25,8 @@ struct HistorySessionView: View {
   let standing: FieldHistoryModel.DesktopStanding
   @Bindable var router: HistoryRouter
   var arrivals: Int = 0
+  /// Item 362b — the reader is reading this session's earlier rows right now.
+  var readingEarlier = false
   var onNeed: (HistoryNeed) -> Void = { _ in }
 
   @Environment(\.colorScheme) private var scheme
@@ -34,11 +36,16 @@ struct HistorySessionView: View {
   @State private var follow: HistoryFollow
   @State private var scroll: ScrollPosition
   @State private var reach = HistoryFollow.Reach(atFoot: true, away: false)
+  /// Item 362b — within a screen of the top; the cursor the last ask went out on, and one a read left unmoved.
+  @State private var nearTop = false
+  @State private var askedCursor: String?
+  @State private var stalledCursor: String?
+  @State private var settling: Task<Void, Never>?
 
   init(
     document: HistoryDocument, corpus: HistoryCorpus, ledger: HistoryCorpus? = nil,
     standing: FieldHistoryModel.DesktopStanding, router: HistoryRouter, arrivals: Int = 0,
-    onNeed: @escaping (HistoryNeed) -> Void = { _ in }
+    readingEarlier: Bool = false, onNeed: @escaping (HistoryNeed) -> Void = { _ in }
   ) {
     self.document = document
     self.corpus = corpus
@@ -46,6 +53,7 @@ struct HistorySessionView: View {
     self.standing = standing
     self.router = router
     self.arrivals = arrivals
+    self.readingEarlier = readingEarlier
     self.onNeed = onNeed
     let landed = router.landed.map { $0.sessionId == document.id && $0.device == corpus.deviceId } ?? false
     let follow = HistoryFollow(landed: landed)
@@ -60,7 +68,7 @@ struct HistorySessionView: View {
   /// content's last row and the arrival pill both clear it, or the pill
   /// hangs behind the glass where no one sees it.
   static let barClearance: CGFloat = 80
-  /// Item 362a — how long after a page above lands the foot is still held: its rows' layout, and a beat.
+  /// Item 362a — how long after the rows above land the foot is still held: their layout, and a beat.
   static let earlierSettles = Duration.milliseconds(250)
 
   private var awake: Bool { standing.isAwake }
@@ -85,10 +93,10 @@ struct HistorySessionView: View {
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 0) {
           head
-          if document.nextCursor != nil {
-            earlier
-          } else {
-            RuleLine(text: "Session start · \(document.startDay)")
+          switch HistoryFollow.head(hasEarlier: document.nextCursor != nil, reading: readingEarlier, awake: awake) {
+          case .start: RuleLine(text: "Session start · \(document.startDay)")
+          case .reading: RuleLine(text: "Reading earlier…")
+          case .earlier, .asleep: earlier
           }
           ForEach(document.turns) { turn in
             turnView(turn)
@@ -125,6 +133,34 @@ struct HistorySessionView: View {
       } action: { _, now in
         reach = now
       }
+      // Item 362b — within a screen of the top the rows above are read in by themselves. The document's height
+      // rides in the value so the first layout is heard, whatever the offset was when it was first reckoned.
+      .onScrollGeometryChange(for: TopReach.self) { geometry in
+        TopReach(
+          near: HistoryFollow.nearTop(
+            offset: geometry.contentOffset.y + geometry.contentInsets.top, container: geometry.containerSize.height),
+          height: geometry.contentSize.height.rounded())
+      } action: { _, now in
+        if nearTop != now.near { nearTop = now.near }
+      }
+      .onChange(of: wantsEarlier, initial: true) { _, wants in
+        if wants { askEarlier() }
+      }
+      .onChange(of: readingEarlier, initial: true) { was, reading in
+        if reading {
+          // what the read adds lands above the reader's place
+          settling?.cancel()
+          follow.askedEarlier()
+        } else if was {
+          // a read that left the cursor where it was is not asked again by itself
+          if document.nextCursor == askedCursor { stalledCursor = askedCursor }
+          settling = Task { @MainActor in
+            try? await Task.sleep(for: Self.earlierSettles)
+            guard !Task.isCancelled else { return }
+            follow.earlierSettled()
+          }
+        }
+      }
       // The arrival pill's one fact: whether the document's END is on screen.
       // Read from the scroll's geometry, not an `onAppear` on the end marker —
       // a lazy stack lays its last rows out ahead of the viewport, which read
@@ -157,13 +193,6 @@ struct HistorySessionView: View {
         guard let anchor else { return }
         follow.landed()
         withAnimation(FieldMotion.ease(0.45)) { proxy.scrollTo(anchor, anchor: .center) }
-      }
-      .onChange(of: document.nextCursor) { _, _ in
-        // the page above has landed: once it is laid out, a change in height is the reader's own again
-        Task { @MainActor in
-          try? await Task.sleep(for: Self.earlierSettles)
-          follow.earlierSettled()
-        }
       }
       .onDisappear {
         // Leaving the document ends the landing: the stepper has nothing to walk.
@@ -215,13 +244,33 @@ struct HistorySessionView: View {
     }
   }
 
-  /// SP-6 — the older page's door: a rule with a button in it.
+  /// Item 362b — the rows above are wanted now (`HistoryFollow.asksEarlier`).
+  private var wantsEarlier: Bool {
+    follow.asksEarlier(
+      nearTop: nearTop, cursor: document.nextCursor, stalled: stalledCursor, awake: awake, reading: readingEarlier)
+  }
+
+  private func askEarlier() {
+    guard document.nextCursor != nil, awake, !readingEarlier else { return }
+    askedCursor = document.nextCursor
+    onNeed(.older(device: corpus.deviceId, session: document.id))
+  }
+
+  /// What the top's geometry says: near it, and the document's height (so a first layout is a change).
+  private struct TopReach: Equatable {
+    var near: Bool
+    var height: CGFloat
+  }
+
+  /// SP-6 — the older page's door: a rule with a button in it. Item 362b — the rows above arrive by themselves as
+  /// the reader nears the top; the press stays, and asks again after a read that brought nothing.
   private var earlier: some View {
     HStack(spacing: 10) {
       Rectangle().fill(ChromePalette.ruleStrong).frame(height: 1)
       Button {
-        follow.askedEarlier()
-        onNeed(.older(device: corpus.deviceId, session: document.id))
+        // a press asks again where a read by itself would not
+        stalledCursor = nil
+        askEarlier()
       } label: {
         Text(awake ? "Earlier" : "Earlier · needs \(corpus.desktop)")
           .font(ChromeType.sans(10.5, .medium))
