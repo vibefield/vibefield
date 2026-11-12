@@ -53,13 +53,26 @@ enum FaceHold {
     private(set) var standing: Standing = .down
 
     /// The finger is this far from where it came down.
-    mutating func moved(_ translation: CGSize) {}
+    mutating func moved(_ translation: CGSize) {
+      guard standing == .down, hypot(translation.width, translation.height) > FaceHold.slop else { return }
+      standing = .strayed
+    }
 
     /// The hold's clock ran out: true when the held face opens on it.
-    mutating func clockRanOut() -> Bool { false }
+    mutating func clockRanOut() -> Bool {
+      guard standing == .down else { return false }
+      standing = .held
+      return true
+    }
 
     /// What the finger's lift is.
-    var letGo: LetGo { .nothing }
+    var letGo: LetGo {
+      switch standing {
+      case .down: .tap
+      case .strayed: .nothing
+      case .held: .release
+      }
+    }
   }
 
   /// A hold in progress: the face's centre in the window, and what the finger reaches.

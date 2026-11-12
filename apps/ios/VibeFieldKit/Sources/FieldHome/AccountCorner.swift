@@ -57,9 +57,11 @@ struct AccountCornerView: View {
   static let grow: Animation = .timingCurve(0.25, 1, 0.3, 1, duration: 0.6)
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  /// The hold has opened the held face and the finger is still down.
-  @State private var holding = false
-  /// The hold's press, as its gesture says it: SwiftUI resets it when the gesture is over, let go or taken away.
+  /// The touch that is down on the face, while one is.
+  @State private var touch: FaceHold.Touch?
+  /// The hold's clock for that touch, while a hold is offered and the touch has not strayed.
+  @State private var holdClock: Task<Void, Never>?
+  /// The touch, as its gesture says it: SwiftUI resets it when the gesture is over, let go or taken away.
   @GestureState private var pressing = false
 
   var body: some View {
@@ -168,10 +170,15 @@ struct AccountCornerView: View {
     }
   }
 
-  /// The face: a tap grows or folds the menu; UM-4 — a hold (while the menu is closed) opens the held face instead,
-  /// which is why it is a tap gesture after the hold's rather than a Button, whose tap would fire on the hold's let-go.
-  /// Where no hold is offered (none handed in, or the menu open) the face takes the plain tap alone, so a long press
-  /// still folds or grows the menu.
+  /// The face: a tap grows or folds the menu; UM-4 — a hold (while the menu is closed) opens the held face instead.
+  /// It is one gesture, read whole by `FaceHold.Touch` (`faceTouch`), and no Button, whose tap would fire on the
+  /// hold's let-go. Where no hold is offered (none handed in, or the menu open) no clock runs, so a long press still
+  /// folds or grows the menu.
+  ///
+  /// *Corrected 2026-11-12 (item 346): this said "a tap gesture after the hold's", and the face wore two gestures,
+  /// `holdGesture.exclusively(before: tap)`. On James's iPhone (iOS 26.6) that pair gave the hold and never the tap:
+  /// a short touch reached the sequence's long press and the tap's `onEnded` never ran, so the menu could not be
+  /// opened. No simulator run had tapped it.*
   private var faceButton: some View {
     ZStack {
       switch face.control {
@@ -187,16 +194,15 @@ struct AccountCornerView: View {
     }
     .frame(width: Self.circle, height: Self.circle)
     .contentShape(Circle())
-    .gesture(holdGesture.exclusively(before: tap), including: offersHold ? .all : .subviews)
-    .gesture(tap, including: offersHold ? .subviews : .all)
+    .gesture(faceTouch)
     .onChange(of: pressing) { _, pressed in
       guard !pressed else { return }
-      // the press is over: a let-go has had its `onEnded` by the next turn (the reset comes before or after it), so
-      // a hold still standing then was taken away, which SwiftUI ends with no `onEnded` at all
-      Task { @MainActor in loseHold() }
+      // the touch is over: a let-go has had its `onEnded` by the next turn (the reset comes before or after it), so
+      // a touch still standing then was taken away, which SwiftUI ends with no `onEnded` at all
+      Task { @MainActor in loseTouch() }
     }
-    // the face replaced mid-hold (it turns into the Sign in circle)
-    .onDisappear { loseHold() }
+    // the face replaced mid-touch (it turns into the Sign in circle)
+    .onDisappear { loseTouch() }
     .onGeometryChange(for: CGPoint.self) { proxy in
       let frame = proxy.frame(in: .global)
       return CGPoint(x: frame.midX, y: frame.midY)
@@ -223,42 +229,64 @@ struct AccountCornerView: View {
     return face.name.isEmpty ? "Account" : "\(face.name): account"
   }
 
-  /// The menu's tap: grow it, or fold it.
-  private var tap: some Gesture {
-    TapGesture().onEnded { onToggle() }
-  }
-
   /// A hold is offered while one is handed in and the menu is closed.
   private var offersHold: Bool { hold != nil && !isOpen }
 
-  /// UM-4 — the hold: 520 ms within 10 of slop opens the held face, the finger then reaches, and letting go releases
-  /// it. A shorter touch fails it, and the tap is the menu's. Not while the menu is open (`offersHold`).
-  private var holdGesture: some Gesture {
-    LongPressGesture(minimumDuration: FaceHold.hold, maximumDistance: FaceHold.slop)
-      .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-      .updating($pressing) { value, state, _ in
-        if case .second(true, _) = value { state = true }
-      }
+  /// The face's one gesture: every touch from the finger's coming down, read whole by `FaceHold.Touch`. Let go
+  /// inside the slop, it grows or folds the menu. UM-4 — while a hold is offered, a touch left inside the slop for
+  /// the hold's 520 ms opens the held face, the finger then reaches, and letting go releases it. A touch carried
+  /// past the slop first is neither.
+  private var faceTouch: some Gesture {
+    DragGesture(minimumDistance: 0, coordinateSpace: .global)
+      .updating($pressing) { _, state, _ in state = true }
       .onChanged { value in
-        guard let hold, !isOpen, case .second(true, let drag) = value else { return }
-        if !holding {
-          holding = true
-          hold.begin()
+        if touch == nil {
+          touch = FaceHold.Touch()
+          if offersHold { startHoldClock() }
         }
-        if let drag { hold.move(drag.location) }
+        touch?.moved(value.translation)
+        switch touch?.standing {
+        case .held: hold?.move(value.location)
+        case .strayed: stopHoldClock()
+        default: break
+        }
       }
       .onEnded { _ in
-        guard holding else { return }
-        holding = false
-        hold?.end()
+        let letGo = touch?.letGo
+        endTouch()
+        switch letGo {
+        case .tap: onToggle()
+        case .release: hold?.end()
+        default: break
+        }
       }
   }
 
-  /// A hold that opened and was never let go is taken away: the held face closes, and nothing is let go.
-  private func loseHold() {
-    guard holding else { return }
-    holding = false
-    hold?.cancel()
+  /// The hold's clock: run out on a touch still inside the slop, it opens the held face.
+  private func startHoldClock() {
+    holdClock = Task { @MainActor in
+      try? await Task.sleep(for: .seconds(FaceHold.hold))
+      guard !Task.isCancelled, touch?.clockRanOut() == true else { return }
+      hold?.begin()
+    }
+  }
+
+  private func stopHoldClock() {
+    holdClock?.cancel()
+    holdClock = nil
+  }
+
+  /// The touch is over, let go or taken away: its clock stops with it.
+  private func endTouch() {
+    stopHoldClock()
+    touch = nil
+  }
+
+  /// A touch that was never let go was taken away: a held face it opened closes, and nothing is let go.
+  private func loseTouch() {
+    let held = touch?.standing == .held
+    endTouch()
+    if held { hold?.cancel() }
   }
 
   /// You, beside the face: the name, and the login line or the connection's
