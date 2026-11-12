@@ -37,11 +37,14 @@ struct BubbleGlyph: View {
 /// they are fine"; DECISIONS LP-D7, built by LP-4): every agent the catalog
 /// offers a phone has its own mark in the folder, written from the toolkit's
 /// path data by the recipe that wrote Codex's (every path argument separated:
-/// Xcode misreads compact arc flags). Eight today: Grok's is restored, and
-/// Kimi's, OpenCode's, Hermes', Antigravity's and Copilot's are new to the
-/// card, which never had them. Pi's is HELD (item 360: the set's `pi` icon is
-/// not yet read to be the coding agent's), so Pi wears its letter; so does
-/// ACP, a protocol with no mark.
+/// Xcode misreads compact arc flags). Nine today: Grok's is restored, and
+/// Kimi's, OpenCode's, Hermes', Antigravity's, Copilot's and Pi's are new to
+/// the card, which never had them. ACP, a protocol with no mark, wears its
+/// letter.
+/// (Pi's was held for some minutes as item 360: the set's `pi` icon had
+/// Inflection's as its neighbour in the swarm's bake. lobe-icons' own index
+/// names it "Pi Agent", https://pi.dev, and lists Inflection apart, read
+/// 2026-11-12 18:03:54Z; closed with no fault.)
 ///
 /// *Corrected 2026-11-12 (item 359; at its source):* this said the mark set
 /// was "Lobe Icons v5.14.0"; the notices and the toolkit name
@@ -61,7 +64,7 @@ struct BubbleGlyph: View {
 /// Until AC-5 that answer was `AgentProvider.hasDrawnMark`, a three-vendor list
 /// in code that had to agree with this folder by hand — a roster of its own. It
 /// is also NOT the swarm's atlas: `MarksAtlas` tiles nine marks and this folder
-/// held three glyphs then (two under LP-4, eight since item 359), so "the atlas
+/// held three glyphs then (two under LP-4, nine since item 359), so "the atlas
 /// has a tile" would have sent six agents to an image that was not here and
 /// drawn them as nothing.
 struct AgentGlyph: View {

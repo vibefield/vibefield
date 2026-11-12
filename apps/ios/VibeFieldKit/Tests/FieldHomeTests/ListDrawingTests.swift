@@ -200,20 +200,17 @@ struct ListDrawingTests {
     /// a View's static, main-actor-isolated (the early kit compile's four Swift 6 isolation warnings).
     /// *Corrected 2026-11-12 (item 359):* deviation 4 ("the SDK draws a path for six the phone letters") is over.
     /// James overturned LP-4's two-mark ruling (DECISIONS LP-D7), so the phone draws a path for every agent the SDK
-    /// does but Pi, whose mark is held (item 360); ACP, which the SDK letters too, is the letter's row here.
+    /// does (Pi's since item 360 closed); ACP, which the SDK letters too, is the letter's row here.
     @MainActor
     @Test func theMarks() {
       let claude = AgentGlyph.drawnAsset(for: "claude")
       #expect(claude != nil)
       let codex = AgentGlyph.drawnAsset(for: "codex")
       #expect(codex != nil)
-      for drawn in ["grok", "kimi", "opencode", "hermes", "antigravity", "copilot"] {
+      for drawn in ["grok", "kimi", "opencode", "hermes", "antigravity", "copilot", "pi"] {
         let asset = AgentGlyph.drawnAsset(for: drawn)
         #expect(asset != nil, "\(drawn)")
       }
-      // ITEM 360 — Pi's mark is held until the set's `pi` icon is read to be the coding agent's
-      let pi = AgentGlyph.drawnAsset(for: "pi")
-      #expect(pi == nil)
       let acp = AgentGlyph.drawnAsset(for: "acp")
       #expect(acp == nil)
       let letter = AgentProvider.acp.markLetter

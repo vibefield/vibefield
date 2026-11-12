@@ -7672,7 +7672,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     after, then days), so a project reads `12h` on both. **The agents** stand at the row's right as on the desktop:
     at most three marks at 15 pt, the lead first and darkest, then `+N`, counted over the project's top-level
     sessions (the listing the desktop counts from). An agent wears its own mark, and its letter on History's chip
-    where the phone has none (ACP; Pi while item 360 holds its mark; an id no catalog names). *Corrected 2026-11-12
+    where the phone has none (ACP; an id no catalog names). *Corrected 2026-11-12
     (item 359):* this said "where the phone keeps one (LP-4: Claude's and Codex's)"; James overturned that ruling
     the same day (§13, the vendor marks). The ledger opens ranked by the most recent, as
     the desktop's does; `spend` ranks by lifetime cost, and the ledger's foot says which measure the wash is scaled
@@ -10753,10 +10753,12 @@ thing and they are fine"; at its source):* the two-mark ruling (DECISIONS LP-D7,
 On the phone's card, lists, search, Settings and History, every agent the catalog offers a phone wears its own mark:
 template imagesets written from the path data the godview's toolkit carries (`agentMark`, puppeteer-view-sdk; Lobe
 Icons, `@lobehub/icons-static-svg` 1.94.0, the set History's room draws too), by the recipe that wrote Codex's.
-Eight today. LP-4 had removed one from the card, Grok's, which is restored; Kimi's, OpenCode's, Hermes',
-Antigravity's and Copilot's are NEW to the card (before LP-4 they were tiles of the swarm's atlas alone). Pi's is
-held (item 360: the set's `pi` icon is not yet read to be the coding agent's and not Inflection's assistant's), so
-Pi wears its letter, as does ACP, a protocol with no mark. The phone's swarm still draws two until item 359's second
+Nine today. LP-4 had removed one from the card, Grok's, which is restored; Kimi's, OpenCode's, Hermes',
+Antigravity's, Copilot's and Pi's are NEW to the card (before LP-4 they were tiles of the swarm's atlas alone). ACP,
+a protocol with no mark, wears its letter. *(Corrected 2026-11-12 18:04Z, item 360: for some minutes this said "Eight
+today" with Pi's mark held, because the bake had set Inflection's icon beside `pi` as its neighbour. lobe-icons' own
+index names `Pi` "Pi Agent", https://pi.dev, and Inflection apart; the mark is the coding agent's, on the phone and
+on the desktop, and the item closed with no fault.)* The phone's swarm still draws two until item 359's second
 step, which keeps LP-D7's other half ("the unused ones leave the bundle"): the atlas regains the cleared agents'
 tiles and no neighbour's. "Three" was the card's count when this was written; the toolkit carries nine paths, read
 2026-11-12. The phone's and
