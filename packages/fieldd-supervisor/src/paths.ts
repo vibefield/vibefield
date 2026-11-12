@@ -22,12 +22,19 @@ export function tokenPath(dataRoot: string): string {
  * appears on disk, which is why the old name lied), the joined LAYOUT path
  * everywhere else. fieldd's own twin of this law is fieldd/src/boot-env.ts —
  * both planes must derive from the SAME root string or they miss each other. */
-export function nativeMgmtEndpoint(dataRoot: string, platform = process.platform): string {
+export function nativeMgmtEndpoint(
+  dataRoot: string,
+  platform = process.platform,
+  uid = process.getuid?.() ?? 0,
+): string {
   // posix.join, not the host join — the same correction fieldd's twin already
   // carries. `platform` must FULLY determine the output, separators included:
   // this unix arm is reachable from a win32 test host, where the host join would
   // hand back `\data\vf\native\run\mgmt.sock` and quietly pass a byte-for-byte
   // claim it had broken. On a real unix host the two joins are identical.
+  // Item 345, S1: `uid` is the unix law's input; S2 makes the unix arm `unixEndpointFor(uid, dataRoot,
+  // SOCKETS.MGMT)` with the alias ensured first.
+  void uid;
   return platform === "win32"
     ? pipeEndpointFor(dataRoot, SOCKETS.MGMT)
     : posix.join(dataRoot, ...LAYOUT.MGMT_SOCKET);
@@ -45,10 +52,16 @@ export const nativeSocketPath = nativeMgmtEndpoint;
 // 103 = 104 - NUL, the exact macOS strlen limit libuv and std enforce.
 const SUN_PATH_MAX_BYTES = 103;
 
-export function assertDataRootUsable(dataRoot: string, platform = process.platform): void {
+export function assertDataRootUsable(
+  dataRoot: string,
+  platform = process.platform,
+  opts: { uid?: number; aliasParent?: string } = {},
+): void {
   // WIN-D1: on win32 the endpoints are named pipes, not socket files — there is
   // no sun_path and this byte budget would refuse perfectly valid data roots
   // (a stock profile path already clears 103 bytes). The guard is a unix law.
+  // Item 345, S1: `opts` is unread; S2 measures `worstUnixEndpoint(uid, dataRoot, aliasParent)` once.
+  void opts;
   if (platform === "win32") return;
   for (const segments of Object.values(LAYOUT)) {
     const last = segments[segments.length - 1];

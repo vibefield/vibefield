@@ -336,9 +336,12 @@ export function assertUserRootBudget(
   rootReal: string,
   fuid: number,
   platform = process.platform,
+  opts: { readonly uid?: number; readonly aliasParent?: string } = {},
 ): void {
   // WIN-D1: named pipes carry no sun_path budget — the guard is a unix law
   // (see fieldd-supervisor/src/paths.ts, the spawn-time twin of this check).
+  // Item 345, S1: `opts` (the uid and alias-parent seams) is unread; S2 measures `worstUnixEndpoint` once.
+  void opts;
   if (platform === "win32") return;
   const userRoot = join(rootReal, ...LAYOUT.USERS_DIR, String(fuid));
   for (const segments of Object.values(LAYOUT)) {

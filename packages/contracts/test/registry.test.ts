@@ -18,6 +18,7 @@ import {
   ArtifactRevealParams,
 } from "../src/artifacts";
 import { DEVICE_LIMITS } from "../src/devices";
+import { SUN_PATH_MAX_BYTES, socketPathBytes, worstUnixEndpoint } from "../src/endpoints";
 import { RpcNotification } from "../src/envelope";
 import { ErrorData, UnavailableDetails } from "../src/errors";
 import { KEYED_FORWARD_METHODS } from "../src/forwarding";
@@ -152,16 +153,20 @@ describe("method registry lint (design-01 §9.2 + D36)", () => {
     );
   });
 
-  it("socket names fit the tightest path budget (UA-D9 — sun_path)", () => {
-    // The tightest real prefix is the repo-nested dev root's users/<fuid>
-    // tree; 14 chars keeps every socket under the 103-byte macOS sun_path
-    // ceiling there with three-digit-fuid headroom. 2026-08-05:
-    // terminal-control.sock (21 chars → a 108-byte path) crashed the dev
-    // terminal plane exactly this way — bind failed, the guard had only
-    // measured mgmt.sock. Longer names need a shallower tree, not a waiver.
+  it("every socket fits for ANY home: the worst unix endpoint is ≤ 103 bytes at every root length (item 345)", () => {
+    // Was: socket names ≤ 14 chars, "with three-digit-fuid headroom" on "the tightest real prefix" — falsified
+    // 2026-11-12 (item 345): the cells bind `termframe.<N>.sock`, N grows with the floor, and a long home has no
+    // tightest prefix. The law now bounds the PATH, whatever the home (PLAN-345-r2).
+    for (let length = 1; length <= 255; length += 1) {
+      const root = `/${"a".repeat(length - 1)}`;
+      for (const uid of [501, 4_294_967_295]) {
+        const worst = worstUnixEndpoint(uid, root);
+        const message = `${length}-byte root, uid ${uid}: ${worst}`;
+        expect(socketPathBytes(worst), message).toBeLessThanOrEqual(SUN_PATH_MAX_BYTES);
+      }
+    }
     for (const name of Object.values(SOCKETS)) {
       expect(name.endsWith(".sock"), `${name} must end .sock`).toBe(true);
-      expect(name.length, `${name} exceeds the 14-char socket name budget`).toBeLessThanOrEqual(14);
     }
   });
 

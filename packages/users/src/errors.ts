@@ -19,7 +19,11 @@ export type UsersErrorKind =
   /** UA-5/UA-D9: the new fuid's root would push a socket path past the OS
    * sun_path limit — refused at create, naming the socket, before any
    * directory exists (the spawn guard would only catch it later) */
-  | "user-root-too-long";
+  | "user-root-too-long"
+  /** Item 345: a root over the sun_path line needs its alias, and the alias's folder or link is not ours to use
+   * (a link, another uid's, open to group or others, or a non-link in the alias's place). Refused at bind and dial,
+   * naming what was found; never a fallback. */
+  | "socket-alias-refused";
 
 export class UsersError extends Error {
   constructor(

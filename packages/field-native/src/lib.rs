@@ -36,6 +36,7 @@ pub mod rlimit;
 /// capability (2026-09-14): the D8 pairing secret.
 pub mod secret_file;
 pub mod services;
+pub mod socket_alias;
 pub mod state;
 /// FW-D4 — the floor's ONE supervised child: the cells' shape, and the freeway host's.
 pub mod supervised_child;

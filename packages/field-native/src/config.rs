@@ -213,6 +213,10 @@ pub struct NativeConfig {
     /// nothing in the product sets it.
     #[doc(hidden)]
     pub mesh_probe: Option<MeshProbeIdentity>,
+    /// Item 345 TEST SEAM — where a root over the sun_path line keeps its socket alias. `None` (every constructor)
+    /// is `endpoints::SOCKET_ALIAS_PARENT`; no env var reads it.
+    #[doc(hidden)]
+    pub socket_alias_parent: Option<PathBuf>,
 }
 
 /// TS-1 TEST SEAM — the `#[ignore]`d live probes only. The floor's own bring-up
@@ -295,6 +299,7 @@ impl NativeConfig {
             allowed_origins,
             mesh_start_timeout: None,
             mesh_probe: None,
+            socket_alias_parent: None,
         })
     }
 
@@ -316,6 +321,7 @@ impl NativeConfig {
             allowed_origins: Vec::new(),
             mesh_start_timeout: None,
             mesh_probe: None,
+            socket_alias_parent: None,
         }
     }
 
@@ -336,6 +342,7 @@ impl NativeConfig {
             allowed_origins: Vec::new(),
             mesh_start_timeout: None,
             mesh_probe: None,
+            socket_alias_parent: None,
         }
     }
 

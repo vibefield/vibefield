@@ -1,5 +1,5 @@
 {
-  "note": "WIN-D1 \u2014 the endpoint-resolution law's cross-language vector. TS (src/endpoints.ts, pinned by test/endpoints.test.ts) and Rust (field-native/src/endpoints.rs, pinned by tests/endpoint_vector.rs) must both derive these exact strings. winA and winA-alt are two spellings of ONE directory and must share a scope \u2014 that collapse is the point of canonicalization. A deliberate change to the law edits this file in the same commit. The termctl.2/termframe.2 rows are TC-S2's per-instance cell names (cellSocketFile/cell_socket_file) riding the same law.",
+  "note": "WIN-D1 \u2014 the endpoint-resolution law's cross-language vector. TS (src/endpoints.ts, pinned by test/endpoints.test.ts) and Rust (field-native/src/endpoints.rs, pinned by tests/endpoint_vector.rs) must both derive these exact strings. winA and winA-alt are two spellings of ONE directory and must share a scope \u2014 that collapse is the point of canonicalization. A deliberate change to the law edits this file in the same commit. The termctl.2/termframe.2 rows are TC-S2's per-instance cell names (cellSocketFile/cell_socket_file) riding the same law. unixVectors (item 345): the unix arm; a root whose worst real path fits keeps it, else the alias.",
   "vectors": [
     {
       "tag": "winA",
@@ -54,6 +54,104 @@
       "scope": "46e04ada2481b851",
       "endpoints": {
         "meshdata.sock": "\\\\.\\pipe\\vibefield-46e04ada2481b851-meshdata"
+      }
+    }
+  ],
+  "unixVectors": [
+    {
+      "tag": "macFits",
+      "uid": 501,
+      "dataRoot": "/Users/jamesyong/Library/Application Support/VibeField/users/1",
+      "worstRealBytes": 99,
+      "branch": "real",
+      "scope": "5d8c500a66b2fbe4",
+      "endpoints": {
+        "mgmt.sock": "/Users/jamesyong/Library/Application Support/VibeField/users/1/native/run/mgmt.sock",
+        "meshdata.sock": "/Users/jamesyong/Library/Application Support/VibeField/users/1/native/run/meshdata.sock",
+        "door.sock": "/Users/jamesyong/Library/Application Support/VibeField/users/1/native/run/door.sock",
+        "termctl.4294967295.sock": "/Users/jamesyong/Library/Application Support/VibeField/users/1/native/run/termctl.4294967295.sock",
+        "termframe.4294967295.sock": "/Users/jamesyong/Library/Application Support/VibeField/users/1/native/run/termframe.4294967295.sock",
+        "termframe.1.sock": "/Users/jamesyong/Library/Application Support/VibeField/users/1/native/run/termframe.1.sock"
+      }
+    },
+    {
+      "tag": "edge103",
+      "uid": 501,
+      "dataRoot": "/Users/eeeeeeeeeeeee/Library/Application Support/VibeField/users/1",
+      "worstRealBytes": 103,
+      "branch": "real",
+      "scope": "ba52b40a721b62dc",
+      "endpoints": {
+        "mgmt.sock": "/Users/eeeeeeeeeeeee/Library/Application Support/VibeField/users/1/native/run/mgmt.sock",
+        "meshdata.sock": "/Users/eeeeeeeeeeeee/Library/Application Support/VibeField/users/1/native/run/meshdata.sock",
+        "door.sock": "/Users/eeeeeeeeeeeee/Library/Application Support/VibeField/users/1/native/run/door.sock",
+        "termctl.4294967295.sock": "/Users/eeeeeeeeeeeee/Library/Application Support/VibeField/users/1/native/run/termctl.4294967295.sock",
+        "termframe.4294967295.sock": "/Users/eeeeeeeeeeeee/Library/Application Support/VibeField/users/1/native/run/termframe.4294967295.sock",
+        "termframe.1.sock": "/Users/eeeeeeeeeeeee/Library/Application Support/VibeField/users/1/native/run/termframe.1.sock"
+      }
+    },
+    {
+      "tag": "edge104",
+      "uid": 501,
+      "dataRoot": "/Users/eeeeeeeeeeeeee/Library/Application Support/VibeField/users/1",
+      "worstRealBytes": 104,
+      "branch": "alias",
+      "scope": "00e1431aa09ac7e3",
+      "endpoints": {
+        "mgmt.sock": "/tmp/vf-501/00e1431aa09ac7e3/mgmt.sock",
+        "meshdata.sock": "/tmp/vf-501/00e1431aa09ac7e3/meshdata.sock",
+        "door.sock": "/tmp/vf-501/00e1431aa09ac7e3/door.sock",
+        "termctl.4294967295.sock": "/tmp/vf-501/00e1431aa09ac7e3/termctl.4294967295.sock",
+        "termframe.4294967295.sock": "/tmp/vf-501/00e1431aa09ac7e3/termframe.4294967295.sock",
+        "termframe.1.sock": "/tmp/vf-501/00e1431aa09ac7e3/termframe.1.sock"
+      }
+    },
+    {
+      "tag": "devShape",
+      "uid": 501,
+      "dataRoot": "/Users/jamesyong/Projects/project100/vibe-field/.vibefield/dev/data/users/1",
+      "worstRealBytes": 112,
+      "branch": "alias",
+      "scope": "1fa36fda818e76ad",
+      "endpoints": {
+        "mgmt.sock": "/tmp/vf-501/1fa36fda818e76ad/mgmt.sock",
+        "meshdata.sock": "/tmp/vf-501/1fa36fda818e76ad/meshdata.sock",
+        "door.sock": "/tmp/vf-501/1fa36fda818e76ad/door.sock",
+        "termctl.4294967295.sock": "/tmp/vf-501/1fa36fda818e76ad/termctl.4294967295.sock",
+        "termframe.4294967295.sock": "/tmp/vf-501/1fa36fda818e76ad/termframe.4294967295.sock",
+        "termframe.1.sock": "/tmp/vf-501/1fa36fda818e76ad/termframe.1.sock"
+      }
+    },
+    {
+      "tag": "mac24",
+      "uid": 501,
+      "dataRoot": "/Users/kkkkkkkkkkkkkkkkkkkkkkkk/Library/Application Support/VibeField/users/12",
+      "worstRealBytes": 115,
+      "branch": "alias",
+      "scope": "3e6cf9256128bafd",
+      "endpoints": {
+        "mgmt.sock": "/tmp/vf-501/3e6cf9256128bafd/mgmt.sock",
+        "meshdata.sock": "/tmp/vf-501/3e6cf9256128bafd/meshdata.sock",
+        "door.sock": "/tmp/vf-501/3e6cf9256128bafd/door.sock",
+        "termctl.4294967295.sock": "/tmp/vf-501/3e6cf9256128bafd/termctl.4294967295.sock",
+        "termframe.4294967295.sock": "/tmp/vf-501/3e6cf9256128bafd/termframe.4294967295.sock",
+        "termframe.1.sock": "/tmp/vf-501/3e6cf9256128bafd/termframe.1.sock"
+      }
+    },
+    {
+      "tag": "mac255",
+      "uid": 4294967295,
+      "dataRoot": "/Users/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz/Library/Application Support/VibeField/users/1",
+      "worstRealBytes": 292,
+      "branch": "alias",
+      "scope": "7e93d0fa726fabd5",
+      "endpoints": {
+        "mgmt.sock": "/tmp/vf-4294967295/7e93d0fa726fabd5/mgmt.sock",
+        "meshdata.sock": "/tmp/vf-4294967295/7e93d0fa726fabd5/meshdata.sock",
+        "door.sock": "/tmp/vf-4294967295/7e93d0fa726fabd5/door.sock",
+        "termctl.4294967295.sock": "/tmp/vf-4294967295/7e93d0fa726fabd5/termctl.4294967295.sock",
+        "termframe.4294967295.sock": "/tmp/vf-4294967295/7e93d0fa726fabd5/termframe.4294967295.sock",
+        "termframe.1.sock": "/tmp/vf-4294967295/7e93d0fa726fabd5/termframe.1.sock"
       }
     }
   ]

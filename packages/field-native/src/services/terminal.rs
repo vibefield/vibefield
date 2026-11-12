@@ -6280,6 +6280,78 @@ mod tests {
         );
     }
 
+    /// Item 345 (PLAN-345-r2) — R4: a socket home over budget even through the alias (an 80-byte alias parent under
+    /// a long data dir) is a config dead end found BEFORE any cell number is taken. Both classes are `Failed` naming
+    /// the worst endpoint and its bytes, the unit is Degraded (a config dead end, not a crash claim), and the
+    /// allocator is untouched. RED at S1: there is no such check, so the classes spawn into a binary that does not
+    /// exist (no cell ever runs), take numbers, and end Crashed.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_over_budget_socket_home_fails_both_classes_and_takes_no_number() {
+        use std::os::unix::fs::MetadataExt;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let uid = std::fs::metadata(dir.path()).expect("stat").uid();
+        let data_dir = dir.path().join("x".repeat(150));
+        let parent = format!("/tmp/{}", "p".repeat(80));
+        let worst = crate::endpoints::worst_unix_endpoint(
+            uid,
+            data_dir.to_str().expect("utf8 data dir"),
+            &parent,
+        );
+        let config = NativeConfig {
+            cell_bin_override: Some(dir.path().join("no-such-field-terminal-host")),
+            socket_alias_parent: Some(PathBuf::from(&parent)),
+            ..NativeConfig::for_data_dir(data_dir)
+        };
+        let shared = test_shared();
+        let supervisor = tokio::spawn(supervise_cells(shared.clone(), config));
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            let settled = {
+                let states = shared.class_states.lock().unwrap();
+                states.len() == 2
+                    && states.values().all(|state| {
+                        matches!(state, ClassPlaneState::Failed(_) | ClassPlaneState::Crashed(_))
+                    })
+            };
+            if settled {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the classes never reached a dead end: {:?}",
+                shared.health()
+            );
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        shared.stopping.send_replace(true);
+        let _ = tokio::time::timeout(Duration::from_secs(10), supervisor).await;
+        {
+            let states = shared.class_states.lock().unwrap();
+            for (label, state) in states.iter() {
+                let ClassPlaneState::Failed(detail) = state else {
+                    panic!(
+                        "{label}: an over-budget socket home is Failed, got: {}",
+                        state.detail()
+                    );
+                };
+                assert!(detail.contains(&worst), "{label}: the detail names the path: {detail}");
+                let bytes = format!("{} bytes", worst.len());
+                assert!(detail.contains(&bytes), "{label}: and its bytes: {detail}");
+            }
+        }
+        assert_eq!(
+            shared.health().state,
+            UnitState::Degraded,
+            "a config dead end is Degraded, not a crash claim"
+        );
+        assert_eq!(
+            shared.next_instance.load(std::sync::atomic::Ordering::Relaxed),
+            0,
+            "no cell number is taken for a home no cell can bind in"
+        );
+    }
+
     /// TC-D4's classification at the crumb seam: a session-naming crumb is
     /// Exact; the sessionless panic-hook form is Infrastructure; nothing — a
     /// SIGKILL, an OOM kill — is Unknown; a stale generation's crumb (boot id

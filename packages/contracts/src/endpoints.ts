@@ -17,7 +17,7 @@
 // field-native/src/endpoints.rs and pinned to this one by
 // fixtures/endpoint.vector.json — the layout.vector.json pattern (EL9).
 
-import { APP_ID, SOCKETS } from "./registries";
+import { APP_ID, LAYOUT, SOCKETS } from "./registries";
 
 // APP_ID doubles as the pipe-name brand — one authority, and a change to it is
 // a deliberate event the endpoint vector catches (it would orphan every running
@@ -99,3 +99,95 @@ export function cellSocketFile(socketFile: string, instance: number): string {
 
 /** Every socket name resolvable through this law — the fixture walks these. */
 export const PIPE_SOCKET_NAMES: readonly string[] = Object.values(SOCKETS);
+
+// Item 345 (PLAN-345-r2) — the unix endpoint law. A root whose WORST real socket path fits macOS's sun_path keeps
+// today's path byte for byte; a root over the line takes ALL of its sockets through one short alias,
+// `/tmp/vf-<uid>/<unixAliasScope(root)>` → `<root>/native/run`, the same for every plane because it is derived from
+// (uid, root) alone, as the win32 arm's pipe names are. The Rust twin is field-native/src/endpoints.rs, pinned to
+// this one by fixtures/endpoint.vector.json's `unixVectors`.
+
+/** macOS's `sun_path` is 104 bytes, and a path must leave room for its NUL. */
+export const SUN_PATH_MAX_BYTES = 103;
+
+/** The largest cell ordinal field-native can allocate (an `AtomicU32`), so a budget taken at it holds for every N. */
+export const CELL_INSTANCE_MAX = 4_294_967_295;
+
+/** Where the aliases of roots over the line live: one 0700 folder per uid. */
+export const SOCKET_ALIAS_PARENT = "/tmp";
+
+/** The bytes a socket path costs `sun_path` (UTF-8, as the kernel counts them). */
+export function socketPathBytes(path: string): number {
+  return new TextEncoder().encode(path).length;
+}
+
+/** A root's run directory on unix: the root, trailing slashes dropped, joined with LAYOUT's run dir. */
+export function nativeRunDirFor(dataRoot: string): string {
+  let root = dataRoot;
+  while (root.length > 1 && root.endsWith("/")) root = root.slice(0, -1);
+  return [root, ...LAYOUT.NATIVE_RUN_DIR].join("/");
+}
+
+/** The longest socket FILE any plane binds in a run dir: every LAYOUT `.sock` row's name, and the cells' two names
+ * taken at `CELL_INSTANCE_MAX`. Derived from the LAYOUT, never typed (VF-PM 10:37:17Z, bound 1). */
+export function longestSocketFile(): string {
+  const names: string[] = [];
+  for (const segments of Object.values(LAYOUT)) {
+    const last = segments[segments.length - 1];
+    if (typeof last !== "string" || !last.endsWith(".sock")) continue;
+    names.push(last);
+    if (last === SOCKETS.TERMINAL_CONTROL || last === SOCKETS.TERMINAL_FRAME) {
+      names.push(cellSocketFile(last, CELL_INSTANCE_MAX));
+    }
+  }
+  return names.reduce((longest, name) =>
+    socketPathBytes(name) > socketPathBytes(longest) ? name : longest,
+  );
+}
+
+/** The alias's scope: FNV-1a 64 over the root's bytes, trailing slashes dropped, NO case fold, unlike `pipeScope`
+ * (VF-PM 10:54:44Z, kept). On a case-insensitive volume, two spellings of one root make two links to the same run
+ * dir, which is harmless: both reach the same socket. A fold could make two DIFFERENT roots on a case-sensitive volume
+ * share one link and fight over it, which is not harmless. */
+export function unixAliasScope(dataRoot: string): string {
+  let root = dataRoot;
+  while (root.length > 1 && root.endsWith("/")) root = root.slice(0, -1);
+  return fnv1a64Hex(root);
+}
+
+/** The short alias of a root's run dir. `parent` is a test seam; the product passes nothing. */
+export function socketAliasFor(
+  uid: number,
+  dataRoot: string,
+  parent = SOCKET_ALIAS_PARENT,
+): string {
+  return `${parent}/vf-${uid}/${unixAliasScope(dataRoot)}`;
+}
+
+/** Item 345's ONE decision (both twins): the directory every socket of `dataRoot` is bound and dialed in. */
+export function unixSocketDir(uid: number, dataRoot: string, parent = SOCKET_ALIAS_PARENT): string {
+  const real = nativeRunDirFor(dataRoot);
+  // S1 holds today's law. S2: return socketPathBytes(`${real}/${longestSocketFile()}`) <= SUN_PATH_MAX_BYTES
+  //   ? real : socketAliasFor(uid, dataRoot, parent);
+  void uid;
+  void parent;
+  return real;
+}
+
+/** One socket's endpoint on unix. */
+export function unixEndpointFor(
+  uid: number,
+  dataRoot: string,
+  socketFile: string,
+  parent = SOCKET_ALIAS_PARENT,
+): string {
+  return `${unixSocketDir(uid, dataRoot, parent)}/${socketFile}`;
+}
+
+/** The longest endpoint a root can ever bind: what every guard measures. */
+export function worstUnixEndpoint(
+  uid: number,
+  dataRoot: string,
+  parent = SOCKET_ALIAS_PARENT,
+): string {
+  return unixEndpointFor(uid, dataRoot, longestSocketFile(), parent);
+}

@@ -1,4 +1,4 @@
-import { pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
+import { pipeEndpointFor, SOCKETS, unixEndpointFor } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { assertDataRootUsable, nativeMgmtEndpoint, nativeSocketPath } from "../src/paths";
 import { SupervisorError } from "../src/types";
@@ -13,7 +13,9 @@ import { SupervisorError } from "../src/types";
 
 /** A root of exactly `n` bytes. Socket suffixes under it, longest first:
  * /native/run/termframe.sock = 26 · /native/run/meshdata.sock = 25 ·
- * /native/run/termctl.sock = 24 · /native/run/mgmt.sock = 21. */
+ * /native/run/termctl.sock = 24 · /native/run/mgmt.sock = 21.
+ * > Correction (2026-11-12, item 345): those are the bare LAYOUT names; the cells' are longer. The worst real suffix
+ * > is /native/run/termframe.4294967295.sock = 37, so n ≤ 66 keeps today's path and n ≥ 67 takes the alias. */
 const rootOf = (n: number): string => `/tmp/${"x".repeat(n - 5)}`;
 
 // The platform is passed EXPLICITLY here, never left to the host: sun_path is a
@@ -22,24 +24,44 @@ const rootOf = (n: number): string => `/tmp/${"x".repeat(n - 5)}`;
 // these rows would assert nothing while still reporting green. Naming the
 // platform is what makes both arms provable from either machine — the same
 // discipline the endpoint rows below already used.
-describe("the sun_path guard measures the LONGEST socket", () => {
-  it("a root where ONLY the longest socket overflows refuses, naming it", () => {
-    // 78 + 26 = 104 > 103 for termframe.sock; every other socket fits —
-    // exactly the class of root the old shortest-name check waved through
+const uid = process.getuid?.() ?? 0;
+
+// Item 345 (2026-11-12): the guard measured LAYOUT's bare `termframe.sock` and called it "the LONGEST socket", but
+// the cells bind `termframe.<N>.sock`. A root that passed it could hold no cell (the `fresh` dev root: 103 measured,
+// 105 bound). The law now sends a root whose worst real path overflows through `/tmp/vf-<uid>/<scope>`, and the guard
+// measures the worst endpoint the law binds (PLAN-345-r2).
+describe("the sun_path guard measures the worst endpoint the law binds", () => {
+  it("a root whose real worst overflows is usable: every socket rides the alias", () => {
+    // was, until 2026-11-12: this 78-byte root refused, naming termframe.sock
     const root = rootOf(78);
+    expect(() => assertDataRootUsable(root, "darwin")).not.toThrow();
+    expect(nativeMgmtEndpoint(root, "darwin")).toBe(unixEndpointFor(uid, root, SOCKETS.MGMT));
+    expect(nativeMgmtEndpoint(root, "darwin").startsWith(`/tmp/vf-${uid}/`)).toBe(true);
+  });
+
+  it("item 345's fresh shape (termframe.sock 103, termframe.1.sock 105) rides the alias, not a dead floor", () => {
+    expect(nativeMgmtEndpoint(rootOf(77), "darwin").startsWith(`/tmp/vf-${uid}/`)).toBe(true);
+  });
+
+  it("the edge: a worst real path of 103 keeps today's path, 104 takes the alias", () => {
+    expect(nativeMgmtEndpoint(rootOf(66), "darwin")).toBe(`${rootOf(66)}/native/run/mgmt.sock`);
+    expect(nativeMgmtEndpoint(rootOf(67), "darwin").startsWith(`/tmp/vf-${uid}/`)).toBe(true);
+  });
+
+  it("a 255-byte root is usable", () => {
+    expect(() => assertDataRootUsable(rootOf(255), "darwin")).not.toThrow();
+  });
+
+  it("refuses an alias home over budget, naming the longest cell file and its bytes", () => {
     let caught: unknown = null;
     try {
-      assertDataRootUsable(root, "darwin");
+      assertDataRootUsable(rootOf(200), "darwin", { aliasParent: `/tmp/${"p".repeat(80)}` });
     } catch (error) {
       caught = error;
     }
     expect(caught).toBeInstanceOf(SupervisorError);
     expect((caught as SupervisorError).kind).toBe("data-root-too-long");
-    expect((caught as SupervisorError).message).toContain("termframe.sock");
-  });
-
-  it("a root at the exact ceiling for the longest socket passes", () => {
-    expect(() => assertDataRootUsable(rootOf(77), "darwin")).not.toThrow(); // termframe → 103
+    expect((caught as SupervisorError).message).toContain("termframe.4294967295.sock");
   });
 
   it("the budget is a unix law — win32 endpoints are pipes, not paths (WIN-D1)", () => {

@@ -809,3 +809,34 @@ async fn a_real_pty_never_inherits_the_daemon_private_prefixes() {
     let _ = lines.next();
     let _ = wait_exit(child, Duration::from_secs(10));
 }
+
+/// Item 345 (PLAN-345-r2) — R3: a cell on a 200-byte root binds through the alias and says hello (the endpoint law
+/// and its ensure, end to end at the bind). Both the root and the alias parent are this test's own temp dirs. RED at
+/// S1: the stub hands back the real run dir, over 103 bytes of socket path, so the cell exits before its hello.
+#[cfg(unix)]
+#[test]
+fn a_cell_on_a_200_byte_root_says_hello_through_the_alias() {
+    use std::os::unix::fs::MetadataExt;
+    let (base, parent) = (short_root(), short_root());
+    let base_path = base.path().to_str().expect("utf8 root");
+    let root = format!("{base_path}/{}", "x".repeat(199 - base_path.len()));
+    assert_eq!(root.len(), 200);
+    std::fs::create_dir_all(field_native::endpoints::native_run_dir_for(&root)).expect("run dir");
+    let uid = std::fs::metadata(base.path()).expect("stat").uid();
+    let dir = field_native::socket_alias::ensure(uid, &root, parent.path().to_str().expect("utf8"))
+        .expect("usable");
+    let (mut command, control, frame) = cell_command(std::path::Path::new(&dir), 1);
+    let mut child = command.stderr(Stdio::null()).spawn().expect("spawn field-terminal-host");
+    let mut stdin = child.stdin.take().expect("stdin");
+    let mut lines = BufReader::new(child.stdout.take().expect("stdout")).lines();
+    writeln!(stdin, "{}", serde_json::json!({ "token": "test-token-345" })).expect("bootstrap");
+    let hello: field_native::cell::CellHello =
+        serde_json::from_str(&lines.next().expect("a hello line").expect("read hello"))
+            .expect("hello parses");
+    assert_eq!(hello.control, control, "the cell bound the alias's endpoint");
+    assert_eq!(hello.frame, frame);
+    assert!(control.len() <= field_native::endpoints::SUN_PATH_MAX_BYTES);
+    drop(stdin);
+    let status = wait_exit(child, Duration::from_secs(10));
+    assert!(status.success(), "a requested drain exits 0, got {status:?}");
+}

@@ -79,3 +79,80 @@ pub fn cell_socket_file(socket_file: &str, instance: u32) -> String {
     let base = socket_file.strip_suffix(".sock").unwrap_or(socket_file);
     format!("{base}.{instance}.sock")
 }
+
+/// Item 345 (PLAN-345-r2): macOS's `sun_path` holds 104 bytes with the NUL.
+pub const SUN_PATH_MAX_BYTES: usize = 103;
+/// The largest cell ordinal the allocator can hand out (`AtomicU32`).
+pub const CELL_INSTANCE_MAX: u32 = u32::MAX;
+/// Where the aliases of roots over the line live: one 0700 folder per uid.
+pub const SOCKET_ALIAS_PARENT: &str = "/tmp";
+
+fn trim_trailing_slashes(root: &str) -> &str {
+    let mut trimmed = root;
+    while trimmed.len() > 1 && trimmed.ends_with('/') {
+        trimmed = &trimmed[..trimmed.len() - 1];
+    }
+    trimmed
+}
+
+/// `<root>/native/run` (trailing slashes on the root dropped), the unix run dir the law joins.
+pub fn native_run_dir_for(data_root: &str) -> String {
+    let mut out = trim_trailing_slashes(data_root).to_owned();
+    for segment in crate::registries::layout::NATIVE_RUN_DIR {
+        out.push('/');
+        out.push_str(segment);
+    }
+    out
+}
+
+/// The longest socket file any plane binds: every LAYOUT `.sock` row, and the cells' two at `CELL_INSTANCE_MAX`.
+/// Derived from `registries::layout::ALL` (the generated table the layout vector walks), never typed.
+pub fn longest_socket_file() -> String {
+    let mut longest = String::new();
+    for (_, segments) in crate::registries::layout::ALL {
+        let Some(last) = segments.last() else {
+            continue;
+        };
+        if !last.ends_with(".sock") {
+            continue;
+        }
+        let mut names = vec![(*last).to_owned()];
+        if *last == crate::registries::sockets::TERMINAL_CONTROL
+            || *last == crate::registries::sockets::TERMINAL_FRAME
+        {
+            names.push(cell_socket_file(last, CELL_INSTANCE_MAX));
+        }
+        for name in names {
+            if name.len() > longest.len() {
+                longest = name;
+            }
+        }
+    }
+    longest
+}
+
+/// The alias's scope: FNV-1a 64 over the root's bytes, trailing slashes dropped, NO case fold.
+pub fn unix_alias_scope(data_root: &str) -> String {
+    fnv1a64_hex(trim_trailing_slashes(data_root))
+}
+
+pub fn socket_alias_for(uid: u32, data_root: &str, parent: &str) -> String {
+    format!("{parent}/vf-{uid}/{}", unix_alias_scope(data_root))
+}
+
+/// Item 345's ONE decision, the twin of contracts' `unixSocketDir`.
+pub fn unix_socket_dir(uid: u32, data_root: &str, parent: &str) -> String {
+    let real = native_run_dir_for(data_root);
+    // S1 holds today's law. S2: if format!("{real}/{}", longest_socket_file()).len() <= SUN_PATH_MAX_BYTES
+    //   { real } else { socket_alias_for(uid, data_root, parent) }
+    let _ = (uid, parent);
+    real
+}
+
+pub fn unix_endpoint_for(uid: u32, data_root: &str, socket_file: &str, parent: &str) -> String {
+    format!("{}/{socket_file}", unix_socket_dir(uid, data_root, parent))
+}
+
+pub fn worst_unix_endpoint(uid: u32, data_root: &str, parent: &str) -> String {
+    unix_endpoint_for(uid, data_root, &longest_socket_file(), parent)
+}

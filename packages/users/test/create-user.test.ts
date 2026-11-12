@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { SUN_PATH_MAX_BYTES, socketPathBytes, worstUnixEndpoint } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { UsersError } from "../src/errors";
 import {
@@ -67,37 +68,41 @@ describe("UA-5 — createUser", () => {
   // WIN-D1 — win32 endpoints are named pipes, not socket paths, so there is no
   // sun_path budget to blow and no refusal for createUser to raise. The byte
   // math itself stays witnessed on both platforms by the test right below.
+  // Item 345 (2026-11-12): this row once REFUSED the 70-byte root, naming termframe.sock. Falsified: the cells bind
+  // `termframe.<N>.sock`, and the law now carries any root over the line through `/tmp/vf-<uid>/<scope>`.
   it.skipIf(process.platform === "win32")(
-    "refuses a root the new fuid would push past sun_path, leaving the file untouched",
+    "a root whose new user's real worst overflows CREATES the user: its sockets ride the alias (item 345)",
     async () => {
-      // suffix /users/2/native/run/termframe.sock = 34 bytes; an exactly-70-byte
-      // root puts ONLY the longest socket at 104 — one past the 103 ceiling —
-      // so the refusal must name termframe.sock (meshdata sits at 103, inside)
+      // /users/2 + the worst real file puts this 70-byte root's worst real path at 115 bytes, over the line.
       const root = `/tmp/${"x".repeat(65)}`;
       rmSync(root, { recursive: true, force: true });
       mkdirSync(root, { recursive: true });
       removeWhenTestEnds(root);
       mintLockedUsersFile(root);
-      const before = readFileSync(usersFilePath(root), "utf8");
-
-      let caught: unknown = null;
-      try {
-        await createUser(root, {});
-      } catch (error) {
-        caught = error;
-      }
-      expect(caught).toBeInstanceOf(UsersError);
-      expect((caught as UsersError).kind).toBe("user-root-too-long");
-      expect((caught as UsersError).message).toContain("termframe.sock");
-      expect(readFileSync(usersFilePath(root), "utf8")).toBe(before);
-      expect(existsSync(join(root, "users", "2"))).toBe(false);
+      const { user } = await createUser(root, {});
+      expect(user.fuid).toBe(2);
+      expect(existsSync(join(root, "users", "2"))).toBe(true);
+      const userRoot = userRootFor(root, user);
+      const uid = process.getuid?.() ?? 0;
+      const worst = socketPathBytes(worstUnixEndpoint(uid, userRoot));
+      expect(worst).toBeLessThanOrEqual(SUN_PATH_MAX_BYTES);
     },
   );
 
   it("the budget is a unix law — win32 endpoints are pipes, not paths (WIN-D1)", () => {
-    // same 70-byte root that just refused on darwin: pure byte math, no fs
+    // the same 70-byte root: pure byte math, no fs. It passes on darwin now (the alias), and refuses only when the
+    // alias home itself is over budget (the parent seam), naming the longest cell file.
     const root = `/tmp/${"x".repeat(65)}`;
     expect(() => assertUserRootBudget(root, 2, "win32")).not.toThrow();
-    expect(() => assertUserRootBudget(root, 2, "darwin")).toThrow(UsersError);
+    expect(() => assertUserRootBudget(root, 2, "darwin")).not.toThrow();
+    let caught: unknown = null;
+    try {
+      assertUserRootBudget(root, 2, "darwin", { aliasParent: `/tmp/${"p".repeat(80)}` });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(UsersError);
+    expect((caught as UsersError).kind).toBe("user-root-too-long");
+    expect((caught as UsersError).message).toContain("termframe.4294967295.sock");
   });
 });
