@@ -177,7 +177,9 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
       MarksAtlas.candidates.filter(\.drawn).map(\.id)
         == ["claudecode", "codex", "grok", "kimi", "opencode", "hermesagent", "antigravity", "githubcopilot", "pi"])
     for mark in nine { #expect(MarksAtlas.tile(for: mark) != nil, "\(mark)") }
-    #expect(MarksAtlas.candidates.filter(\.chosen).allSatisfy(\.kept))
+    // read first: inside #expect a key path handed to a rethrowing call does not compile
+    let chosenAreKept = MarksAtlas.candidates.filter(\.chosen).allSatisfy(\.kept)
+    #expect(chosenAreKept)
     let neighbours = MarksAtlas.candidates.filter { !$0.chosen }
     #expect(neighbours.count == 11)
     #expect(neighbours.allSatisfy { !$0.drawn })

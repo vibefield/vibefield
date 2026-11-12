@@ -213,7 +213,7 @@ struct ListDrawingTests {
       }
       let acp = AgentGlyph.drawnAsset(for: "acp")
       #expect(acp == nil)
-      let letter = AgentProvider.acp.markLetter
+      let letter = AgentProvider(rawValue: "acp").markLetter
       #expect(letter == "A")
       let none = AgentGlyph.drawnAsset(for: "")
       #expect(none == nil)
