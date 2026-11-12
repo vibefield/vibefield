@@ -218,6 +218,9 @@ public struct SettingsView: View {
     #if DEBUG || VF_TESTFLIGHT
       case .notifications:
         NotificationsPage()
+      case .developer:
+        // RB-2b (red): the page is RB-2c's.
+        EmptyView()
     #endif
     case .lock:
       if let lock {

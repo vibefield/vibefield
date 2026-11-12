@@ -140,6 +140,9 @@ public enum SettingsRoute: Hashable, Sendable {
     /// RB-1 — This phone › Notifications, dotted Not yet: drawn in TestFlight and development builds only
     /// (`SettingsBuild`), so the build submitted for App Review has no such route.
     case notifications
+    /// RB-2 — This phone › Developer: drawn in TestFlight and development builds only (`SettingsBuild`), so the
+    /// build submitted for App Review has no such route.
+    case developer
   #endif
   /// WI-3 — This phone › Lock.
   case lock

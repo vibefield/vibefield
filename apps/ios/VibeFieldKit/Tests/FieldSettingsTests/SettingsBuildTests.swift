@@ -4,7 +4,8 @@ import Testing
 @testable import FieldSettings
 
 /// RB-1 — the review-build switch (DESIGN.md §8 "The phone's Settings", amended 2026-11-12; §9 "Notifications, before
-/// push"): which builds draw Notifications, where it stands under This phone, and its words.
+/// push"): which builds draw Notifications, where it stands under This phone, and its words. RB-2 — the same for
+/// Developer, which stands after Notifications (its words are `DeveloperWordsTests`').
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("Notifications stands in TestFlight and development builds, never in the review build")
@@ -23,19 +24,25 @@ struct SettingsBuildTests {
     #expect(drawn == [false, true, true])
   }
 
-  @Test("This phone: Appearance, Terminal, Notifications where the build draws it, then Lock where a lock is held")
+  @Test("every build but the review build draws Developer")
+  func drawsDeveloper() {
+    let drawn = builds.map { $0.drawsDeveloper }
+    #expect(drawn == [false, true, true])
+  }
+
+  @Test("This phone: Appearance, Terminal, then Notifications and Developer where drawn, then Lock where held")
   func thisPhone() {
     let withLock = builds.map { SettingsModel.thisPhoneRows(build: $0, hasLock: true) }
     let noLock = builds.map { SettingsModel.thisPhoneRows(build: $0, hasLock: false) }
     let wantWithLock: [[SettingsRoute]] = [
       [.appearance, .terminal, .lock],
-      [.appearance, .terminal, .notifications, .lock],
-      [.appearance, .terminal, .notifications, .lock],
+      [.appearance, .terminal, .notifications, .developer, .lock],
+      [.appearance, .terminal, .notifications, .developer, .lock],
     ]
     let wantNoLock: [[SettingsRoute]] = [
       [.appearance, .terminal],
-      [.appearance, .terminal, .notifications],
-      [.appearance, .terminal, .notifications],
+      [.appearance, .terminal, .notifications, .developer],
+      [.appearance, .terminal, .notifications, .developer],
     ]
     #expect(withLock == wantWithLock)
     #expect(noLock == wantNoLock)

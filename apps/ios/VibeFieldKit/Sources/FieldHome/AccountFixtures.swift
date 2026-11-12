@@ -26,6 +26,9 @@
   enum AccountFixtures {
     static let argument = "-vf-demo-account"
     static let openArgument = "-vf-demo-account-open"
+    /// RB-2 — every state `demo(named:)` stamps, in the Developer page's order (DESIGN.md §9 "Developer").
+    /// RB-2b (red): a stub, empty. RB-2c lists the 23.
+    static let names: [String] = []
     static let login = "me@jamesyong42.com"
     static let domain = "tail3f2a8c.ts.net"
     static let fox = UserFace(emoji: "🦊", frame: .sticker)

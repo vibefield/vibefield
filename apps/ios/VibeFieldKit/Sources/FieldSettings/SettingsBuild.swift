@@ -26,4 +26,11 @@ public enum SettingsBuild: Sendable, Equatable {
 
   /// Whether This phone draws Notifications, dotted Not yet: every build but the review build.
   public var drawsNotifications: Bool { self != .review }
+
+  /// RB-2 — whether This phone draws Developer: every build but the review build (DESIGN.md §8 "The phone's
+  /// Settings", amended 2026-11-12, RB-2).
+  public var drawsDeveloper: Bool {
+    // RB-2b (red): a stub, the rule's inverse. RB-2c answers `self != .review`.
+    self == .review
+  }
 }
