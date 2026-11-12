@@ -47276,3 +47276,221 @@ copy in `verdict/` is `6f4252a8a7043831` as the line says (`lanes/i280/land-282-
 
 **Not done, and not claimed:** no running app's words were watched or heard with VoiceOver; the readers of the green's
 source files were never listed on the Mac; and no full V ran on the re-cut tip, by VF-PM's ruling.
+
+## The iOS stack — the way in's picks, the Me menu's Theme, the home's Agents, and the phone's bands (M285)
+
+(2026-11-12; fifteen commits, `6f5a3cb72` to `a71a52777`, on main `c550f7cef`. Cut by the IOS session in
+`lanes/ios12b/vibe-field` on 11-11 as four branches on `8fffb13c7`, re-cut on 11-12 as one line onto M284 `fb41e90ce`
+(`ios/stack-p1-p6a`, `a56574f11`), given the bands fix on top (`6495e3dd1`), carried onto `c550f7cef` as
+`ios/stack-p1-p6a-on-c550f7cef`, and landed by the fixer by fast-forward as M285 at 04:11:17Z, on VF-PM's re-issued
+LAND GO of 04:09:35Z, which replaced its GO of 03:55:09Z that the fixer held at 04:08Z.
+Validated by run 313, a9, the old mini, at `6495e3dd1`, and on this Mac by DESIGN.md's readers; the packet is
+`lanes/ios/stack-p1-p6a/`: `packet-v1.md` (`7303d052`) with its ADDENDUM-1 (`788403ae`) and ADDENDUM-2 (`569eb313`).)
+James picked on two pages by 23:00Z on 2026-11-11, and VF-PM read the picks at source from 22:42Z to 23:00Z (its
+message's clock read, 23:03:08Z): on *The Way In* (https://claude.ai/artifact/5cvau5EQBkAXFDjmuMLQih) WI-W2a A,
+W2b A, W2c B, W2d A and W4 B; on *Settings in a Pocket* (https://claude.ai/artifact/QuEyzMmZhjsUKUJMb32nR4)
+theme-row "row" and agents "glance". VF-PM accepted the plan's order, P1–P8, at 23:07:06Z. At 23:16:47Z it extended
+W2a's sentence, by James's rule of 10 Nov 00:46Z, to every surface that said a failure's own text (P1b): a reason
+"may stay in a log line (ids and reason codes only), never on screen". At 23:20:56Z it ruled P6 (a), the home
+desktop's page alone. James picked ios-kc at about 00:55:33Z on 11-12: "Run with the guards, accept the limit".
+The bands fix answers what he typed at fa's session (transcript `96661d1d`, 2026-11-12T00:48:14.586Z, a human entry,
+read by VF-PM at 04:39Z): "the ios app is not usable, there are somehow 2 black bars on top and bottom edges, and the
+menu button does not work, it does not seem to connected to desktop and does not show any desktop sessions"; and
+his screenshot, which VF-PM relayed in its message at the clock read 01:32:22Z (sent 01:32:43.531Z).
+
+**What landed, DESIGN.md first.** Each commit is named with the commit it was first cut as; the re-cut and the carry
+left every patch as it was (`git range-diff`, 15 of 15 "=", at each step).
+- **WI, P1** (W2a, W2c and W4 built; W2b and W2d ruled as written):
+  - the doc (`6f5a3cb72`, from `628a9210c`; 13/0 DESIGN.md): §8 "The phone's way in", amended 2026-11-11
+    (`DESIGN.md:4882-4889`), and §9 "The way in", ruled 2026-11-11 (`:7777-7781`);
+  - the red (`53badb4e1`, from `0ee2a73d2`; `WayInScreenTests.swift` 61/1): `holds`, and three new tests,
+    `failedJoin`, `glassFits` and `noteInk`;
+  - the green (`4e7070a73`, from `7e02f2fd4`): `FieldHomeModel+WayIn.swift` 6/2, `WayInView.swift` 53/17 and
+    `LockWords.swift` 2/1, its doc comment only.
+- **WI, P1b** (W2a's sentence wherever a failure's own text stood):
+  - the doc (`49923aebc`, from `acc9cf908`; 8/1 DESIGN.md): §9 "The way in", extended 2026-11-11 (`:7782-7787`),
+    and a dated pointer in §9 "The phone's door" (`:7688-7689`);
+  - the red (`ca8403bea`, from `c696e1b02`): `AccountDisplayTests` 3/1, `SettingsModelTests` 2/1 and
+    `WayInScreenTests` 7/2;
+  - the green (`f488ce53f`, from `64845370f`): `AccountDisplay.swift` 2/1, `SettingsModel.swift` 2/1 and
+    `FieldHomeModel+WayIn.swift` 4/2. No reason is logged; the kit has no such line, and none was added.
+- **IOS-10b, the Me menu's Theme** (theme-row "row"):
+  - the doc (`79d18d4bf`, from `09348e2cb`; 6/0 DESIGN.md): §8 "The phone's corner", amended 2026-11-11
+    (`:6666-6671`);
+  - the red (`c52ce31a0`, from `43b5a4c4a`): `ThemeMenuRowTests.swift` (new, 44 lines), `order`, `words`, `glyph`;
+  - the green (`cb3d26dbc`, from `008c57dd1`): `AccountCorner.swift` 78/9.
+- **IOS-10c, the home desktop's Agents** (agents "glance"; P6 (a)):
+  - the doc (`7a38ba5ff`, from `6c1b4495c`; 10/0 DESIGN.md): §8 "The phone's Settings", amended 2026-11-11
+    (`:6643-6652`), its sign-in words and foot marked ‹draft› for James;
+  - the red (`a6cb00331`, from `e2d1f8a5f`): `SettingsAgentsTests.swift` (new, 110) and
+    `SettingsAgentWordsTests.swift` (new, 30);
+  - the green (`f665ea825`, from `380cf78f0`): six FieldHome and FieldSettings files, `SettingsAgentMark.swift`
+    new, +196 −7.
+- **MA-6e's bands** (James's screenshot; VF-PM accepted the trace and the plan at 01:42:37Z):
+  - the doc (`aadaeb118`, from `d56cab427`; 5/0 DESIGN.md): §8 "The phone's Apps", the Open bullet, amended
+    2026-11-12 (`:7031-7035`);
+  - the red (`c9284fe86`, from `159ad6633`): a stub `AppsCardClip` in `AppsShelfViews.swift` (11/0) and
+    `AppsCardClipTests.swift` (new, 32), red at its own expectations;
+  - the green (`a71a52777`, from `6495e3dd1`): `AppsShelfViews.swift` 12/9. HomeScreen is untouched by it.
+- 20 paths, +694 −52 on `c550f7cef`: DESIGN.md and 19 under `apps/ios/VibeFieldKit`. No TS, JS or Rust path, no
+  `Package.swift` or `Package.resolved`, no pin-class path (`lanes/fixer/landing/stack-changed.txt`, the same paths as
+  git's own diff).
+- **The earlier cuts that the messages name by sha.** Eight messages name a commit of an earlier cut; each is that
+  role's commit on the four branches of 11-11, all on `8fffb13c7`:
+  - message 2 (`53badb4e1`): `628a9210c`, WI's doc;
+  - message 3 (`4e7070a73`): `0ee2a73d2`, WI's red;
+  - message 4 (`49923aebc`): `7e02f2fd4`, WI's green, the tip of `ios/wi-p1`, at line 14 of the message (line 19 of
+    the raw object);
+  - messages 5 (`ca8403bea`) and 6 (`f488ce53f`): `acc9cf908`, P1b's doc; message 6 also `c696e1b02`, P1b's red;
+  - message 8 (`c52ce31a0`): `09348e2cb`, IOS-10b's doc;
+  - message 9 (`cb3d26dbc`): `43b5a4c4a`, IOS-10b's red;
+  - message 11 (`a6cb00331`): `6c1b4495c`, IOS-10c's doc.
+- **What the messages say of their rows.** The five doc messages (1, 4, 7, 10, 13) say "Docs only. No row has run.";
+  messages 3, 6 and 9 name the K row as owed; message 12 says green by reading only, until ios-kc; message 14's red is
+  a stub that builds and fails at its own expectations. Run 313 is the K row they wait on.
+
+**What a person sees, by reading the code.** Lines are at `a71a52777`. Nothing was watched on a phone; the
+simulator's two stills are the one picture (below).
+- **The Field reaches the screen's edges** with the Apps tab closed. The receded card's clip is one shape,
+  `AppsCardClip.shape(open:)` (`AppsShelfViews.swift:347-358`): closed, it reaches 200 past the pages' bounds and
+  cuts nothing; open, it is MA-6's card, its top corners rounded at 44 (`:376-377`). Before it, the clip stood at
+  radius 0 when closed and cut the full-bleed stage at the safe area: two bands, 59 pt and 34 pt on an iPhone 14 Pro.
+- **A join that fails says "Couldn’t connect."** and nothing more, on the joining hold
+  (`FieldHomeModel+WayIn.swift:223`), on the welcome when a first sign-in fails (`:158`) and under **Sign in to
+  Tailscale again.** when its sheet could not open (`:195`), from `WayInWords.couldNotConnect` (`:123`); in the
+  corner's notice (`AccountDisplay.swift:74`); and on Tailscale's card in Settings › Account
+  (`SettingsModel.swift:190`). The reason stays inside, as data.
+- **The way in's notes** draw in the line's own ink, `inkSecondary` (`WayInView.swift:51`); the legal line keeps
+  `inkTertiary`. **Its glass fits what it holds**, on every step and on the curtain: one act 86, two 146, three 182,
+  the welcome about 206, where every glass was 210 (`glassHeight`, `:240`, from `GlassMeasure`, `:9`).
+- **The Me menu gains Theme**, Light · Dark · Auto, above Settings…, and above Lock now while the lock is on
+  (`AccountCorner.swift:301`, `menuRows`; `:407-438`, `ThemeMenuRow`). It keeps the Appearance key Settings already
+  keeps (`:411`), so the window changes at once and the menu stays open.
+- **The home desktop's page in Settings lists its Agents**, read-only, under This desktop: each offered agent's mark
+  on a 28 tile, its name and its sign-ins (`DesktopPage.swift:44-58`; the words, `SettingsInputs.swift:219-220` and
+  `SettingsModel.swift:26`). The home decides them from the meters' reading (`FieldHomeModel+Settings.swift:123`,
+  `:142`) and hands them to its own row alone (`HomeScreen.swift:3530`); the drawn glyphs come in through the
+  environment (`:3457`). No other desktop's page has the section, and it is never drawn empty.
+- **Not explained by this stack:** the press James made on "the menu button" that did nothing, and the desktop
+  sessions his phone did not show. Neither is traced; VF-PM asked him which control he pressed.
+
+**Validation of record** (run 313, `lanes/ts6/ios-313-mint-a9-results`: `run313/SUMS-run313` 7 of 7 OK and
+`lw/SUMS-mini-ios-313` 13 of 14 OK by `shasum -c` at 04:14:02Z, its fourteenth line the `.done`, whose copy in
+`verdict/` is `822911535adfebea` as the line says; `lw/stills/SUMS-stills` 2 of 2 OK; runner `c8059b50e3cc6e47`, 755
+lines, from `lanes/ts6/run313/a9-staged`; armed 03:20:08Z, the `.done` at 03:42:28Z; VF-PM reported it GREEN, having
+read the `.done` whole, in its message at the clock read 03:52:24Z, sent 03:52:40.925Z):
+- **The host:** the old mini, Xcode 27.2 (27B52), the iPhone 17 simulator `1F155533`, every xcodebuild
+  from A0b's kept SwiftPM fetch with run 313's six flags, so no network. The bundle (`08269880e5c09a6a`, 37,065 B)
+  requires `fb41e90ce` alone; its head into one new kept ref, `ios/stack-p1-p6a-run313` → `6495e3dd1`.
+- **STAGE 0 HOLDS:** three exits 0; fetch-class lines 0 and keychain lines 0; the checkouts unmoved; both
+  `Package.resolved` byte-same; the temp's result-bundle count unchanged.
+- **V, all GREEN:** V-1 `pnpm preflight` ("preflight OK (1 warning(s))", R23's known `acp`); V-1b the agent catalog
+  checker alone, both pass lines; V-2 `pnpm check:walls`; V-3 `pnpm check:retired`; V-4 `pnpm check:ios-fixtures`
+  (454 copies and 112 pins); V-5 fieldd's six DESIGN.md readers, 200 of 200, 6 of 6 files at the expected.
+- **RED-PROOF:** "R-b ASSERT 4 tests 6 issues / R-e ASSERT 1 test 2 issues", the line the addenda want. R-b at
+  `82db14f86` (P1b's red as re-cut on M284): `AccountDisplayTests.swift:69` and `:70`, `SettingsModelTests.swift:186`,
+  `WayInScreenTests.swift:217`, `:218` and `:343`, none off the addendum. R-e at `159ad6633`:
+  `AppsCardClipTests.swift:19` and `:20`; `openKeepsTheCard` passed.
+- **K GREEN-BUT-167:** 2443 tests in 375 suites, as ADDENDUM-2 §4 expected; passed 2439, skipped 3, failed 1. All
+  16 bundles at the table's counts: FieldHomeTests 704 in 87 and FieldSettingsTests 37 in 4, the stack's two;
+  FieldTerminalTests 177 in 35 with item 167's one failure, `scrollingKeepsTheKeyboardDownAndExplicitFocusStillWorks()`.
+- **The App:** Debug and Release for generic iOS, unsigned, both GREEN, each with 2 warnings and 0 error lines.
+- **THE WITNESS:** two stills, Field light and dark, `-vf-mock -vf-lock=none`, the shelf closed: 2 of 2 SHOT
+  (`lw/stills/light-field.png` `6f0d88944259423f`, `dark-field.png` `0ffc5c184bcba431`). Read on this Mac by
+  ADDENDUM-2 §5's rule (`lanes/ios/m285-records/bandread.py`, `db5ab7da9b005e02`, at 03:53:35Z), the column x = 20:
+  light, rows 5–170 spread 15 and rows 2527–2617 spread 12; dark, 4 and 3; a pass is 3 in light and 2 in dark. Run
+  281's stills of the broken build, read the same way, are flat: light 255 to 255, dark 17 to 17. The 03:53:35Z
+  output was printed in the IOS lead's session and not kept; the same read, run again at 04:40:43Z, is kept in
+  `lanes/ios/m285-records/bandread.out` (`8a1552b5ba7d32d3`), with the same numbers. The script needs Pillow (12.2.0,
+  under Python 3.14.0). By eye, the field's grid runs under the status bar and to the bottom edge, and the top row
+  of five view circles is whole.
+- **Beside it, as run 313 printed them:** the kept dirs unmoved (342, newer 0); the kept refs unmoved; KEPT births
+  0; the history files moved in none; THE BINDING after the six, lane-root lines 0; `<H>` after the six absent; the
+  floor held, 40,273 MiB free. Readings, by VF-PM's class of 02:30:53Z: the keychain RAW counts beside the struck 0s
+  (4 at rb-build, re-build, k-build, k-test, app-debug and stills-app; 2 at app-release), which the strike removes
+  as file names; the kept `r312` folder 1,621,640 → 1,619,968 KiB by du, its 16,355 files the same. Kept on the
+  mini, removed by nobody: `<G>/r313` 4,157 MiB and `<G>/rb313` 175 MiB.
+- **FINDINGS:** `workspace-state.json`'s App-root hash is `c4f12228f96cb3aa` in this run (the kit's root
+  `ebb691921d6d84d8`; fetch 0 on every step); and 8 new entries under the mini account's SwiftPM caches, names and
+  counts only, of which the `.done` names five: `package-collection.db-shm`, `manifests/manifest.db` and its two
+  journals, and `manifests/ManifestLoading/vibefieldkit.dia`.
+- Run 312 (`.done` `88d743a2a135b9a2`, STOP 76, a console hold before R-b's boot) is not cited as a green.
+- **The Mac's DESIGN.md readers,** through the door, at nice 19 with `--maxWorkers=2`, on VF-PM's word:
+  - at `6495e3dd1` (`mac-readers-rows-2.sh`, `69fd31158aac37eb`; out `f33064e83333a4bb`, rc 0, 01:54:22Z; DESIGN.md
+    blob `3b2c8a922348`, the tip's): field-app's 27 readers 646 of 646, HOLD 01:54:00Z to 01:54:19Z; sound's
+    `design-md.test.ts` 23 of 23, 01:54:19Z to 01:54:20Z; plugins/simulator's attach and design 19 of 19, 01:54:20Z
+    to 01:54:21Z; logs in `lanes/ios/stack-p1-p6a/logs-2/`;
+  - at `a56574f11` (`mac-readers-rows.sh`, `ba4f89a9b1a0918d`; out `ca962c429f4c7348`, 01:26:38Z), the same three
+    counts, after row 0's frozen install (the lane's lock was 7 Nov's); logs in `lanes/ios/stack-p1-p6a/logs/`.
+  - smoke-first-run, electron-shell's one DESIGN.md reader, ran in neither: it runs on this Mac in no lane (rule 12).
+    OWED, unrun.
+- No TS, JS or Rust path moves, so the other vitest and cargo counts stand at main's last run on `c550f7cef`.
+
+**The cut.**
+- 11-11, on `8fffb13c7`, each commit under the pre-commit hook: `ios/wi-p1` (23:10:09Z to
+  23:14:18Z), `ios/theme-row` (23:16:25Z to 23:17:26Z), `ios/wi-p1b` on `ios/wi-p1` (23:19:15Z to 23:20:06Z) and
+  `ios/agents-glance` (23:25:01Z to 23:30:27Z), the author dates. No row ran: no Swift on the Mac, and every kit row
+  waited on ios-kc.
+- **The one line.** VF-PM ordered ONE stack and ONE mint at 00:56:06Z, named M284 `fb41e90ce` as its base at
+  01:02:30Z, and ruled the re-cut as one line at 01:03:11Z: twelve cherry-picks in the order P1, P1b, P5, P6a, every
+  one "=" by `git range-diff`, merge-tree clean, as `a56574f11`, tree `4dfb049ef`. Accepted at 01:10:34Z.
+- **The bands.** VF-PM relayed James's screenshot and made its trace the first job in its message at the clock read
+  01:32:22Z (sent 01:32:43.531Z: "…This is now your FIRST job…"), accepted the
+  trace and the plan at 01:42:37Z, and had the fix ride before the mint. Its three commits are on `a56574f11`
+  (author dates 01:44:20Z, 01:46:20Z and 01:46:43Z), the tip `6495e3dd1`, tree `7f22a59c4a3b`. The bundle was cut
+  in one door row (01:47Z to 01:48Z) and placed in ADDENDUM-2.
+- **The mint.** Run 312 (armed 02:51Z, re-armed 02:53:33Z) stopped 76 at 02:57:40Z, a console hold before R-b's
+  boot. Run 313, re-cut so the boot waits up to 30 min for an idle console, took VF-PM's ARM at 03:19:19Z, was
+  launched at 03:19:55Z and armed at 03:20:08Z; it waited 7 min for the console (03:23:18Z to 03:30:19Z) and ran
+  whole.
+- **The carry.** Main moved by two commits (`3494ea43a`, `c550f7cef`) that touch none of the stack's 20 paths. On
+  VF-PM's word in its message at the clock read 03:52:24Z (sent 03:52:40.925Z: "run313 is GREEN on the old mini;
+  carry the iOS stack onto main c550f7cef now…"), a new branch at `6495e3dd1`, then one rebase with no stop
+  (03:53:18Z):
+  - `git switch -c ios/stack-p1-p6a-on-c550f7cef 6495e3dd1`;
+  - `git rebase --no-autostash --no-update-refs --onto c550f7cef fb41e90ce`;
+  - the tip `a71a52777`, tree `eb2fe95d110c`; the diff against `6495e3dd1` is main's four docs paths alone;
+    `git range-diff` 15 of 15 "=". VF-PM verified it in James's checkout at 03:54:38Z. `ios/stack-p1-p6a` stays at
+    `6495e3dd1`.
+- **The land.** The fixer's door pair (`lanes/fixer/landing/ios313-land.zsh`, `884245094957f194`, and its inner
+  `ios313-land-inner.zsh`, `4bde8924cbb5428a`) took the door's lock and ran `land-stack5.sh` (`4a1d62d4c8e79f03`).
+  It fast-forwarded main from `c550f7cef` to `a71a52777`, 20 paths (`stack-changed.txt`, `fe1a8934a39317c6`), with no
+  dirty path in James's checkout before or after. Main's reflog has
+  `main@{2026-11-12T04:11:17Z}: merge a71a52777…: Fast-forward`. Nothing is pushed: origin/main is at `8fffb13c7`,
+  main 28 past it.
+
+**Found along the way.**
+- **The bands came in with MA-6e's door** (`b3536ae89`, M272) and show in run 281's simulator stills of 9 Nov
+  (`lanes/vf-m2/um5-stills-a9-results/lw/stills/dark-plan-field.png`), which nobody read for them: MA-6e's own stills
+  were all shelf-open states. My first lead, a compatibility frame from the SDK, was wrong and was withdrawn.
+- **Three compile reds:** the reds of P1 (R-a), IOS-10b (R-c) and IOS-10c (R-d) call symbols the red did not have,
+  so they are red by the compiler, by reading, and never ran. VF-PM ruled at 01:25:37Z that only R-b runs, and stated
+  the three as a one-off; rule 45 binds later Swift slices, whose reds carry a stub (MA-6e's bands red is the first).
+- **Message 3's finding,** the welcome showing a first sign-in's failure as given, was the same class as W2a on
+  another screen; P1b took it.
+- **The witness's row:** ADDENDUM-2 §5 said "the Stories row"; on the Field page the top row is the five view
+  circles, and that is the row read.
+- **The guard's residual** (VF-PM's ruling 4, within the limit James accepted): xcodebuild's reads of the mini
+  account's SwiftPM homes cannot be redirected, only its writes seen; the 8 entries above are those writes.
+
+**Owed.**
+- **smoke-first-run's DESIGN.md read** at this tip: unrun, as above.
+- **The phone build** (James, 03:20:38Z, the board's j-iphone-next-build: "After the iOS stack lands, build main and
+  install it on my phone"), Debug by his click of 03:47:28Z: the next step, not part of this landing
+  (`lanes/ios/phone-build/`). Its build ran on VF-PM's GO of 04:11:57Z; the install waits for James's
+  j-iphone-plugged.
+- **For James's eye:** the four "Couldn’t connect." surfaces (message 4); IOS-10c's sign-in words and foot,
+  ‹draft›; WI-W2e, a next step on "Couldn’t connect." (Try again, or bare), open on *The Way In*.
+- **Untraced:** the menu press that did nothing and the missing desktop sessions on his phone.
+- **The rest of the plan of 11-11,** each on its own ruling: P3 (developer builds) and P4 (notifications in the
+  review build), both still unpicked on *Settings in a Pocket*; P6b (every desktop's Agents, a design note first);
+  P7, the Desktop slice, after WI-W5b (still unpicked) and its design note; P8, the mark's fade, after James pushes
+  vibefield-splash `9219e97`; and A1, the iPad pass, on VF-PM's GO. James picked A on both of their asks, by the
+  page's store (*The Way In*, db `decisions`, read by VF-PM at 04:39:27Z): WI-W3, the page's question "The mark’s
+  fade: will you push vibefield-splash 9219e97?", at 2026-11-11T22:59:41.530Z, and WI-W5, the page's question "The
+  Desktop slice: build it now?", at 23:00:10.604Z. The store holds pick letters; the questions are the page's
+  wording (its published `app.js`, version `1794445916-a393`, read at 03:33Z), not James's.
+- **The landing table at `a71a52777`:** none has run. It is owed before any push and runs on James's word by name.
+
+**Not done, and not claimed:** nothing of this stack ran on a phone, and nothing was watched in a running app beyond
+the simulator's two stills; no Swift row ran on this Mac; and nothing here is pushed.
