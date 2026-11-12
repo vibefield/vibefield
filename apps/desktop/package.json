@@ -63,6 +63,7 @@
     "package:verify:files": "node packaging/verify-files-package.mjs",
     "package:verify:history": "node packaging/verify-history-package.mjs",
     "package:verify:plugins": "node packaging/verify-plugins-package.mjs",
+    "//package:dir": "Item 349 (2026-11-12): this build is unsigned, then re-signed ad hoc by @electron/fuses, with the EnableCookieEncryption fuse on. Opened by hand under a real account, it makes \"VibeField Safe Storage\" in that account's login keychain, trusted by its ad-hoc signature, and every Developer ID build there then asks for that item. Nobody, person or agent, opens one under a real account's HOME: read it with package:audit, or run it under a run HOME and run keychain as smoke:profile does.",
     "package:dir": "pnpm run package:stage && node packaging/run-electron-builder.mjs --dir --config packaging/electron-builder.yml",
     "package:mac:release": "node packaging/run-macos-release.mjs",
     "package:audit": "node ../../scripts/audit-fuses.mjs --app release/mac-arm64/VibeField.app"
