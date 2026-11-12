@@ -47081,3 +47081,198 @@ RV both items at 03:45Z ("6. you spawn one", relayed by VF-PM).
 - Item 320, above.
 
 **Not done, and not claimed:** nothing of 318 was driven in Electron on the Mac, and nothing here is pushed.
+
+## Item 282, the rule and 282-7 — every room keeps VibeField's insides inside, and the small words follow (M284)
+
+(2026-11-12; five commits, `b4f4b1da1` to `fb41e90ce`, on main `874e3cd42`. Cut by ow-design in `lanes/i280/vibe-field`
+on the branch `i282/rule` as `89f6f3548` to `1f3b8f83a` on `8fffb13c7`, re-cut by plumbing onto M283 as
+`i282/rule-m283`, and landed by the fixer by fast-forward as M284 at 01:01:52Z, on VF-PM's LAND GO of 00:55:27Z,
+which the fixer held for run 309's four reads and two KEPT births; VF-PM re-issued it whole at 01:00:48Z, and it
+landed on that word.
+Validated by run 309, a9, the old mini, V alone, at `1f3b8f83a`, and on the re-cut by DESIGN.md's readers; the
+packets are `lanes/i280/packets/282-v1/`, with its transport `282-v1-mini/`, and `lanes/i280/packets/282-m283-fieldd/`.)
+James picked IS-282-1…7, all A, on the page *Insides on Screen* (https://claude.ai/artifact/NqLUt9USAjt5mWCCYzPKRs)
+on 2026-11-10, from 02:35:35Z to 03:32:49Z (DECISIONS "insides · IS-281 · IS-282-1…IS-282-7"); IS-282-7 at
+03:32:41Z: "small words, same rule. The index is History, the deck is terminals, and kinds and exit signals stay
+inside." This lands the rule and 282-7, steps 2 and 3 of the build order (`lanes/i280/plan/build-order-281-282.md`).
+The other groups are owed, below.
+
+**What landed, DESIGN.md first.**
+- The rule (`b4f4b1da1`, from `89f6f3548`; 22/0 DESIGN.md): §9's paragraph "Every room keeps them inside, the same
+  way" (`DESIGN.md:7317-7337`), after item 280's "VibeField's insides are never a person's to read". It states the
+  seven picks, each in the page's lean, and closes with a known deviation: ruled, owed, not built at this tip.
+- 282-7's doc (`831200152`, from `839611f01`; 20/12 DESIGN.md): §8's four places amended at their source and dated:
+  the views track (`:1641-1643`), the line's snapshot (`:1664-1672`), the missing face (`:4288-4293`) and Search's
+  foot (`:6297-6308`).
+- The red (`16a3bdbf7`, from `2245d52db`; 14 field-app test files, +128 −39): 25 rows red at their own assertions,
+  four of them new, and each received the older words.
+- The red rider (`dc9247159`, from `1cb060a2a`; `head.test.tsx` 1/1): the sync dot's decline row, which the red pinned
+  backwards, flipped.
+- The green (`fb41e90ce`, from `1f3b8f83a`): 16 field-app source files, `godview.css` and four follow tests, +61 −55.
+  No import line moves.
+- 36 files, +231 −106 on `874e3cd42`, line for line as on `8fffb13c7`; every file modified, none added, deleted or
+  renamed. Pin-class paths 0; DESIGN.md is the one path outside field-app's src and test
+  (`lanes/i280/land-282-m283/`, its two sweeps).
+
+**What a person sees, by reading the code.** Lines are at `fb41e90ce`, whose 35 files other than DESIGN.md are
+byte-equal to `1f3b8f83a`'s. Nothing was watched in a running app or heard with VoiceOver.
+- **History's cell** names itself "History, reading" to VoiceOver while History reads (`ViewsTrack.tsx:155`), where it
+  said "History, importing".
+- **The Snap tile** says "snapshots aren't available on this computer" (`line-model.ts:89`; the note,
+  `cards-words.ts:213`), where it said "no capture helper on this platform".
+- **The desk's bar** says "can't draw here" for a type this build never registered and "reload to draw it" where its
+  plugin is on but the desk mounted without its kind (`desk-object-words.ts:73`, `:76-77`), where it said "no kind"
+  and "remount to draw it". The catalog's status-line specimen follows (`StatusSection.tsx:153`).
+- **Search** says "Search is getting ready · 42%" while the index builds, "Search is getting ready" before it has a
+  count, and "Search isn't available right now" when the index stopped or its door refused: on its foot and in its
+  empty list (`peek-model.ts:299-307`, `:322`; `Peek.tsx:487`, `:489`), and on Live now's foot after its count, in
+  lower case (`peek-live.ts:131-143`). With nothing to show yet, its list says your latest sessions appear "once
+  History has read them" (`Peek.tsx:482`).
+- **A new terminal** says "terminals aren't ready yet" while the deck has no connection, on the line and from History
+  (`Composer.tsx:193`, `:347`; `history/acts.ts:236`).
+- **With no pane:** "open a terminal in Godview first" where a terminal is being opened (`useMonitorAgents.ts:832`,
+  `line-panes.ts:53`), and "open a terminal first" where a session is mounted or another desktop's run attached
+  (`useMonitorAgents.ts:752`, `:702`).
+- **Godview's pane badge** says "exited with an error" for a nonzero code and "ended" for a signal, both still red
+  (`pane-faces.ts:46`, `:39`). The code and the signal's name stay inside.
+- **The sync dot's title** (`Head.tsx:86`, `:92`, `:97`, `:102`): "Waiting on N changes from another device", "One of
+  your devices is offline — not everything here has reached it", "This device didn't take some changes from another
+  device" and "Catching up with your other devices", each with its last exchange. The catalog's strip follows the
+  offline title (`StatusSection.tsx:210`).
+- **What leaves the screen and goes nowhere yet.** By IS-282-1 what failed goes to the log, and that seam is 282-1a's,
+  not built. Until it is, the decline's own reason, the door's reason, Live now's detail and the index's own detail
+  reach neither the screen nor the log, as §9's known deviation says.
+- **The list is closed by one `git grep -n -F` of 282-7's 21 older words over `packages/field-app`**
+  (`old-words-left.sh`'s list; `lanes/i280/land-282-m283/closing-grep.txt`): 76 lines at `874e3cd42`, five at
+  `fb41e90ce`. None of the five is a word on screen:
+  - the two dated comments that keep the older words with their date (`desk-object-words.ts:11`, `:14`);
+  - "from a peer's" path, in two comments (`BehaviorTab.tsx:117`, `terminal-links.test.ts:7`);
+  - "suspended · " (`PluginsSection.tsx:185`), which holds the fixed string "ended · ".
+
+**Validation of record** (run 309, `lanes/ts6/i282-309-v-a9-results`: `run309/SUMS-run309` 10 of 10 OK and
+`lw/SUMS-mini-i282-309` 6 of 7 OK by `shasum -c` at 00:06:16Z on 11-12, its seventh line the `.done`, whose
+copy in `verdict/` is `6f4252a8a7043831` as the line says (`lanes/i280/land-282-m283/run309-sums-read.txt`); runner
+`f6599de7d16c2f7f`; placed on the old mini at 22:35:58Z, the `.done` at 22:42:51Z; VF-PM accepted it at 22:44:51Z):
+- **V ran at `1f3b8f83a`**, its bundle's one prerequisite `8fffb13c7`: the tip's tree `8e6b8d2e8fd0`, the whole
+  diff's patch-id and each commit's patch-id and tree equal to the packet's (the runner's reads, 22:36:08Z).
+- V: "verify exit 0 … 6 min 19 s" (22:36:13Z → 22:42:32Z).
+  - Every COUNT line as expected but electron-shell's: contracts 1963 (64 files); field-app 4699 (338 files), run
+    296's 4695 with the four new rows, godview-monitor 126, godview-remote-door 26, head 98 and peek 35; fieldd
+    3832 | 15 skipped (3847); biome 3557, 73 warnings, 21 infos; temp roots 270 of 1151; ios 454 and 112.
+  - electron-shell `2845 passed | 3 skipped (2848)` in 185 files, against run 296's `2846 passed | 2 skipped`: a host
+    reading on the old mini, `executable-arch.test.ts` skipped 0 → 1 under its gate (no release field-native), as run
+    306 printed it. This stack changes no electron-shell file.
+  - The file row: 27 packages, 1004 files at the packet's expected (`expected-counts.tsv`, `7fe201f9a9891727`), none
+    off, missing, extra or twice, none not predicted.
+  - "the sum over the count lines: 14717 22", a reading the runner printed as ≠ its expected 14718 21 (run 296's
+    14714 21 and the four new rows): the host's one skip. dev-runner 483 of 483; cargo 37 lines, the set equal to
+    run 296's.
+- **Beside V, as run 309 printed them:**
+  - the bundle read: initial 957.4 KB raw / 254.9 KB gz, equal to run 296's; the lazy chunks DIFFERENT by name, with
+    History's and Settings' scripts at new hashes and the same sizes (`HistoryRoomView-BxeMUaBK.js` 795.5 KB raw,
+    `SettingsPanel-C8lULSnU.js` 334.8 KB raw);
+  - the biome html read and the R23 read, each EQUAL to run 296's; gen:check reached once, porcelain 0 after verify;
+    the census assert OK;
+  - the typecheck read: 28 projects, 0 error lines, electron-shell's two programs and field-app's one;
+  - native provenance: one Compiling line; the cold target's spend 1 MiB;
+  - item 317: the old mini's `~/.bash_history` written once inside V, attributed to the stage `cargo test --workspace`,
+    which VF-PM reads as item 317's class, not this stack's (22:44:51Z);
+  - births: 303 seen, two KEPT, `/private/tmp/.tmpg731KM` and `/private/tmp/vf-seam-CMtO3X`;
+  - the 332 kept dirs and the kept refs unmoved; the new ref `i282/rule-run309` → `1f3b8f83a`, kept; the floor
+    held, 73685 MiB free in fin.
+- **S carried by tree 244a989b8429 (run 284's S GREEN).** V alone: IOS and K did not run.
+- **The re-cut at `fb41e90ce`, covered as VF-PM ruled at 23:06:35Z.** No second full V runs unless a reader goes red
+  or the merge is not clean.
+  - The Mac's 30 DESIGN.md readers, through the door, on VF-PM's 23:57:49Z word (`rows-m283.sh`,
+    `837cb3ed8441f7d5`): field-app's 27 646, sound 23, the simulator 19, every file at 282-v1's expected. HOLD
+    23:58:26Z to 23:59:33Z; logs in `lanes/i280/logs/i282-m283/` (`193c31faa2ba9506`, `5679215d4c901783`,
+    `2c372eecbc9ddb13`).
+  - fieldd's six on the old mini through a9 (`lanes/i280/packets/282-m283-fieldd/`, SUMS `616732e6ddb9869d`):
+    run 311 (`lanes/ts6/i282-311-six-a9-results`: `run311/SUMS-run311` 7 of 7 OK and `lw/SUMS-mini-i282-311` 7 of 8
+    OK by `shasum -c` at 00:41:01Z on 11-12, its eighth line the `.done`, whose copy in `verdict/` is
+    `b73c6a05304a2c5f` as the line says (`lanes/i280/land-282-m283-run311/run311-sums-read.txt`); runner
+    `f26bd32c194d880e`; placed on the old mini at 00:30:33Z, the `.done` at 00:32:34Z; VF-PM reported it GREEN at
+    00:34:11Z).
+    - At `fb41e90ce`, its bundle's one prerequisite `5438a5b3d`: the tip's tree `025b9901afd6`, the whole diff's
+      patch-id and each commit's patch-id and tree equal to the packet's, the numstat 0 lines off, pin-class paths 0
+      (the runner's reads, 00:30:45Z); the one new ref, `i282/rule-m283-run311` → `fb41e90ce`, kept.
+    - vitest exit 0, `Test Files 6 passed (6)` and `Tests 200 passed (200)`, 00:30:51Z to 00:32:12Z: 6 of 6 files
+      at the packet's expected (`expected-fieldd-six.tsv`, `4fbc7372c819a33e`), agent-forwarder-role 8,
+      agent-gateway 106, agent-shim-role 12, needs-words 7, record-stores 43 and spark-transcripts 24; none off,
+      missing, extra or twice; FAIL, Errors and Unhandled lines 0.
+    - Beside it, as run 311 printed them: item 317 over the six 0 (attributed, unattributed and zsh), the history
+      files the same at all five reads, arm to fin; 14 births seen, none KEPT; no fieldd or field-native left; the
+      336 kept dirs and the kept refs unmoved; the cold target's spend 1 MiB; 47925 MiB free in fin. Nothing was
+      printed as a FINDING, KEPT RED or HISTORY MOVED. One READING: the kept `~/vf-lanes/gvt` 840 KiB smaller by
+      du, its 22963 files the same.
+- On the Mac, through the door (`lanes/i280/door2.sh`; the packet's `rows/`, its HOLD lines in
+  `rows/HOLD-lines.txt`), at nice 19 with `--maxWorkers=2` on vitest, each row on its stage's tree on `8fffb13c7`:
+  - the rule's tree and the doc's: DESIGN.md's 31 Mac readers, every file at run 296's count, field-app's 27 645,
+    smoke-first-run 55, sound 23 and the simulator 19;
+  - the red's: biome over its 14 clean; vitest `25 failed | 488 passed (513)`, each failure at a line it added;
+    field-app's typecheck, 0 errors;
+  - the rider's: head.test alone `4 failed | 94 passed (98)`, the red's four; biome and the typecheck clean;
+  - V's tip `1f3b8f83a`: biome over the green's 21 clean and field-app's typecheck 0 errors. No vitest at that tip on
+    the Mac (the cut, below).
+
+**The cut.**
+- VF-PM's words: the rule's diff at 04:44:05Z (one packet for the rule and 282-7, one V) and its commit at 05:00:03Z;
+  282-7's plan ruled at 05:07:18Z; the doc's diff at 05:10:10Z; the red's words at 05:21:08Z and its commit at
+  05:57:06Z, after the disk-full PAUSE of 05:51:05Z; rulings A and B at 06:04:13Z; the rider's commit at 06:12:02Z;
+  the green's at 06:15:59Z by VF-PM's clock.
+- Committed under the pre-commit hook in `lanes/i280/vibe-field` at 05:00:48Z, 05:22:16Z, 05:57:47Z, 06:12:45Z and
+  06:16:36Z (the committer dates), each by its commit script on the tree its rows ran on.
+- The green was committed before its vitest. Claude Code's safety check refused a read-only readers.py pass over its
+  source files at 05:27:53Z, and VF-PM held it for James. James typed "3. V alone" at 19:43:47Z (relayed at
+  19:44:12Z), so the pass runs nowhere and V is the only row over the green's readers.
+- The packet of record is `lanes/i280/packets/282-v1` (SUMS `4d03255e40833230`, 121 of 121 OK; its bundle requires
+  `8fffb13c7` alone), sealed on VF-PM's word of 21:39:06Z; the transport is `282-v1-mini` (SUMS `cf2eeb3533e5d2ac`,
+  3 of 3 OK). Run 309 checked the transport's SUMS and the bundle's prerequisite before V (22:36:07Z).
+- **The re-cut onto M283.** By VF-PM's order RV's 318 + 317 landed first, as M283, and it shares DESIGN.md with this
+  stack, 263 lines apart (`-1377` against `-1640`). VF-PM named ONTO `874e3cd42`, M283 and its records, at 23:47:41Z.
+  - Each commit was replayed with its own parent as the merge base (`git merge-tree --write-tree`), then made with
+    its own message and author (`git commit-tree`), by `lanes/i280/i282/recut/recut-282-v2.sh` (`c5a4bb0b2cd3ee2c`).
+  - v1 of the script stopped its rehearsal at the red (23:48:55Z to 23:48:57Z, exit 7, no ref): it took a one-line
+    output's first character for the tree. v2's rehearsal (23:52:34Z to 23:52:38Z) and the write (23:54:17Z to
+    23:54:22Z) ran clean through the door (`lanes/i280/logs/i282-recut/`).
+  - The proof: the two DESIGN.md commits' +/- lines equal; the red's, the rider's and the green's `-U0` patch-ids
+    equal; the tip's tree `025b9901afd6` equal to the one-shot three-way of `8fffb13c7`, `874e3cd42` and
+    `1f3b8f83a`; every file only one side changed byte-equal to that side's.
+  - `refs/heads/i282/rule-m283` → `fb41e90ce`, written on VF-PM's 23:53:18Z word and verified by it at 23:55:25Z; the
+    lane switched to it at 23:57:12Z. `i282/rule` stays at `1f3b8f83a`, V's tip.
+  - The packet for fieldd's six is `lanes/i280/packets/282-m283-fieldd` (SUMS `616732e6ddb9869d`, 7 files; its bundle
+    requires `5438a5b3d` alone, which the mini holds), sealed on VF-PM's word of 00:01:05Z (11-12).
+- **The land.** The fixer's door pair (`lanes/fixer/landing/i282-land.zsh`, `27dce14e6bc0f6c0`, and its inner
+  `i282-land-inner.zsh`, `4d3c33128c66827d`) took the door's lock and ran `land-stack5.sh` (`4a1d62d4c8e79f03`). It
+  fast-forwarded main from `874e3cd42` to `fb41e90ce`, 36 files, +231 −106 (`stack-changed.txt`, the same paths as
+  git's own diff), with no dirty path in James's checkout. Main's reflog has
+  `main@{2026-11-12T01:01:52Z}: merge fb41e90ce…: Fast-forward`. Nothing is pushed: origin/main is at `8fffb13c7`,
+  main 11 past it (`lanes/i280/land-282-m284-records/land-facts.txt`).
+
+**Found along the way.**
+- **My plan misread `peer-declined`'s direction.** The contracts define it as "we refused a peer's records; devices
+  may differ", so a decline is this device's. The red pinned "One of your devices didn't take the latest changes",
+  and ruling B flipped it in the rider.
+- **Green v2 missed two follows,** found by `old-words-left.sh` before its message: the catalog's strip ("A peer is
+  offline") and `godview.css`'s comment on the exit face. Ruling A put both in v3, the green committed.
+- **smoke-first-run ran on the Mac twice,** as one of DESIGN.md's readers, in the rule's row and the doc's (04:55:53Z,
+  05:16:08Z), before VF-PM restated at 05:21:08Z that it never runs there.
+- **The readers gap at the red:** readers.py never ran over the red's 14 files. VF-PM ruled at 05:57:06Z that the red
+  commits on its three rows and V runs every suite at the tip.
+- **zsh reads `${${(f)out}[1]}` of a one-line value as its first character:** the re-cut's v1 took the red's tree as
+  "8" and stopped before any ref; v2 reads the lines as an array.
+- **Item 317** rode on run 309: one attributed write of the old mini's `~/.bash_history`, in cargo's stage.
+
+**Owed.**
+- **282-2** (build order step 5): the tile captions under the sync dot (`Head.tsx:121-127`); Settings' Mesh rows,
+  with the verbatim decline reason; fieldd `doc-sync.ts`'s comment that paraphrases the old decline title.
+- **The notify teller's fallback to a run's id:** its own slice, with fieldd's tests on V.
+- **282-1a:** the log seam (IS-282-1). Until it lands, the four reasons above reach neither the screen nor the log.
+- **MK-5** takes 282-6's plugin half (VF-PM, 04:31:02Z).
+- **For James's eye** (VF-PM collects them): the decline title's words; "open a terminal in Godview first"; "mount
+  into" and "attach to"; a signal's "ended" (red) and a pane that ended with no code ("ended", muted), told apart by
+  color alone.
+- **The landing table at `fb41e90ce`:** none has run. It is owed before any push and runs on James's word by name.
+
+**Not done, and not claimed:** no running app's words were watched or heard with VoiceOver; the readers of the green's
+source files were never listed on the Mac; and no full V ran on the re-cut tip, by VF-PM's ruling.

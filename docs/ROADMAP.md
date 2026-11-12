@@ -1051,11 +1051,16 @@ law DESIGN.md §9 "VibeField's insides are never a person's to read" (item 280),
   doc rides as its commit 8.
 - Landed 11-10: **item 300** (`d10b64f09` → `a0538cad3`, 3 commits, M280, run 293, an ff of `82cd1fd1c`; LANDED "Item
   300"): the veil's bar fades in where it stands on the island's curve, and reduced motion is 90ms for all of it.
-- Next: the rule (§9's paragraph widened from a start to every room, doc only), then 282's slices in the build order's
-  sequence, with item 293 (ob/ui) before 282-7.
+- Landed 11-12: **item 282's rule and 282-7** (`b4f4b1da1` → `fb41e90ce`, 5 commits, M284, run 309, re-cut onto
+  `874e3cd42` from `1f3b8f83a`; LANDED "Item 282, the rule and 282-7"): §9 says every room keeps VibeField's insides
+  inside, the same way; History says it is reading, a new terminal that terminals aren't ready yet, the desk's bar
+  "can't draw here", Search that it is getting ready, and the sync dot names no peer.
+- Next: 282's groups in the build order's sequence: 282-4's desktop half; 282-2, with the tile captions, Settings'
+  Mesh rows and fieldd's doc-sync.ts comment, and 282-6, whose plugin half is MK-5's; 282-1a, the log seam, settled
+  with RV first; then 282-1b, 282-3 and the phone's. The notify teller's fallback to a run's id is its own slice.
 - Owed: the Mac witness of a failed start; item 295, with no owner (the failure sentence's contrast over the field);
-  the veil in the product's own window (read by grep, not watched). The window rows at 280's main are closed by the
-  landing table at `a0538cad3` (LANDED "Item 281").
+  the veil in the product's own window (read by grep, not watched); 282-7's words in a running app (read from the
+  code, not watched), four of them for James's eye (LANDED "Item 282, the rule and 282-7").
 
 **Release rails — WP12 · TD · BP · FW packaging · RD** · prod-builder (resting) · law `specs/build-wp12-updater.md`,
 `specs/trust-and-distribution.md`, the three `specs/electron-*.md` + `electron-packaging-implementation-plan.md`,
