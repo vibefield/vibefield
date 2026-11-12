@@ -164,12 +164,16 @@ public struct HistoryProject: Identifiable, Equatable, Sendable, Codable {
   public let devices: [String]
   /// PJ-7 — its places, newest first.
   public let places: [HistoryPlace]
+  /// Item 353 — its lifetime (tokens, estimated spend, messages), from `project.figures` over every recorded day;
+  /// nil until that is read. The ledger's figures and its treemap are summed over these. A ledger cached before the
+  /// field reads nil: the synthesized decoding passes over a key that is absent.
+  public let lifetime: HistoryLifetime?
 
   public init(
     id: String, name: String, seq: Int, path: String, missing: Bool = false, figure: String, unit: String,
     spend: Double, last: String, recencyMinutes: Int, agents: [HistoryAgentShare], moreAgents: Int = 0,
     spark: [Int], stats: HistoryProjectStats? = nil, ribbon: [[Int]]? = nil, ink: Int? = nil,
-    devices: [String] = [], places: [HistoryPlace] = []
+    devices: [String] = [], places: [HistoryPlace] = [], lifetime: HistoryLifetime? = nil
   ) {
     self.id = id
     self.name = name
@@ -189,6 +193,7 @@ public struct HistoryProject: Identifiable, Equatable, Sendable, Codable {
     self.ink = ink
     self.devices = devices
     self.places = places
+    self.lifetime = lifetime
   }
 
   public var isLive: Bool { last == "now" }
@@ -201,6 +206,17 @@ public struct HistoryAgentShare: Equatable, Sendable, Codable {
   public init(_ agent: String, _ share: Int) {
     self.agent = agent
     self.share = share
+  }
+}
+
+extension HistoryLifetime {
+  /// Item 353 — the mock's lifetime, in proportion to the record's thirty days (its `spend`, millions of tokens): an
+  /// estimated cost of $2.40 for each of those millions, whole, so the ledger's wash and its ranking by spend stand
+  /// as the record drew them.
+  static func mock(thirtyDays: Double, tokens: Double, messages: Double) -> HistoryLifetime {
+    HistoryLifetime(
+      tokens: tokens, spend: HistorySpend(costMicroUsd: thirtyDays * 2_400_000), messages: messages, clipped: false,
+      partial: false)
   }
 }
 
@@ -553,35 +569,42 @@ extension HistoryCorpus {
         spark: [2, 3, 2, 4, 3, 5, 4, 6, 5, 7, 8, 6, 9, 10, 12],
         stats: .init(
           sessions: "128", messages: "8,412", tokens: "3.73", tokensUnit: "B", activeDays: "102",
-          facts: "31d streak · 31d best · peak 3 PM · mostly Opus 5"), devices: ["dev-1"]),
+          facts: "31d streak · 31d best · peak 3 PM · mostly Opus 5"), devices: ["dev-1"],
+        lifetime: .mock(thirtyDays: 1240, tokens: 3730000000, messages: 8412)),
       HistoryProject(
         id: "ice", name: "infinite-canvas-engine", seq: 1, path: "~/ice", figure: "386", unit: "M", spend: 386, last: "2h",
         recencyMinutes: 120, agents: [.init("claude", 70), .init("cursor", 30)],
-        spark: [9, 8, 6, 7, 5, 4, 4, 3, 3, 2, 2, 1, 0, 1, 1], devices: ["dev-1"]),
+        spark: [9, 8, 6, 7, 5, 4, 4, 3, 3, 2, 2, 1, 0, 1, 1], devices: ["dev-1"],
+        lifetime: .mock(thirtyDays: 386, tokens: 1158000000, messages: 3120)),
       HistoryProject(
         id: "mille", name: "mille", seq: 2, path: "~/project100/mille", figure: "214", unit: "M", spend: 214, last: "now",
         recencyMinutes: 1, agents: [.init("codex", 58), .init("claude", 42)],
         spark: [0, 0, 1, 0, 2, 3, 5, 6, 4, 3, 2, 0, 1, 2, 3],
         stats: .init(
           sessions: "41", messages: "2,904", tokens: "611", tokensUnit: "M", activeDays: "58",
-          facts: "6d streak · 14d best · peak 11 PM · mostly o5"), devices: ["dev-1"]),
+          facts: "6d streak · 14d best · peak 11 PM · mostly o5"), devices: ["dev-1"],
+        lifetime: .mock(thirtyDays: 214, tokens: 611000000, messages: 2904)),
       HistoryProject(
         id: "chop", name: "chopsticks", seq: 3, path: "~/p008/chopsticks", figure: "92.4", unit: "M", spend: 92.4,
         last: "40m", recencyMinutes: 40, agents: [.init("cursor", 55), .init("claude", 45)],
-        spark: [3, 4, 5, 4, 6, 5, 6, 7, 5, 6, 7, 6, 5, 6, 7], devices: ["dev-1"]),
+        spark: [3, 4, 5, 4, 6, 5, 6, 7, 5, 6, 7, 6, 5, 6, 7], devices: ["dev-1"],
+        lifetime: .mock(thirtyDays: 92.4, tokens: 277200000, messages: 1044)),
       HistoryProject(
         id: "rosetta", name: "rosetta", seq: 6, path: "~/project100/rosetta", figure: "71.8", unit: "M", spend: 71.8,
         last: "yesterday", recencyMinutes: 1440,
         agents: [.init("claude", 60), .init("codex", 30), .init("opencode", 10)],
-        spark: [0, 1, 2, 4, 3, 5, 6, 4, 5, 3, 4, 6, 5, 3, 2], devices: ["dev-1"]),
+        spark: [0, 1, 2, 4, 3, 5, 6, 4, 5, 3, 4, 6, 5, 3, 2], devices: ["dev-1"],
+        lifetime: .mock(thirtyDays: 71.8, tokens: 215400000, messages: 870)),
       HistoryProject(
         id: "truffle", name: "truffle", seq: 4, path: "~/p008/truffle · folder not found", missing: true, figure: "31.0",
         unit: "M", spend: 31, last: "12d", recencyMinutes: 17280, agents: [.init("claude", 100)],
-        spark: [4, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], devices: ["dev-1"]),
+        spark: [4, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], devices: ["dev-1"],
+        lifetime: .mock(thirtyDays: 31, tokens: 93000000, messages: 402)),
       HistoryProject(
         id: "jabali", name: "jabali", seq: 5, path: "~/jabali", figure: "4.20", unit: "M", spend: 4.2, last: "26d",
         recencyMinutes: 37440, agents: [.init("gemini", 70), .init("claude", 30)],
-        spark: [1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], devices: ["dev-1"]),
+        spark: [1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], devices: ["dev-1"],
+        lifetime: .mock(thirtyDays: 4.2, tokens: 12600000, messages: 96)),
     ],
     live: [
       HistoryLive(
