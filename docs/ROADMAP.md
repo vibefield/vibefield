@@ -722,7 +722,8 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
     follow. At James's hand, their PR scripts ready (`lanes/rv/pr/`): rv/pup-claude-b (#14, #111, #66, #110, #13)
     and rv/pup-views-b (#103, #104, #41, #101, #108). Building: rv/pup-claude-usage (#70, #32, #34, #102, #109,
     #35, #33). Parked: rv/pup-codex (on rv-pr58-codex-observer).
-- Next: ghosttea 0.15.0 → EL8-g → rv/vf-ghosttea-tail; waves 3–8 by the plan.
+- Next: rv/vf-ghosttea-tail, on ghosttea 0.15.0 (its EL8 landed 11-12 as M290, by the gvt lane; §2 "EL8 — the
+  pins"); waves 3–8 by the plan.
 - Owed: James's hand on every sibling PR and release; the landing table at M283 before its push; item 320 (a
   red over a whole environment prints it), no owner;
   smoke:plugin-restart and the plugin-runtime soak for item 212; item 215 (freeway's link door), item 217 (item 198's
@@ -1123,6 +1124,12 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
 
 **EL8 — the pins** · vibe-field-5c (template lane `hl-el8-0724`) · law DECISIONS TB, the manifests
 - Landed: ghosttea 0.13.7 + truffle 0.7.23 (`5ba36785b`); truffle 0.7.24, the split (`af3f3078f`, DECISIONS TB (a)).
+- Landed 11-12: **ghosttea 0.15.0, libghostty-vt 1.0** (`77ef95f50`, M290; cut as `e8ad39b03`, minted by run runel8
+  on the old mini, carried onto M289 by exact-text edits; LANDED "EL8 — libghostty-vt 1.0"): the six crates, the five
+  npm rows and the kit's Swift package move together, with no product source line changed; truffle's Swift plane
+  stays 0.7.26, which 0.15.0 declares. Owed: the landing gates at this land; item 331 (rustix 1.1.4 → 1.1.6 in
+  `Cargo.lock`); ack-fonts; item 355 (a `GHOSTTEA_` build variable reached a pane on a test host); James's cards
+  (the old mini's keychain file, j-mini-keychain-el8; two root links at 0.14.0 in his checkout).
 - Watch: the kit's Swift plane (0.7.26) rejoins the desktop's truffle 0.7.27 at the first ghosttea that declares it.
   Next events: a later
   puppeteer release (§3 item 3; 0.3.0 pinned 10-28, `1469639a6`), mille's first release. The next event's kit pre-boots the

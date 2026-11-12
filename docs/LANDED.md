@@ -47971,3 +47971,197 @@ No smoke row ran.
 - James's choice on the board, j-340-keychain: unanswered.
 - Item 349 (a), an app name of its own for packages that are not Developer ID signed: after 0.9, not started.
 - The smoke rows at this land.
+
+## EL8 — libghostty-vt 1.0 through released Ghosttea 0.15.0, on every plane; truffle's Swift plane stays 0.7.26 (M290)
+
+(2026-11-12; one commit, `77ef95f50`, on main `c841f8b7c` (M289). Cut by fa (the gvt lane) in
+`lanes/gvt-vfc/vibe-field`, a worktree of James's repository, detached, with no branch and no ref: as `e8ad39b03` on
+main `43492a05d` (M287) at 10:03:35Z, then carried onto `c841f8b7c` at 16:05:49Z by exact-text edits, never a merge.
+Validated by run runel8, a9, on the old mini, at `e8ad39b03`; on this Mac by the carry's five checks at the carried
+tip. Landed by the fixer by fast-forward as M290 at 16:10:19Z, on VF-PM's LAND GO, in the app-closed stretch James
+picked (VF-PM: "Now", DOWN 16:03:29Z). On James's word, typed at VF-PM's session on 2026-11-11 at 22:24:57Z: "Also
+push forward ghosttea progress fast, I want them land ASAP"; and on VF-PM's rulings of 2026-11-12. Its predecessor is
+the EL8 of 2026-11-02, "EL8 — Ghostty 1.4 through released Ghosttea 0.14.0". The rows are `lanes/gvt/rows/el8-*.sh`,
+their logs and state `lanes/gvt-vfc/el8-state/`, the mint's results `lanes/ts6/el8-a9-results/`.)
+
+**What.** The terminal's VT library on every plane is now libghostty-vt 1.0 (Ghostty `0fa3d577`), through ghosttea
+0.15.0: the six crates field-native takes, the five `@vibecook/ghosttea*` npm rows (six packages in the lock), and
+the kit's Swift package with its Apple archive. No VibeField product source line changes. Truffle's Swift plane stays
+0.7.26, which ghosttea 0.15.0 declares exact as 0.14.0 did, so no truffle plane moves in this event.
+
+**The release it pins.**
+- ghosttea `v0.15.0` = `8f5b3d122be284c3d0292dacd5c475c2a6193769`, a signed tag James pushed on 2026-11-12. Its
+  publish run 43145281943 succeeded; read back by GET at 03:23Z: seven crates on crates.io and ten `@vibecook/*`
+  packages on npm, `latest` = 0.15.0. VibeField takes six of the crates (not `-truffle`).
+- By the lane's notes, 0.15.0 is v0.14.0 plus ghosttea #102 (Option as Alt, protocol 1.19, typed input refusals),
+  #103 (the libghostty-vt 1.0 port), #104 (the release branch's pins) and #105 (rustix 1.1.6 in ghosttea's own lock).
+- The VT library release is `ghostty-vt-18e09ae6cb6a`. The macOS library is
+  `254727cdbe43cd9066f2bf11fbb86c9edc529d19ed80a0fe89d0f9346e93c2a0`, the sum in the crate's `artifacts.json`.
+- The Apple release is `ghosttea-apple-native-6a3c4add4331` (50,938,484 B), which the tag's `Package.swift` names.
+  The tag's manifest declares truffle `exact: "0.7.26"`, which is the kit's `truffleRelease` and the lock's
+  `release.swift`.
+
+**What moved** (seventeen files, +138 −127; the commit's message carries each line).
+- **The lock** (`siblings.lock.json`): ghosttea's `sha` and its three `release` keys, and four places in the `"//"`
+  prose, each an exact-text edit checked by parsed JSON after. Its `path` stays, the overlay's coordinate.
+  `render --prod` then wrote `Cargo.toml`'s `ghosttea = "=0.15.0"`, three npm rows (client, react, protocol) and the
+  kit's `ghostteaRelease`.
+- **cargo:** `Cargo.lock` moves in the six ghosttea blocks alone (12 and 12). rustix stays 1.1.4: 0.15.0 allows 1.1.6
+  and does not require it (item 331).
+- **npm** (`pnpm-workspace.yaml`): the two rows the lock does not render (electron, frame), typed; six
+  `minimumReleaseAgeExclude` rows at 0.15.0, published inside the window. The 0.14.0 rows stayed for the one install
+  that rewrote `pnpm-lock.yaml`, then went. The lock moves by the six packages alone (44 and 44).
+- **Swift:** the kit's `Package.resolved` by `swift package resolve` (ghosttea's revision and version), its
+  `originHash` line typed to the SHA-256 of the committed `Package.swift`. The App's `Package.resolved`: ghosttea's
+  two pin lines, typed; its `originHash` left as committed.
+- **Preflight** (`scripts/preflight.mjs`): the six ghosttea `PIN_EXPECTATIONS` rows and the truffle Swift row's label.
+- **The desktop notices** (`scripts/third-party-notices.mjs`): a measured row for Ghostty `0fa3d577` (simdutf,
+  highway, wuffs, compiler_rt). The `83fb9562` row stays beside it, so 0.14.0's crate keeps no gap.
+- **Generated:** `ghostty-keys.generated.ts` by `pnpm gen` (the crate's version, twice; the key table does not move).
+  `apps/ios/App/Resources/acknowledgements.json` by `node scripts/third-party-notices.mjs --ios`: 143 components, 116
+  texts, 0 gaps. The trimmed test copy `acknowledgements-l5.lane.json` moves four lines, and `AppReviewTests.swift`'s
+  expected ghosttea version, which `rows` reads from that copy, is typed to 0.15.0.
+- **Dated notes at their sources:** `Cargo.toml` above the ghosttea row; `pnpm-workspace.yaml`'s two notes; the kit's
+  `Package.swift` (the truffle row stays 0.7.26); two lines in `preflight.mjs`.
+- **Docs:** `apps/ios/TESTFLIGHT.md`'s Swift row with its dated correction; ROADMAP's truffle and ghosttea pin rows;
+  DECISIONS' TB row (no truffle plane moves).
+
+**What 0.15.0 changes for VibeField's code: no source line.**
+- The protocol minor goes 18 → 19 (`OPTION_AS_ALT_PROTOCOL_MINOR`). Option as Alt is not adopted here. The floor's own
+  minimum stays 17 (`packages/field-native/src/services/terminal_client.rs:68`).
+- ghosttea exports `ControlFailure`, which nothing here names. Swift's `GhostteaKeyEvent` gains a defaulted `flags`.
+- By the gvt lane's rows on ghosttea itself (11-10; not run in VibeField): a candidate host with a 0.14.0 client, and
+  the reverse, were green on the old mini; and by its probe of the candidate against 1.4.0, 1.0 obeys DECIC, DECDC,
+  DECBI and DECFI, and one resize that grows the rows and shrinks the columns no longer loses rows.
+
+**Measured on this Mac, through the door.**
+- **The notices row.** `ar -t` on the published macOS archive lists twelve members: simdutf, Highway (three), Wuffs,
+  Zig's `compiler_rt.o` and six of Ghostty's own. So the four keys the table knows and no fifth library. The desktop
+  notices for ghosttea-vt-sys 0.15.0 and for 0.14.0 have five components and no gap each (M7).
+- **The library.** field-native built from the registry crates (M3, K3); the build folder's library is the published
+  one by sha256. `field-terminal-host` has `_ghostty_key_encoder_set` and no `_setopt` of 1.4's.
+- **The slices.** Each of the three Apple slices SwiftPM unpacked equals its sum in ghosttea's artifact lock at the tag
+  and holds the six library objects by `ar -t` (M5, K5). `nm` was not run on the slices.
+- **Eleven checks, green, at the cut's tree** (K6, as M6): preflight, walls, deps, iOS fixtures; the two dev-runner
+  node tests; the key-catalog vitest; the type checks of fieldd, field-app, electron-shell and terminal-perf; biome.
+- Not run on this Mac at any tree: `cargo test`, clippy, the JavaScript suites, the kit's Swift tests, the App build,
+  any smoke.
+
+**The mint** (run runel8, a9, on the old mini, at `e8ad39b03` on `43492a05d`; armed 11:06:17Z; its `.done`
+`7c4fd74cfed040f2` written 11:31:09Z; accepted by VF-PM at 11:34:40Z; the commit reached the mini as a git bundle,
+sha256 `96b38d5a5cff6b6d…`, 10,982 B).
+- F1: `cargo test --workspace --no-run --locked`, exit 0 in 22 s. `cargo fetch` downloaded the six crates; they
+  compiled at 0.15.0; the VT library the build script fetched is `254727cdbe43cd90`.
+- F2: the kit's FieldSettingsTests on the simulator, 37 tests in 4 suites, green. `rows` passed with 0.15.0.
+- H: `swift package resolve` in a scratch copy of the kit with no `Package.resolved` wrote originHash `5a7bd9cd…` and
+  the three pins as committed: 0 lines differ. So the typed line is the one SwiftPM writes.
+- V: `pnpm verify` exit 0 at the parent (6 min 21 s) and at the commit (6 min 20 s). The two compare equal: 1,004
+  test files over 27 packages, 14 singles, 37 cargo results, the dev-runner's 483 tests; the renderer bundle 957.4 KB
+  (254.9 KB gzipped) at both. Preflight's one warning at both is R23's "candidate: `acp` could offer `spawn`".
+- K: the kit's whole suite, 2,444 tests in 375 suites; xcodebuild exit 65 on item 167's four known lines and nothing
+  else, which is the parent's own record (run 315). The kit's `Package.resolved` unmoved after it.
+- The App's Debug and Release builds green; the App's `Package.resolved` unmoved through its resolve and both builds.
+- `nm` on the `field-terminal-host` V built: `_ghostty_key_encoder_set` 1, `_ghostty_key_encoder_setopt` 0.
+
+**The mint's readings, whole.**
+- **The Keychains moved in one block.** After K's test step (k-test, 11:25–11:28Z) the old mini's `Keychains` folder
+  and `login.keychain-db` were newer than the block's mark. The folder's names were 8 before and 8 after, and nothing
+  was opened. The run's own read by block names K's alone (the kit's resolve, F2 and H before it read 0). The card is
+  with James (the board's j-mini-keychain-el8); no run that touches a keychain or a simulator is armed on the old
+  mini until he picks.
+- **The SwiftPM homes.** The kit's first resolve wrote eight entries under the mini account's SwiftPM caches (the
+  package-collection and manifest databases and one manifest diagnostic). xcodebuild's and swift's reads of those
+  homes cannot be redirected, only their writes seen (VF-PM's ruling 4, within the limit James accepted).
+- **The unseen hosts, a named gap** (VF-PM 09:40:22Z, R1). The tools printed github.com (ghosttea, truffle, rosetta)
+  and the crates.io index. The redirect hosts behind github.com's release assets and behind crates.io, and pnpm's
+  registry host, are printed by none of xcodebuild, SwiftPM, cargo or pnpm, and the run did not read them. The VT
+  archive's URL, read before the build, is the crate's own:
+  `github.com/vibecook-dev/ghosttea/releases/download/ghostty-vt-18e09ae6cb6a/…-aarch64-apple-darwin.tar`.
+- **Kept on the mini, removed by nobody:** the new ref `el8/mint-runel8` = `e8ad39b03`; the run's folder `el8-mint`,
+  4,127 MiB (its SwiftPM checkouts and cache, three DerivedData folders, H's scratch, the result bundles). The lane's
+  345 kept entries and its other refs were unmoved; the shell history files unmoved (item 317); the simulator shut
+  down; the free floor held (29,799 MiB against 10,240).
+
+**The cut and the carry.**
+- The first pass, rows M0 to M7, ran on the iOS stack's tip (M285) from 05:07Z to 07:56Z. Three rows stopped, each
+  ahead of its write, and each was finished by the next script (below).
+- The cut: K1 (08:32:34Z) carried the first pass onto main after item 322's records, byte for byte; K2 typed fifteen
+  edits, each dry first; K3 and K5 ran at that tree.
+- A read-only review of the cut (33 readers, 09:17Z) confirmed 21 findings before anything was committed. The one
+  that would have reddened the mint: `AppReviewTests.swift:188` reads the fixture and expected "0.14.0". Also: the
+  notices row's comment said `nm` ran on the Apple slices (only `ar -t` did); the kit's `originHash` was the earlier
+  manifest's; the plan's "cargo rebuilds nothing" was wrong (K3 rebuilt field-native); and `CARGO_NET_OFFLINE` does
+  not bind ghosttea-vt-sys's build script. K7 typed the three fixes.
+- Main took item 273 (M287). K1R re-based the cut onto it (10:02:12Z; no carried file moved), K7 and K6 ran there, and
+  K8 made `e8ad39b03` (tree `b5fe74ec`) at 10:03:35Z. The pre-commit hook ran as it stands.
+- Main then moved ten commits while the mint ran, to `c841f8b7c` (item 273's records, RB-1 and its records, items 340
+  and 349). It moved three of the seventeen files: ROADMAP, DECISIONS and `apps/ios/TESTFLIGHT.md`; no manifest, lock
+  or pin. RB-1 changed TESTFLIGHT.md's line 69, the line under the EL8's line 68, so a three-way merge conflicts
+  there.
+- So the carry is not a merge (`rows/el8-carry-3.sh`). Every file main did not move is `e8ad39b03`'s blob. A doc main
+  moved keeps main's text and takes K2's exact-text edits again (five: TESTFLIGHT 1, ROADMAP 2, DECISIONS 2). The row
+  stops unless those edits are `e8ad39b03`'s whole change to that doc and each old text stands once in main's file.
+- A rehearsal built that tree from git's objects first (`rows/el8-carry-rehearse.sh`, 16:04:52Z): tree `f00c7cdb`;
+  against main the seventeen files, against `e8ad39b03` the fifteen paths main moved. `git merge-tree` of the same
+  trees conflicts in TESTFLIGHT.md alone and differs from the edits' tree there alone, as predicted.
+- Row C (16:05:46Z) made `77ef95f50`: the staged tree and the commit's tree are the rehearsed tree; +138 −127 again.
+- Row V at the carried tip (16:06:19Z), five green: preflight, `render --prod --check`, check:deps,
+  check:ios-fixtures, and biome on the commit's `.mjs` and `.ts` files. Preflight's two warnings are K6's: the lane's
+  own ghosttea checkout stands at the candidate, not the tag; and R23's.
+- A reading in V's preflight log: pnpm's own line "[WARN] There are cyclic workspace dependencies" (fieldd and
+  fieldd-client), which K6's log does not hold. The commit changes no `package.json`. Not explained here.
+- Not run at the carried tree: the kit's FieldSettingsTests, the one test target both lines of work changed (RB-1:
+  five FieldSettings sources and `SettingsBuildTests.swift`; this commit: AppReviewTests' one literal and its
+  fixture). No line RB-1 changed there names the acknowledgements. VF-PM ruled F2 not run again (11:44:32Z).
+- The land: the fixer's fast-forward at 16:10:19Z; `pnpm install --frozen-lockfile` on James's checkout exit 0 at
+  16:12:00Z (+6 −6). The fixer's find after it: two root links, `node_modules/@vibecook/ghosttea` and
+  `ghosttea-frame`, still at 0.14.0 in James's checkout. A card is with James.
+- Not pushed. The landing gates, `pnpm gate:landing` and `pnpm perf:terminal pane-regression`, are owed at this land.
+
+**For James's eye.**
+- The App's `Package.resolved`: its `originHash` is left as committed. What Xcode computes that line from was not
+  found, so whether it matches is not known; Xcode recomputes it at its next package resolve. The mint's App builds
+  left the file unmoved.
+- libghostty-vt 1.0's Zig unit also defines Zig's UBSan runtime (`__ubsan_handle_*`), measured by `nm` on the
+  published macOS library. The notices row says so in its comment, under the licence text the `compiler_rt` key
+  already carries (Zig's). Whether the 1.4 library had it was not measured.
+
+**Found along the way.**
+- **The lock's one-line arrays.** `siblings.lock.json` writes four arrays on one line each, so a rewrite through JSON
+  never keeps its form. The first script stopped at its guard (M1, 05:15:43Z). Since then the lock is edited by exact
+  single texts and checked by parsed JSON after.
+- **A link to James's `mille-pin` reddens `check:deps`** (M2, 06:29:46Z): the link made his checkout's React a search
+  root, so loro, ice and strata counted twice. The lane now has its own mille checkout at the lock's revision.
+  Standing: no worktree is added to James's `mille`.
+- **Item 339: preflight's plain `git status` writes a pinned checkout's index** (`scripts/siblings.mjs`,
+  `siblingDirty`). M6's guard counted one entry newer under James's pins, HEAD and status unchanged. Until the fix,
+  the lane's rows export `GIT_OPTIONAL_LOCKS=0`.
+- **R23's warning is older than this EL8**: lane logs carry it from 2026-11-05, and `check-agent-catalog.mjs` names no
+  ghosttea.
+- **The proof symbols are in `field-terminal-host`**, not `field-native`.
+- **The kit's `originHash` is the SHA-256 of its `Package.swift`** (the lane, twice; a9, at six commits that wrote the
+  file; the mint's H). A resolve that finds the pins satisfied does not rewrite it, so a comment line added to the
+  manifest after the resolve leaves it stale.
+- **The first line list missed four consumers** newer than the last ghosttea EL8: the notices table, the App's
+  `Package.resolved`, `ghostty-keys.generated.ts` and TESTFLIGHT.md's row.
+- **Misses of the lane's.** Its first reads (03:24Z to 03:27Z) ran outside the door, six of them inside other lanes'
+  rows. At 10:08:18Z it wrote over a carry script whose sum VF-PM had accepted, and restored it byte-same by
+  10:09:28Z; nothing ran between. A pre-mint row's detector called a build script's rerun on a folder's own mtime (a
+  false alarm; the compile was green).
+
+**Owed.**
+- The landing gates at this land, on James's word.
+- **Item 331:** rustix 1.1.4 → 1.1.6 in this graph's `Cargo.lock` (RUSTSEC-2026-0486), its own item.
+- **ack-fonts:** the acknowledgements' fonts item.
+- **Item 355:** a suite's check that no `GHOSTTEA_` variable reaches a pane went red on a runner that exported
+  ghosttea-vt-sys's build variables; a read of what the pane's strip removes is in flight.
+- **The `vitest` peer** of `@vibefield/puppeteer-view-sdk@0.4.0`, which `pnpm peers check` printed: RV's, for
+  puppeteer 0.4.1.
+- **James's:** the keychain card (j-mini-keychain-el8); the two root links at 0.14.0 in his checkout; the five
+  ghosttea dists in his `ghosttea-0.11.2` checkout, built at the candidate (j-ghosttea-checkout-dists); his own gate
+  on the desktop app and his iPhone, which he deferred on 11-12 at 00:50:55Z; the phone harness C3, not started.
+- Item 339's fix. The App's `originHash`, at Xcode's next resolve.
+
+**Not done, and not claimed:** the notices row's measure on the two Windows VT libraries (VibeField's release builds
+mac-arm64 alone); Option as Alt; whether the 1.4 library carried Zig's UBSan runtime; any smoke on 0.15.0; the kit's
+FieldSettingsTests at the carried tree.
