@@ -499,3 +499,299 @@ struct HistorySittingTests {
     #expect(cache.latestDocument(device: "dev-1", session: "s1")?.document == kept)
   }
 }
+
+// MARK: - Item 362e
+
+/// Item 362e (James, 2026-11-12 18:40:35Z, of a session opened in the phone's History against the desktop's: "i
+/// think all message type and views are different from desktop, needs thorough audit") — the kinds a row already
+/// carries, drawn by the room's rule (rosetta at the pin, clients/room/src: `buildSegments` in
+/// lib/transcript/turns.ts, then `activityPlan` and `summarizeActivity` in components/transcript/activity-plan.ts).
+/// Between two replies everything the agent did is ONE group, and each thing in it keeps its own form. The phone
+/// counted a thought and dropped its words, drew a notice, a summary and a team message as tool lines, drew a
+/// blank reply as `(no words)` and let it cut the group, and folded a question to the reader into the run.
+///
+/// Rows are built in code, as the 362c suite's are: no fixture is added.
+@Suite("item 362e — between two replies one group, and each thing in it keeps its own form")
+struct HistoryGroupTests {
+  private func row(
+    _ id: String, _ ordinal: Int, _ kind: String, _ more: [String: JSONValue] = [:]
+  ) throws -> IndexTimelineRow {
+    var fields: [String: JSONValue] = [
+      "timelineId": .string(id), "sessionId": .string("s1"), "ordinal": .int(Int64(ordinal)), "kind": .string(kind),
+      "group": .object(["id": .string("g"), "kind": .string(kind == "user" ? "human_turn" : "agent_cycle")]),
+    ]
+    for (key, value) in more { fields[key] = value }
+    return try IndexTimelineRow(json: .object(fields))
+  }
+
+  private func tool(
+    _ id: String, _ ordinal: Int, _ family: String, _ object: String, failed: Bool = false
+  ) throws -> IndexTimelineRow {
+    try row(
+      id, ordinal, "tool_use",
+      [
+        "tool": .object([
+          "name": .string(family), "family": .string(family), "status": .string(failed ? "failed" : "succeeded"),
+          "failed": .bool(failed), "object": .string(object),
+        ])
+      ])
+  }
+
+  private func words(_ id: String, _ ordinal: Int, _ kind: String, _ text: String) throws -> IndexTimelineRow {
+    try row(id, ordinal, kind, ["text": .string(text)])
+  }
+
+  private func notice(_ id: String, _ ordinal: Int, _ type: String, _ text: String? = nil) throws -> IndexTimelineRow {
+    var more: [String: JSONValue] = ["notice": .string(type)]
+    if let text { more["text"] = .string(text) }
+    return try row(id, ordinal, "notice", more)
+  }
+
+  private func group(
+    _ segment: HistorySegment?
+  ) -> (id: String, summary: String, failed: Int, lines: [HistoryLedgerLine])? {
+    guard case .ledger(let id, let summary, _, let failed, _, let lines)? = segment else { return nil }
+    return (id, summary, failed, lines)
+  }
+
+  private func isProse(_ segment: HistorySegment) -> Bool {
+    if case .prose = segment { return true }
+    return false
+  }
+
+  @Test("a reply with no words and no attachment says nothing and closes nothing")
+  func aBlankReply() throws {
+    let rows = [
+      try tool("t1", 1, "shell", "pnpm build"),
+      try words("a1", 2, "agent", "  \n "),
+      try row("a2", 3, "agent"),
+      try tool("t2", 4, "file_read", "a.ts"),
+      try words("a3", 5, "agent", "Done."),
+    ]
+    let segments = FieldHistoryModel.segments(rows, desktop: "studio")
+    #expect(segments.map(\.id) == ["t1", "a3"])
+    let run = try #require(group(segments.first))
+    #expect(run.lines.map(\.id) == ["t1", "t2"], "the group runs on across a reply that said nothing")
+    #expect(run.summary == "1 command · 1 read")
+    #expect(segments.filter(isProse).count == 1, "a blank reply is not drawn as (no words)")
+    // a reply with an attachment and no words is its attachment, and it closes the group
+    let pictured = try row(
+      "a4", 2, "agent", ["attachments": .array([.object(["id": .string("i1"), "kind": .string("image")])])])
+    let more = FieldHistoryModel.segments(
+      [try tool("t3", 1, "shell", "ls"), pictured, try tool("t4", 3, "shell", "pwd")], desktop: "studio")
+    #expect(more.map(\.id) == ["t3", "a4/i1", "t4"])
+    #expect(more.filter(isProse).isEmpty)
+  }
+
+  @Test("a thought is a line with its first words and opens to all of them; a blank thought is not drawn")
+  func aThought() throws {
+    let long = String(repeating: "x", count: 150)
+    let rows = [
+      try words("h1", 1, "thinking", "the lean"),
+      try words("h2", 2, "thinking", "  first line  \nand a second"),
+      try words("h3", 3, "thinking", long),
+      try words("h4", 4, "thinking", " \n "),
+      try row(
+        "h5", 5, "thinking",
+        ["text": .string("cut by the desktop"), "textClipped": .bool(true), "textByteLen": .int(14_336)]),
+    ]
+    let run = try #require(group(FieldHistoryModel.segments(rows, desktop: "studio").first))
+    #expect(run.lines.map(\.id) == ["h1", "h2", "h3", "h5"])
+    try #require(run.lines.count == 4)
+    #expect(run.lines.allSatisfy { $0.kind == .thought && $0.verb == "Thought" })
+    #expect(run.summary == "4 thoughts")
+    // one short line says everything: nothing to open
+    #expect(run.lines[0].object == "the lean" && run.lines[0].words == nil)
+    // the first line, trimmed, and all of it under the line
+    #expect(run.lines[1].object == "first line" && run.lines[1].words == "  first line  \nand a second")
+    // the room's `firstLine`: 120, the last of them the ellipsis
+    #expect(run.lines[2].object == String(repeating: "x", count: 119) + "…")
+    #expect(run.lines[2].words == long)
+    // words the desktop cut open to what it sent, with the cut said under them
+    #expect(run.lines[3].words == "cut by the desktop")
+    #expect(run.lines[3].clipped == "clipped · 14 KB on studio")
+    #expect(FieldHistoryModel.firstLine("one\ntwo") == "one")
+    #expect(FieldHistoryModel.firstLine(String(repeating: "y", count: 120)).count == 120)
+  }
+
+  @Test("a notice says its type and its words in the room's shape; a runtime error counts as failed")
+  func notices() throws {
+    let rows = [
+      try notice("n1", 1, "command_output", "$0.42 so far"),
+      try notice("n2", 2, "runtime_error", "the socket closed"),
+      try notice("n3", 3, "async_task", "the build finished"),
+      try notice("n4", 4, "compaction", "the context was full"),
+      try notice("n5", 5, "model_changed"),
+    ]
+    let run = try #require(group(FieldHistoryModel.segments(rows, desktop: "studio").first))
+    #expect(run.lines.allSatisfy { $0.kind == .notice && $0.verb == "Session notice" })
+    #expect(
+      run.lines.map(\.object) == [
+        "$0.42 so far", "runtime error · the socket closed", "background task · the build finished",
+        "context compacted · the context was full", "model changed",
+      ])
+    #expect(run.lines.map(\.state) == [.ok, .failed, .ok, .ok, .ok])
+    #expect(run.summary == "5 context events")
+    #expect(run.failed == 1, "a runtime error is counted with the failed tools")
+    // each says everything on its line: none opens
+    #expect(run.lines.allSatisfy { $0.words == nil })
+    // a command's output of several lines opens to all of it
+    let output = try #require(
+      group(FieldHistoryModel.segments([try notice("n6", 1, "command_output", "one\ntwo")], desktop: "studio").first))
+    #expect(output.lines.map(\.object) == ["one"] && output.lines.map(\.words) == ["one\ntwo"])
+  }
+
+  @Test("a summary is its purpose and opens to its words; a compaction's is its own card, always")
+  func summaries() throws {
+    let rows = [
+      try row("s1", 1, "summary", ["summaryPurpose": .string("handoff"), "text": .string("where things stand")]),
+      try row("s2", 2, "summary", ["summaryPurpose": .string("handoff"), "text": .string("  ")]),
+      try row("s3", 3, "summary", ["summaryPurpose": .string("compaction"), "text": .string("the story so far")]),
+      try row("s4", 4, "summary", ["summaryPurpose": .string("compaction")]),
+      // the boundary's notice is NOT paired away by standing next to the recap: the row carries no native ids
+      try notice("n1", 5, "compaction", "the context was full"),
+    ]
+    let run = try #require(group(FieldHistoryModel.segments(rows, desktop: "studio").first))
+    #expect(run.lines.map(\.id) == ["s1", "s3", "s4", "n1"], "a blank summary is not drawn; a blank compaction is")
+    try #require(run.lines.count == 4)
+    #expect(run.lines[0].kind == .summary && run.lines[0].verb == "Handoff summary")
+    #expect(run.lines[0].object.isEmpty && run.lines[0].words == "where things stand")
+    #expect(run.lines[1].kind == .compaction && run.lines[1].verb == "Context compacted")
+    #expect(run.lines[1].object == "summary" && run.lines[1].words == "the story so far")
+    #expect(run.lines[2].kind == .compaction && run.lines[2].words == nil)
+    #expect(run.lines[3].kind == .notice && run.lines[3].object == "context compacted · the context was full")
+    #expect(run.summary == "4 context events")
+  }
+
+  @Test("a team message is a member of its own kind: Team update and its first line")
+  func aTeamMessage() throws {
+    let rows = [
+      try words("c1", 1, "collaboration", "design docs updated"),
+      try words("c2", 2, "collaboration", "the review\nthree findings, none blocking"),
+      try row("c3", 3, "collaboration"),
+    ]
+    let run = try #require(group(FieldHistoryModel.segments(rows, desktop: "studio").first))
+    #expect(run.lines.allSatisfy { $0.kind == .team && $0.verb == "Team update" })
+    #expect(run.lines.map(\.object) == ["design docs updated", "the review", ""])
+    #expect(run.lines.map(\.words) == [nil, "the review\nthree findings, none blocking", nil])
+    #expect(run.summary == "3 team updates")
+  }
+
+  @Test("a question to the reader and a request for permission stand alone and close the group on both sides")
+  func requests() throws {
+    let rows = [
+      try tool("t1", 1, "shell", "pnpm build"),
+      try tool("q1", 2, "question", "Which lean?"),
+      try tool("t2", 3, "file_read", "a.ts"),
+      try notice("p1", 4, "permission_requested"),
+      try tool("t3", 5, "file_change", "b.ts"),
+    ]
+    let segments = FieldHistoryModel.segments(rows, desktop: "studio")
+    #expect(segments.map(\.id) == ["t1", "q1", "t2", "p1", "t3"])
+    try #require(segments.count == 5)
+    #expect(segments[1] == .request(id: "q1", question: true, words: "Which lean?", result: "", failed: false))
+    #expect(segments[3] == .request(id: "p1", question: false, words: "", result: "", failed: false))
+    #expect(group(segments[0])?.lines.map(\.id) == ["t1"])
+    #expect(group(segments[2])?.lines.map(\.id) == ["t2"])
+    #expect(group(segments[4])?.lines.map(\.id) == ["t3"])
+  }
+
+  @Test("the head is the room's sentence: the tool nouns, then each other kind where it first appeared")
+  func theHead() throws {
+    let rows = [
+      try words("h1", 1, "thinking", "first, look"),
+      try tool("t1", 2, "file_change", "a.ts"),
+      try notice("n1", 3, "runtime_error", "the socket closed"),
+      try tool("t2", 4, "shell", "pnpm build", failed: true),
+      try tool("t3", 5, "shell", "pnpm test"),
+      try words("c1", 6, "collaboration", "a teammate's note"),
+      try words("h2", 7, "thinking", "then, decide"),
+      try row("s1", 8, "summary", ["summaryPurpose": .string("compaction"), "text": .string("the story so far")]),
+    ]
+    let run = try #require(group(FieldHistoryModel.segments(rows, desktop: "studio").first))
+    // acts before looks (a command is a look), then thoughts, context events and team updates by first appearance
+    #expect(run.summary == "1 edit · a.ts · 2 commands · 2 thoughts · 2 context events · 1 team update")
+    #expect(run.failed == 2, "the failed command and the runtime error")
+    // every member in the order it happened
+    #expect(run.lines.map(\.id) == ["h1", "t1", "n1", "t2", "t3", "c1", "h2", "s1"])
+    #expect(run.lines.map { $0.kind == nil } == [false, true, false, true, true, false, false, false])
+    // a group of notices alone still has a head, and a single thought is `1 thought`
+    let alone = try #require(
+      group(
+        FieldHistoryModel.segments(
+          [try notice("n2", 1, "model_changed"), try notice("n3", 2, "mode_changed")], desktop: "studio"
+        ).first))
+    #expect(alone.summary == "2 context events")
+    let lone = FieldHistoryModel.segments([try words("h3", 1, "thinking", "hm")], desktop: "studio")
+    let one = try #require(group(lone.first))
+    #expect(one.summary == "1 thought")
+    // rows that draw nothing make no group at all
+    #expect(FieldHistoryModel.segments([try words("h4", 1, "thinking", " ")], desktop: "studio").isEmpty)
+  }
+
+  @Test("a group that grows keeps its id and its members' ids, so what was open stays open")
+  func aGroupThatGrows() throws {
+    let before = [
+      try tool("t1", 1, "shell", "pnpm build"),
+      try words("h1", 2, "thinking", "it compiles\nnow the rows"),
+    ]
+    let after = before + [try tool("t2", 3, "file_read", "a.ts"), try words("h2", 4, "thinking", "one more\nthought")]
+    let first = try #require(group(FieldHistoryModel.segments(before, desktop: "studio").first))
+    let grown = try #require(group(FieldHistoryModel.segments(after, desktop: "studio").first))
+    #expect(first.id == "t1" && grown.id == first.id, "the group's open state is kept under its id")
+    #expect(Array(grown.lines.prefix(2)) == first.lines, "the members it had are the members it has")
+    #expect(grown.lines.map(\.id) == ["t1", "h1", "t2", "h2"])
+    // a member's open state never collides with its group's, whose id is its first row's
+    #expect(FieldHistoryModel.memberKey("t1") != "t1")
+    #expect(FieldHistoryModel.memberKey("h1") != FieldHistoryModel.memberKey("h2"))
+  }
+
+  @Test("Open every run opens every group and no member: a member's words are laid out only when it is opened")
+  func openEveryRun() throws {
+    let header = try IndexSessionResult(json: try Fixture.json("index-session.valid")).session
+    var rows = [try words("u1", 1, "user", "go")]
+    // forty thoughts, each with more to say than its line
+    for index in 0..<40 {
+      rows.append(try words("h\(index)", 2 + index, "thinking", "thought \(index)\nand its reasons"))
+    }
+    rows.append(try words("a1", 50, "agent", "Done."))
+    rows.append(try tool("t1", 51, "shell", "pnpm build"))
+    let document = FieldHistoryModel.document(
+      header: header, rows: rows, desktop: "studio", agentLabel: "Claude", nextCursor: nil, watermark: nil,
+      liveSince: nil, now: Date(timeIntervalSince1970: 1_759_285_600))
+    let opened = FieldHistoryModel.everyRun(document)
+    #expect(opened == ["h0", "t1"], "the two groups, by their ids")
+    let thoughts = try #require(group(document.turns.first?.segments.first))
+    #expect(thoughts.lines.count == 40 && thoughts.lines.allSatisfy { $0.words != nil })
+    #expect(thoughts.lines.allSatisfy { !opened.contains(FieldHistoryModel.memberKey($0.id)) })
+  }
+
+  @Test("a document cached before 362e still decodes: its lines are tool lines, and a new one round-trips")
+  func cachedBefore() throws {
+    // a run as the cache held it before this item: no `kind`, no `words`, no `clipped`
+    let old = HistorySegment.ledger(
+      id: "t1", summary: "1 command", duration: "3s", failed: 0, isLive: false,
+      lines: [HistoryLedgerLine(id: "t1", verb: "Ran", object: "pnpm build", result: "exit 0")])
+    var json = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(old)) as? [String: Any])
+    var ledger = try #require(json["ledger"] as? [String: Any])
+    var lines = try #require(ledger["lines"] as? [[String: Any]])
+    #expect(lines[0]["kind"] == nil && lines[0]["words"] == nil && lines[0]["clipped"] == nil)
+    lines[0] = lines[0].filter { !["kind", "words", "clipped"].contains($0.key) }
+    ledger["lines"] = lines
+    json["ledger"] = ledger
+    let read = try JSONDecoder().decode(HistorySegment.self, from: JSONSerialization.data(withJSONObject: json))
+    #expect(read == old)
+    // a member and a request round-trip through the cache's coding
+    let now: [HistorySegment] = [
+      .ledger(
+        id: "h1", summary: "1 thought", duration: "0s", failed: 0, isLive: false,
+        lines: [
+          HistoryLedgerLine(
+            id: "h1", verb: "Thought", object: "the lean", result: "", kind: .thought, words: "the lean\nand why",
+            clipped: "clipped · 14 KB on studio")
+        ]),
+      .request(id: "q1", question: true, words: "Which lean?", result: "", failed: false),
+    ]
+    #expect(try JSONDecoder().decode([HistorySegment].self, from: JSONEncoder().encode(now)) == now)
+  }
+}

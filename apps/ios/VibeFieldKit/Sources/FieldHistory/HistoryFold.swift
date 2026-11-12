@@ -750,6 +750,11 @@ extension FieldHistoryModel {
     return row.text.map { "\(type): \($0)" } ?? type
   }
 
+  // Item 362e (red) — the names `HistoryGroupTests` calls, answering nothing yet.
+  static func firstLine(_ text: String, max: Int = 120) -> String { text }
+  static func memberKey(_ id: String) -> String { id }
+  static func everyRun(_ document: HistoryDocument) -> Set<String> { [] }
+
   // MARK: - Search
 
   /// The index's hits grouped under the session they land in (the root the

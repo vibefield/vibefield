@@ -429,6 +429,9 @@ struct HistorySessionView: View {
       placeholder(label ?? "attachment on \(corpus.desktop)")
     case .clipped(_, let words):
       clippedNote(words)
+    case .request:
+      // item 362e (red): the fold makes none yet, and nothing draws one
+      EmptyView()
     }
   }
 

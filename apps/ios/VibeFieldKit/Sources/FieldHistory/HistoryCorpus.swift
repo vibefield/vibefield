@@ -517,10 +517,15 @@ public enum HistorySegment: Identifiable, Equatable, Sendable, Codable {
   /// record's honest-state voice, so a body never reads as complete when it
   /// is not; the whole is read in the room, which has the ticket.
   case clipped(id: String, words: String)
+  /// Item 362e — a question to the reader (`question`), or a request for permission: the session stopped there for
+  /// a person, so it stands alone between groups, open (the room's `request` block). `words` is what was asked;
+  /// `result` what the record says came of it, when it says.
+  case request(id: String, question: Bool, words: String, result: String, failed: Bool)
 
   public var id: String {
     switch self {
-    case .prose(let id, _, _, _), .ledger(let id, _, _, _, _, _), .attachment(let id, _, _), .clipped(let id, _):
+    case .prose(let id, _, _, _), .ledger(let id, _, _, _, _, _), .attachment(let id, _, _), .clipped(let id, _),
+      .request(let id, _, _, _, _):
       id
     }
   }
@@ -538,20 +543,43 @@ public struct HistoryLedgerLine: Identifiable, Equatable, Sendable, Codable {
     case running
   }
 
+  /// Item 362e — what a member of a group is when it is not a tool line (the room's thought, context event and
+  /// team event). Raw values are what the cache keeps.
+  public enum Kind: String, Equatable, Sendable, Codable {
+    case thought
+    case notice
+    case summary
+    case compaction
+    case team
+  }
+
   public let id: String
   public let verb: String
   public let object: String
   public let dir: String?
   public let result: String
   public let state: State
+  /// nil: a tool line, as every line was, and as a document cached before item 362e holds them (the three fields
+  /// below are optional, so such a document still decodes).
+  public let kind: Kind?
+  /// What opens under the line: the member's words, when they say more than its line does.
+  public let words: String?
+  /// `clipped · 14 KB on studio`, when the desktop cut those words.
+  public let clipped: String?
 
-  public init(id: String, verb: String, object: String, dir: String? = nil, result: String, state: State = .ok) {
+  public init(
+    id: String, verb: String, object: String, dir: String? = nil, result: String, state: State = .ok,
+    kind: Kind? = nil, words: String? = nil, clipped: String? = nil
+  ) {
     self.id = id
     self.verb = verb
     self.object = object
     self.dir = dir
     self.result = result
     self.state = state
+    self.kind = kind
+    self.words = words
+    self.clipped = clipped
   }
 }
 
