@@ -10769,9 +10769,14 @@ Antigravity's, Copilot's and Pi's are NEW to the card (before LP-4 they were til
 a protocol with no mark, wears its letter. *(Corrected 2026-11-12 18:04Z, item 360: for some minutes this said "Eight
 today" with Pi's mark held, because the bake had set Inflection's icon beside `pi` as its neighbour. lobe-icons' own
 index names `Pi` "Pi Agent", https://pi.dev, and Inflection apart; the mark is the coding agent's, on the phone and
-on the desktop, and the item closed with no fault.)* The phone's swarm still draws two until item 359's second
-step, which keeps LP-D7's other half ("the unused ones leave the bundle"): the atlas regains the cleared agents'
-tiles and no neighbour's. "Three" was the card's count when this was written; the toolkit carries nine paths, read
+on the desktop, and the item closed with no fault.)* The phone's swarm draws the same nine on the Field's bodies
+*(item 359's second step, 2026-11-12 18:22Z; until then this said "The phone's swarm still draws two until item
+359's second step")*: the nine tiles the design chose are the bake's bytes again, taken from git (the png at
+`40c794263`, the commit before LP-4's blanking, which is IOS-6c's bake unchanged), and the eleven neighbours the
+bake set beside them (`claude`, `anthropic`, `openai`, `xai`, `moonshot`, `nousresearch`, `geminicli`, `gemini`,
+`copilot`, `github`, `inflection`) stay blank, by `apps/ios/scripts/blank-unkept-marks.mjs`. So LP-D7's other half
+("the unused ones leave the bundle") stands: the bundle carries no mark the app does not draw.
+"Three" was the card's count when this was written; the toolkit carries nine paths, read
 2026-11-12. The phone's and
 the Mac's About still say VibeField "isn't affiliated with or endorsed by Anthropic or OpenAI" (§9), the two makers
 that line names; item 359 changes neither line, and whether it should name the other marks' makers is not decided
