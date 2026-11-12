@@ -7679,6 +7679,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     to and to which project.
   - **What stays the phone's:** the path never shows (PJ-L9: a path stays on its desktop), and the desktop row's
     `···` (pin, hide) is not offered: the phone reads (P2).
+- **The phone's session document reads as the desktop's transcript does** (item 362, 2026-11-12; James, 18:40:35Z,
+  of a session opened in the phone's History: "it has huge mismatch against desktop version … it does not load
+  message progressively like desktop … there is no chat message time grouping like desktop … it somehow scroll start
+  from top, does not like chat message flow in chat app"). A session's document is rosetta's room's transcript at
+  touch pitch: where the room decides how a transcript behaves, the phone decides by the room's rule and says it in
+  the room's words.
+  - **It opens at its end and keeps its end in view** (362a). The newest row stands above the bar when the document
+    opens, and stays there as rows arrive, until you read up the page: a drag stops the following at once, and
+    coming to rest within 24 pt of the end resumes it (Chat's figure). Up the page nothing moves under you: a row
+    arriving below leaves your place alone, a run you open grows down from its own line, and rows read in above land
+    above your place. A document a search landed in opens on the landed row, ringed as before, and does not follow.
+  - **The pill at the foot** is History's arrival pill (36 pt, glass): `3 new ↓` while rows have arrived below the
+    screen, and `Latest ↓` when nothing is unread and the end is more than a screen below. A press returns to the
+    end, and the document follows again.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
