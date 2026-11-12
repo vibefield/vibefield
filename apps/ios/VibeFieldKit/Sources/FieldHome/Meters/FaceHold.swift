@@ -32,6 +32,36 @@ enum FaceHold {
   static let budReach: Double = 58
   static let hubLeft: Double = 52
 
+  /// One touch on the face, read whole by the corner itself (item 346): down inside the slop, its let-go is the
+  /// menu's tap; left there until the hold's clock runs out, the held face opens and its let-go is the lens's;
+  /// carried past the slop first, it is neither.
+  struct Touch: Equatable {
+    enum Standing: Equatable {
+      case down
+      case strayed
+      case held
+    }
+
+    enum LetGo: Equatable {
+      /// the menu's tap
+      case tap
+      /// the held face's let-go
+      case release
+      case nothing
+    }
+
+    private(set) var standing: Standing = .down
+
+    /// The finger is this far from where it came down.
+    mutating func moved(_ translation: CGSize) {}
+
+    /// The hold's clock ran out: true when the held face opens on it.
+    mutating func clockRanOut() -> Bool { false }
+
+    /// What the finger's lift is.
+    var letGo: LetGo { .nothing }
+  }
+
   /// A hold in progress: the face's centre in the window, and what the finger reaches.
   struct Held: Equatable {
     let face: CGPoint
