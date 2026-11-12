@@ -1,6 +1,7 @@
 import FieldAgents
 import FieldProduct
 import Foundation
+import os
 
 // SP-6 (2026-10-04) — the door's answers folded into the tab's VALUES (H-D4:
 // every decision a pure function, pinned by `FieldHistoryTests`): a catalog
@@ -202,21 +203,30 @@ extension FieldHistoryModel {
 
   /// The last `count` calendar days, oldest first, as `YYYY-MM-DD`.
   static func lastDays(_ count: Int, now: Date) -> [String] {
-    let formatter = DateFormatter()
-    formatter.calendar = calendar
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.dateFormat = "yyyy-MM-dd"
-    return (0..<count).reversed().compactMap { back in
-      calendar.date(byAdding: .day, value: -back, to: now).map(formatter.string)
-    }
+    lastDays(count, now: now, in: calendar)
   }
 
-  // Item 364 (red) — the names the rows call. `lastDays(_:now:in:)` does not read the calendar it is handed yet;
-  // `formattedDays` is the days as they are formatted today, in a calendar.
+  /// Item 364 — a day's lists are the same for every project folded on it, and formatting them again for each one (a
+  /// 371-day ribbon, a 31-day window and a 30-day sparkline: three formatters and 432 dates a project) was most of
+  /// what a ledger's fold cost. The longest list read for a day is kept, and a shorter one is its tail.
+  ///
+  /// The key is the calendar's own day: the start of `now`'s day in `calendar`, with the calendar's kind and its
+  /// time zone, so a list is never read across midnight, a time zone or a calendar the person changed. Nothing is
+  /// formatted while the lock is held.
   static func lastDays(_ count: Int, now: Date, in calendar: Calendar) -> [String] {
-    lastDays(count, now: now)
+    let key = DayLists.Key(
+      day: calendar.startOfDay(for: now), calendar: String(describing: calendar.identifier),
+      zone: calendar.timeZone.identifier)
+    let held = dayLists.withLock { lists in lists.key == key && lists.days.count >= count ? lists.days : nil }
+    if let held { return Array(held.suffix(max(count, 0))) }
+    let days = formattedDays(count, now: now, in: calendar)
+    dayLists.withLock { lists in
+      if lists.key != key || lists.days.count < days.count { lists = DayLists(key: key, days: days) }
+    }
+    return days
   }
 
+  /// The days, formatted: what `lastDays` keeps for a day.
   static func formattedDays(_ count: Int, now: Date, in calendar: Calendar) -> [String] {
     let formatter = DateFormatter()
     formatter.calendar = calendar
@@ -227,6 +237,21 @@ extension FieldHistoryModel {
       calendar.date(byAdding: .day, value: -back, to: now).map(formatter.string)
     }
   }
+
+  /// The longest list of days read for one day of one calendar in one time zone.
+  private struct DayLists: Sendable {
+    struct Key: Equatable, Sendable {
+      var day: Date
+      var calendar: String
+      var zone: String
+    }
+
+    var key: Key
+    var days: [String]
+  }
+
+  private static let dayLists = OSAllocatedUnfairLock(
+    initialState: DayLists(key: .init(day: .distantPast, calendar: "", zone: ""), days: []))
 
   /// The 53 weeks of 7 ending today, each day 0…4 by its share of the busiest
   /// day — the index's own count in the record's levels.

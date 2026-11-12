@@ -67,6 +67,10 @@ public final class HistoryCache: @unchecked Sendable {
   private let limit: Int
   private let files = FileManager.default
   private let lock = NSLock()
+  /// Item 364 — when the last ledger written for each device was asked for, where its writer said, and when the cache
+  /// was last cleared (both read and written under `lock`).
+  private var ledgerOrders: [String: UInt64] = [:]
+  private var clearedAt: UInt64 = 0
 
   /// The app's own caches directory by default; a test hands a scratch one.
   public init(directory: URL? = nil, limitBytes: Int = HistoryCache.limitBytes) {
@@ -81,14 +85,23 @@ public final class HistoryCache: @unchecked Sendable {
 
   // MARK: Ledgers
 
-  /// Item 364 (red) — `order` is named and not yet obeyed: a ledger asked for earlier still replaces a later one,
-  /// and one asked for before a clear is still written after it.
+  /// Item 364 — `order`: a writer that keeps the ledger from more than one thread (the ledger's reader writes off the
+  /// main actor, and once more by itself as it closes) says when each was asked for (`DispatchTime`'s uptime, in
+  /// nanoseconds). A ledger asked for earlier than the one already written is dropped, so the last one asked is the
+  /// one kept, whichever lands last. One asked for before the cache was cleared is dropped too, so a write still on
+  /// its way at a sign-out puts nothing back. With no order a ledger is written as it always was.
   public func keepLedger(_ corpus: HistoryCorpus, device: String, readAt: Date = Date(), order: UInt64? = nil) {
     var trimmed = corpus
     trimmed.documents = [:]
     trimmed.hits = []
     trimmed.searchedQuery = nil
-    write(KeptLedger(corpus: trimmed, readAt: readAt), to: ledgerURL(device))
+    write(KeptLedger(corpus: trimmed, readAt: readAt), to: ledgerURL(device)) {
+      guard let order else { return true }
+      guard order > self.clearedAt else { return false }
+      if let last = self.ledgerOrders[device], last > order { return false }
+      self.ledgerOrders[device] = order
+      return true
+    }
   }
 
   public func ledger(device: String) -> KeptLedger? {
@@ -123,8 +136,15 @@ public final class HistoryCache: @unchecked Sendable {
   }
 
   /// Drop everything (sign out: what the field taught this phone goes).
+  ///
+  /// Item 364 — and it stays gone: a ledger that was asked for before this moment and is still on its way off the
+  /// main actor is refused when it lands (`keepLedger`'s `order`).
   public func clear() {
-    lock.withLock { try? files.removeItem(at: root) }
+    lock.withLock {
+      try? files.removeItem(at: root)
+      clearedAt = DispatchTime.now().uptimeNanoseconds
+      ledgerOrders.removeAll()
+    }
   }
 
   // MARK: Files
@@ -152,8 +172,10 @@ public final class HistoryCache: @unchecked Sendable {
     return String(hash, radix: 16)
   }
 
-  private func write<T: Encodable>(_ value: T, to url: URL) {
+  /// `allowed` is asked under the lock, before anything is written.
+  private func write<T: Encodable>(_ value: T, to url: URL, when allowed: () -> Bool = { true }) {
     lock.withLock {
+      guard allowed() else { return }
       do {
         try files.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(value)

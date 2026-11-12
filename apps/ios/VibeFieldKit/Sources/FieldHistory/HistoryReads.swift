@@ -62,6 +62,13 @@ public enum HistoryReads {
   public static let figuresRefreshSeconds: Int64 = 300
   /// Item 353 — figures the door refused are asked again after this long.
   public static let figuresRetrySeconds: Int64 = 20
+  /// Item 364 — while answers stream, the ledger is folded again (and so drawn again) no sooner than this long after
+  /// the fold before it. The first fold of a quiet ledger is immediate; an answer that lands while one runs is
+  /// folded by the next, so the last answer is never dropped.
+  public static let foldEveryMs = 250
+  /// Item 364 — while the ledger changes it is written to the cache no more than once in this long (and at once
+  /// when its reader pauses or closes).
+  public static let keepEverySeconds: Int64 = 1
   /// fix7 — while the ledger's index is not ready (starting, rebuilding,
   /// failed), how often the ledger and its index are read again: nothing pings
   /// when it becomes ready, and two cheap reads every few seconds is a

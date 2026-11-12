@@ -94,16 +94,34 @@ public final class HistoryProjects {
   @ObservationIgnored private var sessionsWalkedAt: [String: Date] = [:]
   @ObservationIgnored private var paused = false
   @ObservationIgnored private var closed = false
-  /// Item 364 (red) — how many times the ledger was folded: once for every answer, on the main actor.
+  /// Item 364 — something the ledger is folded from changed since the last fold began.
+  @ObservationIgnored private var foldWanted = false
+  /// A fold is running off the main actor and has not been published.
+  @ObservationIgnored private var folding = false
+  @ObservationIgnored private var foldTask: Task<Void, Never>?
+  @ObservationIgnored private var foldedAt: ContinuousClock.Instant?
+  @ObservationIgnored private let foldEvery: Duration
+  /// How many folds changed the ledger and were published (the rows that hold the window read it).
   @ObservationIgnored private(set) var foldsPublished = 0
+  /// Item 364 — the ledger changed since the last write to the cache began.
+  @ObservationIgnored private var keepWanted = false
+  /// A write is running off the main actor.
+  @ObservationIgnored private var keeping = false
+  /// Item 364 — whether the listing last read went on past its bound. `cut` says so once the fold that carries those
+  /// rows is drawn, so the line under the ledger never leads the rows it speaks of.
+  @ObservationIgnored private var cutRead = false
+  @ObservationIgnored private var keepTask: Task<Void, Never>?
+  @ObservationIgnored private let keepEvery: Duration
 
   public init(
     source: String?, door: (any HistoryDoor)?, ownsDoor: Bool = false, cache: HistoryCache? = nil,
     roster: [FieldHistoryModel.RosterDesktop] = [], now: @escaping @MainActor () -> Date = { Date() },
     indexRecheck: Duration = .seconds(HistoryReads.indexRecheckSeconds), wantsFigures: Bool = false,
-    foldEvery: Duration = .zero, keepEvery: Duration = .zero
+    foldEvery: Duration = .milliseconds(HistoryReads.foldEveryMs),
+    keepEvery: Duration = .seconds(HistoryReads.keepEverySeconds)
   ) {
-    // item 364 (red): `foldEvery` and `keepEvery` are named and not yet obeyed
+    self.foldEvery = foldEvery
+    self.keepEvery = keepEvery
     self.wantsFigures = wantsFigures
     self.source = source
     self.door = door
@@ -141,6 +159,7 @@ public final class HistoryProjects {
     pings = nil
     tasks.removeValue(forKey: "index-wait")?.cancel()
     tasks.removeValue(forKey: "figures-retry")?.cancel()
+    keepNow()
   }
 
   public func resume() {
@@ -154,8 +173,13 @@ public final class HistoryProjects {
     closed = true
     for task in tasks.values { task.cancel() }
     tasks.removeAll()
+    foldTask?.cancel()
+    foldTask = nil
+    keepTask?.cancel()
+    keepTask = nil
     pings?.cancel()
     pings = nil
+    keepLast()
     if ownsDoor { door?.close() }
   }
 
@@ -208,8 +232,53 @@ public final class HistoryProjects {
     corpus = replayed
   }
 
-  private func keepLedger() {
-    cache?.keepLedger(corpus, device: Self.cacheKey, readAt: now())
+  /// Item 364 — the ledger is kept OFF the main actor, one write at a time and each with the order it was asked in,
+  /// and while the ledger changes no more than once in `keepEvery`. It was the whole ledger encoded and written on
+  /// the main actor after every answer: 171 writes and 3.2 s in the first 25 s of a ledger of 166 projects, measured
+  /// on a phone.
+  private func keepSoon() {
+    guard cache != nil, !closed else { return }
+    keepWanted = true
+    guard keepTask == nil else { return }
+    keepTask = Task { [weak self] in
+      while !Task.isCancelled {
+        guard let self, keepWanted, let cache else { break }
+        keepWanted = false
+        keeping = true
+        let kept = corpus
+        let at = now()
+        let order = DispatchTime.now().uptimeNanoseconds
+        let device = Self.cacheKey
+        await Task.detached(priority: .utility) {
+          cache.keepLedger(kept, device: device, readAt: at, order: order)
+        }.value
+        keeping = false
+        try? await Task.sleep(for: keepEvery)
+      }
+      self?.keepTask = nil
+    }
+  }
+
+  /// What is still to be kept is written now, by the caller: a reader that is leaving the screen does not wait a
+  /// window, and does not trust a write still running off the main actor to land (this one is asked later, so the
+  /// cache keeps it whichever lands last).
+  private func keepNow() {
+    guard keepWanted || keeping, let cache else { return }
+    keepWanted = false
+    cache.keepLedger(corpus, device: Self.cacheKey, readAt: now(), order: DispatchTime.now().uptimeNanoseconds)
+  }
+
+  /// The reader is closing: what it read and had not folded yet is folded now, and the ledger is written now, by the
+  /// caller. A closed reader starts no task and asks the cache for nothing more (a sign-out clears the cache after
+  /// it closes its readers), and the reader that replaces this one replays what it wrote.
+  private func keepLast() {
+    guard let cache else { return }
+    let unfolded = foldWanted || folding
+    guard unfolded || keepWanted || keeping else { return }
+    foldWanted = false
+    keepWanted = false
+    let ledger = unfolded ? Self.folded(ledgerInputs) : corpus
+    cache.keepLedger(ledger, device: Self.cacheKey, readAt: now(), order: DispatchTime.now().uptimeNanoseconds)
   }
 
   // MARK: The reads
@@ -253,7 +322,7 @@ public final class HistoryProjects {
         sources = page.sources
         if page.cursor == nil {
           // the whole ledger is this page
-          cut = false
+          cutRead = false
           hold(page.rows, whole: true)
           walkedAt = now()
         } else if walk {
@@ -280,7 +349,7 @@ public final class HistoryProjects {
             pages += 1
             if first { hold(rows, whole: true) }
           }
-          cut = more
+          cutRead = more
           hold(rows, whole: true)
           walkedAt = now()
           if more { HistoryReads.log("ledger: the listing went on past \(pages) pages; \(rows.count) projects held") }
@@ -319,7 +388,6 @@ public final class HistoryProjects {
     order = rows.map(\.key) + (whole ? [] : order.filter { !listed.contains($0) })
     summaries = kept
     rebuild()
-    keepLedger()
   }
 
   private func readProject(_ key: String) {
@@ -376,7 +444,6 @@ public final class HistoryProjects {
           rebuild()
         }
         if walk || page.cursor == nil { sessionsWalkedAt[page.key] = now() }
-        keepLedger()
       } catch {
         refused(error)
       }
@@ -417,7 +484,6 @@ public final class HistoryProjects {
         figuresFailed.remove(answer.key)
         if figuresFailed.isEmpty { figuresRetries = 0 }
         rebuild()
-        keepLedger()
       } catch {
         if !(error is CancellationError) { figuresFailed.insert(key) }
         refused(error)
@@ -468,7 +534,6 @@ public final class HistoryProjects {
         agentCounts = counts
         agentsReadAt = now()
         rebuild()
-        keepLedger()
       } catch {
         // A desktop that does not answer the sessions' listing still has its ledger: the rows keep the agents their
         // read sessions name, and the listing is asked again at the next refresh. The ledger's own reads say when
@@ -595,8 +660,7 @@ public final class HistoryProjects {
 
   // MARK: The values
 
-  // Item 364 (red) — the names `HistoryLedgerFoldTests` calls. The fold over a snapshot is not written yet: `folded`
-  // answers the ledger that stands, so the row that holds it to the fold as it was is red.
+  /// What a ledger is folded from: values only, taken on the main actor and folded off it.
   struct LedgerInputs: Sendable {
     var order: [String]
     var summaries: [String: ProjectSummary]
@@ -606,27 +670,71 @@ public final class HistoryProjects {
     var sources: [CatalogSource]
     var roster: [FieldHistoryModel.RosterDesktop]
     var source: String?
+    /// The ledger as it stands: the lifetimes and the marks this phone kept stand in it until the door's are read.
     var ledger: HistoryCorpus
     var clock: Date
   }
 
+  /// Everything read, as values, with the ledger that stands and the clock.
   var ledgerInputs: LedgerInputs {
     LedgerInputs(
       order: order, summaries: summaries, sessionsByKey: sessionsByKey, figures: figures, agentCounts: agentCounts,
       sources: sources, roster: roster, source: source, ledger: corpus, clock: now())
   }
 
+  /// Item 364 (James, 2026-11-12 20:07:53Z: "when first open history view on the phone, everything is very janky,
+  /// after a while seems when things all load it is back to normal") — something the ledger is folded from changed:
+  /// fold it again, OFF the main actor, and while answers stream no sooner than `foldEvery` after the fold before.
+  ///
+  /// It was the whole fold on the main actor at every answer. Since item 353 the ledger reads `project.figures` for
+  /// every listed project, so the first open of a ledger of 166 projects ran 171 folds there, 16.8 s in the first
+  /// 25.6 s, the longest 196 ms (measured on a phone). Now the main actor takes a snapshot and swaps a ledger in.
+  ///
+  /// The first fold of a quiet ledger starts at once. An answer that lands while a fold waits or runs is folded by
+  /// the next one, so the last answer is never dropped; a fold that leaves the ledger as it stands publishes
+  /// nothing and keeps nothing.
+  private func rebuild() {
+    foldWanted = true
+    guard foldTask == nil, !closed else { return }
+    foldTask = Task { [weak self] in
+      while !Task.isCancelled {
+        guard let self, foldWanted else { break }
+        if let foldedAt {
+          let since = ContinuousClock.now - foldedAt
+          if since < foldEvery { try? await Task.sleep(for: foldEvery - since) }
+          guard !Task.isCancelled else { break }
+        }
+        foldWanted = false
+        folding = true
+        foldedAt = .now
+        let inputs = ledgerInputs
+        let cutNow = cutRead
+        let changed = await Task.detached(priority: .userInitiated) { HistoryProjects.changed(inputs) }.value
+        folding = false
+        guard !Task.isCancelled else { break }
+        if let changed {
+          corpus = changed
+          foldsPublished += 1
+          keepSoon()
+        }
+        if cut != cutNow { cut = cutNow }
+      }
+      self?.foldTask = nil
+    }
+  }
+
+  /// The fold, or nil when it is the ledger that already stands.
   nonisolated static func changed(_ inputs: LedgerInputs) -> HistoryCorpus? {
     let ledger = folded(inputs)
     return ledger == inputs.ledger ? nil : ledger
   }
 
-  nonisolated static func folded(_ inputs: LedgerInputs) -> HistoryCorpus { inputs.ledger }
-
-  private func rebuild() {
-    foldsPublished += 1
-    let clock = now()
-    let desktops = FieldHistoryModel.desktops(sources: sources, roster: roster, now: clock)
+  /// The ledger these inputs fold to: the one that stands, with its projects, their sessions, the live rows, the
+  /// counts and the desktops read again. Pure; it runs off the main actor.
+  nonisolated static func folded(_ inputs: LedgerInputs) -> HistoryCorpus {
+    var corpus = inputs.ledger
+    let clock = inputs.clock
+    let desktops = FieldHistoryModel.desktops(sources: inputs.sources, roster: inputs.roster, now: clock)
     var projects: [HistoryProject] = []
     var sessions: [String: [HistorySession]] = [:]
     var live: [(key: String, row: IndexSessionRow)] = []
@@ -638,21 +746,24 @@ public final class HistoryProjects {
     for project in corpus.projects where !project.agents.isEmpty {
       heldAgents[project.id] = (project.agents, project.moreAgents)
     }
-    for key in order where !projects.contains(where: { $0.id == key }) {
-      guard let summary = summaries[key], FieldHistoryModel.listed(summary) else { continue }
+    // a key the listing gave twice is one project (it was a scan of the projects folded so far, for every key)
+    var folded: Set<String> = []
+    for key in inputs.order where !folded.contains(key) {
+      guard let summary = inputs.summaries[key], FieldHistoryModel.listed(summary) else { continue }
+      folded.insert(key)
       var project = FieldHistoryModel.ledgerProject(summary, desktops: desktops, now: clock)
-      let rows = sessionsByKey[key] ?? []
-      if let result = figures[key] {
+      let rows = inputs.sessionsByKey[key] ?? []
+      if let result = inputs.figures[key] {
         project = FieldHistoryModel.withFigures(project, result, sessions: rows, now: clock)
       } else if let lifetime = held[key] {
         // Item 353 — a lifetime this phone kept (the cache's, replayed) stands until the door's is read again
         project = project.with(lifetime: lifetime)
       }
-      if let counts = agentCounts {
+      if let counts = inputs.agentCounts {
         // Item 353 — the row's agents are counted over every top-level session, as the desktop's are
         let counted = FieldHistoryModel.agentShares(counts: counts[key] ?? [:])
         project = project.with(agents: counted.shares, more: counted.more)
-      } else if sessionsByKey[key] == nil, project.agents.isEmpty, let kept = heldAgents[key] {
+      } else if inputs.sessionsByKey[key] == nil, project.agents.isEmpty, let kept = heldAgents[key] {
         // the marks this phone kept (the cache's, replayed) stand until the count, or the project's sessions, are read
         project = project.with(agents: kept.agents, more: kept.more)
       }
@@ -669,11 +780,12 @@ public final class HistoryProjects {
     corpus.sessions = sessions
     corpus.live = FieldHistoryModel.projectLiveRows(live, now: clock)
     corpus.sessionCount = total
-    if let counts = agentCounts { agents.formUnion(counts.values.flatMap(\.keys)) }
+    if let counts = inputs.agentCounts { agents.formUnion(counts.values.flatMap(\.keys)) }
     corpus.agentCount = agents.count
     corpus.desktops = desktops
-    corpus.desktop = desktops.first { $0.id == source }?.name ?? corpus.desktop
+    corpus.desktop = desktops.first { $0.id == inputs.source }?.name ?? corpus.desktop
     corpus.readAt = FieldHistoryModel.clock(Int64(clock.timeIntervalSince1970 * 1000))
+    return corpus
   }
 
   // MARK: Refusals

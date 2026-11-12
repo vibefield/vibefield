@@ -140,9 +140,13 @@ public final class HistoryDesktops {
   /// Sign out (AP-D4; ITEM 130): what the field taught this phone goes with
   /// the account — every reader, the ledger, and the cache on disk — so
   /// nothing of the account that left replays here, to it or to the next.
-  /// The readers and the ledger close first, and a closed one writes nothing
-  /// more, so the cache is cleared last and stays clear; the ledger left
-  /// standing is the empty cache's.
+  /// The readers and the ledger close first, and a closed one asks the cache
+  /// for nothing more, so the cache is cleared last and stays clear; the
+  /// ledger left standing is the empty cache's. (Item 364, 2026-11-12: this
+  /// said "a closed one writes nothing more". The ledger's reader now writes
+  /// off the main actor, so a write it asked for before it closed can still
+  /// be on its way here; `HistoryCache.clear` is what refuses it when it
+  /// lands.)
   public func signedOut() {
     for reader in readers { reader.close() }
     readers = []
