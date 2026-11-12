@@ -47769,8 +47769,10 @@ patch as it was: `git range-diff` 1 "=", 2 "!" (its message alone), 3 "=", 4 "="
   Not yet (`SettingsView.swift:110-115`). Its page shows the preview, the caption, Tell me when with three switches
   drawn and disabled (`NotificationsPage.swift:72-77`), and the foot, "Not built yet." first (`:109-111`).
 - **The build for App Review:** This phone is Appearance, Terminal, then Lock, as before. The page and its words are
-  not compiled in: `SettingsBuild.swift` is the one reader of `VF_TESTFLIGHT` (`:18`), and run rb1's review archive
-  carries none of the page's markers.
+  not compiled in. `SettingsBuild.swift:18` is the one place the build's kind is read at run time, and the page's
+  code is compiled only under `#if DEBUG || VF_TESTFLIGHT`, in four files: `NotificationsPage.swift:4`,
+  `SettingsInputs.swift:139`, `SettingsModel.swift:245` and `SettingsView.swift:109`, `:218`. Run rb1's review
+  archive carries none of the page's markers.
 - **James's helper:** `archive 7` alone refuses (exit 2). `archive 7 review` and `archive 8 testflight` each count the
   TestFlight-only pages in their own app and refuse a review archive that carries any, or a TestFlight archive that
   carries none. `upload 8 store` refuses a TestFlight archive whatever it carries. Build 6 is `archive 6 review`, then
