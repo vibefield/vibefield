@@ -1,52 +1,107 @@
 import CoreGraphics
 
-// Item 362a (red) — the names `HistoryFollowTests` calls, answering nothing yet: a document that opens on a landing
-// and never follows, a foot that is never in view, no pill and no words. The rule is the next commit's.
+// Item 362a (James, 2026-11-12 18:40:35Z, of the phone's History session view against the desktop's: "it somehow
+// scroll start from top, does not like chat message flow in chat app") — WHERE A SESSION'S DOCUMENT STANDS: it opens
+// at its end and keeps its end in view, as the desktop's does (rosetta's room, `lib/transcript/tail-scroll.ts`), by
+// the phone's Chat's figures (`ChatThreadView.rows`: the foot within 24 pt, a rest off the foot stops the following).
+// DESIGN.md §8 "The phone's session document".
+//
+// Pure: the view feeds it the scroll's geometry and its phases, and writes what it answers.
 
+/// Whether the document keeps its foot in view, and what its pill says.
 struct HistoryFollow: Equatable, Sendable {
-  static let footSlack: CGFloat = 0
+  /// The foot counts as in view within this many points of the end (Chat's figure).
+  static let footSlack: CGFloat = 24
 
+  /// Where the document stands when it opens.
   enum Opening: Equatable, Sendable {
+    /// At its end: the newest row above the bar.
     case end
+    /// On the row a search landed on, as it always has.
     case landing
   }
 
+  /// The edge a change in the document's height leaves where it is.
   enum Growth: Equatable, Sendable {
+    /// The foot stays: while the document follows, and while a page above is read in (the reader's place is kept).
     case foot
+    /// The head stays: a row arriving below does not move a reader up the page, and a run opened by hand grows down
+    /// from its own line.
     case head
   }
 
+  /// The pill at the foot.
   enum Pill: Equatable, Sendable {
+    /// Rows arrived below the screen.
     case arrivals(Int)
+    /// Nothing is unread, and the end is more than a screen below.
     case latest
   }
 
+  /// What the scroll's geometry says of the end.
   struct Reach: Equatable, Sendable {
+    /// The end is within `footSlack`: a rest here follows.
     var atFoot: Bool
+    /// The end is more than a screen below.
     var away: Bool
   }
 
-  let opening: Opening = .landing
-  private(set) var following = false
+  let opening: Opening
+  /// The document keeps its foot in view.
+  private(set) var following: Bool
+  /// A page above was asked for and has not settled: what it adds lands above the reader's place.
   private(set) var holding = false
 
-  init(landed: Bool) {}
-
-  mutating func dragged() {}
-  mutating func rested(atFoot: Bool) {}
-  mutating func landed() {}
-  mutating func pressed() {}
-  mutating func askedEarlier() {}
-  mutating func earlierSettled() {}
-
-  static func reach(offset: CGFloat, container: CGFloat, content: CGFloat) -> Reach {
-    Reach(atFoot: false, away: false)
+  /// A document opens at its end and follows; one a search landed in opens on the landed row and stays there.
+  init(landed: Bool) {
+    opening = landed ? .landing : .end
+    following = !landed
   }
 
-  func pill(arrivals: Int, endOnScreen: Bool, away: Bool) -> Pill? { nil }
+  /// A finger moved the page: the following stops at once, wherever the page is.
+  mutating func dragged() { following = false }
 
-  var growth: Growth { .head }
+  /// The page came to rest: at the foot it follows, off it it does not.
+  mutating func rested(atFoot: Bool) { following = atFoot }
 
-  static func words(_ pill: Pill) -> String { "" }
-  static func spoken(_ pill: Pill) -> String { "" }
+  /// A search landed on a row, or its stepper walked to one: the page stays there.
+  mutating func landed() { following = false }
+
+  /// The pill was pressed: back to the end, following.
+  mutating func pressed() { following = true }
+
+  /// A page above was asked for.
+  mutating func askedEarlier() { holding = true }
+
+  /// The page above landed and was laid out, or its read ended without one.
+  mutating func earlierSettled() { holding = false }
+
+  static func reach(offset: CGFloat, container: CGFloat, content: CGFloat) -> Reach {
+    let below = content - (offset + container)
+    return Reach(atFoot: below <= footSlack, away: below > container)
+  }
+
+  /// Arrivals outrank `Latest`; at the end, or a short way off it with nothing unread, there is no pill.
+  func pill(arrivals: Int, endOnScreen: Bool, away: Bool) -> Pill? {
+    if arrivals > 0, !endOnScreen { return .arrivals(arrivals) }
+    if !following, away { return .latest }
+    return nil
+  }
+
+  /// Which edge a change in height leaves alone.
+  var growth: Growth { following || holding ? .foot : .head }
+
+  static func words(_ pill: Pill) -> String {
+    switch pill {
+    case .arrivals(let count): "\(count) new"
+    case .latest: "Latest"
+    }
+  }
+
+  static func spoken(_ pill: Pill) -> String {
+    switch pill {
+    case .arrivals(let count): "\(count) new rows, scroll to them"
+    case .latest: "Scroll to the latest row"
+    }
+  }
 }

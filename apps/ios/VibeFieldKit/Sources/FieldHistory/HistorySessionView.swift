@@ -7,6 +7,10 @@ import SwiftUI
 /// A landed search rings its anchor and scrolls to it; the stepper (the
 /// tab bar's accessory) walks the ring.
 ///
+/// Item 362a — it opens at its END and keeps its end in view (`HistoryFollow`,
+/// DESIGN.md §8 "The phone's session document"), as the desktop's transcript
+/// does; a document a search landed in opens on the landed row instead.
+///
 /// SP-6 — over a door: "Earlier" at the top asks the page door for the older
 /// page while the session has one (`document.nextCursor`); rows the tail
 /// appends while the reader is up the page count in the ARRIVAL PILL at the
@@ -26,6 +30,28 @@ struct HistorySessionView: View {
   @Environment(\.colorScheme) private var scheme
   @State private var expanded: Set<String> = []
   @State private var atEnd = false
+  /// Item 362a — whether the document keeps its foot in view, and where it opened.
+  @State private var follow: HistoryFollow
+  @State private var scroll: ScrollPosition
+  @State private var reach = HistoryFollow.Reach(atFoot: true, away: false)
+
+  init(
+    document: HistoryDocument, corpus: HistoryCorpus, ledger: HistoryCorpus? = nil,
+    standing: FieldHistoryModel.DesktopStanding, router: HistoryRouter, arrivals: Int = 0,
+    onNeed: @escaping (HistoryNeed) -> Void = { _ in }
+  ) {
+    self.document = document
+    self.corpus = corpus
+    self.ledger = ledger
+    self.standing = standing
+    self.router = router
+    self.arrivals = arrivals
+    self.onNeed = onNeed
+    let landed = router.landed.map { $0.sessionId == document.id && $0.device == corpus.deviceId } ?? false
+    let follow = HistoryFollow(landed: landed)
+    _follow = State(initialValue: follow)
+    _scroll = State(initialValue: ScrollPosition(edge: follow.opening == .end ? .bottom : .top))
+  }
 
   /// How close to the foot counts as "at the end": the bar's clearance plus a
   /// line, so the end is seen when the last row is readable above the glass.
@@ -34,6 +60,8 @@ struct HistorySessionView: View {
   /// content's last row and the arrival pill both clear it, or the pill
   /// hangs behind the glass where no one sees it.
   static let barClearance: CGFloat = 80
+  /// Item 362a — how long after a page above lands the foot is still held: its rows' layout, and a beat.
+  static let earlierSettles = Duration.milliseconds(250)
 
   private var awake: Bool { standing.isAwake }
   /// The project the document belongs to: the ledger's (by key, when the
@@ -73,6 +101,30 @@ struct HistorySessionView: View {
         .padding(.horizontal, HistoryParts.sidePadding)
         .padding(.bottom, Self.barClearance)
       }
+      // Item 362a — it opens at its end; while it follows, a change in its height keeps the foot, and off the foot a
+      // row arriving below or a run opened by hand leaves the reader's place alone (`HistoryFollow.growth`).
+      .scrollPosition($scroll)
+      .defaultScrollAnchor(follow.opening == .end ? .bottom : .top, for: .initialOffset)
+      .defaultScrollAnchor(follow.growth == .foot ? .bottom : .top, for: .sizeChanges)
+      .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
+        // the first offset is reckoned on the lazy stack's estimate, and rows land: while it follows, the foot is
+        // put back in view (Chat's own rule)
+        if follow.following { scroll.scrollTo(edge: .bottom) }
+      }
+      .onScrollPhaseChange { _, phase in
+        switch phase {
+        case .interacting: follow.dragged()
+        case .idle: follow.rested(atFoot: reach.atFoot)
+        default: break
+        }
+      }
+      .onScrollGeometryChange(for: HistoryFollow.Reach.self) { geometry in
+        HistoryFollow.reach(
+          offset: geometry.contentOffset.y, container: geometry.containerSize.height,
+          content: geometry.contentSize.height)
+      } action: { _, now in
+        reach = now
+      }
       // The arrival pill's one fact: whether the document's END is on screen.
       // Read from the scroll's geometry, not an `onAppear` on the end marker —
       // a lazy stack lays its last rows out ahead of the viewport, which read
@@ -88,7 +140,7 @@ struct HistorySessionView: View {
       .background(ChromePalette.paper.ignoresSafeArea())
       .navigationTitle(document.title)
       .navigationBarTitleDisplayMode(.inline)
-      .overlay(alignment: .bottom) { arrivalPill(proxy) }
+      .overlay(alignment: .bottom) { footPill }
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
           Menu {
@@ -103,7 +155,15 @@ struct HistorySessionView: View {
       .onAppear { onNeed(.session(device: corpus.deviceId, id: document.id)) }
       .onChange(of: litAnchor, initial: true) { _, anchor in
         guard let anchor else { return }
+        follow.landed()
         withAnimation(FieldMotion.ease(0.45)) { proxy.scrollTo(anchor, anchor: .center) }
+      }
+      .onChange(of: document.nextCursor) { _, _ in
+        // the page above has landed: once it is laid out, a change in height is the reader's own again
+        Task { @MainActor in
+          try? await Task.sleep(for: Self.earlierSettles)
+          follow.earlierSettled()
+        }
       }
       .onDisappear {
         // Leaving the document ends the landing: the stepper has nothing to walk.
@@ -160,6 +220,7 @@ struct HistorySessionView: View {
     HStack(spacing: 10) {
       Rectangle().fill(ChromePalette.ruleStrong).frame(height: 1)
       Button {
+        follow.askedEarlier()
         onNeed(.older(device: corpus.deviceId, session: document.id))
       } label: {
         Text(awake ? "Earlier" : "Earlier · needs \(corpus.desktop)")
@@ -178,17 +239,20 @@ struct HistorySessionView: View {
   }
 
   /// SP-6 — the arrival pill: rows the tail appended while the reader was
-  /// up the page; a tap scrolls to the end and the count clears.
+  /// up the page; a tap scrolls to the end and the count clears. Item 362a —
+  /// with nothing unread and the end more than a screen below it says
+  /// `Latest`, and a press follows again.
   @ViewBuilder
-  private func arrivalPill(_ proxy: ScrollViewProxy) -> some View {
-    if arrivals > 0, !atEnd {
+  private var footPill: some View {
+    if let pill = follow.pill(arrivals: arrivals, endOnScreen: atEnd, away: reach.away) {
       Button {
-        withAnimation(FieldMotion.ease(0.45)) { proxy.scrollTo("end", anchor: .bottom) }
-        onNeed(.seen(device: corpus.deviceId, session: document.id))
+        follow.pressed()
+        withAnimation(FieldMotion.ease(0.45)) { scroll.scrollTo(edge: .bottom) }
+        if arrivals > 0 { onNeed(.seen(device: corpus.deviceId, session: document.id)) }
       } label: {
         HStack(spacing: 6) {
-          LivePulse(awake: awake)
-          Text("\(arrivals) new")
+          if case .arrivals = pill { LivePulse(awake: awake) }
+          Text(HistoryFollow.words(pill))
             .font(ChromeType.sans(13, .medium))
             .monospacedDigit()
             .foregroundStyle(ChromePalette.ink)
@@ -203,7 +267,7 @@ struct HistorySessionView: View {
       .buttonStyle(.plain)
       .padding(.bottom, Self.barClearance + 12)
       .transition(.opacity.combined(with: .offset(y: 6)))
-      .accessibilityLabel("\(arrivals) new rows, scroll to them")
+      .accessibilityLabel(HistoryFollow.spoken(pill))
     }
   }
 
