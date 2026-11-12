@@ -196,21 +196,28 @@ struct ListDrawingTests {
 
   #if canImport(UIKit)
     /// D3 (kit) — the mark: the witness's providers (claude, codex) have drawn assets, as the golden's `svg` says; a
-    /// provider with none wears its letter (deviation 4: the SDK draws a path for six the phone letters), and no id
-    /// wears `?`. On the main actor: `AgentGlyph.drawnAsset(for:)` is a View's static, main-actor-isolated (the early
-    /// kit compile's four Swift 6 isolation warnings).
+    /// provider with none wears its letter, and no id wears `?`. On the main actor: `AgentGlyph.drawnAsset(for:)` is
+    /// a View's static, main-actor-isolated (the early kit compile's four Swift 6 isolation warnings).
+    /// *Corrected 2026-11-12 (item 359):* deviation 4 ("the SDK draws a path for six the phone letters") is over.
+    /// James overturned LP-4's two-mark ruling (DECISIONS LP-D7), so the phone draws a path for every agent the SDK
+    /// does but Pi, whose mark is held (item 360); ACP, which the SDK letters too, is the letter's row here.
     @MainActor
     @Test func theMarks() {
       let claude = AgentGlyph.drawnAsset(for: "claude")
       #expect(claude != nil)
       let codex = AgentGlyph.drawnAsset(for: "codex")
       #expect(codex != nil)
-      for letterOnly in ["kimi", "opencode", "hermes", "antigravity", "copilot", "pi"] {
-        let asset = AgentGlyph.drawnAsset(for: letterOnly)
-        #expect(asset == nil, "\(letterOnly)")
+      for drawn in ["grok", "kimi", "opencode", "hermes", "antigravity", "copilot"] {
+        let asset = AgentGlyph.drawnAsset(for: drawn)
+        #expect(asset != nil, "\(drawn)")
       }
-      let kimi = AgentProvider(rawValue: "kimi").markLetter
-      #expect(kimi == "K")
+      // ITEM 360 — Pi's mark is held until the set's `pi` icon is read to be the coding agent's
+      let pi = AgentGlyph.drawnAsset(for: "pi")
+      #expect(pi == nil)
+      let acp = AgentGlyph.drawnAsset(for: "acp")
+      #expect(acp == nil)
+      let letter = AgentProvider.acp.markLetter
+      #expect(letter == "A")
       let none = AgentGlyph.drawnAsset(for: "")
       #expect(none == nil)
       let unnamed = AgentProvider(rawValue: "").markLetter
