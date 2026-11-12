@@ -7028,6 +7028,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **Open**, the bar steps aside, the tab recedes to a card at the foot (at 0.92, 106 of it showing, its top
       corners 44, a grabber 40 × 5 at 30%), and the shelf fills the screen. Pushing the card up, or tapping it, goes
       back.
+      *Amended 2026-11-12 (the phone's bands; James's screenshot, VF-PM 01:42:37Z):* the card's clip stands only
+      while the tab is receded. Closed, the tab clips nothing: the field is full-bleed (PG-4t's stage), under the
+      status bar and the home indicator. As built at M272 the clip stood closed too, at radius 0. It cut every page
+      at the safe area, so the field ended in two bands and the Stories row lost its top edge. Open, the card keeps
+      what was ruled and photographed: its top corners 44, at 0.92, 106 of it showing.
     - **Search opens on Apps as well.** Before you type, a strip headed **Apps** stands above History's search: the
       Recent row and **All apps**. The place is one tap from a control that is always on screen, and typed words
       match apps' titles too. *Amended 2026-11-06 (the lead's ruling 24, ‹for James›): recent searches retire from
