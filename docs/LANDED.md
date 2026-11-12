@@ -48350,6 +48350,11 @@ FieldSettingsTests at the carried tree.
   item 345's packet v3 on the old mini.
 - A nightly carrying 341, and James's eye on it: the agents found, sign-in working, Godview launching.
 
+*Corrected 2026-11-12 (M294's records, item 345): "its five index-reading tests", in **The gap** and in **Owed**
+above, undercounts. Eight electron-shell test files read `src/main/index.ts` at `df3677c46`: the five named, and
+app-name (its `INDEX` constant), signal-quit (`readFileSync`) and studio-composition-boundary (its `source()` helper).
+All eight ran GREEN in run345v3, inside electron-shell's whole suite (LANDED "Item 345").*
+
 ## Item 279, S2 — the installed-plugins folder loads nothing until a signed plugin list is configured (M293)
 
 (2026-11-12; four commits, `c8d84f53f` to `82e166608`, on `57d1e8ad4`. Cut by ob-foundation (track OB) in
@@ -48506,3 +48511,142 @@ of the code."; VF-PM carries it to the board):
 **Not done, and not claimed:** no smoke, no landing table and no app run; no list key configured anywhere, and no
 plugin folder staged, placed or loaded to show any of it (rule 16); no data folder listed or read (rule 48);
 `census:assert` not run; nothing pushed.
+
+## Item 345 — a home over macOS's sun_path line takes every native socket through one short alias (M294)
+
+(2026-11-12; seven commits, `8d416af4e` to `df3677c46`, on `82e166608`. Cut by HK (vibe-field-09) in
+`lanes/hk-345/vibe-field`, each under the pre-commit hook on VF-PM's word: the first six on `hk/i345-socket-alias` on
+`05bfd0944`, the seventh on the first carry. Carried twice by objects, and landed by the fixer by fast-forward to that
+tip, by sha: relayed by VF-PM at 19:42:19Z, and main's reflog reads 19:40:43Z. Validated by run345, run345v2 and
+run345v3, a9, on the old mini. The packet of record is `lanes/hk-345/packets/i345-v3/`.)
+The item is the QA agent's find (vibe-field-a9, 09:32Z) during James's clean-state QA: on the dev root
+`.vibefield/fresh` a cell's frame socket was 105 bytes, past macOS's 103, every cell exited before its hello, and the
+terminal floor was dead. HK's read (10:04Z, `lanes/hk-q20/i345-report.md`): the guards measured LAYOUT's bare
+`termframe.sock`, but a cell binds `termframe.<N>.sock` and N only grows, so a person whose short user name is 23–24
+characters gets terminals that never start, and at 25 or more no app at all. VF-PM ruled it a 0.9 BLOCKER (10:05:32Z),
+with the short socket home as the fix and one budget inside it; the plan is `lanes/hk-q20/PLAN-345.md` and its r2.
+
+**What landed.** 66 files, +2692 −139.
+
+| # | Role | On main | Cut as | What it is |
+|---|---|---|---|---|
+| 1 | red | `8d416af4e` | `43ea270ee` | the law's names and seams final, `unixSocketDir` stubbed; 22 TS rows and R1–R4 red |
+| 2 | keeper | `567f76b5a` | `5ba1a2f2e` | the law flips at 103 bytes; both twins make and check the alias; nothing calls it |
+| 3 | wiring | `c8ff8a55f` | `b74fba460` | the keeper before every bind and dial; the cells' budget before a number is taken |
+| 4 | fmt | `e5e733845` | `9179f6772` | rustfmt's own wraps of the first three commits' Rust lines |
+| 5 | seam | `67a8566b2` | `d9946e895` | every harness gives the alias a parent of its run's own; the witness counts |
+| 6 | supervisor rows | `f6d6e8a1c` | `feb39874d` | spawn.test.ts's two sun_path guard rows under the new law |
+| 7 | comment | `df3677c46` | `7287f0beb` | one comment line at the supervisor's guard naming item 341's asked keys |
+
+- **The law** (contracts and its Rust twin in `endpoints.rs`): a root whose WORST real socket path fits in 103 bytes
+  keeps today's path byte for byte. Any other root takes all of its sockets through `/tmp/vf-<uid>/<scope>`, a link to
+  `<root>/native/run`. The scope is `unixAliasScope`, FNV-1a 64 of the root with no case fold; the worst path is read
+  at the largest cell ordinal, `termframe.4294967295.sock`.
+- **The keeper**, in both twins (users' `ensureSocketDir`, field-native's `socket_alias::ensure`), in one order: a root
+  that fits touches nothing; the parent must be a directory owned by root or by this process, and sticky if others may
+  write it; `vf-<uid>` is made 0700, and an existing one must be a directory, this uid's, mode 0700 exactly; a link to
+  the run dir is kept, a link elsewhere is replaced by a rename, anything else is refused. A refusal names what it
+  found, never the data root or the run dir. Nothing is unlinked, here or on quit.
+- **The wiring:** field-native runs the keeper before its mgmt, mesh, door and cell binds, and again every 60 s; fieldd
+  before the native link, the mesh lane, both terminal dials and both liveness probes. A replaced link is said once,
+  in one warning line naming the alias alone.
+- **The cells' budget** is read before `alloc_instance`: a home no cell can bind in is Failed, naming the path and its
+  bytes, the unit Degraded, and no cell number taken. The supervisor's and users' guards measure the law's worst
+  endpoint, each with a dated correction at its source.
+- **The seam:** one name, `FIELD_SOCKET_ALIAS_PARENT` (registries, generated into `registries.rs`; its FIELD_ prefix
+  keeps it out of every agent PTY), read once per plane, refused when relative or empty, never falling back to `/tmp`.
+  Unset is the product's `/tmp`, and nothing in the product sets it. `scripts/run-alias-parent.mjs` gives each test,
+  smoke and lab run a parent of its own, `/tmp/vfa-XXXXXX`, removed by the run that made it alone, and the witness
+  counts the run's links in `/tmp/vf-<uid>/` at fieldd's, field-app's and fieldd-client's vitest teardowns.
+  check-test-temp-roots gains a second rule, (a)–(d), with self-test fixtures.
+- `.env.example` +7: `#FIELD_SOCKET_ALIAS_PARENT=` under its note, harness only; `pnpm dev`, the QA root and a person's
+  roots never set it.
+
+**What a person sees, by reading the code.** Nothing new is drawn. A person with a long user name gets terminals that
+start and an app that opens. Through the product's `/tmp` the worst alias path is 61 bytes at uid 501, whatever the
+home and the cell number, so the budget's refusal is reached only through a parent no product sets. Its words go to
+the log and the terminal class's Failed detail and are never drawn (VF-PM, 13:01Z and 13:07Z; James's 11-10 rule: no
+keys, custody or paths in front of a person).
+
+**What it does not hold.** The alias folder is the uid's own, so a same-uid process can replace a link there, as it can
+replace a socket in the real run dir today; what answers on a socket is still judged by the bearer tokens (EL7).
+
+**Validation of record** (a9 on the old mini; logs stay on the mini, items 320 and 321).
+- **run345** (`.done` `8f908d5e4fe59c09`, 14:17:26Z), the cargo rows at the red and the keeper on `05bfd0944`: B and C
+  GREEN, F RED at both (rustfmt's wraps of the stack's own lines), a STOP back to HK. The fmt commit is its answer
+  (VF-PM's word, 14:17:29Z: one `cargo fmt -p field-native` in the lane).
+- **run345v2** (`.done` `f5680082c151dfab`, 16:17:33Z), at `d9946e895` on `05bfd0944`: B, F, C and R1–R5 GREEN;
+  field-app 338 files 4700 tests and fieldd-client 8 and 47 GREEN; the witness 0, `/tmp/vfa-*` 0, `/tmp/vf-<uid>`
+  absent before and after. Two reds, each classed: fieldd-supervisor's spawn.test.ts, 2 of 97 (the guard rows the red
+  never rewrote; commit 6), and fieldd's terminal-kill-matrix row 6 (the runner's GHOSTTEA_ exports; item 355, landed
+  M293).
+- **run345v3** (`.done` `3ec8e9092308f36d`, 19:25:05Z; a9's addendum beside the folder `6aa140038d937404`, 19:34Z), at
+  `df3677c46` on `82e166608`, ALL GREEN with one class:
+  - cargo on ghosttea 0.15.0, `--locked --offline`, GHOSTTY_VT_PREFIX from the verified archive: B, F, C, R1 5, R2 13,
+    R3 1, R4 1, R5 1, and P (a plain field-native build before the suites); no download line in the cargo logs;
+  - fieldd `Test Files 271 passed | 5 skipped (276)`, `Tests 3843 passed | 15 skipped (3858)`, 276 of 276 files at the
+    expected count;
+  - fieldd-supervisor 14 files, 103 tests; field-app 338 and 4700; fieldd-client 8 and 47;
+  - electron-shell 189 files, `Tests 2887 passed | 3 skipped (2890)`. The row printed HELD on one count,
+    `app-name.test.ts` 11 where the table said 5; VF-PM classed it GREEN at 19:32:58Z after reading the file: four
+    `it(` rows and an `it.each` of seven. The ground from here is 2887 | 3;
+  - `/tmp/vf-<uid>` absent at the arm and in fin; `/tmp/vfa-*` 0 in fin; Keychains unmoved (8 → 8); the
+    history files unchanged; KEPT births 2 in fieldd's suite, both `/private/tmp/vf-seam-*` (item 363, below).
+- **The Mac's rows** at the carried tip, through HK's door, 17:53Z to 18:22Z (`s8-rows.sh`): biome on the stack's 51
+  TS/JS files, 0; each package's `typecheck` for contracts, fieldd-supervisor, fieldd, field-app, fieldd-client and
+  electron-shell, 0; contracts' endpoints and registry 88; fieldd-supervisor's `paths.test.ts` 9; check:walls clean;
+  check-test-temp-roots' self-test passed, "270 of 1162 … all remove", "alias parent clean — 1199"; the registries
+  generator byte for byte and `gen/layout.json` unchanged. Each commit's own rows are in its message.
+
+**Today's gaps, closed by run345v3** (on a tree holding every land of the day; DESIGN.md's blob `252721ca2e0b` is the
+same at `2b6f5a2a3`, `df3677c46` and `63c9536d5`):
+- M291 (item 334): field-app's 27 DESIGN.md readers, 27 files and 646 tests; fieldd's six, 8, 106, 12, 7, 43 and 24
+  (200); smoke-first-run, 55, in electron-shell's suite. All on ghosttea 0.15.0.
+- M292 (item 341): the merged `src/main/index.ts` in electron-shell's suite, the eight test files that read it among
+  them, and fieldd-supervisor's suite at a tip that holds 341.
+- M293 (item 279, S2): fieldd's suite with 279 on 0.15.0 and beside 341; the four plugin files at 13, 3, 7 and 15.
+- Item 355: terminal-kill-matrix, row 6 in its new form, `20 tests | 1 skipped`, with GHOSTTY_VT_PREFIX set and no
+  GHOSTTEA_ name exported.
+
+**The carries.** Each by objects alone: per commit `git merge-tree --write-tree --merge-base=<its parent>`, then
+`git commit-tree` keeping the author's and committer's names, emails and dates, so a rehearsal's SHAs are the land's.
+- Onto `47f8d4732` (`lanes/hk-345/carry-345.sh`): `hk/i345-on-47f8d4732`. The one shared path,
+  `fieldd-supervisor/src/supervisor.ts`, merged in disjoint hunks. One frozen offline install after it: rc 0,
+  `Packages: +6 -6`, downloaded 0.
+- Onto `82e166608` (`lanes/hk-345/carry-345-82e.sh`): `hk/i345-on-82e166608` → `df3677c46`, seven of seven patch-ids
+  equal. The one shared path, `fieldd/src/daemon.ts`, merged in disjoint hunks, 60 lines apart at the nearest. The
+  lock did not move, so no install.
+- The land: the fixer's fast-forward `82e166608` → `df3677c46`, 66 files, no install (VF-PM, 19:42:19Z; not read by
+  me); main's reflog 19:40:43Z. M291's to M293's records followed at 19:41:43Z.
+
+**What it cannot show.**
+- No smoke and no launcher the seam changed has run: `run-smoke`, `run-studio-smoke`, `run-update-smoke`,
+  `run-browser-profile-smoke`, `smoke-godview` through `withLabProfile`. They are landing gates on James's Mac, on his
+  word.
+- No stills.
+- No real long-named account: R2's `uid + 1` seam, R3's and R4's long roots and the suites' crossing roots stand in.
+- GHOSTTY_VT_PREFIX in a pane, by reading only: the strip lists FIELD_, FIELDD_ and ghosttea's two prefixes, so it
+  reaches every pane fieldd's suite opens; no pane's environment was read.
+- Mixed versions (a new dialer and an old floor, or the reverse), by reading only (the wiring's message): both hold
+  through the link, save an old dialer on a root whose real mgmt path is itself over 103 bytes.
+- The update smoke's opt-in quit-install run: a pair Squirrel relaunches may not carry the variable (a known shape).
+
+**Found along the way.**
+- Item 355 (run345v2): row 6 failed on the runner's GHOSTTEA_ exports; landed M293 with the row planting its own bait.
+- Item 363 (run345v3's KEPT births 2): terminal-seam's afterEach removes its floors' roots before it kills them, and
+  never awaits the kill, so a live floor or cell can write `/tmp/vf-seam-*` back. Planned, red first, for the old mini.
+- Item 365 (RV, by reading): three electron-shell rows hand vitest the shell's whole spawn environment as an actual
+  value; a red there would print it (item 320's class). Rides with 363.
+- The static count's blind spot: a line count of `it(` reads an `it.each` as one row (a9's lesson in the addendum).
+- a9's cut of run345's F output ended at its first blank line and named 8 of the wraps; the lane's run named all.
+- HK's link check after the first install allowed `packages/*` alone and exited 40; the 54 links all lay in the lane.
+- A rule-41 slip of mine (18:22:02Z): a rows log read before the gate; VF-PM: no harm.
+
+**Owed.**
+- The seam's smokes and launchers, at James's landing gates, on his word.
+- A long-named account's witness: no such account was used by any row.
+- Items 363 and 365, on the old mini.
+- The landing table over main, before any push, on James's word by name.
+
+**Not done, and not claimed:** no smoke, no landing table and no app run; no entry of `/tmp/vf-<uid>/` named or opened;
+nothing pushed.

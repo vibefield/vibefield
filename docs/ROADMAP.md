@@ -743,8 +743,11 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   door did not take a fresh connection for 30 s after fd pressure; load not shown to be the cause, corrected
   2026-11-07; measured beside item 204) and petition G36 (ghosttea's accept loops); item 341's merged
   `src/main/index.ts` (with M291's About lines) typechecks (the QA agent's dev runner on `47f8d4732`), and
-  electron-shell's and fieldd-supervisor's suites on it, its five index-reading tests among them, run in item 345's
-  packet v3 on the old mini (LANDED "Item 341").
+  electron-shell's and fieldd-supervisor's suites on it, its eight index-reading tests among them, run in item 345's
+  packet v3 on the old mini (LANDED "Item 341"): ran GREEN in run345v3 at `df3677c46`, closed 2026-11-12 (M294,
+  LANDED "Item 345"). *Corrected 2026-11-12 (M294's records): this said five index-reading tests. Eight read the file:
+  the five, and app-name (its `INDEX` constant), signal-quit (`readFileSync`) and studio-composition-boundary (its
+  `source()` helper).*
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
@@ -1109,7 +1112,9 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
   fa's two commits under it; LANDED "Item 279, S2"): with no list key configured, which is every build today, fieldd
   reads nothing under the installed-plugins folder; a folder with no pointer is not a plugin, and adoption is gone.
   Not re-run at the landed tip: fieldd's suite with 279 on ghosttea 0.15.0 and beside item 341 is owed at the next
-  whole V on the old mini.
+  whole V on the old mini. *Ran 2026-11-12 (M294's records): run345v3 at `df3677c46`, fieldd's suite whole,
+  `271 passed | 5 skipped` files and `3843 passed | 15 skipped` tests, the four plugin files at 13, 3, 7 and 15
+  (LANDED "Item 345").*
 - In flight: the desk tools for Codex and Grok, upstream in puppeteer (seven commits in OB's clone
   `lanes/ob-build/puppeteer`). James on the PM board: `j-ob-desk-tools-puppeteer` "A. Release puppeteer first (push,
   PR and tag on my word), then a pin bump, so all three have desk tools at 0.9" (03:30:27.940Z) and `j-pup-041` "A.
@@ -1122,8 +1127,9 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
   removed), on VF-PM's order, after the 0.9 tag; item 321 on James's card `j-321-design` (open, per VF-PM; its note,
   `lanes/ob-build/ITEM-321-DESIGN-NOTE.v0.2.md`: the connection handed once per page, then one claim for the whole
   bridge).
-- Owed: the whole V named above; the landing table over main, before any push, on James's word by name; item 322's
-  two items for James's eye (LANDED "Item 322") and S2's one (LANDED "Item 279, S2"); item 330, on MK's side.
+- Owed: the whole V named above (*closed 2026-11-12 by run345v3, M294's records*); the landing table over main,
+  before any push, on James's word by name; item 322's two items for James's eye (LANDED "Item 322") and S2's one
+  (LANDED "Item 279, S2"); item 330, on MK's side.
 
 **Release rails — WP12 · TD · BP · FW packaging · RD** · prod-builder (resting) · law `specs/build-wp12-updater.md`,
 `specs/trust-and-distribution.md`, the three `specs/electron-*.md` + `electron-packaging-implementation-plan.md`,
@@ -1336,6 +1342,10 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
      - **F** testers report a problem in one place (LP-D18): LANDED 2026-11-05 (M142 `d48b6fe6d`, LANDED "LP-7"). Owed:
        James's security contact before beta.1's cohort arrives (a SECURITY.md with a private contact, or private
        vulnerability reporting turned on), and the first tester's report through the form.
+     - **G** item 345, a home over macOS's sun_path line (a 0.9 blocker, VF-PM 2026-11-12 10:05:32Z): every native
+       socket of such a root goes through one short alias, `/tmp/vf-<uid>/<scope>`: LANDED 2026-11-12 (M294
+       `df3677c46`, LANDED "Item 345"). Owed: the seam's smokes and launchers at James's landing gates, and a
+       long-named account's witness.
    - **Phase 3, iPhone and iPad to external TestFlight** (by 8 Nov, was 5–19 Nov; the iOS lane and James):
      - the App Store export and uploads signed in with an App Store Connect API key (build 4's upload failed on 09-20,
        and build 5 was archived but never uploaded, so the next build is 6, carrying P0-H1 and everything since 09-13):
@@ -1540,7 +1550,7 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
 **Release rails**
 - BP R3: the pane says a permission refusal; Clear browsing data empties the desk profile's cookies (smoke:canvas, the mini) — LANDED "BP-1".
 - BP R4 = BP-D7: row 31 `smoke:profile` on the signed package, RED until BP-D9's fix (J4 done) — LANDED "BP-1b".
-- field-app's 27 DESIGN.md readers have no run on ghosttea 0.15.0 at M291's DESIGN.md text (they ran at `2b6f5a2a3` on 0.14.0), nor fieldd's six and smoke-first-run (proved by literal, not run): the next whole V on the old mini — LANDED "LP Q3.2 and item 334".
+- field-app's 27 DESIGN.md readers have no run on ghosttea 0.15.0 at M291's DESIGN.md text (they ran at `2b6f5a2a3` on 0.14.0), nor fieldd's six and smoke-first-run (proved by literal, not run): the next whole V on the old mini — LANDED "LP Q3.2 and item 334". *Closed 2026-11-12 (M294's records): run345v3 at `df3677c46` ran all three on ghosttea 0.15.0 at this DESIGN.md text (blob `252721ca2e0b`): the 27 in field-app's suite, 27 files and 646 tests; fieldd's six, 200 in 6 files; smoke-first-run, 55, in electron-shell's suite — LANDED "Item 345".*
 - James's nightly asks for "VibeField Safe Storage": an item a differently signed VibeField made, unproven; his choice is j-340-keychain, and P1 (the keychain probe on the old mini, two signed nightlies on a run keychain) waits on his word for the display and his pick on j-mini-keychain-el8 — LANDED "Items 340 and 349".
 - Desk sign-ins are lost at restart in dev and every smoke (`session.fromPath` outside userData) — LANDED "BP-1b"; closes with BP-D9.
 - D11's signing-only measurement; W11's PTY clause rides it — `build-wp12-updater.md` :365.
