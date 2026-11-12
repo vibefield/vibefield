@@ -175,13 +175,17 @@ private final class StubHTTP: URLProtocol, @unchecked Sendable {
 @MainActor
 private final class Door: HistoryDoor {
   var asked: [String] = []
+  /// Item 366 — the door's `index.timeline`, scripted by its params (nil: the fixture, as every earlier row reads).
+  var timeline: ((FieldProduct.JSONValue?) -> FieldProduct.JSONValue)?
 
   func call(_ method: String, params: FieldProduct.JSONValue?) async throws -> FieldProduct.JSONValue {
     asked.append(method)
     switch method {
     case "index.status": return try Fixture.json("index-status.valid")
     case "index.session": return try Fixture.json("index-session.valid")
-    case "index.timeline": return try Fixture.json("index-timeline.valid")
+    case "index.timeline":
+      if let timeline { return timeline(params) }
+      return try Fixture.json("index-timeline.valid")
     default: throw FieldProductError(kind: "NOT_FOUND", message: method)
     }
   }
@@ -291,6 +295,33 @@ private func unavailable(_ state: String, device: String? = nil) -> FieldProduct
   var details: [String: FieldProduct.JSONValue] = ["service": .string("index"), "state": .string(state)]
   if let device { details["device"] = .string(device) }
   return FieldProductError(kind: "UNAVAILABLE", message: "m", details: .object(details))
+}
+
+/// Item 366 — a row as the door gives it (`IndexTimelineRow`), named as the direct read's `row(_:)` names it: a
+/// row's name is the same on both ways.
+private func doorRow(_ ordinal: Int, id: String? = nil) -> FieldProduct.JSONValue {
+  .object([
+    "timelineId": .string(id ?? "r\(ordinal)"), "sessionId": .string("s1"), "ordinal": .int(Int64(ordinal)),
+    "kind": .string("agent"), "at": .int(3_600_000),
+    "group": .object(["id": .string("cycle-\(ordinal)"), "kind": .string("agent_cycle")]), "text": .string("row"),
+  ])
+}
+
+private func doorPage(_ rows: [FieldProduct.JSONValue], next: String? = nil) -> FieldProduct.JSONValue {
+  var page: [String: FieldProduct.JSONValue] = [
+    "sessionId": .string("s1"), "entries": .array(rows), "watermark": .string("w1"),
+  ]
+  if let next { page["nextCursor"] = .string(next) }
+  return .object(page)
+}
+
+/// The door's pages of one session of a hundred rows: its newest forty, then the forty above, then the top twenty.
+private func hundredByTheDoor(_ params: FieldProduct.JSONValue?) -> FieldProduct.JSONValue {
+  switch params?["cursor"]?.stringValue {
+  case "d1": return doorPage((21...60).map { doorRow($0) }, next: "d2")
+  case "d2": return doorPage((1...20).map { doorRow($0) })
+  default: return doorPage((61...100).map { doorRow($0) }, next: "d1")
+  }
 }
 
 @Suite(.serialized) @MainActor struct HistoryDirectReadTests {
@@ -575,6 +606,75 @@ private func unavailable(_ state: String, device: String? = nil) -> FieldProduct
   }
 
   // MARK: - rosetta's own entries through the seam
+
+  // MARK: - The road changes under an open document (item 366)
+
+  /// Item 366 (found reading for 362f; VF-PM numbered it 2026-11-12 21:05:29Z) — the direct read lost under an
+  /// open document `reopen`ed the session: the rows went, and the door's newest forty stood where up to two
+  /// hundred and the pages above them had been. `ids` are the document's segment ids: what the view keeps a
+  /// reader's place and its opened groups by, so the same ids in the same order are the same page.
+  @Test func aDirectReadLostLeavesEveryRowThatWasOnThePage() async {
+    let rig = Rig()
+    rig.door.timeline = hundredByTheDoor
+    let reader = rig.reader(deadline: .milliseconds(30))
+    guard await rig.open(reader, rows: (1...100).map { row($0) }) else { return }
+    let shown = ids(reader)
+    #expect(shown == (1...100).map { "r\($0)" })
+    rig.sockets.latest?.close()
+    guard await reached("the door's tail", { rig.door.asked.contains("index.session.subscribe") }) else { return }
+    #expect(rig.door.asked.contains("index.timeline"), "the door's own page is read: its cursor comes with it")
+    // every row that was on the page is on the page, in order
+    #expect(ids(reader) == shown, "\(shown.count) rows were on the page and \(ids(reader).count) are left")
+    #expect(reader.corpus.document("s1")?.nextCursor == "d1", "the cursor is the door's now, not rosetta's")
+    // the rows above the door's page are read on by its own cursor: each is already on the page, and none lands
+    // twice or out of order
+    reader.need(.older(device: "dev-1", session: "s1"))
+    guard await reached("the session's top, by the door", { reader.corpus.document("s1")?.nextCursor == nil })
+    else { return }
+    #expect(ids(reader) == shown)
+    #expect(Set(ids(reader)).count == shown.count)
+    reader.close()
+  }
+
+  /// The other way: the pages the door read stay when the direct read comes back with its own newest rows.
+  @Test func aDirectReadComingBackLeavesThePagesTheDoorRead() async {
+    let rig = Rig()
+    rig.tickets.refusal = unavailable("starting")
+    rig.door.timeline = hundredByTheDoor
+    let reader = rig.reader()
+    reader.need(.session(device: "dev-1", id: "s1"))
+    guard await reached("the door's page", { ids(reader).count == 40 }) else { return }
+    reader.need(.older(device: "dev-1", session: "s1"))
+    guard await reached("the door's older page", { ids(reader).count == 80 }) else { return }
+    let shown = ids(reader)
+    #expect(shown == (21...100).map { "r\($0)" })
+    // the phone reaches the desktop again: the direct read opens on its own newest rows, ten of them new
+    rig.tickets.refusal = nil
+    let dials = rig.sockets.dials.count
+    reader.pause()
+    reader.resume()
+    guard await reached("a dial", { rig.sockets.dials.count > dials }) else { return }
+    rig.sockets.latest?.deliver(Frame.hello)
+    rig.sockets.latest?.deliver(Frame.snapshot((71...110).map { row($0) }))
+    guard await reached("the direct read's rows", { ids(reader).last == "r110" }) else { return }
+    #expect(
+      ids(reader) == (21...110).map { "r\($0)" },
+      "\(shown.count) rows were on the page before the direct read came back, and \(ids(reader).count) are left")
+    reader.close()
+  }
+
+  /// The evidence rule: rows go only when the record itself changed. A door's page that shares no row with what
+  /// is held, inside what is held, is a session rewritten on the desktop: the document is read again from its end.
+  @Test func aSessionRewrittenUnderTheChangeIsReadAgainFromItsEnd() async {
+    let rig = Rig()
+    rig.door.timeline = { _ in doorPage((61...100).map { doorRow($0, id: "n\($0)") }, next: "d1") }
+    let reader = rig.reader(deadline: .milliseconds(30))
+    guard await rig.open(reader, rows: (1...100).map { row($0) }) else { return }
+    rig.sockets.latest?.close()
+    guard await reached("the door's tail", { rig.door.asked.contains("index.session.subscribe") }) else { return }
+    #expect(ids(reader) == (61...100).map { "n\($0)" }, "rows of the record that was rewritten are not kept beside it")
+    reader.close()
+  }
 
   @Test func everyPairProjectsThroughRosettasOwnEntry() throws {
     let document = try Fixture.json("index-timeline-pairs.golden")
