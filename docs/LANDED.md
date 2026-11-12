@@ -47714,3 +47714,175 @@ the limits, and "MA-6 (6a–6d + the gate)"'s on the limits.
   change, on VF-PM's word.
 - James's device rows (P6), as LANDED "MA-6e" lists them.
 - `gate:landing` at this land, on James's word. The stack moves no code a desktop smoke runs.
+
+## RB-1 — the build for App Review draws no Notifications page; each release is two archives, and the store takes the clean one (M288)
+
+(2026-11-12; five commits, `88d0ccb16` to `05bfd0944`, on main `76fb404dc`. Cut by the IOS lead in
+`lanes/ios12b/vibe-field` on `ios/rb1`, on M286's `864d7aca3`: the doc `1177d8481`, the red `71e5e1f24`, the green
+`66c0fa63c` and the testflight `474501948`. Carried onto `76fb404dc` object-only as `ios/rb1-on-76fb404dc`
+(`554e1132b`); the fifth, the errata `05bfd0944`, made on top at the fixer's hold, as `ios/rb1e-on-76fb404dc`. Landed
+by the fixer by fast-forward as M288 at 10:57:36Z, on VF-PM's LAND GO re-issued at 10:48:33Z; its first GO, of
+10:22:16Z, was withdrawn at 10:31:52Z on the fixer's hold (below). Validated by run rb1, a9, on the old mini, at
+`474501948`; on this Mac by DESIGN.md's 30 Mac readers at the run's tip and again at the carried tip; and fieldd's six
+by proof at the carried text. The packets are `lanes/ios/settings/rb1-land/` and `rb1-land-2/`.)
+James picked on *Settings in a Pocket* (https://claude.ai/artifact/QuEyzMmZhjsUKUJMb32nR4, db `decisions`, read by
+VF-PM at 05:57Z): notifications "Show it, dotted “Not yet”" (2026-11-11T22:53:47.335Z), developer "Yes, in TestFlight
+and debug builds" (22:53:48.927Z), developer-builds "two" (2026-11-12T05:55:12.345Z) and notifications-review "hide"
+(05:55:37.584Z). VF-PM relayed them at 05:58:42Z, accepted §9's cut at 06:05:50Z and ruled the build numbers on
+LAUNCH's lean at 06:25:26Z: build 6 is main as it stands, one `upload 6 store`; the pair starts at 7, review, and 8,
+testflight. Its word for each commit: the red at 06:25:26Z, the green at 07:10:10Z, the testflight at 07:13:53Z (its
+store gate for an archive made before kinds at 07:29:13Z; committed on the GO of 07:41:16Z), the errata at 10:31:52Z.
+For the run, James picked j-mini-keychain-a1's A at 07:35:11.320Z: "noted, carry on with the narrower read".
+
+**What landed, DESIGN.md first.** Each of the first four is named with the commit it was cut as. The carry left every
+patch as it was: `git range-diff` 1 "=", 2 "!" (its message alone), 3 "=", 4 "=".
+- The doc (`88d0ccb16`, from `1177d8481`; DESIGN.md 23/0): §8 "The phone's Settings", amended 2026-11-12
+  (`DESIGN.md:6654-6663`). This phone gains Notifications after Terminal, §13's `message` with a dotted Not yet, its
+  page stated in words, not stilled. Notifications and Developer are drawn in TestFlight and development builds only,
+  and the build for App Review draws neither. §9 "Notifications, before push" (`:7831-7841`). Two dated corrections
+  at their source (`:6653`, `:6683`): IOS-10c's amendment and the Theme row's each cited James's pick as 23:00Z; the
+  page's store has 22:53:40Z and 22:53:41Z.
+- The red (`3cebbb29b`, from `71e5e1f24`): `SettingsBuild.swift` (new, 19) and `SettingsModel.thisPhoneRows` (11),
+  both stubbed; `SettingsRoute.notifications` (`SettingsInputs.swift` 5, `SettingsView.swift` 4) and
+  `NotificationsPage.swift` (new, 30, stubbed) under `#if DEBUG || VF_TESTFLIGHT`; `SettingsBuildTests.swift` (new,
+  66): 4 tests, red at 11 issues of their own.
+- The green (`f567b027d`, from `66c0fa63c`): `NotificationsPage.swift` 101/16, `SettingsBuild.swift` 13/5,
+  `SettingsModel.swift` 4/1 and `SettingsView.swift` 38/11. SettingsBuildTests is the red's, unchanged.
+- The testflight (`554e1132b`, from `474501948`): `apps/ios/scripts/testflight.sh` 107/12, `apps/ios/TESTFLIGHT.md`
+  33/8 and `apps/ios/README.md` 6/4.
+- The errata (`05bfd0944`, made at the fixer's hold; `apps/ios/TESTFLIGHT.md` 19/6). Build 6 was not archived before
+  kinds landed, so the release block says `archive 6 review`, then `upload 6 store`, and a dated correction stands at
+  the two places that said build 6 would be archived first. Item 347's word, **Scan the code on your computer**, with
+  its own correction. And, by role, two lines of the stack's own messages: the testflight commit's "build 6 is main
+  as it stands, one `upload 6 store`", and the doc commit's "fieldd's six and smoke-first-run on V" (V ran V-1,
+  V-1b, V-4 and V-5; smoke-first-run did not run).
+- 10 paths, +453 −37 over `76fb404dc`: DESIGN.md, six Swift files under `apps/ios/VibeFieldKit`, and the script and
+  two docs under `apps/ios`. No TS, JS or Rust path, no `Package.swift` or `Package.resolved`, no pin-class path.
+- **What the messages say of their rows.** The doc's: none run, DESIGN.md's readers at the tip. The red's and the
+  green's: nothing compiled on this Mac, K on the old mini. The testflight's: the helper's Mac dry, 17 of 17. Run rb1
+  is the row they wait on. The red's line 3 named the doc by its sha; the carry made it "RB-1's doc commit" (VF-PM's
+  ruling), and no message names a stack commit by sha.
+
+**What a person sees, by reading the code.** Lines are at `05bfd0944`. Nothing was watched on a phone.
+- **A TestFlight or a development build:** Settings › This phone is Appearance, Terminal, Notifications, then Lock
+  where a lock is held (`SettingsModel.swift:243-246`, drawn by `SettingsView.swift:77`). Notifications wears a dotted
+  Not yet (`SettingsView.swift:110-115`). Its page shows the preview, the caption, Tell me when with three switches
+  drawn and disabled (`NotificationsPage.swift:72-77`), and the foot, "Not built yet." first (`:109-111`).
+- **The build for App Review:** This phone is Appearance, Terminal, then Lock, as before. The page and its words are
+  not compiled in: `SettingsBuild.swift` is the one reader of `VF_TESTFLIGHT` (`:18`), and run rb1's review archive
+  carries none of the page's markers.
+- **James's helper:** `archive 7` alone refuses (exit 2). `archive 7 review` and `archive 8 testflight` each count the
+  TestFlight-only pages in their own app and refuse a review archive that carries any, or a TestFlight archive that
+  carries none. `upload 8 store` refuses a TestFlight archive whatever it carries. Build 6 is `archive 6 review`, then
+  `upload 6 store`.
+
+**Validation of record** (run rb1, `lanes/ts6/ios-rb1-a9-results`, 143 files; its `.done` `c1b5a8f852c8ac63`, written
+at 09:49:54Z, read whole by VF-PM and reported GREEN and ACCEPTED at 09:55:54Z; the runner `mini-ios-rb1.sh`, cut as
+`43a801821f2f99b1` and filled at the stage by a9 as `a0a31e7c4302126c`, with the four stage-time marks, ARMG 25000
+(VF-PM 09:31:22Z) and the ARMED line's words to match; armed at 09:36:57Z with 29,547 MiB free):
+- **The host:** the old mini, Xcode 27.2 (27B52), the iPhone 17 simulator `1F155533`, every xcodebuild from A0b's
+  kept SwiftPM fetch, so no network. The bundle (`bdef2fa81b79225d`, 17,805 B) requires `864d7aca3` alone, which
+  the mini's lane lacked: T4 (`3892ce89f053fce8`, 84,316 B, main `fb41e90ce..9bbe345ad`) was fetched into its
+  FETCH_HEAD alone, no ref written, and brought it. The bundle's head went into one new kept ref, `ios/rb1-runrb1` →
+  `474501948`.
+- **STAGE 0 HOLDS:** three exits 0; fetch-class 0 and keychain 0; the checkouts unmoved; both `Package.resolved`
+  byte-same; the temp's result-bundle count unchanged.
+- **V, GREEN:** V-1 `pnpm preflight`, V-1b the agent catalog checker, V-4 `pnpm check:ios-fixtures`, and V-5 fieldd's
+  six DESIGN.md readers, 200 of 200, 6 of 6 files at the expected. V-2 and V-3 were out by the plan (VF-PM 07:46:33Z).
+- **R, RED AS READ** at `71e5e1f24`: `SettingsBuildTests`' four tests, 11 issues, at `:17 :23 :40 :41 :46 :50 :51
+  :53 :55 :56 :58`, none elsewhere.
+- **K GREEN-BUT-167:** 2,447 tests in 376 suites; FieldSettingsTests 41 in 5, with SettingsBuildTests' four passing;
+  item 167's one failure. At the landed tree K is 2,448 in 376 (item 273's `shelfTopInset`; FieldHomeTests 705), a
+  delta, not run.
+- **THE PAIR, AS WANTED:** Release for generic iOS, unsigned, both GREEN. testflight.sh's own count over every file of
+  each app: review 0 (`NotificationsPage` 0, the caption 0); testflight 70 (`NotificationsPage` 69, the caption 1). So
+  `-DVF_TESTFLIGHT`, passed through `OTHER_SWIFT_FLAGS`, reaches the kit's package targets.
+- **Beside it, as run rb1 printed them:** the kept dirs unmoved (347, newer 0); the kept refs unmoved; the history
+  files moved in none; the cold target spend 0; the floor held, 26,282 MiB free; kept on the mini, removed by nobody,
+  `<G>/rrb1` 3,045 MiB and `<G>/rbrb1` 122 MiB. `<G>/spm`'s entries newer than the marker went 0 → 4 with its 4,077
+  files and 393,032 KiB the same at both ends, as in runs 313 and 315: the guard's own cache, classed by VF-PM.
+- **FINDINGS:** THE KEYCHAINS by block (names and counts, never opened) moved in rel-tf alone: one file written,
+  `keychain-2.db-wal` under one folder, name lines 8 → 8, no name in or out; classed a reading by VF-PM under James's
+  pick of 07:35:11Z. James clicked j-mini-keychain-rb1 at 10:33:26.997Z: "Noted: carry on, tell me only if it repeats
+  again (Recommended)". Eight new entries under the mini account's SwiftPM caches, as in run 313.
+  `workspace-state.json`: the kit's root `ebb691921d6d84d8`, this run's App root `dda85b9161bbcef2`, from run 315's
+  end state `a824c2e223d3bfca`, each a reading.
+- **The Mac's DESIGN.md readers,** through the door, nice 19, `--maxWorkers=2`:
+  - at `474501948` (`lanes/ios/settings/rb1-mini/mac-readers-rows-3.sh`): field-app's 27 readers 646 of 646
+    (08:42:26Z to 08:42:45Z); sound's `design-md.test.ts` 23 of 23 (08:43:16Z); plugins/simulator's attach and design
+    19 of 19 (08:53:30Z to 08:53:33Z, alone, on VF-PM's word, after James's account switch of about 08:44Z ended its
+    wrapper before it ran);
+  - at `554e1132b`, DESIGN.md `45b57c8709a1`, the landed text (`rb1-land/carried-rows.sh`): 646 of 646 (10:09:44Z to
+    10:10:04Z), 23 of 23 (10:12:44Z to 10:12:45Z), 19 of 19 (10:14:24Z to 10:14:26Z). The errata moves no reader's
+    input: nothing reads TESTFLIGHT.md (`rb1-land-2/errata-proof.txt`);
+  - fieldd's six at the carried text, proved and not run, by ma-6's method (VF-PM 10:16:07Z;
+    `rb1-land/readers-six-proof.py`, one door row): the range's 8 hunks, +24 −14, all at line 7049 or later of the
+    run's text; each of the six reads DESIGN.md whole through `toContain`, with no slice; their 2,611 literals and
+    fieldd's sources' 24,275 change no answer between the two texts, raw or whitespace-normalized; their long
+    literals stand at lines 2076 to 8219, none in a changed span. So V-5's green at the run's text stands at the
+    landed one;
+  - smoke-first-run, electron-shell's one DESIGN.md reader: OWED, unrun.
+- **The runner's dry** on this Mac (`lanes/ios/settings/rb1-mini/dry/`): p1 stopped at scenario 30 of 43 on a defect
+  of my harness; p2, after three harness fixes, 43 of 43 AS WANTED (HOLD 09:09:58Z to 09:16:37Z).
+- **The helper's dry** on this Mac: 17 of 17 AS WANTED (`root-p3`); nothing built, signed or uploaded.
+- No TS, JS or Rust path moves, so the other vitest and cargo counts stand at main's last run.
+
+**The cut.**
+- 11-12, on `864d7aca3`, each commit under the pre-commit hook, on VF-PM's word for it (above).
+- **The run.** The bundle in one door row (07:54:40Z), T4 in another (08:20:25Z). The runner was cut from run 315's
+  r2 (`3246682711e95a5d`; diff 543 lines, `2090d5df`) and dried twice. a9 staged it with the four marks filled from
+  run 315's `.done` (`d32324f21025ec05`) and its end state; the `.done` at 09:49:54Z.
+- **The carry.** Main moved by item 273 (M287, `2a66e06d3` to `43492a05d`) and its records (`76fb404dc`). DESIGN.md
+  is the one path both touch. `lanes/ios/settings/rb1-land/carry-rehearse.sh` (`75ff8e0005184926`), one door row
+  each, object-only: r1 onto `43492a05d` (10:00:50Z to 10:00:53Z) and r2 onto `76fb404dc` (10:07:15Z to 10:07:18Z).
+  Each commit by `merge-tree --merge-base <c^> <new parent> <c>`, exit 0, and `commit-tree` with its author, author
+  date and message. The stepwise tip's tree equals the whole stack's one three-way (`4b82d2380`). Main to the carried
+  tip names RB-1's 10 paths alone; the run's tip to the carried tip, the range's 11 alone. DESIGN.md's +/- lines are
+  RB-1's own 23/0 over main, and the range's own 24/14 over the run's text (item 273's 15/6 and its records' 9/8,
+  every hunk at line 7049 or later). patch-id `--stable` equal for all four. The ref `ios/rb1-on-76fb404dc` →
+  `554e1132b`, create-only, one door row at 10:18:08Z (VF-PM's GO, 10:16:07Z). The first packet was sealed at
+  10:21:40Z (`rb1-land/`, SHA256SUMS `0d7fb981ba99668d`, 65 files).
+- **The withdrawal.** VF-PM's first LAND GO (10:22:16Z) was withdrawn at 10:31:52Z, when the fixer held the land on
+  two points of mine. TESTFLIGHT.md still said build 6 would be archived before kinds landed; it was not, so the page
+  James releases from would have named an archive that does not exist and left out `archive 6 review`. And I had
+  written into the sealed packet: `records/apply-records.py` at 10:22:58Z, so its SUMS read 64 OK, 1 FAILED (rule 10).
+- **The errata.** VF-PM ruled a fifth commit at 10:31:52Z: the correction at its source, in the same land, the four
+  not recut. It was made in `lanes/ios12b` under the pre-commit hook, one door row at 10:39:47Z
+  (`rb1-land-2/errata-commit.sh`), and accepted by VF-PM at 10:41:37Z. Nothing reads TESTFLIGHT.md: no test,
+  script, wall or workflow parses it (`errata-proof.txt`). Its ref `ios/rb1e-on-76fb404dc` → `05bfd0944`,
+  create-only, one door row at 10:45:11Z. The second packet, `rb1-land-2/` (sealed at 10:47:57Z, SHA256SUMS
+  `532820cfe95b4775`, 75 files), holds the first packet's files as sealed (`sealed-1/`, 65 of 65, its
+  `apply-records.py` rebuilt to the sealed `30729978e4ee0b97`) beside the errata's proof; its seal skipped
+  `sealed-1/SHA256SUMS` by name (`0d7fb981ba99668d`), which `sealed-1-check.txt` checks.
+- **The land.** VF-PM re-issued the LAND GO at 10:48:33Z. The fixer was READY at 10:55Z, the app DOWN at 10:56:21Z.
+  Its door pair (`rb1e-land.zsh`, `e122d40260f8239d`, and its inner, `cdfeea7ce0f49bf4`) took the door at 10:57:35Z
+  and ran `land-stack5.sh` (`4a1d62d4c8e79f03`): "Updating 76fb404dc..05bfd0944, Fast-forward", exit 0, landed at
+  10:57:36Z, 75 s from DOWN. Nothing is pushed: origin/main is at `8fffb13c7`, main 44 past it.
+
+**Found along the way.**
+- **The harness's defects** (mine, p1): it hashed the newest `.done` after a scenario had moved it; and BSD
+  `touch -t` reads local time, so the two stand-ins were dated 6 to 7 hours ahead, so `prevoff` stopped at the wrong
+  line and `newerdone` would have passed falsely. Fixed before p2; the runner was not touched.
+- **The arm's free-space gate** (VF-PM 09:31:22Z): 30,000 MiB would never have armed on the mini's 29,474; 25,000 is
+  the floor, the rows' 8,000 and a margin. The cut's ARMED line explained 30,000 in words that summed to 26,940;
+  a9's fill reworded it with the number.
+- **Misses of mine:** two ungated calls at the resume of 07:30Z, inside fa's row (07:30:24Z) and a9's (07:32:44Z)
+  (rule 41); the first launch of the carry's r2 at 10:06:13Z, which stopped in its own `zsh -n` on an apostrophe in a
+  `${…:?}` word before anything ran; and the sealed packet written into at 10:22:58Z (rule 10, the withdrawal above).
+  Each recorded by VF-PM.
+- **Item 347** (VF-PM 10:02:47Z): `apps/ios/TESTFLIGHT.md` told testers to scan "on your Mac"; the button has said
+  "on your computer" since WI-1. Folded into the errata commit.
+
+**Owed.**
+- **Build 6 is not archived** (James had not answered the board's j-asc-build6; VF-PM, 10:16:07Z). From the
+  repository root James runs `bash apps/ios/scripts/testflight.sh archive 6 review`, then, every agent quit and the
+  key's two IDs exported, `bash apps/ios/scripts/testflight.sh upload 6 store` (TESTFLIGHT.md's release block).
+- **James's builds after it:** `archive 7 review`, `archive 8 testflight`, `upload 7 store`, `upload 8 internal`.
+- **The device witness:** a review build on James's phone with no Notifications row, and a TestFlight build with it,
+  dotted Not yet.
+- **smoke-first-run's DESIGN.md read** at this tip: unrun.
+- **Developer's page** (RB-2): its design note first, then the slice.
+- **The landing table at `05bfd0944`:** none has run. It is owed before any push and runs on James's word by name.
+
+**Not done, and not claimed:** nothing of this ran on a phone; no archive was made, signed or uploaded; no Swift row ran
+on this Mac; and nothing here is pushed.
