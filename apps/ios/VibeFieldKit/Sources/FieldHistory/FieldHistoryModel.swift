@@ -39,18 +39,36 @@ public enum FieldHistoryModel {
   }
 
   /// The ledger, ranked: by spend (the corpus's own order) or by recency.
+  ///
+  /// Item 353 — spend is the desktop's: lifetime estimated cost, once any project's figures say one, the thirty
+  /// days' tokens breaking ties (and ranking alone before any lifetime is read, as before).
   public static func projects(_ projects: [HistoryProject], rankedBy rank: Rank) -> [HistoryProject] {
     switch rank {
-    case .spend: projects.sorted { $0.spend > $1.spend }
+    case .spend:
+      projects.sorted { left, right in
+        let a = lifetimeCost(left)
+        let b = lifetimeCost(right)
+        return a != b ? a > b : left.spend > right.spend
+      }
     case .recent: projects.sorted { $0.recencyMinutes < $1.recencyMinutes }
     }
   }
 
   /// The wash behind a row: spend, scaled to the biggest project (0…1).
+  ///
+  /// Item 353 — lifetime estimated cost against the costliest project's, the desktop's `--spend-share`, once any
+  /// project's figures say a cost; the thirty days' tokens until then.
   public static func share(of project: HistoryProject, among projects: [HistoryProject]) -> Double {
+    let costliest = projects.map(lifetimeCost).max() ?? 0
+    if costliest > 0 { return lifetimeCost(project) / costliest }
     let max = projects.map(\.spend).max() ?? 0
     guard max > 0 else { return 0 }
     return project.spend / max
+  }
+
+  /// Item 353 — the project the wash is scaled to: the costliest over its lifetime (nil while none has a cost).
+  public static func costliest(_ projects: [HistoryProject]) -> HistoryProject? {
+    projects.filter { lifetimeCost($0) > 0 }.max { lifetimeCost($0) < lifetimeCost($1) }
   }
 
   /// The line under the title. The device is named as its platform names it (`DeviceWord`; L4's word pass).

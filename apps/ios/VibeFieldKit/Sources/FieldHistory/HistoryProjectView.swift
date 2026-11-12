@@ -136,33 +136,7 @@ struct HistoryProjectView: View {
   }
 
   private func stat(_ figure: String, _ unit: String?, _ label: String) -> some View {
-    VStack(alignment: .leading, spacing: 5) {
-      HStack(alignment: .firstTextBaseline, spacing: 1) {
-        Text(figure)
-          .font(ChromeType.sans(20, .light))
-          .tracking(ChromeType.tracking(-0.02, of: 20))
-          .monospacedDigit()
-          .foregroundStyle(ChromePalette.ink)
-        if let unit, !unit.isEmpty {
-          Text(unit)
-            .font(ChromeType.sans(12))
-            .foregroundStyle(ChromePalette.inkFaint)
-        }
-      }
-      .lineLimit(1)
-      .minimumScaleFactor(0.7)
-      Text(label)
-        .font(ChromeType.sans(9, .medium))
-        .textCase(.uppercase)
-        .tracking(ChromeType.tracking(0.04, of: 9))
-        .foregroundStyle(ChromePalette.inkFaint)
-        .lineLimit(1)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, 8)
-    .padding(.top, 10)
-    .padding(.bottom, 9)
-    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(ChromePalette.fill))
+    StatChip(figure: figure, unit: unit, label: label)
   }
 
   /// The overview card: the ribbon and the facts line.

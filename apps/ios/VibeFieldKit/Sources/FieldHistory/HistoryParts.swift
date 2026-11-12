@@ -73,6 +73,8 @@ public struct AgentMark: View {
   public var opacity: Double = 0.55
   public var size: CGFloat = 13
 
+  @Environment(\.historyAgentGlyph) private var glyph
+
   public init(agent: String, opacity: Double = 0.55, size: CGFloat = 13) {
     self.agent = agent
     self.opacity = opacity
@@ -80,28 +82,63 @@ public struct AgentMark: View {
   }
 
   public var body: some View {
-    Text(agent.prefix(1).uppercased())
-      .font(.system(size: size * 0.62, weight: .bold, design: .rounded))
-      .foregroundStyle(ChromePalette.ink)
-      .frame(width: size, height: size)
-      .background(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).fill(ChromePalette.fill))
-      .overlay(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).strokeBorder(ChromePalette.ruleStrong, lineWidth: 0.5))
-      .opacity(opacity)
-      .accessibilityLabel(agent)
+    if let drawn = glyph?.draw(agent, size) {
+      // Item 353 — the agent's own mark where the home draws one (History's rows, as the desktop's)
+      drawn
+        .foregroundStyle(ChromePalette.ink)
+        .frame(width: size, height: size)
+        .opacity(opacity)
+        .accessibilityLabel(agent)
+    } else {
+      Text(agent.prefix(1).uppercased())
+        .font(.system(size: size * 0.62, weight: .bold, design: .rounded))
+        .foregroundStyle(ChromePalette.ink)
+        .frame(width: size, height: size)
+        .background(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).fill(ChromePalette.fill))
+        .overlay(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous).strokeBorder(ChromePalette.ruleStrong, lineWidth: 0.5))
+        .opacity(opacity)
+        .accessibilityLabel(agent)
+    }
   }
 }
 
-/// The marks of who worked on a project, the lead at full strength and the
-/// rest by their share, then `+N` for the ones that did not fit.
+/// Item 353 — how History draws an agent's own mark. History knows no vendor glyph (AR-L1); the glyphs are the
+/// home's (`AgentGlyph`, the asset catalog's), so the home hands its drawing in through the environment, as it does
+/// for Settings (`SettingsAgentMark`). Without one, and for an agent the home draws no mark for (LP-4 keeps two
+/// vendors' on the phone), the agent's letter stands on its chip, as it always did.
+public struct HistoryAgentGlyph: Sendable {
+  /// The mark for an agent's id (a session's `provider`), fitted to a square of the size given; nil where the home
+  /// draws none for it.
+  public let draw: @MainActor @Sendable (String, CGFloat) -> AnyView?
+
+  public init(_ draw: @escaping @MainActor @Sendable (String, CGFloat) -> AnyView?) {
+    self.draw = draw
+  }
+}
+
+private struct HistoryAgentGlyphKey: EnvironmentKey {
+  static let defaultValue: HistoryAgentGlyph? = nil
+}
+
+extension EnvironmentValues {
+  /// The home's drawing of an agent's mark; nil draws the agent's letter.
+  public var historyAgentGlyph: HistoryAgentGlyph? {
+    get { self[HistoryAgentGlyphKey.self] }
+    set { self[HistoryAgentGlyphKey.self] = newValue }
+  }
+}
+
+/// A project's agents at the row's right: the lead first and darkest, at most three, then how many more.
 struct AgentMarks: View {
   let agents: [HistoryAgentShare]
   let more: Int
+  var size: CGFloat = 13
 
   var body: some View {
-    let lead = Double(agents.first?.share ?? 1)
-    HStack(spacing: 3) {
+    let lead = Double(max(agents.first?.share ?? 1, 1))
+    HStack(spacing: size > 13 ? 5 : 3) {
       ForEach(Array(agents.enumerated()), id: \.offset) { _, share in
-        AgentMark(agent: share.agent, opacity: min(1, 0.34 + 0.3 * Double(share.share) / lead + 0.2))
+        AgentMark(agent: share.agent, opacity: min(1, 0.34 + 0.3 * Double(share.share) / lead + 0.2), size: size)
       }
       if more > 0 {
         Text("+\(more)")

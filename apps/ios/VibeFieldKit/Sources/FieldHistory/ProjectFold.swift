@@ -315,11 +315,49 @@ extension FieldHistoryModel {
   }
 
   /// A project's merged figures (`project.figures`) on its ledger row.
+  ///
+  /// Item 353 — the door is asked over every recorded day, so one answer carries the lifetime the ledger's figures
+  /// sum (`lifetime`) and the window the row and the project's screen have always drawn: the days from
+  /// `figureWindowDays` ago, cut here from the same answer (the row's 30-day tokens, its sparkline, the screen's
+  /// four numbers and its ribbon are computed over those days alone, as they were when the door was asked for them).
   public static func withFigures(
     _ project: HistoryProject, _ result: ProjectFiguresResult, sessions: [IndexSessionRow], now: Date
   ) -> HistoryProject {
-    withFigures(
-      project, heatmap: result.heatmap, models: result.models, contribution: result.contribution, sessions: sessions,
-      now: now)
+    let first = lastDays(figureWindowDays + 1, now: now).first ?? ""
+    let windowed = withFigures(
+      project, heatmap: result.heatmap.filter { $0.day >= first }, models: result.models.filter { $0.day >= first },
+      contribution: result.contribution, sessions: sessions, now: now)
+    return windowed.with(lifetime: lifetime(result))
+  }
+}
+
+extension FieldHistoryModel {
+  /// Item 353 — a project's agents from the count of its top-level sessions by agent, as the desktop's row marks
+  /// them: by share, the lead first, at most three, and how many more there are.
+  public static func agentShares(counts: [String: Int]) -> (shares: [HistoryAgentShare], more: Int) {
+    let total = max(counts.values.reduce(0, +), 1)
+    let ranked = counts.sorted { $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key) }
+    return (
+      ranked.prefix(3).map { HistoryAgentShare($0.key, Int((Double($0.value) / Double(total) * 100).rounded())) },
+      max(0, ranked.count - 3)
+    )
+  }
+}
+
+extension HistoryProject {
+  /// The same project with its agents counted over the sessions' listing.
+  func with(agents: [HistoryAgentShare], more: Int) -> HistoryProject {
+    HistoryProject(
+      id: id, name: name, seq: seq, path: path, missing: missing, figure: figure, unit: unit, spend: spend, last: last,
+      recencyMinutes: recencyMinutes, agents: agents, moreAgents: more, spark: spark, stats: stats, ribbon: ribbon,
+      ink: ink, devices: devices, places: places, lifetime: lifetime)
+  }
+
+  /// The same project with its lifetime read.
+  func with(lifetime: HistoryLifetime?) -> HistoryProject {
+    HistoryProject(
+      id: id, name: name, seq: seq, path: path, missing: missing, figure: figure, unit: unit, spend: spend, last: last,
+      recencyMinutes: recencyMinutes, agents: agents, moreAgents: moreAgents, spark: spark, stats: stats, ribbon: ribbon,
+      ink: ink, devices: devices, places: places, lifetime: lifetime)
   }
 }

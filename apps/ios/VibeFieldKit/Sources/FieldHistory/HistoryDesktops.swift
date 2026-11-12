@@ -20,6 +20,8 @@ public final class HistoryDesktops {
   /// PJ-7 — the ledger of projects, over one door (or the cache's, asleep).
   public private(set) var projects: HistoryProjects
 
+  /// Item 353 — the ledger's figures are on screen; a ledger reader that replaces another keeps reading them.
+  @ObservationIgnored private var wantsFigures = false
   @ObservationIgnored private let cache: HistoryCache?
   @ObservationIgnored private let agentLabel: @MainActor (String) -> String
   @ObservationIgnored private let now: @MainActor () -> Date
@@ -46,7 +48,8 @@ public final class HistoryDesktops {
       return
     }
     projects.close()
-    projects = HistoryProjects(source: source, door: door, ownsDoor: ownsDoor, cache: cache, roster: roster, now: now)
+    projects = HistoryProjects(
+      source: source, door: door, ownsDoor: ownsDoor, cache: cache, roster: roster, now: now, wantsFigures: wantsFigures)
     projects.start()
   }
 
@@ -171,6 +174,9 @@ public final class HistoryDesktops {
       projects.open(key)
     case .session(let device, _), .older(let device, _), .seen(let device, _):
       reader(for: device)?.need(need)
+    case .figures(let wanted):
+      wantsFigures = wanted
+      projects.wantFigures(wanted)
     }
   }
 

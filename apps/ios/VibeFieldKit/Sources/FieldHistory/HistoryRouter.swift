@@ -99,4 +99,6 @@ public enum HistoryNeed: Equatable, Sendable {
   case older(device: String, session: String)
   /// The reader saw the document's end: the arrivals are read.
   case seen(device: String, session: String)
+  /// Item 353 — the ledger's figures came on screen (every listed project's figures are read) or left it.
+  case figures(wanted: Bool)
 }

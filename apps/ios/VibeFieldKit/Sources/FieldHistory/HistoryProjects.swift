@@ -47,6 +47,8 @@ public final class HistoryProjects {
   /// Item 352 — the listing went on past `HistoryReads.ledgerPages` pages: the ledger holds the most recently active
   /// projects and says so.
   public private(set) var cut = false
+  /// Item 353 — the projects whose figures the door refused at the last ask (the panel's "failed · retrying").
+  public private(set) var figuresFailed: Set<String> = []
   public var isReplaying: Bool { door == nil || !standing.isAwake }
   /// The desktop whose door answers, by name: the roster's, else the answer's.
   public var sourceName: String {
@@ -68,6 +70,18 @@ public final class HistoryProjects {
   @ObservationIgnored private var sources: [CatalogSource] = []
   @ObservationIgnored private var sessionsByKey: [String: [IndexSessionRow]] = [:]
   @ObservationIgnored private var figures: [String: ProjectFiguresResult] = [:]
+  /// Item 353 — when each project's figures were read and the project's last activity then: a project that moved
+  /// since is read again, no sooner than `HistoryReads.figuresRefreshSeconds` later.
+  @ObservationIgnored private var figuresRead: [String: (at: Date, lastAt: Int64?)] = [:]
+  /// Item 353 — the ledger's figures are on screen: every listed project's figures are read, a few at a time.
+  @ObservationIgnored private var wantsFigures: Bool
+  @ObservationIgnored private var figuresQueue: [String] = []
+  /// Item 353 — each project's top-level sessions counted by agent, over the sessions' listing (`index.sessions`
+  /// across the mesh, the listing the desktop's rows count their marks from); nil until it is read.
+  @ObservationIgnored private var agentCounts: [String: [String: Int]]?
+  @ObservationIgnored private var agentsReadAt: Date?
+  /// Item 353 — how many rounds of asking have ended with some project still refused (the wait between them grows).
+  @ObservationIgnored private var figuresRetries = 0
   @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
   @ObservationIgnored private var pings: HistoryTailHandle?
   @ObservationIgnored private var openKey: String?
@@ -84,8 +98,9 @@ public final class HistoryProjects {
   public init(
     source: String?, door: (any HistoryDoor)?, ownsDoor: Bool = false, cache: HistoryCache? = nil,
     roster: [FieldHistoryModel.RosterDesktop] = [], now: @escaping @MainActor () -> Date = { Date() },
-    indexRecheck: Duration = .seconds(HistoryReads.indexRecheckSeconds)
+    indexRecheck: Duration = .seconds(HistoryReads.indexRecheckSeconds), wantsFigures: Bool = false
   ) {
+    self.wantsFigures = wantsFigures
     self.source = source
     self.door = door
     self.ownsDoor = ownsDoor
@@ -121,6 +136,7 @@ public final class HistoryProjects {
     pings?.cancel()
     pings = nil
     tasks.removeValue(forKey: "index-wait")?.cancel()
+    tasks.removeValue(forKey: "figures-retry")?.cancel()
   }
 
   public func resume() {
@@ -152,6 +168,20 @@ public final class HistoryProjects {
   public func open(_ key: String) {
     openKey = key
     readProject(key)
+  }
+
+  /// Item 353 — the ledger's figures came on screen, or left it. On screen, every listed project's figures are
+  /// read (the desktop's room reads them all the same way); off it, only what a row or an opened project asks.
+  public func wantFigures(_ wanted: Bool) {
+    guard wanted != wantsFigures else { return }
+    wantsFigures = wanted
+    if wanted {
+      figuresRetries = 0
+      queueFigures()
+    } else {
+      figuresQueue.removeAll()
+      tasks.removeValue(forKey: "figures-retry")?.cancel()
+    }
   }
 
   /// Where a key moved, following every move heard (nil: it did not move).
@@ -260,6 +290,7 @@ public final class HistoryProjects {
         }
         for row in recent where figures[row.key] == nil { readFigures(row.key) }
         if let openKey { readSessions(openKey) }
+        queueFigures()
       } catch {
         refused(error)
       }
@@ -363,24 +394,118 @@ public final class HistoryProjects {
     guard let door, !closed, tasks["figures/\(key)"] == nil else { return }
     tasks["figures/\(key)"] = Task { [weak self] in
       guard let self else { return }
-      defer { tasks["figures/\(key)"] = nil }
+      defer {
+        tasks["figures/\(key)"] = nil
+        pumpFigures()
+      }
       do {
-        let since = now().addingTimeInterval(-Double(FieldHistoryModel.figureWindowDays) * 86_400)
+        // Item 353 — no window: every recorded day (`ProjectFiguresParams.sinceMs` absent is rosetta's default), so
+        // the one answer holds the project's lifetime and the thirty days the row draws (`withFigures`)
         let offset = TimeZone.current.secondsFromGMT() / 60
         let answer = try ProjectFiguresResult(
           json: try await door.call(
-            "project.figures",
-            params: ProjectFiguresParams(
-              key: key, sinceMs: Int64(since.timeIntervalSince1970 * 1000), offsetMinutes: max(-840, min(840, offset))
-            ).json))
+            "project.figures", params: ProjectFiguresParams(key: key, offsetMinutes: max(-840, min(840, offset))).json))
         guard !Task.isCancelled else { return }
         if let to = answer.movedTo, to != key { rekey(from: key, to: to) }
         figures[answer.key] = answer
+        figuresRead[answer.key] = (now(), summaries[answer.key]?.lastAt)
+        figuresFailed.remove(key)
+        figuresFailed.remove(answer.key)
+        if figuresFailed.isEmpty { figuresRetries = 0 }
         rebuild()
         keepLedger()
       } catch {
+        if !(error is CancellationError) { figuresFailed.insert(key) }
         refused(error)
       }
+    }
+  }
+
+  // MARK: The ledger's figures (item 353)
+
+  private var figuresInFlight: Int { tasks.keys.filter { $0.hasPrefix("figures/") }.count }
+
+  /// Whether a listed project's figures are to be read: never read, or read before the project last moved and long
+  /// enough ago.
+  private func needsFigures(_ key: String, lastAt: Int64?, clock: Date) -> Bool {
+    guard figures[key] != nil, let read = figuresRead[key] else { return true }
+    return read.lastAt != lastAt && clock.timeIntervalSince(read.at) >= Double(HistoryReads.figuresRefreshSeconds)
+  }
+
+  /// The agents of every project, counted over the sessions' listing followed to its end (or its bound), read with
+  /// the figures and again no sooner than their refresh.
+  private func readAgents() {
+    guard let door, !closed, !paused, wantsFigures, tasks["agents"] == nil else { return }
+    if let agentsReadAt, now().timeIntervalSince(agentsReadAt) < Double(HistoryReads.figuresRefreshSeconds) { return }
+    tasks["agents"] = Task { [weak self] in
+      guard let self else { return }
+      defer { tasks["agents"] = nil }
+      do {
+        var counts: [String: [String: Int]] = [:]
+        var seen = Set<String>()
+        var cursor: String?
+        var pages = 0
+        repeat {
+          var fields: [String: JSONValue] = ["scope": .string("mesh"), "limit": .int(Int64(HistoryReads.listRows))]
+          if let cursor { fields["cursor"] = .string(cursor) }
+          let page = try IndexSessionsResult(json: try await door.call("index.sessions", params: .object(fields)))
+          guard !Task.isCancelled else { return }
+          var fresh = 0
+          for row in page.rows where seen.insert(Self.sessionKey(row)).inserted {
+            fresh += 1
+            guard let key = row.projectKey else { continue }
+            counts[key, default: [:]][row.provider ?? "agent", default: 0] += 1
+          }
+          // a door that answers a page it already gave is not followed round
+          cursor = fresh == 0 ? nil : page.cursor
+          pages += 1
+        } while cursor != nil && pages < HistoryReads.agentPages
+        if cursor != nil { HistoryReads.log("agents: the sessions' listing went on past \(pages) pages") }
+        agentCounts = counts
+        agentsReadAt = now()
+        rebuild()
+        keepLedger()
+      } catch {
+        // A desktop that does not answer the sessions' listing still has its ledger: the rows keep the agents their
+        // read sessions name, and the listing is asked again at the next refresh. The ledger's own reads say when
+        // the door itself is gone.
+        if !(error is CancellationError) {
+          agentsReadAt = now()
+          HistoryReads.log("agents: the sessions' listing was refused")
+        }
+      }
+    }
+  }
+
+  /// Queue every listed project whose figures are to be read, the ledger's order (the newest first), and start.
+  private func queueFigures() {
+    guard wantsFigures, door != nil, !closed, !paused else { return }
+    readAgents()
+    let clock = now()
+    for key in order where !figuresQueue.contains(key) && tasks["figures/\(key)"] == nil {
+      guard let summary = summaries[key], FieldHistoryModel.listed(summary) else { continue }
+      if needsFigures(key, lastAt: summary.lastAt, clock: clock) { figuresQueue.append(key) }
+    }
+    pumpFigures()
+  }
+
+  /// Start queued reads up to `HistoryReads.figuresAtOnce`; with the queue drained and some refused, ask again later.
+  private func pumpFigures() {
+    guard door != nil, !closed, !paused, standing.isAwake else { return }
+    while figuresInFlight < HistoryReads.figuresAtOnce, !figuresQueue.isEmpty {
+      readFigures(figuresQueue.removeFirst())
+    }
+    guard wantsFigures, figuresQueue.isEmpty, figuresInFlight == 0, !figuresFailed.isEmpty,
+      tasks["figures-retry"] == nil
+    else { return }
+    // each round that still ends refused waits twice as long, up to the refresh's own pace
+    let wait = min(HistoryReads.figuresRefreshSeconds, HistoryReads.figuresRetrySeconds << min(figuresRetries, 6))
+    figuresRetries += 1
+    tasks["figures-retry"] = Task { [weak self] in
+      try? await Task.sleep(for: .seconds(wait))
+      guard let self, !Task.isCancelled else { return }
+      tasks["figures-retry"] = nil
+      queueFigures()
     }
   }
 
@@ -453,7 +578,14 @@ public final class HistoryProjects {
     if openKey == from { openKey = to }
     if let rows = sessionsByKey.removeValue(forKey: from), sessionsByKey[to] == nil { sessionsByKey[to] = rows }
     if let held = figures.removeValue(forKey: from), figures[to] == nil { figures[to] = held }
+    if let read = figuresRead.removeValue(forKey: from), figuresRead[to] == nil { figuresRead[to] = read }
     if let walked = sessionsWalkedAt.removeValue(forKey: from), sessionsWalkedAt[to] == nil { sessionsWalkedAt[to] = walked }
+    if figuresFailed.remove(from) != nil { figuresFailed.insert(to) }
+    if var all = agentCounts, let counts = all.removeValue(forKey: from) {
+      if all[to] == nil { all[to] = counts }
+      agentCounts = all
+    }
+    figuresQueue = figuresQueue.map { $0 == from ? to : $0 }
     order = order.map { $0 == from ? to : $0 }
   }
 
@@ -467,12 +599,29 @@ public final class HistoryProjects {
     var live: [(key: String, row: IndexSessionRow)] = []
     var agents: Set<String> = []
     var total = 0
+    var held: [String: HistoryLifetime] = [:]
+    for project in corpus.projects { if let lifetime = project.lifetime { held[project.id] = lifetime } }
+    var heldAgents: [String: (agents: [HistoryAgentShare], more: Int)] = [:]
+    for project in corpus.projects where !project.agents.isEmpty {
+      heldAgents[project.id] = (project.agents, project.moreAgents)
+    }
     for key in order where !projects.contains(where: { $0.id == key }) {
       guard let summary = summaries[key], FieldHistoryModel.listed(summary) else { continue }
       var project = FieldHistoryModel.ledgerProject(summary, desktops: desktops, now: clock)
       let rows = sessionsByKey[key] ?? []
       if let result = figures[key] {
         project = FieldHistoryModel.withFigures(project, result, sessions: rows, now: clock)
+      } else if let lifetime = held[key] {
+        // Item 353 — a lifetime this phone kept (the cache's, replayed) stands until the door's is read again
+        project = project.with(lifetime: lifetime)
+      }
+      if let counts = agentCounts {
+        // Item 353 — the row's agents are counted over every top-level session, as the desktop's are
+        let counted = FieldHistoryModel.agentShares(counts: counts[key] ?? [:])
+        project = project.with(agents: counted.shares, more: counted.more)
+      } else if sessionsByKey[key] == nil, project.agents.isEmpty, let kept = heldAgents[key] {
+        // the marks this phone kept (the cache's, replayed) stand until the count, or the project's sessions, are read
+        project = project.with(agents: kept.agents, more: kept.more)
       }
       projects.append(project)
       total += Int(summary.sessions)
@@ -487,6 +636,7 @@ public final class HistoryProjects {
     corpus.sessions = sessions
     corpus.live = FieldHistoryModel.projectLiveRows(live, now: clock)
     corpus.sessionCount = total
+    if let counts = agentCounts { agents.formUnion(counts.values.flatMap(\.keys)) }
     corpus.agentCount = agents.count
     corpus.desktops = desktops
     corpus.desktop = desktops.first { $0.id == source }?.name ?? corpus.desktop

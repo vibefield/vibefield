@@ -1019,10 +1019,22 @@ public struct HomeScreen: View {
   }
 
   private var historyTab: some View {
-    HistoryLedgerView(history: historyDesktops, router: history) { need in
+    HistoryLedgerView(history: historyDesktops, router: history, shown: selectedTab == .history) { need in
       historyDesktops.need(need)
     }
     .environment(\.historyActs, historyActs)
+    // Item 353 — History's rows wear the agents' own marks, as the desktop's do: the home's drawing, by the
+    // catalog's mark key (a letter where the asset catalog draws none)
+    .environment(
+      \.historyAgentGlyph,
+      HistoryAgentGlyph { [catalog = link?.catalog ?? .empty] provider, size in
+        let agent = AgentProvider(rawValue: provider)
+        let mark = agent.markKey(with: catalog.entry(for: agent))
+        // LP-4 keeps two vendors' marks on the phone; an agent with none keeps History's own letter chip
+        guard AgentGlyph.drawnAsset(for: mark) != nil else { return nil }
+        return AnyView(AgentGlyph(mark: mark).frame(width: size, height: size))
+      }
+    )
     .environment(\.topPull, TopPull(atTop: { [appsDoor] atTop in appsDoor.historyAtTop = atTop }))
     .environment(
       \.rootHead, rootHead(stepper: history.stepperShowing || slotProject != nil || slotSession != nil))

@@ -50,6 +50,18 @@ public enum HistoryReads {
   /// Item 352 — a listing followed to its end is followed again no sooner than this; between, a ping's read takes
   /// the newest page alone (the door orders by newest activity, so what moved is at its head).
   public static let walkSeconds: Int64 = 60
+  /// Item 353 — how many pages of `listRows` the sessions' listing is followed for when the rows' agents are
+  /// counted: 3,000 top-level sessions, the newest. Past them a project's marks are those of its newest sessions.
+  public static let agentPages = 30
+  /// Item 353 — how many projects' figures are read at once while the ledger's figures are on screen. The room's
+  /// desktop reads four at a time over a local socket; three rosetta GETs each on the desktop, and a phone's link
+  /// carries the answers.
+  public static let figuresAtOnce = 3
+  /// Item 353 — a project that moved since its figures were read is read again no sooner than this (the room's own
+  /// refresh is five minutes).
+  public static let figuresRefreshSeconds: Int64 = 300
+  /// Item 353 — figures the door refused are asked again after this long.
+  public static let figuresRetrySeconds: Int64 = 20
   /// fix7 — while the ledger's index is not ready (starting, rebuilding,
   /// failed), how often the ledger and its index are read again: nothing pings
   /// when it becomes ready, and two cheap reads every few seconds is a
@@ -264,7 +276,7 @@ public final class HistoryDesktopReader: Identifiable {
 
   public func need(_ need: HistoryNeed) {
     switch need {
-    case .project: break
+    case .project, .figures: break
     case .session(_, let id): openSession(id)
     case .older(_, let session): readOlder(session)
     case .seen(_, let session): arrivals[session] = nil

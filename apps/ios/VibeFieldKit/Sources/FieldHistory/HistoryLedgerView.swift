@@ -18,17 +18,24 @@ import SwiftUI
 public struct HistoryLedgerView: View {
   let history: HistoryDesktops
   @Bindable var router: HistoryRouter
+  /// Item 353 — the tab is the one on screen: the ledger's figures are read only while it is.
+  let shown: Bool
   let onNeed: (HistoryNeed) -> Void
 
   public init(
-    history: HistoryDesktops, router: HistoryRouter, onNeed: @escaping (HistoryNeed) -> Void = { _ in }
+    history: HistoryDesktops, router: HistoryRouter, shown: Bool = true,
+    onNeed: @escaping (HistoryNeed) -> Void = { _ in }
   ) {
     self.history = history
     self.router = router
+    self.shown = shown
     self.onNeed = onNeed
   }
 
-  @State private var rank: FieldHistoryModel.Rank = .spend
+  /// Item 353 — the desktop's ledger opens on the most recent project; the phone's does too.
+  @State private var rank: FieldHistoryModel.Rank = .recent
+  /// Item 353 — the figures stand open until their toggle folds them, as the desktop's do; the phone keeps the choice.
+  @AppStorage("vf.history.figures") private var figuresOpen = true
   @Environment(\.colorScheme) private var scheme
   @Environment(\.historyActs) private var acts
 
@@ -50,10 +57,17 @@ public struct HistoryLedgerView: View {
       // page's paper, and the ledger scrolls under it. The system's bar is hidden here; its name stays for a pushed
       // screen's back button.
       .underRootHead {
-        RootHeadRow("History")
-          .frame(maxWidth: .infinity)
-          .background(ChromePalette.paper)
+        // Item 353 — the figures toggle at the head's right, where Chat stands its ✦ (its disc's edge on the
+        // lists' margin)
+        RootHeadRow("History") {
+          FiguresToggle(open: $figuresOpen)
+            .padding(.trailing, RootHead.side - 5)
+        }
+        .frame(maxWidth: .infinity)
+        .background(ChromePalette.paper)
       }
+      // Item 353 — every listed project's figures are read while the figures are open on the tab on screen
+      .task(id: figuresOpen && shown) { onNeed(.figures(wanted: figuresOpen && shown)) }
       .background(ChromePalette.paper.ignoresSafeArea())
       .navigationTitle("History")
       .toolbar(.hidden, for: .navigationBar)
@@ -111,8 +125,21 @@ public struct HistoryLedgerView: View {
     let awake = standing.isAwake
     let live = FieldHistoryModel.liveHeader(corpus, standing: standing)
     let ranked = FieldHistoryModel.projects(corpus.projects, rankedBy: rank)
+    let portfolio = FieldHistoryModel.portfolio(corpus.projects, sessions: corpus.sessionCount)
+    let costed = corpus.projects.contains { FieldHistoryModel.lifetimeCost($0) > 0 }
     return LazyVStack(alignment: .leading, spacing: 0) {
       scope(corpus, standing: standing)
+      if figuresOpen, !corpus.projects.isEmpty {
+        HistoryFiguresPanel(
+          portfolio: portfolio, projects: corpus.projects,
+          note: FieldHistoryModel.portfolioNote(portfolio, failed: projects.figuresFailed.count, awake: awake),
+          awake: awake
+        ) { id in
+          onNeed(.project(id: id))
+          router.path = [.project(id: id)]
+        }
+        .transition(.opacity)
+      }
       if corpus.projects.isEmpty {
         // fix7 — never "no project" while the door's index is not ready
         let empty = FieldHistoryModel.emptyLedger(
@@ -127,13 +154,16 @@ public struct HistoryLedgerView: View {
         }
         .padding(.horizontal, 16)
         GroupHead("Projects") { rankSegment }
-        LazyVStack(spacing: 0) {
+        LazyVStack(spacing: 3) {
           ForEach(ranked) { project in
             projectRow(project, corpus: corpus, awake: awake)
           }
         }
         .padding(.horizontal, 8)
-        Text("Spend over 30 days · the wash is scaled to \(ranked.first?.name ?? "the biggest project")")
+        Text(
+          costed
+            ? "Estimated cost, all time · the wash is scaled to \(FieldHistoryModel.costliest(corpus.projects)?.name ?? "the costliest project")"
+            : "Spend over 30 days · the wash is scaled to \(FieldHistoryModel.projects(corpus.projects, rankedBy: .spend).first?.name ?? "the biggest project")")
           .font(ChromeType.sans(11.5))
           .foregroundStyle(ChromePalette.inkFaint)
           .padding(.horizontal, HistoryParts.sidePadding)
@@ -204,7 +234,7 @@ public struct HistoryLedgerView: View {
 
   private var rankSegment: some View {
     HStack(spacing: 2) {
-      ForEach(FieldHistoryModel.Rank.allCases, id: \.self) { candidate in
+      ForEach([FieldHistoryModel.Rank.recent, .spend], id: \.self) { candidate in
         Button {
           withAnimation(FieldMotion.ease(0.3)) { rank = candidate }
         } label: {
@@ -301,7 +331,7 @@ public struct HistoryLedgerView: View {
       router.path = [.project(id: project.id)]
     } label: {
       HStack(alignment: .top, spacing: 12) {
-        Capsule().fill(color).opacity(0.5).frame(width: 3).frame(maxHeight: .infinity)
+        Capsule().fill(color).opacity(0.45).frame(width: 3).frame(maxHeight: .infinity)
         VStack(alignment: .leading, spacing: 0) {
           HStack(alignment: .center, spacing: 10) {
             Text(project.name)
@@ -309,7 +339,7 @@ public struct HistoryLedgerView: View {
               .foregroundStyle(ChromePalette.ink)
               .lineLimit(1)
             Spacer(minLength: 0)
-            AgentMarks(agents: project.agents, more: project.moreAgents)
+            AgentMarks(agents: project.agents, more: project.moreAgents, size: 15)
           }
           // PJ-7 — location is the desktops' marks in the path's slot (the
           // mock's corpus, which names no desktop, keeps its path)
@@ -328,16 +358,21 @@ public struct HistoryLedgerView: View {
               .padding(.top, 3)
           }
           HStack(alignment: .center, spacing: 10) {
-            if project.spark.isEmpty {
+            if !project.spark.isEmpty {
+              Sparkline(values: project.spark, color: color)
+            } else if project.lifetime == nil {
               // SP-6 — figures not read yet: the session count stands in,
               // honestly labelled, until `project.figures` answers
               Text("sessions")
                 .font(ChromeType.sans(11))
                 .foregroundStyle(ChromePalette.inkFaint)
-            } else {
-              Sparkline(values: project.spark, color: color)
             }
-            FigureText(figure: project.figure, unit: project.unit)
+            // Item 353 — the row's "how much" is the desktop's: lifetime estimated cost, once its figures are read
+            if let lifetime = project.lifetime {
+              SpendText(spend: lifetime.spend)
+            } else {
+              FigureText(figure: project.figure, unit: project.unit)
+            }
             Spacer(minLength: 0)
             LastWord(word: project.last, isLive: project.isLive, awake: awake)
           }
@@ -348,15 +383,30 @@ public struct HistoryLedgerView: View {
       .padding(.leading, 12)
       .padding(.trailing, 14)
       .padding(.vertical, 12)
-      .background {
-        // The wash: the project's colour, as much of it as its spend earns.
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .fill(color.opacity(0.14 * share))
+      .background(alignment: .leading) {
+        // The wash: the project's colour from the row's left, as WIDE as its spend earns against the costliest
+        // project's, fading as it goes (item 353: the desktop row's wash; it was the whole row at a strength).
+        GeometryReader { geometry in
+          RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(
+              LinearGradient(
+                stops: [
+                  .init(color: color.opacity(0.15), location: 0),
+                  .init(color: color.opacity(0.08), location: 0.64),
+                  .init(color: color.opacity(0), location: 1),
+                ], startPoint: .leading, endPoint: .trailing)
+            )
+            .frame(width: max(3, geometry.size.width * share))
+        }
       }
       .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
     .buttonStyle(HistoryRowStyle())
-    .accessibilityLabel("\(project.name), \(project.figure) \(project.unit.isEmpty ? "sessions" : project.unit + " tokens"), last \(project.last)")
+    .accessibilityLabel(
+      project.lifetime.map { lifetime in
+        let word = FieldHistoryModel.spendWord(lifetime.spend)
+        return "\(project.name), \(word.figure)\(word.unit) estimated cost, last \(project.last)"
+      } ?? "\(project.name), \(project.figure) \(project.unit.isEmpty ? "sessions" : project.unit + " tokens"), last \(project.last)")
   }
 
   // MARK: - Honest-missing: no desktop's door answers and nothing is cached

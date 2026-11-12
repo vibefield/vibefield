@@ -24,8 +24,11 @@ extension FieldHistoryModel {
   /// The ledger's token figure is the last thirty days (the record's "Spend
   /// over 30 days"), asked of `index.project` as its window.
   public static let figureWindowDays = 30
-  /// The sparkline's bars: one per day, the last fifteen (the record's own).
+  /// The sparkline's bars: fifteen (the record's own).
   public static let sparkDays = 15
+  /// Item 353 — the days one bar holds: two, so the fifteen bars are the last thirty days, the desktop's activity
+  /// shape (the room's `recentTokenBuckets`). They were the last fifteen days, one each.
+  public static let sparkBarDays = 2
   /// A turn whose prompt came this long after the previous turn ended wears a
   /// day pill (`11:31 · after 1h 19m`), the record's gap.
   public static let dayPillAfterMinutes = 60
@@ -79,19 +82,21 @@ extension FieldHistoryModel {
   }
 
   /// `now` · `40m` · `2h` · `yesterday` · `12d` — the last activity's word.
+  ///
+  /// Item 353 — the desktop's own rule (the room's `lastActive`), so a project reads `12h` on both: `now` under
+  /// ninety seconds, then minutes, hours up to a day, `yesterday` for the day after that, then days. It was the
+  /// calendar's before (an hour count only on the same calendar day), which read `yesterday` where the desktop read
+  /// `12h`.
   public static func lastWord(_ ms: Int64?, now: Date) -> String {
     guard let ms else { return "—" }
-    let minutes = recencyMinutes(ms, now: now)
-    if minutes < 2 { return "now" }
+    let seconds = max(0, Int(now.timeIntervalSince(date(ms))))
+    if seconds < 90 { return "now" }
+    let minutes = seconds / 60
     if minutes < 60 { return "\(minutes)m" }
     let hours = minutes / 60
-    if hours < 24, calendar.isDate(date(ms), inSameDayAs: now) { return "\(hours)h" }
-    if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
-      calendar.isDate(date(ms), inSameDayAs: yesterday)
-    {
-      return "yesterday"
-    }
-    return "\(max(1, minutes / (60 * 24)))d"
+    if hours < 24 { return "\(hours)h" }
+    let days = hours / 24
+    return days == 1 ? "yesterday" : "\(days)d"
   }
 
   /// `48s` · `2m 41s` · `1h 02m` — a span, the record's own spelling.
@@ -166,7 +171,10 @@ extension FieldHistoryModel {
     let total = heatmap.reduce(0) { $0 + $1.tokens }
     let word = tokensWord(total)
     let byDay = Dictionary(heatmap.map { ($0.day, $0.tokens) }, uniquingKeysWith: +)
-    let spark = lastDays(sparkDays, now: now).map { byDay[$0] ?? 0 }
+    let sparkDay = lastDays(sparkDays * sparkBarDays, now: now).map { byDay[$0] ?? 0 }
+    let spark = stride(from: 0, to: sparkDay.count, by: sparkBarDays).map { start in
+      sparkDay[start..<min(start + sparkBarDays, sparkDay.count)].reduce(0, +)
+    }
     let peak = max(spark.max() ?? 0, 1)
     let messages = contribution.reduce(0) { $0 + $1.messages }
     let activeDays = heatmap.filter { $0.tokens > 0 }.count
@@ -187,7 +195,8 @@ extension FieldHistoryModel {
       recencyMinutes: project.recencyMinutes, agents: agentShares(sessions),
       moreAgents: max(0, Set(sessions.compactMap(\.provider)).count - 3),
       spark: spark.map { Int(($0 / peak * 12).rounded()) }, stats: stats,
-      ribbon: ribbon(from: heatmap, now: now), ink: project.ink, devices: project.devices, places: project.places)
+      ribbon: ribbon(from: heatmap, now: now), ink: project.ink, devices: project.devices, places: project.places,
+      lifetime: project.lifetime)
   }
 
   /// The last `count` calendar days, oldest first, as `YYYY-MM-DD`.

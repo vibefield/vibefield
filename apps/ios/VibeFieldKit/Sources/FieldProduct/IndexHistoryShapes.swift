@@ -214,12 +214,18 @@ public struct IndexHeatmapDay: Sendable, Equatable, Decodable {
   public let day: String
   public let tokens: Double
   public let costMicroUsd: Double?
+  /// Item 353 — tokens the price list could not price, and replies whose output was never recorded: with either,
+  /// `costMicroUsd` is a lower bound (the room's `coverage`).
+  public let unpricedTokens: Double
+  public let unrecordedOutput: Double
 
   public init(json: JSONValue) throws {
     var object = try WireObject(shape: "IndexHeatmapDay", value: json)
     day = try object.requiredString("day")
     tokens = object.double("tokens") ?? 0
     costMicroUsd = object.double("costMicroUsd")
+    unpricedTokens = object.double("unpricedTokens") ?? 0
+    unrecordedOutput = object.double("unrecordedOutput") ?? 0
   }
 
   public init(from decoder: any Decoder) throws {
@@ -254,6 +260,9 @@ public struct IndexContribution: Sendable, Equatable, Decodable {
   public let messages: Double
   public let tokens: Double
   public let costMicroUsd: Double?
+  /// Item 353 — as `IndexHeatmapDay`'s: what makes the cost a lower bound.
+  public let unpricedTokens: Double
+  public let unrecordedOutput: Double
   /// PJ-4 — the desktop whose index recorded it (`project.figures`' rows)
   public let device: String?
 
@@ -268,6 +277,8 @@ public struct IndexContribution: Sendable, Equatable, Decodable {
     messages = object.double("messages") ?? 0
     tokens = object.double("tokens") ?? 0
     costMicroUsd = object.double("costMicroUsd")
+    unpricedTokens = object.double("unpricedTokens") ?? 0
+    unrecordedOutput = object.double("unrecordedOutput") ?? 0
   }
 
   public init(from decoder: any Decoder) throws {
