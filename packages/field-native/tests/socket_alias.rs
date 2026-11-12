@@ -28,14 +28,23 @@ fn long_root(base: &Path) -> String {
 fn entries(dir: &Path) -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(dir)
         .expect("read_dir")
-        .map(|entry| entry.expect("entry").file_name().to_string_lossy().into_owned())
+        .map(|entry| {
+            entry
+                .expect("entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
         .collect();
     names.sort();
     names
 }
 
 fn private_dir(path: &Path) {
-    std::fs::DirBuilder::new().mode(0o700).create(path).expect("mkdir 0700");
+    std::fs::DirBuilder::new()
+        .mode(0o700)
+        .create(path)
+        .expect("mkdir 0700");
 }
 
 #[test]
@@ -49,8 +58,14 @@ fn a_root_over_the_line_gets_a_0700_folder_of_ours_and_a_link_to_its_run_dir() {
         std::fs::symlink_metadata(parent.path().join(format!("vf-{uid}"))).expect("folder");
     assert!(folder.is_dir() && !folder.file_type().is_symlink());
     assert_eq!(folder.mode() & 0o777, 0o700);
-    assert!(std::fs::symlink_metadata(&dir).expect("alias").file_type().is_symlink());
-    assert_eq!(utf8(&std::fs::read_link(&dir).expect("readlink")), native_run_dir_for(&root));
+    assert!(std::fs::symlink_metadata(&dir)
+        .expect("alias")
+        .file_type()
+        .is_symlink());
+    assert_eq!(
+        utf8(&std::fs::read_link(&dir).expect("readlink")),
+        native_run_dir_for(&root)
+    );
 }
 
 #[test]
@@ -64,11 +79,17 @@ fn a_root_that_fits_returns_its_real_run_dir_and_makes_nothing() {
 #[test]
 fn refuses_a_folder_that_is_a_link() {
     let uid = own_uid();
-    let (base, parent, elsewhere) =
-        (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let (base, parent, elsewhere) = (
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+    );
     symlink(elsewhere.path(), parent.path().join(format!("vf-{uid}"))).expect("symlink");
     let refusal = ensure(uid, &long_root(base.path()), utf8(parent.path())).expect_err("refused");
-    assert!(matches!(refusal, AliasRefusal::FolderIsLink(_)), "{refusal:?}");
+    assert!(
+        matches!(refusal, AliasRefusal::FolderIsLink(_)),
+        "{refusal:?}"
+    );
 }
 
 #[test]
@@ -105,9 +126,16 @@ fn refuses_a_file_where_the_alias_belongs() {
     let (base, parent) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let root = long_root(base.path());
     private_dir(&parent.path().join(format!("vf-{uid}")));
-    std::fs::write(socket_alias_for(uid, &root, utf8(parent.path())), "not a link").expect("write");
+    std::fs::write(
+        socket_alias_for(uid, &root, utf8(parent.path())),
+        "not a link",
+    )
+    .expect("write");
     let refusal = ensure(uid, &root, utf8(parent.path())).expect_err("refused");
-    assert!(matches!(refusal, AliasRefusal::AliasNotLink(_)), "{refusal:?}");
+    assert!(
+        matches!(refusal, AliasRefusal::AliasNotLink(_)),
+        "{refusal:?}"
+    );
 }
 
 // S2's three rows (VF-PM 12:06Z): the parent's own safety, a non-directory in the folder's place, a socket in the
@@ -132,7 +160,10 @@ fn refuses_a_file_where_the_folder_belongs() {
     let (base, parent) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     std::fs::write(parent.path().join(format!("vf-{uid}")), "not a folder").expect("write");
     let refusal = ensure(uid, &long_root(base.path()), utf8(parent.path())).expect_err("refused");
-    assert!(matches!(refusal, AliasRefusal::FolderNotDir(_)), "{refusal:?}");
+    assert!(
+        matches!(refusal, AliasRefusal::FolderNotDir(_)),
+        "{refusal:?}"
+    );
 }
 
 #[test]
@@ -144,14 +175,20 @@ fn refuses_a_socket_where_the_alias_belongs() {
     let alias = socket_alias_for(uid, &root, utf8(parent.path()));
     let _listener = UnixListener::bind(&alias).expect("bind a socket in the alias's place");
     let refusal = ensure(uid, &root, utf8(parent.path())).expect_err("refused");
-    assert!(matches!(refusal, AliasRefusal::AliasNotLink(_)), "{refusal:?}");
+    assert!(
+        matches!(refusal, AliasRefusal::AliasNotLink(_)),
+        "{refusal:?}"
+    );
 }
 
 #[test]
 fn replaces_an_alias_pointing_elsewhere_by_a_rename_inside_our_folder_removing_nothing_else() {
     let uid = own_uid();
-    let (base, parent, elsewhere) =
-        (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let (base, parent, elsewhere) = (
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+    );
     let root = long_root(base.path());
     let folder = parent.path().join(format!("vf-{uid}"));
     private_dir(&folder);
@@ -159,7 +196,10 @@ fn replaces_an_alias_pointing_elsewhere_by_a_rename_inside_our_folder_removing_n
     let alias = socket_alias_for(uid, &root, utf8(parent.path()));
     symlink(elsewhere.path(), &alias).expect("symlink");
     ensure(uid, &root, utf8(parent.path())).expect("usable");
-    assert_eq!(utf8(&std::fs::read_link(&alias).expect("readlink")), native_run_dir_for(&root));
+    assert_eq!(
+        utf8(&std::fs::read_link(&alias).expect("readlink")),
+        native_run_dir_for(&root)
+    );
     let scope = alias.rsplit('/').next().expect("scope").to_owned();
     let mut want = vec!["neighbour".to_owned(), scope];
     want.sort();
@@ -170,13 +210,20 @@ fn replaces_an_alias_pointing_elsewhere_by_a_rename_inside_our_folder_removing_n
 #[test]
 fn says_when_it_replaced_a_link_pointing_elsewhere_and_not_when_it_made_or_kept_its_own() {
     let uid = own_uid();
-    let (base, parent, elsewhere) =
-        (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let (base, parent, elsewhere) = (
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+    );
     let root = long_root(base.path());
     let alias = socket_alias_for(uid, &root, utf8(parent.path()));
     let made = ensure_outcome(uid, &root, utf8(parent.path())).expect("usable");
     assert_eq!((made.dir.as_str(), made.replaced), (alias.as_str(), false));
-    assert!(!ensure_outcome(uid, &root, utf8(parent.path())).expect("usable").replaced);
+    assert!(
+        !ensure_outcome(uid, &root, utf8(parent.path()))
+            .expect("usable")
+            .replaced
+    );
     let moved = parent.path().join(format!("vf-{uid}")).join("moved");
     symlink(elsewhere.path(), &moved).expect("symlink");
     std::fs::rename(&moved, &alias).expect("rename over the alias");
@@ -199,7 +246,10 @@ fn two_spellings_of_one_root_reach_the_same_socket_through_two_links() {
     let b = ensure(uid, utf8(&upper), utf8(parent.path())).expect("usable");
     assert_ne!(a, b);
     // the same directory by identity, not spelling (a canonical path may keep the case it is given)
-    let (at_a, at_b) = (std::fs::metadata(&a).expect("a"), std::fs::metadata(&b).expect("b"));
+    let (at_a, at_b) = (
+        std::fs::metadata(&a).expect("a"),
+        std::fs::metadata(&b).expect("b"),
+    );
     assert_eq!((at_a.dev(), at_a.ino()), (at_b.dev(), at_b.ino()));
 }
 
@@ -211,6 +261,12 @@ fn is_idempotent_a_second_ensure_keeps_the_same_link() {
     let first = ensure(uid, &root, utf8(parent.path())).expect("usable");
     assert_eq!(first, socket_alias_for(uid, &root, utf8(parent.path())));
     let inode = std::fs::symlink_metadata(&first).expect("alias").ino();
-    assert_eq!(ensure(uid, &root, utf8(parent.path())).expect("usable"), first);
-    assert_eq!(std::fs::symlink_metadata(&first).expect("alias").ino(), inode);
+    assert_eq!(
+        ensure(uid, &root, utf8(parent.path())).expect("usable"),
+        first
+    );
+    assert_eq!(
+        std::fs::symlink_metadata(&first).expect("alias").ino(),
+        inode
+    );
 }

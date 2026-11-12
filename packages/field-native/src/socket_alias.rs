@@ -28,7 +28,11 @@ pub enum AliasRefusal {
     /// `<parent>/vf-<uid>` is neither a directory nor a link
     FolderNotDir(String),
     /// `<parent>/vf-<uid>` belongs to another uid
-    FolderNotOurs { path: String, owner: u32, wanted: u32 },
+    FolderNotOurs {
+        path: String,
+        owner: u32,
+        wanted: u32,
+    },
     /// `<parent>/vf-<uid>`'s mode is not exactly 0700
     FolderOpen { path: String, mode: u32 },
     /// something that is not a link sits where the alias belongs
@@ -206,5 +210,7 @@ pub fn ensure_outcome(uid: u32, data_root: &str, parent: &str) -> Result<Outcome
             "{folder}: no free temp name for the alias's replacement"
         )));
     }
-    Err(AliasRefusal::Io(format!("{alias} kept changing while it was made")))
+    Err(AliasRefusal::Io(format!(
+        "{alias} kept changing while it was made"
+    )))
 }

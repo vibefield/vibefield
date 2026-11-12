@@ -71,8 +71,14 @@ fn unix_endpoint_law_matches_the_cross_language_fixture() {
     )
     .expect("read endpoint.vector.json");
     let fixture: Value = serde_json::from_str(&raw).expect("parse endpoint.vector.json");
-    let vectors = fixture["unixVectors"].as_array().expect("unixVectors array");
-    assert_eq!(vectors.len(), 6, "macFits, edge103, edge104, devShape, mac24, mac255");
+    let vectors = fixture["unixVectors"]
+        .as_array()
+        .expect("unixVectors array");
+    assert_eq!(
+        vectors.len(),
+        6,
+        "macFits, edge103, edge104, devShape, mac24, mac255"
+    );
     assert_eq!(ep::longest_socket_file(), "termframe.4294967295.sock");
     let socket_files: Vec<&str> = field_native::registries::layout::ALL
         .iter()

@@ -6347,7 +6347,10 @@ mod tests {
                 let states = shared.class_states.lock().unwrap();
                 states.len() == 2
                     && states.values().all(|state| {
-                        matches!(state, ClassPlaneState::Failed(_) | ClassPlaneState::Crashed(_))
+                        matches!(
+                            state,
+                            ClassPlaneState::Failed(_) | ClassPlaneState::Crashed(_)
+                        )
                     })
             };
             if settled {
@@ -6371,7 +6374,10 @@ mod tests {
                         state.detail()
                     );
                 };
-                assert!(detail.contains(&worst), "{label}: the detail names the path: {detail}");
+                assert!(
+                    detail.contains(&worst),
+                    "{label}: the detail names the path: {detail}"
+                );
                 let bytes = format!("{} bytes", worst.len());
                 assert!(detail.contains(&bytes), "{label}: and its bytes: {detail}");
             }
@@ -6382,7 +6388,9 @@ mod tests {
             "a config dead end is Degraded, not a crash claim"
         );
         assert_eq!(
-            shared.next_instance.load(std::sync::atomic::Ordering::Relaxed),
+            shared
+                .next_instance
+                .load(std::sync::atomic::Ordering::Relaxed),
             0,
             "no cell number is taken for a home no cell can bind in"
         );

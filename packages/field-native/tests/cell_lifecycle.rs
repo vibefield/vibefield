@@ -826,17 +826,31 @@ fn a_cell_on_a_200_byte_root_says_hello_through_the_alias() {
     let dir = field_native::socket_alias::ensure(uid, &root, parent.path().to_str().expect("utf8"))
         .expect("usable");
     let (mut command, control, frame) = cell_command(std::path::Path::new(&dir), 1);
-    let mut child = command.stderr(Stdio::null()).spawn().expect("spawn field-terminal-host");
+    let mut child = command
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn field-terminal-host");
     let mut stdin = child.stdin.take().expect("stdin");
     let mut lines = BufReader::new(child.stdout.take().expect("stdout")).lines();
-    writeln!(stdin, "{}", serde_json::json!({ "token": "test-token-345" })).expect("bootstrap");
+    writeln!(
+        stdin,
+        "{}",
+        serde_json::json!({ "token": "test-token-345" })
+    )
+    .expect("bootstrap");
     let hello: field_native::cell::CellHello =
         serde_json::from_str(&lines.next().expect("a hello line").expect("read hello"))
             .expect("hello parses");
-    assert_eq!(hello.control, control, "the cell bound the alias's endpoint");
+    assert_eq!(
+        hello.control, control,
+        "the cell bound the alias's endpoint"
+    );
     assert_eq!(hello.frame, frame);
     assert!(control.len() <= field_native::endpoints::SUN_PATH_MAX_BYTES);
     drop(stdin);
     let status = wait_exit(child, Duration::from_secs(10));
-    assert!(status.success(), "a requested drain exits 0, got {status:?}");
+    assert!(
+        status.success(),
+        "a requested drain exits 0, got {status:?}"
+    );
 }

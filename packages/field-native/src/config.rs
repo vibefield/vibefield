@@ -283,7 +283,11 @@ impl SocketHome {
         {
             let root = self.data_root.as_deref()?;
             let uid = crate::socket_alias::own_uid();
-            Some(crate::endpoints::worst_unix_endpoint(uid, root, &self.alias_parent))
+            Some(crate::endpoints::worst_unix_endpoint(
+                uid,
+                root,
+                &self.alias_parent,
+            ))
         }
         #[cfg(not(unix))]
         {
