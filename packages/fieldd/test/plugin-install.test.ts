@@ -19,6 +19,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
+import { PluginArtifactStore } from "../src/plugin-artifact-store";
 import { semverNewer } from "../src/plugin-install";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { nativeEndpoint } from "./native-harness";
@@ -221,5 +222,95 @@ describe("semverNewer", () => {
     expect(semverNewer("1.0.0", "1.0.0")).toBe(false);
     expect(semverNewer("0.9.9", "1.0.0")).toBe(false);
     expect(semverNewer("2.0.0", "1.9.9")).toBe(true);
+  });
+});
+
+// Item 279 (S2) — the boot's side. With no list key configured, fieldd hands its registry no
+// installed root and leaves that folder as it finds it; with a key, the folder is read and cleaned
+// as before. Each boot is in-process, on the test's own temp data folder, never a child.
+const PLACED_ID = "vibefield.fixture.placed";
+
+async function bootAt(
+  keyed: boolean,
+  place: (installedRoot: string) => void | Promise<void>,
+): Promise<{ daemon: FielddDaemon; installedRoot: string }> {
+  const dataDir = mkdtempSync(join(tmpdir(), "vf-install-nokey-"));
+  cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+  mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+  writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+  const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+  await mock.start();
+  cleanup.push(() => mock.stop());
+  const installedRoot = join(dataDir, "plugins", "installed");
+  mkdirSync(installedRoot, { recursive: true });
+  await place(installedRoot);
+  const daemon = await bootstrap({
+    dataDir,
+    controlPort: 0,
+    ...(keyed ? { registryPublicKey: generateRegistryKeypair().publicKey } : {}),
+  });
+  cleanup.push(() => daemon.stop());
+  return { daemon, installedRoot };
+}
+
+/** A manifest-only object plugin published by the store itself: a pointer and a marked revision,
+ * no provenance file. Manifest-only, so the keyed boot starts no plugin service. */
+async function placePublished(installedRoot: string): Promise<void> {
+  const objectType = `${PLACED_ID}.card`;
+  const manifest = {
+    manifestVersion: 1,
+    id: PLACED_ID,
+    version: "0.1.0",
+    title: PLACED_ID,
+    engines: { app: ">=0.0.0", contracts: "^0.1.0" },
+    entries: { renderer: "./renderer.js" },
+    activation: [`onObject:${objectType}`],
+    capabilities: [],
+    contributes: {
+      objects: [
+        {
+          type: objectType,
+          title: "Card",
+          schemaVersion: 1,
+          size: { w: 200, h: 120 },
+          provides: ["desk.object"],
+          binding: { kind: "card" },
+        },
+      ],
+    },
+  };
+  const store = new PluginArtifactStore(installedRoot);
+  const staged = await store.stage({
+    pluginId: PLACED_ID,
+    artifactSha256: `sha256:${"d".repeat(64)}`,
+    prepare: async (root) => {
+      writeFileSync(join(root, "vibefield.plugin.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+      writeFileSync(join(root, "renderer.js"), "export {};\n");
+    },
+  });
+  await store.commit(staged, null, 1);
+}
+
+describe("item 279 — with no list key, boot leaves the installed folder alone", () => {
+  it("with no list key, a published install in the installed folder gives no row and no problem; with a key it is a row", async () => {
+    const keyless = await bootAt(false, placePublished);
+    expect(keyless.daemon.plugins.get(PLACED_ID)).toBeUndefined();
+    expect(keyless.daemon.plugins.snapshot().problems).toEqual([]);
+    await keyless.daemon.stop();
+
+    const keyed = await bootAt(true, placePublished);
+    expect(keyed.daemon.plugins.get(PLACED_ID)?.id).toBe(PLACED_ID);
+  });
+
+  it("with no list key, boot leaves an unpublished staging folder as found; with a key, boot removes it", async () => {
+    const leaveStaging = (installedRoot: string): void => {
+      mkdirSync(join(installedRoot, ".staging-left"));
+    };
+    const keyless = await bootAt(false, leaveStaging);
+    expect(existsSync(join(keyless.installedRoot, ".staging-left"))).toBe(true);
+    await keyless.daemon.stop();
+
+    const keyed = await bootAt(true, leaveStaging);
+    expect(existsSync(join(keyed.installedRoot, ".staging-left"))).toBe(false);
   });
 });
