@@ -7693,6 +7693,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **The pill at the foot** is History's arrival pill (36 pt, glass): `3 new ↓` while rows have arrived below the
     screen, and `Latest ↓` when nothing is unread and the end is more than a screen below. A press returns to the
     end, and the document follows again.
+  - **The rows above arrive as you read up** (362b). Within one screen of the top the rows above are read in by
+    themselves and land above your place. One approach reads on until what it brought holds six messages (a prompt,
+    or a reply with words or an attachment), in at most five asks of forty rows: the room's rule, so a stretch of
+    tool rows alone never lands as "earlier" with no message in it. One read at a time, and none in a loop: a read
+    that left the rows above where they were is not asked again until you press. The rule at the top says where the
+    rows above stand: `Earlier` (a press reads them too) · `Reading earlier…` · `Earlier · needs studio` while their
+    desktop does not answer · `Session start · Sat 12 Sep` at the record's top. The room's pull to reveal is not
+    kept: on a phone the rows land by themselves. A document a search landed in reads nothing in until you move it.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
