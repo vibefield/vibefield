@@ -5271,12 +5271,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   first. **Remove… takes it off every desktop**, its settings and data kept (MK-E10, ruled by James
   2026-11-11 06:48:31Z at MK's lean: "everywhere, with settings and data kept"), and **Remove it and
   its data…** "stays the separate red, two-step act" (the lean's words); it reaches this desktop
-  alone, and whether it also deletes the plugin's data on your other desktops is *open, James's call
-  (MK-0b, 2026-11-11; VF-PM 07:23:04Z)*. Today fieldd's uninstall takes it off this desktop and out
-  of the set your desktops share: a desktop that has not installed it yet no longer will, and one
-  that has keeps it, since the reconciler installs and never removes (`install-reconciler.ts`),
-  though spec §16.6 says dropping an entry uninstalls code everywhere; teaching it to remove is
-  MK-2's, after its custody note. *To be built by track MK. Until then* Settings → Plugins' registry
+  alone: your other desktops remove the plugin and keep their copy of its data, and nothing deletes
+  data on a desktop you aren't at (*ruled by James 2026-11-11 22:34:05Z, MK-O4: "This desktop
+  alone"*). Today fieldd's uninstall takes it off this desktop and out of the set your desktops
+  share, and every desktop that has it removes it too, its data kept (`install-reconciler.ts`
+  `removeHere`, with `removeData: false`), as spec §16.6 says for code. *Corrected 2026-11-12
+  (MK-O4's plan):* this said a desktop that had it kept it, "since the reconciler installs and never
+  removes", and that teaching it to remove was MK-2's; MK-2d built that removal, held by
+  `install-reconciler.test.ts` ("E10 across desktops" and "E10 on a booted daemon"). *To be built by
+  track MK. Until then* Settings → Plugins' registry
   and sideloaded rows carry a **More +** disclosure revealing **Uninstall** (keeps data) and
   **Remove plugin and data** (the danger tone), each a two-step confirm with Cancel beside it:
   "Uninstall ‹title›?" says "Plugin data is preserved, so reinstalling can restore its settings.";
@@ -9036,6 +9039,11 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   which asks **Remove ‹plugin› and its data?** · **Cancel** · **Remove data**. Remove… takes the set off every
   desktop, its settings and data kept, and **Remove it and its data…** "stays the separate red, two-step act"
   (MK-E10, the lean's words).
+  *Added 2026-11-12 (James's MK-O4 pick, 2026-11-11 22:34:05Z: "This desktop alone"), ‹draft› for his eye:* under
+  **Remove ‹plugin› and its data?**, "This deletes its settings and data on ‹this desktop›. It can't be undone.
+  ‹Your other desktops› remove ‹plugin› too, and keep their copy of its data." ‹this desktop› and ‹your other
+  desktops› are their names, as his page drew them ("This Mac"; "mini and studio"); with no other desktop, the
+  second sentence is not said.
   *Added 2026-11-11 (MK-4a's code; VF-PM 12:07:40Z), MK's words, ‹draft›, for James's eye:*
   - Installed's line, until the plugin's page (MK-4c), says no place: "3 objects · 1.2.0", "1 object · 0.1.0". It
     differs from the ruled line above, which says where a set hangs ("4 objects · Things, Tools · 1.0.0"; "Hangs under
