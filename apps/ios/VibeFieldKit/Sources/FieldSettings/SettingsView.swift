@@ -188,6 +188,10 @@ public struct SettingsView: View {
       AppearancePage(look: $look)
     case .terminal:
       TerminalSettingsPage(appearance: $terminal)
+    #if DEBUG || VF_TESTFLIGHT
+      case .notifications:
+        NotificationsPage()
+    #endif
     case .lock:
       if let lock {
         LockPage(lock: lock)

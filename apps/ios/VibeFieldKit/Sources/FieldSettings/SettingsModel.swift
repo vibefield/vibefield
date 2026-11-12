@@ -235,6 +235,17 @@ public enum SettingsModel {
     }
   }
 
+  // MARK: - This phone
+
+  /// RB-1 — This phone's rows, in order (DESIGN.md §8 "The phone's Settings", amended 2026-11-12): Appearance,
+  /// Terminal, then Notifications in every build but the review build (`SettingsBuild`), then Lock where a lock is
+  /// held (WI-3). RB-1's red: a stub that leaves Notifications out.
+  public static func thisPhoneRows(build: SettingsBuild, hasLock: Bool) -> [SettingsRoute] {
+    var rows: [SettingsRoute] = [.appearance, .terminal]
+    if hasLock { rows.append(.lock) }
+    return rows
+  }
+
   // MARK: - About
 
   /// `0.1 (4)` — the bundle's own version and build.

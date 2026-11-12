@@ -136,6 +136,11 @@ public enum SettingsRoute: Hashable, Sendable {
   case desktop(String)
   case appearance
   case terminal
+  #if DEBUG || VF_TESTFLIGHT
+    /// RB-1 — This phone › Notifications, dotted Not yet: drawn in TestFlight and development builds only
+    /// (`SettingsBuild`), so the build submitted for App Review has no such route.
+    case notifications
+  #endif
   /// WI-3 — This phone › Lock.
   case lock
   case about
