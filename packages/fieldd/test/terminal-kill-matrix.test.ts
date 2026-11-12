@@ -88,6 +88,13 @@ async function spawnNative(dir?: string, env: Record<string, string> = {}): Prom
       // environment:{mode:"inherit"} spawns must lose them).
       FIELD_SMUGGLE: "leak-me",
       FIELDD_SMUGGLE: "leak-me-too",
+      // Item 355 — ghosttea's own classes: one name under each `GHOSTTEA_` prefix its strip
+      // lists (`GHOSTTEA_TRUFFLE_`, `GHOSTTEA_EXTERNAL_`), which must never reach a PTY, and
+      // one `GHOSTTEA_` name it does NOT list, which must reach a free shell. Row 6 reads the
+      // three by their whole names, so it never depends on what the runner exported.
+      GHOSTTEA_TRUFFLE_SMUGGLE: "leak-me-three",
+      GHOSTTEA_EXTERNAL_SMUGGLE: "leak-me-four",
+      GHOSTTEA_GHOSTTY_VT_BAIT: "kept-by-design",
       // WIN-6 / G13 bait: a CASE-VARIANT of a stripped prefix. On unix this is a
       // genuinely different (non-FIELD_) var; on Windows env is case-insensitive,
       // so it IS a FIELD_ var — and ghosttea's case-sensitive `starts_with` strip
@@ -956,16 +963,37 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       });
       // the bait planted in field-native's own environment never reaches a PTY;
       // ordinary vars do (inherit-minus-strip, NF-D6). SCOPE HONESTY (review):
-      // this proves the PREFIX classes (FIELD_/FIELDD_/GHOSTTEA_/...) — the
-      // upstream strip is an exact-prefix list, so a NON-prefixed secret in the
-      // daemon's env would pass into inherit-mode shells. That is spec-sanctioned
-      // (EL7 registers prefixes precisely so secrets are namable), not proof
-      // that arbitrary secrets can't ride the daemon env.
+      // this proves the classes it plants bait for (`FIELD_`, `FIELDD_`, `GHOSTTEA_TRUFFLE_`,
+      // `GHOSTTEA_EXTERNAL_`) — the upstream strip is a list of names and prefixes, so a
+      // secret in the daemon's env that matches none of them would pass into inherit-mode
+      // shells. That is spec-sanctioned (EL7 registers prefixes precisely so secrets are
+      // namable), not proof that arbitrary secrets can't ride the daemon env.
+      // *Corrected 2026-11-12 (item 355): this said "this proves the PREFIX classes
+      // (FIELD_/FIELDD_/GHOSTTEA_/...)" and called the strip "an exact-prefix list", and the
+      // row asserted `not.toContain("GHOSTTEA_")` with no bait planted. `GHOSTTEA_` is not a
+      // prefix anything strips. ghosttea removes ten names and three prefixes (its session.rs:
+      // PRIVATE_SERVICE_ENVIRONMENT_KEYS and PRIVATE_SERVICE_ENVIRONMENT_PREFIXES), and
+      // VibeField registers `FIELD_` and `FIELDD_` (ENV_PREFIXES). A `GHOSTTEA_` name that is
+      // none of those passes into a free shell, by design. The bare match was green only
+      // while the runner exported no such name: it went red on a host that had exported
+      // ghosttea-vt-sys's build variables.*
       expect(env).not.toContain("FIELD_SMUGGLE");
       expect(env).not.toContain("FIELDD_SMUGGLE");
-      expect(env).not.toContain("GHOSTTEA_");
+      // Only the three planted names are compared, so a red prints none of the pane's
+      // environment: the two under a stripped prefix are gone, the third is there.
+      const ghostteaBait = [
+        "GHOSTTEA_TRUFFLE_SMUGGLE",
+        "GHOSTTEA_EXTERNAL_SMUGGLE",
+        "GHOSTTEA_GHOSTTY_VT_BAIT",
+      ];
+      const reached = env
+        .split(/\r?\n/)
+        .map((line) => line.split("=", 1)[0] ?? "")
+        .filter((name) => ghostteaBait.includes(name));
+      expect(reached).toEqual(["GHOSTTEA_GHOSTTY_VT_BAIT"]);
       // an ordinary (non-prefixed) var survives the strip: HOME on unix, the user
-      // profile path on Windows (the strip is exact-prefix, so both are untouched).
+      // profile path on Windows (the strip matches names and prefixes, so both are untouched).
+      // *Corrected 2026-11-12 (item 355): this said "the strip is exact-prefix".*
       expect(env).toContain(WIN ? "USERPROFILE=" : "HOME=");
       // item 317: the suite's HISTFILE (vitest.config.ts) reaches a real pane by that same road,
       // so a test's sh saves no history into the runner's home. Only the HISTFILE lines are
