@@ -113,14 +113,20 @@ Run from the repository root:
 export ASC_KEY_ID=XXXXXXXXXX
 export ASC_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
-# Each release is two archives of the same code, each with its own build number:
-# the review build for App Review, and the TestFlight build with TestFlight's own
-# rows. The archive signs with Xcode's account; the key is read at upload only.
+# Build 6 is one archive of the review kind, for App Review and internal TestFlight
+# alike. The archive signs with Xcode's account; the key is read at upload only.
+bash apps/ios/scripts/testflight.sh archive 6 review
+# Stop the agents running as you (the helper refuses while one runs), then upload it.
+bash apps/ios/scripts/testflight.sh upload 6 store
+
+# From the next release, each release is two archives of the same code, each with
+# its own build number: the review build for App Review, and the TestFlight build
+# with TestFlight's own rows.
 bash apps/ios/scripts/testflight.sh archive 7 review
 bash apps/ios/scripts/testflight.sh archive 8 testflight
 
-# Stop the agents running as you (the helper refuses while one runs), then upload
-# the review archive for the App Store and external TestFlight ...
+# With the agents stopped, upload the review archive for the App Store and external
+# TestFlight ...
 bash apps/ios/scripts/testflight.sh upload 7 store
 # ... and the TestFlight archive for internal TestFlight only.
 bash apps/ios/scripts/testflight.sh upload 8 internal
@@ -133,6 +139,9 @@ archive kinds land (VF-PM, 2026-11-12): one archive, uploaded with `upload 6 sto
 App Review and internal TestFlight alike, and that command stays good after kinds land:
 an archive with no kind goes to the store when its app carries no TestFlight-only page.
 From build 7 the helper takes a kind, so the two numbers are 7 and 8.
+*Corrected 2026-11-12: build 6 was not archived before kinds landed. From this commit:
+`bash apps/ios/scripts/testflight.sh archive 6 review`, then `upload 6 store`.* The
+block above showed builds 7 and 8's four commands alone.
 
 *Corrected 2026-11-05 (LP-4):* this block said "Builds 1–3 are archived and build 3
 is uploaded. Use 4, 5, ... for new builds" and showed `archive 4` / `upload 4`.
@@ -159,6 +168,8 @@ archive whose app carries none of them, so the bytes sent to App Review decide. 
 archive made before kinds has no `.kind`: it uploads `internal`, and `store` when its
 app carries none of them (so `upload 6 store` stays good). A `testflight` archive
 never goes to `store`.
+*Corrected 2026-11-12: build 6 was not archived before kinds landed. From this commit:
+`bash apps/ios/scripts/testflight.sh archive 6 review`, then `upload 6 store`.*
 
 There are two exports of the same archive, chosen at upload:
 
@@ -391,9 +402,11 @@ rounded corners.
 > shares is writable by default (QW1, James 2026-10-28). There is no mesh control and no **CONNECT**: the mesh sheet
 > retired at IOS-8b (2026-09-23), and Connect and Disconnect on 2026-10-18, because a signed-in phone stays
 > connected by itself. A phone signs in from the Field page's welcome, **Continue with Tailscale**, in iOS's own
-> sign-in sheet, or by **Scan the code on your Mac** (TS-7); its account corner holds Sign out and Settings…. On
+> sign-in sheet, or by **Scan the code on your computer** (TS-7); its account corner holds Sign out and Settings…. On
 > main the field's agents come from your desktops (IOS-4b), History is built (IOS-9, PJ-7), and a project's colour is
 > its ink (PJ-7). Write steps 2–3 and the limits again with the next build's notes.
+> *Corrected 2026-11-12 (item 347): this said **Scan the code on your Mac**; the phone's button says
+> **Scan the code on your computer**, as it has since WI-1.*
 
 1. Install Apple's [TestFlight](https://testflight.apple.com/) on the iPhone.
    Accept your internal tester invitation on that device, then install VibeField.
