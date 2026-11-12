@@ -7997,6 +7997,25 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - The drawing's first-use hint, "Hold your face for your agents' usage", is not drawn: it was not a ruled mark
     ‹for James›.
   - The desktop's half is §8 "Godview's profiles column".
+- **The roots' heads** (item 350; James, 2026-11-12, on his iPhone 14 Pro). History's and Chat's roots wear no
+  system bar. Each has a head in the band Field's Stories row stands in: its top the row's (56 on an island phone, §8
+  "The phone's Stories row") and 44 tall, a circle's. So the view circles, **History**, **Chat** and Chat's ✦ stand on
+  one line across the three tabs. The title is 34 bold in the ink, 20 from the left, the lists' margin; Chat's ✦ keeps
+  its 44 button, its glyph's right edge 20 from the right. History's head stands on the page's paper and the ledger
+  scrolls under it. Chat's stands on the list's paper; on the night it is clear and wears the night's ink. A pushed
+  screen keeps the system's bar, and its back button still says the root's name.
+  - His words: 10:22:37Z, "the history and chat has too much while gap at top which should be reduced as well";
+    10:50:05Z, "add back titles, but this time make sure the view switch buttons in field view, title in history,
+    chat in chat view, spark button in chat view, all top aligned"; 10:58:14Z, of the build that does it, "All
+    aligned", and of the status bar on Chat's night, "Readable".
+  - The roots are laid out on the screen's own measures (the band's top; at the foot, the home indicator's inset
+    with the bar's clearance), never on the safe area read inside the page. A root stands in a `NavigationStack`,
+    whose insets the system reads from where the page is drawn, and the card the tabs stand in (§8 "The phone's
+    Apps", "As you pull") is drawn lower and smaller as it is pulled: a page laid out on those insets slides inside
+    its card (his 10:59:12Z: "top content not properly shrinked and moved"; 11:08:37Z, of the fix, "Both move as
+    one").
+  - *Before:* the system's large titles, which stand a bar's height under the status bar's line, lower than Field's
+    row.
 - **The phone's Chat** (track IOS, ruled 2026-11-04 from the design page *Chat in a Pocket*: PC-D1 and PC-D3…D8 A,
   James; PC-D2 carried A; the laws PC-L1…L5). Nothing is drawn yet: IOS-12a carries the wire, and IOS-12b…g draw it,
   in that order. One Chat, two sizes (PC-L1): the Mac's sparks, words, statuses and rulings at touch pitch. Every
@@ -8021,7 +8040,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     after the need ends, else cyan while unread (PC-L5). Held, it opens a context menu: **Open its pane** · **Wake**
     or **Put to sleep** · **Its profile**.
   - **Empty: the night** (track ES; ES-D1…D7 A, ruled by James 2026-11-08; one Chat, two sizes). With no spark the
-    page is the hatch's night, full bleed under the large title: the status bar, "Chat" and its ✦ wear the night's ink
+    page is the hatch's night, full bleed under its head (*corrected 2026-11-12, item 350: this said "under the large
+    title"; §8 "The roots' heads"*): the status bar, "Chat" and its ✦ wear the night's ink
     (§2.4), and the bar's glass floats on it in its night look. Its words are the Mac's (§8 "Chat's list"; §9): "Make
     your first spark" 30 light (§3's Headline at touch pitch), the sentence 15 in t2, **New spark** as a wide pill 50
     tall in the night look's fill (no key printed), "Or give it a first job" 13 in t3, and the hello's starters in night
@@ -8180,7 +8200,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     *Amended 2026-11-07 (IOS-12f; VF-PM's rulings on its Q1–Q10, 12:35:44Z; its words are §9's, for James's eye):*
     the Mac's sheet (§8 "The New spark sheet") at touch pitch, one rule read twice. The desk draws it 540 wide in
     the window's middle; the phone draws it in the system's sheet (Q2).
-    - **Its door** (Q1): `sparkle` 22 on a 44 button at the right of Chat's large title, named New spark, as the
+    - **Its door** (Q1): `sparkle` 22 on a 44 button at the right of Chat's title, in its head (*corrected
+      2026-11-12, item 350: this said "Chat's large title"; §8 "The roots' heads"*), named New spark, as the
       Mac's create stands in Chat's line. The bar keeps its three tabs. Cancel, or the sheet pulled down, folds the
       sheet, and nothing is made.
     - **The sheet** (Q2): the system's sheet at its large detent, on the paper, with the 40 corners of the phone's
