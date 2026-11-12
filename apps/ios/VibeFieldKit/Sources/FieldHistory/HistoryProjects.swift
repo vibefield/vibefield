@@ -72,6 +72,12 @@ public final class HistoryProjects {
   @ObservationIgnored private var pings: HistoryTailHandle?
   @ObservationIgnored private var openKey: String?
   @ObservationIgnored private var rereadWanted = false
+  /// Item 352 — the next ledger read follows the listing to its end (a start, a resume, a regroup, the index's
+  /// wait); a ping's read takes the newest page alone, until the last walk is `HistoryReads.walkSeconds` old.
+  @ObservationIgnored private var walkWanted = true
+  @ObservationIgnored private var walkedAt: Date?
+  /// Item 352 — when each project's sessions were last followed to their end.
+  @ObservationIgnored private var sessionsWalkedAt: [String: Date] = [:]
   @ObservationIgnored private var paused = false
   @ObservationIgnored private var closed = false
 
@@ -105,7 +111,7 @@ public final class HistoryProjects {
   public func start() {
     replayCache()
     guard door != nil else { return }
-    readLedger()
+    readLedger(whole: true)
     openPings()
   }
 
@@ -121,7 +127,7 @@ public final class HistoryProjects {
     guard paused else { return }
     paused = false
     openPings()
-    readLedger()
+    readLedger(whole: true)
   }
 
   public func close() {
@@ -174,8 +180,17 @@ public final class HistoryProjects {
 
   // MARK: The reads
 
-  private func readLedger() {
+  /// Read the ledger. `whole` follows the listing to its end; without it the newest page is read and laid over
+  /// what is held, unless the last walk is old.
+  ///
+  /// Item 352 (James, 2026-11-12 11:38:00Z: "the history items on the phone does not match the items on the desktop,
+  /// desktop have more items") — a desktop answers a phone a page of at most `listRows` projects with a cursor to the
+  /// next (fieldd's `tailnetRowLimit`; "a page with a cursor, never a silent cut"). This reader asked the first page
+  /// and never the next, so a ledger of more than a hundred projects stopped at a hundred here while the desktop's
+  /// window, which walks every page, showed them all.
+  private func readLedger(whole: Bool = false) {
     guard let door, !closed else { return }
+    if whole { walkWanted = true }
     if tasks["ledger"] != nil {
       rereadWanted = true
       return
@@ -194,20 +209,50 @@ public final class HistoryProjects {
       do {
         await readIndex(door)
         guard !Task.isCancelled else { return }
-        let page = try ProjectListResult(
-          json: try await door.call("project.list", params: ProjectListParams(limit: HistoryReads.listRows).json))
+        let stale = walkedAt.map { now().timeIntervalSince($0) >= Double(HistoryReads.walkSeconds) } ?? true
+        let walk = walkWanted || stale
+        walkWanted = false
+        let page = try await listPage(door, cursor: nil)
         guard !Task.isCancelled else { return }
         standing = .connected
         failure = nil
         sources = page.sources
-        order = page.rows.map(\.key)
-        var kept: [String: ProjectSummary] = [:]
-        for row in page.rows { kept[row.key] = row }
-        // an opened project the page did not reach stays as `project.get` read it
-        if let openKey, kept[openKey] == nil, let open = summaries[openKey] { kept[openKey] = open }
-        summaries = kept
-        rebuild()
-        keepLedger()
+        if page.cursor == nil {
+          // the whole ledger is this page
+          cut = false
+          hold(page.rows, whole: true)
+          walkedAt = now()
+        } else if walk {
+          // nothing of this door is drawn yet: each page is drawn as it lands; a ledger already drawn changes once
+          let first = order.isEmpty
+          var rows = page.rows
+          var seen = Set(rows.map(\.key))
+          var cursor = page.cursor
+          var pages = 1
+          var more = false
+          if first { hold(rows, whole: true) }
+          while let next = cursor {
+            guard pages < HistoryReads.ledgerPages else {
+              more = true
+              break
+            }
+            let further = try await listPage(door, cursor: next)
+            guard !Task.isCancelled else { return }
+            let fresh = further.rows.filter { seen.insert($0.key).inserted }
+            // a door that answers a page it already gave is not followed round
+            guard !fresh.isEmpty else { break }
+            rows += fresh
+            cursor = further.cursor
+            pages += 1
+            if first { hold(rows, whole: true) }
+          }
+          cut = more
+          hold(rows, whole: true)
+          walkedAt = now()
+          if more { HistoryReads.log("ledger: the listing went on past \(pages) pages; \(rows.count) projects held") }
+        } else {
+          hold(page.rows, whole: false)
+        }
         let clock = now()
         let recent = page.rows.filter(FieldHistoryModel.listed).prefix(HistoryReads.prefetchFigures)
         for row in recent where FieldHistoryModel.recencyMinutes(row.lastAt, now: clock) < FieldHistoryModel.liveWithinMinutes {
@@ -219,6 +264,27 @@ public final class HistoryProjects {
         refused(error)
       }
     }
+  }
+
+  /// One page of the ledger, from `cursor` (nil: the newest).
+  private func listPage(_ door: any HistoryDoor, cursor: String?) async throws -> ProjectListResult {
+    try ProjectListResult(
+      json: try await door.call(
+        "project.list", params: ProjectListParams(cursor: cursor, limit: HistoryReads.listRows).json))
+  }
+
+  /// Hold the rows read. `whole`: they are the ledger. Otherwise they are its newest page, laid over what is held:
+  /// its rows lead in its order, and the rows it did not reach stay behind them as they were read.
+  private func hold(_ rows: [ProjectSummary], whole: Bool) {
+    var kept: [String: ProjectSummary] = whole ? [:] : summaries
+    for row in rows { kept[row.key] = row }
+    // an opened project the listing did not reach stays as `project.get` read it
+    if let openKey, kept[openKey] == nil, let open = summaries[openKey] { kept[openKey] = open }
+    let listed = Set(rows.map(\.key))
+    order = rows.map(\.key) + (whole ? [] : order.filter { !listed.contains($0) })
+    summaries = kept
+    rebuild()
+    keepLedger()
   }
 
   private func readProject(_ key: String) {
@@ -241,24 +307,56 @@ public final class HistoryProjects {
     }
   }
 
+  /// A project's sessions. The opened project's are followed to their end (item 352: the door pages them at
+  /// `listRows` for a phone, and this reader asked one page), at its opening and again once that walk is
+  /// `walkSeconds` old; between, and for a row's live prefetch, the newest page is laid over what is held.
   private func readSessions(_ key: String) {
     guard let door, !closed, tasks["sessions/\(key)"] == nil else { return }
     tasks["sessions/\(key)"] = Task { [weak self] in
       guard let self else { return }
       defer { tasks["sessions/\(key)"] = nil }
       do {
-        let page = try ProjectSessionsResult(
-          json: try await door.call(
-            "project.sessions", params: ProjectSessionsParams(key: key, limit: HistoryReads.listRows).json))
+        let page = try await sessionsPage(door, key: key, cursor: nil)
         guard !Task.isCancelled else { return }
         if let to = page.movedTo, to != key { rekey(from: key, to: to) }
-        sessionsByKey[page.key] = page.rows
+        let stale = sessionsWalkedAt[page.key].map { now().timeIntervalSince($0) >= Double(HistoryReads.walkSeconds) } ?? true
+        let walk = page.key == openKey && stale
+        var seen = Set(page.rows.map(Self.sessionKey))
+        if page.cursor == nil || walk {
+          sessionsByKey[page.key] = page.rows
+        } else {
+          sessionsByKey[page.key] = page.rows + (sessionsByKey[page.key] ?? []).filter { !seen.contains(Self.sessionKey($0)) }
+        }
         rebuild()
+        var cursor = walk ? page.cursor : nil
+        var pages = 1
+        while let next = cursor, pages < HistoryReads.sessionPages {
+          let further = try await sessionsPage(door, key: page.key, cursor: next)
+          guard !Task.isCancelled else { return }
+          let fresh = further.rows.filter { seen.insert(Self.sessionKey($0)).inserted }
+          guard !fresh.isEmpty else { break }
+          sessionsByKey[page.key, default: []] += fresh
+          cursor = further.cursor
+          pages += 1
+          rebuild()
+        }
+        if walk || page.cursor == nil { sessionsWalkedAt[page.key] = now() }
         keepLedger()
       } catch {
         refused(error)
       }
     }
+  }
+
+  private func sessionsPage(_ door: any HistoryDoor, key: String, cursor: String?) async throws -> ProjectSessionsResult {
+    try ProjectSessionsResult(
+      json: try await door.call(
+        "project.sessions", params: ProjectSessionsParams(key: key, cursor: cursor, limit: HistoryReads.listRows).json))
+  }
+
+  /// A session row's identity across pages: the desktop that recorded it and its id there.
+  private static func sessionKey(_ row: IndexSessionRow) -> String {
+    "\(row.device ?? "")\u{0}\(row.sessionId)"
   }
 
   private func readFigures(_ key: String) {
@@ -313,7 +411,7 @@ public final class HistoryProjects {
       try? await Task.sleep(for: wait)
       guard let self, !Task.isCancelled else { return }
       tasks["index-wait"] = nil
-      readLedger()
+      readLedger(whole: true)
     }
   }
 
@@ -344,7 +442,8 @@ public final class HistoryProjects {
   func ping(_ payload: JSONValue) {
     guard let delta = try? ProjectChangesDelta(json: payload) else { return }
     for move in delta.regrouped where move.from != move.to { rekey(from: move.from, to: move.to) }
-    readLedger()
+    // a regroup moves rows anywhere in the listing; a plain ping moves the newest to its head
+    readLedger(whole: !delta.regrouped.isEmpty)
   }
 
   /// D9 — `from` regrouped into `to`: what is held under it moves, and the
@@ -354,6 +453,7 @@ public final class HistoryProjects {
     if openKey == from { openKey = to }
     if let rows = sessionsByKey.removeValue(forKey: from), sessionsByKey[to] == nil { sessionsByKey[to] = rows }
     if let held = figures.removeValue(forKey: from), figures[to] == nil { figures[to] = held }
+    if let walked = sessionsWalkedAt.removeValue(forKey: from), sessionsWalkedAt[to] == nil { sessionsWalkedAt[to] = walked }
     order = order.map { $0 == from ? to : $0 }
   }
 

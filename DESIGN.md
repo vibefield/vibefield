@@ -7632,6 +7632,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   only over an index that is READY (or a desktop whose door offers no `index.status`). The phone
   offers no restart; desktop History's failed state carries **Restart the index**. While it is not ready the
   ledger is read again every few seconds (nothing pings when it becomes ready).
+  **The ledger is the door's whole listing** (item 352, 2026-11-12; James, 11:38:00Z: "the history items on the phone
+  does not match the items on the desktop, desktop have more items"): a desktop answers a phone a hundred projects a
+  page with a cursor to the next, and the phone follows the pages to the listing's end, so it lists what the desktop
+  lists; an opened project's sessions are followed the same way. Past the phone's bound (2,000 projects) the ledger's
+  last line says so, never a silent cut: `The 2,000 most recently active projects are listed · studio holds more`.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the

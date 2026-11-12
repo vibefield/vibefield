@@ -138,7 +138,15 @@ public struct HistoryLedgerView: View {
           .foregroundStyle(ChromePalette.inkFaint)
           .padding(.horizontal, HistoryParts.sidePadding)
           .padding(.top, 14)
-          .padding(.bottom, 24)
+          .padding(.bottom, projects.cut ? 6 : 24)
+        if projects.cut {
+          // Item 352 — the listing went on past the phone's bound: said, never a silent cut
+          Text(FieldHistoryModel.cutLedger(corpus.projects.count, desktop: projects.sourceName))
+            .font(ChromeType.sans(11.5))
+            .foregroundStyle(ChromePalette.inkFaint)
+            .padding(.horizontal, HistoryParts.sidePadding)
+            .padding(.bottom, 24)
+        }
       }
     }
   }

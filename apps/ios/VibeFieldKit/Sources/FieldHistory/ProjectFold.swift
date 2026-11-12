@@ -214,6 +214,11 @@ extension FieldHistoryModel {
     return corpus.desktops.isEmpty ? base : "\(base) on"
   }
 
+  /// Item 352 — the ledger's last line when the listing went on past the phone's bound of pages.
+  public static func cutLedger(_ count: Int, desktop: String) -> String {
+    "The \(figure(count)) most recently active projects are listed · \(desktop) holds more"
+  }
+
   /// A project's place as the phone draws it: the folder's name, a branch that
   /// says more than the folder, the last use, and why a launch cannot land.
   public static func place(_ place: ProjectPlace, now: Date) -> HistoryPlace {
