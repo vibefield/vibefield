@@ -3759,7 +3759,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   name for it, else Tailscale's machine name, whichever the phone will read back (never a code its own
   phone refuses; with neither, the code waits) — at Sign in on your phone's size and inks, with
   **Scan with VibeField on your iPhone.** · "Get VibeField from TestFlight first, then open it and choose
-  **Scan the code on your Mac**. The same code tells it to expect ‹login›." — the page's words
+  **Scan the code on your computer**. The same code tells it to expect ‹login›." — the page's words
   (A:277-288) adapted to there being no install link yet. **Not now** lands on the same
   Ready pane; the face menu keeps Connect your devices… and nothing else asks until a moment where
   it helps (§8 "Asking again"). The refusals keep the daemon's sentence and gain a person's words
@@ -3768,7 +3768,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   can't own this Mac" (a tagged sign-in); "This Mac's link record is damaged" with Reveal in
   Finder. **Other ways:** Sign in on your phone, and an auth key for a machine with no browser
   (untagged; never stored). The sync question is not asked here: the first new project after
-  connecting asks it (TS-D13).
+  connecting asks it (TS-D13). *Amended 2026-11-12 (item 334): the button is named as the phone names it
+  since WI-1 (§9, "The phone says 'computer'"); TestFlight's words stay until the listing is public
+  (James, 05:56:25Z).*
 - **Settings → Devices** (track TS, TS-D3 ruled 2026-10-27): the account's reach, one page under
   the head, absorbing Mesh; Account keeps the profile and the users. In order: the **Tailscale
   card** — the mark (§13), one state word (a green "Connected"; "This Mac only" muted; the
