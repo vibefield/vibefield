@@ -6696,6 +6696,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       amendments at their source). The switch is an app preference that syncs to your desktops, with a flag that the
       statement was seen; it takes no undo, so ⌘Z never turns it on, and while it is off a community install is
       refused (MK-E3).
+      *Ruled by James 2026-11-11 22:33:55Z (MK-O3: "Stop"):* while it is off, the community plugins you have stop
+      until you turn it back on. Each is held as if you had turned it off: none of its code runs, its objects on
+      your desks draw as missing, and nothing is removed, so turning community plugins back on brings them back as
+      they were. The switch syncs, so turning it off at one desktop stops them at every desktop.
+      *To be built by track MK (O3-C); until then nothing stops them, and no build has one.*
     - **Nothing to discover yet** (every build until the registry rung, above): Discover is one state, never a blank
       (§8 "Empty / degraded states") — the words **Nothing to discover yet**, saying the plugins that come with
       VibeField are in Installed, with a press that shows them. Installed works without a registry.
@@ -8991,6 +8996,11 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   their objects: a community plugin may add objects to your pegboard, as any listed plugin may. While it is off,
   search says "Community plugins are off, so their objects aren't searched.", and a community install is refused,
   in words MK-4 drafts, judged on screen with the rest.
+  *Added 2026-11-12 (James's MK-O3 pick, 2026-11-11 22:33:55Z: "Stop"), ‹draft› for his eye, as his page drew
+  them:* while it is off, a community plugin's row in Installed says "Off while community plugins are off · its
+  objects on your desks draw as missing", or, for one with no objects that runs a service, "Off while community
+  plugins are off · its service is stopped" ("service" as under **What it adds** below, James's to keep or strike).
+  MK-4 draws the row with the switch.
 - **The install card** (MK-D7). It asks **Install ‹plugin›?**, then says "It adds ‹n› objects to your pegboard:" with
   each ‹object›; "It gives your agents ‹n› tools." when it brings tools; "It can:" with its powers in their plain
   words (below), or "Nothing beyond drawing its own objects" when it asks for none (for a plugin with no object that
