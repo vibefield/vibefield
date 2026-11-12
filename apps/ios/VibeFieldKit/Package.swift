@@ -484,7 +484,7 @@ let package = Package(
     .testTarget(
       name: "FieldHistoryTests",
       dependencies: [
-        "FieldHistory", "FieldProduct",
+        "FieldHistory", "FieldProduct", "FieldMarkdown",
         // SP-7b's 7b-2b — the direct reader's tests script rosetta's socket seam
         .product(name: "RosettaClient", package: "rosetta"),
       ],

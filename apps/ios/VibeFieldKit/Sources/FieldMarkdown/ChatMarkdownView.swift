@@ -115,3 +115,31 @@ private struct ChatMarkdownBlocks: View {
       .fixedSize(horizontal: false, vertical: true)
   }
 }
+
+// Item 362d (red) — the name `HistoryWordsTests` calls, answering nothing yet: a measure of zeros that the view does
+// not read. The figures, and the view's use of them, are the next commit's.
+public struct ChatMarkdownMeasure: Sendable, Equatable {
+  public var size: CGFloat
+  public var lineSpacing: CGFloat
+  public var codeSize: CGFloat
+  public var codeLineSpacing: CGFloat
+  public var blockGap: CGFloat
+  public var top: CGFloat
+  public var onPanel: Bool
+
+  public init(
+    size: CGFloat, lineSpacing: CGFloat, codeSize: CGFloat, codeLineSpacing: CGFloat, blockGap: CGFloat, top: CGFloat,
+    onPanel: Bool
+  ) {
+    self.size = size
+    self.lineSpacing = lineSpacing
+    self.codeSize = codeSize
+    self.codeLineSpacing = codeLineSpacing
+    self.blockGap = blockGap
+    self.top = top
+    self.onPanel = onPanel
+  }
+
+  public static let chat = ChatMarkdownMeasure(
+    size: 0, lineSpacing: 0, codeSize: 0, codeLineSpacing: 0, blockGap: 0, top: 0, onPanel: false)
+}
