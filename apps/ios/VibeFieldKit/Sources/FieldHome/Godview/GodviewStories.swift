@@ -1,4 +1,5 @@
 import CoreGraphics
+import FieldHistory
 import Foundation
 
 // PG-4t — THE PHONE'S STORIES ROW, AS NUMBERS (DESIGN.md §8 "The phone's Stories row"): Godview's head carried to
@@ -115,5 +116,14 @@ struct GodviewStorySaying: Equatable, Sendable {
   mutating func drop() {
     view = nil
     until = nil
+  }
+}
+
+extension GodviewStories {
+  /// Item 350 — where History's and Chat's heads stand, and what their roots clear at the foot, by the screen's own
+  /// measures: the row's band (its top, a circle's height), and the home indicator's inset with the bar's clearance.
+  /// Item 350 (red): a stub, the head at the screen's top with nothing cleared.
+  static func rootHead(safeTop: CGFloat, homeInset: CGFloat, stepper: Bool) -> RootHead {
+    RootHead()
   }
 }

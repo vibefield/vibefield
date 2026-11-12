@@ -1,4 +1,5 @@
 import CoreGraphics
+import FieldHistory
 import Foundation
 import SwiftUI
 import Testing
@@ -297,5 +298,28 @@ enum StageInputs {
       isActive: true, rows: [], fieldIsLive: true, unreadIds: [], activeId: nil, colour: { _ in nil },
       now: { Date(timeIntervalSince1970: 1_790_803_300) }, bandHeight: bandHeight, topInset: topInset,
       skin: GodviewSkin(scheme: .light), isStill: isStill, onOpen: { _ in })
+  }
+}
+
+/// Item 350 (DESIGN.md §8 "The roots' heads") — History's and Chat's heads stand in the Stories row's band, and their
+/// roots clear the bar, by the screen's own measures. That the four stand on one line on a phone is James's answer
+/// (2026-11-12 10:58:14Z, "All aligned").
+@Suite("item 350 — the roots' heads stand in the Stories row's band")
+struct RootHeadTests {
+  @Test func theHeadIsTheRowsBandAndTheFootClearsTheBar() {
+    let island = GodviewStories.rootHead(safeTop: 59, homeInset: 34, stepper: false)
+    #expect(island.top == 56, "the row's top on an island phone")
+    #expect(island.height == 44, "a circle's height")
+    let clearance = AppBar.clearance(homeInset: 34, stepper: false)
+    #expect(island.foot == 34 + clearance, "the home indicator's inset and the bar")
+
+    let stepped = GodviewStories.rootHead(safeTop: 59, homeInset: 34, stepper: true)
+    let steppedClearance = AppBar.clearance(homeInset: 34, stepper: true)
+    #expect(stepped.foot == 34 + steppedClearance, "and the stepper above the bar")
+    #expect(stepped.foot > island.foot)
+
+    let plain = GodviewStories.rootHead(safeTop: 20, homeInset: 0, stepper: false)
+    #expect(plain.top == 28, "8 under a safe line that stands higher than the island's foot")
+    #expect(plain.height == 44)
   }
 }
