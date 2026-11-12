@@ -452,6 +452,25 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
     #expect(selected == ["a"])
   }
 
+  /// Item 348 (DESIGN.md §8 "The phone's Apps": "anywhere but on a bubble") — a host that shares the finger with the
+  /// swarm reads whether the swarm has it.
+  @Test func theStageSaysWhetherTheFingerIsOnABody() {
+    let stage = stage()
+    stage.update(bubbles: [bubble(id: "a")], time: 0)
+    stage.pump(time: 0)
+    let body = stage.frame(time: 0.01, motion: false).bodies[0]
+    let point = SIMD2(body.x, body.y)
+    let ground = SIMD2<Double>(body.x > 200 ? 10 : 390, body.y > 400 ? 10 : 790)
+    #expect(stage.holdsBody == false)
+    stage.pointerDown(at: point, time: 0.02)
+    #expect(stage.holdsBody, "a finger on a bubble is the swarm's")
+    stage.pointerUp(at: point)
+    #expect(stage.holdsBody == false)
+    stage.pointerDown(at: ground, time: 0.03)
+    #expect(stage.holdsBody == false, "empty ground is free for the pull")
+    stage.pointerUp(at: ground)
+  }
+
   @Test func aHoldOnEmptyGroundCreatesAfterTheLongPressAndAMoveCancelsIt() {
     let stage = stage()
     var created: [SIMD2<Double>] = []

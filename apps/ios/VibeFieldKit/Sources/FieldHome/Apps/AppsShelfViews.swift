@@ -561,3 +561,19 @@ extension View {
     }
   }
 }
+
+// Item 348 (red) — the card's outline and where it is drawn, as stubs: the outline is the bounds, and the card is
+// drawn where it lies.
+struct AppsCardShape: Shape {
+  init(card: AppsPull.Card, safeTop: CGFloat) {}
+
+  func path(in rect: CGRect) -> Path { Path(rect) }
+}
+
+struct AppsCardPlace: GeometryEffect {
+  var scale: CGFloat
+  var offset: CGFloat
+  let top: CGFloat
+
+  func effectValue(size: CGSize) -> ProjectionTransform { ProjectionTransform(.identity) }
+}

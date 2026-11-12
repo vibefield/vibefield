@@ -236,3 +236,33 @@ enum AppsDot {
   /// Ringed in the bar's glass.
   static let ring: CGFloat = 2
 }
+
+// Item 348 (red) — the one pull's rule and the one card's form, as stubs: no ground gives the pull, and the card never
+// leaves its rest. AppsCardTests' rows compile against them and fail at their assertions.
+extension AppsPull {
+  /// What a drag starts on.
+  enum Ground: Equatable {
+    case swarm(taken: Bool)
+    case band(reserve: CGFloat)
+    case list(atTop: Bool)
+  }
+
+  static func begins(start: CGPoint, translation: CGSize, safeTop: CGFloat, ground: Ground) -> Bool { false }
+
+  /// The tab as the one card the three pages stand in.
+  struct Card: Equatable {
+    var scale: CGFloat
+    var offset: CGFloat
+    var radius: CGFloat
+    var shade: Double
+
+    static let rest = Card(scale: 1, offset: 0, radius: 0, shade: 0)
+    static let peek = rest
+
+    static func receded(bounds: CGFloat, safeTop: CGFloat) -> Card { rest }
+
+    static func pulled(_ drag: CGFloat) -> Card { rest }
+
+    static func standing(open: Bool, peeking: Bool, drag: CGFloat, bounds: CGFloat, safeTop: CGFloat) -> Card { rest }
+  }
+}

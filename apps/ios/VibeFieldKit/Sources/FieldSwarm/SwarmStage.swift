@@ -318,6 +318,9 @@ public final class SwarmStage {
     bubbles.first { $0.id == id }
   }
 
+  /// Whether the finger that is down is on a body. Item 348 (red): a stub, it never is.
+  public var holdsBody: Bool { false }
+
   /// A finger came down. On a body it begins a drag; on empty ground it begins
   /// the hold that creates a terminal there.
   public func pointerDown(at point: SIMD2<Double>, time: Double) {
