@@ -1859,6 +1859,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         effectiveAppPreferences(await settingsDoc.appValues()).communityPlugins,
       // MK-2c (the floor): an install's or an updates check's index is held to the held list's `generatedAt`
       indexFloor: (): Promise<number | null> => catalog.heldGeneratedAt(),
+      // MK-O3 (O3-B, 2026-11-12; James's pick, 03:42:10Z): an install holds the list it verified, here and on every
+      // desktop the install reaches through the shared set, as if the person had checked for plugins there
+      holdVerifiedIndex: (signed): Promise<boolean> => catalog.holdVerified(signed),
       logger: logger.child({ component: "plugin.install" }),
     });
     // Item 279 (S2) — with the installed root withheld, boot leaves it as it finds it.

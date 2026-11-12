@@ -39,6 +39,11 @@ import { contractsRangeSatisfied, type PluginRegistryService } from "./plugin-re
 // against that (custody note, addenda 2026-11-11). Nothing at load reads this list yet (`listedAsFor`, G3's read):
 // whether a community plugin still loads while the switch is off is James's.
 //
+// MK-O3 (O3-B, 2026-11-12; custody note addendum "an install holds the list it verified", accepted 02:58:44Z; James's
+// pick on the board, 03:42:10Z): the held list has a second writer. An install hands over the index it read and
+// verified (`holdVerified`), and the catalog holds it as its own read would: the same re-verify, parse and floor, the
+// same one write, and no picture fetched. The floor and the write run one at a time, whichever writer asks.
+//
 // MK-2e (2026-11-11; MK-E9, B1; `lanes/mk/mk2e/PLAN.md` v3, VF-PM 11:00:56Z, 11:03:18Z): the pictures. After a read
 // ends ready, inside the person's refresh, the catalog keeps the pictures the held list pins in
 // `<dataDir>/plugins/catalog/pictures/<hex>`, one file per pin, and the refresh answers once that phase ends:
@@ -101,6 +106,10 @@ interface HeldList {
   checkedAt: number | null;
 }
 
+/** MK-O3 (O3-B): what one turn of the floor and the write ended as: held, at its time, or refused with the held list
+ * that stays. */
+type HoldOutcome = { held: true; checkedAt: number } | { held: false; kept: HeldList };
+
 /** What the last read this boot ended as; null until one has run. */
 type LastRead = "ready" | "unreachable" | "refused" | null;
 
@@ -120,6 +129,8 @@ export class PluginCatalogService {
   private lastRefusedHeld: { key: string; reason: HeldRefusal } | null = null;
   /** MK-2e: the picture refusals said, `<hex>:<reason>`, in memory alone; kept to the held list's pins */
   private readonly saidPictures = new Set<string>();
+  /** MK-O3 (O3-B): the floor and the write, one at a time, for the person's read and an install's hand-over alike */
+  private writes: Promise<void> = Promise.resolve();
 
   constructor(private readonly cfg: PluginCatalogConfig) {
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "plugin.catalog" });
@@ -163,6 +174,33 @@ export class PluginCatalogService {
     return held === null || held === "refused" ? null : held.index.generatedAt;
   }
 
+  /** MK-O3 (O3-B, 2026-11-12): an install's hand-over, the index it read and verified (`plugin-install.ts`, prepare).
+   * It is held as the person's read holds a list: re-verified with the configured key, parsed, held to the floor (an
+   * older list than the one held is refused, an equal one passes), and only then written; no picture is fetched (those
+   * stay inside the person's refresh). Answers whether it was held; a list refused anywhere holds nothing. */
+  async holdVerified(signed: { bytes: Buffer; signature: string }): Promise<boolean> {
+    if (!this.cfg.installer.verifyIndex(signed.bytes, signed.signature)) {
+      this.log.warn(
+        "fieldd.plugin_catalog.index_refused",
+        "A plugin list an install handed over did not verify; nothing was held",
+        { reason: "signature" },
+      );
+      return false;
+    }
+    let index: RegistryIndex;
+    try {
+      // a refusal here is logged by the installer's own parse, with its reason
+      index = this.cfg.installer.parseIndex(signed.bytes);
+    } catch {
+      return false;
+    }
+    const outcome = await this.holdIfNotOlder(signed.bytes, signed.signature, index);
+    if (!outcome.held) return false;
+    // the install read the list on the person's act, as a refresh does
+    this.lastRead = "ready";
+    return true;
+  }
+
   private async read(): Promise<PluginsCatalog> {
     let signed: Awaited<ReturnType<PluginCatalogConfig["installer"]["fetchSignedIndex"]>>;
     try {
@@ -181,28 +219,50 @@ export class PluginCatalogService {
       this.lastRead = "refused";
       return this.answerFrom(await this.readHeld(), this.lastRead);
     }
-    const held = await this.readHeld();
-    // the rollback floor (VF-PM 09:25:04Z, Q2): a signed list older than the held one is refused, the held list
-    // stays; an equal one passes. A held list that failed re-verify sets no floor.
-    if (held !== null && held !== "refused" && index.generatedAt < held.index.generatedAt) {
-      this.log.warn(
-        "fieldd.plugin_catalog.index_refused",
-        "A plugin list older than the one held was refused; the held list stays",
-        {
-          reason: "rollback",
-          heldGeneratedAt: held.index.generatedAt,
-          generatedAt: index.generatedAt,
-        },
-      );
+    const outcome = await this.holdIfNotOlder(signed.bytes, signed.signature, index);
+    if (!outcome.held) {
       this.lastRead = "refused";
-      return this.answerFrom(held, this.lastRead);
+      return this.answerFrom(outcome.kept, this.lastRead);
     }
-    const checkedAt = this.now();
-    await this.writeHeld(signed.bytes, signed.signature, checkedAt);
     this.lastRead = "ready";
     // MK-2e: the pictures this list pins, inside the person's read; `get` says reading until the phase ends
     await this.picturesPhase(index, signed.indexRef);
-    return this.answerFrom({ index, checkedAt }, "ready");
+    return this.answerFrom({ index, checkedAt: outcome.checkedAt }, "ready");
+  }
+
+  /** The rollback floor and the one write, for either writer (the person's read, an install's hand-over), run one at
+   * a time: the floor is read and the list written in one turn, so an older list never passes the floor before a newer
+   * one lands and is then written over it (MK-O3, O3-B). The floor (VF-PM 09:25:04Z, Q2): a signed list older than
+   * the held one is refused and the held list stays; an equal one passes; a held list that failed re-verify sets no
+   * floor. */
+  private holdIfNotOlder(
+    bytes: Buffer,
+    signature: string,
+    index: RegistryIndex,
+  ): Promise<HoldOutcome> {
+    const turn = this.writes.then(async (): Promise<HoldOutcome> => {
+      const held = await this.readHeld();
+      if (held !== null && held !== "refused" && index.generatedAt < held.index.generatedAt) {
+        this.log.warn(
+          "fieldd.plugin_catalog.index_refused",
+          "A plugin list older than the one held was refused; the held list stays",
+          {
+            reason: "rollback",
+            heldGeneratedAt: held.index.generatedAt,
+            generatedAt: index.generatedAt,
+          },
+        );
+        return { held: false, kept: held };
+      }
+      const checkedAt = this.now();
+      await this.writeHeld(bytes, signature, checkedAt);
+      return { held: true, checkedAt };
+    });
+    this.writes = turn.then(
+      () => undefined,
+      () => undefined,
+    );
+    return turn;
   }
 
   /** MK-2e (plan v3 §2): the folder's lstat, the prune, the count, the fetches. Runs only after a ready read. */

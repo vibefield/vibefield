@@ -59,6 +59,10 @@ export interface RegistryInstallConfig {
   /** MK-2c (the floor, VF-PM 10:08:59Z): the held plugin list's `generatedAt`, or null with none held. An index
    * older than it is refused, as the catalog's own read refuses one (`plugin-catalog.ts`). */
   indexFloor?: () => Promise<number | null>;
+  /** MK-O3 (O3-B, 2026-11-12): the catalog's hand-over (`plugin-catalog.ts`, `holdVerified`). An install hands it the
+   * index it read and verified, and the catalog holds it as the person's read would. Absent (an installer a test
+   * builds alone), nothing is held. */
+  holdVerifiedIndex?: (signed: { bytes: Buffer; signature: string }) => Promise<boolean>;
   logger?: Logger;
 }
 
@@ -125,6 +129,13 @@ function pinnedManifestHashOf(artifactBytes: Buffer): string | null {
 async function slotManifestHash(root: string): Promise<string | null> {
   const read = await readFileCapped(join(root, MANIFEST_FILE), PLUGIN_LIMITS.MANIFEST_MAX_BYTES);
   return read.ok ? hashOfManifestBytes(read.bytes) : null;
+}
+
+/** MK-O3 (O3-B): a failure as its reason code alone, its kind or its code and never its text (rule 22) */
+function failureCode(error: unknown): string {
+  const code =
+    error instanceof RpcCallError ? error.kind : (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" ? code.slice(0, 64) : "UNKNOWN";
 }
 
 const sha256hex = (bytes: Buffer): string =>
@@ -200,6 +211,15 @@ export class RegistryInstallService {
   /** fetch + signature-verify + parse the index (§5.3.1 — the byte is the
    * unit of trust: the signature covers the exact file, never a re-canon). */
   async fetchIndex(): Promise<{ index: RegistryIndex; indexRef: string }> {
+    const { index, signed } = await this.verifiedIndex();
+    return { index, indexRef: signed.indexRef };
+  }
+
+  /** `fetchIndex`'s read, with the signed bytes it verified kept for an install's hand-over (MK-O3, O3-B). */
+  private async verifiedIndex(): Promise<{
+    index: RegistryIndex;
+    signed: { bytes: Buffer; signature: string; indexRef: string };
+  }> {
     const signed = await this.fetchSignedIndex();
     const index = this.parseIndex(signed.bytes);
     // MK-2c (2026-11-11; the floor, VF-PM 10:08:59Z): where a list is held, an install's or an updates check's
@@ -218,7 +238,23 @@ export class RegistryInstallService {
         { pluginKind: "PLUGIN_SOURCE_UNAVAILABLE" },
       );
     }
-    return { index, indexRef: signed.indexRef };
+    return { index, signed };
+  }
+
+  /** MK-O3 (O3-B, 2026-11-12): the list this install read and verified, handed to the catalog to hold. A hand-over
+   * that fails does not fail the install: it is said by its reason code, and the list held stays as it was. */
+  private async holdList(signed: { bytes: Buffer; signature: string }): Promise<void> {
+    const hold = this.cfg.holdVerifiedIndex;
+    if (hold === undefined) return;
+    try {
+      await hold({ bytes: signed.bytes, signature: signed.signature });
+    } catch (error) {
+      this.log.warn(
+        "fieldd.plugin_install.list_not_held",
+        "The plugin list this install read could not be kept; the install goes on",
+        { reason: failureCode(error) },
+      );
+    }
   }
 
   /** MK-2b (2026-11-11): a registry is configured only with both its location and its verify key. */
@@ -354,7 +390,11 @@ export class RegistryInstallService {
       );
     if (params.id === undefined)
       throw new RpcCallError("PRECONDITION_FAILED", "expected { id, version? }", false);
-    const { index, indexRef } = await this.fetchIndex();
+    const { index, signed } = await this.verifiedIndex();
+    const indexRef = signed.indexRef;
+    // MK-O3 (O3-B): the list passed the installer's verify, parse and floor; it is held before anything of the
+    // plugin is fetched, so the install and the stop read the same list. Another desktop's install meets this too.
+    await this.holdList(signed);
     const entry = index.plugins[params.id];
     if (entry === undefined)
       throw new RpcCallError("NOT_FOUND", `${params.id} is not in the registry index`, false, {
