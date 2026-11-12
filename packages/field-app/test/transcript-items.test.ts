@@ -322,6 +322,21 @@ describe("the honest lines (TH0-Q7 (a))", () => {
       { kind: "honest", key: "before", which: "before", words: FLOW_WORDS.before("Vela") },
     ]);
   });
+
+  it("says a turn that couldn't finish where it ended, after its tools; its other edges say nothing", () => {
+    const turn = fixture("spark-transcript-line.turn");
+    const lines = [...(linesOf("run", "you", "turn", "tool").get(RUN) ?? [])];
+    const read = (edge: string) =>
+      transcriptReadingOf([FIRST, LATEST], new Map([[RUN, [...lines, { ...turn, seq: 9, edge }]]]));
+    const failed = itemsOf(read("failed"));
+    expect(kinds(failed)).toEqual(["day", "you", "tools", "honest"]);
+    expect(failed.at(-1)).toMatchObject({
+      which: "failed",
+      words: "Vela couldn't finish — what happened is in Vela's terminal",
+    });
+    for (const edge of ["end", "paused"])
+      expect(kinds(itemsOf(read(edge))), edge).toEqual(["day", "you", "tools"]);
+  });
 });
 
 describe("Thinking… (TH-Q2 (a))", () => {
