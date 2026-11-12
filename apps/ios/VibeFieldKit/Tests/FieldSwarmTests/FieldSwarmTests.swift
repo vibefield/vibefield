@@ -76,6 +76,17 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
     return red
   }
 
+  /// How many of a tile's texels carry ink in the uploaded red channel.
+  private func inkedTexels(of candidate: MarksAtlas.Candidate, in red: [UInt8]) -> Int {
+    var inked = 0
+    for y in candidate.tile.y..<(candidate.tile.y + MarksAtlas.tile) {
+      for x in candidate.tile.x..<(candidate.tile.x + MarksAtlas.tile) where red[y * MarksAtlas.width + x] != 0 {
+        inked += 1
+      }
+    }
+    return inked
+  }
+
   /// The desktop SDK 0.3.2 uploads this PNG's red channel in top-to-bottom
   /// order, without color conversion. Check the actual Metal bytes, including
   /// tile gutters: a flipped upload can leave every tile coordinate correct
@@ -97,16 +108,29 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
   @Test @MainActor func onlyTheDrawnTilesCarryAMark() throws {
     let red = try uploadedRed()
     for candidate in MarksAtlas.candidates {
-      var inked = 0
-      for y in candidate.tile.y..<(candidate.tile.y + MarksAtlas.tile) {
-        for x in candidate.tile.x..<(candidate.tile.x + MarksAtlas.tile) where red[y * MarksAtlas.width + x] != 0 {
-          inked += 1
-        }
-      }
+      let inked = inkedTexels(of: candidate, in: red)
       if candidate.drawn {
         #expect(inked > 0, "\(candidate.id) is drawn but its tile is empty")
       } else {
         #expect(inked == 0, "\(candidate.id) is not drawn but its tile carries \(inked) inked texels")
+      }
+    }
+  }
+
+  /// Item 359 (James, 2026-11-12 17:50:31Z: "overturn this ruling, bring back
+  /// those icons now") — LP-4's two-mark ruling is overturned, so every mark
+  /// the design chose for an agent is in the png the bundle ships. Read from
+  /// the png itself (its upload), not from the table: each chosen tile carries
+  /// ink. What LP-D7 ruled beside it stands: a neighbour the bake set beside a
+  /// pick is no agent's mark, and its tile is blank.
+  @Test @MainActor func everyChosenTileCarriesItsMarkAndNoNeighboursDoes() throws {
+    let red = try uploadedRed()
+    for candidate in MarksAtlas.candidates {
+      let inked = inkedTexels(of: candidate, in: red)
+      if candidate.chosen {
+        #expect(inked > 0, "\(candidate.id) is the pick for \(candidate.provider ?? "no agent") but its tile is empty")
+      } else {
+        #expect(inked == 0, "\(candidate.id) is a neighbour, no agent's mark, but its tile carries \(inked) inked texels")
       }
     }
   }
@@ -132,7 +156,7 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
   @Test func theTilesAndTheLetterFallback() {
     #expect(MarksAtlas.tile(for: "claude") == MarksAtlas.Tile(x: 0, y: 0))
     #expect(MarksAtlas.tile(for: "codex") == MarksAtlas.Tile(x: 198, y: 0))
-    #expect(MarksAtlas.tile(for: "pi") == nil)
+    #expect(MarksAtlas.tile(for: "pi") == MarksAtlas.Tile(x: 0, y: 198))
     #expect(MarksAtlas.letter(for: "pi") == "P")
     #expect(MarksAtlas.tile(for: "acp") == nil)
     #expect(MarksAtlas.letter(for: "acp") == "A")
@@ -140,19 +164,21 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
     #expect(MarksAtlas.candidates.count == 20)
   }
 
-  /// LP-4 (2026-11-05) — James kept Claude's and Codex's logos for v1 and no
-  /// other: every other vendor's pick stays recorded (`chosen`, the lab's ✓)
-  /// but is not drawn, so that agent wears its letter, the swarm's own path for
-  /// an agent with no tile.
-  @Test func onlyClaudeAndCodexMarksAreDrawn() {
-    #expect(MarksAtlas.providers == ["claude", "codex"])
-    #expect(MarksAtlas.candidates.filter(\.drawn).map(\.id) == ["claudecode", "codex"])
-    for mark in ["grok", "kimi", "opencode", "hermes", "antigravity", "copilot", "pi"] {
-      #expect(MarksAtlas.tile(for: mark) == nil, "\(mark)")
-      #expect(MarksAtlas.letter(for: mark) == String(mark.prefix(1)).uppercased(), "\(mark)")
-    }
-    // The design's picks are still on record for the lab.
-    #expect(MarksAtlas.candidates.filter(\.chosen).count == 9)
+  /// Item 359 (2026-11-12) — the table's side of it: every pick is kept, so
+  /// the keys the app draws a tile for are the nine, and no neighbour is
+  /// drawn. (LP-4, 2026-11-05, kept Claude's and Codex's and no other; this
+  /// row was `onlyClaudeAndCodexMarksAreDrawn` until James overturned it.)
+  @Test func everyChosenMarkIsDrawnAndNoNeighbourIs() {
+    let nine = ["claude", "codex", "grok", "kimi", "opencode", "hermes", "antigravity", "copilot", "pi"]
+    #expect(MarksAtlas.providers == nine)
+    #expect(
+      MarksAtlas.candidates.filter(\.drawn).map(\.id)
+        == ["claudecode", "codex", "grok", "kimi", "opencode", "hermesagent", "antigravity", "githubcopilot", "pi"])
+    for mark in nine { #expect(MarksAtlas.tile(for: mark) != nil, "\(mark)") }
+    #expect(MarksAtlas.candidates.filter(\.chosen).allSatisfy(\.kept))
+    let neighbours = MarksAtlas.candidates.filter { !$0.chosen }
+    #expect(neighbours.count == 11)
+    #expect(neighbours.allSatisfy { !$0.drawn })
   }
 }
 
