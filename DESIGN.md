@@ -8491,8 +8491,35 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   waiting on you") with §9's caption under it; then **Tell me when**, tagged **Not yet** dotted, three switches
   drawn and disabled (**An agent needs you**, "An approval or a question" under it, on; **A session finishes** and
   **A desktop goes to sleep**, off) and §9's foot. **Developer** stays undrawn: its page is a later slice, its
-  design first. Both are drawn in TestFlight and development builds only. The build submitted for App Review draws
-  neither: Notifications until push ships, Developer never.
+  design first *(drawn since 2026-11-12, RB-2, below)*. Both are drawn in TestFlight and development builds only. The
+  build submitted for App Review draws neither: Notifications until push ships, Developer never.
+  *Amended 2026-11-12 (RB-2; James on the board card j-rb2-developer-page, 17:56:21.512Z, "All four leans; build it":
+  D1–D4; the account states on the correction card j-rb2-d3-count, 21:44:43.337Z, "All 23, in two groups"; how a demo
+  ends on the card j-rb2-d5-demo-ends, 21:44:36.025Z, "A: a state lasts one open, then your own account returns"; the
+  acts under a demo ruled by VF-PM 18:06:27Z):* **This phone** gains **Developer**, after **Notifications**: §13's
+  `code`. It is drawn in TestFlight and development builds only. The build submitted for App Review never draws it
+  and carries none of its code: its archive is counted for the page's markers, as RB-1's are. The page has two groups
+  and §9's foot (D4).
+  - **Demo**, two rows. **Demo field**, a switch, off: a made-up field in place of yours (two desktops, studio and
+    mini, their agents, and History to read), with no desktop and no network. **Account**, a picker: **Your own**,
+    then every state the corner and the way in can stand in, drawn over made-up facts, in two groups, **Your
+    account** (13) and **The way in** (10), each named as its page or the corner says it (§9).
+  - **Labs**, two rows, each opening its lab: **Swarm lab**, the swarm's design lab (IOS-6c); **Input card states**,
+    the input card over a made-up session, in the states that otherwise take a long press, a held key or the
+    microphone. Nothing typed there is sent. The lab's states are named in §9 when RB-2c reads them.
+  - A choice takes effect the next time VibeField opens (D1), never at once: a made-up field stands in for your
+    desktops' answers from the first frame, and swapping it under a running field would rebuild the field. The Demo
+    group's foot says so.
+  - While Demo field or an account state stands, a dotted **Demo** tag stands beside the account corner (D2), so a
+    made-up fleet never passes for your own agents.
+  - A state stands for one open: the next time VibeField opens after it, your own account is back and the picker says
+    **Your own** (D5 A, j-rb2-d5-demo-ends). One open is a launch, never a return from the background, and the choice
+    is let go as it is read, so an open that fails cannot keep the phone in the state. Demo field keeps the tabs and
+    Settings, so it stays on until it is switched off.
+  - A demo never signs you in or out, never turns your lock on, and never opens the camera or Safari: under a demo
+    every button that would reach your account, your lock, the code reader or Safari does nothing, and the buttons
+    that only move between pages still move. The lock itself stands over a demo as it does over your own field.
+  - The choices are this phone's own, kept beside Appearance, never synced and never sent.
 - **The phone's corner — your face, held, and Agent Profiles** (track UM, ruled 2026-11-06 from the page *The Bands
   Meter*: UM-D24, UM-D25 and UM-D26 A; UM-D8 and UM-D12 carried A at the leans; the drawing is
   `draft/profile-meters/round4/src/p4f-frames.js` and `round4.css`, the bloom's numbers `p3c-phone.js`). The account
@@ -9917,6 +9944,25 @@ of "The phone's legal words".
   session finishes** and **A desktop goes to sleep**.
 - The foot: "**Not built yet.** When it is, a desktop tells this iPhone only that something happened, never what
   your agents said. Until then, the orange count on the Field tab is how this iPhone tells you."
+**Developer** (track IOS, RB-2; James on the board card j-rb2-developer-page, 2026-11-12 17:56:21.512Z, D1–D4, the
+correction card j-rb2-d3-count, 21:44:43.337Z, and the card j-rb2-d5-demo-ends, 21:44:36.025Z, A; where it stands is
+§8 "The phone's Settings"). It is drawn in TestFlight and development builds only. Its words say what a row does,
+never how it is built.
+- The row is **Developer**.
+- **Demo**: **Demo field**, with "A made-up field: studio and mini, their agents and History to read. No desktop
+  needed." under it; **Account**, which reads **Your own** or the state that stands, with "A state stands for one
+  open; then your own account comes back." under it. The group's foot: "Changes take effect the next time VibeField
+  opens."
+- The picker's **Your account**: **Signed in** · **Your desktops asleep** · **Sign in to Tailscale again** · **Signed
+  in, no face** · **Another account’s desktop nearby** · **A desktop refused this phone** · **Welcome** · **Welcome,
+  a first sign-in failed** · **Waiting for approval** · **No desktops yet** · **Welcome, after a scanned code** ·
+  **Another account? (a scanned code)** · **Another account? (a link)**.
+- The picker's **The way in**: **Joining your network** · **Looking for your computer** · **How it works, 1 of 4** ·
+  **How it works, 2 of 4** · **How it works, 3 of 4** · **How it works, 4 of 4** · **Found your desktop** · **Sent by
+  a desktop’s code** · **The lock offered (Face ID)** · **The lock offered (passcode only)**.
+- **Labs**: **Swarm lab** · **Input card states**.
+- The tag beside the corner is **Demo**, dotted; it is spoken "Demo. What you see is made up."
+- The foot: "For testing. TestFlight and development builds show this page; the build in the App Store does not."
 **The freeway's refusals** (track FW, F1b's kit half; FW-D5; added 2026-11-01). The phone asks its home desktop to
 approve its connection to each desktop, and when a desktop says no, the phone says it in these words. ‹desktop› is
 the field's name for that desktop, the way the attach card names it ("couldn't reach studio's terminal"). The
