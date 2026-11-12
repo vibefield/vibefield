@@ -1,4 +1,5 @@
 import FieldDesign
+import FieldMarkdown
 import SwiftUI
 
 /// The document (H-4): the prompt as the one filled panel, one head per
@@ -364,10 +365,8 @@ struct HistorySessionView: View {
   }
 
   private func prompt(_ turn: HistoryTurn) -> some View {
-    Text(turn.prompt.isEmpty ? "(an empty prompt)" : turn.prompt)
-      .font(ChromeType.sans(15))
-      .lineSpacing(4)
-      .foregroundStyle(turn.prompt.isEmpty ? ChromePalette.inkFaint : ChromePalette.ink)
+    HistoryWordsView(text: turn.prompt, blank: "(an empty prompt)", measure: HistoryWords.prompt)
+      .equatable()
       .padding(.horizontal, 15)
       .padding(.top, 11)
       .padding(.bottom, 12)
@@ -379,6 +378,8 @@ struct HistorySessionView: View {
         }
       }
       .id(turn.promptAnchor ?? "prompt-\(turn.id)")
+      // one element, as the one Text it was: the blocks are not read out piece by piece
+      .accessibilityElement(children: .ignore)
       .accessibilityLabel("You, at \(turn.at): \(turn.prompt)")
   }
 
@@ -409,10 +410,8 @@ struct HistorySessionView: View {
   private func segmentView(_ segment: HistorySegment) -> some View {
     switch segment {
     case .prose(let id, let at, let text, let anchor):
-      Text(text.isEmpty ? "(no words)" : text)
-        .font(ChromeType.sans(15))
-        .lineSpacing(4)
-        .foregroundStyle(text.isEmpty ? ChromePalette.inkFaint : ChromePalette.ink)
+      HistoryWordsView(text: text, blank: "(no words)", measure: HistoryWords.reply)
+        .equatable()
         .padding(.vertical, 6)
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -422,6 +421,7 @@ struct HistorySessionView: View {
             .opacity(anchor != nil && litAnchor == anchor ? 1 : 0)
         }
         .id(anchor ?? id)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(document.agentName), at \(at): \(text)")
     case .ledger(let id, let summary, let duration, let failed, let isLive, let lines):
       ledger(id: id, summary: summary, duration: duration, failed: failed, isLive: isLive, lines: lines)
@@ -566,5 +566,37 @@ struct HistorySessionView: View {
     }
     .frame(minHeight: 26)
     .accessibilityElement(children: .combine)
+  }
+}
+
+/// Item 362d — a recorded message's words, drawn: read by `HistoryWords` and set by the view Chat draws a spark's
+/// words with, at the document's measure. Equatable, so words that did not change are not read again when the
+/// document's scroll state does.
+private struct HistoryWordsView: View, Equatable {
+  let text: String
+  /// What stands for words that are nothing but space.
+  let blank: String
+  let measure: ChatMarkdownMeasure
+
+  nonisolated static func == (a: HistoryWordsView, b: HistoryWordsView) -> Bool {
+    a.text == b.text && a.blank == b.blank && a.measure == b.measure
+  }
+
+  var body: some View {
+    switch HistoryWords.reading(text) {
+    case .blank:
+      plain(blank).foregroundStyle(ChromePalette.inkFaint)
+    case .typed(let typed):
+      plain(typed).foregroundStyle(ChromePalette.ink)
+    case .blocks(let blocks):
+      ChatMarkdownView(blocks: blocks, measure: measure)
+    }
+  }
+
+  private func plain(_ words: String) -> some View {
+    Text(verbatim: words)
+      .font(ChromeType.sans(measure.size))
+      .lineSpacing(measure.lineSpacing)
+      .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
