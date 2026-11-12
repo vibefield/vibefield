@@ -95,7 +95,8 @@ describe("buildSupervisor — the rosettad fieldd is handed (AR-8, L3)", () => {
 
   it("hands nothing when the package carries no rosettad", () => {
     delete process.env["FIELDD_ROSETTAD_BIN"];
-    expect(spawnEnvironment(packagedLayout(false))).not.toHaveProperty("FIELDD_ROSETTAD_BIN");
+    // Item 365: booleans, never the environment itself, so a red cannot print this process's whole environment.
+    expect("FIELDD_ROSETTAD_BIN" in spawnEnvironment(packagedLayout(false))).toBe(false);
   });
 
   it("lets the environment's choice win, and reads an empty one as unset", () => {
@@ -126,6 +127,8 @@ describe("buildSupervisor — the rosettad fieldd is handed (AR-8, L3)", () => {
       logRoot: tmpdir(),
       logger: createNoopLogger(),
     });
-    expect(stub.created.at(-1)?.environment).not.toHaveProperty("FIELDD_ROSETTAD_BIN");
+    const handed = stub.created.at(-1)?.environment;
+    expect(handed === undefined).toBe(false);
+    expect("FIELDD_ROSETTAD_BIN" in (handed ?? {})).toBe(false);
   });
 });

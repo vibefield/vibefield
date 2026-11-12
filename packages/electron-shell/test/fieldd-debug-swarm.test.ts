@@ -114,8 +114,8 @@ describe("buildSupervisor — the debug swarm never reaches a packaged fieldd (P
       CORPUS,
     );
     delete process.env[FIELDD_DEBUG_SWARM_CORPUS_ENV];
-    expect(spawnEnvironment("smoke", developmentLayout())).not.toHaveProperty(
-      FIELDD_DEBUG_SWARM_CORPUS_ENV,
-    );
+    // Item 365: a boolean, never the environment itself, so a red cannot print this process's whole environment.
+    const handed = spawnEnvironment("smoke", developmentLayout());
+    expect(FIELDD_DEBUG_SWARM_CORPUS_ENV in handed).toBe(false);
   });
 });
