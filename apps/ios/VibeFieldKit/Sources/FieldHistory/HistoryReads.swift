@@ -42,6 +42,14 @@ public enum HistoryReads {
   /// How many of the most recent projects get their figures read as the ledger
   /// opens (three rosetta GETs each on the desktop): the rest read when opened.
   public static let prefetchFigures = 6
+  /// Item 352 — how many pages of `listRows` the ledger's listing is followed for: 2,000 projects. A desktop's
+  /// window follows 200 pages of 500; a phone's ledger past two thousand says it holds the most recent.
+  public static let ledgerPages = 20
+  /// Item 352 — how many pages of `listRows` an opened project's sessions are followed for: 1,000 sessions.
+  public static let sessionPages = 10
+  /// Item 352 — a listing followed to its end is followed again no sooner than this; between, a ping's read takes
+  /// the newest page alone (the door orders by newest activity, so what moved is at its head).
+  public static let walkSeconds: Int64 = 60
   /// fix7 — while the ledger's index is not ready (starting, rebuilding,
   /// failed), how often the ledger and its index are read again: nothing pings
   /// when it becomes ready, and two cheap reads every few seconds is a

@@ -44,6 +44,9 @@ public final class HistoryProjects {
   /// fix7 — the door's index (`index.status`): nil before it is read, or when
   /// the door does not offer it (the listing is believed then).
   public private(set) var index: FieldHistoryModel.IndexStanding?
+  /// Item 352 — the listing went on past `HistoryReads.ledgerPages` pages: the ledger holds the most recently active
+  /// projects and says so.
+  public private(set) var cut = false
   public var isReplaying: Bool { door == nil || !standing.isAwake }
   /// The desktop whose door answers, by name: the roster's, else the answer's.
   public var sourceName: String {
