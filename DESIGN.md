@@ -6878,6 +6878,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         **Refused**, one line under the setting, at 12/400 in the attention ink (§2.5), says it couldn't, never the
         error's own text; a secret typed and refused stays in its masked field. **Away**, nothing takes input, and
         the page says the popup's away sentence (Its switches).
+      - **Unread** (*drawn 2026-11-12, MK-4c2b; VF-PM 23:49:52Z, 1*; ‹draft› for James's eye): when fieldd answers
+        but refuses to read a setting, one line under it, at 12/400 in the attention ink (§2.5), says so in §9's
+        words, never the error's own text, and the setting takes no input. It is read again at the page's next
+        opening, or when fieldd answers again after being away; nothing retries it on its own.
       - A setting is read as the page opens and again after its own change. Nothing re-reads on its own while the
         page is open: a change made in Settings, its Undo included, or on another desktop shows at the page's next
         opening.
@@ -9079,6 +9083,8 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   - A page's settings stand under **Settings**.
   - An off plugin's page says, under Settings, "Turn it on to change its settings."
   - A setting that couldn't be saved says "Couldn't save that. Try again."
+  - *Added 2026-11-12 (VF-PM 23:49:52Z, 1), ‹draft›:* a setting that couldn't be read says "Couldn't load this
+    setting."
   - A secret that is kept says "Saved" in its empty field; the page never shows what is kept.
   - A choice with nothing chosen yet says "Choose…" (Settings' word).
   - A setting the page can't draw says "This setting can't be changed here."
