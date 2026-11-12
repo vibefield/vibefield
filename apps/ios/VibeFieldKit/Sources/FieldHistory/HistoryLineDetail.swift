@@ -45,14 +45,3 @@ struct HistoryProjected: Equatable, Sendable {
   let row: IndexTimelineRow
   let detail: HistoryLineDetail?
 }
-
-// Item 362f (red) — the names the rows call. Nothing is kept beyond a row yet.
-extension HistoryProjection {
-  static let wholeChars = 32_768
-
-  static func detail(entry: FieldProduct.JSONValue, beside row: IndexTimelineRow) -> HistoryLineDetail? { nil }
-
-  static func projected(entry: FieldProduct.JSONValue) -> HistoryProjected? {
-    row(entry: entry).map { HistoryProjected(row: $0, detail: nil) }
-  }
-}

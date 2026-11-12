@@ -235,6 +235,9 @@ public final class HistoryDesktopReader: Identifiable {
   /// Item 366 — per session, the rows a document held when a direct read took it over: those above the direct
   /// read's own window stay on the page until it reaches them
   @ObservationIgnored private var carried: [String: [String: IndexTimelineRow]] = [:]
+  /// Item 362f — per session and row id, what the direct read's entries carry beyond their rows. A detail speaks
+  /// only while the row it was made beside is the row held (`HistoryLineDetail`); `rows` stays the door's rows.
+  @ObservationIgnored private var details: [String: [String: HistoryLineDetail]] = [:]
 
   public init(
     deviceId: String, name: String, isHome: Bool = false, door: (any HistoryDoor)?, ownsDoor: Bool = false,
@@ -493,8 +496,12 @@ public final class HistoryDesktopReader: Identifiable {
   private func rebuildDocument(_ sessionId: String) {
     guard let header = headers[sessionId] else { return }
     let clock = now()
+    let held = rows[sessionId] ?? [:]
+    // item 362f — a detail whose row the door has since changed is silent, and goes here
+    let beyond = HistoryLineDetail.live(details[sessionId] ?? [:], over: held)
+    details[sessionId] = beyond.isEmpty ? nil : beyond
     let document = FieldHistoryModel.document(
-      header: header, rows: Array((rows[sessionId] ?? [:]).values), desktop: name,
+      header: header, rows: HistoryLineDetail.applied(Array(held.values), beyond), desktop: name,
       agentLabel: agentLabel(header.provider ?? "agent"), nextCursor: cursors[sessionId],
       watermark: watermarks[sessionId], liveSince: liveSince[sessionId], now: clock)
     corpus.documents[sessionId] = document
@@ -585,7 +592,7 @@ public final class HistoryDesktopReader: Identifiable {
     closeTail()
     let sink = HistoryDirectRead.Sink(
       page: { [weak self] cursor, watermark in self?.directPage(sessionId, cursor: cursor, watermark: watermark) },
-      rows: { [weak self] rows in self?.directRows(sessionId, rows) },
+      rows: { [weak self] rows, beyond in self?.directRows(sessionId, rows, beyond) },
       lost: { [weak self] reason in self?.directLost(sessionId, reason) })
     let read = HistoryDirectRead(sessionId: sessionId, plane: directPlane, sink: sink, log: log)
     directRead = (sessionId, read)
@@ -628,7 +635,12 @@ public final class HistoryDesktopReader: Identifiable {
   /// until the read reaches them, while the list shares a row with them (one record). A list that shares none is
   /// another record, or too far from them to join: they go, as they always did. It was the list alone, so a direct
   /// read coming back dropped the pages the door had read.
-  private func directRows(_ sessionId: String, _ visible: [IndexTimelineRow]) {
+  ///
+  /// Item 362f — `beyond` is what the list's entries carry beyond their rows. It is laid over the details of the
+  /// rows still held as they were (those carried from an earlier direct read keep theirs).
+  private func directRows(
+    _ sessionId: String, _ visible: [IndexTimelineRow], _ beyond: [String: HistoryLineDetail]
+  ) {
     let before = (rows[sessionId] ?? [:]).values.map(\.ordinal).max() ?? -1
     var held: [String: IndexTimelineRow] = [:]
     for row in visible { held[row.timelineId] = row }
@@ -642,6 +654,9 @@ public final class HistoryDesktopReader: Identifiable {
       }
     }
     rows[sessionId] = held
+    var kept = HistoryLineDetail.live(details[sessionId] ?? [:], over: held)
+    for (id, detail) in beyond { kept[id] = detail }
+    details[sessionId] = kept.isEmpty ? nil : kept
     let appended = visible.filter { $0.ordinal > before }.count
     if appended > 0, before >= 0 { arrivals[sessionId, default: 0] += appended }
     rebuildDocument(sessionId)
@@ -771,6 +786,7 @@ public final class HistoryDesktopReader: Identifiable {
     rows[sessionId] = nil
     cursors[sessionId] = nil
     carried[sessionId] = nil
+    details[sessionId] = nil
     closeTail()
     openSession(sessionId)
   }

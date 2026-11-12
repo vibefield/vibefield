@@ -108,8 +108,8 @@ final class HistoryDirectRead {
   struct Sink {
     /// A page's continuation and its generation: the snapshot's, or an older page's before it is revealed.
     let page: @MainActor (_ cursor: String?, _ watermark: String) -> Void
-    /// Every visible row, in order, after a change.
-    let rows: @MainActor ([IndexTimelineRow]) -> Void
+    /// Every visible row, in order, after a change; and, by row id, what their entries carry beyond them (362f).
+    let rows: @MainActor ([IndexTimelineRow], [String: HistoryLineDetail]) -> Void
     /// The read gave up after it was live; it is already closed.
     let lost: @MainActor (HistoryDirectFallback) -> Void
   }
@@ -124,7 +124,7 @@ final class HistoryDirectRead {
   private var client: RosettaClient?
   private var urlSession: URLSession?
   private var subscription: SessionSubscription?
-  private var cache = HistoryProjectionCache<TimelineEntry, IndexTimelineRow>()
+  private var cache = HistoryProjectionCache<TimelineEntry, HistoryProjected>()
   private var opening: CheckedContinuation<Outcome, Never>?
   private var deadline: Task<Void, Never>?
   private var renewal: Task<Void, Never>?
@@ -204,9 +204,13 @@ final class HistoryDirectRead {
   }
 
   private func changed(_ entries: [TimelineEntry]) {
-    let rows = cache.rows(
-      of: entries, id: { $0.timelineId }, project: { HistoryProjection.row(entry: $0) })
-    sink.rows(rows)
+    let projected = cache.rows(
+      of: entries, id: { $0.timelineId }, project: { HistoryProjection.projected(entry: $0) })
+    var details: [String: HistoryLineDetail] = [:]
+    for item in projected {
+      if let detail = item.detail { details[item.row.timelineId] = detail }
+    }
+    sink.rows(projected.map(\.row), details)
   }
 
   private func heard(_ status: SubscriptionStatus) {
@@ -356,6 +360,11 @@ extension HistoryProjection {
   /// The row of one of rosetta's entries; nil for one the gate refuses.
   static func row(entry: TimelineEntry) -> IndexTimelineRow? {
     row(entry: FieldProduct.JSONValue.object(entry.fields.mapValues(productJSON)))
+  }
+
+  /// Item 362f — one of rosetta's entries projected: its row, and what it carries beyond it.
+  static func projected(entry: TimelineEntry) -> HistoryProjected? {
+    projected(entry: FieldProduct.JSONValue.object(entry.fields.mapValues(productJSON)))
   }
 
   private static func productJSON(_ value: RosettaJSON) -> FieldProduct.JSONValue {

@@ -16,11 +16,21 @@ import Foundation
 //
 // What never crosses, as at the door: an asset's bytes, its address on rosettad (`AssetRef.url` is
 // not read — EL2, EL7), a citation's source, a tool's diagnostics beyond its summary, provenance.
+//
+// *Corrected 2026-11-12 (item 362f):* "reads the same as the row the door would have sent" is the ROW's law, and
+// it stands. The row is no longer all the phone keeps of an entry it read directly: `detail(entry:beside:)` keeps,
+// beside the row and never in it, the body's whole words when the row's were cut at `textChars` and the entry
+// holds them inline (`HistoryLineDetail`). What never crosses is unchanged: a detail reads no asset, no address,
+// no citation's source, no diagnostic and no provenance.
 public enum HistoryProjection {
   /// `INDEX_TIMELINE.TEXT_CHARS`, held by `pnpm check:ios-fixtures`: a row's words, UTF-16 units.
   public static let textChars = 2_000
   /// `INDEX_TIMELINE.OBJECT_CHARS`, held the same way: a tool line's object and failure.
   public static let objectChars = 200
+  /// Item 362f — the most a whole text may be, UTF-16 units. rosetta holds a text of up to 32 KiB inline and files
+  /// a longer one as a member (a preview and its size), so an inline text within this is the whole. Past it the
+  /// row's own cut stands, with its mark.
+  public static let wholeChars = 32_768
 
   private typealias Fields = [String: JSONValue]
 
@@ -59,7 +69,10 @@ public enum HistoryProjection {
   }
 
   /// The row as the door would send it; nil for an entry the gate refuses.
-  static func rowJSON(entry: JSONValue) -> JSONValue? {
+  static func rowJSON(entry: JSONValue) -> JSONValue? { rowJSON(entry: entry, textBound: textChars) }
+
+  /// The row with its words cut at `textBound` units: the door's `textChars`, or `wholeChars` for a detail's whole.
+  private static func rowJSON(entry: JSONValue, textBound: Int) -> JSONValue? {
     guard let fields = entry.objectValue, admitsEntry(fields) else { return nil }
     guard let body = fields["body"]?.objectValue, let kind = body["type"]?.stringValue else {
       return nil
@@ -82,7 +95,7 @@ public enum HistoryProjection {
     if let response = fields["response"]?.objectValue { row["responseId"] = response["id"] }
 
     if let words = bodyText(body) {
-      let clipped = clip(words.text, textChars)
+      let clipped = clip(words.text, textBound)
       row["text"] = .string(clipped.text)
       if clipped.clipped { row["textClipped"] = .bool(true) }
       row["textByteLen"] = words.byteLen
@@ -98,6 +111,27 @@ public enum HistoryProjection {
       row["costMicroUsd"] = num(cost["micro_usd"])
     }
     return .object(row)
+  }
+
+  // MARK: - Beyond the row (item 362f)
+
+  /// What the entry carries beyond `row`, its own projection; nil when it carries nothing more.
+  ///
+  /// The whole words: only where the row's were cut, and only when the entry holds them. A member text's whole is
+  /// a file on the desktop (the row says its size, `textByteLen`), and an inline text past `wholeChars` is still
+  /// cut at that bound: neither has a whole here.
+  static func detail(entry: JSONValue, beside row: IndexTimelineRow) -> HistoryLineDetail? {
+    guard row.textClipped, row.textByteLen == nil,
+      let json = rowJSON(entry: entry, textBound: wholeChars), let whole = try? IndexTimelineRow(json: json),
+      !whole.textClipped
+    else { return nil }
+    return HistoryLineDetail(row: row, whole: whole)
+  }
+
+  /// The entry projected: its row, and what it carries beyond it. Nil for an entry the gate refuses.
+  static func projected(entry: JSONValue) -> HistoryProjected? {
+    guard let row = row(entry: entry) else { return nil }
+    return HistoryProjected(row: row, detail: detail(entry: entry, beside: row))
   }
 
   // MARK: - The readers' primitives
