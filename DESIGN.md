@@ -7709,6 +7709,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     not this one (`24 Aug 2025`); a pause is said to the minute, and from two days on as `2d 3h`. A reply the cut
     falls inside continues under the pill with no second head, and a run never crosses a pill. A session of one
     sitting has no pill. It was one pill before a prompt sixty minutes or more after the turn before it, with no day.
+  - **Its words are read as Chat reads a spark's** (362d). A reply's words go through the phone's one reader
+    (`ChatMarkdown.blocks`, the Mac's `markdownBlocksOf`) and the view Chat draws a spark's words with: paragraphs
+    with their line breaks, bold, italic, `code`, fenced code that scrolls within itself, lists, quotes, a heading as
+    a bold paragraph. Never markup (EL7): a link is its words and nothing in the document opens anything; an address
+    written bare between angle brackets is shown as its own characters, as words. The measure is the document's, not
+    Chat's: 15 pt with 4 of leading, `code` and fenced code at 13 pt (fenced at 1.45), blocks 10 apart. **A prompt is
+    read the same way**, because the room reads it so and this document is the desktop's record being read; Chat's
+    own prompt stays plain with its chips, because there you are typing. On the prompt's panel a fence takes solid
+    chrome (`menuSurface`) ringed by `ruleStrong`, and `code` takes the mono and no ground: the panel is `fill`, and
+    a fill on a fill is no boundary (the room's own rule). Words that are nothing but space say so (`(no words)`,
+    `(an empty prompt)`); words that read into no block stand as typed. Not ported from the room: tables (they stand
+    as their source lines), strike, rules, a heading's level, the code bar (language, copy) and syntax colours, the
+    long-message excerpt (the phone's words are already cut at 2,000 units, with `clipped · 14 KB on studio` under
+    them), and search terms marked inside the words (the phone lights the row). It was plain text.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
