@@ -7,7 +7,8 @@ import Foundation
 // sends the record does not show yet, in; the flow's rows, top to bottom, out. The latest conversation (its runs
 // joined) is drawn, the earlier ones behind one row until asked for; your words with their chips and their receipt,
 // its replies whole, its tools one line a turn by kind, VibeField's own acts, the hello while the spark is new and its
-// conversation empty, Thinking… while its own run works, day lines, and the three honest lines. A word this build does
+// conversation empty, Thinking… while its own run works, day lines, and the four honest lines (the fourth, a turn
+// that couldn't finish: item 230, 2026-11-12). A word this build does
 // not know draws no word of its own (the tolerant reader).
 //
 // The fold reads a spark as `ChatFlowSpark`: the nine facts the Mac's fold reads of its entry, and nothing else. Each
@@ -119,10 +120,10 @@ public struct ChatStarter: Sendable, Equatable {
   public let words: String
 }
 
-/// Which honest line: the record began after the spark first worked, a part written while VibeField restarted, or a
-/// part the worker could not check.
+/// Which honest line: the record began after the spark first worked, a part written while VibeField restarted, a
+/// part the worker could not check, or a turn that couldn't finish (item 230, 2026-11-12).
 public enum ChatHonest: String, Sendable, Equatable {
-  case before, gap, dropped
+  case before, gap, dropped, failed
 }
 
 /// One row of the flow (`FlowItem`). `lead`: its face leads the row (once per run of its rows).
@@ -192,6 +193,9 @@ public enum ChatFlowWords {
   public static func before(_ name: String) -> String { "Earlier messages are in \(name)'s terminal" }
   public static func gap(_ name: String) -> String {
     "Part of this conversation happened while VibeField restarted — it's in \(name)'s terminal"
+  }
+  public static func failed(_ name: String) -> String {
+    "\(name) couldn't finish — what happened is in \(name)'s terminal"
   }
   public static let dropped = "Part of this conversation couldn't be checked, so it isn't shown"
 
@@ -451,8 +455,8 @@ public enum ChatFlows {
 
   /// A conversation's lines as rows: replies (the latest for a message id, where it first stood), tools folded one
   /// line a turn (VibeField's own left out), your words with what their receipt needs, VibeField's acts, and the gap
-  /// line. Turn edges and run lines are read for grouping and draw nothing; an outcome is read into its bubble's
-  /// receipt.
+  /// line. Turn edges and run lines are read for grouping; a failed turn's edge draws its honest line (item 230,
+  /// 2026-11-12), and nothing else of them is drawn. An outcome is read into its bubble's receipt.
   static func rows(of lines: [SparkTranscriptKnownLine], name: String, key: String) -> [Row] {
     var rows: [Row] = []
     var replies: [String: Int] = [:]
@@ -485,6 +489,12 @@ public enum ChatFlows {
         if !tool.ours { toolRows?.append(ChatToolRow(words: ChatFlowWords.tool(tool.toolKind), detail: tool.detail)) }
       case .turn(let edge, _):
         if edge != "start" { closeTools() }
+        // item 230 (2026-11-12): a failed turn says so where it ended; why it failed stays inside
+        if edge == "failed" {
+          let item = ChatFlowItem.honest(
+            key: "failed:\(key):\(line.seq)", which: .failed, words: ChatFlowWords.failed(name))
+          rows.append(Row(at: at, item: .item(item)))
+        }
       case .run, .outcome:
         break
       case .reply(let messageId, _, let text):

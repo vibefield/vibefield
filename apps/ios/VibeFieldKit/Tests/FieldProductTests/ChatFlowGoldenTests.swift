@@ -68,6 +68,7 @@ struct ChatFlowGoldenTests {
     #expect(flow["before"] == .string(ChatFlowWords.before("Vela")))
     #expect(flow["gap"] == .string(ChatFlowWords.gap("Vela")))
     #expect(flow["dropped"] == .string(ChatFlowWords.dropped))
+    #expect(flow["failed"] == .string(ChatFlowWords.failed("Vela")))
 
     let tools = try #require(golden["tools"]?.arrayValue)
     #expect(tools.compactMap { $0["kind"]?.stringValue } == ChatFlowWords.toolKinds.map { $0.kind } + ["telepathy"])

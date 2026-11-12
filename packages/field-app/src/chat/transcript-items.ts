@@ -47,7 +47,7 @@ export type FlowItem =
   | {
       readonly kind: "honest";
       readonly key: string;
-      readonly which: "before" | "gap" | "dropped";
+      readonly which: "before" | "gap" | "dropped" | "failed";
       readonly words: string;
     }
   | {
@@ -117,6 +117,7 @@ export const FLOW_WORDS = {
   before: (name: string) => `Earlier messages are in ${name}'s terminal`,
   gap: (name: string) =>
     `Part of this conversation happened while VibeField restarted — it's in ${name}'s terminal`,
+  failed: (name: string) => `${name} couldn't finish — what happened is in ${name}'s terminal`,
   dropped: "Part of this conversation couldn't be checked, so it isn't shown",
 } as const;
 
@@ -345,7 +346,8 @@ export function transcriptItemsOf({
 
 /** A conversation's lines as rows: replies (the latest for a message id, where it first stood), tools folded one line
  * a turn (VibeField's own left out), your words with what their receipt needs, VibeField's acts, and the gap line.
- * Turn edges and run lines are read for grouping and draw nothing; an outcome is read into its bubble's receipt. */
+ * Turn edges and run lines are read for grouping; a failed turn's edge draws its honest line (item 230, 2026-11-12),
+ * and nothing else of them is drawn. An outcome is read into its bubble's receipt. */
 function rowsOf(lines: readonly SparkTranscriptKnownLine[], name: string, key: string): Row[] {
   const rows: Row[] = [];
   const replies = new Map<string, number>();
@@ -386,6 +388,17 @@ function rowsOf(lines: readonly SparkTranscriptKnownLine[], name: string, key: s
         break;
       case "turn":
         if (line.edge !== "start") closeTools();
+        // item 230 (2026-11-12): a failed turn says so where it ended; why it failed stays inside
+        if (line.edge === "failed")
+          rows.push({
+            at,
+            item: {
+              kind: "honest",
+              key: `failed:${key}:${line.seq}`,
+              which: "failed",
+              words: FLOW_WORDS.failed(name),
+            },
+          });
         break;
       case "run":
       case "outcome":

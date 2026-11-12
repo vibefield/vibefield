@@ -353,10 +353,17 @@ const CASES: readonly FlowCase[] = [
   {
     name: "honest",
     about:
-      "The record began after the spark first worked (before), a part it could not check (dropped), and a part written while VibeField restarted (gap), each in its words",
+      "The record began after the spark first worked (before), a part it could not check (dropped), a part written while VibeField restarted (gap), and a turn that couldn't finish (failed), each in its words",
     spark: sparkInput(),
     runs: [LATEST],
-    raw: { [RUN]: [line("run"), line("reply"), line("gap")] },
+    raw: {
+      [RUN]: [
+        line("run"),
+        line("reply"),
+        line("gap"),
+        line("turn", { seq: 11, at: "2026-11-04T23:20:10.000Z", edge: "failed" }),
+      ],
+    },
     dropped: 2,
   },
   {
@@ -535,6 +542,7 @@ function wordsGolden() {
       before: FLOW_WORDS.before("Vela"),
       gap: FLOW_WORDS.gap("Vela"),
       dropped: FLOW_WORDS.dropped,
+      failed: FLOW_WORDS.failed("Vela"),
     },
     tools: [...Object.keys(TOOL_WORDS), "telepathy"].map((kind) => ({
       kind,

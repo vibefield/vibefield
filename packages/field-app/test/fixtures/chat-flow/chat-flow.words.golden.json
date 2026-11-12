@@ -16,7 +16,8 @@
     ],
     "before": "Earlier messages are in Vela's terminal",
     "gap": "Part of this conversation happened while VibeField restarted — it's in Vela's terminal",
-    "dropped": "Part of this conversation couldn't be checked, so it isn't shown"
+    "dropped": "Part of this conversation couldn't be checked, so it isn't shown",
+    "failed": "Vela couldn't finish — what happened is in Vela's terminal"
   },
   "tools": [
     {

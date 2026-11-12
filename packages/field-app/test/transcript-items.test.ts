@@ -390,6 +390,7 @@ describe('the words (§9 "Chat\'s words")', () => {
       FLOW_WORDS.before("Vela"),
       FLOW_WORDS.gap("Vela"),
       FLOW_WORDS.dropped,
+      FLOW_WORDS.failed("Vela"),
       ...Object.values(TOOL_WORDS),
       actWords("wake", "‹what it told›", "Vela"),
       actWords("answer", "Yes", "Vela"),
