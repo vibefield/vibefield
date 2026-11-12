@@ -291,4 +291,47 @@ describe("item 322: a revision slot that already exists is not taken on its mark
       ).rejects.toMatchObject({ name: "PluginArtifactSlotMismatchError" });
     }
   });
+
+  // The second road into `stage`: the adoption of a flat install (`adoptLegacy`), whose `prepare` is a copy of the
+  // flat install's own files. A folder already at that install's slot is held to the same rule.
+  it("adoption refuses a folder at the flat install's slot that is not its files", async () => {
+    const value = await store();
+    await legacy(value);
+    // a folder at the slot of sha("a"), with a marker that names sha("a"), holding other bytes
+    const there = await stage(value, "0.0.0-other", sha("a"));
+
+    await expect(value.adoptLegacy(PLUGIN_ID)).rejects.toMatchObject({
+      name: "PluginArtifactSlotMismatchError",
+    });
+    // nothing became current, the folder is left as found, and discovery still reads the flat install
+    expect(await value.current(PLUGIN_ID)).toBeNull();
+    expect(await readFile(join(there.root, "dist", "renderer.js"), "utf8")).toContain(
+      "0.0.0-other",
+    );
+    expect(await resolveInstalledArtifactRoot(value.installedRoot, PLUGIN_ID)).toBe(
+      value.pluginRoot(PLUGIN_ID),
+    );
+    expect(await stagingLeft(value)).toEqual([]);
+  });
+
+  // The other side of that rule, so it does not cost a recovery: an adoption that put its folder at the slot and
+  // was cut short before the pointer moved is finished on the next try, because the folder holds the same files.
+  it("finishes an adoption cut short before its pointer when the files are the same", async () => {
+    const value = await store();
+    await legacy(value);
+    const cut = new PluginArtifactStore(value.installedRoot, {
+      beforeCurrentPublish: () => {
+        throw new Error("simulated power loss before pointer rename");
+      },
+    });
+    await expect(cut.adoptLegacy(PLUGIN_ID)).rejects.toThrow("simulated power loss");
+    expect(await value.current(PLUGIN_ID)).toBeNull();
+
+    const adopted = await value.adoptLegacy(PLUGIN_ID);
+    expect(adopted?.pointer.artifactSha256).toBe(sha("a"));
+    expect(await readFile(join(adopted?.root ?? "", "dist", "renderer.js"), "utf8")).toContain(
+      "1.0.0",
+    );
+    expect(await stagingLeft(value)).toEqual([]);
+  });
 });
