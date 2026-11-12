@@ -715,7 +715,20 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 - Landed 11-11: **items 318 + 317** (318's doc to 317's green, M283, run 306; LANDED "Items 318 + 317"): the
   palette takes no pointer while it folds, so a press after ⌘K or Esc reaches what it was aimed at; the suites'
   shells keep no history in the runner's home. Landed after the push, by James's pick.
+- Landed 11-12: **item 341** (`de3b86eab` → `47f8d4732`, 4 commits, M292, run341 on the old mini; LANDED "Item 341"):
+  a packaged VibeField asks the person's login shell for `PATH` once and hands that one key to each pair it spawns,
+  so a copy opened from the Dock finds the agents a terminal finds (nightly-20261110.1 found none). `dev` and every
+  smoke keep their own PATH. ESP-18 is landed in code; §5.1 waits in the draft queue.
 - In flight:
+  - item 341's slice 4, `smoke:agent-path`: its red `9466221a8` stays on `rv/341`. Its green and its first run wait
+    for item 354.
+  - item 354, the Homebrew probe (note `lanes/rv/nightly-agents/item-354-note.md`, James's card j-354-homebrew-probe):
+    puppeteer's inventory reads `/opt/homebrew` and `/usr/local` whatever a harness isolates, so a test or smoke
+    fieldd runs a Homebrew-installed agent's version command. puppeteer's half (forward `brewPrefixes`) is James's
+    hand; fieldd's half (pass none in every harness, its seam beside `FIELDD_AGENT_SEARCH_PATH`) follows its EL8.
+  - item 357 (note `lanes/rv/nightly-agents/item-357-note.md`, with 354's card): the adapters' service runs (version,
+    sign-in status, usage, models, extensions) start the vendor's executable with the daemon's whole environment,
+    `FIELDD_*` included, because the built-in providers take no `env`. The agent's PTY and helpers stay clean.
   - the sibling lanes, filed by James on 11-06: puppeteer #64 rv/pup-monitor (#84, #81, #9) and #65
     rv/pup-claude-a (#1, #61, #4, #3, #5a, #64, #62, #63) MERGED, #66 rv/pup-views-a (#38, #39, #106, #107, #40,
     #105) open; ghosttea #102 rv/ghosttea (#115, #37 G-A, #92, #113, #94) MERGED. Their releases and the EL8 pins
@@ -728,7 +741,10 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   red over a whole environment prints it), no owner;
   smoke:plugin-restart and the plugin-runtime soak for item 212; item 215 (freeway's link door), item 217 (item 198's
   door did not take a fresh connection for 30 s after fd pressure; load not shown to be the cause, corrected
-  2026-11-07; measured beside item 204) and petition G36 (ghosttea's accept loops).
+  2026-11-07; measured beside item 204) and petition G36 (ghosttea's accept loops); item 341's merged
+  `src/main/index.ts` (with M291's About lines) typechecks (the QA agent's dev runner on `47f8d4732`), and
+  electron-shell's and fieldd-supervisor's suites on it, its five index-reading tests among them, run in item 345's
+  packet v3 on the old mini (LANDED "Item 341").
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on

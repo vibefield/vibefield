@@ -48260,3 +48260,92 @@ FieldSettingsTests at the carried tree.
   at the next whole V on the old mini (VF-PM, 16:32:21Z). fieldd's six and smoke-first-run have no run at the landed
   text either (proved, not run); a whole V runs them.
 - James's eye: VibeField › About VibeField, and the Mac's Add your phone, in the first signed build that carries them.
+
+## Item 341 — a packaged pair's PATH is the person's, asked of their login shell when it spawns (M292)
+
+**Item 341 (four commits, `de3b86eab` → `47f8d4732`, M292, 2026-11-12).**
+- Cut on main `9bbe345ad` as `61e018fb4` (doc), `22181ddc0` (red), `770fcc67f` (red, 2b) and `9c6bbab00` (green),
+  lane `lanes/rv/i341`, branch `rv/341`.
+- Carried object-only onto `2b6f5a2a3` (M291's tip) by `lanes/rv/land-341/carry-341.sh` (`a3c6f2fcbd700449`):
+  `merge-tree` per commit, then `commit-tree` with each commit's author, author date and raw message. The committer
+  is the carry's. It was rehearsed on `c841f8b7c` (12:31:46Z) and on `2b6f5a2a3` (16:14:21Z), and the land wrote the
+  rehearsed tree, `1c5c8ec69034`, as `rv/341-on-2b6f5a2a3`.
+- The fixer landed it third in the app-closed stretch, after the ghosttea 0.15.0 EL8 (M290) and M291: main
+  `47f8d4732`, LANDED_AT 16:30:04Z.
+- Its cause: James's words on the signed nightly-20261110.1, relayed by VF-PM at 08:17:17Z: "these agents appear as
+  not checked yet, and i can not sign in, and in the godview none of them works". Read from fieldd's own log lines
+  alone: a packaged fieldd runs on launchd's short PATH, so a pair it spawns finds no agent.
+
+**What changed.**
+- `packages/electron-shell/src/main/login-shell.ts` (72 → 356 lines):
+  - the ask: zsh, bash and ksh get `-l -i -c` with the PATH printed between two marks, fish the same with its history
+    off, and any other shell is never asked;
+  - the read: only the bytes between the marks. Kept: absolute entries with no control character, the first of
+    equals, no VibeField shim folder, at most 256 entries and 16 KiB;
+  - a 3 s ceiling, then the child's group is ended. Whenever the shell does not answer, main's PATH plus the common
+    install folders that exist (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`) answer, with the reason;
+  - one answer per shell process (`personPathOnce`). The one event, `desktop.person_path.resolved`, carries
+    {source, why, dirs, ms} and never a folder.
+- `packages/fieldd-supervisor/src/supervisor.ts` and `types.ts`: `spawnEnvironment`, awaited right before a spawn and
+  never on an adoption.
+  - It keeps only string values whose key begins with none of FIELD_, FIELDD_, VIBEFIELD_ or VF_.
+  - A hook that rejects or passes 5 s is said once (`fieldd.supervisor.spawn_environment_unavailable` {why, ms}), and
+    the spawn goes on without it.
+- `packages/electron-shell/src/main/fieldd.ts`: in `production` alone, the hook hands `{ PATH }` or no key.
+- `packages/electron-shell/src/main/index.ts`: the resolve begins at main's start in `production`, and nothing but a
+  pair's spawn awaits it.
+- `docs/DECISIONS.md`: ESP-18 queued (the doc commit), and here landed in code. ESP §5.1 waits in the draft queue,
+  so the decision is not yet in force.
+
+**Verified.**
+- On this Mac, through the door, in the borrowed installed tree (`swap341g.sh` on `770fcc67f`):
+  - electron-shell's person-path and fieldd-person-path: 27 passed;
+  - fieldd-supervisor's spawn-environment: 6 passed;
+  - both typechecks: 0 errors;
+  - biome clean, after one red (index.ts's `node:fs` specifier order);
+  - check:walls clean.
+- On the old mini: run341 at `9c6bbab00` on `9bbe345ad` (.done `3d1ca8af55acc439`, 12:27:31Z):
+  - preflight OK (1 warning), both typechecks 0, check:walls clean at 270 of 1154;
+  - electron-shell 187 files, 2,872 passed and 3 skipped, each file at its count (login-shell 7, person-path 25,
+    fieldd-person-path 2);
+  - fieldd-supervisor 14 files, 100 (spawn-environment 6).
+  - No build ran: the seven build-reading files read electron-shell's dist built at `e8ad39b03`.
+- The carry: patch-ids (-U0) equal for the four (`28ffacf64ed0`, `096dc07901fa`, `316f258f1195`, `99795fb23d67`);
+  range-diff 4 '=' of 4; the nine paths alone, +1226/−4.
+- **The gap, as it stands at this commit:**
+  - main moved two of the nine paths since run341's base: `docs/DECISIONS.md` (3/2) and electron-shell's
+    `src/main/index.ts` (4/10, M291's About options, `623ab00f5`).
+  - index.ts merged in disjoint regions (M291 at 9, 66 and 2584; 341 at 2, 128, 421, 433 and 1157), its -U0 patch-id
+    equal.
+  - **Typecheck: closed.** The QA agent's dev runner on main `47f8d4732`, the 0.15.0 install, printed "NX
+    Successfully ran target typecheck for 28 projects", electron-shell's two programs and fieldd-supervisor among
+    them, with no `error TS` line. VF-PM relayed it at 16:40:41Z from the QA agent's report; RV did not read the log.
+  - **Tests: owed.** No test has run on the merged file. electron-shell's and fieldd-supervisor's suites on the merged
+    tree, its five index-reading tests among them (authority-production, needs-notices, smoke-chat-night, smoke-opens,
+    sound-voice), run in item 345's packet v3 on the old mini, on a tree holding every land of the day.
+
+**Corrected.**
+- `login-shell.ts` was not a new file, as it was labelled at the land: main held 72 lines (the window's shell and
+  home, `shellIdentity`), and the stack grows it to 356. (The fixer's read at the land, 2026-11-12.)
+
+**Found.**
+- Item 354 (note `lanes/rv/nightly-agents/item-354-note.md`, James's card j-354-homebrew-probe).
+  - puppeteer-runtime 0.4.0 and 0.4.1 probe the Homebrew prefixes (`/opt/homebrew`, `/usr/local`) for each provider's
+    kegs, whatever the search path and home, and forward no `brewPrefixes`.
+  - So a fieldd under a harness that isolates its search path still finds an agent installed by Homebrew. It runs that
+    agent's version command at the warm-up, and its sign-in status command.
+  - Read from code alone: no host's Homebrew folders were read.
+- Item 357 (note `lanes/rv/nightly-agents/item-357-note.md`, after the land, with 354's card): the adapters' service
+  runs start the vendor's executable with the daemon's whole environment, `FIELDD_*` included, because the built-in
+  providers take no `env`. The agent's PTY and its helpers stay clean (item 355's half).
+- The carry's first rehearsal (12:29Z) stopped on the lane's own bug. `setopt extendedglob` made `^` a glob operator,
+  so zsh refused `<sha>^{tree}` before git ran, and the script read that as a conflict. Fixed and rehearsed again; no
+  object had been written.
+
+**Owed.**
+- Slice 4, `smoke:agent-path`: its red `9466221a8` stays on `rv/341`. Its green and its first run wait for item 354's
+  fix, the launcher's environment allow-list, and its road.
+- ESP §5.1, from the draft queue (`lanes/rv/draft-queue/ESP-the-pairs-path.md`) when VF-PM opens it.
+- electron-shell's and fieldd-supervisor's suites on the merged tree, its five index-reading tests among them, in
+  item 345's packet v3 on the old mini.
+- A nightly carrying 341, and James's eye on it: the agents found, sign-in working, Godview launching.
