@@ -6650,6 +6650,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   this desktop."› Its usage stays on the Agent Profiles sheet, one tap from the corner. Every other desktop's page
   has no Agents section at all, since the phone reads agents only through its home; reading every desktop's is a
   later slice, its design first. The section stands only once the home's catalog has answered, never empty.
+  *Corrected 2026-11-12 (RB-1's doc): the pick's time is 22:53:40Z by the page's store, not 23:00Z.*
+  *Amended 2026-11-12 (James on the page Settings in a Pocket, 05:55:12Z and 05:55:37Z: developer-builds, two;
+  notifications-review, hide; on his picks of 2026-11-11, notifications "Show it, dotted “Not yet”" at 22:53:47Z
+  and developer "Yes, in TestFlight and debug builds" at 22:53:48Z):*
+  **This phone** gains **Notifications**, after **Terminal**: §13's `message`, tagged **Not yet** dotted. Its page
+  shows what a notification will look like (the plain icon over **VIBEFIELD** · now and "**studio** · An agent is
+  waiting on you") with §9's caption under it; then **Tell me when**, tagged **Not yet** dotted, three switches
+  drawn and disabled (**An agent needs you**, "An approval or a question" under it, on; **A session finishes** and
+  **A desktop goes to sleep**, off) and §9's foot. **Developer** stays undrawn: its page is a later slice, its
+  design first. Both are drawn in TestFlight and development builds only. The build submitted for App Review draws
+  neither: Notifications until push ships, Developer never.
 - **The phone's corner — your face, held, and Agent Profiles** (track UM, ruled 2026-11-06 from the page *The Bands
   Meter*: UM-D24, UM-D25 and UM-D26 A; UM-D8 and UM-D12 carried A at the leans; the drawing is
   `draft/profile-meters/round4/src/p4f-frames.js` and `round4.css`, the bloom's numbers `p3c-phone.js`). The account
@@ -6669,6 +6680,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   (`PhoneAppearance.storageKey`). It stands above Settings…, and above Lock now while the lock is on, so Lock now keeps
   its place just above Settings… (WI-3). Choosing leaves the menu open while the phone changes behind it, as the
   Mac's does.
+  *Corrected 2026-11-12 (RB-1's doc): the pick's time is 22:53:41Z by the page's store, not 23:00Z.*
   - **At rest the face is plain** (UM-D24 A): no ring, no meter's dot and no lens glyph. A tap is still the menu.
   - **Hold it** for **520ms**, the spawn bloom's own hold (`FieldMotion.longPressDuration`, puppeteer-views'
     `holdMs`), with 10 of slop before it opens; a short tap stays the menu's. ‹for James: the page said 450 "as the
@@ -7816,6 +7828,17 @@ reject"; where each word stands is §8 "The phone's Settings" and "The phone's w
   (LP-4).
 
 *(VF-PM 2026-11-05 02:29Z, at IOS-13a; for James's eye.)*
+**Notifications, before push** (track IOS, RB-1; James on the page Settings in a Pocket: notifications "Show it,
+dotted “Not yet”", 2026-11-11 22:53:47Z, and notifications-review "Hide it in the review build", 2026-11-12
+05:55:37Z; where it stands is §8 "The phone's Settings"). It is drawn in TestFlight and development
+builds only, so nothing the reviewed build shows promises what isn't built. "this iPhone" below is the substitution
+of "The phone's legal words".
+- The row is **Notifications**, tagged **Not yet**.
+- Under the preview: "A title and nothing more: what your agents said stays on your desktop."
+- The group is **Tell me when**, tagged **Not yet**: **An agent needs you** ("An approval or a question"), **A
+  session finishes** and **A desktop goes to sleep**.
+- The foot: "**Not built yet.** When it is, a desktop tells this iPhone only that something happened, never what
+  your agents said. Until then, the orange count on the Field tab is how this iPhone tells you."
 **The freeway's refusals** (track FW, F1b's kit half; FW-D5; added 2026-11-01). The phone asks its home desktop to
 approve its connection to each desktop, and when a desktop says no, the phone says it in these words. ‹desktop› is
 the field's name for that desktop, the way the attach card names it ("couldn't reach studio's terminal"). The
