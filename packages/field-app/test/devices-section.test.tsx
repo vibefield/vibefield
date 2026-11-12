@@ -504,7 +504,9 @@ describe("Settings → Devices: This Mac and your devices (TS-D3, TS-D9)", () =>
     await mount(client({ link: LINKED() }));
     await act(async () => button("Add a device")?.click());
     expect(text()).toContain("Scan with VibeField on your iPhone.");
-    expect(text()).toContain("Scan the code on your Mac");
+    // Item 334: the phone's button has said "computer" since WI-1 (DESIGN.md §8, amended 2026-11-12)
+    expect(text()).toContain("Scan the code on your computer");
+    expect(text()).not.toContain("Scan the code on your Mac");
     expect(text()).toContain("james@example.com");
     // no roster yet: this Mac is named as Tailscale names it
     expect(container?.querySelector("[data-code]")?.getAttribute("data-code")).toBe(
