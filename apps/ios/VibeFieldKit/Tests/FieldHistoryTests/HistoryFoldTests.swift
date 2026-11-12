@@ -319,3 +319,176 @@ struct HistoryFoldTests {
     #expect(FieldHistoryModel.liveHeader(corpus, standing: .incompatible(theirs: "0.2.0", ours: "0.1.0")).count == nil)
   }
 }
+
+/// Item 362c (James, 2026-11-12 18:40:35Z, of the phone's History session view: "there is no chat message time
+/// grouping like desktop") — time cuts a session's document into SITTINGS by the room's rule (rosetta
+/// `lib/transcript/sittings.ts`, `document-plan.ts`, `DayPill.tsx`): a new sitting before a row fifteen minutes or
+/// more after the row before it, or on another calendar day, each opened by the room's pill. The phone had one
+/// pill, before a prompt sixty minutes or more after the turn before it, with no day in it.
+///
+/// Every stamp is built on this phone's own calendar, so the rows hold in any time zone.
+@Suite("item 362c — time cuts a session's document into sittings")
+struct HistorySittingTests {
+  private let calendar = Calendar.autoupdatingCurrent
+
+  private func at(_ month: Int, _ day: Int, _ hour: Int, _ minute: Int, year: Int = 2026) -> Int64 {
+    let parts = DateComponents(year: year, month: month, day: day, hour: hour, minute: minute)
+    return Int64(calendar.date(from: parts)!.timeIntervalSince1970 * 1000)
+  }
+
+  /// Thursday 2026-10-01 10:30 on this phone.
+  private var now: Date { calendar.date(from: DateComponents(year: 2026, month: 10, day: 1, hour: 10, minute: 30))! }
+
+  private func row(_ id: String, _ ordinal: Int, _ kind: String, at: Int64?) throws -> IndexTimelineRow {
+    var fields: [String: JSONValue] = [
+      "timelineId": .string(id), "sessionId": .string("s1"), "ordinal": .int(Int64(ordinal)), "kind": .string(kind),
+      "group": .object(["id": .string("g"), "kind": .string(kind == "user" ? "human_turn" : "agent_cycle")]),
+      "text": .string("words of \(id)"),
+    ]
+    if let at { fields["at"] = .int(at) }
+    return try IndexTimelineRow(json: .object(fields))
+  }
+
+  private func document(_ rows: [IndexTimelineRow]) throws -> HistoryDocument {
+    let header = try IndexSessionResult(json: try Fixture.json("index-session.valid")).session
+    return FieldHistoryModel.document(
+      header: header, rows: rows, desktop: "studio", agentLabel: "Claude", nextCursor: nil, watermark: nil,
+      liveSince: nil, now: now)
+  }
+
+  @Test("fifteen minutes of silence start a sitting, fourteen do not; the first sitting's pill is its day")
+  func thePause() throws {
+    let rows = [
+      try row("u1", 1, "user", at: at(9, 1, 10, 0)), try row("a1", 2, "agent", at: at(9, 1, 10, 1)),
+      try row("u2", 3, "user", at: at(9, 1, 10, 15)), try row("u3", 4, "user", at: at(9, 1, 10, 30)),
+    ]
+    #expect(FieldHistoryModel.sittingPauseMinutes == 15)
+    #expect(FieldHistoryModel.sittings(rows, now: now).map(\.rowIds) == [["u1", "a1", "u2"], ["u3"]])
+    let turns = try document(rows).turns
+    #expect(turns.map(\.id) == ["u1", "u2", "u3"])
+    #expect(turns[0].dayPill == HistoryDayPill(lead: "Tue 1 Sep"))
+    #expect(turns[1].dayPill == nil, "fourteen minutes after the reply")
+    #expect(turns[2].dayPill == HistoryDayPill(lead: "10:30", after: "after 15m"))
+  }
+
+  @Test("a session of one sitting wears no pill at all")
+  func oneSitting() throws {
+    let rows = [
+      try row("u1", 1, "user", at: at(9, 1, 10, 0)), try row("a1", 2, "agent", at: at(9, 1, 10, 14)),
+      try row("u2", 3, "user", at: at(9, 1, 10, 28)),
+    ]
+    #expect(try document(rows).turns.allSatisfy { $0.dayPill == nil })
+  }
+
+  @Test("a day that turns without a pause is the day alone; a pause across a day is the day, the clock and the gap")
+  func theDay() throws {
+    let quiet = [try row("a1", 1, "agent", at: at(8, 31, 23, 55)), try row("a2", 2, "agent", at: at(9, 1, 0, 2))]
+    #expect(
+      FieldHistoryModel.sittings(quiet, now: now).map(\.pill)
+        == [HistoryDayPill(lead: "Mon 31 Aug"), HistoryDayPill(lead: "Tue 1 Sep")])
+    let paused = [try row("a1", 1, "agent", at: at(8, 31, 23, 18)), try row("a2", 2, "agent", at: at(9, 1, 0, 2))]
+    #expect(
+      FieldHistoryModel.sittings(paused, now: now).last?.pill
+        == HistoryDayPill(lead: "Tue 1 Sep · 00:02", after: "after 44m"))
+    let within = [try row("a1", 1, "agent", at: at(9, 1, 0, 13)), try row("a2", 2, "agent", at: at(9, 1, 12, 31))]
+    #expect(
+      FieldHistoryModel.sittings(within, now: now).last?.pill == HistoryDayPill(lead: "12:31", after: "after 12h 18m"))
+  }
+
+  @Test("the day is Today, Yesterday, a named day, and wears its year only when it is not this one")
+  func theDaysWords() {
+    #expect(FieldHistoryModel.sittingDay(at(10, 1, 8, 0), now: now) == "Today")
+    #expect(FieldHistoryModel.sittingDay(at(9, 30, 23, 0), now: now) == "Yesterday")
+    #expect(FieldHistoryModel.sittingDay(at(9, 28, 9, 0), now: now) == "Mon 28 Sep")
+    #expect(FieldHistoryModel.sittingDay(at(8, 24, 9, 0, year: 2025), now: now) == "24 Aug 2025")
+  }
+
+  @Test("a pause is said to the minute: minutes, hours and minutes up to two days, then days and hours")
+  func thePausesWords() {
+    #expect(FieldHistoryModel.pauseText(44 * 60_000) == "44m")
+    #expect(FieldHistoryModel.pauseText(90_000) == "2m", "a half minute rounds up")
+    #expect(FieldHistoryModel.pauseText((12 * 60 + 18) * 60_000) == "12h 18m")
+    #expect(FieldHistoryModel.pauseText((47 * 60 + 59) * 60_000) == "47h 59m")
+    #expect(FieldHistoryModel.pauseText(51 * 3_600_000) == "2d 3h")
+  }
+
+  @Test("a reply the time cuts continues under the pill: no second head, no prompt, and no run across the cut")
+  func aReplyCut() throws {
+    let rows = [
+      try row("u1", 1, "user", at: at(9, 1, 10, 0)), try row("t1", 2, "thinking", at: at(9, 1, 10, 1)),
+      try row("t2", 3, "thinking", at: at(9, 1, 10, 40)), try row("a1", 4, "agent", at: at(9, 1, 10, 41)),
+    ]
+    let turns = try document(rows).turns
+    #expect(turns.count == 2)
+    #expect(turns[0].id == "u1" && turns[0].continues == false)
+    #expect(turns[0].segments.map(\.id) == ["t1"], "the run ends at the cut")
+    #expect(turns[1].id == "t2" && turns[1].continues)
+    #expect(turns[1].prompt == "" && turns[1].promptAnchor == nil)
+    #expect(turns[1].model == "" && turns[1].facts == "", "the head stands once, on the reply's first part")
+    #expect(turns[1].dayPill == HistoryDayPill(lead: "10:40", after: "after 39m"))
+    #expect(turns[1].segments.map(\.id) == ["t2", "a1"])
+    #expect(turns[0].facts.hasPrefix("40m"), "the reply's span is the whole reply's")
+  }
+
+  @Test("a prompt whose reply began in a later sitting stands alone before the pill, and the reply keeps its head")
+  func aPromptAlone() throws {
+    let rows = [
+      try row("u1", 1, "user", at: at(8, 31, 23, 50)), try row("a1", 2, "agent", at: at(9, 1, 0, 30)),
+    ]
+    let turns = try document(rows).turns
+    #expect(turns.map(\.id) == ["u1", "a1"])
+    #expect(turns[0].prompt == "words of u1" && turns[0].segments.isEmpty)
+    #expect(turns[0].dayPill == HistoryDayPill(lead: "Mon 31 Aug"))
+    #expect(turns[1].continues == false, "it carries the reply's head")
+    #expect(turns[1].dayPill == HistoryDayPill(lead: "Tue 1 Sep · 00:30", after: "after 40m"))
+  }
+
+  @Test("a row with no stamp never cuts, a stamp that runs backwards is no pause, and the rule starts at the first row's")
+  func whatNeverCuts() throws {
+    let unstamped = [
+      try row("u1", 1, "user", at: at(9, 1, 10, 0)), try row("a1", 2, "agent", at: nil),
+      try row("a2", 3, "agent", at: at(9, 1, 10, 10)),
+    ]
+    #expect(FieldHistoryModel.sittings(unstamped, now: now).count == 1)
+    let backwards = [try row("u1", 1, "user", at: at(9, 1, 10, 0)), try row("a1", 2, "agent", at: at(9, 1, 9, 50))]
+    #expect(FieldHistoryModel.sittings(backwards, now: now).count == 1)
+    // the room's code as it stands: with no stamp on the first row there is nothing to measure a silence from
+    let headless = [
+      try row("a0", 1, "agent", at: nil), try row("a1", 2, "agent", at: at(9, 1, 10, 0)),
+      try row("a2", 3, "agent", at: at(9, 1, 12, 0)),
+    ]
+    #expect(FieldHistoryModel.sittings(headless, now: now).count == 1)
+  }
+
+  @Test("a document this phone kept in the older shape is dropped and read again, never a crash")
+  func anOlderKeptDocument() throws {
+    let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vf-history-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let cache = HistoryCache(directory: directory)
+    let key = HistoryCache.Key(device: "dev-1", session: "s1", stamp: "1")
+    let kept = try document([
+      try row("u1", 1, "user", at: at(9, 1, 10, 0)), try row("u2", 2, "user", at: at(9, 1, 11, 19)),
+    ])
+    cache.keep(kept, key: key)
+    #expect(cache.document(key: key)?.document == kept)
+    // as a build before item 362c kept it: a pill of `time` and `after`, turns with no `continues`
+    let names = FileManager.default.enumerator(atPath: directory.path)?.allObjects as? [String] ?? []
+    let file = directory.appendingPathComponent(try #require(names.first { $0.hasSuffix(".json") }))
+    var whole = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+    var document = try #require(whole["document"] as? [String: Any])
+    let turns = try #require(document["turns"] as? [[String: Any]])
+    document["turns"] = turns.map { turn -> [String: Any] in
+      var older = turn
+      older["continues"] = nil
+      if older["dayPill"] != nil { older["dayPill"] = ["time": "11:19", "after": "after 1h 19m"] }
+      return older
+    }
+    whole["document"] = document
+    try JSONSerialization.data(withJSONObject: whole).write(to: file)
+    #expect(cache.document(key: key) == nil)
+    #expect(FileManager.default.fileExists(atPath: file.path) == false, "what cannot be read is not kept")
+    #expect(cache.latestDocument(device: "dev-1", session: "s1") == nil)
+    cache.keep(kept, key: key)
+    #expect(cache.latestDocument(device: "dev-1", session: "s1")?.document == kept)
+  }
+}

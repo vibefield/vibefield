@@ -757,3 +757,15 @@ extension HistoryCorpus {
     // PJ-7 — the mock's one desktop, as the ledger's marks draw it
     desktops: [HistoryDevice(id: "dev-1", name: "studio", platform: "darwin", asleep: false, readAt: "11:42", isHome: true)])
 }
+
+// Item 362c (red) — the names `HistorySittingTests` calls, over the shapes as they stand: a pill made of a lead is
+// still the clock and the gap, and no part of a reply continues another. The shapes are the next commit's.
+extension HistoryDayPill {
+  public init(lead: String, after: String? = nil) {
+    self.init(time: lead, after: after ?? "")
+  }
+}
+
+extension HistoryTurn {
+  public var continues: Bool { false }
+}

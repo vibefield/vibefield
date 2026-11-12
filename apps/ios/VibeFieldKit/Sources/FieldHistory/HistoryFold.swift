@@ -659,3 +659,22 @@ extension FieldHistoryModel.SearchKind {
     }
   }
 }
+
+// Item 362c (red) — the names `HistorySittingTests` calls, answering nothing yet: every row in one sitting, no day
+// and no pause said. The room's rule is the next commit's.
+extension FieldHistoryModel {
+  public static let sittingPauseMinutes = 60
+
+  struct Sitting: Equatable {
+    let rowIds: [String]
+    let pill: HistoryDayPill?
+  }
+
+  static func sittings(_ rows: [IndexTimelineRow], now: Date) -> [Sitting] {
+    [Sitting(rowIds: rows.map(\.timelineId), pill: nil)]
+  }
+
+  static func sittingDay(_ ms: Int64, now: Date) -> String { "" }
+
+  static func pauseText(_ ms: Int64) -> String { "" }
+}
