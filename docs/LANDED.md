@@ -47494,3 +47494,151 @@ read the `.done` whole, in its message at the clock read 03:52:24Z, sent 03:52:4
 
 **Not done, and not claimed:** nothing of this stack ran on a phone, and nothing was watched in a running app beyond
 the simulator's two stills; no Swift row ran on this Mac; and nothing here is pushed.
+
+## Item 322 — a release's folder already in place is compared with the verified bytes, never taken on its marker's word (M286)
+
+(2026-11-12; four commits, `2b6c966a6` to `864d7aca3`, on main `a3362a7ed`. Cut by ob-foundation (track OB) in
+`lanes/ob-plug/vibe-field` on the branch `ob/plugin-integrity`: the first three as `6ff247c0e` to `34de86d81` on
+`8fffb13c7` (11-11), re-cut onto M284's `fb41e90ce` as `15f7294fc` to `3cf7afec5`, with the rider `a61185b30` on top;
+carried onto M285's `a3362a7ed` as `ob/plugin-integrity-on-a3362a7ed`, and landed by the fixer by fast-forward as M286
+at 05:36:27Z (main's reflog), on VF-PM's LAND GO re-issued whole at 05:34:24Z; the 05:27:01Z GO was held by the
+fixer for one miscounted line. Validated by run 314, a9, on the old mini: fieldd's vitest alone and the named readers
+outside it, at `a61185b30`. The packet is `lanes/ob-plug/packets/i322-v1/`.)
+James gave the item to OB's session on the page *James's Rulings Docket*
+(https://claude.ai/artifact/6xovbEgmuvMnzKPuWZcFz6, db `decisions`, `cu-owners`: "OB's session takes 279, 321, 322",
+at 2026-11-11 22:47:10.131Z; its store read by VF-PM at 05:41Z and by ob-foundation at 05:53:47Z).
+
+**What landed.**
+- The store's red (`2b6c966a6`, from `15f7294fc`, first cut as `6ff247c0e`; `plugin-artifact-store.test.ts` +87): the
+  describe "item 322: a revision slot that already exists is not taken on its marker's word" (`:213`), four rows. A
+  slot whose files are not what `prepare` made is refused and left (`:217`). `prepare` runs for a slot that exists, and
+  the slot is reused when the files are the same (`:232`). A refusing `prepare` is heard though the slot exists
+  (`:254`). A longer, a missing and an extra file are each told (`:270`). Each row asserts that no `.staging-` folder
+  is left.
+- The installer's red (`df067db54`, from `81650e28b`, first cut as `d784f85ac`; `plugin-install-slots.test.ts` +50):
+  "item 322: a revision at the slot that is not the artifact's files is refused" (`:127`), beside PRC-5b's row.
+- The green (`555da80a7`, from `3cf7afec5`, first cut as `34de86d81`; `plugin-artifact-store.ts` +69 −11 and
+  `plugin-install.ts` +26 −1):
+  - `stage` (`plugin-artifact-store.ts:163`) always runs `prepare` into its private staging folder and writes the
+    marker there. A folder already at the slot (`:199`, and the rename race at `:207`) is compared with it by
+    `firstDifference` (`:446`): the same directories, regular files, sizes and bytes, the marker included. A symbolic
+    link or any other non-file is a difference; modes and times are not compared. Equal: the folder is reused. Not
+    equal: `PluginArtifactSlotMismatchError` (`:97`), the staging copy is removed and the folder is left as found.
+  - `prepare` (`plugin-install.ts:145`) wraps the old body and maps that one error to `PRECONDITION_FAILED` with
+    `pluginKind: "PLUGIN_ARTIFACT_MISMATCH"`, in words that name no path (`:155-160`), plus one warn line,
+    `fieldd.plugin_install.slot_mismatch` (`:151`), with the plugin's id, the slot and the first differing path inside
+    the artifact. Both roads into `stage` pass through it: the candidate (`:220`) and `adoptLegacy` (`:216`).
+- The rider (`864d7aca3`, from `a61185b30`; the store's test +43, no source): `adoptLegacy`
+  (`plugin-artifact-store.ts:296`) is the second road into `stage` (`:311`). Two rows: "adoption refuses a folder at
+  the flat install's slot that is not its files" (`:297`), and "finishes an adoption cut short before its pointer when
+  the files are the same" (`:319`), so the rule costs no recovery.
+- 4 files, +275 −12 (`lanes/fixer/landing/stack-changed.txt`, the same four paths as git's own diff). Every file
+  modified, none added, deleted or renamed. One name joins an import that already stood (`plugin-install.ts:20`).
+
+**What a person sees, by reading the code.** Lines are at `864d7aca3`. Nothing was run in an app.
+- Nothing, today: no build configures a plugin registry, so no build reaches the installer's road.
+- With a registry configured, an install of a release whose folder is already in place and differs from what the
+  registry signed is refused. The updates panel draws the kind's existing sentence, "artifact hash mismatch —
+  discarded" (`packages/field-app/src/panels/PluginUpdates.tsx:25-30`). No new text reaches a person.
+- That sentence names a hash, one of VibeField's insides by DESIGN.md §9's rule. The plugin panel's words are
+  IS-282-6's plugin half, which is MK-5's (VF-PM, 2026-11-11 04:31:02Z; DECISIONS "insides").
+
+**Stated limits** (VF-PM's ruling, 05:28:24Z: the strict reading stands for 322; loosening either of the first two is
+a later item, on James's word).
+- A differing folder is refused, not replaced, and the install does not repair it. For a plugin that has a row,
+  uninstalling it and installing again does (`uninstall`, `plugin-install.ts:326`). For a folder with no row,
+  `uninstall` answers NOT_FOUND (`:328`), so nothing in the app clears it.
+- `.vf-registry.json`, which fieldd writes with the index's reference (`plugin-install.ts:252-261`), is in the
+  comparison. The same artifact fetched through an index at another location is refused the same way.
+- From the rider's message: on the adoption road the sentence is the same, though the folder that failed is the old
+  install's revision. The kind's written meaning is the hash alone (`tooling/plugin-cli/src/refusals.ts:419`,
+  `packages/contracts/src/plugin-distribution.ts:23-24`), while the installer already used it for an id or a version
+  that does not match (`plugin-install.ts:236-251`); the green adds a third use, and no doc is edited. There is no
+  installer-level row for the adoption road.
+- A folder changed after it was installed is still loaded as it lies. That is item 279's, not closed here: the
+  comparison reads the folder by path at install time and holds nothing after it.
+
+**For James's eye** (VF-PM carries them; the packet's README, "For James's eye, before it lands"):
+- If the same plugin release is offered from a registry at a different address than the one it was first prepared
+  from, the install is refused, because the folder already there records the old address.
+- If a folder for a release is already in place, was never finished as an install, and is not what the registry
+  signed, that release cannot be installed and nothing in the app clears the folder; today a person would have to
+  remove it by hand.
+
+**Validation of record** (run 314, `lanes/ts6/i322-314-a9-results`: `run314/SUMS-run314` 56 of 56 OK and
+`lw/SUMS-mini-i322-314` 12 of 13 OK by `shasum -c` at 05:35:24Z, its thirteenth line the `.done`, whose copy in
+`verdict/` is `1e5d06b7f8a11ae1` as the line says; placed on the old mini at 04:32:53Z, the `.done` at 04:37:28Z;
+VF-PM reported it GREEN at 04:41:23Z):
+- The arm: the packet copy's SUMS 50 of 50 OK; the bundle's one prerequisite `fb41e90ce` present; one new ref,
+  `ob/plugin-integrity-run314` → `a61185b30`, kept; the tip's tree `f543496d8595`, the whole diff's patch-id and each
+  commit's patch-id and tree equal to the packet's. One install (`pnpm install --frozen-lockfile`, exit 0, "Done in
+  962ms using pnpm v11.13.1"); `siblings:build` exit 0 in 2 s, with no Compiling line.
+- The reds, each at its own assertions and none elsewhere (their logs stay on the mini, items 320 and 321):
+  - R1 at `15f7294fc` and R2 at `81650e28b`, the store's test alone: `Tests 4 failed | 9 passed (13)`;
+  - R3 at `81650e28b`, the installer's test alone: `Tests 1 failed | 1 passed (2)`;
+  - R4 at `81650e28b` with the rider's store test over it (VF-PM's ruling (A), 01:44:02Z):
+    `Tests 5 failed | 10 passed (15)`.
+- V at `a61185b30`, fieldd's suite whole by its own `test` script, 04:33:43Z to 04:35:54Z, GREEN:
+  `Test Files 271 passed | 5 skipped (276)` and `Tests 3839 passed | 15 skipped (3854)`, as the packet predicted
+  (run 309's 3832 and the seven new rows); the store's test 15 and the installer's 2.
+- The readers outside fieldd, at `a61185b30`, each GREEN: field-app's five files 28; electron-shell's
+  `staged-serving-seam` 7; fieldd-client's four files 23; fieldd-supervisor's suite 94 in 13 files.
+- Beside them, as run 314 printed them: the history files equal at the arm and in fin, stat only; births kept 0; the
+  344 kept dirs and the kept refs unmoved; no fieldd or field-native left; 41006 MiB free in fin; V's 1-min load at
+  most 11.70, a reading. No cargo test ran.
+- On the Mac, through the door (the packet's `rows/`; its 48 HOLD lines in `hold-lines.txt`), each package's own
+  script. At `a61185b30`: fieldd's typecheck, 0 error lines; `biome check .`, 3557 files, 74 warnings, 21 infos;
+  electron-shell's two programs, field-app, fieldd-client, fieldd-supervisor and `tooling/terminal-perf`, each 0 error
+  lines; `check:walls`' four node commands clean ("270 of 1151 test files make a temp root; all remove");
+  `check:retired` clean. fieldd's typecheck and biome also ran at each earlier tree, first cut and re-cut, each clean
+  with biome's counts the same.
+- Not run: `census:assert` (VF-PM's ruling); every smoke and the landing table; the `verify` stages the diff does not
+  reach (the packet's README names them).
+
+**The cut.**
+- VF-PM's words: the first red's commit at 23:20:56Z (11-11), "under the hook", with the second red and the green
+  after it as their own commits; the re-cut onto `fb41e90ce` at 01:02:30Z; the Mac's rows before the arm at
+  01:37:42Z; the rider's rulings and its commit at 01:44:02Z; the seal at 01:52:50Z; GREEN at 04:41:23Z; the carry's
+  GO at 05:20:45Z; the LAND GO at 05:27:01Z, which the fixer held for one miscounted line (22 kept refs where run
+  314's `.done` names 21); and that GO re-issued whole at 05:34:24Z, on which it landed.
+- The re-cut: `lanes/ob-plug/rows/recut.sh` (`ef74a4c6ff2c720b`), one door row, 01:09:12Z to 01:09:14Z, each commit
+  equal by patch-id and message; the first cut kept as `ob/plugin-integrity-on-8fffb13c7` (`34de86d81`).
+- The packet of record, `lanes/ob-plug/packets/i322-v1`, sealed at 01:56:14Z: SHA256SUMS `f82aebf82388f6b1`, 50 files;
+  README `c50250509a223e62`; the bundle `46f01995662ce78a`, 11637 B, requiring `fb41e90ce` alone.
+- The carry onto `a3362a7ed`: `fb41e90ce..a3362a7ed` touched none of the four files, no lock or manifest and nothing
+  under `packages/fieldd` (19 files under `apps/ios`, DESIGN.md, SECURITY.md and three docs).
+  `lanes/ob-plug/rows/carry-a3362a7ed.sh` (`e09438f2263dc5c4`), one door row, 05:23:36Z to 05:23:39Z: each commit
+  equal by patch-id and message, the range-diff 4 of 4 `=`, the four blobs equal, and the tip different from main in
+  the four files alone (its log `lanes/ob-plug/logs/carry-a3362a7ed.log`, `a6cda58987373814`).
+- The land: the fixer's door pair (`lanes/fixer/landing/i322-land.zsh`, `561cdc4e37fd0cd0`, and its inner
+  `i322-land-inner.zsh`, `c2585e5f174cc395`) ran `land-stack5.sh` (`4a1d62d4c8e79f03`) and fast-forwarded main from
+  `a3362a7ed` to `864d7aca3`, with no dirty path in James's checkout (`stack-dirty-before.txt` and
+  `stack-dirty-after.txt` both empty). Nothing is pushed: origin/main is at `8fffb13c7`, main 33 past it.
+
+**Found along the way.**
+- **Item 330** (VF-PM, 02:11:34Z): MK's merge read of `mk/mk-0` with this stack is clean, but MK-2c (unlanded) puts
+  the plugin list's display copies in fieldd's sidecar. After both land, a release prepared again after the list
+  changed either word would be refused while the earlier folder stands. VF-PM's lean is MK's side: the display
+  copies leave the sidecar, in an MK slice later.
+- **Two misses of mine, recorded by VF-PM at 01:05:05Z:** four ungated calls inside fa's open row, 01:03:24Z to
+  01:03:46Z, light git and file reads (rule 41: the gate goes inside the first command of every turn); and
+  `recut.sh`, a script that writes refs, queued at the door before it came to VF-PM (rule 27).
+- **The carry's status calls:** `carry-a3362a7ed.sh` called `git status --porcelain` three times without
+  `--no-optional-locks`, so each could refresh the ob-plug lane's own index (VF-PM, 05:31:29Z). I first said four;
+  VF-PM, 05:41:18Z: "THREE status calls, not four."
+- **A range check's blind spot:** `^[+-]\s*import\b` does not see a name added inside a multi-line import
+  (`plugin-install.ts:20`); VF-PM took it into its own range check (01:37:42Z).
+
+**Owed.**
+- **The landing table:** none has run. It runs over main as it stands after these records land (its code at
+  `864d7aca3`, docs only over it), before any push, on James's word by name.
+- Item 279's S2, cut on `864d7aca3` (`ob/plugin-fail-closed`, re-pointed there at 05:39:59Z by
+  `lanes/ob-plug/rows/repoint-fail-closed.sh`): it removes `adoptLegacy`, which retires the rider's two rows. Then
+  S3, and item 321.
+- Item 330, on MK's side.
+- The two items for James's eye, above.
+- The green's and the rider's messages say "NOT RUN", true at each commit. The Mac's rows ran after them and run 314
+  ran the tests; the packet's README carries that correction, and this entry is where it lands.
+
+**Not done, and not claimed:** no smoke, no landing table and no app run; no registry configured anywhere, and no
+plugin folder staged, placed or loaded to show any of it (rule 16); `census:assert` not run; nothing pushed.

@@ -1073,6 +1073,32 @@ law DESIGN.md §9 "VibeField's insides are never a person's to read" (item 280),
   the veil in the product's own window (read by grep, not watched); 282-7's words in a running app (read from the
   code, not watched), four of them for James's eye (LANDED "Item 282, the rule and 282-7").
 
+**OB — Objects at Work (the plugin folders first: items 279, 321, 322)** · ob-foundation (lanes `lanes/ob-plug`,
+`lanes/ob-build`) · law `draft/thinking-objects-at-work.md`, `lanes/ob-build/ITEMS-279-321-322-PLAN.md` with its three
+addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
+- Ruled 11-11 and 11-12 (James): on the page *James's Rulings Docket* (`6xovbEgmuvMnzKPuWZcFz6`, db `decisions`),
+  `cu-owners` "OB's session takes 279, 321, 322" (11-11 22:47:10.131Z) and `obui-tag` "Before the tag" (11-11
+  22:33:08.463Z: Objects at Work, held for its custody fix, lands before the 0.9 beta tag once the fix is green); on
+  the PM board, `j-ob-s4-default-on` "B. On right away, as today" (03:30:14.024Z: a plugin installed from a list stays
+  on when no record says otherwise; nothing is built for it) and `j-ob-q4-installed-folder` "A. Nothing I use lives
+  there. Go ahead." (03:35:03.057Z: S2 may be cut; nobody lists a data folder of his).
+- Landed 11-12: **item 322** (`2b6c966a6` → `864d7aca3`, 4 commits, M286, run 314, an ff of `a3362a7ed`; LANDED "Item
+  322"): fieldd's installer compares a release's folder already in place with the verified bytes, and refuses one
+  that differs.
+- In flight: item 279's S2 on `ob/plugin-fail-closed`, re-pointed to `864d7aca3`: the installed-plugins folder loads
+  nothing until a signed list is configured. Its conditions A (the smokes) and B (the test rows) were traced by
+  reading at `a61185b30`; their two addenda go to VF-PM before any cut.
+- In flight: the desk tools for Codex and Grok, upstream in puppeteer (seven commits in OB's clone
+  `lanes/ob-build/puppeteer`). James on the PM board: `j-ob-desk-tools-puppeteer` "A. Release puppeteer first (push,
+  PR and tag on my word), then a pin bump, so all three have desk tools at 0.9" (03:30:27.940Z) and `j-pup-041` "A.
+  Release 0.4.1 now; the desk tools come in 0.4.2 (Recommended: the bands and spend words reach the app sooner)"
+  (05:12:14.356Z). 0.4.1 merged; its release runs. Then the seven are re-cut onto it and their rows run; the push,
+  PR and tag are James's word; then an EL8.
+- Next: S2, then S3 (a verified load, once a list is configured) on VF-PM's order; item 321 after its reads
+  (`lanes/ob-build/studies/item-321-s5-reads-2026-11-11.md`).
+- Owed: the landing table over main as it stands after these records (its code at `864d7aca3`), before any push, on
+  James's word by name; item 322's two items for James's eye (LANDED "Item 322"); item 330, on MK's side.
+
 **Release rails — WP12 · TD · BP · FW packaging · RD** · prod-builder (resting) · law `specs/build-wp12-updater.md`,
 `specs/trust-and-distribution.md`, the three `specs/electron-*.md` + `electron-packaging-implementation-plan.md`,
 `specs/build-wp8-bundled-plugins.md`, `draft/thinking-browser-profile.md` (BP), `draft/thinking-release-deps.md` (RD),
@@ -1665,6 +1691,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | ES — Chat's empty state | ACTIVE since 11-08 (ES-D1…D7 ruled at the leans); ES-1 + ES-2 landed 11-08 (M226 `6b8a4b09f`), ES-3 + ES-4 landed 11-08 (M238 `2c34727a3`), ES-4 (role) landed 11-09 (M241 `7d7019a23`), ES-6 landed 11-09 (M260 `f3cbbc469`), ES-Q1 + ES-5a to 5d landed 11-09 (M270 `e6de35f09`) | DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`) | 5e (a device and James); ES-6's first real window (row 36) |
 | HG — History's first view and its waits | ACTIVE since 11-08 (HG-D1…D6, HG-W1…W5 and HG-L1 ruled at the leans); HG-1 + HG-2 landed 11-08 (M235 `3264c54f1`); items 263 + 264 landed 11-08 (M239 `9d2b8d03d`); item 267 landed 11-09 (M242 `519132f1a`) | DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and `9ByDzaNGQaijgSHW6GrZUb`) | HG-3 (rosetta's `waitMark`, RO-40) → rosetta-room 0.1.6's EL8 → HG-4, History's holds in the living mark |
 | NR — native re-arm | ACTIVE since 11-08 (opened by VF-PM 19:53Z, Q1–Q5 answered); S0–S2 landed 11-08 (M240 `33162a078`) | `draft/thinking-native-replay-rearm.md`; DECISIONS NR | S3 with the integration lane after EL8-TRUFFLE; the named follow-ups (LANDED "NR S0 + S1 + S2", Not this entry) |
+| OB — Objects at Work | ACTIVE since 11-09, the plugin folders first since 11-11; item 322 landed 11-12 (M286 `864d7aca3`, run 314) | `draft/thinking-objects-at-work.md`; `lanes/ob-build/ITEMS-279-321-322-PLAN.md`; DECISIONS "items 279 · 321 · 322" | item 279's S2, then S3; item 321; the desk tools in puppeteer 0.4.2 |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | — |
 
 **Retired and superseded tracks**
