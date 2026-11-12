@@ -7723,6 +7723,29 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     as their source lines), strike, rules, a heading's level, the code bar (language, copy) and syntax colours, the
     long-message excerpt (the phone's words are already cut at 2,000 units, with `clipped · 14 KB on studio` under
     them), and search terms marked inside the words (the phone lights the row). It was plain text.
+  - **Between two replies it folds what the agent did into one group, and each thing in it keeps its own form**
+    (362e), by the room's rule (`buildSegments`, then `activityPlan`). A group holds, in the order they happened,
+    the tool lines, the thoughts, the session's notices, its summaries and its team messages. It is closed until
+    pressed, and its head is the room's sentence: the tool nouns, acts before looks (a command is a look), then
+    `2 thoughts` · `1 context event` (a notice, a summary, a compaction) · `1 team update`, each where it first
+    appeared, with `N failed` in red when a tool failed or the session reported a runtime error. Opened, a tool
+    line is the line it was. A thought is `Thought` and its first line, cut at 120 characters with `…`; a notice
+    is `Session notice` and its words (`runtime error · the socket closed`, `context compacted · the context was
+    full`, a command's output as it stands); a summary is its purpose (`Handoff summary`); a compaction is
+    `Context compacted · summary`; a team message is `Team update` and its first line. A member whose words say
+    more than its line opens in place (a chevron says so) to its words, read as a reply's are at the group's pitch
+    (13 pt with 3 of leading, `code` at 12, blocks 8 apart), whole under the desktop's own cut with its
+    `clipped · 14 KB on studio` line; a compaction's opens under the room's sentence, `Agent-generated context for
+    continuing this session.` Nothing opens members in bulk: `Open every run` opens the groups, and a member's
+    words exist on the page only while that member is open. **A question to you and a request for permission
+    stand alone** between groups, open, on a hairline card (`Question`, `Permission requested`): the session
+    stopped there for a person. **A reply with no words and no attachment says nothing and closes nothing**;
+    `(no words)` is not drawn for it, and the group runs on across it. A blank thought and a blank summary are not
+    drawn. What the desktop's row does not carry is left unsaid on this road, never guessed: a compaction's
+    boundary notice stands beside its card (the room hides it only where the record proves the pair), a team
+    message is `Team update` whoever sent it, and a notice says its type and its words. It was: a thought counted
+    and its words dropped, and a notice, a summary and a team message each drawn as a tool line (`Note`, `Summary`,
+    `Message`).
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
