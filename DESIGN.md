@@ -7637,6 +7637,46 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   page with a cursor to the next, and the phone follows the pages to the listing's end, so it lists what the desktop
   lists; an opened project's sessions are followed the same way. Past the phone's bound (2,000 projects) the ledger's
   last line says so, never a silent cut: `The 2,000 most recently active projects are listed · studio holds more`.
+- **The phone's ledger wears the desktop's figures and the desktop's rows** (item 353, 2026-11-12; James, 11:38:00Z:
+  "port the stats and treemap of the desktop to mobile as well … let's just try to match mobile's history ui design
+  more like the desktop one, we can have a stats toggle button at the right top position"; his phone beside his
+  desktop at 17:06:27Z, "entry does match, but there are many visual dismatches", and at 17:35:10Z the rows
+  "matches", the figures "Keep as is"). What the desktop's History heads its projects with (rosetta's room,
+  `PortfolioSummaryPanel`) heads the phone's, by the room's rules and in the room's words, read from the door the
+  ledger already reads (`project.figures` asked over every recorded day; nothing is added to a contract):
+  - **The toggle** stands at the head's right, where Chat stands its ✦: the room's three ascending bars (2 pt round
+    strokes in a 22 pt box) on a 34 pt disc inside a 44 pt target; open, the bars are `ink` on a `fill` disc; folded,
+    `inkTertiary` on nothing. The figures stand OPEN until it folds them, the phone keeps the choice, and they fold
+    and unfold in 0.3 s on the house curve. They are read only while they are open on the tab on screen.
+  - **The four figures** (`sessions` · `messages` · `tokens` · `est. cost`) are one chip each, the project screen's
+    chip (`fill`, radius 12, 4 pt apart): the digits at 20 pt light in `ink`, their unit at 12 pt in `inkFaint`, the
+    label under them at 9 pt medium, uppercase, in `inkFaint`. Sessions are the ledger's own count, whole at once;
+    the other three are sums over the projects whose figures are read, and a dash before the first is. Cost is
+    estimated at list prices and says so (`~`); a sum that is a lower bound says `+`.
+  - **One line under them says what is not whole, and nothing when all is** (11.5 pt, `inkFaint`): `reading figures
+    · 41 of 166 projects` · `figures for 3 projects failed · retrying` · `messages are a lower bound` (a desktop cuts
+    a project's session rows for a phone at a hundred, and says so) · `2 projects' days are not exact`.
+  - **The treemap** is the ten projects that cost most over their lifetime, squarified (the room's layout), in a
+    148 pt plot on a `fill` card (radius 14, 9 pt in): each tile its project's ink at 26% (34% in the dark), radius
+    5, a 2 pt gutter; from 52 × 36 pt up a tile carries its name (10.5 pt medium, `inkSecondary`, top left) and its
+    cost (10.5 pt, `ink`, bottom right). A tile opens its project. Before a cost is read the card says `Reading the
+    projects' figures`; with none to draw, `No priced project usage`; and under the plot, the room's own line for
+    what it cannot size: `3 projects have usage with no list price and are not shown`.
+  - **The row** is the desktop's row at the phone's width. Its "how much" is the project's lifetime estimated cost
+    once its figures are read (`$1.24` `K`; `+` on a lower bound; `n/p` for usage with no list price, never a claimed
+    $0), and its count of sessions until then. **The wash** runs from the row's left edge as WIDE as the project's
+    cost against the costliest project's (never under 3 pt): its ink at 15%, falling to 8% at 64% of that width and
+    to nothing at its end. It was the whole row at a strength. The cap is the ink at 45%, and rows stand 3 pt apart.
+    **The sparkline** is the desktop's shape: fifteen bars of two days, the last thirty days. **The last word**
+    follows the desktop's rule (`now` under ninety seconds, then minutes, hours up to a day, `yesterday` for the day
+    after, then days), so a project reads `12h` on both. **The agents** stand at the row's right as on the desktop:
+    at most three marks at 15 pt, the lead first and darkest, then `+N`, counted over the project's top-level
+    sessions (the listing the desktop counts from). An agent wears its own mark where the phone keeps one (LP-4:
+    Claude's and Codex's) and its letter on History's chip otherwise. The ledger opens ranked by the most recent, as
+    the desktop's does; `spend` ranks by lifetime cost, and the ledger's foot says which measure the wash is scaled
+    to and to which project.
+  - **What stays the phone's:** the path never shows (PJ-L9: a path stays on its desktop), and the desktop row's
+    `···` (pin, hide) is not offered: the phone reads (P2).
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
