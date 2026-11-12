@@ -94,7 +94,8 @@ private struct AppsFolderTile: View {
         tile
         Text(folder.name)
           .font(ChromeType.sans(AppsShelfChrome.folderName, .semibold))
-          .foregroundStyle(ChromePalette.ink)  // ‹for James›: §8 asks whether a name may wear its project's ink
+          // Ruled 2026-11-12 (James, 06:07:01Z, PM board): the primary ink. Item 273.
+          .foregroundStyle(ChromePalette.ink)
           .lineLimit(1)
       }
     }
