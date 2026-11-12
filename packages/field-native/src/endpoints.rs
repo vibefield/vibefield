@@ -143,10 +143,11 @@ pub fn socket_alias_for(uid: u32, data_root: &str, parent: &str) -> String {
 /// Item 345's ONE decision, the twin of contracts' `unixSocketDir`.
 pub fn unix_socket_dir(uid: u32, data_root: &str, parent: &str) -> String {
     let real = native_run_dir_for(data_root);
-    // S1 holds today's law. S2: if format!("{real}/{}", longest_socket_file()).len() <= SUN_PATH_MAX_BYTES
-    //   { real } else { socket_alias_for(uid, data_root, parent) }
-    let _ = (uid, parent);
-    real
+    if format!("{real}/{}", longest_socket_file()).len() <= SUN_PATH_MAX_BYTES {
+        real
+    } else {
+        socket_alias_for(uid, data_root, parent)
+    }
 }
 
 pub fn unix_endpoint_for(uid: u32, data_root: &str, socket_file: &str, parent: &str) -> String {

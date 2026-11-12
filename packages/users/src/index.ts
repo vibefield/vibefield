@@ -16,7 +16,12 @@ export {
   withUsersLock,
 } from "./lock";
 export { type MigrateOptions, migrateFlatV1, v1TopEntries } from "./migrate";
-export { ensureSocketDir, type SocketAliasOptions } from "./socket-alias";
+export {
+  ensureSocketDir,
+  ensureSocketDirOutcome,
+  type SocketAliasOptions,
+  type SocketDirOutcome,
+} from "./socket-alias";
 export { ulid } from "./ulid";
 export {
   activeUser,

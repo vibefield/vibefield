@@ -5,8 +5,9 @@
 #![cfg(unix)]
 
 use field_native::endpoints::{native_run_dir_for, socket_alias_for};
-use field_native::socket_alias::{ensure, AliasRefusal};
+use field_native::socket_alias::{ensure, ensure_outcome, AliasRefusal};
 use std::os::unix::fs::{symlink, DirBuilderExt, MetadataExt, PermissionsExt};
+use std::os::unix::net::UnixListener;
 use std::path::Path;
 
 /// This process's uid, read off a directory it just made (no `unsafe` for `getuid`).
@@ -109,6 +110,43 @@ fn refuses_a_file_where_the_alias_belongs() {
     assert!(matches!(refusal, AliasRefusal::AliasNotLink(_)), "{refusal:?}");
 }
 
+// S2's three rows (VF-PM 12:06Z): the parent's own safety, a non-directory in the folder's place, a socket in the
+// alias's place.
+
+#[test]
+fn refuses_a_parent_others_may_write_without_the_sticky_bit() {
+    let (base, parent) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let open = std::fs::Permissions::from_mode(0o777);
+    std::fs::set_permissions(parent.path(), open).expect("chmod");
+    let refusal =
+        ensure(own_uid(), &long_root(base.path()), utf8(parent.path())).expect_err("refused");
+    assert!(
+        matches!(&refusal, AliasRefusal::ParentUnsafe { why, .. } if why.contains("sticky")),
+        "{refusal:?}"
+    );
+}
+
+#[test]
+fn refuses_a_file_where_the_folder_belongs() {
+    let uid = own_uid();
+    let (base, parent) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    std::fs::write(parent.path().join(format!("vf-{uid}")), "not a folder").expect("write");
+    let refusal = ensure(uid, &long_root(base.path()), utf8(parent.path())).expect_err("refused");
+    assert!(matches!(refusal, AliasRefusal::FolderNotDir(_)), "{refusal:?}");
+}
+
+#[test]
+fn refuses_a_socket_where_the_alias_belongs() {
+    let uid = own_uid();
+    let (base, parent) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let root = long_root(base.path());
+    private_dir(&parent.path().join(format!("vf-{uid}")));
+    let alias = socket_alias_for(uid, &root, utf8(parent.path()));
+    let _listener = UnixListener::bind(&alias).expect("bind a socket in the alias's place");
+    let refusal = ensure(uid, &root, utf8(parent.path())).expect_err("refused");
+    assert!(matches!(refusal, AliasRefusal::AliasNotLink(_)), "{refusal:?}");
+}
+
 #[test]
 fn replaces_an_alias_pointing_elsewhere_by_a_rename_inside_our_folder_removing_nothing_else() {
     let uid = own_uid();
@@ -127,6 +165,23 @@ fn replaces_an_alias_pointing_elsewhere_by_a_rename_inside_our_folder_removing_n
     want.sort();
     assert_eq!(entries(&folder), want);
     assert_eq!(entries(parent.path()), vec![format!("vf-{uid}")]);
+}
+
+#[test]
+fn says_when_it_replaced_a_link_pointing_elsewhere_and_not_when_it_made_or_kept_its_own() {
+    let uid = own_uid();
+    let (base, parent, elsewhere) =
+        (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let root = long_root(base.path());
+    let alias = socket_alias_for(uid, &root, utf8(parent.path()));
+    let made = ensure_outcome(uid, &root, utf8(parent.path())).expect("usable");
+    assert_eq!((made.dir.as_str(), made.replaced), (alias.as_str(), false));
+    assert!(!ensure_outcome(uid, &root, utf8(parent.path())).expect("usable").replaced);
+    let moved = parent.path().join(format!("vf-{uid}")).join("moved");
+    symlink(elsewhere.path(), &moved).expect("symlink");
+    std::fs::rename(&moved, &alias).expect("rename over the alias");
+    let again = ensure_outcome(uid, &root, utf8(parent.path())).expect("usable");
+    assert_eq!((again.dir.as_str(), again.replaced), (alias.as_str(), true));
 }
 
 #[test]

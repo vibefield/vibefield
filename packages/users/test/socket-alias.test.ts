@@ -5,15 +5,17 @@ import {
   mkdirSync,
   readdirSync,
   readlinkSync,
+  renameSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createServer } from "node:net";
 import { join } from "node:path";
 import { nativeRunDirFor, socketAliasFor } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { UsersError } from "../src/errors";
-import { ensureSocketDir } from "../src/socket-alias";
+import { ensureSocketDir, ensureSocketDirOutcome } from "../src/socket-alias";
 import { tempDir } from "./temp-dir";
 
 const uid = process.getuid?.() ?? 0;
@@ -81,6 +83,33 @@ describe.runIf(process.platform !== "win32")("item 345 — the socket alias (uni
     refused(() => ensureSocketDir(root, { parent }), /is not a link/);
   });
 
+  // S2's three rows (VF-PM 12:06Z): the parent's own safety, a non-directory in the folder's place, a socket in the
+  // alias's place.
+  it("refuses a parent others may write without the sticky bit (0777)", () => {
+    const parent = parentDir();
+    chmodSync(parent, 0o777);
+    refused(() => ensureSocketDir(longRoot(), { parent }), /without the sticky bit/);
+  });
+
+  it("refuses a file where the folder belongs", () => {
+    const parent = parentDir();
+    writeFileSync(join(parent, `vf-${uid}`), "not a folder");
+    refused(() => ensureSocketDir(longRoot(), { parent }), /is not a directory/);
+  });
+
+  it("refuses a socket where the alias belongs", async () => {
+    const parent = parentDir();
+    const root = longRoot();
+    mkdirSync(join(parent, `vf-${uid}`), { mode: 0o700 });
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(socketAliasFor(uid, root, parent), resolve));
+    try {
+      refused(() => ensureSocketDir(root, { parent }), /is not a link/);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it("replaces an alias pointing elsewhere, by a rename inside our own folder, removing nothing else", () => {
     const parent = parentDir();
     const root = longRoot();
@@ -95,6 +124,18 @@ describe.runIf(process.platform !== "win32")("item 345 — the socket alias (uni
       ["neighbour", socketAliasFor(uid, root, parent).split("/").pop() ?? ""].sort(),
     );
     expect(readdirSync(parent)).toEqual([`vf-${uid}`]);
+  });
+
+  it("says when it replaced a link pointing elsewhere, and not when it made or kept its own", () => {
+    const parent = parentDir();
+    const root = longRoot();
+    const made = ensureSocketDirOutcome(root, { parent });
+    expect(made).toEqual({ dir: socketAliasFor(uid, root, parent), replaced: false });
+    expect(ensureSocketDirOutcome(root, { parent }).replaced).toBe(false);
+    const moved = join(parent, `vf-${uid}`, "moved");
+    symlinkSync(tempDir("vf-elsewhere-"), moved);
+    renameSync(moved, made.dir);
+    expect(ensureSocketDirOutcome(root, { parent })).toEqual({ dir: made.dir, replaced: true });
   });
 
   it("two spellings of one root reach the same socket: two links, one run dir (no case fold, VF-PM 10:54:44Z)", () => {

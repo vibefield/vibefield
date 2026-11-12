@@ -166,11 +166,9 @@ export function socketAliasFor(
 /** Item 345's ONE decision (both twins): the directory every socket of `dataRoot` is bound and dialed in. */
 export function unixSocketDir(uid: number, dataRoot: string, parent = SOCKET_ALIAS_PARENT): string {
   const real = nativeRunDirFor(dataRoot);
-  // S1 holds today's law. S2: return socketPathBytes(`${real}/${longestSocketFile()}`) <= SUN_PATH_MAX_BYTES
-  //   ? real : socketAliasFor(uid, dataRoot, parent);
-  void uid;
-  void parent;
-  return real;
+  return socketPathBytes(`${real}/${longestSocketFile()}`) <= SUN_PATH_MAX_BYTES
+    ? real
+    : socketAliasFor(uid, dataRoot, parent);
 }
 
 /** One socket's endpoint on unix. */
