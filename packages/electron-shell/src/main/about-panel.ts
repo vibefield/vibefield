@@ -19,7 +19,7 @@ export interface AboutPanelOptions {
   readonly applicationName: string;
   readonly applicationVersion: string;
   readonly version?: string;
-  readonly credits?: string;
+  readonly credits: string;
 }
 
 /** `app.setAboutPanelOptions`'s argument on macOS, as a function so a unit reaches it. */
@@ -32,5 +32,7 @@ export function aboutPanelOptions(
     applicationName: "VibeField",
     applicationVersion,
     ...(commit !== undefined ? { version: commit } : {}),
+    // Both lines, the trademark first, as on the phone (James, j-mac-about-tm, 2026-11-12).
+    credits: `${ABOUT_TRADEMARK}\n${ABOUT_NOT_AFFILIATED}`,
   };
 }
