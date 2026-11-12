@@ -92,14 +92,16 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
   /// tile gutters: a flipped upload can leave every tile coordinate correct
   /// while showing a different agent's mark (or an empty tile).
   ///
-  /// LP-4 (2026-11-05): the pin is the atlas with every unkept tile blanked in
-  /// place (`apps/ios/scripts/blank-unkept-marks.mjs` prints it; the
-  /// generator's full bake pinned 49b54415…). The two kept tiles are the bake's
-  /// bytes and both sit in the top row, so a flipped upload still misses it.
+  /// The pin is the atlas with every unkept tile blanked in place
+  /// (`apps/ios/scripts/blank-unkept-marks.mjs` prints it; the generator's
+  /// full bake pinned 49b54415…). Item 359 (2026-11-12): nine tiles are kept,
+  /// the bake's bytes: three in the top row, three in the second, two in the
+  /// third and one in the last, so a flipped upload still misses it. (LP-4,
+  /// 2026-11-05, kept two, both in the top row, and pinned 4c89a40c….)
   @Test @MainActor func uploadedMarksMatchDesktopPixels() throws {
     let red = try uploadedRed()
     let digest = SHA256.hash(data: Data(red)).map { String(format: "%02x", $0) }.joined()
-    #expect(digest == "4c89a40c1c66d10382b83645eb08b2391eae29bfc7372e8ab0c73a744e867df7")
+    #expect(digest == "873a6a58bc37325008b8194fdc2c38ccde072389d1812b4425bcfc137a63a166")
   }
 
   /// LP-4 — the bundle carries no vendor mark the app does not draw: every

@@ -12,20 +12,27 @@ import UIKit
 // could be confused with, so the design could weigh the choice; the app draws
 // only the chosen ones that are KEPT.
 //
-// LP-4 (2026-11-05, the 0.9 launch; James kept two vendor logos in v1): only
-// Claude's and Codex's marks are kept. Every other vendor's mark is a third
-// party's trademark the app has no leave to draw, so every other agent — its
-// pick still recorded as `chosen`, the design's record — wears its LETTER, the
-// swarm's own path for an agent with no tile (`SwarmRenderer`'s watermark
-// fallback). The png ships those two tiles alone: every other tile is blanked
-// IN PLACE (every channel 0, alpha 0) by `apps/ios/scripts/blank-unkept-marks.mjs`,
-// which holds its table to `candidates` below and prints the pixel digest
-// `FieldSwarmTests` pins. The kept tiles are the bake's bytes and no tile
-// moved. The DEBUG lab's sheet (`-vf-swarm-lab=marks`) lists the kept marks
-// alone, read from this table (VF-PM's ruling (a)): a shipped lab shows only
-// what the atlas holds. The design's record of the blanked candidates is the
-// gitignored draft/launch/swarm-marks-candidates.md. A re-bake is the
-// generator's, and the generator is not in this repo.
+// WHICH ARE KEPT. LP-4 (2026-11-05, the 0.9 launch) kept two vendor logos,
+// Claude's and Codex's, and every other agent wore its LETTER. Item 359
+// (2026-11-12; James, 17:50:31Z: "overturn this ruling, bring back those
+// icons now") overturned that: every pick is kept, so each of the nine agents
+// with a tile draws its own mark again. `kept` stays in the table, so one
+// mark can be withdrawn by its row; an agent whose pick is not kept, or that
+// has no tile, wears its letter, the swarm's own path (`SwarmRenderer`'s
+// watermark fallback).
+//
+// WHAT SHIPS. LP-D7's other half stands: a mark the app does not draw leaves
+// the bundle. The png carries the nine chosen tiles and no other: the eleven
+// neighbours are blanked IN PLACE (every channel 0, alpha 0) by
+// `apps/ios/scripts/blank-unkept-marks.mjs`, which holds its table to
+// `candidates` below and prints the pixel digest `FieldSwarmTests` pins. The
+// kept tiles are the bake's bytes (the seven LP-4 had blanked came back from
+// git, the png at 40c794263) and no tile moved. The DEBUG lab's sheet
+// (`-vf-swarm-lab=marks`) lists the kept marks alone, read from this table
+// (VF-PM's ruling (a)): a shipped lab shows only what the atlas holds. The
+// design's record of the blanked candidates is the gitignored
+// draft/launch/swarm-marks-candidates.md. A re-bake is the generator's, and
+// the generator is not in this repo.
 //
 // THE ALLOW-LISTED PRESENTATION TABLE (AC-5, R23b). `candidates` below is the
 // one place in this target that names agents, and it is allowed to because it
@@ -60,9 +67,9 @@ public enum MarksAtlas {
     public var provider: String?
     /// The mark the design picked for that provider.
     public var chosen: Bool
-    /// Whether the app may draw that pick (LP-4): a vendor's logo is its
-    /// owner's, and only the two James kept for v1 are drawn. Unkept, the
-    /// provider wears its letter.
+    /// Whether the app draws that pick. Every pick is kept since item 359
+    /// (2026-11-12); LP-4 (2026-11-05) had kept two. Unkept, the provider
+    /// wears its letter.
     public var kept: Bool = false
 
     /// The app draws this tile: the design's pick, and a mark it keeps.
@@ -80,20 +87,20 @@ public enum MarksAtlas {
     Candidate(id: "anthropic", title: "Anthropic", tile: at(2), provider: "claude", chosen: false),
     Candidate(id: "codex", title: "Codex", tile: at(3), provider: "codex", chosen: true, kept: true),
     Candidate(id: "openai", title: "OpenAI", tile: at(4), provider: "codex", chosen: false),
-    Candidate(id: "grok", title: "Grok", tile: at(5), provider: "grok", chosen: true),
+    Candidate(id: "grok", title: "Grok", tile: at(5), provider: "grok", chosen: true, kept: true),
     Candidate(id: "xai", title: "xAI", tile: at(6), provider: "grok", chosen: false),
-    Candidate(id: "kimi", title: "Kimi", tile: at(7), provider: "kimi", chosen: true),
+    Candidate(id: "kimi", title: "Kimi", tile: at(7), provider: "kimi", chosen: true, kept: true),
     Candidate(id: "moonshot", title: "Moonshot AI", tile: at(8), provider: "kimi", chosen: false),
-    Candidate(id: "opencode", title: "opencode", tile: at(9), provider: "opencode", chosen: true),
-    Candidate(id: "hermesagent", title: "Hermes Agent", tile: at(10), provider: "hermes", chosen: true),
+    Candidate(id: "opencode", title: "opencode", tile: at(9), provider: "opencode", chosen: true, kept: true),
+    Candidate(id: "hermesagent", title: "Hermes Agent", tile: at(10), provider: "hermes", chosen: true, kept: true),
     Candidate(id: "nousresearch", title: "Nous Research", tile: at(11), provider: "hermes", chosen: false),
-    Candidate(id: "antigravity", title: "Antigravity", tile: at(12), provider: "antigravity", chosen: true),
+    Candidate(id: "antigravity", title: "Antigravity", tile: at(12), provider: "antigravity", chosen: true, kept: true),
     Candidate(id: "geminicli", title: "Gemini CLI", tile: at(13), provider: "antigravity", chosen: false),
     Candidate(id: "gemini", title: "Gemini", tile: at(14), provider: "antigravity", chosen: false),
-    Candidate(id: "githubcopilot", title: "GitHub Copilot", tile: at(15), provider: "copilot", chosen: true),
+    Candidate(id: "githubcopilot", title: "GitHub Copilot", tile: at(15), provider: "copilot", chosen: true, kept: true),
     Candidate(id: "copilot", title: "Copilot", tile: at(16), provider: "copilot", chosen: false),
     Candidate(id: "github", title: "GitHub", tile: at(17), provider: "copilot", chosen: false),
-    Candidate(id: "pi", title: "Pi", tile: at(18), provider: "pi", chosen: true),
+    Candidate(id: "pi", title: "Pi", tile: at(18), provider: "pi", chosen: true, kept: true),
     Candidate(id: "inflection", title: "Inflection", tile: at(19), provider: "pi", chosen: false),
   ]
 
@@ -103,7 +110,7 @@ public enum MarksAtlas {
   public static let providers: [String] = candidates.filter(\.drawn).compactMap(\.provider)
 
   /// The tile for a mark key, or nil for one with only a letter (no tile, or
-  /// a vendor's mark the app does not keep, LP-4).
+  /// a mark the app does not keep).
   public static func tile(for mark: String) -> Tile? {
     candidates.first { $0.drawn && $0.provider == mark }?.tile
   }

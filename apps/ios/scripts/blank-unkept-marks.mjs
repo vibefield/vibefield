@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 // Blanks, IN PLACE, every tile of the swarm's mark atlas (FieldSwarm/Resources/marks.png) that the
-// app does not draw (LP-4, 2026-11-05, the 0.9 launch: James kept two vendor logos in v1, Claude
-// Code's and Codex's, so the bundle carries those two and no other vendor's mark).
+// app does not draw, so the bundle carries no mark it has no use for (DECISIONS LP-D7).
+// - LP-4 (2026-11-05, the 0.9 launch) kept two vendor logos, Claude Code's and Codex's.
+// - Item 359 (2026-11-12; James: "overturn this ruling, bring back those icons now") keeps every
+//   mark the design chose for an agent, nine, and blanks the eleven neighbours the bake set beside
+//   them. This script cannot restore a tile it blanked, so the seven came back from git first:
+//   `git show 40c794263:apps/ios/VibeFieldKit/Sources/FieldSwarm/Resources/marks.png` is the bake
+//   (98,495 bytes, sha256 6a5bca60526102573cf5c63cccf5af0ab086c0db0d1d0d0f45e96fa9fbc0104e). It
+//   was written over the png, and then this script ran with the nine in KEPT.
 //
 //   node apps/ios/scripts/blank-unkept-marks.mjs           blanks the unkept tiles, rewrites the png, prints the pin
 //   node apps/ios/scripts/blank-unkept-marks.mjs --check   the committed png against the table and the pin (no write)
@@ -12,7 +18,7 @@
 //
 // Why a blanking and not a re-bake: the atlas's generator (research/svg-sdf, which baked
 // @lobehub/icons-static-svg@1.94.0 into 64-texel signed-distance tiles) is not in this repo. So the
-// two kept tiles stay the generator's bytes, untouched, and each unkept tile becomes transparent
+// kept tiles stay the generator's bytes, untouched, and each unkept tile becomes transparent
 // black — every channel 0, alpha 0 — which the swarm's text shader reads as "outside every edge"
 // (the field is the red channel, 0.5 at the edge). The grid stays as baked: 6 columns at a 66-texel
 // pitch, the tile order MarksAtlas.swift's `candidates` names, so no tile coordinate moves.
@@ -51,7 +57,8 @@ const TILE = 64;
 const PITCH = 66;
 const COLUMNS = 6;
 
-// MarksAtlas.swift's `candidates`, in bake order (index → tile), and the two it keeps.
+// MarksAtlas.swift's `candidates`, in bake order (index → tile), and the ones it keeps: every mark
+// the design chose for an agent (item 359).
 const CANDIDATES = [
   "claudecode",
   "claude",
@@ -74,7 +81,17 @@ const CANDIDATES = [
   "pi",
   "inflection",
 ];
-const KEPT = new Set(["claudecode", "codex"]);
+const KEPT = new Set([
+  "claudecode",
+  "codex",
+  "grok",
+  "kimi",
+  "opencode",
+  "hermesagent",
+  "antigravity",
+  "githubcopilot",
+  "pi",
+]);
 
 const check = process.argv.includes("--check");
 const unknown = process.argv.slice(2).filter((arg) => arg !== "--check");
@@ -334,7 +351,7 @@ assert(pinned, `no digest pin found in ${relative(ROOT, PIN)}`);
 if (check) {
   assert(before.equals(after), `${relative(ROOT, ATLAS)} still carries unkept tiles; run without --check`);
   assert(pinned === digest, `the pin is ${pinned}; the atlas's red channel hashes to ${digest}`);
-  console.log(`ok: ${relative(ROOT, ATLAS)} carries only ${[...KEPT].join(" and ")}; red-channel sha256 ${digest} = the pin`);
+  console.log(`ok: ${relative(ROOT, ATLAS)} carries only ${[...KEPT].join(", ")}; red-channel sha256 ${digest} = the pin`);
 } else {
   const bytes = encode(after);
   assert(decode(bytes).equals(after), "the re-encoded png does not decode to the blanked pixels");

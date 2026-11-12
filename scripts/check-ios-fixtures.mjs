@@ -212,9 +212,11 @@ const VENDORED = new Map([["splash-clock.json", "apps/ios/scripts/vendor-splash.
 // Bundle assets a script EDITED in place, whose generator is not in this repo: each script's own
 // `--check` holds the asset to the Swift table it serves and to its test's pin, below with the
 // vendored ones, so a table edit the asset does not follow is red here and not only on the kit
-// slot. LP-4 — the swarm's mark atlas (FieldSwarm/Resources/marks.png), every tile but Claude
-// Code's and Codex's blanked, held to MarksAtlas.swift's `candidates` and `kept` and to
-// FieldSwarmTests' `uploadedMarksMatchDesktopPixels`.
+// slot. The swarm's mark atlas (FieldSwarm/Resources/marks.png), every tile the app does not draw
+// blanked, held to MarksAtlas.swift's `candidates` and `kept` and to FieldSwarmTests'
+// `uploadedMarksMatchDesktopPixels`. (Corrected 2026-11-12, item 359: this said "LP-4 … every tile
+// but Claude Code's and Codex's blanked"; nine tiles are kept since, and the eleven neighbours are
+// the blank ones.)
 const EDITED_IN_PLACE = ["apps/ios/scripts/blank-unkept-marks.mjs"];
 
 const problems = [];

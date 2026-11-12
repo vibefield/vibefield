@@ -230,7 +230,8 @@ private struct LabClusterSection: View {
 /// atlas holds. So the sheet lists `MarksAtlas`' KEPT candidates and no other:
 /// the neighbours the design weighed beside them are blank in `marks.png`, and
 /// every other agent wears its letter. The kept set is read from the table,
-/// never listed here a second time.
+/// never listed here a second time: nine since item 359 (2026-11-12), two
+/// under LP-4.
 private struct LabMarksSection: View {
   private let columns = 5
   private let cell: CGFloat = 64
