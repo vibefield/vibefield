@@ -73,6 +73,16 @@ export function spawnsUnderInspector(
   return [...args, ...nodeOptions].some((flag) => flag !== undefined && INSPECTOR_FLAG.test(flag));
 }
 
+/** ESP-18 (item 341) — the supervisor's spawn-time hook for the person's PATH: that one key, or none. */
+function personPathEnvironment(
+  personPath: () => Promise<string | undefined>,
+): () => Promise<Readonly<Record<string, string>>> {
+  return async () => {
+    const path = await personPath();
+    return path === undefined ? {} : { PATH: path };
+  };
+}
+
 export function buildSupervisor(opts: {
   mode: ShellMode;
   rendererPolicyMode: ShellMode;
@@ -92,7 +102,7 @@ export function buildSupervisor(opts: {
    * (login-shell.ts), asked for when a pair is SPAWNED: it becomes the
    * supervisor's `spawnEnvironment` in `production` alone, so the window and an
    * adoption never wait on it. Every other mode keeps the PATH it was launched
-   * with. SLICE 2 (red): not applied yet. */
+   * with. */
   personPath?: () => Promise<string | undefined>;
 }): FielddSupervisor {
   // Env overrides still win — they are how smoke harnesses and a developer
@@ -228,6 +238,11 @@ export function buildSupervisor(opts: {
     // item 212 (RV #67) — the supervisor watches every handle's link at the house numbers (FIELDD_LIVENESS), and ends
     // a wedged fieldd it spawned; never one under the inspector, whose paused debugger is no wedge
     ...(spawnsUnderInspector(packaged, args, baseEnvironment) ? { liveness: false as const } : {}),
+    // ESP-18 (item 341) — a packaged pair's PATH is the person's, asked when the pair is SPAWNED (never for an adoption,
+    // never before the window); every other mode keeps the PATH it was launched with
+    ...(opts.mode === "production" && opts.personPath !== undefined
+      ? { spawnEnvironment: personPathEnvironment(opts.personPath) }
+      : {}),
     onEvent: (event) => {
       if (event.kind === "lifecycle") {
         logger.info(event.event, event.message, event.attrs);

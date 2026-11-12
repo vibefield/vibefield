@@ -38,6 +38,10 @@ import {
 
 const READINESS_DEADLINE_MS = 20_000;
 const ADOPT_PROBE_MS = 1_500;
+/** ESP-18 (item 341) — how long a spawn waits on `spawnEnvironment` before it goes on without it. */
+const SPAWN_ENVIRONMENT_MS = 5_000;
+/** ESP-18 (item 341) — the daemons' own key prefixes: no `spawnEnvironment` answer carries one into fieldd. */
+const DAEMON_PREFIXES = ["FIELD_", "FIELDD_", "VIBEFIELD_", "VF_"];
 const POLL_PROBE_MS = 600;
 const POLL_INTERVAL_MS = 200;
 const STOP_TERM_WAIT_MS = 2_000;
@@ -176,9 +180,11 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     }
     // item 212 — the record this spawn supersedes, when one was read: its late answer is never the race's winner
     const superseding = adopted.recorded?.bootId;
+    // ESP-18 (item 341) — asked only here, once a spawn is decided: an adoption has returned above
+    const asked = await askSpawnEnvironment(signal);
 
     const tail = createLogTail();
-    const spawned = spawnFieldd(tail);
+    const spawned = spawnFieldd(tail, asked);
     child = spawned;
 
     // child exit before readiness rejects PROMPTLY (spec; slice-0 finding 3)
@@ -358,9 +364,59 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     }
   }
 
-  function spawnFieldd(tail: ReturnType<typeof createLogTail>): ChildProcess {
+  /** ESP-18 (item 341) — the keys this spawn asks for, over `environment`: only string values under no daemon
+   * prefix are kept. A hook that rejects, or has not answered within its time, is said once — its reason and the
+   * wait, never a value or an error's words — and the spawn goes on without it: a spawn never fails for this. An
+   * abort ends the wait as it ends every other wait in `run`. */
+  async function askSpawnEnvironment(signal: AbortSignal): Promise<Record<string, string>> {
+    const hook = opts.spawnEnvironment;
+    if (hook === undefined) return {};
+    const started = Date.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+    const outcome = await Promise.race([
+      Promise.resolve()
+        .then(hook)
+        .then(
+          (answer) => ({ kind: "answer" as const, answer }),
+          () => ({ kind: "rejected" as const }),
+        ),
+      new Promise<{ kind: "deadline" }>((resolve) => {
+        const ms = opts.spawnEnvironmentMs ?? SPAWN_ENVIRONMENT_MS;
+        timer = setTimeout(() => resolve({ kind: "deadline" }), ms);
+      }),
+      new Promise<{ kind: "aborted" }>((resolve) => {
+        onAbort = () => resolve({ kind: "aborted" });
+        if (signal.aborted) onAbort();
+        else signal.addEventListener("abort", onAbort, { once: true });
+      }),
+    ]).finally(() => {
+      clearTimeout(timer);
+      if (onAbort !== undefined) signal.removeEventListener("abort", onAbort);
+    });
+    switch (outcome.kind) {
+      case "answer":
+        return keptSpawnKeys(outcome.answer);
+      case "aborted":
+        throw new SupervisorError("aborted", "supervisor operation aborted");
+      default:
+        lifecycle(
+          "fieldd.supervisor.spawn_environment_unavailable",
+          "The spawn's own environment could not be asked; fieldd is spawned without it",
+          { why: outcome.kind, ms: Date.now() - started },
+        );
+        return {};
+    }
+  }
+
+  function spawnFieldd(
+    tail: ReturnType<typeof createLogTail>,
+    asked: Readonly<Record<string, string>>,
+  ): ChildProcess {
     const env: Record<string, string | undefined> = {
       ...opts.environment,
+      // ESP-18 (item 341) — after the base, before every key of the supervisor's own, which therefore always win
+      ...asked,
       FIELDD_DATA_DIR: opts.dataRoot,
       // UA-1 — the supervisor already resolved the attached USER root; the
       // explicit variable tells fieldd's standalone entry to skip its own
@@ -701,6 +757,19 @@ function parseReadySignal(line: string): FielddReadySignal | null {
   } catch {
     return null;
   }
+}
+
+/** ESP-18 (item 341) — of a `spawnEnvironment` answer, the string values whose keys carry no daemon prefix; anything
+ * that is not a plain record keeps nothing. */
+function keptSpawnKeys(answer: unknown): Record<string, string> {
+  const kept: Record<string, string> = {};
+  if (answer === null || typeof answer !== "object") return kept;
+  for (const [key, value] of Object.entries(answer)) {
+    if (typeof value !== "string") continue;
+    if (DAEMON_PREFIXES.some((prefix) => key.startsWith(prefix))) continue;
+    kept[key] = value;
+  }
+  return kept;
 }
 
 function throwIfAborted(signal: AbortSignal): void {

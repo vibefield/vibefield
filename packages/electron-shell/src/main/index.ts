@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { accessSync, constants as fsConstants, readFileSync } from "node:fs";
+import { accessSync, existsSync, constants as fsConstants, readFileSync } from "node:fs";
 import { homedir, release, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -126,6 +126,12 @@ import { LiveSurfaceTicketTable } from "./live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "./live-surfaces/window-host";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
+import {
+  personPathOnce,
+  resolvePersonPath,
+  shellIdentity,
+  spawnPersonPathChild,
+} from "./login-shell";
 import {
   CHAT_NIGHT_FLAG,
   hasQuitGate,
@@ -419,6 +425,17 @@ async function closeEvidence(): Promise<void> {
   await logging?.close();
 }
 
+/** ESP-18 (item 341) — every user's agent-shim folder: VibeField's own launchers, never handed back as the person's
+ * PATH. Read once, when the person's PATH is first asked; a users file that cannot be read gives none. */
+function shimDirectoriesOf(rootReal: string): string[] {
+  try {
+    const users = readUsersFile(rootReal)?.users ?? [];
+    return users.map((record) => join(userRootFor(rootReal, record), ...LAYOUT.AGENT_SHIMS_DIR));
+  } catch {
+    return [];
+  }
+}
+
 async function main(
   root: string,
   logRoot: string,
@@ -431,6 +448,24 @@ async function main(
   user: { userId: string; name: string; rootReal: string },
 ): Promise<void> {
   const logger = shellLogging.logger;
+  // ESP-18 (item 341) — a packaged pair's PATH is the person's, asked of their login shell ONCE: begun here, so it is
+  // under way while the window comes up, and awaited only by a pair's SPAWN (fieldd.ts → the supervisor's
+  // spawnEnvironment), never by the window or an adoption. Development and every smoke keep the PATH they were given.
+  const personPath = personPathOnce(() =>
+    resolvePersonPath({
+      mode: MODE,
+      platform: process.platform,
+      shell: shellIdentity().defaultShell,
+      home: shellIdentity().home,
+      env: process.env,
+      spawn: spawnPersonPathChild,
+      exists: existsSync,
+      now: Date.now,
+      log: logger.child({ component: "desktop.person-path" }),
+      shimDirectories: shimDirectoriesOf(user.rootReal),
+    }),
+  );
+  if (MODE === "production") void personPath();
   // BP-1c (BP-D9 (a)) — the desk browser keeps its sign-ins only where its profiles lie inside Electron's userData
   // (live-surfaces/browser-profiles-placement.ts). Checked ONCE, at start, on the attached user's profiles root: every
   // user's root is a sibling under the same data root, so the answer holds for a switch too. Said in the log here, and
@@ -1155,6 +1190,7 @@ async function main(
       logger,
       userId,
       ...(environment !== undefined ? { environment } : {}),
+      personPath: async () => (await personPath())?.path,
     });
     // Item 212 (RV #29) — each pair has its own coordinator, so its own bounded recovery under the house intensity
     // (the soak's in its lab); only the attached pair's moves the link (fielddLink ignores the others).
