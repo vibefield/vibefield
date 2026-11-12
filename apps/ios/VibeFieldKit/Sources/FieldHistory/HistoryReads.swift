@@ -232,6 +232,9 @@ public final class HistoryDesktopReader: Identifiable {
   @ObservationIgnored private var directDeclined: Set<String> = []
   /// this desktop's daemon does not serve the direct read: nothing a retry changes
   @ObservationIgnored private var directOff = false
+  /// Item 366 — per session, the rows a document held when a direct read took it over: those above the direct
+  /// read's own window stay on the page until it reaches them
+  @ObservationIgnored private var carried: [String: [String: IndexTimelineRow]] = [:]
 
   public init(
     deviceId: String, name: String, isHome: Bool = false, door: (any HistoryDoor)?, ownsDoor: Bool = false,
@@ -356,18 +359,20 @@ public final class HistoryDesktopReader: Identifiable {
 
   // MARK: A session
 
-  private func openSession(_ sessionId: String) {
+  /// `again` (item 366): the document is open and the way it is read changed under it. The door's head is read
+  /// once more and laid over what is held (`layOver`), and the document is not said to be reading.
+  private func openSession(_ sessionId: String, again: Bool = false) {
     tailWanted = sessionId
     guard let door, !closed else {
       replayDocument(sessionId)
       return
     }
-    if headers[sessionId] != nil {
+    if headers[sessionId] != nil, !again {
       openTail(sessionId)
       return
     }
     guard tasks["session/\(sessionId)"] == nil else { return }
-    reading.insert(sessionId)
+    if !again { reading.insert(sessionId) }
     tasks["session/\(sessionId)"] = Task { [weak self] in
       guard let self else { return }
       defer {
@@ -380,25 +385,59 @@ public final class HistoryDesktopReader: Identifiable {
         // SP-7b's 7b-2b — the direct read fills the rows; only if it declines does the door read a page
         headers[sessionId] = header
         if await openDirect(sessionId) { return }
-        headers[sessionId] = nil
+        // a document already on the page keeps its head while the door's page is read (item 366)
+        if rows[sessionId] == nil { headers[sessionId] = nil }
         let page = try await door.call(
           "index.timeline",
           params: .object(["sessionId": .string(sessionId), "limit": .int(Int64(HistoryReads.pageRows))])
         ).decode(IndexTimelineResult.self)
         guard !Task.isCancelled else { return }
         headers[sessionId] = header
-        var held: [String: IndexTimelineRow] = [:]
-        for row in page.entries { held[row.timelineId] = row }
-        rows[sessionId] = held
+        let hole = layOver(sessionId, page.entries)
         if let next = page.nextCursor { cursors[sessionId] = next } else { cursors[sessionId] = nil }
         watermarks[sessionId] = page.watermark
         rebuildDocument(sessionId)
+        if let hole { fillHole(sessionId, below: hole.below, reaching: hole.reaching) }
         openTail(sessionId)
       } catch {
         replayDocument(sessionId)
         refused(error)
       }
     }
+  }
+
+  /// Item 366 — the door's newest page laid over the rows a document already holds, when the way it is read
+  /// changed under it. Nothing held: the page is the document, as it always was.
+  ///
+  /// - A row in common: the two are one record. The page's rows stand for everything from its oldest row on (a row
+  ///   the page does not carry there is gone upstream), and the rows above stay as they were read.
+  /// - None in common and the page newer than everything held: the rows between are a hole. What is held stays for
+  ///   item 109's fill, which reads the rows between or drops the older ones (the returned bounds).
+  /// - None in common inside what is held: the session was rewritten. What was held goes.
+  ///
+  /// It was `rows[sessionId] = the page`: a direct read lost under an open document left the door's newest forty
+  /// rows where up to two hundred and the pages above them had been.
+  private func layOver(_ sessionId: String, _ page: [IndexTimelineRow]) -> (below: Double, reaching: Double)? {
+    var held = rows[sessionId] ?? [:]
+    let before = held.values.map(\.ordinal).max() ?? -1
+    var hole: (below: Double, reaching: Double)?
+    var joined = false
+    if !held.isEmpty, let oldest = page.map(\.ordinal).min() {
+      if page.contains(where: { held[$0.timelineId] != nil }) {
+        for (id, row) in held where row.ordinal >= oldest { held[id] = nil }
+        joined = true
+      } else if oldest > before {
+        hole = (oldest, before)
+        joined = true
+      } else {
+        held = [:]
+      }
+    }
+    for row in page { held[row.timelineId] = row }
+    rows[sessionId] = held
+    let appended = page.filter { $0.ordinal > before }.count
+    if joined, appended > 0 { arrivals[sessionId, default: 0] += appended }
+    return hole
   }
 
   /// Item 362b — the rows above the document's top, read on until they hold `earlierMessages` messages, in at most
@@ -541,6 +580,8 @@ public final class HistoryDesktopReader: Identifiable {
   /// Reads `sessionId` directly when this desktop's road allows it. False: the door reads it, and `failure` says why.
   private func openDirect(_ sessionId: String) async -> Bool {
     guard let directPlane, !directOff, !directDeclined.contains(sessionId), !closed, !paused else { return false }
+    // item 366 — what the document holds as this road takes it over
+    carried[sessionId] = rows[sessionId].flatMap { $0.isEmpty ? nil : $0 }
     closeTail()
     let sink = HistoryDirectRead.Sink(
       page: { [weak self] cursor, watermark in self?.directPage(sessionId, cursor: cursor, watermark: watermark) },
@@ -563,6 +604,7 @@ public final class HistoryDesktopReader: Identifiable {
       return true
     case .door(let reason):
       if directRead?.read === read { directRead = nil }
+      carried[sessionId] = nil
       declineDirect(sessionId, reason)
       return false
     }
@@ -581,10 +623,24 @@ public final class HistoryDesktopReader: Identifiable {
   }
 
   /// The subscription's whole visible list: what it shows is what is held.
+  ///
+  /// Item 366 — and the rows the document held when this read took it over, above the list's oldest row, stay
+  /// until the read reaches them, while the list shares a row with them (one record). A list that shares none is
+  /// another record, or too far from them to join: they go, as they always did. It was the list alone, so a direct
+  /// read coming back dropped the pages the door had read.
   private func directRows(_ sessionId: String, _ visible: [IndexTimelineRow]) {
     let before = (rows[sessionId] ?? [:]).values.map(\.ordinal).max() ?? -1
     var held: [String: IndexTimelineRow] = [:]
     for row in visible { held[row.timelineId] = row }
+    if let shown = carried[sessionId] {
+      // a list with nothing in it yet leaves the page as it stands
+      guard let oldest = visible.map(\.ordinal).min() else { return }
+      if visible.contains(where: { shown[$0.timelineId] != nil }) {
+        for (id, row) in shown where row.ordinal < oldest && held[id] == nil { held[id] = row }
+      } else {
+        carried[sessionId] = nil
+      }
+    }
     rows[sessionId] = held
     let appended = visible.filter { $0.ordinal > before }.count
     if appended > 0, before >= 0 { arrivals[sessionId, default: 0] += appended }
@@ -611,7 +667,8 @@ public final class HistoryDesktopReader: Identifiable {
     }
   }
 
-  /// A live direct read gave up: its cursors are rosetta's, so the door starts the session again from the head.
+  /// A live direct read gave up: the door reads on. Its cursor was rosetta's, so the door's own comes with the
+  /// door's head page; the rows on the page stay (item 366: it was `reopen`, which let them go).
   private func directLost(_ sessionId: String, _ reason: HistoryDirectFallback) {
     guard directRead?.session == sessionId else { return }
     directRead = nil
@@ -620,7 +677,10 @@ public final class HistoryDesktopReader: Identifiable {
       liveSince[sessionId] = nil
     }
     declineDirect(sessionId, reason)
-    reopen(sessionId)
+    carried[sessionId] = nil
+    cursors[sessionId] = nil
+    closeTail()
+    openSession(sessionId, again: true)
   }
 
   // MARK: The hole (item 109)
@@ -710,6 +770,7 @@ public final class HistoryDesktopReader: Identifiable {
     headers[sessionId] = nil
     rows[sessionId] = nil
     cursors[sessionId] = nil
+    carried[sessionId] = nil
     closeTail()
     openSession(sessionId)
   }
