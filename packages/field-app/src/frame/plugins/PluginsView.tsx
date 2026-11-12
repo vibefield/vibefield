@@ -41,7 +41,9 @@ import "./plugins.css";
 // plugin's one switch stands on its row, beside the row's press and never inside
 // it, with a stop of Tab of its own, and again on its page beside "Installed";
 // its powers' switches stand at their lines' ends. Each switch is the kit's,
-// named by what it turns and never by its state.
+// named by what it turns and never by its state. MK-4c2b: a page's settings
+// section stands in its first column, after What it adds; the controller
+// mounts it and hands it here.
 
 export interface PluginsViewProps {
   open: boolean;
@@ -58,6 +60,8 @@ export interface PluginsViewProps {
   hot: number;
   /** The page shown in the body, and the tab it opened from; null: the tab's own body */
   page: PluginPage | null;
+  /** MK-4c2b: the page's settings section, which the controller mounts and owns; null: none */
+  pageSettings?: ReactNode;
   pageFrom: PluginsTab;
   /** Updates' count, the Me row's (null or 0: none) */
   updates: number | null;
@@ -203,6 +207,7 @@ function PageSection({ head, children }: { head: string; children: ReactNode }):
  * Made by and Version. */
 function PageView({
   page,
+  settings,
   from,
   away,
   under,
@@ -212,6 +217,7 @@ function PageView({
   onTurnPower,
 }: {
   page: PluginPage;
+  settings: ReactNode;
   from: PluginsTab;
   away: boolean;
   under: ReadonlySet<string>;
@@ -242,6 +248,8 @@ function PageView({
               ))}
             </ul>
           </PageSection>
+          {/* MK-4c2b: its settings, 20 after What it adds (the column's gap) */}
+          {settings}
         </div>
         <div className="vf-plugins-page-column" data-column="second">
           <div className="vf-plugins-page-top">
@@ -341,12 +349,14 @@ function PageView({
 export function PluginsView(props: PluginsViewProps): ReactElement {
   const { open, layout, tab, query, shelf, foot, installed, installedFoot, inputRef } = props;
   const { hot, page, pageFrom, updates, listRef, away, under, refused } = props;
+  const { pageSettings = null } = props;
   const { onQuery, onTab, onClose, onShowInstalled, onOpenPage, onBack, onKeyDown } = props;
   const { onTurn, onTurnPower } = props;
   const body =
     page !== null ? (
       <PageView
         page={page}
+        settings={pageSettings}
         from={pageFrom}
         away={away}
         under={under}

@@ -515,6 +515,45 @@
   flex: 1;
 }
 
+/* MK-4c2b (§8 "Its settings", as corrected for James's MK-O6 pick: no Undo, no
+   Redo): a section of the first column, 20 after What it adds (the column's
+   gap); its off line 6 under its head; each setting a row, the first 6 under
+   the head and the rest 12 apart, its title at 13/400 in primary ink and its
+   description under it at 12/400 in tertiary ink, its control at the row's end
+   12 after its words (the kit's switch, or the kit's field at its own width);
+   a refusal under its words in the attention ink; the foot 12 under the last
+   row at 12/400 in tertiary ink. */
+.vf-plugins-settings-rows {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vf-plugins-setting {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.vf-plugins-setting-text {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+
+.vf-plugins-setting-title {
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.vf-plugins-settings-foot {
+  margin-top: 6px;
+}
+
 @container (max-width: 719px) {
   .vf-plugins-page-columns {
     grid-template-columns: minmax(0, 1fr);

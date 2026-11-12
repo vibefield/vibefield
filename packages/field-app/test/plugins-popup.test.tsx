@@ -82,11 +82,17 @@ function counting(inner: PluginsPort): {
   };
 }
 
-/** A port's switches, for a test that presses none: each refuses, so a stray press is never a quiet pass. */
-const NO_SWITCHES: Pick<PluginsPort, "enable" | "disable" | "grant"> = {
+/** A port's switches and settings (MK-4c2b), for a test that presses and reads none: each refuses, so a stray press
+ * or read is never a quiet pass. */
+const NO_SWITCHES: Pick<
+  PluginsPort,
+  "enable" | "disable" | "grant" | "settingsGet" | "settingsSet"
+> = {
   enable: () => Promise.reject(new Error("no switch is pressed in this test")),
   disable: () => Promise.reject(new Error("no switch is pressed in this test")),
   grant: () => Promise.reject(new Error("no switch is pressed in this test")),
+  settingsGet: () => Promise.reject(new Error("no setting is read in this test")),
+  settingsSet: () => Promise.reject(new Error("no setting is kept in this test")),
 };
 
 /** The requests a port's switches sent, in order (MK-4c2a). */

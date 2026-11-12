@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import { usePluginRegistrySnapshot } from "../../plugin-host/plugin-registry-store";
 import { useGodviewFindDoor } from "../find-door";
 import { type FrameSurface, foldSurface } from "../frame-surface";
+import { PluginSettings } from "./PluginSettings";
 import { PluginsView } from "./PluginsView";
 import {
   claimWindowAsk,
@@ -58,7 +59,12 @@ import { type PluginsPort, pluginsPortOver } from "./plugins-port";
 // out it takes no press (a second press sends nothing), a refusal is said in
 // §9's words (never the error's text) until a press or fieldd's snapshot shows
 // the switch the way it was turning, and while fieldd isn't answering no switch
-// takes a press. Every other plugin's page reads only (item 321).
+// takes a press. Every other plugin's page reads only (item 321). MK-4c2b: a
+// Built in or Development plugin's settings on its page (§8 "Its settings"),
+// a section the controller mounts once per page opening and hands the view, so
+// the view holds no state; each setting reads and keeps its value over the
+// requests Settings → Plugins sends today. No Undo and no Redo on the page
+// (James's MK-O6 pick): going back stays in Settings.
 // Its doors (MK-4b) are the Me menu's Plugins… row and the palette's Plugins…
 // and Check plugins for updates, each through ChromeLayer's `openPlugins`; the
 // pegboard's pill is MK-4d's. The catalog mounts this controller over a
@@ -446,6 +452,17 @@ export function Plugins({
       installedFoot={snapshot === null ? null : installedFoot(snapshot)}
       hot={hotAt}
       page={shown}
+      pageSettings={
+        shown !== null && shown.settings !== null ? (
+          <PluginSettings
+            key={shown.id}
+            id={shown.id}
+            settings={shown.settings}
+            port={port}
+            away={away}
+          />
+        ) : null
+      }
       pageFrom={page?.from ?? tab}
       updates={updates}
       away={away}

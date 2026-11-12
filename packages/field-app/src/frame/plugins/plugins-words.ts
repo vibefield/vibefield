@@ -163,6 +163,29 @@ export const SWITCH_WORDS = {
     turningOn ? "Couldn't turn it on. Try again." : "Couldn't turn it off. Try again.",
 } as const;
 
+/** A plugin's settings (MK-4c2b; DESIGN.md §8 "Its settings", §9 MK-4c2b's block, as corrected for James's MK-O6
+ * pick): MK's words, ‹draft›, for James's eye (VF-PM 2026-11-11 19:40:52Z), and the one §8 already holds, quoted. A
+ * setting is named by its plugin's own title for it. The page has no Undo and no Redo: going back stays in Settings.
+ * Settings → Plugins keeps its own words until MK-5. */
+export const SETTINGS_WORDS = {
+  /** The section's head (§8 "Its settings"). */
+  head: "Settings",
+  /** An off plugin's page, under Settings. */
+  off: "Turn it on to change its settings.",
+  /** A setting fieldd refused to keep: never the error's own text. */
+  refused: "Couldn't save that. Try again.",
+  /** A kept secret's empty field: it never shows what is kept. */
+  saved: "Saved",
+  /** A choice with nothing chosen yet (Settings' word, quoted). */
+  choose: "Choose…",
+  /** A setting the page can't draw. */
+  cantDraw: "This setting can't be changed here.",
+  /** The foot, with a setting in the synced history: where it can be undone (MK's, ‹draft›, for James's eye). */
+  footSynced: "Synced settings can be undone in Settings.",
+  /** The foot with none: §8 "The settings undo affordance"'s device sentence (James's MK-O33 is open on it). */
+  footHere: "Device and secret settings stay on this device and are not part of settings history.",
+} as const;
+
 /** Installed, when no plugin holds every typed word (MK's, ‹draft›; the Peek's "Nothing in your past holds every
  * word of “q”" is its pattern). */
 export function noMatchWords(query: string): string {

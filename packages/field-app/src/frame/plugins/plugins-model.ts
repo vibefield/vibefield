@@ -8,6 +8,7 @@ import {
   type PluginsCatalog,
   pluginOwnPowerLine,
   pluginPowerWords,
+  type SettingsGetResult,
 } from "@vibefield/contracts";
 import {
   CATALOG_FOOT,
@@ -19,6 +20,7 @@ import {
   NO_LIST,
   PAGE_WORDS,
   READING,
+  SETTINGS_WORDS,
   SOURCE_WORDS,
   SWITCH_WORDS,
 } from "./plugins-words";
@@ -27,9 +29,9 @@ import {
 // popup"): its size in a window (MK-E1), what Discover and Updates show for
 // each state of the read, the foot's sentence, Installed's rows from the
 // registry snapshot the window already holds, (MK-4c) a plugin's page and the
-// walk of Installed's hot row, and (MK-4c2a) which plugins carry switches here
-// and where each switch stands. Pure: the controller and the tests read the same
-// functions.
+// walk of Installed's hot row, (MK-4c2a) which plugins carry switches here
+// and where each switch stands, and (MK-4c2b) a plugin's settings on its page.
+// Pure: the controller and the tests read the same functions.
 
 /** The popup as drawn (MK-D2): 960 × 640. */
 export const PLUGINS_SIZE = { width: 960, height: 640 } as const;
@@ -402,6 +404,8 @@ export interface PluginPage {
   readonly elsewhere: string | null;
   /** said under What it can do's head while it is off and its powers have switches */
   readonly offLine: string | null;
+  /** MK-4c2b: its settings, when its switches stand here and it declares one; null otherwise */
+  readonly settings: PageSettings | null;
 }
 
 /** Made by (§9 MK-4c's block): a Built in plugin's sentence; for a registry
@@ -546,5 +550,127 @@ export function pluginPage(
         ? SWITCH_WORDS.elsewhere
         : null,
     offLine: switches && !record.enabled && powerSwitches ? SWITCH_WORDS.off : null,
+    settings: settingsOf(record),
   };
+}
+
+/** How the page draws a setting (MK-4c2b; §8 "Its settings"): Settings → Plugins' own kinds, read from the same
+ * declared schema in the same order (`panels/PluginSettingsForm.tsx`, `controlKind`). A yes-or-no takes the kit's
+ * switch, a choice a menu, words or a number a field, and a secret a masked field. */
+export type SettingKind =
+  | "secret"
+  | "choice"
+  | "text"
+  | "integer"
+  | "number"
+  | "switch"
+  | "unsupported";
+
+/** The parts of a declared JSON Schema a setting is drawn from (contracts `JsonSchemaObject`: passthrough). */
+interface SchemaView {
+  readonly type?: unknown;
+  readonly enum?: unknown;
+  readonly minimum?: unknown;
+  readonly maximum?: unknown;
+  readonly default?: unknown;
+}
+
+export function settingKind(scope: string, schema: object): SettingKind {
+  const view = schema as SchemaView;
+  if (scope === "secret") return "secret";
+  if (Array.isArray(view.enum)) return "choice";
+  if (view.type === "string") return "text";
+  if (view.type === "integer") return "integer";
+  if (view.type === "number") return "number";
+  if (view.type === "boolean") return "switch";
+  return "unsupported";
+}
+
+/** One setting on a plugin's page: its key names it to fieldd and is never shown; its title and description are the
+ * plugin's own words. */
+export interface PageSetting {
+  readonly key: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly kind: SettingKind;
+  /** a choice's options, in the plugin's order */
+  readonly options: readonly unknown[];
+  /** a number's bounds */
+  readonly min: number | null;
+  readonly max: number | null;
+  /** its declared default, shown while nothing is kept */
+  readonly fallback: unknown;
+}
+
+/** A plugin's settings section (MK-4c2b; §8 "Its settings", as corrected for James's MK-O6 pick: no Undo and no
+ * Redo on the page). */
+export interface PageSettings {
+  readonly rows: readonly PageSetting[];
+  /** whether its settings take input: it is on and working (fieldd refuses a set while it is off) */
+  readonly live: boolean;
+  /** the foot: where a synced setting can be undone, or that none syncs */
+  readonly foot: string;
+  /** said 6 under the head while it is off */
+  readonly offLine: string | null;
+}
+
+/** A plugin's settings: null unless its switches stand here (`controlsHere`; a read-only page carries no section and
+ * asks fieldd nothing, U2) and it declares a setting. */
+export function settingsOf(record: PluginRecord): PageSettings | null {
+  if (!controlsHere(record)) return null;
+  const entries = Object.entries(record.contributions.settings?.properties ?? {});
+  if (entries.length === 0) return null;
+  const rows = entries.map(([key, property]): PageSetting => {
+    const schema = property.schema as SchemaView;
+    return {
+      key,
+      title: property.title,
+      description: property.description ?? null,
+      kind: settingKind(property.scope, property.schema),
+      options: Array.isArray(schema.enum) ? schema.enum : [],
+      min: typeof schema.minimum === "number" ? schema.minimum : null,
+      max: typeof schema.maximum === "number" ? schema.maximum : null,
+      fallback: schema.default,
+    };
+  });
+  const synced = entries.some(([, property]) => property.scope === "user");
+  return {
+    rows,
+    live: record.enabled && record.state === "enabled",
+    foot: synced ? SETTINGS_WORDS.footSynced : SETTINGS_WORDS.footHere,
+    offLine: record.enabled ? null : SETTINGS_WORDS.off,
+  };
+}
+
+/** What a setting's control shows for fieldd's answer, as Settings reads it (`PluginSettingsForm.tsx`): a secret's
+ * field is empty (fieldd never sends a window what is kept); a switch is on when the value, or the default while
+ * nothing is kept, is `true`; a choice is its option's place, "" with none; a field holds the value's words. */
+export function settingDraft(setting: PageSetting, got: SettingsGetResult): string {
+  if (setting.kind === "secret") return "";
+  const current = got.isSet ? got.value : setting.fallback;
+  if (setting.kind === "switch") return current === true ? "true" : "false";
+  if (setting.kind === "choice") {
+    const at = setting.options.findIndex((option) => String(option) === String(current));
+    return at >= 0 ? String(at) : "";
+  }
+  return current === undefined || current === null ? "" : String(current);
+}
+
+/** What a field sends on ↵ or on leaving it (§8: nothing when it is unchanged), as Settings decides it: a secret
+ * sends what was typed, never an empty field; a number sends a number, never a blank or one that isn't; words send
+ * the words. `null` sends nothing. */
+export function settingToSend(
+  setting: PageSetting,
+  draft: string,
+  got: SettingsGetResult,
+): { readonly value: unknown } | null {
+  if (setting.kind === "secret") return draft.length > 0 ? { value: draft } : null;
+  if (draft === settingDraft(setting, got)) return null;
+  if (setting.kind === "integer" || setting.kind === "number") {
+    if (draft.trim() === "") return null;
+    const number = Number(draft);
+    return Number.isNaN(number) ? null : { value: number };
+  }
+  if (setting.kind === "text") return { value: draft };
+  return null;
 }

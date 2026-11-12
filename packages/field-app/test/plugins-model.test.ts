@@ -6,6 +6,7 @@ import {
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_READ_AT,
+  PLUGINS_FIXTURE_SETTINGS_SNAPSHOT,
   PLUGINS_FIXTURE_SNAPSHOT,
   PLUGINS_FIXTURE_SWITCHES_SNAPSHOT,
 } from "../src/design-system/plugins-fixtures";
@@ -15,11 +16,16 @@ import {
   controlsHere,
   installedFoot,
   installedRows,
+  type PageSetting,
   type PluginsRead,
   pluginPage,
   pluginsLayout,
   powerSwitchOf,
   refusalStale,
+  settingDraft,
+  settingKind,
+  settingsOf,
+  settingToSend,
   shelfState,
   walkHot,
 } from "../src/frame/plugins/plugins-model";
@@ -28,7 +34,7 @@ import * as words from "../src/frame/plugins/plugins-words";
 // MK-4a — the Plugins popup's model (DESIGN.md §8 "Plugins — the frame's second popup", §9 "The plugins'
 // words"): its place in a window (MK-E1), what Discover and Updates say in each state of the read, the foot,
 // and Installed's rows from the registry snapshot; MK-4c adds a plugin's page, read only, and the hot row's walk;
-// MK-4c2a, which plugins carry switches here and where each stands.
+// MK-4c2a, which plugins carry switches here and where each stands; MK-4c2b, a plugin's settings on its page.
 
 const answered = (catalog: PluginsCatalog): PluginsRead => ({ kind: "answered", catalog });
 const when = words.listTime(PLUGINS_FIXTURE_READ_AT, PLUGINS_FIXTURE_NOW);
@@ -297,6 +303,8 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
       readOnly: null,
       elsewhere: words.SWITCH_WORDS.elsewhere,
       offLine: null,
+      // MK-4c2b: it declares no setting here, so its page has no Settings section
+      settings: null,
     });
     // off the Mac, no Mac note
     const offMac = pluginPage(simulators, null, PLUGINS_FIXTURE_SNAPSHOT, false);
@@ -636,6 +644,129 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
     ]);
     // a plugin gone from the snapshot leaves nothing to say
     expect(refusalStale({ ...turningOff, id: "gone.plugin" }, snapshot)).toBe(true);
+  });
+});
+
+/** One of Simulators' settings, as its page draws it (MK-4c2b's fixture). */
+function simulatorsSetting(key: string): PageSetting {
+  const record = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.simulator");
+  const setting = settingsOf(record)?.rows.find((row) => row.key === key);
+  if (setting === undefined) throw new Error(`the fixture's Simulators declares no ${key}`);
+  return setting;
+}
+
+describe("a plugin's settings (MK-4c2b; §8 'Its settings', corrected for James's MK-O6)", () => {
+  it("draws each setting by what its schema declares, as Settings → Plugins does", () => {
+    expect(settingKind("secret", { type: "string" })).toBe("secret");
+    expect(settingKind("user", { type: "string", enum: ["a", "b"] })).toBe("choice");
+    expect(settingKind("user", { type: "string" })).toBe("text");
+    expect(settingKind("device", { type: "integer" })).toBe("integer");
+    expect(settingKind("user", { type: "number" })).toBe("number");
+    expect(settingKind("user", { type: "boolean" })).toBe("switch");
+    expect(settingKind("user", { type: "array" })).toBe("unsupported");
+    expect(settingKind("user", {})).toBe("unsupported");
+  });
+
+  it("lists a Built in plugin's settings in its order, with its own words and bounds, and says where they go back", () => {
+    const simulators = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.simulator");
+    const settings = settingsOf(simulators);
+    expect(settings?.rows.map((setting) => [setting.key, setting.kind])).toEqual([
+      ["showFrame", "switch"],
+      ["phone", "choice"],
+      ["frameRate", "integer"],
+      ["caption", "text"],
+      ["token", "secret"],
+      ["sizes", "unsupported"],
+    ]);
+    expect(settings?.rows[2]).toEqual({
+      key: "frameRate",
+      title: "Frames each second",
+      description: "How often a screen is drawn on your desk.",
+      kind: "integer",
+      options: [],
+      min: 1,
+      max: 60,
+      fallback: 30,
+    });
+    expect(settings?.rows[1]?.options).toEqual(["iPhone 17", "iPhone 17 Pro", "iPhone Air"]);
+    expect(settings?.rows[1]?.description).toBeNull();
+    expect([settings?.live, settings?.foot, settings?.offLine]).toEqual([
+      true,
+      words.SETTINGS_WORDS.footSynced,
+      null,
+    ]);
+    // no Undo and no Redo on the page (James's MK-O6), and no reset (C2)
+    expect(Object.keys(settings ?? {}).sort()).toEqual(["foot", "live", "offLine", "rows"]);
+    expect(Object.values(words.SETTINGS_WORDS).join(" ")).not.toMatch(/\b(undo|redo|reset)\b/i);
+    // the page carries the same section
+    const page = pluginPage(simulators, null, PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, true);
+    expect(page.settings).toEqual(settings);
+  });
+
+  it("shows an off plugin's settings taking no input, and says how to change them", () => {
+    const clock = settingsOf(recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "example.desk-clock"));
+    expect([clock?.live, clock?.offLine, clock?.foot]).toEqual([
+      false,
+      words.SETTINGS_WORDS.off,
+      words.SETTINGS_WORDS.footSynced,
+    ]);
+    // one that is on but not working takes no input either, and is not called off
+    const simulators = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.simulator");
+    const broken = settingsOf({ ...simulators, state: "invalid" });
+    expect([broken?.live, broken?.offLine]).toEqual([false, null]);
+    // one whose settings all stay on this desktop
+    const pad = settingsOf(recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.comment-pad"));
+    expect(pad?.foot).toBe(words.SETTINGS_WORDS.footHere);
+  });
+
+  it("carries no section on a page that reads only, nor for a plugin that declares no setting (U2)", () => {
+    for (const id of ["acme.kanban", "example.kv-service"]) {
+      expect(settingsOf(recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, id))).toBeNull();
+    }
+    const bare = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator");
+    expect(settingsOf(bare)).toBeNull();
+    const contributions = { ...bare.contributions, settings: { properties: {} } };
+    expect(settingsOf({ ...bare, contributions })).toBeNull();
+  });
+
+  it("shows what fieldd keeps, or the default while nothing is kept, and never a secret", () => {
+    const frame = simulatorsSetting("showFrame");
+    expect(settingDraft(frame, { isSet: false })).toBe("true");
+    expect(settingDraft(frame, { isSet: true, value: false })).toBe("false");
+    const phone = simulatorsSetting("phone");
+    expect(settingDraft(phone, { isSet: true, value: "iPhone Air" })).toBe("2");
+    // nothing kept and no default, or a kept choice it no longer offers: no choice shown
+    expect(settingDraft(phone, { isSet: false })).toBe("");
+    expect(settingDraft(phone, { isSet: true, value: "iPhone 4" })).toBe("");
+    const rate = simulatorsSetting("frameRate");
+    expect(settingDraft(rate, { isSet: false })).toBe("30");
+    expect(settingDraft(rate, { isSet: true, value: 45 })).toBe("45");
+    expect(settingDraft(simulatorsSetting("caption"), { isSet: false })).toBe("");
+    // a secret's field is empty, kept or not, whatever an answer carries
+    const token = simulatorsSetting("token");
+    const carried = { isSet: true, secret: true, value: "plum orchard lantern" };
+    expect(settingDraft(token, carried) === "").toBe(true);
+    expect(settingDraft(token, { isSet: false, secret: true }) === "").toBe(true);
+  });
+
+  it("sends a field's words, a number as a number and a secret as typed; nothing unchanged, blank or unreadable", () => {
+    const unset = { isSet: false };
+    const rate = simulatorsSetting("frameRate");
+    expect(settingToSend(rate, "30", unset)).toBeNull();
+    expect(settingToSend(rate, "45", unset)).toEqual({ value: 45 });
+    expect(settingToSend(rate, " ", unset)).toBeNull();
+    expect(settingToSend(rate, "lots", unset)).toBeNull();
+    const caption = simulatorsSetting("caption");
+    expect(settingToSend(caption, "", unset)).toBeNull();
+    expect(settingToSend(caption, "Lab bench", unset)).toEqual({ value: "Lab bench" });
+    const token = simulatorsSetting("token");
+    const kept = { isSet: true, secret: true };
+    const typed = "plum orchard lantern";
+    expect(settingToSend(token, "", kept)).toBeNull();
+    expect(settingToSend(token, typed, kept)?.value === typed).toBe(true);
+    // a switch and a choice send from their own controls, never from a field
+    expect(settingToSend(simulatorsSetting("showFrame"), "false", unset)).toBeNull();
+    expect(settingToSend(simulatorsSetting("phone"), "1", unset)).toBeNull();
   });
 });
 

@@ -5,9 +5,9 @@ import { PluginsPlate } from "../PluginsPreview";
 // Plugins (MK-4a; DESIGN.md §8 "Plugins — the frame's second popup"): the
 // frame's second popup as it opens today, on fixture ports — the shipping
 // controller in each state the read can be in, a plugin's page, read only
-// (MK-4c), Updates carrying the Me row's count, and (MK-4c2a) a plugin's
-// switches. Discover's shelf, Updates' rows and a plugin's settings come with
-// later MK-4 parts.
+// (MK-4c), Updates carrying the Me row's count, (MK-4c2a) a plugin's switches
+// and (MK-4c2b) its settings. Discover's shelf and Updates' rows come with later
+// MK-4 parts.
 
 export function PluginsSection(): ReactElement {
   return (
@@ -100,6 +100,27 @@ export function PluginsSection(): ReactElement {
         bleed
       >
         <PluginsPlate state="switches-away" />
+      </Specimen>
+      <Specimen
+        title="A plugin's settings — one of each kind, and one it can't draw"
+        source="frame/plugins/PluginSettings.tsx · frame/plugins/plugins-model.ts"
+        bleed
+      >
+        <PluginsPlate state="settings" />
+      </Specimen>
+      <Specimen
+        title="A plugin in development, turned off — its settings wait for it"
+        source="frame/plugins/PluginSettings.tsx"
+        bleed
+      >
+        <PluginsPlate state="settings-off" />
+      </Specimen>
+      <Specimen
+        title="A plugin whose settings all stay on this desktop"
+        source="frame/plugins/plugins-words.ts"
+        bleed
+      >
+        <PluginsPlate state="settings-here" />
       </Specimen>
     </Section>
   );

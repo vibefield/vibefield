@@ -8,6 +8,8 @@ import {
   CATALOG_LISTED,
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
+  PLUGINS_FIXTURE_SETTINGS,
+  PLUGINS_FIXTURE_SETTINGS_SNAPSHOT,
   PLUGINS_FIXTURE_SNAPSHOT,
   PLUGINS_FIXTURE_SWITCHES_SNAPSHOT,
   type PluginsFixtureRead,
@@ -27,7 +29,10 @@ import {
 // powers' (one taken back, one it can't have here), a Development plugin's page
 // while it is off, and the same Built in page while fieldd isn't answering. A
 // press on a plate's switch is sent to its fixture port, which answers and moves
-// nothing, as fieldd's answer moves nothing: only a snapshot does.
+// nothing, as fieldd's answer moves nothing: only a snapshot does. MK-4c2b adds
+// a plugin's settings: a Built in plugin's page with one setting of each kind,
+// a Development plugin's while it is off, and a Built in plugin's whose settings
+// all stay on this desktop. No Undo and no Redo on any of them (James's MK-O6).
 
 export type PluginsPlateState =
   | "no-registry"
@@ -42,7 +47,10 @@ export type PluginsPlateState =
   | "count"
   | "switches"
   | "switches-off"
-  | "switches-away";
+  | "switches-away"
+  | "settings"
+  | "settings-off"
+  | "settings-here";
 
 const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   "no-registry": {
@@ -67,6 +75,15 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
     catalog: CATALOG_FIXTURES.unconfigured,
     refresh: CATALOG_FIXTURES.unconfigured,
   },
+  settings: { catalog: CATALOG_FIXTURES.unconfigured, refresh: CATALOG_FIXTURES.unconfigured },
+  "settings-off": {
+    catalog: CATALOG_FIXTURES.unconfigured,
+    refresh: CATALOG_FIXTURES.unconfigured,
+  },
+  "settings-here": {
+    catalog: CATALOG_FIXTURES.unconfigured,
+    refresh: CATALOG_FIXTURES.unconfigured,
+  },
 };
 
 /** The page a plate opens on, from Installed. */
@@ -76,12 +93,16 @@ const PLATE_PAGES: Readonly<Partial<Record<PluginsPlateState, string>>> = {
   switches: "vibefield.simulator",
   "switches-off": "example.desk-clock",
   "switches-away": "vibefield.simulator",
+  settings: "vibefield.simulator",
+  "settings-off": "example.desk-clock",
+  "settings-here": "vibefield.comment-pad",
 };
 
 /** The plugins a plate's desktop has. */
 function plateSnapshot(state: PluginsPlateState) {
   if (state === "page-listed") return PLUGINS_FIXTURE_LISTED_SNAPSHOT;
   if (state.startsWith("switches")) return PLUGINS_FIXTURE_SWITCHES_SNAPSHOT;
+  if (state.startsWith("settings")) return PLUGINS_FIXTURE_SETTINGS_SNAPSHOT;
   return PLUGINS_FIXTURE_SNAPSHOT;
 }
 
@@ -93,7 +114,9 @@ function plateTab(state: PluginsPlateState): PluginsTab {
 export function PluginsPlate({ state }: { state: PluginsPlateState }): ReactElement {
   const [surface, setSurface] = useState<FrameSurface | null>("plugins");
   const [plate, setPlate] = useState<HTMLDivElement | null>(null);
-  const [port] = useState(() => pluginsFixturePort(PLATE_READS[state]));
+  const [port] = useState(() =>
+    pluginsFixturePort(PLATE_READS[state], "answers", PLUGINS_FIXTURE_SETTINGS),
+  );
   const now = useCallback(() => PLUGINS_FIXTURE_NOW, []);
   const tab = plateTab(state);
   return (
