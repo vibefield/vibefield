@@ -2147,6 +2147,13 @@ export const FIELDD_TRUST_ROOT_KEYS_ENV = "FIELDD_TRUST_ROOT_KEYS" as const;
  * corpus once, then holds its last state (rows alive and quiet); restart fieldd to replay. A packaged fieldd refuses
  * to boot under it, and the shell blanks it for a packaged fieldd. TS-only, like the two above. */
 export const FIELDD_DEBUG_SWARM_CORPUS_ENV = "FIELDD_DEBUG_SWARM_CORPUS" as const;
+/** RV item 354 (F1) — a HARNESS seam: the Homebrew prefixes a fieldd lets its agents' install inventory probe, a
+ * PATH-style list (fieldd boot-env `agentBrewPrefixes`). Unset keeps puppeteer's default (`/opt/homebrew`,
+ * `/usr/local`: the machine's own Homebrew, which a person's app wants listed); empty probes none, so a harness's
+ * daemon finds no install of the machine owner's there. The shell leaves it OUT for a packaged fieldd, never "",
+ * which is "none". fieldd hands it to the runtime's `distribution.brewPrefixes` once puppeteer 0.4.2 is pinned (F1's
+ * second half, after the EL8). TS-only, like the three above. */
+export const FIELDD_AGENT_BREW_PREFIXES_ENV = "FIELDD_AGENT_BREW_PREFIXES" as const;
 /** Item 345 — a HARNESS seam both planes read: the folder in which a root over the sun_path line keeps its socket
  * alias. Unset is endpoints.ts's `SOCKET_ALIAS_PARENT` (`/tmp`), the product's only value, and nothing in the product
  * sets it. Tests, smokes and lab runs set it to a short folder each run makes and removes (`/tmp/vfa-XXXXXX`: under

@@ -2,6 +2,7 @@ import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { delimiter, posix, win32 } from "node:path";
 import {
+  FIELDD_AGENT_BREW_PREFIXES_ENV,
   pipeEndpointFor,
   SOCKET_ALIAS_PARENT_ENV,
   SOCKETS,
@@ -47,6 +48,19 @@ export function defaultDataRoot(
  * does not restore correctness — it mints a new silent break. */
 export function splitPathList(value: string | undefined, listDelimiter = delimiter): string[] {
   return value?.split(listDelimiter).filter(Boolean) ?? [];
+}
+
+/** RV item 354 (F1) — the Homebrew prefixes a harness lets its fieldd's install inventory probe
+ * (FIELDD_AGENT_BREW_PREFIXES; puppeteer's `distribution.brewPrefixes`). Unset is no list, so
+ * puppeteer keeps its own default, the machine's Homebrew. "" is an empty list, so the harness's
+ * fieldd probes no prefix. Anything else is a PATH-style list read by `splitPathList`. The shell
+ * never hands one to a packaged fieldd (electron-shell `main/fieldd.ts`). */
+export function agentBrewPrefixes(
+  env: NodeJS.ProcessEnv = process.env,
+  listDelimiter = delimiter,
+): string[] | undefined {
+  const value = env[FIELDD_AGENT_BREW_PREFIXES_ENV];
+  return value === undefined ? undefined : splitPathList(value, listDelimiter);
 }
 
 /** WIN-D1 — where field-native binds ONE of the `SOCKETS` names under

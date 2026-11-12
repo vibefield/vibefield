@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import {
+  FIELDD_AGENT_BREW_PREFIXES_ENV,
   FIELDD_DEBUG_SWARM_CORPUS_ENV,
   FIELDD_PLUGIN_REGISTRY_KEY_ENV,
   FIELDD_PLUGIN_REGISTRY_URL_ENV,
@@ -211,6 +212,11 @@ export function buildSupervisor(opts: {
       // cannot honour (ESP §9.3).
       ...(nodeMode ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
       ...pluginEnvironment,
+      // RV item 354 (F1): FIELDD_AGENT_BREW_PREFIXES is a harness's seam. A package's fieldd is
+      // spawned WITHOUT it, so its inventory probes the person's own Homebrew (puppeteer's
+      // default): left out, never blanked, since fieldd reads "" as "probe no prefix". Node's
+      // spawn passes no undefined entry. Development passes the launching shell's value through.
+      ...(packaged ? { [FIELDD_AGENT_BREW_PREFIXES_ENV]: undefined } : {}),
       // The shell resolved this root under its own mode policy. Passing that
       // trusted absolute decision keeps all three process owners aligned while
       // fieldd still refuses an ambient override on its own.

@@ -10094,7 +10094,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
  * path's first directory, the stub's own in every harness, so the machine
  * owner's `~/.local/bin` and the like are never read. An empty list falls to the
  * user root, which here is fieldd's data directory, never $HOME. Production
- * passes no search path, so its inventory reads the person's own home. */
+ * passes no search path, so its inventory reads the person's own home.
+ *
+ * Errata (2026-11-12, RV item 354): "never read" held for the install
+ * directories under a home, not for the inventory. puppeteer also probes the
+ * Homebrew prefixes (`/opt/homebrew`, `/usr/local`, its `DEFAULT_BREW_PREFIXES`),
+ * which lie under no home, whatever the search path; so a harness that isolates
+ * the search path still has its fieldd read the machine owner's Homebrew. A
+ * harness will name its own with FIELDD_AGENT_BREW_PREFIXES (boot-env
+ * `agentBrewPrefixes`; "" probes none). That reaches `distribution.brewPrefixes`
+ * once puppeteer 0.4.2 is pinned (F1's second half, after the EL8); until then
+ * every fieldd's inventory probes both. */
 function agentInstallHome(searchPath: string, userRoot: string): string {
   return splitPathList(searchPath)[0] ?? userRoot;
 }
