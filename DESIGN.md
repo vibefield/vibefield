@@ -7778,6 +7778,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the excerpt rule above decides how much of them the document draws. While the app runs the whole stays with
     its row when the way changes, as long as the row the door then sends is the same row, and goes when it is not.
     A later launch that can only read through the home desktop reads the door's row again.
+  - **A cut is marked whenever the words are less than the whole** (item 368). Two things make them less: the
+    door cut them at its bound, or the whole is a file on the desktop (a text past rosetta's 32 KiB) and the row
+    carries its opening and the file's size. The second arrives without the door's cut flag when that opening
+    fits the bound, so the flag alone read it as a whole message. The mark stands for both: `clipped · 88 KB on
+    studio` under a reply, under a prompt, and under a member's opened words, which open even when they are one
+    line.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
