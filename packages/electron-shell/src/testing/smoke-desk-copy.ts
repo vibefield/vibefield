@@ -310,20 +310,81 @@ export interface DeskFacts {
   readonly frames: number | null;
 }
 
+/** The page read behind `DeskFacts`: the anchor (`__vfDesk.anchor()`), the hand, the bar's data-attributes, the
+ * editor's focus and the desk's drawn frames. Reads only; no input, no write. */
+const DESK_FACTS = `(() => {
+  const d = globalThis.__vfDesk;
+  const a = d?.anchor?.() ?? null;
+  const b = document.querySelector("[data-selection-bar]");
+  return {
+    count: a === null ? null : a.count,
+    locked: a === null ? null : a.locked === true,
+    gesturing: a === null ? null : a.gesturing === true,
+    editing: a === null ? null : a.editing === true,
+    box: a === null ? null : a.box !== null,
+    held: d === undefined ? null : d.held() !== null,
+    bar: b === null ? null : {
+      shown: b.getAttribute("data-shown"),
+      face: b.getAttribute("data-face"),
+      open: b.hasAttribute("data-open"),
+      traveling: b.hasAttribute("data-traveling"),
+    },
+    writing: document.activeElement?.hasAttribute("data-desk-editor") === true,
+    frames: d === undefined ? null : d.perf().frames,
+  };
+})()`;
+
+/** What a press at `at` meets after it: inside the desk, and inside the hand's cards — two booleans, no markup. */
+const UNDER = (at: { readonly x: number; readonly y: number }): string => `(() => {
+  const el = document.elementFromPoint(${at.x}, ${at.y});
+  const desk = document.querySelector("[data-desk]");
+  return {
+    desk: el !== null && desk !== null && desk.contains(el),
+    cards: (el?.closest(".vf-cards") ?? null) !== null,
+  };
+})()`;
+
+/** One word, as a data-attribute's value is: anything else is said `?`. */
+const ONE_WORD = /^[a-z][a-z-]{0,23}$/u;
+
 /** Item 327 — the desk's facts in words: the fixed keys in a fixed order, a data-attribute only when it is one word,
- * and nothing else it is handed. RED: a stub. */
+ * and nothing else it is handed. */
 export function deskFactsWords(facts: Readonly<Record<string, unknown>> | null): string {
-  void facts;
-  return "";
+  if (facts === null) return "no desk";
+  const said = (v: unknown): string => {
+    if (v === null || v === undefined) return "none";
+    if (typeof v === "boolean") return String(v);
+    if (typeof v === "number" && Number.isFinite(v)) return String(v);
+    return "?";
+  };
+  const attr = (v: unknown): string => {
+    if (v === null || v === undefined) return "none";
+    return typeof v === "string" && ONE_WORD.test(v) ? v : "?";
+  };
+  const raw = facts["bar"];
+  const bar =
+    typeof raw === "object" && raw !== null ? (raw as Readonly<Record<string, unknown>>) : null;
+  return [
+    `count=${said(facts["count"])}`,
+    `locked=${said(facts["locked"])}`,
+    `gesturing=${said(facts["gesturing"])}`,
+    `editing=${said(facts["editing"])}`,
+    `box=${said(facts["box"])}`,
+    `held=${said(facts["held"])}`,
+    bar === null
+      ? "bar=none"
+      : `bar.shown=${attr(bar["shown"])} bar.face=${attr(bar["face"])} ` +
+        `bar.open=${said(bar["open"])} bar.traveling=${said(bar["traveling"])}`,
+    `writing=${said(facts["writing"])}`,
+    `frames=${said(facts["frames"])}`,
+  ].join(" ");
 }
 
 /** Item 327 — `select()`'s press took the selection its row's bar asks next: `want` (1, or one more under ⇧) against
- * the anchor's count read after the press. RED: a stub. */
+ * the anchor's count read after the press. */
 export function judgeSelectionTook(type: string, want: number, got: number | null): string | null {
-  void type;
-  void want;
-  void got;
-  return null;
+  if (got === want) return null;
+  return `the press on ${type} took no selection: count ${got ?? "none"}, not ${want}`;
 }
 
 /** HN-3's rows (above). Returns the problems, each in words. */
@@ -333,6 +394,9 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
     win.webContents.executeJavaScript(expression, true) as Promise<T>;
   const copied = (): Promise<CopiedSeen | null> =>
     js<CopiedSeen | null>("globalThis.__vfDesk.copied()");
+  /** Item 327: the desk's facts in words, read once where a wait ran out. */
+  const facts = async (): Promise<string> =>
+    deskFactsWords(await js<Readonly<Record<string, unknown>> | null>(DESK_FACTS));
   const until = async (label: string, timeoutMs: number, expression: string): Promise<void> => {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
@@ -340,7 +404,8 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
       await sleep(60);
     }
     throw new Error(
-      `${label} did not happen within ${timeoutMs}ms (copied ${JSON.stringify(await copied())})`,
+      `${label} did not happen within ${timeoutMs}ms (copied ${JSON.stringify(await copied())}) ` +
+        `(desk ${await facts()})`,
     );
   };
   const press = async (at: { x: number; y: number }, modifiers: "shift"[] = []): Promise<void> => {
@@ -409,10 +474,30 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
       await until("the writing let go", 5_000, `!(${writing})`);
     }
   };
+  const countNow = (): Promise<number | null> =>
+    js<number | null>("globalThis.__vfDesk.anchor()?.count ?? null");
   const select = async (type: string, modifiers: "shift"[] = []): Promise<void> => {
-    await press(await point(type), modifiers);
+    const before = (await countNow()) ?? 0;
+    const at = await point(type);
+    await press(at, modifiers);
     await sleep(300);
     await letWritingGo();
+    // Item 327: the press took the selection the row's bar asks next (1, or one more under ⇧), or the red says the
+    // press and not the bar. A green run passes the first read.
+    const want = modifiers.includes("shift") ? before + 1 : 1;
+    const deadline = Date.now() + 5_000;
+    let got = await countNow();
+    while (got !== want && Date.now() < deadline) {
+      await sleep(60);
+      got = await countNow();
+    }
+    const problem = judgeSelectionTook(type, want, got);
+    if (problem === null) return;
+    const under = await js<{ desk: boolean; cards: boolean }>(UNDER(at));
+    throw new Error(
+      `${problem} (at ${at.x},${at.y}: in the desk ${under.desk}, in the cards ${under.cards}) ` +
+        `(desk ${await facts()})`,
+    );
   };
   const barShown = async (label: string, extra = "true"): Promise<void> => {
     await until(
