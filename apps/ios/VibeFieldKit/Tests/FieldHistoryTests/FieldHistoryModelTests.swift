@@ -4,7 +4,8 @@ import Testing
 @testable import FieldHistory
 
 /// IOS-9b — the History tab's decisions over the mock corpus: the ranking,
-/// the wash, the scope line's three states, the search's matching and its
+/// the wash, the line under the head (item 390: the scope line's states,
+/// less its summary), the search's matching and its
 /// words, where a hit lands, the stepper's ring and the ribbon's determinism.
 @Suite("the History tab decides in words")
 struct FieldHistoryModelTests {
@@ -39,14 +40,15 @@ struct FieldHistoryModelTests {
     #expect(FieldHistoryModel.share(of: vf, among: []) == 0)
   }
 
-  @Test("the scope line says the three states in the record's words")
-  func scopeLine() {
-    #expect(
-      FieldHistoryModel.scopeLine(corpus, standing: .connected, device: .iPhone)
-        == "7 projects · 1,405 sessions across 9 agents")
-    #expect(FieldHistoryModel.scopeLine(corpus, standing: .asleep, device: .iPhone) == "studio is asleep · read 11:42")
+  // Item 390 (James, 2026-11-13 23:28:32Z, session qa-01) — RE-CUT: this row held the scope line's three states, the
+  // first of them the summary `7 projects · 1,405 sessions across 9 agents`. He removed that line from the head, so
+  // a desktop that answers has nothing said under the head; the other two states keep the record's words.
+  @Test("the line under the head says nothing while the desktop answers, and its other states in the record's words")
+  func headNote() {
+    #expect(FieldHistoryModel.headNote(corpus, standing: .connected, device: .iPhone) == nil)
+    #expect(FieldHistoryModel.headNote(corpus, standing: .asleep, device: .iPhone) == "studio is asleep · read 11:42")
     let indexing = FieldHistoryModel.DesktopStanding.indexing(percent: 61, done: "8,400", total: "13,700")
-    #expect(FieldHistoryModel.scopeLine(corpus, standing: indexing, device: .iPhone) == "studio is indexing · 61%")
+    #expect(FieldHistoryModel.headNote(corpus, standing: indexing, device: .iPhone) == "studio is indexing · 61%")
     #expect(FieldHistoryModel.indexingDenominator(standing: indexing) == "8,400 of 13,700 sessions")
     #expect(FieldHistoryModel.indexingDenominator(standing: .connected) == nil)
   }
@@ -57,7 +59,7 @@ struct FieldHistoryModelTests {
     let stopped = FieldHistoryModel.IndexStanding.failed(reason: "rosettad stopped")
     for device in [DeviceWord.iPad, .unknown] {
       let words = [
-        FieldHistoryModel.scopeLine(corpus, standing: incompatible, device: device),
+        FieldHistoryModel.headNote(corpus, standing: incompatible, device: device) ?? "",
         FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: device).text,
         FieldHistoryModel.emptyLedger(standing: .connected, index: stopped, desktop: "studio", device: device).text,
         FieldHistoryModel.projectNotRead(device: device).text, FieldHistoryModel.sessionNotRead(device: device).text,
@@ -68,7 +70,7 @@ struct FieldHistoryModelTests {
       }
     }
     #expect(
-      FieldHistoryModel.scopeLine(corpus, standing: incompatible, device: .iPad)
+      FieldHistoryModel.headNote(corpus, standing: incompatible, device: .iPad)
         == "studio speaks contracts 0.2.0 · this iPad 0.1.0")
     #expect(
       FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: .iPad).text

@@ -158,11 +158,16 @@ struct HistoryStatsTests {
       FieldHistoryModel.portfolioNote(reading, failed: 2, awake: true) == "figures for 2 projects failed · retrying")
     #expect(
       FieldHistoryModel.portfolioNote(reading, failed: 0, awake: false) == "figures for 1 of 3 projects were read")
+    // Item 390 (James, 2026-11-13 23:28:32Z, session qa-01: "remove the second marked text") — RE-CUT: this row
+    // held `messages are a lower bound · 1 project's days are not exact`. The line no longer says a cut project's
+    // messages are a lower bound; the figure's own `+` does (`portfolio`, above), and the days' sentence stays.
     let bounded = FieldHistoryModel.portfolio(
       [Self.project("a", cost: 1, clipped: true), Self.project("b", cost: 1, partial: true)], sessions: 1)
-    #expect(
-      FieldHistoryModel.portfolioNote(bounded, failed: 0, awake: true)
-        == "messages are a lower bound · 1 project's days are not exact")
+    #expect(bounded.messagesLowerBound, "the figure still wears its +")
+    #expect(FieldHistoryModel.portfolioNote(bounded, failed: 0, awake: true) == "1 project's days are not exact")
+    let cut = FieldHistoryModel.portfolio([Self.project("a", cost: 1, clipped: true)], sessions: 1)
+    #expect(cut.messagesLowerBound)
+    #expect(FieldHistoryModel.portfolioNote(cut, failed: 0, awake: true) == nil, "a lower bound alone is no line")
     #expect(FieldHistoryModel.unpricedNote(0) == nil)
     #expect(FieldHistoryModel.unpricedNote(1) == "1 project has usage with no list price and is not shown")
     #expect(FieldHistoryModel.unpricedNote(3) == "3 projects have usage with no list price and are not shown")

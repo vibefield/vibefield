@@ -85,6 +85,31 @@ public enum FieldHistoryModel {
     }
   }
 
+  /// Item 390 (James, 2026-11-13) — the line under the root's head: nothing while the ledger's desktop answers, and
+  /// that desktop's own sentence while it does not.
+  ///
+  /// The red's stub: it answers the scope line, summary and all, as the head drew it before item 390.
+  public static func headNote(_ corpus: HistoryCorpus, standing: DesktopStanding, device: DeviceWord) -> String? {
+    scopeLine(corpus, standing: standing, device: device)
+  }
+
+  /// A head as its page says it (item 390): the title, the count in the bubble beside it, and the one line VoiceOver
+  /// reads for the two.
+  public struct Head: Equatable, Sendable {
+    public let title: String
+    /// The bubble's words (`79`, `1,485`); nil draws no bubble.
+    public let count: String?
+    /// The title and its count as one spoken line: `Projects, 79`.
+    public let spoken: String
+  }
+
+  /// Item 390 — the root's head: "Projects" and how many the ledger lists.
+  ///
+  /// The red's stub: the head as it stood before item 390, "History" and no bubble.
+  public static func rootHead(projects: Int, cut: Bool = false) -> Head {
+    Head(title: "History", count: nil, spoken: "History")
+  }
+
   /// The words under an indexing scope line: `8,400 of 13,700 sessions`.
   public static func indexingDenominator(standing: DesktopStanding) -> String? {
     guard case .indexing(_, let done, let total) = standing else { return nil }

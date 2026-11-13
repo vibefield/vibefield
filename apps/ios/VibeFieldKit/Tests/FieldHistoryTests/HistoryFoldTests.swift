@@ -326,7 +326,7 @@ struct HistoryFoldTests {
     #expect(FieldHistoryModel.standing(status: nil) == .asleep)
     let corpus = HistoryCorpus.mock
     #expect(
-      FieldHistoryModel.scopeLine(corpus, standing: .incompatible(theirs: "0.2.0", ours: "0.1.0"), device: .iPhone)
+      FieldHistoryModel.headNote(corpus, standing: .incompatible(theirs: "0.2.0", ours: "0.1.0"), device: .iPhone)
         == "studio speaks contracts 0.2.0 · this iPhone 0.1.0")
     #expect(FieldHistoryModel.liveHeader(corpus, standing: .incompatible(theirs: "0.2.0", ours: "0.1.0")).count == nil)
   }

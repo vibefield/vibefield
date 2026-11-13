@@ -320,7 +320,7 @@ struct HistoryReadsTests {
     offline.need(.session(device: "dev-1", id: "s1"))
     #expect(offline.corpus.document("s1")?.title == "Named")
     #expect(
-      FieldHistoryModel.scopeLine(offline.corpus, standing: offline.standing, device: .iPhone)
+      FieldHistoryModel.headNote(offline.corpus, standing: offline.standing, device: .iPhone)
         == "mini is asleep · read \(offline.corpus.readAt)")
     #expect(FieldHistoryModel.liveHeader(offline.corpus, standing: offline.standing).count == nil)
   }
