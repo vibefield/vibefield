@@ -43,8 +43,25 @@ enum HistoryRow: Identifiable, Equatable, Sendable {
     }
   }
 
-  // STUB (item 381, red): no rows. The view still draws a turn whole.
+  /// The document's rows: each turn's parts in the order the turn is drawn. The room above, or the sitting's pill
+  /// in its place; the prompt, where it has words or a search landed on it; the cut's note and the attachments
+  /// under it; the reply's head, unless the turn is a later part of a reply that time cut; each part of the reply.
   static func of(_ turns: [HistoryTurn]) -> [HistoryRow] {
-    []
+    var rows: [HistoryRow] = []
+    for turn in turns {
+      if let pill = turn.dayPill {
+        rows.append(.sitting(turn: turn.id, pill: pill))
+      } else {
+        rows.append(.gap(turn: turn.id))
+      }
+      if !turn.prompt.isEmpty || turn.promptAnchor != nil { rows.append(.prompt(turn)) }
+      if let words = turn.promptClipped { rows.append(.promptClipped(turn: turn.id, words: words)) }
+      for (index, words) in turn.promptAttachments.enumerated() {
+        rows.append(.promptAttachment(turn: turn.id, index: index, words: words))
+      }
+      if !turn.segments.isEmpty, !turn.continues { rows.append(.head(turn)) }
+      for segment in turn.segments { rows.append(.segment(segment, turn: turn)) }
+    }
+    return rows
   }
 }

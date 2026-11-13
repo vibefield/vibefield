@@ -51,6 +51,9 @@ struct HistorySessionView: View {
   @State private var askedCursor: String?
   @State private var stalledCursor: String?
   @State private var settling: Task<Void, Never>?
+  /// Item 381 — the scroll is at rest (no finger on it, no move carrying it), and the page stands past its end.
+  @State private var resting = true
+  @State private var past = false
 
   init(
     document: HistoryDocument, corpus: HistoryCorpus, ledger: HistoryCorpus? = nil,
@@ -82,6 +85,8 @@ struct HistorySessionView: View {
   static let barClearance: CGFloat = 80
   /// Item 362a — how long after the rows above land the foot is still held: their layout, and a beat.
   static let earlierSettles = Duration.milliseconds(250)
+  /// Item 381 — the id of the document's last row, the bar's clearance: at the screen's foot, the page is at its end.
+  static let endRow = "end"
 
   private var awake: Bool { standing.isAwake }
   /// The project the document belongs to: the ledger's (by key, when the
@@ -110,16 +115,18 @@ struct HistorySessionView: View {
           case .reading: RuleLine(text: "Reading earlier…")
           case .earlier, .asleep: earlier
           }
-          ForEach(document.turns) { turn in
-            turnView(turn)
+          // Item 381 — a row is one part of a turn, never a whole turn (`HistoryRow.of`)
+          ForEach(HistoryRow.of(document.turns)) { row in
+            rowView(row)
           }
           if let since = document.liveSince, awake {
             RuleLine(text: "Live · new since \(since)", tone: ChromePalette.green, rule: ChromePalette.green.opacity(0.38))
           }
-          Color.clear.frame(height: 1).id("end")
+          // the end is the bar's clearance itself, so the end's own row at the screen's foot is the page at its
+          // end (item 381: it is where a page found past its end is put back). It was a point over a padding.
+          Color.clear.frame(height: Self.barClearance + 1).id(Self.endRow)
         }
         .padding(.horizontal, HistoryParts.sidePadding)
-        .padding(.bottom, Self.barClearance)
       }
       // Item 362a — it opens at its end; while it follows, a change in its height keeps the foot, and off the foot a
       // row arriving below or a run opened by hand leaves the reader's place alone (`HistoryFollow.growth`).
@@ -132,11 +139,23 @@ struct HistorySessionView: View {
         if follow.following { scroll.scrollTo(edge: .bottom) }
       }
       .onScrollPhaseChange { _, phase in
+        resting = phase == .idle
         switch phase {
         case .interacting: follow.dragged()
         case .idle: follow.rested(atFoot: reach.atFoot)
         default: break
         }
+        putBack(proxy, past: past, resting: phase == .idle)
+      }
+      // Item 381 — a page found at rest past its end stands on nothing: it is put back on its end
+      .onScrollGeometryChange(for: Bool.self) { geometry in
+        HistoryFollow.pastEnd(
+          offset: geometry.contentOffset.y, container: geometry.containerSize.height,
+          content: geometry.contentSize.height, topInset: geometry.contentInsets.top,
+          bottomInset: geometry.contentInsets.bottom)
+      } action: { _, now in
+        past = now
+        putBack(proxy, past: now, resting: resting)
       }
       .onScrollGeometryChange(for: HistoryFollow.Reach.self) { geometry in
         HistoryFollow.reach(
@@ -263,6 +282,13 @@ struct HistorySessionView: View {
     }
   }
 
+  /// Item 381 — the end's row is put at the screen's foot when the page is found past its end at rest
+  /// (`HistoryFollow.putsBack`), with no move to watch: there is nothing on screen to move from.
+  private func putBack(_ proxy: ScrollViewProxy, past: Bool, resting: Bool) {
+    guard HistoryFollow.putsBack(past: past, resting: resting) else { return }
+    proxy.scrollTo(Self.endRow, anchor: .bottom)
+  }
+
   /// Item 362b — the rows above are wanted now (`HistoryFollow.asksEarlier`).
   private var wantsEarlier: Bool {
     follow.asksEarlier(
@@ -339,47 +365,48 @@ struct HistorySessionView: View {
     }
   }
 
-  // MARK: - A turn
+  // MARK: - A row
 
+  /// Item 381 — one part of a turn, drawn: the lazy stack lays out a part at a time (`HistoryRow`).
   @ViewBuilder
-  private func turnView(_ turn: HistoryTurn) -> some View {
-    if let pill = turn.dayPill {
-      HStack {
-        Spacer()
-        HStack(spacing: 6) {
-          Text(pill.lead)
-          if let after = pill.after {
-            Text(after).foregroundStyle(ChromePalette.inkFaint)
-          }
+  private func rowView(_ row: HistoryRow) -> some View {
+    switch row {
+    case .gap:
+      Color.clear.frame(height: HistoryRow.turnGap)
+    case .sitting(_, let pill):
+      sitting(pill)
+    case .prompt(let turn):
+      prompt(turn)
+    case .promptClipped(_, let words):
+      clippedNote(words)
+    case .promptAttachment(_, _, let words):
+      placeholder(words)
+    case .head(let turn):
+      responseHead(turn)
+    case .segment(let segment, let turn):
+      segmentView(segment, in: turn)
+    }
+  }
+
+  /// Item 362c — the pill a sitting opens with, centred.
+  private func sitting(_ pill: HistoryDayPill) -> some View {
+    HStack {
+      Spacer()
+      HStack(spacing: 6) {
+        Text(pill.lead)
+        if let after = pill.after {
+          Text(after).foregroundStyle(ChromePalette.inkFaint)
         }
-        .font(ChromeType.sans(11.5, .medium))
-        .monospacedDigit()
-        .foregroundStyle(ChromePalette.inkTertiary)
-        .padding(.horizontal, 12)
-        .frame(height: 26)
-        .background(Capsule().fill(ChromePalette.fill))
-        Spacer()
       }
-      .padding(.vertical, 18)
+      .font(ChromeType.sans(11.5, .medium))
+      .monospacedDigit()
+      .foregroundStyle(ChromePalette.inkTertiary)
+      .padding(.horizontal, 12)
+      .frame(height: 26)
+      .background(Capsule().fill(ChromePalette.fill))
+      Spacer()
     }
-    VStack(alignment: .leading, spacing: 0) {
-      if !turn.prompt.isEmpty || turn.promptAnchor != nil {
-        prompt(turn)
-      }
-      if let words = turn.promptClipped {
-        clippedNote(words)
-      }
-      ForEach(Array(turn.promptAttachments.enumerated()), id: \.offset) { _, words in
-        placeholder(words)
-      }
-      if !turn.segments.isEmpty, !turn.continues {
-        responseHead(turn)
-      }
-      ForEach(turn.segments) { segment in
-        segmentView(segment, in: turn)
-      }
-    }
-    .padding(.top, turn.dayPill == nil ? 30 : 0)
+    .padding(.vertical, 18)
   }
 
   private func prompt(_ turn: HistoryTurn) -> some View {

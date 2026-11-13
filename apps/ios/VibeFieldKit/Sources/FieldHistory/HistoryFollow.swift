@@ -103,16 +103,19 @@ struct HistoryFollow: Equatable, Sendable {
   /// How far below the document's foot the screen's may stand before the page counts as past its end.
   static let pastSlack: CGFloat = 1
 
-  // STUB (item 381, red): never past its end.
+  /// The page stands past its end: it has been moved from its top, and the screen's foot is below the document's
+  /// own by more than the bar's inset allows. At its end a page rests with the inset under it, which is not past
+  /// it; a document shorter than the screen rests at its top, which is not either.
   static func pastEnd(
     offset: CGFloat, container: CGFloat, content: CGFloat, topInset: CGFloat, bottomInset: CGFloat
   ) -> Bool {
-    false
+    offset + topInset > pastSlack && offset + container > content + bottomInset + pastSlack
   }
 
-  // STUB (item 381, red): never put back.
+  /// A page past its end is put back on its end when it is found there at rest. While a finger holds it there,
+  /// or a move is still carrying it, it is left alone: the scroll's own spring brings it back.
   static func putsBack(past: Bool, resting: Bool) -> Bool {
-    false
+    past && resting
   }
 
   /// Arrivals outrank `Latest`; at the end, or a short way off it with nothing unread, there is no pill.
