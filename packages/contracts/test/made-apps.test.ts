@@ -497,10 +497,14 @@ describe("the acts: artifact.open's answers and refusals, artifact.mark's set se
     expect(parses(MadeAppOpenRefusal, indexWords)).toBe(false);
   });
 
-  it("marks with at least one flag, and answers both", () => {
+  // Hide dropped (James, 2026-11-13 01:29:54Z): `hidden` is retired, so a mark names `kept`.
+  it("marks by kept: hidden is refused alone and ignored beside kept, and the answer says both", () => {
     const foldKey = FOLD_KEY;
     expect(parses(ArtifactMarkParams, { foldKey })).toBe(false);
-    expect(parses(ArtifactMarkParams, { foldKey, hidden: false })).toBe(true);
+    expect(parses(ArtifactMarkParams, { foldKey, hidden: true })).toBe(false);
+    expect(parses(ArtifactMarkParams, { foldKey, hidden: false })).toBe(false);
+    expect(parses(ArtifactMarkParams, { foldKey, kept: false })).toBe(true);
+    expect(parses(ArtifactMarkParams, { foldKey, kept: true, hidden: true })).toBe(true);
     expect(parses(ArtifactMarkParams, { foldKey: "review", kept: true })).toBe(false);
     expect(parses(ArtifactMarkResult, { foldKey, kept: true })).toBe(false);
     expect(parses(ArtifactMarkResult, { foldKey, kept: true, hidden: false })).toBe(true);
