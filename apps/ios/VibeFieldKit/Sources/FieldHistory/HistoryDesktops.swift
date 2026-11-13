@@ -181,7 +181,7 @@ public final class HistoryDesktops {
     switch need {
     case .project(let key):
       projects.open(key)
-    case .session(let device, _), .older(let device, _), .seen(let device, _):
+    case .session(let device, _), .older(let device, _), .seen(let device, _), .picture(let device, _, _, _):
       reader(for: device)?.need(need)
     case .figures(let wanted):
       wantsFigures = wanted

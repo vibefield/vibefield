@@ -339,6 +339,7 @@ public final class HistoryDesktopReader: Identifiable {
     case .session(_, let id): openSession(id)
     case .older(_, let session): readOlder(session)
     case .seen(_, let session): arrivals[session] = nil
+    case .picture(_, let session, let id, let size): needPicture(session: session, id: id, size: size)
     }
   }
 

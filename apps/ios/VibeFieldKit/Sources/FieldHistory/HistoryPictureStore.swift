@@ -20,7 +20,7 @@ import Foundation
 // decodes to is not counted here.
 
 /// The size a picture is asked at.
-enum HistoryPictureSize: String, Sendable, CaseIterable {
+public enum HistoryPictureSize: String, Sendable, CaseIterable {
   /// A row's square tile: rosetta's `tile2x`, a centred square of at most 640 px.
   case tile
   /// The full-size sheet: rosetta's `preview`, at most 1600 px on the long edge. Never rosetta's `full`.

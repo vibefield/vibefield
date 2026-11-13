@@ -550,6 +550,11 @@ extension FieldHistoryModel {
       ].compactMap { $0 }.joined(separator: " · ")
       let head = [model.isEmpty ? nil : model, effort].compactMap { $0 }.joined(separator: " · ")
       let promptAttachments = group.prompt?.attachments.map { attachmentWords($0, desktop: desktop) } ?? []
+      // item 362g — their ids beside their words, in the same order and in a reply's form, so the view can find
+      // a picture for each; nil with nothing attached, so such a prompt's turn is encoded as it was
+      let promptAttachmentIds: [String]? = group.prompt.flatMap { prompt in
+        prompt.attachments.isEmpty ? nil : prompt.attachments.map { "\(prompt.timelineId)/\($0.id)" }
+      }
       let promptClipped = group.prompt.flatMap { prompt -> String? in
         isCut(prompt) ? clippedWords(byteLen: prompt.textByteLen, desktop: desktop) : nil
       }
@@ -571,7 +576,7 @@ extension FieldHistoryModel {
           id: turnId, at: clockSeconds(at), dayPill: pill(opening: sitting), prompt: group.prompt?.text ?? "",
           promptAnchor: group.prompt?.timelineId, model: headed ? head : "", facts: headed ? facts : "",
           isLive: headed && isLive, segments: segments, promptAttachments: promptAttachments,
-          promptClipped: promptClipped)
+          promptAttachmentIds: promptAttachmentIds, promptClipped: promptClipped)
       }
       guard let first = slices.first else {
         turns.append(opener([], sitting: opens ?? 0, headed: true))
@@ -748,11 +753,17 @@ extension FieldHistoryModel {
   ///   group in two);
   /// - a question to the reader and a request for permission stand alone between groups (the room's `request`
   ///   block): the session stopped there for a person.
+  ///
+  /// Item 362g — a group's recorded images follow it as attachment segments (`runImages`): the room's one strip,
+  /// outside the fold. They were drawn nowhere.
   static func segments(_ body: [IndexTimelineRow], desktop: String) -> [HistorySegment] {
     var out: [HistorySegment] = []
     var run: [IndexTimelineRow] = []
     func flush() {
-      if let group = ledger(run, desktop: desktop) { out.append(group) }
+      if let group = ledger(run, desktop: desktop) {
+        out.append(group)
+        out += runImages(run, desktop: desktop)
+      }
       run.removeAll()
     }
     for row in body {
@@ -794,6 +805,27 @@ extension FieldHistoryModel {
     let result = tool.result ?? (tool.failed ? (tool.failure ?? "failed") : "")
     return .request(
       id: row.timelineId, question: true, words: tool.object ?? tool.name, result: result, failed: tool.failed)
+  }
+
+  /// Item 362g — the recorded images of a group's rows, in the order they happened, as attachment segments: a
+  /// tool's (`tool.attachments`), and a team message's. The room gathers them into one strip that stands outside
+  /// both of the group's folds (rosetta's clients/room, lib/transcript/images.ts, `timelineImages`: "One rail for
+  /// every image occurrence in the run, regardless of row type"), so they are seen whether the group is open or
+  /// closed; here they are the segments right after the group. Only an image is gathered (`rowImages` keeps
+  /// `fact.kind === "image"`): a tool's other attachments are drawn nowhere in the room either. One whose bytes
+  /// were not recorded is gathered too, and says why. The id is the form a reply's attachment has,
+  /// `<timelineId>/<attachmentId>`, the row being the one that carries it: what a picture is found by.
+  ///
+  /// Not gathered: the images among an artifact's, a workflow's, a document's or an external tool's resources
+  /// (the second half of `rowImages`). The desktop's row does not carry them.
+  static func runImages(_ rows: [IndexTimelineRow], desktop: String) -> [HistorySegment] {
+    rows.flatMap { row -> [HistorySegment] in
+      let recorded = row.kind == "tool_use" ? row.tool?.attachments ?? [] : row.attachments
+      return recorded.filter { $0.kind == "image" }.map { image in
+        HistorySegment.attachment(
+          id: "\(row.timelineId)/\(image.id)", kind: image.kind, label: attachmentWords(image, desktop: desktop))
+      }
+    }
   }
 
   /// A group: the rows between two replies, each a member in its own form, under the room's head.

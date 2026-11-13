@@ -12,6 +12,11 @@ import SwiftUI
 /// DESIGN.md §8 "The phone's session document"), as the desktop's transcript
 /// does; a document a search landed in opens on the landed row instead.
 ///
+/// Item 362g — a recorded picture is drawn where its placeholder stood, when the session is read straight from
+/// its desktop and the picture is held (`pictures`): a square tile, and a press opens it on a sheet of its own,
+/// where it zooms (HistoryPictureView.swift). A picture on its way holds its tile's square; one that does not
+/// arrive, and whatever is no picture, is the placeholder, as it was.
+///
 /// SP-6 — over a door: "Earlier" at the top asks the page door for the older
 /// page while the session has one (`document.nextCursor`); rows the tail
 /// appends while the reader is up the page count in the ARRIVAL PILL at the
@@ -21,7 +26,8 @@ import SwiftUI
 /// *Corrected 2026-11-13 (item 362g):* "a placeholder row … never a broken image (H-D9)" is the door's road, as
 /// that paragraph says, and it stands there: the door's row names an attachment with no digest and no address. Read
 /// straight from the desktop's index the projection now keeps which recorded image an attachment is, beside the
-/// row (`HistoryPicture`). As of this correction the view is not handed it, and draws the placeholder on both roads.
+/// row (`HistoryPicture`). Since the item's third slice the view is handed the pictures a direct read holds
+/// (`pictures`, the paragraph on item 362g above) and draws one as a tile; through the door it is the placeholder.
 struct HistorySessionView: View {
   let document: HistoryDocument
   /// the document's own desktop's corpus (its reader's)
@@ -35,12 +41,17 @@ struct HistorySessionView: View {
   var readingEarlier = false
   /// Item 362f — what this session's tool lines open to, by the line's id; empty through the home desktop.
   var opens: [String: HistoryToolDetail] = [:]
+  /// Item 362g — this session's pictures as its reader holds them, by `HistoryPictureLayout.key` (an attachment's
+  /// id and the size asked); empty through the home desktop, where every attachment is its placeholder.
+  var pictures: [String: HistoryPictureFace] = [:]
   var onNeed: (HistoryNeed) -> Void = { _ in }
 
   @Environment(\.colorScheme) private var scheme
   @State private var expanded: Set<String> = []
   /// Item 362f — the message whose whole text is open on its own sheet.
   @State private var whole: HistoryWholeMessage?
+  /// Item 362g — the picture that is open on its own sheet.
+  @State private var picture: HistoryWholePicture?
   @State private var atEnd = false
   /// Item 362a — whether the document keeps its foot in view, and where it opened.
   @State private var follow: HistoryFollow
@@ -59,7 +70,7 @@ struct HistorySessionView: View {
     document: HistoryDocument, corpus: HistoryCorpus, ledger: HistoryCorpus? = nil,
     standing: FieldHistoryModel.DesktopStanding, router: HistoryRouter, arrivals: Int = 0,
     readingEarlier: Bool = false, opens: [String: HistoryToolDetail] = [:],
-    onNeed: @escaping (HistoryNeed) -> Void = { _ in }
+    pictures: [String: HistoryPictureFace] = [:], onNeed: @escaping (HistoryNeed) -> Void = { _ in }
   ) {
     self.document = document
     self.corpus = corpus
@@ -69,6 +80,7 @@ struct HistorySessionView: View {
     self.arrivals = arrivals
     self.readingEarlier = readingEarlier
     self.opens = opens
+    self.pictures = pictures
     self.onNeed = onNeed
     let landed = router.landed.map { $0.sessionId == document.id && $0.device == corpus.deviceId } ?? false
     let follow = HistoryFollow(landed: landed)
@@ -226,6 +238,17 @@ struct HistorySessionView: View {
           .presentationCornerRadius(40)
           .presentationBackground(ChromePalette.paper)
       }
+      // Item 362g — a pressed tile's picture, on the whole message's sheet; opening it asks for the larger size
+      .sheet(item: $picture) { opened in
+        HistoryPictureView(
+          picture: opened, face: pictures[HistoryPictureLayout.key(opened.id, .preview)],
+          need: { onNeed(.picture(device: corpus.deviceId, session: document.id, id: opened.id, size: .preview)) }
+        )
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(40)
+        .presentationBackground(ChromePalette.paper)
+      }
       .onAppear { onNeed(.session(device: corpus.deviceId, id: document.id)) }
       .onChange(of: litAnchor, initial: true) { _, anchor in
         guard let anchor else { return }
@@ -380,8 +403,8 @@ struct HistorySessionView: View {
     case .promptClipped(_, let words):
       clippedNote(words)
     case .promptStrip(_, let attached), .strip(_, let attached):
-      // Item 362g (red) — a stub: each as its placeholder's line. The green draws the strip.
-      ForEach(attached) { one in placeholder(one.words) }
+      // item 362g — what was attached to one message, or recorded by one group, is one strip
+      pictureStrip(attached)
     case .head(let turn):
       responseHead(turn)
     case .segment(let segment, let turn):
@@ -480,8 +503,9 @@ struct HistorySessionView: View {
       .id(anchor ?? id)
     case .ledger(let id, let summary, let duration, let failed, let isLive, let lines):
       ledger(id: id, summary: summary, duration: duration, failed: failed, isLive: isLive, lines: lines)
-    case .attachment(_, _, let label):
-      placeholder(label ?? "attachment on \(corpus.desktop)")
+    case .attachment:
+      // never reached: `HistoryRow.of` gathers a reply's attachments into strips' rows (item 362g)
+      EmptyView()
     case .clipped(_, let words):
       clippedNote(words)
     case .request(_, let question, let words, let result, let failed):
@@ -540,26 +564,19 @@ struct HistorySessionView: View {
     return nil
   }
 
-  /// SP-6 — what the phone does not carry, said: `image shot.png on studio`.
-  private func placeholder(_ words: String) -> some View {
-    HStack(spacing: 8) {
-      Image(systemName: "photo")
-        .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(ChromePalette.inkFaint)
-      Text(words)
-        .font(ChromeType.sans(12.5))
-        .foregroundStyle(ChromePalette.inkTertiary)
-        // the reason an attachment has no bytes is the row's point: wrap, never cut the middle out
-        .lineLimit(2)
-        .truncationMode(.tail)
-        .multilineTextAlignment(.leading)
-      Spacer(minLength: 0)
-    }
-    .padding(.horizontal, 12)
-    .frame(minHeight: 34)
-    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ChromePalette.cardHairline, lineWidth: 0.5))
-    .padding(.vertical, 4)
-    .accessibilityLabel(words)
+  /// Item 362g — the attachments under one message, or under one group: each is its tile where its picture is
+  /// held, the tile's square while it is on its way, and otherwise the placeholder the document always drew
+  /// (`HistoryPictureStrip`, HistoryPictureView.swift, where the placeholder's line now lives as
+  /// `HistoryPlaceholderLine`). A cell that comes on screen asks for its picture; a press on a tile opens the
+  /// picture on its sheet.
+  private func pictureStrip(_ attached: [HistoryAttached]) -> some View {
+    HistoryPictureStrip(
+      attached: attached, pictures: pictures,
+      need: { id in onNeed(.picture(device: corpus.deviceId, session: document.id, id: id, size: .tile)) },
+      open: { one, tile in
+        guard let id = one.picture else { return }
+        picture = HistoryWholePicture(id: id, words: one.words, desktop: corpus.desktop, tile: tile)
+      })
   }
 
   private func ledger(id: String, summary: String, duration: String, failed: Int, isLive: Bool, lines: [HistoryLedgerLine]) -> some View {

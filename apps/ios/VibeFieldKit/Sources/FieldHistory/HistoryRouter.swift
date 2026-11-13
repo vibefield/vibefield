@@ -101,4 +101,8 @@ public enum HistoryNeed: Equatable, Sendable {
   case seen(device: String, session: String)
   /// Item 353 — the ledger's figures came on screen (every listed project's figures are read) or left it.
   case figures(wanted: Bool)
+  /// Item 362g — a recorded picture came on screen (`tile`) or was opened (`preview`): it is asked for by the id
+  /// the document names it with, `<timelineId>/<attachmentId>`. Answered only for a session read straight from
+  /// its desktop; for any other nothing is asked, and the placeholder stays.
+  case picture(device: String, session: String, id: String, size: HistoryPictureSize)
 }
