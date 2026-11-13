@@ -10,7 +10,8 @@ import SwiftUI
 /// have landed (`project.ribbon`), the record's seeded pattern until then.
 ///
 /// PJ-7 — one project across every desktop (DESIGN.md §8 "The phone's History
-/// is one ledger of projects"): the head says `N places on` and the marks; the
+/// is one ledger of projects"): the head (item 392: the name and its count
+/// alone; it said `N places on` and the marks under them until then); the
 /// project's live sessions; DESKTOPS, one row per desktop that folds its places
 /// out; and each session row names where it ran — the desktop's mark and name,
 /// then the folder's name — and opens its document on that desktop's door.
@@ -52,8 +53,18 @@ struct HistoryProjectView: View {
       }
       .foldsBar(router)
       .background(ChromePalette.paper.ignoresSafeArea())
+      // Item 392 (James, 2026-11-13) — the head under the bar says the name, so the bar does not say it a second
+      // time: its centre is left empty, and it holds the back button alone. The page keeps its name for the session
+      // pushed over it, whose back button says it.
       .navigationTitle(project.name)
       .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .principal) {
+          Color.clear
+            .frame(width: 1, height: 1)
+            .accessibilityHidden(true)
+        }
+      }
       .overlay(alignment: .bottom) { receiptView }
       .onAppear {
         onNeed(.project(id: project.id))
@@ -71,40 +82,17 @@ struct HistoryProjectView: View {
     }
   }
 
+  /// Item 392 (James, 2026-11-13) — the head is the root's over again: after the project's cap, its name and how
+  /// many sessions the page lists, in the root's type and the root's bubble (`HeadTitle`), and nothing else. Under
+  /// the name stood `N places on` and the desktops' marks (PJ-7; the mock's corpus, which names no desktop, showed
+  /// its path there): the places are still under DESKTOPS. Only the index's sentence, while its index is not ready
+  /// (fix7), stands under the head.
   private var head: some View {
-    VStack(alignment: .leading, spacing: 0) {
+    let words = FieldHistoryModel.projectHead(name: project.name, sessions: sessions.count)
+    return VStack(alignment: .leading, spacing: 0) {
       HStack(alignment: .center, spacing: 10) {
         Capsule().fill(color).frame(width: 4, height: 26)
-        Text(project.name)
-          .font(ChromeType.sans(28, .bold))
-          .tracking(ChromeType.tracking(-0.02, of: 28))
-          .foregroundStyle(ChromePalette.ink)
-          .lineLimit(1)
-        Text("\(sessions.count)")
-          .font(ChromeType.sans(12, .medium))
-          .monospacedDigit()
-          .foregroundStyle(ChromePalette.inkSecondary)
-          .padding(.horizontal, 8)
-          .frame(height: 22)
-          .background(Capsule().fill(ChromePalette.fill))
-      }
-      if project.devices.isEmpty {
-        Text(project.path)
-          .font(ChromeType.mono(11.5))
-          .italic(project.missing)
-          .foregroundStyle(ChromePalette.inkFaint)
-          .lineLimit(1)
-          .truncationMode(.middle)
-          .padding(.top, 4)
-      } else {
-        // PJ-7 — the places, as marks: the path never shows
-        HStack(spacing: 6) {
-          Text("\(project.places.count) \(project.places.count == 1 ? "place" : "places") on")
-            .font(ChromeType.sans(12.5))
-            .foregroundStyle(ChromePalette.inkFaint)
-          DeviceMarks(ids: project.devices, desktops: corpus.desktops)
-        }
-        .padding(.top, 5)
+        HeadTitle(title: words.title, count: words.count, spoken: words.spoken)
       }
       if let index {
         HStack(spacing: 5) {

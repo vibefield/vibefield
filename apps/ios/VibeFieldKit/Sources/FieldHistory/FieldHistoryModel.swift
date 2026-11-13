@@ -91,8 +91,8 @@ public enum FieldHistoryModel {
   // sentences are `headNote`'s, word for word. Its first, `N projects · N sessions across N agents`, said while the
   // desktop answers, is the line James removed: the head's bubble holds the count.
 
-  /// A head as its page says it (item 390): the title, the count in the bubble beside it, and the one line VoiceOver
-  /// reads for the two.
+  /// A head as its page says it (items 390 and 392): the title, the count in the bubble beside it, and the one line
+  /// VoiceOver reads for the two.
   public struct Head: Equatable, Sendable {
     public let title: String
     /// The bubble's words (`79`, `1,485`); nil draws no bubble.
@@ -113,12 +113,13 @@ public enum FieldHistoryModel {
       : Head(title: title, count: count, spoken: "\(title), \(count)")
   }
 
-  /// Item 392 (James, 2026-11-13) — a project's head: its name and how many sessions its page lists.
-  ///
-  /// The red's stub: the head as it stood before item 392. The bubble said the bare count, a 0 too, and the name
-  /// was read alone.
+  /// Item 392 (James, 2026-11-13) — a project's head: its name and how many sessions its page lists, the root's
+  /// head over again and in the root's bubble. The spoken line names what is counted, since a project's name does
+  /// not: `rosetta, 62 sessions`. A project whose sessions are not read yet wears no bubble, never a 0.
   public static func projectHead(name: String, sessions: Int) -> Head {
-    Head(title: name, count: "\(sessions)", spoken: name)
+    guard sessions > 0 else { return Head(title: name, count: nil, spoken: name) }
+    let count = figure(sessions)
+    return Head(title: name, count: count, spoken: "\(name), \(count) \(sessions == 1 ? "session" : "sessions")")
   }
 
   /// The words under an indexing scope line: `8,400 of 13,700 sessions`.

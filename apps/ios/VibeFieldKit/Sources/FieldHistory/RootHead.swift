@@ -67,6 +67,8 @@ struct HeadCount: View {
 
 /// Item 390 — a head's words: its title and, beside it, the bubble that holds its count. The two are one heading
 /// to VoiceOver, read as `spoken` says (`Projects, 79`). A head given no count is its title alone, as Chat's is.
+///
+/// Item 392 — a project's page wears it too, after its cap: its name and its sessions (`rosetta, 62 sessions`).
 struct HeadTitle: View {
   let title: String
   var count: String? = nil
@@ -76,6 +78,9 @@ struct HeadTitle: View {
 
   /// The bubble's distance from the title.
   static let gap: CGFloat = 10
+  /// Item 392 — a title too long for its line is drawn smaller before it is cut, down to this share of its size:
+  /// the 28 a project's name was. "Projects" and "Chat" never reach it.
+  static let squeeze: CGFloat = 28 / RootHead.titleSize
 
   var body: some View {
     HStack(alignment: .center, spacing: Self.gap) {
@@ -83,6 +88,7 @@ struct HeadTitle: View {
         .font(ChromeType.sans(RootHead.titleSize, .bold))
         .foregroundStyle(ink)
         .lineLimit(1)
+        .minimumScaleFactor(Self.squeeze)
       if let count { HeadCount(words: count) }
     }
     .accessibilityElement(children: .ignore)
