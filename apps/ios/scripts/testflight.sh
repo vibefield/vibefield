@@ -172,6 +172,32 @@ count_markers() {
   echo "$total $absent ($each)"
 }
 
+# The dSYM notice (item 374; James on the board, 2026-11-13 23:55:16Z: "As is, with the notice, for build 6"):
+# uploadSymbols sends the archive's dSYMs to Apple for crash reports. They hold this Mac's build paths by design (the
+# debug info), they are never in the app, and no tester or reviewer sees them. One line at upload, never a refusal; its
+# counts name the paths, never print them.
+dsym_notice() {
+  local up home=0 here=0 repo
+  up="$(/usr/libexec/PlistBuddy -c 'Print :uploadSymbols' "$export_options" 2>/dev/null || echo unset)"
+  if [[ "$up" != true ]]; then
+    echo "Notice: uploadSymbols is $up: this upload sends no dSYM to Apple."
+    return 0
+  fi
+  repo="$(cd "$ios_root/../.." && pwd -P)"
+  if [[ -d "$1/dSYMs" ]]; then
+    home="$({ LC_ALL=C grep -raoF -- "$HOME/" "$1/dSYMs" || true; } | wc -l | tr -d ' ')"
+    here="$({ LC_ALL=C grep -raoF -- "$repo/" "$1/dSYMs" || true; } | wc -l | tr -d ' ')"
+  fi
+  if [[ "$home$here" == 00 ]]; then
+    echo "Notice: this upload sends the archive's dSYMs to Apple for crash reports (uploadSymbols);" \
+      "they name none of this Mac's build folders."
+  else
+    echo "Notice: this upload sends the archive's dSYMs to Apple for crash reports (uploadSymbols)." \
+      "They name this Mac's build folders (this Mac's home $home, this checkout $here). They are not in the app," \
+      "and no tester or reviewer sees them."
+  fi
+}
+
 # Every refusal that needs no key comes before the keychain is asked.
 agents_override="revoke-the-key-afterwards"
 case "${VIBEFIELD_ASC_AGENTS_RUNNING:-}" in
@@ -233,6 +259,8 @@ case "$action" in
       fi
       echo "The ${recorded_kind:+review }archive carries no TestFlight-only page: $found."
     fi
+    # For both exports: internal TestFlight uploads its dSYMs too.
+    dsym_notice "$archive"
     ;;
 esac
 

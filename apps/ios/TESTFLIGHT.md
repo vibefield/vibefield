@@ -180,7 +180,9 @@ There are two exports of the same archive, chosen at upload:
 
 Both use `method` `app-store-connect`, `destination` `upload`, automatic signing
 for team `9F79X9D26S`, Xcode-managed build numbers, and dSYMs for crash
-symbolication. A build uploaded with `testFlightInternalTestingOnly=true` can
+symbolication. The dSYMs name this Mac's build folders by design and go to Apple alone; the helper says so in
+one line at upload, counting this Mac's home and checkout in them without printing either (item 374,
+James's pick of 2026-11-13: "As is, with the notice, for build 6"). A build uploaded with `testFlightInternalTestingOnly=true` can
 never be used for external testing or the App Store, so a build meant for App
 Review is uploaded with `store` from the start; neither export publishes a
 release by itself (submitting for review is done in App Store Connect).
