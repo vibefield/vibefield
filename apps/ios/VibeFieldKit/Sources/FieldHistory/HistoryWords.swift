@@ -147,4 +147,40 @@ enum HistoryWords {
     let fence = max(rest.prefix { $0 == 0x60 }.count, rest.prefix { $0 == 0x7E }.count)
     return fence >= 3 && !rest.contains(0x0A)
   }
+
+  // MARK: - The window (item 380)
+
+  /// The room's window over a message's words (rosetta at the pin, clients/room/src/styles/message-preview.css,
+  /// `.tr-message__viewport`): at most 21.7 em tall; at least 5 em where words are left out; its words clear from
+  /// 32 above its foot, where `View full message` stands in a band of 44.
+  static let windowEms: CGFloat = 21.7
+  static let windowFloorEms: CGFloat = 5
+  static let fadeClearance: CGFloat = 32
+  static let openBand: CGFloat = 44
+
+  /// A message's window.
+  struct Window: Equatable {
+    /// How tall it stands.
+    let height: CGFloat
+    /// More is left to read than it shows: its words fade, and `View full message` stands over its foot.
+    let more: Bool
+  }
+
+  /// One stop of the window's fade: how much of the words shows (1 whole, 0 none) at a point down the window (0 its
+  /// top, 1 its foot).
+  struct FadeStop: Equatable {
+    let shows: Double
+    let at: Double
+  }
+
+  // STUB (item 380, red): the document as it stood. No window: the words stand as tall as they are, and more is
+  // left to read only where the excerpt left words out.
+  static func window(natural: CGFloat, omitted: Bool, size: CGFloat) -> Window {
+    Window(height: natural, more: omitted)
+  }
+
+  // STUB (item 380, red): no ramp.
+  static func fade(height: CGFloat) -> [FadeStop] {
+    [FadeStop(shows: 1, at: 0)]
+  }
 }

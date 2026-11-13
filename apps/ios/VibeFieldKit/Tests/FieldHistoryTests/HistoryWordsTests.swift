@@ -247,3 +247,84 @@ struct HistoryExcerptTests {
     #expect(HistoryWords.excerptLines == 32)
   }
 }
+
+/// Item 380 (James, 2026-11-13 05:29:39Z, of the first build that reads a desktop directly: "the long message does
+/// not seem to be capped in short view like desktop, and they dont have the same gradient fade at cap bottom which
+/// is not good") — the room bounds a message by height as well as by length: a window of 21.7 em whose words fade
+/// under `View full message` (rosetta at the pin, clients/room/src/styles/message-preview.css). These rows hold the
+/// window's height, whether more is left to read, and the fade's stops. How it looks is his to see.
+@Suite("item 380 — a long message stands in the room's window, and fades")
+struct HistoryWindowTests {
+  private typealias Window = HistoryWords.Window
+  private typealias Stop = HistoryWords.FadeStop
+
+  /// The document's size, and the bound at it.
+  private let size: CGFloat = 15
+  private var bound: CGFloat { HistoryWords.windowEms * size }
+
+  @Test("the figures are the room's: 21.7 em, a floor of 5 em, clear from 32 above the foot, a band of 44")
+  func theRoomsFigures() {
+    #expect(HistoryWords.windowEms == 21.7)
+    #expect(HistoryWords.windowFloorEms == 5)
+    #expect(HistoryWords.fadeClearance == 32)
+    #expect(HistoryWords.openBand == 44)
+  }
+
+  @Test("words within the bound stand as tall as they are, with nothing more to read")
+  func withinTheBound() {
+    #expect(HistoryWords.window(natural: 120, omitted: false, size: size) == Window(height: 120, more: false))
+    #expect(HistoryWords.window(natural: 0, omitted: false, size: size) == Window(height: 0, more: false))
+  }
+
+  @Test("words taller than the bound stand at the bound, and there is more to read though no word was left out")
+  func tallerThanTheBound() {
+    #expect(HistoryWords.window(natural: 900, omitted: false, size: size) == Window(height: bound, more: true))
+  }
+
+  @Test("the bound is 325.5 pt at the document's 15 and 282.1 pt at a member's 13")
+  func theBoundAtTwoSizes() {
+    #expect(abs(HistoryWords.window(natural: 5_000, omitted: false, size: 15).height - 325.5) < 0.001)
+    #expect(abs(HistoryWords.window(natural: 5_000, omitted: false, size: 13).height - 282.1) < 0.001)
+  }
+
+  @Test("a point over the bound still fits, as in the room; more than a point does not")
+  func aPointOver() {
+    let fits = HistoryWords.window(natural: bound + 1, omitted: false, size: size)
+    #expect(fits == Window(height: bound, more: false))
+    let over = HistoryWords.window(natural: bound + 1.5, omitted: false, size: size)
+    #expect(over == Window(height: bound, more: true))
+  }
+
+  @Test("words the excerpt cut stand in a window of 5 em at least; words it left whole have no floor")
+  func theFloor() {
+    #expect(HistoryWords.window(natural: 40, omitted: true, size: size) == Window(height: 75, more: true))
+    #expect(HistoryWords.window(natural: 200, omitted: true, size: size) == Window(height: 200, more: true))
+    #expect(HistoryWords.window(natural: 40, omitted: false, size: size) == Window(height: 40, more: false))
+  }
+
+  @Test("words the excerpt cut that are also taller than the bound stand at the bound")
+  func cutAndTall() {
+    #expect(HistoryWords.window(natural: 900, omitted: true, size: size) == Window(height: bound, more: true))
+  }
+
+  @Test("the fade is the room's ramp: whole down to 35%, 136 of 255 at 60%, clear from 32 above the foot")
+  func theFade() {
+    #expect(
+      HistoryWords.fade(height: 325.5) == [
+        Stop(shows: 1, at: 0.35), Stop(shows: 136.0 / 255.0, at: 0.6), Stop(shows: 0, at: (325.5 - 32) / 325.5),
+      ])
+  }
+
+  @Test("in a window too short for the ramp the clear stop stands at the stop before it, as CSS places it")
+  func theFadeInAShortWindow() {
+    #expect(
+      HistoryWords.fade(height: 75) == [
+        Stop(shows: 1, at: 0.35), Stop(shows: 136.0 / 255.0, at: 0.6), Stop(shows: 0, at: 0.6),
+      ])
+  }
+
+  @Test("a window of no height has no ramp: its one stop is whole")
+  func noHeight() {
+    #expect(HistoryWords.fade(height: 0) == [Stop(shows: 1, at: 0)])
+  }
+}
