@@ -1065,12 +1065,23 @@ test("the committed records are the pins' own: the iOS acknowledgements and the 
     doc.components.some((c) => c.licence === "OFL-1.1"),
     "the terminal's fonts",
   );
-  // item 259: VibeField's own rides the record, so its inventory is whole (the phone's page draws no own part)
+  // item 259, as rosetta 0.1.6 leaves it (MIT, #51): the Swift client is a licensed sibling, listed with its LICENSE
+  // like any MIT package, and no row of the record is VibeField's own now (the phone's page draws no own part)
   const rosetta = doc.components.find((c) => c.ecosystem === "swift" && c.name === "rosetta");
   assert.deepEqual(
-    rosetta && { version: rosetta.version, own: rosetta.own, texts: rosetta.texts },
-    { version: doc.pins.rosetta.version, own: true, texts: [] },
-    "the record lists rosetta's Swift client as VibeField's own",
+    rosetta && {
+      version: rosetta.version,
+      own: "own" in rosetta,
+      licence: rosetta.licence,
+      texts: rosetta.texts.length,
+    },
+    { version: doc.pins.rosetta.version, own: false, licence: "MIT", texts: 1 },
+    "the record lists rosetta's Swift client as a licensed MIT sibling, with one text",
+  );
+  assert.equal(
+    doc.texts.find((x) => x.id === rosetta.texts[0])?.kind,
+    "MIT",
+    "rosetta's one text is one of the record's texts, and an MIT one",
   );
   // what Ghostty VT's library carries rides with it (measured for its commit), and a C library is never a Rust crate
   const ghosttyVt = doc.components.find((c) => c.name === "Ghostty VT");
