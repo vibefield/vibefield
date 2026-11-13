@@ -7750,8 +7750,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     do it properly".*) By the viewer's own calendar days, counted from today:
     - **today**: the clock alone, `20:21`;
     - **one of the six days before today**: the weekday and the clock, `Fri · 20:21`;
-    - **earlier**: the day and the clock, `Fri 6 Nov · 20:21`, and with its year when it is not this one,
-      `6 Nov 2025 · 20:21`.
+    - **earlier**, from seven days back: the day and the clock, `Fri 6 Nov · 20:21`, and with its year when
+      it is not this one, `6 Nov 2025 · 20:21`. (His own case: a sitting on Fri 6 Nov seen on Fri 13 Nov.)
+    - a sitting stamped later than now, where two devices' clocks disagree, reads as today's: the clock alone
+      (*VF-PM's ruling, 2026-11-13 23:47Z*).
 
     `after 3h 37m` follows as it did. This holds for every pill with a clock, where the day turned and inside a
     day alike: until this item a pill inside one day said the clock alone however old the day was, and only a
@@ -7768,6 +7770,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **What it shows**: a round glass button, 40 pt on the phone (32 px in the room, on the room's island
       shadow and hairline), holding `chevron.up` at 15 pt semibold in the primary ink. No word. Its spoken name
       and the room's tooltip are `Previous message`.
+    - **Which messages**: a prompt a person typed, and no other. A settings command and a prompt a machine
+      wrote (an assignment) are passed over, and do not keep the button up (*VF-PM's ruling, 2026-11-13
+      23:47Z, so the two halves match*).
     - **What a press does**: the document goes to the nearest message of the person's own (a prompt) that
       begins above the top of the view, and stands that message's top 12 under the head. Pressed again it goes
       to the one before that. A message more than a screen away is gone to at once and a nearer one on the
