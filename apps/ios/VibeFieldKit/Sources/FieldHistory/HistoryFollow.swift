@@ -118,6 +118,21 @@ struct HistoryFollow: Equatable, Sendable {
     past && resting
   }
 
+  // MARK: The foot's clearance (items 387 and 389)
+
+  /// The air between the top of what stands over the page's foot and the document's last row: 24 pt over the
+  /// 8 pt the bar's own clearance keeps, so the last row rests 32 pt above the bar, or above the slot.
+  static let footAir: CGFloat = 24
+
+  /// Items 387 and 389 (red) — a stub: what the page did, the bar alone whatever stands over the foot.
+  static func clearance(bar: CGFloat) -> CGFloat { 81 }
+
+  /// Items 387 and 389 (red) — a stub: where the pill stood, over the bar alone.
+  static func pillFoot(bar: CGFloat) -> CGFloat { 92 }
+
+  /// Items 387 and 389 (red) — a stub: the slack the end was seen within, over the bar alone.
+  static func endSlack(bar: CGFloat) -> CGFloat { 120 }
+
   /// Arrivals outrank `Latest`; at the end, or a short way off it with nothing unread, there is no pill.
   func pill(arrivals: Int, endOnScreen: Bool, away: Bool) -> Pill? {
     if arrivals > 0, !endOnScreen { return .arrivals(arrivals) }

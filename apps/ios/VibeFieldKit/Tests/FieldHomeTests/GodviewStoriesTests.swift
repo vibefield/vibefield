@@ -322,4 +322,17 @@ struct RootHeadTests {
     #expect(plain.top == 28, "8 under a safe line that stands higher than the island's foot")
     #expect(plain.height == 44)
   }
+
+  /// Items 387 and 389 — a pushed page (a session's document) keeps the system's bottom inset, so it is told what
+  /// stands over its foot above the safe area's line: the bar's clearance, with the slot when one stands.
+  @Test func aPushedPageIsToldWhatStandsOverItsFoot() {
+    let island = GodviewStories.rootHead(safeTop: 59, homeInset: 34, stepper: false)
+    #expect(island.bar == 57, "the bar alone")
+    #expect(island.bar == AppBar.clearance(homeInset: 34, stepper: false))
+    let stepped = GodviewStories.rootHead(safeTop: 59, homeInset: 34, stepper: true)
+    #expect(stepped.bar == 115, "and the slot above the bar")
+    #expect(stepped.foot == 34 + stepped.bar, "a root's foot is the same clearance on the home indicator's inset")
+    let plain = GodviewStories.rootHead(safeTop: 20, homeInset: 0, stepper: false)
+    #expect(plain.bar == 78, "a phone with no home indicator: the bar stands 8 up from the edge")
+  }
 }

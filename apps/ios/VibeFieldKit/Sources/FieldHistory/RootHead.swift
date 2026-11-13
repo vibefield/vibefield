@@ -15,11 +15,17 @@ public struct RootHead: Equatable, Sendable {
   public var height: CGFloat
   /// What the page's content clears at the screen's foot: the home indicator's inset and the bar.
   public var foot: CGFloat
+  /// Items 387 and 389 — what stands over a PUSHED page's foot, above the safe area's line: the bar, and the slot
+  /// above it when one stands (a session's act, a landed search's stepper). `foot` less the home indicator's
+  /// inset. A pushed page keeps the system's bottom inset, and the home screen's own inset under the tab does
+  /// not reach it, so it clears this itself (`HistoryFollow.clearance`).
+  public var bar: CGFloat
 
-  public init(top: CGFloat = 0, height: CGFloat = 44, foot: CGFloat = 0) {
+  public init(top: CGFloat = 0, height: CGFloat = 44, foot: CGFloat = 0, bar: CGFloat = 0) {
     self.top = top
     self.height = height
     self.foot = foot
+    self.bar = bar
   }
 
   /// The title's size, the system's large title.

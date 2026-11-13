@@ -100,6 +100,40 @@ struct HistoryFollowTests {
   }
 }
 
+/// Items 387 and 389 (James, 2026-11-13 23:18:12Z, of a session's document on his phone: "UIs are stacking and
+/// overlapping here [Image #13]" and "the message bottom is not leaving enough safe and empty space [Image #15]
+/// looks bad") — the document's end and its pill clear whatever stands over the page's foot: the bar, and the slot
+/// above it when a session has an act or a search has landed. The page cleared the bar alone.
+///
+/// The measure is what stands over the foot above the safe area's line (`RootHead.bar`): 57 for the bar on a phone
+/// with a home indicator, 115 with the slot (48 tall, 10 above the bar), whose top is then 107 above that line.
+@Suite("items 387 and 389 — the document's end clears whatever stands over its foot")
+struct HistoryFootTests {
+  @Test("over the bar alone the end, the pill and the end's slack stand where they did")
+  func theBarAlone() {
+    #expect(HistoryFollow.clearance(bar: 57) == 81)
+    #expect(HistoryFollow.pillFoot(bar: 57) == 92)
+    #expect(HistoryFollow.endSlack(bar: 57) == 120)
+  }
+
+  @Test("with the slot above the bar the last row rests 32 above the slot's top, and the pill's foot 43")
+  func theSlot() {
+    #expect(HistoryFollow.clearance(bar: 115) == 139)
+    #expect(HistoryFollow.pillFoot(bar: 115) == 150)
+    #expect(HistoryFollow.endSlack(bar: 115) == 178)
+    #expect(HistoryFollow.clearance(bar: 115) - 107 == 32)
+    #expect(HistoryFollow.pillFoot(bar: 115) - 107 == 43)
+  }
+
+  @Test("with nothing over the foot the end keeps its air alone, and a measure below nothing counts as nothing")
+  func nothingOverTheFoot() {
+    #expect(HistoryFollow.footAir == 24)
+    #expect(HistoryFollow.clearance(bar: 0) == 24)
+    #expect(HistoryFollow.clearance(bar: -8) == 24)
+    #expect(HistoryFollow.pillFoot(bar: 0) == 35)
+  }
+}
+
 /// Item 381 (James, 2026-11-13 05:29:39Z: "some long session shows up blank and only shows when i try to scroll") —
 /// a page found at rest with the screen's foot below the document's own is put back on its end; a page a finger
 /// holds there is left alone. That the blank open is a page past its end is a reading of the code, not yet shown
