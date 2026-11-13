@@ -798,3 +798,81 @@ struct HistoryGroupTests {
     #expect(try JSONDecoder().decode([HistorySegment].self, from: JSONEncoder().encode(now)) == now)
   }
 }
+
+/// Item 368 (found porting 362f, 2026-11-12; VF-PM numbered it 23:02:13Z) — a text past rosetta's 32 KiB is a file
+/// on the desktop: its row carries the text's opening and the file's size (`textByteLen`). The door sets its cut
+/// flag (`textClipped`) only when that opening is itself over the door's bound, so an opening within it arrives
+/// with the size and without the flag, and the phone, which marked a cut by the flag alone, drew it as a whole
+/// message. Rows are built in code; no fixture is added.
+@Suite("item 368 — words that are less than the whole are marked, flag or no flag")
+struct HistoryCutMarkTests {
+  private func row(
+    _ id: String, _ ordinal: Int, _ kind: String, _ more: [String: JSONValue]
+  ) throws -> IndexTimelineRow {
+    var fields: [String: JSONValue] = [
+      "timelineId": .string(id), "sessionId": .string("s1"), "ordinal": .int(Int64(ordinal)), "kind": .string(kind),
+      "group": .object(["id": .string("g"), "kind": .string(kind == "user" ? "human_turn" : "agent_cycle")]),
+    ]
+    for (key, value) in more { fields[key] = value }
+    return try IndexTimelineRow(json: .object(fields))
+  }
+
+  /// A file's opening: its words and the file's size, and no cut flag.
+  private func opening(_ text: String) -> [String: JSONValue] {
+    ["text": .string(text), "textByteLen": .int(90_000)]
+  }
+
+  private func cutMarks(_ segments: [HistorySegment]) -> [String] {
+    segments.compactMap { segment in
+      if case .clipped(_, let words) = segment { return words }
+      return nil
+    }
+  }
+
+  @Test("a reply that is a file's opening is marked with the file's size")
+  func aReply() throws {
+    let reply = try row("a1", 1, "agent", opening("The opening of a long reply."))
+    let segments = FieldHistoryModel.segments([reply], desktop: "studio")
+    #expect(segments.map(\.id) == ["a1", "a1/clipped"])
+    #expect(cutMarks(segments) == ["clipped · 88 KB on studio"])
+  }
+
+  @Test("a prompt that is a file's opening is marked")
+  func aPrompt() throws {
+    let header = try IndexSessionResult(json: try Fixture.json("index-session.valid")).session
+    let prompt = try row("u1", 1, "user", opening("The opening of a long prompt."))
+    let document = FieldHistoryModel.document(
+      header: header, rows: [prompt], desktop: "studio", agentLabel: "Claude", nextCursor: nil, watermark: nil,
+      liveSince: nil, now: Date(timeIntervalSince1970: 1_790_000_000))
+    #expect(document.turns.first?.promptClipped == "clipped · 88 KB on studio")
+  }
+
+  @Test("a thought that is a file's opening opens, even of one line, with the mark under its words")
+  func aMember() throws {
+    let rows = [
+      try row("h1", 1, "thinking", opening("one line of a long thought")),
+      try row("a1", 2, "agent", ["text": .string("Done.")]),
+    ]
+    let segments = FieldHistoryModel.segments(rows, desktop: "studio")
+    guard case .ledger(_, _, _, _, _, let lines)? = segments.first else {
+      Issue.record("the thought is in no group")
+      return
+    }
+    #expect(lines.first?.words == "one line of a long thought")
+    #expect(lines.first?.clipped == "clipped · 88 KB on studio")
+  }
+
+  @Test("words with neither the flag nor a size are whole: no mark")
+  func wholeWords() throws {
+    let reply = try row("a1", 1, "agent", ["text": .string("A whole reply.")])
+    #expect(FieldHistoryModel.segments([reply], desktop: "studio").map(\.id) == ["a1"])
+  }
+
+  @Test("the flag and the size together mark once, with the size")
+  func bothTogether() throws {
+    var more = opening("The opening.")
+    more["textClipped"] = .bool(true)
+    let segments = FieldHistoryModel.segments([try row("a1", 1, "agent", more)], desktop: "studio")
+    #expect(cutMarks(segments) == ["clipped · 88 KB on studio"])
+  }
+}
