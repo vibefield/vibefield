@@ -461,6 +461,12 @@ public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
   /// SP-6 — what was attached to the PROMPT, as placeholders' words (`image
   /// shot.png on studio`): drawn under the panel, never relayed (H-D9).
   public let promptAttachments: [String]
+  /// Item 362g (2026-11-13) — the ids of those attachments, in the same order, each in the form a reply's
+  /// attachment segment has (`<timelineId>/<attachmentId>`), so the view can find the picture a direct read holds
+  /// for one. Ids only: the document is written to the phone's cache, and nothing that says where a picture is
+  /// kept goes into it. nil for a prompt with nothing attached, and in a document kept before this item: the
+  /// field is optional, so such a document still decodes, and its placeholders stand as they did.
+  public let promptAttachmentIds: [String]?
   /// SP-6 — the words under a prompt the door cut at its bound (`clipped ·
   /// 14 KB on studio`); nil for a prompt carried whole.
   public let promptClipped: String?
@@ -470,7 +476,8 @@ public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
   public init(
     id: String, at: String, dayPill: HistoryDayPill? = nil, prompt: String, promptAnchor: String? = nil,
     model: String, facts: String, isLive: Bool = false, segments: [HistorySegment],
-    promptAttachments: [String] = [], promptClipped: String? = nil, continues: Bool = false
+    promptAttachments: [String] = [], promptAttachmentIds: [String]? = nil, promptClipped: String? = nil,
+    continues: Bool = false
   ) {
     self.id = id
     self.at = at
@@ -482,6 +489,7 @@ public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
     self.isLive = isLive
     self.segments = segments
     self.promptAttachments = promptAttachments
+    self.promptAttachmentIds = promptAttachmentIds
     self.promptClipped = promptClipped
     self.continues = continues
   }

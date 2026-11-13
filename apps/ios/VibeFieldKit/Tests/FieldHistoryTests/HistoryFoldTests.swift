@@ -113,8 +113,9 @@ struct HistoryFoldTests {
     // both agent rows carry a REQUEST's usage (rosetta's `scope: request`; a tool
     // round-trip is two requests of one response): the turn sums its requests
     #expect(turn.facts.hasSuffix("· 36"))
-    // the Bash line, then the reply, then its image as words, then the message
-    #expect(turn.segments.count == 4)
+    // the Bash line, then its recorded image as words (item 362g: a tool's image was drawn nowhere), then the
+    // reply, then its image as words, then the message
+    try #require(turn.segments.count == 5)
     guard case .ledger(_, let summary, _, let failed, let isLive, let lines) = turn.segments[0] else {
       Issue.record("the first segment is the run")
       return
@@ -123,14 +124,15 @@ struct HistoryFoldTests {
     #expect(failed == 0 && !isLive)
     #expect(lines.map(\.verb) == ["Ran"])
     #expect(lines.first?.object == "one" && lines.first?.result == "exit 0")
-    guard case .prose(let id, _, let text, let anchor) = turn.segments[1] else {
-      Issue.record("the second segment is the reply")
+    #expect(turn.segments[1] == .attachment(id: "t1/tool-image-1", kind: "image", label: "image on studio"))
+    guard case .prose(let id, _, let text, let anchor) = turn.segments[2] else {
+      Issue.record("the third segment is the reply")
       return
     }
     #expect(id == "t2" && anchor == "t2" && text.hasPrefix("Rendering every row"))
-    #expect(turn.segments[2] == .attachment(id: "t2/img-1", kind: "image", label: "image specimen.png on studio"))
-    guard case .ledger(_, let message, _, _, _, let messageLines) = turn.segments[3] else {
-      Issue.record("the fourth segment is the collaboration's run")
+    #expect(turn.segments[3] == .attachment(id: "t2/img-1", kind: "image", label: "image specimen.png on studio"))
+    guard case .ledger(_, let message, _, _, _, let messageLines) = turn.segments[4] else {
+      Issue.record("the fifth segment is the collaboration's run")
       return
     }
     // item 362e: a team message is a member of its own kind under the room's head (it was a tool-shaped line,
@@ -1000,5 +1002,357 @@ struct HistoryRoomWordsTests {
     let said = try result(
       "shell", ["status": .string("succeeded"), "failed": .bool(false), "result": .string("exit 0")])
     #expect(said == "exit 0", "the door's `exit 0` on a line that did not fail is item 369's, and stays")
+  }
+}
+
+/// Item 362g (James's board pick, 2026-11-12 20:43Z: "images through a rosetta release"; VF-PM's rulings,
+/// 2026-11-13 00:24Z) — pictures in the phone's History, the document's part. A reply's attachment was a segment
+/// with an id; a prompt's was its words alone; a tool's was drawn nowhere. For the view to find the picture a
+/// direct read holds, each has to be named in the document, by an id and nothing more: the document is written to
+/// the phone's cache, and nothing that says where a picture is kept may go into it. The room gathers a group's
+/// images into one strip outside the fold (rosetta at the pin, clients/room/src/lib/transcript/images.ts,
+/// `timelineImages`), and so does the fold. Rows are built in code; no fixture is added.
+@Suite("item 362g — a recorded picture has its place in the document, and the document holds only its id")
+struct HistoryPictureFoldTests {
+  private func row(
+    _ id: String, _ ordinal: Int, _ kind: String, _ more: [String: JSONValue] = [:]
+  ) throws -> IndexTimelineRow {
+    var fields: [String: JSONValue] = [
+      "timelineId": .string(id), "sessionId": .string("s1"), "ordinal": .int(Int64(ordinal)), "kind": .string(kind),
+      "group": .object(["id": .string("g"), "kind": .string(kind == "user" ? "human_turn" : "agent_cycle")]),
+    ]
+    for (key, value) in more { fields[key] = value }
+    return try IndexTimelineRow(json: .object(fields))
+  }
+
+  /// An attachment as a row names it: its id and kind, its name when it has one, and whether its bytes were kept.
+  private func attached(
+    _ id: String, _ kind: String = "image", name: String? = nil, reason: String? = nil
+  ) -> JSONValue {
+    var fields: [String: JSONValue] = ["id": .string(id), "kind": .string(kind), "available": .bool(reason == nil)]
+    if let name { fields["name"] = .string(name) }
+    if let reason { fields["reason"] = .string(reason) }
+    return .object(fields)
+  }
+
+  private func tool(
+    _ id: String, _ ordinal: Int, _ family: String, _ object: String, attachments: [JSONValue] = []
+  ) throws -> IndexTimelineRow {
+    try row(
+      id, ordinal, "tool_use",
+      [
+        "tool": .object([
+          "name": .string(family), "family": .string(family), "status": .string("succeeded"), "failed": .bool(false),
+          "object": .string(object), "attachments": .array(attachments),
+        ])
+      ])
+  }
+
+  private func document(_ rows: [IndexTimelineRow]) throws -> HistoryDocument {
+    let header = try IndexSessionResult(json: try Fixture.json("index-session.valid")).session
+    return FieldHistoryModel.document(
+      header: header, rows: rows, desktop: "studio", agentLabel: "Claude", nextCursor: nil, watermark: nil,
+      liveSince: nil, now: Date(timeIntervalSince1970: 1_790_000_000))
+  }
+
+  // MARK: The fold
+
+  @Test("a tool's recorded image is a segment right after its group, under the id a reply's image has")
+  func aToolsImage() throws {
+    let rows = [
+      try tool("t1", 1, "shell", "pnpm shot", attachments: [attached("shot-1", name: "shot.png")]),
+      try tool("t2", 2, "file_read", "a.ts"),
+      try tool("t3", 3, "shell", "pnpm shots", attachments: [attached("a"), attached("b")]),
+      try row("a1", 4, "agent", ["text": .string("Done.")]),
+    ]
+    let segments = FieldHistoryModel.segments(rows, desktop: "studio")
+    #expect(segments.map(\.id) == ["t1", "t1/shot-1", "t3/a", "t3/b", "a1"])
+    try #require(segments.count == 5)
+    #expect(segments[1] == .attachment(id: "t1/shot-1", kind: "image", label: "image shot.png on studio"))
+    #expect(segments[2] == .attachment(id: "t3/a", kind: "image", label: "image on studio"))
+    // the group is the group it was: its id, its head, its lines
+    guard case .ledger(let id, let summary, _, _, _, let lines) = segments[0] else {
+      Issue.record("the first segment is the group")
+      return
+    }
+    #expect(id == "t1" && summary == "2 commands · 1 read")
+    #expect(lines.map(\.id) == ["t1", "t2", "t3"])
+  }
+
+  @Test("only an image is gathered: a tool's other attachments have no segment, and an image with no bytes says why")
+  func onlyImages() throws {
+    let report = attached("d1", "document", name: "report.pdf")
+    let rows = [try tool("t1", 1, "shell", "pnpm report", attachments: [report, attached("i2", reason: "omitted")])]
+    let segments = FieldHistoryModel.segments(rows, desktop: "studio")
+    #expect(segments.map(\.id) == ["t1", "t1/i2"])
+    #expect(
+      segments.last == .attachment(id: "t1/i2", kind: "image", label: "image · omitted from the record on studio"))
+  }
+
+  @Test("a team message's image stands in its group's strip: the room gathers a run's images whatever the row")
+  func aTeamMessagesImage() throws {
+    let message = try row(
+      "c1", 2, "collaboration",
+      ["text": .string("the mock"), "attachments": .array([attached("i1", name: "mock.png")])])
+    let segments = FieldHistoryModel.segments([try tool("t1", 1, "shell", "ls"), message], desktop: "studio")
+    #expect(segments.map(\.id) == ["t1", "c1/i1"])
+    #expect(segments.last == .attachment(id: "c1/i1", kind: "image", label: "image mock.png on studio"))
+  }
+
+  @Test("a group with no image is the group alone, and a reply's attachments stand under the reply as they did")
+  func nothingElseMoves() throws {
+    let reply = try row(
+      "a1", 2, "agent", ["text": .string("Here."), "attachments": .array([attached("i1", name: "shot.png")])])
+    let segments = FieldHistoryModel.segments([try tool("t1", 1, "shell", "ls"), reply], desktop: "studio")
+    #expect(segments.map(\.id) == ["t1", "a1", "a1/i1"])
+    #expect(segments.last == .attachment(id: "a1/i1", kind: "image", label: "image shot.png on studio"))
+  }
+
+  @Test("a prompt's attachments carry their ids beside their words, in the same order")
+  func aPromptsIds() throws {
+    let notes = attached("d1", "document", name: "notes.pdf", reason: "omitted")
+    let prompt = try row(
+      "u1", 1, "user",
+      ["text": .string("What is wrong in this one?"), "attachments": .array([attached("i1", name: "shot.png"), notes])])
+    let turn = try #require(try document([prompt]).turns.first)
+    // the words are the words they were
+    #expect(
+      turn.promptAttachments == [
+        "image shot.png on studio", "document notes.pdf · omitted from the record on studio",
+      ])
+    #expect(turn.promptAttachmentIds == ["u1/i1", "u1/d1"])
+  }
+
+  @Test("a prompt with nothing attached carries no ids, and its turn is encoded as it was")
+  func noIdsWhereNothingIsAttached() throws {
+    let turn = try #require(try document([try row("u1", 1, "user", ["text": .string("go")])]).turns.first)
+    #expect(turn.promptAttachments.isEmpty && turn.promptAttachmentIds == nil)
+    let json = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(turn)) as? [String: Any])
+    #expect(json["promptAttachmentIds"] == nil)
+  }
+
+  @Test("a document kept before 362g still decodes: its prompt's placeholders stand with no ids; a new one round-trips")
+  func keptBefore() throws {
+    let turn = HistoryTurn(
+      id: "u1", at: "10:02:14", prompt: "What is wrong in this one?", promptAnchor: "u1", model: "", facts: "",
+      segments: [.attachment(id: "t1/shot-1", kind: "image", label: "image on studio")],
+      promptAttachments: ["image shot.png on studio"], promptAttachmentIds: ["u1/i1"])
+    var json = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(turn)) as? [String: Any])
+    #expect(json["promptAttachmentIds"] as? [String] == ["u1/i1"])
+    // as a build before this item kept it: the words, and no ids
+    json["promptAttachmentIds"] = nil
+    let read = try JSONDecoder().decode(HistoryTurn.self, from: JSONSerialization.data(withJSONObject: json))
+    #expect(read.promptAttachmentIds == nil)
+    #expect(read.promptAttachments == turn.promptAttachments && read.segments == turn.segments)
+    #expect(try JSONDecoder().decode(HistoryTurn.self, from: JSONEncoder().encode(turn)) == turn)
+  }
+
+  @Test("the kept document names a picture by its id alone: no digest and no address, whatever its row was read from")
+  func idsOnly() throws {
+    let digest = String(repeating: "ab", count: 32)
+    // an attachment as a whole entry names it, its stored image beside it: the row's reader keeps none of that
+    func stored(_ id: String) -> JSONValue {
+      .object([
+        "id": .string(id), "kind": .string("image"), "name": .string("shot.png"), "available": .bool(true),
+        "source": .object([
+          "type": .string("asset"),
+          "asset": .object(["url": .string("/api/assets/\(digest).png"), "digest": .string(digest)]),
+        ]),
+      ])
+    }
+    let rows = [
+      try row("u1", 1, "user", ["text": .string("look"), "attachments": .array([stored("i1")])]),
+      try tool("t1", 2, "shell", "pnpm shot", attachments: [stored("shot-1")]),
+      try row("a1", 3, "agent", ["text": .string("Done."), "attachments": .array([stored("i2")])]),
+    ]
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.withoutEscapingSlashes]
+    let kept = String(decoding: try encoder.encode(try document(rows)), as: UTF8.self)
+    for id in ["u1/i1", "t1/shot-1", "a1/i2"] {
+      #expect(kept.contains("\"\(id)\""), "\(id) is named")
+    }
+    #expect(!kept.contains(digest) && !kept.contains("/api/assets"))
+  }
+
+  // MARK: What the view decides
+
+  @Test("a run of attachments is one strip, in order; every other segment stands as it was")
+  func strips() throws {
+    let group = HistorySegment.ledger(
+      id: "t1", summary: "1 command", duration: "3s", failed: 0, isLive: false, lines: [])
+    let reply = HistorySegment.prose(id: "a1", at: "10:02:14", text: "Done.", anchor: "a1")
+    let pieces = HistoryPictureLayout.pieces(
+      [
+        group, .attachment(id: "t1/a", kind: "image", label: "image on studio"),
+        .attachment(id: "t1/b", kind: "image", label: "image on studio"), reply,
+        .attachment(id: "a1/i1", kind: "image", label: "image shot.png on studio"),
+      ], desktop: "studio")
+    #expect(pieces.map(\.id) == ["t1", "t1/a", "a1", "a1/i1"])
+    try #require(pieces.count == 4)
+    #expect(pieces[0] == .segment(group) && pieces[2] == .segment(reply))
+    guard case .strip(let first) = pieces[1], case .strip(let second) = pieces[3] else {
+      Issue.record("the second and the fourth piece are strips")
+      return
+    }
+    #expect(first.map(\.id) == ["t1/a", "t1/b"] && second.map(\.id) == ["a1/i1"])
+    #expect(HistoryPictureLayout.pieces([], desktop: "studio").isEmpty)
+  }
+
+  @Test("only an image is asked for as a picture; an attachment the document has no words for says where it is")
+  func whatIsAskedFor() {
+    let pieces = HistoryPictureLayout.pieces(
+      [
+        .attachment(id: "a1/d1", kind: "document", label: nil),
+        .attachment(id: "a1/i1", kind: "image", label: "image shot.png on studio"),
+      ], desktop: "studio")
+    let strip = HistoryPiece.strip([
+      HistoryAttached(id: "a1/d1", picture: nil, words: "attachment on studio"),
+      HistoryAttached(id: "a1/i1", picture: "a1/i1", words: "image shot.png on studio"),
+    ])
+    #expect(pieces == [strip])
+  }
+
+  @Test("a prompt's attachments are a strip: its words with their ids; a document kept before the ids asks for nothing")
+  func aPromptsStrip() {
+    let words = ["image shot.png on studio", "document notes.pdf on studio"]
+    func turn(_ ids: [String]?) -> HistoryTurn {
+      HistoryTurn(
+        id: "u1", at: "10:02:14", prompt: "look", model: "", facts: "", segments: [], promptAttachments: words,
+        promptAttachmentIds: ids)
+    }
+    // the document names no kind for a prompt's attachment: each is asked for by its id, and what is no picture
+    // finds none
+    #expect(
+      HistoryPictureLayout.attached(to: turn(["u1/i1", "u1/d1"])) == [
+        HistoryAttached(id: "u1/i1", picture: "u1/i1", words: words[0]),
+        HistoryAttached(id: "u1/d1", picture: "u1/d1", words: words[1]),
+      ])
+    let kept = HistoryPictureLayout.attached(to: turn(nil))
+    #expect(kept.map(\.words) == words && kept.allSatisfy { $0.picture == nil })
+    #expect(Set(kept.map(\.id)).count == 2, "each still has an id of its own")
+    // ids fewer than the words (no fold makes this): the rest are placeholders, and nothing is read past the end
+    #expect(HistoryPictureLayout.attached(to: turn(["u1/i1"])).map(\.picture) == ["u1/i1", nil])
+  }
+
+  @Test("a picture is found under its id and the size asked, the reader's key")
+  func theKey() {
+    #expect(HistoryPictureLayout.key("t1/shot-1", .tile) == "t1/shot-1/tile")
+    #expect(HistoryPictureLayout.key("t1/shot-1", .preview) == "t1/shot-1/preview")
+  }
+
+  @Test("a held picture is its tile; one on its way is the tile's square, waiting; every other face is the line")
+  func theFaces() {
+    let bytes = Data([1, 2, 3])
+    #expect(HistoryPictureLayout.draws(.held(bytes), read: true) == .tile)
+    // asked and not yet answered, or answered and not yet read
+    #expect(HistoryPictureLayout.draws(.waiting, read: nil) == .waiting)
+    #expect(HistoryPictureLayout.draws(.held(bytes), read: nil) == .waiting)
+    // a read that failed, bytes that are no picture, and nothing held: the placeholder's line, as it always was
+    #expect(HistoryPictureLayout.draws(.failed, read: nil) == .placeholder)
+    #expect(HistoryPictureLayout.draws(.held(bytes), read: false) == .placeholder)
+    #expect(HistoryPictureLayout.draws(nil, read: nil) == .placeholder)
+    // a picture read from bytes the reader no longer holds is not drawn
+    #expect(HistoryPictureLayout.draws(nil, read: true) == .placeholder)
+    #expect(HistoryPictureLayout.draws(.waiting, read: true) == .waiting)
+  }
+
+  @Test("a picture on its way holds its tile's square, so a row keeps its height when the picture lands")
+  func theSquare() {
+    let side = HistoryPictureLayout.tile
+    #expect(HistoryPictureLayout.side(.tile) == side && HistoryPictureLayout.side(.waiting) == side)
+    // the placeholder is a line as wide as its strip, and no square
+    #expect(HistoryPictureLayout.side(.placeholder) == nil)
+    // a strip on a 375 pt phone, as its cells draw
+    func strip(_ draws: [HistoryPictureDraws]) -> CGSize {
+      let sizes = draws.map { one in
+        HistoryPictureLayout.side(one).map { CGSize(width: $0, height: $0) } ?? CGSize(width: 335, height: 34)
+      }
+      return HistoryPictureLayout.flow(sizes, width: 335, gap: HistoryPictureLayout.gap).size
+    }
+    // three on their way, one landed, all landed: the strip is the size it was
+    #expect(strip([.waiting, .waiting, .waiting]) == CGSize(width: 328, height: 104))
+    #expect(strip([.waiting, .tile, .waiting]) == strip([.waiting, .waiting, .waiting]))
+    #expect(strip([.tile, .tile, .tile]) == strip([.waiting, .waiting, .waiting]))
+  }
+
+  @Test("the strip wraps: three tiles across a 375 pt phone and any wider, never four; a placeholder on its own row")
+  func theStripWraps() {
+    let gap = HistoryPictureLayout.gap
+    let tile = CGSize(width: HistoryPictureLayout.tile, height: HistoryPictureLayout.tile)
+    #expect(HistoryPictureLayout.tile == 104 && gap == 8, "three across every phone; the room's tile is 112 px")
+    let three = [CGPoint(x: 0, y: 0), CGPoint(x: 112, y: 0), CGPoint(x: 224, y: 0)]
+    // 375 pt across, the document's 20 pt margin on each side: three, and a fourth starts a row
+    let narrow = HistoryPictureLayout.flow([tile, tile, tile, tile], width: 335, gap: gap)
+    #expect(narrow.origins == three + [CGPoint(x: 0, y: 112)])
+    #expect(narrow.size == CGSize(width: 328, height: 216))
+    // 393 pt across, and the widest phone, 440 pt: still three, the fourth 40 pt short at the widest
+    for width in [353, 400] as [CGFloat] {
+      let wide = HistoryPictureLayout.flow([tile, tile, tile, tile], width: width, gap: gap)
+      #expect(wide.origins == three + [CGPoint(x: 0, y: 112)], "\(width)")
+    }
+    // a placeholder is as wide as the strip: it shares no row, and a tile after it starts the next
+    let line = CGSize(width: 353, height: 34)
+    let mixed = HistoryPictureLayout.flow([tile, line, tile], width: 353, gap: gap)
+    #expect(mixed.origins == [CGPoint(x: 0, y: 0), CGPoint(x: 0, y: 112), CGPoint(x: 0, y: 154)])
+    #expect(mixed.size == CGSize(width: 353, height: 258))
+    // two placeholders stand as the document always stood them, 8 apart
+    let lines = HistoryPictureLayout.flow([line, line], width: 353, gap: gap)
+    #expect(lines.origins == [CGPoint(x: 0, y: 0), CGPoint(x: 0, y: 42)] && lines.size.height == 76)
+    #expect(HistoryPictureLayout.flow([], width: 353, gap: gap).size == .zero)
+  }
+
+  @Test("a picture is read to the pixels it is drawn in, and never larger than it is")
+  func thePixels() {
+    #expect(HistoryPictureLayout.pixels(104, scale: 3) == 312)
+    #expect(HistoryPictureLayout.pixels(104, scale: 2) == 208)
+    #expect(HistoryPictureLayout.pixels(353, scale: 3) == 1059)
+    #expect(HistoryPictureLayout.pixels(0.2, scale: 1) == 1 && HistoryPictureLayout.pixels(104, scale: 0) == 104)
+    #expect(HistoryPictureLayout.pixels(0, scale: 3) == 1 && HistoryPictureLayout.pixels(.infinity, scale: 3) == 1)
+    // a tile of 640 px drawn 312 across: 312 a side
+    #expect(HistoryPictureLayout.longSide(width: 640, height: 640, across: 312) == 312)
+    // a wide picture's long side is its width
+    #expect(HistoryPictureLayout.longSide(width: 1600, height: 900, across: 1059) == 1059)
+    // a tall one drawn at half its width is read at half its height
+    #expect(HistoryPictureLayout.longSide(width: 400, height: 1600, across: 200) == 800)
+    // drawn wider than it is: itself, never enlarged
+    #expect(HistoryPictureLayout.longSide(width: 400, height: 1600, across: 1059) == 1600)
+    #expect(HistoryPictureLayout.longSide(width: 200, height: 100, across: 312) == 200)
+    // a picture whose size is not known is read at the width it is drawn
+    #expect(HistoryPictureLayout.longSide(width: 0, height: 0, across: 312) == 312)
+    // on its sheet a picture is read to what its furthest zoom can show, which is all the desktop sent of it
+    let zoomed = HistoryPictureLayout.pixels(353 * HistoryPictureLayout.zoomMost, scale: 3)
+    #expect(zoomed == 4236 && HistoryPictureLayout.longSide(width: 1600, height: 900, across: zoomed) == 1600)
+  }
+
+  @Test("on its sheet a picture is fitted to the page's width; a double tap goes to twice and back, a pinch to four")
+  func theZoom() {
+    // a desktop's screenshot of 1,600 by 900 on a 393 pt phone's page, 353 across: its own shape
+    #expect(HistoryPictureLayout.fitted(width: 1600, height: 900, across: 353) == CGSize(width: 353, height: 198.5625))
+    // a small picture is drawn up to the width, as the tile's stand-in is
+    #expect(HistoryPictureLayout.fitted(width: 8, height: 4, across: 353) == CGSize(width: 353, height: 176.5))
+    // a picture with no size takes no room
+    #expect(HistoryPictureLayout.fitted(width: 0, height: 4, across: 353) == .zero)
+    #expect(HistoryPictureLayout.zoomMost == 4 && HistoryPictureLayout.zoomTap == 2)
+    // fitted: to twice. Zoomed, by a tap or by a pinch: back to fitted
+    #expect(HistoryPictureLayout.tapped(from: 1) == 2)
+    #expect(HistoryPictureLayout.tapped(from: 2) == 1 && HistoryPictureLayout.tapped(from: 3.2) == 1)
+    // the part a double tap zooms to: half the page each way, about the point tapped
+    let part = HistoryPictureLayout.zoomRect(
+      around: CGPoint(x: 100, y: 60), page: CGSize(width: 393, height: 700), zoom: 2)
+    #expect(part == CGRect(x: 1.75, y: -115, width: 196.5, height: 350))
+  }
+
+  @Test("bytes that are no picture read as none; a picture reads at the size it is drawn, and no larger than it is")
+  func theDecode() throws {
+    #expect(HistoryPictureDecode.read(Data("not a picture".utf8), across: 312) == nil)
+    #expect(HistoryPictureDecode.read(Data(), across: 312) == nil)
+    // a picture of 8 by 4 pixels (a PNG made for this row: one colour, 74 bytes), drawn 4 across: 4 by 2
+    let png64 = "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAIAAAA8r+mnAAAAEUlEQVR42mM4YWODFTFQTwIA4k0oAUZvm1sAAAAASUVORK5CYII="
+    let png = try #require(Data(base64Encoded: png64))
+    let small = try #require(HistoryPictureDecode.read(png, across: 4))
+    #expect(small.cgImage?.width == 4 && small.cgImage?.height == 2)
+    // drawn wider than it is: itself
+    let whole = try #require(HistoryPictureDecode.read(png, across: 312))
+    #expect(whole.cgImage?.width == 8 && whole.cgImage?.height == 4)
   }
 }

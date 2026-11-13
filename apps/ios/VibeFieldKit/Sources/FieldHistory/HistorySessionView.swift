@@ -116,7 +116,7 @@ struct HistorySessionView: View {
           case .earlier, .asleep: earlier
           }
           // Item 381 — a row is one part of a turn, never a whole turn (`HistoryRow.of`)
-          ForEach(HistoryRow.of(document.turns)) { row in
+          ForEach(HistoryRow.of(document.turns, desktop: corpus.desktop)) { row in
             rowView(row)
           }
           if let since = document.liveSince, awake {
@@ -379,8 +379,9 @@ struct HistorySessionView: View {
       prompt(turn)
     case .promptClipped(_, let words):
       clippedNote(words)
-    case .promptAttachment(_, _, let words):
-      placeholder(words)
+    case .promptStrip(_, let attached), .strip(_, let attached):
+      // Item 362g (red) — a stub: each as its placeholder's line. The green draws the strip.
+      ForEach(attached) { one in placeholder(one.words) }
     case .head(let turn):
       responseHead(turn)
     case .segment(let segment, let turn):
