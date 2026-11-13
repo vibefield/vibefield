@@ -7796,6 +7796,25 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     word (`denied`, `killed`) reads through the same rule and says itself, which is right. A command that timed out says
     `timed out` and nothing else. A failed line with no words left says its exit, else its result, else its
     status (`failed`, `denied`, `interrupted`), and never `exit 0`.
+  - **A tool line opens** (362f). Read straight from the desktop's index, a tool line with more to say than its
+    line carries a chevron and opens in place, as a member of the group does, to the room's own blocks at the
+    room's figures. **A command** opens to its working folder and its source as the room previews it: the first
+    line that is not blank, whole up to 42 characters, else its first 39 and `...` (rosetta hands a long command
+    over already cut to this; its whole is the desktop's to show). **A change** opens to its first four files,
+    each its path and the first twelve lines of its diff: the line's number, `+` or `−`, the text, an added line
+    on `green` at 11 % and a line taken out on `red` at 10 %; then `… 3 more lines`, `… 2 more files in this
+    change`, or `no diff recorded`. **A read** opens to the files it named with their ranges (`L1–180`, `p3–4`)
+    when it named a range or more than one file, and **a search** to the paths it found: at most twenty-four,
+    then `… 16 more`. **A line that failed** adds its summary under those, and opens to the summary alone only
+    when that says more than the line does (more than one line, or past the 60 the line shows). All of it is
+    11.5 pt mono at the group's indent, the quiet lines 11.5 pt sans in `inkFaint`; a command and a summary sit
+    on `fill` with 6 pt corners. A line of a diff wraps, where the room scrolls sideways, and is cut at 200
+    units. Never shown: a tool's output, which no record carries, and a failure's diagnostic (item 371). Nothing
+    in it opens anything: a path is its words. Like the whole words above, these are kept only while the app
+    runs: a later launch that can only read through the home desktop shows the line as the door sends it. They
+    are also never written into the phone's own copy of the document, which is written at every change, so a
+    document shown from that copy has plain lines until a direct read lands. Nothing on screen names the way a
+    document is read.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
