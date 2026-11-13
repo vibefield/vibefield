@@ -7742,6 +7742,42 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     not this one (`24 Aug 2025`); a pause is said to the minute, and from two days on as `2d 3h`. A reply the cut
     falls inside continues under the pill with no second head, and a run never crosses a pill. A session of one
     sitting has no pill. It was one pill before a prompt sixty minutes or more after the turn before it, with no day.
+    **A pill that carries a clock says how far back it is** (*item 395, 2026-11-13; the rule for the room and the
+    phone alike. James, 23:38:00Z, session qa-01, of a sitting's pill that read `20:21 · after 3h 37m` on a day a
+    week past: "this message is from Nov 6, but the last pill only shows time like it is today, which is wrong
+    in a chat ui, if you learn from real world chat ui, the last time pill depands on how far the date is, it
+    only show time when it is today, show weekday if it was within a week, and show date if outside a week ago,
+    do it properly".*) By the viewer's own calendar days, counted from today:
+    - **today**: the clock alone, `20:21`;
+    - **one of the six days before today**: the weekday and the clock, `Fri · 20:21`;
+    - **earlier**: the day and the clock, `Fri 6 Nov · 20:21`, and with its year when it is not this one,
+      `6 Nov 2025 · 20:21`.
+
+    `after 3h 37m` follows as it did. This holds for every pill with a clock, where the day turned and inside a
+    day alike: until this item a pill inside one day said the clock alone however old the day was, and only a
+    pill where the day turned named its day. A pill with no clock (the day turned with no pause) keeps its day
+    alone, as above: `Today`, `Yesterday`, `Fri 6 Nov`. The words are made when the document is drawn, from the
+    sitting's own time, so a pill read today and looked at tomorrow says tomorrow's words.
+  - **A button at the side goes to the message before** (*item 396, 2026-11-13; one design for the room and the
+    phone. James, 23:38:00Z, session qa-01: "a good addition design should be added to both desktop and mobile
+    is that we should have a floating button on the side for user to quick jump to previous user message so user
+    can quick navigate, help me design and implement nicely".*)
+    - **Where it floats**: over the document's trailing side, level with the pill at the foot (its centre on
+      the pill's centre line), so it clears whatever stands over the foot as the pill does. On the phone 16 pt
+      in from the screen's edge; in the room 16 px in from the transcript column's edge.
+    - **What it shows**: a round glass button, 40 pt on the phone (32 px in the room, on the room's island
+      shadow and hairline), holding `chevron.up` at 15 pt semibold in the primary ink. No word. Its spoken name
+      and the room's tooltip are `Previous message`.
+    - **What a press does**: the document goes to the nearest message of the person's own (a prompt) that
+      begins above the top of the view, and stands that message's top 12 under the head. Pressed again it goes
+      to the one before that. A message more than a screen away is gone to at once and a nearer one on the
+      300 ms ease (none under Reduce Motion), and the document stops following, as it does for any move up the
+      page. Nothing else marks the message: its place at the top of the view is the mark.
+    - **When it hides**: it is there only while a message of the person's own begins above the top of the
+      view, or rows above are not yet read. It fades in and out over 200 ms; hidden, it takes no press.
+    - **At the first message**: with nothing above it the button is gone. With rows above not yet read from
+      the desktop it stays, and a press goes to the document's top, where the rows above are read in as they
+      are for a reader who scrolls there; the next press finds the message among them.
   - **Its words are read as Chat reads a spark's** (362d). A reply's words go through the phone's one reader
     (`ChatMarkdown.blocks`, the Mac's `markdownBlocksOf`) and the view Chat draws a spark's words with: paragraphs
     with their line breaks, bold, italic, `code`, fenced code that scrolls within itself, lists, quotes, a heading as
