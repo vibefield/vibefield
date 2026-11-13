@@ -1107,6 +1107,226 @@ test("the committed records are the pins' own: the iOS acknowledgements and the 
   for (const m of go.modules) for (const id of m.texts) assert.ok(go.texts[id], `${m.path}: ${id}`);
 });
 
+// Item 379 (2026-11-13) — the committed Go record is BOTH shipped Go binaries' own: the desktop's mesh sidecar and the
+// phone's TailscaleKit (truffle's Swift plane, a Go build of its own). `--ios` reads TailscaleKit's Go texts from it, so
+// a module only TailscaleKit embeds was a gap on any host with no Go module cache (klauspost/compress v1.20.0, since
+// the sidecar EL8 4f4c9038d moved the sidecar alone to v1.20.2), and every `--ios` read go's env file under the home.
+
+/** A Go binary for the fixtures: Go 1.18+'s inline build info, as `goBuildInfo` reads it. */
+function goBinary({ goVersion = "go1.27.3", path, deps }) {
+  const sentinel = (c) => Buffer.alloc(16, c);
+  const modinfo = [
+    `path\t${path}`,
+    `mod\t${path}\t(devel)\t`,
+    ...deps.map(([p, v]) => `dep\t${p}\t${v}\th1:x=`),
+    "build\tGOOS=darwin",
+    "",
+  ].join("\n");
+  const mod = Buffer.concat([sentinel(0x30), Buffer.from(modinfo), sentinel(0x31)]);
+  const varint = (n) => {
+    const out = [];
+    for (let rest = n; ; ) {
+      const low = rest & 0x7f;
+      rest = Math.floor(rest / 128);
+      out.push(rest > 0 ? low | 0x80 : low);
+      if (rest === 0) return Buffer.from(out);
+    }
+  };
+  const header = Buffer.concat([
+    Buffer.from("\xff Go buildinf:", "latin1"),
+    Buffer.from([8, 2]),
+    Buffer.alloc(16),
+  ]);
+  const version = Buffer.from(goVersion);
+  return Buffer.concat([header, varint(version.length), version, varint(mod.length), mod]);
+}
+
+/** A scratch directory of the test's own, removed after it. */
+function scratch(t, prefix) {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const write = (rel, body) => {
+    mkdirSync(dirname(join(dir, rel)), { recursive: true });
+    writeFileSync(join(dir, rel), body);
+  };
+  return { dir, write };
+}
+
+const TAILSCALEKIT_IN_ARTIFACTS =
+  "truffle/TailscaleKit/TailscaleKit.xcframework/ios-arm64/TailscaleKit.framework/TailscaleKit";
+
+test("item 379: the committed Go record covers every Go row the iOS record lists, text for text", () => {
+  const doc = JSON.parse(readFileSync(join(REPO_ROOT, IOS_OUTPUT), "utf8"));
+  const go = JSON.parse(readFileSync(join(REPO_ROOT, GO_SNAPSHOT), "utf8"));
+  const rows = doc.components.filter((c) => c.ecosystem === "go");
+  assert.ok(rows.length > 0, "the iOS record lists TailscaleKit's Go rows");
+  const sorted = (ids) => [...ids].sort();
+  const uncovered = [];
+  for (const c of rows) {
+    const recorded = c.name.startsWith("Go (")
+      ? go.go.find((g) => g.version === c.version)
+      : go.modules.find((m) => m.path === c.name && m.version === c.version);
+    if (!recorded || sorted(recorded.texts).join() !== sorted(c.texts).join())
+      uncovered.push(`${c.name} ${c.version}`);
+  }
+  assert.deepEqual(uncovered, [], "every Go row of the iOS record is in the Go record");
+});
+
+test("item 379: the committed Go record names the kit's TailscaleKit — its truffle pin and its revision", () => {
+  const doc = JSON.parse(readFileSync(join(REPO_ROOT, IOS_OUTPUT), "utf8"));
+  const go = JSON.parse(readFileSync(join(REPO_ROOT, GO_SNAPSHOT), "utf8"));
+  const resolved = JSON.parse(
+    readFileSync(join(REPO_ROOT, "apps/ios/VibeFieldKit/Package.resolved"), "utf8"),
+  );
+  const truffle = resolved.pins.find((p) => p.identity === "truffle");
+  assert.deepEqual(
+    go.tailscaleKit,
+    { truffle: truffle.state.version, revision: doc.tailscaleKit },
+    "truffle's Swift plane moves with a refresh of the Go record (`--refresh-go-modules`)",
+  );
+});
+
+test("item 379: the refresh reads both Go binaries, the sidecar and TailscaleKit, and refuses with either missing", (t) => {
+  assert.equal(typeof notices.goRefresh, "function", "goRefresh is the refresh's reading");
+  const { dir: root, write } = scratch(t, "vf-gorefresh-");
+  const sidecarPkg = "apps/desktop/node_modules/@vibecook/truffle-sidecar-darwin-arm64";
+  write(
+    "apps/desktop/package.json",
+    JSON.stringify({
+      name: "fixture-desktop",
+      version: "1.0.0",
+      optionalDependencies: { "@vibecook/truffle-sidecar-darwin-arm64": "0.7.27" },
+    }),
+  );
+  write(
+    `${sidecarPkg}/package.json`,
+    JSON.stringify({ name: "@vibecook/truffle-sidecar-darwin-arm64", version: "0.7.27" }),
+  );
+  write(
+    `${sidecarPkg}/bin/sidecar-slim`,
+    goBinary({
+      path: "github.com/vibecook/sidecar",
+      deps: [
+        ["golang.org/x/sys", "v0.48.0"],
+        ["github.com/shared/mod", "v1.0.0"],
+      ],
+    }),
+  );
+  const revision = "1".repeat(40);
+  write(
+    "apps/ios/VibeFieldKit/Package.resolved",
+    JSON.stringify({
+      pins: [{ identity: "truffle", state: { version: "0.7.26", revision } }],
+    }),
+  );
+  write("checkouts/truffle/.git/HEAD", `${revision}\n`);
+  write("checkouts/truffle/apple/Vendor/README.md", "| Revision | `abcdef0123` |\n");
+  write(
+    `artifacts/${TAILSCALEKIT_IN_ARTIFACTS}`,
+    goBinary({
+      path: "github.com/tailscale/libtailscale",
+      deps: [
+        ["github.com/shared/mod", "v1.0.0"],
+        ["github.com/klauspost/compress", "v1.20.0"],
+      ],
+    }),
+  );
+  write("cache/golang.org/toolchain@v0.0.1-go1.27.3.darwin-arm64/LICENSE", mit("The Go Authors"));
+  write("cache/golang.org/x/sys@v0.48.0/LICENSE", mit("Sys"));
+  write("cache/github.com/shared/mod@v1.0.0/LICENSE", mit("Shared"));
+  write("cache/github.com/klauspost/compress@v1.20.0/LICENSE", mit("Klaus Post"));
+  const args = {
+    repoRoot: root,
+    checkouts: join(root, "checkouts"),
+    artifacts: join(root, "artifacts"),
+    cache: join(root, "cache"),
+    recorded: null,
+  };
+  const { doc, missing, problems } = notices.goRefresh(args);
+  assert.deepEqual(problems, []);
+  assert.deepEqual(missing, []);
+  assert.deepEqual(
+    doc.modules.map((m) => `${m.path}@${m.version}`),
+    [
+      "github.com/klauspost/compress@v1.20.0",
+      "github.com/shared/mod@v1.0.0",
+      "golang.org/x/sys@v0.48.0",
+    ],
+    "the union of both binaries' modules, each once",
+  );
+  assert.deepEqual(
+    doc.go.map((g) => g.version),
+    ["go1.27.3"],
+  );
+  assert.deepEqual(doc.sidecar, { package: "@vibecook/truffle-sidecar-*", version: "0.7.27" });
+  assert.deepEqual(doc.tailscaleKit, { truffle: "0.7.26", revision: "abcdef0123" });
+
+  rmSync(join(root, "artifacts"), { recursive: true });
+  const refused = notices.goRefresh(args);
+  assert.equal(refused.doc, null, "never a record of one binary");
+  assert.match(refused.problems.join("\n"), /TailscaleKit's binary is not under --artifacts/);
+});
+
+test("item 379: a module or toolchain already recorded keeps its texts with no module cache read", (t) => {
+  const { dir: cache } = scratch(t, "vf-gocache-empty-");
+  const goBody = normalizeText(mit("The Go Authors"));
+  const sharedBody = normalizeText(mit("Shared"));
+  const recorded = {
+    go: [{ version: "go1.27.3", texts: [textId(goBody)] }],
+    modules: [{ path: "github.com/shared/mod", version: "v1.0.0", texts: [textId(sharedBody)] }],
+    texts: {
+      [textId(goBody)]: { file: "LICENSE", body: goBody },
+      [textId(sharedBody)]: { file: "LICENSE", body: sharedBody },
+    },
+  };
+  const info = goBuildInfo(
+    goBinary({
+      path: "github.com/vibecook/sidecar",
+      deps: [
+        ["github.com/shared/mod", "v1.0.0"],
+        ["github.com/new/mod", "v2.0.0"],
+      ],
+    }),
+  );
+  const sidecar = { package: "p", version: "1" };
+  for (const dir of [cache, null]) {
+    const { doc, missing } = notices.goSnapshot([info], dir, sidecar, { recorded });
+    assert.deepEqual(missing, ["github.com/new/mod@v2.0.0"], "only what the record lacks");
+    assert.deepEqual(doc.go, [{ version: "go1.27.3", texts: [textId(goBody)] }]);
+    assert.deepEqual(doc.modules, [
+      { path: "github.com/shared/mod", version: "v1.0.0", texts: [textId(sharedBody)] },
+    ]);
+    assert.equal(doc.texts[textId(sharedBody)].body, sharedBody);
+  }
+});
+
+test("item 379: a Go module cache is read only when asked — the CLI's --gomodcache, the stage's own variable", (t) => {
+  const { dir: home, write } = scratch(t, "vf-gohome-");
+  write("Library/Application Support/go/env", `GOMODCACHE=${home}/from-the-env-file\n`);
+  write(".config/go/env", `GOMODCACHE=${home}/from-the-xdg-env-file\n`);
+  const names = ["HOME", "XDG_CONFIG_HOME", "GOMODCACHE", "GOPATH"];
+  const saved = Object.fromEntries(names.map((n) => [n, process.env[n]]));
+  t.after(() => {
+    for (const n of names) {
+      if (saved[n] === undefined) Reflect.deleteProperty(process.env, n);
+      else process.env[n] = saved[n];
+    }
+  });
+  process.env.HOME = home;
+  process.env.XDG_CONFIG_HOME = join(home, ".config");
+  process.env.GOMODCACHE = join(home, "from-GOMODCACHE");
+  process.env.GOPATH = join(home, "gopath");
+  assert.equal(notices.goModCacheDir(), null, "no flag: no cache, and nothing of the home is read");
+  assert.equal(notices.goModCacheDir(undefined), null);
+  assert.equal(notices.goModCacheDir("/a/run/own/gomod"), "/a/run/own/gomod");
+  assert.equal(typeof notices.stageGoCache, "function", "the stage's rule is named");
+  assert.equal(notices.stageGoCache({ GOMODCACHE: "/x", GOPATH: "/y", HOME: home }), null);
+  assert.equal(
+    notices.stageGoCache({ VIBEFIELD_NOTICES_GOMODCACHE: "/z", GOMODCACHE: "/x" }),
+    "/z",
+  );
+});
+
 test("the stage generates the notices and ships them with Electron's and Node's licences in Resources/legal", () => {
   // A source-level guard, as for the stager's other rows (it stages at import time, so it cannot be imported).
   const stager = readFileSync(join(REPO_ROOT, "scripts/stage-package.mjs"), "utf8");
