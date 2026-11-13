@@ -18,8 +18,8 @@ struct SettingsModelTests {
     desktops: [SettingsDesktop] = []
   ) -> SettingsAccount {
     SettingsAccount(
-      standing: standing, name: "James", login: "me@jamesyong42.com", face: face, faceSource: source,
-      seed: "me@jamesyong42.com", tailnet: "tail3f2a8c.ts.net", machineName: "iphone-17-pro",
+      standing: standing, name: "James", login: "me@example.com", face: face, faceSource: source,
+      seed: "me@example.com", tailnet: "example.ts.net", machineName: "iphone-17-pro",
       adminConsole: nil, desktops: desktops)
   }
 
@@ -50,9 +50,9 @@ struct SettingsModelTests {
 
   @Test("the login is said once: under the name, or as the name until a desktop names you")
   func loginLine() {
-    #expect(account(.connected).loginLine == "me@jamesyong42.com")
+    #expect(account(.connected).loginLine == "me@example.com")
     var nameless = account(.connected)
-    nameless.name = "me@jamesyong42.com"
+    nameless.name = "me@example.com"
     #expect(nameless.loginLine == nil)
   }
 
@@ -294,7 +294,7 @@ struct SettingsModelTests {
 
   @Test("sign out is asked in one set of words, wherever it is asked")
   func signOutWords() {
-    #expect(SettingsWords.signOutTitle(login: "me@jamesyong42.com") == "Sign out of me@jamesyong42.com?")
+    #expect(SettingsWords.signOutTitle(login: "me@example.com") == "Sign out of me@example.com?")
     #expect(SettingsWords.signOutTitle(login: nil) == "Sign out of this account?")
     // What a sign-out removes and keeps, said whole: the project colours and
     // the History read from your desktops go (item 130); this phone's look and

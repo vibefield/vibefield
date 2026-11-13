@@ -74,7 +74,7 @@ struct AccountMemoryTests {
     let defaults = scratch()
     let memory = ExpectationMemory(defaults: defaults)
     memory.record(PhoneCode(login: "me@example.com", from: "Studio"), arrival: .scanned)
-    SignOutSweep(login: "james@acme.dev", stateDirectory: nil).run(defaults: defaults)
+    SignOutSweep(login: "someone@example.org", stateDirectory: nil).run(defaults: defaults)
     #expect(memory.expected()?.login == "me@example.com")
   }
 

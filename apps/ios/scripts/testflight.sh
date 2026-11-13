@@ -20,8 +20,8 @@ Usage: bash apps/ios/scripts/testflight.sh archive BUILD_NUMBER review|testfligh
   archive 8 testflight  The same code with VF_TESTFLIGHT set, so TestFlight's
                         own rows are compiled in: its app must carry every one of
                         them. Each archive has its own number.
-  upload 7 store        Upload a review archive, or one made before kinds (build
-                        6), for the App Store and external TestFlight
+  upload 7 store        Upload a review archive, or one made before kinds, for
+                        the App Store and external TestFlight
                         (ExportOptions-AppStore.plist). It refuses a testflight
                         archive, and any archive whose app carries a
                         TestFlight-only page: the app's bytes decide.
@@ -207,8 +207,9 @@ case "$action" in
       echo "The archive's bundle ID or signing team does not match VibeField." >&2
       exit 1
     fi
-    # The store gate (RB-1): App Review gets a review archive, or one made before kinds (build 6, VF-PM
-    # 2026-11-12), and either way its app's bytes decide. A testflight archive never goes to the store.
+    # The store gate (RB-1): App Review gets a review archive, or one made before kinds, and either way its
+    # app's bytes decide. A testflight archive never goes to the store. (Build 6 is a review archive: it was not
+    # archived before kinds landed, TESTFLIGHT.md's correction of 2026-11-12.)
     if [[ "$export_kind" == store ]]; then
       recorded_kind="$(cat "$kind_file" 2>/dev/null || true)"
       case "$recorded_kind" in

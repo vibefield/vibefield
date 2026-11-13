@@ -345,11 +345,11 @@ struct WayInScreenTests {
 
   @Test("Another account?: TS-7b's words; a code by link leads with Keep this account (EL7)")
   func anotherAccount() {
-    let scanned = screen(.anotherAccount(current: "james@acme.dev", expected: login, from: "Studio", byLink: false))
+    let scanned = screen(.anotherAccount(current: "someone@example.org", expected: login, from: "Studio", byLink: false))
     #expect(scanned.words.title == "Another account?")
     #expect(
       line(scanned)
-        == "This iPhone is signed in as james@acme.dev, but the code you scanned came from Studio, signed in as me@example.com.")
+        == "This iPhone is signed in as someone@example.org, but the code you scanned came from Studio, signed in as me@example.com.")
     #expect(scanned.acts.first == .primary("Sign in again", .switchAccount))
     #expect(scanned.acts.last == .note("At Tailscale, pick me@example.com."))
     let byLink = screen(.anotherAccount(current: "a@b", expected: "c@d", from: "Mini", byLink: true))

@@ -40,7 +40,7 @@
 
     static let login = AccountFixtures.login
     static let domain = AccountFixtures.domain
-    static let name = "James"
+    static let name = "Robin"
     static let face = AccountFixtures.fox
     static let userId = "01J8F2ZQ9K3M4N5P6Q7R8S9T0V"
 

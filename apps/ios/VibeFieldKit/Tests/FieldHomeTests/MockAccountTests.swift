@@ -17,8 +17,8 @@ struct MockAccountTests {
     let mock = MockAccount()
     let face = mock.face
     #expect(face.control == .face(AccountFixtures.fox))
-    #expect(face.name == "James")
-    #expect(face.detail == "me@jamesyong42.com · tail3f2a8c.ts.net")
+    #expect(face.name == "Robin")
+    #expect(face.detail == "me@example.com · example.ts.net")
     #expect(face.detailIsLogin)
     #expect(!face.wantsAttention)
     #expect(face.desktops.map(\.name) == ["studio", "mini"])
@@ -26,7 +26,7 @@ struct MockAccountTests {
     #expect(!face.offersSignIn)
     #expect(face.canSignOut)
     #expect(mock.desktopIsUp)
-    #expect(mock.login == "me@jamesyong42.com")
+    #expect(mock.login == "me@example.com")
   }
 
   /// M2 (PG-3e, the v2 check) — the mock's studio, whose board the mock never lists, is watchable on its Settings page:

@@ -132,7 +132,7 @@ public struct CreateSessionSheet: View {
           if let scenario = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-workspace=") })?.split(separator: "=").last {
             if ["folder", "launch", "refused", "spawning"].contains(String(scenario)) {
               if let reader = model.reader, let root = reader.roots.first(where: { $0.browse == "home" }) {
-                await reader.open(root, path: "Projects/project100")
+                await reader.open(root, path: "Projects/workbench")
                 if scenario != "folder" { _ = model.chooseCurrentFolder() }
               }
             }

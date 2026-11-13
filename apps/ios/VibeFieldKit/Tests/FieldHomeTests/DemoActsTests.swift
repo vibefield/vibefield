@@ -22,7 +22,7 @@ struct DemoActsTests {
 
   /// "Another account?" over made-up facts: a state whose page has a sign-in, a switch and a keep.
   private let demo = LaunchFixtures(demoField: false, account: "another")
-  private let code = PhoneCode(login: "me@jamesyong42.com", from: "Studio")
+  private let code = PhoneCode(login: "me@example.com", from: "Studio")
   private static let console = URL(string: "https://login.tailscale.com/admin/machines")!
 
   /// The calls the acts made, by name, in order.

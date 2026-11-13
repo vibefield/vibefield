@@ -13,8 +13,8 @@ import Testing
 /// corner's words for each, whose word the face is, and Network details.
 @Suite("Settings is handed the corner's account")
 struct SettingsAccountTests {
-  private let login = "me@jamesyong42.com"
-  private let domain = "tail3f2a8c.ts.net"
+  private let login = "me@example.com"
+  private let domain = "example.ts.net"
   private let fox = UserFace(emoji: "🦊")
   private let heard = Date(timeIntervalSince1970: 1_798_502_400)
 

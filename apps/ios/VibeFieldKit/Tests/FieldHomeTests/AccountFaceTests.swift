@@ -11,8 +11,8 @@ import Testing
 /// offers — the page's seven states, as decisions.
 @Suite("the corner is the account")
 struct AccountFaceTests {
-  private let login = "me@jamesyong42.com"
-  private let domain = "tail3f2a8c.ts.net"
+  private let login = "me@example.com"
+  private let domain = "example.ts.net"
   private let fox = UserFace(emoji: "🦊")
 
   private func desktop(
@@ -52,7 +52,7 @@ struct AccountFaceTests {
     #expect(corner.control == .face(fox))
     #expect(!corner.wantsAttention)
     #expect(corner.name == "James")
-    #expect(corner.detail == "me@jamesyong42.com · tail3f2a8c.ts.net")
+    #expect(corner.detail == "me@example.com · example.ts.net")
     #expect(corner.detailIsLogin)
     #expect(corner.desktops == [.init(id: "dev-1", name: "studio", word: nil, wantsTheUser: false, platform: "darwin")])
     #expect(corner.othersLine == nil)
@@ -65,7 +65,7 @@ struct AccountFaceTests {
     let corner = face(meshState: .up, login: login, domain: domain)
     #expect(corner.control == .blank)
     #expect(corner.name == login)
-    #expect(corner.detail == "signed in to tail3f2a8c.ts.net")
+    #expect(corner.detail == "signed in to example.ts.net")
     #expect(!corner.detailIsLogin)
   }
 

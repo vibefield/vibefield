@@ -182,15 +182,15 @@ struct DoorPageTests {
   @Test("another account than the code named: Another account?, at once and over any other page")
   func anotherAccount() {
     let page = FieldHomeModel.DoorPage.anotherAccount(
-      current: "james@acme.dev", expected: "me@example.com", from: "Studio", byLink: false)
-    #expect(expected(.up, login: "james@acme.dev", expecting()) == page)
-    #expect(expected(.needsMachineAuth, login: "james@acme.dev", expecting()) == page)
+      current: "someone@example.org", expected: "me@example.com", from: "Studio", byLink: false)
+    #expect(expected(.up, login: "someone@example.org", expecting()) == page)
+    #expect(expected(.needsMachineAuth, login: "someone@example.org", expecting()) == page)
     // A remembered account counts: the phone is that account until it signs out.
-    #expect(expected(.off, remembered: "james@acme.dev", expecting()) == page)
+    #expect(expected(.off, remembered: "someone@example.org", expecting()) == page)
     // By a link, Keep this account leads (EL7).
     #expect(
-      expected(.up, login: "james@acme.dev", expecting("me@example.com", .link))
-        == .anotherAccount(current: "james@acme.dev", expected: "me@example.com", from: "Studio", byLink: true))
+      expected(.up, login: "someone@example.org", expecting("me@example.com", .link))
+        == .anotherAccount(current: "someone@example.org", expected: "me@example.com", from: "Studio", byLink: true))
   }
 
   @Test("the account the code named, in any case, is no mismatch")
@@ -217,7 +217,7 @@ struct DoorPageTests {
   @Test("only the node's own login settles the code, in any case")
   func settles() {
     #expect(FieldHomeModel.expectationSettles(expecting(), login: "ME@example.com"))
-    #expect(!FieldHomeModel.expectationSettles(expecting(), login: "james@acme.dev"))
+    #expect(!FieldHomeModel.expectationSettles(expecting(), login: "someone@example.org"))
     #expect(!FieldHomeModel.expectationSettles(expecting(), login: nil))
     #expect(!FieldHomeModel.expectationSettles(expecting(), login: ""))
     #expect(!FieldHomeModel.expectationSettles(nil, login: "me@example.com"))

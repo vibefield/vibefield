@@ -9963,6 +9963,27 @@ never how it is built.
 - **Labs**: **Swarm lab** · **Input card states**.
 - The tag beside the corner is **Demo**, dotted; it is spoken "Demo. What you see is made up."
 - The foot: "For testing. TestFlight and development builds show this page; the build in the App Store does not."
+
+**The made-up names** (item 367; James on the board card j-367-real-strings-in-builds, 2026-11-13 00:58:16Z, "Replace
+them all with made-up names before build 6 goes to App Review"). What a demo or a bundled fixture shows on the phone
+names no one. A fixture that ships names someone only from this table, and a new kind adds its row here first. Test
+data that never ships keeps its older names until it next moves, and then it takes these. `HistoryCorpus.mock` and
+HomeScreen's two demo paths take theirs in item 367's last commit.
+
+| kind | made-up | where it stands |
+| --- | --- | --- |
+| the demo's person | Robin | `MockField.name` |
+| a person in a path | ada (`/Users/ada/…`), you (`/Users/you/…`) | the workspace goldens; the swarm lab |
+| a sign-in | `me@example.com` | `AccountFixtures`, the account's login |
+| another sign-in | `someone@example.org` | `AccountFixtures`, "Another account?" |
+| a tailnet | `example.ts.net`; a host in it, `<name>.example.ts.net` | `AccountFixtures`, the account's tailnet |
+| a GitHub owner | `example_owner` | `index-projects.mesh.json`, the contracts golden and its three kit copies |
+| a home folder | `~/code/<project>` | `HistoryCorpus.mock`; the input card's and the remote demo's paths |
+| an external volume | Backup, `/Volumes/Backup` | `workspace-roots.valid.json` |
+| a projects folder | workbench | the workspace goldens; the workspace sheet's demo |
+| projects | garden-planner, canvas-kit, ledger, tide-tables, atlas, lantern, kiln | for the next fixture (`HistoryCorpus.mock` keeps its own names and ids) |
+| no one's, kept | `tail1234`, `100.64.0.x` | the contracts' house placeholders |
+
 **The freeway's refusals** (track FW, F1b's kit half; FW-D5; added 2026-11-01). The phone asks its home desktop to
 approve its connection to each desktop, and when a desktop says no, the phone says it in these words. ‹desktop› is
 the field's name for that desktop, the way the attach card names it ("couldn't reach studio's terminal"). The

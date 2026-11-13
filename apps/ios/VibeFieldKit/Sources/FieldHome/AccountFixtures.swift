@@ -34,8 +34,8 @@
       "joining", "looking", "tour-1", "tour-2", "tour-3", "tour-4", "none-found", "from-code", "lock-offer",
       "lock-offer-passcode",
     ]
-    static let login = "me@jamesyong42.com"
-    static let domain = "tail3f2a8c.ts.net"
+    static let login = "me@example.com"
+    static let domain = "example.ts.net"
     static let fox = UserFace(emoji: "🦊", frame: .sticker)
     /// The approval page's machine name: a phone's own, as Layer 3 spells it.
     static let machine = "iphone-17-pro"
@@ -113,7 +113,7 @@
     }
 
     /// The account the page's "Another account?" finds signed in (A:723).
-    static let otherLogin = "james@acme.dev"
+    static let otherLogin = "someone@example.org"
 
     private static func expectation(_ arrival: PhoneCodeExpectation.Arrival) -> PhoneCodeExpectation {
       PhoneCodeExpectation(login: login, from: "Studio", arrival: arrival, at: Date(timeIntervalSince1970: 1_798_502_400))
