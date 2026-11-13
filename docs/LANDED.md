@@ -48878,3 +48878,183 @@ EQUAL". GEN's six are held by its SHA256SUMS (`2c37979307f078d3…`, 6 OK of 6, 
 - `gate:landing`, landing-only, on James's Mac mini at his unlock (j-table-next).
 
 **Not done, and not claimed:** no smoke, no app run and no Electron row for this commit; nothing pushed.
+
+**Addendum (2026-11-13; landed with HG-4's records): the Mac's rows after the land, PAID** (VF-PM's GO 22:23:00Z;
+HG's, in the main checkout at `8daecb9c8` (M296 landed 22:22:33Z), in the slot VF-PM booked: rows 1 and 2 by
+`lanes/hg/el8-016-land/post-land-rows.sh` (`d101d462…`), rows 3 and 4 by its continuation `post-land-rows-34.sh`
+(`e71ad71b…`; row 2's STOP, below), each row under `door.lock`, nice 19, with HOLD START/END; their results
+`post-land/results.txt` and `post-land-34/results.txt` beside them). Each row refused unless the checkout was on `main`
+at the landed sha with porcelain 0. Never an amend of this entry's commit (VF-PM 05:54Z).
+- `../rosetta-pin` (22:24:13Z to 22:24:16Z, exit 0): `git fetch` from its origin, anonymous, then `checkout --detach`:
+  - before, "HEAD 811e554c64e60509ef624660f0709fd33717cc2c, porcelain 0";
+  - after, "HEAD 00221b5b70f64dc0e08588886718f3db6222f99c, porcelain 0".
+- The install (22:24:46Z to 22:24:52Z, exit 0):
+  `ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install --frozen-lockfile`, "Lockfile is up to date", "Packages: +2 -2",
+  "Done in 5.6s using pnpm v11.13.1", porcelain 0 after. Then the script's own check STOPPED the run (22:24:52Z,
+  "a 0.1.5 rosetta package is still installed"): it read the names in `node_modules/.pnpm`, where pnpm keeps the two
+  0.1.5 dirs of 2026-11-08 that no package links, and not the links. The check's fault, not the install's (VF-PM
+  22:28:15Z), and mine; its erratum is `post-land/ERRATUM-2026-11-13.txt`. Read again by its links in the
+  continuation: 3 workspace links and 2 hoist links found, each at 0.1.6, and the lock naming no 0.1.5; the two 0.1.5
+  dirs stay, as nothing prunes.
+- rosettad (22:31:02Z to 22:32:49Z, exit 0): `pnpm siblings:build` with cargo offline, its log ending
+  "Finished `release` profile [optimized] target(s) in 1m 02s" with no offline miss; the binary before it 45063568 B
+  (2026-11-08T16:19:27Z), after it of 2026-11-13T22:32:49Z. The binary
+  `/Volumes/SamsungRed/rust-target/rosetta-pin/release/rosettad`, 45066000 B, sha256
+  `cb86df92d4dee1881b7b4cbd29fae88ea2aafcb923ea5d21c8210bf410874a50`.
+- `pnpm siblings` and `pnpm preflight` (22:37:50Z to 22:37:55Z, exit 0): for `../rosetta-pin`,
+  "at pin 00221b5b70f6 · clean · rosettad · release npm 0.1.6, swift 0.1.6", "@vibefield/rosetta-protocol → 0.1.6"
+  and "@vibefield/rosetta-room → 0.1.6"; "preflight OK (5 warning(s))", none of them rosetta's: four sibling
+  checkouts not at their release revisions, from which nothing builds (puppeteer, truffle, ghosttea, ice), and
+  R23's `acp` candidate. The door held row 4 until the 1-min load after row 3 (30.88) fell below 8; the main
+  checkout's porcelain after, 0.
+- The two QA desktops stayed DOWN until row 4 was green (VF-PM 05:56Z).
+
+## HG-4 — History's first open is the hold in the living mark: the room's waits wear the mark, its first hold carries History's opening, the mark rests on the kit's stills, and the census's baseline names its two moving files (M297)
+
+(2026-11-13; five commits on M296's records `8daecb9c8`, branch `hg/hold-r5` in the hg lane, `lanes/hg/vibe-field`:
+`b399703d0` (red'), `ee51f1dd2` (green), `9f38a5d13` (bind), `32b4fba34` (the rider, item 264's N1 and N2) and
+`5749798c2` (the census's baseline, T, tree `90bc3b3235ca`), with these records over them. Cut by HG (vibe-field-7c,
+then vibe-field-12). Validated at the census commit by run mini-hg4r4b and at T by run mini-hg4r5a, both on the old
+mini; the first, mini-hg4r4a, went red at the census (Found). Lands by the fixer by fast-forward as M297, over
+M296, on VF-PM's LAND GO. On James's words: page 2's "good, go with your lean and start implementation" (2026-11-08
+06:35:59Z), and "i want HG fully land soon", typed at VF-PM's session (2026-11-12 23:19:24Z).
+- **The cuts.**
+  - The first, on `hg/hold` over HG-2's green (`0ebb5879d`), 2026-11-08: `6b654ab03` (red), `7c4fae5e3` (green) and
+    `85e520ab0` (bind), each with its rows in its message. The bind was built and run under the dev overlay (rosetta
+    linked at HG-3's `196b19c0d`), since its type rode rosetta-room 0.1.6.
+  - hold-r3, on the EL8's first commit `31abf8792`, and hold-r4, on its tip `ea26b0464`. The red was re-cut as red':
+    its one hunk in head.test.tsx dropped whole, since main's FL-2b `b62e3842a` deleted the block it edited (VF-PM,
+    2026-11-12 23:23:37Z). Item 264's two held nits joined as the rider (VF-PM, 2026-11-09 02:22Z).
+  - The census commit `e2c80f296`, on hold-r4's tip `cf8be3d3f`: the census's own `--update` in run mini-hg4r4b on
+    the old mini (VF-PM 07:57:12Z), with HG's message filled there by `msg-fill.mjs`.
+  - hold-r5, this landing: the five carried onto `8daecb9c8` by `carry-hg4.sh` (`7a13d5039bfc781f`), plumbing alone,
+    once, at 10:02:41Z on VF-PM's GO (10:02:14Z). Per commit, a `merge-tree --write-tree` replay and `commit-tree`,
+    the author, its date and the message kept byte for byte. Each -U0 patch-id is its source's (`6f0204afd262`,
+    `250f0a5ea54b`, `a1f1173203d0`, `63bd89b5744c` and `808ca18a38e7`), and T's tree is `e2c80f296`'s but for the
+    three docs, which are `8daecb9c8`'s.)
+
+**Why.** Page 2, *The Mark Holds* (`9ByDzaNGQaijgSHW6GrZUb`), answered History's waits (LANDED "HG-1 + HG-2", Why),
+and James ruled it in words: "good, go with your lean and start implementation" (2026-11-08 06:35:59.291Z), every
+mark at its lean (DECISIONS "HG-D1…HG-D6 · HG-W1…HG-W5 · HG-L1"). Its law landed with HG-1 (DESIGN.md §6 and §8,
+M235). Its upstream half is HG-3, rosetta's `waitMark` (#48, RO-40), on James's words "merge #48 first", typed at
+VF-PM's session (2026-11-12 23:17:43Z); rosetta 0.1.6 released it (M296). HG-4 is VibeField's half: History's
+opening face changes together with the room's own hold, never alone (the lead's reading under the word, DECISIONS).
+
+**What moved.** 19 files, +695 −83 over `8daecb9c8`, 4 of them added. No pin, lock, fieldd, contracts, Rust or docs
+path; pin-class and release-class 0.
+- design-kit: the two stills, `living-mark-dark-rest.svg` and `living-mark-light-rest.svg` (new, 3,814 and 3,815 B),
+  and `LivingMark.tsx`'s `resting` with `LIVING_MARK_REST_URL`.
+- tooling/splash/living-mark.mjs: `svgFor(ground, resting)`. The generator writes each ground's still beside its
+  moving file; the moving files are unchanged byte for byte, and `--check` holds all four.
+- field-app: `history/history-mark.tsx` (new); `HistoryOpening.tsx`, `HistoryRoomView.tsx`, `room-chunk.tsx` and
+  `history-room-view.css`; the catalog's History plate (`HistorySection.tsx`).
+- electron-shell's harness: `src/testing/smoke-catalog.ts` and its test (the rider).
+- Tests: `history-mark.test.tsx` (new, 7); living-mark 8 → 10; history-chunk, history-chunk-loader, history-view and
+  design-system amended.
+- The census's baseline, `apps/desktop/packaging/package-manifest.json` (+47 −38): the range's one release-adjacent
+  file, generated on the mini (Found).
+
+**What is real.**
+- **History's first open is a hold** (HG-W1; DESIGN.md §8 "History", its first open). Until the room's chunk lands,
+  `HistoryOpeningState` stands the living mark at the centre of the room's own box (from the head band's hairline to
+  the reserve, rows `1fr | 44 | 1fr`), "Opening History…" 26 under it (14px, t2) and its sub 17 under that (12px,
+  t3). The kit's empty state and the history glyph are gone. The words come late as before, after 120 ms (180 ms
+  `ease`), and the mark with them over 400 ms. Under reduced motion it takes the room's M6 floor.
+- **The mark on the theme's ground.** `HistoryMark` draws both grounds, and the theme's class shows one: `light` by
+  day, `dark` by night. It is decoration. The catalog sets that class itself, so it draws what the product does.
+- **The mark rests while its work does** (HG-L1, HG-W4). Each ground has a still: its moving file with the keyframes,
+  the animations and the media query that stops them taken out, the pose it stands in under reduced motion.
+  `LivingMark resting` draws it. The stills are under Vite's 4 KiB limit and inline as data URLs, which the
+  renderer's CSP admits.
+- **The bind: the room's waits wear the mark** (HG-W1, HG-W2, HG-W4; rosetta-room 0.1.6's `waitMark`, R10). The room
+  is handed `waitMark={historyWaitMark(carriesOpening(…))}`, the mark at 99 in a hold and 40 on the import card. Its
+  first hold carries History's opening only once the opening has begun to show, past its 120 ms late (a carried hold
+  keeps its 800 ms floor), so at the handover the mark stands on and only the words change. A feed that closed keeps
+  the room's face. `RoomWaitMark` and `RoomWaitPlace` are rosetta-room's, imported as types only; the chunk wall
+  exempts `import type`, so the module stays the canvas's.
+- **The rider, item 264's two held nits** (LANDED "Item 264", "Nits, held"; VF-PM 2026-11-09 02:22Z). N1: a face
+  walked again says "; a capture of it failed: X", true of either attempt. N2: the Text ramp's capture is bracketed
+  from `ramp()`'s own read of its top, as a face's is.
+- **The census's baseline** names the two files the History chunk now emits, `living-mark-dark-[hash].svg` (19,868 B)
+  and `living-mark-light-[hash].svg` (19,869 B), each byte-equal to the kit's moving file. It gives packages/fieldd's
+  `dist/agent-forwarder.cjs` row its bytes (4,104 B). Totals 121 → 124 files, 43,750,442 → 44,108,773 B.
+
+**Found.**
+- **The census's two moving files: my miss** (VF-PM 08:03:59Z: "the miss yours").
+  - At 07:28Z I told VF-PM the census would hold at "122 files across 8 packages", and the -r4 brief said no built
+    file is added, because the two stills inline under Vite's 4 KiB limit.
+  - Run mini-hg4r4a (07:48:06Z to 07:50:59Z, `.done` `7f20e20fd970978b`, results `lanes/ts6/hg4r4-a9-results/`) ran
+    HG-4's twelve rows GREEN, and V went RED at the census, STOP 36: "[122 files across 8 packages] -> [124 files
+    across 8 packages]", "present but UNEXPECTED (2)": `living-mark-dark-[hash].svg` and
+    `living-mark-light-[hash].svg`.
+  - The cause: `history-mark.tsx` is the first product importer of the kit's `./living-mark` entry (at `ea26b0464`
+    nothing imports it), and `LivingMark.tsx` names both grounds' MOVING files by `new URL(…, import.meta.url)`. Each
+    is over the limit, so the History chunk emits it. The green's own message says "its two moving files served and
+    its stills inline"; I read the stills and not the files beside them.
+  - M235's ruling already names this slice's class: `history-mark.tsx` is a new module in field-app, so the census
+    assert is one of its door rows. The -r4 brief predicted the census instead of reading it in a row of its own, and
+    V was the first to read it.
+  - The answer: two more shipped files are right (VF-PM 07:57:12Z). The baseline names them in a commit of its own,
+    made by the census's `--update` on the mini and never by hand. The -r4 brief's errata are at its source (07:28Z
+    and 07:57Z).
+- **Item 203's census row and totals** (VF-PM 08:03:59Z, verified at `cf8be3d3f`). `c2462d046` wrote packages/fieldd's
+  `dist/agent-forwarder.cjs` row by hand as `{"count": 1}`, with no `bytes`, and left `totals.files` at 121 while the
+  census counted 122. Its deviation (a) says "The first `--update` on a release build records it". This was that
+  `--update`: the row gains its bytes, and the totals go 121 → 124 (+1 for the forwarder, +2 for the marks). VF-PM
+  ruled it named in the census commit's own bullet, not split. Found by testing `census-step-check.mjs` on synthetic
+  input before the run.
+- **The runner's kept-ref lists** (qa-01, via VF-PM after 10:01Z). mini-hg4r4b's `.done` flagged "the kept refs
+  MOVED": the arm's 38 and the end's 39 differ by the run's own new ref, `hg/hold-r4-census`, alone. Neither list
+  named the base's kept ref, `hg/hold-r4-runhg4`, because a line inherited from mini-hg4r4a filtered it. qa-01's next
+  cut filters the run's new ref and lists the base.
+- **My slip in the carry's print.** `carry-hg4.sh`'s summary line printed the mini's bundle as requiring T beside
+  `ea26b0464`; its verify file says `ea26b0464` alone. A print, and nothing was written from it. The kept copy reads
+  the "requires" lines alone, with a dated comment (VF-PM 10:04:49Z).
+
+**The witnesses.**
+- The first cut's rows on this Mac (2026-11-08, through the HOLD door, nice 19, swap 0), in each commit's message.
+- **mini-hg4r4a at `cf8be3d3f`, red** (Found): its twelve rows green, V red at the census.
+- **mini-hg4r4b at `cf8be3d3f`, then at `e2c80f296`, green** (09:34:24Z to 09:42:26Z, `.done` `abc764f0fb381606`,
+  all 20 rows; results `lanes/ts6/hg4r4b-a9-results/`; brief -r5 `f6046eca…`):
+  - Step M: bundle:assert rc 0; census:assert rc 1, "0 missing / 2 unexpected / 0 miscounted", the two marks alone;
+    `--update`, "124 files, 44,108,773 bytes"; `census-step-check.mjs` PASS, 28 rows' bytes moved and the two emitted
+    files byte-equal to the kit's; `--assert --strict` "no drift"; biome on the manifest clean; the commit through
+    the repository's hook. The bundle back: 2,615 B, sha256 `d945505b68b736f2…`, ONE ref, requiring `cf8be3d3f`
+    alone.
+  - R, at `e2c80f296`: LM; B (18 files); tsc for field-app, design-kit and electron-shell; history-mark 7,
+    living-mark 10, history-chunk 1, history-chunk-loader 6, history-view 28, design-system 7; smoke-catalog 22.
+  - V: `pnpm verify` exit 0 (383 s). Against part (B)'s V at `ea26b0464`, 9 checks ok, the brief's moves and no
+    other: field-app 339 files and 4709 tests (+1 and +9), biome "Checked 3575 files" (+2), "270 of 1163 test files
+    make a temp root", the census "TOTAL 124 files across 8 packages" with "no §7.3 violation". Its reads are kept as
+    the v-base at `e2c80f296` (SHA256SUMS `9f88b0cf9298b753`).
+- **mini-hg4r5a at T, green** (12:07:11Z to 12:15:44Z, all 16 rows, `.done` `98d6d8bbaf1f2b29`; brief -r6 `06093bfd…`;
+  results `lanes/ts6/hg4r5-a9-results/`):
+  - P0 and PT: T's tree `90bc3b3235ca`; against `e2c80f296`, the three docs alone. MB and MS: bundle:assert rc 0,
+    and census:assert rc 0, "TOTAL 124 files across 8 packages", no drift.
+  - R: the twelve, each as mini-hg4r4b's.
+  - V: `pnpm verify` exit 0 (387 s). So no stage of verify reads the three docs, as VF-PM wanted it shown
+    (10:02:14Z). Against the v-base at `e2c80f296`:
+    set-equal, no move: 10 checks ok and 0 off. Each equal: field-app's 339 files and 4709 tests, electron-shell's 189
+    and 2887, biome's "Checked 3575 files", "270 of 1163 test files make a temp root", the census's three lines
+    whole ("TOTAL 124 files across 8 packages", "no §7.3 violation"), the bundle assert's line, the per-file table
+    (1011 files), the cargo table (38 lines), dev-runner's 483 of 483 and preflight's one warning; gen:check's line
+    once, and porcelain 0 after V. Byte for byte, two reads differ and no other: count-lines.txt holds the same 54
+    lines in another order (parallel tasks), equal when sorted, and biome.txt differs in biome's own time alone. The
+    reads are kept as the v-base at `5749798c2` (SHA256SUMS `f77343c889432d3c`, 12 of 12 OK), on the mini and in
+    the results.
+  - The host: the old mini, macOS 26.7.2 (25G332), node v26.5.0, pnpm 11.13.1; Xcode 27.2 (27B52), as qa-01 read it
+    from Xcode's version.plist at 12:05:15Z, and no Xcode tool ran. No fetch-class line in any row or in V, and no URL
+    host but the known three (nx.dev, react.dev, rolldown.rs). After it the lane was back at its HEAD with porcelain
+    0; rosetta-pin, the kept dirs and the 40 kept refs were as at the arm, the one ref the run wrote `hg/hold-r5`;
+    births left 0; the Keychains' 8 name lines unmoved. The results: 60 files, 924 KiB, with rows/ (17 files) and
+    v-base/, and no bundle back.
+
+**Owed.**
+- The Electron witnesses: `smoke:godview`'s History rung (item 263's) and the catalog walk for N1 and N2, with James's
+  stills from the walk on his board; and `gate:landing`, landing-only. On James's Mac mini at his unlock
+  (j-table-next; VF-PM 03:27Z).
+- James's eye on the built hold: the opening, the handover into the room's hold, and the mark at rest, by day and by
+  night.
+- Item 379 (HG's), and the phone's `AppReviewTests.swift` comment-only follow-up (LANDED "EL8 — Rosetta 0.1.6", Owed).
+
+**Not done, and not claimed:** no smoke, no app run and no Electron row for these commits; nothing pushed.
