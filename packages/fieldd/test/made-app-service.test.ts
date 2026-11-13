@@ -38,6 +38,7 @@ import {
 import { createNoopLogger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { type ArtifactServeBridge, canonicalJson } from "../src/artifact-service";
+import { MadeAppKeptIntents, madeAppKeptKey } from "../src/made-app-intents";
 import {
   canonicalMadeAppServingConfig,
   canonicalMadePreviewsServingConfig,
@@ -62,6 +63,7 @@ import {
 } from "../src/made-app-service";
 import type { ObservedServe, ServeSpec, ServeState } from "../src/mesh-client";
 import { RpcCallError } from "../src/native-link";
+import { SettingsDocService } from "../src/settings-doc";
 import { serveAllowGlob } from "../src/terminal-serve";
 import type { BuildMadeViewArgs } from "../src/workspace/protocol";
 import { TEST_LOGIN } from "./link-fixture";
@@ -1876,6 +1878,34 @@ describe("MadeAppService (MA-3b unit)", () => {
       },
       "read: the kept app stays up, the two overdue ones close",
     ).toEqual({ states: ["open", "closed", "closed"], live: [true, false, false] });
+    expect(q.timers.delays(), "a kept app arms no idle close").toEqual([]);
+  });
+
+  // MA-3h — Keep, the short path (James, 2026-11-13): the real reader over a settings document, read at
+  // open, so a kept app is known before the service's first idle-close pass (A6 for Keep).
+  it("MA-3h — a kept app overdue at start is not closed, over the real reader on a settings document", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const first = made(p);
+    await first.start();
+    await first.open({ appId: row.appId });
+    await first.dispose();
+
+    const settings = new SettingsDocService({ dataDir: p.dataDir });
+    cleanup.push(() => settings.dispose());
+    await settings.setKept(madeAppKeptKey(madeAppFoldKey(row)), true, p.clock.now, "test");
+    const intents = await MadeAppKeptIntents.open(settings);
+    cleanup.push(() => intents.dispose());
+    p.clock.now += 3 * MADE_APP_LIMITS.IDLE_CLOSE_MS;
+
+    const bridge = new FakeBridge();
+    bridge.native = new Map(p.bridge.native);
+    const q = parts({ dataDir: p.dataDir, clock: p.clock, bridge, rows: p.rows });
+    const second = made(q, { intents });
+    await second.start();
+    await second.settled();
+    expect(recordOf(q, row.appId)?.state, "kept: it stays up").toBe("open");
+    expect(appSpecOf(bridge, row.appId), "and stays declared").toBeDefined();
     expect(q.timers.delays(), "a kept app arms no idle close").toEqual([]);
   });
 

@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SETTINGS_DOC_SECTIONS, standingDecision } from "@vibefield/contracts";
+import { MADE_APP_LIMITS, SETTINGS_DOC_SECTIONS, standingDecision } from "@vibefield/contracts";
 import { LoroDoc } from "loro-crdt";
 import { afterEach, describe, expect, it } from "vitest";
 import { type RefusalAct, SettingsDocService } from "../src/settings-doc";
@@ -536,5 +536,90 @@ describe("406 — the refusals' one writer, and its callers", () => {
       'daemon.ts: device.remove ("remove")',
       'device-service.ts: refreshPeers ("append")',
     ]);
+  });
+});
+
+// MA-3h — Keep, the short path (James, 2026-11-13 01:29:54Z): a kept app is one key of the root map
+// `madeApps.kept`, the fold key's sha256 → the writer's clock. The fold key itself is never stored.
+describe("MA-3h — the kept apps in the settings doc", () => {
+  const keyOf = (n: number): string => n.toString(16).padStart(64, "0");
+  const KEY = keyOf(1);
+  const keptOf = async (svc: SettingsDocService) => Object.fromEntries(await svc.keptApps());
+
+  it("keeps an app by its key, persisted; keeping it again changes nothing; stopping deletes it", async () => {
+    const dataDir = tempDataDir();
+    const a = make(dataDir);
+    expect(await a.setKept(KEY, true, 1_000, "test")).toBe("written");
+    expect(await a.setKept(KEY, true, 2_000, "test")).toBe("unchanged");
+    expect(await keptOf(a)).toEqual({ [KEY]: 1_000 });
+    await a.dispose();
+
+    const b = make(dataDir);
+    expect(await keptOf(b), "it reloads in a fresh instance").toEqual({ [KEY]: 1_000 });
+    expect(await b.setKept(KEY, false, 3_000, "test")).toBe("written");
+    expect(await keptOf(b)).toEqual({});
+    expect(await b.setKept(KEY, false, 4_000, "test")).toBe("unchanged");
+  });
+
+  it("undo never stops keeping an app: a keep is outside the undo stack, as the install-set is", async () => {
+    const svc = make(tempDataDir());
+    await svc.setAppValue("theme", "dark", "pane");
+    await svc.setKept(KEY, true, 1_000, "apps");
+    expect(await svc.undo()).toEqual({ applied: true });
+    expect(await svc.appValues(), "the app value is undone").toEqual({});
+    expect(await keptOf(svc), "the keep stands").toEqual({ [KEY]: 1_000 });
+  });
+
+  it("a new key past MADE_APP_LIMITS.INTENTS writes nothing; a held key and a stop still pass", async () => {
+    const svc = make(tempDataDir());
+    await svc.ready();
+    const kept = svc.hostDoc().getMap(SETTINGS_DOC_SECTIONS.MADE_APPS_KEPT);
+    for (let n = 0; n < MADE_APP_LIMITS.INTENTS; n += 1) kept.set(keyOf(n), 1);
+    svc.hostDoc().commit();
+    expect(await svc.setKept(keyOf(MADE_APP_LIMITS.INTENTS), true, 2, "apps")).toBe("full");
+    expect(kept.keys()).toHaveLength(MADE_APP_LIMITS.INTENTS);
+    expect(await svc.setKept(keyOf(0), true, 3, "apps")).toBe("unchanged");
+    expect(await svc.setKept(keyOf(1), false, 4, "apps")).toBe("written");
+    expect(await svc.setKept(keyOf(MADE_APP_LIMITS.INTENTS), true, 5, "apps")).toBe("written");
+  });
+
+  it("the host's merge announces madeApps, and the merged keep reads back", async () => {
+    const a = make(tempDataDir());
+    const b = make(tempDataDir());
+    await a.setKept(KEY, true, 1_000, "apps");
+    await b.ready();
+    const sections: string[] = [];
+    b.on("changed", (event: { section: string }) => sections.push(event.section));
+    b.hostDoc().import(a.hostDoc().export({ mode: "update" }));
+    b.hostOwner().merged();
+    expect(sections).toContain("madeApps");
+    expect(await keptOf(b)).toEqual({ [KEY]: 1_000 });
+  });
+
+  it("A3: two desktops merge to ONE answer, by the document's order and never by the clock", async () => {
+    // B saw A's keep and stopped it with a clock that runs behind A's: the later write in the
+    // document's order wins on both
+    const a = make(tempDataDir());
+    const b = make(tempDataDir());
+    await a.setKept(KEY, true, 2_000, "apps");
+    await b.ready();
+    b.hostDoc().import(a.hostDoc().export({ mode: "update" }));
+    expect(await b.setKept(KEY, false, 1_000, "apps")).toBe("written");
+    a.hostDoc().import(b.hostDoc().export({ mode: "update" }));
+    expect(await keptOf(a), "A").toEqual({});
+    expect(await keptOf(b), "B").toEqual({});
+    // two keeps neither saw, with different clocks: either import order gives both one value
+    for (const order of ["C first", "D first"] as const) {
+      const c = make(tempDataDir());
+      const d = make(tempDataDir());
+      await c.setKept(KEY, true, 5_000, "apps");
+      await d.setKept(KEY, true, 1_000, "apps");
+      const x = order === "C first" ? c : d;
+      const y = order === "C first" ? d : c;
+      y.hostDoc().import(x.hostDoc().export({ mode: "update" }));
+      x.hostDoc().import(y.hostDoc().export({ mode: "update" }));
+      expect(await keptOf(c), order).toEqual(await keptOf(d));
+      expect(Object.keys(await keptOf(c)), order).toEqual([KEY]);
+    }
   });
 });

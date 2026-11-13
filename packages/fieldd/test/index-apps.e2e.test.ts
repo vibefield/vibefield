@@ -50,6 +50,7 @@ import {
   madeAppFoldKey,
   type PlaceFacts,
   type Scope,
+  SETTINGS_DOC_SECTIONS,
   SHELL_PROVIDER_METHODS,
   ShellProviderCallParams,
   SOCKETS,
@@ -621,7 +622,7 @@ describe("MA-3e — the made apps across two real daemons", () => {
     });
   }, 120_000);
 
-  it("B's artifact.open {device: A} reaches A's rosetta export door and answers A's serve, audited on A as the act of B's window; artifact.mark is the home's and says intent-unbuilt until slice 3h", async () => {
+  it("B's artifact.open {device: A} reaches A's rosetta export door and answers A's serve, audited on A as the act of B's window; artifact.mark is the home's: B keeps A's app, audited on B by the fold key's digest", async () => {
     const { A, B } = await bootPair(
       { a: SCRIPT_A, b: SCRIPT_B },
       { aMadeApps: { view: madeView } },
@@ -664,18 +665,43 @@ describe("MA-3e — the made apps across two real daemons", () => {
     expect(local.ok, "A's own open answers").toBe(true);
     expect(exportsOf(A)).toHaveLength(1);
 
-    // keep is the person's intent, the home's to write (slice 3h): until then, said in words
+    // keep is the person's intent, the home's to write (slice 3h, the short path: a row of the settings
+    // document, keyed by the fold key's sha256)
     const foldKey = madeAppFoldKey({ device: "dev-a", appId, kind: "claude-code" });
+    const digest = createHash("sha256").update(foldKey, "utf8").digest("hex");
     const marked = await win.attempt("artifact.mark", { foldKey, kept: true });
-    expect(marked.ok, "nothing is kept before slice 3h writes the intent").toBe(false);
-    if (!marked.ok) {
-      expect(marked.error.data?.kind).toBe("UNAVAILABLE");
-      expect(marked.error.data?.retryable).toBe(false);
-      expect(marked.error.data?.details).toEqual({
-        service: MADE_APP_OPEN.SERVICE,
-        state: MADE_APP_OPEN.STATE_INTENT_UNBUILT,
+    expect(marked, "B keeps it").toEqual({
+      ok: true,
+      result: { foldKey, kept: true, hidden: false },
+    });
+    const keptRows = await win.attempt("index.apps.list", { scope: "mesh", kept: true });
+    expect(
+      keptRows.ok ? IndexAppsResult.parse(keptRows.result).rows.map((row) => row.foldKey) : [],
+      "B's fold says kept, and kept narrows to it",
+    ).toEqual([foldKey]);
+    const unmarked = await win.attempt("artifact.mark", { foldKey, kept: false });
+    expect(unmarked, "B stops keeping it").toEqual({
+      ok: true,
+      result: { foldKey, kept: false, hidden: false },
+    });
+    // ONE action, its attrs saying which (api.html's `artifact.made.mark`)
+    const marksOf = async (desk: Desk) =>
+      (await auditRecords(desk.daemon)).filter((record) => record.action === "artifact.made.mark");
+    const marks = await marksOf(B);
+    const rows = marks.map((record) => [record.phase, record.outcome ?? null, record.attrs?.kept]);
+    expect(rows).toEqual([
+      ["attempt", null, true],
+      ["outcome", "succeeded", true],
+      ["attempt", null, false],
+      ["outcome", "succeeded", false],
+    ]);
+    for (const record of marks) {
+      expect(record.target, "the fold key's digest, never the key").toEqual({
+        kind: "made-app",
+        id: digest,
       });
     }
+    expect(await marksOf(A), "the home writes the mark: A audits none").toEqual([]);
     // PIN (the D36 wall holds it on the skeleton too): the mark is `local`, never routed
     const routed = await win.attempt("artifact.mark", { foldKey, kept: true, device: "dev-a" });
     expect(routed.ok, "a device never routes the mark").toBe(false);
@@ -683,6 +709,59 @@ describe("MA-3e — the made apps across two real daemons", () => {
       expect(routed.error.data?.kind).toBe("PRECONDITION_FAILED");
       expect(routed.error.data?.details).toEqual({ method: "artifact.mark", locality: "local" });
     }
+  }, 120_000);
+
+  it("MA-3h: at MADE_APP_LIMITS.INTENTS a new keep is refused before its audit (RESOURCE_EXHAUSTED, not retryable), so it writes nothing and audits nothing; stopping is never refused", async () => {
+    const { B } = await bootPair({ a: SCRIPT_A, b: SCRIPT_B });
+    const win = await windowOn(B);
+    // B's settings document holds one kept app fewer than VibeField holds
+    const settings = B.daemon.settingsDoc;
+    const kept = settings.hostDoc().getMap(SETTINGS_DOC_SECTIONS.MADE_APPS_KEPT);
+    for (let n = 0; n < MADE_APP_LIMITS.INTENTS - 1; n += 1) {
+      kept.set(n.toString(16).padStart(64, "0"), 1);
+    }
+    settings.hostDoc().commit();
+    settings.hostOwner().merged();
+    const one = madeAppFoldKey({ device: "dev-a", appId: appIdOf("one"), kind: "claude-code" });
+    const bee = madeAppFoldKey({ device: "dev-b", appId: appIdOf("bee"), kind: "claude-code" });
+    const mark = (foldKey: string, keep: boolean) =>
+      win.attempt("artifact.mark", { foldKey, kept: keep });
+    const marks = async () =>
+      (await auditRecords(B.daemon))
+        .filter((record) => record.action === "artifact.made.mark")
+        .map((record) => [record.phase, record.attrs?.kept]);
+
+    expect(await mark(one, true), "the last one under the bound").toEqual({
+      ok: true,
+      result: { foldKey: one, kept: true, hidden: false },
+    });
+    const refused = await mark(bee, true);
+    expect(refused.ok, "past the bound").toBe(false);
+    if (!refused.ok) {
+      expect(refused.error.data?.kind).toBe("RESOURCE_EXHAUSTED");
+      expect(refused.error.data?.retryable).toBe(false);
+    }
+    expect(kept.keys(), "nothing written").toHaveLength(MADE_APP_LIMITS.INTENTS);
+    expect(await marks(), "a refusal with no effect audits nothing").toEqual([
+      ["attempt", true],
+      ["outcome", true],
+    ]);
+    expect(await mark(one, false), "stopping at the bound").toEqual({
+      ok: true,
+      result: { foldKey: one, kept: false, hidden: false },
+    });
+    expect(await mark(bee, true), "under the bound again").toEqual({
+      ok: true,
+      result: { foldKey: bee, kept: true, hidden: false },
+    });
+    expect(await marks()).toEqual([
+      ["attempt", true],
+      ["outcome", true],
+      ["attempt", false],
+      ["outcome", false],
+      ["attempt", true],
+      ["outcome", true],
+    ]);
   }, 120_000);
 
   it("EL2: the page's bytes never ride B↔A — what the daemons' peer sockets carry while A's app replicates and B lists, opens and reads it stays under the size its row declares, and A's rosettad is never asked for the page", async () => {

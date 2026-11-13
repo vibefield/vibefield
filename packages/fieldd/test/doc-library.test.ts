@@ -12,6 +12,7 @@ import { type DocLibraryEntry, DocRegistryEntry } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DocumentService } from "../src/doc-service";
 import { LibraryDocService, systemAccount, systemDocId } from "../src/library-doc";
+import { MadeAppKeptIntents } from "../src/made-app-intents";
 import { SettingsDocService } from "../src/settings-doc";
 import { Device, Mesh } from "./doc-mesh-harness";
 import { Renderer, replay } from "./loro-renderer";
@@ -315,5 +316,20 @@ describe("two desktops — the library and settings on the host", () => {
     await until(() => sections.includes("app"), "B's listeners to hear of it");
     expect(sections).toContain("installSet");
     expect(await onB.undo()).toEqual({ applied: false, reason: "empty-stack" });
+  });
+
+  // MA-3h — Keep, the short path (James, 2026-11-13): a keep is a row of the settings document, so it
+  // crosses as settings do, to every desktop of the account.
+  it("MA-3h — a Keep on A reads kept on B's reader, and B's stop reaches A", async () => {
+    const { settings } = await pair();
+    const onA = await MadeAppKeptIntents.open(settings[0]);
+    const onB = await MadeAppKeptIntents.open(settings[1]);
+    const foldKey = "native:claude-code:review";
+    await onA.mark(foldKey, true, "test");
+    await until(() => onB.of(foldKey)?.kept === true, "A's keep to reach B");
+    await onB.mark(foldKey, false, "test");
+    await until(() => onA.of(foldKey) === undefined, "B's stop to reach A");
+    onA.dispose();
+    onB.dispose();
   });
 });
