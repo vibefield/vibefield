@@ -13,9 +13,10 @@ import SwiftUI
 /// does; a document a search landed in opens on the landed row instead.
 ///
 /// Item 362g — a recorded picture is drawn where its placeholder stood, when the session is read straight from
-/// its desktop and the picture is held (`pictures`): a square tile, and a press opens it on a sheet of its own,
-/// where it zooms (HistoryPictureView.swift). A picture on its way holds its tile's square; one that does not
-/// arrive, and whatever is no picture, is the placeholder, as it was.
+/// its desktop and the picture is held (`pictures`): a square tile, and a press opens its row's pictures in a
+/// viewer that is the whole screen, where each zooms and a swipe goes to the next (item 384;
+/// HistoryPictureView.swift). A picture on its way holds its tile's square; one that does not arrive, and
+/// whatever is no picture, is the placeholder, as it was.
 ///
 /// SP-6 — over a door: "Earlier" at the top asks the page door for the older
 /// page while the session has one (`document.nextCursor`); rows the tail
@@ -50,8 +51,8 @@ struct HistorySessionView: View {
   @State private var expanded: Set<String> = []
   /// Item 362f — the message whose whole text is open on its own sheet.
   @State private var whole: HistoryWholeMessage?
-  /// Item 362g — the picture that is open on its own sheet.
-  @State private var picture: HistoryWholePicture?
+  /// Item 384 — the row whose pictures are open in the viewer, and the tile that was pressed.
+  @State private var gallery: HistoryGalleryOpen?
   @State private var atEnd = false
   /// Item 362a — whether the document keeps its foot in view, and where it opened.
   @State private var follow: HistoryFollow
@@ -238,16 +239,14 @@ struct HistorySessionView: View {
           .presentationCornerRadius(40)
           .presentationBackground(ChromePalette.paper)
       }
-      // Item 362g — a pressed tile's picture, on the whole message's sheet; opening it asks for the larger size
-      .sheet(item: $picture) { opened in
-        HistoryPictureView(
-          picture: opened, face: pictures[HistoryPictureLayout.key(opened.id, .preview)],
-          need: { onNeed(.picture(device: corpus.deviceId, session: document.id, id: opened.id, size: .preview)) }
-        )
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(40)
-        .presentationBackground(ChromePalette.paper)
+      // Item 384 — a pressed tile's row, in a viewer that is the whole screen and never a card; the viewer asks
+      // for the larger size of the picture it shows and of the one on each side of it
+      .fullScreenCover(item: $gallery) { opened in
+        HistoryGalleryView(
+          open: opened, pictures: pictures,
+          need: { id, size in
+            onNeed(.picture(device: corpus.deviceId, session: document.id, id: id, size: size))
+          })
       }
       .onAppear { onNeed(.session(device: corpus.deviceId, id: document.id)) }
       .onChange(of: litAnchor, initial: true) { _, anchor in
@@ -568,14 +567,14 @@ struct HistorySessionView: View {
   /// held, the tile's square while it is on its way, and otherwise the placeholder the document always drew
   /// (`HistoryPictureStrip`, HistoryPictureView.swift, where the placeholder's line now lives as
   /// `HistoryPlaceholderLine`). A cell that comes on screen asks for its picture; a press on a tile opens the
-  /// picture on its sheet.
+  /// row's pictures in the viewer, on the one pressed (item 384).
   private func pictureStrip(_ attached: [HistoryAttached]) -> some View {
     HistoryPictureStrip(
       attached: attached, pictures: pictures,
       need: { id in onNeed(.picture(device: corpus.deviceId, session: document.id, id: id, size: .tile)) },
       open: { one, tile in
         guard let id = one.picture else { return }
-        picture = HistoryWholePicture(id: id, words: one.words, desktop: corpus.desktop, tile: tile)
+        gallery = HistoryGalleryOpen(id: id, attached: attached, desktop: corpus.desktop, tile: tile)
       })
   }
 

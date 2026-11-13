@@ -4,8 +4,9 @@ import UIKit
 
 // Item 362g (James's board pick, 2026-11-12 20:43Z: "images through a rosetta release"; VF-PM's rulings,
 // 2026-11-13 00:24Z) — A RECORDED PICTURE, DRAWN. Where the document drew a placeholder for everything attached
-// (`image shot.png on studio`), a picture the session's reader holds is drawn: a square tile in the row, and the
-// picture at its full width on a sheet of its own when the tile is pressed, where a pinch zooms it. A reader
+// (`image shot.png on studio`), a picture the session's reader holds is drawn: a square tile in the row, and,
+// when the tile is pressed, the row's pictures in a viewer that is the whole screen, where a pinch zooms one and
+// a swipe goes to the next (item 384, at the foot of this file; before it, one picture on a sheet). A reader
 // holds pictures only for a session read straight from its desktop. Everywhere else, and for whatever is no
 // picture, the placeholder stands as it always did; nothing on screen names the way a document is read.
 //
@@ -17,7 +18,7 @@ import UIKit
 // across (the rule a tool line's diff follows).
 //
 // A picture's bytes are held by the reader, in memory and under a bound, and never by the document. What is read
-// from them to draw is kept only in a view's state, so a tile that leaves the page, and a sheet that closes, let
+// from them to draw is kept only in a view's state, so a tile that leaves the page, and a viewer that closes, let
 // their picture go. A recorded picture is the adversary's as every recorded thing is (EL7): it is read by the
 // system's decoder into pixels, and nothing here opens anything.
 // DESIGN.md §8 "The phone's session document" (item 362g).
@@ -229,176 +230,413 @@ struct HistoryPictureGlyph: View {
   }
 }
 
-// MARK: - The picture, on a sheet of its own
+// MARK: - The row's pictures, in a viewer that is the whole screen (item 384)
 
-/// The picture a sheet was opened for.
-struct HistoryWholePicture: Identifiable {
-  /// The attachment's id in the document, `<timelineId>/<attachmentId>`.
+/// What a viewer was opened for: the row whose tile was pressed, and the tile.
+struct HistoryGalleryOpen: Identifiable {
+  /// The pressed picture's id in the document, `<timelineId>/<attachmentId>`.
   let id: String
-  /// The placeholder's words, `image shot.png on studio`: the sheet's name, and the picture's spoken one.
-  let words: String
-  /// The desktop the session is on, for the line under a picture that did not arrive.
+  /// The row's attachments, in the row's order. The pictures among them are the viewer's
+  /// (`HistoryPictureLayout.gallery`).
+  let attached: [HistoryAttached]
+  /// The desktop the session is on, for the line under a picture that is being read, or did not arrive.
   let desktop: String
-  /// The tile's picture, which stands in until the larger one is read.
+  /// The pressed tile's picture, which stands in on its page at once.
   let tile: UIImage
 }
 
-/// A picture at the sheet's width: the larger size the desktop makes (at most 1,600 pixels on its long side),
-/// asked for when the sheet opens, with the tile's picture standing in until it is read. The sheet is the whole
-/// message's (`HistoryMessageView`): the name, `Done`, a hairline, and the page under it.
+/// Item 384 (James, 2026-11-13 23:05:55Z: "a proper image preview ui that has image in full size that are pannable
+/// and zoomable, and has row of thumbnails of all other images in the same row that can click and navigate, and i
+/// can also swipe left right to navigate images"; 23:06:26Z: "and it should not be a card ui") — a row's pictures
+/// on the whole screen. At its head the name of the picture shown and `Done`; under that the pictures, a page
+/// each, a swipe left or right going from one to the next; and at its foot, when the row holds more than one,
+/// the room's rail (`Images in this row`, `2 / 5`, a thumbnail of each, the one shown ringed), where a press goes
+/// to a picture. It took the place of a sheet that showed one picture at the page's width.
 ///
-/// Once the larger picture is read the page is a scroll view that also zooms (`HistoryPictureScroll`): a pinch
-/// takes the picture from the page's width up to four times that, a double tap goes to twice and back, a zoomed
-/// picture pans, and a picture taller than the sheet scrolls as it did. The stand-in does not zoom: it is the
-/// tile's square crop, and there is nothing more in it to see.
-struct HistoryPictureView: View {
-  let picture: HistoryWholePicture
-  /// The larger picture's face as the reader holds it; nil until it is asked for.
-  let face: HistoryPictureFace?
-  /// Asks for the larger picture.
-  let need: () -> Void
+/// The picture shown and the one on each side of it are asked for at the larger size
+/// (`HistoryPictureLayout.asked`), and only those three pages keep their picture read (`near`). Nothing here
+/// saves, shares or copies a picture.
+struct HistoryGalleryView: View {
+  let open: HistoryGalleryOpen
+  /// This session's pictures as its reader holds them, by `HistoryPictureLayout.key`.
+  let pictures: [String: HistoryPictureFace]
+  /// Asks for a picture at a size, by the attachment's id.
+  let need: (String, HistoryPictureSize) -> Void
 
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// The row's pictures as they stood when the viewer opened. Kept as they were: the reader lets a tile's bytes
+  /// go to make room for the larger pictures this viewer asks for, and a page must not leave under a finger.
+  @State private var members: [HistoryAttached]
+  /// The picture shown, by its id: written by the pager as a swipe lands, and by a press on a thumbnail.
+  @State private var shown: String?
+  /// The pager is at rest. A zoomed picture that was swiped away goes back to fitted only then, when it is off
+  /// the screen, so it does not change size while it is still sliding out.
+  @State private var resting = true
+
+  init(
+    open: HistoryGalleryOpen, pictures: [String: HistoryPictureFace],
+    need: @escaping (String, HistoryPictureSize) -> Void
+  ) {
+    self.open = open
+    self.pictures = pictures
+    self.need = need
+    let row = HistoryPictureLayout.gallery(open.attached, faces: pictures)
+    _members = State(initialValue: row)
+    _shown = State(initialValue: HistoryPictureLayout.opened(open.id, among: row))
+  }
+
+  /// The words of the picture shown: the viewer's name, and what `Done` closes.
+  private var words: String {
+    members.first { $0.id == shown }?.words ?? members.first?.words ?? ""
+  }
+
+  var body: some View {
+    VStack(spacing: 0) {
+      head
+      Rectangle()
+        .fill(ChromePalette.cardHairline)
+        .frame(height: 0.5)
+      pager
+      if members.count > 1 { rail }
+    }
+    .background(ChromePalette.paper.ignoresSafeArea())
+    .onChange(of: shown, initial: true) { _, now in
+      for id in HistoryPictureLayout.asked(around: now, among: members) { need(id, .preview) }
+      // the row's tiles are on screen here too, on the rail and in the document behind: asking for one that is
+      // held counts as a use, so the larger pictures read here do not push this row's tiles out of the reader's
+      // memory, and one that was let go is read again before the viewer closes
+      for one in members { need(one.id, .tile) }
+    }
+  }
+
+  /// The head, the whole message's: the name, one line, and `Done`.
+  private var head: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 8) {
+      Text(verbatim: words)
+        .font(ChromeType.sans(15, .semibold))
+        .foregroundStyle(ChromePalette.ink)
+        .lineLimit(1)
+        .truncationMode(.middle)
+      Spacer(minLength: 8)
+      Button("Done") { dismiss() }
+        .font(ChromeType.sans(15, .medium))
+        .foregroundStyle(ChromePalette.inkSecondary)
+        .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+    }
+    .padding(.leading, 20)
+    .padding(.trailing, 16)
+  }
+
+  /// The pictures, a page each, side by side: a swipe goes to the next or the previous and lands on a page.
+  private var pager: some View {
+    ScrollViewReader { proxy in
+      ScrollView(.horizontal) {
+        LazyHStack(spacing: 0) {
+          ForEach(members) { one in
+            HistoryGalleryPage(
+              attached: one, desktop: open.desktop,
+              tile: pictures[HistoryPictureLayout.key(one.id, .tile)],
+              preview: pictures[HistoryPictureLayout.key(one.id, .preview)],
+              pressed: one.id == open.id ? open.tile : nil,
+              fits: resting && one.id != shown,
+              near: HistoryPictureLayout.near(one.id, to: shown, among: members)
+            )
+            .containerRelativeFrame([.horizontal, .vertical])
+          }
+        }
+        .scrollTargetLayout()
+      }
+      .scrollTargetBehavior(.paging)
+      .scrollPosition(id: $shown)
+      .scrollIndicators(.hidden)
+      .onScrollPhaseChange { _, phase in resting = phase == .idle }
+      .onAppear {
+        // the page of the picture pressed, said to the scroll view itself as well: a lazy row is not relied on
+        // to open where its binding stood before it was laid out
+        if let first = HistoryPictureLayout.opened(open.id, among: members) {
+          proxy.scrollTo(first, anchor: .center)
+        }
+      }
+    }
+  }
+
+  /// The room's rail: its caption and count, and the row's pictures as thumbnails, the one shown kept in view.
+  private var rail: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(spacing: 12) {
+        Text("Images in this row")
+        Spacer(minLength: 0)
+        if let count = HistoryPictureLayout.counter(shown, among: members) {
+          Text(verbatim: count).monospacedDigit()
+        }
+      }
+      .font(ChromeType.sans(10.5))
+      .foregroundStyle(ChromePalette.inkTertiary)
+      .padding(.horizontal, 16)
+      ScrollViewReader { proxy in
+        ScrollView(.horizontal) {
+          HStack(spacing: HistoryPictureLayout.gap) {
+            ForEach(members) { one in
+              HistoryGalleryThumb(
+                attached: one, face: pictures[HistoryPictureLayout.key(one.id, .tile)],
+                pressed: one.id == open.id ? open.tile : nil, isShown: one.id == shown
+              ) {
+                withAnimation(reduceMotion ? nil : FieldMotion.ease(0.3)) { shown = one.id }
+              }
+            }
+          }
+          .padding(.horizontal, 16)
+          // the ring's own room, so a ringed thumbnail is not cut at the rail's edge
+          .padding(.vertical, 2)
+        }
+        .scrollIndicators(.hidden)
+        .onChange(of: shown, initial: true) { _, now in
+          guard let now else { return }
+          withAnimation(reduceMotion ? nil : FieldMotion.ease(0.3)) { proxy.scrollTo(now, anchor: .center) }
+        }
+      }
+    }
+    .padding(.top, 10)
+    .padding(.bottom, 8)
+    .overlay(alignment: .top) {
+      Rectangle()
+        .fill(ChromePalette.cardHairline)
+        .frame(height: 0.5)
+    }
+  }
+}
+
+/// One picture's page in the viewer. The larger size the desktop makes (at most 1,600 pixels on its long side)
+/// is read while the page is shown or beside the one shown, and the tile's picture stands in until it is: the
+/// pressed tile's own at once, on the page the viewer opened on, and on another page its tile's bytes, read
+/// here. With the larger picture read the page zooms and pans (`HistoryPictureScroll`). The stand-in does not
+/// zoom: it is the tile's square crop, and there is nothing more in it to see.
+struct HistoryGalleryPage: View {
+  let attached: HistoryAttached
+  /// The desktop the session is on, for the line under a picture that is being read, or did not arrive.
+  let desktop: String
+  /// The tile's face as the reader holds it; nil where it holds none.
+  let tile: HistoryPictureFace?
+  /// The larger picture's face as the reader holds it; nil until it is asked for.
+  let preview: HistoryPictureFace?
+  /// The pressed tile's own picture, on the page the viewer opened on.
+  let pressed: UIImage?
+  /// The pager rests on another page: this one goes back to fitted.
+  let fits: Bool
+  /// Shown, or beside the one shown: its larger picture is kept read.
+  let near: Bool
+
   @Environment(\.displayScale) private var scale
-  /// How wide the picture is drawn when it is fitted, in points; 0 until the sheet is laid out.
-  @State private var across: CGFloat = 0
-  /// The larger picture, read. View state only: it goes with the sheet.
+  /// The page's size, in points; nothing until it is laid out.
+  @State private var page: CGSize = .zero
+  /// The larger picture, read. View state only: it goes when the page is no longer near, and with the viewer.
   @State private var whole: UIImage?
   /// The bytes that arrived are no picture the phone reads.
   @State private var unreadable = false
+  /// The tile's picture, read from its held bytes, on a page that is not the pressed tile's.
+  @State private var small: UIImage?
 
-  /// The page's margins, the whole message's (`HistoryMessageView`): 20 at the sides, 16 above, 32 below.
-  private static let page = EdgeInsets(top: 16, leading: 20, bottom: 32, trailing: 20)
-
-  /// What is read and to how many pixels: the picture is read again when either changes.
+  /// What is read and to how many pixels, and whether it is kept: the picture is read again when any changes.
   private struct Reading: Equatable {
     let data: Data?
     let across: Int
+    let near: Bool
   }
+
+  private var heldWhole: Data? {
+    if case .held(let data)? = preview { return data }
+    return nil
+  }
+
+  private var heldSmall: Data? {
+    if case .held(let data)? = tile { return data }
+    return nil
+  }
+
+  /// The larger picture did not arrive, or did not read as one: the tile's stays, and the line under it says so.
+  private var failed: Bool { preview == .failed || unreadable }
+
+  /// The pixels the larger picture is read to, across: what its furthest zoom can show. The decode never reads
+  /// more than the picture has (`HistoryPictureLayout.longSide`), and the desktop sends at most 1,600 on the long
+  /// side, so this is the whole of what was sent: at most some 10 MB of pixels a page, for three pages.
+  private var pixels: Int {
+    let across = max(0, page.width - 2 * HistoryPictureLayout.pageMargin)
+    return HistoryPictureLayout.pixels(across * HistoryPictureLayout.zoomMost, scale: scale)
+  }
+
+  var body: some View {
+    ZStack {
+      if let whole {
+        HistoryPictureZoom(picture: whole, words: attached.words, fits: fits)
+      } else {
+        VStack(spacing: 10) {
+          standIn
+          HistoryPictureNote(
+            words: failed ? "full size on \(desktop)" : "Reading from \(desktop)…", waiting: !failed)
+        }
+        .padding(HistoryPictureLayout.pageMargin)
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .onGeometryChange(for: CGSize.self) { $0.size } action: { page = $0 }
+    .task(id: Reading(data: heldWhole, across: pixels, near: near)) { await readWhole() }
+    .task(id: heldSmall) { await readSmall() }
+  }
+
+  /// The tile's picture standing in, inside the tile's corners and hairline; where the reader holds none, the
+  /// tile's own square with the glyph, breathing while the larger picture is on its way.
+  @ViewBuilder
+  private var standIn: some View {
+    let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+    if let picture = pressed ?? small {
+      Image(uiImage: picture)
+        .resizable()
+        .aspectRatio(contentMode: .fit)
+        .clipShape(shape)
+        .overlay { shape.strokeBorder(ChromePalette.cardHairline, lineWidth: 0.5) }
+        .accessibilityLabel(attached.words)
+        .accessibilityAddTraits(.isImage)
+    } else {
+      shape.fill(ChromePalette.fill)
+        .aspectRatio(1, contentMode: .fit)
+        .overlay {
+          HistoryPictureGlyph(size: 12, waiting: !failed)
+            .foregroundStyle(ChromePalette.inkFaint)
+        }
+        .overlay { shape.strokeBorder(ChromePalette.cardHairline, lineWidth: 0.5) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(attached.words)
+    }
+  }
+
+  /// Reads the held bytes to the pixels the picture's furthest zoom shows, off the main actor, while the page is
+  /// near. A page further off lets its pixels go: the reader still holds its bytes, under its bound. With no
+  /// bytes held it keeps what it read: a picture the reader let go while its page is up stays on the page.
+  private func readWhole() async {
+    guard near else {
+      whole = nil
+      unreadable = false
+      return
+    }
+    guard let data = heldWhole, page.width > 0 else { return }
+    let image = await HistoryPictureDecode.image(data, across: pixels)
+    guard !Task.isCancelled else { return }
+    whole = image
+    unreadable = image == nil
+  }
+
+  /// Reads the tile's bytes at the size a tile is drawn, for the stand-in, where the pressed tile's own picture
+  /// is not this page's.
+  private func readSmall() async {
+    guard pressed == nil, let data = heldSmall else { return }
+    let across = HistoryPictureLayout.pixels(HistoryPictureLayout.tile, scale: scale)
+    let image = await HistoryPictureDecode.image(data, across: across)
+    guard !Task.isCancelled else { return }
+    small = image
+  }
+}
+
+/// One picture on the viewer's rail: its tile's picture whole inside a square on the fill, the room's thumbnail.
+/// The one shown is ringed in the ink, 1.5 pt inside (§2.3's ring; the phone's chrome carries no select hue).
+struct HistoryGalleryThumb: View {
+  let attached: HistoryAttached
+  /// The tile's face as the reader holds it; nil where it holds none.
+  let face: HistoryPictureFace?
+  /// The pressed tile's own picture, on the thumbnail of the picture the viewer opened on.
+  let pressed: UIImage?
+  let isShown: Bool
+  let press: () -> Void
+
+  @Environment(\.displayScale) private var scale
+  /// The tile's bytes, read at the thumbnail's size. View state only.
+  @State private var picture: UIImage?
 
   private var held: Data? {
     if case .held(let data)? = face { return data }
     return nil
   }
 
-  /// The larger picture did not arrive, or did not read as one: the tile's stays, and the line under it says so.
-  private var failed: Bool { face == .failed || unreadable }
-
-  /// The pixels the larger picture is read to, across: what its furthest zoom can show. The decode never reads
-  /// more than the picture has (`HistoryPictureLayout.longSide`), and the desktop sends at most 1,600 on the long
-  /// side, so this is the whole of what was sent: at most some 10 MB of pixels, for the one picture, while its
-  /// sheet is open.
-  private var pixels: Int {
-    HistoryPictureLayout.pixels(across * HistoryPictureLayout.zoomMost, scale: scale)
-  }
-
   var body: some View {
-    VStack(spacing: 0) {
-      HStack(alignment: .firstTextBaseline, spacing: 8) {
-        Text(verbatim: picture.words)
-          .font(ChromeType.sans(15, .semibold))
-          .foregroundStyle(ChromePalette.ink)
-          .lineLimit(1)
-          .truncationMode(.middle)
-        Spacer(minLength: 8)
-        Button("Done") { dismiss() }
-          .font(ChromeType.sans(15, .medium))
-          .foregroundStyle(ChromePalette.inkSecondary)
-          .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
-      }
-      .padding(.leading, 20)
-      .padding(.trailing, 16)
-      .padding(.top, 14)
-      Rectangle()
-        .fill(ChromePalette.cardHairline)
-        .frame(height: 0.5)
-      if let whole {
-        // the larger picture: its page scrolls as the stand-in's does, and zooms
-        HistoryPictureZoom(picture: whole, words: picture.words, margins: Self.page)
-          .ignoresSafeArea(edges: .bottom)
-      } else {
-        ScrollView {
-          VStack(alignment: .leading, spacing: 10) {
-            standIn
-            HistoryPictureNote(
-              words: failed ? "full size on \(picture.desktop)" : "Reading from \(picture.desktop)…",
-              waiting: !failed)
-          }
-          .padding(Self.page)
-          .frame(maxWidth: .infinity, alignment: .leading)
+    let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+    Button(action: press) {
+      ZStack {
+        if let picture = pressed ?? picture {
+          Image(uiImage: picture)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .padding(HistoryPictureLayout.thumbInset)
+        } else {
+          HistoryPictureGlyph(size: 12, waiting: face == .waiting)
+            .foregroundStyle(ChromePalette.inkFaint)
         }
       }
+      .frame(width: HistoryPictureLayout.thumb, height: HistoryPictureLayout.thumb)
+      .background(shape.fill(ChromePalette.fill))
+      .overlay {
+        shape.strokeBorder(
+          isShown ? ChromePalette.ink : ChromePalette.cardHairline, lineWidth: isShown ? 1.5 : 0.5)
+      }
+      .contentShape(shape)
     }
-    // the sheet's width less the page's margins: how wide a fitted picture is, whichever page is up
-    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-      across = max(0, width - Self.page.leading - Self.page.trailing)
-    }
-    .onAppear(perform: need)
-    .task(id: Reading(data: held, across: pixels)) { await readHeld() }
+    .buttonStyle(.plain)
+    .accessibilityLabel(attached.words)
+    .accessibilityAddTraits(isShown ? [.isImage, .isSelected] : .isImage)
+    .task(id: held) { await read() }
   }
 
-  /// The tile's picture, standing in at the page's width until the larger one is read: its square, inside the
-  /// tile's hairline and corners.
-  private var standIn: some View {
-    let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-    return Image(uiImage: picture.tile)
-      .resizable()
-      .aspectRatio(contentMode: .fit)
-      .clipShape(shape)
-      .overlay { shape.strokeBorder(ChromePalette.cardHairline, lineWidth: 0.5) }
-      .accessibilityLabel(picture.words)
-      .accessibilityAddTraits(.isImage)
-  }
-
-  /// Reads the held bytes to the pixels the picture's furthest zoom shows, off the main actor. With none held it
-  /// keeps what it read: a picture the reader let go while its sheet is open stays on the sheet.
-  private func readHeld() async {
-    guard let data = held, across > 0 else { return }
-    let image = await HistoryPictureDecode.image(data, across: pixels)
+  /// Reads the tile's bytes at the size a thumbnail is drawn, off the main actor.
+  private func read() async {
+    guard pressed == nil, let data = held else { return }
+    let across = HistoryPictureLayout.pixels(HistoryPictureLayout.thumb, scale: scale)
+    let image = await HistoryPictureDecode.image(data, across: across)
     guard !Task.isCancelled else { return }
-    whole = image
-    unreadable = image == nil
+    picture = image
   }
 }
 
-/// The larger picture on its page, which scrolls and zooms (`HistoryPictureScroll`).
+/// The larger picture on its page, which zooms and pans (`HistoryPictureScroll`).
 private struct HistoryPictureZoom: UIViewRepresentable {
   let picture: UIImage
   /// The picture's spoken name.
   let words: String
-  /// The page's margins, outside the picture at every zoom.
-  let margins: EdgeInsets
+  /// The pager rests on another page: this one goes back to fitted.
+  let fits: Bool
 
-  func makeUIView(context: Context) -> HistoryPictureScroll {
-    HistoryPictureScroll(
-      margins: UIEdgeInsets(top: margins.top, left: margins.leading, bottom: margins.bottom, right: margins.trailing))
-  }
+  func makeUIView(context: Context) -> HistoryPictureScroll { HistoryPictureScroll() }
 
   func updateUIView(_ page: HistoryPictureScroll, context: Context) {
     page.show(picture, spoken: words)
+    if fits { page.fit() }
   }
 }
 
-/// The sheet's page for the larger picture: a scroll view that scrolls a tall picture, as the page always did,
-/// and also zooms it. Fitted, the picture stands at the page's width inside the page's margins
-/// (`HistoryPictureLayout.fitted`). A pinch takes it up to `zoomMost` times that; a double tap goes to `zoomTap`
-/// times, about the point tapped, and back to fitted; a zoomed picture pans. The corners and the hairline keep
-/// their size on screen whatever the zoom. Nothing else: no gallery, no next or previous, no control.
+/// A picture's page in the viewer: a scroll view that zooms. Fitted, the picture stands whole inside the page,
+/// at its centre (`HistoryPictureLayout.fitted(width:height:inside:margin:)`, `centred`), and the page takes no
+/// drag for itself, so a swipe left or right is the viewer's pager's. A pinch takes the picture up to `zoomMost`
+/// times that; a double tap goes to `zoomTap` times, about the point tapped, and back to fitted; a zoomed
+/// picture pans, and at its own edge the pager has the drag again. The corners and the hairline keep their
+/// size on screen whatever the zoom.
 final class HistoryPictureScroll: UIScrollView, UIScrollViewDelegate {
   private let drawn = UIImageView()
   private let hairline = UIColor(ChromePalette.cardHairline)
-  /// The width the picture was last fitted to: the fit is made again only when the page's width changes, or
-  /// another picture is shown.
-  private var fittedAcross: CGFloat = 0
+  /// The page's size the picture was last fitted inside: the fit is made again only when the page's size
+  /// changes, or another picture is shown.
+  private var fittedPage: CGSize = .zero
 
-  init(margins: UIEdgeInsets) {
+  init() {
     super.init(frame: .zero)
     delegate = self
-    contentInset = margins
     minimumZoomScale = 1
     maximumZoomScale = HistoryPictureLayout.zoomMost
-    // the page gives under a pull whatever the picture's height, as the stand-in's page does
-    alwaysBounceVertical = true
+    // a fitted picture is no larger than its page, and the page gives under no pull: the drag is the pager's
+    alwaysBounceVertical = false
+    alwaysBounceHorizontal = false
+    showsVerticalScrollIndicator = false
+    showsHorizontalScrollIndicator = false
+    // the room around the picture is this page's own reckoning (`centre`), never the safe area's
+    contentInsetAdjustmentBehavior = .never
     drawn.clipsToBounds = true
     drawn.layer.cornerCurve = .continuous
     drawn.isAccessibilityElement = true
@@ -416,28 +654,42 @@ final class HistoryPictureScroll: UIScrollView, UIScrollViewDelegate {
   required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
   /// The picture to show, and its spoken name. The same picture shown again changes nothing, so a zoom is kept
-  /// through every redraw of the sheet; another picture starts fitted.
+  /// through every redraw of the viewer; another picture starts fitted.
   func show(_ picture: UIImage, spoken words: String) {
     drawn.accessibilityLabel = words
     guard drawn.image !== picture else { return }
     drawn.image = picture
-    fittedAcross = 0
+    fittedPage = .zero
     setNeedsLayout()
+  }
+
+  /// Back to fitted, at once: a picture that is no longer the one shown.
+  func fit() {
+    guard zoomScale != 1 else { return }
+    setZoomScale(1, animated: false)
   }
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    let across = bounds.width - contentInset.left - contentInset.right
-    guard across > 0, across != fittedAcross, let picture = drawn.image else { return }
-    fittedAcross = across
-    // a picture shown anew, and a page whose width changed, start fitted: the frame is set at no zoom, and the
-    // page stands at its top, the margins showing
+    guard bounds.width > 0, bounds.height > 0, bounds.size != fittedPage, let picture = drawn.image else { return }
+    fittedPage = bounds.size
+    // a picture shown anew, and a page whose size changed, start fitted: the frame is set at no zoom
     zoomScale = 1
-    let size = HistoryPictureLayout.fitted(width: picture.size.width, height: picture.size.height, across: across)
+    let size = HistoryPictureLayout.fitted(
+      width: picture.size.width, height: picture.size.height, inside: bounds.size,
+      margin: HistoryPictureLayout.pageMargin)
     drawn.frame = CGRect(origin: .zero, size: size)
     contentSize = size
-    contentOffset = CGPoint(x: -adjustedContentInset.left, y: -adjustedContentInset.top)
+    centre()
     edge()
+  }
+
+  /// Stands the picture at the page's centre while it is the smaller, by the room at each side of it; a picture
+  /// zoomed past the page has none, and pans to its own edges.
+  private func centre() {
+    let room = HistoryPictureLayout.centred(contentSize, on: bounds.size)
+    contentInset = UIEdgeInsets(top: room.y, left: room.x, bottom: room.y, right: room.x)
+    if zoomScale <= 1 { contentOffset = CGPoint(x: -room.x, y: -room.y) }
   }
 
   /// The tile's corners and hairline, at the size they are on screen whatever the zoom: the layer is zoomed with
@@ -451,7 +703,10 @@ final class HistoryPictureScroll: UIScrollView, UIScrollViewDelegate {
 
   func viewForZooming(in scrollView: UIScrollView) -> UIView? { drawn }
 
-  func scrollViewDidZoom(_ scrollView: UIScrollView) { edge() }
+  func scrollViewDidZoom(_ scrollView: UIScrollView) {
+    centre()
+    edge()
+  }
 
   /// A double tap: from fitted to `zoomTap` times about the point tapped, and from any zoom back to fitted. The
   /// system's own zoom animation; none under Reduce Motion.
@@ -468,8 +723,8 @@ final class HistoryPictureScroll: UIScrollView, UIScrollViewDelegate {
   }
 }
 
-/// The quiet line under a picture on its sheet, in the cut mark's voice (`HistoryCutNote`): that the larger
-/// picture is being read, or, when it did not arrive, where the full size is.
+/// The quiet line under a picture's stand-in on its page, in the cut mark's voice (`HistoryCutNote`): that the
+/// larger picture is being read, or, when it did not arrive, where the full size is.
 struct HistoryPictureNote: View {
   let words: String
   var waiting = false

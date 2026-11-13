@@ -8,7 +8,7 @@ import UIKit
 // decided here, so `FieldHistoryTests` holds it without a screen (H-D4): which attachments stand together as one
 // strip, which of them is asked for as a picture and under what key it is found, what a cell draws for the face
 // its reader holds and how much room that takes, where the cells of a strip stand, how many pixels a picture is
-// read to, and how a picture is fitted and zoomed on its sheet.
+// read to, and how a picture is zoomed. The viewer a pressed tile opens has its own part below (item 384).
 //
 // The strip is the room's (rosetta's clients/room: components/transcript/Attachments.tsx and
 // styles/attachments.css, read at the pin, 811e554c6), at the figures the art director ruled for a phone
@@ -61,7 +61,7 @@ enum HistoryPictureLayout {
   /// The space between two tiles and between two rows of a strip: the room's `gap: 8px` in the same rule, and the
   /// 8 pt the document always kept between two placeholders.
   static let gap: CGFloat = 8
-  /// The most a pinch zooms a picture on its sheet: this many times its size fitted to the page's width.
+  /// The most a pinch zooms a picture in its viewer: this many times its size fitted inside its page.
   static let zoomMost: CGFloat = 4
   /// What a double tap zooms a fitted picture to. A double tap on a zoomed one goes back to fitted.
   static let zoomTap: CGFloat = 2
@@ -183,14 +183,6 @@ extension HistoryPictureLayout {
     return max(1, Int((Double(long) * Double(across) / Double(width)).rounded(.up)))
   }
 
-  /// The size a picture of `width` by `height` is drawn at on its sheet before any zoom: the page's width
-  /// (`across`), in its own shape. A small picture is drawn up to the width, as the tile's stand-in is. A picture
-  /// with no size takes no room.
-  static func fitted(width: CGFloat, height: CGFloat, across: CGFloat) -> CGSize {
-    guard width > 0, height > 0, across > 0 else { return .zero }
-    return CGSize(width: across, height: across * height / width)
-  }
-
   /// The zoom a double tap goes to from `zoom`: `zoomTap` from fitted, and fitted (1) from any zoom past it,
   /// whether a tap or a pinch made it.
   static func tapped(from zoom: CGFloat) -> CGFloat { zoom > 1.01 ? 1 : zoomTap }
@@ -224,26 +216,68 @@ extension HistoryPictureLayout {
   /// The least room around a fitted picture on its page, on every side.
   static let pageMargin: CGFloat = 12
 
-  /// Item 384 (red) — a stub: no pictures.
-  static func gallery(_ attached: [HistoryAttached], faces: [String: HistoryPictureFace]) -> [HistoryAttached] { [] }
+  /// The pictures a row's viewer shows, in the row's order: the attachments asked for as pictures whose tile the
+  /// reader holds or is reading (`faces`, by `key`). A line that is no picture is not among them, nor one whose
+  /// tile was not read: a prompt's attachments are all asked for by id, whatever they are, and what is no
+  /// picture ends failed. The room keeps an unrecorded image's place on its rail, disabled; the phone cannot
+  /// tell such an image from a document, so its rail holds pictures only. Every one of them has a picture's id,
+  /// and that id is its `id`.
+  static func gallery(_ attached: [HistoryAttached], faces: [String: HistoryPictureFace]) -> [HistoryAttached] {
+    attached.filter { one in
+      guard let id = one.picture, let face = faces[key(id, .tile)] else { return false }
+      return face != .failed
+    }
+  }
 
-  /// Item 384 (red) — a stub: nothing to open on.
-  static func opened(_ id: String, among members: [HistoryAttached]) -> String? { nil }
+  /// The picture a viewer opens on: the one pressed when it is among the row's pictures, and else the first.
+  static func opened(_ id: String, among members: [HistoryAttached]) -> String? {
+    members.contains { $0.id == id } ? id : members.first?.id
+  }
 
-  /// Item 384 (red) — a stub: no count.
-  static func counter(_ id: String?, among members: [HistoryAttached]) -> String? { nil }
+  /// The rail's count, the room's: where the picture shown stands among the row's, `2 / 5`. nil for a row of one
+  /// picture, which has no rail, and where the one shown is not the row's.
+  static func counter(_ id: String?, among members: [HistoryAttached]) -> String? {
+    guard members.count > 1, let index = members.firstIndex(where: { $0.id == id }) else { return nil }
+    return "\(index + 1) / \(members.count)"
+  }
 
-  /// Item 384 (red) — a stub: nothing asked.
-  static func asked(around id: String?, among members: [HistoryAttached]) -> [String] { [] }
+  /// The pictures asked for at the larger size while `id` is shown, in the order they are asked: itself, then
+  /// the next, then the previous, so a swipe either way finds its picture read or on its way. No other is asked
+  /// for until it is come to: each is up to `previewBytes` of the reader's memory.
+  static func asked(around id: String?, among members: [HistoryAttached]) -> [String] {
+    guard let index = members.firstIndex(where: { $0.id == id }) else { return [] }
+    return [index, index + 1, index - 1].filter { members.indices.contains($0) }.map { members[$0].id }
+  }
 
-  /// Item 384 (red) — a stub: never near.
-  static func near(_ id: String, to shown: String?, among members: [HistoryAttached]) -> Bool { false }
+  /// Whether a page keeps its larger picture read: the one shown and the one on each side of it do, and a page
+  /// further off lets it go, so the viewer holds three pictures' pixels at most whatever the row's length.
+  static func near(_ id: String, to shown: String?, among members: [HistoryAttached]) -> Bool {
+    guard let at = members.firstIndex(where: { $0.id == id }),
+      let index = members.firstIndex(where: { $0.id == shown })
+    else { return false }
+    return abs(at - index) <= 1
+  }
 
-  /// Item 384 (red) — a stub: no room.
-  static func fitted(width: CGFloat, height: CGFloat, inside page: CGSize, margin: CGFloat) -> CGSize { .zero }
+  /// The size a picture of `width` by `height` is drawn at on its page before any zoom: the largest at which it
+  /// stands whole inside `page` with `margin` clear on every side, in its own shape. A small picture is drawn
+  /// up to that, as the tile's stand-in is. A picture with no size, and a page with no room inside its margins,
+  /// take no room.
+  static func fitted(width: CGFloat, height: CGFloat, inside page: CGSize, margin: CGFloat) -> CGSize {
+    let room = CGSize(width: page.width - 2 * margin, height: page.height - 2 * margin)
+    guard width > 0, height > 0, room.width > 0, room.height > 0 else { return .zero }
+    // whichever side the page is shorter of, for this shape, is filled exactly; the other follows
+    if room.width * height <= room.height * width {
+      return CGSize(width: room.width, height: room.width * height / width)
+    }
+    return CGSize(width: room.height * width / height, height: room.height)
+  }
 
-  /// Item 384 (red) — a stub: no room around it.
-  static func centred(_ content: CGSize, on page: CGSize) -> (x: CGFloat, y: CGFloat) { (0, 0) }
+  /// The room left at each side of a picture of `content` (its size at its zoom) on a `page`: half of what the
+  /// page has over, across and down, and nothing where the picture is the larger. So a picture smaller than its
+  /// page stands at the page's centre, and one zoomed past it pans to its own edges.
+  static func centred(_ content: CGSize, on page: CGSize) -> (x: CGFloat, y: CGFloat) {
+    (max(0, (page.width - content.width) / 2), max(0, (page.height - content.height) / 2))
+  }
 }
 
 // MARK: - The decode

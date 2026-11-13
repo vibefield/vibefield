@@ -1319,7 +1319,7 @@ struct HistoryPictureFoldTests {
     #expect(HistoryPictureLayout.longSide(width: 200, height: 100, across: 312) == 200)
     // a picture whose size is not known is read at the width it is drawn
     #expect(HistoryPictureLayout.longSide(width: 0, height: 0, across: 312) == 312)
-    // on its sheet a picture is read to what its furthest zoom can show, which is all the desktop sent of it
+    // in its viewer a picture is read to what its furthest zoom can show, which is all the desktop sent of it
     let zoomed = HistoryPictureLayout.pixels(353 * HistoryPictureLayout.zoomMost, scale: 3)
     #expect(zoomed == 4236 && HistoryPictureLayout.longSide(width: 1600, height: 900, across: zoomed) == 1600)
   }
