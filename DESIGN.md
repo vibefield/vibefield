@@ -7726,6 +7726,28 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     cause is a reading of the code and is not yet shown on a device: over rows not yet laid out an eased move
     aims at an estimate of the end and comes to rest short of it, where the document stops following and the
     pill returns. Going at once is how the document opens at its end, which holds.*)
+  - **Its foot fades as its head does** (*item 391, 2026-11-13. James, 23:28:32Z, session qa-01, of a session's
+    document on his phone with the area over its foot marked: "[Image #17] make the messages start fade, blur
+    and dim at the marked area like how it looks at the top edge area". It overturns no text: nothing ruled
+    how the foot looks, and the rows ran sharp under the slot and the bar to the screen's bottom edge.*) At
+    the head the rows go soft and dim under the navigation bar toward the screen's top edge. That look is the
+    system's: the bar is the system's own, iOS 26 softens what scrolls under its bars, and nothing of ours
+    draws it. The bar at the foot and the slot above it are ours, drawn over the page by the home screen, so
+    the system gives the foot nothing. A **band** stands there now, over the rows and under the pill, the slot
+    and the bar. It begins 24 pt above the top of the higher of the bar and the slot, where it is clear, and
+    deepens to the screen's bottom edge, where it is strongest. At its end the document's last row rests 32 pt
+    above that top (the bullet before the pill's), so the newest row stands whole, 8 pt clear of the band. The
+    band stands on the measure the page's clearance stands on, so it does not move when the bar folds. It
+    takes no touch and is not read out. **How it is made**, said because it is not the system's effect:
+    SwiftUI has no public blur whose radius changes down its height, so the blur is one system material
+    (`.ultraThinMaterial`, the material the chrome's glass stands on below iOS 26) under a mask that brings it
+    in, from nothing at the band's top to whole at half its depth. It does not grow softer toward the edge as
+    the head's does; it arrives. The dim is the page's own `paper` over the material, from nothing at the
+    band's top to 90% at the screen's edge: in the dark it dims the words and by day it pales them, toward the
+    page in both. With Reduce Transparency on the material is left out and the dim stands alone, for the
+    system draws a material solid there and a solid band would hide the rows outright. *The head's look is
+    known from James's words and from the code, which draws nothing there; the band has not been seen on a
+    device.*
   - **The rows above arrive as you read up** (362b). Within one screen of the top the rows above are read in by
     themselves and land above your place. One approach reads on until what it brought holds six messages (a prompt,
     or a reply with words or an attachment), in at most five asks of forty rows: the room's rule, so a stretch of
