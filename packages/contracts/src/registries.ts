@@ -629,7 +629,7 @@ export const FLOW_HOST = {
  *    `reach` and the capture's `allowHosts` (shell.ts).
  *  - INTENTS: the apps one person's keep-and-hide rows hold (`MadeAppIntentRow`, artifacts.ts; slice 3h) and the serve
  *    records one desktop keeps (`MadeAppRegistry`). A port reservation lasts for the app's life, so this bounds the
- *    reservations too.
+ *    reservations too. *Corrected 2026-11-13 (Hide dropped):* the person's rows are kept apps only.
  *  - NATIVE_ID_CHARS: an app's native id (rosetta's `native_id`, a fold key, L6). rosetta admits 4,096; 256 is
  *    rosetta's own bound on a filter value. A longer one costs the field, and the fold falls back to the hosted link.
  * TS-only: no native reader. */

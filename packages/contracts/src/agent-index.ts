@@ -1369,7 +1369,9 @@ export type IndexAppsSource = z.infer<typeof IndexAppsSource>;
  *  - projectKey, place, ink: joined at THIS door from the root session's cwd (PJ-4), never replicated. `ink` is the
  *    project's deal index (`ProjectSummary.ink`), the fallback icon's colour (MA-D10 (b)).
  *  - kept, hidden: the person's merged intent for the fold key, joined at this door (slice 3h; absent until then).
- *  - openable: the app has a verified copy, is not hidden, and its desktop can export it. */
+ *  - openable: the app has a verified copy, is not hidden, and its desktop can export it.
+ * *Corrected 2026-11-13 (James, 01:29:54Z: Hide dropped):* `hidden` is retired: no door sets it, and `openable` is a
+ * verified copy on a desktop that can export it. */
 export const IndexApp = IndexCatalogApp.omit({ projectId: true })
   .extend({
     appKey: z.string().min(1),
@@ -1379,6 +1381,7 @@ export const IndexApp = IndexCatalogApp.omit({ projectId: true })
     place: PlaceRef.optional(),
     ink: z.number().int().nonnegative().optional(),
     kept: z.literal(true).optional(),
+    /** Retired 2026-11-13 (Hide dropped): never set. */
     hidden: z.literal(true).optional(),
     openable: z.boolean(),
   })
@@ -1390,7 +1393,8 @@ export type IndexApp = z.infer<typeof IndexApp>;
  * desktop's library; `mesh`: the merged replica of every self desktop, an asleep one's apps listed and greyed by
  * `sources`, DS-L8). `devices` narrows to some desktops, `projectKey` to one project, `q` to titles that hold it, and
  * `kept` to the kept apps. A hidden app is dropped unless `includeHidden`. A tailnet caller's page is cut at
- * INDEX_TAILNET_LIMITS.MAX_ROWS, and `clipped` says so. */
+ * INDEX_TAILNET_LIMITS.MAX_ROWS, and `clipped` says so. *Corrected 2026-11-13 (Hide dropped):* no app is hidden;
+ * `includeHidden` is retired, accepted and inert. */
 export const IndexAppsParams = z
   .object({
     scope: MeshScope.optional(),
@@ -1398,6 +1402,7 @@ export const IndexAppsParams = z
     projectKey: ProjectKey.optional(),
     q: z.string().min(1).max(512).optional(),
     kept: z.boolean().optional(),
+    /** Retired 2026-11-13 (Hide dropped): accepted and inert. */
     includeHidden: z.boolean().optional(),
     cursor: z.string().min(1).max(1024).optional(),
     limit: z.number().int().min(1).max(500).optional(),

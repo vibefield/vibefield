@@ -538,16 +538,19 @@ export type MadeAppOpenRefusal = z.infer<typeof MadeAppOpenRefusal>;
  * desktop. Each origin reads the merged intent to decide its serves: kept means no idle close; hidden means the serve
  * retires and `artifact.open` answers NOT_FOUND. The method is `local`, so it takes no `device`, and a holder that is
  * asleep misses nothing because nothing is sent to it. Set semantics: `true` sets a flag, `false` clears it, and an
- * absent flag is left as it is; at least one is named. Hidden wins over kept: a hidden app is never served. */
+ * absent flag is left as it is; at least one is named. Hidden wins over kept: a hidden app is never served.
+ * *Corrected 2026-11-13 (James, 01:29:54Z: Hide dropped; it was never his pick):* a mark names `kept`. `hidden` is
+ * retired: a mark naming it alone is refused, and beside `kept` it is ignored. Nothing hides an app. */
 export const ArtifactMarkParams = z
   .object({
     foldKey: MadeAppFoldKey,
     kept: z.boolean().optional(),
+    /** Retired 2026-11-13 (Hide dropped): accepted beside `kept` and ignored. */
     hidden: z.boolean().optional(),
   })
   .passthrough()
-  .refine((value) => value.kept !== undefined || value.hidden !== undefined, {
-    message: "artifact.mark requires kept or hidden",
+  .refine((value) => value.kept !== undefined, {
+    message: "artifact.mark requires kept",
   });
 export type ArtifactMarkParams = z.infer<typeof ArtifactMarkParams>;
 
@@ -556,6 +559,7 @@ export const ArtifactMarkResult = z
   .object({
     foldKey: MadeAppFoldKey,
     kept: z.boolean(),
+    /** Retired 2026-11-13 (Hide dropped): always false. It stays required, since an older reader requires it. */
     hidden: z.boolean(),
   })
   .passthrough();
@@ -564,11 +568,12 @@ export type ArtifactMarkResult = z.infer<typeof ArtifactMarkResult>;
 /** One app's keep-and-hide intent, a row of the replicated settings document (slice 3h), keyed by the fold key. A flag
  * is present only when it is set, so a row with neither is the same as no row. `updatedAt` is the writer's clock in
  * epoch ms; how the document merges two writes is 3h's. Declared at MA-1a so 3h codes to it; nothing writes one before
- * 3h. */
+ * 3h. *Corrected 2026-11-13 (Hide dropped):* `hidden` is retired: never written, and a reader takes it as absent. */
 export const MadeAppIntentRow = z
   .object({
     foldKey: MadeAppFoldKey,
     kept: z.literal(true).optional(),
+    /** Retired 2026-11-13 (Hide dropped): never written; a reader ignores it. */
     hidden: z.literal(true).optional(),
     updatedAt: z.number().int().nonnegative(),
   })
