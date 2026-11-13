@@ -6594,7 +6594,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **In a project:** **Live now** first, then the room's days; in Temporary, the sessions older
       than 14 days fold behind **"Older than 14 days · n · Show older"** (PJ-L4).
     - **A session row** (PJ-D9) carries, in its id slot, this desktop's mark and the folder's path,
-      cut whole folders from the left to fit (FitPath: `…/project100/vibe-field`, never a name cut
+      cut whole folders from the left to fit (FitPath: `…/code/garden-planner`, never a name cut
       mid-word; the whole path is its title); and at its end **Resume** (the `resume` glyph and the
       word) or, while it runs here, **Jump to** (`jump`) — or, quiet in the reason's place, why
       neither, in the empty pane launcher's own words: "folder is gone", "not installed", "not
@@ -10113,7 +10113,7 @@ in the Setup Assistant, Settings, History and the launcher alike. An **agent** i
 catalog's label (Claude Code, Codex, Grok). **This Mac** is the profile that uses the agents' own
 folders ("This PC" on Windows) — never "native", "This desktop" or "this machine". A **profile** is a
 set of sign-ins, one per agent; "Agent Profiles" is only the Settings group's head. A **sign-in** is
-one agent's account inside a profile ("Signed in as james@acme.dev"). A **plan** is what a sign-in
+one agent's account inside a profile ("Signed in as me@example.com"). A **plan** is what a sign-in
 runs on, by its product name ("Claude Max", "ChatGPT Pro"); "subscription" is only the idea ("Every
 subscription, side by side."). **History** is the place, and its verbs are **bring in** (the yes),
 **read** (the work) and **stop reading** (the no). What comes in is **past sessions**. **Get** starts
