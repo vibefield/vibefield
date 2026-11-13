@@ -117,6 +117,7 @@ describe("ArtifactPreviewCapture", () => {
       clearStorageData: vi.fn(async () => undefined),
       clearCache: vi.fn(async () => undefined),
       closeAllConnections: vi.fn(async () => undefined),
+      setProxy: vi.fn(async () => undefined),
     };
     const navigation = new Map<string, (event: { preventDefault(): void }, url: string) => void>();
     const window = {
@@ -128,6 +129,7 @@ describe("ArtifactPreviewCapture", () => {
           navigation.set(event, listener);
         },
         setWindowOpenHandler: vi.fn(),
+        setWebRTCIPHandlingPolicy: vi.fn(),
       },
       destroy() {
         this.destroyed = true;
@@ -387,6 +389,8 @@ function captureRig(
   let headersReceived: RigHeadersReceived | null = null;
   const verdicts: Array<{ url: string; resourceType: string; admitted: boolean }> = [];
   const navigation = new Map<string, RigNavigationGuard>();
+  /** Item 378: the fence's two calls and the load, in the order the capture made them. */
+  const order: string[] = [];
   const captureSession = {
     webRequest: {
       onBeforeRequest: (
@@ -409,6 +413,9 @@ function captureRig(
     clearStorageData: vi.fn(async () => undefined),
     clearCache: vi.fn(async () => undefined),
     closeAllConnections: vi.fn(async () => undefined),
+    setProxy: vi.fn(async (_config: unknown) => {
+      order.push("proxy");
+    }),
   };
   const window = {
     destroyed: false,
@@ -419,6 +426,9 @@ function captureRig(
         navigation.set(event, listener);
       },
       setWindowOpenHandler: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn((_policy: string) => {
+        order.push("webrtc");
+      }),
     },
     destroy() {
       this.destroyed = true;
@@ -427,6 +437,7 @@ function captureRig(
       return this.destroyed;
     },
     loadURL: vi.fn(async (url: string) => {
+      order.push("load");
       for (const request of options.requests ?? []) {
         beforeRequest?.(request, (decision) => {
           verdicts.push({ ...request, admitted: !decision.cancel });
@@ -440,7 +451,7 @@ function captureRig(
     createWindow: () => window,
     decodeImage: () => image,
   };
-  return { native, navigation, verdicts, window };
+  return { native, navigation, verdicts, window, captureSession, order };
 }
 
 /** The requests a made app's page makes as it runs, each with the verdict the guard owes it under
@@ -476,6 +487,42 @@ const MADE_PAGE_REQUESTS: ReadonlyArray<RigRequest & { admitted: boolean }> = [
   { url: "https://cdn.jsdelivr.net/npm/x/index.html", resourceType: "subFrame", admitted: false },
   { url: "https://cdn.jsdelivr.net/npm/x/embed.html", resourceType: "object", admitted: false },
 ];
+
+// Item 378 — a captured page's WebRTC: its ICE never passes webRequest, so the request gate cannot see it. The capture
+// refuses its unproxied UDP per contents, and sends its TCP (a TURN relay over TCP or TLS, ICE-TCP) to a dead proxy on
+// its own session. Only its origin and allowHosts bypass that proxy, and `<-loopback>` takes away Chromium's implicit
+// loopback bypass. The fence is per capture, never process-wide: the desk's browser pages share one profile.
+describe("item 378 — a capture's WebRTC reaches nothing", () => {
+  it("a made capture's session sends WebRTC's TCP to a dead proxy that only its origin and allowHosts bypass (this Mac's own ports too: <-loopback>), and its contents refuse unproxied UDP, both before the page loads", async () => {
+    const rig = captureRig();
+    const capture = new ArtifactPreviewCapture({ dataDir: dataDir(), native: rig.native });
+    await capture.capture(
+      { artifactId: ARTIFACT_ID, url: MADE_URL, allowHosts: ALLOW_HOSTS },
+      new AbortController().signal,
+    );
+    expect(rig.captureSession.setProxy).toHaveBeenCalledExactlyOnceWith({
+      mode: "fixed_servers",
+      proxyRules: "127.0.0.1:9",
+      proxyBypassRules: ["device.tail1234.ts.net", ...ALLOW_HOSTS, "<-loopback>"].join(","),
+    });
+    expect(rig.window.webContents.setWebRTCIPHandlingPolicy).toHaveBeenCalledExactlyOnceWith(
+      "disable_non_proxied_udp",
+    );
+    expect(rig.order, "the fence, then the load").toEqual(["proxy", "webrtc", "load"]);
+  });
+
+  it("a live capture (no allowHosts) bypasses its own origin alone, and this Mac's own ports stay behind the dead proxy", async () => {
+    const rig = captureRig();
+    const capture = new ArtifactPreviewCapture({ dataDir: dataDir(), native: rig.native });
+    await capture.capture({ artifactId: ARTIFACT_ID, url: MADE_URL }, new AbortController().signal);
+    expect(rig.captureSession.setProxy).toHaveBeenCalledExactlyOnceWith({
+      mode: "fixed_servers",
+      proxyRules: "127.0.0.1:9",
+      proxyBypassRules: "device.tail1234.ts.net,<-loopback>",
+    });
+    expect(rig.order).toEqual(["proxy", "webrtc", "load"]);
+  });
+});
 
 describe("MA-3c — a made app's capture admits its allowHosts", () => {
   it("a made capture's guard admits its allowHosts' https subresources beside its own origin, and nothing else", async () => {
