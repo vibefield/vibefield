@@ -10,6 +10,10 @@ import FieldProduct
 // (`HistoryProjectionTests` holds that against fieldd's own pairs), and the merges of a road change go on comparing
 // like with like (item 366).
 //
+// Two things are kept: the body's whole words where the row's were cut (`whole`), and what the row's tool line
+// opens to (`tool`, `HistoryToolDetail`). The first is laid over the rows a fold reads (`applied`). The second never
+// enters the fold or the document: it reaches the view beside the document, by the line's id (`opened`).
+//
 // A detail speaks only for the row it was made beside (`row`). The moment the document holds another row under
 // that id (the door sent one that differs), the detail is silent, and it is dropped at the next fold. So no path
 // that lands rows has to keep a detail in step with its row.
@@ -22,6 +26,19 @@ struct HistoryLineDetail: Equatable, Sendable {
   /// That row with the body's whole words: `text` whole and `textClipped` off. Nil when the row's words were not
   /// cut, or the whole is not in the entry (a text that is a file on the desktop).
   let whole: IndexTimelineRow?
+  /// What the row's tool line opens to; nil for a row that is no tool line, or one with nothing to open.
+  let tool: HistoryToolDetail?
+
+  init(row: IndexTimelineRow, whole: IndexTimelineRow?, tool: HistoryToolDetail? = nil) {
+    self.row = row
+    self.whole = whole
+    self.tool = tool
+  }
+
+  /// What the tool lines open to, by the line's id (a tool line's id is its row's).
+  static func opened(_ details: [String: HistoryLineDetail]) -> [String: HistoryToolDetail] {
+    details.compactMapValues(\.tool)
+  }
 
   /// The rows a fold reads: each row as it is, or as its whole where a detail was made beside that very row.
   static func applied(_ rows: [IndexTimelineRow], _ details: [String: HistoryLineDetail]) -> [IndexTimelineRow] {

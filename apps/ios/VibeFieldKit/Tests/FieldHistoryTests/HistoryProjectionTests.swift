@@ -420,3 +420,293 @@ struct HistoryLineDetailTests {
     #expect(HistoryProjection.wholeChars == 32_768)
   }
 }
+
+/// Item 362f (James, 2026-11-12 18:40:35Z: "i think all message type and views are different from desktop, needs
+/// thorough audit") — what a tool line opens to. In the room a command opens to its folder and its source, a
+/// change to its diff, a read and a search to their paths. The door's row carries none of that; the entry does.
+/// These rows hold what the phone keeps of it beside the row, by the room's own rules and figures (rosetta at the
+/// pin 811e554c6: lib/transcript/families.ts, components/transcript/detail-parts.tsx,
+/// components/file-viewer/diff/parse.ts), and what it never keeps: a failure's diagnostic (item 371).
+@Suite("item 362f — what a tool line opens to")
+struct HistoryToolDetailTests {
+  private func file(_ path: String) -> JSONValue {
+    .object(["type": .string("file"), "path": .string(path), "resolved": .bool(true)])
+  }
+
+  private func folder(_ path: String) -> JSONValue {
+    .object(["type": .string("directory"), "path": .string(path), "resolved": .bool(true)])
+  }
+
+  private func action(_ type: String, _ more: [String: JSONValue]) -> JSONValue {
+    var fields = more
+    fields["type"] = .string(type)
+    return .object(fields)
+  }
+
+  private func failing(_ action: JSONValue, _ failure: [String: JSONValue]) -> JSONValue {
+    toolEntry(action: action, over: ["status": .object(["value": .string("failed")]), "failure": .object(failure)])
+  }
+
+  private func opened(_ raw: JSONValue) throws -> HistoryToolDetail? {
+    let row = try #require(HistoryProjection.row(entry: raw))
+    return HistoryProjection.toolDetail(entry: raw, beside: row)
+  }
+
+  private func kinds(_ lines: [HistoryToolDetail.DiffLine]) -> [HistoryToolDetail.DiffLine.Kind] { lines.map(\.kind) }
+
+  // MARK: A command
+
+  @Test("a command opens to its folder and its source")
+  func aCommand() throws {
+    let raw = toolEntry(action: action("shell", ["command": inline("ls -la"), "cwd": folder("/work/app")]))
+    let detail = try #require(try opened(raw))
+    #expect(detail.command == "ls -la")
+    #expect(detail.folder == "/work/app")
+    #expect(detail.files.isEmpty && detail.paths.isEmpty && detail.failure == nil)
+  }
+
+  @Test("code opens to its source, and has no folder when the record names none")
+  func code() throws {
+    let raw = toolEntry(action: action("code_execute", ["code": inline("print(1)"), "language": .string("python")]))
+    let detail = try #require(try opened(raw))
+    #expect(detail.command == "print(1)")
+    #expect(detail.folder == nil)
+  }
+
+  @Test("the room's preview: a first line within 42 is whole; a longer one is its first 39 and three dots")
+  func thePreviewBound() {
+    let at = String(repeating: "a", count: 42)
+    let past = String(repeating: "a", count: 43)
+    #expect(HistoryProjection.commandPreview(at, sourceTruncated: false) == at)
+    #expect(HistoryProjection.commandPreview(past, sourceTruncated: false) == String(repeating: "a", count: 39) + "...")
+  }
+
+  @Test("the preview is the first line that is not blank, and says there is more when there is")
+  func thePreviewOfManyLines() {
+    #expect(HistoryProjection.commandPreview("\n  \n  echo hi\nsecond", sourceTruncated: false) == "  echo hi...")
+    #expect(HistoryProjection.commandPreview("a\r\nb", sourceTruncated: false) == "a...")
+    #expect(HistoryProjection.commandPreview("ls", sourceTruncated: true) == "ls...")
+    #expect(HistoryProjection.commandPreview(" \n\t", sourceTruncated: false) == nil)
+  }
+
+  @Test("the preview counts code points, as the room does")
+  func thePreviewCountsCodePoints() {
+    let faces = String(repeating: "\u{1F600}", count: 43)
+    let kept = String(repeating: "\u{1F600}", count: 39) + "..."
+    #expect(HistoryProjection.commandPreview(faces, sourceTruncated: false) == kept)
+  }
+
+  // MARK: A diff
+
+  @Test("a hunk's lines carry their sign and their number in the new file, or the old for a line taken out")
+  func aPositionedHunk() {
+    let diff = "--- a/x.ts\n+++ b/x.ts\n@@ -10,3 +10,4 @@ fn walk()\n ctx\n-old\n+new\n+more\n ctx2"
+    let read = HistoryProjection.diffLines(diff)
+    #expect(kinds(read.lines) == [.context, .del, .add, .add, .context])
+    #expect(read.lines.map(\.number) == [10, 11, 11, 12, 13])
+    #expect(read.lines.map(\.text) == ["ctx", "old", "new", "more", "ctx2"])
+    #expect(read.more == 0)
+  }
+
+  @Test("a bare hunk gives no place, so its lines have no number")
+  func aBareHunk() {
+    let read = HistoryProjection.diffLines("@@\n+a\n-b")
+    #expect(kinds(read.lines) == [.add, .del])
+    #expect(read.lines.map(\.number) == [nil, nil])
+  }
+
+  @Test("a backslash line is a note, drawn as context with no number; an empty line is context")
+  func notesAndEmptyLines() {
+    let note = HistoryProjection.diffLines("@@ -1 +1 @@\n-a\n\\ No newline at end of file\n+b")
+    #expect(kinds(note.lines) == [.del, .context, .add])
+    #expect(note.lines.map(\.text) == ["a", "No newline at end of file", "b"])
+    #expect(note.lines.map(\.number) == [1, nil, 1])
+    let empty = HistoryProjection.diffLines("@@ -1,3 +1,3 @@\n a\n\n b")
+    #expect(empty.lines.map(\.text) == ["a", "", "b"])
+    #expect(empty.lines.map(\.number) == [1, 2, 3])
+  }
+
+  @Test("anything else ends the hunk, and lines outside a hunk are neither drawn nor counted")
+  func theHunkEnds() {
+    let diff = "@@ -1 +1 @@\n+a\ndiff --git a/y b/y\n+not counted\n@@ -5 +5 @@\n+b"
+    let read = HistoryProjection.diffLines(diff)
+    #expect(read.lines.map(\.text) == ["a", "b"])
+    #expect(read.lines.map(\.number) == [1, 5])
+  }
+
+  @Test("twelve lines are drawn, and the rest are counted")
+  func theLineCap() {
+    let diff = "@@ -1,0 +1,15 @@\n" + (1...15).map { "+line \($0)" }.joined(separator: "\n")
+    let read = HistoryProjection.diffLines(diff)
+    #expect(read.lines.count == 12)
+    #expect(read.lines.last?.text == "line 12")
+    #expect(read.more == 3)
+  }
+
+  @Test("text in which no hunk is read is drawn as it stands; a blank diff has no lines")
+  func noHunks() {
+    let words = HistoryProjection.diffLines("just words\nand more")
+    #expect(kinds(words.lines) == [.context, .context])
+    #expect(words.lines.map(\.text) == ["just words", "and more"])
+    #expect(words.lines.map(\.number) == [nil, nil])
+    let long = HistoryProjection.diffLines((1...14).map { "row \($0)" }.joined(separator: "\n"))
+    #expect(long.lines.count == 12 && long.more == 2)
+    let blank = HistoryProjection.diffLines(" \n\t\n")
+    #expect(blank.lines.isEmpty && blank.more == 0)
+  }
+
+  @Test("a header that ends in a return is no header, as the room's own pattern reads it")
+  func aReturnAfterTheHeader() {
+    let read = HistoryProjection.diffLines("@@ -1 +1 @@\r\n+a\r\n")
+    #expect(kinds(read.lines) == [.context, .context, .context], "no hunk is read, so the text stands as it is")
+    #expect(read.lines.first?.text == "@@ -1 +1 @@\r")
+  }
+
+  @Test("a line of a diff is cut at the door's bound for a line")
+  func aLongLine() {
+    let read = HistoryProjection.diffLines("@@ -1 +1 @@\n+" + String(repeating: "x", count: 500))
+    #expect(read.lines.first?.text.utf16.count == HistoryProjection.objectChars)
+  }
+
+  // MARK: A change
+
+  @Test("a change opens to its first four files, each its path and its diff's lines, and counts the rest")
+  func aChange() throws {
+    let changes: [JSONValue] = (1...5).map { index in
+      .object(["path": file("src/f\(index).ts"), "diff": inline("@@ -1 +1 @@\n-a\n+b")])
+    }
+    let detail = try #require(try opened(toolEntry(action: action("file_change", ["changes": .array(changes)]))))
+    #expect(detail.files.map(\.path) == ["src/f1.ts", "src/f2.ts", "src/f3.ts", "src/f4.ts"])
+    #expect(detail.moreFiles == 1)
+    #expect(kinds(detail.files[0].lines) == [.del, .add])
+  }
+
+  @Test("a change with no diff says so: its file has no lines")
+  func aChangeWithNoDiff() throws {
+    let change: JSONValue = .object(["path": file("src/x.ts"), "lines_added": .int(3)])
+    let detail = try #require(try opened(toolEntry(action: action("file_change", ["changes": .array([change])]))))
+    #expect(detail.files == [HistoryToolDetail.File(path: "src/x.ts", lines: [], more: 0)])
+    #expect(detail.moreFiles == 0)
+  }
+
+  // MARK: A read and a search
+
+  @Test("a range is the room's: L1–180, p3–4, and its start alone for a range of one or with no count")
+  func aRange() {
+    func range(_ unit: String, _ start: Int64, _ count: JSONValue) -> JSONValue {
+      .object(["unit": .string(unit), "start": .int(start), "count": count])
+    }
+    #expect(HistoryProjection.rangeText(range("line", 1, .int(180))) == "L1\u{2013}180")
+    #expect(HistoryProjection.rangeText(range("page", 3, .int(2))) == "p3\u{2013}4")
+    #expect(HistoryProjection.rangeText(range("line", 5, .null)) == "L5")
+    #expect(HistoryProjection.rangeText(range("line", 5, .int(1))) == "L5")
+    #expect(HistoryProjection.rangeText(nil) == nil)
+  }
+
+  @Test("a read of one file with no range opens to nothing; with a range, or with more files, it lists them")
+  func aRead() throws {
+    func target(_ path: String, range: JSONValue = .null) -> JSONValue {
+      .object(["resource": file(path), "range": range, "media_kind": .null])
+    }
+    func read(_ targets: [JSONValue]) -> JSONValue {
+      toolEntry(action: action("file_read", ["targets": .array(targets)]))
+    }
+    #expect(try opened(read([target("a.ts")])) == nil)
+    let lines: JSONValue = .object(["unit": .string("line"), "start": .int(1), "count": .int(40)])
+    let ranged = try #require(try opened(read([target("a.ts", range: lines)])))
+    #expect(ranged.paths == [HistoryToolDetail.Path(path: "a.ts", range: "L1\u{2013}40")])
+    let two = try #require(try opened(read([target("a.ts"), target("b.ts")])))
+    #expect(two.paths.map(\.path) == ["a.ts", "b.ts"])
+    let many = try #require(try opened(read((1...30).map { target("f\($0).ts") })))
+    #expect(many.paths.count == 24 && many.morePaths == 6)
+  }
+
+  @Test("a search opens to the paths it found, and counts the rest by the index's own total")
+  func aSearch() throws {
+    func search(_ outcome: [String: JSONValue]) -> JSONValue {
+      toolEntry(action: action("file_search", ["query": .string("TODO"), "outcome": .object(outcome)]))
+    }
+    let paths: JSONValue = .array([file("a.ts"), file("b.ts")])
+    let found = try #require(
+      try opened(search(["match_count": .int(40), "paths": paths, "total_paths": .int(40)])))
+    #expect(found.paths.map(\.path) == ["a.ts", "b.ts"])
+    #expect(found.morePaths == 38)
+    #expect(try opened(search(["match_count": .int(0), "paths": .array([])])) == nil)
+  }
+
+  // MARK: A line that failed
+
+  @Test("a failed line adds its summary under its family's detail")
+  func aFailedCommand() throws {
+    let summary = "make: *** No rule to make target"
+    let raw = failing(shell("make"), ["kind": .string("unknown"), "summary": .string(summary)])
+    let detail = try #require(try opened(raw))
+    #expect(detail.command == "make")
+    #expect(detail.failure == summary)
+  }
+
+  @Test("with no family detail a failed line opens only when its summary says more than its line")
+  func aFailureAlone() throws {
+    let list = action("file_list", ["directory": folder("/work/app")])
+    #expect(try opened(failing(list, ["kind": .string("unknown"), "summary": .string("permission denied")])) == nil)
+    let two = try #require(try opened(failing(list, ["kind": .string("unknown"), "summary": .string("first\nsecond")])))
+    #expect(two.failure == "first\nsecond")
+    let long = String(repeating: "word ", count: 20)
+    let past = try #require(try opened(failing(list, ["kind": .string("unknown"), "summary": .string(long)])))
+    #expect(past.failure == String(long.dropLast()), "the summary whole, less the space at its end")
+  }
+
+  @Test("a failure that is a kind is the line's to say: it opens nothing")
+  func aKindOpensNothing() throws {
+    let list = action("file_list", ["directory": folder("/work/app")])
+    #expect(try opened(failing(list, ["kind": .string("not_found")])) == nil)
+    let command = try #require(try opened(failing(shell("make"), ["kind": .string("unknown")])))
+    #expect(command.failure == nil)
+  }
+
+  @Test("a failure's diagnostic is never kept (item 371): the summary the row carries, or nothing")
+  func neverTheDiagnostic() throws {
+    let raw = failing(shell("make"), ["kind": .string("unknown"), "diagnostic": .string("raw error text\nline two")])
+    let detail = try #require(try opened(raw))
+    #expect(detail.failure == nil)
+    #expect(detail.command == "make")
+  }
+
+  // MARK: Beside the row, and out of the document
+
+  @Test("the detail rides beside the row: a tool entry's projection carries it, and a reply's does not")
+  func besideTheRow() throws {
+    let raw = toolEntry(action: action("shell", ["command": inline("ls"), "cwd": folder("/work/app")]))
+    let projected = try #require(HistoryProjection.projected(entry: raw))
+    #expect(projected.detail?.row == projected.row)
+    #expect(projected.detail?.whole == nil)
+    #expect(projected.detail?.tool?.folder == "/work/app")
+    let reply = entry(["body": .object(["type": .string("agent"), "text": inline("done"), "attachments": .array([])])])
+    #expect(HistoryProjection.projected(entry: reply)?.detail == nil)
+  }
+
+  /// VF-PM's row (2026-11-12 23:27:01Z): "a document rebuilt with details present encodes to the same bytes as one
+  /// without". The document is written to the cache at every rebuild; a tool detail must never ride in that write.
+  @Test("a document folded with a tool detail present encodes to the same bytes as one folded without")
+  func theDocumentDoesNotCarryIt() throws {
+    let raw = toolEntry(action: action("shell", ["command": inline("ls"), "cwd": folder("/work/marker-362f")]))
+    let projected = try #require(HistoryProjection.projected(entry: raw))
+    let detail = try #require(projected.detail)
+    #expect(detail.tool?.folder == "/work/marker-362f")
+    let header = try IndexSessionResult(json: try Fixture.json("index-session.valid")).session
+    func bytes(_ rows: [IndexTimelineRow]) throws -> Data {
+      let document = FieldHistoryModel.document(
+        header: header, rows: rows, desktop: "studio", agentLabel: "Claude", nextCursor: nil, watermark: nil,
+        liveSince: nil, now: Date(timeIntervalSince1970: 1_790_000_000))
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys]
+      return try encoder.encode(document)
+    }
+    let with = try bytes(HistoryLineDetail.applied([projected.row], [projected.row.timelineId: detail]))
+    let without = try bytes([projected.row])
+    #expect(with == without)
+    #expect(!String(decoding: with, as: UTF8.self).contains("marker-362f"))
+    let id = projected.row.timelineId
+    #expect(HistoryLineDetail.opened([id: detail]) == [id: try #require(detail.tool)])
+  }
+}

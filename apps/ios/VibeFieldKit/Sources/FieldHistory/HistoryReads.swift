@@ -179,6 +179,9 @@ public final class HistoryDesktopReader: Identifiable {
   /// Item 362b — sessions whose earlier rows are being read right now: one read a session at a time, and the rule
   /// at the document's top says so.
   public private(set) var readingEarlier: Set<String> = []
+  /// Item 362f (red) — per session, what its tool lines open to, by the line's id. DECLARED so the rows compile;
+  /// nothing fills it yet.
+  private(set) var toolDetails: [String: [String: HistoryToolDetail]] = [:]
   /// The door's last refusal, in its own words, for the record.
   public private(set) var failure: String?
   /// SE-P1 (SE-D4 A) — Live now's last answer from this desktop's index: the words asked over its live runs' own

@@ -20,6 +20,20 @@ private func row(_ ordinal: Int, _ words: String = "row") -> String {
   return "\(identity),\(group),\(body)"
 }
 
+/// Item 362f — one tool row's members: a shell command run in a folder, as rosetta's client holds it.
+private func commandRow(_ ordinal: Int, _ command: String, in folder: String) -> String {
+  let identity = #""timeline_id":"r\#(ordinal)","session_id":"s1","ordinal":\#(ordinal)"#
+  let group = #""group":{"id":"cycle-\#(ordinal)","kind":"agent_cycle"},"at":3600000"#
+  let source = #""command":{"type":"inline","text":"\#(command)"}"#
+  let place = #""cwd":{"type":"directory","path":"\#(folder)","resolved":true}"#
+  let outcome = #""outcome":{"exit_code":0,"signal":null,"process_id":null}"#
+  let action = #"{"type":"shell",\#(source),\#(place),"timeout_ms":null,"background":false,\#(outcome)}"#
+  let made = #""correlation":{"key":"k\#(ordinal)","derivation":"native_id"},"native":{"name":"Bash"}"#
+  let state = #""status":{"value":"succeeded","basis":"native_terminal_record"}"#
+  let tool = #"{\#(made),\#(state),"action":\#(action),"failure":null,"timing":null}"#
+  return #"\#(identity),\#(group),"body":{"type":"tool_use","tool":\#(tool)}"#
+}
+
 private enum Frame {
   static let hello = #"{"frame":"hello","protocol_version":\#(Rosetta.protocolVersion)}"#
   static let resync = #"{"frame":"resync"}"#
@@ -732,6 +746,35 @@ private func hundredByTheDoor(_ params: FieldProduct.JSONValue?) -> FieldProduct
     rig.sockets.latest?.close()
     guard await reached("the door's tail", { rig.door.asked.contains("index.session.subscribe") }) else { return }
     #expect(reply(reader).text == "rewritten on the desktop")
+    reader.close()
+  }
+
+  /// Item 362f — read straight from the desktop, a tool line's detail reaches the reader beside the document, by
+  /// the line's id, and the document itself does not carry it (the document is written to the cache at every
+  /// rebuild).
+  @Test func aToolLinesDetailStandsBesideTheDocumentOnTheDirectRead() async throws {
+    let rig = Rig()
+    let reader = rig.reader()
+    guard await rig.open(reader, rows: [commandRow(5, "ls", in: "/work/marker-362f")]) else { return }
+    #expect(reader.toolDetails["s1"]?["r5"]?.folder == "/work/marker-362f")
+    #expect(reader.toolDetails["s1"]?["r5"]?.command == "ls")
+    let document = try #require(reader.corpus.document("s1"))
+    let data = try JSONEncoder().encode(document)
+    let written = String(decoding: data, as: UTF8.self)
+    #expect(!written.contains("marker-362f"), "the detail is not in what the cache is handed")
+    reader.close()
+  }
+
+  /// And it goes when the door's row under that id is another row.
+  @Test func aToolLinesDetailGoesWhenTheDoorsRowIsAnother() async {
+    let rig = Rig()
+    rig.door.timeline = { _ in doorPage([doorRow(5, text: "rewritten on the desktop")]) }
+    let reader = rig.reader(deadline: .milliseconds(30))
+    guard await rig.open(reader, rows: [commandRow(5, "ls", in: "/work/app")]) else { return }
+    rig.sockets.latest?.close()
+    guard await reached("the door's tail", { rig.door.asked.contains("index.session.subscribe") }) else { return }
+    guard await reached("the detail gone", { reader.toolDetails["s1"] == nil }) else { return }
+    #expect(reader.toolDetails["s1"] == nil)
     reader.close()
   }
 
