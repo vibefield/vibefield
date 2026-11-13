@@ -93,6 +93,10 @@ public enum HistoryReads {
   /// SP-7b's 7b-2b — how long a direct socket may go without answering (a hello, or a reconnect's) before the session
   /// is read through the door: rosetta's client redials four times inside it, and a phone reader is waiting.
   public static let directOpenSeconds: Int64 = 8
+  /// Item 362g — how many of a session's recorded pictures are read at once; the rest wait their turn. rosettad
+  /// encodes a rendition nobody has asked for yet behind four permits (rosetta `crates/server/src/http/images.rs`),
+  /// so one phone's asks never hold them all, and a phone's link carries the answers.
+  public static let pictureAsks = 3
 
   static let logger = Logger(subsystem: "com.jamesyong.vibefield.kit", category: "history")
 
@@ -183,6 +187,9 @@ public final class HistoryDesktopReader: Identifiable {
   /// speak (`HistoryLineDetail.opened`). Beside the document and never in it: the document is encoded and written
   /// to the cache at every rebuild, and these would ride in every one of those writes.
   private(set) var toolDetails: [String: [String: HistoryToolDetail]] = [:]
+  /// Item 362g (red) — per session, the faces of its recorded pictures. DECLARED so the rows compile; nothing
+  /// fills it yet.
+  private(set) var pictures: [String: [String: HistoryPictureFace]] = [:]
   /// The door's last refusal, in its own words, for the record.
   public private(set) var failure: String?
   /// SE-P1 (SE-D4 A) — Live now's last answer from this desktop's index: the words asked over its live runs' own
@@ -318,6 +325,14 @@ public final class HistoryDesktopReader: Identifiable {
     case .seen(_, let session): arrivals[session] = nil
     }
   }
+
+  // MARK: Pictures (item 362g)
+
+  /// Item 362g (red) — a STUB so the rows compile: nothing is asked for, and no face is made.
+  func needPicture(session sessionId: String, id: String, size: HistoryPictureSize) {}
+
+  /// Item 362g (red) — a STUB: nothing is held.
+  var pictureBytes: Int { 0 }
 
   // MARK: The cache
 

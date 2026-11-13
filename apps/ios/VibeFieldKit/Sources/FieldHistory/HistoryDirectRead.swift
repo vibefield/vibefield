@@ -318,6 +318,26 @@ final class HistoryDirectRead {
     giveUp(.socket)
   }
 
+  // MARK: Pictures (item 362g)
+
+  /// The most a tile's answer may hold: a byte and a half for each pixel of rosetta's largest `tile2x`, a 640 px
+  /// square. rosettad encodes it as a WebP at quality 80, where a photograph or a screenshot is a fraction of a
+  /// byte a pixel (some tens of kilobytes in all; not measured on real records yet), so a still tile is well
+  /// inside it. What is past it is an animation of many frames, which stays the placeholder rather than be held
+  /// whole for a square the size of a thumb. rosetta's own default is 32 MiB.
+  static let tileBytes = 640 * 640 * 3 / 2
+  /// The most a preview's answer may hold: the same byte and a half for each pixel of rosetta's largest
+  /// `preview`, 1600 px on both edges. A preview is the picture itself when its long edge is 1600 px or less, and
+  /// a legacy bundle's was encoded before these figures were written, so the room above a real picture's size is
+  /// meant.
+  static let previewBytes = 1600 * 1600 * 3 / 2
+
+  /// Item 362g (red) — a STUB so the rows compile: no picture is read. The green reads one through rosetta's
+  /// client, under the bounds above.
+  func picture(_ picture: HistoryPicture, size: HistoryPictureSize) async throws -> Data {
+    throw HistoryPictureFailure(said: "not written")
+  }
+
   // MARK: The end
 
   /// Give the session back to the door: to the opener if it is still waiting, else to the owner.
@@ -377,5 +397,44 @@ extension HistoryProjection {
     case .array(let items): return .array(items.map(productJSON))
     case .object(let fields): return .object(fields.mapValues(productJSON))
     }
+  }
+}
+
+// MARK: - A recorded picture through rosetta's client (item 362g)
+
+/// Why a picture was not read, in words a log may hold: a fixed word, an HTTP status, or a code this build names.
+///
+/// rosetta's own error never leaves this file. Its message names the request's path, and a picture's path holds
+/// the picture's digest; a daemon's refusal carries the daemon's own message and code, which may hold anything.
+/// None of those is kept.
+struct HistoryPictureFailure: Error, Equatable, Sendable {
+  let said: String
+
+  /// The read was closed, or was not open yet: nothing was learned about the picture.
+  static let closed = HistoryPictureFailure(said: "closed")
+
+  init(said: String) {
+    self.said = said
+  }
+
+  init(_ error: any Error) {
+    said = Self.word(error)
+  }
+
+  private static func word(_ error: any Error) -> String {
+    if let refusal = error as? RosettaError {
+      if case .tooLarge = refusal { return "past the bound" }
+      if case .unauthorized(let reason, _) = refusal { return "unauthorized, \(reason?.rawValue ?? "no reason")" }
+      if case .request(let status, let code, _) = refusal {
+        // a code is the daemon's own string: only one this build names is repeated
+        if let code, ErrorCode.known.contains(code) { return code.rawValue }
+        // rosetta's client refuses an answer that is not a WebP under the answer's own status, a 2xx
+        return (200..<300).contains(status) ? "not a rendition" : "status \(status)"
+      }
+      return "refused"
+    }
+    if let failure = error as? URLError { return "network \(failure.code.rawValue)" }
+    if error is CancellationError { return "cancelled" }
+    return "failed"
   }
 }
