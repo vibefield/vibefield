@@ -812,6 +812,13 @@ extension HistoryProjection {
   }
 }
 
+// MARK: - The pictures an entry carries (item 362g)
+
+extension HistoryProjection {
+  // Item 362g (red) — a STUB so the rows compile: no entry names a picture. The green writes the reader here.
+  static func pictures(entry: JSONValue) -> [String: HistoryPicture] { [:] }
+}
+
 /// D-2c (a): an entry's row is made once and made again only when the entry changed. rosetta's
 /// client hands over the whole visible list on every change and a `TimelineEntry` has no revision,
 /// so the cache keeps each entry beside its row and compares. A refused entry keeps its refusal.

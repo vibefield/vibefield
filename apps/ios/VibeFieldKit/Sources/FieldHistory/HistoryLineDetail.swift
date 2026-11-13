@@ -10,9 +10,11 @@ import FieldProduct
 // (`HistoryProjectionTests` holds that against fieldd's own pairs), and the merges of a road change go on comparing
 // like with like (item 366).
 //
-// Two things are kept: the body's whole words where the row's were cut (`whole`), and what the row's tool line
-// opens to (`tool`, `HistoryToolDetail`). The first is laid over the rows a fold reads (`applied`). The second never
-// enters the fold or the document: it reaches the view beside the document, by the line's id (`opened`).
+// Three things are kept: the body's whole words where the row's were cut (`whole`), what the row's tool line opens
+// to (`tool`, `HistoryToolDetail`), and the recorded pictures its attachments name (`pictures`, `HistoryPicture`;
+// item 362g). The first is laid over the rows a fold reads (`applied`). The other two never enter the fold or the
+// document: they are found beside it, a tool's by its line's id (`opened`), a picture by its attachment's
+// (`pictured`).
 //
 // A detail speaks only for the row it was made beside (`row`). The moment the document holds another row under
 // that id (the door sent one that differs), the detail is silent, and it is dropped at the next fold. So no path
@@ -28,16 +30,35 @@ struct HistoryLineDetail: Equatable, Sendable {
   let whole: IndexTimelineRow?
   /// What the row's tool line opens to; nil for a row that is no tool line, or one with nothing to open.
   let tool: HistoryToolDetail?
+  /// Item 362g — the recorded pictures the entry's attachments name, by attachment id; empty when it names none.
+  let pictures: [String: HistoryPicture]
 
-  init(row: IndexTimelineRow, whole: IndexTimelineRow?, tool: HistoryToolDetail? = nil) {
+  init(
+    row: IndexTimelineRow, whole: IndexTimelineRow?, tool: HistoryToolDetail? = nil,
+    pictures: [String: HistoryPicture] = [:]
+  ) {
     self.row = row
     self.whole = whole
     self.tool = tool
+    self.pictures = pictures
   }
 
   /// What the tool lines open to, by the line's id (a tool line's id is its row's).
   static func opened(_ details: [String: HistoryLineDetail]) -> [String: HistoryToolDetail] {
     details.compactMapValues(\.tool)
+  }
+
+  /// Item 362g — the pictures by the id the document has for each attachment: its row's id, a slash, its own
+  /// (`HistoryFold` makes a reply's `.attachment` segment's id the same way). The one place the two ids are joined
+  /// outside the fold.
+  static func pictured(_ details: [String: HistoryLineDetail]) -> [String: HistoryPicture] {
+    var found: [String: HistoryPicture] = [:]
+    for detail in details.values {
+      for (attachmentId, picture) in detail.pictures {
+        found["\(detail.row.timelineId)/\(attachmentId)"] = picture
+      }
+    }
+    return found
   }
 
   /// The rows a fold reads: each row as it is, or as its whole where a detail was made beside that very row.

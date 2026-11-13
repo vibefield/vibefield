@@ -710,3 +710,477 @@ struct HistoryToolDetailTests {
     #expect(HistoryLineDetail.opened([id: detail]) == [id: try #require(detail.tool)])
   }
 }
+
+/// Item 362g (James's pick on the board, 2026-11-12 20:43Z, as VF-PM relayed it: "Both A and B for 0.9: images
+/// through a rosetta release, and full detail on the direct road") — the pictures an entry carries. Through the
+/// door an attachment is a ref with no digest and no address; rosetta's entry names the stored member. These rows
+/// hold which attachments the phone keeps a picture for, beside the row and never in it, by the room's own rule
+/// (rosetta at the pin 811e554c6: `isRecordedImageAsset` in clients/room/src/lib/image-media.ts, whose own cases
+/// in clients/app/test/transcript-activity-images.test.mjs are ported here), and that neither the row nor the
+/// document changes for it (VF-PM's rulings 2 and 8, 2026-11-13 00:24Z).
+@Suite("item 362g — the pictures an entry carries")
+struct HistoryPictureProjectionTests {
+  /// Sixty-four of one hex digit: a digest as the room's own tests make one.
+  private func digest(_ digit: Character) -> String { String(repeating: digit, count: 64) }
+
+  /// One stored member as rosetta names it: `/api/assets/<digest>.<ext>`.
+  private func stored(
+    _ digit: Character, _ mediaType: String = "image/webp", _ ext: String = "webp", byteLen: Int64 = 42
+  ) -> [String: JSONValue] {
+    [
+      "url": .string("/api/assets/\(digest(digit)).\(ext)"), "digest": .string(digest(digit)),
+      "media_type": .string(mediaType), "byte_len": .int(byteLen),
+    ]
+  }
+
+  /// What the projection keeps of `stored(digit, mediaType, ext)`.
+  private func kept(
+    _ digit: Character, _ mediaType: String = "image/webp", _ ext: String = "webp", byteLen: Int = 42
+  ) -> HistoryPictureMember {
+    HistoryPictureMember(
+      url: "/api/assets/\(digest(digit)).\(ext)", digest: digest(digit), mediaType: mediaType, byteLen: byteLen)
+  }
+
+  /// A recorded original: a member in one of the six formats, with no rendition map.
+  private func original(_ mediaType: String = "image/png", _ ext: String = "png") -> [String: JSONValue] {
+    stored("1", mediaType, ext, byteLen: 4_096)
+  }
+
+  /// What the projection keeps of `original()`.
+  private var keptOriginal: HistoryPictureMember { kept("1", "image/png", "png", byteLen: 4_096) }
+
+  /// A complete legacy WebP bundle: the member `a…` and its four renditions `b…` to `e…`; `without` leaves some
+  /// out, `sized` puts another member in a rendition's place.
+  private func bundle(
+    without gone: [String] = [], sized changes: [String: [String: JSONValue]] = [:]
+  ) -> [String: JSONValue] {
+    var members = ["rail": stored("b"), "tile": stored("c"), "tile2x": stored("d"), "preview": stored("e")]
+    for name in gone { members[name] = nil }
+    for (name, change) in changes { members[name] = change }
+    var asset = stored("a")
+    asset["image_variants"] = .object(members.mapValues { JSONValue.object($0) })
+    return asset
+  }
+
+  /// An attachment as rosetta writes one (`AttachmentRef`), its source as given.
+  private func ref(_ id: String = "a1", kind: String = "image", source: JSONValue) -> JSONValue {
+    .object([
+      "id": .string(id), "kind": .string(kind), "label": .null, "name": .string("shot.png"),
+      "media_type": .string("image/png"), "byte_len": .int(4_096), "dimensions": .null,
+      "message_ranges": .array([]), "source": source,
+    ])
+  }
+
+  /// An image attachment whose bytes rosetta stored as `asset`.
+  private func image(_ id: String, _ asset: [String: JSONValue]) -> JSONValue {
+    ref(id, source: .object(["type": .string("asset"), "asset": .object(asset)]))
+  }
+
+  /// An entry whose body is of `type`, with `more`.
+  private func bodied(
+    _ type: String, _ more: [String: JSONValue], id: String = "t1", ordinal: Int64 = 1
+  ) -> JSONValue {
+    var body = more
+    body["type"] = .string(type)
+    return entry(["timeline_id": .string(id), "ordinal": .int(ordinal), "body": .object(body)])
+  }
+
+  /// A reply that says `done`, with `attachments`.
+  private func reply(_ attachments: [JSONValue], id: String = "t1", ordinal: Int64 = 1) -> JSONValue {
+    bodied("agent", ["text": inline("done"), "attachments": .array(attachments)], id: id, ordinal: ordinal)
+  }
+
+  /// A tool entry that ran `command` and recorded `attachments`.
+  private func ran(
+    _ command: String, _ attachments: [JSONValue], id: String = "t1", ordinal: Int64 = 1
+  ) -> JSONValue {
+    let tool: [String: JSONValue] = [
+      "native": .object(["name": .string("Bash")]), "status": .object(["value": .string("succeeded")]),
+      "action": shell(command), "attachments": .array(attachments),
+    ]
+    return bodied("tool_use", ["tool": .object(tool)], id: id, ordinal: ordinal)
+  }
+
+  private func carried(_ raw: JSONValue) -> [String: HistoryPicture] { HistoryProjection.pictures(entry: raw) }
+
+  // MARK: What is a picture
+
+  @Test("a recorded original is a picture: its address, its digest, its type, its size, and no sized members")
+  func aRecordedOriginal() {
+    let found = carried(reply([image("a1", original())]))
+    #expect(found == ["a1": HistoryPicture(attachmentId: "a1", base: keptOriginal, variants: [:])])
+  }
+
+  @Test("each of rosetta's six recorded formats is a picture, under its one extension")
+  func theSixFormats() {
+    let formats = [
+      ("image/png", "png"), ("image/jpeg", "jpg"), ("image/gif", "gif"), ("image/webp", "webp"),
+      ("image/bmp", "bmp"), ("image/x-icon", "ico"),
+    ]
+    for (mediaType, ext) in formats {
+      let found = carried(reply([image("a1", original(mediaType, ext))]))["a1"]
+      #expect(found?.base == kept("1", mediaType, ext, byteLen: 4_096), "\(mediaType)")
+      #expect(found?.variants.isEmpty == true, "\(mediaType)")
+    }
+  }
+
+  @Test("a complete legacy WebP bundle is a picture with its four sized members, and no others")
+  func aLegacyBundle() throws {
+    let found = try #require(carried(reply([image("a1", bundle())]))["a1"])
+    #expect(found.base == kept("a"))
+    #expect(found.variants == ["rail": kept("b"), "tile": kept("c"), "tile2x": kept("d"), "preview": kept("e")])
+    // a member under a name the rule does not know is neither judged nor kept
+    let more = carried(reply([image("a1", bundle(sized: ["full": stored("f")]))]))["a1"]
+    #expect(more?.variants.keys.sorted() == ["preview", "rail", "tile", "tile2x"])
+  }
+
+  /// fieldd's golden pairs hold rosetta's own page golden (`crates/protocol/tests/golden/wire.json`), whose tool
+  /// recorded one image as a legacy bundle. Their other attachments name a made-up member (`abc`), which the rule
+  /// refuses. The pairs' rows are held unchanged by `everyEntryProjectsToItsRow`, above.
+  @Test("over fieldd's own pairs: rosetta's page golden names one picture, and a made-up member names none")
+  func thePairs() throws {
+    let document = try Fixture.json("index-timeline-pairs.golden")
+    let cases = document["cases"]?.arrayValue ?? []
+    #expect(cases.count == 55)
+    var named: [[String: HistoryPicture]] = []
+    for item in cases {
+      let name = item["name"]?.stringValue ?? "?"
+      let raw = try #require(item["entry"], "\(name): no entry")
+      let found = HistoryProjection.pictures(entry: raw)
+      if !found.isEmpty { named.append(found) }
+      // a picture is only ever of an attachment its row carries
+      let row = HistoryProjection.row(entry: raw)
+      let refs = (row?.attachments ?? []) + (row?.tool?.attachments ?? [])
+      #expect(Set(found.keys).isSubset(of: Set(refs.map(\.id))), "\(name)")
+    }
+    #expect(named.count == 1)
+    let golden = try #require(named.first?["tool-image-1"])
+    let base = "09aab85791343d3f141e31e18f5a98b981114f9b2babb2437b5747d98b8502cc"
+    #expect(golden.base.digest == base)
+    #expect(golden.base.url == "/api/assets/\(base).webp")
+    #expect(golden.base.mediaType == "image/webp")
+    #expect(golden.base.byteLen == 17)
+    #expect(golden.variants.keys.sorted() == ["preview", "rail", "tile", "tile2x"])
+    #expect(golden.variants["tile2x"]?.digest == "18c7bfef4056353384174f2edda6228c7cb0d02d1781ae4a0e078dd1f438d732")
+    #expect(golden.variants["preview"]?.byteLen == 19)
+  }
+
+  // MARK: What is not
+
+  @Test("a reference, an unavailable source and a source with no asset are no picture")
+  func otherSources() {
+    #expect(carried(reply([image("a1", original())])).count == 1, "the control: a stored original is a picture")
+    let file: JSONValue = .object(["type": .string("file"), "path": .string("/work/shot.png")])
+    let reference: JSONValue = .object(["type": .string("reference"), "reference": file])
+    let unavailable: JSONValue = .object(["type": .string("unavailable"), "reason": .string("not_recorded")])
+    let bare: JSONValue = .object(["type": .string("asset")])
+    let nullAsset: JSONValue = .object(["type": .string("asset"), "asset": .null])
+    // the source's type decides, whatever else it carries
+    let disguised: JSONValue = .object(["type": .string("reference"), "asset": .object(original())])
+    var sources: [(String, JSONValue)] = []
+    sources.append(("a reference", reference))
+    sources.append(("unavailable", unavailable))
+    sources.append(("no asset", bare))
+    sources.append(("a null asset", nullAsset))
+    sources.append(("a reference that carries an asset", disguised))
+    for (name, source) in sources {
+      #expect(carried(reply([ref(source: source)])).isEmpty, "\(name)")
+    }
+  }
+
+  @Test("only an attachment of kind image is a picture, whatever its member is")
+  func onlyAnImage() {
+    let source: JSONValue = .object(["type": .string("asset"), "asset": .object(original())])
+    #expect(carried(reply([ref(kind: "image", source: source)])).count == 1, "the control")
+    for kind in ["document", "file", "video", "Image"] {
+      #expect(carried(reply([ref(kind: kind, source: source)])).isEmpty, "\(kind)")
+    }
+  }
+
+  @Test("an address that is not exactly /api/assets/<digest>.<ext> is no picture")
+  func theAddress() {
+    #expect(carried(reply([image("a1", original())])).count == 1, "the control")
+    let one = digest("1")
+    var refused: [(String, String)] = []
+    refused.append(("another extension", "/api/assets/\(one).jpg"))
+    refused.append(("another digest", "/api/assets/\(digest("2")).png"))
+    refused.append(("a host", "https://example.test/api/assets/\(one).png"))
+    refused.append(("a file's address", "file:///api/assets/\(one).png"))
+    refused.append(("a query", "/api/assets/\(one).png?image=full&v=1"))
+    refused.append(("a newline after it", "/api/assets/\(one).png\n"))
+    refused.append(("another folder", "/api/asset/\(one).png"))
+    refused.append(("no leading slash", "api/assets/\(one).png"))
+    for (name, url) in refused {
+      var asset = original()
+      asset["url"] = .string(url)
+      #expect(carried(reply([image("a1", asset)])).isEmpty, "\(name)")
+    }
+  }
+
+  @Test("a digest is sixty-four lowercase hex digits, and nothing else")
+  func theDigest() {
+    #expect(carried(reply([image("a1", original())])).count == 1, "the control")
+    var refused: [(String, String)] = []
+    refused.append(("uppercase", String(repeating: "F", count: 64)))
+    refused.append(("sixty-three digits", String(repeating: "1", count: 63)))
+    refused.append(("sixty-five digits", String(repeating: "1", count: 65)))
+    refused.append(("a letter past f", String(repeating: "g", count: 64)))
+    refused.append(("a newline after it", String(repeating: "1", count: 64) + "\n"))
+    for (name, stated) in refused {
+      var asset = original()
+      asset["digest"] = .string(stated)
+      asset["url"] = .string("/api/assets/\(stated).png")
+      #expect(carried(reply([image("a1", asset)])).isEmpty, "\(name)")
+    }
+  }
+
+  @Test("a member of no bytes is no picture: its size is a whole number above zero")
+  func theSize() {
+    #expect(carried(reply([image("a1", original())])).count == 1, "the control")
+    var refused: [(String, JSONValue)] = []
+    refused.append(("zero", JSONValue.int(0)))
+    refused.append(("below zero", JSONValue.int(-1)))
+    refused.append(("null", JSONValue.null))
+    // the port's own: the room's `byte_len > 0` would coerce these two; rosetta's wire is a u64 and sends neither
+    refused.append(("a string", JSONValue.string("4096")))
+    refused.append(("a fraction", JSONValue.double(0.5)))
+    for (name, size) in refused {
+      var asset = original()
+      asset["byte_len"] = size
+      #expect(carried(reply([image("a1", asset)])).isEmpty, "\(name)")
+    }
+    // a whole number is one however its writer spelt it
+    var spelt = original()
+    spelt["byte_len"] = JSONValue.double(4_096)
+    #expect(carried(reply([image("a1", spelt)]))["a1"]?.base.byteLen == 4_096)
+  }
+
+  @Test("a member that is not one of the six image types is no picture")
+  func theType() {
+    #expect(carried(reply([image("a1", original())])).count == 1, "the control")
+    var refused: [(String, String)] = []
+    refused.append(("image/svg+xml", "svg"))
+    refused.append(("image/avif", "avif"))
+    refused.append(("image/jpg", "jpg"))
+    refused.append(("image/vnd.microsoft.icon", "ico"))
+    refused.append(("text/plain; charset=utf-8", "txt"))
+    refused.append(("application/pdf", "pdf"))
+    refused.append(("IMAGE/PNG", "png"))
+    for (mediaType, ext) in refused {
+      // the attachment still says `image/png` of itself (`ref`): the member's own type decides
+      #expect(carried(reply([image("a1", original(mediaType, ext))])).isEmpty, "\(mediaType)")
+    }
+  }
+
+  @Test("a legacy bundle is whole and WebP throughout, or it is no picture")
+  func anIncompleteBundle() {
+    #expect(carried(reply([image("a1", bundle())])).count == 1, "the control: the whole bundle is a picture")
+    var refused: [(String, [String: JSONValue])] = []
+    var asset = bundle()
+    asset["media_type"] = .string("image/png")
+    refused.append(("its own member is not a WebP", asset))
+    asset = bundle()
+    asset["url"] = .string("https://example.test/image.webp")
+    refused.append(("its own address has a host", asset))
+    refused.append(("no tile2x", bundle(without: ["tile2x"])))
+    refused.append(("no tile2x and no preview", bundle(without: ["tile2x", "preview"])))
+    refused.append(("a rail alone", bundle(without: ["tile", "tile2x", "preview"])))
+    var sized = stored("e")
+    sized["url"] = .string("file:///tmp/image.webp")
+    refused.append(("a sized member at a file's address", bundle(sized: ["preview": sized])))
+    sized = stored("c")
+    sized["digest"] = .string(digest("f"))
+    refused.append(("a sized member whose digest is not its address's", bundle(sized: ["tile": sized])))
+    sized = stored("b")
+    sized["byte_len"] = .int(0)
+    refused.append(("a sized member of no bytes", bundle(sized: ["rail": sized])))
+    refused.append(("a sized member that is a recorded original", bundle(sized: ["preview": original()])))
+    // a member that states a rendition map is judged as a bundle, an original among them
+    asset = original()
+    asset["image_variants"] = .object([:])
+    refused.append(("an original with an empty map", asset))
+    asset = original()
+    asset["image_variants"] = .object(["tile": .object(stored("c"))])
+    refused.append(("an original with one sized member", asset))
+    asset = bundle()
+    asset["image_variants"] = .string("rail")
+    refused.append(("a map that is no object", asset))
+    for (name, changed) in refused {
+      #expect(carried(reply([image("a1", changed)])).isEmpty, "\(name)")
+    }
+    // a null map is no map: the member is judged as an original
+    asset = original()
+    asset["image_variants"] = JSONValue.null
+    #expect(carried(reply([image("a1", asset)]))["a1"]?.base == keptOriginal)
+  }
+
+  // MARK: Where they are read
+
+  @Test("a prompt's, a reply's, a team message's and a tool's attachments are all read, and no other body's")
+  func everyBody() {
+    let shot = image("a1", original())
+    let wanted = ["a1": HistoryPicture(attachmentId: "a1", base: keptOriginal, variants: [:])]
+    #expect(carried(bodied("user", ["text": inline("look"), "attachments": .array([shot])])) == wanted)
+    #expect(carried(reply([shot])) == wanted)
+    #expect(carried(bodied("collaboration", ["event": .object(["attachments": .array([shot])])])) == wanted)
+    #expect(carried(ran("screencapture", [shot])) == wanted)
+    #expect(carried(bodied("summary", ["text": inline("so far"), "attachments": .array([shot])])).isEmpty)
+    #expect(carried(bodied("thinking", ["text": inline("hm"), "attachments": .array([shot])])).isEmpty)
+  }
+
+  @Test("a picture is kept only for an attachment its row carries")
+  func onlyWhatTheRowCarries() throws {
+    let shot = image("a1", original())
+    var unreadable = attachment
+    unreadable["id"] = .string("")
+    unreadable["kind"] = .string("image")
+    unreadable["source"] = .object(["type": .string("asset"), "asset": .object(original())])
+    // a body drops the attachment its gate refuses, and keeps the rest
+    let mixed = reply([.object(unreadable), shot])
+    let mixedRow = try #require(HistoryProjection.row(entry: mixed))
+    #expect(mixedRow.attachments.map(\.id) == ["a1"])
+    #expect(carried(mixed).keys.sorted() == ["a1"])
+    // one unreadable attachment refuses a tool's whole line, and with it every picture
+    let refusedLine = ran("ls", [shot, .object(unreadable)])
+    let lineRow = try #require(HistoryProjection.row(entry: refusedLine))
+    #expect(lineRow.tool == nil)
+    #expect(carried(refusedLine).isEmpty)
+    // an entry the gate refuses has no row, and no picture
+    let refusedEntry = entry(
+      ["body": .object(["type": .string("agent"), "attachments": .array([shot])])], without: ["group"])
+    #expect(HistoryProjection.row(entry: refusedEntry) == nil)
+    #expect(carried(refusedEntry).isEmpty)
+  }
+
+  @Test("two attachments under one id are one picture, the first")
+  func oneIdTwice() {
+    let found = carried(reply([image("a1", original()), image("a1", bundle())]))
+    #expect(found.count == 1)
+    #expect(found["a1"]?.base == keptOriginal)
+  }
+
+  // MARK: Beside the row, and out of the document
+
+  @Test("the row beside the pictures is the door's row: a ref, with no digest and no address")
+  func theRowIsTheDoors() throws {
+    let raw = reply([image("a1", original()), image("a2", bundle())])
+    let projected = try #require(HistoryProjection.projected(entry: raw))
+    #expect(projected.detail?.pictures.keys.sorted() == ["a1", "a2"])
+    #expect(projected.row == HistoryProjection.row(entry: raw))
+    #expect(projected.detail?.row == projected.row)
+    func door(_ id: String) -> JSONValue {
+      .object([
+        "id": .string(id), "kind": .string("image"), "name": .string("shot.png"),
+        "mediaType": .string("image/png"), "byteLen": .int(4_096), "available": .bool(true),
+      ])
+    }
+    let wanted: JSONValue = .object([
+      "timelineId": .string("t1"), "sessionId": .string("s1"), "ordinal": .int(1), "kind": .string("agent"),
+      "group": .object(["id": .string("g1"), "kind": .string("human_turn")]), "text": .string("done"),
+      "attachments": .array([door("a1"), door("a2")]),
+    ])
+    let sent = try #require(HistoryProjection.rowJSON(entry: raw))
+    let difference = firstDifference(sent, wanted)
+    #expect(difference == nil, "\(difference ?? "")")
+    let written = String(decoding: try sent.encoded(), as: UTF8.self)
+    for digit in ["1", "a", "b", "c", "d", "e"] as [Character] {
+      #expect(!written.contains(digest(digit)), "\(digit)")
+    }
+    #expect(!written.contains("assets"))
+  }
+
+  @Test("an entry whose only extra is a picture has a detail; an attachment that is no picture leaves none")
+  func aDetailForAPictureAlone() throws {
+    let raw = reply([image("a1", original())])
+    let row = try #require(HistoryProjection.row(entry: raw))
+    #expect(!row.textClipped)
+    let detail = try #require(HistoryProjection.detail(entry: raw, beside: row))
+    #expect(detail.row == row)
+    #expect(detail.whole == nil)
+    #expect(detail.tool == nil)
+    #expect(detail.pictures.keys.sorted() == ["a1"])
+    #expect(HistoryProjection.projected(entry: raw) == HistoryProjected(row: row, detail: detail))
+    // it is laid over no row: the fold reads the row as it is
+    #expect(HistoryLineDetail.applied([row], [row.timelineId: detail]) == [row])
+    let omitted: JSONValue = .object(["type": .string("unavailable"), "reason": .string("omitted")])
+    let plain = reply([ref(source: omitted)])
+    let plainRow = try #require(HistoryProjection.row(entry: plain))
+    #expect(plainRow.attachments.map(\.id) == ["a1"])
+    #expect(HistoryProjection.detail(entry: plain, beside: plainRow) == nil)
+  }
+
+  @Test("a tool line's picture stands beside what the line opens to")
+  func besideAToolDetail() throws {
+    let raw = ran("screencapture shot.png", [image("tool-image-1", bundle())])
+    let detail = try #require(HistoryProjection.projected(entry: raw)?.detail)
+    #expect(detail.tool?.command == "screencapture shot.png")
+    #expect(detail.pictures["tool-image-1"]?.variants["tile2x"] == kept("d"))
+    #expect(detail.pictures["tool-image-1"]?.variants["preview"] == kept("e"))
+  }
+
+  @Test("above the projection a picture is found by its attachment's id after its row's")
+  func theKeyAbove() throws {
+    let first = try #require(HistoryProjection.projected(entry: reply([image("a1", original())])))
+    let second = try #require(
+      HistoryProjection.projected(entry: reply([image("a1", bundle()), image("a2", original())], id: "t2", ordinal: 2)))
+    let words = try #require(HistoryProjection.projected(entry: reply([], id: "t3", ordinal: 3)))
+    #expect(words.detail == nil)
+    var details: [String: HistoryLineDetail] = [:]
+    details["t1"] = try #require(first.detail)
+    details["t2"] = try #require(second.detail)
+    let found = HistoryLineDetail.pictured(details)
+    #expect(found.keys.sorted() == ["t1/a1", "t2/a1", "t2/a2"])
+    #expect(found["t1/a1"]?.base == keptOriginal)
+    #expect(found["t2/a1"]?.base == kept("a"))
+    #expect(HistoryLineDetail.pictured([:]).isEmpty)
+  }
+
+  /// VF-PM's ruling 8 (2026-11-13 00:24Z): "a document folded from rows with pictures beside them encodes to the
+  /// same bytes as one folded without". The document is written to the phone's cache at every rebuild (ruling 2):
+  /// no digest, no address and no byte may ride in that write. What it does carry is the attachment segment's id,
+  /// which is the key a picture is found by.
+  @Test("a document folded with picture details present encodes to the same bytes as one folded without")
+  func theDocumentDoesNotCarryThem() throws {
+    let raws = [
+      bodied("user", ["text": inline("look at this"), "attachments": .array([image("p1", original())])]),
+      reply([image("a1", original()), image("a2", bundle())], id: "t2", ordinal: 2),
+      ran("screencapture", [image("tool-image-1", bundle())], id: "t3", ordinal: 3),
+    ]
+    var rows: [IndexTimelineRow] = []
+    var details: [String: HistoryLineDetail] = [:]
+    for raw in raws {
+      let projected = try #require(HistoryProjection.projected(entry: raw))
+      rows.append(projected.row)
+      details[projected.row.timelineId] = try #require(projected.detail)
+    }
+    let found = HistoryLineDetail.pictured(details)
+    #expect(found.keys.sorted() == ["t1/p1", "t2/a1", "t2/a2", "t3/tool-image-1"])
+    let header = try IndexSessionResult(json: try Fixture.json("index-session.valid")).session
+    func folded(_ rows: [IndexTimelineRow]) -> HistoryDocument {
+      FieldHistoryModel.document(
+        header: header, rows: rows, desktop: "studio", agentLabel: "Claude", nextCursor: nil, watermark: nil,
+        liveSince: nil, now: Date(timeIntervalSince1970: 1_790_000_000))
+    }
+    func bytes(_ document: HistoryDocument) throws -> Data {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys]
+      return try encoder.encode(document)
+    }
+    let document = folded(HistoryLineDetail.applied(rows, details))
+    let with = try bytes(document)
+    let without = try bytes(folded(rows))
+    #expect(with == without)
+    let written = String(decoding: with, as: UTF8.self)
+    for digit in ["1", "a", "b", "c", "d", "e"] as [Character] {
+      #expect(!written.contains(digest(digit)), "\(digit)")
+    }
+    #expect(!written.contains("assets"))
+    // what the document does carry of an attachment is its segment's id, and that id is a picture's key
+    let ids = document.turns.flatMap(\.segments).compactMap { segment -> String? in
+      if case .attachment(let id, _, _) = segment { return id }
+      return nil
+    }
+    #expect(ids.contains("t2/a1") && ids.contains("t2/a2"))
+    for id in ids { #expect(found[id] != nil, "\(id)") }
+  }
+}
