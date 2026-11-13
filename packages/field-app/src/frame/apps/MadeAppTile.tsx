@@ -16,7 +16,8 @@ import {
 // with its state: the status dot (§2.5) beside the desktop's name, and the state's word when it is
 // not serving ("mini · asleep"); while this window's open is in flight, §9's "Opening on
 // ‹desktop›…", late. Its menu (•••, on a chip over the well) holds Keep (or Stop
-// keeping), Versions, Open in ‹host› (only with a hosted link) and Hide from Apps.
+// keeping), Versions and Open in ‹host› (only with a hosted link). Hide from Apps was dropped
+// (James, 2026-11-13).
 // The face is pressable in every state, so a tile that cannot open says why (the group's notice)
 // rather than lying inert; it waits only while an act of its own is under way.
 
@@ -37,7 +38,6 @@ export interface MadeAppTileProps {
   readonly busy: boolean;
   readonly onOpen: () => void;
   readonly onKeep: () => void;
-  readonly onHide: () => void;
   readonly onVersions: () => void;
 }
 
@@ -52,7 +52,6 @@ export function MadeAppTile({
   busy,
   onOpen,
   onKeep,
-  onHide,
   onVersions,
 }: MadeAppTileProps): ReactElement {
   const menu = useRef<HTMLDetailsElement>(null);
@@ -106,9 +105,6 @@ export function MadeAppTile({
               Open in {host}
             </a>
           )}
-          <button type="button" onClick={shut(onHide)} disabled={busy}>
-            Hide from Apps
-          </button>
         </div>
       </details>
     </li>

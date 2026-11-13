@@ -31,8 +31,9 @@ import { getRendererLogger } from "../../logging";
 // - OPEN is `artifact.open {appId, device, reveal: true}`: the HOME opens the URL it validated
 //   through its shell's `shell.openLink` (RULINGS L4, C1, C2). The window never holds `shell.open`
 //   and never calls `shell.openExternal`.
-// - KEEP and HIDE are `artifact.mark {foldKey, kept | hidden}`, ONCE: the person's intent, written
-//   at the home and replicated (RULINGS L8, C5), never a call per holder in `devices`.
+// - KEEP is `artifact.mark {foldKey, kept}`, ONCE: the person's intent, written at the home and
+//   replicated (RULINGS L8, C5), never a call per holder in `devices`. (Hide was dropped, James
+//   2026-11-13.)
 // - VERSIONS is `index.artifacts {device, appId}`, paged, each presentation opened by its id.
 // - Every state is said in words (MA-L10): a library still reading, a desktop asleep or on another
 //   build, a page not kept or too large, and — on a desktop whose build does not export yet, since
@@ -459,7 +460,7 @@ function appsUnavailable(error: unknown): boolean {
 /** The words for an act that failed other than by a refusal state (provisional, owed to James). */
 export function madeAppErrorWords(
   error: unknown,
-  act: "open" | "keep" | "unkeep" | "hide" | "versions",
+  act: "open" | "keep" | "unkeep" | "versions",
   title: string,
   desktop: string,
 ): string {
@@ -472,12 +473,11 @@ export function madeAppErrorWords(
       return "This window can't open apps yet.";
     return `Couldn't open ${title}. Try again.`;
   }
-  if (appsUnavailable(error)) return "Keeping and hiding apps isn't ready yet.";
+  if (appsUnavailable(error)) return "Keeping apps isn't ready yet.";
   if (kind === "FORBIDDEN_SCOPE" || kind === "UNAUTHORIZED")
-    return "This window can't keep or hide apps yet.";
+    return "This window can't keep apps yet.";
   if (act === "keep") return `Couldn't keep ${title}. Try again.`;
-  if (act === "unkeep") return `Couldn't stop keeping ${title}. Try again.`;
-  return `Couldn't hide ${title}. Try again.`;
+  return `Couldn't stop keeping ${title}. Try again.`;
 }
 
 /** An answer this build cannot read: the reading is refused whole, in words. */
@@ -569,17 +569,13 @@ export async function openMadeApp(
   return parsed.success ? parsed.data : { state: "starting" };
 }
 
-/** Keep or hide an app, ONCE at the home: `artifact.mark {foldKey, kept?, hidden?}`. */
+/** Keep an app, or stop keeping it, ONCE at the home: `artifact.mark {foldKey, kept}`. */
 export async function markMadeApp(
   client: MadeAppsClient,
   app: IndexApp,
-  flags: { readonly kept?: boolean; readonly hidden?: boolean },
+  flags: { readonly kept: boolean },
 ): Promise<ArtifactMarkResult> {
-  const raw = await client.request("artifact.mark", {
-    foldKey: app.foldKey,
-    ...(flags.kept !== undefined ? { kept: flags.kept } : {}),
-    ...(flags.hidden !== undefined ? { hidden: flags.hidden } : {}),
-  });
+  const raw = await client.request("artifact.mark", { foldKey: app.foldKey, kept: flags.kept });
   const parsed = ArtifactMarkResult.safeParse(raw);
   if (!parsed.success) throw new MadeAppsUnreadable("artifact.mark");
   return parsed.data;

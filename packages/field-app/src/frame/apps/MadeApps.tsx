@@ -60,8 +60,9 @@ import "./made-apps.css";
 // - A press on a tile that cannot open asks nothing and says why in the group's notice, with
 //   "Open in ‹host›" when the app is hosted: an https link the window's own policy hands the system
 //   browser (main's `decideWindowOpen`), so it needs no `shell.open` either.
-// - Keep and Hide ask `artifact.mark` once by the fold key. The home's answer stands until the next
-//   reading lands; until slice 3h the door refuses, and the group says so.
+// - Keep asks `artifact.mark` once by the fold key. The home's answer stands until the next
+//   reading lands; until slice 3h the door refuses, and the group says so. (Hide was dropped,
+//   James 2026-11-13.)
 
 export interface MadeAppsProps {
   readonly client: MadeAppsClient;
@@ -94,7 +95,6 @@ interface Noticed {
  * answered over: it stands until a newer reading lands. */
 interface Mark {
   readonly kept: boolean;
-  readonly hidden: boolean;
   readonly over: number;
 }
 
@@ -304,20 +304,16 @@ export function MadeApps({
     void ask(app, presentationId, madeAppActBasis(app, sourceOf(app)), 0);
   };
 
-  const mark = async (app: IndexApp, flags: { kept?: boolean; hidden?: boolean }) => {
+  const mark = async (app: IndexApp, flags: { kept: boolean }) => {
     const key = app.appKey;
     if (!begin(key)) return;
     setError(null);
-    const act = flags.hidden === true ? "hide" : flags.kept === false ? "unkeep" : "keep";
+    const act = flags.kept ? "keep" : "unkeep";
     try {
       const answer = await markMadeApp(client, app, flags);
       if (!mounted.current) return;
       setMarks((current) =>
-        new Map(current).set(app.foldKey, {
-          kept: answer.kept,
-          hidden: answer.hidden,
-          over: readings.current,
-        }),
+        new Map(current).set(app.foldKey, { kept: answer.kept, over: readings.current }),
       );
       refresh();
     } catch (failure) {
@@ -347,10 +343,7 @@ export function MadeApps({
     setNotice(null);
   };
 
-  const apps =
-    feed.phase === "live"
-      ? feed.apps.filter((app) => markOf(app)?.hidden !== true)
-      : ([] as IndexApp[]);
+  const apps = feed.phase === "live" ? feed.apps : ([] as IndexApp[]);
   const clock = now ?? Date.now();
   // the notice's app: the Versions step's own while it shows, else a tile still in the group
   const noticedApp = (about: Noticed): IndexApp | undefined => {
@@ -500,7 +493,6 @@ export function MadeApps({
                       busy={busy.has(app.appKey)}
                       onOpen={() => open(app)}
                       onKeep={() => void mark(app, { kept: !kept })}
-                      onHide={() => void mark(app, { hidden: true })}
                       onVersions={() => void showVersions(app)}
                     />
                   );
