@@ -7815,6 +7815,37 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     are also never written into the phone's own copy of the document, which is written at every change, so a
     document shown from that copy has plain lines until a direct read lands. Nothing on screen names the way a
     document is read.
+  - **A recorded picture is shown** (362g). Read straight from the desktop's index, an image the record holds
+    is drawn where its line stands today (`image shot.png on studio`): a square tile 104 pt a side on `fill`,
+    the picture cropped to its centre, at the placeholder's own corners and hairline (10 pt, the card's
+    hairline). The room's tile is 112 px in a narrow column; 104 pt stands three across on every iPhone. The
+    pictures of one message stand side by side, 8 pt apart, and wrap to a new row; a line that is no picture
+    keeps a row of its own among them. A reply's stand under the reply and a prompt's under the prompt. A
+    picture a tool recorded, and a team message's, gain their place as well, right under their group; they
+    had none. **While it is read** the tile's square stands empty with the line's glyph breathing at its
+    centre, as a running line's pulse does (to 35 % and back, 1.1 s each way; still under Reduce Motion), so
+    a row takes its height once, as it comes on screen, and nothing moves when the picture lands. **If it
+    cannot be read** the line stands as it does today, words and all; nothing in the document says an error,
+    and it is asked again when its row next comes on screen. **A press on a tile** opens the picture on a
+    sheet of its own, as a long message's (the large detent, the grabber, 40 pt corners, `paper`; the line's
+    words as its name, and `Done`): at the page's width, a taller picture scrolling. A pinch zooms it up to
+    four times, a double tap goes between fitted and twice, and it pans when zoomed. The tile's picture stands
+    in until the larger one is read (`Reading from studio…`), and stays if that does not arrive (`full size on
+    studio`). Nothing saves, shares or copies a picture. An animation shows its first frame; one too long for
+    the bound below keeps its line. The desktop renders both sizes and the phone asks for no other: the tile
+    at most 640 px square (the room's `tile2x`), the sheet at most 1,600 px on its long edge (its `preview`),
+    never the stored original. What counts as a picture is the room's rule: an image whose bytes rosetta
+    stored, in one of its six formats or as one of its older WebP sets. A document, a video, a file, and an
+    image the record does not hold keep their line. **Through the home desktop there is no picture**, only the
+    line: the door's row says what was attached and never where its bytes are. Nothing on screen names the way
+    a document is read. **Kept in memory only.** A picture's bytes live under a bound while the app runs (16
+    MiB a desktop; a tile's answer at most 614,400 bytes and a sheet's 3,840,000), the least recently shown
+    going first, and all of them go at sign-out; they are never written to the phone, and the direct read
+    keeps no cache of its own. Which picture a line is stays in memory too, beside its row, as the whole words
+    above do: the phone's own copy of the document holds the line's words and its id, never a digest or an
+    address. **One thing is accepted:** the grant the phone reads a session with also opens, on that desktop,
+    a picture of another session to a holder who already knows that picture's digest. That is rosetta's stated
+    design, and on this road every holder is one of the same person's own devices.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
