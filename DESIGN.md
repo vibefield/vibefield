@@ -7610,7 +7610,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   A **live row** names its desktop — mark and name — before its running
   line. The project's colour is **its ink** (§2.9) on the cap, the wash, the sparkline and the
   ribbon; the per-device deal by sequence retires from History. The **project screen**: the head
-  (cap, name, count), `N places on` and the marks, the four tiles, Overview, Live now, then
+  (cap, name, count) and nothing else in it, the name in the root's type and the count of its sessions in the
+  root's bubble (§8 "The roots' heads", A project's page wears the same head; *item 392, 2026-11-13. James,
+  23:28:32Z, session qa-01, of a project's page on his phone: "[Image #18] redesign this header area to match same
+  redesign of the project header, so it is simple showing project name and a bubble showing the session count, and
+  remove other text". It overturns PJ-7's "`N places on` and the marks" (2026-10-14), which stood here after the
+  head; a project's places are still under Desktops, below.*), the four tiles, Overview, Live now, then
   **Desktops** — one row per desktop (its mark at 19 pt, its name, `1 working` or `asleep · 2h`,
   and a disclosure that folds its places out run-fold style: each place by its folder's name and
   a branch that says more, then its last use or why it cannot take a launch), then the sessions by
@@ -8398,6 +8403,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       ledger the phone cut at its bound (item 352) says `2,000+`, as a lower bound says everywhere on the phone, and
       is read `Projects, more than 2,000`. *Both are readings; he ruled neither.*
     - The root's name, which a pushed screen's back button says, follows its title: **Projects**. *A reading.*
+  - **A project's page wears the same head** (item 392, 2026-11-13. James, 23:28:32Z, session qa-01, of a project's
+    page on his phone: "[Image #18] redesign this header area to match same redesign of the project header, so it is
+    simple showing project name and a bubble showing the session count, and remove other text"). After its cap (the
+    project's ink, 4 × 26) stands its name in the root's type, 34 bold in the ink, and beside it the root's bubble
+    with how many sessions the page lists (`62`, `1,485`); the two are read as one heading, `rosetta, 62 sessions`.
+    Nothing else stands in the head. It overturns the line under the name, `N places on` and the desktops' marks
+    (§8 "The phone's History is one ledger of projects"), and the bar's inline title, which said the name a second
+    time: the bar over the page holds the back button alone. The page keeps its name for the session pushed over
+    it, whose back button says it. The name was 28 bold, in the code alone.
+    - *Readings; he ruled none of them.* The cap stays: it is the project's mark, not text. A name too long for its
+      line is drawn smaller, down to the 28 it was, before it is cut; the bubble is never cut. A project whose
+      sessions are not read yet wears no bubble, as the root does with no project. The index's sentence, while it
+      is not ready (fix7), still stands under the head: it says the page is not whole.
 - **The phone's Chat** (track IOS, ruled 2026-11-04 from the design page *Chat in a Pocket*: PC-D1 and PC-D3…D8 A,
   James; PC-D2 carried A; the laws PC-L1…L5). Nothing is drawn yet: IOS-12a carries the wire, and IOS-12b…g draw it,
   in that order. One Chat, two sizes (PC-L1): the Mac's sparks, words, statuses and rulings at touch pitch. Every
