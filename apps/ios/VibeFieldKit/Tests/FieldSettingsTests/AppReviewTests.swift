@@ -150,8 +150,9 @@ struct AppReviewTests {
 
   @Test("VibeField's own parts (`own: true`) ride the record and are in no group; no group is left empty")
   func ownPartsAreNotDrawn() {
-    // Three own parts: one in a leading role, one in a role of its own, and rosetta as the generator writes its own
-    // row, with its note and no roles, so unfiltered it would sit last under no head.
+    // Three own parts: one in a leading role, one in a role of its own, and one with its note and no roles, in the
+    // form the generator wrote rosetta's row before 0.1.6, so unfiltered it would sit last under no head. Since
+    // rosetta 0.1.6 (MIT) the generator writes rosetta as a licensed part in "agent history", with its text.
     let json = #"""
       {"schema": 1, "components": [
         {"ecosystem": "swift", "name": "ghosttea", "version": "0.14.0", "licence": "MIT", "texts": [],
