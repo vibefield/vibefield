@@ -7595,9 +7595,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   marks (§13; the Mac's a laptop since LP-4, 2026-11-05), template assets on the phone, in the text's ink — and never a hue. The **ledger row**
   keeps identity · location · quantity; location is the marks, **one per desktop the project lives
   on, left-aligned** in the roster's order (the home first) at 13 pt in `inkFaint`, a sleeping
-  desktop's at 40% — the path never shows. The **scope line** ends in the marks of the desktops
-  read (12 pt), and each sleeping desktop gets its own honest sentence led by its mark: `⊞ mini is
-  asleep · read 11:42`. A **live row** names its desktop — mark and name — before its running
+  desktop's at 40% — the path never shows. The **root's head** is one word and one count: **Projects**, and
+  beside it a bubble that holds how many the ledger lists (§8 "The roots' heads" rules the bubble; *item 390,
+  2026-11-13. James, 23:28:32Z, session qa-01, of the root on his phone, its title and the line under it marked
+  first: "[Image #16] redesign the first marked area, to just show Projects and a bubble that shows the project
+  count and thats it, keep it minimal, remove the second marked text". It overturns PJ-7's scope line
+  (2026-10-14), which stood here: "The **scope line** ends in the marks of the desktops read (12 pt)", the line
+  under the title that said `N projects · N sessions across N agents on` and then those marks.*) Under the head
+  stands only what says the ledger is not whole, in the words it had: the ledger's own desktop while it does not
+  answer (`studio is asleep · read 11:42`, or the contracts version it speaks), each sleeping desktop's own
+  honest sentence led by its mark (`⊞ mini is asleep · read 11:42`), and the index's while it is not ready (fix7,
+  below). A whole ledger has no line there. *That these three stay is a reading of "and thats it", not his
+  ruling: the ledger in his picture was whole.*
+  A **live row** names its desktop — mark and name — before its running
   line. The project's colour is **its ink** (§2.9) on the cap, the wash, the sparkline and the
   ribbon; the per-device deal by sequence retires from History. The **project screen**: the head
   (cap, name, count), `N places on` and the marks, the four tiles, Overview, Live now, then
@@ -7625,8 +7635,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Claude Code on studio` · `Held under another profile on studio`.
   **The ledger's door's INDEX is said, never guessed** (fix7, 2026-10-14 — PJ-7's first phone run
   said "No project in your desktops' index yet" over a FAILED index): the reader asks `index.status`
-  beside each `project.list`, and while the index is not ready the scope line gains one more
-  sentence, led by that desktop's mark like an asleep one — `studio's index is starting` · `studio
+  beside each `project.list`, and while the index is not ready one more sentence stands under the head
+  (*until item 390, 2026-11-13, this said "the scope line gains one more sentence"; the scope line is gone,
+  above*), led by that desktop's mark like an asleep one — `studio's index is starting` · `studio
   is rebuilding its index` · `studio is indexing · 61%` · `studio's index has stopped` · `studio runs
   no history index` — the project screen carries the same line under its head, and an EMPTY ledger
   says it as its note, with fieldd's own words after it: **"studio's index has stopped"** — "‹fieldd's
@@ -7661,8 +7672,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the other three are sums over the projects whose figures are read, and a dash before the first is. Cost is
     estimated at list prices and says so (`~`); a sum that is a lower bound says `+`.
   - **One line under them says what is not whole, and nothing when all is** (11.5 pt, `inkFaint`): `reading figures
-    · 41 of 166 projects` · `figures for 3 projects failed · retrying` · `messages are a lower bound` (a desktop cuts
-    a project's session rows for a phone at a hundred, and says so) · `2 projects' days are not exact`.
+    · 41 of 166 projects` · `figures for 3 projects failed · retrying` · `2 projects' days are not exact`.
+    *Corrected 2026-11-13 (item 390): the line also said `messages are a lower bound` ("a desktop cuts a project's
+    session rows for a phone at a hundred, and says so"). James removed it: 23:28:32Z, session qa-01, the line
+    marked second on his phone, "[Image #16] redesign the first marked area, to just show Projects and a bubble that
+    shows the project count and thats it, keep it minimal, remove the second marked text". The messages figure keeps
+    its `+` (above), which is now all that says its sum is a lower bound. The line's other sentences were not in
+    his picture and stay (a reading).*
   - **The treemap** is the ten projects that cost most over their lifetime, squarified (the room's layout), in a
     148 pt plot on a `fill` card (radius 14, 9 pt in): each tile its project's ink at 26% (34% in the dark), radius
     5, a 2 pt gutter; from 52 × 36 pt up a tile carries its name (10.5 pt medium, `inkSecondary`, top left) and its
@@ -8350,7 +8366,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
 - **The roots' heads** (item 350; James, 2026-11-12, on his iPhone 14 Pro). History's and Chat's roots wear no
   system bar. Each has a head in the band Field's Stories row stands in: its top the row's (56 on an island phone, §8
   "The phone's Stories row") and 44 tall, a circle's. So the view circles, **History**, **Chat** and Chat's ✦ stand on
-  one line across the three tabs. The title is 34 bold in the ink, 20 from the left, the lists' margin; Chat's ✦ keeps
+  one line across the three tabs (*corrected 2026-11-13, item 390: History's root is titled **Projects** now, with
+  its count in a bubble beside it; "A head's bubble", below*). The title is 34 bold in the ink, 20 from the left,
+  the lists' margin; Chat's ✦ keeps
   its 44 button, its glyph's right edge 20 from the right. History's head stands on the page's paper and the ledger
   scrolls under it. Chat's stands on the list's paper; on the night it is clear and wears the night's ink. A pushed
   screen keeps the system's bar, and its back button still says the root's name.
@@ -8366,6 +8384,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     one").
   - *Before:* the system's large titles, which stand a bar's height under the status bar's line, lower than Field's
     row.
+  - **A head's bubble** (item 390, 2026-11-13. James, 23:28:32Z, session qa-01, of History's root on his phone:
+    "[Image #16] redesign the first marked area, to just show Projects and a bubble that shows the project count
+    and thats it, keep it minimal, remove the second marked text"). History's root is titled **Projects**. The tab
+    is still History, in the bar and in its spoken name; the page it opens is its projects. Beside the title, 10 pt
+    on and centred on it, a bubble holds how many projects the ledger lists: the count with its thousands separator
+    (`79`, `1,485`), 12 medium with tabular digits in `inkSecondary`, 8 pt in from each end of a `fill` capsule 22
+    tall. It is the bubble a project's page has worn beside its name since H-3, which no text ruled until now. The
+    title and its bubble are read as one heading, `Projects, 79`. The band, its top and its 44, the title's 34
+    bold and the figures toggle at its right (item 353) do not move. It overturns "**History**" as this root's
+    title (item 350, above) and the line that stood under it (§8 "The phone's History is one ledger of projects").
+    - A ledger that lists no project wears no bubble: the page's note says why, and a `0` would be a claim. A
+      ledger the phone cut at its bound (item 352) says `2,000+`, as a lower bound says everywhere on the phone, and
+      is read `Projects, more than 2,000`. *Both are readings; he ruled neither.*
+    - The root's name, which a pushed screen's back button says, follows its title: **Projects**. *A reading.*
 - **The phone's Chat** (track IOS, ruled 2026-11-04 from the design page *Chat in a Pocket*: PC-D1 and PC-D3…D8 A,
   James; PC-D2 carried A; the laws PC-L1…L5). Nothing is drawn yet: IOS-12a carries the wire, and IOS-12b…g draw it,
   in that order. One Chat, two sizes (PC-L1): the Mac's sparks, words, statuses and rulings at touch pitch. Every
