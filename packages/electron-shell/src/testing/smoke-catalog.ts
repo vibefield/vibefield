@@ -223,6 +223,8 @@ export function judgeCatalog(faces: readonly CatalogFace[]): string[] {
 export interface RampSeen {
   readonly view: { readonly width: number; readonly height: number };
   readonly box: Box;
+  /** The document's position, read with the specimen's box: the ramp's capture is bracketed from here (N2). */
+  readonly top: number | null;
   readonly chips: readonly (Box & {
     readonly tier: string;
     readonly ground: string;
@@ -378,6 +380,8 @@ ${PAGE_WORDS}
       return {
         view: { width: innerWidth, height: innerHeight },
         box: box(ramp),
+        // the document's position, read with the specimen's box: the ramp's capture is bracketed from here (N2)
+        top: document.scrollingElement?.scrollTop ?? null,
         chips: [...ramp.querySelectorAll("[data-ramp-tier]")].map((chip) => {
           const range = document.createRange();
           range.selectNodeContents(chip);
@@ -547,7 +551,7 @@ export async function catalogRows(
   // a capture walked again, once, when the document moved during it (item 264): first the document comes to rest again
   // (fd's F2, so a mover still going cannot hit the second capture too), then the attempt re-runs whole (centred,
   // settled, read, captured), named in `recaptured`. A move during the second is the walk's problem to say, quoting
-  // the last thing a capture of this face threw. Every capture that failed is kept in `captureFailures` (fd's F1); the
+  // the last thing either capture threw (N1). Every capture that failed is kept in `captureFailures` (fd's F1); the
   // caller lets one that failed on a still document stand
   const steady = async <T extends { readonly shot: Captured | null }>(
     theme: CatalogTheme,
@@ -577,7 +581,7 @@ export async function catalogRows(
     const last = threw.at(-1);
     return {
       ...again,
-      moved: last === undefined ? moved : `${moved}; the capture failed: ${last}`,
+      moved: last === undefined ? moved : `${moved}; a capture of it failed: ${last}`,
     };
   };
 
@@ -687,7 +691,7 @@ export async function catalogRows(
         const seen = await page<RampSeen>("ramp()");
         if (shown !== true || seen === null) return { seen: null, rect: null, shot: null };
         const rect = rounded(seen.box);
-        return { seen, rect, shot: await capture(rect) };
+        return { seen, rect, shot: await capture(rect, seen.top) };
       });
       if (ramp.seen === null || ramp.rect === null || ramp.shot === null)
         problems.push(`by ${theme} the catalog's Text ramp did not stand`);

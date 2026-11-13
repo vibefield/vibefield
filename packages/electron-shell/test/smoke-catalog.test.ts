@@ -221,6 +221,7 @@ describe("DESIGN.md §2.4's ramp measured (item 127)", () => {
     const ramp: RampSeen = {
       view: { width: 1600, height: 900 },
       box: { x: 300, y: 40, width: 40, height: 10 },
+      top: null,
       chips: [seen("t3", 4.5, 300), seen("t3", 4.5, 320)],
     };
     const readings = rampReadings("day", bitmap, ramp);
@@ -429,7 +430,7 @@ const walkOver = async (
       return seen;
     },
     showRamp: () => true,
-    ramp: () => ({ view, box: rampBox, chips: [] }),
+    ramp: () => ({ view, box: rampBox, top: top(), chips: [] }),
     scrollTop: () => top(),
   };
   const win = {
@@ -534,7 +535,7 @@ describe("the walk over a page held here, no Electron (item 264)", () => {
       capturing: [{ move: 500 }, { move: 500, fails: true }],
     });
     expect(movedLines(failed.problems)).toEqual([
-      "on day text ramp the catalog's document moved during the capture (500 → 1000), twice; the capture failed: UnknownVizError",
+      "on day text ramp the catalog's document moved during the capture (500 → 1000), twice; a capture of it failed: UnknownVizError",
     ]);
   });
 
