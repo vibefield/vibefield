@@ -44835,6 +44835,16 @@ check. Neither had run at this entry.
 - The EL8 to mille 0.3.5, and DR-1 (B).
 - The Swift plane rejoins at the first ghosttea that declares 0.7.27, and the phone takes klauspost v1.20.2 then.
 
+**Corrected 2026-11-13 (item 379; found at STOP 30 of the EL8 to rosetta 0.1.6, LANDED "EL8 — Rosetta 0.1.6").**
+This EL8 refreshed `go-modules.json` from sidecar 0.7.27, which took klauspost/compress v1.20.2, so v1.20.0 left
+the snapshot. That snapshot is the only offline source of Go licence texts the phone's record reads (`--ios` takes a
+module's texts from it first, then from a module cache). The Swift plane stayed 0.7.26, whose TailscaleKit
+(`d1dc45d03`) still links v1.20.0, and the record was not regenerated in this event, so nothing failed here. From
+this event on, the record regenerated only on a host whose Go module cache held v1.20.0: the regeneration in
+`77ef95f50` (M290) ran on one that did; the old mini, with no Go, did not. Until item 379 makes the snapshot
+cover both Go binaries, every runner that regenerates the iOS record seeds a module cache of its own with that
+module's LICENSE, taken from the committed record, and passes `--gomodcache` (VF-PM, 2026-11-13 02:46Z).
+
 ## Q4 + MV's gate fixes (M246) — the thumbnail follows an edit by ≈ 10 s, not ≈ 22: the desk's wind blows 8 s after the last touch; and the squeeze gate's owed test fixes, at their causes
 
 (2026-11-09; seven commits from two hands, landed together: MV's five (vibe-field-5a) and Q4's red and green (bb), in
@@ -48729,3 +48739,142 @@ words are unchanged.
 **Owed.** Item 320's class beyond these three sites, as ROADMAP names it (RV's section).
 
 **Not done, and not claimed:** no smoke and no app run; nothing pushed.
+
+## EL8 — Rosetta 0.1.6: the npm rows, the lock, the pin and PIN_EXPECTATIONS move together with the kit's Swift row; rosetta is MIT, and the notices list it so (M296)
+
+(2026-11-13; TWO commits, `31abf8792` (the pin event, tree `384ced6b5643`) and its fix `ea26b0464` (the notices
+test, tree `4a919c98be60`), on main `bf9ebb21c` (M295), with HK's M295 records re-carried as `dc2edb222` and
+these records over them. Cut by HG (vibe-field-12) in `lanes/hg/vibe-field` on `hg/el8-rosetta-016` by
+`el8-commit.sh` (`501332b1…`), once, directly, at 03:20:12Z on VF-PM's GO: its hand half by `edits.py` (14
+exact-text edits over 5 files), its generated half a9's six files from run el8r016b on the old mini. Validated by
+el8r016b (the generated half) and part (B) at the tip (the committed rows and V), both on the old mini; the
+first B1, mini-el8c016a at `31abf8792`, went red, and B2's first try stopped (Found). Lands by the fixer by
+fast-forward as M296, on VF-PM's LAND GO. On James's words, typed at VF-PM's session on 2026-11-12: "merge #48
+first" (23:17:43Z) and "i want HG fully land soon" (23:19:24Z). The packet is
+`lanes/hg/el8-016-land/packet-ea26b0464/` (SHA256SUMS
+`7f974399b8e872f3…`, 36 entries). Its predecessor is "EL8 — Rosetta 0.1.5" (`68b80fb95`, M230).)
+
+**The release it pins.** rosetta 0.1.6 is `00221b5b70f64dc0e08588886718f3db6222f99c`, "Release 0.1.6 (#53)", whose
+parent is `cead42a79`, #48's merge; tags `v0.1.6` and `npm-v0.1.6`, pushed by James (npm's two packages published
+00:29Z and 00:33Z on 2026-11-13). Over 0.1.5's `811e554c6` it carries:
+- #48 (RO-40, HG-3): the room's `waitMark`, which HG-4's bind takes. James merged it first, on his word above.
+- #50: the Swift client's bounded reads (images, oversized text, an omitted command) and `RosettaError.tooLarge`. The
+  kit compiles over it unchanged: FieldHistory tests the client's errors with `if case`
+  (`HistoryDirectRead.swift:300–312`), never an exhaustive switch.
+- #51: MIT. A root LICENSE, one per npm package, `license = "MIT"` in the workspace, and the daemon archive's LICENSE.
+- #53: the release.
+- OB's read before the pin moved: `crates/` is the same tree as 0.1.5's, with PROTOCOL_VERSION 30, SCHEMA 30, SEARCH 4
+  and LEDGER_META 2 unmoved, so the contracts' fixtures stay; both npm packages read 0.1.6 on the registry.
+
+**What landed.** 11 files, +76 −71 over the two: the pin event +61 −67, patch-ids `9c8dd024a21f` (plain) and
+`8999a3559f4d` (-U0); its fix, the notices test alone, +15 −4, `e538501b1d19` and `41d990077494`. The pin class is
+7, release-class 0, release-adjacent 0; no Rust, no product source.
+
+| Path | numstat | How |
+|---|---|---|
+| `siblings.lock.json` | 4 4 | rosetta's `sha` 811e554c6 → 00221b5b7, `release` {npm 0.1.6, swift 0.1.6}, the header's history |
+| `pnpm-workspace.yaml` | 10 9 | the two rows 0.1.5 → 0.1.6 with the block's history line; the exclude holds the 0.1.6 rows |
+| `scripts/preflight.mjs` | 6 6 | `PIN_EXPECTATIONS`: the two npm rows and `let rosettaRelease`, 0.1.5 → 0.1.6 |
+| `scripts/third-party-notices.mjs` | 6 16 | rosetta takes the licensed row; `ownNote` goes from the cargo sibling and `IOS_SIBLINGS` |
+| `tooling/dev-runner/test/third-party-notices.test.mjs` | 16 5 | item 259's row: its note is `siblingRow`'s default now; and (the fix) the committed record's rosetta row: no `own`, MIT, one text |
+| `pnpm-lock.yaml` | 15 15 | the ONE install that rewrote it; four 0.1.6 keys, no 0.1.5 key |
+| `apps/ios/VibeFieldKit/Package.swift` | 1 1 | `let rosettaRelease: Version? = "0.1.6"`, rendered from the lock |
+| `apps/ios/VibeFieldKit/Package.resolved` | 3 3 | rosetta's pin (0.1.6, `00221b5b7`) and the originHash alone |
+| the App's `Package.resolved` | 3 3 | the same |
+| `apps/ios/App/Resources/acknowledgements.json` | 10 7 | regenerated by `third-party-notices.mjs --ios` |
+| its trimmed copy, `acknowledgements-l5.lane.json` | 2 2 | the `pins` row alone |
+
+**MIT, and the notices (VF-PM's ruling, 2026-11-12 23:27:46Z).** The rosetta packages are listed as MIT with their
+LICENSE text, like any other MIT package; "the owner's own, not licensed separately" would now be false. `siblingRow`
+lists a sibling with a licence or a licence file as licensed, and 0.1.6 has both, so rosettad's crates (the desktop
+ledger) and the Swift client (the iOS record) take the licensed row. In the phone's record, rosetta's row goes from
+the owner's own (UNLICENSED, no text) to MIT, role "agent history", text `a3f177dc04ae`: the same words as ghosttea's
+and truffle's MIT text, already in the record, so it holds 116 texts before and after. No other row moves.
+
+**The generated half: run el8r016b** (a9, the old mini; done 03:08:47Z; its `.done` is the last line of
+`lanes/ts6/runel8rb/wait.out`, 8,893 B, sha256 `4e467449c0499a73…`). Steps 1 to 9 as wanted, and "the notices proof
+EQUAL". GEN's six are held by its SHA256SUMS (`2c37979307f078d3…`, 6 OK of 6, read again on this Mac):
+- the one install downloaded 2, from registry.npmjs.org; the frozen install after the 0.1.5 rows dropped held the lock
+  (`f82b5d84e4ebffc1…`);
+- `../rosetta-pin` 811e554c6 → 00221b5b7, fetched from github.com; rosettad rebuilt from it (45,066,000 B); crates.io
+  never (cargo offline);
+- both Swift resolves exit 0 from github.com, keychain-class 0, the five SwiftPM credential variables unset; each moves
+  rosetta's pin and the originHash alone;
+- the record regenerated with `--gomodcache` naming a module cache of the run's own (below, Found), reproducing
+  `bf9ebb21c`'s record byte for byte before the pin moved.
+
+**The committed rows and V: part (B)** (B1 `37729a9cf38e778b…`, B2 `3bd87b8c958e3ddb…`).
+- B1, the re-cut (run mini-el8c016c, 05:41:02Z to 05:48:35Z; results `lanes/ts6/el8c016c-a9-results/`): "PART (B1)
+  RAN TO ITS END: ALL 11 ROWS GREEN at ea26b0464, V whole the last of them".
+  - D `pnpm check:deps`, R `node scripts/siblings.mjs render --prod --check`, B biome with no `--write` on the eleven
+    (11 exits 0), I `pnpm check:ios-fixtures` ("ios fixtures: 454 copies identical"): each exit 0.
+  - TA and TD, tsc field-app and fieldd: exit 0. VH, the five history files: "Tests 65 passed (65)". N, the notices
+    test: "tests 23", "pass 23", "fail 0".
+  - BU "bundle assert OK"; CE "census assert OK — no §7.3 violation", drift named none.
+  - V, `pnpm verify` WHOLE and once: exit 0 in 382 s; dev-runner 483 of 483; "cargo test results ok 38, FAILED 0";
+    gen:check's line x1; field-app "Tests 4700 passed (4700)", fieldd "Tests 3845 passed | 15 skipped (3860)". Its
+    reads are HG-4's base (`v-base`, SHA256SUMS `cbb8d6a1ace93c50…`, in the packet).
+  - The install `--frozen-lockfile --offline`, hosts none in every row; rosettad at the pin (45,066,000 B) unmoved.
+- B2, the kit (run mini-el8c016e, 06:54:46Z to 07:00:50Z; results `lanes/ts6/el8c016e-a9-results/`; "Xcode 27.2
+  Build version 27B52"): "PART (B2) RAN TO ITS END: ALL 3 ROWS GREEN at ea26b0464".
+  - KB, build-for-testing VibeFieldKit-Package for the iPhone 17 simulator: exit 0, "** TEST BUILD SUCCEEDED **".
+  - KH, FieldHistoryTests (HistoryDirectReadTests, the RosettaClient consumer): "131 tests in 11 suites", 0 failed.
+  - KS, FieldSettingsTests (AppReviewTests): "41 tests in 5 suites", 0 failed; the row that reads the record's fixture
+    copy passed x1.
+  - Hosts none: fetch-class 0 and from-cache 0 in each kit step. The SwiftPM residual is el8r016b's (Found).
+
+**Found along the way.**
+- **The first B1, at `31abf8792`, went red: "RAN TO ITS END WITH RED: 3 of 11 rows red [R N V]"** (run
+  mini-el8c016a, 05:07:24Z to 05:12:56Z; `.done` `6fcd62aef20daf25…`; results `lanes/ts6/el8c016a-a9-results/`,
+  its `v-base` marked a red V, not a base).
+  - R, red by usage: the brief wrote `node scripts/siblings.mjs render --check`, which needs `--prod`; it printed
+    its usage line and exited 2, and the check never ran. A dated erratum is at the brief's line 66. Nothing was
+    retried; the re-cut runs `render --prod --check` as its first row (VF-PM 05:11Z).
+  - N, red and real: the notices test (23 tests, 22 pass, 1 fail) still asserted rosetta `own: true` against the
+    regenerated record, which carries no `own` key now. `31abf8792` moved that file by one line and missed this
+    assertion. V went red at `pnpm test` after 259 s on that one failure (dev-runner 483, 482 pass, 1 fail).
+  - Both misses are mine and VF-PM's: neither of us ran that file, or read that row against the tool's usage,
+    before the cut. qa-01 found them. The answer is the fix `ea26b0464`, one commit and never an amend (VF-PM
+    05:16Z), and the re-cut B1 at the tip.
+- **B2's first try, at the tip, stopped: "STOPPED (exit 34)"** (run mini-el8c016b, 06:25:06Z to 06:25:45Z; `.done`
+  `9a44446cf9c48e13…`; results `lanes/ts6/el8c016b-a9-results/`): "a path rewrite in the copy failed at
+  checkouts/ghosttea/.git/config (STOP 34, OWED)", before any kit step. The copy's SwiftPM checkout files are mode
+  444, and `cp` over one was refused; nothing was harmed, and the lane, its install and `../rosetta-pin` were left as
+  found. The miss is VF-PM's and qa-01's: VF-PM's ruling of the copy (option 1) did not ask the modes (VF-PM
+  07:05:22Z). The second try, mini-el8c016e, puts the rewritten files' modes back as the source's and ran green.
+- **STOP 30 of run el8r016 (02:36:06Z, before step 1; nothing changed, the pin unmoved).** The notices generator could
+  not regenerate the committed iOS record on a host with no Go module cache: "GAP TailscaleKit:
+  github.com/klauspost/compress v1.20.0 has no recorded licence". The committed Go snapshot lost that module at the EL8
+  to truffle 0.7.27, which is corrected at its source in this commit (LANDED "EL8 — truffle 0.7.27"; DECISIONS TB).
+  el8r016b seeded a module cache of its own with one file, `github.com/klauspost/compress@v1.20.0/LICENSE`, whose bytes
+  are the committed record's own text `000c1296f033` (16,732 B). That seed proves nothing for that one text. Its
+  witnesses are the committed snapshot's byte-equal text for v1.20.2 (by `cmp` in the run) and `77ef95f50`'s run on a
+  host with a real module cache (116 texts, 0 gaps). The repair is item 379, HG's.
+- **a9's step-5 finding:** "1 changed line(s) under crates and clients name a protocol or schema version". The QA agent
+  read it at 03:12Z: one added line in `clients/swift/Tests/RosettaClientTests/Support.swift` that uses the constants
+  (`Rosetta.protocolVersionHeader`); no version value moved, and the installed package's wire version reads 30.
+- **The App's xcodebuild resolve** leaves SwiftPM's fingerprints (rosetta, ghosttea) and manifest caches under the
+  mini's SwiftPM homes: the EL8 mint's known residual, its reads not redirectable, its writes seen.
+- **The SSD filled at 03:09Z** (32 MiB free) from a cargo test in a separate rosetta session of James's, stopped at
+  03:19Z, as that session named itself; no lane ran cargo. The commit's branch switch (652 paths, net +2.04 MiB) ran
+  at 48 MiB free on VF-PM's GO; the packet was built on the internal disk (`pack-el8.v2.sh`, OUT as a third
+  argument, VF-PM 03:17Z) and copied to the SSD after.
+- **My slips.** My first answer on STOP 30 read truffle's two go.mod files from James's own checkout `../p008/truffle`
+  (git objects at public tags; nothing changed or printed): a departure, which VF-PM named at 02:49Z. And
+  `values.json` carried no message fields when VF-PM first said GO; `el8-commit.sh` fills its message only after the
+  switch and the writes, so I held the run and filled them from the `.done` first.
+
+**Owed.**
+- Item 379 (HG's): the committed Go snapshot covers the phone's TailscaleKit too, with a row that regenerates the iOS
+  record under an empty module cache and wants 0 gaps.
+- The EL8 that moves the Swift plane to truffle 0.7.27 owes the measurement that the record's klauspost row moves to
+  v1.20.2 with the same text, `000c1296f033`.
+- HG-4 (`hg/hold-r4` on the tip, re-cut once more onto these records before it lands) and its own entry.
+- The phone's `AppReviewTests.swift` holds an inline record whose comment describes the generator before 0.1.6:
+  a comment-only follow-up, numbered when the EL8 has landed (VF-PM 05:22Z).
+- The Mac's rows after the land (`../rosetta-pin` at the pin, the frozen install, rosettad, preflight): HG's, on
+  VF-PM's GO after the land (`lanes/hg/el8-016-land/POST-LAND-MAC.md`); their readings ride HG-4's records as an
+  addendum to this entry.
+- `gate:landing`, landing-only, on James's Mac mini at his unlock (j-table-next).
+
+**Not done, and not claimed:** no smoke, no app run and no Electron row for this commit; nothing pushed.
