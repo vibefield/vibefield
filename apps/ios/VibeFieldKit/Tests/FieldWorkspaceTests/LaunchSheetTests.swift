@@ -220,7 +220,7 @@ struct LaunchSheetTests {
     #expect(!model.canSpawn)
     let reader = try #require(model.reader)
     let home = try #require(reader.roots.first { $0.browse == "home" })
-    await reader.open(home, path: "Projects/project100")
+    await reader.open(home, path: "Projects/workbench")
     #expect(model.chooseCurrentFolder())
     #expect(model.place == nil)
     #expect(await model.spawn())

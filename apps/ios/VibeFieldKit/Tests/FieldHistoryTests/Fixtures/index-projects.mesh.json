@@ -6,8 +6,8 @@
       "projectId": "p-4f1c2a9e",
       "name": "vibe-field",
       "rootPaths": ["/Users/me/Projects/vibe-field"],
-      "gitRepo": "github.com:jamesyong42/vibe-field",
-      "family": "github.com/jamesyong42/vibe-field",
+      "gitRepo": "github.com:example_owner/vibe-field",
+      "family": "github.com/example_owner/vibe-field",
       "sessionCount": 412,
       "lastActivityAt": 1759276800000
     },
@@ -16,8 +16,8 @@
       "projectId": "p-1b9e77aa",
       "name": "vibe-field",
       "rootPaths": ["/Users/me/code/vibe-field"],
-      "gitRepo": "https://github.com/jamesyong42/vibe-field",
-      "family": "github.com/jamesyong42/vibe-field",
+      "gitRepo": "https://github.com/example_owner/vibe-field",
+      "family": "github.com/example_owner/vibe-field",
       "sessionCount": 37,
       "lastActivityAt": 1759190400000
     }

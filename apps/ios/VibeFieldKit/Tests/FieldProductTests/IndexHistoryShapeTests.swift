@@ -31,7 +31,7 @@ import Testing
     #expect(first.projectId == "p-4f1c2a9e")
     #expect(first.name == "vibe-field")
     #expect(first.rootPaths == ["/Users/me/Projects/vibe-field"])
-    #expect(first.family == "github.com/jamesyong42/vibe-field")
+    #expect(first.family == "github.com/example_owner/vibe-field")
     #expect(first.sessionCount == 412)
     #expect(first.lastActivityAt == 1_759_276_800_000)
     // the `//` note is the fixture's own commentary: carried, named, never fatal

@@ -149,7 +149,7 @@ func labTerminal(_ id: String, project: String, running: Bool) -> FieldBubble {
   FieldBubble(
     id: id,
     project: project,
-    detail: "/Users/james/Projects/" + project,
+    detail: "/Users/you/Projects/" + project,
     status: running ? .working : .idle,
     identityKey: id,
     createdAt: labNow.addingTimeInterval(-60),

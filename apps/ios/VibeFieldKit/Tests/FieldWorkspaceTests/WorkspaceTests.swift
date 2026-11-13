@@ -30,7 +30,7 @@ private let desktopID = "dev_7d3c9b"
     #expect(page.entries[2].kind == "symlink")
     let search = try WorkspaceSearchResult(json: workspaceFixture("workspace-search.valid"))
     #expect(search.complete && !search.clipped)
-    #expect(search.hits.first?.relativePath == "Projects/project100/vibe-field")
+    #expect(search.hits.first?.relativePath == "Projects/workbench/vibe-field")
   }
 
   @Test func requestsUseRelativePathsAndCatalogExplicitlyOffersSpawn() throws {
@@ -71,7 +71,7 @@ private let desktopID = "dev_7d3c9b"
     await reader.refreshRoots()
     #expect(reader.recent.map(\.name) == ["vibe-field", "old-spike"])
     let home = try #require(reader.roots.first { $0.browse == "home" })
-    await reader.open(home, path: "Projects/project100")
+    await reader.open(home, path: "Projects/workbench")
     #expect(reader.choice?.path == first["path"]?.stringValue)
     #expect(reader.entries.count == 4 && reader.clipped)
     await reader.more()
@@ -81,7 +81,7 @@ private let desktopID = "dev_7d3c9b"
     reader.copyPath(reader.entries.last!.path) { copied = $0 }
     #expect(copied == "/exact/from/server")
     await reader.search("vibe")
-    #expect(asks.last?.1?["path"] == .string("Projects/project100"))
+    #expect(asks.last?.1?["path"] == .string("Projects/workbench"))
     #expect(!reader.complete && reader.clipped)
     #expect(reader.hits.count == 2)
     reader.copyPath("C:\\Users\\Ada\\a folder") { copied = $0 }
@@ -204,7 +204,7 @@ private let desktopID = "dev_7d3c9b"
     await model.select(desktopID)
     let reader = try #require(model.reader)
     let root = try #require(reader.roots.first { $0.browse == "home" })
-    await reader.open(root, path: "Projects/project100")
+    await reader.open(root, path: "Projects/workbench")
     #expect(model.chooseCurrentFolder())
     #expect(model.canSpawn)
     let pending = Task { await model.spawn() }
