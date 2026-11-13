@@ -386,8 +386,64 @@ extension FieldHistoryModel {
     let state: HistoryLedgerLine.State = tool.failed ? .failed : (tool.status == "running" || tool.status == "pending") ? .running : .ok
     let object = tool.object ?? tool.name
     let (dir, name) = splitPath(object, family: tool.family)
-    let result = tool.result ?? (tool.failed ? (tool.failure ?? "failed") : "")
-    return HistoryLedgerLine(id: row.timelineId, verb: verb, object: name, dir: dir, result: result, state: state)
+    return HistoryLedgerLine(
+      id: row.timelineId, verb: verb, object: name, dir: dir, result: resultWords(tool), state: state)
+  }
+
+  /// Item 370 — a tool line's result. A line that did not fail says the family's result. A line that failed says
+  /// its failure, as the room does (`failureResult`, lib/transcript/ledger.ts: "the failure's own words always
+  /// beat the family's outcome"): a command that timed out says `timed out`; otherwise the failure's words, after
+  /// `exit N · ` when the row's result is a command's exit. With no words it says that exit, else the result, else
+  /// its status (the room's `statusWord`). A failed line never says `exit 0`.
+  ///
+  /// It was `tool.result ?? …`: a result hid the failure's words, so a failed search read `3 matches`.
+  static func resultWords(_ tool: IndexTimelineTool) -> String {
+    guard tool.failed else { return tool.result ?? "" }
+    let runs = tool.family == "shell" || tool.family == "code_execute"
+    if runs, tool.status == "timed_out" || tool.failure == "timeout" { return "timed out" }
+    let said = runs && tool.result == "exit 0" ? nil : tool.result
+    let exit = runs ? said.flatMap { $0.hasPrefix("exit ") ? $0 : nil } : nil
+    switch (exit, failureWords(tool.failure)) {
+    case (let exit?, let line?): return "\(exit) · \(line)"
+    case (let exit?, nil): return exit
+    case (nil, let line?): return line
+    case (nil, nil): return said ?? statusWords(tool.status)
+    }
+  }
+
+  /// The row's failure as a line's words; nil where it says nothing.
+  ///
+  /// The row's `failure` is the failure's summary, or its KIND where it had none (fieldd's `index-timeline.ts`:
+  /// `summary ?? kind`), and the commonest failure has none: rosetta's `terminal_update` makes it of kind `unknown`
+  /// with its words in a diagnostic the row does not carry. A kind is a bare word (rosetta's `FailureKind`:
+  /// `not_found`, `invalid_input`, …), so a bare word is read as one, by its shape and not from a copy of
+  /// rosetta's list: `unknown` says nothing, `exit_non_zero` nothing an exit does not, `timeout` says `timed out`
+  /// (the room's words), any other itself with spaces. Anything else is a sentence: its first line, cut at 60
+  /// (the room's figure).
+  static func failureWords(_ failure: String?) -> String? {
+    guard let failure else { return nil }
+    guard isBareWord(failure) else {
+      let line = firstLine(failure, max: 60)
+      return line.isEmpty ? nil : line
+    }
+    switch failure {
+    case "unknown", "exit_non_zero": return nil
+    case "timeout": return "timed out"
+    default: return firstLine(failure.replacingOccurrences(of: "_", with: " "), max: 60)
+    }
+  }
+
+  /// A bare word: lowercase letters and underscores, and nothing else. The shape of a kind.
+  static func isBareWord(_ text: String) -> Bool {
+    !text.isEmpty && text.unicodeScalars.allSatisfy { ("a"..."z").contains($0) || $0 == "_" }
+  }
+
+  /// The room's `statusWord` for a failed line with nothing else to say: its status, as words.
+  static func statusWords(_ status: String) -> String {
+    switch status {
+    case "timed_out", "denied", "cancelled", "interrupted": status.replacingOccurrences(of: "_", with: " ")
+    default: "failed"
+    }
   }
 
   static func runningVerb(_ family: String) -> String {
@@ -433,7 +489,8 @@ extension FieldHistoryModel {
       words.append(noun(family, counts[family] ?? 0))
       if family == "file_change", !edited.isEmpty {
         let shown = edited.prefix(4).joined(separator: ", ")
-        words.append(edited.count > 4 ? "\(shown) +\(edited.count - 4)" : shown)
+        // item 370 — the room's words past four names (`Activity.tsx`: ` … N more`); it was `+N`
+        words.append(edited.count > 4 ? "\(shown) … \(edited.count - 4) more" : shown)
       }
     }
     if words.isEmpty, thoughts > 0 { words.append("\(thoughts) \(thoughts == 1 ? "thought" : "thoughts")") }
@@ -663,10 +720,6 @@ extension FieldHistoryModel {
   /// second arrives WITHOUT the flag when that opening fits the bound (fieldd's `index-timeline.ts` sets the flag
   /// only for its own cut), so the flag alone read such an opening as a whole message.
   static func isCut(_ row: IndexTimelineRow) -> Bool { row.textClipped || row.textByteLen != nil }
-
-  /// Item 370 (red) — the row's failure as a line's words. A STUB so the rows compile: the failure as it is
-  /// spelt. Nothing reads it yet; the green writes it and has `ledgerLine` read it.
-  static func failureWords(_ failure: String?) -> String? { failure }
 
   /// `clipped · 14 KB on studio` — the words under a text the door cut at its
   /// bound (`textClipped`), with the whole's size when the index named one
