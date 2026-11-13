@@ -7613,7 +7613,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   agent (absent otherwise); `asleep` stands in its place while that desktop sleeps. A session the field
   holds a run for (joined by the conversation's native id) takes **Jump to** instead, and a live row
   ends in a 32 pt `jump` circle; Jump to switches to the Field and opens that run's card. On a session's
-  document the stepper's slot carries the same act with where it runs (mark, desktop, folder). A refused
+  document the stepper's slot carries the same act **and nothing beside it**: a button of the act's glyph
+  and its word, as wide as they are, centred over the bar (*item 388, 2026-11-13. James, 23:18:12Z, session
+  qa-01, of the slot on his phone: "this is too busy [Image #14] just make it a resume button, no need for
+  the device stuff". It overturns PJ-7's "with where it runs (mark, desktop, folder)" (2026-10-14, Q3 (a)),
+  which stood here; where a session ran stays on its row in the list.*) What the act has to say stands
+  after its word, on the same line and in the secondary ink: `asleep` while its desktop sleeps, and a
+  Resume's answer (`Resuming on studio`, or the refusal). With the bar folded the button stands in the
+  bar's row, between the folded tab and search; its word is never broken onto two lines. A refused
   Resume is said, never shown as a failure: `studio is asleep` · `The folder is gone` · `Signed out of
   Claude Code on studio` · `Held under another profile on studio`.
   **The ledger's door's INDEX is said, never guessed** (fix7, 2026-10-14 — PJ-7's first phone run
@@ -7703,9 +7710,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     its end at once, without a move to watch; a page a finger holds there is left alone. *The cause is a
     reading of the code and is not yet shown on a device: a row was a whole turn, a turn of whole messages
     stood thousands of points tall once the direct read brought them, and the estimate overshot the end.*
+  - **Its end clears whatever stands over its foot** (items 387 and 389, 2026-11-13. James, 23:18:12Z, session
+    qa-01: "UIs are stacking and overlapping here [Image #13]" and "the message bottom is not leaving enough
+    safe and empty space [Image #15] looks bad"). Over the document's foot stands the bar, and above the bar
+    the slot (48 pt, 10 above it) whenever the session has an act or a search has landed in it. At its end
+    the document's last row rests 32 pt above the top of the higher of the two, and the pill's foot stands
+    43 pt above it. Until this item the page cleared the bar alone, by a fixed 80 pt above the safe area's
+    line, so the slot lay over the last rows and over the pill. With the bar folded the slot stands in the
+    bar's row and the clearance stays what it was: the page does not move when the bar folds.
   - **The pill at the foot** is History's arrival pill (36 pt, glass): `3 new ↓` while rows have arrived below the
     screen, and `Latest ↓` when nothing is unread and the end is more than a screen below. A press returns to the
-    end, and the document follows again.
+    end, and the document follows again: at once when the end is more than a screen below, which `Latest`
+    always is, and on the 450 ms ease when it is nearer (*item 386, 2026-11-13. James, 23:18:12Z, session
+    qa-01: "Latest button does not work". The press eased to the end over 450 ms whatever the distance. The
+    cause is a reading of the code and is not yet shown on a device: over rows not yet laid out an eased move
+    aims at an estimate of the end and comes to rest short of it, where the document stops following and the
+    pill returns. Going at once is how the document opens at its end, which holds.*)
   - **The rows above arrive as you read up** (362b). Within one screen of the top the rows above are read in by
     themselves and land above your place. One approach reads on until what it brought holds six messages (a prompt,
     or a reply with words or an attachment), in at most five asks of forty rows: the room's rule, so a stretch of
