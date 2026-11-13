@@ -222,7 +222,7 @@ function fakeClient(routes: Partial<Record<string, Route>> = {}) {
     "artifact.mark": (params) => ({
       foldKey: params["foldKey"],
       kept: params["kept"] === true,
-      hidden: params["hidden"] === true,
+      hidden: false,
     }),
     "index.artifacts": () => ({ entries: [], canonicalReady: true }),
   };
@@ -686,7 +686,7 @@ describe("a made tile's state (§8: serving green, failed red, the rest muted, e
         "Release notes",
         "studio",
       ),
-    ).toBe("Keeping and hiding apps isn't ready yet.");
+    ).toBe("Keeping apps isn't ready yet.");
     expect(madeAppErrorWords(rpcError("TIMEOUT"), "versions", "Release notes", "studio")).toBe(
       "The versions of Release notes can't be read right now.",
     );
@@ -696,11 +696,11 @@ describe("a made tile's state (§8: serving green, failed red, the rest muted, e
   });
 
   it("says a mark that failed other than by 3h's wait in plain words, by its act", () => {
-    expect(madeAppErrorWords(rpcError("FORBIDDEN_SCOPE"), "hide", "Release notes", "studio")).toBe(
-      "This window can't keep or hide apps yet.",
+    expect(madeAppErrorWords(rpcError("FORBIDDEN_SCOPE"), "keep", "Release notes", "studio")).toBe(
+      "This window can't keep apps yet.",
     );
     expect(madeAppErrorWords(rpcError("UNAUTHORIZED"), "keep", "Release notes", "studio")).toBe(
-      "This window can't keep or hide apps yet.",
+      "This window can't keep apps yet.",
     );
     // another service's UNAVAILABLE is no wait for 3h
     const elsewhere = rpcError("UNAVAILABLE", { service: "rosetta", state: "starting" });
@@ -709,9 +709,6 @@ describe("a made tile's state (§8: serving green, failed red, the rest muted, e
     );
     expect(madeAppErrorWords(rpcError("INTERNAL"), "unkeep", "Release notes", "studio")).toBe(
       "Couldn't stop keeping Release notes. Try again.",
-    );
-    expect(madeAppErrorWords(rpcError("TIMEOUT"), "hide", "Release notes", "studio")).toBe(
-      "Couldn't hide Release notes. Try again.",
     );
     expect(madeAppErrorWords(rpcError("NOT_FOUND"), "keep", "Release notes", "studio")).toBe(
       "Release notes is no longer in Apps.",
@@ -1059,32 +1056,21 @@ describe("<MadeApps> — the group over its client", () => {
     ]);
   });
 
-  it("hides ONCE by the fold key, and the tile leaves the group", async () => {
-    let hidden = false;
-    const release = app(2, { title: "Release notes" });
+  // Hide dropped (James, 2026-11-13 01:29:54Z): the tile's menu holds no Hide from Apps.
+  it("offers Keep and Versions in the tile's menu, and never Hide from Apps", async () => {
     const door = fakeClient({
       "index.apps.list": () => ({
-        rows: hidden
-          ? [app(3, { title: "Bundle size" })]
-          : [release, app(3, { title: "Bundle size" })],
+        rows: [app(2, { title: "Release notes" })],
         sources: [STUDIO_SOURCE],
       }),
-      "artifact.mark": () => {
-        hidden = true;
-        return { foldKey: release.foldKey, kept: false, hidden: true };
-      },
     });
     await mount(door.client);
-    const hide = actIn(tileOf("Release notes"), "Hide from Apps");
-    expect(hide, "the menu's Hide from Apps").toBeDefined();
-    await press(hide);
-    expect(door.callsOf("artifact.mark").map((call) => call.params)).toEqual([
-      { foldKey: release.foldKey, hidden: true },
-    ]);
-    expect(tileTitles()).toEqual(["Bundle size"]);
+    expect(actIn(tileOf("Release notes"), "Keep"), "the menu's Keep").toBeDefined();
+    expect(actIn(tileOf("Release notes"), "Versions"), "the menu's Versions").toBeDefined();
+    expect(actIn(tileOf("Release notes"), "Hide from Apps"), "no Hide").toBeUndefined();
   });
 
-  it("says honestly that Keep and Hide wait, while the home has no intent to write (until 3h)", async () => {
+  it("says honestly that Keep waits, while the home has no intent to write (until 3h)", async () => {
     const door = fakeClient({
       "index.apps.list": () => ({
         rows: [app(2, { title: "Release notes" })],
@@ -1098,7 +1084,7 @@ describe("<MadeApps> — the group over its client", () => {
     await press(actIn(tileOf("Release notes"), "Keep"));
     expect(door.callsOf("artifact.mark")).toHaveLength(1);
     const alert = container?.querySelector('.vf-apps-error[role="alert"]');
-    expect(alert?.textContent).toBe("Keeping and hiding apps isn't ready yet.");
+    expect(alert?.textContent).toBe("Keeping apps isn't ready yet.");
     expect(tileTitles()).toEqual(["Release notes"]);
     expect(actIn(tileOf("Release notes"), "Keep"), "Keep still offered").toBeDefined();
   });
