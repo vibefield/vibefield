@@ -506,11 +506,17 @@ public enum HistorySegment: Identifiable, Equatable, Sendable, Codable {
   case prose(id: String, at: String, text: String, anchor: String?)
   /// A folded run: the sentence of nouns, the duration, the failed count, the ladder.
   case ledger(id: String, summary: String, duration: String, failed: Int, isLive: Bool, lines: [HistoryLedgerLine])
-  /// SP-6 — something attached to a message that this phone does NOT carry
+  /// SP-6 — something attached to a message that the door does NOT carry to this phone
   /// (H-D9, EL2: images and files are not relayed): an honest placeholder in
   /// the row — `image on studio` — never a broken image. `kind` is rosetta's
   /// attachment kind (image · document · audio · video · file, open),
   /// `label` the name when the index had one.
+  ///
+  /// *Corrected 2026-11-13 (item 362g):* this said "that this phone does NOT carry". The door carries none of it,
+  /// and a segment never does, on either road: it holds an id, a kind and words, and is written to the phone's
+  /// cache. But read straight from the desktop's index the phone now knows which recorded image an attachment is
+  /// (`HistoryPicture`, kept beside the row in memory, found by this `id`). No digest, address or byte goes in a
+  /// segment.
   case attachment(id: String, kind: String, label: String?)
   /// SP-6 — the words under a reply whose text the door CUT at its bound
   /// (`INDEX_TIMELINE.TEXT_CHARS`): `clipped · 14 KB on studio`, in the

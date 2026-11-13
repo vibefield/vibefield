@@ -17,6 +17,11 @@ import SwiftUI
 /// appends while the reader is up the page count in the ARRIVAL PILL at the
 /// foot (`N new`), a tap scrolls to them; an attachment the index recorded is
 /// a placeholder row (`image on studio`), never a broken image (H-D9).
+///
+/// *Corrected 2026-11-13 (item 362g):* "a placeholder row … never a broken image (H-D9)" is the door's road, as
+/// that paragraph says, and it stands there: the door's row names an attachment with no digest and no address. Read
+/// straight from the desktop's index the projection now keeps which recorded image an attachment is, beside the
+/// row (`HistoryPicture`). As of this correction the view is not handed it, and draws the placeholder on both roads.
 struct HistorySessionView: View {
   let document: HistoryDocument
   /// the document's own desktop's corpus (its reader's)

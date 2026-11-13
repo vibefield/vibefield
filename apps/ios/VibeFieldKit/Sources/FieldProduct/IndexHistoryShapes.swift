@@ -15,6 +15,12 @@ import Foundation
 // words, a tool line's facts, attachments as REFS (what was attached and
 // whether its bytes exist upstream — never the bytes, never an address: H-D9,
 // EL2). Figures rosetta could not price stay absent, never zero.
+//
+// *Corrected 2026-11-13 (item 362g):* "never the bytes, never an address" is the row's law and the door's, and it
+// stands: no row in this file carries an attachment's bytes or where they are. It is no longer all the phone holds
+// of an attachment. Reading a session straight from the desktop's index, FieldHistory keeps beside the row the
+// stored member a recorded image names, its address on rosettad and its digest (`HistoryPicture`): never in the
+// row, never in a shape of this file.
 
 /// `IndexCatalogProject` — one project of `index.projects`' page, keyed
 /// `{device, projectId}` (identity is `{device, path}`, D30; the family only
@@ -573,6 +579,10 @@ public enum IndexTicketRefusal: Sendable, Equatable {
 
 /// An attachment as a REF: what was attached, and whether rosetta recorded
 /// its bytes — never the bytes, never an address (H-D9, EL2).
+///
+/// *Corrected 2026-11-13 (item 362g):* that is this ref's law, through the door and on the direct read alike, and
+/// it stands. It is no longer all the phone holds: on the direct read FieldHistory keeps, beside the row and never
+/// in this type, which stored member a recorded image is (`HistoryPicture`).
 public struct IndexTimelineAttachment: Sendable, Equatable, Identifiable, Decodable {
   public let id: String
   /// image · document · audio · video · file (open)

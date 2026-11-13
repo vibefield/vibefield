@@ -14,19 +14,29 @@ import Foundation
 // shape this build never heard of is a row of its kind with no words. Each reader below keeps zod's
 // distinction: `.optional()` refuses a JSON null where `.nullish()` admits it.
 //
-// What never crosses, as at the door: an asset's bytes, its address on rosettad (`AssetRef.url` is
-// not read — EL2, EL7), a citation's source, a tool's diagnostics beyond its summary, provenance.
+// What never crosses into the row, as at the door: an asset's bytes, its address on rosettad
+// (`AssetRef.url` is not read into it — EL2, EL7), a citation's source, a tool's diagnostics beyond
+// its summary, provenance.
 //
 // *Corrected 2026-11-12 (item 362f):* "reads the same as the row the door would have sent" is the ROW's law, and
 // it stands. The row is no longer all the phone keeps of an entry it read directly: `detail(entry:beside:)` keeps,
 // beside the row and never in it, the body's whole words when the row's were cut at `textChars` and the entry
-// holds them inline (`HistoryLineDetail`). What never crosses is unchanged: a detail reads no asset, no address,
-// no citation's source, no diagnostic and no provenance.
+// holds them inline (`HistoryLineDetail`). What never crosses is unchanged: for its whole words a detail reads no
+// asset, no address, no citation's source, no diagnostic and no provenance.
 //
 // *Added 2026-11-12 (item 362f, the tool lines):* the detail also keeps what a tool line opens to
 // (`HistoryToolDetail`, made by `toolDetail(entry:beside:)` at the foot of this file): a command's folder and its
 // preview, a change's first diff lines, a read's and a search's paths. The sentence above still holds: no
 // diagnostic is read (item 371), and a failed line opens to the summary its row already carries.
+//
+// *Corrected 2026-11-13 (item 362g):* this header said `AssetRef.url` "is not read", and 362f's correction that "a
+// detail reads no asset, no address". Both were true until now, and both are scoped above to what they still hold
+// for: the row, and a detail's whole words. EL7's sentence was the door's, where fieldd would be handing on an
+// address on rosettad's own listener. On the direct read rosettad hands the phone the whole entry itself, address
+// included, under the phone's own grant. So `pictures(entry:)`, at the foot of this file, now keeps beside the row,
+// and never in it, the stored member an image attachment names: its address on rosettad, its digest, its type and
+// its size (`HistoryPicture`). The row is unchanged and carries neither, as at the door. No byte of an asset is
+// read here (EL2).
 public enum HistoryProjection {
   /// `INDEX_TIMELINE.TEXT_CHARS`, held by `pnpm check:ios-fixtures`: a row's words, UTF-16 units.
   public static let textChars = 2_000
@@ -121,12 +131,14 @@ public enum HistoryProjection {
   // MARK: - Beyond the row (item 362f)
 
   /// What the entry carries beyond `row`, its own projection; nil when it carries nothing more: its whole words
-  /// (`wholeRow`), and what its tool line opens to (`toolDetail`, at the foot of this file).
+  /// (`wholeRow`), what its tool line opens to (`toolDetail`), and the recorded pictures its attachments name
+  /// (`pictures`). The last two are at the foot of this file.
   static func detail(entry: JSONValue, beside row: IndexTimelineRow) -> HistoryLineDetail? {
     let whole = wholeRow(entry: entry, beside: row)
     let tool = toolDetail(entry: entry, beside: row)
-    guard whole != nil || tool != nil else { return nil }
-    return HistoryLineDetail(row: row, whole: whole, tool: tool)
+    let pictured = pictures(entry: entry)
+    guard whole != nil || tool != nil || !pictured.isEmpty else { return nil }
+    return HistoryLineDetail(row: row, whole: whole, tool: tool, pictures: pictured)
   }
 
   /// The row with the body's whole words: only where the row's were cut, and only when the entry holds them. A
@@ -815,8 +827,129 @@ extension HistoryProjection {
 // MARK: - The pictures an entry carries (item 362g)
 
 extension HistoryProjection {
-  // Item 362g (red) — a STUB so the rows compile: no entry names a picture. The green writes the reader here.
-  static func pictures(entry: JSONValue) -> [String: HistoryPicture] { [:] }
+  /// rosetta's six recorded image formats, each with the one extension its stored member's name carries (the
+  /// room's `RECORDED_IMAGE_EXTENSION`).
+  private static let recordedImages: [(mediaType: String, ext: String)] = [
+    (mediaType: "image/png", ext: "png"),
+    (mediaType: "image/jpeg", ext: "jpg"),
+    (mediaType: "image/gif", ext: "gif"),
+    (mediaType: "image/webp", ext: "webp"),
+    (mediaType: "image/bmp", ext: "bmp"),
+    (mediaType: "image/x-icon", ext: "ico"),
+  ]
+
+  /// The four sized members a legacy WebP bundle holds (the room's `BUNDLE_VARIANTS`).
+  private static let bundleVariants = ["rail", "tile", "tile2x", "preview"]
+
+  /// The recorded pictures the entry's attachments name, by attachment id; empty when it names none, and for an
+  /// entry the gate refuses. A picture says WHICH stored image an attachment is (its address on rosettad, its
+  /// digest, its type, its size) and holds nothing of the image: no byte is read here.
+  ///
+  /// The attachments read are the ones the row carries, from the same members and through the same gates as the
+  /// row's refs (`bodyAttachments`, `projectTool`): a prompt's and a reply's (`body.attachments`), a team
+  /// message's (`body.event.attachments`) and a tool's (`body.tool.attachments`). So a picture is never kept for
+  /// an attachment its row dropped. Two attachments under one id are one picture, the first.
+  ///
+  /// Which of them are pictures is the room's rule for what it draws as an image, ported rule for rule from
+  /// rosetta at the pin 811e554c6 (clients/room/src): the attachment's kind is `image` (`Tile`,
+  /// components/transcript/Attachments.tsx), its source is a stored member (`imageResource`,
+  /// components/transcript/attachment-file-source.ts), and that member is a recorded image
+  /// (`isRecordedImageAsset`, lib/image-media.ts). Not ported: the images the room finds among an artifact's, a
+  /// workflow's, a structured output's and an external tool's resources (`rowImages`, lib/transcript/images.ts).
+  /// They are no attachment, so the row has no ref for one.
+  static func pictures(entry: JSONValue) -> [String: HistoryPicture] {
+    guard let fields = entry.objectValue, admitsEntry(fields), let body = fields["body"]?.objectValue else {
+      return [:]
+    }
+    var found: [String: HistoryPicture] = [:]
+    for attachment in carriedAttachments(body) {
+      guard let recorded = recordedPicture(attachment), found[recorded.attachmentId] == nil else { continue }
+      found[recorded.attachmentId] = recorded
+    }
+    return found
+  }
+
+  /// The attachments the row carries, as the entry holds them: the array `bodyAttachments` or `projectTool` reads,
+  /// and of it the items the attachment gate admits. A tool's are read only when its line is: one unreadable item
+  /// refuses the whole line, and its row then carries no attachment at all.
+  private static func carriedAttachments(_ body: Fields) -> [JSONValue] {
+    let items: [JSONValue]?
+    switch body["type"]?.stringValue ?? "" {
+    case "user", "agent":
+      items = body["attachments"]?.arrayValue
+    case "collaboration":
+      items = body["event"]?["attachments"]?.arrayValue
+    case "tool_use":
+      guard let tool = body["tool"]?.objectValue, admitsTool(tool) else { return [] }
+      items = tool["attachments"]?.arrayValue
+    default:
+      items = nil
+    }
+    return (items ?? []).filter(admitsAttachment)
+  }
+
+  /// One attachment as a picture; nil when the room would not draw it as an image.
+  private static func recordedPicture(_ attachment: JSONValue) -> HistoryPicture? {
+    guard let id = str(attachment["id"]), let kind = attachment["kind"]?.stringValue, same(kind, "image") else {
+      return nil
+    }
+    guard let source = attachment["source"], let type = source["type"]?.stringValue, same(type, "asset") else {
+      return nil
+    }
+    guard let asset = source["asset"], let image = recordedImage(asset) else { return nil }
+    return HistoryPicture(attachmentId: id, base: image.base, variants: image.variants)
+  }
+
+  /// The room's `isRecordedImageAsset`: a recorded original (a member in one of the six formats, with no rendition
+  /// map), or a complete legacy WebP bundle (`isLegacyImageBundle`: the member and its four renditions, WebP
+  /// throughout). A member that states a rendition map is judged as a bundle, even an empty map; a null one is no
+  /// map. A rendition under any other name is neither judged nor kept.
+  private static func recordedImage(
+    _ asset: JSONValue
+  ) -> (base: HistoryPictureMember, variants: [String: HistoryPictureMember])? {
+    if let renditions = asset["image_variants"], !renditions.isNull {
+      guard let base = member(asset, mediaType: "image/webp", ext: "webp") else { return nil }
+      var variants: [String: HistoryPictureMember] = [:]
+      for name in bundleVariants {
+        guard let named = renditions[name], let sized = member(named, mediaType: "image/webp", ext: "webp")
+        else { return nil }
+        variants[name] = sized
+      }
+      return (base, variants)
+    }
+    guard let stated = asset["media_type"]?.stringValue,
+      let format = recordedImages.first(where: { same($0.mediaType, stated) }),
+      let base = member(asset, mediaType: format.mediaType, ext: format.ext)
+    else { return nil }
+    return (base, [:])
+  }
+
+  /// The room's `isMember`: one content-addressed member. Its type is the one asked for, its size is above zero,
+  /// its digest is sixty-four lowercase hex digits (`/^[a-f0-9]{64}$/`), and its address is
+  /// `/api/assets/<digest>.<extension>` and nothing else: no host, no query.
+  ///
+  /// Where this is narrower than the TypeScript: each member must be of its JSON type, and the size a whole
+  /// number. The room's `byte_len > 0` and its template string would coerce a numeric string, a fraction or a
+  /// one-item array; rosetta's wire sends a string, a string, a string and a u64, so neither reads a real row
+  /// differently.
+  private static func member(_ value: JSONValue, mediaType: String, ext: String) -> HistoryPictureMember? {
+    guard let stated = value["media_type"]?.stringValue, same(stated, mediaType) else { return nil }
+    guard let size = value["byte_len"]?.intValue, size > 0, let byteLen = Int(exactly: size) else { return nil }
+    guard let digest = value["digest"]?.stringValue, isDigest(digest) else { return nil }
+    guard let url = value["url"]?.stringValue, same(url, "/api/assets/\(digest).\(ext)") else { return nil }
+    return HistoryPictureMember(url: url, digest: digest, mediaType: stated, byteLen: byteLen)
+  }
+
+  private static func isDigest(_ text: String) -> Bool {
+    let bytes = text.utf8
+    return bytes.count == 64 && bytes.allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
+  }
+
+  /// JavaScript's `===` on two strings: unit for unit. A Swift `==` is by canonical equivalence, so this port
+  /// needs no argument about which characters normalise to which.
+  private static func same(_ left: String, _ right: String) -> Bool {
+    left.utf8.elementsEqual(right.utf8)
+  }
 }
 
 /// D-2c (a): an entry's row is made once and made again only when the entry changed. rosetta's
