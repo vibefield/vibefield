@@ -758,9 +758,12 @@ struct HistorySessionView: View {
 }
 
 /// Item 362f — a prompt's or a reply's words under the room's excerpt rule: the words to the bound, and `View full
-/// message` under them when there are more. The words drawn are one element to a reader of the screen, as they
-/// were (the blocks are not read out piece by piece): who and when (`lead`), then those words; the control is its
-/// own. Equatable on what it draws, so the bound is not worked out again when the document's scroll state changes.
+/// message` when there are more. Item 380 — and in the room's window: the words stand from their top in a window
+/// of 21.7 em at most; where more is left to read than it shows (the excerpt cut, or the words overrun it) they
+/// fade toward its foot by the room's ramp and `View full message` stands centred over the foot. The words drawn
+/// are one element to a reader of the screen, as they were (the blocks are not read out piece by piece): who and
+/// when (`lead`), then those words; the control is its own. Equatable on what it draws, so the bound is not
+/// worked out again when the document's scroll state changes.
 private struct HistoryExcerptView: View, Equatable {
   let text: String
   let blank: String
@@ -768,30 +771,82 @@ private struct HistoryExcerptView: View, Equatable {
   let lead: String
   let open: () -> Void
 
+  /// The words as drawn overrun the window: read from their own height once they are laid out. The window's
+  /// height never waits on it (`HistoryWindow` reckons it in the layout's own pass); the fade and the control do.
+  @State private var overruns = false
+
   nonisolated static func == (a: HistoryExcerptView, b: HistoryExcerptView) -> Bool {
     a.text == b.text && a.blank == b.blank && a.measure == b.measure && a.lead == b.lead
   }
 
   var body: some View {
     let excerpt = HistoryWords.excerpt(text)
-    VStack(alignment: .leading, spacing: 4) {
+    let size = measure.size
+    let more = excerpt.omitted || overruns
+    HistoryWindow(omitted: excerpt.omitted, size: size) {
       HistoryWordsView(text: excerpt.text, blank: blank, measure: measure)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(lead): \(excerpt.text)")
-      if excerpt.omitted {
+        .onGeometryChange(for: Bool.self) { geometry in
+          HistoryWords.window(natural: geometry.size.height, omitted: false, size: size).more
+        } action: { now in
+          overruns = now
+        }
+    }
+    // the mask is the window's edge too: what overruns the window is not drawn
+    .mask { HistoryFade(more: more) }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("\(lead): \(excerpt.text)")
+    .overlay(alignment: .bottom) {
+      if more {
         Button(action: open) {
-          HStack(spacing: 5) {
-            Text("View full message")
-            Image(systemName: "arrow.up.right")
-              .font(.system(size: 9.5, weight: .semibold))
-          }
-          .font(ChromeType.sans(12.5, .medium))
-          .foregroundStyle(ChromePalette.inkTertiary)
-          .frame(minHeight: 30)
-          .contentShape(Rectangle())
+          Text("View full message")
+            .font(ChromeType.sans(12.5, .medium))
+            .foregroundStyle(ChromePalette.inkSecondary)
+            .padding(.horizontal, 12)
+            .frame(minHeight: HistoryWords.openBand)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
       }
+    }
+  }
+}
+
+/// Item 380 — the window's layout: its words from their top at their own height, and the window as tall as
+/// `HistoryWords.window` says, across the width it is given. One pass: a row's height never waits on a reading.
+private struct HistoryWindow: Layout {
+  let omitted: Bool
+  let size: CGFloat
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    guard let words = subviews.first else { return .zero }
+    let natural = words.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+    let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? natural.width
+    return CGSize(
+      width: width, height: HistoryWords.window(natural: natural.height, omitted: omitted, size: size).height)
+  }
+
+  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    subviews.first?.place(
+      at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(width: bounds.width, height: nil))
+  }
+}
+
+/// Item 380 — the window's mask: whole where nothing more is left to read, else the room's ramp down its height
+/// (`HistoryWords.fade`).
+private struct HistoryFade: View {
+  let more: Bool
+
+  var body: some View {
+    if more {
+      GeometryReader { geometry in
+        LinearGradient(
+          stops: HistoryWords.fade(height: geometry.size.height).map { stop in
+            Gradient.Stop(color: .black.opacity(stop.shows), location: stop.at)
+          },
+          startPoint: .top, endPoint: .bottom)
+      }
+    } else {
+      Rectangle()
     }
   }
 }

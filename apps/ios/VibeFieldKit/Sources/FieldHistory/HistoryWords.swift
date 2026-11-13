@@ -173,14 +173,23 @@ enum HistoryWords {
     let at: Double
   }
 
-  // STUB (item 380, red): the document as it stood. No window: the words stand as tall as they are, and more is
-  // left to read only where the excerpt left words out.
+  /// The window of words that stand `natural` tall when drawn whole at `size`, `omitted` when the excerpt left
+  /// words out. The words stand from their top to the bound, and a point over still fits (the room's `height <=
+  /// limit + 1`). More is left to read where the excerpt cut or the words overrun the bound: the room shortens
+  /// such words until they fit and marks them omitted, so the same messages fade. There the window is at least
+  /// its floor.
   static func window(natural: CGFloat, omitted: Bool, size: CGFloat) -> Window {
-    Window(height: natural, more: omitted)
+    let bound = windowEms * size
+    let more = omitted || natural > bound + 1
+    return Window(height: max(min(natural, bound), more ? windowFloorEms * size : 0), more: more)
   }
 
-  // STUB (item 380, red): no ramp.
+  /// The fade down a window `height` tall, where more is left to read: the room's `linear-gradient(to bottom, #000
+  /// 35%, #0008 60%, transparent calc(100% - 32px))`. `#0008` is 136 of 255. A stop that would stand above the one
+  /// before it stands at it, as CSS places it. A window of no height has no ramp.
   static func fade(height: CGFloat) -> [FadeStop] {
-    [FadeStop(shows: 1, at: 0)]
+    guard height > 0 else { return [FadeStop(shows: 1, at: 0)] }
+    let clear = max(0.6, Double((height - fadeClearance) / height))
+    return [FadeStop(shows: 1, at: 0.35), FadeStop(shows: 136.0 / 255.0, at: 0.6), FadeStop(shows: 0, at: clear)]
   }
 }
