@@ -7690,6 +7690,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     coming to rest within 24 pt of the end resumes it (Chat's figure). Up the page nothing moves under you: a row
     arriving below leaves your place alone, a run you open grows down from its own line, and rows read in above land
     above your place. A document a search landed in opens on the landed row, ringed as before, and does not follow.
+  - **It never rests past its end** (item 381; James, 2026-11-13 05:29:39Z, of the first build that reads a
+    desktop directly: "some long session shows up blank and only shows when i try to scroll"). The document is
+    laid out lazily, and a row of it is one part of a turn: the room above it or its sitting's pill, its prompt,
+    the note and the attachments under the prompt, the reply's head, each reply, each group. No row is a whole
+    turn, so a row at rest is no taller than a message's window and its padding, and the first offset, which is
+    reckoned on an estimate of the rows not yet laid out, lands near the true end. Should the page still be
+    found at rest with the screen's foot below the document's own, beyond the bar's inset, it is put back on
+    its end at once, without a move to watch; a page a finger holds there is left alone. *The cause is a
+    reading of the code and is not yet shown on a device: a row was a whole turn, a turn of whole messages
+    stood thousands of points tall once the direct read brought them, and the estimate overshot the end.*
   - **The pill at the foot** is History's arrival pill (36 pt, glass): `3 new ↓` while rows have arrived below the
     screen, and `Latest ↓` when nothing is unread and the end is more than a screen below. A press returns to the
     end, and the document follows again.
