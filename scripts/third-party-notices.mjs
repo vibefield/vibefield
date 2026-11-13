@@ -22,12 +22,16 @@
 //     ABSENT was therefore not built for this host and is not in the package: it is skipped and
 //     counted, never guessed. A root's own direct dependency missing means the binary was not built
 //     here, which is a gap (fatal for a release stage).
-//   - The ONE input a release host cannot have is the Go module cache behind the npm-prebuilt mesh
-//     sidecar (`@vibecook/truffle-sidecar-*`; no Go toolchain runs in a release). That piece alone is
-//     committed: apps/desktop/packaging/notices/go-modules.json, written by `--refresh-go-modules` on
-//     a host with the cache, and checked at every stage against the module list the sidecar binary
-//     itself embeds (Go build info). The sidecar moves only in an EL8 event, so the check fires
-//     exactly then.
+//   - The ONE input a release host cannot have is the Go module cache behind the two shipped Go
+//     binaries: the npm-prebuilt mesh sidecar (`@vibecook/truffle-sidecar-*`) and the phone's
+//     TailscaleKit (truffle's Swift plane); no Go toolchain runs in a release or an iOS build. That
+//     piece alone is committed: apps/desktop/packaging/notices/go-modules.json, written by
+//     `--refresh-go-modules` from BOTH binaries' build info, and checked at every stage against the
+//     module list the sidecar binary itself embeds, and by `--ios` against TailscaleKit's. Either binary
+//     moves only in an EL8 event, so the checks fire exactly then. (Item 379, 2026-11-13: the refresh
+//     read the sidecar alone, so a module only TailscaleKit embeds was a gap for `--ios` on any host
+//     with no module cache.) A module cache is read only when one is named — `--gomodcache`, or the
+//     stage's VIBEFIELD_NOTICES_GOMODCACHE — never $GOMODCACHE, go's env file or the home.
 //
 // What it reads for the desktop:
 //   - npm, BUNDLED: the esbuild bundles keep a `// <path>` comment per module (main, preload, fieldd's
@@ -62,9 +66,11 @@
 //   node scripts/third-party-notices.mjs [--root <repo>] [--out <file>]
 //       the desktop notices from a built tree (`pnpm build`, fieldd's dist), printed summary; --out writes them
 //   node scripts/third-party-notices.mjs --ios --checkouts <SourcePackages/checkouts> [--artifacts <SourcePackages/artifacts>] [--gomodcache <dir>]
-//       writes apps/ios/App/Resources/acknowledgements.json (--out to write elsewhere)
-//   node scripts/third-party-notices.mjs --refresh-go-modules [--gomodcache <dir>]
-//       rewrites apps/desktop/packaging/notices/go-modules.json from the installed sidecar binary
+//       writes apps/ios/App/Resources/acknowledgements.json (--out to write elsewhere); TailscaleKit's Go
+//       texts come from the committed Go record, and from a module cache only when --gomodcache names one
+//   node scripts/third-party-notices.mjs --refresh-go-modules --checkouts <SourcePackages/checkouts> [--artifacts <SourcePackages/artifacts>] [--gomodcache <dir>]
+//       rewrites apps/desktop/packaging/notices/go-modules.json from the installed sidecar binary AND the
+//       kit's TailscaleKit; a text the record holds is kept, the rest is read from --gomodcache
 //
 // Node >=22 ESM, builtins only (and the builtins-only table of fieldd's sidecars, for the executable's name).
 import { createHash } from "node:crypto";
@@ -1354,22 +1360,18 @@ export function goBuildInfo(buf) {
   return info;
 }
 
-/** The module cache: --gomodcache, $GOMODCACHE, go's env file, $GOPATH/pkg/mod, ~/go/pkg/mod. */
-export function goModCacheDir(env = process.env, flag = null) {
-  if (flag) return flag;
-  if (env.GOMODCACHE) return env.GOMODCACHE;
-  const envFiles = [
-    join(homedir(), "Library", "Application Support", "go", "env"),
-    join(env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "go", "env"),
-  ];
-  for (const file of envFiles) {
-    try {
-      const m = /^GOMODCACHE=(.+)$/m.exec(readFileSync(file, "utf8"));
-      if (m) return m[1].trim();
-    } catch {}
-  }
-  const gopath = env.GOPATH?.split(":")[0] ?? join(homedir(), "go");
-  return join(gopath, "pkg", "mod");
+/**
+ * The module cache the CLI reads: the one `--gomodcache` names, or none (item 379, VF-PM 2026-11-13). Never
+ * $GOMODCACHE, go's env file, $GOPATH or the home: the committed Go record is the source, and a cache is asked
+ * only for what the record lacks, by name.
+ */
+export function goModCacheDir(flag = null) {
+  return flag || null;
+}
+
+/** The desktop stage's module cache: VIBEFIELD_NOTICES_GOMODCACHE when the stage is asked for one, else none. */
+export function stageGoCache(env = process.env) {
+  return env.VIBEFIELD_NOTICES_GOMODCACHE || null;
 }
 
 /** The module cache's case encoding: each capital letter becomes `!` and its lower case. */
@@ -1438,8 +1440,13 @@ export function collectGo(ledger, { info, snapshot = null, cache = null, role, b
   }
 }
 
-/** The committed Go record for the sidecar: every module the binary embeds, with its texts. */
-export function goSnapshot(infos, cache, sidecar) {
+/**
+ * The committed Go record: every module and toolchain the given binaries embed (the sidecar's and
+ * TailscaleKit's, `goRefresh`), with its texts. A module@version or toolchain the `recorded` record already
+ * holds keeps its texts, since a module version's contents never change (Go's checksum database); the rest are
+ * read from `cache` when one is named, and anything neither holds is `missing`.
+ */
+export function goSnapshot(infos, cache, sidecar, { recorded = null, tailscaleKit = null } = {}) {
   const texts = {};
   const keep = (list) =>
     list.map((t) => {
@@ -1448,19 +1455,25 @@ export function goSnapshot(infos, cache, sidecar) {
       texts[id] = { file: t.file, body };
       return id;
     });
+  const fromRecord = (row) => {
+    const list = row ? row.texts.map((id) => recorded.texts?.[id]) : [];
+    return list.length > 0 && list.every(Boolean) ? list : null;
+  };
   const modules = new Map();
   const go = new Map();
   const missing = [];
   for (const info of infos) {
     if (info.goVersion && !go.has(info.goVersion)) {
-      const std = goStdlibTexts(cache, info.goVersion);
+      const had = recorded?.go?.find((g) => g.version === info.goVersion);
+      const std = fromRecord(had) ?? (cache ? goStdlibTexts(cache, info.goVersion) : null);
       if (std) go.set(info.goVersion, { version: info.goVersion, texts: keep(std).sort() });
       else missing.push(`Go ${info.goVersion}`);
     }
     for (const dep of info.deps) {
       const key = `${dep.path}@${dep.version}`;
       if (modules.has(key)) continue;
-      const found = goModuleTexts(cache, dep.path, dep.version);
+      const had = recorded?.modules?.find((m) => m.path === dep.path && m.version === dep.version);
+      const found = fromRecord(had) ?? (cache ? goModuleTexts(cache, dep.path, dep.version) : null);
       if (!found || found.length === 0) missing.push(key);
       else modules.set(key, { path: dep.path, version: dep.version, texts: keep(found).sort() });
     }
@@ -1474,11 +1487,15 @@ export function goSnapshot(infos, cache, sidecar) {
     doc: {
       schema: 1,
       note:
-        "GENERATED by `node scripts/third-party-notices.mjs --refresh-go-modules` (LP-5) from the Go " +
-        "module cache: the licence texts of every Go module the mesh sidecar binary embeds, which a " +
-        "release host cannot read (no Go toolchain runs there). The stager checks the installed " +
-        "sidecar's own build info against this file; refresh it in the EL8 event that moves the sidecar.",
+        "GENERATED by `node scripts/third-party-notices.mjs --refresh-go-modules` (LP-5, item 379) from " +
+        "the build info of both shipped Go binaries, the desktop's mesh sidecar and the phone's " +
+        "TailscaleKit: the licence texts of every Go module and toolchain either embeds, which neither a " +
+        "release host nor the iOS build can read (no Go toolchain runs there). A text already recorded " +
+        "is kept; the rest are read from the module cache --gomodcache names. The stager checks the " +
+        "sidecar's build info against this file, and --ios TailscaleKit's; refresh it in the EL8 event " +
+        "that moves either truffle plane.",
       sidecar,
+      ...(tailscaleKit ? { tailscaleKit } : {}),
       go: [...go.values()].sort((a, b) => byText(a.version, b.version)),
       modules: [...modules.values()].sort(
         (a, b) => byText(a.path, b.path) || byText(a.version, b.version),
@@ -1487,6 +1504,73 @@ export function goSnapshot(infos, cache, sidecar) {
     },
     missing,
   };
+}
+
+/** TailscaleKit's device binary under SwiftPM's artifacts: the slice the phone ships. */
+export const TAILSCALEKIT_BINARY =
+  "truffle/TailscaleKit/TailscaleKit.xcframework/ios-arm64/TailscaleKit.framework/TailscaleKit";
+
+/** TailscaleKit's revision, as truffle's apple/Vendor/README.md records it, or "". */
+export function tailscaleKitRevision(truffleCheckout) {
+  const readme = join(truffleCheckout, "apple/Vendor/README.md");
+  const text = existsSync(readme) ? readFileSync(readme, "utf8") : "";
+  return /\| Revision \| `([0-9a-f]+)` \|/.exec(text)?.[1] ?? "";
+}
+
+/**
+ * The refresh's reading (item 379): the build info of BOTH shipped Go binaries, every installed mesh sidecar
+ * (`@vibecook/truffle-sidecar-*`) and the kit's TailscaleKit at its truffle pin, into the committed Go record
+ * (`goSnapshot`), keeping what `recorded` holds. Refused, with no record to write, while either binary, the
+ * truffle pin or its checkout at the pin is missing: never a record of one binary.
+ */
+export function goRefresh({ repoRoot, checkouts, artifacts, cache = null, recorded = null }) {
+  const problems = [];
+  const desktop = readJson(join(repoRoot, "apps/desktop/package.json"));
+  const rows = Object.entries(desktop.optionalDependencies ?? {}).filter(([n]) =>
+    n.startsWith("@vibecook/truffle-sidecar-"),
+  );
+  const infos = [];
+  for (const [name] of rows) {
+    const dir = resolvePackage(join(repoRoot, "apps/desktop"), name);
+    if (!dir) continue;
+    const bin = readdirSync(join(dir, "bin")).find((f) => f.startsWith("sidecar-slim"));
+    const info = bin ? goBuildInfo(readFileSync(join(dir, "bin", bin))) : null;
+    if (info) infos.push(info);
+  }
+  if (infos.length === 0)
+    problems.push("no installed sidecar binary to read — `pnpm install` first");
+
+  const resolved = readJson(join(repoRoot, "apps/ios/VibeFieldKit/Package.resolved"));
+  const pin = (resolved.pins ?? []).find((p) => p.identity === "truffle")?.state ?? null;
+  const truffle = join(checkouts, "truffle");
+  const head = gitHead(truffle);
+  if (!pin) problems.push("Package.resolved pins no truffle — the kit's TailscaleKit is unknown");
+  else if (head !== pin.revision)
+    problems.push(
+      `the truffle checkout is at ${head ?? "no revision"}, not Package.resolved's ${pin.revision} — resolve the kit first`,
+    );
+  const revision = tailscaleKitRevision(truffle);
+  if (!revision) problems.push("truffle's apple/Vendor/README.md names no TailscaleKit revision");
+  const binary = join(artifacts, TAILSCALEKIT_BINARY);
+  if (!existsSync(binary))
+    problems.push(
+      "TailscaleKit's binary is not under --artifacts (SourcePackages/artifacts) — a record of the sidecar alone is refused",
+    );
+  else {
+    const info = goBuildInfo(readFileSync(binary));
+    if (info) infos.push(info);
+    else problems.push("TailscaleKit carries no Go build info — its Go modules are unknown");
+  }
+  if (problems.length > 0) return { doc: null, missing: [], problems };
+
+  const versions = [...new Set(rows.map(([, v]) => v))];
+  const { doc, missing } = goSnapshot(
+    infos,
+    cache,
+    { package: "@vibecook/truffle-sidecar-*", version: versions.join(" ") },
+    { recorded, tailscaleKit: { truffle: pin.version, revision } },
+  );
+  return { doc, missing, problems };
 }
 
 // ---- vendored art (the hand-kept rows: what ships as copied pixels or paths, not as a package) ----
@@ -2156,7 +2240,7 @@ export async function desktopInputs(repoRoot, { sidecarPath = null, env = proces
     problems: mille?.problem ? [mille.problem] : [],
     sidecar,
     goSnapshotFile: join(repoRoot, GO_SNAPSHOT),
-    goCache: env.VIBEFIELD_NOTICES_GOMODCACHE ?? null,
+    goCache: stageGoCache(env),
     vendored: DESKTOP_VENDORED,
     target: hostTarget(),
     registryDirs: cargoRegistryDirs(env),
@@ -2584,10 +2668,7 @@ export function iosAcknowledgements({
     role: "the private network",
   });
   const vendor = join(truffle, "apple/Vendor");
-  const readme = existsSync(join(vendor, "README.md"))
-    ? readFileSync(join(vendor, "README.md"), "utf8")
-    : "";
-  const tsRevision = /\| Revision \| `([0-9a-f]+)` \|/.exec(readme)?.[1] ?? "";
+  const tsRevision = tailscaleKitRevision(truffle);
   const tsLicence = join(vendor, "TAILSCALE-LICENSE");
   if (!existsSync(tsLicence))
     ledger.gaps.push(
@@ -2603,12 +2684,7 @@ export function iosAcknowledgements({
       : [],
     role: "the private network (libtailscale)",
   });
-  const binary = artifacts
-    ? join(
-        artifacts,
-        "truffle/TailscaleKit/TailscaleKit.xcframework/ios-arm64/TailscaleKit.framework/TailscaleKit",
-      )
-    : null;
+  const binary = artifacts ? join(artifacts, TAILSCALEKIT_BINARY) : null;
   if (binary && existsSync(binary)) {
     const info = goBuildInfo(readFileSync(binary));
     if (info)
@@ -2656,36 +2732,39 @@ async function main(argv) {
   };
 
   if (argv.includes("--refresh-go-modules")) {
-    const cache = goModCacheDir(process.env, value("--gomodcache"));
-    const desktop = readJson(join(repoRoot, "apps/desktop/package.json"));
-    const rows = Object.entries(desktop.optionalDependencies ?? {}).filter(([n]) =>
-      n.startsWith("@vibecook/truffle-sidecar-"),
-    );
-    const infos = [];
-    for (const [name] of rows) {
-      const dir = resolvePackage(join(repoRoot, "apps/desktop"), name);
-      if (!dir) continue;
-      const bin = readdirSync(join(dir, "bin")).find((f) => f.startsWith("sidecar-slim"));
-      const info = bin ? goBuildInfo(readFileSync(join(dir, "bin", bin))) : null;
-      if (info) infos.push(info);
-    }
-    if (infos.length === 0) {
-      console.error("no installed sidecar binary to read — `pnpm install` first");
+    const checkouts =
+      value("--checkouts") ?? join(repoRoot, "apps/ios/VibeFieldKit/.build/checkouts");
+    const artifacts = value("--artifacts") ?? join(dirname(checkouts), "artifacts");
+    const cache = goModCacheDir(value("--gomodcache"));
+    let recorded = null;
+    try {
+      recorded = readJson(join(repoRoot, GO_SNAPSHOT));
+    } catch {}
+    const { doc, missing, problems } = goRefresh({
+      repoRoot,
+      checkouts,
+      artifacts,
+      cache,
+      recorded,
+    });
+    for (const p of problems) console.error(`  ERROR  ${p}`);
+    if (problems.length > 0) {
+      console.error("not written: resolve the errors above");
       return 1;
     }
-    const versions = [...new Set(rows.map(([, v]) => v))];
-    const { doc, missing } = goSnapshot(infos, cache, {
-      package: "@vibecook/truffle-sidecar-*",
-      version: versions.join(" "),
-    });
     if (missing.length > 0) {
-      console.error(`the module cache at ${cache} lacks: ${missing.join(", ")}`);
+      console.error(
+        cache
+          ? `neither the Go record nor the module cache at ${cache} holds: ${missing.join(", ")}`
+          : `the Go record lacks: ${missing.join(", ")} — name a module cache that holds them (--gomodcache <dir>)`,
+      );
       return 1;
     }
     const file = out ? resolve(out) : join(repoRoot, GO_SNAPSHOT);
     writeFileSync(file, `${JSON.stringify(doc, null, 2)}\n`);
     console.log(
-      `wrote ${relativeTo(repoRoot, file)}: Go ${doc.go.map((g) => g.version).join(", ")}, ${doc.modules.length} modules`,
+      `wrote ${relativeTo(repoRoot, file)}: Go ${doc.go.map((g) => g.version).join(", ")}, ${doc.modules.length} modules ` +
+        `(the sidecar ${doc.sidecar.version}, TailscaleKit ${doc.tailscaleKit.revision} at truffle ${doc.tailscaleKit.truffle})`,
     );
     return 0;
   }
@@ -2708,7 +2787,7 @@ async function main(argv) {
       repoRoot,
       checkouts,
       artifacts,
-      goCache: goModCacheDir(process.env, value("--gomodcache")),
+      goCache: goModCacheDir(value("--gomodcache")),
       goSnapshot: snap,
     });
     const status = report(ledger, "iOS acknowledgements");
