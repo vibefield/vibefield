@@ -221,7 +221,7 @@ struct HistorySessionView: View {
       .background(ChromePalette.paper.ignoresSafeArea())
       .navigationTitle(document.title)
       .navigationBarTitleDisplayMode(.inline)
-      .overlay(alignment: .bottom) { footPill }
+      .overlay(alignment: .bottom) { footPill(proxy) }
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
           Menu {
@@ -359,12 +359,23 @@ struct HistorySessionView: View {
   /// up the page; a tap scrolls to the end and the count clears. Item 362a —
   /// with nothing unread and the end more than a screen below it says
   /// `Latest`, and a press follows again.
+  ///
+  /// Item 386 — a press goes to the end at once when it is more than a screen below (`HistoryFollow.going`):
+  /// the scroll's position is set to its foot, and the end's own row is asked for by name as well, which is the
+  /// call that puts a page back on its end (item 381) and does not hang on what the position last held. Nearer,
+  /// it eases as it did. Either way the document follows until it arrives (`HistoryFollow.rested`).
   @ViewBuilder
-  private var footPill: some View {
+  private func footPill(_ proxy: ScrollViewProxy) -> some View {
     if let pill = follow.pill(arrivals: arrivals, endOnScreen: atEnd, away: reach.away) {
       Button {
         follow.pressed()
-        withAnimation(FieldMotion.ease(0.45)) { scroll.scrollTo(edge: .bottom) }
+        switch HistoryFollow.going(away: reach.away) {
+        case .atOnce:
+          scroll.scrollTo(edge: .bottom)
+          proxy.scrollTo(Self.endRow, anchor: .bottom)
+        case .eased:
+          withAnimation(FieldMotion.ease(0.45)) { scroll.scrollTo(edge: .bottom) }
+        }
         if arrivals > 0 { onNeed(.seen(device: corpus.deviceId, session: document.id)) }
       } label: {
         HStack(spacing: 6) {

@@ -73,6 +73,8 @@ struct HistoryFollow: Equatable, Sendable {
   private(set) var touched = false
   /// A page above was asked for and has not settled: what it adds lands above the reader's place.
   private(set) var holding = false
+  /// Item 386 — the pill was pressed and the page is on its way to its end: only a finger stops it.
+  private(set) var returning = false
 
   /// A document opens at its end and follows; one a search landed in opens on the landed row and stays there.
   init(landed: Bool) {
@@ -83,17 +85,34 @@ struct HistoryFollow: Equatable, Sendable {
   /// A finger moved the page: the following stops at once, wherever the page is.
   mutating func dragged() {
     following = false
+    returning = false
     touched = true
   }
 
   /// The page came to rest: at the foot it follows, off it it does not.
-  mutating func rested(atFoot: Bool) { following = atFoot }
+  ///
+  /// Item 386 — except the rest of a press's own move. Over rows not yet laid out that move can come to rest
+  /// short of the end, and the page is still on its way there: while it follows, each change in the document's
+  /// height puts the foot back. So such a rest is not the reader's, and it stops nothing. Arriving ends the return.
+  mutating func rested(atFoot: Bool) {
+    if returning {
+      if atFoot { returning = false }
+      return
+    }
+    following = atFoot
+  }
 
   /// A search landed on a row, or its stepper walked to one: the page stays there.
-  mutating func landed() { following = false }
+  mutating func landed() {
+    following = false
+    returning = false
+  }
 
-  /// The pill was pressed: back to the end, following.
-  mutating func pressed() { following = true }
+  /// The pill was pressed: back to the end, following, until the page arrives or a finger takes it.
+  mutating func pressed() {
+    following = true
+    returning = true
+  }
 
   /// A page above was asked for.
   mutating func askedEarlier() { holding = true }
@@ -126,8 +145,11 @@ struct HistoryFollow: Equatable, Sendable {
     past && resting
   }
 
-  /// Item 386 (red) — a stub: what the press did, the ease whatever the distance.
-  static func going(away: Bool) -> Going { .eased }
+  /// Item 386 — how a press on the pill goes to the end: at once when the end is more than a screen below
+  /// (`Reach.away`), which `Latest` always is, and on the ease when it is nearer. Far off, the rows between are
+  /// not laid out, and an eased move aims at an estimate of the end; going at once is how the document opens on
+  /// its end.
+  static func going(away: Bool) -> Going { away ? .atOnce : .eased }
 
   // MARK: The foot's clearance (items 387 and 389)
 
