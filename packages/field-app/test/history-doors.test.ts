@@ -85,6 +85,7 @@ import {
   TICKET_RETRY_MIN_MS,
   ticketRefusalWords,
 } from "../src/history/session-port";
+import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "contracts", "fixtures");
 const fixture = (name: string): unknown => JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
@@ -2169,5 +2170,211 @@ describe("MA-4b — the History plate's fixture library (the projects plate)", (
       library.read(other?.publication.session_id ?? "", one?.publication.id ?? ""),
       "a kept page asked under another session",
     ).rejects.toThrow(refusal);
+  });
+});
+
+/* ── item 385: a figure's wait is a wait ──────────────────────────────── */
+
+// Item 385 (2026-11-13; PLAN-385, ruled by VF-PM 23:23:48Z) — on the QA desktop the room said "figures for 1 project
+// failed · retrying" (James, 23:01:43Z, session qa-01): the room counts ANY throw of `projectStats` as a failure, and
+// the port handed it a refusal that may be answered (a call in flight when the socket closed, fieldd still grouping).
+// A wait is a wait: the port waits it out (500 ms doubling to 10 s, 30 s in all), asks a partial answer whose part has
+// not answered yet again (2 s apart, at most three times), and says the refusal once per key in the renderer log.
+describe("item 385: a figure's wait is a wait", () => {
+  const WINDOW = { sinceMs: 1_700_000_000_000, offsetMinutes: -420 };
+  const [HERE, ASLEEP] = FIGURES.sources;
+  /** the whole answer: every desktop answered, nothing held in part */
+  const WHOLE = ProjectFiguresResult.parse({
+    ...FIGURES,
+    sources: [HERE],
+    partial: false,
+    lifetimePartial: false,
+  });
+  /** a part that has not answered YET: this desktop's index still building */
+  const WAITING = ProjectFiguresResult.parse({
+    ...FIGURES,
+    heatmap: [],
+    sources: [
+      { ...HERE, state: "building", detail: "this desktop's index did not answer" },
+      ASLEEP,
+    ],
+  });
+  const closed = (message = "connection closed") =>
+    Object.assign(new Error(message), { kind: "UNAVAILABLE", retryable: true });
+  const settledOf = <T>(answer: Promise<T>) => {
+    const out: { done: boolean; value?: T; error?: unknown } = { done: false };
+    answer.then(
+      (value) => Object.assign(out, { done: true, value }),
+      (error: unknown) => Object.assign(out, { done: true, error }),
+    );
+    return out;
+  };
+  /** answers from a script, one per ask: an Error is thrown, anything else answered */
+  const door = (method: string, script: unknown[], last?: unknown) =>
+    client({
+      [method]: () => {
+        const next = script.length > 0 ? script.shift() : last;
+        if (next instanceof Error) throw next;
+        return next;
+      },
+    });
+  const asks = (d: ReturnType<typeof client>, method = "project.figures") =>
+    d.calls.filter((call) => call.method === method).length;
+  function recording() {
+    const records: Array<{ level: string; event: string; component: unknown; attrs: unknown }> = [];
+    const make = (bindings: Record<string, unknown>): RendererLogger => ({
+      child: (more) => make({ ...bindings, ...more }),
+      trace() {},
+      debug() {},
+      info: (event, _message, attrs) =>
+        void records.push({ level: "info", event, component: bindings.component, attrs }),
+      warn: (event, _message, attrs) =>
+        void records.push({ level: "warn", event, component: bindings.component, attrs }),
+      error() {},
+      fatal() {},
+      isLevelEnabled: () => true,
+    });
+    const before = getRendererLogger();
+    setRendererLogger(make({}));
+    return { records, restore: () => setRendererLogger(before) };
+  }
+
+  it("W1: a refusal that may be answered is a wait — the figure arrives, and the room never sees the refusal", async () => {
+    vi.useFakeTimers();
+    const d = door("project.figures", [closed(), closed(), WHOLE]);
+    const answer = settledOf(catalogPortOver(d).projectStats(VIBE_FIELD, WINDOW));
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(answer.error, "the room is handed no refusal").toBeUndefined();
+    expect(answer.value).toEqual(projectStatsOf(WHOLE));
+    expect(asks(d)).toBe(3);
+  });
+
+  it("W2: past 30 s of waiting, the refusal is the room's, as it came", async () => {
+    vi.useFakeTimers();
+    const d = door("project.figures", [], closed());
+    const answer = settledOf(catalogPortOver(d).projectStats(VIBE_FIELD, WINDOW));
+    await vi.advanceTimersByTimeAsync(29_900);
+    expect(answer.done, "still waiting at 29.9 s").toBe(false);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(answer.done).toBe(true);
+    expect((answer.error as Error).message).toBe("connection closed");
+  });
+
+  it("W3 (a guard): a refusal that will not change, or an answer this build cannot read, is the room's at once", async () => {
+    vi.useFakeTimers();
+    const notFound = Object.assign(new Error("no project holds that key or anchor"), {
+      kind: "NOT_FOUND",
+      retryable: false,
+    });
+    const refused = door("project.figures", [notFound]);
+    const one = settledOf(catalogPortOver(refused).projectStats(VIBE_FIELD, WINDOW));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(one.done).toBe(true);
+    expect((one.error as { kind?: unknown }).kind).toBe("NOT_FOUND");
+    expect(asks(refused)).toBe(1);
+    const malformed = door("project.figures", [{ key: VIBE_FIELD }]);
+    const two = settledOf(catalogPortOver(malformed).projectStats(VIBE_FIELD, WINDOW));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(two.done).toBe(true);
+    expect(asks(malformed)).toBe(1);
+  });
+
+  it("W4: the room's signal ends the wait at once, and nothing is asked after", async () => {
+    vi.useFakeTimers();
+    const d = door("project.figures", [], closed());
+    const controller = new AbortController();
+    const port = catalogPortOver(d);
+    const answer = settledOf(port.projectStats(VIBE_FIELD, WINDOW, controller.signal));
+    await vi.advanceTimersByTimeAsync(100);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(answer.done).toBe(true);
+    expect((answer.error as Error).name).toBe("AbortError");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(asks(d)).toBe(1);
+  });
+
+  it("W5: the refusal is said once per key, in fieldd's words, in the renderer log — and again after a whole answer", async () => {
+    vi.useFakeTimers();
+    const log = recording();
+    try {
+      const d = door("project.figures", [closed(), closed(), WHOLE, closed(), WHOLE]);
+      const catalog = catalogPortOver(d);
+      await vi.advanceTimersByTimeAsync(0);
+      const first = settledOf(catalog.projectStats(VIBE_FIELD, WINDOW));
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(first.value).toEqual(projectStatsOf(WHOLE));
+      // past the shared flight's 10 s, a second episode
+      await vi.advanceTimersByTimeAsync(11_000);
+      const second = settledOf(catalog.projectStats(VIBE_FIELD, WINDOW));
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(second.value).toEqual(projectStatsOf(WHOLE));
+      const waits = log.records.filter((r) => r.event === "renderer.history.figures_wait");
+      expect(waits).toEqual([
+        {
+          level: "info",
+          event: "renderer.history.figures_wait",
+          component: "history.figures",
+          attrs: expect.objectContaining({ key: VIBE_FIELD, words: "Connection closed" }),
+        },
+        expect.objectContaining({ event: "renderer.history.figures_wait" }),
+      ]);
+    } finally {
+      log.restore();
+    }
+  });
+
+  it("W6: a partial answer whose part has not answered yet is asked again before it is handed over", async () => {
+    vi.useFakeTimers();
+    const d = door("project.figures", [WAITING, WHOLE]);
+    const answer = settledOf(catalogPortOver(d).projectStats(VIBE_FIELD, WINDOW));
+    await vi.advanceTimersByTimeAsync(2_100);
+    expect(answer.value).toEqual(projectStatsOf(WHOLE));
+    expect(asks(d), "asked again inside the shared flight's 10 s").toBe(2);
+  });
+
+  it("W7: past three asks again it is handed over as it is; a part asleep alone is handed over at once", async () => {
+    vi.useFakeTimers();
+    const d = door("project.figures", [], WAITING);
+    const answer = settledOf(catalogPortOver(d).projectStats(VIBE_FIELD, WINDOW));
+    await vi.advanceTimersByTimeAsync(5_900);
+    expect(answer.done, "still asking at 5.9 s").toBe(false);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(answer.value).toEqual(projectStatsOf(WAITING));
+    expect(asks(d)).toBe(4);
+    const asleep = door("project.figures", [FIGURES]);
+    const once = settledOf(catalogPortOver(asleep).projectStats(VIBE_FIELD, WINDOW));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(once.value).toEqual(projectStatsOf(FIGURES));
+    expect(asks(asleep)).toBe(1);
+  });
+
+  it("W8: a day's figures wait out a refusal that may be answered too", async () => {
+    vi.useFakeTimers();
+    const d = door("project.figuresDay", [closed(), DAY]);
+    const answer = settledOf(catalogPortOver(d).dayUsage(VIBE_FIELD, "2026-09-29", -420));
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(answer.value).toEqual(dayUsageOf(DAY));
+    expect(asks(d, "project.figuresDay")).toBe(2);
+  });
+
+  it("W9: the words written carry no path, URL or query — fieldd's sentence with each such token left out", async () => {
+    vi.useFakeTimers();
+    const log = recording();
+    try {
+      const pathy = closed(
+        "the agent index did not answer /api/projects/r0s3tt4/heatmap?since_ms=1 at http://127.0.0.1:4317/x",
+      );
+      const d = door("project.figures", [pathy, WHOLE]);
+      const answer = settledOf(catalogPortOver(d).projectStats(VIBE_FIELD, WINDOW));
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(answer.value).toEqual(projectStatsOf(WHOLE));
+      const [said] = log.records.filter((r) => r.event === "renderer.history.figures_wait");
+      const words = (said?.attrs as { words?: string } | undefined)?.words;
+      expect(words).toBe("The agent index did not answer … at …");
+      expect(words).not.toMatch(/[/\\?]/);
+    } finally {
+      log.restore();
+    }
   });
 });
