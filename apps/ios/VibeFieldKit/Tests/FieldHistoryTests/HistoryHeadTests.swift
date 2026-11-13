@@ -7,7 +7,12 @@ import Testing
 /// minimal, remove the second marked text") — a head is its title and how many it holds. These rows hold what a
 /// head says without a screen: its title, the words in its bubble, and the one line VoiceOver reads for the two.
 /// How the bubble sits beside the title is the view's, and his to see.
-@Suite("item 390 — a head says its name and how many, and nothing else")
+///
+/// Item 392 (James, 2026-11-13 23:28:32Z, session qa-01, of a project's page: "[Image #18] redesign this header area
+/// to match same redesign of the project header, so it is simple showing project name and a bubble showing the
+/// session count, and remove other text") — a project's head is the root's over again: its name, and its sessions
+/// in the same bubble.
+@Suite("items 390 and 392 — a head says its name and how many, and nothing else")
 struct HistoryHeadTests {
   @Test("the root's head says Projects and how many the ledger lists, with the ledger's thousands separator")
   func rootCount() {
@@ -33,5 +38,34 @@ struct HistoryHeadTests {
       FieldHistoryModel.rootHead(projects: 2_000, cut: true)
         == FieldHistoryModel.Head(title: "Projects", count: "2,000+", spoken: "Projects, more than 2,000"))
     #expect(FieldHistoryModel.rootHead(projects: 0, cut: true).count == nil)
+  }
+
+  @Test("a project's head says its name and how many sessions its page lists, and is read with what is counted")
+  func projectCount() {
+    #expect(
+      FieldHistoryModel.projectHead(name: "rosetta", sessions: 62)
+        == FieldHistoryModel.Head(title: "rosetta", count: "62", spoken: "rosetta, 62 sessions"))
+    #expect(
+      FieldHistoryModel.projectHead(name: "vibe-field", sessions: 1_485)
+        == FieldHistoryModel.Head(title: "vibe-field", count: "1,485", spoken: "vibe-field, 1,485 sessions"))
+    #expect(
+      FieldHistoryModel.projectHead(name: "mille", sessions: 1)
+        == FieldHistoryModel.Head(title: "mille", count: "1", spoken: "mille, 1 session"))
+  }
+
+  @Test("a project whose sessions are not read yet wears no bubble, never a 0")
+  func projectUnread() {
+    #expect(
+      FieldHistoryModel.projectHead(name: "rosetta", sessions: 0)
+        == FieldHistoryModel.Head(title: "rosetta", count: nil, spoken: "rosetta"))
+  }
+
+  @Test("the two heads write a count the same way: one bubble, one separator")
+  func oneBubble() {
+    for count in [1, 62, 999, 1_000, 1_485, 12_345] {
+      #expect(
+        FieldHistoryModel.projectHead(name: "p", sessions: count).count
+          == FieldHistoryModel.rootHead(projects: count).count)
+    }
   }
 }

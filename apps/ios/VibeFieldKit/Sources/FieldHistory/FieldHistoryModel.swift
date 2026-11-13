@@ -113,6 +113,14 @@ public enum FieldHistoryModel {
       : Head(title: title, count: count, spoken: "\(title), \(count)")
   }
 
+  /// Item 392 (James, 2026-11-13) — a project's head: its name and how many sessions its page lists.
+  ///
+  /// The red's stub: the head as it stood before item 392. The bubble said the bare count, a 0 too, and the name
+  /// was read alone.
+  public static func projectHead(name: String, sessions: Int) -> Head {
+    Head(title: name, count: "\(sessions)", spoken: name)
+  }
+
   /// The words under an indexing scope line: `8,400 of 13,700 sessions`.
   public static func indexingDenominator(standing: DesktopStanding) -> String? {
     guard case .indexing(_, let done, let total) = standing else { return nil }
