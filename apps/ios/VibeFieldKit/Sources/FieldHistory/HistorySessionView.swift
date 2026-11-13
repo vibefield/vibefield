@@ -221,7 +221,8 @@ struct HistorySessionView: View {
       .background(ChromePalette.paper.ignoresSafeArea())
       .navigationTitle(document.title)
       .navigationBarTitleDisplayMode(.inline)
-      .historyFootFade(height: HistoryFootFade.placeholderHeight)
+      // Item 391 — the band over the foot, under the pill: as tall as what stands over the foot, and 24 more
+      .historyFootFade(height: HistoryFootFade.height(foot: rootHead.foot))
       .overlay(alignment: .bottom) { footPill(proxy) }
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {

@@ -131,6 +131,13 @@ struct AppBarTests {
     // A page's last row clears the bar, and the stepper when it rides above.
     #expect(AppBar.clearance(homeInset: 34, stepper: false) == 57)
     #expect(AppBar.clearance(homeInset: 34, stepper: true) == 115)
+    // Item 391 — the band over a session's foot reckons the bar's top from this clearance: it is the bar's top
+    // above the safe area's line and 8 pt of air (`HistoryFootFade.clearanceAir`, FieldHistory)
+    for inset in [CGFloat(34), 0] {
+      let top = AppBar.bottomGap(homeInset: inset) + AppBar.height
+      #expect(AppBar.clearance(homeInset: inset, stepper: false) == top - inset + 8)
+      #expect(AppBar.clearance(homeInset: inset, stepper: true) == top - inset + 8 + 48 + 10)
+    }
   }
 
   /// SE-2 (SE-D3 A; DESIGN.md §8 "The phone's search") — the glass sheet over the field: 10 from each side, its foot 10

@@ -32,10 +32,17 @@ enum HistoryFootFade {
   /// rows are dimmed toward the page, not painted out.
   static let dimAtEdge: Double = 0.9
 
-  /// A PLACEHOLDER, what the document passes until it is handed the screen's own measure: the band on a phone with
-  /// a home indicator while the slot stands (the bar's row 21 pt up and 62 tall, the slot 10 above it and 48 tall,
-  /// so its top at 141). With the bar alone the band it gives begins 82 pt above the bar, which is too high.
-  static let placeholderHeight: CGFloat = HistoryFootFade.height(over: 141)
+  /// The air the bar's clearance keeps over the bar (`AppBar.clearance`'s 8 pt, FieldHome). A page's `RootHead.foot`
+  /// is that clearance on the home indicator's inset, so `foot` less this is the top of what stands over the foot,
+  /// measured from the screen's bottom edge.
+  static let clearanceAir: CGFloat = 8
+
+  /// The band's height where the home screen's measure of the foot is `foot` (`RootHead.foot`: the home indicator's
+  /// inset and the bar's clearance, with the slot's when one stands). It follows that measure as the document's end
+  /// does, so it reaches the slot's top while a session has an act and the bar's while it has none.
+  static func height(foot: CGFloat) -> CGFloat {
+    height(over: foot - clearanceAir)
+  }
 
   /// The band's height, from the screen's bottom edge, where the top of what stands over the foot (the bar, or the
   /// slot above it) is `over` points above that edge: to that top and `lead` beyond it. Where nothing stands over

@@ -22,6 +22,19 @@ struct HistoryFootFadeTests {
     #expect(HistoryFootFade.height(over: 70) == 94)
   }
 
+  @Test("it stands on the home screen's measure of the foot, less the 8 points of air that measure keeps")
+  func theScreensMeasure() {
+    #expect(HistoryFootFade.clearanceAir == 8)
+    // a home indicator's 34 and the bar's clearance of 57: the bar's top is 83 up
+    #expect(HistoryFootFade.height(foot: 91) == 107)
+    // with the slot, 34 and 115: the slot's top is 141 up
+    #expect(HistoryFootFade.height(foot: 149) == 165)
+    // no home indicator, the bar's clearance of 78: the bar's top is 70 up
+    #expect(HistoryFootFade.height(foot: 78) == 94)
+    // a page that is told nothing (a preview) has no band
+    #expect(HistoryFootFade.height(foot: 0) == 0)
+  }
+
   @Test("where nothing stands over the foot there is no band")
   func noBand() {
     #expect(HistoryFootFade.height(over: 0) == 0)
