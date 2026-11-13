@@ -38,6 +38,14 @@ struct HistoryFollow: Equatable, Sendable {
     case latest
   }
 
+  /// Item 386 — how a press on the pill goes to the end.
+  enum Going: Equatable, Sendable {
+    /// With no move to watch, as the document opens on its end.
+    case atOnce
+    /// On the pill's ease (450 ms).
+    case eased
+  }
+
   /// What the scroll's geometry says of the end.
   struct Reach: Equatable, Sendable {
     /// The end is within `footSlack`: a rest here follows.
@@ -117,6 +125,9 @@ struct HistoryFollow: Equatable, Sendable {
   static func putsBack(past: Bool, resting: Bool) -> Bool {
     past && resting
   }
+
+  /// Item 386 (red) — a stub: what the press did, the ease whatever the distance.
+  static func going(away: Bool) -> Going { .eased }
 
   // MARK: The foot's clearance (items 387 and 389)
 

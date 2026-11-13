@@ -85,6 +85,45 @@ struct HistoryFollowTests {
     #expect(follow.pill(arrivals: 0, endOnScreen: false, away: true) == nil, "on its way to the end")
   }
 
+  // Item 386 (James, 2026-11-13 23:18:12Z, of a session's document on his phone: "Latest button does not work") —
+  // the two rows below. The cause is a reading of the code, not yet shown on a device: the press eased to the end
+  // whatever the distance, an eased move over rows not yet laid out aims at an estimate of the end and rests short
+  // of it, and that rest stopped the following, so the pill came back over a page that had not arrived.
+  @Test("a press goes to the end at once when it is more than a screen below, and on the ease when nearer")
+  func howAPressGoes() {
+    #expect(HistoryFollow.going(away: true) == .atOnce, "`Latest` is always more than a screen from the end")
+    #expect(HistoryFollow.going(away: false) == .eased, "arrivals a short way below")
+  }
+
+  @Test("the rest of a press's own move, short of the end, does not stop the following; a finger does")
+  func aPressIsNotStoppedByItsOwnRest() {
+    var follow = HistoryFollow(landed: true)
+    follow.pressed()
+    follow.rested(atFoot: false)
+    #expect(follow.following, "still on its way: each change in the document's height puts the foot back")
+    #expect(follow.pill(arrivals: 0, endOnScreen: false, away: true) == nil)
+    follow.rested(atFoot: true)
+    #expect(follow.following, "arrived")
+    // arrived, a rest off the foot is the reader's own again, and stops the following as it always did
+    follow.rested(atFoot: false)
+    #expect(follow.following == false)
+    // on its way, a finger takes the page at once
+    follow.pressed()
+    follow.dragged()
+    follow.rested(atFoot: false)
+    #expect(follow.following == false)
+    #expect(follow.pill(arrivals: 0, endOnScreen: false, away: true) == .latest)
+    // and a landing ends a return as it ends the following
+    follow.pressed()
+    follow.landed()
+    follow.rested(atFoot: true)
+    #expect(follow.following, "a rest at the foot follows, as any rest there does")
+    follow.pressed()
+    follow.landed()
+    follow.rested(atFoot: false)
+    #expect(follow.following == false)
+  }
+
   @Test("off the foot a change in height leaves the head; a page asked for above holds the foot until it settles")
   func theGrowth() {
     var follow = HistoryFollow(landed: false)
