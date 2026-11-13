@@ -45,27 +45,79 @@ extension EnvironmentValues {
   }
 }
 
-/// The head row itself: the title at the left, and whatever the page stands at its right, centred in the band.
+/// Item 390 (James, 2026-11-13) — a head's count in its bubble: how many the page under the head holds, beside its
+/// title. The look is the one a project's page wore beside its name before any text ruled it (DESIGN.md §8 "The
+/// roots' heads", A head's bubble): 12 medium and tabular in the secondary ink, on a `fill` capsule 22 tall. The
+/// count is never cut: a long title gives way to it.
+struct HeadCount: View {
+  let words: String
+
+  var body: some View {
+    Text(words)
+      .font(ChromeType.sans(12, .medium))
+      .monospacedDigit()
+      .foregroundStyle(ChromePalette.inkSecondary)
+      .lineLimit(1)
+      .fixedSize()
+      .padding(.horizontal, 8)
+      .frame(height: 22)
+      .background(Capsule().fill(ChromePalette.fill))
+  }
+}
+
+/// Item 390 — a head's words: its title and, beside it, the bubble that holds its count. The two are one heading
+/// to VoiceOver, read as `spoken` says (`Projects, 79`). A head given no count is its title alone, as Chat's is.
+struct HeadTitle: View {
+  let title: String
+  var count: String? = nil
+  /// What VoiceOver reads for the title and its bubble; nil reads the title.
+  var spoken: String? = nil
+  var ink: Color = ChromePalette.ink
+
+  /// The bubble's distance from the title.
+  static let gap: CGFloat = 10
+
+  var body: some View {
+    HStack(alignment: .center, spacing: Self.gap) {
+      Text(title)
+        .font(ChromeType.sans(RootHead.titleSize, .bold))
+        .foregroundStyle(ink)
+        .lineLimit(1)
+      if let count { HeadCount(words: count) }
+    }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(spoken ?? title)
+    .accessibilityAddTraits(.isHeader)
+  }
+}
+
+/// The head row itself: the title at the left, with its count in a bubble beside it where the page gives one (item
+/// 390), and whatever the page stands at its right, centred in the band.
 public struct RootHeadRow<Trailing: View>: View {
   private let title: String
+  private let count: String?
+  private let spoken: String?
   private let ink: Color
   private let trailing: Trailing
 
   @Environment(\.rootHead) private var head
 
-  public init(_ title: String, ink: Color = ChromePalette.ink, @ViewBuilder trailing: () -> Trailing) {
+  /// `count` is the words in the bubble beside the title, and `spoken` the line VoiceOver reads for the two; a head
+  /// given neither is its title alone.
+  public init(
+    _ title: String, count: String? = nil, spoken: String? = nil, ink: Color = ChromePalette.ink,
+    @ViewBuilder trailing: () -> Trailing
+  ) {
     self.title = title
+    self.count = count
+    self.spoken = spoken
     self.ink = ink
     self.trailing = trailing()
   }
 
   public var body: some View {
     HStack(spacing: 0) {
-      Text(title)
-        .font(ChromeType.sans(RootHead.titleSize, .bold))
-        .foregroundStyle(ink)
-        .lineLimit(1)
-        .accessibilityAddTraits(.isHeader)
+      HeadTitle(title: title, count: count, spoken: spoken, ink: ink)
       Spacer(minLength: 0)
       trailing
     }

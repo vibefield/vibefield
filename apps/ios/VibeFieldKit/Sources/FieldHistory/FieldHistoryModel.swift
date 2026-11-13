@@ -2,7 +2,7 @@ import FieldDesign
 import Foundation
 
 /// Everything on the History tab that is a DECISION rather than a layout
-/// (H-D4): the ledger's order and wash, the scope line's words, the search's
+/// (H-D4): the ledger's order and wash, the heads' words, the search's
 /// matching and its counts, where a hit lands and what the stepper says.
 /// Pure functions over the corpus, pinned by `FieldHistoryTests` — IOS-3r's
 /// finding applied before the fact: the one module with no test target is
@@ -71,11 +71,13 @@ public enum FieldHistoryModel {
     projects.filter { lifetimeCost($0) > 0 }.max { lifetimeCost($0) < lifetimeCost($1) }
   }
 
-  /// The line under the title. The device is named as its platform names it (`DeviceWord`; L4's word pass).
-  public static func scopeLine(_ corpus: HistoryCorpus, standing: DesktopStanding, device: DeviceWord) -> String {
+  /// Item 390 (James, 2026-11-13) — the line under the root's head: nothing while the ledger's desktop answers, and
+  /// that desktop's own sentence while it does not. The device is named as its platform names it (`DeviceWord`;
+  /// L4's word pass).
+  public static func headNote(_ corpus: HistoryCorpus, standing: DesktopStanding, device: DeviceWord) -> String? {
     switch standing {
     case .connected:
-      return "\(corpus.projects.count) projects · \(figure(corpus.sessionCount)) sessions across \(corpus.agentCount) agents"
+      return nil
     case .asleep:
       return "\(corpus.desktop) is asleep · read \(corpus.readAt)"
     case .indexing(let percent, _, _):
@@ -85,13 +87,9 @@ public enum FieldHistoryModel {
     }
   }
 
-  /// Item 390 (James, 2026-11-13) — the line under the root's head: nothing while the ledger's desktop answers, and
-  /// that desktop's own sentence while it does not.
-  ///
-  /// The red's stub: it answers the scope line, summary and all, as the head drew it before item 390.
-  public static func headNote(_ corpus: HistoryCorpus, standing: DesktopStanding, device: DeviceWord) -> String? {
-    scopeLine(corpus, standing: standing, device: device)
-  }
+  // RETIRED 2026-11-13 (item 390): `scopeLine`, the line under the title. Its asleep, indexing and contracts
+  // sentences are `headNote`'s, word for word. Its first, `N projects · N sessions across N agents`, said while the
+  // desktop answers, is the line James removed: the head's bubble holds the count.
 
   /// A head as its page says it (item 390): the title, the count in the bubble beside it, and the one line VoiceOver
   /// reads for the two.
@@ -103,11 +101,16 @@ public enum FieldHistoryModel {
     public let spoken: String
   }
 
-  /// Item 390 — the root's head: "Projects" and how many the ledger lists.
-  ///
-  /// The red's stub: the head as it stood before item 390, "History" and no bubble.
+  /// Item 390 — the root's head: "Projects" and how many the ledger lists, with the thousands separator the
+  /// ledger's counts wear. A ledger that lists none wears no bubble: the page's note says why, and a 0 would be a
+  /// claim. One the phone cut at its bound (item 352) says `+`, as a lower bound does everywhere on the phone.
   public static func rootHead(projects: Int, cut: Bool = false) -> Head {
-    Head(title: "History", count: nil, spoken: "History")
+    let title = "Projects"
+    guard projects > 0 else { return Head(title: title, count: nil, spoken: title) }
+    let count = figure(projects)
+    return cut
+      ? Head(title: title, count: count + "+", spoken: "\(title), more than \(count)")
+      : Head(title: title, count: count, spoken: "\(title), \(count)")
   }
 
   /// The words under an indexing scope line: `8,400 of 13,700 sessions`.

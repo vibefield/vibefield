@@ -207,12 +207,9 @@ extension FieldHistoryModel {
     return capitalized.hasSuffix(".") ? capitalized : capitalized + "."
   }
 
-  /// The scope line over the ledger, before the desktops' marks: `12 projects
-  /// · 1,405 sessions across 9 agents on`.
-  public static func ledgerScope(_ corpus: HistoryCorpus) -> String {
-    let base = "\(corpus.projects.count) projects · \(figure(corpus.sessionCount)) sessions across \(corpus.agentCount) agents"
-    return corpus.desktops.isEmpty ? base : "\(base) on"
-  }
+  // RETIRED 2026-11-13 (item 390): `ledgerScope`, the scope line over the ledger before the desktops' marks (`12
+  // projects · 1,405 sessions across 9 agents on`). James removed the line; the root's head says how many projects
+  // in its bubble (`rootHead`).
 
   /// Item 352 — the ledger's last line when the listing went on past the phone's bound of pages.
   public static func cutLedger(_ count: Int, desktop: String) -> String {

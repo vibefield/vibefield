@@ -196,6 +196,9 @@ extension FieldHistoryModel {
 
   /// The line under the figures while they are not whole, or when some are not exact; nil when there is nothing to
   /// say.
+  ///
+  /// Item 390 (James, 2026-11-13) — it no longer says `messages are a lower bound`: he removed that sentence. A cut
+  /// project's messages still wear their `+` on the figure (`messagesLowerBound`).
   public static func portfolioNote(_ portfolio: HistoryPortfolio, failed: Int, awake: Bool) -> String? {
     var parts: [String] = []
     if !portfolio.isWhole {
@@ -208,7 +211,6 @@ extension FieldHistoryModel {
         parts.append("reading figures · \(portfolio.read) of \(portfolio.projects) projects")
       }
     }
-    if portfolio.messagesLowerBound { parts.append("messages are a lower bound") }
     if portfolio.partial > 0 {
       parts.append("\(portfolio.partial) \(portfolio.partial == 1 ? "project's days are" : "projects' days are") not exact")
     }

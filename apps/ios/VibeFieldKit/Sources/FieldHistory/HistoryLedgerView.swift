@@ -1,8 +1,9 @@
 import FieldDesign
 import SwiftUI
 
-/// The History tab's home (H-2): the ledger at full width — the large title,
-/// the scope line, Live now, then the projects with the three lines the
+/// The History tab's home (H-2): the ledger at full width — the head (item
+/// 390: "Projects" and how many, in a bubble), Live now, then the projects
+/// with the three lines the
 /// desktop's ledger row keeps (identity, location, quantity) and its one
 /// comparison, the wash of spend behind the row scaled to the biggest
 /// project. Pushed screens ride the tab's own `NavigationStack`, whose path
@@ -11,8 +12,9 @@ import SwiftUI
 /// PJ-7 — ONE LEDGER of projects (`HistoryProjects`, `project.*` over one
 /// door; DESIGN.md §8 "The phone's History is one ledger of projects"): no
 /// longer grouped by desktop. Location is the desktops' marks in the path's
-/// slot; the scope line ends in them, and each sleeping desktop has its own
-/// honest sentence led by its mark. A session's document is read from its OWN
+/// slot, and each sleeping desktop has its own honest sentence led by its
+/// mark (the scope line, which ended in the marks, went at item 390). A
+/// session's document is read from its OWN
 /// desktop's reader (the route's device). What a screen needs read it asks
 /// through `onNeed`; the mock answers none, its corpus is whole.
 public struct HistoryLedgerView: View {
@@ -41,6 +43,11 @@ public struct HistoryLedgerView: View {
 
   private var projects: HistoryProjects { history.projects }
 
+  /// Item 390 (James, 2026-11-13) — what the root's head says: "Projects" and how many the ledger lists.
+  private var head: FieldHistoryModel.Head {
+    FieldHistoryModel.rootHead(projects: projects.corpus.projects.count, cut: projects.cut)
+  }
+
   public var body: some View {
     NavigationStack(path: $router.path) {
       ScrollView {
@@ -57,9 +64,10 @@ public struct HistoryLedgerView: View {
       // page's paper, and the ledger scrolls under it. The system's bar is hidden here; its name stays for a pushed
       // screen's back button.
       .underRootHead {
-        // Item 353 — the figures toggle at the head's right, where Chat stands its ✦ (its disc's edge on the
-        // lists' margin)
-        RootHeadRow("History") {
+        // Item 390 (James, 2026-11-13) — the head says Projects and, in the bubble beside it, how many the ledger
+        // lists, and nothing else. Item 353 — the figures toggle at the head's right, where Chat stands its ✦ (its
+        // disc's edge on the lists' margin)
+        RootHeadRow(head.title, count: head.count, spoken: head.spoken) {
           FiguresToggle(open: $figuresOpen)
             .padding(.trailing, RootHead.side - 5)
         }
@@ -69,7 +77,8 @@ public struct HistoryLedgerView: View {
       // Item 353 — every listed project's figures are read while the figures are open on the tab on screen
       .task(id: figuresOpen && shown) { onNeed(.figures(wanted: figuresOpen && shown)) }
       .background(ChromePalette.paper.ignoresSafeArea())
-      .navigationTitle("History")
+      // Item 390 — the root's name follows its head: a pushed screen's back button says Projects
+      .navigationTitle(head.title)
       .toolbar(.hidden, for: .navigationBar)
       .navigationDestination(for: HistoryRouter.Route.self) { route in
         destination(route)
@@ -129,7 +138,7 @@ public struct HistoryLedgerView: View {
     let portfolio = FieldHistoryModel.portfolio(corpus.projects, sessions: corpus.sessionCount)
     let costed = corpus.projects.contains { FieldHistoryModel.lifetimeCost($0) > 0 }
     return LazyVStack(alignment: .leading, spacing: 0) {
-      scope(corpus, standing: standing)
+      headNotes(corpus, standing: standing)
       if figuresOpen, !corpus.projects.isEmpty {
         HistoryFiguresPanel(
           portfolio: portfolio, projects: corpus.projects,
@@ -182,41 +191,29 @@ public struct HistoryLedgerView: View {
     }
   }
 
-  /// The scope line, ending in the marks of the desktops read; then each
-  /// sleeping desktop's own sentence, led by its mark; then the door's index
-  /// while it is not ready (fix7), led by its desktop's mark the same way.
-  private func scope(_ corpus: HistoryCorpus, standing: FieldHistoryModel.DesktopStanding) -> some View {
+  /// Under the head, only what says the ledger is not whole (item 390; the scope line's summary and the desktops'
+  /// marks stood here): the ledger's own desktop while it does not answer; then each sleeping desktop's own
+  /// sentence, led by its mark; then the door's index while it is not ready (fix7), led by its desktop's mark the
+  /// same way. A whole ledger has no line here.
+  private func headNotes(_ corpus: HistoryCorpus, standing: FieldHistoryModel.DesktopStanding) -> some View {
     VStack(alignment: .leading, spacing: 5) {
-      if corpus.desktops.isEmpty {
-        Text(FieldHistoryModel.scopeLine(corpus, standing: standing, device: DeviceWord.current))
+      if let note = FieldHistoryModel.headNote(corpus, standing: standing, device: DeviceWord.current) {
+        Text(note)
           .font(ChromeType.sans(13))
           .monospacedDigit()
           .foregroundStyle(ChromePalette.inkTertiary)
-      } else {
-        HStack(spacing: 6) {
-          Text(
-            standing.isAwake
-              ? FieldHistoryModel.ledgerScope(corpus)
-              : FieldHistoryModel.scopeLine(corpus, standing: standing, device: DeviceWord.current))
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+      }
+      ForEach(corpus.desktops.filter(\.asleep)) { desktop in
+        HStack(spacing: 5) {
+          DeviceMark(platform: desktop.platform, size: 12)
+          Text(FieldHistoryModel.asleepSentence(desktop))
             .font(ChromeType.sans(13))
             .monospacedDigit()
-            .foregroundStyle(ChromePalette.inkTertiary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-          if standing.isAwake {
-            DeviceMarks(ids: corpus.desktops.map(\.id), desktops: corpus.desktops, size: 12)
-          }
         }
-        ForEach(corpus.desktops.filter(\.asleep)) { desktop in
-          HStack(spacing: 5) {
-            DeviceMark(platform: desktop.platform, size: 12)
-            Text(FieldHistoryModel.asleepSentence(desktop))
-              .font(ChromeType.sans(13))
-              .monospacedDigit()
-          }
-          .foregroundStyle(ChromePalette.inkTertiary)
-          .accessibilityElement(children: .combine)
-        }
+        .foregroundStyle(ChromePalette.inkTertiary)
+        .accessibilityElement(children: .combine)
       }
       if standing.isAwake, let line = FieldHistoryModel.indexSentence(projects.index, desktop: projects.sourceName) {
         HStack(spacing: 5) {
