@@ -9182,7 +9182,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         { onError: streamFrameFailed("artifact.subscribe") },
       ),
     );
-    // MA-3e — open a MADE app, and keep or hide one (methods.ts' MA-1a rows;
+    // MA-3e — open a MADE app, and keep one (methods.ts' MA-1a rows;
     // `apps.use`). `artifact.open` is `federate`: a `device` carries it WHOLE to
     // the app's desktop, which answers from its own rule and audits the act;
     // the forward hook below is the home's say over what came back.
@@ -9295,22 +9295,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         () => ({ outcome: "succeeded" }),
       );
     });
-    // Until slice 3h the home has no intent document to write a keep or a hide
-    // to, so the mark says so in its own word (MADE_APP_OPEN.STATE_INTENT_UNBUILT,
-    // not retryable: nothing a retry changes before 3h), never a fake answer. A
-    // refusal with no effect writes no audit record; 3h audits the write.
+    // Until slice 3h the home has no intent document to write a keep to (Hide
+    // was dropped 2026-11-13), so the mark says so in its own word
+    // (MADE_APP_OPEN.STATE_INTENT_UNBUILT, not retryable: nothing a retry
+    // changes before 3h), never a fake answer. A refusal with no effect writes
+    // no audit record; 3h audits the write.
     api.register("artifact.mark", (ctx, params): ArtifactMarkResult => {
       admitApps(ctx, "artifact.mark", false);
       const parsed = ArtifactMarkParams.safeParse(params ?? {});
       if (!parsed.success)
-        throw new RpcCallError(
-          "PRECONDITION_FAILED",
-          "expected { foldKey, kept?: boolean, hidden?: boolean }, naming at least one",
-          false,
-        );
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { foldKey, kept: boolean }", false);
       throw new RpcCallError(
         "UNAVAILABLE",
-        "keeping or hiding a made app is not built yet: this desktop has no intent to write it to",
+        "keeping a made app is not built yet: this desktop has no intent to write it to",
         false,
         { service: MADE_APP_OPEN.SERVICE, state: MADE_APP_OPEN.STATE_INTENT_UNBUILT },
       );

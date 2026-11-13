@@ -54,11 +54,11 @@ import { tailnetRowLimit } from "./tailnet-rows";
 //     equal to that peer's MagicDNS name as the roster authenticates it — else stripped, never rewritten (C16).
 //   · THE FOLD (MA-D4). One row per `madeAppFoldKey` (contracts' one composer; never re-spelled here), the newest
 //     presentation (`publishedAt ?? capturedAt ?? 0`) serving it, `devices` naming every holder, the serving one
-//     first. The merged intent (an injected reader; empty until 3h) drops a hidden app unless `includeHidden`. `q`,
-//     `devices`, `projectKey` and `kept` narrow; keyset pages; a tailnet caller's page is cut at
-//     INDEX_TAILNET_LIMITS.MAX_ROWS and says `clipped`. The project joins at THIS door through an injected
-//     `joinProject` (3e wires ProjectDoors), never from a row (PJ-4), and never for a peer daemon (DS-L4), whose
-//     `projectKey` is refused with a word rather than answered a blank.
+//     first. The merged intent (an injected reader; empty until 3h) marks the kept apps (Hide dropped 2026-11-13:
+//     `includeHidden` is inert). `q`, `devices`, `projectKey` and `kept` narrow; keyset pages; a tailnet caller's
+//     page is cut at INDEX_TAILNET_LIMITS.MAX_ROWS and says `clipped`. The project joins at THIS door through an
+//     injected `joinProject` (3e wires ProjectDoors), never from a row (PJ-4), and never for a peer daemon (DS-L4),
+//     whose `projectKey` is refused with a word rather than answered a blank.
 //   · ITS OWN PINGS. `changes()` is the shelf's `index.apps.subscribe` (rows always empty). It is never wired to
 //     IndexMesh's `change`, so an app's move never regroups the projects (the fieldd map's Q13).
 //
@@ -81,10 +81,10 @@ export interface AppsLocalSource {
   off(event: "changed", listener: () => void): unknown;
 }
 
-/** The person's merged keep-and-hide intent, by fold key (the lead's ruling on L8; slice 3h). Until 3h it is
- * empty: no app is kept or hidden. */
+/** The person's merged keep intent, by fold key (the lead's ruling on L8; slice 3h). Until 3h it is empty: no app is
+ * kept. *Hide dropped 2026-11-13 (James, 01:29:54Z): no app is hidden.* */
 export interface MadeAppIntentReader {
-  of(foldKey: string): { kept?: true; hidden?: true } | undefined;
+  of(foldKey: string): { kept?: true } | undefined;
   /** the merged intent moved; the answer is how to stop listening */
   onChanged?(listener: () => void): () => void;
 }
@@ -398,7 +398,6 @@ export class AppsMesh extends EventEmitter {
       limit,
       (fold) => {
         const intent = intentOf(fold);
-        if (intent?.hidden === true && params.includeHidden !== true) return false;
         if (params.kept !== undefined && (intent?.kept === true) !== params.kept) return false;
         if (
           needle !== undefined &&
@@ -569,11 +568,11 @@ export class AppsMesh extends EventEmitter {
 
   /** The door's row: the serving row's columns (never rosetta's project id, never a path: EL2), then the fold's and
    * this door's own. A column this door owns is never taken from a row, whoever sent it: the project is joined here
-   * (PJ-4, as ProjectDoors' `keyed` drops a row's stale key) and Keep and Hide are the person's intent, never a row's
-   * fact (the lead's ruling on L8). A replicated row that carries one is read as carrying none. */
+   * (PJ-4, as ProjectDoors' `keyed` drops a row's stale key) and Keep is the person's intent, never a row's fact (the
+   * lead's ruling on L8). A replicated row that carries one, or the retired `hidden`, is read as carrying none. */
   #rowOf(
     fold: Fold,
-    intent: { kept?: true; hidden?: true } | undefined,
+    intent: { kept?: true } | undefined,
     join: AppProjectJoin | undefined,
   ): IndexApp {
     const {
@@ -593,7 +592,6 @@ export class AppsMesh extends EventEmitter {
       openable: _openable,
       ...columns
     } = fold.serving;
-    const hidden = intent?.hidden === true;
     return {
       ...columns,
       versions: fold.versions,
@@ -604,11 +602,7 @@ export class AppsMesh extends EventEmitter {
       ...(join?.place !== undefined ? { place: join.place } : {}),
       ...(join?.ink !== undefined ? { ink: join.ink } : {}),
       ...(intent?.kept === true ? { kept: true as const } : {}),
-      ...(hidden ? { hidden: true as const } : {}),
-      openable:
-        fold.serving.availability === "captured" &&
-        !hidden &&
-        this.#exportReady(fold.serving.device),
+      openable: fold.serving.availability === "captured" && this.#exportReady(fold.serving.device),
     };
   }
 

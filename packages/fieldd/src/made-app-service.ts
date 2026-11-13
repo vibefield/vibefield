@@ -11,15 +11,15 @@
 //    shares with AH, the declare under the app's headers (DR-D11 (a)), and the URL its listener reported, validated
 //    against the app's port and this desktop's MagicDNS name and stripped when it fails (C16: validate or strip, never
 //    rewrite).
-//  - the idle close at MADE_APP_LIMITS.IDLE_CLOSE_MS from the last open, on one timer to the next due close; kept and
-//    hidden come from an injected intent reader (slice 3h writes the intent; until then nothing is kept or hidden),
-//    read by the fold key the app's ROW spells. A record whose row is not held while the library's table does not
-//    speak yet (a restart, before 3a's walk) is neither kept, hidden, closed nor evicted: it stays as it was until
-//    `reconsider()` reads its row (RULINGS L8: kept means no idle close).
+//  - the idle close at MADE_APP_LIMITS.IDLE_CLOSE_MS from the last open, on one timer to the next due close; kept
+//    comes from an injected intent reader (slice 3h writes the intent; until then nothing is kept), read by the fold
+//    key the app's ROW spells. A record whose row is not held while the library's table does not speak yet (a
+//    restart, before 3a's walk) is neither kept, closed nor evicted: it stays as it was until `reconsider()` reads its
+//    row (RULINGS L8: kept means no idle close). *Hide dropped 2026-11-13 (James, 01:29:54Z): no app is hidden.*
 //  - the shared ceiling: open made serves and AH's objects together under ARTIFACT_LIMITS.LOCAL_OBJECTS.
 //  - the previews serve: ONE standing serve per desktop over `artifacts/made-previews/` only (the lead's L12), its
 //    port by the made rule over the device id; after each capture the JPEG is HARD-LINKED there (`fs.link`, never a
-//    read), and a hidden app's link is removed.
+//    read).
 //  - the capture: owed at the first serve and on a new page digest, run at the next open on this desktop (L11; no
 //    window-show event, never a timer). An open that answered `starting` captures when its own listener reports.
 // `artifact.mark` (the person's intent, slice 3h) and `reveal` (the home's shell.openLink, slice 3e) are NOT this
@@ -110,7 +110,7 @@ const MAX_TIMER_MS = 2_147_483_647;
 /** How soon the idle close is tried again while the registry cannot be written (a close is durable first). */
 const STORAGE_RETRY_MS = 60_000;
 /** How soon a removal (or a sweep) that failed is tried again, while one is owed: AH's maintenance cadence
- * (artifact-service.ts `DEFAULT_MAINTENANCE_MS`). A hidden or idle-closed app's listener is never left up unbounded. */
+ * (artifact-service.ts `DEFAULT_MAINTENANCE_MS`). An idle-closed app's listener is never left up unbounded. */
 const RETRY_MS = 10_000;
 
 /** The made rule's first candidate for an app's port: AH-D4's derivation over the same range with
@@ -361,7 +361,6 @@ export interface MadeAppRows {
 /** The person's intent for one fold key (`madeAppFoldKey`), merged, as slice 3h reads it from the settings document. */
 export interface MadeAppIntent {
   kept?: true;
-  hidden?: true;
 }
 
 export interface MadeAppIntentReader {
@@ -370,7 +369,7 @@ export interface MadeAppIntentReader {
   on(cb: () => void): () => void;
 }
 
-/** Until slice 3h: nothing is kept and nothing is hidden. */
+/** Until slice 3h: nothing is kept. */
 export const NO_MADE_APP_INTENTS: MadeAppIntentReader = {
   of: () => undefined,
   on: () => () => undefined,
@@ -421,7 +420,7 @@ export interface MadeAppServiceOptions {
   rows: MadeAppRows;
   exporter: MadeAppExporter;
   view: MadeAppViewBuilder;
-  /** Slice 3h's merged intent. Absent: nothing kept, nothing hidden. */
+  /** Slice 3h's merged intent. Absent: nothing kept. */
   intents?: MadeAppIntentReader;
   /** The account a serve's `allow` is derived from at every declare. null: no serve can be carried (`not-linked`). */
   linkedLogin: () => string | null;
@@ -501,9 +500,6 @@ export class MadeAppService {
   readonly #previewsRetiring = new Set<string>();
   /** Apps whose older digest folders go once their old serve has converged. */
   readonly #prune = new Set<string>();
-  /** Apps whose preview link is withheld (seen hidden, or stamped while their intent could not be read): once the app
-   * is read unhidden, the link comes back. */
-  readonly #linkWithheld = new Set<string>();
   /** A sweep is owed: the last one could not list the floor or remove a stray, or a close could not name its floor id
    * (a full retirement list). The one timer retries it at RETRY_MS. */
   #sweepOwed = false;
@@ -597,7 +593,7 @@ export class MadeAppService {
 
   /** The library's rows moved (3e wires IndexApps' `changed`, which fires when the table first speaks and whenever a
    * row or the standing moves): an app's fold key, so its intent, is read from its row, and a record whose row was not
-   * held (a restart, before the walk) can now be kept, hidden or closed. Re-applies keep, hide and the idle close. */
+   * held (a restart, before the walk) can now be kept or closed. Re-applies keep and the idle close. */
   reconsider(): Promise<void> {
     return this.#enqueue(() => this.#reconsider());
   }
@@ -693,7 +689,6 @@ export class MadeAppService {
       if (!this.#rows.speaks()) throw madeAppRefusal(MADE_APP_OPEN.STATE_READING, device);
       throw notFound();
     }
-    if (this.#intentOf(appId)?.hidden === true) throw notFound();
     const target = await this.#target(row, params.presentationId);
     const refusal = availabilityRefusal(target.availability);
     if (refusal !== undefined) throw madeAppRefusal(refusal, device);
@@ -935,7 +930,7 @@ export class MadeAppService {
     for (const record of open) {
       const intent = this.#intentOf(record.appId);
       if (intent === undefined) unread += 1;
-      else if (intent.kept === true && intent.hidden !== true) kept += 1;
+      else if (intent.kept === true) kept += 1;
       else closable.push(record);
     }
     if (closable.length >= over) {
@@ -1242,7 +1237,7 @@ export class MadeAppService {
     return wanted;
   }
 
-  // ---- keep, hide and the idle close --------------------------------------
+  // ---- keep and the idle close --------------------------------------------
 
   async #reconsider(): Promise<void> {
     if (this.#disposed || !this.#started) return;
@@ -1250,9 +1245,8 @@ export class MadeAppService {
     this.#armTimer();
   }
 
-  /** Hidden: the serve retires and its preview link goes. Unhidden: the link comes back (no reopen). Open, unkept and
-   * past its idle close: it closes. A record whose intent cannot be read yet is left as it was. Answers whether a
-   * record changed. */
+  /** Open, unkept and past its idle close: it closes. A record whose intent cannot be read yet is left as it was.
+   * Answers whether a record changed. */
   #applyIntents(): boolean {
     const now = this.#now();
     let apps: Map<string, MadeAppServeRecord> | null = null;
@@ -1260,29 +1254,6 @@ export class MadeAppService {
       const intent = this.#intentOf(record.appId);
       // not readable yet (its row is not held, the table does not speak): decide nothing; `reconsider()` will
       if (intent === undefined) continue;
-      if (intent.hidden === true) {
-        if (record.state === "open") {
-          apps ??= new Map(this.#registry.apps);
-          apps.set(record.appId, this.#closing(record, now));
-        }
-        this.#captureOnUrl.delete(record.appId);
-        if (!this.#linkWithheld.has(record.appId) && record.previewId !== undefined) {
-          this.#unlinkPreview(record.previewId);
-        }
-        this.#linkWithheld.add(record.appId);
-        continue;
-      }
-      if (this.#linkWithheld.delete(record.appId) && record.preview !== undefined) {
-        try {
-          this.#linkPreview(record.preview.id);
-        } catch (error) {
-          this.#logger.info(
-            "fieldd.made_apps.relink_preview_failed",
-            "An unhidden made app's preview could not be linked again",
-            { appId: record.appId, error: errorName(error) },
-          );
-        }
-      }
       if (record.state === "open" && intent.kept !== true && this.#overdue(record, now)) {
         apps ??= new Map(this.#registry.apps);
         apps.set(record.appId, this.#closing(record, now));
@@ -1293,7 +1264,7 @@ export class MadeAppService {
   }
 
   /** The one timer's work: close what is overdue, then retry what is owed (a removal that failed, a sweep that could
-   * not be made), so a hidden or idle-closed app's listener never waits for an unrelated event to go. */
+   * not be made), so an idle-closed app's listener never waits for an unrelated event to go. */
   async #tick(): Promise<void> {
     if (this.#disposed) return;
     const closed = this.#closeOverdue();
@@ -1311,7 +1282,7 @@ export class MadeAppService {
     for (const record of this.#registry.apps.values()) {
       if (record.state !== "open" || !this.#overdue(record, now)) continue;
       const intent = this.#intentOf(record.appId);
-      if (intent === undefined || (intent.kept === true && intent.hidden !== true)) continue;
+      if (intent === undefined || intent.kept === true) continue;
       apps ??= new Map(this.#registry.apps);
       apps.set(record.appId, this.#closing(record, now));
     }
@@ -1344,7 +1315,7 @@ export class MadeAppService {
     for (const record of this.#registry.apps.values()) {
       if (record.state !== "open") continue;
       const intent = this.#intentOf(record.appId);
-      if (intent === undefined || (intent.kept === true && intent.hidden !== true)) continue;
+      if (intent === undefined || intent.kept === true) continue;
       const at = (record.lastOpenedAt ?? 0) + MADE_APP_LIMITS.IDLE_CLOSE_MS;
       if (due === undefined || at < due) due = at;
     }
@@ -1411,7 +1382,7 @@ export class MadeAppService {
   // ---- previews and the capture -------------------------------------------
 
   /** The capture runs when one is owed (no preview yet, or one of another page), the shell can draw and the app's
-   * listener answers a valid URL: one at a time, beside the mutation chain, never while hidden. */
+   * listener answers a valid URL: one at a time, beside the mutation chain. */
   #maybeCapture(appId: string): void {
     const capture = this.#capturePreview;
     if (capture === undefined || this.#disposed || this.#capturing.has(appId)) return;
@@ -1421,8 +1392,6 @@ export class MadeAppService {
     const pageDigest = record?.exportedDigest;
     if (record === undefined || previewId === undefined || pageDigest === undefined) return;
     if (record.preview?.pageDigest === pageDigest) return;
-    const intent = this.#intentOf(appId);
-    if (intent === undefined || intent.hidden === true) return;
     const url = this.#servingUrl(appId);
     if (url === undefined) return;
     const params = ShellWebContentsCaptureArtifactPreviewParams.safeParse({
@@ -1463,26 +1432,20 @@ export class MadeAppService {
     });
   }
 
-  /** After a capture: the JPEG hard-linked into made-previews (unless hidden), then the record's preview, announced. */
+  /** After a capture: the JPEG hard-linked into made-previews, then the record's preview, announced. */
   #stamp(appId: string, previewId: string, digest: string, pageDigest: string): void {
     if (this.#disposed) return;
     const record = this.#registry.apps.get(appId);
     if (record === undefined || record.previewId !== previewId) return;
-    const intent = this.#intentOf(appId);
-    if (intent !== undefined && intent.hidden !== true) {
-      try {
-        this.#linkPreview(previewId);
-      } catch (error) {
-        this.#logger.info(
-          "fieldd.made_apps.link_failed",
-          "A made app's capture could not be linked for the previews serve",
-          { appId, error: errorName(error) },
-        );
-        return;
-      }
-    } else {
-      // hidden, or not readable now: the link waits until the app is read unhidden (`#applyIntents`)
-      this.#linkWithheld.add(appId);
+    try {
+      this.#linkPreview(previewId);
+    } catch (error) {
+      this.#logger.info(
+        "fieldd.made_apps.link_failed",
+        "A made app's capture could not be linked for the previews serve",
+        { appId, error: errorName(error) },
+      );
+      return;
     }
     const now = this.#now();
     const preview = MadeAppPreview.parse({ id: previewId, digest, pageDigest, capturedAt: now });
@@ -1519,18 +1482,6 @@ export class MadeAppService {
     } catch (error) {
       rmSync(tmp, { force: true });
       throw error;
-    }
-  }
-
-  #unlinkPreview(previewId: string): void {
-    try {
-      rmSync(join(this.#madePreviewsRoot, previewId), { recursive: true, force: true });
-    } catch (error) {
-      this.#logger.info(
-        "fieldd.made_apps.unlink_preview_failed",
-        "A hidden made app's preview link could not be removed",
-        { error: errorName(error) },
-      );
     }
   }
 
@@ -1793,7 +1744,7 @@ function previewsSpec(input: MadePreviewsServeInput): ServeSpec {
   };
 }
 
-/** A hidden app and one no row names answer the same: a hidden app never opens. */
+/** An app no row names (gone from the library, or never in it). */
 function notFound(): RpcCallError {
   return new RpcCallError("NOT_FOUND", "no such made app on this desktop", false);
 }
