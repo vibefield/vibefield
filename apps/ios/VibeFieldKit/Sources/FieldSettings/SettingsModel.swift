@@ -244,6 +244,12 @@ public enum SettingsModel {
     var rows: [SettingsRoute] = [.appearance, .terminal]
     #if DEBUG || VF_TESTFLIGHT
       if build.drawsNotifications { rows.append(.notifications) }
+      // RB-2 — until the gate widens (PLAN-2c §1C, after item 367's pick), Developer is drawn in development builds
+      // alone: a TestFlight build has no made-up field or state to stand in yet (VF-PM 00:10Z, 11-13, (a)). The
+      // widening removes this gate.
+      #if DEBUG
+        if build.drawsDeveloper { rows.append(.developer) }
+      #endif
     #endif
     if hasLock { rows.append(.lock) }
     return rows

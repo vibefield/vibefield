@@ -9,8 +9,21 @@ import SwiftUI
 /// word names this phone's method (`LockWords`).
 struct LockPage: View {
   let lock: FieldLock
+  #if DEBUG || VF_TESTFLIGHT
+    /// RB-2 (VF-PM 21:59:10Z, Q2) — a demo stands: the page draws the lock as it is and changes nothing, either way.
+    var held = false
+  #endif
   /// A change is asking: the controls wait for its answer.
   @State private var asking = false
+
+  /// Whether the controls are held (a demo stands); never in the build submitted for App Review, which has no demo.
+  private var isHeld: Bool {
+    #if DEBUG || VF_TESTFLIGHT
+      return held
+    #else
+      return false
+    #endif
+  }
 
   var body: some View {
     let words = lock.words
@@ -23,7 +36,7 @@ struct LockPage: View {
         ) {
           ChromeRow(LockWords.toggle)
         }
-        .disabled(asking || (lock.method == LockMethod.none && !lock.isOn))
+        .disabled(asking || isHeld || (lock.method == LockMethod.none && !lock.isOn))
       } header: {
         ChromeListHead(tags: [FactTag(DeviceWord.current.This)])
       } footer: {
@@ -68,14 +81,14 @@ struct LockPage: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .disabled(asking)
+    .disabled(asking || isHeld)
     .accessibilityLabel(LockWords.delay(delay))
     .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
   }
 
   /// One change at a time: the ask is the lock's, and the page shows its answer.
   private func change(_ ask: @escaping @MainActor () async -> Bool) {
-    guard !asking else { return }
+    guard !asking, !isHeld else { return }
     asking = true
     Task {
       _ = await ask()

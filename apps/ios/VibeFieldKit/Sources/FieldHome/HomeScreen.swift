@@ -269,6 +269,8 @@ public struct HomeScreen: View {
     /// `-vf-swarm-lab[=section[:page]]`: the design lab over the field (IOS-6c, D-i15).
     @State private var swarmLabOpen = false
     @State private var swarmLabFocus: LabFocus?
+    /// RB-2 — the Developer page asked for the swarm lab: it opens once Settings has left (`afterSettings`).
+    @State private var swarmLabAfterSettings = false
   #endif
   // --- IOS-5a: the input card ---------------------------------------------
   /// The card above the keyboard: the draft, the latch, the mode. It is state
@@ -837,14 +839,14 @@ public struct HomeScreen: View {
         screen: FieldHomeModel.wayInScreen(step, lock: lockOffered, device: DeviceWord.current),
         face: wayInFace,
         faceSeed: accountSeed,
-        onAct: wayInAct)
+        onAct: { _ = wayInDispatch.perform($0) })
       .phoneAppearance(phoneLook)
       // On the way in rather than the tabs: the reader is how a signed-out phone takes a desktop's code.
       .fullScreenCover(isPresented: $macCodeReaderOpen) {
         MacCodeReader(
           onCode: { code in
             macCodeReaderOpen = false
-            receive(code, arrival: .scanned)
+            _ = wayInDispatch.receive(code, arrival: .scanned)
           },
           onClose: { macCodeReaderOpen = false })
       }
@@ -873,40 +875,32 @@ public struct HomeScreen: View {
     if accountMenuOpen { setAccountMenu(open: false) }
   }
 
-  /// WI-1 — the way in's acts, each the home's own: the sign-in, the reader, the tour, and TS-7b's two.
-  private func wayInAct(_ act: FieldHomeModel.WayInAct) {
-    switch act {
-    case .continueWithTailscale, .signInAgain:
-      performSignIn()
-    case .scanCode:
-      macCodeReaderOpen = true
-    case .seeHowItWorks:
-      tourPage = 0
-    case .tour(let page):
-      tourPage = min(max(page, 0), 3)
-    case .welcome:
-      tourPage = nil
-    case .useAnotherAccount:
-      // Tailscale asking again, answered with another account: the full sign-out, then the welcome
-      signOut()
-    case .switchAccount:
-      switchAccount()
-    case .keepAccount, .startOver:
-      // the desktop's code is set aside: the welcome, or the account kept
-      keepAccount()
-    case .openAdminConsole(let url):
-      openURL(url)
-    case .lockOn:
-      // Lock with Face ID: iOS asks (its first time is its own question), then the hand-over; a miss stays here
-      Task {
-        if await lock.setOn(true) { wayInEnding = nil }
-      }
-    case .notNow:
-      wayInEnding = nil
-    case .unlock:
-      // the curtain's own act; the way in never shows it
-      Task { await lock.unlock() }
-    }
+  /// WI-1 — the way in's acts, each the home's own: the sign-in, the reader, the tour, and TS-7b's two. RB-2 — through
+  /// one dispatcher, which holds an act that would reach something real while this open's demo stands
+  /// (`WayInDispatch`; the launch's `LaunchFixtures` is the one answer to whether a demo stands).
+  private var wayInDispatch: FieldHomeModel.WayInDispatch {
+    FieldHomeModel.WayInDispatch(
+      fixtures: Self.thisLaunch,
+      calls: FieldHomeModel.WayInCalls(
+        signIn: { performSignIn() },
+        openReader: { macCodeReaderOpen = true },
+        receive: { code, arrival in receive(code, arrival: arrival) },
+        // Tailscale asking again, answered with another account: the full sign-out, then the welcome
+        signOut: { signOut() },
+        switchAccount: { switchAccount() },
+        // the desktop's code is set aside: the welcome, or the account kept
+        keepAccount: { keepAccount() },
+        openURL: { url in openURL(url) },
+        // Lock with Face ID: iOS asks (its first time is its own question), then the hand-over; a miss stays here
+        lockOn: {
+          Task {
+            if await lock.setOn(true) { wayInEnding = nil }
+          }
+        },
+        // the curtain's own act; the way in never shows it
+        unlock: { Task { await lock.unlock() } },
+        showTour: { page in tourPage = page },
+        notNow: { wayInEnding = nil }))
   }
 
   // MARK: - IOS-9e: the pages, and the bar over them
@@ -1289,7 +1283,8 @@ public struct HomeScreen: View {
   /// Nothing of the mock's account reaches the disk: its ledger is a value, as its sign-out is.
   private static var appsCuesStore: AppsCuesStore? {
     #if DEBUG
-      if ProcessInfo.processInfo.arguments.contains(MockAccount.argument) { return nil }
+      // RB-2 — Demo field, by its argument or by the Developer page
+      if thisLaunch.demoField { return nil }
     #endif
     return AppsCuesStore(defaults: .standard)
   }
@@ -1494,7 +1489,8 @@ public struct HomeScreen: View {
 
   private static var appsPreviewsDirectory: URL? {
     #if DEBUG
-      if ProcessInfo.processInfo.arguments.contains(MockAccount.argument) { return nil }
+      // RB-2 — Demo field, by its argument or by the Developer page
+      if thisLaunch.demoField { return nil }
     #endif
     return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
       .appendingPathComponent("vibefield-app-previews", isDirectory: true)
@@ -1993,6 +1989,22 @@ public struct HomeScreen: View {
         actions: FaceHold.actions(meters.reading.profiles),
         perform: { performHoldAct($0) })
     )
+    .overlay(alignment: .topLeading) { demoTag }
+  }
+
+  /// RB-2 (D2) — while a demo the Developer page chose stands, a dotted Demo tag over the corner, so a made-up fleet
+  /// never passes for your own agents. A scripted run's photograph wears none: its argument is the demo's own word.
+  @ViewBuilder
+  private var demoTag: some View {
+    #if DEBUG || VF_TESTFLIGHT
+      if Self.thisLaunch.demoStands && !Self.thisLaunchScripted && !accountMenuOpen {
+        FactTag(DeveloperWords.demoTag, line: .dotted)
+          .fixedSize()
+          .offset(y: -26)
+          .allowsHitTesting(false)
+          .accessibilityLabel(DeveloperWords.demoTagSpoken)
+      }
+    #endif
   }
 
   // MARK: - UM-4: the held face
@@ -2357,7 +2369,8 @@ public struct HomeScreen: View {
         // starts on the `Sign in` circle, `-vf-mock-search=<q>` fills the
         // search field, `-vf-mock-landed` lands the second hit of the first
         // group, and `-vf-mock-folded` folds the bar as a scroll down would.
-        if ProcessInfo.processInfo.arguments.contains(MockAccount.argument), mock == nil {
+        // RB-2 — Demo field, by its argument or by the Developer page (`thisLaunch`, read once for the launch)
+        if Self.thisLaunch.demoField, mock == nil {
           let account = MockAccount()
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-signed-out") { account.standing = .signedOut }
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-reconnecting") { account.standing = .reconnecting }
@@ -2502,13 +2515,17 @@ public struct HomeScreen: View {
         // IOS-8e — the corner's states, photographed. The decision is the
         // shipping one over invented inputs; `-vf-demo-account-open` grows the
         // menu, which a headless run could not tap.
-        if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(AccountFixtures.argument) }) {
-          let state = String(argument.dropFirst(AccountFixtures.argument.count).drop(while: { $0 == "=" }))
+        // RB-2 — the state, by its argument or by the Developer page (`thisLaunch`: read once, and a chosen state let
+        // go as it is read, so it stands for this open alone)
+        if let state = Self.thisLaunch.account {
           demoAccount = AccountFixtures.demo(named: state)
-          if demoAccount == nil { print("unknown account fixture:", state) }
           if ProcessInfo.processInfo.arguments.contains(AccountFixtures.openArgument) {
             accountMenuOpen = true
           }
+        } else if let argument = ProcessInfo.processInfo.arguments.first(where: {
+          $0.hasPrefix(LaunchFixtures.accountArgument + "=")
+        }) {
+          print("unknown account fixture:", argument.dropFirst(LaunchFixtures.accountArgument.count + 1))
         }
         // TS-7 — the spike TS-D11 A asked for first: can the app close the
         // system's sign-in sheet in code, with no callback to end it? The sheet
@@ -2965,7 +2982,7 @@ public struct HomeScreen: View {
         .presentationCornerRadius(40)
         .fieldGlassSheet()
     }
-    .sheet(isPresented: $settingsSheetOpen) {
+    .sheet(isPresented: $settingsSheetOpen, onDismiss: { afterSettings() }) {
       settingsSheet(at: settingsOpening)
     }
     .sheet(isPresented: $agentProfilesOpen) {
@@ -2986,7 +3003,7 @@ public struct HomeScreen: View {
     .onChange(of: mesh.loginName) { settleExpectation() }
     .onOpenURL { url in
       guard case .success(let code) = PhoneCode.parse(url.absoluteString) else { return }
-      receive(code, arrival: .link)
+      _ = wayInDispatch.receive(code, arrival: .link)
     }
   }
 
@@ -3483,18 +3500,12 @@ public struct HomeScreen: View {
       terminal: terminalAppearance,
       opening: opening,
       lock: lock,
-      actions: SettingsActions(
-        // Both acts leave Settings first: the sign-in is the system's own
-        // sheet, and a signed-out phone is the way in (WI-1).
-        signIn: {
-          closeSettings()
-          performSignIn()
-        },
-        signOut: {
-          closeSettings()
-          confirmSignOut()
-        })
+      actions: settingsActions
     )
+    #if DEBUG || VF_TESTFLIGHT
+      // RB-2 (Q2) — under a demo, This phone › Lock changes nothing
+      .lockHeld(Self.thisLaunch.holds(.lock, scripted: Self.thisLaunchScripted))
+    #endif
     // IOS-10c — the home's agents wear the kit's drawn marks where the build carries them (`AgentGlyph`); Settings
     // knows no vendor glyph of its own.
     .environment(\.settingsAgentMark, SettingsAgentMark { mark in AnyView(AgentGlyph(mark: mark, letterSize: 15)) })
@@ -3504,12 +3515,51 @@ public struct HomeScreen: View {
     .presentationBackground(ChromePalette.paper)
   }
 
+  /// The acts Settings is handed. Both account acts leave Settings first: the sign-in is the system's own sheet, and a
+  /// signed-out phone is the way in (WI-1).
+  private var settingsActions: SettingsActions {
+    let actions = SettingsActions(
+      signIn: {
+        closeSettings()
+        performSignIn()
+      },
+      signOut: {
+        closeSettings()
+        confirmSignOut()
+      })
+    #if DEBUG
+      // RB-2 — the Developer page's Swarm lab: Settings leaves, then the lab opens over the home (`afterSettings`). It
+      // is DEBUG's until the gate widens (PLAN-2c §1C, after item 367's pick), as the lab's door is (`swarmLabBinding`).
+      var labs = actions
+      labs.openSwarmLab = {
+        swarmLabAfterSettings = true
+        closeSettings()
+      }
+      return labs
+    #else
+      return actions
+    #endif
+  }
+
   private func closeSettings() {
     settingsSheetOpen = false
   }
 
+  /// RB-2 — what the Developer page asked for once Settings has left: two pages are never presented at once.
+  private func afterSettings() {
+    #if DEBUG
+      if swarmLabAfterSettings {
+        swarmLabAfterSettings = false
+        swarmLabFocus = nil
+        swarmLabOpen = true
+      }
+    #endif
+  }
+
   /// A confirmed Sign out, from the corner's menu or from Settings › Account.
   private func confirmSignOut() {
+    // RB-2 (Q1) — under a demo the page chose, nothing is signed out and no code is set aside
+    if accountActsHeld { return }
     // TS-7b — the person's own Sign out settles a Mac's code too; the sweep
     // alone keeps it, for "Another account?"'s Sign in again.
     expectationMemory.forget()
@@ -3657,10 +3707,9 @@ public struct HomeScreen: View {
   /// the app on a phone with no account, it goes on to the sign-in — the code
   /// was the step before it; by a link it does not (any page can open the
   /// scheme, so the person's own Continue starts it).
+  ///
+  /// RB-2 — under a demo the way in's dispatcher holds the code before it reaches here (`WayInDispatch.receive`).
   private func receive(_ code: PhoneCode, arrival: PhoneCodeExpectation.Arrival) {
-    #if DEBUG
-      if demoAccount != nil || mock != nil { return }
-    #endif
     expectationMemory.record(code, arrival: arrival)
     identityEpoch += 1
     settleExpectation()
@@ -3675,30 +3724,44 @@ public struct HomeScreen: View {
 
   /// "Another account?"'s Sign in again: the full sign-out (its sweep keeps
   /// the expectation), then a fresh sign-in, which waits for the sweep.
+  /// RB-2 — under a demo the way in's dispatcher holds it (`WayInDispatch`).
   private func switchAccount() {
-    #if DEBUG
-      // A stamped page is a photograph: its acts reach no mesh and no memory.
-      if demoAccount != nil || mock != nil { return }
-    #endif
     signOut()
     performSignIn()
   }
 
   /// "Another account?"'s Keep this account: the code is set aside.
+  /// RB-2 — under a demo the way in's dispatcher holds it (`WayInDispatch`).
   private func keepAccount() {
-    #if DEBUG
-      if demoAccount != nil || mock != nil { return }
-    #endif
     expectationMemory.forget()
     identityEpoch += 1
   }
+
+  // RB-2 — the demo this open stands in, read ONCE for the process (a static is read once): a scripted run's launch
+  // argument first, the Developer page's choices second, a chosen account state let go as it is read (D5 A), so a
+  // return from the background reads nothing. The build submitted for App Review has no demo and compiles no reader.
+  #if DEBUG
+    static let thisLaunch = LaunchFixtures.read(arguments: ProcessInfo.processInfo.arguments, defaults: .standard)
+  #else
+    // Until the gate widens (PLAN-2c §1C, after item 367's pick), a TestFlight build stands in no demo: the mock and
+    // the stamped states are DEBUG's, so a demo read there would hold your own field's acts over nothing made up
+    // (VF-PM 00:10Z, 11-13, (a)). The widening makes this line's gate `DEBUG || VF_TESTFLIGHT`.
+    static let thisLaunch = LaunchFixtures.off
+  #endif
+  #if DEBUG || VF_TESTFLIGHT
+    /// Whether this open's demo is a scripted run's (its launch argument), not the page's: the mock keeps its own
+    /// acts (Q1), and a scripted photograph wears no Demo tag.
+    static let thisLaunchScripted = LaunchFixtures.fromArguments(ProcessInfo.processInfo.arguments) != nil
+  #endif
 
   #if DEBUG
     /// A launch argument that stages this phone's own pixels owns the field
     /// from the first frame: a door page over its photograph would be the
     /// simulator's mesh (`.off`, nothing remembered) speaking over the
     /// fixture. `-vf-demo-signin` is the real welcome under the real sheet.
-    private static let fixtureArguments = ProcessInfo.processInfo.arguments.contains { argument in
+    /// RB-2 — a demo the Developer page chose owns it as its argument does.
+    private static let fixtureArguments = thisLaunch.demoStands
+      || ProcessInfo.processInfo.arguments.contains { argument in
       (argument.hasPrefix("-vf-demo-") && !argument.hasPrefix("-vf-demo-signin"))
         || argument.hasPrefix("-vf-mock") || argument.hasPrefix("-vf-swarm-lab")
     }
@@ -3762,6 +3825,8 @@ public struct HomeScreen: View {
   /// model's own sweep, then the ledger's in-memory copy, so the field draws
   /// no colour the sweep has already forgotten.
   private func signOut() {
+    // RB-2 (Q1) — under a demo the page chose, a Sign out signs nothing out, the mock's included
+    if accountActsHeld { return }
     #if DEBUG
       // The mock forgets nothing on disk: its account is a value, and the
       // sign-out is the standing moving.
@@ -3796,6 +3861,8 @@ public struct HomeScreen: View {
   /// SIGN IN, as the corner offers it: the first sign-in, or the tailnet
   /// asking again. Everything else about the connection is the mesh's own.
   private func performSignIn() {
+    // RB-2 (Q1) — under a demo the page chose, a Sign in starts nothing, the mock's included
+    if accountActsHeld { return }
     #if DEBUG
       if let mock {
         mock.signIn()
@@ -3805,6 +3872,16 @@ public struct HomeScreen: View {
       if demoAccount != nil { return }
     #endif
     mesh.signIn()
+  }
+
+  /// RB-2 (VF-PM 21:59:10Z, Q1) — the corner's and Settings' Sign in and Sign out under a demo the page chose: held,
+  /// for a demo never signs you in or out. A scripted run's mock keeps its own (`LaunchFixtures.holds`).
+  private var accountActsHeld: Bool {
+    #if DEBUG || VF_TESTFLIGHT
+      return Self.thisLaunch.holds(.account, scripted: Self.thisLaunchScripted)
+    #else
+      return false
+    #endif
   }
 
   /// The real mesh keeps itself up, unless the mock or a stamped demo owns the

@@ -25,8 +25,61 @@ struct LaunchFixtures: Equatable, Sendable {
     /// the page's own choices second (`DeveloperChoices`). An account state is let go in the same step that reads it,
     /// so it stands for one open, and an open that fails cannot keep the phone in it.
     static func read(arguments: [String], defaults: UserDefaults) -> LaunchFixtures {
-      // RB-2b (red): a stub, one fixed answer that reads nothing and lets nothing go. RB-2c reads.
-      LaunchFixtures(demoField: false, account: "signedin")
+      if let scripted = fromArguments(arguments) { return scripted }
+      let chosen = DeveloperChoices.read(defaults)
+      // D5 A: the state is let go in the read that takes it, so it stands for this open alone
+      if chosen.account != nil { DeveloperChoices.setAccount(nil, in: defaults) }
+      return LaunchFixtures(demoField: chosen.demoField, account: chosen.account.flatMap(known))
+    }
+
+    /// A scripted run's demo, by its launch arguments: `-vf-mock` (Demo field) and `-vf-demo-account=<state>`. Nil
+    /// when they name none, so the page's choices are read instead.
+    static func fromArguments(_ arguments: [String]) -> LaunchFixtures? {
+      let prefix = accountArgument + "="
+      let field = arguments.contains(mockArgument)
+      let named = arguments.first(where: { $0.hasPrefix(prefix) }).map { String($0.dropFirst(prefix.count)) }
+      guard field || named != nil else { return nil }
+      return LaunchFixtures(demoField: field, account: named.flatMap(known))
+    }
+
+    /// The scripted runs' two arguments: the words `MockField.argument` and `AccountFixtures.argument` hold.
+    static let mockArgument = "-vf-mock"
+    static let accountArgument = "-vf-demo-account"
+
+    /// A state's name as the picker offers it, or nil: a stale or unknown name never stands a demo with no state
+    /// behind it. The picker's list and the fixtures' are one list (`LaunchFixturesTests.pickerParity`).
+    private static func known(_ name: String) -> String? {
+      DeveloperWords.accountStates.contains { $0.key == name } ? name : nil
     }
   #endif
 }
+
+#if DEBUG || VF_TESTFLIGHT
+  extension LaunchFixtures {
+    /// RB-2 — the home's acts outside the way in, and which of them a demo holds (VF-PM 21:59:10Z on PLAN-2c: Q1,
+    /// Q2, and the way to Developer). The way in's own acts are `WayInDispatch`'s.
+    enum HomeAct: CaseIterable, Sendable {
+      /// The corner's and Settings' Sign in and Sign out.
+      case account
+      /// This phone › Lock: its switch, either way, and the time it asks again.
+      case lock
+      /// The way to Developer and its two choices: the corner's Settings, This phone › Developer, the Demo field
+      /// switch and the Account picker. Never held, so a demo can always be switched off.
+      case openSettings, openDeveloper, demoFieldSwitch, accountPicker
+    }
+
+    /// Whether this open's demo holds an act. `scripted`: the demo is a scripted run's (its launch argument), whose
+    /// mock keeps its own Sign in and Sign out: they move `MockAccount`'s standing and reach nothing real.
+    func holds(_ act: HomeAct, scripted: Bool) -> Bool {
+      guard demoStands else { return false }
+      switch act {
+      case .account:
+        return !scripted
+      case .lock:
+        return true
+      case .openSettings, .openDeveloper, .demoFieldSwitch, .accountPicker:
+        return false
+      }
+    }
+  }
+#endif

@@ -54,24 +54,18 @@ extension FieldHomeModel {
     }
 
     /// Whether a demo stands: the home's own `LaunchFixtures`, never an answer of the dispatcher's.
-    var underDemo: Bool {
-      // RB-2b (red): a stub, an answer of its own. RB-2c reads `fixtures.demoStands`.
-      false
-    }
+    var underDemo: Bool { fixtures.demoStands }
 
     /// One act of the way in.
     func perform(_ act: WayInAct) -> WayInOutcome {
-      // RB-2b (red): a stub, the rule's inverse: an act is made only where the rule holds it. RB-2c holds an act
-      // where `underDemo && Self.reachesOutside(act)`, and makes every other.
-      guard fixtures.demoStands && Self.reachesOutside(act) else { return .heldUnderDemo }
+      if underDemo && Self.reachesOutside(act) { return .heldUnderDemo }
       make(act)
       return .made
     }
 
     /// A desktop's code arriving, by the reader or by a link.
     func receive(_ code: PhoneCode, arrival: PhoneCodeExpectation.Arrival) -> WayInOutcome {
-      // RB-2b (red): a stub, the rule's inverse. RB-2c holds it under a demo, by both arrivals.
-      guard fixtures.demoStands else { return .heldUnderDemo }
+      if underDemo { return .heldUnderDemo }
       calls.receive(code, arrival)
       return .made
     }

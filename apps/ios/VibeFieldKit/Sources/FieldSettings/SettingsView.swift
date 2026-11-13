@@ -28,6 +28,11 @@ public struct SettingsView: View {
   @State private var path: NavigationPath
   @AppStorage(PhoneAppearance.storageKey) private var look: PhoneAppearance = .auto
   @Environment(\.dismiss) private var dismiss
+  #if DEBUG || VF_TESTFLIGHT
+    /// RB-2 (VF-PM 21:59:10Z, Q2) — under a demo, This phone › Lock changes nothing: the lock is this phone's real one,
+    /// and a demo never turns it on or off. The home says whether a demo stands (`lockHeld(_:)`).
+    private var holdsLock = false
+  #endif
 
   /// - Parameter opening: where the sheet opens — the card's `···` opens it on
   ///   Terminal (`.terminal`), with Settings one step back.
@@ -44,6 +49,16 @@ public struct SettingsView: View {
     if let page = opening.terminalPage { path.append(page) }
     _path = State(initialValue: path)
   }
+
+  #if DEBUG || VF_TESTFLIGHT
+    /// RB-2 (Q2) — Settings with This phone › Lock held: its switch and its times draw the lock as it is and change
+    /// nothing.
+    public func lockHeld(_ held: Bool) -> SettingsView {
+      var view = self
+      view.holdsLock = held
+      return view
+    }
+  #endif
 
   public var body: some View {
     NavigationStack(path: $path) {
@@ -115,6 +130,11 @@ public struct SettingsView: View {
             FactTag("Not yet", line: .dotted)
           }
           .accessibilityElement(children: .combine)
+        }
+      case .developer:
+        // RB-2 — §13's `code`: drawn in TestFlight and development builds, never in the review build
+        NavigationLink(value: SettingsRoute.developer) {
+          ChromeRow(DeveloperWords.row, lead: .glyph(.code))
         }
     #endif
     case .lock:
@@ -219,12 +239,15 @@ public struct SettingsView: View {
       case .notifications:
         NotificationsPage()
       case .developer:
-        // RB-2b (red): the page is RB-2c's.
-        EmptyView()
+        DeveloperPage(actions: actions)
     #endif
     case .lock:
       if let lock {
-        LockPage(lock: lock)
+        #if DEBUG || VF_TESTFLIGHT
+          LockPage(lock: lock, held: holdsLock)
+        #else
+          LockPage(lock: lock)
+        #endif
       }
     case .about:
       AboutPage(desktops: account.desktops)

@@ -19,18 +19,25 @@
 
     /// The choices as kept.
     public static func read(_ defaults: UserDefaults) -> DeveloperChoices {
-      // RB-2b (red): a stub that reads nothing. RB-2c reads the two keys.
-      DeveloperChoices()
+      DeveloperChoices(demoField: defaults.bool(forKey: demoFieldKey), account: defaults.string(forKey: accountKey))
     }
 
     /// Demo field, on or off. Off removes the key.
     public static func setDemoField(_ on: Bool, in defaults: UserDefaults) {
-      // RB-2b (red): a stub that keeps nothing. RB-2c writes or removes the key.
+      if on {
+        defaults.set(true, forKey: demoFieldKey)
+      } else {
+        defaults.removeObject(forKey: demoFieldKey)
+      }
     }
 
     /// An account state, or nil for your own. Your own removes the key.
     public static func setAccount(_ name: String?, in defaults: UserDefaults) {
-      // RB-2b (red): a stub that keeps nothing. RB-2c writes or removes the key.
+      if let name, !name.isEmpty {
+        defaults.set(name, forKey: accountKey)
+      } else {
+        defaults.removeObject(forKey: accountKey)
+      }
     }
   }
 #endif

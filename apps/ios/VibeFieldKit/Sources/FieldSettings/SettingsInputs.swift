@@ -174,6 +174,12 @@ public struct SettingsOpening: Equatable, Sendable {
 public struct SettingsActions {
   public var signIn: () -> Void
   public var signOut: () -> Void
+  #if DEBUG || VF_TESTFLIGHT
+    /// RB-2 — the Developer page's Labs, each opening its lab over the home with Settings closed first. Nil: the
+    /// home has no such lab in this build, and its row is not drawn.
+    public var openSwarmLab: (() -> Void)? = nil
+    public var openInputCardStates: (() -> Void)? = nil
+  #endif
 
   public init(signIn: @escaping () -> Void, signOut: @escaping () -> Void) {
     self.signIn = signIn
