@@ -1,5 +1,5 @@
 {
-  "originHash" : "42e19fae6e0173b1d2b4469356ed31a580017b9344f77f6315207960f29aa531",
+  "originHash" : "f219cedcf3ea6cd2e3af45d756cd5f227d2d8d265d1d1fe0cfa9dda474e20251",
   "pins" : [
     {
       "identity" : "ghosttea",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vibefield/rosetta.git",
       "state" : {
-        "revision" : "811e554c64e60509ef624660f0709fd33717cc2c",
-        "version" : "0.1.5"
+        "revision" : "00221b5b70f64dc0e08588886718f3db6222f99c",
+        "version" : "0.1.6"
       }
     },
     {

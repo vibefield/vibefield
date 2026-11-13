@@ -966,7 +966,7 @@ test("item 259: a sibling the kit links is the owner's own with no licence file,
       name: "rosetta",
       version: "0.1.5",
       own: true,
-      note: "agent history's Swift client (RosettaClient); the owner's own, UNLICENSED",
+      note: "the owner's own, not licensed separately",
     },
   ]);
   writeFileSync(join(checkouts, "rosetta", "LICENSE"), mit("Rosetta"));

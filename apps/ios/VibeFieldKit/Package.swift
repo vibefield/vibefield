@@ -48,7 +48,7 @@ let ghostteaDependency: Package.Dependency =
 // `release.swift`, never by hand. Its tag is the revision rosettad is built from and the npm rows were
 // published from (RD-5a: rosettad and its clients never name two revisions); `pnpm siblings use rosetta` renders
 // it nil, and the path package is `../rosetta-pin` through `.window/rosetta`.
-let rosettaRelease: Version? = "0.1.5"
+let rosettaRelease: Version? = "0.1.6"
 let rosettaDependency: Package.Dependency =
   if let release = rosettaRelease {
     .package(url: "https://github.com/vibefield/rosetta.git", exact: release)

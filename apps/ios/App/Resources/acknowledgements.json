@@ -7,8 +7,8 @@
       "revision": "8f5b3d122be284c3d0292dacd5c475c2a6193769"
     },
     "rosetta": {
-      "version": "0.1.5",
-      "revision": "811e554c64e60509ef624660f0709fd33717cc2c"
+      "version": "0.1.6",
+      "revision": "00221b5b70f64dc0e08588886718f3db6222f99c"
     },
     "truffle": {
       "version": "0.7.26",
@@ -1561,11 +1561,14 @@
     {
       "ecosystem": "swift",
       "name": "rosetta",
-      "version": "0.1.5",
-      "licence": "",
-      "note": "agent history's Swift client (RosettaClient); the owner's own, UNLICENSED",
-      "own": true,
-      "texts": []
+      "version": "0.1.6",
+      "licence": "MIT",
+      "roles": [
+        "agent history"
+      ],
+      "texts": [
+        "a3f177dc04ae"
+      ]
     },
     {
       "ecosystem": "swift",

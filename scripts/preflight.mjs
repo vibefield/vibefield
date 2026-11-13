@@ -237,22 +237,22 @@ const PIN_EXPECTATIONS = [
   // to the line's end like ice's row, so a prerelease never passes for the release.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/rosetta-protocol":\s*0\.1\.5\s*$/m,
-    label: '"@vibefield/rosetta-protocol": 0.1.5',
+    re: /"@vibefield\/rosetta-protocol":\s*0\.1\.6\s*$/m,
+    label: '"@vibefield/rosetta-protocol": 0.1.6',
     package: "@vibefield/rosetta-protocol",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/rosetta-room":\s*0\.1\.5\s*$/m,
-    label: '"@vibefield/rosetta-room": 0.1.5',
+    re: /"@vibefield\/rosetta-room":\s*0\.1\.6\s*$/m,
+    label: '"@vibefield/rosetta-room": 0.1.6',
     package: "@vibefield/rosetta-room",
   },
   // SP-7b D6: the kit's rosetta Swift row, the release of the two npm rows and rosettad's
   // pin. It stands aside while the dev overlay links rosetta and renders it nil (RD-3).
   {
     file: "apps/ios/VibeFieldKit/Package.swift",
-    re: /^let rosettaRelease: Version\? = "0\.1\.5"$/m,
-    label: 'let rosettaRelease: Version? = "0.1.5"',
+    re: /^let rosettaRelease: Version\? = "0\.1\.6"$/m,
+    label: 'let rosettaRelease: Version? = "0.1.6"',
     overlay: "rosetta",
   },
   // RD-5's exit for puppeteer's npm plane (2026-10-26, 0.2.3): the seven rows are exact `@vibefield/puppeteer-*`,

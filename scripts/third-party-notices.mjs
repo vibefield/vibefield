@@ -40,8 +40,8 @@
 //   - cargo: field-native and its two host binaries (this repo's Cargo.lock), rosettad (the rosetta
 //     checkout's lock) and mille's Node-API engine (the lock of the checkout its addon was built in,
 //     or, once mille is released, its prebuilt package's own files — `milleEngine`), walked from the
-//     root crates over normal and build edges whose `cfg(...)` holds for this target. rosetta is the
-//     owner's own and UNLICENSED: it is listed as VibeField's own component, never as third-party.
+//     root crates over normal and build edges whose `cfg(...)` holds for this target. rosetta is MIT
+//     since 0.1.6 (#51): rosettad's crates are one component, listed with the checkout's LICENSE.
 //     Code others made that a crate compiles in or links beyond its root licence is a component of
 //     its own (NATIVE_LINKS): Ghostty's VT core (libghostty-vt, MIT) and the simdutf, Highway, Wuffs
 //     and Zig compiler_rt its static library carries (ghosttea-vt-sys), libwebp (libwebp-sys), zstd
@@ -2126,10 +2126,7 @@ export async function desktopInputs(repoRoot, { sidecarPath = null, env = proces
               workspaceRoot: rosetta,
               roots: ["rosettad"],
               role: "rosettad (agent history)",
-              sibling: {
-                name: "rosetta",
-                ownNote: "agent history (rosettad and its crates); the owner's own, UNLICENSED",
-              },
+              sibling: { name: "rosetta" },
             },
           ]
         : []),
@@ -2458,17 +2455,10 @@ export function kitProducts(kitManifest, pkg) {
 
 /**
  * The owner's siblings the kit may link as Swift packages (item 259, 2026-11-08): each takes `siblingRow` on its
- * SwiftPM checkout while the kit's manifest takes one of its products. rosetta's Swift client (SP-7b D6) declares no
- * licence, so it is listed as VibeField's own; the phone's page draws no own part (`Acknowledgements.groups`, DESIGN.md
- * §8).
+ * SwiftPM checkout while the kit's manifest takes one of its products. rosetta's Swift client (SP-7b D6) is MIT since
+ * 0.1.6 (#51): its checkout carries the LICENSE, so its row is licensed (`siblingRow`), never the owner's own.
  */
-export const IOS_SIBLINGS = [
-  {
-    package: "rosetta",
-    role: "agent history",
-    ownNote: "agent history's Swift client (RosettaClient); the owner's own, UNLICENSED",
-  },
-];
+export const IOS_SIBLINGS = [{ package: "rosetta", role: "agent history" }];
 
 /** The ledger rows of the siblings the kit links (`IOS_SIBLINGS`), each at its Package.resolved pin. */
 export function iosSiblingRows({ kitManifest, checkouts, pins, siblings = IOS_SIBLINGS }) {
