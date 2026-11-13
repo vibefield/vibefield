@@ -124,14 +124,18 @@ struct HistoryFollow: Equatable, Sendable {
   /// 8 pt the bar's own clearance keeps, so the last row rests 32 pt above the bar, or above the slot.
   static let footAir: CGFloat = 24
 
-  /// Items 387 and 389 (red) — a stub: what the page did, the bar alone whatever stands over the foot.
-  static func clearance(bar: CGFloat) -> CGFloat { 81 }
+  /// What the document's end clears above the safe area's line: what stands over the page's foot (`bar`, the
+  /// home screen's measure: the bar, and the slot above it when one stands) and the air. It is the height of the
+  /// document's last row, the end's own. Over the bar alone it is the 81 pt the page always kept.
+  static func clearance(bar: CGFloat) -> CGFloat { max(0, bar) + footAir }
 
-  /// Items 387 and 389 (red) — a stub: where the pill stood, over the bar alone.
-  static func pillFoot(bar: CGFloat) -> CGFloat { 92 }
+  /// Where the pill's foot stands above the safe area's line: 11 pt above the document's end, so 43 pt above
+  /// the top of what stands over the foot. Over the bar alone it is the 92 pt it always was.
+  static func pillFoot(bar: CGFloat) -> CGFloat { clearance(bar: bar) + 11 }
 
-  /// Items 387 and 389 (red) — a stub: the slack the end was seen within, over the bar alone.
-  static func endSlack(bar: CGFloat) -> CGFloat { 120 }
+  /// How close to the document's foot counts as its end on screen: the end's clearance and a line (39 pt), so
+  /// the end is seen when the last row is readable above the glass. Over the bar alone, the 120 pt it was.
+  static func endSlack(bar: CGFloat) -> CGFloat { clearance(bar: bar) + 39 }
 
   /// Arrivals outrank `Latest`; at the end, or a short way off it with nothing unread, there is no pill.
   func pill(arrivals: Int, endOnScreen: Bool, away: Bool) -> Pill? {

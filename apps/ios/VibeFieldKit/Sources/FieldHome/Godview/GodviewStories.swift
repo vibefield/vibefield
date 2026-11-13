@@ -122,9 +122,11 @@ struct GodviewStorySaying: Equatable, Sendable {
 extension GodviewStories {
   /// Item 350 — where History's and Chat's heads stand, and what their roots clear at the foot, by the screen's own
   /// measures: the row's band (its top, a circle's height), and the home indicator's inset with the bar's clearance.
+  /// Items 387 and 389 — and what a pushed page clears above the safe area's line (`bar`): that same clearance,
+  /// without the inset the system already gives it.
   static func rootHead(safeTop: CGFloat, homeInset: CGFloat, stepper: Bool) -> RootHead {
-    RootHead(
-      top: top(safeTop: safeTop), height: circle,
-      foot: max(0, homeInset) + AppBar.clearance(homeInset: homeInset, stepper: stepper))
+    let clearance = AppBar.clearance(homeInset: homeInset, stepper: stepper)
+    return RootHead(
+      top: top(safeTop: safeTop), height: circle, foot: max(0, homeInset) + clearance, bar: clearance)
   }
 }

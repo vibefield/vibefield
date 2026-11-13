@@ -2102,12 +2102,18 @@ public struct HomeScreen: View {
 
   /// PJ-7 — a session on top of History's stack, no landed search holding the
   /// slot: its act (Resume, Jump to, or why not) stands there (TP §6.3).
+  ///
+  /// Items 387 and 389 — only a session that HAS an act holds the slot. The page under it clears the slot's room
+  /// (`RootHead.bar`), and a session with none (an agent that cannot resume, a live one with no run of ours)
+  /// would keep 58 pt of nothing over its last row.
   private var slotSession: HistorySession? {
     guard selectedTab == .history, !history.stepperShowing, !accountMenuOpen, !searchOpen,
       case .session(let device, let id)? = history.path.last
     else { return nil }
-    return historyDesktops.projects.corpus.sessions.values.lazy.flatMap { $0 }
+    let session = historyDesktops.projects.corpus.sessions.values.lazy.flatMap { $0 }
       .first { $0.id == id && ($0.device ?? device) == device }
+    guard let session, historyActs.act(for: session) != nil else { return nil }
+    return session
   }
 
   /// The session's act in the stepper's slot, with where it runs.

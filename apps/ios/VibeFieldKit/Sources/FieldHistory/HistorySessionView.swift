@@ -48,6 +48,8 @@ struct HistorySessionView: View {
   var onNeed: (HistoryNeed) -> Void = { _ in }
 
   @Environment(\.colorScheme) private var scheme
+  /// Items 387 and 389 — the home screen's measures: what stands over this page's foot is `rootHead.bar`.
+  @Environment(\.rootHead) private var rootHead
   @State private var expanded: Set<String> = []
   /// Item 362f — the message whose whole text is open on its own sheet.
   @State private var whole: HistoryWholeMessage?
@@ -89,13 +91,12 @@ struct HistorySessionView: View {
     _scroll = State(initialValue: ScrollPosition(edge: follow.opening == .end ? .bottom : .top))
   }
 
-  /// How close to the foot counts as "at the end": the bar's clearance plus a
-  /// line, so the end is seen when the last row is readable above the glass.
-  static let endSlack: CGFloat = 120
-  /// The app bar's row and its margin stand over the scroll's foot: the
-  /// content's last row and the arrival pill both clear it, or the pill
-  /// hangs behind the glass where no one sees it.
-  static let barClearance: CGFloat = 80
+  /// Items 387 and 389 — what stands over the page's foot above the safe area's line, as the home screen says it
+  /// (`RootHead.bar`): the bar, and the slot above it when the session has an act or a search has landed. The
+  /// document's last row, its pill and the slack its end is seen within all clear it (`HistoryFollow.clearance`,
+  /// `pillFoot`, `endSlack`), or they hang behind the glass where no one sees them. They cleared the bar alone,
+  /// by a fixed 80 pt, and the slot lay over the last rows and over the pill.
+  private var overFoot: CGFloat { rootHead.bar }
   /// Item 362a — how long after the rows above land the foot is still held: their layout, and a beat.
   static let earlierSettles = Duration.milliseconds(250)
   /// Item 381 — the id of the document's last row, the bar's clearance: at the screen's foot, the page is at its end.
@@ -135,9 +136,9 @@ struct HistorySessionView: View {
           if let since = document.liveSince, awake {
             RuleLine(text: "Live · new since \(since)", tone: ChromePalette.green, rule: ChromePalette.green.opacity(0.38))
           }
-          // the end is the bar's clearance itself, so the end's own row at the screen's foot is the page at its
+          // the end is the foot's clearance itself, so the end's own row at the screen's foot is the page at its
           // end (item 381: it is where a page found past its end is put back). It was a point over a padding.
-          Color.clear.frame(height: Self.barClearance + 1).id(Self.endRow)
+          Color.clear.frame(height: HistoryFollow.clearance(bar: overFoot)).id(Self.endRow)
         }
         .padding(.horizontal, HistoryParts.sidePadding)
       }
@@ -211,7 +212,7 @@ struct HistorySessionView: View {
       // as "seen" and cleared the count before anyone saw a row.
       .onScrollGeometryChange(for: Bool.self) { geometry in
         geometry.contentOffset.y + geometry.containerSize.height
-          >= geometry.contentSize.height - Self.endSlack
+          >= geometry.contentSize.height - HistoryFollow.endSlack(bar: overFoot)
       } action: { _, endOnScreen in
         atEnd = endOnScreen
         if endOnScreen { onNeed(.seen(device: corpus.deviceId, session: document.id)) }
@@ -381,7 +382,7 @@ struct HistorySessionView: View {
         .liquidGlassCapsule()
       }
       .buttonStyle(.plain)
-      .padding(.bottom, Self.barClearance + 12)
+      .padding(.bottom, HistoryFollow.pillFoot(bar: overFoot))
       .transition(.opacity.combined(with: .offset(y: 6)))
       .accessibilityLabel(HistoryFollow.spoken(pill))
     }
