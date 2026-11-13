@@ -738,7 +738,8 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 - Next: rv/vf-ghosttea-tail, on ghosttea 0.15.0 (its EL8 landed 11-12 as M290, by the gvt lane; §2 "EL8 — the
   pins"); waves 3–8 by the plan.
 - Owed: James's hand on every sibling PR and release; the landing table at M283 before its push; item 320 (a
-  red over a whole environment prints it), no owner;
+  red over a whole environment prints it), no owner (three electron-shell sites on the shell's spawn environment
+  became booleans with item 365, M295, LANDED "Items 363 and 365"; the class beyond them stands);
   smoke:plugin-restart and the plugin-runtime soak for item 212; item 215 (freeway's link door), item 217 (item 198's
   door did not take a fresh connection for 30 s after fd pressure; load not shown to be the cause, corrected
   2026-11-07; measured beside item 204) and petition G36 (ghosttea's accept loops); item 341's merged
@@ -1550,7 +1551,11 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
 **Release rails**
 - BP R3: the pane says a permission refusal; Clear browsing data empties the desk profile's cookies (smoke:canvas, the mini) — LANDED "BP-1".
 - BP R4 = BP-D7: row 31 `smoke:profile` on the signed package, RED until BP-D9's fix (J4 done) — LANDED "BP-1b".
-- field-app's 27 DESIGN.md readers have no run on ghosttea 0.15.0 at M291's DESIGN.md text (they ran at `2b6f5a2a3` on 0.14.0), nor fieldd's six and smoke-first-run (proved by literal, not run): the next whole V on the old mini — LANDED "LP Q3.2 and item 334". *Closed 2026-11-12 (M294's records): run345v3 at `df3677c46` ran all three on ghosttea 0.15.0 at this DESIGN.md text (blob `252721ca2e0b`): the 27 in field-app's suite, 27 files and 646 tests; fieldd's six, 200 in 6 files; smoke-first-run, 55, in electron-shell's suite — LANDED "Item 345".*
+- field-app's 27 DESIGN.md readers have no run on ghosttea 0.15.0 at M291's DESIGN.md text (they ran at
+  `2b6f5a2a3` on 0.14.0), nor fieldd's six and smoke-first-run (proved by literal, not run): the next whole V on the
+  old mini — LANDED "LP Q3.2 and item 334". *Closed 2026-11-12 (M294's records): run345v3 at `df3677c46` ran all
+  three on ghosttea 0.15.0 at this DESIGN.md text (blob `252721ca2e0b`): the 27 in field-app's suite, 27 files and
+  646 tests; fieldd's six, 200 in 6 files; smoke-first-run, 55, in electron-shell's suite — LANDED "Item 345".*
 - James's nightly asks for "VibeField Safe Storage": an item a differently signed VibeField made, unproven; his choice is j-340-keychain, and P1 (the keychain probe on the old mini, two signed nightlies on a run keychain) waits on his word for the display and his pick on j-mini-keychain-el8 — LANDED "Items 340 and 349".
 - Desk sign-ins are lost at restart in dev and every smoke (`session.fromPath` outside userData) — LANDED "BP-1b"; closes with BP-D9.
 - D11's signing-only measurement; W11's PTY clause rides it — `build-wp12-updater.md` :365.

@@ -48650,3 +48650,82 @@ same at `2b6f5a2a3`, `df3677c46` and `63c9536d5`):
 
 **Not done, and not claimed:** no smoke, no landing table and no app run; no entry of `/tmp/vf-<uid>/` named or opened;
 nothing pushed.
+
+## Items 363 and 365 — a row's floors are gone before its root is; no row hands vitest a whole environment (M295)
+
+(2026-11-13; three commits, `792712574` to `bf9ebb21c`, with M294's records `447ee7ad8` under them, on `63c9536d5`.
+Cut by HK (vibe-field-09) in `lanes/hk-345/vibe-field` on `hk/i363-teardown`, each under the pre-commit hook on
+VF-PM's word, once, directly. Landed by the fixer by fast-forward to that tip, by sha: relayed by VF-PM at 01:31Z
+(the fixer's report not read by me); main's reflog reads 01:30:19Z. M294's records rode the same fast-forward (VF-PM,
+00:52Z: "this is that carry"). Validated by run363, a9, on the old mini. The packets are `lanes/hk-345/packets/i363-v1/`
+(the run) and `lanes/hk-345/packets/i363-land/` (the land, SHA256SUMS `2ca49b99fff0711b`).)
+Item 363 is the fixer's read of run345v3's "KEPT births 2" (VF-PM, 2026-11-12 19:42:19Z). terminal-seam.test.ts
+removed its floors' roots before it killed them, and never awaited the kill. A live floor or one of its terminal cells
+could write `/tmp/vf-seam-*` back: run345v3 kept two, while run345v2 and run279 kept none. Item 365 is RV's find by
+reading (VF-PM, 21:02:36Z): three electron-shell rows asserted `.not.toHaveProperty` on the shell's spawn environment,
+which is built over the process's whole environment, so a red would print it (item 320's class).
+
+**What landed.** 8 test-side files, +179 −44, beside M294's records (docs, +160 −6); the range is 10 files, +339 −50.
+
+| # | Role | Commit | What |
+|---|---|---|---|
+| 1 | 363 red | `792712574` | `endRow` in native-harness.ts, in today's order; two order rows; terminal-seam and two-pairs end their rows through it |
+| 2 | 363 green | `9118d96bd` | `endRow` turned round with its bound; rosettad-supervisor and swarm-replay-packaged await their kills |
+| 3 | 365 | `bf9ebb21c` | three electron-shell assertions as `NAME in env` booleans |
+
+- **`endRow({stops, floors, roots}, io, boundMs)`** (`packages/fieldd/test/native-harness.ts`). It runs the row's
+  stops, in reverse and error-isolated. Then it kills every floor's tree (`killDaemonTree`) and awaits its exit for at
+  most `boundMs`. Then it sweeps every root of what outlives a floor (`endProcessesUnder`, item 196), and only then
+  removes every root. A floor still running at the bound is named in the error thrown after the removal, so the row
+  fails by the floor's name and the suite does not hang.
+- terminal-seam and two-pairs end their rows through it. rosettad-supervisor and swarm-replay-packaged await
+  `killDaemonTree` before their folders go.
+- fieldd-debug-swarm.test.ts and fieldd-rosettad.test.ts assert `NAME in env` with `toBe(false)`. In :129 a boolean
+  first proves the stub's environment is defined.
+
+**The red, and why it reads the order as data.** Today's race cannot be made to happen on demand. A floor writes back
+only if the scheduler runs it between the removal and the kill's delivery, SIGKILL cannot be caught, and the old order
+sent no other signal. So the two rows drive `endRow` with a stand-in floor and a recording io, and nothing spawns.
+
+**The sweeps** (by reading at `63c9536d5`; in the commits' messages):
+- 363: 32 fieldd test files both remove a folder and kill a child. Four are changed. Five are read and left:
+  agent-index-artifacts, index-apps and index-catalog (the fake rosettad, whose SIGINT exit only removes its announce
+  file), and floor-of-record-daemon and native-restart-door (`node -e setTimeout` stand-ins). Nine already ran in order.
+- 365: 203 test files in electron-shell and fieldd-supervisor; 37 name an environment; 3 sites in 2 files; the
+  supervisor 0.
+
+**Validation of record: run363** (`lanes/ts6/run363-a9-results/verdict/run363.done`, `29d2b66dda394a9e`, 00:43:31Z;
+the packet `i363-v1`, SHA256SUMS `bf5fc6e96a184712`). "all eleven rows run, each once". Logs stay on the mini (items 320
+and 321); R1's log is held there.
+- At the red: B5 biome "Checked 4 files … No fixes applied." and T5 fieldd's typecheck, GREEN. R1
+  `Tests 2 failed | 15 passed (17)`: the item 363 describe's two, one to-deeply-equal and one
+  resolved-instead-of-rejecting, nothing else failing, "RED AS WANTED".
+- At the green: B6 biome (3 files) and T6, GREEN; G1 `Tests 17 passed (17)`; G2 `Test Files 4 passed (4)`,
+  `Tests 42 passed (42)`.
+- At the tip: B7 biome (2 files) and T7 electron-shell's typecheck, GREEN; E1 `Tests 6 passed (6)`; V fieldd whole,
+  `Test Files 271 passed | 5 skipped (276)`, `Tests 3845 passed | 15 skipped (3860)`.
+- KEPT births under `/private/tmp`: 0 in every row, so no `vf-seam-*` or `vf-2p-*` was kept. A reading, not the proof;
+  the proof is the order, read as data by R1 and G1.
+- `/tmp/vf-<uid>` absent at the arm and in fin; `/tmp/vfa-*` 0; Keychains unmoved (8 → 8); the history files unmoved;
+  field-native compiled in R1 alone (relinked, the same sha16).
+- One finding, VF-PM's class, not this stack's: "the install's stamp (node_modules/.modules.yaml mtime
+  2026-11-13T00:17:36Z) is not 2026-11-12T19:18:25Z, the one run345v3 left": runrb2's one frozen install on the same
+  lock.
+
+**No row ran on James's Mac.** Its gate held the red's biome and fieldd typecheck for 90 minutes under memory pressure
+(2026-11-12 21:59Z to 23:29Z; swap 7.3 of 8 GB). VF-PM moved them to the old mini (23:30:08Z), before each commit's
+vitest rows; a red there would have been answered by a new commit, never an amend.
+
+**Corrected here.** The fixer's note at the land (relayed by VF-PM, 01:31Z): M294's records left one ROADMAP line of
+about 560 characters, the release-rails gap line with its dated closing. It is wrapped in place in these records; its
+words are unchanged.
+
+**Found along the way.**
+- The red's first message claimed Mac rows that never ran. It was rewritten before the commit, and VF-PM read the v2.
+- My packet plan's draft named a count I had not read ("39 rows"). It was removed before the seal.
+- My seal script's first run failed to parse (an apostrophe inside `${1:?…}`). It wrote nothing.
+- My report of the 90-minute hold came an hour late. The 30-minute rule now carries a watcher.
+
+**Owed.** Item 320's class beyond these three sites, as ROADMAP names it (RV's section).
+
+**Not done, and not claimed:** no smoke and no app run; nothing pushed.
