@@ -7784,6 +7784,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     fits the bound, so the flag alone read it as a whole message. The mark stands for both: `clipped · 88 KB on
     studio` under a reply, under a prompt, and under a member's opened words, which open even when they are one
     line.
+  - **A group's head and a failed line say what the room says** (item 370). After four edited files the head
+    says ` … N more`, where it said `+N`. A tool line that failed says its failure: the failure's first line, cut
+    at 60, and after `exit N · ` when the command's exit was not zero. It was the family's result (`3 matches` on
+    a search that failed, `exit 2` alone on a command), with the failure's words hidden behind it. The desktop's
+    row carries the failure's kind where it had no sentence (rosetta's `FailureKind`, a bare word such as
+    `not_found`), and the commonest failure has none, so a bare word is read as a kind and never printed as it
+    is spelt: `unknown` and `exit_non_zero` say nothing, `timeout` says `timed out`, and any other says itself
+    with spaces (`not found`). The rule is by the word's shape, lowercase letters and underscores, so a kind
+    rosetta adds later reads as words too; no copy of rosetta's list is kept. A real summary of one lowercase
+    word (`denied`, `killed`) reads through the same rule and says itself, which is right. A command that timed out says
+    `timed out` and nothing else. A failed line with no words left says its exit, else its result, else its
+    status (`failed`, `denied`, `interrupted`), and never `exit 0`.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
