@@ -65,6 +65,7 @@ import type {
   ProjectStats,
   RoomPorts,
 } from "@vibefield/rosetta-room";
+import { getRendererLogger } from "../logging";
 import { WorkspaceClient, type WorkspaceClientOptions } from "../workspace/client";
 import { type AssetSourceOptions, assetSourceOver, type HistoryAssetSource } from "./asset-source";
 import {
@@ -143,6 +144,13 @@ export const HISTORY_RETRY_MAX_MS = 10_000;
  * the same window — the panel's figures and its usage are ONE door (AR-D39
  * (a)). */
 export const PROJECT_FIGURES_SHARE_MS = 10_000;
+/** Item 385 — how long a figure's ask waits out a refusal that may be answered (a connection not up, fieldd not
+ * ready yet), from its first ask: past it the refusal is the room's, and its "failed · retrying" is true. */
+export const FIGURES_WAIT_MAX_MS = 30_000;
+/** Item 385 — a partial answer whose part has not answered YET is asked again this long after, at most this many
+ * times (inside FIGURES_WAIT_MAX_MS), before it is handed over as it is. */
+export const FIGURES_PARTIAL_ASK_MS = 2_000;
+export const FIGURES_PARTIAL_ASKS_MAX = 3;
 /** A listing longer than this many pages is refused rather than walked. */
 export const HISTORY_LISTING_MAX_PAGES = 200;
 
@@ -752,6 +760,58 @@ function withSignal<T>(answer: Promise<T>, signal: AbortSignal | undefined): Pro
   });
 }
 
+/* ── item 385: a figure's wait is a wait ────────────────────────────────── */
+
+/** A pause the caller's signal ends at once. */
+function waitFor(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  if (signal?.aborted === true) return Promise.reject(aborted(signal));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", stop);
+      resolve();
+    }, ms);
+    const stop = (): void => {
+      clearTimeout(timer);
+      reject(aborted(signal));
+    };
+    signal?.addEventListener("abort", stop, { once: true });
+  });
+}
+
+/** Whether a figure's refusal may be answered by asking again: `askAgain`'s rule, but never an answer this build
+ * cannot read (a parse error carries no kind, and asking again does not change it). */
+function mayAnswer(cause: unknown): boolean {
+  return askAgain(cause) && !(cause instanceof Error && cause.name === "ZodError");
+}
+
+/** A part of a merged figure that has not answered YET: its index still building, or silent. (`asleep` and
+ * `incompatible` are the roster's standing, and a split never fills: neither is waited for.) */
+const waitingPart = (source: { state: string }): boolean =>
+  source.state === "building" || source.state === "timeout";
+
+/** A refusal's words for the log: fieldd's own sentence, with every token that looks like a path, a URL or a query
+ * left out, so no origin, route or file reaches a log line. */
+function figureWords(cause: unknown): string {
+  return refusalWords(cause)
+    .split(" ")
+    .map((word) => (/[/\\]|\?\S|^~/.test(word) ? "…" : word))
+    .join(" ");
+}
+
+/** What a figure's refusal says, for the log line. */
+function figureRefusal(cause: unknown): Record<string, unknown> {
+  const refusal = refusalOf(cause);
+  const state = refusal.details?.["state"];
+  return {
+    words: figureWords(cause),
+    ...(typeof refusal.kind === "string" ? { kind: refusal.kind } : {}),
+    ...(typeof refusal.retryable === "boolean" ? { retryable: refusal.retryable } : {}),
+    ...(typeof state === "string" ? { state } : {}),
+  };
+}
+
+const figuresLog = () => getRendererLogger().child({ component: "history.figures" });
+
 /* ── the catalog port ───────────────────────────────────────────────────── */
 
 /** The two parts of the room's meta a read fetches: the roots (`project.list`
@@ -1009,6 +1069,100 @@ export function catalogPortOver(
       if (figures.get(shared)?.answer === answer) figures.delete(shared);
     });
     return answer;
+  }
+
+  /** Item 385 — a shared flight let go, so the next ask reaches fieldd: a partial answer is kept no longer than a
+   * failure is. */
+  function letGoFigures(answer: Promise<ProjectFiguresResult>): void {
+    for (const [held, entry] of figures) if (entry.answer === answer) figures.delete(held);
+  }
+
+  /** Item 385 — what a figure's ask has said, once per key per episode (its next answer with no part waiting ends
+   * the episode): in the renderer log, never the room's words, since nothing on screen is to change. */
+  const told = new Set<string>();
+  function tell(
+    key: string,
+    level: "info" | "warn",
+    event: string,
+    message: string,
+    attrs: Record<string, unknown>,
+  ): void {
+    const once = `${event}\u0000${key}`;
+    if (told.has(once)) return;
+    told.add(once);
+    figuresLog()[level](event, message, { key, ...attrs });
+  }
+
+  /**
+   * Item 385 — a figure's ask, settled before the room is handed it: the room counts ANY throw as "figures failed ·
+   * retrying". A refusal that may be answered (`mayAnswer`: a connection not up, fieldd not ready yet) is a wait,
+   * asked again after HISTORY_RETRY_MIN_MS, doubling to HISTORY_RETRY_MAX_MS, until FIGURES_WAIT_MAX_MS from the
+   * first ask; then it is thrown as it came. A partial answer whose part has not answered yet (`waitingPart`) is
+   * asked again FIGURES_PARTIAL_ASK_MS apart, at most FIGURES_PARTIAL_ASKS_MAX times inside the same bound, then
+   * handed over as it is. The room's signal ends a wait at once. Meanwhile nothing changes on screen: the figure
+   * arrives.
+   */
+  async function settled<T extends { partial: boolean; sources: readonly { state: string }[] }>(
+    key: string,
+    signal: AbortSignal | undefined,
+    ask: () => Promise<T>,
+    letGo: (answer: Promise<T>) => void,
+  ): Promise<T> {
+    const started = now();
+    let delay = HISTORY_RETRY_MIN_MS;
+    let partials = 0;
+    for (;;) {
+      const flight = ask();
+      let answer: T;
+      try {
+        answer = await withSignal(flight, signal);
+      } catch (cause) {
+        if (signal?.aborted === true) throw cause;
+        const left = FIGURES_WAIT_MAX_MS - (now() - started);
+        if (!mayAnswer(cause) || left <= 0) {
+          tell(
+            key,
+            "warn",
+            "renderer.history.figures_failed",
+            "fieldd did not answer a project's figures",
+            figureRefusal(cause),
+          );
+          throw cause;
+        }
+        tell(
+          key,
+          "info",
+          "renderer.history.figures_wait",
+          "fieldd could not answer a project's figures yet; asked again",
+          figureRefusal(cause),
+        );
+        await waitFor(Math.min(delay, left), signal);
+        delay = Math.min(HISTORY_RETRY_MAX_MS, delay * 2);
+        continue;
+      }
+      const waiting = answer.partial
+        ? answer.sources.filter(waitingPart).map((source) => source.state)
+        : [];
+      if (waiting.length === 0) {
+        for (const once of told) if (once.endsWith(`\u0000${key}`)) told.delete(once);
+        return answer;
+      }
+      if (
+        partials >= FIGURES_PARTIAL_ASKS_MAX ||
+        now() - started + FIGURES_PARTIAL_ASK_MS > FIGURES_WAIT_MAX_MS
+      )
+        return answer;
+      partials += 1;
+      letGo(flight);
+      tell(
+        key,
+        "info",
+        "renderer.history.figures_partial",
+        "a project's figures came back in part; asked again",
+        { waiting, parts: answer.sources.length },
+      );
+      await waitFor(FIGURES_PARTIAL_ASK_MS, signal);
+    }
   }
 
   /** PJ-4 — ONE feed for the port, however many read it (History's room and
@@ -1328,27 +1482,27 @@ export function catalogPortOver(
 
     // PJ-4 (H2) — the room's project id IS the PJ key: its figures are the
     // project's merged ones, every desktop and rosetta project it holds
+    // (item 385: each settled first — a wait is a wait, and the room is handed only a refusal that is true)
     async projectStats(key, window, signal) {
-      return projectStatsOf(await withSignal(projectFigures(key, window), signal));
+      return projectStatsOf(
+        await settled(key, signal, () => projectFigures(key, window), letGoFigures),
+      );
     },
 
     async usage(key, window, signal) {
-      return usageOf(await withSignal(projectFigures(key, window), signal));
+      return usageOf(await settled(key, signal, () => projectFigures(key, window), letGoFigures));
     },
 
     async dayUsage(key, day, offsetMinutes, signal) {
-      return dayUsageOf(
-        ProjectFiguresDayResult.parse(
-          await withSignal(
-            client.request("project.figuresDay", {
-              key,
-              day,
-              offsetMinutes: Math.max(-840, Math.min(840, Math.round(offsetMinutes))),
-            }),
-            signal,
-          ),
-        ),
-      );
+      const ask = () =>
+        client
+          .request("project.figuresDay", {
+            key,
+            day,
+            offsetMinutes: Math.max(-840, Math.min(840, Math.round(offsetMinutes))),
+          })
+          .then((value) => ProjectFiguresDayResult.parse(value));
+      return dayUsageOf(await settled(key, signal, ask, () => {}));
     },
 
     async search(request: CatalogSearch, signal): Promise<SearchResponse> {
