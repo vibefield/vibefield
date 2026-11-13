@@ -494,7 +494,7 @@ extension FieldHistoryModel {
       let head = [model.isEmpty ? nil : model, effort].compactMap { $0 }.joined(separator: " · ")
       let promptAttachments = group.prompt?.attachments.map { attachmentWords($0, desktop: desktop) } ?? []
       let promptClipped = group.prompt.flatMap { prompt -> String? in
-        prompt.textClipped ? clippedWords(byteLen: prompt.textByteLen, desktop: desktop) : nil
+        isCut(prompt) ? clippedWords(byteLen: prompt.textByteLen, desktop: desktop) : nil
       }
       let turnId = group.prompt?.timelineId ?? group.body.first?.timelineId ?? "turn-\(index)"
       // the body, cut wherever the sitting changes under it
@@ -658,6 +658,12 @@ extension FieldHistoryModel {
     }
   }
 
+  /// Item 368 — whether a row's words are less than the whole. The door cut them at its bound (`textClipped`), or
+  /// the whole is a file on the desktop and the row carries its opening and the file's size (`textByteLen`). The
+  /// second arrives WITHOUT the flag when that opening fits the bound (fieldd's `index-timeline.ts` sets the flag
+  /// only for its own cut), so the flag alone read such an opening as a whole message.
+  static func isCut(_ row: IndexTimelineRow) -> Bool { row.textClipped || row.textByteLen != nil }
+
   /// `clipped · 14 KB on studio` — the words under a text the door cut at its
   /// bound (`textClipped`), with the whole's size when the index named one
   /// (`textByteLen`, a text that lives in an asset upstream); `clipped on
@@ -695,13 +701,13 @@ extension FieldHistoryModel {
     for row in body {
       switch row.kind {
       case "agent":
-        let words = said(row.text) != nil || row.textClipped
+        let words = said(row.text) != nil || isCut(row)
         guard words || !row.attachments.isEmpty else { continue }
         flush()
         if words {
           out.append(.prose(id: row.timelineId, at: clockSeconds(row.at), text: row.text ?? "", anchor: row.timelineId))
         }
-        if row.textClipped {
+        if isCut(row) {
           out.append(.clipped(id: "\(row.timelineId)/clipped", words: clippedWords(byteLen: row.textByteLen, desktop: desktop)))
         }
         for attachment in row.attachments {
@@ -822,10 +828,10 @@ extension FieldHistoryModel {
     _ row: IndexTimelineRow, _ kind: HistoryLedgerLine.Kind, verb: String, lead: String, words: String?,
     state: HistoryLedgerLine.State = .ok, desktop: String
   ) -> HistoryLedgerLine {
-    let more = words.flatMap { $0 == lead && !row.textClipped ? nil : $0 }
+    let more = words.flatMap { $0 == lead && !isCut(row) ? nil : $0 }
     return HistoryLedgerLine(
       id: row.timelineId, verb: verb, object: lead, result: "", state: state, kind: kind, words: more,
-      clipped: more != nil && row.textClipped ? clippedWords(byteLen: row.textByteLen, desktop: desktop) : nil)
+      clipped: more != nil && isCut(row) ? clippedWords(byteLen: row.textByteLen, desktop: desktop) : nil)
   }
 
   /// The words, when there are any but space.
