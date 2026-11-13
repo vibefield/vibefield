@@ -1,6 +1,7 @@
 // MA-3b — the made-app service (`made-app-service.ts`): a made app is served only when a person opens it, at its own
 // port for life, from the folder rosetta's export wrote, behind the linked login; it closes a day after its last open
-// unless kept; a hidden app never serves; one previews serve per desktop carries made apps' JPEGs and nothing else.
+// unless kept; one previews serve per desktop carries made apps' JPEGs and nothing else. (Hide dropped, James
+// 2026-11-13: no app is hidden.)
 // Unit rows over fakes (the serve bridge, the library rows, the exporter, the intent reader, the capture, the clock and
 // the one timer): no daemon, no field-native. The pure rules are held to `made-app-serving.vector.json`, which a
 // script computed independently of this code. Rows named "PIN:" pass on the red skeleton by design.
@@ -838,7 +839,7 @@ describe("MadeAppService (MA-3b unit)", () => {
     ).toBe(false);
   });
 
-  it("refuses honestly before any export: unknown, hidden, a library still reading, rosetta's availability, unlinked", async () => {
+  it("refuses honestly before any export: unknown, a library still reading, rosetta's availability, unlinked", async () => {
     const cases: Record<string, (p: Parts) => IndexCatalogApp | string> = {
       unknown: () => hex("never made"),
       reading: (p) => {
@@ -854,11 +855,6 @@ describe("MadeAppService (MA-3b unit)", () => {
       no_page_read: (p) => {
         p.rows.canonicalReady = undefined;
         return hex("nothing read");
-      },
-      hidden: (p) => {
-        const row = p.rows.add(appRow(1));
-        p.intents.set(madeAppFoldKey(row), { hidden: true });
-        return row;
       },
       not_captured: (p) => p.rows.add(appRow(1, { availability: "not_captured" })),
       missing: (p) => p.rows.add(appRow(1, { availability: "missing" })),
@@ -886,7 +882,6 @@ describe("MadeAppService (MA-3b unit)", () => {
       reading: refused("library-reading", true),
       walking: refused("library-reading", true),
       no_page_read: refused("library-reading", true),
-      hidden: notFound,
       not_captured: refused("not-kept", false),
       missing: refused("not-kept", false),
       changed_during_read: refused("not-kept", false),
@@ -1047,31 +1042,23 @@ describe("MadeAppService (MA-3b unit)", () => {
     expect(p.bridge.native.has(serveId ?? "<none>"), "nothing listens on it").toBe(false);
   });
 
-  it("hides: the serve retires, its preview link goes, and an open is NOT_FOUND; unhidden, the link comes back", async () => {
+  // Hide dropped (James, 2026-11-13 01:29:54Z): no app is hidden. A reader whose intent still names `hidden` (an older
+  // object) is read for `kept` alone: the app opens, its serve stays, and its capture is linked.
+  it("ignores an intent's hidden: the app opens, its serve stays declared and its capture is linked", async () => {
     const p = parts();
     const row = p.rows.add(appRow(1));
+    p.intents.set(madeAppFoldKey(row), { hidden: true } as unknown as MadeAppIntent);
     const svc = made(p);
     await svc.start();
     expect(await opened(svc, row.appId)).toEqual(serving(appPort(row)));
     await svc.settled();
     const previewId = previewIdOf(p, row.appId);
     expect(existsSync(linkedFile(p, previewId)), "the capture is linked").toBe(true);
-    const spec = appSpecOf(p.bridge, row.appId);
-
-    p.intents.set(madeAppFoldKey(row), { hidden: true });
-    await svc.settled();
-    expect(p.bridge.removeAttempts, "the hidden app's serve retires").toContain(spec?.serveId);
-    expect(appSpecOf(p.bridge, row.appId)).toBeUndefined();
-    expect(recordOf(p, row.appId)?.state).toBe("closed");
-    expect(existsSync(linkedFile(p, previewId)), "its preview link is removed").toBe(false);
-    expect(existsSync(capturedFile(p, previewId)), "the capture itself is kept").toBe(true);
-    expect(await opened(svc, row.appId)).toMatchObject({ kind: "NOT_FOUND", retryable: false });
-
-    p.intents.set(madeAppFoldKey(row), undefined);
-    await svc.settled();
-    expect(existsSync(linkedFile(p, previewId)), "unhidden, its link is back").toBe(true);
-    expect(statSync(linkedFile(p, previewId)).ino).toBe(statSync(capturedFile(p, previewId)).ino);
-    expect(await opened(svc, row.appId)).toEqual(serving(appPort(row)));
+    expect(appSpecOf(p.bridge, row.appId), "its serve stays declared").toBeDefined();
+    expect(recordOf(p, row.appId)?.state).toBe("open");
+    expect(p.timers.delays(), "unkept, it arms the idle close").toEqual([
+      MADE_APP_LIMITS.IDLE_CLOSE_MS,
+    ]);
   });
 
   it("shares ARTIFACT_LIMITS.LOCAL_OBJECTS with AH: at the ceiling an open closes the least recently opened unkept serve, and refuses when all are kept", async () => {
@@ -1312,7 +1299,7 @@ describe("MadeAppService (MA-3b unit)", () => {
     ).toBe(true);
   });
 
-  it("retries a hidden app's failed removal on the one timer, without another open (RULINGS L8: hidden means retire)", async () => {
+  it("retries an idle close's failed removal on the one timer, without another open", async () => {
     const p = parts();
     const row = p.rows.add(appRow(1));
     const svc = made(p);
@@ -1321,7 +1308,8 @@ describe("MadeAppService (MA-3b unit)", () => {
     await svc.settled();
     const serveId = appSpecOf(p.bridge, row.appId)?.serveId ?? "<none>";
     p.bridge.failRemoveCount = 1;
-    p.intents.set(madeAppFoldKey(row), { hidden: true });
+    p.clock.now += MADE_APP_LIMITS.IDLE_CLOSE_MS;
+    expect(p.timers.fire(), "the idle close fires").toBe(true);
     await svc.settled();
     expect(p.bridge.native.has(serveId), "the first removal failed: it still listens").toBe(true);
     expect(recordOf(p, row.appId)).toMatchObject({ state: "closed", retiringServeIds: [serveId] });
@@ -1823,23 +1811,22 @@ describe("MadeAppService (MA-3b unit)", () => {
     }).toEqual({ stamps: [], linked: false, recorded: undefined, stamp: undefined });
   });
 
-  it("after a restart, keeps, hides and idle-closes nothing until the library's rows speak: a kept app is never closed before the walk (RULINGS L8)", async () => {
+  it("after a restart, keeps and idle-closes nothing until the library's rows speak: a kept app is never closed before the walk (RULINGS L8)", async () => {
     const p = parts();
-    const [kept, hidden, plain] = [1, 2, 3].map((n) => p.rows.add(appRow(n))) as [
+    const [kept, idle, plain] = [1, 2, 3].map((n) => p.rows.add(appRow(n))) as [
       IndexCatalogApp,
       IndexCatalogApp,
       IndexCatalogApp,
     ];
     const first = made(p);
     await first.start();
-    for (const row of [kept, hidden, plain]) await first.open({ appId: row.appId });
+    for (const row of [kept, idle, plain]) await first.open({ appId: row.appId });
     const ids = Object.fromEntries(
-      [kept, hidden, plain].map((row, i) => [i, appSpecOf(p.bridge, row.appId)?.serveId]),
+      [kept, idle, plain].map((row, i) => [i, appSpecOf(p.bridge, row.appId)?.serveId]),
     );
     await first.dispose();
-    // while fieldd was down: the person kept one and hid another (native-keyed intents), and a day and more passed
+    // while fieldd was down: the person kept one (a native-keyed intent), and a day and more passed
     p.intents.set(madeAppFoldKey(kept), { kept: true });
-    p.intents.set(madeAppFoldKey(hidden), { hidden: true });
     p.clock.now += 3 * MADE_APP_LIMITS.IDLE_CLOSE_MS;
 
     const bridge = new FakeBridge();
@@ -1854,8 +1841,8 @@ describe("MadeAppService (MA-3b unit)", () => {
     expect(
       {
         removed: bridge.removeAttempts,
-        states: [kept, hidden, plain].map((row) => recordOf(q, row.appId)?.state),
-        declared: [kept, hidden, plain].map((row) => appSpecOf(bridge, row.appId)?.serveId),
+        states: [kept, idle, plain].map((row) => recordOf(q, row.appId)?.state),
+        declared: [kept, idle, plain].map((row) => appSpecOf(bridge, row.appId)?.serveId),
         timers: q.timers.delays(),
       },
       "before the walk nothing is decided: every serve stays as it was, no idle timer",
@@ -1878,16 +1865,16 @@ describe("MadeAppService (MA-3b unit)", () => {
     others = 0;
 
     // the walk lands: 3e's IndexApps `changed` → reconsider()
-    for (const row of [kept, hidden, plain]) rows.add(row);
+    for (const row of [kept, idle, plain]) rows.add(row);
     rows.walked = true;
     await second.reconsider();
     await second.settled();
     expect(
       {
-        states: [kept, hidden, plain].map((row) => recordOf(q, row.appId)?.state),
+        states: [kept, idle, plain].map((row) => recordOf(q, row.appId)?.state),
         live: [ids[0], ids[1], ids[2]].map((id) => bridge.native.has(id ?? "<none>")),
       },
-      "read: the kept app stays up, the hidden one retires, the overdue one closes",
+      "read: the kept app stays up, the two overdue ones close",
     ).toEqual({ states: ["open", "closed", "closed"], live: [true, false, false] });
     expect(q.timers.delays(), "a kept app arms no idle close").toEqual([]);
   });

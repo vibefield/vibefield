@@ -470,7 +470,7 @@ function refusalOf(call: () => unknown): RpcCallError | undefined {
 }
 
 /** The merged intent, by fold key, with its change listeners. */
-function intentsOf(entries: Array<[string, { kept?: true; hidden?: true }]>) {
+function intentsOf(entries: Array<[string, { kept?: true }]>) {
   const map = new Map(entries);
   const listeners = new Set<() => void>();
   const reader: MadeAppIntentReader = {
@@ -482,7 +482,7 @@ function intentsOf(entries: Array<[string, { kept?: true; hidden?: true }]>) {
   };
   return {
     reader,
-    set(foldKey: string, intent: { kept?: true; hidden?: true } | undefined) {
+    set(foldKey: string, intent: { kept?: true } | undefined) {
       if (intent === undefined) map.delete(foldKey);
       else map.set(foldKey, intent);
       for (const listener of listeners) listener();
@@ -1013,7 +1013,9 @@ describe("AppsMesh — the fold (MA-D4)", () => {
     expect(narrowed.sources.map((source) => source.device)).toEqual(["dev-a", "dev-c"]);
   });
 
-  it("the merged intent: a hidden app is dropped unless includeHidden; kept is marked and filters; openable = captured ∧ not hidden ∧ its desktop exports", async () => {
+  // Hide dropped (James, 2026-11-13 01:29:54Z): no app is hidden. A reader whose intent still names `hidden` (an older
+  // object) is read for `kept` alone, and `includeHidden` is accepted and changes nothing.
+  it("the merged intent: kept is marked and filters; a hidden flag is ignored and includeHidden is inert; openable = captured ∧ its desktop exports", async () => {
     const a = owner("dev-a");
     const kept = app("dev-a", "kept", 400);
     const hidden = app("dev-a", "hidden", 300);
@@ -1022,38 +1024,38 @@ describe("AppsMesh — the fold (MA-D4)", () => {
     a.apps.upsert([kept, hidden, plain, missing]);
     const intent = intentsOf([
       [madeAppFoldKey(kept), { kept: true }],
-      [madeAppFoldKey(hidden), { hidden: true }],
+      [madeAppFoldKey(hidden), { hidden: true } as unknown as { kept?: true }],
     ]);
     const w = world("dev-a", [a], []);
     const { mesh } = appsMesh(w, a, { intents: intent.reader, exportReady: () => true });
 
     const page = mesh.list({ scope: "local" }, windowCtx);
-    expect(titles(page), "the hidden app is dropped").toEqual([
-      "App kept",
-      "App plain",
-      "App missing",
-    ]);
-    expect(page.rows.map((row) => [row.kept ?? null, row.hidden ?? null, row.openable])).toEqual([
-      [true, null, true],
-      [null, null, true],
-      [null, null, false], // no verified copy
-    ]);
-    const all = mesh.list({ scope: "local", includeHidden: true }, windowCtx);
-    expect(titles(all)).toEqual(["App kept", "App hidden", "App plain", "App missing"]);
-    expect(all.rows[1]).toMatchObject({ hidden: true, openable: false });
-    expect(titles(mesh.list({ scope: "local", kept: true }, windowCtx))).toEqual(["App kept"]);
-    expect(
-      titles(mesh.list({ scope: "local", kept: false }, windowCtx)),
-      "`kept: false` narrows to the apps not kept (the hidden one still dropped)",
-    ).toEqual(["App plain", "App missing"]);
-
-    // the intent moves: the fold follows at once
-    intent.set(madeAppFoldKey(hidden), undefined);
-    expect(titles(mesh.list({ scope: "local" }, windowCtx))).toEqual([
+    expect(titles(page), "an intent naming hidden drops nothing").toEqual([
       "App kept",
       "App hidden",
       "App plain",
       "App missing",
+    ]);
+    expect(page.rows.map((row) => [row.kept ?? null, "hidden" in row, row.openable])).toEqual([
+      [true, false, true],
+      [null, false, true],
+      [null, false, true],
+      [null, false, false], // no verified copy
+    ]);
+    const all = mesh.list({ scope: "local", includeHidden: true }, windowCtx);
+    expect(all.rows, "includeHidden changes nothing").toEqual(page.rows);
+    expect(titles(mesh.list({ scope: "local", kept: true }, windowCtx))).toEqual(["App kept"]);
+    expect(titles(mesh.list({ scope: "local", kept: false }, windowCtx))).toEqual([
+      "App hidden",
+      "App plain",
+      "App missing",
+    ]);
+
+    // the intent moves: the fold follows at once
+    intent.set(madeAppFoldKey(plain), { kept: true });
+    expect(titles(mesh.list({ scope: "local", kept: true }, windowCtx))).toEqual([
+      "App kept",
+      "App plain",
     ]);
   });
 
@@ -1434,7 +1436,7 @@ describe("AppsMesh — its own pings", () => {
     // the merged intent
     before = meshPings.length;
     const beforeLocal = localPings.length;
-    intent.set("app:dev-a:whatever", { hidden: true });
+    intent.set("app:dev-a:whatever", { kept: true });
     await settle(() => meshPings.length > before && localPings.length > beforeLocal);
     expect(meshPings.length, "the intent moved (mesh)").toBeGreaterThan(before);
     expect(localPings.length, "the intent moved (local)").toBeGreaterThan(beforeLocal);
