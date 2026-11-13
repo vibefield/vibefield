@@ -179,8 +179,9 @@ public final class HistoryDesktopReader: Identifiable {
   /// Item 362b — sessions whose earlier rows are being read right now: one read a session at a time, and the rule
   /// at the document's top says so.
   public private(set) var readingEarlier: Set<String> = []
-  /// Item 362f (red) — per session, what its tool lines open to, by the line's id. DECLARED so the rows compile;
-  /// nothing fills it yet.
+  /// Item 362f — per session, what its tool lines open to, by the line's id: the direct read's details that still
+  /// speak (`HistoryLineDetail.opened`). Beside the document and never in it: the document is encoded and written
+  /// to the cache at every rebuild, and these would ride in every one of those writes.
   private(set) var toolDetails: [String: [String: HistoryToolDetail]] = [:]
   /// The door's last refusal, in its own words, for the record.
   public private(set) var failure: String?
@@ -503,6 +504,8 @@ public final class HistoryDesktopReader: Identifiable {
     // item 362f — a detail whose row the door has since changed is silent, and goes here
     let beyond = HistoryLineDetail.live(details[sessionId] ?? [:], over: held)
     details[sessionId] = beyond.isEmpty ? nil : beyond
+    let opens = HistoryLineDetail.opened(beyond)
+    if toolDetails[sessionId] ?? [:] != opens { toolDetails[sessionId] = opens.isEmpty ? nil : opens }
     let document = FieldHistoryModel.document(
       header: header, rows: HistoryLineDetail.applied(Array(held.values), beyond), desktop: name,
       agentLabel: agentLabel(header.provider ?? "agent"), nextCursor: cursors[sessionId],
@@ -790,6 +793,7 @@ public final class HistoryDesktopReader: Identifiable {
     cursors[sessionId] = nil
     carried[sessionId] = nil
     details[sessionId] = nil
+    toolDetails[sessionId] = nil
     closeTail()
     openSession(sessionId)
   }

@@ -22,6 +22,11 @@ import Foundation
 // beside the row and never in it, the body's whole words when the row's were cut at `textChars` and the entry
 // holds them inline (`HistoryLineDetail`). What never crosses is unchanged: a detail reads no asset, no address,
 // no citation's source, no diagnostic and no provenance.
+//
+// *Added 2026-11-12 (item 362f, the tool lines):* the detail also keeps what a tool line opens to
+// (`HistoryToolDetail`, made by `toolDetail(entry:beside:)` at the foot of this file): a command's folder and its
+// preview, a change's first diff lines, a read's and a search's paths. The sentence above still holds: no
+// diagnostic is read (item 371), and a failed line opens to the summary its row already carries.
 public enum HistoryProjection {
   /// `INDEX_TIMELINE.TEXT_CHARS`, held by `pnpm check:ios-fixtures`: a row's words, UTF-16 units.
   public static let textChars = 2_000
@@ -115,17 +120,24 @@ public enum HistoryProjection {
 
   // MARK: - Beyond the row (item 362f)
 
-  /// What the entry carries beyond `row`, its own projection; nil when it carries nothing more.
-  ///
-  /// The whole words: only where the row's were cut, and only when the entry holds them. A member text's whole is
-  /// a file on the desktop (the row says its size, `textByteLen`), and an inline text past `wholeChars` is still
-  /// cut at that bound: neither has a whole here.
+  /// What the entry carries beyond `row`, its own projection; nil when it carries nothing more: its whole words
+  /// (`wholeRow`), and what its tool line opens to (`toolDetail`, at the foot of this file).
   static func detail(entry: JSONValue, beside row: IndexTimelineRow) -> HistoryLineDetail? {
+    let whole = wholeRow(entry: entry, beside: row)
+    let tool = toolDetail(entry: entry, beside: row)
+    guard whole != nil || tool != nil else { return nil }
+    return HistoryLineDetail(row: row, whole: whole, tool: tool)
+  }
+
+  /// The row with the body's whole words: only where the row's were cut, and only when the entry holds them. A
+  /// member text's whole is a file on the desktop (the row says its size, `textByteLen`), and an inline text past
+  /// `wholeChars` is still cut at that bound: neither has a whole here.
+  private static func wholeRow(entry: JSONValue, beside row: IndexTimelineRow) -> IndexTimelineRow? {
     guard row.textClipped, row.textByteLen == nil,
       let json = rowJSON(entry: entry, textBound: wholeChars), let whole = try? IndexTimelineRow(json: json),
       !whole.textClipped
     else { return nil }
-    return HistoryLineDetail(row: row, whole: whole)
+    return whole
   }
 
   /// The entry projected: its row, and what it carries beyond it. Nil for an entry the gate refuses.
@@ -552,6 +564,251 @@ public enum HistoryProjection {
     var row: Fields = [:]
     for bucket in usageBuckets { row[bucket.row] = num(usage[bucket.wire]) }
     return row.isEmpty ? nil : JSONValue.object(row)
+  }
+}
+
+// MARK: - What a tool line opens to (item 362f)
+
+extension HistoryProjection {
+  /// What the entry's tool line opens to; nil when it would say nothing its line does not. `row` is the entry's
+  /// own projection: the family and the failure are read from it, so the detail and the line agree.
+  ///
+  /// - A command or code: its folder, and its source as the room previews it.
+  /// - A change: its first files, each with the first lines of its diff.
+  /// - A read: the files it named with their ranges, when it named a range or more than one file (one file with
+  ///   no range is what the line already says).
+  /// - A search: the paths it found.
+  /// - A line that failed: its summary under any of those, and alone when it says more than the line shows (more
+  ///   than one line, or past the 60 the line cuts it at). A failure that is a kind is the line's to say.
+  static func toolDetail(entry: JSONValue, beside row: IndexTimelineRow) -> HistoryToolDetail? {
+    guard let line = row.tool, let action = entry["body"]?["tool"]?["action"]?.objectValue else { return nil }
+    var detail = HistoryToolDetail()
+    switch line.family {
+    case "shell", "code_execute":
+      let source = textOf(action[line.family == "shell" ? "command" : "code"])?.text
+      let truncated = action["source_truncated"]?.boolValue == true
+      detail.command = source.flatMap { commandPreview($0, sourceTruncated: truncated) }
+      detail.folder = resourceLabel(action["cwd"]).map { clip($0, objectChars).text }
+    case "file_change":
+      let changes = action["changes"]?.arrayValue ?? []
+      detail.files = changes.prefix(HistoryToolDetail.changeFiles).compactMap(changedFile)
+      detail.moreFiles = max(0, changes.count - HistoryToolDetail.changeFiles)
+    case "file_read":
+      let targets = action["targets"]?.arrayValue ?? []
+      let named = targets.prefix(HistoryToolDetail.listed).compactMap(readTarget)
+      if targets.count > 1 || named.contains(where: { $0.range != nil }) {
+        detail.paths = named
+        detail.morePaths = max(0, targets.count - HistoryToolDetail.listed)
+      }
+    case "file_search":
+      let outcome = action["outcome"]?.objectValue
+      let found = outcome?["paths"]?.arrayValue ?? []
+      detail.paths = found.prefix(HistoryToolDetail.listed).compactMap { resource in
+        resourceLabel(resource).map { HistoryToolDetail.Path(path: clip($0, objectChars).text, range: nil) }
+      }
+      if !detail.paths.isEmpty {
+        // the room's `total > shown.length`: the index's own total, or what it listed
+        let stated = num(outcome?["total_paths"])?.doubleValue.flatMap { Int(exactly: $0.rounded()) }
+        let total = stated ?? found.count
+        detail.morePaths = max(0, total - min(found.count, HistoryToolDetail.listed))
+      }
+    default:
+      break
+    }
+    if line.failed, let failure = line.failure, !FieldHistoryModel.isBareWord(failure) {
+      let whole = failure.trimmingCharacters(in: .whitespacesAndNewlines)
+      let saysMore = FieldHistoryModel.firstLine(whole, max: 60) != whole
+      if !whole.isEmpty, !detail.isEmpty || saysMore { detail.failure = whole }
+    }
+    return detail.isEmpty ? nil : detail
+  }
+
+  private static func changedFile(_ change: JSONValue) -> HistoryToolDetail.File? {
+    guard let path = resourceLabel(change["path"]) else { return nil }
+    let diff = diffLines(textOf(change["diff"])?.text ?? "")
+    return HistoryToolDetail.File(path: clip(path, objectChars).text, lines: diff.lines, more: diff.more)
+  }
+
+  private static func readTarget(_ target: JSONValue) -> HistoryToolDetail.Path? {
+    guard let path = resourceLabel(target["resource"]) else { return nil }
+    return HistoryToolDetail.Path(path: clip(path, objectChars).text, range: rangeText(target["range"]))
+  }
+
+  /// `L1–180` · `p3–4` · `L5`: the room's `rangeText` (lib/transcript/families.ts). A range of one, or with no
+  /// count, is its start.
+  static func rangeText(_ value: JSONValue?) -> String? {
+    guard let range = value?.objectValue, let start = num(range["start"])?.doubleValue else { return nil }
+    let mark = range["unit"]?.stringValue == "line" ? "L" : "p"
+    let first = "\(mark)\(numberText(number(start)))"
+    guard let count = num(range["count"])?.doubleValue else { return first }
+    let end = start + count - 1
+    return end <= start ? first : "\(first)\u{2013}\(numberText(number(end)))"
+  }
+
+  /// A command as the room previews it (`commandPreviewText`, lib/transcript/families.ts): its first line that is
+  /// not blank, whole; or its first 39 code points and `...` when the source was truncated, has more than one
+  /// line, or is longer than 42. Nil for a command of nothing but space.
+  ///
+  /// A long command reaches the phone already cut to this by rosetta, with `source_truncated` set; its whole is
+  /// one read away on the desktop (`show full command`), a route the phone's client does not have.
+  static func commandPreview(_ text: String, sourceTruncated: Bool) -> String? {
+    let lines = split(text, returns: true)
+    let line = lines.first { !firstLine($0).isEmpty } ?? ""
+    let points = Array(line.unicodeScalars)
+    guard !points.isEmpty else { return nil }
+    guard sourceTruncated || lines.count > 1 || points.count > HistoryToolDetail.commandChars else { return line }
+    var kept = String.UnicodeScalarView()
+    kept.append(contentsOf: points.prefix(HistoryToolDetail.commandChars - 3))
+    return String(kept) + "..."
+  }
+
+  /// The first lines of a diff as the room draws them (`DiffLines` in components/transcript/detail-parts.tsx, over
+  /// `parseDiff` in components/file-viewer/diff/parse.ts), and how many more there are.
+  ///
+  /// The lines are those of its hunks; headers and the preamble are neither drawn nor counted. A hunk opens at
+  /// `@@ -a,b +c,d @@`, or at a bare `@@` (Codex's patches, which give no place, so their lines have no number).
+  /// Inside one, `+` adds, `-` takes out, a space or an empty line is context, a backslash line is a note (drawn
+  /// as context, with no number), and anything else ends the hunk. A line's number is its place in the new file,
+  /// or in the old one for a line taken out. Text in which no hunk is read is drawn as it stands, its first lines
+  /// as context. A blank diff has no lines.
+  ///
+  /// The phone's own bound: a line is cut at `objectChars`, where the room lets it run on and scrolls sideways.
+  static func diffLines(_ text: String) -> (lines: [HistoryToolDetail.DiffLine], more: Int) {
+    guard !text.unicodeScalars.allSatisfy(isTrimmed) else { return ([], 0) }
+    let cap = HistoryToolDetail.diffLines
+    let raw = split(text, returns: false)
+    var lines: [HistoryToolDetail.DiffLine] = []
+    var total = 0
+    var inHunk = false
+    var old: Int? = nil
+    var new: Int? = nil
+    for line in raw {
+      if let start = hunkStart(line) {
+        inHunk = true
+        old = start.old
+        new = start.new
+        continue
+      }
+      if isBareHunk(line) {
+        inHunk = true
+        old = nil
+        new = nil
+        continue
+      }
+      guard inHunk else { continue }
+      let points = line.unicodeScalars
+      var rest = String.UnicodeScalarView()
+      rest.append(contentsOf: points.dropFirst())
+      var words = String(rest)
+      let kind: HistoryToolDetail.DiffLine.Kind
+      let number: Int?
+      switch points.first ?? " " {
+      case "+":
+        kind = .add
+        number = new
+        new = new.map { $0 + 1 }
+      case "-":
+        kind = .del
+        number = old
+        old = old.map { $0 + 1 }
+      case " ":
+        kind = .context
+        number = new ?? old
+        old = old.map { $0 + 1 }
+        new = new.map { $0 + 1 }
+      case "\\":
+        kind = .context
+        number = nil
+        words = firstLine(words)
+      default:
+        inHunk = false
+        continue
+      }
+      total += 1
+      if lines.count < cap {
+        lines.append(HistoryToolDetail.DiffLine(kind: kind, number: number, text: clip(words, objectChars).text))
+      }
+    }
+    if total == 0 {
+      total = raw.count
+      lines = raw.prefix(cap).map {
+        HistoryToolDetail.DiffLine(kind: .context, number: nil, text: clip($0, objectChars).text)
+      }
+    }
+    return (lines, max(0, total - cap))
+  }
+
+  /// The room's `HUNK`: `^@@+ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@+(.*)$`. The two starts, or nil when the line
+  /// is no such header. A start too long to be a number is no place.
+  private static func hunkStart(_ line: String) -> (old: Int?, new: Int?)? {
+    let bytes = Array(line.utf8)
+    var at = 0
+    func run(_ byte: UInt8) -> Int {
+      let from = at
+      while at < bytes.count, bytes[at] == byte { at += 1 }
+      return at - from
+    }
+    func take(_ text: String) -> Bool {
+      let wanted = Array(text.utf8)
+      guard bytes[at...].starts(with: wanted) else { return false }
+      at += wanted.count
+      return true
+    }
+    // a run of ASCII digits: whether there was one, and its value when it fits
+    func digits() -> (found: Bool, value: Int?) {
+      let from = at
+      while at < bytes.count, (0x30...0x39).contains(bytes[at]) { at += 1 }
+      return (at > from, Int(String(decoding: bytes[from..<at], as: UTF8.self)))
+    }
+    // `,` then a count: the group is optional, and a comma with no digits after it is no header
+    func count() -> Bool {
+      guard at < bytes.count, bytes[at] == 0x2C else { return true }
+      at += 1
+      return digits().found
+    }
+    guard run(0x40) >= 2, take(" -") else { return nil }
+    let old = digits()
+    guard old.found, count(), take(" +") else { return nil }
+    let new = digits()
+    guard new.found, count(), take(" "), run(0x40) >= 2 else { return nil }
+    // `(.*)$`: a dot stops at a line terminator, so one after the header is no match
+    let tail = String(decoding: bytes[at...], as: UTF8.self)
+    guard !tail.unicodeScalars.contains(where: isLineTerminator) else { return nil }
+    return (old.value, new.value)
+  }
+
+  /// The room's `UNPOSITIONED_HUNK`: `^@@(?:\s+(.*))?$`. Two at-signs alone, or two and then space.
+  private static func isBareHunk(_ line: String) -> Bool {
+    let points = Array(line.unicodeScalars)
+    guard points.count >= 2, points[0] == "@", points[1] == "@" else { return false }
+    guard points.count > 2 else { return true }
+    guard isTrimmed(points[2]) else { return false }
+    var at = 2
+    while at < points.count, isTrimmed(points[at]) { at += 1 }
+    return !points[at...].contains(where: isLineTerminator)
+  }
+
+  /// ECMAScript's LineTerminator, which a regular expression's dot does not match.
+  private static func isLineTerminator(_ scalar: Unicode.Scalar) -> Bool {
+    scalar.value == 0x0A || scalar.value == 0x0D || scalar.value == 0x2028 || scalar.value == 0x2029
+  }
+
+  /// JavaScript's `text.split("\n")`, or with `returns` its `text.split(/\r?\n/)`: by scalar, because a
+  /// `Character` holds a CRLF as one.
+  private static func split(_ text: String, returns: Bool) -> [String] {
+    var lines: [String] = []
+    var current = String.UnicodeScalarView()
+    for scalar in text.unicodeScalars {
+      guard scalar.value == 0x0A else {
+        current.append(scalar)
+        continue
+      }
+      if returns, current.last?.value == 0x0D { current.removeLast() }
+      lines.append(String(current))
+      current = String.UnicodeScalarView()
+    }
+    lines.append(String(current))
+    return lines
   }
 }
 

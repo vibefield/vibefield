@@ -28,6 +28,8 @@ struct HistorySessionView: View {
   var arrivals: Int = 0
   /// Item 362b — the reader is reading this session's earlier rows right now.
   var readingEarlier = false
+  /// Item 362f — what this session's tool lines open to, by the line's id; empty through the home desktop.
+  var opens: [String: HistoryToolDetail] = [:]
   var onNeed: (HistoryNeed) -> Void = { _ in }
 
   @Environment(\.colorScheme) private var scheme
@@ -48,7 +50,8 @@ struct HistorySessionView: View {
   init(
     document: HistoryDocument, corpus: HistoryCorpus, ledger: HistoryCorpus? = nil,
     standing: FieldHistoryModel.DesktopStanding, router: HistoryRouter, arrivals: Int = 0,
-    readingEarlier: Bool = false, onNeed: @escaping (HistoryNeed) -> Void = { _ in }
+    readingEarlier: Bool = false, opens: [String: HistoryToolDetail] = [:],
+    onNeed: @escaping (HistoryNeed) -> Void = { _ in }
   ) {
     self.document = document
     self.corpus = corpus
@@ -57,6 +60,7 @@ struct HistorySessionView: View {
     self.router = router
     self.arrivals = arrivals
     self.readingEarlier = readingEarlier
+    self.opens = opens
     self.onNeed = onNeed
     let landed = router.landed.map { $0.sessionId == document.id && $0.device == corpus.deviceId } ?? false
     let follow = HistoryFollow(landed: landed)
@@ -672,7 +676,39 @@ struct HistorySessionView: View {
     }
   }
 
+  /// Item 362f — a tool line. Where the direct read kept what it opens to (`opens`), it is a button with a chevron
+  /// and opens in place, as a member does; otherwise it is the line it was. Its open state is kept under a
+  /// member's key, so `Open every run` does not open it: a detail exists on the page only while its line is open.
+  @ViewBuilder
   private func ledgerLine(_ line: HistoryLedgerLine) -> some View {
+    if let detail = opens[line.id] {
+      let key = FieldHistoryModel.memberKey(line.id)
+      let open = expanded.contains(key)
+      VStack(alignment: .leading, spacing: 0) {
+        Button {
+          withAnimation(FieldMotion.ease(0.3)) {
+            if open { expanded.remove(key) } else { expanded.insert(key) }
+          }
+        } label: {
+          ledgerHead(line, open: open)
+        }
+        .buttonStyle(HistoryRowStyle(radius: 6))
+        .accessibilityValue(open ? "expanded" : "collapsed")
+        if open {
+          HistoryToolDetailView(detail: detail)
+            .equatable()
+            .padding(.leading, 22)
+            .padding(.trailing, 4)
+            .padding(.bottom, 6)
+            .transition(.opacity)
+        }
+      }
+    } else {
+      ledgerHead(line, open: nil)
+    }
+  }
+
+  private func ledgerHead(_ line: HistoryLedgerLine, open: Bool?) -> some View {
     HStack(spacing: 8) {
       Group {
         switch line.state {
@@ -703,8 +739,15 @@ struct HistorySessionView: View {
         .monospacedDigit()
         .foregroundStyle(line.state == .running && awake ? ChromePalette.green : line.state == .failed ? ChromePalette.red : ChromePalette.inkFaint)
         .lineLimit(1)
+      if let open {
+        Image(systemName: "chevron.right")
+          .font(.system(size: 9, weight: .semibold))
+          .rotationEffect(.degrees(open ? 90 : 0))
+          .foregroundStyle(ChromePalette.inkFaint)
+      }
     }
     .frame(minHeight: 26)
+    .contentShape(Rectangle())
     .accessibilityElement(children: .combine)
   }
 }

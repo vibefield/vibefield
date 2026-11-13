@@ -17,8 +17,6 @@
 // A recorded text is the adversary's (EL7): everything here is drawn as text, and nothing opens anything.
 // DESIGN.md §8 "The phone's session document" → a tool line opens.
 
-import FieldProduct
-
 /// What a tool line opens to. Empty is never kept: a line with nothing to open has no detail.
 struct HistoryToolDetail: Equatable, Sendable {
   /// One line of a diff.
@@ -77,13 +75,4 @@ struct HistoryToolDetail: Equatable, Sendable {
   /// The room's `COMMAND_PREVIEW_CHARACTER_LIMIT` (lib/transcript/families.ts), in code points: its three dots
   /// are inside it.
   static let commandChars = 42
-}
-
-// Item 362f (red) — STUBS so the rows compile. The green writes the reader at the foot of HistoryProjection.swift
-// and takes these out.
-extension HistoryProjection {
-  static func toolDetail(entry: JSONValue, beside row: IndexTimelineRow) -> HistoryToolDetail? { nil }
-  static func rangeText(_ value: JSONValue?) -> String? { nil }
-  static func commandPreview(_ text: String, sourceTruncated: Bool) -> String? { nil }
-  static func diffLines(_ text: String) -> (lines: [HistoryToolDetail.DiffLine], more: Int) { ([], 0) }
 }

@@ -106,7 +106,7 @@ public struct HistoryLedgerView: View {
         HistorySessionView(
           document: document, corpus: reader.corpus, ledger: projects.corpus, standing: reader.standing,
           router: router, arrivals: reader.arrivals[id] ?? 0, readingEarlier: reader.readingEarlier.contains(id),
-          onNeed: onNeed)
+          opens: reader.toolDetails[id] ?? [:], onNeed: onNeed)
       } else if let reader = reader(device), reader.standing.isAwake {
         QuietNote(title: "Reading the session on \(reader.name)", text: "Its header, its newest rows and its tail arrive over the desktop's door.")
           .onAppear { onNeed(.session(device: device, id: id)) }
