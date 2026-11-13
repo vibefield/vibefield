@@ -11,6 +11,9 @@ import {
 import { durableRename } from "@vibefield/logging";
 
 const PREVIEW_PARTITION_PREFIX = "vibefield-artifact-preview:";
+/** Item 378 — where a capture's WebRTC TCP is sent: a loopback port nothing serves, so a relay over TCP or TLS never
+ * connects. The page's own origin and its allowHosts bypass it, and the request gate cancels everything else anyway. */
+const PREVIEW_DEAD_PROXY = "127.0.0.1:9";
 const ALL_URLS = { urls: ["<all_urls>"] } as const;
 const guardedPreviewSessions = new WeakSet<object>();
 
@@ -42,6 +45,13 @@ interface PreviewWebRequest {
   ): void;
 }
 
+/** Item 378 — the capture session's proxy, as `Session.setProxy` takes it. */
+interface PreviewProxyConfig {
+  mode: "fixed_servers";
+  proxyRules: string;
+  proxyBypassRules: string;
+}
+
 interface PreviewSession {
   webRequest: PreviewWebRequest;
   setPermissionRequestHandler(
@@ -53,6 +63,7 @@ interface PreviewSession {
   clearStorageData(): Promise<void>;
   clearCache(): Promise<void>;
   closeAllConnections(): Promise<void>;
+  setProxy(config: PreviewProxyConfig): Promise<void>;
 }
 
 interface PreviewWebContents {
@@ -63,6 +74,7 @@ interface PreviewWebContents {
     listener: (event: { preventDefault(): void }, url: string) => void,
   ): void;
   setWindowOpenHandler(handler: () => { action: "deny" }): void;
+  setWebRTCIPHandlingPolicy(policy: "disable_non_proxied_udp"): void;
 }
 
 interface PreviewWindow {
@@ -188,6 +200,18 @@ export class ArtifactPreviewCapture {
       downloadGuardInstalled = true;
       signal.addEventListener("abort", abort, { once: true });
       abortGuardInstalled = true;
+      // Item 378 — WebRTC's ICE never passes webRequest, so the gate above cannot see a page's peer
+      // connection. Its unproxied UDP is refused per contents (below); its TCP (a TURN relay over TCP
+      // or TLS, ICE-TCP) takes this session's proxy, a dead one. `<-loopback>` takes away Chromium's
+      // implicit loopback bypass, so this Mac's own ports are no relay either. Per capture, never
+      // process-wide: the desk's own browser pages share a profile where a person may hold a call.
+      // Both halves are measured on a real Electron by desk-gates row 38 (`smoke:capture-webrtc`).
+      await captureSession.setProxy({
+        mode: "fixed_servers",
+        proxyRules: PREVIEW_DEAD_PROXY,
+        proxyBypassRules: [new URL(params.url).hostname, ...allowHosts, "<-loopback>"].join(","),
+      });
+      throwIfAborted(signal);
 
       window = this.#native.createWindow({
         width: ARTIFACT_PREVIEW_LIMITS.WIDTH,
@@ -204,6 +228,7 @@ export class ArtifactPreviewCapture {
         },
       });
       window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+      window.webContents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
       const guardTopLevel = (event: { preventDefault(): void }, url: string) => {
         if (!isAllowedTopLevelNavigation(targetOrigin, url)) event.preventDefault();
       };
