@@ -66,9 +66,20 @@ public struct SessionSlotWords: Equatable, Sendable {
 }
 
 extension FieldHistoryModel {
-  /// Item 388 (red) — a stub: no word and no note.
+  /// Item 388 — what a session's act says in the slot over the bar: its word, and after it only what the act
+  /// itself has to say. Resume says its last answer (`Resuming on studio`, or the refusal) once it has one. Jump
+  /// to stands alone: the session is in the field, and a Resume's answer is no longer about it. An act that
+  /// cannot be pressed says why (`asleep`), whatever was answered before. Where the session runs is not said:
+  /// the rule is handed neither the desktop nor the folder.
   public static func slotWords(_ act: SessionAct, answer: String?) -> SessionSlotWords {
-    SessionSlotWords(word: "", note: nil)
+    switch act {
+    case .jump:
+      SessionSlotWords(word: "Jump to", note: nil)
+    case .resume:
+      SessionSlotWords(word: "Resume", note: answer.flatMap { $0.isEmpty ? nil : $0 })
+    case .why(let reason):
+      SessionSlotWords(word: "Resume", note: reason)
+    }
   }
 }
 

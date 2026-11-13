@@ -2116,10 +2116,16 @@ public struct HomeScreen: View {
     return session
   }
 
-  /// The session's act in the stepper's slot, with where it runs.
+  /// The session's act in the stepper's slot: a button of the act's glyph and its word, as wide as they are, and
+  /// after the word only what the act has to say (`FieldHistoryModel.slotWords`).
+  ///
+  /// Item 388 (James, 2026-11-13 23:18:12Z: "this is too busy [Image #14] just make it a resume button, no need
+  /// for the device stuff") — it was a capsule as wide as the screen that also said where the session runs (the
+  /// desktop's mark, its name, the folder), and with the bar folded its word broke onto two lines.
   @ViewBuilder
   private func sessionSlot(_ session: HistorySession) -> some View {
     if let act = historyActs.act(for: session) {
+      let says = FieldHistoryModel.slotWords(act, answer: resumeWords)
       Button {
         switch act {
         case .jump: if let native = session.nativeSessionId { jumpToRun(native) }
@@ -2132,26 +2138,20 @@ public struct HomeScreen: View {
           case .jump: FieldGlyph(.jump, size: FieldGlyph.box(for: 15))
           case .resume, .why: FieldGlyph(.resume, size: FieldGlyph.box(for: 15))
           }
-          Text(act == .jump ? "Jump to" : "Resume").font(ChromeType.sans(15, .semibold))
-          Spacer(minLength: 6)
-          if case .why(let reason) = act {
-            Text(reason).font(ChromeType.sans(13))
-          } else if let words = resumeWords {
-            Text(words).font(ChromeType.sans(13)).lineLimit(1)
-          } else if let device = session.device {
-            DeviceMark(platform: link?.desktops.first { $0.deviceId == device }?.platform, size: 12)
-            Text([session.deviceName, session.folder].compactMap { $0 }.joined(separator: " · "))
-              .font(ChromeType.sans(13)).lineLimit(1)
+          // the word is never broken or cut; where the row is narrow, its note gives way
+          Text(says.word).font(ChromeType.sans(15, .semibold)).lineLimit(1).fixedSize()
+          if let note = says.note {
+            Text(note).font(ChromeType.sans(13)).foregroundStyle(ChromePalette.inkSecondary).lineLimit(1)
           }
         }
         .foregroundStyle(act == .why("asleep") ? ChromePalette.inkSecondary : ChromePalette.ink)
-        .padding(.horizontal, 18)
-        .frame(maxWidth: .infinity, minHeight: 44)
+        .padding(.horizontal, 22)
+        // the whole capsule takes the press, at the slot's own height
+        .frame(height: barFolded ? AppBar.height : AppBar.stepperHeight)
         .contentShape(Capsule())
       }
       .buttonStyle(.plain)
       .disabled({ if case .why = act { true } else { false } }())
-      .frame(height: barFolded ? AppBar.height : AppBar.stepperHeight)
       .liquidGlassCapsule()
       .glassID("stepper", in: barGlass)
       .padding(.horizontal, barFolded ? AppBar.margin + AppBar.height + AppBar.inlineGap : AppBar.margin)

@@ -33,7 +33,8 @@ struct SessionSlotTests {
 
   @Test("an act that cannot be pressed says why after its word, whatever was answered before")
   func why() {
-    #expect(FieldHistoryModel.slotWords(.why("asleep"), answer: nil) == SessionSlotWords(word: "Resume", note: "asleep"))
+    #expect(
+      FieldHistoryModel.slotWords(.why("asleep"), answer: nil) == SessionSlotWords(word: "Resume", note: "asleep"))
     #expect(
       FieldHistoryModel.slotWords(.why("asleep"), answer: "Resuming on studio")
         == SessionSlotWords(word: "Resume", note: "asleep"))
