@@ -204,6 +204,48 @@ extension HistoryPictureLayout {
   }
 }
 
+// MARK: - The viewer (item 384)
+
+// Item 384 (James, 2026-11-13 23:05:55Z: "a proper image preview ui that has image in full size that are pannable
+// and zoomable, and has row of thumbnails of all other images in the same row that can click and navigate, and i
+// can also swipe left right to navigate images"; 23:06:26Z: "and it should not be a card ui") — A ROW'S PICTURES
+// IN A VIEWER THAT IS THE WHOLE SCREEN, AS VALUES: which of a row's attachments it shows, the one it opens on,
+// what its rail counts, which pictures are read at the larger size, how a picture is fitted inside its page and
+// where it stands there. The rail is the room's (rosetta's clients/room, components/file-viewer/
+// ImageGalleryDialog.tsx and styles/image-gallery.css, read at the pin, 00221b5b70f6).
+// DESIGN.md §8 "The phone's session document".
+extension HistoryPictureLayout {
+  /// A thumbnail's side on the viewer's rail, in points: the room's in a column of 600 px or less
+  /// (image-gallery.css, `@media (max-width: 600px) { .ah-image-gallery__thumb { width: 52px; height: 52px } }`).
+  /// Two thumbnails stand `gap` apart, the room's `gap: 8px` on its rail.
+  static let thumb: CGFloat = 52
+  /// The room between a thumbnail's edge and its picture (`.ah-image-gallery__thumb { padding: 3px }`).
+  static let thumbInset: CGFloat = 3
+  /// The least room around a fitted picture on its page, on every side.
+  static let pageMargin: CGFloat = 12
+
+  /// Item 384 (red) — a stub: no pictures.
+  static func gallery(_ attached: [HistoryAttached], faces: [String: HistoryPictureFace]) -> [HistoryAttached] { [] }
+
+  /// Item 384 (red) — a stub: nothing to open on.
+  static func opened(_ id: String, among members: [HistoryAttached]) -> String? { nil }
+
+  /// Item 384 (red) — a stub: no count.
+  static func counter(_ id: String?, among members: [HistoryAttached]) -> String? { nil }
+
+  /// Item 384 (red) — a stub: nothing asked.
+  static func asked(around id: String?, among members: [HistoryAttached]) -> [String] { [] }
+
+  /// Item 384 (red) — a stub: never near.
+  static func near(_ id: String, to shown: String?, among members: [HistoryAttached]) -> Bool { false }
+
+  /// Item 384 (red) — a stub: no room.
+  static func fitted(width: CGFloat, height: CGFloat, inside page: CGSize, margin: CGFloat) -> CGSize { .zero }
+
+  /// Item 384 (red) — a stub: no room around it.
+  static func centred(_ content: CGSize, on page: CGSize) -> (x: CGFloat, y: CGFloat) { (0, 0) }
+}
+
 // MARK: - The decode
 
 /// A picture's bytes read into a picture to draw. The bytes are always a WebP the desktop's index made (rosetta's

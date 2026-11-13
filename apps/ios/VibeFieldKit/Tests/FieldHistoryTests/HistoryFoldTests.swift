@@ -1324,14 +1324,10 @@ struct HistoryPictureFoldTests {
     #expect(zoomed == 4236 && HistoryPictureLayout.longSide(width: 1600, height: 900, across: zoomed) == 1600)
   }
 
-  @Test("on its sheet a picture is fitted to the page's width; a double tap goes to twice and back, a pinch to four")
+  // Item 384 — how a picture is fitted is the viewer's now, and held in HistoryGalleryTests (`fits`): the sheet it
+  // was fitted to the width of is gone. This row keeps the zoom.
+  @Test("a double tap goes from fitted to twice and back, about the point tapped; a pinch goes to four")
   func theZoom() {
-    // a desktop's screenshot of 1,600 by 900 on a 393 pt phone's page, 353 across: its own shape
-    #expect(HistoryPictureLayout.fitted(width: 1600, height: 900, across: 353) == CGSize(width: 353, height: 198.5625))
-    // a small picture is drawn up to the width, as the tile's stand-in is
-    #expect(HistoryPictureLayout.fitted(width: 8, height: 4, across: 353) == CGSize(width: 353, height: 176.5))
-    // a picture with no size takes no room
-    #expect(HistoryPictureLayout.fitted(width: 0, height: 4, across: 353) == .zero)
     #expect(HistoryPictureLayout.zoomMost == 4 && HistoryPictureLayout.zoomTap == 2)
     // fitted: to twice. Zoomed, by a tap or by a pinch: back to fitted
     #expect(HistoryPictureLayout.tapped(from: 1) == 2)
