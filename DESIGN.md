@@ -7853,14 +7853,29 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     centre, as a running line's pulse does (to 35 % and back, 1.1 s each way; still under Reduce Motion), so
     a row takes its height once, as it comes on screen, and nothing moves when the picture lands. **If it
     cannot be read** the line stands as it does today, words and all; nothing in the document says an error,
-    and it is asked again when its row next comes on screen. **A press on a tile** opens the picture on a
-    sheet of its own, as a long message's (the large detent, the grabber, 40 pt corners, `paper`; the line's
-    words as its name, and `Done`): at the page's width, a taller picture scrolling. A pinch zooms it up to
-    four times, a double tap goes between fitted and twice, and it pans when zoomed. The tile's picture stands
-    in until the larger one is read (`Reading from studio…`), and stays if that does not arrive (`full size on
-    studio`). Nothing saves, shares or copies a picture. An animation shows its first frame; one too long for
+    and it is asked again when its row next comes on screen. **A press on a tile opens the row's pictures in
+    a viewer that is the whole screen, never a card** (*item 384, 2026-11-13. James, 23:05:55Z: "it should be
+    a proper image preview ui that has image in full size that are pannable and zoomable, and has row of
+    thumbnails of all other images in the same row that can click and navigate, and i can also swipe left
+    right to navigate images"; 23:06:26Z: "and it should not be a card ui". It overturns the sheet ruled at
+    01:17Z the same day: the large detent, the grabber, 40 pt corners, the picture at the page's width.*) On
+    `paper`, edge to edge: at its head the line's words as the picture's name, and `Done`. **The picture**
+    stands whole inside the screen, in its own shape, at its centre, 12 pt clear of every edge, at the tile's
+    corners and hairline. A pinch zooms it up to four times, a double tap goes between fitted and twice,
+    about the point tapped, and it pans when zoomed. **A swipe left or right** goes to the next or the
+    previous picture of the same row of the document (one message's pictures, or one group's); a picture left
+    behind goes back to fitted. **Under it, when the row holds more than one, is the room's rail**: `Images in
+    this row` and `2 / 5` above the row's pictures as thumbnails, 52 pt square and 8 pt apart, each whole
+    inside its square on `fill` (the room's rail in a narrow column). The one shown is ringed, 1.5 pt inside,
+    in `ink`: the ring's place and weight are §2.3's, and the phone's chrome carries no select hue. A press on
+    a thumbnail goes to its picture; the rail scrolls sideways and keeps the one shown in view. The rail holds
+    the pictures the phone holds or is reading when the viewer opens; a line that is no picture, and one that
+    could not be read, are not in it. The tile's picture stands in until the larger one is read (`Reading
+    from studio…`), and stays if that does not arrive (`full size on studio`); the picture shown and the one
+    on each side of it are read, the others as they are come to. Nothing saves, shares or copies a picture.
+    An animation shows its first frame; one too long for
     the bound below keeps its line. The desktop renders both sizes and the phone asks for no other: the tile
-    at most 640 px square (the room's `tile2x`), the sheet at most 1,600 px on its long edge (its `preview`),
+    at most 640 px square (the room's `tile2x`), the viewer at most 1,600 px on its long edge (its `preview`),
     never the stored original. What counts as a picture is the room's rule: an image whose bytes rosetta
     stored, in one of its six formats or as one of its older WebP sets. A document, a video, a file, and an
     image the record does not hold keep their line. **Through the home desktop there is no picture**, only the
