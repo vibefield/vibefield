@@ -1680,7 +1680,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     then the project), and its desktop and its state: the status dot (§2.5) beside its desktop's
     name, with the state's word when it is not serving ("mini · asleep"). Serving is green, failed is
     red, and starting, not kept, too large and not yet written out are muted, each with its words
-    (§9 "Apps"). Its menu adds **Keep** (or **Stop keeping**), **Versions** and **Hide from Apps**.
+    (§9 "Apps"). Its menu adds **Keep** (or **Stop keeping**) and **Versions**. *Hide dropped 2026-11-13 (James,
+    01:29:54Z).*
   - **A made tile opens through `artifact.open`**, as History's Open will, in the system browser as a
     live tile opens: the fieldd the window asks (the answering home, never the app's own desktop)
     opens the URL it validated through its shell's `shell.openLink`, as a terminal's link opens, and
@@ -8337,7 +8338,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       opened yet, a cyan one, so the first reading's apps wear none. *Ruled 2026-11-12 (James, 06:07:07Z, the PM
       board): the narrow reading.* The dot sits at the squircle's top right, 3 outside it, ringed 2 in the paper.
     - An asleep desktop's apps stand at 45%.
-    - A long press opens the system's context menu over the preview: Open, Keep, Versions, About, Hide.
+    - A long press opens the system's context menu over the preview: Open, Keep, Versions, About. *Hide dropped
+      2026-11-13 (James, 01:29:54Z).*
   - **The open app** (MA-D11 A, MA-D12 A): it zooms out of its icon (iOS 18's `navigationTransition(.zoom)`) and
     fills the screen, edge to edge.
     - One glass row stands at the bottom, Safari's iOS 26 grammar at the bar's measure: 62 tall, 21 from the sides
@@ -8352,7 +8354,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - The page's layout ends above the row (P3), so the row never covers the page's own controls.
     - ✕ or an edge swipe zooms it back into its icon.
     - ··· holds Reload · Keep (or Stop keeping) · Versions · Open on ‹desktop› · Open in ‹host› (when it has a
-      hosted link) · About this app · Hide from Apps. A live app adds Copy link.
+      hosted link) · About this app. A live app adds Copy link. *Hide dropped 2026-11-13 (James, 01:29:54Z).*
     - A page-only app says so in a glass note above the row, never over the page's own head.
   - **Warm:** the last app stays loaded for **10 minutes** after you leave it. It is the one web view
     (`PHONE_BUDGET.WEB_VIEWS`), released before the next is taken, and it heads Recent with a ring that says it
@@ -9208,9 +9210,9 @@ him and are not invented here.
   shelf, "Your agents haven't made an app yet"; while the phone waits for its first list, "Reading your apps"; and
   when the phone stops reading at ten pages, "Not every app is shown here". *Ruled 2026-11-12 (James, 03:38:38Z,
   the PM board): kept.*
-- **The acts.** An app's acts are **Open**, **Keep** (or **Stop keeping**), **Versions**, **About this app**, **Hide
-  from Apps**, **Reload**, **Open on ‹desktop›**, **Open in ‹host›** (only with a hosted link) and, for a live app,
-  **Copy link**.
+- **The acts.** An app's acts are **Open**, **Keep** (or **Stop keeping**), **Versions**, **About this app**,
+  **Reload**, **Open on ‹desktop›**, **Open in ‹host›** (only with a hosted link) and, for a live app, **Copy link**.
+  *Hide from Apps dropped 2026-11-13 (James, 01:29:54Z).*
 - **About** says "Made by ‹agent›", its session and project, "on ‹desktop›" and its date, and opens the session in
   History. Before an app has a preview it says "No preview yet — it's drawn the first time the app opens".
   ‹for James: the line for a capture that failed›. Before MA-5, an app this phone cannot run yet says "This app
