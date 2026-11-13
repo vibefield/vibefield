@@ -15,10 +15,11 @@ Usage: bash apps/ios/scripts/testflight.sh archive BUILD_NUMBER review|testfligh
        bash apps/ios/scripts/testflight.sh upload BUILD_NUMBER [internal|store]
 
   archive 7 review      Build a signed Release archive for App Review: it draws
-                        no TestFlight-only row (Notifications), as James ruled
-                        (the Settings page, 2026-11-12).
+                        no TestFlight-only row (Notifications, Developer), as
+                        James ruled (the Settings page, 2026-11-12; RB-2).
   archive 8 testflight  The same code with VF_TESTFLIGHT set, so TestFlight's
-                        own rows are compiled in. Each archive has its own number.
+                        own rows are compiled in: its app must carry every one of
+                        them. Each archive has its own number.
   upload 7 store        Upload a review archive, or one made before kinds (build
                         6), for the App Store and external TestFlight
                         (ExportOptions-AppStore.plist). It refuses a testflight
@@ -137,16 +138,23 @@ archive="$output/VibeField-$build_number.xcarchive"
 kind_file="$output/VibeField-$build_number.kind"
 mkdir -p "$output"
 
-# What a review archive must not carry (RB-1; RB-2 adds Developer's): each TestFlight-only
-# page's type name, which Swift's reflection metadata keeps in a Release build, and one
-# literal of its words, longer than Swift's 15-byte inline strings so it is a C string.
+# What a review archive must not carry, and a TestFlight archive must carry every one of
+# (RB-1's Notifications, RB-2's Developer): each TestFlight-only page's type name, which
+# Swift's reflection metadata keeps in a Release build, and one literal of its words,
+# longer than Swift's 15-byte inline strings so it is a C string. Until RB-2's gate widens
+# (its §1C), a TestFlight app carries Developer's two while This phone does not draw the
+# row: the page is compiled in and unreachable. The count says the code is in the app,
+# never that the page can be reached.
 markers=(
   "NotificationsPage"
   "A title and nothing more: what your agents said stays on your desktop."
+  "DeveloperPage"
+  "For testing. TestFlight and development builds show this page; the build in the App Store does not."
 )
-# Prints "<total> (<marker> <count>; ...)" for the archive's app, every file in it read.
+# Prints "<total> <absent> (<marker> <count>; ...)" for the archive's app, every file in it
+# read: absent is how many markers it carries none of.
 count_markers() {
-  local app m n total=0 each=""
+  local app m n total=0 absent=0 each=""
   app="$(find "$1/Products/Applications" -maxdepth 1 -name '*.app' -print -quit 2>/dev/null)"
   if [[ -z "$app" ]]; then
     echo "unread (no app in the archive)"
@@ -157,8 +165,11 @@ count_markers() {
     n="$({ LC_ALL=C grep -raoF -- "$m" "$app" || true; } | wc -l | tr -d ' ')"
     each+="${each:+; }${m:0:24} $n"
     total=$((total + n))
+    if [[ "$n" == 0 ]]; then
+      absent=$((absent + 1))
+    fi
   done
-  echo "$total ($each)"
+  echo "$total $absent ($each)"
 }
 
 # Every refusal that needs no key comes before the keychain is asked.
@@ -450,8 +461,11 @@ case "$action" in
       echo "This review archive carries a TestFlight-only page, so upload store will refuse it." >&2
       exit 1
     fi
-    if [[ "$archive_kind" == testflight && "${found%% *}" == 0 ]]; then
-      echo "This TestFlight archive carries none of TestFlight's own pages: VF_TESTFLIGHT did not reach them." >&2
+    absent="${found#* }"
+    absent="${absent%% *}"
+    if [[ "$archive_kind" == testflight && "$absent" != 0 ]]; then
+      echo "This TestFlight archive lacks $absent of the ${#markers[@]} TestFlight-only page markers: $found." \
+        "VF_TESTFLIGHT did not reach every TestFlight-only page." >&2
       exit 1
     fi
     if [[ "$archive_kind" == review ]]; then
