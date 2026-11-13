@@ -52,6 +52,26 @@ extension FieldHistoryModel {
   }
 }
 
+/// Item 388 — what a session's act says in the slot over the bar, on its document.
+public struct SessionSlotWords: Equatable, Sendable {
+  /// The act's word: `Resume`, `Jump to`.
+  public let word: String
+  /// What the act has to say after its word, when it has something: why it cannot be pressed, or a Resume's answer.
+  public let note: String?
+
+  public init(word: String, note: String?) {
+    self.word = word
+    self.note = note
+  }
+}
+
+extension FieldHistoryModel {
+  /// Item 388 (red) — a stub: no word and no note.
+  public static func slotWords(_ act: SessionAct, answer: String?) -> SessionSlotWords {
+    SessionSlotWords(word: "", note: nil)
+  }
+}
+
 /// The acts History hands the home screen, and what it needs to know to draw
 /// them: whether the field holds a conversation's run, whether a desktop
 /// answers, whether its catalog offers Resume for an agent.
