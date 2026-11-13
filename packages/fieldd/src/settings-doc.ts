@@ -8,9 +8,11 @@ import {
   InstallSetEntry,
   KnownPhone,
   LAYOUT,
+  MADE_APP_LIMITS,
   type PhoneEvidence,
   RefusedDevice,
   SETTINGS_DOC_SECTIONS,
+  Sha256Hex,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { LoroDoc, UndoManager } from "loro-crdt";
@@ -116,6 +118,15 @@ import { SystemDocFile } from "./system-doc-file";
 //     deletes the entry in the refusal's own transaction. A deleted entry leaves
 //     the document's STATE only: its name stays in the operation history the
 //     snapshots keep (law 3), so nothing may promise that Remove erases it.
+//
+// MA-3h (2026-11-13; James, 01:29:54Z: Keep goes the short path) — THE KEPT
+// APPS: one root map, `madeApps.kept`, the fold key's sha256 → the writer's
+// clock. The fold key itself is never stored: a hosted one is a URL, and this
+// document crosses every desktop. Keeping and stopping commit under a
+// `no-undo:` origin, so ⌘Z never stops keeping an app (law 2's discipline, as
+// the install-set's). A key is one register, merged in Loro's order and never
+// by the clock. A writer adds at most MADE_APP_LIMITS.INTENTS readable keys; a
+// merged document past it is read whole (a kept app only stays up).
 
 export interface SettingsDocConfig {
   dataDir: string;
@@ -166,6 +177,7 @@ export type RefusalAct = "remove" | "append";
 
 const S = SETTINGS_DOC_SECTIONS;
 const ORIGIN_INSTALL_SET = "no-undo:install-set:";
+const ORIGIN_MADE_APPS = "no-undo:made-apps:";
 /** MK-2a (S1): an app preference that must never be undone (`APP_PREFERENCES_NEVER_UNDONE`). */
 const ORIGIN_APP_NEVER_UNDONE = "no-undo:app:";
 /** Item 406 — both device sections commit under it: outside the undo stack (law 2). */
@@ -176,7 +188,14 @@ const ORIGIN_DEVICES = "no-undo:devices:";
  * does, or once a day. */
 const KNOWN_PHONE_REFRESH_MS = 24 * 60 * 60 * 1000;
 /** Every section a peer's merge may have moved (`hostOwner().merged`). */
-const MERGED_SECTIONS = ["app", "settings", "installSet", S.DEVICES_REFUSED, S.DEVICES_PHONES];
+const MERGED_SECTIONS = [
+  "app",
+  "settings",
+  "installSet",
+  "madeApps",
+  S.DEVICES_REFUSED,
+  S.DEVICES_PHONES,
+];
 
 /** `[pluginId, capability]` — a JSON tuple, so no id alphabet can collide. */
 function grantKey(pluginId: string, capability: string): string {
@@ -420,6 +439,49 @@ export class SettingsDocService extends EventEmitter {
     this.doc.commit({ origin: `settings:${by}` });
     await this.persistNow();
     this.emit("changed", { section: "settings", pluginId });
+  }
+
+  // --- MA-3h: the kept apps (SETTINGS_DOC_SECTIONS.MADE_APPS_KEPT) ----------
+
+  /** The kept apps now, read synchronously: call only once `ready()` has resolved (MadeAppKeptIntents opens after
+   * it). A key that is not a sha256, or a value that is not a clock, is skipped, never fatal. */
+  keptAppsNow(): Map<string, number> {
+    const out = new Map<string, number>();
+    const kept = this.doc.getMap(S.MADE_APPS_KEPT);
+    for (const key of kept.keys()) {
+      const at = kept.get(key);
+      if (!Sha256Hex.safeParse(key).success) continue;
+      if (typeof at !== "number" || !Number.isSafeInteger(at) || at < 0) continue;
+      out.set(key, at);
+    }
+    return out;
+  }
+
+  async keptApps(): Promise<Map<string, number>> {
+    await this.ready();
+    return this.keptAppsNow();
+  }
+
+  /** Keep an app, its key a fold key's sha256, or stop keeping it. "unchanged": it already was so. "full": a new key
+   * past MADE_APP_LIMITS.INTENTS, and nothing is written. */
+  async setKept(
+    key: string,
+    kept: boolean,
+    at: number,
+    by: string,
+  ): Promise<"written" | "unchanged" | "full"> {
+    await this.ready();
+    if (!Sha256Hex.safeParse(key).success) throw new TypeError("a kept app's key is a sha256");
+    const now = this.keptAppsNow();
+    if (now.has(key) === kept) return "unchanged";
+    if (kept && now.size >= MADE_APP_LIMITS.INTENTS) return "full";
+    const map = this.doc.getMap(S.MADE_APPS_KEPT);
+    if (kept) map.set(key, at);
+    else map.delete(key);
+    this.doc.commit({ origin: `${ORIGIN_MADE_APPS}${by}` });
+    await this.persistNow();
+    this.emit("changed", { section: "madeApps" });
+    return "written";
   }
 
   // --- spine preferences (D29′ extension a — same discipline, app section) ---

@@ -82,7 +82,8 @@ export interface AppsLocalSource {
 }
 
 /** The person's merged keep intent, by fold key (the lead's ruling on L8; slice 3h). Until 3h it is empty: no app is
- * kept. *Hide dropped 2026-11-13 (James, 01:29:54Z): no app is hidden.* */
+ * kept. *Hide dropped 2026-11-13 (James, 01:29:54Z): no app is hidden.* *3h, 2026-11-13: the daemon's reader is
+ * `MadeAppKeptIntents` (made-app-intents.ts), the settings document's kept map.* */
 export interface MadeAppIntentReader {
   of(foldKey: string): { kept?: true } | undefined;
   /** the merged intent moved; the answer is how to stop listening */

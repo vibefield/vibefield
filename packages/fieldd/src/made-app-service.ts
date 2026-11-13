@@ -16,6 +16,8 @@
 //    key the app's ROW spells. A record whose row is not held while the library's table does not speak yet (a
 //    restart, before 3a's walk) is neither kept, closed nor evicted: it stays as it was until `reconsider()` reads its
 //    row (RULINGS L8: kept means no idle close). *Hide dropped 2026-11-13 (James, 01:29:54Z): no app is hidden.*
+//    *3h, 2026-11-13: the daemon's reader is `MadeAppKeptIntents` (made-app-intents.ts), the settings document's kept
+//    map, read before this service starts.*
 //  - the shared ceiling: open made serves and AH's objects together under ARTIFACT_LIMITS.LOCAL_OBJECTS.
 //  - the previews serve: ONE standing serve per desktop over `artifacts/made-previews/` only (the lead's L12), its
 //    port by the made rule over the device id; after each capture the JPEG is HARD-LINKED there (`fs.link`, never a
@@ -369,7 +371,8 @@ export interface MadeAppIntentReader {
   on(cb: () => void): () => void;
 }
 
-/** Until slice 3h: nothing is kept. */
+/** Nothing is kept: the reader before 3h, and a test's or an unwired service's (3h wires
+ * `MadeAppKeptIntents`). */
 export const NO_MADE_APP_INTENTS: MadeAppIntentReader = {
   of: () => undefined,
   on: () => () => undefined,

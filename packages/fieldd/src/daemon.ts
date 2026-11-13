@@ -330,6 +330,7 @@ import {
   systemDocId,
 } from "./library-doc";
 import { LinkService, otherUserLinks } from "./link-service";
+import { madeAppKeptFull, MadeAppKeptIntents, madeAppKeptKey } from "./made-app-intents";
 import {
   type MadeAppExporter,
   MadeAppService,
@@ -839,7 +840,8 @@ export interface FielddDaemon {
   docs: DocumentService;
   devices: DeviceService;
   /** Item 406 — the system settings document (D29′): tests read the account's refused and known
-   * phones here (`refusals`, `knownPhones`). */
+   * phones here (`refusals`, `knownPhones`). MA-3h — the kept apps' home too: tests seed its kept
+   * map. */
   settingsDoc: SettingsDocService;
   peers: PeerLink;
   /** DS-1 — the egress ROUTES port (E2): a loopback address that reaches a
@@ -1977,6 +1979,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       }),
     );
     await plugins.refresh();
+    // MA-3h — Keep, the short path (James, 2026-11-13): the person's kept apps, a
+    // root map of the settings document keyed by the fold key's sha256, read
+    // HERE, before the fold and the made-app service are built, so neither
+    // decides a fold or an idle close before this boot knows who keeps what.
+    const keptApps = await MadeAppKeptIntents.open(settingsDoc, {
+      logger: logger.child({ component: "made_apps.kept" }),
+    });
     // DS-5 (DS-D6, DS-D18) — the SETTINGS document and the LIBRARY join the
     // Loro-level host as SYSTEM documents, under well-known ids derived from
     // the ACCOUNT (the linked login, else this user root), so every desktop of
@@ -8357,6 +8366,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       exportReady: (device) => device !== devices.currentDeviceId() || madeRoots !== undefined,
       dir: join(config.dataDir, ...LAYOUT.MESH_APPS_DIR),
       joinProject: appProjectOf,
+      intents: keptApps,
       ...historyCadences,
       logger,
     });
@@ -8843,6 +8853,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const service = new MadeAppService({
         dataDir: config.dataDir,
         deviceId: devices.currentDeviceId(),
+        intents: keptApps,
         bridge: {
           declare: async (specs) => {
             lastMadeServeSpecs = specs;
@@ -9295,21 +9306,36 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         () => ({ outcome: "succeeded" }),
       );
     });
-    // Until slice 3h the home has no intent document to write a keep to (Hide
-    // was dropped 2026-11-13), so the mark says so in its own word
-    // (MADE_APP_OPEN.STATE_INTENT_UNBUILT, not retryable: nothing a retry
-    // changes before 3h), never a fake answer. A refusal with no effect writes
-    // no audit record; 3h audits the write.
-    api.register("artifact.mark", (ctx, params): ArtifactMarkResult => {
+    // MA-3h — Keep at the home (the short path, James 2026-11-13): the person's
+    // intent, written to this desktop's settings document and carried to every
+    // desktop of the account as settings are (DS-5b). *Corrected 2026-11-13: it
+    // answered MADE_APP_OPEN.STATE_INTENT_UNBUILT until 3h.*
+    //  - The audit's target is the fold key's sha256, never the key: a hosted
+    //    fold key is a URL, up to 2,055 characters, past an audit id's 256, and
+    //    a record never holds a URL.
+    //  - ONE action, `artifact.made.mark` (api.html's), its attrs {kept} on both
+    //    records.
+    //  - A keep past MADE_APP_LIMITS.INTENTS is refused before the audit, and
+    //    writes nothing; a refusal with no effect writes no audit record.
+    //  - `hidden` is retired (Hide dropped 2026-11-13): accepted beside `kept`,
+    //    and ignored.
+    api.register("artifact.mark", async (ctx, params): Promise<ArtifactMarkResult> => {
       admitApps(ctx, "artifact.mark", false);
       const parsed = ArtifactMarkParams.safeParse(params ?? {});
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { foldKey, kept: boolean }", false);
-      throw new RpcCallError(
-        "UNAVAILABLE",
-        "keeping a made app is not built yet: this desktop has no intent to write it to",
-        false,
-        { service: MADE_APP_OPEN.SERVICE, state: MADE_APP_OPEN.STATE_INTENT_UNBUILT },
+      const foldKey = parsed.data.foldKey;
+      const kept = parsed.data.kept === true;
+      if (keptApps.full(foldKey, kept)) throw madeAppKeptFull();
+      return await audit.required(
+        ctx,
+        {
+          action: "artifact.made.mark",
+          target: { kind: "made-app", id: madeAppKeptKey(foldKey) },
+          attrs: { kept },
+        },
+        () => keptApps.mark(foldKey, kept, ctx.clientKind === "shell-main" ? "shell" : "apps"),
+        () => ({ outcome: "succeeded", attrs: { kept } }),
       );
     });
     // The home's say over a routed open (C16, "validate or strip"): the
