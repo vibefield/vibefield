@@ -664,6 +664,10 @@ extension FieldHistoryModel {
   /// only for its own cut), so the flag alone read such an opening as a whole message.
   static func isCut(_ row: IndexTimelineRow) -> Bool { row.textClipped || row.textByteLen != nil }
 
+  /// Item 370 (red) — the row's failure as a line's words. A STUB so the rows compile: the failure as it is
+  /// spelt. Nothing reads it yet; the green writes it and has `ledgerLine` read it.
+  static func failureWords(_ failure: String?) -> String? { failure }
+
   /// `clipped · 14 KB on studio` — the words under a text the door cut at its
   /// bound (`textClipped`), with the whole's size when the index named one
   /// (`textByteLen`, a text that lives in an asset upstream); `clipped on

@@ -876,3 +876,129 @@ struct HistoryCutMarkTests {
     #expect(cutMarks(segments) == ["clipped · 88 KB on studio"])
   }
 }
+
+/// Item 370 (found reading the room for 362f's f3, 2026-11-12; VF-PM numbered it 23:19:02Z and settled its two
+/// parts at 23:21:26Z) — two places where the phone's own fold said something other than the room, from a row that
+/// already carries what the room reads. Rows are built in code; no fixture is added.
+///
+/// The row's `failure` is the failure's summary, or its KIND where it had none (`summary ?? kind`, fieldd's
+/// index-timeline.ts), and rosetta's commonest failure has none (kind `unknown`). So a bare word is read as a kind.
+@Suite("item 370 — a group's head and a failed line say what the room says")
+struct HistoryRoomWordsTests {
+  private func tool(_ family: String, _ more: [String: JSONValue]) throws -> (IndexTimelineRow, IndexTimelineTool) {
+    var fields: [String: JSONValue] = [
+      "name": .string(family), "family": .string(family), "status": .string("failed"), "failed": .bool(true),
+      "object": .string("the object"),
+    ]
+    for (key, value) in more { fields[key] = value }
+    let row = try IndexTimelineRow(
+      json: .object([
+        "timelineId": .string("t1"), "sessionId": .string("s1"), "ordinal": .int(1), "kind": .string("tool_use"),
+        "group": .object(["id": .string("g"), "kind": .string("agent_cycle")]), "tool": .object(fields),
+      ]))
+    return (row, try #require(row.tool))
+  }
+
+  private func result(_ family: String, _ more: [String: JSONValue]) throws -> String {
+    let (row, facts) = try tool(family, more)
+    return FieldHistoryModel.ledgerLine(row, tool: facts).result
+  }
+
+  // MARK: The head
+
+  @Test("past four edited files the head says … N more")
+  func theOverflow() {
+    let six = ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts", "f.ts"].map { (family: "file_change", object: $0) }
+    #expect(FieldHistoryModel.runSummary(lines: six, thoughts: 0) == "6 edits · a.ts, b.ts, c.ts, d.ts … 2 more")
+  }
+
+  @Test("four edited files are all named, with nothing after them")
+  func fourAreNamed() {
+    let four = ["a.ts", "b.ts", "c.ts", "d.ts"].map { (family: "file_change", object: $0) }
+    #expect(FieldHistoryModel.runSummary(lines: four, thoughts: 0) == "4 edits · a.ts, b.ts, c.ts, d.ts")
+  }
+
+  // MARK: A failed line
+
+  @Test("a command that failed says its exit and then its failure")
+  func aFailedCommand() throws {
+    let said = try result("shell", ["result": .string("exit 2"), "failure": .string("command not found: pnpm")])
+    #expect(said == "exit 2 · command not found: pnpm")
+  }
+
+  @Test("a failed line says its failure, not the family's result")
+  func theFailureBeatsTheResult() throws {
+    let said = try result("file_search", ["result": .string("3 matches"), "failure": .string("permission denied")])
+    #expect(said == "permission denied")
+  }
+
+  @Test("the failure is its first line, cut at 60")
+  func oneLineOfIt() throws {
+    let long = String(repeating: "a", count: 80) + "\nand a second line"
+    let said = try result("file_read", ["failure": .string(long)])
+    #expect(said == String(repeating: "a", count: 59) + "…")
+  }
+
+  @Test("an exit of zero on a line that failed is not said before the failure")
+  func aZeroExitIsNotSaid() throws {
+    let said = try result("shell", ["result": .string("exit 0"), "failure": .string("killed by the caller")])
+    #expect(said == "killed by the caller")
+  }
+
+  @Test("with no failure words a failed line says its exit, else its result, else failed")
+  func noWords() throws {
+    #expect(try result("shell", ["result": .string("exit 1")]) == "exit 1")
+    #expect(try result("file_search", ["result": .string("3 matches")]) == "3 matches")
+    #expect(try result("file_read", [:]) == "failed")
+    #expect(try result("file_read", ["failure": .string("  ")]) == "failed")
+  }
+
+  @Test("the row's failure is a kind where it had no sentence, and `unknown` says nothing")
+  func anUnknownKindSaysNothing() throws {
+    #expect(try result("shell", ["result": .string("exit 1"), "failure": .string("unknown")]) == "exit 1")
+    #expect(try result("file_read", ["failure": .string("unknown")]) == "failed")
+    #expect(try result("shell", ["result": .string("exit 2"), "failure": .string("exit_non_zero")]) == "exit 2")
+  }
+
+  @Test("a kind says itself as words, and a timeout says timed out")
+  func aKindAsWords() throws {
+    #expect(try result("file_read", ["failure": .string("not_found")]) == "not found")
+    #expect(try result("web_fetch", ["result": .string("404"), "failure": .string("timeout")]) == "timed out")
+    #expect(try result("shell", ["result": .string("exit 124"), "failure": .string("timeout")]) == "timed out")
+    #expect(try result("shell", ["status": .string("timed_out"), "failure": .string("it ran too long")]) == "timed out")
+  }
+
+  /// rosetta's eight, as its generated `FailureKind` lists them at the pin (811e554c6,
+  /// clients/ts/generated/FailureKind.ts). The fold keeps no copy of this list: it reads a kind by its shape.
+  @Test("every kind rosetta has today says nothing or says words, and one it adds later says words too")
+  func noKindIsPrintedAsItIsSpelt() throws {
+    let kinds = [
+      "permission", "not_found", "invalid_input", "exit_non_zero", "timeout", "cancelled", "provider", "unknown",
+    ]
+    let said = kinds.map { FieldHistoryModel.failureWords($0) }
+    #expect(said == ["permission", "not found", "invalid input", nil, "timed out", "cancelled", "provider", nil])
+    #expect(FieldHistoryModel.failureWords("rate_limited") == "rate limited")
+    #expect(FieldHistoryModel.failureWords("ENOENT: no such file") == "ENOENT: no such file", "a sentence stays")
+  }
+
+  @Test("a one-word summary in lowercase reads through the same rule and says itself")
+  func aOneWordSummarySaysItself() throws {
+    #expect(FieldHistoryModel.failureWords("denied") == "denied")
+    #expect(FieldHistoryModel.failureWords("killed") == "killed")
+    #expect(try result("shell", ["result": .string("exit 137"), "failure": .string("killed")]) == "exit 137 · killed")
+  }
+
+  @Test("a failed line with no words says its status, never the bare word failed for a denial")
+  func theStatusSpeaks() throws {
+    #expect(try result("file_read", ["status": .string("denied")]) == "denied")
+    #expect(try result("file_change", ["status": .string("interrupted")]) == "interrupted")
+    #expect(try result("shell", ["result": .string("exit 0")]) == "failed", "a failed line never says exit 0")
+  }
+
+  @Test("a line that did not fail says its result as it did")
+  func aLineThatDidNotFail() throws {
+    let said = try result(
+      "shell", ["status": .string("succeeded"), "failed": .bool(false), "result": .string("exit 0")])
+    #expect(said == "exit 0", "the door's `exit 0` on a line that did not fail is item 369's, and stays")
+  }
+}
