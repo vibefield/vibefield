@@ -7760,16 +7760,30 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     names the way a document is read. It was: a direct read lost under an open document left the newest forty rows
     where two hundred and the pages above them had been, and a direct read coming back did the same to the pages
     read the other way.
-  - **A long message is its opening, and the whole is one press away** (362f). The room's excerpt rule, as it is
+  - **A long message is its opening in a window, and the whole is one press away** (362f; the window, item 380).
+    The room bounds a message twice, and the phone keeps both. **By length**, the room's excerpt rule as it is
     written (`messageExcerpt`): a prompt or a reply longer than 2,400 characters or 32 lines is drawn to that
     bound, cut back to a paragraph, a line or a word where one falls in the bound's last quarter, never through a
-    character, and never ending on a heading or an opening fence whose body it left out. Under it stands `View
-    full message` (12.5 pt medium in `inkTertiary`, a 30 pt target), which opens the message on a sheet of its
-    own, as the phone's other sheets (the large detent, the grabber, 40 pt corners, `paper`): who said it and
-    when, `Done`, and the words at the document's measure, laid out a block at a time as the page is read, and
+    character, and never ending on a heading or an opening fence whose body it left out. **By height**, the
+    room's window (`.tr-message__viewport`, `styles/message-preview.css`): the words stand from their top in a
+    window at most 21.7 em tall, which is 325.5 pt at the document's 15, and what overruns it is not drawn (a
+    pt over still fits, as in the room). Where either bound left words out, the window is at least 5 em tall
+    (75 pt) and its words fade toward its foot by the room's own ramp: whole down to 35% of the window, 53% at
+    60%, and clear from 32 pt above the foot. `View full message` stands centred over that foot (12.5 pt medium
+    in `inkSecondary`, in a band 44 pt high, which is its target), and opens the message on a sheet of its own,
+    as the phone's other sheets (the large detent, the grabber, 40 pt corners, `paper`): who said it and when,
+    `Done`, and the words at the document's measure, laid out a block at a time as the page is read, and
     selectable. Where the desktop cut the words the document holds, the sheet says so at its foot as the document
-    does (`clipped · 14 KB on studio`). The rule is the view's and holds however the document is read. The room
-    lowers the bound further to fit its window; that is its layout and is not kept.
+    does (`clipped · 14 KB on studio`). A message within both bounds is drawn whole, with no fade and no
+    control. The rule is the view's and holds however the document is read. The room shortens the words until
+    they fit its window, so that no link or copy button is left live behind a cut; the phone draws them to the
+    length bound and lets the window cut them, because nothing in the phone's words opens anything.
+    *Corrected 2026-11-13 (item 380; James, 05:29:39Z, of the first build that reads a desktop directly: "the
+    long message does not seem to be capped in short view like desktop, and they dont have the same gradient
+    fade at cap bottom which is not good"): this said "Under it stands `View full message` (12.5 pt medium in
+    `inkTertiary`, a 30 pt target)" and "The room lowers the bound further to fit its window; that is its layout
+    and is not kept." The window is the cap he reads on the desktop, and 2,400 characters alone is two screens
+    of a phone: it read as no cap at all once a message came whole.*
   - **Read straight from the desktop, a message is whole** (362f). Through the home desktop a message's words
     stop at 2,000 units with `clipped · 14 KB on studio` under them: the door carries a bounded row. Read straight
     from the desktop's index the phone holds the whole entry, so the words are all there, up to rosetta's own
