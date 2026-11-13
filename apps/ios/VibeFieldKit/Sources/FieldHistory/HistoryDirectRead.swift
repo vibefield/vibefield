@@ -14,6 +14,9 @@ import RosettaClient
 // - a 401 `expired` on a page renews once, and reads again;
 // - the four roads back to the door's pages (`HistoryDirectFallback`): no ticket, no pages, a refusal, a socket that
 //   does not answer. The reader says which, and reads as it always has.
+// - (item 362g) a recorded picture's rendition, read by the same client under the same grant and the same renew-once
+//   rule (`picture(_:size:)`). Its bytes ride this ticketed road and never fieldd's RPC (EL2), and a picture that is
+//   not read ends nothing.
 //
 // An older page is fetched and then REVEALED under the subscription, so it takes later patches and `onChange` hands
 // the whole visible list; a row is projected once, and again only when its entry changed (`HistoryProjectionCache`).
@@ -180,10 +183,18 @@ final class HistoryDirectRead {
   }
 
   /// Off the main actor, so the fresh configuration crosses no isolation on its way to the provider.
+  ///
+  /// Item 362g — the configuration is handed over with NO cache, and its requests pass any cache by. rosettad's
+  /// answers are immutable, so a session with a cache would keep pictures of its own, outside the count of the
+  /// one memory pictures are kept in, which has a byte bound (`HistoryPictureStore`). It covers the pages and the
+  /// socket too, which is right: nothing the direct read fetches should be answered from a cache.
   nonisolated private static func makeSession(
     _ provider: HistoryDirectPlane.SessionProvider
   ) async throws -> URLSession {
-    try await provider(URLSessionConfiguration.ephemeral)
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.urlCache = nil
+    configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+    return try await provider(configuration)
   }
 
   private func handlers() -> SessionSubscriptionHandlers {
@@ -332,10 +343,54 @@ final class HistoryDirectRead {
   /// meant.
   static let previewBytes = 1600 * 1600 * 3 / 2
 
-  /// Item 362g (red) — a STUB so the rows compile: no picture is read. The green reads one through rosetta's
-  /// client, under the bounds above.
+  /// One rendition of a recorded picture, as the bytes rosettad answered: a WebP it encoded (rosetta's client
+  /// refuses any other answer before its body is read), held only up to the size's bound. `tile` asks rosetta's
+  /// `tile2x` and `preview` its `preview`. A legacy bundle is asked at its sized member's own address, a recorded
+  /// original through the recipe on its one member: rosetta's `imageAssetURL` decides, from the members handed
+  /// to it.
+  ///
+  /// An expired grant renews once and reads again, as an older page does. Unlike a page, a picture that is not
+  /// read ends nothing: the failure is the picture's alone, thrown as `HistoryPictureFailure`, and the session is
+  /// read on. A read closed before the bytes were asked for, or while they were on their way, hands none out.
   func picture(_ picture: HistoryPicture, size: HistoryPictureSize) async throws -> Data {
-    throw HistoryPictureFailure(said: "not written")
+    guard let client, !closed else { throw HistoryPictureFailure.closed }
+    let asset = picture.asset
+    let variant: ImageVariant
+    let bound: Int
+    switch size {
+    case .tile:
+      variant = .tile2x
+      bound = Self.tileBytes
+    case .preview:
+      variant = .preview
+      bound = Self.previewBytes
+    }
+    let data: Data
+    do {
+      data = try await Self.rendition(client, asset, variant, bound)
+    } catch {
+      guard Self.isExpired(error), await renew() else { throw pictureFailure(error) }
+      do {
+        data = try await Self.rendition(client, asset, variant, bound)
+      } catch {
+        throw pictureFailure(error)
+      }
+    }
+    guard !closed else { throw HistoryPictureFailure.closed }
+    return data
+  }
+
+  /// Off the main actor: rosetta's client counts the answer's body as it arrives.
+  nonisolated private static func rendition(
+    _ client: RosettaClient, _ asset: AssetRef, _ variant: ImageVariant, _ bound: Int
+  ) async throws -> Data {
+    try await client.image(asset, variant: variant, maxBytes: bound).bytes
+  }
+
+  /// What a picture that was not read is thrown as: never rosetta's own error, whose message names the picture's
+  /// address.
+  private func pictureFailure(_ error: any Error) -> HistoryPictureFailure {
+    closed ? .closed : HistoryPictureFailure(error)
   }
 
   // MARK: The end
@@ -436,5 +491,18 @@ struct HistoryPictureFailure: Error, Equatable, Sendable {
     if let failure = error as? URLError { return "network \(failure.code.rawValue)" }
     if error is CancellationError { return "cancelled" }
     return "failed"
+  }
+}
+
+private extension HistoryPicture {
+  /// This picture as rosetta's client asks for it. A legacy bundle hands over its sized members, so each size is
+  /// asked at its member's own address; a recorded original has none, and rosettad renders its sizes on request.
+  var asset: AssetRef {
+    func member(_ stored: HistoryPictureMember) -> AssetRef {
+      AssetRef(url: stored.url, digest: stored.digest, mediaType: stored.mediaType, byteLen: Int64(stored.byteLen))
+    }
+    var ref = member(base)
+    if !variants.isEmpty { ref.imageVariants = variants.mapValues(member) }
+    return ref
   }
 }

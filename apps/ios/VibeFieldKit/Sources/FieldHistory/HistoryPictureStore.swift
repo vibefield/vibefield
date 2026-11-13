@@ -68,23 +68,43 @@ struct HistoryPictureStore {
   /// the answer is then the key itself, and nothing already held is let go for them.
   @discardableResult
   mutating func put(_ data: Data, for key: Key) -> [Key] {
-    // Item 362g (red) — a STUB so the rows compile: nothing is kept.
-    []
+    drop(key)
+    guard data.count <= bound else { return [key] }
+    held[key] = data
+    order.append(key)
+    bytes += data.count
+    var gone: [Key] = []
+    while bytes > bound, let oldest = order.first {
+      drop(oldest)
+      gone.append(oldest)
+    }
+    return gone
   }
 
   /// The bytes under `key`, which is now the most recently used; nil when none are held.
   mutating func get(_ key: Key) -> Data? {
-    // Item 362g (red) — a STUB: nothing is held.
-    nil
+    guard let data = held[key] else { return nil }
+    order.removeAll { $0 == key }
+    order.append(key)
+    return data
   }
 
   /// Let go of everything one session holds.
   mutating func remove(session: String) {
-    // Item 362g (red) — a STUB.
+    let gone = order.filter { $0.session == session }
+    for key in gone { drop(key) }
   }
 
   /// Let go of everything.
   mutating func clear() {
-    // Item 362g (red) — a STUB.
+    held.removeAll()
+    order.removeAll()
+    bytes = 0
+  }
+
+  private mutating func drop(_ key: Key) {
+    guard let data = held.removeValue(forKey: key) else { return }
+    bytes -= data.count
+    order.removeAll { $0 == key }
   }
 }

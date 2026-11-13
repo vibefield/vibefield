@@ -26,6 +26,10 @@ import os
 // SP-7b's 7b-2b: with a plane given, a session's pages and tail come directly from rosetta (`HistoryDirectRead`) and
 // land in the same `rows`, so everything above them is unchanged. A session the plane cannot serve reads through the
 // door as before, and says why in `failure`. The header, the lists and search stay on the door.
+//
+// Item 362g (2026-11-13): read directly, a session's recorded pictures are read too, each when its tile asks
+// (`needPicture`), into memory under a bound (`HistoryPictureStore`) and never onto the phone's disk. Through the
+// door there are none to read: a door's row names no stored member.
 
 /// The numbers the phone's reads hold to, each with its reason.
 public enum HistoryReads {
@@ -187,8 +191,12 @@ public final class HistoryDesktopReader: Identifiable {
   /// speak (`HistoryLineDetail.opened`). Beside the document and never in it: the document is encoded and written
   /// to the cache at every rebuild, and these would ride in every one of those writes.
   private(set) var toolDetails: [String: [String: HistoryToolDetail]] = [:]
-  /// Item 362g (red) — per session, the faces of its recorded pictures. DECLARED so the rows compile; nothing
-  /// fills it yet.
+  /// Item 362g — per session, the faces of its recorded pictures, by "<timelineId>/<attachmentId>/<size>": the
+  /// id a reply's attachment segment carries, then the size asked. Made only by `needPicture`, only while the
+  /// session is read straight from the desktop. A held face carries its bytes, which are in memory alone
+  /// (`HistoryPictureStore`): beside the document and never in it, and never in the cache. When a direct read is
+  /// lost and the door reads on, the faces already here stay until the session is let go (`reopen`) or the
+  /// account signs out; a face whose bytes the bound let go is taken away, and is read again when its tile asks.
   private(set) var pictures: [String: [String: HistoryPictureFace]] = [:]
   /// The door's last refusal, in its own words, for the record.
   public private(set) var failure: String?
@@ -249,6 +257,12 @@ public final class HistoryDesktopReader: Identifiable {
   /// Item 362f — per session and row id, what the direct read's entries carry beyond their rows. A detail speaks
   /// only while the row it was made beside is the row held (`HistoryLineDetail`); `rows` stays the door's rows.
   @ObservationIgnored private var details: [String: [String: HistoryLineDetail]] = [:]
+  /// Item 362g — the bytes behind the held faces, under its bound; a face goes when its bytes do
+  @ObservationIgnored private var pictureStore = HistoryPictureStore()
+  /// the picture asks being read now, at most `HistoryReads.pictureAsks`
+  @ObservationIgnored private var pictureTasks: [HistoryPictureStore.Key: Task<Void, Never>] = [:]
+  /// the picture asks waiting their turn, first asked first
+  @ObservationIgnored private var pictureQueue: [PictureAsk] = []
 
   public init(
     deviceId: String, name: String, isHome: Bool = false, door: (any HistoryDoor)?, ownsDoor: Bool = false,
@@ -311,6 +325,8 @@ public final class HistoryDesktopReader: Identifiable {
     ledgerTask?.cancel()
     for task in tasks.values { task.cancel() }
     tasks.removeAll()
+    // item 362g — a closed reader asks for no picture, and one on its way lands nothing
+    stopPictureAsks()
     closeTail()
     if ownsDoor { door?.close() }
   }
@@ -328,11 +344,136 @@ public final class HistoryDesktopReader: Identifiable {
 
   // MARK: Pictures (item 362g)
 
-  /// Item 362g (red) — a STUB so the rows compile: nothing is asked for, and no face is made.
-  func needPicture(session sessionId: String, id: String, size: HistoryPictureSize) {}
+  /// A picture's tile came on screen, or its full-size sheet opened: read it at `size`, once.
+  ///
+  /// `id` is the attachment segment's id, "<timelineId>/<attachmentId>", and the picture is found by the WHOLE of
+  /// it (`HistoryLineDetail.pictured`, the one place the two ids are joined outside the fold). It is never cut
+  /// back into its two ids: neither a row's id nor an attachment's is promised to hold no `/`, so a cut could
+  /// look in the wrong row or for the wrong attachment. The face is kept under "<id>/<size>", which is only ever
+  /// a key.
+  ///
+  /// Nothing is asked for, and no face is made:
+  /// - when the session is not being read straight from the desktop. Through the home desktop a row names no
+  ///   stored member, so there is nothing to ask for, and the placeholder stays;
+  /// - when the face is already held (which counts as a use: what is on screen is the last to go) or waiting;
+  /// - when the entries held name no picture under the id.
+  ///
+  /// A face that failed is asked for again. At most `HistoryReads.pictureAsks` are read at once, and the rest wait
+  /// their turn, first asked first.
+  ///
+  /// A KNOWN LIMIT: a face is kept by its ids, not by the stored member's digest. If an entry later came to name
+  /// another stored member under the same attachment id, a face already held would stay the earlier picture
+  /// until its bytes are let go (the bound, its session let go, sign-out). A face is not dropped when its detail
+  /// stops being live: that would take the picture each face was read from, kept beside it, and a pass over them
+  /// at every rebuild.
+  func needPicture(session sessionId: String, id: String, size: HistoryPictureSize) {
+    guard !closed, directRead?.session == sessionId else { return }
+    let slot = HistoryPictureStore.Key(session: sessionId, face: "\(id)/\(size.rawValue)")
+    switch pictures[sessionId]?[slot.face] {
+    case .some(.waiting):
+      return
+    case .some(.held):
+      _ = pictureStore.get(slot)
+      return
+    case .some(.failed), .none:
+      break
+    }
+    // only an ask that will read joins the session's ids: a tile that is waiting or held has returned above
+    guard let picture = HistoryLineDetail.pictured(details[sessionId] ?? [:])[id] else { return }
+    setFace(slot, .waiting)
+    pictureQueue.append(PictureAsk(slot: slot, picture: picture, size: size))
+    runPictureAsks()
+  }
 
-  /// Item 362g (red) — a STUB: nothing is held.
-  var pictureBytes: Int { 0 }
+  /// Every byte of picture this reader holds in memory.
+  var pictureBytes: Int { pictureStore.bytes }
+
+  /// Sign-out: every picture goes, its bytes with it, and an ask still on its way lands nothing
+  /// (`HistoryDesktops.signedOut`).
+  func dropPictures() {
+    stopPictureAsks()
+    pictureStore.clear()
+    if !pictures.isEmpty { pictures = [:] }
+  }
+
+  /// A session let go (`reopen`): its pictures go with its rows.
+  private func dropPictures(session sessionId: String) {
+    stopPictureAsks(session: sessionId)
+    pictureStore.remove(session: sessionId)
+    if pictures[sessionId] != nil { pictures[sessionId] = nil }
+  }
+
+  /// One face set or, with nil, taken away. A session left with no face leaves no entry.
+  private func setFace(_ slot: HistoryPictureStore.Key, _ face: HistoryPictureFace?) {
+    var faces = pictures[slot.session] ?? [:]
+    faces[slot.face] = face
+    pictures[slot.session] = faces.isEmpty ? nil : faces
+  }
+
+  /// Start the asks that wait while a turn is free. The read itself runs off the main actor, inside rosetta's
+  /// client (`HistoryDirectRead.picture`); only its answer comes back here.
+  ///
+  /// An ask whose session is no longer read straight from the desktop is let go with its face: nothing was
+  /// learned about its picture.
+  private func runPictureAsks() {
+    while pictureTasks.count < HistoryReads.pictureAsks, !pictureQueue.isEmpty {
+      let ask = pictureQueue.removeFirst()
+      guard let direct = directRead, direct.session == ask.slot.session else {
+        setFace(ask.slot, nil)
+        continue
+      }
+      let read = direct.read
+      pictureTasks[ask.slot] = Task { [weak self] in
+        let answer: Result<Data, HistoryPictureFailure>
+        do {
+          answer = .success(try await read.picture(ask.picture, size: ask.size))
+        } catch {
+          answer = .failure((error as? HistoryPictureFailure) ?? HistoryPictureFailure(said: "failed"))
+        }
+        // let go while it was being read (a sign-out, a close, its session read again from its end): the answer
+        // lands nowhere, and the turn was already given back
+        guard let self, !Task.isCancelled, !self.closed else { return }
+        self.pictureTasks[ask.slot] = nil
+        self.landed(ask.slot, answer)
+        self.runPictureAsks()
+      }
+    }
+  }
+
+  /// An ask ended. Bytes go to the store and their face holds them; what the store let go to keep its bound loses
+  /// its face, and is read again when its tile next asks. A failure says a fixed word in the log, and never the
+  /// picture's id or its address (`HistoryPictureFailure`).
+  private func landed(_ slot: HistoryPictureStore.Key, _ answer: Result<Data, HistoryPictureFailure>) {
+    switch answer {
+    case .success(let data):
+      let gone = pictureStore.put(data, for: slot)
+      setFace(slot, .held(data))
+      for old in gone { setFace(old, nil) }
+    case .failure(let failure):
+      // the read closed under the ask: nothing was learned about the picture, and nothing is said
+      guard failure != .closed else {
+        setFace(slot, nil)
+        return
+      }
+      setFace(slot, .failed)
+      log("history[\(deviceId)] \(slot.session): a picture was not read (\(failure.said))")
+    }
+  }
+
+  /// Stop the asks of one session, or with nil of every session: those being read and those waiting. Their faces
+  /// go, so none is left waiting for an answer that will not land.
+  private func stopPictureAsks(session sessionId: String? = nil) {
+    let running = pictureTasks.filter { sessionId == nil || $0.key.session == sessionId }
+    for (slot, task) in running {
+      task.cancel()
+      pictureTasks[slot] = nil
+      setFace(slot, nil)
+    }
+    for ask in pictureQueue where sessionId == nil || ask.slot.session == sessionId { setFace(ask.slot, nil) }
+    pictureQueue.removeAll { sessionId == nil || $0.slot.session == sessionId }
+    // the turns given back go to another session's asks, if any wait
+    runPictureAsks()
+  }
 
   // MARK: The cache
 
@@ -713,6 +854,9 @@ public final class HistoryDesktopReader: Identifiable {
       liveSince[sessionId] = nil
     }
     declineDirect(sessionId, reason)
+    // item 362g — the pictures this session holds stay on the page: only the direct read could have read them, and
+    // the door reads none. They go when the session is let go (`reopen`) or the account signs out. An ask this
+    // cut off leaves no face.
     carried[sessionId] = nil
     cursors[sessionId] = nil
     closeTail()
@@ -807,6 +951,8 @@ public final class HistoryDesktopReader: Identifiable {
     rows[sessionId] = nil
     cursors[sessionId] = nil
     carried[sessionId] = nil
+    // item 362g — what was held goes, its pictures too
+    dropPictures(session: sessionId)
     details[sessionId] = nil
     toolDetails[sessionId] = nil
     closeTail()
@@ -903,6 +1049,13 @@ public final class HistoryDesktopReader: Identifiable {
       standing = .asleep
     }
   }
+}
+
+/// Item 362g — one picture ask: the face it fills, and what is asked of the desktop.
+private struct PictureAsk: Sendable {
+  let slot: HistoryPictureStore.Key
+  let picture: HistoryPicture
+  let size: HistoryPictureSize
 }
 
 /// An ordinal as a log line says it: rosetta's are whole numbers.

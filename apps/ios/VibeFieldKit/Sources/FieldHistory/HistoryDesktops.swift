@@ -146,9 +146,14 @@ public final class HistoryDesktops {
   /// said "a closed one writes nothing more". The ledger's reader now writes
   /// off the main actor, so a write it asked for before it closed can still
   /// be on its way here; `HistoryCache.clear` is what refuses it when it
-  /// lands.)
+  /// lands.) Item 362g, 2026-11-13: a reader's recorded pictures are in
+  /// memory alone, and go here too (`dropPictures`); one still on its way
+  /// lands nothing on a closed reader.
   public func signedOut() {
-    for reader in readers { reader.close() }
+    for reader in readers {
+      reader.close()
+      reader.dropPictures()
+    }
     readers = []
     home = nil
     projects.close()
