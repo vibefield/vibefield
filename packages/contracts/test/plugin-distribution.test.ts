@@ -57,7 +57,7 @@ describe("the install-set entry (§16.6) — the PA-32 stamps", () => {
     ).toBe(false);
   });
 
-  it("names one root section per field, apart from P7's whole-entry section", () => {
+  it("names one root section per field, apart from P7's whole-entry section, and MA-3h's kept apps", () => {
     const sections = [
       SETTINGS_DOC_SECTIONS.INSTALL_SET,
       SETTINGS_DOC_SECTIONS.INSTALL_SET_PLUGINS,
@@ -66,6 +66,7 @@ describe("the install-set entry (§16.6) — the PA-32 stamps", () => {
       SETTINGS_DOC_SECTIONS.INSTALL_SET_REVOCATIONS,
       // MK-2d (E10's R1): the grow-only removal keys
       SETTINGS_DOC_SECTIONS.INSTALL_SET_REMOVALS,
+      SETTINGS_DOC_SECTIONS.MADE_APPS_KEPT,
     ];
     expect(new Set(sections).size).toBe(sections.length);
     // Loro refuses a root container name holding "/" or NUL.

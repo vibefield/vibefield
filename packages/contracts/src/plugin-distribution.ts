@@ -523,6 +523,8 @@ export type PluginsCatalogResult = z.infer<typeof PluginsCatalogResult>;
 //                                   key per refusal ever made, never deleted
 //                                   (item 406, Q-PM1)
 //   "devices.phones"              → deviceId → KnownPhone (item 406, Q-PM2)
+//   "madeApps.kept"               → sha256(fold key), 64 hex → the writer's
+//                                   clock: a kept app (MA-3h, 2026-11-13)
 // Per-key LWW; op history retained (undo horizon = compaction epochs); every
 // write stamps principal provenance into op metadata. The install-set and the
 // grant decisions inside it are OUTSIDE the undo stack (D29′ law 2 — undo
@@ -567,6 +569,12 @@ export const SETTINGS_DOC_SECTIONS = {
    * upserted when a node speaks as a phone and deleted by Remove. A deleted entry, its name with
    * it, stays in the document's history. */
   DEVICES_PHONES: "devices.phones",
+  /** MA-3h (2026-11-13; James, 01:29:54Z: the short path) — the apps a person keeps: the sha256 of a fold key
+   * (`MadeAppFoldKey`), 64 lowercase hex (`Sha256Hex`) → the writer's clock in epoch ms. The fold key itself is never
+   * stored: a hosted one is a URL, and this document crosses every desktop. A key is a kept app; stopping keeping
+   * deletes it. One register per key, merged in Loro's order and never by the clock. A writer adds at most
+   * MADE_APP_LIMITS.INTENTS keys. Outside the undo stack, as the install-set is. */
+  MADE_APPS_KEPT: "madeApps.kept",
 } as const;
 
 export const GrantDecision = z

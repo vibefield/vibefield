@@ -568,7 +568,10 @@ export type ArtifactMarkResult = z.infer<typeof ArtifactMarkResult>;
 /** One app's keep-and-hide intent, a row of the replicated settings document (slice 3h), keyed by the fold key. A flag
  * is present only when it is set, so a row with neither is the same as no row. `updatedAt` is the writer's clock in
  * epoch ms; how the document merges two writes is 3h's. Declared at MA-1a so 3h codes to it; nothing writes one before
- * 3h. *Corrected 2026-11-13 (Hide dropped):* `hidden` is retired: never written, and a reader takes it as absent. */
+ * 3h. *Corrected 2026-11-13 (Hide dropped):* `hidden` is retired: never written, and a reader takes it as absent.
+ * *3h, 2026-11-13 (James, 01:29:54Z: the short path):* a row is one key of the settings document's root map
+ * `SETTINGS_DOC_SECTIONS.MADE_APPS_KEPT`: the fold key's sha256 (`Sha256Hex`; the key itself is never stored) → the
+ * writer's clock, read back as `updatedAt`. One register per key, merged in Loro's order and never by the clock. */
 export const MadeAppIntentRow = z
   .object({
     foldKey: MadeAppFoldKey,

@@ -669,7 +669,8 @@ export const MADE_APP_LIMITS = {
  * RESOURCE_EXHAUSTED `{resource: RESOURCE}`. TS-only: no native reader.
  * STATE_INTENT_UNBUILT (MA-3e, 2026-11-05): `artifact.mark`'s answer, not the open's, until slice 3h writes the
  *   person's intent: the home has no intent document to write a keep or a hide to yet. Retryable false: nothing a retry
- *   changes until 3h lands. It is never an open's refusal (`MADE_APP_OPEN_REFUSAL_STATES` does not name it). */
+ *   changes until 3h lands. It is never an open's refusal (`MADE_APP_OPEN_REFUSAL_STATES` does not name it).
+ *   *3h, 2026-11-13:* no build from 3h on answers it; a reader keeps its words for an older home. */
 export const MADE_APP_OPEN = {
   /** `UnavailableDetails.service` on every refusal */
   SERVICE: "apps",
