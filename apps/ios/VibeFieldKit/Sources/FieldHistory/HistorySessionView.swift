@@ -221,6 +221,7 @@ struct HistorySessionView: View {
       .background(ChromePalette.paper.ignoresSafeArea())
       .navigationTitle(document.title)
       .navigationBarTitleDisplayMode(.inline)
+      .historyFootFade(height: HistoryFootFade.placeholderHeight)
       .overlay(alignment: .bottom) { footPill(proxy) }
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
