@@ -98,6 +98,23 @@ struct HistoryFollow: Equatable, Sendable {
     return Reach(atFoot: below <= footSlack, away: below > container)
   }
 
+  // MARK: Past its end (item 381)
+
+  /// How far below the document's foot the screen's may stand before the page counts as past its end.
+  static let pastSlack: CGFloat = 1
+
+  // STUB (item 381, red): never past its end.
+  static func pastEnd(
+    offset: CGFloat, container: CGFloat, content: CGFloat, topInset: CGFloat, bottomInset: CGFloat
+  ) -> Bool {
+    false
+  }
+
+  // STUB (item 381, red): never put back.
+  static func putsBack(past: Bool, resting: Bool) -> Bool {
+    false
+  }
+
   /// Arrivals outrank `Latest`; at the end, or a short way off it with nothing unread, there is no pill.
   func pill(arrivals: Int, endOnScreen: Bool, away: Bool) -> Pill? {
     if arrivals > 0, !endOnScreen { return .arrivals(arrivals) }

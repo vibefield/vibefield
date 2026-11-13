@@ -99,3 +99,47 @@ struct HistoryFollowTests {
     #expect(follow.growth == .head)
   }
 }
+
+/// Item 381 (James, 2026-11-13 05:29:39Z: "some long session shows up blank and only shows when i try to scroll") —
+/// a page found at rest with the screen's foot below the document's own is put back on its end; a page a finger
+/// holds there is left alone. That the blank open is a page past its end is a reading of the code, not yet shown
+/// on a device.
+///
+/// A screen of 800 over a document of 2,000, under a bar of 100 and over an inset of 34: at its end the page rests
+/// at 2,000 + 34 - 800 = 1,234.
+@Suite("item 381 — a page at rest past its end is put back")
+struct HistoryPastEndTests {
+  private func past(_ offset: CGFloat, content: CGFloat = 2_000) -> Bool {
+    HistoryFollow.pastEnd(offset: offset, container: 800, content: content, topInset: 100, bottomInset: 34)
+  }
+
+  @Test("the screen's foot below the document's own, beyond the bar's inset, is past its end")
+  func pastItsEnd() {
+    #expect(past(1_236))
+    #expect(past(3_000))
+  }
+
+  @Test("at its end, with the bar's inset under it, a page is not past its end; nor up the page; nor a point over")
+  func atItsEnd() {
+    #expect(!past(1_234))
+    #expect(!past(600))
+    #expect(!past(1_235))
+  }
+
+  @Test("a document shorter than the screen, at its top, is not past its end")
+  func aShortDocument() {
+    #expect(!past(-100, content: 300))
+  }
+
+  @Test("it is put back at rest, and never while a finger or a move holds it")
+  func onlyAtRest() {
+    #expect(HistoryFollow.putsBack(past: true, resting: true))
+    #expect(!HistoryFollow.putsBack(past: true, resting: false))
+    #expect(!HistoryFollow.putsBack(past: false, resting: true))
+  }
+
+  @Test("the slack is a point")
+  func theSlack() {
+    #expect(HistoryFollow.pastSlack == 1)
+  }
+}
