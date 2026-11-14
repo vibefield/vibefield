@@ -2151,8 +2151,8 @@ export const FIELDD_DEBUG_SWARM_CORPUS_ENV = "FIELDD_DEBUG_SWARM_CORPUS" as cons
  * PATH-style list (fieldd boot-env `agentBrewPrefixes`). Unset keeps puppeteer's default (`/opt/homebrew`,
  * `/usr/local`: the machine's own Homebrew, which a person's app wants listed); empty probes none, so a harness's
  * daemon finds no install of the machine owner's there. The shell leaves it OUT for a packaged fieldd, never "",
- * which is "none". fieldd hands it to the runtime's `distribution.brewPrefixes` once puppeteer 0.4.2 is pinned (F1's
- * second half, after the EL8). TS-only, like the three above. */
+ * which is "none". fieldd hands it to the runtime's `distribution.brewPrefixes` (F1's second half, over puppeteer
+ * 0.4.2), and a packaged fieldd ignores it. TS-only, like the three above. */
 export const FIELDD_AGENT_BREW_PREFIXES_ENV = "FIELDD_AGENT_BREW_PREFIXES" as const;
 /** Item 345 — a HARNESS seam both planes read: the folder in which a root over the sun_path line keeps its socket
  * alias. Unset is endpoints.ts's `SOCKET_ALIAS_PARENT` (`/tmp`), the product's only value, and nothing in the product

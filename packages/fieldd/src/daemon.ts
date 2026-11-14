@@ -650,6 +650,11 @@ export interface FielddConfig {
    * Setting the search path also isolates the home the inventory searches each
    * provider's install directories under (`agentInstallHome`, puppeteer 0.3.1). */
   agentSearchPath?: string;
+  /** RV item 354 (F1) — a harness seam: the Homebrew prefixes the agent install inventory probes
+   * (puppeteer's `distribution.brewPrefixes`). Absent = puppeteer's default, the machine's own
+   * Homebrew; `[]` probes none. bin.ts reads FIELDD_AGENT_BREW_PREFIXES (boot-env
+   * `agentBrewPrefixes`) for a development fieldd, never for a package. */
+  agentBrewPrefixes?: readonly string[];
   /** PG-9 S4c — DEBUG: the recorded swarm this desktop's boards play in place of its agents
    * (`debug/swarm-replay.ts`); bin.ts reads FIELDD_DEBUG_SWARM_CORPUS and refuses it in a package. */
   debugSwarmCorpus?: string;
@@ -1454,6 +1459,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           installHome: agentInstallHome(config.agentSearchPath, config.dataDir),
         }
       : {}),
+    ...(config.agentBrewPrefixes !== undefined ? { brewPrefixes: config.agentBrewPrefixes } : {}),
     ...(config.agentFetch !== undefined ? { fetchFn: config.agentFetch } : {}),
     ...(config.agentResumeWhenIdle !== undefined
       ? { resumeWhenIdle: config.agentResumeWhenIdle }
@@ -10101,10 +10107,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
  * Homebrew prefixes (`/opt/homebrew`, `/usr/local`, its `DEFAULT_BREW_PREFIXES`),
  * which lie under no home, whatever the search path; so a harness that isolates
  * the search path still has its fieldd read the machine owner's Homebrew. A
- * harness will name its own with FIELDD_AGENT_BREW_PREFIXES (boot-env
- * `agentBrewPrefixes`; "" probes none). That reaches `distribution.brewPrefixes`
- * once puppeteer 0.4.2 is pinned (F1's second half, after the EL8); until then
- * every fieldd's inventory probes both. */
+ * harness names its own with FIELDD_AGENT_BREW_PREFIXES (boot-env
+ * `agentBrewPrefixes`; "" probes none), which reaches `distribution.brewPrefixes`
+ * as `FielddConfig.agentBrewPrefixes` (F1's second half, over puppeteer 0.4.2).
+ * A fieldd whose harness names none, and every packaged one, probes both. */
 function agentInstallHome(searchPath: string, userRoot: string): string {
   return splitPathList(searchPath)[0] ?? userRoot;
 }

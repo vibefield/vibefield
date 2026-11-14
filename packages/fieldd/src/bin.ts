@@ -42,6 +42,7 @@ async function main(): Promise<void> {
   const { pairLogRoot, resolvePlatformLogRoot } = await import("@vibefield/logging");
   const { ensureUsersRoot, rootAboveUserRoot } = await import("@vibefield/users");
   const {
+    agentBrewPrefixes,
     defaultDataRoot,
     ensureNativeSocketDir,
     nativeAlive,
@@ -104,6 +105,11 @@ async function main(): Promise<void> {
   // PATH). The godview smoke points it at its stub's own directory, so no
   // install of the machine owner's is found, inspected or run by its daemon.
   const agentSearchPath = process.env["FIELDD_AGENT_SEARCH_PATH"];
+  // RV item 354 (F1) — a harness's seam too: the Homebrew prefixes that inventory probes
+  // (`FielddConfig.agentBrewPrefixes`; unset = puppeteer's default, "" = none). A packaged fieldd
+  // ignores it (item 354: "production: the probe is wanted"), so a person's Homebrew agents stay
+  // listed; the shell leaves it out of a package's environment as well (`main/fieldd.ts`).
+  const agentBrewPrefixList = isSea() ? undefined : agentBrewPrefixes(process.env);
   const allowedOrigins = [
     "file://",
     ...(process.env["FIELDD_ALLOWED_ORIGINS"]?.split(",").filter(Boolean) ?? []),
@@ -225,6 +231,7 @@ async function main(): Promise<void> {
     ...(spawnNative !== undefined ? { nativeSpawner: spawnNative } : {}),
     ...(rosettadBin !== undefined ? { rosettadBin } : {}),
     ...(agentSearchPath !== undefined ? { agentSearchPath } : {}),
+    ...(agentBrewPrefixList !== undefined ? { agentBrewPrefixes: agentBrewPrefixList } : {}),
     ...(debugSwarmCorpus !== undefined ? { debugSwarmCorpus } : {}),
     // MK-6 — the list a development run named (registry-seam.ts); unset, "no plugin registry is configured"
     ...(pluginRegistry !== undefined ? pluginRegistry : {}),

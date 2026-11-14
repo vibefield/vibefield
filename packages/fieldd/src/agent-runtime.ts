@@ -477,6 +477,11 @@ export interface AgentRuntimeServiceOptions {
    * directories under (default: os.homedir()); the daemon isolates it whenever
    * it isolates the search path */
   installHome?: string;
+  /** RV item 354 (F1) — a harness seam: the Homebrew prefixes the install
+   * inventory probes (puppeteer 0.4.2's `distribution.brewPrefixes`). Default:
+   * puppeteer's own, `/opt/homebrew` and `/usr/local`, the machine's Homebrew,
+   * which a person's app lists; `[]` probes none */
+  brewPrefixes?: readonly string[];
   /** test seam: the fetch release detectors use (default: global fetch) */
   fetchFn?: typeof fetch;
   /** Show in Finder: the shell provider's internal door, LATE-BOUND (the
@@ -903,6 +908,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(opts.fetchFn !== undefined ? { fetch: opts.fetchFn } : {}),
         ...(opts.searchPath !== undefined ? { searchPath: opts.searchPath } : {}),
         ...(opts.installHome !== undefined ? { home: opts.installHome } : {}),
+        ...(opts.brewPrefixes !== undefined ? { brewPrefixes: opts.brewPrefixes } : {}),
       },
       // PF5's tick: the fold publishes one frame per tick anyway, so the
       // runtime's own coalescing matches it rather than adding a 100 ms stage
