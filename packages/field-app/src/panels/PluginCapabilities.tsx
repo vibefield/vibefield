@@ -5,6 +5,7 @@ import type {
 } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useMemo, useState } from "react";
+import { SWITCH_WORDS } from "../frame/plugins/plugins-words";
 import { labelCls } from "./settings-ui";
 
 // P6 UI — the per-plugin capability GRANTS pane (plugin spec §15.2–§15.4). Mounts
@@ -23,6 +24,12 @@ import { labelCls } from "./settings-ui";
 // only"); §8 (a state is rendered, never blank — a denied row shows its reason);
 // §9 (voice — honest reasons, sentence case, say what to do next). The mono/
 // neutral vocabulary matches the Settings panel's diagnostics sections.
+//
+// MK-5 (VF-PM 2026-11-14 06:56Z, C22: Settings never prints fieldd's text): a
+// grant fieldd refused to change is said by its kind in one plain line, the way
+// its switch was being turned, in the words a power's switch says on a plugin's
+// page (§9 MK-4c2a's): "Couldn't turn it on. Try again." or "Couldn't turn it
+// off. Try again.", never the error's own text.
 
 /** §15.4 denial reasons → one honest sentence each (DESIGN.md §9). "revoked" is
  * the interactive off-state (re-grantable); the other three are structural and
@@ -134,7 +141,8 @@ export function PluginCapabilities({
 }): ReactElement {
   const client = useFielddClient();
   const [pendingCap, setPendingCap] = useState<string | null>(null);
-  const [error, setError] = useState<{ capability: string; message: string } | null>(null);
+  // which grant fieldd refused, and the way it was being turned (C22: never its text)
+  const [error, setError] = useState<{ capability: string; turningOn: boolean } | null>(null);
 
   // Custom x.* capabilities are DECLARED by their owning plugin (§15.1). Index
   // every plugin's contributions by exact capability id so a requested x.* cap
@@ -165,8 +173,8 @@ export function PluginCapabilities({
       await client.request("plugins.grants.set", { id: plugin.id, capability, granted: !granted });
       // No optimistic flip: the registry subscription pushes the next snapshot
       // and the row re-renders from grantedCapabilities/deniedCapabilities.
-    } catch (e) {
-      setError({ capability, message: e instanceof Error ? e.message : String(e) });
+    } catch {
+      setError({ capability, turningOn: !granted });
     } finally {
       setPendingCap(null);
     }
@@ -201,7 +209,11 @@ export function PluginCapabilities({
               meta={catalog.get(row.capability)}
               interactive={interactive}
               busy={pendingCap === row.capability}
-              error={error?.capability === row.capability ? error.message : undefined}
+              error={
+                error?.capability === row.capability
+                  ? SWITCH_WORDS.refused(error.turningOn)
+                  : undefined
+              }
               onToggle={toggle}
             />
           );

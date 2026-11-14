@@ -557,7 +557,9 @@ describe("Settings → Updates", () => {
     await mount(STAGED, openDiagnostics);
     const dot = container?.querySelector('[data-updates-phase="staged"] .vf-updates-dot');
     expect(dot).not.toBeNull();
-    expect(text()).toContain("Plugins update from Settings → Plugins.");
+    // MK-5 (MK-D10): the foot points at the popup, whose Updates lists them
+    expect(text()).toContain("Plugins update from Plugins… in the Me menu.");
+    expect(text()).not.toContain("Settings → Plugins");
     await click("Updater diagnostics →");
     expect(openDiagnostics).toHaveBeenCalledTimes(1);
     act(() => root?.unmount());

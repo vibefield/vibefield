@@ -448,7 +448,8 @@ export function UpdatesSectionView({
 
       <div className="flex flex-wrap items-center gap-3 px-1" data-updates-foot="">
         <UiButton onClick={onOpenDiagnostics}>Updater diagnostics →</UiButton>
-        <span className={labelCls}>Plugins update from Settings → Plugins.</span>
+        {/* MK-5 (MK-D10): the popup's Updates lists them (§8 "Settings → Updates", the foot) */}
+        <span className={labelCls}>Plugins update from Plugins… in the Me menu.</span>
       </div>
     </div>
   );

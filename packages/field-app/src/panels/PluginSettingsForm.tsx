@@ -1,6 +1,7 @@
 import type { SettingsContribution } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
+import { SETTINGS_WORDS } from "../frame/plugins/plugins-words";
 import {
   buttonCls,
   fieldCls,
@@ -12,6 +13,20 @@ import {
 
 // Generated plugin preferences. The controls come entirely from the plugin's
 // declared schema; plugin code never mounts inside the settings surface.
+//
+// MK-5 (VF-PM 2026-11-14 06:56Z, C22: Settings never prints fieldd's text): a
+// setting fieldd refused is said by the refusal's kind in one plain line, the
+// page's words (§9 MK-4c2b's) — one it couldn't read, "Couldn't load this
+// setting."; one it couldn't keep or set back to its default, "Couldn't save
+// that. Try again." — and never the error's own text.
+
+/** A refusal's one line, by its kind (C22; §9 MK-4c2b's words). */
+const REFUSAL = {
+  /** `storage.settings.get` refused */
+  read: SETTINGS_WORDS.unread,
+  /** `storage.settings.set` or `storage.settings.reset` refused */
+  change: SETTINGS_WORDS.refused,
+} as const;
 
 interface SchemaView {
   type?: unknown;
@@ -62,7 +77,8 @@ function PluginSettingRow({
   const [draft, setDraft] = useState("");
   const [boolDraft, setBoolDraft] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // what fieldd refused, by its kind (C22): a read, or a change
+  const [error, setError] = useState<keyof typeof REFUSAL | null>(null);
   const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
@@ -90,9 +106,9 @@ function PluginSettingRow({
           setDraft(current === undefined || current === null ? "" : String(current));
         }
         setLoaded(true);
-      } catch (caught) {
+      } catch {
         if (!cancelled) {
-          setError(caught instanceof Error ? caught.message : String(caught));
+          setError("read");
           setLoaded(true);
         }
       }
@@ -113,8 +129,8 @@ function PluginSettingRow({
       });
       onSettingsChanged?.(prop.scope === "user");
       setReloadNonce((nonce) => nonce + 1);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+    } catch {
+      setError("change");
     } finally {
       setBusy(false);
     }
@@ -127,8 +143,8 @@ function PluginSettingRow({
       await client.request("storage.settings.reset", { pluginId, key: settingKey });
       onSettingsChanged?.(prop.scope === "user");
       setReloadNonce((nonce) => nonce + 1);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+    } catch {
+      setError("change");
     } finally {
       setBusy(false);
     }
@@ -226,9 +242,7 @@ function PluginSettingRow({
         <>
           {prop.description !== undefined && <span>{prop.description}</span>}
           {error !== null && (
-            <span className="mt-1 block text-amber-600 dark:text-amber-400" title={error}>
-              {error}
-            </span>
+            <span className="mt-1 block text-amber-600 dark:text-amber-400">{REFUSAL[error]}</span>
           )}
         </>
       }

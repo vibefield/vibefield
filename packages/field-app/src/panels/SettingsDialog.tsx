@@ -105,7 +105,8 @@ const PAGES: readonly PageMeta[] = [
   {
     id: "plugins",
     label: "Plugins",
-    description: "Installed extensions and their preferences.",
+    // MK-5 (VF-PM 2026-11-14 04:33Z): narrowed until Plugins… holds every switch (DESIGN.md §8)
+    description: "Plugin settings back to their defaults, and switches not in Plugins… yet.",
     icon: "plugin",
   },
   {

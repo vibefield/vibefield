@@ -169,6 +169,9 @@ describe("widgetlab panels", () => {
     expect(container?.textContent).toContain("System status");
     expect(container?.textContent).toContain("connection");
     expect(container?.textContent).toContain("board");
+    // MK-5 (MK-D10, MK-E12): each plugin's runtime, moved here from Settings → Plugins
+    expect(container?.querySelector('[data-diagnostics="plugin-runtime"]')).not.toBeNull();
+    expect(container?.textContent).toContain("Each plugin's runtime");
   });
 
   it("carries ICE's devtools in Settings → Advanced, in development builds (FC-D12)", () => {

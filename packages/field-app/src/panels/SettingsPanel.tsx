@@ -35,6 +35,7 @@ import { DeskReadout } from "./DeskReadout";
 import { DesktopSection } from "./DesktopSection";
 import { DevicesSection } from "./DevicesSection";
 import { HistorySettings } from "./HistorySettings";
+import { PluginsDiagnosticsSection } from "./PluginsDiagnosticsSection";
 import { PluginsSection } from "./PluginsSection";
 import {
   type SettingsAccountHead,
@@ -674,6 +675,8 @@ export function SettingsPanel({
         <SystemSection />
         {/* WP12d (L3c-ii, §13 C4) — the updater's doctor lines, the same a support bundle carries */}
         <UpdatesDoctorSection />
+        {/* MK-5 (MK-D10, MK-E12) — each plugin's runtime, moved from Settings → Plugins */}
+        <PluginsDiagnosticsSection />
         <SettingsSection
           title="Diagnostics viewer"
           description="Inspect logs, crashes, debug leases, and support bundle contents."
