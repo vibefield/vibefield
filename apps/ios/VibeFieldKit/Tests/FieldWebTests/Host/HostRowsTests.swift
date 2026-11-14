@@ -8,8 +8,9 @@ import WebKit
 /// SP-4c's host rows (PLAN-sp4-ma5 §2b, §2c), on the mini's simulator only, each red first. The page's ONLY way out
 /// is the rig's stand-in proxy, which counts CONNECTs by name class and refuses all but the origin and the one
 /// declared host; the origin and the declared host are loopback HTTPS servers with the rig's test identity, which
-/// only the test target's `RigNavigation` trusts. W1–W3 come first: the rig is read from their answers, never
-/// guessed.
+/// only the test target's `RigNavigation` trusts. The W rows come first: the rig is read from their answers, never
+/// guessed. R9's loopback literals go to counting traps instead (`RigTrap`): WebKit sends a loopback address around
+/// its proxy (route B's P1a-ip, 2026-11-14), so the content rule list is the only fence there.
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @MainActor
@@ -51,9 +52,10 @@ struct HostRowsTests {
     let declared: RigServer
     let proxyPort: UInt16
 
-    init() throws {
+    /// `extra`: pages only one row serves (R9's, which name its traps' ports), over the shared table.
+    init(extra: [String: RigServer.Answer] = [:]) throws {
       let identity = try RigIdentity.load().identity
-      origin = RigServer(identity: identity, table: HostRowsTests.pages)
+      origin = RigServer(identity: identity, table: HostRowsTests.pages.merging(extra) { _, row in row })
       declared = RigServer(identity: identity, table: ["/x.png": .init(headers: ["Content-Type": "image/png"])])
       let originPort = try origin.start()
       let declaredPort = try declared.start()
@@ -136,6 +138,22 @@ struct HostRowsTests {
     server.stop()
     #expect(port > 0)
     #expect(RigIdentity.pinned != nil)
+  }
+
+  @Test("W4: the stand-in replies ONCE per CONNECT; a far side failing after it closes the tunnel, adding nothing")
+  func w4() async throws {
+    let resetPort = try RigReset.start()
+    let proxy = RigProxy(originName: Self.originName, routes: ["reset.example": resetPort])
+    let proxyPort = try proxy.start()
+    defer { proxy.stop() }
+    let heard = try await RigSocksClient.connect(
+      port: proxyPort, user: proxy.user, password: proxy.password, name: "reset.example", waitSeconds: 2)
+    try await Task.sleep(for: .milliseconds(300))
+    let replies = proxy.replyCounts()
+    print("SP4C-W4 code=\(heard.code) after=\(heard.after) replies=\(replies)")
+    #expect(heard.code == 0)
+    #expect(heard.after == 0)
+    #expect(replies == [1])
   }
 
   // MARK: - R: §2b's seven, and R8
@@ -304,6 +322,74 @@ struct HostRowsTests {
     #expect(failover == false)
     let strings = Mirror(reflecting: WebAppCounts()).children.filter { $0.value is String || $0.value is URL }
     #expect(strings.isEmpty)
+  }
+
+  @Test("R9: loads to loopback and address literals, plain, behind userinfo or redirected, reach nothing", .rigMade)
+  func r9() async throws {
+    let trap = try RigTrap(["plain4", "plain6", "img", "xhr", "fetch", "ws", "redirect"])
+    defer { trap.stop() }
+    let rig = try Rig(extra: [
+      "/to-loopback": .redirect("https://127.0.0.1:\(trap.port("redirect"))/r.png"),
+      "/r9": .page(Self.r9Page(trap)),
+    ])
+    defer { rig.stop() }
+    _ = try await open("/r9", proxy: rig.configuration)
+    try await Task.sleep(for: .milliseconds(1500))
+    let said = trap.labels.map { "\($0)=\(trap.count($0))" }.joined(separator: " ")
+    let address = rig.proxy.count(.address)
+    let undeclared = rig.proxy.count(.undeclared)
+    let tailnet = rig.proxy.count(.tailnetOther)
+    print("SP4C-R9 \(said) address=\(address) undeclared=\(undeclared) tailnet=\(tailnet)")
+    for label in trap.labels {
+      let reached = trap.count(label)
+      #expect(reached == 0, "\(label)")
+    }
+    #expect(address == 0)
+    #expect(undeclared == 0)
+    #expect(tailnet == 0)
+    // The page ran: its declared image went out through the stand-in, and the redirect was asked of the origin.
+    let declared = rig.proxy.count(.declared)
+    let redirect = rig.origin.asked("/to-loopback")
+    #expect(declared >= 1)
+    #expect(redirect >= 1)
+  }
+
+  /// R9's page: every load to a loopback or address literal it can make — plainly, behind a declared name's userinfo
+  /// (`https://declared.example:x@127.0.0.1/`, whose host is the address), and by a same-origin redirect — each kind to
+  /// its own trap, and one load to the declared host, so a zero is a refusal, not a page that never ran.
+  static func r9Page(_ trap: RigTrap) -> String {
+    let named = "https://\(declaredName):x@"
+    let p4 = trap.port("plain4")
+    let p6 = trap.port("plain6")
+    let plain = [
+      "https://127.0.0.1:\(p4)/", "http://127.0.0.1:\(p4)/", "http://127.1:\(p4)/", "http://2130706433:\(p4)/",
+      "http://localhost:\(p4)/", "http://[::ffff:127.0.0.1]:\(p4)/", "https://[::1]:\(p6)/", "http://[::1]:\(p6)/",
+    ]
+    let list = plain.map { "\"\($0)\"" }.joined(separator: ",")
+    let img = "\(named)127.0.0.1:\(trap.port("img"))/i.png"
+    let xhr = "\(named)127.0.0.1:\(trap.port("xhr"))/x"
+    let fetch = "\(named)127.0.0.1:\(trap.port("fetch"))/f"
+    let ws = "wss://\(declaredName):x@127.0.0.1:\(trap.port("ws"))/w"
+    let address = "\(named)100.101.102.103:13377/a.png"
+    let undeclared = "\(named)undeclared.example.org/u.png"
+    let tailnet = "\(named)other.tail1234.ts.net:13377/t.png"
+    return """
+      <html><head></head><body><img src="https://\(declaredName)/x.png"><img src="/to-loopback"><script>
+      for (const t of [\(list)]) {
+        new Image().src = t + "i.png";
+        fetch(t + "f").catch(() => {});
+        try { const x = new XMLHttpRequest(); x.open("GET", t + "x"); x.send(); } catch (_) {}
+        try { new WebSocket(t.replace("http", "ws") + "w"); } catch (_) {}
+      }
+      new Image().src = "\(img)";
+      try { const x = new XMLHttpRequest(); x.open("GET", "\(xhr)"); x.send(); } catch (_) {}
+      fetch("\(fetch)").catch(() => {});
+      try { new WebSocket("\(ws)"); } catch (_) {}
+      new Image().src = "\(address)";
+      new Image().src = "\(undeclared)";
+      new Image().src = "\(tailnet)";
+      </script></body></html>
+      """
   }
 }
 

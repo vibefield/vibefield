@@ -70,6 +70,24 @@ struct WebRuleListTests {
     }
   }
 
+  /// WebKit sends a loopback address around its proxy (route B's P1a-ip, 2026-11-14), so for a page's own loads this
+  /// list is the only fence in front of the phone's loopback; and a declared name's userinfo in front of another host
+  /// (`https://cdn.jsdelivr.net:x@127.0.0.1/`: its host is the address) must not read as that name.
+  @Test("an address, a loopback name, or a declared name's userinfo in front of another host never passes")
+  func literals() throws {
+    let rules = try WebRuleList.rules(origin: origin(), reach: Self.reach)
+    for url in [
+      "https://127.0.0.1:13377/", "wss://127.0.0.1:13377/", "http://127.0.0.1/", "https://[::1]:13377/", "ws://[::1]/",
+      "https://localhost:13377/", "https://0.0.0.0/", "https://[::ffff:127.0.0.1]/",
+      "https://cdn.jsdelivr.net:x@127.0.0.1:13377/", "wss://unpkg.com:x@[::1]:13377/",
+      "https://cdn.jsdelivr.net:x@100.101.102.103:13377/", "https://unpkg.com:443@other.tail1234.ts.net:13377/",
+      "https://cdnjs.cloudflare.com:x@example.com/", "https://studio.tail1234.ts.net:13377@127.0.0.1/",
+    ] {
+      let passes = try admits(rules, url)
+      #expect(!passes, "\(url)")
+    }
+  }
+
   @Test("the declared hosts it admits: lowercased, deduplicated, sorted, public, never a tailnet or private name")
   func admitted() {
     let hosts = WebRuleList.admitted([

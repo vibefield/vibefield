@@ -24,6 +24,8 @@ final class RigProxy: @unchecked Sendable {
   private let queue = DispatchQueue(label: "sp4c.rig.proxy")
   private var listener: NWListener?
   private var seen: [Class: Int] = [:]
+  /// Every reply written, by the client it was written to (codes only), so W4 reads how many each CONNECT got.
+  private var replies: [(client: NWConnection, codes: [UInt8])] = []
 
   /// `routes`: a name to the loopback port that serves it; `originName` is the one counted as the origin.
   init(originName: String, routes: [String: UInt16]) {
@@ -32,6 +34,9 @@ final class RigProxy: @unchecked Sendable {
   }
 
   func count(_ kind: Class) -> Int { queue.sync { seen[kind, default: 0] } }
+
+  /// How many replies each client got, in the order the clients were first answered.
+  func replyCounts() -> [Int] { queue.sync { replies.map { $0.codes.count } } }
 
   /// Starts on 127.0.0.1 and answers its port.
   func start() throws -> UInt16 {
@@ -133,6 +138,11 @@ final class RigProxy: @unchecked Sendable {
   }
 
   private func reply(_ client: NWConnection, _ code: UInt8, then: (@Sendable () -> Void)? = nil) {
+    if let index = replies.firstIndex(where: { $0.client === client }) {
+      replies[index].codes.append(code)
+    } else {
+      replies.append((client: client, codes: [code]))
+    }
     write(client, [5, code, 0, 1, 0, 0, 0, 0, 0, 0]) {
       if let then { then() } else { client.cancel() }
     }
