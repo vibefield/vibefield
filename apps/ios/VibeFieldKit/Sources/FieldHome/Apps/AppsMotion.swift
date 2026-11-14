@@ -6,8 +6,8 @@ import Foundation
 // that decides a motion stands here, once, and the views read it; how each feels under a finger is James's, on his
 // phone.
 //
-// STUBS (the red), still standing for the zoom's source and the folder: each of those rules answers what the shelf
-// did before item 419, or nothing. The press and the long press are real.
+// STUBS (the red), still standing for the folder: each of its rules answers what the shelf did before item 419, or
+// nothing. The press, the long press and the zoom's source are real.
 
 /// An icon under a finger.
 enum AppsPress {
@@ -62,9 +62,10 @@ struct AppsZoomAsk: Equatable {
 enum AppsZoomSource {
   /// The key an app's icon carries at `place`. The screen zooms from the app's own key, so only the icon asked
   /// carries it, and every other standing of the same app carries a key no screen names. Two icons under one key
-  /// leave the choice to the system, and a screen may leave one and come back into another. STUB: the app's own key
-  /// at every place, as before item 419.
-  static func id(appKey: String, at place: AppsPlace, asked: AppsZoomAsk?) -> String { appKey }
+  /// leave the choice to the system, and a screen may leave one and come back into another.
+  static func id(appKey: String, at place: AppsPlace, asked: AppsZoomAsk?) -> String {
+    asked == AppsZoomAsk(place: place, appKey: appKey) ? appKey : "\(appKey)|\(place.tag)"
+  }
 }
 
 /// A project's folder, open over the shelf: the Home Screen's folder at the shelf's measure.

@@ -178,7 +178,7 @@ struct AppsStripView: View {
       VStack(spacing: Self.nameGap) {
         AppIconView(app: app, side: AppsShelfChrome.icon)
           .opacity(content.away.contains(app.appKey) ? AppIcon.awayOpacity : 1)
-          .matchedTransitionSource(id: app.appKey, in: zoom)
+          .appsZoomSource(id: app.appKey, in: zoom, side: AppsShelfChrome.icon)
         Text(app.title)
           .font(ChromeType.sans(AppsShelfChrome.nameSize, .semibold))
           .foregroundStyle(ChromePalette.inkSecondary)
@@ -222,7 +222,7 @@ struct AppsSearchGroupView: View {
   private func label(_ row: AppsSearchGroup.Row) -> some View {
     HStack(spacing: SearchSheet.rowParts) {
       AppIconView(app: row.app, side: SearchSheet.offerDisc)
-        .matchedTransitionSource(id: row.app.appKey, in: zoom)
+        .appsZoomSource(id: row.app.appKey, in: zoom, side: SearchSheet.offerDisc)
         .opacity(row.away ? AppIcon.awayOpacity : 1)
       VStack(alignment: .leading, spacing: SearchSheet.rowStack) {
         Text(SearchSheet.marked(row.app.title, terms: terms, size: 16, weight: .semibold, ink: ChromePalette.ink))

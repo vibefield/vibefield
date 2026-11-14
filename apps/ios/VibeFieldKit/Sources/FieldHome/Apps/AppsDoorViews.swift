@@ -74,7 +74,7 @@ struct AppsDropView: View {
       HStack(spacing: Self.gap) {
         if let app {
           AppIconView(app: app, side: AppsDrop.icon)
-            .matchedTransitionSource(id: app.appKey, in: zoom)
+            .appsZoomSource(id: app.appKey, in: zoom, side: AppsDrop.icon)
         }
         VStack(alignment: .leading, spacing: 1) {
           Text(drop.head)

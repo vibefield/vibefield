@@ -78,6 +78,8 @@ struct AppsTile: View {
   let away: Bool
   let unopened: Bool
   let zoom: Namespace.ID
+  /// The key its icon carries for the zoom: the app's own when this is the icon asked (`AppsZoomSource`).
+  let source: String
   let onOpen: () -> Void
   let onAbout: () -> Void
 
@@ -109,7 +111,7 @@ struct AppsTile: View {
       .overlay(alignment: .topTrailing) {
         if unopened { AppsUnopenedMark() }
       }
-      .matchedTransitionSource(id: app.appKey, in: zoom)
+      .appsZoomSource(id: source, in: zoom, side: side)
   }
 }
 
@@ -220,6 +222,8 @@ struct AppsShelfView: View {
   let onAbout: (IndexAppRow) -> Void
 
   @State private var words = ""
+  /// The icon the last open was asked from: the one its screen zooms out of, and back into.
+  @State private var asked: AppsZoomAsk?
 
   private static let groupGap: CGFloat = 28
   private static let headGap: CGFloat = 14
@@ -249,7 +253,7 @@ struct AppsShelfView: View {
         field
         let matched = AppsShelf.matching(words, in: reading.apps)
         if !words.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-          grid(matched, shelf: shelf)
+          grid(matched, shelf: shelf, place: .matched)
         } else if reading.apps.isEmpty {
           emptyWords(shelf: shelf)
         } else {
@@ -288,9 +292,9 @@ struct AppsShelfView: View {
         .font(ChromeType.sans(Self.footSize))
         .foregroundStyle(ChromePalette.inkSecondary)
     }
-    group("Recent", count: shelf.recent.count, shelf.recent, shelf: shelf)
+    group("Recent", count: shelf.recent.count, shelf.recent, shelf: shelf, place: .recent)
     if !shelf.kept.isEmpty {
-      group("Kept", count: shelf.kept.count, shelf.kept, shelf: shelf)
+      group("Kept", count: shelf.kept.count, shelf.kept, shelf: shelf, place: .kept)
     }
     if !shelf.folders.isEmpty {
       VStack(alignment: .leading, spacing: Self.headGap) {
@@ -299,14 +303,17 @@ struct AppsShelfView: View {
       }
     }
     if !shelf.noProject.isEmpty {
-      group(AppsShelf.noProjectHead, count: shelf.noProject.count, shelf.noProject, shelf: shelf)
+      group(
+        AppsShelf.noProjectHead, count: shelf.noProject.count, shelf.noProject, shelf: shelf, place: .noProject)
     }
   }
 
-  private func group(_ name: String, count: Int, _ apps: [IndexAppRow], shelf: AppsShelf) -> some View {
+  private func group(
+    _ name: String, count: Int, _ apps: [IndexAppRow], shelf: AppsShelf, place: AppsPlace
+  ) -> some View {
     VStack(alignment: .leading, spacing: Self.headGap) {
       head(name, count: count)
-      grid(apps, shelf: shelf)
+      grid(apps, shelf: shelf, place: place)
     }
   }
 
@@ -322,15 +329,23 @@ struct AppsShelfView: View {
     }
   }
 
-  private func grid(_ apps: [IndexAppRow], shelf: AppsShelf) -> some View {
+  private func grid(_ apps: [IndexAppRow], shelf: AppsShelf, place: AppsPlace) -> some View {
     LazyVGrid(columns: tileColumns, spacing: AppsShelfChrome.rowGap) {
       ForEach(apps) { app in
         AppsTile(
           app: app, side: AppsShelfChrome.icon, away: shelf.away.contains(app.appKey),
           unopened: door.cues.unopened.contains(app.foldKey), zoom: zoom,
-          onOpen: { onOpen(app) }, onAbout: { onAbout(app) })
+          source: AppsZoomSource.id(appKey: app.appKey, at: place, asked: asked),
+          onOpen: { open(app, at: place) }, onAbout: { onAbout(app) })
       }
     }
+  }
+
+  /// An app is opened from the icon at `place`. That icon takes the app's key first, so the screen zooms out of it
+  /// and comes back into it, and not into the same app's icon in another group.
+  private func open(_ app: IndexAppRow, at place: AppsPlace) {
+    asked = AppsZoomAsk(place: place, appKey: app.appKey)
+    onOpen(app)
   }
 
   /// A folder opens in place: it takes the Projects group, and its head closes it.
@@ -350,7 +365,7 @@ struct AppsShelfView: View {
           .foregroundStyle(ChromePalette.ink)
         }
         .buttonStyle(.plain)
-        grid(open.apps, shelf: shelf)
+        grid(open.apps, shelf: shelf, place: .folder(open.key))
       }
     } else {
       LazyVGrid(columns: folderColumns, spacing: AppsShelfChrome.folderRowGap) {
@@ -695,6 +710,15 @@ struct AppsAboutSheet: View {
 }
 
 extension View {
+  /// The icon an app's screen zooms out of, and back into (item 419): the squircle itself, at its own corner, so the
+  /// screen leaves and returns in the icon's shape and not as a square over it. Every source of the zoom is named
+  /// here, in one place.
+  func appsZoomSource(id: String, in zoom: Namespace.ID, side: CGFloat) -> some View {
+    matchedTransitionSource(id: id, in: zoom) { source in
+      source.clipShape(RoundedRectangle(cornerRadius: AppIcon.corner(side: side), style: .continuous))
+    }
+  }
+
   /// The app's screen zooms out of the row's icon; under Reduce Motion the system's own presentation stands (M6's fade
   /// is the cover's own, and `AppsGlassRow.reducedFade` is its measure).
   @ViewBuilder
