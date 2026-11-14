@@ -88,3 +88,21 @@ describe("device setup navigation", () => {
     expect(props.onBegin).toHaveBeenCalledExactlyOnceWith({ authKey: "tskey-auth-test-fixture" });
   });
 });
+
+// Item 160 (DESIGN.md §8 "The Connect pane", corrected at its source 2026-11-14; item 406, S6):
+// the fourth privacy fact says the product bible's sentence as the phone ships it. Tailscale may
+// relay a connection, so no word promises a direct path or carriage device to device.
+describe("what VibeField can see (item 160)", () => {
+  it("says the fourth fact as the phone ships it, and none of the words it retires", () => {
+    mount();
+    act(() => button("What VibeField can see").click());
+    const facts = [...host.querySelectorAll(".vf-door-see li")].map((li) => li.textContent ?? "");
+    expect(facts).toHaveLength(5);
+    expect(facts[3]).toBe(
+      "Encrypted end to end. Your phone and your other computers reach this Mac over your own Tailscale network. VibeField runs no session relay.",
+    );
+    // the phone's own test refuses the first two (WayInScreenTests)
+    const retired = ["no servers", "device to device", "travels directly", "never their contents"];
+    for (const words of retired) expect(facts.join(" ")).not.toContain(words);
+  });
+});
