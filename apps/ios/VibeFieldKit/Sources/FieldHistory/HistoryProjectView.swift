@@ -15,6 +15,9 @@ import SwiftUI
 /// project's live sessions; DESKTOPS, one row per desktop that folds its places
 /// out; and each session row names where it ran — the desktop's mark and name,
 /// then the folder's name — and opens its document on that desktop's door.
+///
+/// Item 416 — the head stands in the bar over the page, on the back button's row, and the page under the bar
+/// begins with the tiles (`HistoryProjectHead`, below).
 struct HistoryProjectView: View {
   let project: HistoryProject
   let sessions: [HistorySession]
@@ -42,7 +45,8 @@ struct HistoryProjectView: View {
     ScrollViewReader { proxy in
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 0) {
-          head
+          if HistoryProjectHead.line == .page { head }
+          indexNote
           stats
           card
           if !live.isEmpty { liveList }
@@ -53,16 +57,23 @@ struct HistoryProjectView: View {
       }
       .foldsBar(router)
       .background(ChromePalette.paper.ignoresSafeArea())
-      // Item 392 (James, 2026-11-13) — the head under the bar says the name, so the bar does not say it a second
-      // time: its centre is left empty, and it holds the back button alone. The page keeps its name for the session
-      // pushed over it, whose back button says it.
+      // Item 416 (James, 2026-11-14) — the head stands in the bar, on the back button's row: the bar's own inline
+      // title is not drawn, and in its place, from the left after the back button, stand the cap, the name and its
+      // bubble. The row is as wide as the bar leaves it, so a name too long for it is cut and the bubble keeps its
+      // place. Until this item the bar's centre was left empty (item 392) and the head stood under the bar. The
+      // page keeps its name for the session pushed over it, whose back button says it.
       .navigationTitle(project.name)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .principal) {
-          Color.clear
-            .frame(width: 1, height: 1)
-            .accessibilityHidden(true)
+          if HistoryProjectHead.line == .bar {
+            headWords
+              .frame(maxWidth: .infinity, alignment: .leading)
+          } else {
+            Color.clear
+              .frame(width: 1, height: 1)
+              .accessibilityHidden(true)
+          }
         }
       }
       .overlay(alignment: .bottom) { receiptView }
@@ -85,29 +96,42 @@ struct HistoryProjectView: View {
   /// Item 392 (James, 2026-11-13) — the head is the root's over again: after the project's cap, its name and how
   /// many sessions the page lists, in the root's type and the root's bubble (`HeadTitle`), and nothing else. Under
   /// the name stood `N places on` and the desktops' marks (PJ-7; the mock's corpus, which names no desktop, showed
-  /// its path there): the places are still under DESKTOPS. Only the index's sentence, while its index is not ready
-  /// (fix7), stands under the head.
-  private var head: some View {
+  /// its path there): the places are still under DESKTOPS.
+  ///
+  /// Item 416 — these are the head's words alone, for whichever line the head stands on (`HistoryProjectHead.line`).
+  /// The name gives way as the rule says (`HistoryProjectHead.scale`): cut at its end, at its own size.
+  private var headWords: some View {
     let words = FieldHistoryModel.projectHead(name: project.name, sessions: sessions.count)
-    return VStack(alignment: .leading, spacing: 0) {
-      HStack(alignment: .center, spacing: 10) {
-        Capsule().fill(color).frame(width: 4, height: 26)
-        HeadTitle(title: words.title, count: words.count, spoken: words.spoken)
-      }
-      if let index {
-        HStack(spacing: 5) {
-          DeviceMark(platform: indexPlatform, size: 12)
-          Text(index)
-            .font(ChromeType.sans(12.5))
-            .monospacedDigit()
-        }
-        .foregroundStyle(ChromePalette.inkTertiary)
-        .padding(.top, 5)
-        .accessibilityElement(children: .combine)
-      }
+    return HStack(alignment: .center, spacing: 10) {
+      Capsule().fill(color).frame(width: 4, height: 26)
+      HeadTitle(title: words.title, count: words.count, spoken: words.spoken, least: HistoryProjectHead.scale)
     }
-    .padding(.horizontal, HistoryParts.sidePadding)
-    .padding(.top, 6)
+  }
+
+  /// The head as the page's own first row, under the bar: where it stood from item 392 until item 416, and where
+  /// it stands again should the rule say `page`.
+  private var head: some View {
+    headWords
+      .padding(.horizontal, HistoryParts.sidePadding)
+      .padding(.top, 6)
+  }
+
+  /// fix7 — the index's sentence, while its index is not ready, led by its desktop's mark: it says the page is not
+  /// whole. It stood under the head; with the head in the bar (item 416) it is the page's first line.
+  @ViewBuilder
+  private var indexNote: some View {
+    if let index {
+      HStack(spacing: 5) {
+        DeviceMark(platform: indexPlatform, size: 12)
+        Text(index)
+          .font(ChromeType.sans(12.5))
+          .monospacedDigit()
+      }
+      .foregroundStyle(ChromePalette.inkTertiary)
+      .padding(.horizontal, HistoryParts.sidePadding)
+      .padding(.top, 5)
+      .accessibilityElement(children: .combine)
+    }
   }
 
   private var stats: some View {
@@ -451,8 +475,8 @@ struct HistoryProjectView: View {
 /// its head, and how the name gives way there. The rule is pure; the page draws what it answers. DESIGN.md §8 "The
 /// roots' heads", A project's head stands on the back button's row.
 ///
-/// STUB (the red): it answers what the page does today, the head under the bar and a name drawn smaller before it
-/// is cut (item 392). Nothing reads it yet.
+/// Both lines and both ways of giving are kept, so the page can be told otherwise in one word: until this item the
+/// head stood on `page` and its name was `squeezed(to: 28 / 34)` (item 392).
 enum HistoryProjectHead {
   /// The lines a pushed page has for its head.
   enum Line: Equatable, Sendable {
@@ -470,12 +494,12 @@ enum HistoryProjectHead {
     case cut
   }
 
-  /// Where the head stands.
-  static let line = Line.page
-  /// How its name gives way.
-  static let giving = Giving.squeezed(to: 28 / RootHead.titleSize)
+  /// Where the head stands: on the back button's row.
+  static let line = Line.bar
+  /// How its name gives way: cut at its end, never drawn smaller.
+  static let giving = Giving.cut
 
-  /// The least share of its size the name is drawn at: 1 where it is only cut.
+  /// The least share of its size the name is drawn at (`HeadTitle.least`): 1 where it is only cut.
   static var scale: CGFloat {
     switch giving {
     case .squeezed(let share): return share
