@@ -84,6 +84,8 @@ export interface DevicesDoc {
     tailscaleIds: readonly string[],
     by: string,
   ): Promise<{ wrote: boolean }>;
+  /** the review's folds (5) — a device seen as a desktop: its known-phone record goes */
+  forgetPhone(deviceId: string, by: string): Promise<{ wrote: boolean }>;
 }
 
 /** Item 406 (Q-PM2) — a node of this account that spoke as a phone, by its
@@ -299,11 +301,14 @@ export class DeviceService extends EventEmitter {
     deviceIds: new Set(),
     nodeIds: new Set(),
   };
-  /** Item 406 — the durable ids the last registry pass forgot, by their own id or
-   * by a refused node's */
+  /** Item 406 — the durable ids the last registry pass forgot, by their own id
+   * (never by a refused node's claim of one: the review's folds, (4)) */
   private refusedPeers = new Set<string>();
   /** Item 406 (Q-PM2) — the account's known phones as the last pass read them */
   private knownPhones: ReadonlyMap<string, KnownPhone> = new Map();
+  /** The review's folds (5) — every peer whose slice, past the registry's gate, said `docHost`
+   * in this daemon's life: never a phone here again, even once its slice is away */
+  private readonly desktopsSeen = new Set<string>();
   private disposed = false;
 
   constructor(private readonly opts: DeviceServiceOptions) {
@@ -382,9 +387,14 @@ export class DeviceService extends EventEmitter {
     return row !== undefined && !row.self && row.capabilities?.docHost === true;
   }
 
-  // 406 (red, the review's folds): STUBBED — the slice's word now only (green remembers it)
+  /** The review's folds (5) — has this roster ever seen the device's slice, past the registry's
+   * gate, say it hosts documents (`docHost`)? True while it says so now, and after its slice is
+   * away (offline, or forgotten): "not a desktop" is never a phone fact, and a Remove is never
+   * taken back. A restart starts from nothing, so the account's known-phone record of such a
+   * device goes the moment it is seen (`forgetPhone`), and no restart reads it as a phone. */
   seenAsDesktop(deviceId: string): boolean {
-    return this.isDocHost(deviceId);
+    if (deviceId === this.deviceId) return false;
+    return this.desktopsSeen.has(deviceId) || this.isDocHost(deviceId);
   }
 
   get(deviceId: string): DeviceInfo | undefined {
@@ -423,6 +433,8 @@ export class DeviceService extends EventEmitter {
     // registry pass below judges by them, and the doors' predicate holds them even while the
     // mesh is down. Never throws.
     await this.readDevicesDoc();
+    // the review's folds (5) — a desktop's phone record whose forgetting has not landed yet
+    await this.forgetDesktopsKnownAsPhones();
     try {
       // Identity first (D30): the store's own device id IS the mesh identity.
       // UA-P-0e keeps this read — it asks the floor for OUR OWN durable ULID and
@@ -597,19 +609,20 @@ export class DeviceService extends EventEmitter {
       // carried into the refusals (`appends`), so the doors, which see only the
       // node, refuse it too. Never another account's node, and never under a
       // durable id Remove did not refuse.
-      if (this.refused.deviceIds.has(deviceId) || this.refused.nodeIds.has(parsed.data.id)) {
+      if (this.refused.deviceIds.has(deviceId)) {
         this.refusedPeers.add(deviceId);
         this.lastOnline.delete(deviceId);
-        if (
-          mine &&
-          this.refused.deviceIds.has(deviceId) &&
-          !this.refused.nodeIds.has(parsed.data.id)
-        ) {
+        if (mine && !this.refused.nodeIds.has(parsed.data.id)) {
           this.refused.nodeIds.add(parsed.data.id);
           appends.push({ deviceId, tailscaleId: parsed.data.id });
         }
         continue;
       }
+      // The review's folds (4) — a refused NODE under a durable id Remove did not refuse is skipped
+      // alone: the node is the transport's fact, the id it publishes only its claim. A removed
+      // phone tampered to publish a desktop's id would otherwise refuse that desktop on every
+      // desktop of the account (no freeway admit, its forwards refused), and nothing lifts it.
+      if (this.refused.nodeIds.has(parsed.data.id)) continue;
       // S6 — the node's `online` moved since the last pass (slept, or woke)
       const was = this.lastOnline.get(deviceId);
       this.lastOnline.set(deviceId, parsed.data.online);
@@ -711,8 +724,9 @@ export class DeviceService extends EventEmitter {
   }
 
   /** Item 406 — is this durable id refused? Remove refused it (`devices.refused`),
-   * or the last registry pass forgot it because one of its node ids is refused.
-   * The freeway's declaration drops it (`freewayDeclaration`). */
+   * as the settings document or the last registry pass read it. A refused node
+   * never makes the id it claims refused (the review's folds, (4)): that node is
+   * skipped alone. The freeway's declaration drops it (`freewayDeclaration`). */
   isRefused(deviceId: string): boolean {
     return this.refused.deviceIds.has(deviceId) || this.refusedPeers.has(deviceId);
   }
@@ -866,6 +880,8 @@ export class DeviceService extends EventEmitter {
         if (!this.isRefused(deviceId)) this.noteUnlistedSlice(deviceId);
         continue;
       }
+      // the review's folds (5) — past the registry's gate, a slice that says `docHost` is a desktop
+      if (!self && slice.capabilities.docHost === true) this.noteDesktop(deviceId);
       // ULID slice key → tailscale id → liveness. Joining peerLiveness by the
       // ULID directly is the T1 §6 bug: the map is keyed by the tailnet's own
       // node id, and the two keyspaces never intersect.
@@ -987,8 +1003,39 @@ export class DeviceService extends EventEmitter {
    * has not arrived says nothing either, and a refusal is never lifted. Copied
    * field by field, as every fact this narrow writer keeps. */
   private phoneOf(deviceId: string, docHost: boolean | undefined): { phone?: PhoneFact } {
-    const known = docHost === true ? undefined : this.knownPhones.get(deviceId);
+    // the review's folds (5) — nor a device ever seen as a desktop, its slice away or not
+    const desktop = docHost === true || this.desktopsSeen.has(deviceId);
+    const known = desktop ? undefined : this.knownPhones.get(deviceId);
     return known === undefined ? {} : { phone: { via: known.phone.via, at: known.phone.at } };
+  }
+
+  /** The review's folds (5) — a peer's slice said `docHost`: it is a desktop from now on, and the
+   * account's record of it as a phone (a forwarded approval or a hello that came before its slice)
+   * goes, so no desktop of the account reads it as one again, restarted or not. */
+  private noteDesktop(deviceId: string): void {
+    if (this.desktopsSeen.has(deviceId)) return;
+    this.desktopsSeen.add(deviceId);
+    void this.forgetDesktopsKnownAsPhones();
+  }
+
+  /** Every device seen as a desktop that the account's known phones still name, forgotten there.
+   * At first sight, and again at each pass (`doSync`) until the write lands. Never throws: a
+   * write that fails is a line, and the device stays a desktop here meanwhile. */
+  private async forgetDesktopsKnownAsPhones(): Promise<void> {
+    const doc = this.opts.devicesDoc;
+    if (doc === undefined) return;
+    for (const deviceId of this.desktopsSeen) {
+      if (!this.knownPhones.has(deviceId)) continue;
+      try {
+        await doc.forgetPhone(deviceId, this.deviceId);
+      } catch (error) {
+        this.logger.warn(
+          "fieldd.devices.desktop_phone_record_kept",
+          "A desktop's record as a phone could not be forgotten; the next pass tries again",
+          { deviceId, error: String(error) },
+        );
+      }
+    }
   }
 
   private emitRoster(): void {
@@ -1035,13 +1082,14 @@ export class DeviceService extends EventEmitter {
  * phone is a hello that SAID `clientKind: "ios"` (`PhoneEvidence` `product`),
  * over the tailnet door, as this account (`tailnet`, `self`), from a node the
  * sidecar named and the roster correlates to a device that is neither this one
- * nor a desktop (`isDocHost`). The kind is the hello's claim; the node, the
- * login and the correlation are the transport's facts, so the claim can only
- * say which of the account's own devices is a phone. A refused node correlates
- * to nothing, so it is never one. */
+ * nor one ever seen as a desktop (`seenAsDesktop`, the review's folds (5): its
+ * slice may be away). The kind is the hello's claim; the node, the login and the
+ * correlation are the transport's facts, so the claim can only say which of the
+ * account's own devices is a phone. A refused node correlates to nothing, so it
+ * is never one. */
 export function phoneAtHello(
   ctx: CallerContext,
-  roster: Pick<DeviceService, "currentDeviceId" | "deviceIdByNodeId" | "isDocHost">,
+  roster: Pick<DeviceService, "currentDeviceId" | "deviceIdByNodeId" | "seenAsDesktop">,
 ): PhoneSeen | null {
   const principal = ctx.principal;
   if (principal.kind !== "tailnet" || principal.self !== true) return null;
@@ -1050,7 +1098,7 @@ export function phoneAtHello(
   if (tailscaleId === undefined) return null;
   const deviceId = roster.deviceIdByNodeId(tailscaleId);
   if (deviceId === undefined || deviceId === roster.currentDeviceId()) return null;
-  return roster.isDocHost(deviceId) ? null : { deviceId, tailscaleId };
+  return roster.seenAsDesktop(deviceId) ? null : { deviceId, tailscaleId };
 }
 
 /** This user root's own device id, persisted at `LAYOUT.DEVICE_ID` (minted on

@@ -217,13 +217,18 @@ export class FreewayFloor extends EventEmitter {
       if (sameHost(host, this.current)) await this.revokeExact(clientId, host);
       else this.owedClients.delete(clientId);
     }
-    // asked before the state was read: said once to the host it names now, or to none if it is down
-    if (this.current !== null && this.unread.size > 0) {
-      const unread = [...this.unread];
-      this.unread.clear();
-      for (const minted of unread) await this.revokeClient(minted);
-    }
+    await this.sayUnread();
     await this.declare();
+  }
+
+  /** One-client revokes asked before the state was read: said once to the host the state names
+   * now, or to none if it is down. At the connect that reads it, and as the first state arrives by
+   * the stream (`apply`; the review's folds, (8)), whichever comes first. Never throws. */
+  private async sayUnread(): Promise<void> {
+    if (this.current === null || this.unread.size === 0) return;
+    const unread = [...this.unread];
+    this.unread.clear();
+    for (const minted of unread) await this.revokeClient(minted);
   }
 
   /** Close every phone link and wall every keyring the host holds: unlink, sign-out, another
@@ -256,8 +261,8 @@ export class FreewayFloor extends EventEmitter {
    * phone keeps any later host from linking it. Owed to THAT host as revokeAll is (the class's
    * law). Answers how many links the host says it closed: 0 when nothing was said or it is owed.
    * Asked before the floor's state was read (S3's fold: the boot sweep, field-native outliving
-   * fieldd), it is owed to the first host the state names, said at the connect that reads it.
-   * Never throws. */
+   * fieldd), it is owed to the first host the state names, said as that state is read
+   * (`sayUnread`). Never throws. */
   async revokeClient(minted: string): Promise<number> {
     if (this.disposed) return 0;
     const state = this.current;
@@ -536,6 +541,9 @@ export class FreewayFloor extends EventEmitter {
     this.current = next;
     this.logLinks(prev, next);
     this.emit("state", next);
+    // the first state read: a revoke owed to it is said now, never left for a reconnect (it may
+    // come as a delta after the stream armed on a frame that was no state)
+    if (prev === null) void this.sayUnread();
   }
 }
 

@@ -123,6 +123,18 @@ export class SystemDocFile {
     return run;
   }
 
+  /** Item 406, the review's folds (7) — persist the bytes `snapshot` makes when the write RUNS, in
+   * the queue's order, durably: a change that must be on disk BEFORE its document commits it
+   * (`SettingsDocService`'s refusals, which are announced to the account's desktops at commit and
+   * never taken back). Never joined to a waiting write, and none joins it: its bytes are not the
+   * document's own, so a persist asked after it queues behind it. */
+  persistWith(snapshot: () => Uint8Array): Promise<void> {
+    const run = this.#running.catch(() => undefined).then(() => this.#write(snapshot()));
+    this.#waiting = null;
+    this.#running = run;
+    return run;
+  }
+
   /** Resolves once every write already asked for has landed (or failed). */
   drained(): Promise<void> {
     return this.#running.catch(() => undefined);

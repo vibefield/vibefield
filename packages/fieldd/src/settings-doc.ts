@@ -707,7 +707,13 @@ export class SettingsDocService extends EventEmitter {
    *    id Remove did not, whatever node id it carries.
    * `by` is the writing desktop's roster id (`RefusedDevice.by`). Every entry is
    * checked before any is written, so a refused input throws having written
-   * nothing; one write commits under the `no-undo:` origin. */
+   * nothing; one write commits under the `no-undo:` origin.
+   * DURABLE FIRST (the review's folds, (7)): a commit is announced to the
+   * account's other desktops as it lands (`registerSystemDoc`'s local updates),
+   * and a refusal is never lifted, so a refusal committed and then not saved could
+   * be neither kept nor taken back. The file first takes a copy of the document
+   * with the refusal in it, through its one writer; only then does the document
+   * commit it. A copy the disk refuses throws having committed nothing. */
   async refuseDevice(
     act: RefusalAct,
     deviceId: string,
@@ -723,23 +729,64 @@ export class SettingsDocService extends EventEmitter {
     const fresh = [...new Set(tailscaleIds)].filter((nodeId) => !standing.nodeIds.has(nodeId));
     if (act === "append" && fresh.length === 0) return { wrote: false };
     const removedAt = Date.now();
-    // one entry per NODE_IDS_PER_ENTRY node ids, and one with none when Remove knew none
-    const entries: RefusedDevice[] = [];
+    // one entry per NODE_IDS_PER_ENTRY node ids, and one with none when Remove knew none; each
+    // keyed once, so the copy on disk and the document hold the same keys
+    const entries: Array<[string, RefusedDevice]> = [];
     for (let at = 0; at === 0 || at < fresh.length; at += DEVICE_LIMITS.NODE_IDS_PER_ENTRY) {
       const nodeIds = fresh.slice(at, at + DEVICE_LIMITS.NODE_IDS_PER_ENTRY);
-      entries.push(RefusedDevice.parse({ tailscaleIds: nodeIds, removedAt, by }));
+      const entry = RefusedDevice.parse({ tailscaleIds: nodeIds, removedAt, by });
+      entries.push([JSON.stringify([deviceId, randomUUID()]), entry]);
     }
-    const section = this.doc.getMap(S.DEVICES_REFUSED);
-    for (const entry of entries) {
-      section.set(JSON.stringify([deviceId, randomUUID()]), entry as never);
+    const origin = `${ORIGIN_DEVICES}${act}:${by}`;
+    /** The refusal as one transaction of `doc`; true when it forgot a known phone. */
+    const refuse = (doc: LoroDoc): boolean => {
+      const section = doc.getMap(S.DEVICES_REFUSED);
+      for (const [key, entry] of entries) section.set(key, entry as never);
+      const phones = doc.getMap(S.DEVICES_PHONES);
+      const known = act === "remove" && phones.get(deviceId) !== undefined;
+      if (known) phones.delete(deviceId);
+      doc.commit({ origin });
+      return known;
+    };
+    // 1. the disk takes a copy holding the refusal, made when the write runs (so it holds every
+    //    commit before it), or this throws having committed nothing
+    await this.file.persistWith(() => {
+      const copy = new LoroDoc();
+      copy.import(this.doc.export({ mode: "snapshot" }));
+      refuse(copy);
+      return copy.export({ mode: "snapshot" });
+    });
+    // 2. the document commits it (and announces it), and is written as itself. The copy on disk
+    //    already holds the refusal, so a write that fails here loses nothing of it.
+    const forgot = refuse(this.doc);
+    try {
+      await this.persistNow();
+    } catch (error) {
+      this.log.warn(
+        "fieldd.settings_doc.refusal_copy_stands",
+        "The settings document was not written after a refusal; the copy on disk holds it",
+        { error: String(error) },
+      );
     }
-    const phones = this.doc.getMap(S.DEVICES_PHONES);
-    const forgot = act === "remove" && phones.get(deviceId) !== undefined;
-    if (forgot) phones.delete(deviceId);
-    this.doc.commit({ origin: `${ORIGIN_DEVICES}${act}:${by}` });
-    await this.persistNow();
     this.emit("changed", { section: S.DEVICES_REFUSED });
     if (forgot) this.emit("changed", { section: S.DEVICES_PHONES });
+    return { wrote: true };
+  }
+
+  /** The review's folds (5) — a device a desktop of the account has seen as a
+   * desktop (its slice said `docHost`) is no phone: its known-phone record goes,
+   * one a forwarded approval or a hello wrote before its slice said so. Writes only
+   * while a record stands, under the `no-undo:` origin. A later record for it is
+   * refused by its caller (`seenAsDesktop`), never here: this document does not
+   * know which devices are desktops. */
+  async forgetPhone(deviceId: string, by: string): Promise<{ wrote: boolean }> {
+    await this.ready();
+    const phones = this.doc.getMap(S.DEVICES_PHONES);
+    if (phones.get(deviceId) === undefined) return { wrote: false };
+    phones.delete(deviceId);
+    this.doc.commit({ origin: `${ORIGIN_DEVICES}desktop:${by}` });
+    await this.persistNow();
+    this.emit("changed", { section: S.DEVICES_PHONES });
     return { wrote: true };
   }
 

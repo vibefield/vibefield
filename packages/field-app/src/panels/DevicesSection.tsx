@@ -144,9 +144,10 @@ export interface DevicesSectionViewProps {
 export const CONNECT_ASKS_TITLE = "Suggest connecting where it helps";
 export const CONNECT_ASKS_LINE = "At most once a day, and each place once a month.";
 
-/** Item 406 — a refused Remove in the product's words, by fieldd's error kind, never its message.
- * DESIGN.md §9 is silent on these: drafts, owed to it first and to James's word. A kind not named
- * here (INTERNAL, a cut socket) is the one the person can try again, since the act is declarative.
+/** Item 406 — a refused Remove in the product's words, by fieldd's error kind, never its message:
+ * DESIGN.md §9 "The link's words" (amended 2026-11-14, the doc commit before S5) holds each one, a
+ * draft pending James's word. A kind not named here (INTERNAL, a cut socket, a refusal the disk
+ * would not take) is the one the person can try again, since the act is declarative.
  * AUDIT_UNAVAILABLE never comes here: the phone WAS removed (`removeDone`). */
 export function removeRefusalWords(kind: string | undefined, name: string): string {
   switch (kind) {
@@ -640,9 +641,9 @@ function ThisMac(props: DevicesSectionViewProps): ReactElement {
 /** Item 406 — the confirm, in place under the phone's row (DESIGN.md §8 "Settings → Devices"
  * and §9 "The link's words", amended 2026-11-14; drafts pending James): its title, what goes and
  * what stays, the line that leaves the network side to Tailscale's admin console, then Cancel,
- * leading and focused, and Remove in red text. Esc closes it, as it closes the page's sheets, and
- * goes no further (the Settings dialog closes on an Escape the window hears). While it runs, both
- * wait. */
+ * leading and focused. It takes focus when it opens, and Esc closes it while focus is in it (not
+ * from the window, as the page's sheets hear it), going no further: the Settings dialog closes on
+ * an Escape the window hears. While it runs, both wait. */
 function RemoveConfirm({
   name,
   step,
@@ -705,7 +706,8 @@ function RemoveConfirm({
 }
 
 /** One quiet row: an OS mark, the name, one word. A row the roster knows to be a phone ends in
- * Remove…, a fourth column in red text, and its confirm opens in place under it (item 406). */
+ * Remove…, a fourth column in red text, and its confirm opens in place under it (item 406). Its
+ * accessible name is "Remove ‹name›…" (DESIGN.md §9 "The link's words"), so phones read apart. */
 function DeviceRow({
   device,
   remove,
@@ -750,6 +752,7 @@ function DeviceRow({
           ref={opener}
           type="button"
           className={`${buttonCls} text-[var(--vf-red)]`}
+          aria-label={`Remove ${device.name}…`}
           aria-expanded={open}
           disabled={remove.kind === "pending"}
           onClick={() => onRemoveAsk(device.id)}
@@ -781,6 +784,22 @@ function YourDevices(props: DevicesSectionViewProps): ReactElement {
       : [{ id: "self", name: "This Mac", os: osOf(props.platform), self: true, online: true }];
   const consoleUrl = consoleOf(props.face);
   const removed = remove.kind === "removed" ? remove : null;
+  // the review's folds (9) — the row and its confirm went with the phone, and the keyboard with
+  // them to the page's body: it lands on the line said where the row stood (DESIGN.md §8), unless
+  // the person has already taken it elsewhere
+  const list = useRef<HTMLUListElement>(null);
+  const after = useRef<HTMLAnchorElement>(null);
+  const removedId = removed?.deviceId;
+  useEffect(() => {
+    if (removedId === undefined) return;
+    const active = document.activeElement;
+    const lost =
+      active === null ||
+      active === document.body ||
+      !active.isConnected ||
+      list.current?.contains(active) === true;
+    if (lost) after.current?.focus();
+  }, [removedId]);
   // the answer can outrun the roster's pass, which forgets the phone: a row the answer names is
   // not drawn while it lingers
   const drawn = rows.filter((device) => device.id !== removed?.deviceId);
@@ -804,7 +823,7 @@ function YourDevices(props: DevicesSectionViewProps): ReactElement {
       0,
       <li key={`removed:${removed.deviceId}`} className="vf-devices-row vf-devices-removed">
         <span className={labelCls}>{`${removed.name} was removed.`}</span>
-        <a className={buttonCls} href={consoleUrl} target="_blank" rel="noreferrer">
+        <a ref={after} className={buttonCls} href={consoleUrl} target="_blank" rel="noreferrer">
           Manage in Tailscale ↗
         </a>
       </li>,
@@ -812,7 +831,7 @@ function YourDevices(props: DevicesSectionViewProps): ReactElement {
   }
   return (
     <SettingsSection title="Your devices">
-      <ul className="vf-devices-rows">{items}</ul>
+      <ul ref={list} className="vf-devices-rows">{items}</ul>
       {linked ? (
         <div className="vf-devices-acts">
           <button type="button" className={buttonCls} onClick={() => props.onSheet("add-device")}>

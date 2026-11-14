@@ -122,9 +122,11 @@ export class DeviceRemoval {
    *  - a malformed ask: PRECONDITION_FAILED;
    *  - this desktop: PRECONDITION_FAILED — a desktop removes its phones, never itself;
    *  - a device this roster does not list: NOT_FOUND;
-   *  - a desktop (`isDocHost`), or a row not KNOWN to be a phone (`DeviceInfo.phone`):
-   *    PRECONDITION_FAILED. A refusal is never lifted, so it is never written on a guess: a
-   *    desktop whose slice has not arrived says nothing of itself either. */
+   *  - a desktop, or one this roster has EVER seen as a desktop (`seenAsDesktop`: its slice may
+   *    be away, and a record may have been kept for it wrongly; the review's folds, (5)), or a
+   *    row not KNOWN to be a phone (`DeviceInfo.phone`): PRECONDITION_FAILED. A refusal is never
+   *    lifted, so it is never written on a guess: a desktop whose slice has not arrived says
+   *    nothing of itself either. */
   async ask(params: unknown): Promise<RemovalAsk | null> {
     const parsed = DeviceRemoveParams.safeParse(params);
     if (!parsed.success)
@@ -141,7 +143,7 @@ export class DeviceRemoval {
       );
     if (row === undefined)
       throw new RpcCallError("NOT_FOUND", "this desktop's roster lists no such device", false);
-    if (roster.isDocHost(deviceId) || row.phone === undefined)
+    if (roster.seenAsDesktop(deviceId) || row.phone === undefined)
       throw new RpcCallError(
         "PRECONDITION_FAILED",
         "only a device known to be a phone can be removed",
@@ -159,15 +161,25 @@ export class DeviceRemoval {
 
   /** The act: `write` (the refusal's one writer, as the handler calls it), the roster's pass, then
    * the sweep, audited as the caller's (`device.remove`). `removed` is whether THIS call wrote the
-   * refusal: false when another got there first, its outcome `cancelled`. The effect runs even when
-   * the audit fails, and the audit's failure is then the caller's to hear. */
+   * refusal. The review's folds:
+   *  - (6) the ask is made outside the act's turn, so a second press racing the first finds the
+   *    refusal standing only here: re-read in the turn, it answers `{removed: false, closed: 0}`
+   *    with NO audit row (ruling (3)), no write and no sweep. `cancelled` is left for a refusal
+   *    another desktop's merge wrote between this read and this write.
+   *  - (7) the effect runs again only when the AUDIT failed before it ran (revocation preserves
+   *    safety, and the audit's failure is then the caller's to hear). An effect that threw has
+   *    run: its failure is the caller's, once. */
   remove(
     ctx: CallerContext,
     ask: RemovalAsk,
     write: () => Promise<{ wrote: boolean }>,
   ): Promise<DeviceRemoveResult> {
     return this.serially(async () => {
+      if ((await this.opts.doc.refusedDevices()).has(ask.deviceId))
+        return { removed: false, closed: 0 };
+      let ran = false;
       const effect = async (): Promise<DeviceRemoveResult> => {
+        ran = true;
         const { wrote } = await write();
         // swept here: the merged sweep its write sets going finds nothing new
         this.mark(ask.deviceId, ask.tailscaleIds);
@@ -189,8 +201,9 @@ export class DeviceRemoval {
         );
       } catch (error) {
         // revocation preserves safety (`revokeWindowToken`): evidence that failed is surfaced,
-        // and the phone is refused and closed all the same
-        await effect();
+        // and the phone is refused and closed all the same. Only an audit that failed BEFORE the
+        // effect leaves it to run here (the review's folds, (7)).
+        if (!ran) await effect();
         throw error;
       }
     });

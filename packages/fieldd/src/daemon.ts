@@ -2424,6 +2424,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const rememberPhone = (seen: PhoneSeen, via: PhoneEvidence): void => {
       const roster = devicesRef;
       if (roster === null) return;
+      // the review's folds (5) — never a device ever seen as a desktop, its slice away or not: a
+      // forwarded approval names the device its peer says, and a slice-less desktop passes the
+      // approver's own test
+      if (roster.seenAsDesktop(seen.deviceId)) return;
       const name = roster.get(seen.deviceId)?.name;
       const remembered = settingsDoc.rememberPhone(
         seen.deviceId,
