@@ -376,6 +376,14 @@ function revisions(dataDir: string, id: string): string[] {
   return existsSync(dir) ? readdirSync(dir).sort() : [];
 }
 
+/** KV's service running, as the registry's snapshot says it: `get` returns the stored row, whose
+ * `service` is the manifest's ("inactive"); the live state is merged in `snapshot()` alone
+ * (`plugin-registry.ts` `snapshot`, `setServiceEntryState`), as `plugin-install-card.test.ts`
+ * reads it. */
+function serviceActive(daemon: { plugins: PluginRegistryService }): boolean {
+  return daemon.plugins.snapshot().plugins.find((p) => p.id === KV_ID)?.service === "active";
+}
+
 const UPDATE_DOORS = ["plugin.update.prepare", "plugin.update.cancel", "plugin.update"];
 
 describe("the update card's doors (MK-UC)", () => {
@@ -389,7 +397,7 @@ describe("the update card's doors (MK-UC)", () => {
       await kvRelease(releases, "0.1.0"),
     ]);
     const pointer = join(dataDir, "plugins", "installed", KV_ID, PLUGIN_CURRENT_POINTER_FILE);
-    const active = () => daemon.plugins.get(KV_ID)?.service === "active";
+    const active = () => serviceActive(daemon);
 
     // the version you have: 0.1.0, on, its service running
     await shell.call("plugins.install", { id: KV_ID, version: "0.1.0" });
@@ -481,7 +489,7 @@ describe("the update card's doors (MK-UC)", () => {
       await kvRelease(releases, "0.2.0"),
       await kvRelease(releases, "0.1.0"),
     ]);
-    const active = () => daemon.plugins.get(KV_ID)?.service === "active";
+    const active = () => serviceActive(daemon);
     await shell.call("plugins.install", { id: KV_ID, version: "0.1.0" });
     await until(active, 15_000, "0.1.0's service");
 
@@ -532,7 +540,7 @@ describe("the update card's doors (MK-UC)", () => {
       await kvRelease(releases, "0.2.0", ["net.outbound"]),
       await kvRelease(releases, "0.1.0"),
     ]);
-    const active = () => daemon.plugins.get(KV_ID)?.service === "active";
+    const active = () => serviceActive(daemon);
     await shell.call("plugins.install", { id: KV_ID, version: "0.1.0" });
     await until(active, 15_000, "0.1.0's service");
 
@@ -601,7 +609,7 @@ describe("the update card's doors (MK-UC)", () => {
       await kvRelease(releases, "0.1.0"),
     ]);
     const pointer = join(dataDir, "plugins", "installed", KV_ID, PLUGIN_CURRENT_POINTER_FILE);
-    const active = () => daemon.plugins.get(KV_ID)?.service === "active";
+    const active = () => serviceActive(daemon);
     await shell.call("plugins.install", { id: KV_ID, version: "0.1.0" });
     await until(active, 15_000, "0.1.0's service");
 
