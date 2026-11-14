@@ -444,3 +444,42 @@ struct HistoryProjectView: View {
     }
   }
 }
+
+/// Item 416 (James, 2026-11-14 08:13:38Z, session qa-01, of a project's page on his phone: "in project page, the
+/// project title and count bubble should be at the same row as the back button so it is aligned with the history
+/// projects line. and if the project title too long it should be omitted properly") — where a project's page stands
+/// its head, and how the name gives way there. The rule is pure; the page draws what it answers. DESIGN.md §8 "The
+/// roots' heads", A project's head stands on the back button's row.
+///
+/// STUB (the red): it answers what the page does today, the head under the bar and a name drawn smaller before it
+/// is cut (item 392). Nothing reads it yet.
+enum HistoryProjectHead {
+  /// The lines a pushed page has for its head.
+  enum Line: Equatable, Sendable {
+    /// The bar over the page: the back button's row.
+    case bar
+    /// The page's own first row, under the bar.
+    case page
+  }
+
+  /// How a name too long for its line gives way. The bubble and the back button never do.
+  enum Giving: Equatable, Sendable {
+    /// Drawn smaller first, down to this share of its size, and then cut at its end.
+    case squeezed(to: CGFloat)
+    /// Cut at its end with an ellipsis, at its own size.
+    case cut
+  }
+
+  /// Where the head stands.
+  static let line = Line.page
+  /// How its name gives way.
+  static let giving = Giving.squeezed(to: 28 / RootHead.titleSize)
+
+  /// The least share of its size the name is drawn at: 1 where it is only cut.
+  static var scale: CGFloat {
+    switch giving {
+    case .squeezed(let share): return share
+    case .cut: return 1
+    }
+  }
+}
