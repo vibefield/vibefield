@@ -693,6 +693,7 @@ export class ProjectDoors {
       { sinceMs: params.sinceMs, offsetMinutes: params.offsetMinutes },
       this.#figuresAsk(),
       maxContributionRows,
+      params.sessions,
     );
   }
 

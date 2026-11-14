@@ -13,7 +13,7 @@ import {
   IndexSearchSource,
 } from "./agent-index";
 import { PlaceRef, ProjectKey } from "./project-places";
-import { PROJECT_DOORS } from "./registries";
+import { INDEX_TAILNET_LIMITS, PROJECT_DOORS } from "./registries";
 import { RowsSubscribeParams, rowsDelta, rowsOpen } from "./rows";
 
 // PJ-3 — THE `project.*` DOORS (`thinking-project-places.md` §9; PJ-D15 (a)
@@ -382,6 +382,14 @@ export type ProjectSessionsResult = z.infer<typeof ProjectSessionsResult>;
 //    case) keeps ONE contribution row, and its days — counted on both — make
 //    the daily figures partial.
 
+/** Item 398 — one listed conversation `project.figures` is asked for by id:
+ * the desktop whose listing named it and rosetta's canonical id there
+ * (`IndexCatalogSession.device` and `.sessionId`, a `project.sessions` row's). */
+export const ProjectFiguresSession = z
+  .object({ device: z.string().min(1), sessionId: z.string().min(1) })
+  .passthrough();
+export type ProjectFiguresSession = z.infer<typeof ProjectFiguresSession>;
+
 /** `project.figures` — a project's panels in one answer: the heatmap since
  * `sinceMs`, its decomposition, every session's contribution. The window and
  * timezone are `index.project`'s (`offsetMinutes` −840…840). */
@@ -390,6 +398,15 @@ export const ProjectFiguresParams = z
     key: ProjectKey,
     sinceMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     offsetMinutes: z.number().int().min(-840).max(840).optional(),
+    /** Item 398 — the contribution rows of exactly these conversations (a
+     * listed page's), before any cut, so a row past a tailnet caller's bound
+     * is still answered when it is asked for. At most
+     * `INDEX_TAILNET_LIMITS.MAX_ROWS`: a page. A pair this project does not
+     * hold answers no row, and nothing says why (EL7: an ask by id tells a
+     * caller nothing this project's own listing would not). An answer to it
+     * carries no `totals`, and only the desktops its pairs name are asked:
+     * its daily figures are theirs, `partial` when another was left out. */
+    sessions: z.array(ProjectFiguresSession).min(1).max(INDEX_TAILNET_LIMITS.MAX_ROWS).optional(),
   })
   .passthrough()
   .superRefine(refusePaths);
@@ -410,6 +427,21 @@ export const ProjectFiguresSource = IndexSearchSource.extend({
   split: z.number().int().nonnegative(),
 }).passthrough();
 export type ProjectFiguresSource = z.infer<typeof ProjectFiguresSource>;
+
+/** Item 398 — the lifetime figures summed over EVERY contribution row the
+ * answer gathered, before a tailnet caller's cut: a project's messages are
+ * never a clipped page's sum. Money sums as SQL sums it (null only while
+ * every row's is null). `lifetimePartial` still says when a desktop did not
+ * answer or a peer's own rows were cut. */
+export const ProjectFiguresTotals = z
+  .object({
+    conversations: z.number().int().nonnegative(),
+    messages: z.number().finite(),
+    tokens: z.number().finite(),
+    costMicroUsd: z.number().finite().nullable(),
+  })
+  .passthrough();
+export type ProjectFiguresTotals = z.infer<typeof ProjectFiguresTotals>;
 
 export const ProjectFiguresResult = z
   .object({
@@ -433,6 +465,10 @@ export const ProjectFiguresResult = z
     lifetimePartial: z.boolean(),
     /** SP-D13 — a tailnet caller's rows cut at its bound */
     clipped: z.boolean(),
+    /** Item 398 — the sums over every row gathered, before the cut; absent
+     * from an answer asked by `sessions` (its rows are a page's, not the
+     * project's) and from an answer of an earlier build */
+    totals: ProjectFiguresTotals.optional(),
   })
   .passthrough();
 export type ProjectFiguresResult = z.infer<typeof ProjectFiguresResult>;

@@ -9,7 +9,13 @@ import {
 } from "./artifacts";
 import { isAbsoluteDesktopPath } from "./paths";
 import { PlaceFactsList, PlaceRef, ProjectKey } from "./project-places";
-import { INDEX_ACTIVITY, INDEX_TICKET, INDEX_TIMELINE, MADE_APP_LIMITS } from "./registries";
+import {
+  INDEX_ACTIVITY,
+  INDEX_TAILNET_LIMITS,
+  INDEX_TICKET,
+  INDEX_TIMELINE,
+  MADE_APP_LIMITS,
+} from "./registries";
 import { composeRemoteEndpoints, remoteDoorUrl, remoteEndpointSet } from "./remote-endpoints";
 import {
   MeshScope,
@@ -1785,6 +1791,11 @@ export const IndexProjectParams = z
     sinceMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     offsetMinutes: OffsetMinutes.optional(),
     device: z.string().min(1).optional(),
+    /** Item 398 — only these sessions' contribution rows (rosetta's canonical
+     * ids), kept before any cut: a merging daemon's `project.figures` ask by
+     * id, handed down to a peer so its byte budget cannot drop an asked row.
+     * An id this rosetta project does not hold answers no row. */
+    sessionIds: z.array(z.string().min(1)).min(1).max(INDEX_TAILNET_LIMITS.MAX_ROWS).optional(),
   })
   .passthrough();
 export type IndexProjectParams = z.infer<typeof IndexProjectParams>;

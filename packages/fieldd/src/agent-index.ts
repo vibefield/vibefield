@@ -1493,13 +1493,17 @@ export class IndexService {
    * the rows stop there in rosetta's order and the answer says `clipped`; this
    * service knows no principal. `maxAnswerBytes` is the door's item-60 budget
    * for a peer daemon: the rows stop where the encoded answer would pass it.
-   * Either cut says how many rows it left out (`omitted`). */
+   * Either cut says how many rows it left out (`omitted`). `sessionIds`
+   * (item 398, a merging daemon's ask by id) keeps only those sessions' rows,
+   * before either cut; an id this rosetta project does not hold answers no
+   * row. */
   async project(params: {
     projectId: string;
     sinceMs?: number | undefined;
     offsetMinutes?: number | undefined;
     maxContributionRows?: number | undefined;
     maxAnswerBytes?: number | undefined;
+    sessionIds?: readonly string[] | undefined;
   }): Promise<IndexProjectResult> {
     this.requireReady();
     const base = `/api/projects/${encodeURIComponent(params.projectId)}`;
@@ -1513,11 +1517,13 @@ export class IndexService {
       this.aggregate(`${base}/usage${query}`, IndexUsageResponse, "usage"),
       this.aggregate(`${base}/contribution`, IndexContributionResponse, "contribution"),
     ]);
+    const askedIds = params.sessionIds === undefined ? undefined : new Set(params.sessionIds);
+    const kept =
+      askedIds === undefined
+        ? contribution.rows
+        : contribution.rows.filter((row) => askedIds.has(row.session_id));
     const limit = params.maxContributionRows;
-    const rows =
-      limit !== undefined && contribution.rows.length > limit
-        ? contribution.rows.slice(0, limit)
-        : contribution.rows;
+    const rows = limit !== undefined && kept.length > limit ? kept.slice(0, limit) : kept;
     const answer: IndexProjectResult = {
       projectId: params.projectId,
       heatmap: heatmap.days.map((day) => ({ day: day.day, ...usageFigures(day) })),
@@ -1543,7 +1549,7 @@ export class IndexService {
     };
     if (params.maxAnswerBytes !== undefined)
       answer.contribution = rowsWithin(answer, params.maxAnswerBytes);
-    const omitted = contribution.rows.length - answer.contribution.length;
+    const omitted = kept.length - answer.contribution.length;
     return omitted > 0 ? { ...answer, clipped: true, omitted } : answer;
   }
 

@@ -3144,7 +3144,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { projectId: string, sinceMs?: ms ≥ 0, offsetMinutes?: −840…840, device?: string }",
+          "expected { projectId: string, sinceMs?: ms ≥ 0, offsetMinutes?: −840…840, device?: string, sessionIds?: 1–100 ids }",
           false,
         );
       return await index.project({
@@ -3153,6 +3153,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         offsetMinutes: parsed.data.offsetMinutes,
         maxContributionRows: tailnetRowLimit(ctx.principal, undefined, Number.MAX_SAFE_INTEGER),
         maxAnswerBytes: peerAnswerBytes(ctx.principal),
+        // item 398: a merging daemon's ask by id, handed down
+        sessionIds: parsed.data.sessionIds,
       });
     });
     api.register("index.projectDay", async (_ctx, params) => {
@@ -3730,7 +3732,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const ask = parseProjectAsk(
         ProjectFiguresParams,
         params,
-        "expected { key, sinceMs?: ms ≥ 0, offsetMinutes?: −840…840 }",
+        "expected { key, sinceMs?: ms ≥ 0, offsetMinutes?: −840…840, sessions?: 1–100 { device, sessionId } }",
       );
       return await projectDoors.figures(
         ask,

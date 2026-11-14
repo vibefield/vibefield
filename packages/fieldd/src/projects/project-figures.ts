@@ -10,7 +10,9 @@ import {
   type ProjectContribution,
   type ProjectFiguresDayResult,
   type ProjectFiguresResult,
+  type ProjectFiguresSession,
   type ProjectFiguresSource,
+  type ProjectFiguresTotals,
 } from "@vibefield/contracts";
 import { RpcCallError } from "../native-link";
 
@@ -65,6 +67,7 @@ export interface FiguresAsk {
       projectId: string;
       sinceMs?: number | undefined;
       offsetMinutes?: number | undefined;
+      sessionIds?: readonly string[] | undefined;
     }): Promise<IndexProjectResult>;
     projectDay(params: {
       projectId: string;
@@ -289,16 +292,46 @@ function sumBy<Row extends Figures, Key extends string | number>(
     .map(([key, { row, figures }]) => rebuild(key, row, figures));
 }
 
+/** Item 398 — the key of one asked conversation: the desktop and rosetta's
+ * canonical id there, as a contribution row and a listing row both carry. */
+const pairKey = (device: string, sessionId: string): string => `${device}\u0000${sessionId}`;
+
+/** Item 398 — the sums over every row gathered (money as SQL sums it). */
+function totalsOf(rows: readonly ProjectContribution[]): ProjectFiguresTotals {
+  let messages = 0;
+  let tokens = 0;
+  let costMicroUsd: number | null = null;
+  for (const row of rows) {
+    messages += row.messages;
+    tokens += row.tokens;
+    costMicroUsd = plus(costMicroUsd, row.costMicroUsd);
+  }
+  return { conversations: rows.length, messages, tokens, costMicroUsd };
+}
+
 /** PJ-4 — fold the answered parts into one project's figures (pure). Daily
  * figures come from WHOLE parts only; contribution rows from every part (a
- * split part's for the project's own sessions), one per conversation. */
+ * split part's for the project's own sessions), one per conversation. Asked
+ * by id (item 398, `sessions`), the rows are exactly the asked pairs this
+ * project holds, kept before the cut, and the answer has no `totals`; an
+ * asked pair the project does not hold answers no row (EL7). Only the
+ * desktops the asked pairs name were asked, so the daily figures are theirs
+ * alone and say `partial` when another desktop of the plan was left out. */
 export function mergeFigures(
   plan: FiguresPlan,
   answered: ReadonlyArray<{ part: FiguresPart; value: IndexProjectResult }>,
   sources: ProjectFiguresSource[],
   missing: boolean,
   maxContributionRows?: number,
+  sessions?: readonly ProjectFiguresSession[],
 ): ProjectFiguresResult {
+  const asked =
+    sessions === undefined
+      ? undefined
+      : new Set(sessions.map((s) => pairKey(s.device, s.sessionId)));
+  const askedDevices = sessions === undefined ? undefined : new Set(sessions.map((s) => s.device));
+  const leftOut =
+    askedDevices !== undefined && plan.parts.some((part) => !askedDevices.has(part.device));
   const whole = answered.filter(({ part }) => part.whole);
   const heatmap = sumBy(
     whole.flatMap(({ value }) => value.heatmap),
@@ -329,6 +362,9 @@ export function mergeFigures(
   for (const { part, value } of ordered) {
     for (const row of value.contribution) {
       if (!part.whole && !part.sessions.has(row.sessionId)) continue;
+      // asked by id: the asked pairs alone (a peer of an earlier build answers
+      // every row; this is where they are left out)
+      if (asked !== undefined && !asked.has(pairKey(part.device, row.sessionId))) continue;
       const conversation =
         plan.conversations.get(`${part.device}\u0000${row.sessionId}`) ??
         `\u0001${part.device}\u0000${row.sessionId}`;
@@ -352,9 +388,10 @@ export function mergeFigures(
     usage: { models, hours },
     contribution: limit !== undefined ? contribution.slice(0, limit) : contribution,
     sources,
-    partial: missing || split || recordedTwice,
+    partial: missing || split || recordedTwice || leftOut,
     lifetimePartial: missing || clipped,
     clipped,
+    ...(asked === undefined ? { totals: totalsOf(contribution) } : {}),
   };
 }
 
@@ -393,27 +430,40 @@ export function mergeDay(
 
 /* ── the fan-out ───────────────────────────────────────────────────────── */
 
-/** `project.figures` — every part asked, the answers folded. */
+/** `project.figures` — every part asked, the answers folded. Asked by id
+ * (item 398, `sessions`): only the parts on a desktop an asked pair names
+ * are asked, each handed that desktop's ids (`sessionIds`), so a peer's byte
+ * budget cannot drop an asked row; a desktop none names is not asked, as
+ * `projectFiguresDay` leaves a split part unasked. */
 export async function projectFigures(
   plan: FiguresPlan,
   window: { sinceMs?: number | undefined; offsetMinutes?: number | undefined },
   ask: FiguresAsk,
   maxContributionRows?: number,
+  sessions?: readonly ProjectFiguresSession[],
 ): Promise<ProjectFiguresResult> {
   const asked = {
     ...(window.sinceMs !== undefined ? { sinceMs: window.sinceMs } : {}),
     ...(window.offsetMinutes !== undefined ? { offsetMinutes: window.offsetMinutes } : {}),
   };
+  const idsOn = new Map<string, string[]>();
+  for (const s of sessions ?? []) {
+    const ids = idsOn.get(s.device) ?? [];
+    if (!ids.includes(s.sessionId)) ids.push(s.sessionId);
+    idsOn.set(s.device, ids);
+  }
+  const byId = (part: FiguresPart) =>
+    sessions === undefined ? {} : { sessionIds: idsOn.get(part.device) ?? [] };
   const { answered, sources, missing } = await askAll(
     plan,
     ask,
-    plan.parts,
-    (part) => ask.local.project({ projectId: part.projectId, ...asked }),
+    sessions === undefined ? plan.parts : plan.parts.filter((part) => idsOn.has(part.device)),
+    (part) => ask.local.project({ projectId: part.projectId, ...asked, ...byId(part) }),
     "index.project",
-    (part) => ({ projectId: part.projectId, ...asked }),
+    (part) => ({ projectId: part.projectId, ...asked, ...byId(part) }),
     (value) => IndexProjectResult.parse(value),
   );
-  return mergeFigures(plan, answered, sources, missing, maxContributionRows);
+  return mergeFigures(plan, answered, sources, missing, maxContributionRows, sessions);
 }
 
 /** `project.figuresDay` — the whole parts' hours that day, folded. */
