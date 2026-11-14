@@ -53,7 +53,8 @@ import "./plugins.css";
 // page of a set this desktop doesn't have, read from the list, says no power.
 // O2-C: the page's act — Installed, Install, the install card — is the
 // controller's, handed here, and the foot on Discover offers the hot tile's
-// Install.
+// Install. MK-4f: Remove… and its question stand at the second column's foot,
+// the controller's too.
 
 export interface PluginsViewProps {
   open: boolean;
@@ -82,6 +83,8 @@ export interface PluginsViewProps {
   pageAct?: ReactNode;
   /** O2-C: the foot's act on Discover, the hot tile's Install; null: none */
   onInstallHot?: (() => void) | null;
+  /** MK-4f: Remove… and its question at the second column's foot (`RemoveQuestion.tsx`), the controller's */
+  pageRemove?: ReactNode;
   pageFrom: PluginsTab;
   /** Updates' count, the Me row's (null or 0: none) */
   updates: number | null;
@@ -229,6 +232,7 @@ function PageView({
   page,
   settings,
   act,
+  remove,
   from,
   away,
   under,
@@ -240,6 +244,7 @@ function PageView({
   page: PluginPage;
   settings: ReactNode;
   act: ReactNode;
+  remove: ReactNode;
   from: PluginsTab;
   away: boolean;
   under: ReadonlySet<string>;
@@ -374,6 +379,8 @@ function PageView({
           <PageSection head={PAGE_WORDS.version}>
             <p className="vf-plugins-page-lines">{page.version}</p>
           </PageSection>
+          {/* MK-4f: Remove…, 20 after Version (the column's gap) */}
+          {remove}
         </div>
       </div>
     </div>
@@ -384,7 +391,7 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
   const { open, layout, tab, query, shelf, foot, installed, installedFoot, inputRef } = props;
   const { hot, page, pageFrom, updates, listRef, away, under, refused } = props;
   const { pageSettings = null, discoverEnd = null, discover = null, columns = 1 } = props;
-  const { pageAct = null, onInstallHot = null } = props;
+  const { pageAct = null, onInstallHot = null, pageRemove = null } = props;
   const { onQuery, onTab, onClose, onShowInstalled, onOpenPage, onBack, onKeyDown } = props;
   const { onTurn, onTurnPower } = props;
   const body =
@@ -393,6 +400,7 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
         page={page}
         settings={pageSettings}
         act={pageAct}
+        remove={pageRemove}
         from={pageFrom}
         away={away}
         under={under}

@@ -987,11 +987,62 @@
   cursor: pointer;
 }
 
-.vf-plugins-card-cancel:hover {
+.vf-plugins-card-cancel:not(:disabled):hover {
   background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
 }
 
 .vf-plugins-card-cancel:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* ── Remove… (MK-4f; §8, drawn 2026-11-14, ‹draft›): at the second column's
+   foot, the card's Cancel's look, its refusal 6 under it in the attention ink;
+   pressed, its question in the card's look, Remove trailing in the act's look
+   and the second question's Remove data in the danger ink (§2.5 red, text only,
+   never a filled alarm); Remove it and its data… 10 under the acts, at its
+   start, 32 tall, padded 0 14, corners 16, 12.5/600 in the danger ink, the
+   ready fill under the pointer. Under way, nothing takes a press. ── */
+.vf-plugins-remove {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+}
+
+.vf-plugins-card-cancel:disabled {
+  color: var(--vf-text-tertiary);
+  cursor: default;
+}
+
+.vf-plugins-act[data-tone="danger"]:not(:disabled) {
+  color: var(--vf-ink-danger);
+}
+
+.vf-plugins-remove-data {
+  height: 32px;
+  justify-self: start;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  color: var(--vf-ink-danger);
+  background: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.vf-plugins-remove-data:not(:disabled):hover {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-plugins-remove-data:disabled {
+  color: var(--vf-text-tertiary);
+  cursor: default;
+}
+
+.vf-plugins-remove-data:focus-visible {
   outline: 2px solid var(--vf-select);
   outline-offset: 2px;
 }

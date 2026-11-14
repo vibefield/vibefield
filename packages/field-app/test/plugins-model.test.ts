@@ -945,6 +945,17 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
   "CARD_WORDS.reaches": [[2], [3]],
   "INSTALL_WORDS.installing": [[0], [1], [3]],
   "INSTALL_WORDS.failed": [["Desk clock"]],
+  // acts c: Remove… and its two questions
+  listNames: [[["Laptop"]], [["Laptop", "Studio"]], [["Laptop", "Studio", "Office"]]],
+  "REMOVE_WORDS.ask": [["Desk clock"]],
+  "REMOVE_WORDS.missing": [["3"]],
+  "REMOVE_WORDS.askData": [["Desk clock"]],
+  "REMOVE_WORDS.deletes": [["this Mac"]],
+  "REMOVE_WORDS.others": [
+    [["Laptop"], "Desk clock"],
+    [["Laptop", "Studio"], "Desk clock"],
+  ],
+  "REMOVE_WORDS.here": [[true], [false]],
 };
 
 /** The strings a value says: strings as they are, objects and arrays by their

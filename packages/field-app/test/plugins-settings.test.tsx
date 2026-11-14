@@ -497,7 +497,7 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
 
   it("the port asks fieldd for a setting and keeps one, and has no reset, undo or redo (C2; James's MK-O6)", () => {
     const port = pluginsPortOver({ request: () => Promise.resolve({}) });
-    // O2-C adds the install card's doors and the roster: commit, desktops, discard and prepare
+    // O2-C adds the install card's doors and the roster: commit, desktops, discard and prepare; MK-4f uninstall
     expect(Object.keys(port).sort()).toEqual([
       "catalog",
       "commit",
@@ -510,6 +510,7 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
       "refresh",
       "settingsGet",
       "settingsSet",
+      "uninstall",
     ]);
   });
 });

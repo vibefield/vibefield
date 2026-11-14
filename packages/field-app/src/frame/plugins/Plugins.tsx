@@ -49,6 +49,7 @@ import {
   walkHot,
 } from "./plugins-model";
 import { type PluginsPort, pluginsPortOver } from "./plugins-port";
+import { type RemoveAsk, removable, removeQuestion } from "./plugins-remove";
 import {
   discoverShelf,
   isShelfKey,
@@ -58,6 +59,7 @@ import {
   shelfShows,
   walkShelf,
 } from "./plugins-shelf";
+import { RemoveView } from "./RemoveQuestion";
 
 // THE PLUGINS POPUP'S CONTROLLER (MK-4a; DESIGN.md §8 "Plugins — the frame's
 // second popup"): the frame's second popup, built the way search is. It is one
@@ -101,6 +103,15 @@ import {
 // never fieldd's text (`installRefusal`): one this VibeField can't run says it
 // needs a newer VibeField, and every other §9's line with Try again. ↵ on a
 // page presses its act or the card's Install.
+// MK-4f: a plugin from the list's page carries Remove… (`plugins-remove.ts`),
+// which asks in place — §8's two-step destructive confirm, Cancel holding the
+// keyboard — and its second question, Remove it and its data…; the roster is
+// read as Remove… is pressed, for the second's names. A Built in, Development
+// or Sideloaded page carries none. The question stands, its buttons taking no
+// press, until the snapshot no longer holds the plugin; a refusal is said under
+// Remove…, never fieldd's text. Esc, leaving the page or folding the popup is
+// its Cancel; whichever way it goes, the keyboard goes back to the field. A
+// page whose plugin neither the snapshot nor the list holds closes to its tab.
 // Its doors (MK-4b) are the Me menu's Plugins… row and the palette's Plugins…
 // and Check plugins for updates, each through ChromeLayer's `openPlugins`; the
 // pegboard's pill is MK-4d's. The catalog mounts this controller over a
@@ -220,6 +231,9 @@ export function Plugins({
     flowNow.current = next;
     setFlow(next);
   }, []);
+  // MK-4f: Remove…'s question standing on a page, and the plugin whose last removal fieldd refused
+  const [removing, setRemoving] = useState<RemoveAsk | null>(null);
+  const [removeRefused, setRemoveRefused] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const returnFocus = useRef<Element | null>(null);
@@ -229,6 +243,12 @@ export function Plugins({
   useLayoutEffect(() => {
     heard.current = onCatalog;
   }, [onCatalog]);
+  // MK-4f: whether the popup stands now, for an answer that lands late: a refusal gives the field the keyboard
+  // only while it stands
+  const openNow = useRef(open);
+  useLayoutEffect(() => {
+    openNow.current = open;
+  }, [open]);
 
   const fold = useCallback(
     () => onSurfaceChange(foldSurface(surface, "plugins")),
@@ -357,10 +377,61 @@ export function Plugins({
     if (takeFocus) inputRef.current?.focus({ preventScroll: true });
   }, [dropInstall, takeFocus]);
 
+  // MK-4f: Remove… asks, and reads the roster for its second question's names (none said if it can't be read)
+  const askRemove = useCallback(
+    (id: string) => {
+      if (away) return;
+      setRemoveRefused(null);
+      setRemoving({ id, step: "ask", roster: null, sending: false });
+      port.desktops().then(
+        (roster) => setRemoving((was) => (was?.id === id ? { ...was, roster } : was)),
+        () => undefined,
+      );
+    },
+    [away, port],
+  );
+  // Remove it and its data… turns the question into its second
+  const askRemoveData = useCallback(() => {
+    setRemoving((was) => (was === null || was.sending ? was : { ...was, step: "ask-data" }));
+  }, []);
+  // its Cancel: the question goes, and the keyboard goes back to the field; one whose request is out stands
+  const cancelRemove = useCallback(() => {
+    setRemoving((was) => (was?.sending === true ? was : null));
+    if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+  }, [takeFocus]);
+  // Remove, or Remove data: one request; the question stands until the snapshot no longer holds the plugin, and
+  // a refusal is said under Remove…
+  const confirmRemove = useCallback(() => {
+    if (away || removing === null || removing.sending) return;
+    const { id, step } = removing;
+    setRemoving({ ...removing, sending: true });
+    port.uninstall(id, step === "ask-data").then(
+      () => undefined,
+      () => {
+        setRemoving((was) => (was?.id === id ? null : was));
+        setRemoveRefused(id);
+        // the question's buttons went with it, so the keyboard goes back to the field while the popup stands
+        if (takeFocus && openNow.current) inputRef.current?.focus({ preventScroll: true });
+      },
+    );
+  }, [away, removing, port, takeFocus]);
+  useEffect(() => {
+    if (removing === null || snapshot === null) return;
+    if (snapshot.plugins.some((plugin) => plugin.id === removing.id)) return;
+    setRemoving(null);
+    if (open && takeFocus) inputRef.current?.focus({ preventScroll: true });
+  }, [open, snapshot, removing, takeFocus]);
+  // the question and a refusal's line belong to their page: leaving it, or folding the popup, lets them go
+  useEffect(() => {
+    const here = open ? page?.id : undefined;
+    setRemoving((was) => (was !== null && was.id !== here ? null : was));
+    setRemoveRefused((was) => (was !== null && was !== here ? null : was));
+  }, [open, page]);
+
   // While open, Esc is the popup's before anything else hears it, and answers
-  // the nearest first (§8 "Keys"): the install card (its Cancel), then the
-  // community tile's ask goes back (MK-O3D), then a page goes back to its tab,
-  // then the popup folds.
+  // the nearest first (§8 "Keys"): the install card (its Cancel) or Remove…'s
+  // question (its Cancel), then the community tile's ask goes back (MK-O3D),
+  // then a page goes back to its tab, then the popup folds.
   useEffect(() => {
     if (!open || !bindKeys) return;
     const onKey = (event: globalThis.KeyboardEvent): void => {
@@ -368,13 +439,14 @@ export function Plugins({
       event.preventDefault();
       event.stopPropagation();
       if (flowNow.current?.at.step === "card") cancelInstall();
+      else if (removing !== null) cancelRemove();
       else if (asking) cancelAsk();
       else if (page !== null) back();
       else fold();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, bindKeys, fold, page, back, asking, cancelAsk, cancelInstall]);
+  }, [open, bindKeys, fold, page, back, asking, cancelAsk, cancelInstall, removing, cancelRemove]);
 
   // O2-C: the install belongs to its page. Leaving the page — its back row, a tab, typed words — or folding the
   // popup lets it go, so nothing waits in fieldd for a card no one sees. The window closing, or its port changing,
@@ -509,6 +581,11 @@ export function Plugins({
     const entry = catalog?.plugins.find((listed) => listed.id === page.id);
     return entry === undefined ? null : listedPage(entry);
   }, [page, snapshot, catalog, onMac]);
+  // MK-4f: so a page whose plugin went closes to its tab (one removed that the list doesn't hold), and its keys
+  // walk again, once both the snapshot and a list have answered; before either, nothing is known gone
+  useEffect(() => {
+    if (open && page !== null && shown === null && snapshot !== null && catalog !== null) back();
+  }, [open, page, shown, snapshot, catalog, back]);
   // O2-C: what stands where its act stands, and what ↵ on the page presses
   const act = useMemo(
     () =>
@@ -538,6 +615,13 @@ export function Plugins({
     }
     return false;
   }, [shown, act, install, confirm]);
+  // MK-4f: Remove… stands on the page of an installed plugin from the list, with its question when one stands
+  const removeShown = useMemo(() => {
+    if (shown === null || !shown.installed) return undefined;
+    const record = snapshot?.plugins.find((plugin) => plugin.id === shown.id);
+    return record !== undefined && removable(record) ? record : undefined;
+  }, [shown, snapshot]);
+  const removeAsking = removing !== null && removing.id === removeShown?.id ? removing : null;
   // O2-C: the foot's act on Discover — the hot tile's Install opens its page and presses it there
   const hotTile = tab === "discover" && page === null ? tiles[hotAt] : undefined;
   const live = installLive(catalog?.state ?? null, away) && flow?.at.step !== "installing";
@@ -769,6 +853,25 @@ export function Plugins({
             onInstall={() => install(shown.id)}
             onConfirm={confirm}
             onCancel={cancelInstall}
+          />
+        ) : null
+      }
+      pageRemove={
+        removeShown !== undefined ? (
+          <RemoveView
+            question={
+              removeAsking === null
+                ? null
+                : removeQuestion(removeShown, removeAsking.step, removeAsking.roster, onMac)
+            }
+            sending={removeAsking?.sending === true}
+            refused={removeRefused === removeShown.id}
+            live={!away}
+            takeFocus={takeFocus}
+            onAsk={() => askRemove(removeShown.id)}
+            onFurther={askRemoveData}
+            onConfirm={confirmRemove}
+            onCancel={cancelRemove}
           />
         ) : null
       }

@@ -249,6 +249,37 @@ export const INSTALL_WORDS = {
   offline: "Installing needs the internet",
 } as const;
 
+/** Names said as a list is: "Clock", "Clock and Ruler", "Clock, Calendar and Ruler" (MK's). */
+export function listNames(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`;
+}
+
+/** Remove… and its two questions (MK-4f; DESIGN.md §9 "Installed, off and Remove…", ruled with MK-E10's change and
+ * MK-O4's ‹draft› sentences): §9's words, ‹this desktop› said as the card says it ("this Mac", MK's), one other
+ * desktop said as one ("mini removes …", MK's, ‹draft›), and the refusal in the switches' pattern (MK's, ‹draft›).
+ * "‹plugin›" is the installed plugin's title. */
+export const REMOVE_WORDS = {
+  act: "Remove…",
+  ask: (title: string) => `Remove ${title}?`,
+  kept: "Its settings and data stay on your desktops, so installing it again brings them back.",
+  missing: (objects: string) =>
+    `${objects} objects on your desks draw as missing on your desktops until then.`,
+  confirm: "Remove",
+  further: "Remove it and its data…",
+  askData: (title: string) => `Remove ${title} and its data?`,
+  deletes: (here: string) => `This deletes its settings and data on ${here}. It can't be undone.`,
+  others: (desktops: readonly string[], title: string) =>
+    desktops.length === 1
+      ? `${listNames(desktops)} removes ${title} too, and keeps its copy of its data.`
+      : `${listNames(desktops)} remove ${title} too, and keep their copy of its data.`,
+  confirmData: "Remove data",
+  cancel: "Cancel",
+  /** ‹this desktop›, as the install card says it */
+  here: (onMac: boolean) => (onMac ? "this Mac" : "this PC"),
+  refused: "Couldn't remove it. Try again.",
+} as const;
+
 /** Installed, when no plugin holds every typed word (MK's, ‹draft›; the Peek's "Nothing in your past holds every
  * word of “q”" is its pattern). */
 export function noMatchWords(query: string): string {

@@ -203,6 +203,8 @@ export type PluginsFixtureSettings = Readonly<
 export interface PluginsFixtureInstall {
   readonly prepare?: PluginsFixtureActs;
   readonly commit?: PluginsFixtureActs;
+  /** MK-4f: a removal (`uninstall`), which moves nothing either */
+  readonly uninstall?: PluginsFixtureActs;
 }
 
 /** The handle a fixture's download answers with: fieldd's opaque candidate, as its shape holds it. */
@@ -269,6 +271,7 @@ export function pluginsFixturePort(
     commit: () => settle(install.commit ?? "answers", undefined),
     discard: () => Promise.resolve(),
     desktops: () => Promise.resolve(PLUGINS_FIXTURE_ROSTER),
+    uninstall: () => settle(install.uninstall ?? "answers", undefined),
   };
 }
 

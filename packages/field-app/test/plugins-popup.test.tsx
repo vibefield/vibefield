@@ -88,8 +88,8 @@ function counting(inner: PluginsPort): {
   };
 }
 
-/** A port's switches and settings (MK-4c2b), and (O2-C) its install's doors, for a test that presses and reads
- * none: each refuses, so a stray press or read is never a quiet pass. */
+/** A port's switches and settings (MK-4c2b), (O2-C) its install's doors and (MK-4f) Remove…, for a test that
+ * presses and reads none: each refuses, so a stray press or read is never a quiet pass. */
 const NO_SWITCHES: Pick<
   PluginsPort,
   | "enable"
@@ -101,6 +101,7 @@ const NO_SWITCHES: Pick<
   | "commit"
   | "discard"
   | "desktops"
+  | "uninstall"
 > = {
   enable: () => Promise.reject(new Error("no switch is pressed in this test")),
   disable: () => Promise.reject(new Error("no switch is pressed in this test")),
@@ -111,6 +112,7 @@ const NO_SWITCHES: Pick<
   commit: () => Promise.reject(new Error("nothing is installed in this test")),
   discard: () => Promise.reject(new Error("nothing is installed in this test")),
   desktops: () => Promise.reject(new Error("nothing is installed in this test")),
+  uninstall: () => Promise.reject(new Error("nothing is removed in this test")),
 };
 
 /** The requests a port's switches sent, in order (MK-4c2a). */
@@ -1266,6 +1268,161 @@ describe("Install and the install card (O2-C; §8 'Every install asks first')", 
     openThings();
     expect(pageAct()?.disabled).toBe(true);
     expect(bodyText()).toContain(words.PLUGINS_AWAY);
+  });
+});
+
+/** The removals a port sent, in order (MK-4f). */
+function removals(inner: PluginsPort): { port: PluginsPort; sent: string[] } {
+  const sent: string[] = [];
+  return {
+    sent,
+    port: {
+      ...inner,
+      uninstall: (id, removeData) => {
+        sent.push(`uninstall ${id} ${removeData}`);
+        return inner.uninstall(id, removeData);
+      },
+    },
+  };
+}
+const removeAct = (): HTMLButtonElement | null =>
+  document.body.querySelector<HTMLButtonElement>(".vf-plugins-remove .vf-plugins-card-cancel");
+const question = (): HTMLElement | null =>
+  document.body.querySelector<HTMLElement>('.vf-plugins-card[aria-label^="Remove"]');
+const questionButton = (words_: string): HTMLButtonElement | null =>
+  [...(question()?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+    (button) => button.textContent === words_,
+  ) ?? null;
+const LISTED: PluginsFixtureRead = { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED };
+/** Kanban's page, from Installed, on the desktop that has it. */
+async function openKanban(port: PluginsPort): Promise<void> {
+  await mount(port, PLUGINS_FIXTURE_LISTED_SNAPSHOT);
+  toInstalled();
+  const kanban = rows().find((row) => row.textContent?.includes("Kanban"));
+  act(() => kanban?.click());
+}
+
+describe("Remove… on a plugin's page (MK-4f; §8 'The destructive uninstall affordance')", () => {
+  it("stands on a plugin from the list's page alone: never a Built in, Development (§8's call, closed) or Sideloaded one", async () => {
+    await openKanban(pluginsFixturePort(LISTED));
+    expect(removeAct()?.textContent).toBe(words.REMOVE_WORDS.act);
+    act(() => root.unmount());
+    root = createRoot(host);
+    await mount(pluginsFixturePort(LISTED), PLUGINS_FIXTURE_LISTED_SNAPSHOT);
+    toInstalled();
+    for (const title of ["Simulators", "Desk clock", "Key-value store"]) {
+      act(() =>
+        rows()
+          .find((row) => row.textContent?.includes(title))
+          ?.click(),
+      );
+      expect(pageTitle()).toBe(title);
+      expect(removeAct()).toBeNull();
+      esc();
+    }
+  });
+
+  it("asks in place, Cancel holding the keyboard, and names the objects that will draw as missing", async () => {
+    const { port, sent } = removals(pluginsFixturePort(LISTED));
+    await openKanban(port);
+    act(() => removeAct()?.click());
+    await settle();
+    expect(question()?.getAttribute("aria-label")).toBe("Remove Kanban?");
+    expect(question()?.textContent).toContain(
+      "Board and Card objects on your desks draw as missing on your desktops until then.",
+    );
+    expect(document.activeElement).toBe(questionButton(words.REMOVE_WORDS.cancel));
+    // Esc answers the question first, and the keyboard goes back to the field
+    esc();
+    expect(question()).toBeNull();
+    expect(pageTitle()).toBe("Kanban");
+    expect(document.activeElement).toBe(field());
+    act(() => removeAct()?.click());
+    act(() => questionButton(words.REMOVE_WORDS.cancel)?.click());
+    await settle();
+    // a roster answering after Cancel brings no question back
+    expect(question()).toBeNull();
+    expect(sent).toEqual([]);
+  });
+
+  it("removes it with its data kept, and stands until the snapshot no longer holds it", async () => {
+    const { port, sent } = removals(pluginsFixturePort(LISTED));
+    await openKanban(port);
+    act(() => removeAct()?.click());
+    await settle();
+    act(() => questionButton(words.REMOVE_WORDS.confirm)?.click());
+    await settle();
+    expect(sent).toEqual(["uninstall acme.kanban false"]);
+    // under way: it stands, and nothing takes a press
+    expect(questionButton(words.REMOVE_WORDS.cancel)?.disabled).toBe(true);
+    act(() => root.render(<Window port={port} snapshot={PLUGINS_FIXTURE_SNAPSHOT} open />));
+    await settle();
+    // gone from this desktop: its page is the list's, whose act is Install, and the keyboard is the field's
+    expect(question()).toBeNull();
+    expect(pageTitle()).toBe("Kanban");
+    expect(removeAct()).toBeNull();
+    expect(pageAct()?.textContent).toBe(`${words.SHELF_WORDS.install}↵`);
+    expect(document.activeElement).toBe(field());
+  });
+
+  it("closes the page to its tab once a plugin the list doesn't hold is gone, and its keys walk again", async () => {
+    const port = pluginsFixturePort(NO_REGISTRY);
+    await mount(port, PLUGINS_FIXTURE_LISTED_SNAPSHOT);
+    toInstalled();
+    act(() =>
+      rows()
+        .find((row) => row.textContent?.includes("Kanban"))
+        ?.click(),
+    );
+    expect(pageTitle()).toBe("Kanban");
+    act(() => removeAct()?.click());
+    await settle();
+    act(() => questionButton(words.REMOVE_WORDS.confirm)?.click());
+    await settle();
+    act(() => root.render(<Window port={port} snapshot={PLUGINS_FIXTURE_SNAPSHOT} open />));
+    await settle();
+    expect(pageTitle()).toBeNull();
+    expect(chosen()).toBe(words.PLUGINS_TAB_WORDS.installed);
+    expect(document.activeElement).toBe(field());
+    expect(hotTitle()).toBe("Comment pad");
+    press("ArrowDown");
+    expect(hotTitle()).toBe("Simulators");
+  });
+
+  it("asks again before its data goes: this desktop alone, your others named, Remove data", async () => {
+    const { port, sent } = removals(pluginsFixturePort(LISTED));
+    await openKanban(port);
+    act(() => removeAct()?.click());
+    await settle();
+    act(() => questionButton(words.REMOVE_WORDS.further)?.click());
+    expect(question()?.getAttribute("aria-label")).toBe("Remove Kanban and its data?");
+    // the window says this PC unless it is told it runs on a Mac (`onMac`, false in these tests)
+    expect(question()?.textContent).toContain(
+      "This deletes its settings and data on this PC. It can't be undone.",
+    );
+    expect(question()?.textContent).toContain(
+      "mini and tower remove Kanban too, and keep their copy of its data.",
+    );
+    expect(document.activeElement).toBe(questionButton(words.REMOVE_WORDS.cancel));
+    act(() => questionButton(words.REMOVE_WORDS.confirmData)?.click());
+    await settle();
+    expect(sent).toEqual(["uninstall acme.kanban true"]);
+  });
+
+  it("says a refusal under Remove…, never fieldd's text, until it is pressed again", async () => {
+    await openKanban(pluginsFixturePort(LISTED, "answers", {}, { uninstall: "refuses" }));
+    act(() => removeAct()?.click());
+    await settle();
+    act(() => questionButton(words.REMOVE_WORDS.confirm)?.click());
+    await settle();
+    expect(question()).toBeNull();
+    expect(bodyText()).toContain(words.REMOVE_WORDS.refused);
+    expect(bodyText()).not.toContain(PLUGINS_FIXTURE_REFUSAL);
+    // the question's buttons went with it, so the keyboard goes back to the field
+    expect(document.activeElement).toBe(field());
+    act(() => removeAct()?.click());
+    await settle();
+    expect(bodyText()).not.toContain(words.REMOVE_WORDS.refused);
   });
 });
 

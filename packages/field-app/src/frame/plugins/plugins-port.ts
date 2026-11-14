@@ -30,7 +30,9 @@ import {
 // the card showed; `discard` throws the download away — and this desktop's
 // roster (`device.list`), which the card's desktops are read from. A commit's
 // answer is not read: the snapshot fieldd pushes next says Installed (the P5
-// law). Nothing here removes a plugin.
+// law). MK-4f adds Remove… (`plugins.uninstall`, `{ id, removeData }`, the
+// request Settings → Plugins sends today): its answer is not read either; the
+// snapshot that no longer holds the plugin is.
 
 export interface PluginsPort {
   /** The list fieldd holds, its state and its time. */
@@ -55,6 +57,9 @@ export interface PluginsPort {
   discard(candidate: string): Promise<void>;
   /** O2-C: this desktop's roster, which the card's desktops are read from. */
   desktops(): Promise<readonly DeviceInfo[]>;
+  /** MK-4f: remove a plugin from every desktop (`plugins.uninstall`), its settings and data deleted on this one
+   * alone when `removeData`: settles when fieldd has answered. */
+  uninstall(id: string, removeData: boolean): Promise<void>;
 }
 
 /** What the port asks of a fieldd client: one request door. */
@@ -100,6 +105,9 @@ export function pluginsPortOver(client: PluginsDoorClient): PluginsPort {
     },
     async desktops() {
       return DeviceListResult.parse(await client.request("device.list", {})).devices;
+    },
+    async uninstall(id, removeData) {
+      await client.request("plugins.uninstall", { id, removeData });
     },
   };
 }
