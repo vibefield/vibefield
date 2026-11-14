@@ -66,6 +66,10 @@ export type PluginsPlateState =
   | "held"
   | "away"
   | "page"
+  // MK-6 (N29): the page above in a narrow window. The plate is 720 wide (scenes.css), so the
+  // controller's own clamp draws the popup 672 wide, and a page in a popup under 720 stacks its
+  // columns, the second above (§8: "A smaller window clamps it", "Its columns")
+  | "narrow"
   | "page-listed"
   | "count"
   | "switches"
@@ -97,6 +101,7 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   offline: { catalog: CATALOG_FIXTURES.unreachable, refresh: CATALOG_FIXTURES.unreachable },
   refused: { catalog: CATALOG_FIXTURES.refused, refresh: CATALOG_FIXTURES.refused },
   held: { catalog: CATALOG_FIXTURES.ready, refresh: CATALOG_FIXTURES.ready },
+  narrow: { catalog: CATALOG_FIXTURES.unconfigured, refresh: CATALOG_FIXTURES.unconfigured },
   away: { catalog: "fails", refresh: "fails" },
   page: { catalog: CATALOG_FIXTURES.unconfigured, refresh: CATALOG_FIXTURES.unconfigured },
   "page-listed": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
@@ -154,6 +159,7 @@ const PLATE_INSTALLS: Readonly<Partial<Record<PluginsPlateState, PluginsFixtureI
 /** The page a plate opens on, from Installed. */
 const PLATE_PAGES: Readonly<Partial<Record<PluginsPlateState, string>>> = {
   page: "vibefield.simulator",
+  narrow: "vibefield.simulator",
   "page-listed": "acme.kanban",
   switches: "vibefield.simulator",
   "switches-off": "example.desk-clock",

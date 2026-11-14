@@ -113,6 +113,13 @@ export function PluginsSection(): ReactElement {
         <PluginsPlate state="page" />
       </Specimen>
       <Specimen
+        title="A narrow window — the popup clamped to it, the same page in one column"
+        source="frame/plugins/Plugins.tsx · frame/plugins/plugins.css"
+        bleed
+      >
+        <PluginsPlate state="narrow" />
+      </Specimen>
+      <Specimen
         title="A plugin's page — a community plugin the list names"
         source="frame/plugins/plugins-model.ts"
         bleed

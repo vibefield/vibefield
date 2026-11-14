@@ -206,6 +206,14 @@
   height: 520px;
 }
 
+/* MK-6 (N29) — the Plugins popup's narrow window: a window 720 wide, under the 768 below which the
+   popup, min(960, window − 48), stands narrower than 720 and a plugin's page stacks its columns
+   (DESIGN.md §8 "Plugins — the frame's second popup"). It stages the window alone; the popup's
+   rules are its own. */
+.vf-ds-history-plate[data-state="plugins-narrow"] {
+  width: 720px;
+}
+
 /* The Peek's plates (2026-10-08): the plate is the window — the view fills it
    and recedes by the product's own rule. */
 .vf-ds-peek-view {
