@@ -446,7 +446,8 @@ export function madeAppRefusalOf(error: unknown): MadeAppRefusalState | null {
 }
 
 /** Whether an error is an UNAVAILABLE of the apps service, whatever its state: how a mark refused
- * until slice 3h is read (by its service alone, never by 3e's word). */
+ * until slice 3h is read (by its service alone, never by 3e's word). *3h, 2026-11-13: only a home
+ * from before it still answers so.* */
 function appsUnavailable(error: unknown): boolean {
   if (madeAppErrorKind(error) !== "UNAVAILABLE") return false;
   const details = errorDetails(error);
@@ -457,7 +458,8 @@ function appsUnavailable(error: unknown): boolean {
   );
 }
 
-/** The words for an act that failed other than by a refusal state (provisional, owed to James). */
+/** The words for an act that failed other than by a refusal state (provisional, owed to James; the
+ * keep's three in DESIGN.md §9 "Keep's words" are his, 2026-11-14). */
 export function madeAppErrorWords(
   error: unknown,
   act: "open" | "keep" | "unkeep" | "versions",
@@ -476,6 +478,9 @@ export function madeAppErrorWords(
   if (appsUnavailable(error)) return "Keeping apps isn't ready yet.";
   if (kind === "FORBIDDEN_SCOPE" || kind === "UNAUTHORIZED")
     return "This window can't keep apps yet.";
+  // K3, DESIGN.md §9 "Keep's words": a keep past MADE_APP_LIMITS.INTENTS, which no retry changes
+  if (act === "keep" && kind === "RESOURCE_EXHAUSTED")
+    return `You're keeping as many apps as VibeField holds. Stop keeping one to keep ${title}.`;
   if (act === "keep") return `Couldn't keep ${title}. Try again.`;
   return `Couldn't stop keeping ${title}. Try again.`;
 }
