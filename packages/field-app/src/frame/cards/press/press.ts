@@ -1,15 +1,17 @@
 import { PAPER_TEX, paperTexture } from "@vibecook/ice/desk/kit";
 import { type BackPrints, type PressSurface, paintBack } from "./back-print";
+import { type PressColours, pressColours, rootToken } from "./press-colours";
 import { CARD_DESIGN, LAMP_COLOUR, PRESS } from "./press-numbers";
 import { PRESS_FS, PRESS_VS } from "./press-shader";
 
-export { PRESS } from "./press-numbers";
+export { PRESS, PRESS_TOKENS } from "./press-numbers";
 
 /**
  * THE PRESS (CS-D5 A, CS-D6 C; DESIGN.md §5 "The stock is printed, once — the press"). Every card wears the same stock, so
  * it is printed once per side, size, density and light by one WebGL2 context on an OffscreenCanvas, read out as an
  * image, and the context is let go. The hand then asks nothing of the GPU: the browser moves the printed cards as layers.
- * Where WebGL2 is refused the answer is null, and a card keeps its flat stock.
+ * Where WebGL2 is refused the answer is null, and a card keeps its flat stock. Its colours are the root's tokens, read
+ * when it prints (§5 "Its colours are tokens"); where one cannot be read the answer is null too, and is not kept.
  */
 
 export interface PrintSpec {
@@ -33,10 +35,12 @@ export interface PressCanvas {
 export interface PressDeps {
   /** a surface of this many device px, or null where there is none */
   readonly canvas: (width: number, height: number) => PressCanvas | null;
-  /** the back's prints at this many px a design unit */
-  readonly paintBack: (scale: number) => BackPrints;
+  /** the back's prints at this many px a design unit, in the press's colours */
+  readonly paintBack: (scale: number, colours: PressColours) => BackPrints;
   /** an address for a printed image */
   readonly url: (blob: Blob) => string;
+  /** a token's value as the root holds it now */
+  readonly token: (name: string) => string;
 }
 
 const DEFAULT_DEPS: PressDeps = {
@@ -44,8 +48,9 @@ const DEFAULT_DEPS: PressDeps = {
     typeof OffscreenCanvas === "undefined"
       ? null
       : (new OffscreenCanvas(w, h) as unknown as PressCanvas),
-  paintBack: (scale) => paintBack(scale),
+  paintBack: (scale, colours) => paintBack(scale, colours),
   url: (blob) => URL.createObjectURL(blob),
+  token: rootToken,
 };
 
 /** A print's key: its side, size, density and light. PURE. */
@@ -54,7 +59,9 @@ export const pressKey = (s: PrintSpec): string =>
 
 const printed = new Map<string, Promise<string | null>>();
 
-/** The stock printed to `spec`, as an image's address: once per key, every later ask the same answer. */
+/** The stock printed to `spec`, as an image's address: once per key, every later ask the same answer. Its colours are
+ * read before anything is made, so a token it cannot read makes no context, and that answer is not kept: a later ask,
+ * once the root holds its tokens, prints. */
 export function printStock(
   spec: PrintSpec,
   deps: PressDeps = DEFAULT_DEPS,
@@ -62,7 +69,9 @@ export function printStock(
   const key = pressKey(spec);
   const had = printed.get(key);
   if (had !== undefined) return had;
-  const job = press(spec, deps).catch(() => null);
+  const colours = pressColours(deps.token);
+  if (colours === null) return Promise.resolve(null);
+  const job = press(spec, colours, deps).catch(() => null);
   printed.set(key, job);
   return job;
 }
@@ -129,15 +138,13 @@ function texture(
   }
 }
 
-const rgb = (hex: string): readonly [number, number, number] => [
-  Number.parseInt(hex.slice(1, 3), 16) / 255,
-  Number.parseInt(hex.slice(3, 5), 16) / 255,
-  Number.parseInt(hex.slice(5, 7), 16) / 255,
-];
-
 let PAPER: Uint8Array | null = null;
 
-async function press(spec: PrintSpec, deps: PressDeps): Promise<string | null> {
+async function press(
+  spec: PrintSpec,
+  colours: PressColours,
+  deps: PressDeps,
+): Promise<string | null> {
   const w = Math.round(spec.width * spec.density);
   const h = Math.round(spec.height * spec.density);
   const canvas = deps.canvas(w, h);
@@ -163,7 +170,9 @@ async function press(spec: PrintSpec, deps: PressDeps): Promise<string | null> {
     PAPER ??= paperTexture();
     texture(gl, 0, { bytes: PAPER, size: PAPER_TEX }, true);
     const back =
-      spec.side === "back" ? deps.paintBack(spec.density * (spec.width / CARD_DESIGN.width)) : null;
+      spec.side === "back"
+        ? deps.paintBack(spec.density * (spec.width / CARD_DESIGN.width), colours)
+        : null;
     texture(gl, 1, back?.color ?? null, false);
     texture(gl, 2, back?.mask ?? null, false);
     texture(gl, 3, back?.height ?? null, false);
@@ -175,7 +184,7 @@ async function press(spec: PrintSpec, deps: PressDeps): Promise<string | null> {
     gl.uniform1i(u("uSide"), spec.side === "back" ? 1 : 0);
     gl.uniform2f(u("uSize"), CARD_DESIGN.width, CARD_DESIGN.height);
     gl.uniform1f(u("uRadius"), PRESS.corner);
-    gl.uniform3fv(u("uPaperC"), [...rgb(PRESS.paper)]);
+    gl.uniform3fv(u("uPaperC"), colours.paper.map((channel) => channel / 255));
     gl.uniform3fv(u("uLight"), [...PRESS.lamp]);
     gl.uniform3fv(u("uRoom"), [...PRESS.room]);
     gl.uniform3fv(u("uLamp"), [...(spec.night ? LAMP_COLOUR.night : LAMP_COLOUR.day)]);
