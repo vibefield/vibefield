@@ -7401,6 +7401,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         unchanged.
       - It shows none of Settings' insides: no mark for where a setting is kept or that it is the default, no
         setting's id, and no **Reset**. Going back to a default stays in Settings → Plugins (MK-4c2's C2).
+        *Corrected 2026-11-14, at its source (James's click on the PM board, 2026-11-14 08:19:36Z, card
+        j-mk-readings, "Yes, add them to the plugin's page"; MK-4c2c):* going back to a default is on the page, and
+        so is removing a saved secret (**Its way back**, below). Its marks and its id stay out, and so does the word
+        **Reset**.
       - **The foot**, 12 under the last row at 12/400 in tertiary ink: when a setting is kept in the synced history,
         that Settings can undo it; otherwise §8 "The settings undo affordance"'s device sentence (its words in §9).
         *Corrected 2026-11-14 (James's MK-O33 pick B, 2026-11-12 06:12:16Z):* with none, the foot says that its
@@ -7419,6 +7423,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - A setting is read as the page opens and again after its own change. Nothing re-reads on its own while the
         page is open: a change made in Settings, its Undo included, or on another desktop shows at the page's next
         opening.
+      - **Its way back** (*drawn 2026-11-14, MK-4c2c; James's click on the PM board, 2026-11-14 08:19:36Z, card
+        j-mk-readings, "Yes, add them to the plugin's page"; VF-PM 08:33:16Z*; ‹draft› for James's eye, its words
+        in §9 "The plugins' words"): a setting that is kept carries an act under its words, in the page's quiet
+        button (**Remove…**'s). It stands only while one is kept, so it marks neither where nor whether: a setting
+        at its default carries none.
+        - A kept value has **Back to default**. One press sets it back, and the row reads it again.
+        - A kept secret has **Remove the saved secret…**. Only typing it again brings it back, so it asks
+          first, in place, as **Remove…** does (§8 "The destructive uninstall affordance", RemoveQuestion's
+          pattern): its line says what removing it does; **Cancel** leads and holds the keyboard; **Remove**
+          trails, in the danger ink (§2.5). **Cancel** asks nothing of fieldd.
+        - Both are the one request Settings' **Reset** sends (`storage.settings.reset`). Under way, Refused,
+          While it is off and Away are the setting's own (above).
+        - The page learns only whether a secret is kept, before the act and after it; no value of it reaches the
+          window.
   - **After install: Show them on the pegboard** (MK-D8 ruled A, B ships; MK-E2). As it ships, the act folds the popup
     and the board rises on the set's first category with its first object in the keyboard's focus — the pegboard's
     own category and focus doors (§8 "The pegboard"), and nothing of ICE's insides; over a covered view the frame
@@ -9838,6 +9856,11 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   - A secret that is kept says "Saved" in its empty field; the page never shows what is kept.
   - A choice with nothing chosen yet says "Choose…" (Settings' word).
   - A setting the page can't draw says "This setting can't be changed here."
+  - *Added 2026-11-14 (MK-4c2c; James's click on the PM board, 2026-11-14 08:19:36Z, card j-mk-readings, "Yes,
+    add them to the plugin's page"), MK's words, ‹draft›, for James's after-land list:* a kept setting's act says
+    "Back to default"; a kept secret's says "Remove the saved secret…", whose question says "This deletes the
+    saved secret. To use it again, you type it in again." over **Cancel** and **Remove** (Remove…'s own); a
+    refusal says "Couldn't save that. Try again." (above).
   - The foot says "Synced settings can be undone in Settings." when a setting is in the synced history, and
     otherwise "These settings stay on this desktop."; a page with both kinds says the first alone, as before
     (ruled at MK's lean by VF-PM, 2026-11-14 03:11Z).
