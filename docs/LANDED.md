@@ -15545,7 +15545,7 @@ commit, anchored on the ledger's frozen trustRootKeys):
 - (c) A remembered policy v2 and remembered heads v11 are each refused `policy-rollback`; the control at v1 is accepted.
 - The runner was first fixed for the tag lane: seven jobs, and the commit read from the tag, not `targetCommitish`.
 
-**W11, the install and launch half** (the Mac mini, jasper; VF-PM's grant for /Applications and `~/Library/*VibeField*`,
+**W11, the install and launch half** (the Mac mini; VF-PM's grant for /Applications and `~/Library/*VibeField*`,
 read and install, never delete):
 - The DMG came by curl, its sha256 GitHub's digest. With no quarantine, Gatekeeper's first-launch prompt was NOT
   exercised. It was installed by `ditto` into /Applications.
@@ -15723,7 +15723,7 @@ signed nightly.
   `68f5fc97…` → `a5414c2b…`. Every plane's sources changed again (the EL8 to ghosttea 0.13.6), so this is still not D11's
   signing-only measurement.
 
-**W11's apply** (the Mac mini, jasper, as the W11 runbook directs; agents read logs, the audit ledger and state.json and
+**W11's apply** (the Mac mini, as the W11 runbook directs; agents read logs, the audit ledger and state.json and
 nothing else; James's acts, "done" at 04:17:13Z):
 - **Before:** the app (N, pid 65520, booted 22:50:36Z on 10-26) had checked once and read `not-available`. state.json
   remembered channels 10, and `lastApply` was null.
@@ -34840,7 +34840,7 @@ clean-Mac row meets", and ruled with prod-builder from 11:33Z to 11:54Z. Item 18
 - James's call, per class, for the seven walled classes: keep the wall (the lean) or prompt. An opened class lands its
   entitlement in `entitlements.mac.plist` alone with its string, and `sign-mac.mjs:81`'s line, in one commit.
 - James's reap of the 580M witness package on the mini
-  (`/Users/jasper/vf-lanes/verify/vibe-field/apps/desktop/release/`).
+  (`~/vf-lanes/verify/vibe-field/apps/desktop/release/`).
 
 ## SP-1e2's renderer half — the crew card, drawn: Chat hangs each crew's card under the act line fieldd's crews now write, live from the crews door and the board, and item 180 closes (track CO) (2026-11-05; `b9a61d5e4` → `320d4b882`, 11 commits on main `18bb15a74`, lane `sp-1e2r` in `/Volumes/SamsungRed/lanes/co-sp1e2/vibe-field`, stacked as M156 `320d4b882`, run 156)
 
@@ -35345,7 +35345,7 @@ and 9 in the dev runner. No Rust, no lock.
     - probe C3 (`build-fieldd-sea.mjs --verify`, exit 0; `D-sea.log` `085abf01…`): "ok   flows-host role: ready in
       73 ms, one agent call answered, the realm frozen, no process in the compartment";
     - its SEA tmp, kept for James's reap (Owed):
-      `/Users/jasper/vf-lanes/verify/sea-c3-tmp` on the mini, 145M (a9, 15:08:05Z);
+      `~/vf-lanes/verify/sea-c3-tmp` on the mini, 145M (a9, 15:08:05Z);
     - N1's real-cap probe at T (`E-n1.log` `b0f41adb…`; probe `0bce9712…`, at its defaults): "N1 real-cap probe:
       PASS"; rss MB ready 56.1, waiting 75.7, kept 1 328.0; asks heard ["start","kept 1"]; `memory`, SIGKILL, 0
       stragglers; the heap stats are not printed by the probe (Owed);
@@ -35550,7 +35550,7 @@ One LOW, O3, goes to Owed 4a2b; it predates `c07039551`.
   (`a311e8e43`). It is cosmetic, biome does not hold comment widths, and touching it would move a RELEASE-ADJACENT
   blob again.
 - **For James's reap:** probe C3's SEA tmp from the mint, kept (VF-PM 14:43Z: agents delete nothing):
-  `/Users/jasper/vf-lanes/verify/sea-c3-tmp` on the mini, 145M (a9, 15:08:05Z).
+  `~/vf-lanes/verify/sea-c3-tmp` on the mini, 145M (a9, 15:08:05Z).
 - **Closes no item.**
 - **For James's eye** (draft words; not a hold): DESIGN.md §9's five sentences for a run's host:
   - "VibeField ended ‹flow›: it stopped answering." (`unanswered`)
@@ -47021,10 +47021,10 @@ RV both items at 03:45Z ("6. you spawn one", relayed by VF-PM).
 - **Step 1, the red of record, at 317's red** (19:37:34Z to 19:38:05Z):
   - kill-matrix alone, exit 1 in 30 s, `Tests 1 failed | 18 passed | 1 skipped (20)`, row 6 alone, at its
     `toEqual` (`:974`);
-  - a lane `HISTFILE` (VF-PM's (b), 18:42:08Z: a lane HISTFILE, no write into `jasper`'s `.bash_history`), set for
+  - a lane `HISTFILE` (VF-PM's (b), 18:42:08Z: a lane HISTFILE, no write into the mini login's `.bash_history`), set for
     step 1 alone, as a prefix on its one command, as addendum 2 has it; so Received was that line;
   - the env-shaped grep found 2 hits, the Expected and Received sides (lines 60 and 61);
-  - `jasper`'s two history files were unchanged in stat over step 1.
+  - the mini login's two history files were unchanged in stat over step 1.
 - **V at `5438a5b3d`**: "verify exit 0", 6 min 20 s (19:38:05Z to 19:44:25Z).
   - contracts 1963; electron-shell `2845 passed | 3 skipped (2848)`; field-app 4696 (338 files, command-palette
     11 → 12); fieldd `3832 passed | 15 skipped (3847)`.
@@ -47079,7 +47079,7 @@ RV both items at 03:45Z ("6. you spawn one", relayed by VF-PM).
   key alone (`field-native/src/logging/record.rs:640-665`). No owner, and nobody runs those rows red to find out.
 - **Item 324:** run 305's V had no verdict. mille's binding was rebuilt under the lane's exported `CARGO_TARGET_DIR`,
   which is the runner's own fault; run 306 answered it.
-- **run 309** (VF-PM 23:03:08Z) measured +538 B to `jasper`'s bash history at the cargo stage, at a main without
+- **run 309** (VF-PM 23:03:08Z) measured +538 B to the mini login's bash history at the cargo stage, at a main without
   317's green, with `HISTFILE` set in the runner. tp_activation's sessions take their own environment, so 317's green
   names it there too.
 - *Correction (2026-11-11, the fixer):* "5438a5b3d's message cites :428 for the throwaway HOME; it is
