@@ -146,7 +146,9 @@ export const COPY_FIXTURES: readonly Card[] = [
   ),
 ];
 
-/** What a drag from another app shows before it is let go: only its kind. */
+/** What a drag from another app shows before it is let go: only its kind — a picture, three
+ * files, and words, as the product's `waitingCardOf` deals them (HN-D2). The words' name is the
+ * longest a waiting card has, so the plate shows how the head sets it. */
 export const WAITING_FIXTURES: readonly Card[] = [
   pictureCardOf(
     { title: "", width: 0, height: 0, src: "" },
@@ -156,6 +158,12 @@ export const WAITING_FIXTURES: readonly Card[] = [
     { name: WAITING_WORDS.files(3) },
     { id: "fx-wait-file", origin: { view: "outside", how: "drag" }, at: NOW, waiting: true },
   ),
+  textCardOf("", {
+    id: "fx-wait-text",
+    origin: { view: "outside", how: "drag" },
+    at: NOW,
+    waiting: true,
+  }),
 ];
 
 /** What another app, Settings and History deal (HN-5, HN-6; DESIGN.md §8 "The hand"): a file
@@ -321,9 +329,9 @@ export function CardsFromPlate({ reach }: { readonly reach: string }): ReactElem
   );
 }
 
-/** The six faces at twice their size (and a drag's two waiting faces, the
- * two the desk's Copy deals, and what another app, Settings and History deal),
- * by the page's light or by the Moon's. */
+/** The six faces at twice their size (and a drag's three waiting faces, the
+ * two the desk's Make a card deals, and what another app, Settings and History
+ * deal), by the page's light or by the Moon's. */
 export function CardFacesPlate({
   cards,
   night = false,
