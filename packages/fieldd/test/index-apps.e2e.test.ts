@@ -721,7 +721,7 @@ describe("MA-3e — the made apps across two real daemons", () => {
       kept.set(n.toString(16).padStart(64, "0"), 1);
     }
     settings.hostDoc().commit();
-    settings.hostOwner().merged();
+    settings.hostOwner().merged?.();
     const one = madeAppFoldKey({ device: "dev-a", appId: appIdOf("one"), kind: "claude-code" });
     const bee = madeAppFoldKey({ device: "dev-b", appId: appIdOf("bee"), kind: "claude-code" });
     const mark = (foldKey: string, keep: boolean) =>

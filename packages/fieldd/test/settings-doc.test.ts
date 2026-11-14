@@ -591,7 +591,7 @@ describe("MA-3h — the kept apps in the settings doc", () => {
     const sections: string[] = [];
     b.on("changed", (event: { section: string }) => sections.push(event.section));
     b.hostDoc().import(a.hostDoc().export({ mode: "update" }));
-    b.hostOwner().merged();
+    b.hostOwner().merged?.();
     expect(sections).toContain("madeApps");
     expect(await keptOf(b)).toEqual({ [KEY]: 1_000 });
   });

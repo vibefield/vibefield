@@ -68,7 +68,7 @@ describe("MA-3h — the kept apps over the settings document", () => {
     kept.set(madeAppKeptKey(NATIVE), "soon");
     kept.set("not-a-digest", 1);
     settings.hostDoc().commit();
-    settings.hostOwner().merged();
+    settings.hostOwner().merged?.();
     expect(intents.of(NATIVE), "a value it cannot read is no keep").toBeUndefined();
     expect(intents.of(HOSTED), "the rest stand").toEqual({ kept: true });
     expect(await intents.mark(HOSTED, false, "test")).toEqual({
@@ -91,12 +91,12 @@ describe("MA-3h — the kept apps over the settings document", () => {
 
     await (await intentsOn(a)).mark(HOSTED, true, "test");
     b.hostDoc().import(a.hostDoc().export({ mode: "update" }));
-    b.hostOwner().merged();
+    b.hostOwner().merged?.();
     expect(heard, "a merge").toEqual(["service", "fold", "service", "fold"]);
     expect(reader.of(HOSTED)).toEqual({ kept: true });
 
     await b.setAppValue("theme", "dark", "pane");
-    b.hostOwner().merged();
+    b.hostOwner().merged?.();
     expect(heard, "another section moved: nothing to tell").toHaveLength(4);
     offService();
     offFold();
@@ -112,7 +112,7 @@ describe("MA-3h — the kept apps over the settings document", () => {
       kept.set(n.toString(16).padStart(64, "0"), 1);
     }
     settings.hostDoc().commit();
-    settings.hostOwner().merged();
+    settings.hostOwner().merged?.();
     expect(intents.full(NATIVE, true), "the bound is read before a write").toBe(true);
     expect(intents.full(NATIVE, false), "stopping is never refused").toBe(false);
     const refused = await intents.mark(NATIVE, true, "test").catch((error: unknown) => error);
