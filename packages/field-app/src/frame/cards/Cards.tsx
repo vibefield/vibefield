@@ -19,6 +19,7 @@ import { CardsView, type HeldCard, type LeavingCard } from "./CardsView";
 import { CarriedCardLayer } from "./CarriedCardLayer";
 import { type CardBox, getCarriedCard, startCardDrag, useCarriedCard } from "./card-drag";
 import {
+  blobUrlsOf,
   CARD_H,
   CARD_W,
   CARDS_LINE_RIGHT,
@@ -168,7 +169,7 @@ const modified = (event: KeyboardEvent): boolean => event.metaKey || event.ctrlK
 
 /** A card's own object URL goes with it (a picture pasted or dropped in; HN-D9 keeps nothing). */
 function release(card: Card): void {
-  if (card.kind === "pict" && card.src.startsWith("blob:")) URL.revokeObjectURL(card.src);
+  for (const url of blobUrlsOf(card)) URL.revokeObjectURL(url);
 }
 
 /** Claim a key for the hand: no pane, no desk and no later listener acts on it. */
