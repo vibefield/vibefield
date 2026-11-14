@@ -125,14 +125,12 @@ extension FieldHomeModel {
     static let couldNotConnect = "Couldn’t connect."
     /// WI-1's hold, and the gate's (WI-L2 as amended 2026-11-13): one title for a phone looking for a desktop.
     static let looking = "Looking for your computer…"
-    /// The gate's own words (§9 "The way in", amended 2026-11-13; drafts pending James).
+    /// The gate's own words (§9 "The way in", amended 2026-11-13; ruled as written 2026-11-14, WI-G1 A and WI-G2 A).
+    /// Can’t reach your computer.'s line sets the desktop's name in bold: `FieldHomeModel.unreachableLine`.
     static let cantReach = "Can’t reach your computer."
     static let offline = "You’re offline."
     static let tryAgain = "Try again"
     static let useAnotherAccount = "Use another account"
-    static func cantReachLine(desktop: String?) -> String {
-      "Open VibeField on \(desktop ?? "your computer"), and keep it awake and connected."
-    }
     static func offlineLine(device: DeviceWord) -> String {
       "Connect \(device.this) to the internet to reach your computer."
     }
@@ -250,23 +248,26 @@ extension FieldHomeModel {
         words: .init(title: "No desktops yet.", line: noDesktopsLine(login: login)),
         acts: [.computerWaiting, .share(words.sendTheLink, primary: false)])
 
-    // WI-L2 as amended 2026-11-13 — the gate's three screens: no step of the first way in, so no bars, the mark
-    // in its place, and no found beat after them (§9 "The way in"; where each stands is §8 "The phone's way in")
-    case .page(.reaching):
-      // WI-1's title alone, since the phone has been here before; under a launch's grace it is not drawn at all
-      // (`wayInDraws`)
-      return WayInScreen(words: .init(title: words.looking, hold: true))
+    // WI-L2 as amended 2026-11-13 — the gate's three screens: no step of the first way in, so no bars, and no found
+    // beat after them (§9 "The way in"; where each stands is §8 "The phone's way in"). WI-G9 B (James, 2026-11-14):
+    // your face where the mark stands on the three that have words, as on Sign in to Tailscale again (WI-D8 A)
+    case .page(.reaching(let quiet)):
+      // WI-1's title alone, since the phone has been here before. Under a launch's grace it is not drawn at all
+      // (`wayInDraws`), and it keeps the mark: the launch picture cannot hold a face
+      return WayInScreen(picture: quiet ? .mark : .face, words: .init(title: words.looking, hold: true))
 
     case .page(.unreachable(let desktop)):
-      // Try again leads, and the way out is Sign in again's: Settings is behind the gate
+      // Try again leads, and the way out is Sign in again's: Settings is behind the gate. WI-G3 A: the way out asks
+      // first (`WayInDispatch`)
       return WayInScreen(
-        words: .init(title: words.cantReach, line: AttributedString(words.cantReachLine(desktop: desktop))),
+        picture: .face,
+        words: .init(title: words.cantReach, line: unreachableLine(desktop: desktop)),
         acts: [.primary(words.tryAgain, .tryAgain), .link(words.useAnotherAccount, .useAnotherAccount)])
 
     case .page(.offline):
       // no act: nothing on this screen brings a network back, and the gate lifts by itself when one returns
       return WayInScreen(
-        words: .init(title: words.offline, line: AttributedString(words.offlineLine(device: device))))
+        picture: .face, words: .init(title: words.offline, line: AttributedString(words.offlineLine(device: device))))
 
     case .found(let name, let desktop):
       return WayInScreen(
@@ -354,6 +355,20 @@ extension FieldHomeModel {
     var line = AttributedString("Signed in as \(login). On your computer, open VibeField, click your face, then ")
     line += bold("Connect your devices…")
     line += AttributedString(" with this same account.")
+    return line
+  }
+
+  /// WI-G1 A, refined (James on the page The Way In, 2026-11-14 03:46:06Z) — Can’t reach your computer.'s line: the
+  /// account's one desktop by its name, in bold as the way in sets the account to pick, so "on studio" reads as a
+  /// name; with several, "your computer" in the line's own ink.
+  static func unreachableLine(desktop: String?) -> AttributedString {
+    var line = AttributedString("Open VibeField on ")
+    if let desktop {
+      line += bold(desktop)
+    } else {
+      line += AttributedString("your computer")
+    }
+    line += AttributedString(", and keep it awake and connected.")
     return line
   }
 

@@ -123,6 +123,9 @@ public struct HomeScreen: View {
   /// IOS-8d — Sign out asks first: it is the one act in the menu that is
   /// destructive, and the sentence says what goes and what stays.
   @State private var signOutPending = false
+  /// WI-G3 A (James on the page The Way In, 2026-11-14 03:47:00Z) — the way in's Use another account asks the same
+  /// question, from the way in's own view: the corner's is on the tabs, which are not mounted under the way in.
+  @State private var wayInSignOutPending = false
   // --- IOS-9a/9e: the two tabs, search, and the account in one bar ---------
   /// Which page stands: the field, History or Chat (IOS-12b). Search stands over it (SE-2).
   @State private var selectedTab: AppTab = .field
@@ -797,7 +800,13 @@ public struct HomeScreen: View {
     // standing again (a sign-out, Tailscale asking again) takes the screen whole:
     // nothing the tabs had open stays over it or comes back with them.
     .onChange(of: wayInStep == nil) { _, signedIn in
-      if signedIn { refold() } else { closeWhatTheTabsOpened() }
+      if signedIn {
+        // WI-G3 A — a question the way in asked goes with it, and never stands up again on its next return
+        wayInSignOutPending = false
+        refold()
+      } else {
+        closeWhatTheTabsOpened()
+      }
     }
     #if DEBUG
       // WI-1's OWED witness — signed out, the slice's link waits for the tabs to be down: a launch signed out stands
@@ -908,6 +917,18 @@ public struct HomeScreen: View {
           },
           onClose: { macCodeReaderOpen = false })
       }
+      // WI-G3 A — Use another account asks first, in the corner's own words (the stage's question, and Settings ›
+      // Account's), on the way in for the reader's reason: the tabs are not mounted under it. Its Sign out goes back
+      // through the dispatcher, which holds it under a demo; Cancel leaves the page as it was.
+      .confirmationDialog(
+        SettingsWords.signOutTitle(login: accountLogin), isPresented: $wayInSignOutPending,
+        titleVisibility: .visible
+      ) {
+        Button("Sign out", role: .destructive) { _ = wayInDispatch.signOut() }
+        Button("Cancel", role: .cancel) {}
+      } message: {
+        Text(SettingsWords.signOutMessage(DeviceWord.current))
+      }
     }
   }
 
@@ -943,9 +964,11 @@ public struct HomeScreen: View {
         signIn: { performSignIn() },
         openReader: { macCodeReaderOpen = true },
         receive: { code, arrival in receive(code, arrival: arrival) },
-        // RED — Use another account asks nothing yet (WI-G3 A): the dispatcher still signs out at its tap
-        askSignOut: {},
-        // Tailscale asking again, answered with another account: the full sign-out, then the welcome
+        // Use another account (Tailscale asking again, or no desktop answering): the corner's question first (WI-G3 A)
+        askSignOut: { wayInSignOutPending = true },
+        // the question's Sign out: the full sign-out, then the welcome. The link's own, as it was: the account a
+        // desktop's code named is kept, as the sweep keeps it for "Another account?" (the corner's
+        // `confirmSignOut` forgets it first)
         signOut: { signOut() },
         switchAccount: { switchAccount() },
         // the desktop's code is set aside: the welcome, or the account kept

@@ -5,7 +5,9 @@ import Foundation
 // acts, out of the view so a test sees which real call each one makes. Under a demo, every act that would reach this
 // phone's real account, its lock, the code reader or Safari is held, and nothing is called; the acts that only move
 // between the way in's pages, and the lock's own Unlock, are made. Whether a demo stands is answered in one place: the
-// `LaunchFixtures` value the home reads.
+// `LaunchFixtures` value the home reads. WI-G3 A (James on the page The Way In, 2026-11-14 03:47:00Z): Use another
+// account asks the corner's question first. The asking reaches nothing, so it is made under a demo; the question's
+// Sign out reaches the account, so it is held.
 extension FieldHomeModel {
   /// What one act came to.
   enum WayInOutcome: Equatable, Sendable {
@@ -79,18 +81,20 @@ extension FieldHomeModel {
     /// WI-G3 A (2026-11-14) — the question's Sign out, after Use another account: the full sign-out. It reaches the
     /// account, so a demo holds it.
     func signOut() -> WayInOutcome {
-      // RED — the stub is the rule's inverse: made under a demo too, and it calls nothing
-      .made
+      if underDemo { return .heldUnderDemo }
+      calls.signOut()
+      return .made
     }
 
     /// Whether an act's call reaches past the way in's own pages: the account (Try again: its node and its desktops),
-    /// the lock, the reader or Safari.
+    /// the lock, the reader or Safari. Use another account only asks (WI-G3 A): its question's Sign out, `signOut()`,
+    /// is what reaches the account.
     static func reachesOutside(_ act: WayInAct) -> Bool {
       switch act {
-      case .continueWithTailscale, .signInAgain, .scanCode, .useAnotherAccount, .switchAccount, .keepAccount,
-        .startOver, .openAdminConsole, .lockOn, .tryAgain:
+      case .continueWithTailscale, .signInAgain, .scanCode, .switchAccount, .keepAccount, .startOver,
+        .openAdminConsole, .lockOn, .tryAgain:
         return true
-      case .seeHowItWorks, .tour, .welcome, .notNow, .unlock:
+      case .seeHowItWorks, .tour, .welcome, .notNow, .unlock, .useAnotherAccount:
         return false
       }
     }
@@ -108,7 +112,7 @@ extension FieldHomeModel {
       case .welcome:
         calls.showTour(nil)
       case .useAnotherAccount:
-        calls.signOut()
+        calls.askSignOut()
       case .switchAccount:
         calls.switchAccount()
       case .keepAccount, .startOver:

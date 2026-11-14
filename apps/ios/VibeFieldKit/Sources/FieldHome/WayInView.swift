@@ -26,7 +26,8 @@ private enum GlassMeasure {
 /// amended 2026-11-11). It decides nothing: every act goes back to the home.
 struct WayInView: View {
   let screen: FieldHomeModel.WayInScreen
-  /// The face that takes the mark's place (the found beat, Tailscale asking again), and its tilt's seed.
+  /// The face that takes the mark's place (the found beat, Tailscale asking again, and since WI-G9 B the gate's three
+  /// screens with words), and its tilt's seed.
   let face: UserFace?
   let faceSeed: String
   let onAct: (FieldHomeModel.WayInAct) -> Void
