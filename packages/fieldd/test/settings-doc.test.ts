@@ -448,6 +448,7 @@ describe("406 — the account's refused and known phones (Q-PM1, Q-PM2)", () => 
     // without these, another desktop's roster never passes again, and never forgets the phone
     expect(announced).toContain(SETTINGS_DOC_SECTIONS.DEVICES_REFUSED);
     expect(announced).toContain(SETTINGS_DOC_SECTIONS.DEVICES_PHONES);
+    expect(announced).toContain("installSet");
   });
 
   it("known phones: upserted when a node speaks as one, kept across a reload, never a refused phone, and gone at Remove", async () => {
