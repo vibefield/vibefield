@@ -943,6 +943,8 @@ public struct HomeScreen: View {
         signIn: { performSignIn() },
         openReader: { macCodeReaderOpen = true },
         receive: { code, arrival in receive(code, arrival: arrival) },
+        // RED — Use another account asks nothing yet (WI-G3 A): the dispatcher still signs out at its tap
+        askSignOut: {},
         // Tailscale asking again, answered with another account: the full sign-out, then the welcome
         signOut: { signOut() },
         switchAccount: { switchAccount() },

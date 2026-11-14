@@ -1,3 +1,4 @@
+import FieldDesign
 import FieldMesh
 import FieldSettings
 import Foundation
@@ -11,7 +12,9 @@ import Testing
 /// whether a demo stands is the home's own `LaunchFixtures` value. Each held row asserts the outcome first, so a
 /// dispatcher that does nothing at all is red. RB-2c0 — a link that opens VibeField while a state is stored lands in
 /// that open: the state stands for it and the link is held (James on the card j-rb2-d5-demo-ends, 2026-11-12
-/// 21:44:36.025Z, A: "a state lasts one open"; VF-PM 21:59:10Z).
+/// 21:44:36.025Z, A: "a state lasts one open"; VF-PM 21:59:10Z). WI-G3 A (James on the page The Way In, 2026-11-14
+/// 03:47:00Z) — Use another account asks the corner's question first: the asking reaches nothing, and the question's
+/// Sign out is the act that reaches the account, so it is the one a demo holds.
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("under a demo the way in's acts reach nothing real; with none they do")
@@ -37,6 +40,7 @@ struct DemoActsTests {
         signIn: { made.calls.append("signIn") },
         openReader: { made.calls.append("openReader") },
         receive: { _, arrival in made.calls.append("receive(\(arrival.rawValue))") },
+        askSignOut: { made.calls.append("askSignOut") },
         signOut: { made.calls.append("signOut") },
         switchAccount: { made.calls.append("switchAccount") },
         keepAccount: { made.calls.append("keepAccount") },
@@ -85,11 +89,42 @@ struct DemoActsTests {
     #expect(made.calls == [])
   }
 
-  @Test("Use another account signs nothing out under a demo")
+  /// WI-G3 A (2026-11-14) — changed, not doubled: the act asks now, so it is made under a demo, and the question's
+  /// Sign out is what is held. Nothing is signed out, as before.
+  @Test("Use another account signs nothing out under a demo: it asks, and the question's Sign out is held")
   func signOutHeld() {
-    let r = held([.useAnotherAccount])
-    #expect(r.outcomes == [.heldUnderDemo])
-    #expect(r.calls == [])
+    let made = Made()
+    let d = dispatch(demo, made)
+    let outcomes = [d.perform(.useAnotherAccount), d.signOut()]
+    #expect(outcomes == [.made, .heldUnderDemo])
+    #expect(made.calls == ["askSignOut"])
+  }
+
+  /// The link that names the act on a page of the way in.
+  private func linkAct(on page: FieldHomeModel.DoorPage) -> Act? {
+    for act in FieldHomeModel.wayInScreen(.page(page), device: .iPhone).acts {
+      if case .link(_, let what) = act { return what }
+    }
+    return nil
+  }
+
+  /// WI-G3 A (2026-11-14) — the two links that sign this phone out are one act, and it asks first: on Can’t reach your
+  /// computer., and on Sign in to Tailscale again. by the cost James picked with it ("Sign in to Tailscale again has
+  /// the same link and signs out at one tap; it should ask too, in the same slice."). Only the question's Sign out
+  /// signs out.
+  @Test("Use another account asks first on Can’t reach your computer. and on Sign in to Tailscale again.")
+  func bothLinksAsk() {
+    let made = Made()
+    let d = dispatch(.off, made)
+    let pages: [FieldHomeModel.DoorPage] = [.unreachable(desktop: "studio"), .signInAgain(note: nil)]
+    let links = pages.compactMap { linkAct(on: $0) }
+    let outcomes = links.map { d.perform($0) }
+    #expect(links == [.useAnotherAccount, .useAnotherAccount])
+    #expect(outcomes == [.made, .made])
+    #expect(made.calls == ["askSignOut", "askSignOut"], "a question, never the sign-out at one tap")
+    let confirmed = d.signOut()
+    #expect(confirmed == .made)
+    #expect(made.calls == ["askSignOut", "askSignOut", "signOut"], "the question's Sign out is the sign-out")
   }
 
   @Test("Another account?'s Sign in again, Keep this account and Start over move no account under a demo")
@@ -130,13 +165,16 @@ struct DemoActsTests {
       .openAdminConsole(Self.console), .lockOn, .tryAgain,
     ]
     let outcomes = acts.map { d.perform($0) }
+    // WI-G3 A — Use another account asks; the question's Sign out is the full sign-out
+    let confirmed = d.signOut()
     let received = [d.receive(code, arrival: .scanned), d.receive(code, arrival: .link)]
     #expect(outcomes == Array(repeating: Outcome.made, count: 10))
+    #expect(confirmed == .made)
     #expect(received == [.made, .made])
     #expect(
       made.calls == [
-        "signIn", "signIn", "openReader", "signOut", "switchAccount", "keepAccount", "keepAccount", "openURL", "lockOn",
-        "tryAgain", "receive(scanned)", "receive(link)",
+        "signIn", "signIn", "openReader", "askSignOut", "switchAccount", "keepAccount", "keepAccount", "openURL",
+        "lockOn", "tryAgain", "signOut", "receive(scanned)", "receive(link)",
       ])
   }
 

@@ -24,7 +24,10 @@ extension FieldHomeModel {
     var openReader: () -> Void
     /// A desktop's code, by the reader or by a link: the account to expect.
     var receive: (PhoneCode, PhoneCodeExpectation.Arrival) -> Void
-    /// Use another account: the full sign-out.
+    /// WI-G3 A (James on the page The Way In, 2026-11-14 03:47:00Z) — Use another account, on Can’t reach your
+    /// computer. and on Sign in to Tailscale again.: the corner's own Sign out question, asked first. It moves nothing.
+    var askSignOut: () -> Void
+    /// The question's Sign out, after Use another account: the full sign-out.
     var signOut: () -> Void
     /// "Another account?"'s Sign in again.
     var switchAccount: () -> Void
@@ -71,6 +74,13 @@ extension FieldHomeModel {
       if underDemo { return .heldUnderDemo }
       calls.receive(code, arrival)
       return .made
+    }
+
+    /// WI-G3 A (2026-11-14) — the question's Sign out, after Use another account: the full sign-out. It reaches the
+    /// account, so a demo holds it.
+    func signOut() -> WayInOutcome {
+      // RED — the stub is the rule's inverse: made under a demo too, and it calls nothing
+      .made
     }
 
     /// Whether an act's call reaches past the way in's own pages: the account (Try again: its node and its desktops),

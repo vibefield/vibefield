@@ -321,14 +321,17 @@ struct WayInScreenTests {
     #expect(looking.acts.isEmpty)
   }
 
-  /// WI-L2 as amended 2026-11-13 (James, in session; DESIGN.md §9 "The way in", its words drafts pending him) — the
-  /// gate's three screens. They are no step of the first way in: no bars, the mark in its place, no note.
+  /// WI-L2 as amended 2026-11-13 (James, in session; DESIGN.md §9 "The way in", its words ruled as written
+  /// 2026-11-14) — the gate's three screens. They are no step of the first way in: no bars, no back, no note. What
+  /// stands in the mark's place is `gateFace`'s row (WI-G9 B), and the line's bold run `gateBoldName`'s (WI-G1 A).
   @Test("WI-L2 amended: the gate says Looking for your computer…, then Can’t reach your computer., or You’re offline.")
   func gate() {
     let hold = screen(.reaching(quiet: false))
     #expect(hold.words == .init(title: "Looking for your computer…", hold: true), "WI-1's title alone")
     #expect(hold.acts.isEmpty)
-    #expect(screen(.reaching(quiet: true)) == hold, "a launch's bare hold is the same screen, not drawn")
+    let bare = screen(.reaching(quiet: true))
+    #expect(bare.words == hold.words, "a launch's bare hold says the same, and is not drawn")
+    #expect(bare.acts.isEmpty)
     let one = screen(.unreachable(desktop: "studio"))
     #expect(one.words.title == "Can’t reach your computer.")
     #expect(line(one) == "Open VibeField on studio, and keep it awake and connected.")
@@ -345,12 +348,55 @@ struct WayInScreenTests {
     for page: FieldHomeModel.DoorPage in [.reaching(quiet: false), .unreachable(desktop: "studio"), .offline] {
       let s = screen(page)
       #expect(s.steps == nil, "\(page): no step of the first way in")
-      #expect(s.picture == .mark, "\(page)")
       #expect(s.back == nil, "\(page)")
       #expect(s.words.note == nil, "\(page)")
     }
     // the hold's title is the first way in's own, word for word
     #expect(screen(.looking(login: login)).words.title == hold.words.title)
+  }
+
+  /// WI-G9 B (James on the page The Way In, 2026-11-14 03:46:00Z; DESIGN.md §9 "The way in", ruled that day) — your
+  /// face where the mark stands on the gate's three screens that have words, as on Sign in to Tailscale again (WI-D8
+  /// A). A launch's bare hold keeps the mark: the launch picture cannot hold a face. The screen says what it asks for;
+  /// the view keeps the mark where the phone holds no face, and while the mark cannot fade
+  /// (`theMarkFadesOnlyThroughItsDoor`).
+  @Test("WI-G9 B: your face in the mark's place on the gate's three worded screens; a bare launch keeps the mark")
+  func gateFace() {
+    let pages: [FieldHomeModel.DoorPage] = [
+      .reaching(quiet: false), .unreachable(desktop: "studio"), .unreachable(desktop: nil), .offline,
+      .reaching(quiet: true),
+    ]
+    let pictures = pages.map { screen($0).picture }
+    #expect(pictures == [.face, .face, .face, .face, .mark])
+    // the picture Sign in to Tailscale again asks for, the same word
+    let signInAgain = screen(.signInAgain(note: nil)).picture
+    #expect(signInAgain == .face)
+  }
+
+  /// A line's bold runs, by their words: what `WayInView.inked` sets in the ink and the semibold weight.
+  private func boldRuns(_ screen: Screen) -> [String] {
+    guard let line = screen.words.line else { return [] }
+    var runs: [String] = []
+    for run in line.runs where run.inlinePresentationIntent?.contains(.stronglyEmphasized) == true {
+      runs.append(String(line[run.range].characters))
+    }
+    return runs
+  }
+
+  /// WI-G1 A, refined (James on the page The Way In, 2026-11-14 03:46:06Z; §9, ruled that day) — the one desktop's
+  /// name in bold, as the way in sets the account to pick (Connect to ‹desktop›.'s login), so "on studio" reads as a
+  /// name; with several desktops the line names none, and nothing in it is bold. The words are unchanged.
+  @Test("WI-G1 A: Can’t reach your computer. sets the one desktop's name in bold, and nothing with several")
+  func gateBoldName() {
+    let one = screen(.unreachable(desktop: "studio"))
+    let several = screen(.unreachable(desktop: nil))
+    #expect(boldRuns(one) == ["studio"])
+    #expect(boldRuns(several) == [])
+    #expect(line(one) == "Open VibeField on studio, and keep it awake and connected.")
+    #expect(line(several) == "Open VibeField on your computer, and keep it awake and connected.")
+    // the way in's bold elsewhere, read the same way: the account the desktop's code names
+    let fromCode = screen(.fromCode(desktop: "studio", login: login))
+    #expect(boldRuns(fromCode) == [login])
   }
 
   @Test("No desktops yet: TS-7's words with “computer”, its row, and the link to send")
