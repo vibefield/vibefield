@@ -68,6 +68,7 @@ let package = Package(
     .library(name: "SwarmPhysics", targets: ["SwarmPhysics"]),
     .library(name: "FieldAgents", targets: ["FieldAgents"]),
     .library(name: "FieldProduct", targets: ["FieldProduct"]),
+    .library(name: "FieldWeb", targets: ["FieldWeb"]),
     .library(name: "FieldMesh", targets: ["FieldMesh"]),
     .library(name: "FieldTerminal", targets: ["FieldTerminal"]),
     .library(name: "FieldRoutedTerminal", targets: ["FieldRoutedTerminal"]),
@@ -219,6 +220,11 @@ let package = Package(
     // the phone knows about fieldd, and the mesh leg below depends on IT for
     // the wire shapes rather than the other way round.
     .target(name: "FieldProduct"),
+    // SP-4b/4c — the phone web host (cp-landing, 2026-11-13): an app's origin, where its page may go, MA-L7 as a
+    // content rule list, and the host itself, which compiles only under DEBUG or VF_WEB_RELAY (item 373: SP-4d's
+    // land adds that define). FieldProduct for the wire's root-URL rule and its declared hosts.
+    .target(name: "FieldWeb", dependencies: ["FieldProduct"]),
+    .testTarget(name: "FieldWebTests", dependencies: ["FieldWeb"], exclude: ["Host/make-rig-identity.sh"]),
     // The mesh leg: the in-process Truffle/Tailscale runtime, login flow, peer
     // roster (IOS-2), the synced stores and the product-door join (IOS-4b).
     //
@@ -384,6 +390,7 @@ let package = Package(
       name: "FieldHome",
       dependencies: [
         "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal", "FieldInput",
+        "FieldWeb",
         "FieldSwarm", "FieldHistory", "FieldWorkspace", "FieldProduct", "FieldFreeway",
         "FieldRoutedTerminal", "FieldSettings", "FieldSplash", "FieldLock", "FieldMarkdown",
       ],
