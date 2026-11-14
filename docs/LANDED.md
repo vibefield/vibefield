@@ -49436,3 +49436,83 @@ the installed lock the carried one.
 
 **Not done, and not claimed:** no V at the carried tip itself (grounds above); packaged-history not run at 0.1.7; the
 kit's Swift plane not moved; nothing pushed.
+
+## Item 414 — quinn-udp 0.5.15 → 0.5.16 under truffle-core's quinn (RUSTSEC-2026-0538): Cargo.lock alone (M302)
+
+(2026-11-14; one commit, Cargo.lock alone (+2 −2). Cut by the IOS lane as `58dec26ae` on M298 `a5025d1fa` (branch
+`fix/414-quinn-udp`, `lanes/i414/vibe-field`). Carried by `carry-414.sh` (`a0c8ecef`) onto M300 `5cf8eebe7` as
+`a7cc8ceb5`, tree `0739bb6cd282`, its message the same but for the `Claude-Session:` line, dropped on James's click on
+the PM board (2026-11-14 08:18:25Z: "Drop the session link from now on; keep the rest (Recommended)"). Then carried by
+the fixer over the rosetta 0.1.7 land's records as `f63d072c2`, with the same author and dates. Validated by run
+mini-i414a on the old mini at `58dec26ae`. Lands as M302 in the rosetta land's window, on James's click for that window
+and VF-PM's GO.)
+
+**Why.**
+- RUSTSEC-2026-0538, "Receive loop can spin after a truncated datagram", is in quinn-udp ≤ 0.5.15. Patched versions:
+  >=0.5.16, <0.6.0 or >=0.6.3.
+- quinn 0.11 asks `^0.5`, and 0.5.16 is the only patched version it reaches. truffle-core `=0.7.27` (the EL8 pin) brings
+  quinn 0.11.11.
+- It clears the advisory from the report of audit.yml's cargo-audit job (report-first, continue-on-error).
+
+**What moved** (Cargo.lock, +2 −2):
+- quinn-udp's version, 0.5.15 → 0.5.16, and its checksum:
+  `af66907df18639dcf4db56ca65490cabc4b27a97dbadd96f2926cca73298f016`.
+- No `[[package]]` is added or removed. truffle-core `=0.7.27`, quinn 0.11.11 and every manifest are unmoved. Not an
+  EL8 event.
+- Written by cargo (1.99.1, the pinned toolchain), never by hand. `cargo update -p quinn-udp --precise 0.5.16` first
+  wrote 8/8, re-choosing six `windows-sys` edges 0.61.2 → 0.52.0. One re-resolve,
+  `cargo update -p errno@0.3.14 --precise 0.3.14`, returned all six to 0.61.2.
+
+**The witness: mini-i414a** at `58dec26ae`, on the old mini. It ended 11:47:06Z, `.done` `bf316270349265d0`, results in
+`lanes/ts6/mini-i414a-a9-results`. The runner was `mini-i414a.sh` `52a9d9d4d9eaae0f` (r7), dried at 185 of 185
+(`85d9c990c8e9e326`) with 125 of 125 mutations refused.
+- **The one network step:** `cargo fetch --locked --target aarch64-apple-darwin`, 1 s, exit 0, at index.crates.io and
+  static.crates.io alone. It added one crate, quinn-udp v0.5.16, whose sha256 `af66907df18639dc` is the lock's.
+- **R2:** `cargo build -p field-native --locked`, exit 0, 13 s, 0 warnings.
+- **R3:** `cargo clippy --workspace --all-targets -- -D warnings`, exit 0, 0 warnings. This is the tip's `lint:rust`
+  script, run without pnpm.
+- **R4:** `cargo fmt --check`, exit 0, 0 diff lines.
+- **R5:** `cargo test --workspace`, exit 0, 128 s: 629 passed, 0 failed, 15 ignored. This is the tip's `test:rust`
+  script, run without pnpm.
+- **R6:** the lock holds quinn-udp once, at 0.5.16 with its checksum. 0.5.15 is nowhere.
+- **R1:** `pnpm preflight` was not as written.
+  - pnpm 11.13.1 refused before preflight ran (`ERR_PNPM_VERIFY_DEPS_BEFORE_RUN`, naming `apps/plugin-playground`).
+    That is its run-time check, under the run's `pnpm_config_verify_deps_before_run=error`, after the run moved HEAD.
+    It is not 414's tree.
+  - Closed by reading: preflight reads only Cargo.lock's skip-worktree flag, never its content (`scripts/preflight.mjs`
+    :536 and :540 at the rosetta land, `ed67b0c5b`).
+  - Closed also by `node scripts/preflight.mjs` on the landed M302 in James's checkout:
+    exit 0, its last line "preflight OK (5 warning(s))".
+- **The carry:** M300's seven commits since M298 touch no Cargo path. Neither does the rosetta land, whose four paths
+  are pnpm-lock.yaml, pnpm-workspace.yaml, scripts/preflight.mjs and siblings.lock.json. So the landed tree differs
+  from its parent by 414's delta byte for byte (diff hash 2378a96370f125c7). That is the Rust plane the run built and
+  tested.
+
+**Found.**
+- **cargo's windows-sys choice flips.** For six range crates (errno, quinn-udp, rustix, rustls-platform-verifier,
+  tempfile, winapi-util), cargo's choice between windows-sys 0.52.0 and 0.61.2 flips on each re-resolve, on main's lock
+  as well. A later `cargo update` of anything may move those edges again. One step of the try also moved a getrandom
+  edge (0.4.3 → 0.3.4).
+- **pnpm installs on its own before a run.** pnpm 11.13.1's `verify-deps-before-run` defaults to `install` (qa-01's
+  read of its source). A `pnpm run` over a node_modules that does not match the lock starts a child `pnpm install`
+  inside the row, with no `--offline` and no `--frozen-lockfile`. The run had three defences:
+  - the installed copy is held to the lock before R1, and pnpm is not invoked otherwise;
+  - the environment fence `pnpm_config_verify_deps_before_run=error`. Never `false`: the value is a string, and a
+    string is truthy;
+  - a witness class for an install's own words in every row's log (STOP 31).
+- **The run's fetch broke under /bin/bash 3.2.** Its line 22 put a `case` pattern's `)` inside `$( )`, which
+  `bash -n` passes. qa-01 ran a copy corrected in that one line, on VF-PM's word. The dry had no mode that reached the
+  fetch's end.
+
+**Owed.**
+- gate:landing at James's unlock. The fix is in QUIC's UDP receive loop, which field-native's mesh runs through
+  truffle-core's quinn. No cargo row exercises a live QUIC receive; the terminal and Godview smokes do.
+- field-native rebuilds in James's checkout when the dev stack next comes up there. On the old mini, over a warm
+  target, that took 13 s (4 Compiling lines). No cargo runs in the landing pair.
+
+**Not done, and not claimed:**
+- no cargo row at the landed commit (the run was at `58dec26ae`);
+- no cargo row on this Mac;
+- no Windows build: the windows-sys edges are main's, unmoved, and no gate builds field-native on Windows;
+- `pnpm preflight` through pnpm was never green in this run;
+- nothing pushed.
