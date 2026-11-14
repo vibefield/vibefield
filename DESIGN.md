@@ -5459,6 +5459,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   for each plugin. Settings' pair reaches a change made on that page, since fieldd keeps one history for them all
   (`fieldd/src/settings-doc.ts`): the last synced change made on this desktop, which may be another plugin's setting
   or a preference such as Play sounds. The pair this paragraph first drew on the page left whole.
+  *Corrected 2026-11-14, at its source:* the page's foot says neither sentence drawn above. With a setting in the
+  synced history it says "Synced settings can be undone in Settings." ‹draft› (MK-4c2b, for James's MK-O6 pick),
+  and with none, "These settings stay on this desktop." (James's MK-O33 pick B, 2026-11-12 06:12:16Z); §9 "The
+  plugins' words" holds both. The device sentence stays Settings → Plugins' own until MK-5.
 - **Settings → Diagnostics' Plugins section** (MK-D10; item 282-6's plugin half, by MK-E12; *added
   2026-11-11*): each plugin's runtime, one block per plugin under its title, drawn as
   `SystemSection` draws its rows (§10's template): its controllers (the service's and each
@@ -6939,6 +6943,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       the pair Settings' toolbar has, **Undo** and **Redo** (§8 "The settings undo affordance"), and the form's foot
       sentence names that pair, no longer the window's toolbar. Settings' note that plugin grants are kept out of
       its history stays true (`panels/SettingsPanel.tsx`).
+      *Corrected 2026-11-14, at its source (James's MK-O6 pick, 2026-11-11 22:34:31Z; his MK-O33 pick B,
+      2026-11-12 06:12:16Z):* the page carries no Undo and no Redo, so its foot names no pair. Going back on a
+      change stays in Settings, whose Undo reaches one made on the page, and the foot says so when a setting is in
+      the synced history; where none is, it says that its settings stay on this desktop (MK-4c2b's "Its
+      settings", below; their words in §9).
     - **An update brings the window back fresh** when the plugin adds objects (MK-E6): the popup opens again on that
       plugin's page, saying Installed, and nothing on screen says the window came back (§9: no reload or restart
       word).
@@ -6993,6 +7002,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - **What it can do** lists each power it asked for: one it holds with its switch on, one taken back with
         its switch off, each switch at its line's end, 12 after its words. One it can't have on this desktop
         has no switch, and says why under its words at 12/400 in tertiary ink.
+        *Added 2026-11-14 (James's MK-O34 pick B, 2026-11-12 06:12:24Z):* a power VibeField can't describe is
+        said, in §9's words. Each such power is a line of its own (ruled at MK's lean by VF-PM, 2026-11-14 03:11Z).
+        As before (MK-4c2a), it has no switch, and one it can't have on this desktop says why under its words, as
+        above.
       - **While it is off**, the powers' switches take no press, and a line 6 under What it can do's head, at
         12/400 in tertiary ink, says how to change them.
       - **Under way**, a switch keeps its place and takes no press, and nothing spins: it moves when fieldd's
@@ -7020,6 +7033,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         setting's id, and no **Reset**. Going back to a default stays in Settings → Plugins (MK-4c2's C2).
       - **The foot**, 12 under the last row at 12/400 in tertiary ink: when a setting is kept in the synced history,
         that Settings can undo it; otherwise §8 "The settings undo affordance"'s device sentence (its words in §9).
+        *Corrected 2026-11-14 (James's MK-O33 pick B, 2026-11-12 06:12:16Z):* with none, the foot says that its
+        settings stay on this desktop, in §9's words, no longer Settings' device sentence. A page with both kinds
+        says the first alone, as before (ruled at MK's lean by VF-PM, 2026-11-14 03:11Z).
       - **While it is off**, each setting shows its value and takes no input. A line 6 under the head, at 12/400 in
         tertiary ink, says how to change them.
       - **Under way**, a setting keeps its value and takes no input until fieldd answers; nothing spins.
@@ -7066,6 +7082,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     §5's, §6's and the Peek's. Studio's catalog mounts the shipping popup over a fixture port (MK-4a;
     `docs/UI_SYSTEM.md`, Catalog fidelity), and MK-6 keeps its gates. *Corrected 2026-11-11 (MK-4a; VF-PM 11:40:58Z,
     Q7): this gave the catalog's plates to MK-6; MK-4a builds them with their boundary rule.*
+    *Corrected 2026-11-14, at its source (James's MK-O6 pick, 2026-11-11 22:34:31Z):* the page has no Undo and no
+    Redo (MK-4c2b's "Its settings", above), so where they stand is owed no more.
   - **Its words** are in §9 "The plugins' words": the tabs, the acts, the sources, the statement, the powers in
     plain words and every state's sentence. Nothing in it names a key, a signature, a hash, a rung, a worker or a
     process, a restart or a reload, a repository's address, a power's id or a daemon (§9, VibeField's insides).
@@ -9276,12 +9294,20 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   - **What it can do** says each power it holds in the plain words below; one named by a plugin that isn't
     installed, "A power named by a plugin that isn't installed here"; with none, "Nothing beyond drawing its
     own objects" (the install card's) or, for a plugin with no object, "Nothing beyond its own work".
+    *Added 2026-11-14 (James's MK-O34 pick B, 2026-11-12 06:12:24Z), his words:* a power VibeField has no words
+    for is said as "A power VibeField can't describe", never by its id; nothing under it says what it does or whose
+    it is. Each such power is a line of its own (ruled at MK's lean by VF-PM, 2026-11-14 03:11Z). It is a power the
+    plugin holds (with switches here, one it asked for), so the page never says "Nothing beyond…" over it.
   - **Made by** says a Built in plugin's sentence above, "Comes with VibeField. It can be turned off, not
     removed."; a listed plugin's, "VibeField" or its publisher's name. A Development or Sideloaded plugin's
     page has no Made by, and no page says "Reviewed by" until the plugin list carries who reviewed it.
   - **Version** says its version, "1.2.0".
   - The switch's **Updates** says its count after its word, "Updates 2", and nothing while there are none.
   *Added 2026-11-11 (MK-4c2a; VF-PM 18:36:34Z, 18:39:16Z), MK's words, ‹draft›, for James's eye:*
+  *Ruled 2026-11-14 (James's picks at A, as built, 2026-11-12: MK-O21 06:10:41Z, MK-O22 06:10:49Z, MK-O23
+  06:10:59Z, MK-O26 06:11:19Z and MK-O27 06:11:32Z), no longer ‹draft›:* "Its switches aren't here yet.", "Turning
+  it off, or a power off, does the same on your other desktops.", "Turn it on to change what it can do.", the three
+  reasons a power can't be had here, and "Couldn't turn it off. Try again." with "Couldn't turn it on. Try again."
   - A plugin's one switch is named to assistive tech by the plugin, "‹plugin›", and a power's switch by the power's
     plain words; each says on or off as a switch does, so its name never changes with its state.
   - A page of a plugin from the plugin list, or a Sideloaded one, says "Its switches aren't here yet."
@@ -9296,16 +9322,24 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   *Added 2026-11-11 (MK-4c2b; VF-PM 19:40:52Z), MK's words, ‹draft›, for James's eye; corrected the same day
   (James's MK-O6 pick, 22:34:31Z): the page's Undo and Redo left, with "Couldn't undo that. Try again.", "Couldn't
   redo that. Try again." and the page's use of §8's five outcomes, which stay Settings' own:*
+  *Ruled 2026-11-14 (James's MK-O31 pick A, 2026-11-12 06:11:57Z), no longer ‹draft›:* "Turn it on to change its
+  settings.", "Couldn't save that. Try again.", "Saved", "Choose…" and "This setting can't be changed here.", the
+  five his pick showed.
   - A page's settings stand under **Settings**.
   - An off plugin's page says, under Settings, "Turn it on to change its settings."
   - A setting that couldn't be saved says "Couldn't save that. Try again."
   - *Added 2026-11-12 (VF-PM 23:49:52Z, 1), ‹draft›:* a setting that couldn't be read says "Couldn't load this
     setting."
+    *Ruled 2026-11-14 (James's MK-O35 pick A, 2026-11-12 06:12:28Z), no longer ‹draft›.*
   - A secret that is kept says "Saved" in its empty field; the page never shows what is kept.
   - A choice with nothing chosen yet says "Choose…" (Settings' word).
   - A setting the page can't draw says "This setting can't be changed here."
   - The foot says "Synced settings can be undone in Settings." when a setting is in the synced history, and
-    otherwise "Device and secret settings stay on this device and are not part of settings history." (§8's).
+    otherwise "These settings stay on this desktop."; a page with both kinds says the first alone, as before
+    (ruled at MK's lean by VF-PM, 2026-11-14 03:11Z).
+    *Changed 2026-11-14 (James's MK-O33 pick B, 2026-11-12 06:12:16Z), his words:* the second said §8's device
+    sentence, "Device and secret settings stay on this device and are not part of settings history.", which stays
+    Settings → Plugins' own until MK-5.
   - *Kept, dated 2026-11-11 (VF-PM 19:40:52Z):* Settings → Plugins keeps its own form and words until MK-5: its
     "user", "device", "secret" and "default" marks, **Reset**, "Unsupported schema", "•••• set", "This plugin
     has no settings.", "Synced user settings can be undone from the window toolbar." and an error's own text
@@ -9362,6 +9396,11 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   and behaviors, the Doctor's issues, under "Each plugin's runtime: its controllers, behaviors and the Doctor's
   issues. Moved here from Settings → Plugins." (MK-D10's ruled drawing; §8 "Settings → Diagnostics' Plugins
   section").
+  *Corrected 2026-11-14, at its source (James's MK-O6 pick, 2026-11-11 22:34:31Z; his MK-O33 pick B,
+  2026-11-12 06:12:16Z):* this paragraph said the page carries Settings' Undo and Redo, and that its foot says
+  "Synced settings can be undone here or in Settings." The page has no Undo and no Redo (§8 "Its settings"), so no
+  pair sits on it to be drawn, and its foot says "Synced settings can be undone in Settings." ‹draft› or, where no
+  setting syncs, "These settings stay on this desktop." (above, MK-4c2b's block).
 - **The "…"** (the rule in "The update's words", above: an act wears "…" only when it asks a question or opens a
   window before it completes). **Plugins…** and **More in Plugins…** open the popup. Two acts the rule would give
   one are bare as ruled: **Check plugins for updates**, which opens the popup on Updates (where the app menu's
