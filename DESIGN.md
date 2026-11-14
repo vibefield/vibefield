@@ -8541,6 +8541,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     every button that would reach your account, your lock, the code reader or Safari does nothing, and the buttons
     that only move between pages still move. The lock itself stands over a demo as it does over your own field.
   - The choices are this phone's own, kept beside Appearance, never synced and never sent.
+  *Amended 2026-11-14 (WI-W2e A, James on the page The Way In, 03:47:45Z; §9 "The way in" holds the words):* while
+  Tailscale's card says "Couldn’t connect." (§9's state since 2026-11-11), the row under the state is **Try again**,
+  where **Sign in again** stands while the card says **Sign in to Tailscale again** (`SettingsModel.tailscaleAct`).
+  Settings stays open, where Sign in and Sign out leave it first: Try again opens no sheet and signs no one out, so the
+  card says **Connecting…** on the page you are reading, then the state it comes to (**Connected**, or "Couldn’t
+  connect." and **Try again** again). Under a demo it does nothing.
 - **The phone's corner — your face, held, and Agent Profiles** (track UM, ruled 2026-11-06 from the page *The Bands
   Meter*: UM-D24, UM-D25 and UM-D26 A; UM-D8 and UM-D12 carried A at the leans; the drawing is
   `draft/profile-meters/round4/src/p4f-frames.js` and `round4.css`, the bloom's numbers `p3c-phone.js`). The account
@@ -8561,6 +8567,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   its place just above Settings… (WI-3). Choosing leaves the menu open while the phone changes behind it, as the
   Mac's does.
   *Corrected 2026-11-12 (RB-1's doc): the pick's time is 22:53:41Z by the page's store, not 23:00Z.*
+  *Amended 2026-11-14 (WI-W2e A, James on the page The Way In, 03:47:45Z; §9 "The way in" holds the words):* under
+  its notice "Couldn’t connect." the Me menu draws **Try again**, in Sign in's place, wearing SF Symbols'
+  `arrow.clockwise`, as the corner's other rows wear theirs. The two never stand together: Sign in stands while the
+  tailnet asks, and Try again after a start that failed, which nothing retries by itself. A tap folds the menu, as Sign
+  in's does, and the network starts again at once (`MeshModel.tryAgain`). Under a demo it does nothing, a scripted
+  run's included, since no demo has a network to start (`LaunchFixtures.holds(.tryAgain)`).
   - **At rest the face is plain** (UM-D24 A): no ring, no meter's dot and no lens glyph. A tap is still the menu.
   - **Hold it** for **520ms**, the spawn bloom's own hold (`FieldMotion.longPressDuration`, puppeteer-views'
     `holdMs`), with 10 of slop before it opens; a short tap stays the menu's. ‹for James: the page said 450 "as the
@@ -9799,8 +9811,9 @@ so the page's words stand clear and the tabs and search it keeps are not dimmed 
 under the name "waiting for approval", "couldn’t connect", "signing out"; its notices "Sign in to
 Tailscale again to reach your desktops.", "An admin of your Tailscale network approves new devices.",
 "Couldn’t connect — ‹reason›." *(Since 2026-11-11, "Couldn’t connect." with no reason: "The way in",
-extended that day.)*; its menu row **Continue with Tailscale** with no account and **Sign in
-again** with one; its desktops each wear their OS mark. While the welcome stands, the corner steps
+extended that day; with **Try again** under it since 2026-11-14, WI-W2e A.)*; its menu row **Continue
+with Tailscale** with no account and **Sign in again** with one; its desktops each wear their OS mark.
+While the welcome stands, the corner steps
 aside on the Field tab, so its one act is said once. *Added with TS-7b (Q2 A):* the welcome also offers
 **Scan the code on your Mac** — the phone's reader for the Mac's Add your phone code, which tells it the
 account to expect; scanned on a phone with no account it goes straight on to the sign-in, and the welcome
@@ -9917,7 +9930,8 @@ screen):* the same sentence, "Couldn’t connect.", with no reason, wherever a f
 notice (TS-7's "Couldn’t connect — ‹reason›." in "The phone's door"), the state on Tailscale's card in Settings ›
 Account (§8 "The phone's Settings" takes §9's words), the welcome's note when a first sign-in fails, and the note
 under **Sign in to Tailscale again.** when its sign-in sheet could not open. A reason may go to the log, as ids and
-codes; it is never said.
+codes; it is never said. *(Ruled 2026-11-14, below: on the corner's notice and on Tailscale's card it carries its next
+step, **Try again**, WI-W2e A.)*
 *Amended 2026-11-13 (James, in session at 00:24Z and 00:34Z: the phone is a companion to VibeField on a computer, so
 "if it does not connect to desktop app, it should not provide any function"; "when all desktops disconnect, it should
 also gate, when mobile offline, also gate". WI-L2 is amended; the words added here are drafts pending James,
@@ -9964,6 +9978,18 @@ data is off for VibeField says too, with no page of its own (WI-G10 B); the 5s g
 the page (WI-G5 A); a launch bare for its first 5s, then the hold's words (WI-G6 A); a desktop that answers and
 refuses this phone keeps the tabs, which say why (WI-G7 A); and what the tabs had open closes under the gate, as under
 a sign-out (WI-G8 A).
+*Ruled 2026-11-14 (James on the page The Way In, its store: WI-W2e A, "Add a next step", at 03:47:45Z, by his rule of
+10 Nov for every room that a failure says the act and its next step, IS-282-1; then in session vibe-field-3f at
+03:48:55Z, "ruled, now start implement and land them"):* "Couldn’t connect." on the corner's notice and on Tailscale's
+card in Settings › Account carries its next step, **Try again**, and the sentence stays as it is. In the corner's menu
+**Try again** is a row under the notice, in Sign in's place; on the card it is the row under the state, where **Sign
+in again** stands while Tailscale asks. **Try again** starts the network again at once, as the phone starts it by
+itself for an account it keeps. It signs no one in or out and forgets nothing, and it opens no sign-in page of its own:
+if Tailscale asks, **Sign in to Tailscale again.** stands, as whenever Tailscale asks. While it starts, the line under
+your name says "connecting…" and the card **Connecting…**; if the start fails again, "Couldn’t connect." and **Try
+again** stand again. The welcome's note and the note under **Sign in to Tailscale again.** keep the acts already beside
+them, **Continue with Tailscale** and **Sign in again**. Under a demo **Try again** does nothing, as no button that
+reaches your account does (§8 "The phone's Settings", Developer).
 *Added 2026-11-14 (item 406; drafts pending James's word — a reading of Q-J4: the phone's own screen is the iOS
 lane's later slice, and these words wait here for it):* **a removed phone.** A phone removed on one of your computers
 (§8 Settings → Devices) is told so: **This phone was removed.** · "It can't reach your computers. To use it here
