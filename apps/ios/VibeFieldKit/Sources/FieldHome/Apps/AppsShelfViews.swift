@@ -232,8 +232,13 @@ struct AppsShelfView: View {
     let held = folder != nil && stand.takesClose
     behind(list(shelf), held: held, drawn: folder != nil)
       .overlay { folderLayer(folder, shelf: shelf) }
-      .onChange(of: door.folder) { _, key in
-        if key == nil { folderLeaves() }
+      .onChange(of: door.folder, initial: true) { _, key in
+        if let key {
+          // opened by the model's word alone, with no tile's place: it grows out of the panel's own middle
+          if !stand.hides(key) { stand.place(key, tile: .zero) }
+        } else {
+          folderLeaves()
+        }
       }
       .onChange(of: folder?.key) { _, key in
         // its project left the shelf while its folder was drawn over it

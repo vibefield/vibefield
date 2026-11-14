@@ -264,6 +264,22 @@ struct AppsMotionTests {
     #expect(stand.takesClose == false, "there is nothing to close yet")
   }
 
+  @Test("a tap outside closes a folder heading open, and is nothing to one in its tile or on its way home")
+  func tapOutside() {
+    var stand = AppsFolderStand()
+    #expect(stand.takesClose == false, "none is drawn")
+    stand.place("project-1", tile: Self.tile)
+    #expect(stand.takesClose == false, "placed, it has not left its tile")
+    stand.rise()
+    #expect(stand.takesClose, "opening or open: the tap sends it back from where it is")
+    stand.pinch(0.9)
+    #expect(stand.takesClose, "under a pinch as well")
+    stand.leave()
+    #expect(stand.takesClose == false, "already on its way home, it is left to arrive")
+    stand.rise()
+    #expect(stand.takesClose, "turned back open")
+  }
+
   @Test("risen, it stands open and a close can take it")
   func risen() {
     let stand = Self.standing()
