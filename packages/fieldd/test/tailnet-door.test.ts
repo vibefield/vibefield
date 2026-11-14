@@ -3,7 +3,7 @@
 // headers/paths the sidecar would. The SPOOF test is the point: EL7's same-uid
 // adversary can type Tailscale-User-* headers on the ordinary door and must
 // get nothing.
-import { CONTRACTS_VERSION, TAILNET_SCOPES } from "@vibefield/contracts";
+import { CONTRACTS_VERSION, DEVICE_REFUSALS, TAILNET_SCOPES } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { ProductApi } from "../src/product-api";
@@ -368,5 +368,158 @@ describe("the tailnet door (C3 provenance auth)", () => {
       error: { data: { kind: string } };
     };
     expect(res.error.data.kind).toBe("UNAUTHORIZED");
+  });
+});
+
+// Item 406 (track WI's Desktop slice; VF-PM's rulings of 2026-11-14 04:49Z, Q-PM5 and Q-PM6) — a
+// phone Remove refused, at the door it reaches this desktop through. The upgrade marks it from the
+// transport's facts alone (`classifyDoor`: the node id the sidecar injected on the secret path),
+// and its hello is answered with the typed word BEFORE the verified-token arm, which otherwise wins
+// on either door; then the door closes. While any refusal stands, a same-login hello the sidecar named
+// no node for is refused too, in a word of its own: the door can tell it neither from the removed
+// phone nor that it is it. A peer daemon's forward FOR a refused phone is refused before it runs
+// and is not retryable: the belt behind the phone's home refusing it at its own door.
+describe("406 — a removed phone at the door", () => {
+  const REMOVED_NODE = "nREMOVED01";
+  const removedWord = {
+    kind: "UNAUTHORIZED",
+    retryable: false,
+    details: { reason: DEVICE_REFUSALS.REASON_REMOVED },
+  };
+
+  /** A door whose roster refuses `REMOVED_NODE` (and its device, `dev-removed`), `stand` saying
+   * whether any refusal stands; `dev-desk` (node `nDESK01`) is one of the account's desktops. Its
+   * `device.list` probe notes whom each call it served was for. */
+  async function refusing(
+    stand = true,
+  ): Promise<{ api: ProductApi; port: number; served: string[] }> {
+    const served: string[] = [];
+    const a = new ProductApi({
+      port: 0,
+      tokens: {
+        verify: (t) =>
+          t === "good-token"
+            ? { tokenId: "tk1", scopes: ["doc.read", "workspace.read"], label: "t" }
+            : null,
+      },
+      tailnetPathSecret: SECRET,
+      getLinkedLogin: () => LINKED,
+      correlateNodeId: (nodeId) => (nodeId === "nDESK01" ? "dev-desk" : undefined),
+      isDocHost: (deviceId) => deviceId === "dev-desk",
+      isRefusedNode: (nodeId) => nodeId === REMOVED_NODE,
+      refusalsStand: () => stand,
+      isRefusedDevice: (deviceId) => deviceId === "dev-removed",
+    });
+    a.register("device.list", (ctx) => {
+      served.push(ctx.onBehalfOf?.clientDeviceId ?? ctx.principal.kind);
+      return { principal: ctx.principal };
+    });
+    const port = await a.listen();
+    cleanup.push(() => a.close());
+    return { api: a, port, served };
+  }
+
+  /** The secret path as the sidecar delivers a caller of the linked login, from `node` if any. */
+  const fromNode = (port: number, node?: string, login = LINKED) =>
+    dial(port, {
+      path: `/t/${SECRET}`,
+      headers: {
+        "Tailscale-User-Login": login,
+        ...(node !== undefined ? { "Tailscale-Node-Id": node } : {}),
+      },
+    });
+  const phoneHello = (credential?: string) => ({ ...hello(credential), clientKind: "ios" });
+
+  it("a refused node hears the typed word at its hello and the door closes, whatever it carries — BEFORE the verified-token arm", async () => {
+    const { port } = await refusing();
+    for (const credential of [undefined, "good-token"]) {
+      const ws = await fromNode(port, REMOVED_NODE);
+      const res = (await call(ws, 1, "system.hello", phoneHello(credential))) as {
+        error?: { code: number; data: unknown };
+      };
+      expect(res.error?.data, String(credential)).toEqual(removedWord);
+      expect(res.error?.code).toBe(-32001);
+      await closed(ws);
+    }
+  });
+
+  it("a node not refused is unchanged while a refusal stands: the preset, or its token's grant", async () => {
+    const { port } = await refusing();
+    const phone = await fromNode(port, "nPHONE02");
+    const ack = (await call(phone, 1, "system.hello", phoneHello())) as {
+      result: { grantedScopes: string[] };
+    };
+    expect(ack.result.grantedScopes).toEqual([...TAILNET_SCOPES]);
+    const withToken = await fromNode(port, "nPHONE02");
+    const tokenAck = (await call(withToken, 1, "system.hello", hello("good-token"))) as {
+      result: { grantedScopes: string[] };
+    };
+    expect(tokenAck.result.grantedScopes).toEqual(["doc.read", "workspace.read"]);
+  });
+
+  it("while a refusal stands, a same-login hello with no node id is refused in its own word, never device-removed; a guest, and a door with none standing, are unchanged", async () => {
+    const { port } = await refusing();
+    for (const credential of [undefined, "good-token"]) {
+      const ws = await fromNode(port);
+      const res = (await call(ws, 1, "system.hello", phoneHello(credential))) as {
+        error?: { data: unknown };
+      };
+      expect(res.error?.data, String(credential)).toEqual({
+        kind: "UNAUTHORIZED",
+        retryable: false,
+        details: { reason: DEVICE_REFUSALS.REASON_UNIDENTIFIED },
+      });
+      await closed(ws);
+    }
+    // another login is a guest, as it was: never one of this account's devices
+    const guest = await fromNode(port, undefined, "colleague@corp.example");
+    const guestAck = (await call(guest, 1, "system.hello", hello())) as {
+      result: { grantedScopes: string[] };
+    };
+    expect(guestAck.result.grantedScopes).toEqual([]);
+    // no refusal standing: the same hello is the preset, as before 406
+    const calm = await refusing(false);
+    const before = await fromNode(calm.port);
+    const beforeAck = (await call(before, 1, "system.hello", phoneHello())) as {
+      result: { grantedScopes: string[] };
+    };
+    expect(beforeAck.result.grantedScopes).toEqual([...TAILNET_SCOPES]);
+  });
+
+  it("a peer daemon's forward FOR a refused phone is refused before it runs, not retryable; its forward for another phone, or a window, is served", async () => {
+    const { port, served } = await refusing();
+    const peer = await fromNode(port, "nDESK01");
+    await call(peer, 1, "system.hello", hello());
+    const forward = (clientDeviceId?: string) => ({
+      forward: {
+        onBehalfOf:
+          clientDeviceId !== undefined
+            ? { clientKind: "ios", deviceId: "dev-desk", clientDeviceId }
+            : { clientKind: "renderer", deviceId: "dev-desk", windowId: "w-1" },
+      },
+    });
+    const refused = (await call(peer, 2, "device.list", forward("dev-removed"))) as {
+      error?: { data: unknown };
+    };
+    expect(refused.error?.data).toEqual(removedWord);
+    expect(served).toEqual([]);
+    await call(peer, 3, "device.list", forward("dev-phone"));
+    await call(peer, 4, "device.list", forward());
+    expect(served).toEqual(["dev-phone", "peer-fieldd"]);
+  });
+
+  it("the sweep's node step closes every connection from the named nodes, said its hello or not, and no other", async () => {
+    const { api: door, port } = await refusing(false);
+    const helloed = await fromNode(port, "nPHONE03");
+    await call(helloed, 1, "system.hello", phoneHello());
+    const silent = await fromNode(port, "nPHONE03");
+    const other = await fromNode(port, "nPHONE04");
+    await call(other, 1, "system.hello", phoneHello());
+    expect(door.dropNodeConnections(["nPHONE03"])).toBe(2);
+    await closed(helloed);
+    await closed(silent);
+    const still = (await call(other, 2, "device.list", {})) as { result: unknown };
+    expect(still.result).toBeDefined();
+    expect(door.dropNodeConnections(["nPHONE03"])).toBe(0);
   });
 });

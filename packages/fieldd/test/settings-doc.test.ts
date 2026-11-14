@@ -485,9 +485,9 @@ describe("406 — the account's refused and known phones (Q-PM1, Q-PM2)", () => 
 // Item 406 (VF-PM's ruling, 2026-11-14 04:49Z) — the refusals have ONE writer, and it has exactly
 // the callers the ruling names. Read off the source, as item 172's read seam is
 // (record-stores.test.ts R7): each site is placed by the class method around it, or by the product
-// method whose handler holds it. At S2 the writer has one caller, DeviceService's registry pass
-// appending a node id under a durable id already refused. S3's `device.remove` handler adds the
-// second, `daemon.ts: device.remove ("remove")`, to the list below, which then holds exactly two.
+// method whose handler holds it. The writer has exactly two callers: DeviceService's registry pass
+// appending a node id under a durable id already refused (S2), and the `device.remove` handler
+// refusing a phone not refused yet (S3), its act a string literal at the call.
 describe("406 — the refusals' one writer, and its callers", () => {
   const src = join(import.meta.dirname, "../src");
   const files = (readdirSync(src, { recursive: true, encoding: "utf8" }) as string[]).filter(
@@ -529,8 +529,11 @@ describe("406 — the refusals' one writer, and its callers", () => {
     expect(opened).toEqual(["settings-doc.ts: readRefusals", "settings-doc.ts: refuseDevice"]);
   });
 
-  it("the writer's callers are exactly the ones the ruling names: the registry pass's append (and, from S3, Remove)", () => {
+  it("the writer's callers are exactly the ones the ruling names: Remove, and the registry pass's append", () => {
     const calls = sitesOf(/\.refuseDevice\(\s*("\w+")?/g, (m) => ` (${m[1] ?? "?"})`);
-    expect(calls).toEqual(['device-service.ts: refreshPeers ("append")']);
+    expect(calls).toEqual([
+      'daemon.ts: device.remove ("remove")',
+      'device-service.ts: refreshPeers ("append")',
+    ]);
   });
 });

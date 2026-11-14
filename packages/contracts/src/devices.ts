@@ -349,6 +349,9 @@ export type KnownPhone = z.infer<typeof KnownPhone>;
 export const DEVICE_REFUSALS = {
   /** the reason a removed phone's product hello is answered with (`DeviceRemovedDetails`) */
   REASON_REMOVED: "device-removed",
+  /** S3 (Q-PM6) — the reason a same-login hello the sidecar named no node for is answered with,
+   * while any refusal stands (`DeviceUnidentifiedDetails`) */
+  REASON_UNIDENTIFIED: "device-unidentified",
 } as const;
 
 /** Item 406 (Q-PM5) — the details of the UNAUTHORIZED, retryable false, that a desktop answers a
@@ -364,3 +367,7 @@ export const DeviceRemovedDetails = z
   .object({ reason: z.literal(DEVICE_REFUSALS.REASON_REMOVED) })
   .passthrough();
 export type DeviceRemovedDetails = z.infer<typeof DeviceRemovedDetails>;
+
+// 406 (red, S3): STUBBED — refuses every value, so the row that reads it fails (the green commit's schema)
+export const DeviceUnidentifiedDetails = z.custom<{ reason: "device-unidentified" }>(() => false);
+export type DeviceUnidentifiedDetails = z.infer<typeof DeviceUnidentifiedDetails>;

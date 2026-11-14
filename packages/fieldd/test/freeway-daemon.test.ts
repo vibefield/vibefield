@@ -5,7 +5,7 @@
 // restarted mid-session leaves the terminal live"); the phone's approval is minted under the
 // floor's key, audited, and refused to a desktop's node and while the host is down; each join and
 // leave the host reports is an audit row, and what the floor could not hold is said; an unlink
-// revokes every link.
+// revokes every link; and Remove for a phone (item 406) revokes that phone's alone.
 import { createHmac } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,6 +14,9 @@ import { verifyAuditSegment } from "@vibefield/audit";
 import {
   approvalSigningInput,
   CONTRACTS_VERSION,
+  DEVICE_REFUSALS,
+  DeviceRemoveResult,
+  DOC_SYNC_RECORD,
   FREEWAY_APPROVAL,
   FreewayApproveResult,
   type FreewayDeclareParams,
@@ -24,12 +27,14 @@ import {
 import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { bootstrap, type FielddDaemon } from "../src/index";
+import { bootstrap, DocumentService, type FielddDaemon } from "../src/index";
+import { systemAccount, systemDocId } from "../src/library-doc";
+import { SettingsDocService } from "../src/settings-doc";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productDoorPath, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { desktopSlice, registryPeer } from "./peer-roster";
-import { helloAs, until, WsRpc } from "./ws-rpc";
+import { helloAs, type RpcErrorShape, until, WsRpc } from "./ws-rpc";
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -340,5 +345,269 @@ describe("F1 — fieldd's freeway half on a booted daemon", () => {
     await until(() => mock.freewayRevokes.length === 1, 15_000, "the revoke");
     expect(mock.freewayRevokes[0]).toEqual({});
     expect(mock.meshServes.get("freeway")).toBeUndefined();
+  }, 60_000);
+});
+
+// Item 406 (track WI's Desktop slice; WI-W5b A; VF-PM's rulings of 2026-11-14 04:49Z) — Remove for
+// a phone on a booted daemon, kill-matrix style: the act is a desktop caller's and a known phone's
+// alone; it closes what the phone holds here (its product socket, its freeway client by the exact
+// id the host keys it by), audits the device and never its name, and the phone that dials back is
+// told the typed word whatever it carries. A peer daemon forwarding FOR the removed phone is
+// refused without retry, `freeway.approve` included. A second desktop, the refusal merged into its settings
+// document, sweeps the same and audits it as its own. The order of the sweep's steps is
+// device-removal.test.ts's; the door's unit rows are tailnet-door.test.ts's.
+describe("406 — Remove for a phone, on a booted daemon", () => {
+  const NAME = "pocket-7q";
+  const SETTINGS_ID = systemDocId("settings", systemAccount(TEST_LOGIN, undefined));
+  const removedWord = {
+    kind: "UNAUTHORIZED",
+    retryable: false,
+    details: { reason: DEVICE_REFUSALS.REASON_REMOVED },
+  };
+
+  /** The world, its phone named as a person names one (the audit must never say it). */
+  async function phoneWorld(): Promise<{ dataDir: string; mock: MockMgmtServer }> {
+    const made = await world(upState());
+    made.mock.meshPeers = [
+      registryPeer({ nodeId: "node-phone", deviceId: "dev-phone", name: NAME, login: TEST_LOGIN }),
+      registryPeer({
+        nodeId: "node-desk-b",
+        deviceId: "dev-desk-b",
+        name: "desk-b",
+        login: TEST_LOGIN,
+      }),
+    ];
+    return made;
+  }
+
+  /** Booted, with the phone's row, the other desktop's slice and the floor's freeway read. */
+  async function booted(dataDir: string, mock: MockMgmtServer): Promise<FielddDaemon> {
+    const daemon = await boot(dataDir);
+    await until(() => daemon.devices.get("dev-phone") !== undefined, 15_000, "the phone's row");
+    await until(() => daemon.devices.isDocHost("dev-desk-b"), 15_000, "the desktop's slice");
+    await until(() => mock.meshServes.get("freeway") !== undefined, 15_000, "the freeway serve");
+    return daemon;
+  }
+
+  /** The phone's product hello ("ios"), which makes it a KNOWN phone (S2), and its socket. */
+  async function knownPhone(daemon: FielddDaemon, mock: MockMgmtServer): Promise<WsRpc> {
+    const phone = await fromNode(daemon, mock, "node-phone");
+    await until(() => daemon.devices.get("dev-phone")?.phone !== undefined, 15_000, "the fact");
+    return phone;
+  }
+
+  /** A loopback caller holding `token`, its hello saying `kind`. */
+  async function local(daemon: FielddDaemon, token: string, kind: string): Promise<WsRpc> {
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    cleanup.push(() => ws.close());
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    const rpc = new WsRpc(ws);
+    await helloAs(rpc, token, kind);
+    return rpc;
+  }
+
+  /** `node` dialling the door again, with `credential` or none: what its hello is answered, once
+   * the door has closed. */
+  async function helloRefused(
+    daemon: FielddDaemon,
+    mock: MockMgmtServer,
+    node: string,
+    credential?: string,
+  ): Promise<RpcErrorShape> {
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}${productDoorPath(mock)}`, {
+      headers: { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": node },
+    });
+    cleanup.push(() => ws.close());
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    const rpc = new WsRpc(ws);
+    const refused = await rpc.callErr("system.hello", {
+      contractsVersion: CONTRACTS_VERSION,
+      minCompatible: CONTRACTS_VERSION,
+      clientKind: "ios",
+      ...(credential !== undefined ? { credential } : {}),
+    });
+    await until(() => rpc.closed, 15_000, "the door closing");
+    return refused;
+  }
+
+  /** `to` reconnects to `from`: the doc-sync VERSION exchange against `to`'s own host, as
+   * device-service.test.ts drives it. True when something crossed. */
+  async function exchange(from: DocumentService, to: DocumentService): Promise<boolean> {
+    const theirs = await to.hostVersion(SETTINGS_ID);
+    const answer = theirs === null ? null : await from.hostAnswer(SETTINGS_ID, theirs);
+    if (answer === null || answer.update === null) return false;
+    const outcome = await to.applyRemoteRecord(SETTINGS_ID, {
+      kind: DOC_SYNC_RECORD.UPDATE,
+      meta: answer.meta,
+      payload: answer.update,
+    });
+    return outcome.applied;
+  }
+
+  it("is a desktop caller's alone, and a known phone's alone: a phone, a plugin and a copied token are refused; this desktop, a desktop and a device never seen as a phone are refused; nothing is written", async () => {
+    const { dataDir, mock } = await phoneWorld();
+    const daemon = await booted(dataDir, mock);
+    // the phone itself, its hello saying no "ios" (so it never becomes a known phone here): no
+    // tailnet grant holds settings.manage
+    const phone = await fromNode(daemon, mock, "node-phone", "debug");
+    const asPhone = await phone.callErr("device.remove", { deviceId: "dev-phone" });
+    expect(asPhone.data?.kind).toBe("FORBIDDEN_SCOPE");
+    // a plugin, and a window's token copied into another client, each holding the scope
+    const pluginToken = daemon.tokens.mint(["settings.manage"], "a plugin", {
+      pluginId: "p.copied",
+    });
+    const copied = daemon.tokens.mint(["settings.manage"], "copied");
+    for (const caller of [
+      await local(daemon, pluginToken.token, "plugin-worker"),
+      await local(daemon, copied.token, "debug"),
+    ]) {
+      const refused = await caller.callErr("device.remove", { deviceId: "dev-phone" });
+      expect(refused.data?.kind).toBe("FORBIDDEN_SCOPE");
+      expect(refused.message).toContain("trusted desktop caller");
+    }
+    // a window passes the gate, and Remove refuses anything but a device known to be a phone
+    const window = await local(daemon, copied.token, "renderer");
+    const kindOf = async (deviceId: unknown) =>
+      (await window.callErr("device.remove", { deviceId })).data?.kind;
+    expect(await kindOf(daemon.devices.currentDeviceId())).toBe("PRECONDITION_FAILED");
+    expect(await kindOf("dev-desk-b")).toBe("PRECONDITION_FAILED");
+    expect(await kindOf("dev-phone")).toBe("PRECONDITION_FAILED");
+    expect(await kindOf("dev-nobody")).toBe("NOT_FOUND");
+    expect(await kindOf(7)).toBe("PRECONDITION_FAILED");
+    expect(await daemon.settingsDoc.refusals()).toEqual({
+      deviceIds: new Set(),
+      nodeIds: new Set(),
+    });
+    expect(daemon.devices.get("dev-phone")).toBeDefined();
+    expect(phone.closed).toBe(false);
+  }, 60_000);
+
+  it("closes a connected phone here, sends its exact freeway client, audits the device and never its name; its next hello hears the word whatever it carries; a second Remove answers removed false", async () => {
+    const { dataDir, mock } = await phoneWorld();
+    const daemon = await booted(dataDir, mock);
+    const phone = await knownPhone(daemon, mock);
+    const shell = await shellOf(daemon);
+    const removed = DeviceRemoveResult.parse(
+      await shell.call("device.remove", { deviceId: "dev-phone" }),
+    );
+    // its one product socket here (the scripted host closes no link)
+    expect(removed).toEqual({ removed: true, closed: 1 });
+    await until(() => phone.closed, 15_000, "the phone's socket");
+    expect(mock.freewayRevokes).toContainEqual({
+      clientId: `freeway:${TEST_LOGIN}#node-phone~hb-1`,
+    });
+    // forgotten, its record with it, and never admitted to the freeway again
+    expect(daemon.devices.get("dev-phone")).toBeUndefined();
+    expect(await daemon.settingsDoc.refusals()).toEqual({
+      deviceIds: new Set(["dev-phone"]),
+      nodeIds: new Set(["node-phone"]),
+    });
+    expect((await daemon.settingsDoc.knownPhones()).has("dev-phone")).toBe(false);
+    await until(
+      () => !admits(mock.freewayDeclarations.at(-1), "dev-phone", "phone"),
+      15_000,
+      "the declaration without it",
+    );
+    const rows = (await auditRecords(daemon)).filter((r) => r.action === "device.remove");
+    expect(rows.map((record) => record.phase)).toEqual(["attempt", "outcome"]);
+    expect(rows[1]).toMatchObject({
+      outcome: "succeeded",
+      target: { kind: "device", id: "dev-phone" },
+      actor: { kind: "shell-main" },
+      attrs: { closed: 1 },
+    });
+    expect(JSON.stringify(rows)).not.toContain(NAME);
+    // dialling back: the word, then the close — with no credential, or a verified token
+    const token = daemon.tokens.mint(["workspace.read"], "copied").token;
+    for (const credential of [undefined, token]) {
+      const refused = await helloRefused(daemon, mock, "node-phone", credential);
+      expect(refused.data, String(credential !== undefined)).toEqual(removedWord);
+    }
+    // Remove again: declarative — nothing written, nothing audited
+    expect(await shell.call("device.remove", { deviceId: "dev-phone" })).toEqual({
+      removed: false,
+      closed: 0,
+    });
+    const after = (await auditRecords(daemon)).filter((r) => r.action === "device.remove");
+    expect(after).toHaveLength(2);
+  }, 60_000);
+
+  it("after Remove, a peer daemon's forward FOR the phone is refused without retry, `freeway.approve`'s too; before it both were served, and its forwards for a window still are", async () => {
+    const { dataDir, mock } = await phoneWorld();
+    const daemon = await booted(dataDir, mock);
+    await knownPhone(daemon, mock);
+    // the phone's home, the other desktop, forwarding for it (F1b)
+    const home = await fromNode(daemon, mock, "node-desk-b", "peer-fieldd");
+    const forPhone = {
+      forward: {
+        onBehalfOf: { clientKind: "ios", deviceId: "dev-desk-b", clientDeviceId: "dev-phone" },
+      },
+    };
+    await home.call("device.list", forPhone);
+    FreewayApproveResult.parse(await home.call("freeway.approve", forPhone));
+    const shell = await shellOf(daemon);
+    await shell.call("device.remove", { deviceId: "dev-phone" });
+
+    for (const method of ["device.list", "freeway.approve"]) {
+      const refused = await home.callErr(method, forPhone);
+      // never `uncorrelated`, retryable: the home would ask again and again
+      expect(refused.data, method).toEqual(removedWord);
+    }
+    const forWindow = {
+      forward: { onBehalfOf: { clientKind: "renderer", deviceId: "dev-desk-b", windowId: "w-1" } },
+    };
+    await home.call("device.list", forWindow);
+    expect(home.closed).toBe(false);
+    // the one approval is the one minted before Remove
+    const mints = (await auditRecords(daemon)).filter(
+      (r) => r.action === "freeway.approval.mint" && r.phase === "outcome",
+    );
+    expect(mints).toHaveLength(1);
+  }, 60_000);
+
+  it("a second desktop refuses after the merge: the phone's socket closes there, its exact freeway client is revoked, the sweep is audited as that desktop's own, and its next hello hears the word", async () => {
+    const { dataDir, mock } = await phoneWorld();
+    const daemon = await booted(dataDir, mock);
+    const phone = await fromNode(daemon, mock, "node-phone");
+
+    // the desktop where the person pressed Remove: its settings document on its own disk and host,
+    // registered as its mountSystemDocs registers it
+    const peerDir = mkdtempSync(join(tmpdir(), "vf-fw-peer-"));
+    cleanup.push(() => rmSync(peerDir, { recursive: true, force: true }));
+    const peer = new SettingsDocService({ dataDir: peerDir });
+    cleanup.push(() => peer.dispose());
+    const peerDocs = new DocumentService({ dataDir: peerDir });
+    cleanup.push(() => peerDocs.dispose());
+    peerDocs.registerSystemDoc(SETTINGS_ID, "Settings", peer.hostDoc(), peer.hostOwner());
+    const wrote = await peer.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
+    expect(wrote).toEqual({ wrote: true });
+
+    expect(await exchange(peerDocs, daemon.docs), "the refusal crossed").toBe(true);
+    await until(() => phone.closed, 15_000, "the phone's socket");
+    expect(mock.freewayRevokes).toContainEqual({
+      clientId: `freeway:${TEST_LOGIN}#node-phone~hb-1`,
+    });
+    expect(daemon.devices.get("dev-phone")).toBeUndefined();
+    const outcomes = await eventually(
+      async () =>
+        (await auditRecords(daemon)).filter(
+          (r) => r.action === "device.remove" && r.phase === "outcome",
+        ),
+      "the sweep's row",
+    );
+    expect(outcomes[0]).toMatchObject({
+      outcome: "succeeded",
+      target: { kind: "device", id: "dev-phone" },
+      actor: { kind: "system", id: "fieldd" },
+      attrs: { closed: 1 },
+    });
+    const refused = await helloRefused(daemon, mock, "node-phone");
+    expect(refused.data).toEqual(removedWord);
   }, 60_000);
 });

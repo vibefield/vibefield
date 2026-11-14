@@ -10,6 +10,7 @@ import {
   DeviceRemoveParams,
   DeviceRemoveResult,
   DeviceSlice,
+  DeviceUnidentifiedDetails,
   KnownPhone,
   RefusedDevice,
 } from "../src/devices";
@@ -281,5 +282,25 @@ describe("406 — Remove for a phone: the act, the refusal, the known phones, th
     // the word is the reason itself: a bare UNAUTHORIZED (a bad token) says nothing of a removal
     for (const details of [undefined, {}, { reason: "invalid-token" }])
       expect(DeviceRemovedDetails.safeParse(details).success, JSON.stringify(details)).toBe(false);
+  });
+
+  // S3 (Q-PM6) — while any refusal stands, a same-login hello the sidecar named no node for is
+  // refused too: the door cannot tell it from the removed phone. It cannot tell it IS the removed
+  // phone either, so it is never told it was removed: its own word says what the door knows.
+  it("the door's word to a same-login caller it cannot place while a refusal stands: {reason: device-unidentified}, never device-removed", () => {
+    const data = ErrorData.parse(golden("error-data.device-unidentified.json"));
+    expect(data.kind).toBe("UNAUTHORIZED");
+    // the same sidecar names no node the next time either
+    expect(data.retryable).toBe(false);
+    expect(DEVICE_REFUSALS.REASON_UNIDENTIFIED).toBe("device-unidentified");
+    expect(DeviceUnidentifiedDetails.parse(data.details)).toEqual({
+      reason: DEVICE_REFUSALS.REASON_UNIDENTIFIED,
+    });
+    // two words, never one read as the other
+    expect(DeviceRemovedDetails.safeParse(data.details).success).toBe(false);
+    const removed = golden("error-data.device-removed.json")["details"];
+    expect(DeviceUnidentifiedDetails.safeParse(removed).success).toBe(false);
+    for (const details of [undefined, {}, { reason: "invalid-token" }])
+      expect(DeviceUnidentifiedDetails.safeParse(details).success).toBe(false);
   });
 });

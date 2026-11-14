@@ -170,6 +170,10 @@ export interface ProductApiOptions {
    * answer is sent: the daemon remembers a phone that hellos as one (`phoneAtHello`). Never a
    * gate, and a listener that throws never touches the hello. */
   onHello?: (ctx: CallerContext) => void;
+  // 406 (red, S3): declared, and not yet read by the door (the green commit reads them)
+  isRefusedNode?: (nodeId: string) => boolean;
+  refusalsStand?: () => boolean;
+  isRefusedDevice?: (deviceId: string) => boolean;
 }
 
 /** DS-L7/DS-D15 — `envelope` is what the forwarding hop adds beside the
@@ -364,6 +368,11 @@ export class ProductApi extends EventEmitter {
       }
     }
     return dropped;
+  }
+
+  // 406 (red, S3): STUBBED — closes nothing (the green commit's node-id sweep)
+  dropNodeConnections(_nodeIds: readonly string[]): number {
+    return 0;
   }
 
   /** P4 — arm the x.* dynamic-method path (the ServiceRegistry). */

@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import {
   approvalSigningInput,
   type CallerContext,
+  DEVICE_REFUSALS,
   FREEWAY,
   FREEWAY_APPROVAL,
   FreewayApproveResult,
@@ -81,6 +82,9 @@ class ScriptedFloor implements FreewayNative {
   readonly declared: unknown[] = [];
   readonly acks: unknown[] = [];
   revokes = 0;
+  /** every revoke's params, in order, and how many links the host says each closed */
+  readonly revoked: unknown[] = [];
+  revokeCloses = 0;
   refuseRevoke = false;
   /** the state stream's: how often it was asked, whether it refuses, its frames, its ends */
   subscribes = 0;
@@ -111,8 +115,9 @@ class ScriptedFloor implements FreewayNative {
     }
     if (method === "native.freeway.revoke") {
       this.revokes += 1;
+      this.revoked.push(params);
       if (this.refuseRevoke) throw new Error("the host did not answer");
-      return { closed: 0 };
+      return { closed: this.revokeCloses };
     }
     expect(method).toBe("native.freeway.declare");
     this.declared.push(params);
@@ -495,6 +500,43 @@ describe("F1 — the joins, the links and the revoke", () => {
     await floor.connected();
     expect(native.revokes).toBe(4);
   });
+
+  // Item 406 (VF-PM's rulings of 2026-11-14) — Remove walls ONE phone's keyrings, beside
+  // revokeAll's every phone: by the exact client id the host keys them by, the approval's
+  // (`freeway:<login>#<node>`) with the running host's boot added (`~<hostBootId>`). Owed to THAT
+  // host as revokeAll's is: a revoke the floor did not take is said again to it, never to a later
+  // host.
+  it("406 — revokes one phone's client by its exact id under the host running now, owed to THAT host as revokeAll's is", async () => {
+    const { native, floor } = rig();
+    await floor.connected();
+    native.revokeCloses = 1;
+    expect(await floor.revokeClient(`freeway:${LOGIN}#nPHONE01`)).toBe(1);
+    expect(native.revoked).toEqual([{ clientId: `freeway:${LOGIN}#nPHONE01~hb-1` }]);
+    native.revokeCloses = 0;
+    native.refuseRevoke = true;
+    expect(await floor.revokeClient(`freeway:${LOGIN}#nPHONE02`)).toBe(0);
+    native.refuseRevoke = false;
+    await floor.connected(); // the same host is up: said again, exactly
+    expect(native.revoked).toHaveLength(3);
+    expect(native.revoked.at(-1)).toEqual({ clientId: `freeway:${LOGIN}#nPHONE02~hb-1` });
+    await floor.connected(); // answered: nothing owed
+    expect(native.revoked).toHaveLength(3);
+    native.refuseRevoke = true;
+    await floor.revokeClient(`freeway:${LOGIN}#nPHONE03`);
+    native.refuseRevoke = false;
+    // a new host: the keyrings the refusal was for went with the old one
+    native.push?.(floorState({ revision: 2, hostBootId: "hb-2" }));
+    await floor.connected();
+    expect(native.revoked).toHaveLength(4);
+    // no host up: there is nothing to wall, and nothing is said
+    native.push?.(floorState({ revision: 3, up: false }));
+    expect(await floor.revokeClient(`freeway:${LOGIN}#nPHONE04`)).toBe(0);
+    expect(native.revoked).toHaveLength(4);
+    // revokeAll is as it was: every phone's, without a client id
+    native.push?.(floorState({ revision: 4, hostBootId: "hb-3" }));
+    await floor.revokeAll();
+    expect(native.revoked.at(-1)).toEqual({});
+  });
 });
 
 describe("F1 — the freeway's serve", () => {
@@ -589,6 +631,9 @@ const ROSTER: FreewayApprovalRoster = {
     if (entry === undefined) return undefined;
     return entry.row.self ? entry.row : { ...entry.row, tailscaleId: entry.node };
   },
+  // item 406 — none of these is refused (the rows that are: "406 — a removed phone's approval")
+  isRefused: () => false,
+  isRefusedNode: () => false,
 };
 
 function caller(principal: CallerContext["principal"]): CallerContext {
@@ -799,5 +844,52 @@ describe("F1b — the phone's approval forwarded through its home (FW-D5)", () =
       retryable: true,
       state: FREEWAY_APPROVAL.STATE_DOWN,
     });
+  });
+});
+
+// Item 406 (VF-PM's rulings of 2026-11-14) — a phone Remove refused is forgotten by the roster, so
+// without its own refusal the approver would answer it `uncorrelated`, retryable, and the phone (or
+// its home, asking for it) would ask again and again. It is told the typed word instead, not
+// retryable, by either road: its own node asking, or its home forwarding for its durable id. The
+// door refuses both first (tailnet-door.test.ts); this is the approver's own line behind it.
+describe("406 — a removed phone's approval", () => {
+  const REFUSING: FreewayApprovalRoster = {
+    ...ROSTER,
+    isRefused: (deviceId) => deviceId === "dev-removed",
+    isRefusedNode: (node) => node === "nREMOVED01",
+  };
+
+  /** The refusal a call answers with, its details whole. */
+  function word(call: () => unknown): { kind: string; retryable: boolean; details?: unknown } {
+    try {
+      call();
+    } catch (error) {
+      if (!(error instanceof RpcCallError)) throw error;
+      return { kind: error.kind, retryable: error.retryable, details: error.details };
+    }
+    throw new Error("expected a refusal");
+  }
+
+  it("is refused in the removed word, not retryable, asked directly or forwarded by its home — before `uncorrelated`, and before the host's state", () => {
+    let state: FreewayState | null = floorState();
+    const approver = new FreewayApprover({
+      state: () => state,
+      roster: REFUSING,
+      linkedLogin: () => LOGIN,
+    });
+    const removed = {
+      kind: "UNAUTHORIZED",
+      retryable: false,
+      details: { reason: DEVICE_REFUSALS.REASON_REMOVED },
+    };
+    expect(word(() => approver.check(fromPhone("nREMOVED01"), {}))).toEqual(removed);
+    expect(word(() => approver.check(forwardedFor("dev-removed"), {}))).toEqual(removed);
+    state = null;
+    expect(word(() => approver.check(fromPhone("nREMOVED01"), {}))).toEqual(removed);
+    expect(word(() => approver.check(forwardedFor("dev-removed"), {}))).toEqual(removed);
+    // a phone not refused is approved as before
+    state = floorState();
+    expect(approver.check(fromPhone(), {}).deviceId).toBe("dev-phone");
+    expect(approver.check(forwardedFor("dev-phone"), {}).tailscaleId).toBe(PHONE_NODE);
   });
 });

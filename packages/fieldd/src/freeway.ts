@@ -228,6 +228,11 @@ export class FreewayFloor extends EventEmitter {
     }
   }
 
+  // 406 (red, S3): STUBBED — says nothing to the floor (the green commit's single-client revoke)
+  async revokeClient(_minted: string): Promise<number> {
+    return 0;
+  }
+
   /** fieldd's word may have changed: declare it, unless this link already carries exactly it.
    * Serialized, and the word is read when its turn comes, so two changes arriving together send
    * the newer last. Never throws: a floor that cannot hear it now hears it at the next connect. */
@@ -581,6 +586,9 @@ export interface FreewayApprovalRoster {
         tailscaleId?: string | undefined;
       }
     | undefined;
+  // 406 (red, S3): declared, and not yet read by the approver (the green commit reads them)
+  isRefused(deviceId: string): boolean;
+  isRefusedNode(nodeId: string): boolean;
 }
 
 export interface FreewayApproverOptions {
