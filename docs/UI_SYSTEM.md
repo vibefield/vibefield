@@ -264,10 +264,12 @@ The catalog currently mounts these shipping views directly:
   (fading in), and a specimen in the keyboard's focus (ringed); the filters placed and filled by
   the product's own model (`placeFilters`, `filterOptions`); and the line's create in hand, faint,
   "Put it down first"
-- Copy (HN-3; it replaced Send to…, DK-14): the selection bar's Copy on the shipping
-  `SelectionBarView` (its plates read the product's model), and the cards it deals — a note's words
-  as a text card, two objects as a picture card — on the shipping `CardFace`. Send to…'s plates (the
-  chip in the draft, `ChipFlierView`, `SendFlightPlate`) left with the line's draft
+- Make a card (CS-D11 A; it was Copy, HN-3, which replaced Send to…, DK-14): the selection bar's
+  Make a card on the shipping `SelectionBarView` (its plates read the product's model), and the
+  cards it deals — a note's words as a text card, two objects as a picture card — on the shipping
+  `CardFace`. Send to…'s plates (the chip in the draft, `ChipFlierView`, `SendFlightPlate`) left with
+  the line's draft (*amended 2026-11-14, item 400: this said "Copy (HN-3; it replaced Send to…,
+  DK-14): the selection bar's Copy"; the act, its ⌘C and its plates are the same*)
 - the peers on the mat (DK-16): `PeersLayerView` and `PeerCursorView` over fixture peers on a stand-in
   for the lit mat (`--vf-mat-ground`, where the desk draws its own) — a peer, and two with one at the
   mat's edge — each arrow placed by the product's own model through a fixture camera (`arrowBoxAt`)

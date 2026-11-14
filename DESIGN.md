@@ -4481,8 +4481,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   writes would clobber each other). The selection is **never cleared or put back**: no
   selection write while the card is made, and nothing a peer could see blink. ⌘C makes a card only on Canvas, with a
   selection, outside any field — a note being written copies its own text — and never under a cover.
+  **A selection with no picture to take deals nothing** — none of its box on the view, or a desk that
+  cannot draw it — and the note says why: "No card made — it is off the screen", "No card made — the
+  desk could not draw it".
   **A copy the clipboard refuses deals nothing** — the card is dealt only once its contents are on
-  the clipboard — and the note says why, in Copy's voice: "Not copied — the clipboard did not take
+  the clipboard — and the note says why, in the button's voice: "Not copied — the clipboard did not take
   the picture", "Not copied — the picture could not be read", or its size against the clipboard's
   bound, counted as §9 counts — the size rounded up, the bound down ("Not copied — the words hold
   80 KB; the clipboard takes at most 65 KB"); words that fit the clipboard but not the one request a
@@ -4497,6 +4500,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   selection to the line's caret (1.25 → 0.86, 560ms) and typed the @ 180ms after it landed, so @'s
   list opened; the bar stepped aside from the press while the chip flew. It left with the line's
   draft (LN-D3, HN-2). *Until HN-5* only the text half reached the system clipboard.
+  *Amended 2026-11-14 (item 400): the two refusals with no picture said "Not copied — it is off the screen" and
+  "Not copied — the desk could not draw it", and the clipboard's were said "in Copy's voice". The clipboard's keep
+  "Not copied — …", the copy door's one sentence, which History's room says too.*
 - **The missing face** (DK-D18 as amended 2026-10-03: no VibeField kind; ICE I24; R11, R12, R24):
   an object the desk cannot draw — its type has **no kind** on this desk (a plugin off or gone, a
   type this build never registered — ghost stubs register faceless types only — or one registered
