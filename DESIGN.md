@@ -1500,7 +1500,16 @@ recede the frame and leave the desk at scale 1. Nothing forbids the desk's reced
 bars a transform on the desk's box only while a cover stands, and the pill's sheet and Settings
 already scale it there (`.field-scene[data-sheet-open]` in `styles/base.css`, 600ms on the island
 curve about its centre). *Owed, doc first (MK-4):* how the desk and the frame recede
-as one, at one duration about one point. Under the scrim the desk is out of reach (the field is
+as one, at one duration about one point. *Drawn 2026-11-14 (MK-4d; the MK inventory's A1, ruled by
+VF-PM at its lean), for James's eye on screen:* over Canvas the desk and the frame recede as one, at
+the desk's own recede — both to `scale(0.98)` **about the window's centre over 600ms on the island
+curve**, as the pill's sheet and Settings recede the desk — and come forward the same way when the
+popup folds (600ms there, in place of the 420ms above). The desk's box takes it as under those
+sheets (`sheetOpen` in `field.tsx`, while the open surface is `plugins` and no cover stands), and
+while no cover stands the frame's box takes the desk's point and duration in place of the Peek's
+50% 46% and 420ms, so neither leads the other. Under a cover nothing of this moves: the Peek's
+recede above stands exactly, and no transform reaches the desk's box (DK-15). Reduced motion (M6):
+neither recedes. Under the scrim the desk is out of reach (the field is
 inert) and nothing freezes: no cover stands, so M5's freeze is not taken, and the desk keeps its own
 idle, as under a sheet. Inside the popup a tab or a plugin's page changes in place, and Install
 grows into the install card (M1); their timings are drawn at MK-4 and written here first. Reduced
@@ -4456,8 +4465,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   click on the dimmed desk. **It opens the Plugins popup on Discover** (§8 "Plugins — the frame's
   second popup") on the board's chosen category (`tray.category()`; Discover's categories are the
   pegboard's own, MK-D2) — from All, on Discover's top — and the board folds as the popup opens
-  (one surface at a time, below). *Status 2026-11-11: ruled, to be built.* Its words, and the
-  act's below, are §9 "The plugins' words".
+  (one surface at a time, below). *Status 2026-11-11: ruled, to be built; built 2026-11-14 (MK-4d),
+  as drawn below.* Its words, and the act's below, are §9 "The plugins' words".
+  *Drawn and built 2026-11-14 (MK-4d), for James's eye on screen; no new word:* stepping aside it fades
+  out over 90ms and back over 180ms (ease-out), as ICE's bar does, and while aside it takes no press
+  and no stop of Tab. Under the pointer it grows to 1.03 and pressed to 0.95 (§7), each over 200ms
+  on the pop curve, the line's create's (§8 "The line"); under reduced
+  motion neither, and its fades halve (M6). By night its glass is the line's (94%, the strong
+  hairline, the 6% top light; §5). It rides the drawer's slide by the drawer's own frames: the anchor
+  says where the drawer's top is and how far it has slid, so two frames of a slide say how far it
+  travels, and the pill stands below its place by the part of that travel still to go. The press hands the
+  frame the board's category, but Discover draws no categories yet (its shelf waits, §8 "Plugins —
+  the frame's second popup"), so until it does the pill opens Discover where the Me menu's
+  **Plugins…** does.
 
   **After an install** (MK-D8, ruled A by James 2026-11-11; VF-PM's MK-E2 of the same day builds the
   plugin market page's fallback B): the popup's **Show them on the pegboard** folds the popup and
@@ -4471,7 +4491,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   fresh, as an update's does (MK-E6 rules the update's; the install's, and where the popup and its
   act stand after it, are *owed (MK-4c)*, here and in §8 "Plugins — the frame's second popup" first)
   — and ICE's focus answers nothing until the board is next laid (petition I37), so the board asks
-  for it again once it hangs the set. *Status 2026-11-11: ruled, to be built.* The set's own token —
+  for it again once it hangs the set. *Status 2026-11-11: ruled, to be built; the board's half built
+  2026-11-14 (MK-4d), below.* The set's own token —
   the board showing only the new set under "Desk things · 4 new", each object over its own
   category's tape, its × back to every object — waits for ICE's door (a filter by a set of types;
   ICE 0.17.0's lay filters by one category alone; petition I54, drafted, which James files after the
@@ -4483,6 +4504,27 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   fresh is the update's: the popup's note reopens it on the plugin's page, its act saying
   **Installed** (§8 "Plugins — the frame's second popup", "Updates", "The window coming back
   fresh"). **Show them on the pegboard** stands there once MK-4d builds it.
+  *Built 2026-11-14 (MK-4d), the board's half; no new word:* the board's door that the act calls
+  (the set's objects, in the set's own order) and all the board does after it, as written above.
+  As built: the set's first object under that category is the first in the set's own order; the
+  board rises at once, folding the popup, and asks again on each frame until it hangs the set, so a
+  showing lands across the install's remount, the board rising again on the new desk. A showing
+  ends once it lands, or once you choose on the board yourself (a filter, a key), fold the board,
+  open another surface or go to another view: Canvas is asked for once, over the view the act was
+  pressed in, and never once the showing has stood on Canvas. While an object is in hand the desk
+  refuses the board (R14) and nothing waits to rise. Over a covered view whose move to Canvas does
+  not happen, it ends when the popup folds, so no board rises on a later visit to Canvas.
+  *Drawn and built 2026-11-14 (MK-4d's second part, the act on the page, on the page's Install,
+  O2-C), ‹draft› for James's eye; no new word:* on the page of an installed plugin
+  that is on and adds an object the board hangs (one with a pegboard entry; one without hangs
+  nowhere), **Show them on the pegboard**, "Show on the pegboard" for a set of one (§9
+  "Installing, and after"), stands 12 after **Installed**, in the look O2-C draws for the page's
+  **Install**, ↵ printed on it; ↵ from the field presses it. It hands the board those objects, in
+  the set's own order, and folds nothing itself: the board's rise folds the popup, or over a
+  covered view the move to Canvas. A plugin that is off (turned off, or held off while community
+  plugins are off) is offered none, for the board does not hang its kinds (P3c); nor is one whose
+  objects all hang nowhere. "For a set of one" counts the objects it hands the board: a plugin that
+  adds three, one of which hangs, says "Show on the pegboard".
 
   **One object at a time waits** (MK-D9, ruled A by James 2026-11-11: each object its own pegboard
   switch; not buildable on ICE 0.17.0, VF-PM's MK-E2): until ICE's door, a plugin's objects hang
@@ -4566,6 +4608,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   card it makes carries the type's name. It is said once, in the status line (R12, above), never painted onto the
   object as an alarm. *Amended 2026-11-11 (item 282, IS-282-7 A): the third and fourth words were "no kind"
   and "remount to draw it".*
+  *Amended 2026-11-14 (MK-4d; the MK inventory's N23; §9 "The plugins' words", "Never on screen"):* a
+  type id no longer stands in for a name. Where the registry has no name for the type — its plugin
+  removed, or the daemon away — the name is the one this window staged its plugin with, kept until the
+  window opens again, so a removed plugin's object says "Clock · plugin gone"; a type with no name here
+  at all (its plugin removed and the window opened again, or a kind from another desktop this build never
+  had) is **Object** ‹draft›: "Object · can't draw here". This said "else the type id (R12)".
 - **The covers over the desk** (DK-D25 ruled 2026-10-02 — "frozen desk should be still and consume
   no render time at all"; FC-D13, FC-D15, FC-D16; ICE I23; R16; DK-15): **under a cover the desk is
   a still and costs nothing** — the cover fades in over the LIVE desk (240ms) while
@@ -5424,7 +5472,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   without its kinds), until it is installed again. *Owed (MK):* with the plugin's record gone, the
   bar's ‹name› falls back to the type id (`desk-object-words.ts`), an id on screen against §9,
   VibeField's insides, so what the bar names a removed plugin's object by is still to be said, here
-  first. **Remove… takes it off every desktop**, its settings and data kept (MK-E10, ruled by James
+  first. *Said 2026-11-14 (MK-4d; §8 "The missing face" as amended that day):* by the name this
+  window staged its plugin with, until the window opens again, and then, with no name here, **Object**
+  ‹draft› ("Object · can't draw here"); never the type id.
+  **Remove… takes it off every desktop**, its settings and data kept (MK-E10, ruled by James
   2026-11-11 06:48:31Z at MK's lean: "everywhere, with settings and data kept"), and **Remove it and
   its data…** "stays the separate red, two-step act" (the lean's words); it reaches this desktop
   alone: your other desktops remove the plugin and keep their copy of its data, and nothing deletes
@@ -7269,7 +7320,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         12/400 in tertiary ink, Body too.
       - **What it adds**: each object by its pegboard label, or by its title when it hangs nowhere; then its
         tools and its service; or that it adds none. Where each hangs waits for the pegboard's names to reach
-        the popup (MK-4d).
+        the popup (MK-4d). *Corrected 2026-11-14 (MK-4d's rider; VF-PM 04:33Z, MK-4d's Q3 at its lean): the
+        board's door and its act came first, without the names; the pegboard's names reach the popup in a later
+        part, after the page's acts, by a door beside the act's.*
         *Changed 2026-11-14 (James's MK-O14 pick B, 2026-11-11 23:03:25Z: "With the count: 6 tools for your
         agents"; his MK-O20 pick A, 23:03:26Z: "Name each under What it adds"; both at their leans on his
         Plugins page, built on VF-PM's ruling of 2026-11-14 04:33Z that his picks there are rulings):* its tools
@@ -9461,7 +9514,8 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   you (AU-D1). The palette (⌘K) says **Plugins…**, its small line "Me menu", and **Check plugins for updates** (glyph
   `reset`), its small line "Plugins", which opens the popup on Updates, for opening it is the read (MK-D5); it wears
   no "…", as ruled (below). The pegboard's foot says **More in Plugins…**, which opens Discover on the board's
-  category.
+  category. *Built 2026-11-14 (MK-4d), in the ruled words: until Discover draws its categories it opens Discover
+  where Plugins… does (§8 "The pegboard").*
 - **The popup** (MK-D2, MK-D4). Its field says "Search plugins and objects…", with **Discover** · **Installed** ·
   **Updates** at its end, Updates carrying the Me row's count. A set's picture says how many objects it holds, "3
   objects"; a set of more than six shows its first six and "+‹n›" ("+4" for a set of ten). A set found by one of its
@@ -9686,7 +9740,9 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     Things · 1.0.0"), for those names are the pegboard's and the popup does not read them yet. A built-in's keeps its
     version before its end, "3 objects · 1.2.0 · comes with VibeField".
     *Corrected 2026-11-11 (MK-4c; VF-PM 13:56:27Z): the place waits for the pegboard's names to reach the popup
-    (MK-4d), not for the plugin's page.*
+    (MK-4d), not for the plugin's page.* *Corrected 2026-11-14 (MK-4d's rider; VF-PM 04:33Z, MK-4d's Q3 at its
+    lean): the board's door and its act came first, without the names; the names reach the popup in a later part,
+    after the page's acts (§8 "Plugins — the frame's second popup", What it adds).*
   - A plugin with no object and one of the two says "No objects · a service" or "No objects · tools", and with
     neither, "No objects".
   - One of a thing is said as one: "1 plugin", "1 object".
@@ -9848,6 +9904,11 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   "From the registry", Discover's "From the community · reviewed by the registry" and a Development row's
   "reloads when you build"); none ships, and what the two groups say instead is drawn at MK-4 and written here
   first. They stay in the log, Diagnostics and the code.
+  *Added 2026-11-14 (MK-4d; the MK inventory's N23), MK's word, ‹draft›, for James's eye:* nor an object's type id
+  on the desk's bar. An object the desk draws as missing is named by its plugin's name for it, and a removed
+  plugin's object keeps that name until the window opens again ("Clock · plugin gone"); one with no name here at
+  all is **Object**: "Object · can't draw here", and "OBJECT · CAN'T DRAW HERE" in the grown menu's eyebrow (§8
+  "The missing face").
 
 *(Godview round 3, built 2026-10-12; its status is §8 the deck's.)*
 **The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —
@@ -10229,7 +10290,7 @@ and the pegboard's **More in Plugins…** pill (15; §8 "The pegboard"), and the
 `reset`, as the app's update does. The Settings rail's Plugins row wears it today and retires with
 MK-D10, when that page leaves Settings; the agents' Extensions in Settings → Agent Profiles keep
 wearing it. *To be built in track MK.* *Built 2026-11-11: the popup's field at MK-4a, and the Me menu's and the
-palette's doors at MK-4b; the pegboard's pill is MK-4d's.*
+palette's doors at MK-4b; the pegboard's pill is MK-4d's.* *Built 2026-11-14: the pegboard's pill at MK-4d.*
 **`package`** is Artifacts' (PL-D1, PL-D2; built at HN-8; *amended 2026-11-05, MA-D13 (a): the shelf it opens
 says Apps, and the glyph stays, below*): the pill's button and the covered views'
 circle (§8 "The head"), folded into the terminals' title bar with search. It was the right notch's
