@@ -728,8 +728,15 @@ export class DeviceService extends EventEmitter {
     return this.refused.deviceIds.size > 0;
   }
 
-  // 406 (red, S3's fold): STUBBED — reads nothing (the green commit loads the refusals)
-  async loadRefusals(): Promise<void> {}
+  /** Item 406, S3's fold (VF-PM 06:18Z, (5a)) — read the account's refused and
+   * known phones now, with no registry pass and no mesh call. The daemon calls it
+   * before its door listens, so the doors' predicate (`isRefusedNode`,
+   * `hasRefusals`) holds every refusal the settings document does from the
+   * door's first hello; a registry pass reads them again at its start. Never
+   * throws: a read that fails keeps what was read before. */
+  async loadRefusals(): Promise<void> {
+    await this.readDevicesDoc();
+  }
 
   /** UA-P-0e — where a peer's product door is, DERIVED: its authenticated
    * MagicDNS name plus the registry's fixed product serve port, over plain `http`

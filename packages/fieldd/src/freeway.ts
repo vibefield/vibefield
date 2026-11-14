@@ -172,6 +172,9 @@ export class FreewayFloor extends EventEmitter {
   /** Item 406 — one-client revokes the floor did not take, by the exact client id, each owed to
    * the host whose boot that id names */
   private readonly owedClients = new Map<string, HostBoot>();
+  /** Item 406, S3's fold — one-client revokes asked before the floor's state was read (the boot
+   * sweep's, when it outruns the stream), by the minted id: owed to the first host it names */
+  private readonly unread = new Set<string>();
   /** The current floor boot's joins: the highest cursor taken and the `dropped` total said, the
    * cursor through which the audit wrote, and the one the floor took. */
   private joinsSeen: {
@@ -214,6 +217,12 @@ export class FreewayFloor extends EventEmitter {
       if (sameHost(host, this.current)) await this.revokeExact(clientId, host);
       else this.owedClients.delete(clientId);
     }
+    // asked before the state was read: said once to the host it names now, or to none if it is down
+    if (this.current !== null && this.unread.size > 0) {
+      const unread = [...this.unread];
+      this.unread.clear();
+      for (const minted of unread) await this.revokeClient(minted);
+    }
     await this.declare();
   }
 
@@ -246,11 +255,17 @@ export class FreewayFloor extends EventEmitter {
    * (a host's keyrings go with it) and nothing is said; a declaration that no longer admits the
    * phone keeps any later host from linking it. Owed to THAT host as revokeAll is (the class's
    * law). Answers how many links the host says it closed: 0 when nothing was said or it is owed.
+   * Asked before the floor's state was read (S3's fold: the boot sweep, field-native outliving
+   * fieldd), it is owed to the first host the state names, said at the connect that reads it.
    * Never throws. */
   async revokeClient(minted: string): Promise<number> {
     if (this.disposed) return 0;
     const state = this.current;
-    if (state?.up !== true || state.hostBootId === undefined) return 0;
+    if (state === null) {
+      this.unread.add(minted);
+      return 0;
+    }
+    if (state.up !== true || state.hostBootId === undefined) return 0;
     const host = { floorBootId: state.floorBootId, hostBootId: state.hostBootId };
     return await this.revokeExact(`${minted}~${state.hostBootId}`, host);
   }

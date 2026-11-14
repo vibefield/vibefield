@@ -28,11 +28,14 @@ import { clientIdFor } from "./terminal-grants";
 // Revocation preserves safety: the effect runs even when the audit cannot be written, and the
 // caller still hears the audit's failure. Before the sweep the roster passes once more, so the door
 // refuses a phone that dials back mid-sweep (`isRefusedNode`), and the freeway's declaration drops
-// it (4410). What stays open is DESIGN.md §9's to say, never this module's to promise: a terminal
-// on a product-door grant until the grant ends (S4 is the floor's wall, not built), an open History
-// session (Q-PM3: no rosettad restart, a named gap), made apps and store delivery until the person
-// removes the phone in Tailscale's admin console. Workspace tickets are a window's alone
-// (`WorkspaceTickets.check`), so a phone holds none.
+// it (4410). At boot (S3's fold), what stood is swept once the roster has passed: its sockets and
+// freeway clients, with no audit row (`sweepSeeded`). What stays open is DESIGN.md §9's to say,
+// never this module's to promise: a terminal on a product-door grant until the grant ends (S4 is
+// the floor's wall, not built), an open History session (Q-PM3: no rosettad restart, a named gap),
+// a transcript reader a third desktop relayed for the phone's home (the worker closes an exact key
+// alone, transcripts/host/listener.ts `revokeClient`; a named gap), made apps and store delivery
+// until the person removes the phone in Tailscale's admin console. Workspace tickets are a
+// window's alone (`WorkspaceTickets.check`), so a phone holds none.
 
 /** What Remove reads of the roster (`DeviceService`). */
 export interface RemovalRoster {
@@ -94,10 +97,16 @@ export interface RemovalAsk {
  * new node id carried into the refusals (on any desktop). */
 type SweepCause = "remove" | "merge" | "append";
 
+/** S3's fold — the boot sweep's diagnostics line, by its code: its attrs are exactly
+ * `{connections, links}`, the product sockets and freeway links it closed for one refusal. */
+const BOOT_SWEPT = "fieldd.devices.removal_swept_at_boot";
+
 export class DeviceRemoval {
   private readonly logger: Logger;
   /** What this desktop has swept: each refused durable id, with the node ids swept under it. */
   private readonly swept = new Map<string, Set<string>>();
+  /** What stood at boot, by durable id with its node ids: the boot sweep's (`sweepSeeded`). */
+  private readonly seeded = new Map<string, Set<string>>();
   /** The act, the sweeps and the seed, one at a time, in the order they were asked. */
   private chain: Promise<unknown> = Promise.resolve();
 
@@ -208,14 +217,16 @@ export class DeviceRemoval {
     });
   }
 
-  /** At boot, before the door listens: every refusal standing is taken as swept. Nothing of a
-   * phone lives in a daemon whose door has not opened, and a sweep would audit each again at every
-   * boot. Never rejects. */
+  /** At boot, before the door listens: every refusal standing is taken as swept, so no merge or
+   * append sweep audits it again at every boot, and is kept for the boot sweep (`sweepSeeded`),
+   * which closes what the floor may still hold of it. Never rejects. */
   seed(): Promise<void> {
     return this.serially(async () => {
       try {
-        for (const [deviceId, nodes] of await this.opts.doc.refusedDevices())
+        for (const [deviceId, nodes] of await this.opts.doc.refusedDevices()) {
           this.mark(deviceId, [...nodes]);
+          this.seeded.set(deviceId, new Set(nodes));
+        }
       } catch (error) {
         this.logger.warn(
           "fieldd.devices.removal_seed_failed",
@@ -226,8 +237,46 @@ export class DeviceRemoval {
     });
   }
 
-  // 406 (red, S3's fold): STUBBED — sweeps nothing (the green commit's boot sweep)
-  async sweepSeeded(): Promise<void> {}
+  /** S3's fold (VF-PM 06:18Z, (5b)) — the boot sweep, once, after the roster's first pass. The
+   * seed took what stood at boot as swept, but field-native outlives fieldd: a daemon stopped
+   * between a refusal's merge and its sweep (a crash, or a same-uid process killing it) left the
+   * freeway host holding the phone's keyrings. So each refused phone's live product connections
+   * close by node id, then its freeway client per node is revoked (idempotent: a client the host
+   * does not hold closes nothing; owed to the first host the floor names when it has named none).
+   * No audit row: nothing was decided here. ONE diagnostics line per refusal whose sweep closed
+   * something: its code (`BOOT_SWEPT`) and its counts, never an id, token, address or host name.
+   * Its transcripts are not asked: the worker is this boot's own and holds no ticket from before.
+   * Never rejects. */
+  sweepSeeded(): Promise<void> {
+    return this.serially(async () => {
+      const seeded = [...this.seeded.values()];
+      this.seeded.clear();
+      const login = this.opts.linkedLogin();
+      for (const nodes of seeded) {
+        try {
+          const nodeIds = [...nodes];
+          const connections = this.opts.dropConnections(nodeIds);
+          let links = 0;
+          if (login !== null) {
+            for (const tailscaleId of nodeIds)
+              links += await this.opts.revokeFreeway(freewayClientId(login, tailscaleId));
+          }
+          if (connections + links > 0)
+            this.logger.info(
+              BOOT_SWEPT,
+              "A phone removed before this boot still held something here; it is closed",
+              { connections, links },
+            );
+        } catch {
+          // both seams answer and never throw; a throw is said by its code alone, as the line is
+          this.logger.warn(
+            "fieldd.devices.removal_boot_sweep_failed",
+            "A phone removed before this boot could not be swept here at boot",
+          );
+        }
+      }
+    });
+  }
 
   private async sweepAsSystem(
     deviceId: string,

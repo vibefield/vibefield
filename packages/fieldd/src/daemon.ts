@@ -8534,8 +8534,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ),
       );
     });
-    // what stood before this boot is taken as swept (no door has opened yet); every refusal after
-    // it, written here or merged from another desktop, is swept once
+    // what stood before this boot is never swept as a merge (no audit row at every boot): it is the
+    // boot sweep's, once the roster has passed (below, after the door listens; S3's fold). Every
+    // refusal after it, written here or merged from another desktop, is swept once
     void deviceRemoval.seed();
     settingsDoc.on("changed", (event: { section: string }) => {
       if (event.section === SETTINGS_DOC_SECTIONS.DEVICES_REFUSED) void deviceRemoval.sweep();
@@ -8804,6 +8805,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     let controlPort: number;
     try {
       if (fatalReason) throw new Error(fatalReason);
+      // Item 406, S3's fold (VF-PM 06:18Z, (5a)) — the door's refusal predicate is filled from the
+      // settings document BEFORE the door listens. The roster's first registry pass comes after the
+      // listen (below), and until it the door read no refusal: a removed phone's hello in that
+      // instant was admitted, and a same-uid process can make that instant by restarting fieldd.
+      // The read never throws (a failure keeps the empty reading and says so).
+      await devices.loadRefusals();
       controlPort = await api.listen();
       if (fatalReason || native.superseded || native.closed)
         throw new Error(fatalReason ?? "native link closed during Product API startup");
@@ -8811,6 +8818,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // post-bind service initialization. A migration/storage failure may not
       // leave a zombie ProductAPI listener behind.
       await devices.sync();
+      // S3's fold, (5b) — the roster has passed: what stood at boot is swept now, by node id and
+      // exact freeway client (field-native outlived the last fieldd, and may hold its keyrings).
+      // No audit row; one diagnostics line per refusal that closed something. Never rejects.
+      void deviceRemoval.sweepSeeded();
       // MA-3e — built now that the device id is the mesh's (see `buildMadeApps`),
       // and before AH's start, whose first reconcile reads its reservations
       madeAppsRef = buildMadeApps();
