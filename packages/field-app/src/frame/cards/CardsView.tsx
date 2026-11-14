@@ -435,8 +435,9 @@ function keepKeyInside(event: ReactKeyboardEvent<HTMLDivElement>): void {
 }
 
 /** A card picked up (HN-D5): it leaves its place in the fan for the middle at reading size while
- * the window behind it goes out of focus, and the bar under the head says where it came from. Up,
- * it is a modal dialog named by the card. Flip it turns it to its printed back and again to its
+ * the window behind it goes out of focus, and the bar under the head says what it is, in bold (its
+ * `about`: said, not printed — round 5's face), and where it came from. Up, it is a modal dialog
+ * named by the card. Flip it turns it to its printed back and again to its
  * face (DESIGN.md §8 "Picking one up"); put back, it goes home face up. */
 function HeldLayer({
   held,
@@ -519,6 +520,7 @@ function HeldLayer({
         </div>
       </div>
       <div className="vf-cards-bar" {...(up ? { "data-on": "" } : {})} inert={!up}>
+        {held.card.about !== "" && <b className="vf-cards-bar-about">{held.card.about}</b>}
         <span className="vf-cards-bar-from">{provenance(held.card, now, keys)}</span>
         <span className="vf-cards-bar-rule" aria-hidden="true" />
         <button

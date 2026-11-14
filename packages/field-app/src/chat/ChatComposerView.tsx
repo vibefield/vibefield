@@ -14,7 +14,9 @@ import {
   type Ref,
   useId,
 } from "react";
-import { CARD_INDEX, cardLook } from "../frame/cards/CardFace";
+import { cardLook } from "../frame/cards/CardFace";
+import { cardType } from "../frame/cards/cards-model";
+import { TYPE_GLYPH } from "../frame/cards/type-glyphs";
 import { menuRowId } from "./agent-chip-menu";
 import { AT_WORDS, type AtAgentRow, type AtList, type AtRow, type AtSessionRow } from "./at-rows";
 import { chipLabel, type DraftChip, type DraftPart, draftPlaceholder } from "./composer-draft";
@@ -93,9 +95,9 @@ function menuLabel(rows: readonly AgentMenuRow[]): string {
   return head?.kind === "agent" ? `${head.agent.label}'s model` : "Its model";
 }
 
-/** A chip's mark: an agent's or a session's, its agent's at 15; a card's, its kind's index glyph at 13. */
+/** A chip's mark: an agent's or a session's, its agent's at 15; a card's, its type's glyph at 13 (§13, its head's). */
 function ChipMark({ chip }: { chip: DraftChip }): ReactElement {
-  if (chip.kind === "card") return <FieldGlyph name={CARD_INDEX[cardLook(chip.card)]} size={13} />;
+  if (chip.kind === "card") return <FieldGlyph name={TYPE_GLYPH[cardType(chip.card)]} size={13} />;
   return (
     <span className="vf-chat-chip-mark" aria-hidden="true">
       <AgentIcon providerId={chip.agent} />

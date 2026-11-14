@@ -1,23 +1,25 @@
-import { FieldGlyph, type GlyphName } from "@vibefield/design-kit/glyphs";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { projectInk } from "@vibefield/design-kit/project-ink";
 import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 import { agentMark } from "@vibefield/puppeteer-view-sdk/toolkit";
 import { type CSSProperties, type ReactElement, type ReactNode, useState } from "react";
-import type { Card, FileFace as FileFaceData, SessionFace, TextShow } from "./cards-model";
+import { headOf, nameOnFace, wordsOnFace } from "./card-fit";
+import { type Card, cardType, type FileFace, type SessionFace, type TextShow } from "./cards-model";
 import { AGENT_STATE_WORDS, cardName, HAND_WORDS, WAITING_WORDS } from "./cards-words";
+import { TYPE_GLYPH } from "./type-glyphs";
 import "./cards.css";
 
 /**
- * One card of the hand (track HN, HN-D1 "one stock, six faces"; DESIGN.md §5 "The hand's cards
- * are paper", §8 "The hand"): the same white stock for every kind, the kind's glyph printed in two
- * corners as a playing card prints its index, and one thing on its face, its name first. A picture
- * is printed on it; an agent's card is the one dark stock. Controller-free: the fan, the held
- * layer, the carried card and the catalog all draw a card through this, and each sets where it
- * stands, its turn and its lift on its own wrapper (the `--vf-cards-*` properties `cards.css`
+ * One card of the hand (DESIGN.md §5 "The hand's cards are paper", §8 "A card"; *Card Stock* round 5, ruled with
+ * CS-D5…D12 on 2026-11-09; item 405): every card is the same printed stock under one face of three things and one line
+ * of words — its type's glyph, then its name; the window, what it holds, seen; its faces, as their types' glyphs along
+ * its foot. A card picked up is the same face at 2.4×. The agent's card keeps its own dark face until its window
+ * (FACE-b). Controller-free: the fan, the held layer, the carried card and the catalog all draw a card through this,
+ * and each sets where it stands, its turn and its lift on its own wrapper (the `--vf-cards-*` properties `cards.css`
  * reads).
  */
 
-/** How a card's first face prints today (OB-1a: this face's look, unchanged; §7's marks replace it). */
+/** How a card's first face prints today: the dark stock keys on "agent", the composer's chip names its kind by it. */
 export type CardLook = "text" | "file" | "agent" | "term" | "msg" | "pict";
 
 /** The look a card's first face prints with. PURE. */
@@ -38,21 +40,11 @@ export function cardLook(card: Card): CardLook {
   }
 }
 
-/** The index each kind prints in its corners: a fanned hand is read by them. */
-export const CARD_INDEX: Readonly<Record<CardLook, GlyphName>> = {
-  text: "snippets",
-  file: "code",
-  agent: "agents",
-  term: "terminal",
-  msg: "message",
-  pict: "capture",
-};
-
 export interface CardFaceProps {
   readonly card: Card;
-  /** Picked up (HN-D5): the same card, its type set finer inside so the whole of it reads. */
+  /** Picked up (§8 "Picking one up"): the same face at 2.4×; the press's held print keys on it. */
   readonly held?: boolean;
-  /** The reach brought it forward: its × shows inside its top right, across from the index. */
+  /** The reach brought it forward: its chip shows on its top right corner. */
   readonly reached?: boolean;
   readonly onRemove?: () => void;
 }
@@ -63,21 +55,18 @@ export function CardFace({
   reached = false,
   onRemove,
 }: CardFaceProps): ReactElement {
-  const look = cardLook(card);
-  const index = CARD_INDEX[look];
+  const first = card.faces[0];
   return (
     <div
       className="vf-card"
-      data-kind={look}
+      data-kind={cardLook(card)}
       data-card={card.id}
       {...(held ? { "data-held": "" } : {})}
       {...(card.waiting === true ? { "data-waiting": "" } : {})}
     >
       <i className="vf-card-stock" aria-hidden="true" />
       <div className="vf-card-face">
-        <FieldGlyph name={index} size={12} className="vf-card-ix" />
-        <FieldGlyph name={index} size={12} className="vf-card-ix vf-card-ix-tail" />
-        {faceOf(card)}
+        {first.type === "session" ? <AgentFace face={first} /> : <PrintedFace card={card} />}
       </div>
       <i className="vf-card-gloss" aria-hidden="true" />
       {reached && (
@@ -101,105 +90,248 @@ export function CardFace({
   );
 }
 
-function faceOf(card: Card): ReactElement {
+/** A copy that starts at a prompt is named by its command. */
+const PROMPT = /^\$\s+/u;
+
+/** The one line of words the head prints: a terminal copy's command without its prompt; a drag from another app its
+ * kind while it is on its way (HN-D2); else the card's own name; always one line. PURE. */
+export function faceName(card: Card): string {
+  const face = card.faces[0];
+  if (card.waiting === true) {
+    if (face.type === "image") return WAITING_WORDS.image;
+    if (face.type === "file") return face.name === "" ? WAITING_WORDS.file : face.name;
+    return WAITING_WORDS.text;
+  }
+  const name =
+    face.type === "text" && face.show.as === "term"
+      ? face.show.first.replace(PROMPT, "")
+      : card.title;
+  return name.replace(/\s+/gu, " ").trim();
+}
+
+/** THE ROUND 5 FACE: its type, then its name; the window; its faces along its foot, in the bloom's order. Until the
+ * card's bloom (OB-1b) a card has one face, so its foot shows its one glyph. */
+function PrintedFace({ card }: { readonly card: Card }): ReactElement {
+  const type = cardType(card);
+  const name = nameOnFace(faceName(card), type === "file");
+  return (
+    <>
+      <div className="vf-card-head">
+        <FieldGlyph name={TYPE_GLYPH[type]} size={10.4} className="vf-card-type" />
+        <div className="vf-card-name" style={{ "--card-name": `${name.px}px` } as CSSProperties}>
+          {name.text}
+        </div>
+      </div>
+      {windowOf(card)}
+      <div className="vf-card-faces">
+        {card.faces.map((face) => (
+          <FieldGlyph key={face.id} name={TYPE_GLYPH[face.type]} size={7.4} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** The window: what the card holds, seen, with nothing said about it. */
+function windowOf(card: Card): ReactElement {
   const face = card.faces[0];
   const waiting = card.waiting === true;
   switch (face.type) {
     case "text":
-      return textFaceOf(face.show, waiting);
-    case "file":
-      return <FileFace face={face} waiting={waiting} />;
-    case "session":
-      return <AgentFace face={face} />;
-    case "image":
-      return <PictFace picture={face} title={card.title} waiting={waiting} />;
-    case "link":
-      return (
-        <TextFace show={{ title: face.title, body: face.url, bare: true }} waiting={waiting} />
+      return waiting ? (
+        <div className="vf-card-window" data-window="text" />
+      ) : (
+        <TextWindow show={face.show} />
       );
+    case "image":
+      return <PictureWindow kind="image" picture={face} waiting={waiting} />;
+    case "file":
+      return <FileWindow face={face} waiting={waiting} />;
     case "ref":
-      return <PictFace picture={face.still} title={card.title} waiting={waiting} />;
+      // its still, as its Picture face is, until its own window: the mat and the live pin (FACE-b)
+      return <PictureWindow kind="ref" picture={face.still} waiting={false} />;
+    case "link":
+      // its page, bare, until FACE-b draws its bar and its page
+      return <div className="vf-card-window" data-window="link" />;
+    case "session":
+      return <div className="vf-card-window" data-window="session" />;
   }
 }
 
-function textFaceOf(show: TextShow, waiting: boolean): ReactElement {
+/** The most of its words a text window ever sets: past this its eleven lines are full. */
+const WORDS_SHOWN = 600;
+
+/** TEXT — what follows its name (a mail's body under its subject), or all of it when that is all it says. */
+function TextWindow({ show }: { readonly show: TextShow }): ReactElement {
   switch (show.as) {
     case "words":
-      return <TextFace show={show} waiting={waiting} />;
-    case "term":
-      return <TermFace show={show} />;
+      return <WordsWindow words={show.body === "" ? show.title : show.body} />;
     case "msg":
-      return <MsgFace show={show} />;
+      return <WordsWindow words={show.words} />;
+    case "term":
+      return <ConsoleWindow show={show} />;
   }
 }
 
-/** A text card's name as its face prints it: a sentence keeps its own stop and a title that is
- * one gets a full stop; a bare line (an error, a command, a list) gets none. PURE. */
-export function cardTitle(show: { readonly title: string; readonly bare: boolean }): string {
-  return show.bare || /[.!?…:]$/u.test(show.title) ? show.title : `${show.title}.`;
-}
-
-/** TEXT — the words themselves; the first sentence is their name, run in bold. A drag from
- * another app says only its kind until it is let go (HN-D2). */
-function TextFace({
-  show,
-  waiting,
-}: {
-  readonly show: { readonly title: string; readonly body: string; readonly bare: boolean };
-  readonly waiting: boolean;
-}): ReactElement {
-  if (waiting) {
-    return (
-      <div className="vf-card-body">
-        <p className="vf-card-words">
-          <b>{WAITING_WORDS.text}</b>
-        </p>
-      </div>
-    );
-  }
+function WordsWindow({ words }: { readonly words: string }): ReactElement {
+  const shown = headOf(words, WORDS_SHOWN);
+  const fit = wordsOnFace(shown);
+  const set = {
+    "--card-words": `${fit.px}px`,
+    "--card-pitch": `${fit.pitch}px`,
+    "--card-lines": fit.lines,
+  } as CSSProperties;
   return (
-    <div className="vf-card-body">
-      <p className="vf-card-words">
-        <b>{cardTitle(show)}</b> {show.body}
+    <div className="vf-card-window" data-window="text">
+      <p className="vf-card-words" style={set}>
+        {shown}
       </p>
     </div>
   );
 }
 
-/** FILE — its name, where it lives, and its first lines fading into the stock (or its facts when
- * it has no lines). Waiting, it says how many and that letting go shows them. */
-function FileFace({
-  face,
-  waiting,
-}: {
-  readonly face: FileFaceData;
-  readonly waiting: boolean;
-}): ReactElement {
-  if (waiting) {
-    return (
-      <div className="vf-card-body">
-        <div className="vf-card-name">{face.name === "" ? WAITING_WORDS.file : face.name}</div>
-        <div className="vf-card-path">{WAITING_WORDS.letGo}</div>
-      </div>
-    );
+/** Each line of `text` with where it starts in it (its key), at most `max`. PURE. */
+function linesOf(
+  text: string,
+  max: number,
+): ReadonlyArray<{ readonly at: number; readonly line: string }> {
+  const out: Array<{ at: number; line: string }> = [];
+  let at = 0;
+  for (const line of text.split("\n")) {
+    if (out.length >= max) break;
+    out.push({ at, line });
+    at += line.length + 1;
   }
+  return out;
+}
+
+/** A terminal window's lines: ten at most, the most of them it reads. */
+const CONSOLE_LINES = 10;
+const CONSOLE_SHOWN = 1200;
+/** The test runner's summary line: its count of passes in the pass ink. */
+const PASSED = /^(Tests\s+)(\d+ passed)(.*)$/u;
+
+/** TERMINAL — what it printed, in mono, each line from its first mark: a prompt's command in bold, a pass in the pass
+ * ink, the one colour a terminal card prints. A copy that is one line shows that line. */
+function ConsoleWindow({
+  show,
+}: {
+  readonly show: Extract<TextShow, { as: "term" }>;
+}): ReactElement {
+  const rest = show.rest.replace(/\n+$/u, "");
+  const lines = linesOf(headOf(rest !== "" ? rest : show.first, CONSOLE_SHOWN), CONSOLE_LINES);
   return (
-    <div className="vf-card-body">
-      <div className="vf-card-name">{face.name}</div>
-      {face.folder !== undefined && <div className="vf-card-path">{face.folder}</div>}
-      {face.lines !== undefined && face.lines !== "" ? (
-        <pre className="vf-card-lines">{face.lines}</pre>
-      ) : face.facts !== undefined ? (
-        <div className="vf-card-path" data-facts="">
-          {face.facts}
-        </div>
-      ) : null}
+    <div className="vf-card-window" data-window="term">
+      <div className="vf-card-out">
+        {lines.map(({ at, line }) => (
+          <ConsoleLine key={at} line={line.trimStart()} />
+        ))}
+      </div>
     </div>
   );
 }
 
-/** The agent's mark: the SDK's own when it has one for this agent (branding, never behaviour —
- * AR-L1), else the kit's `agents` glyph. */
+function ConsoleLine({ line }: { readonly line: string }): ReactElement {
+  if (PROMPT.test(line)) {
+    return (
+      <div>
+        <span className="vf-card-prompt">$ </span>
+        <b>{line.replace(PROMPT, "")}</b>
+      </div>
+    );
+  }
+  const passed = PASSED.exec(line);
+  if (passed !== null) {
+    return (
+      <div data-quiet="">
+        {"Tests "}
+        <b className="vf-card-pass">{passed[2]}</b>
+        {passed[3]}
+      </div>
+    );
+  }
+  const parts: ReactNode[] = [];
+  let from = 0;
+  for (let mark = line.indexOf("✓"); mark >= 0; mark = line.indexOf("✓", from)) {
+    parts.push(
+      line.slice(from, mark),
+      <b key={mark} className="vf-card-pass">
+        ✓
+      </b>,
+    );
+    from = mark + 1;
+  }
+  parts.push(line.slice(from));
+  return <div>{parts}</div>;
+}
+
+/** A file window's first lines, as a page: what fills 110. */
+const FILE_LINES = 20;
+const FILE_SHOWN = 4000;
+/** A comment's line, quieter than the code. */
+const QUIET = /^\s*(\/\*\*|\*|\*\/|\/\/)/u;
+
+/** FILE — its first lines as a page, no line numbers, the comment quieter than the code, fading out; a file that is
+ * not words is a blank page (what it is and how big is said in the bar over it, held). Waiting, it says letting go
+ * shows it. */
+function FileWindow({
+  face,
+  waiting,
+}: {
+  readonly face: FileFace;
+  readonly waiting: boolean;
+}): ReactElement {
+  if (waiting) {
+    return (
+      <div className="vf-card-window" data-window="file">
+        <p className="vf-card-wait">{WAITING_WORDS.letGo}</p>
+      </div>
+    );
+  }
+  const lines =
+    face.lines === undefined || face.lines === ""
+      ? []
+      : linesOf(headOf(face.lines, FILE_SHOWN), FILE_LINES);
+  return (
+    <div className="vf-card-window" data-window="file">
+      {lines.length > 0 && (
+        <div className="vf-card-lines">
+          {lines.map(({ at, line }) => (
+            <div key={at} {...(QUIET.test(line) ? { "data-quiet": "" } : {})}>
+              {line}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** IMAGE (and a ref, until its own window) — the picture itself, filling the window about its middle; its ground
+ * until it loads, and in place of a still main no longer keeps, never a broken image. Waiting, the ground alone. */
+function PictureWindow({
+  kind,
+  picture,
+  waiting,
+}: {
+  readonly kind: "image" | "ref";
+  readonly picture: { readonly src: string };
+  readonly waiting: boolean;
+}): ReactElement {
+  const [broken, setBroken] = useState<string | null>(null);
+  const shown = !waiting && picture.src !== "" && broken !== picture.src;
+  const ground = waiting ? { "data-waiting": "" } : {};
+  return (
+    <div className="vf-card-window" data-window={kind} {...ground}>
+      {shown && (
+        <img src={picture.src} alt="" draggable={false} onError={() => setBroken(picture.src)} />
+      )}
+    </div>
+  );
+}
+
+/** The agent's mark: the SDK's own when it has one for this agent (branding, never behaviour — AR-L1), else the
+ * kit's `agents` glyph. */
 function CardMark({ agent }: { readonly agent: string | undefined }): ReactElement {
   if (agent !== undefined && agentMark(agent).kind === "path") {
     return <AgentIcon providerId={agent} />;
@@ -207,8 +339,8 @@ function CardMark({ agent }: { readonly agent: string | undefined }): ReactEleme
   return <FieldGlyph name="agents" size={38} />;
 }
 
-/** AGENT — the one dark card: its handle, its project behind the project's dot (high on the card,
- * so it shows at rest), its mark, and its state at its foot. */
+/** AGENT — the one dark card, until its window (FACE-b): its handle, its project behind the project's dot (high on
+ * the card, so it shows at rest), its mark, and its state at its foot. */
 function AgentFace({ face }: { readonly face: SessionFace }): ReactElement {
   return (
     <>
@@ -239,114 +371,5 @@ function AgentFace({ face }: { readonly face: SessionFace }): ReactElement {
         </div>
       )}
     </>
-  );
-}
-
-/** A copy that starts at a prompt is named by its command. */
-const PROMPT = /^\$\s+/u;
-/** The test runner's summary line: a pass, inked. */
-const PASSED = /Tests\s+\d+ passed/u;
-
-/** A ✓ in the pass ink. */
-function tick(key: number): ReactElement {
-  return (
-    <span key={key} className="vf-card-pass">
-      ✓
-    </span>
-  );
-}
-
-/** What a pane printed, its passes inked — a ✓, and the runner's "Tests N passed" line in bold.
- * A pass is the one colour a terminal card prints. */
-function inked(out: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  let at = 0;
-  for (const line of out.split("\n")) {
-    if (at > 0) nodes.push("\n");
-    if (PASSED.test(line)) {
-      nodes.push(<b key={at}>{line}</b>);
-    } else {
-      let from = 0;
-      for (let mark = line.indexOf("✓"); mark >= 0; mark = line.indexOf("✓", from)) {
-        nodes.push(line.slice(from, mark), tick(at + mark));
-        from = mark + 1;
-      }
-      nodes.push(line.slice(from));
-    }
-    at += line.length + 1;
-  }
-  return nodes;
-}
-
-/** TERMINAL — the command is its name; what it printed runs under it, cut by the card's edge as a
- * pane cuts it. A copy that does not start at a prompt is all output. */
-function TermFace({ show }: { readonly show: Extract<TextShow, { as: "term" }> }): ReactElement {
-  const command = PROMPT.test(show.first) ? show.first.replace(PROMPT, "") : null;
-  const parts = command === null ? [show.first, show.rest] : [show.rest];
-  const out = parts.filter((part) => part !== "").join("\n");
-  return (
-    <div className="vf-card-body">
-      {command !== null && (
-        <div className="vf-card-cmd">
-          <span>$</span> {command}
-        </div>
-      )}
-      {out !== "" && <pre className="vf-card-out">{inked(out)}</pre>}
-    </div>
-  );
-}
-
-/** MESSAGE — who said it, then what they said. */
-function MsgFace({ show }: { readonly show: Extract<TextShow, { as: "msg" }> }): ReactElement {
-  return (
-    <div className="vf-card-body">
-      <div className="vf-card-who">
-        <b>{show.speaker}</b>
-        <span>{show.time}</span>
-      </div>
-      <p className="vf-card-words">{show.words}</p>
-    </div>
-  );
-}
-
-/** A picture's own proportion as its face mounts it: never taller than square, never wider than
- * 2.2, so the face's column always holds it; 1.4 while its size is unknown. PURE. */
-export function pictureRatio(size: { readonly width: number; readonly height: number }): number {
-  if (size.width <= 0 || size.height <= 0) return 1.4;
-  return Math.round(Math.min(2.2, Math.max(1, size.width / size.height)) * 1000) / 1000;
-}
-
-/** PICTURE — the picture, printed in the face's column, named under it with its size. Waiting,
- * the capture glyph on a faint ground inside a hairline, and its kind. */
-function PictFace({
-  picture,
-  title,
-  waiting,
-}: {
-  readonly picture: { readonly src: string; readonly width: number; readonly height: number };
-  readonly title: string;
-  readonly waiting: boolean;
-}): ReactElement {
-  // A still main no longer keeps (its ring moved on under another window's captures) shows the
-  // picture's ground, never a broken image.
-  const [broken, setBroken] = useState<string | null>(null);
-  const shown = !waiting && picture.src !== "" && broken !== picture.src;
-  return (
-    <div className="vf-card-body">
-      <div
-        className="vf-card-photo"
-        style={{ "--card-ar": pictureRatio(picture) } as CSSProperties}
-        {...(waiting ? { "data-waiting": "" } : {})}
-      >
-        {waiting && <FieldGlyph name="capture" size={20} />}
-        {shown && (
-          <img src={picture.src} alt="" draggable={false} onError={() => setBroken(picture.src)} />
-        )}
-      </div>
-      <div className="vf-card-name">{waiting ? WAITING_WORDS.image : title}</div>
-      {!waiting && picture.width > 0 && picture.height > 0 && (
-        <div className="vf-card-size">{`${picture.width} × ${picture.height}`}</div>
-      )}
-    </div>
   );
 }

@@ -4,20 +4,20 @@
    `--vf-card-*` (tokens.css) — and no colour literal but the stock's own light and shade (white
    and black, with an alpha). */
 
-/* ── THE CARD (HN-D1: one stock, six faces) ────────────────────────────────────────────────────
-   One card for every kind: a white stock, the kind's glyph in two corners as a playing card prints
-   its index, and one thing on its face. The realism is in the stock — a grain, a cut edge, a catch
-   of light, a card's thickness, a shadow that grows as it rises — never in the printing. Every
-   face measure is in em of the face's 9.5px, so a held card sets the same design finer and reads
-   more of itself. Whoever places a card sets its lift (0…1), turn and scale on its own wrapper —
-   `--vf-cards-lp`, `--vf-cards-r`, `--vf-cards-s` — and the card inherits them. */
+/* ── THE CARD (DESIGN.md §5 "The hand's cards are paper", §8 "A card"; *Card Stock* round 5, item 405) ─────────────
+   One card for every type: the printed stock, and on it one face of three things and one line of words — its type's
+   glyph, then its name; the window, what it holds, seen; its faces, as their types' glyphs along its foot — every line
+   10 inside the card's sides, in the card's own 120 × 168 units (a card picked up is the same face at 2.4×). The
+   realism is in the stock — a grain, a cut edge, a catch of light, a card's thickness, a shadow that grows as it
+   rises — never in the printing. The agent's card keeps its own dark face, in ems of the face's 9.5px, until its
+   window (FACE-b). Whoever places a card sets its lift (0…1), turn and scale on its own wrapper — `--vf-cards-lp`,
+   `--vf-cards-r`, `--vf-cards-s` — and the card inherits them. */
 .vf-card {
   --card-stock: var(--vf-card-stock);
   --card-edge: var(--vf-card-edge);
   --card-ink: var(--vf-card-stock-ink);
   --card-ink-2: var(--vf-card-stock-ink-2);
   --card-ink-3: var(--vf-card-stock-ink-3);
-  --card-ix: var(--vf-card-index);
   --card-cut: var(--vf-card-cut);
   --card-lit: 0.6;
   --card-foot: 0.035;
@@ -85,7 +85,7 @@
 
 /* printed (§5 "the press"): once the press has printed, the stock wears its print (the paper, its weave and the lamp's
    light) in place of the flat paper and its grain, and a card picked up wears the print made at its size. The agent's
-   dark card keeps its own stock until the round 5 face. */
+   dark card keeps its own stock until its window (FACE-b). */
 :root[data-vf-card-print="ready"] .vf-card:not([data-kind="agent"]) .vf-card-stock {
   background: var(--vf-card-print-front) center / 100% 100% no-repeat;
 }
@@ -139,25 +139,176 @@
   pointer-events: none;
 }
 
-/* the index, printed twice: the top left a fanned hand shows, and the bottom right turned */
-.vf-card-ix {
+/* its type: the glyph at 10.4, centred on 16.9, with its ink on the column (its box 3/24 of its size left of it) */
+.vf-card-type {
   position: absolute;
-  top: 0.84em;
-  left: 0.84em;
-  width: 1.2em;
-  height: 1.2em;
-  color: var(--card-ix);
+  top: 11.7px;
+  left: 8.7px;
+  color: var(--vf-card-type-ink);
 }
 
-.vf-card-ix-tail {
-  top: auto;
-  right: 0.84em;
-  bottom: 0.84em;
-  left: auto;
-  transform: rotate(180deg);
+/* its name: 700 at 11.5 on baseline 21 from x 21.4, tracked −0.22, set down in quarter steps to 10 before it is ever
+   cut (card-fit.ts). Its box is trimmed to its capitals and its baseline, so its foot IS the baseline; the clip lets a
+   descender and an accent past the box, and holds a name the face could not measure. */
+.vf-card-name {
+  position: absolute;
+  bottom: 147px;
+  left: 21.4px;
+  max-width: 88.6px;
+  overflow: clip;
+  overflow-clip-margin: 3px;
+  color: var(--card-ink);
+  font-family: var(--vf-font-sans);
+  font-size: var(--card-name, 11.5px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.22px;
+  text-box: trim-both cap alphabetic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* the face: one column under the index, clear of the turned one */
+/* the window, 29–139 (100 × 110, corner 3.5): what the card holds, seen, with nothing said about it */
+.vf-card-window {
+  position: absolute;
+  top: 29px;
+  left: 10px;
+  width: 100px;
+  height: 110px;
+  overflow: hidden;
+  border-radius: 3.5px;
+  background: var(--vf-card-plate);
+}
+
+/* its hairline, over what it holds */
+.vf-card-window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 0.35px var(--vf-card-frame);
+  pointer-events: none;
+}
+
+/* its faces: each its type's glyph at 7.4 on 152.6, 10 apart from the column; the first, what it is, the darker.
+   Until the card's bloom (OB-1b) a card has one face, so the foot shows its one glyph. */
+.vf-card-faces {
+  position: absolute;
+  top: 148.9px;
+  left: 9.075px;
+  display: flex;
+  gap: 2.6px;
+  color: var(--vf-card-face-ink-2);
+}
+
+.vf-card-faces > :first-child {
+  color: var(--vf-card-face-ink);
+}
+
+/* TEXT — what follows its name, at the largest of three sizes at which it all fits (card-fit.ts) */
+.vf-card-words {
+  display: -webkit-box;
+  margin: 0;
+  padding: 5px 6px 0;
+  overflow: hidden;
+  /* a path or a URL copied as words breaks anywhere, never cut at the edge */
+  overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--card-ink) 84%, transparent);
+  font-family: var(--vf-font-sans);
+  font-size: var(--card-words, 7.4px);
+  line-height: var(--card-pitch, 10px);
+  letter-spacing: -0.05px;
+  text-wrap: pretty;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--card-lines, 10);
+}
+
+/* TERMINAL — what it printed, in mono at 5.9, 11 apart: a prompt's command in bold, a pass in the pass ink, the one
+   colour a terminal card prints */
+.vf-card-out {
+  padding: 6px 6px 0;
+  color: color-mix(in srgb, var(--card-ink) 74%, transparent);
+  font-family: var(--vf-font-mono);
+  font-size: 5.9px;
+  line-height: 11px;
+  white-space: pre;
+}
+
+.vf-card-out > div {
+  min-height: 11px;
+  overflow: hidden;
+}
+
+.vf-card-out b {
+  color: color-mix(in srgb, var(--card-ink) 90%, transparent);
+  font-weight: 600;
+}
+
+.vf-card-out .vf-card-pass {
+  color: var(--vf-card-pass);
+}
+
+.vf-card-prompt {
+  color: color-mix(in srgb, var(--card-ink) 36%, transparent);
+}
+
+.vf-card-out [data-quiet] {
+  color: color-mix(in srgb, var(--card-ink) 50%, transparent);
+}
+
+/* FILE — its first lines as a page, in mono at 4.3, 5.8 apart, no line numbers, the comment quieter than the code,
+   fading out over its last 30 */
+.vf-card-lines {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 5px 6px 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--card-ink) 78%, transparent);
+  font-family: var(--vf-font-mono);
+  font-size: 4.3px;
+  line-height: 5.8px;
+  white-space: pre;
+  mask-image: linear-gradient(rgb(0 0 0) calc(100% - 30px), transparent);
+}
+
+.vf-card-lines > div {
+  min-height: 5.8px;
+}
+
+.vf-card-lines [data-quiet] {
+  color: color-mix(in srgb, var(--card-ink) 36%, transparent);
+}
+
+/* a file still on its way in from another app: that letting go shows it */
+.vf-card-wait {
+  display: grid;
+  height: 100%;
+  margin: 0;
+  place-items: center;
+  color: var(--card-ink-3);
+  font-size: 7.4px;
+}
+
+/* IMAGE (and a ref, until its own window) — the picture, filling the window about its middle, over its ground */
+.vf-card-window:is([data-window="image"], [data-window="ref"]) {
+  background: var(--vf-card-photo);
+}
+
+.vf-card-window img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+/* a picture still on its way in from another app: a faint ground of the card's ink (the page's) */
+.vf-card-window[data-waiting] {
+  background: color-mix(in srgb, var(--card-ink) 6%, transparent);
+}
+
+/* AGENT — the one dark card, the session card's stock, until its window (FACE-b): its handle, its project, its mark,
+   its state, in one column 1em inside its sides */
 .vf-card-body {
   position: absolute;
   top: 2.72em;
@@ -167,69 +318,12 @@
   overflow: hidden;
 }
 
-/* TEXT — the words themselves; the first sentence is their name */
-.vf-card-words {
-  display: -webkit-box;
-  margin: 0;
-  overflow: hidden;
-  /* a path or a URL copied as words breaks anywhere, as the file's path does, never cut at the edge */
-  overflow-wrap: anywhere;
-  color: var(--card-ink-2);
-  font-size: 0.96em;
-  text-wrap: pretty;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 7;
-}
-
-.vf-card-words b {
-  color: var(--card-ink);
-  font-weight: 600;
-}
-
-/* FILE — its name, where it lives, and its first lines fading into the stock */
-.vf-card-name {
-  overflow: hidden;
-  font-size: 1.1em;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vf-card-path {
-  margin-top: 0.28em;
-  overflow-wrap: anywhere;
-  color: var(--card-ink-3);
-  font-family: var(--vf-font-mono);
-  font-size: 0.76em;
-  line-height: 1.42;
-}
-
-.vf-card-path[data-facts] {
-  margin-top: 0.9em;
-}
-
-.vf-card-lines {
-  margin: 0.95em 0 0;
-  overflow: hidden;
-  color: var(--card-ink-3);
-  font-family: var(--vf-font-mono);
-  font-size: 0.72em;
-  line-height: 1.6;
-  white-space: pre;
-  mask-image: linear-gradient(rgb(0 0 0) 30%, transparent 92%);
-}
-
-/* AGENT — the one dark card, the session card's stock: its handle, its project, its mark, its
-   state */
 .vf-card[data-kind="agent"] {
   --card-stock: var(--vf-card-dark-stock);
   --card-edge: var(--vf-card-dark-edge);
   --card-ink: var(--vf-card-dark-ink);
   --card-ink-2: var(--vf-card-dark-ink-2);
   --card-ink-3: var(--vf-card-dark-ink-3);
-  --card-ix: var(--vf-card-dark-index);
   --card-cut: var(--vf-card-dark-cut);
   --card-lit: 0.06;
   --card-foot: 0.12;
@@ -318,148 +412,9 @@
   background: var(--vf-orange);
 }
 
-/* TERMINAL — the command is its name; what it printed runs under it, cut by the card's edge as a
-   pane cuts it. A pass is the one colour it prints. */
-.vf-card-cmd {
-  display: -webkit-box;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  color: var(--card-ink);
-  font-family: var(--vf-font-mono);
-  font-size: 0.8em;
-  font-weight: 500;
-  line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-.vf-card-cmd span {
-  color: var(--card-ink-3);
-  font-weight: 400;
-}
-
-.vf-card-out {
-  margin: 0;
-  overflow: hidden;
-  color: var(--card-ink-3);
-  font-family: var(--vf-font-mono);
-  font-size: 0.74em;
-  line-height: 1.6;
-  white-space: pre;
-  mask-image: linear-gradient(90deg, rgb(0 0 0) 78%, transparent);
-}
-
-.vf-card-cmd + .vf-card-out {
-  margin-top: 0.7em;
-}
-
-.vf-card-pass {
-  color: var(--vf-card-pass);
-}
-
-.vf-card-out b {
-  color: var(--vf-card-pass);
-  font-weight: 600;
-}
-
-/* MESSAGE — who said it, then what they said */
-.vf-card-who {
-  display: flex;
-  height: 1.55em;
-  align-items: center;
-  gap: 0.45em;
-  white-space: nowrap;
-}
-
-.vf-card-who b {
-  font-weight: 600;
-}
-
-.vf-card-who span {
-  color: var(--card-ink-3);
-  font-size: 0.84em;
-}
-
-.vf-card[data-kind="msg"] .vf-card-words {
-  margin-top: 0.62em;
-  -webkit-line-clamp: 5;
-}
-
-/* PICTURE — the picture, mounted in the face's column at its own proportion (clamped), named under
-   it; its ground shows until it loads */
-.vf-card-photo {
-  position: relative;
-  width: 100%;
-  overflow: hidden;
-  aspect-ratio: var(--card-ar, 1.4);
-  border-radius: 1.5px;
-  background: var(--vf-card-photo);
-  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 14%);
-}
-
-.vf-card-photo img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  pointer-events: none;
-}
-
-.vf-card-photo::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(160deg, rgb(255 255 255 / 16%), transparent 40%);
-}
-
-/* a picture still on its way in from another app: the capture glyph on a faint ground of the
-   card's ink, a hairline round it (the page's) */
-.vf-card-photo[data-waiting] {
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, var(--card-ink) 6%, transparent);
-  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--card-ink) 12%, transparent);
-  color: var(--card-ink-3);
-}
-
-.vf-card-photo[data-waiting]::after {
-  content: none;
-}
-
-.vf-card-photo[data-waiting] svg {
-  width: 2.1em;
-  height: 2.1em;
-}
-
-.vf-card[data-kind="pict"] .vf-card-name {
-  margin-top: 0.72em;
-  font-size: 1em;
-  line-height: 1.42;
-}
-
-.vf-card-size {
-  margin-top: 0.1em;
-  overflow: hidden;
-  color: var(--card-ink-3);
-  font-family: var(--vf-font-mono);
-  font-size: 0.76em;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* held (HN-D5): the same card, its type set finer inside so the whole of it reads */
+/* held (§8 "Picking one up"): the same face at 2.4× — the layer scales it, and nothing is set finer */
 .vf-card[data-held] {
   cursor: default;
-}
-
-.vf-card[data-held] .vf-card-face {
-  font-size: 5.6px;
-}
-
-.vf-card[data-held] :is(.vf-card-words, .vf-card-cmd) {
-  display: block;
-  -webkit-line-clamp: unset;
 }
 
 /* the chip of a card reached for (CS-D7 B): 30 round on its top right corner, half off the card, 44 to hit, red under the
@@ -692,7 +647,8 @@
 /* ── A CARD PICKED UP (HN-D5) ──────────────────────────────────────────────────────────────────
    As the desk opens a notebook: the card at reading size in the middle, the window behind it out
    of focus (blurred 14, dimmed 8%), and a bar under the head at the tools in hand's place (y 64)
-   saying where it came from, with Remove, Flip it and Done. Above the line and the hand. */
+   saying what it is and where it came from, with Remove, Flip it and Done. Above the line and the
+   hand. */
 .vf-cards-held {
   position: absolute;
   z-index: 64;
@@ -878,6 +834,15 @@
   color: var(--vf-text-secondary);
   font-size: 12px;
   font-weight: 500;
+  white-space: nowrap;
+}
+
+/* what it is and how big, in bold, before where it came from (round 5: said, not printed) */
+.vf-cards-bar-about {
+  margin-right: 4px;
+  color: var(--vf-text-primary);
+  font-size: 12px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
