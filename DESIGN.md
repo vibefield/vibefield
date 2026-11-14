@@ -965,6 +965,16 @@ up wears a print at 2.4×). Until it has printed, and wherever WebGL2 is refused
   window (the faces' rule, §2.10).
 - **What it costs:** a carried card does not bend with its speed, and the lamp's light does not run across a card as it
   turns. The thin gloss above stands in.
+- **Its colours are tokens** (item 403, 2026-11-14; VF-PM's ruling at 04:09Z: the press's hex leaves its code). The
+  press reads every colour it prints with from the root as it stands when it prints, so a print is made in its theme's
+  own values and the press's code holds none: the front's paper `--vf-card-press-paper` (`#f4efe5`), which is the
+  back's margin too; the back's field `--vf-card-back` (`#2d4824`) and its rule `--vf-card-back-rule` (`#eee4c8`); the
+  band pressed into the stock, darker by `--vf-card-press-deboss` (`rgb(20 36 14 / 16%)` over the field); and the
+  mark's three lights, the living mark's own, `--vf-mark-rose` (`#FF0054`), `--vf-mark-mint` (`#00F59B`) and
+  `--vf-mark-cobalt` (`#083CFF`). Each is the same by day and by night, for the night is the lamp's. A token it cannot
+  read is no print, so the cards keep the flat stock. The front's ink `#1c1611` is never printed: it is the face's,
+  which the stock's inks move to with the round 5 face. The lamp's and the room's light stay the press's own numbers,
+  above: they are light, not ink.
 
 ### 5.1 The material book — what the desk's materials mean (DK-D5; a stub)
 

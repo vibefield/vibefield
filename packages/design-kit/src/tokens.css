@@ -228,10 +228,21 @@
   --vf-card-dark-ink-3: rgb(255 255 255 / 40%);
   --vf-card-dark-index: rgb(255 255 255 / 46%);
   --vf-card-dark-cut: rgb(255 255 255 / 9%);
+  /* the back's field and its rule (DESIGN.md §5 "the press", its colours are tokens): the press prints them */
+  --vf-card-back: #2d4824;
+  --vf-card-back-rule: #eee4c8;
   --vf-card-dim: 1;
   --vf-card-shade: 1;
   --vf-paper-card-shadow: 0 0 0 0.5px rgb(58 46 22 / 22%), -1px 1.5px 3px rgb(0 0 0 / 28%);
   --vf-card-chip-shadow: 0 0 0 2px rgb(255 255 255 / 90%), 0 4px 14px rgb(0 0 0 / 35%);
+  /* §5 "the press" (CS-D5 A, CS-D6 C; item 403): the rest of what the press prints with, read from the root when it
+     prints and the same in both themes (its night is its lamp's) — the front's paper, which is the back's margin too;
+     the band pressed into the back, a little darker over its field; and the living mark's three lights */
+  --vf-card-press-paper: #f4efe5;
+  --vf-card-press-deboss: rgb(20 36 14 / 16%);
+  --vf-mark-rose: #ff0054;
+  --vf-mark-mint: #00f59b;
+  --vf-mark-cobalt: #083cff;
 
   /* §2.7 Godview instrument palette — exact values from the Chopsticks
      Godview reference. Both modes live here because Godview owns a local theme
