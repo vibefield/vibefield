@@ -103,6 +103,13 @@ import { RemoveView } from "./RemoveQuestion";
 // never fieldd's text (`installRefusal`): one this VibeField can't run says it
 // needs a newer VibeField, and every other §9's line with Try again. ↵ on a
 // page presses its act or the card's Install.
+// MK-O3D (James's MK-O1 pick B): a community set's install at a desktop that
+// hasn't shown the community statement shows it once the download is in, where
+// the card would stand. Its Continue marks this desktop and the card stands;
+// its Cancel, Esc, leaving the page or folding the popup throws the download
+// away, as the card's Cancel does, and marks nothing. ↵ presses nothing there:
+// the keyboard is on its Cancel. A mark unread, or one that can't be read,
+// shows it (`communitySwitch.shownHere`, read as Install is pressed).
 // MK-4f: a plugin from the list's page carries Remove… (`plugins-remove.ts`),
 // which asks in place — §8's two-step destructive confirm, Cancel holding the
 // keyboard — and its second question, Remove it and its data…; the roster is
@@ -364,11 +371,14 @@ export function Plugins({
 
   // O2-C: an install the window lets go of. A card standing throws its download away (`discard`); a download
   // still running is thrown away as it lands (`install`, below); a failure's line goes. An install whose card's
-  // Install was pressed is fieldd's now, and is kept until the snapshot holds its plugin.
+  // Install was pressed is fieldd's now, and is kept until the snapshot holds its plugin. MK-O3D: the community
+  // statement standing throws its download away, as the card does.
   const dropInstall = useCallback(() => {
     const was = flowNow.current;
     if (was === null || was.at.step === "installing") return;
-    if (was.at.step === "card") void port.discard(was.at.candidate).catch(() => undefined);
+    if (was.at.step === "card" || was.at.step === "statement") {
+      void port.discard(was.at.candidate).catch(() => undefined);
+    }
     putFlow(null);
   }, [port, putFlow]);
   // the card's Cancel, pressed or Esc: its download goes, and the keyboard goes back to the field
@@ -429,16 +439,18 @@ export function Plugins({
   }, [open, page]);
 
   // While open, Esc is the popup's before anything else hears it, and answers
-  // the nearest first (§8 "Keys"): the install card (its Cancel) or Remove…'s
-  // question (its Cancel), then the community tile's ask goes back (MK-O3D),
-  // then a page goes back to its tab, then the popup folds.
+  // the nearest first (§8 "Keys"): the install card or the community statement
+  // where it stands (MK-O3D; its Cancel), or Remove…'s question (its Cancel),
+  // then the community tile's ask goes back (MK-O3D), then a page goes back to
+  // its tab, then the popup folds.
   useEffect(() => {
     if (!open || !bindKeys) return;
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      if (flowNow.current?.at.step === "card") cancelInstall();
+      const step = flowNow.current?.at.step;
+      if (step === "card" || step === "statement") cancelInstall();
       else if (removing !== null) cancelRemove();
       else if (asking) cancelAsk();
       else if (page !== null) back();
@@ -467,12 +479,18 @@ export function Plugins({
   // window let this install go meanwhile, when the download is thrown away as it lands. A second install drops
   // the first. No press while fieldd isn't answering. A refusal is kept by its kind alone (`installRefusal`),
   // never its text, which can name VibeField's insides. The keyboard stays in the field, as a row's press keeps it.
+  // MK-O3D (MK-O1 B): whether an install shows the community statement before its card, read as Install is
+  // pressed — a community set's, at a desktop that hasn't shown it — kept in a ref (set once the list held and
+  // this desktop's mark are known, below), so `install` keeps its identity.
+  const { markShown, shownHere } = communitySwitch;
+  const statementFirst = useRef<(id: string) => boolean>(() => false);
   const install = useCallback(
     (id: string) => {
       // one install at a time: an Install pressed is fieldd's until the snapshot holds it
       if (away || flowNow.current?.at.step === "installing") return;
       dropInstall();
       const started: InstallFlow = { id, at: { step: "downloading" } };
+      const first = statementFirst.current(id);
       putFlow(started);
       if (takeFocus) inputRef.current?.focus({ preventScroll: true });
       Promise.all([port.prepare(id), port.desktops().catch(() => null)]).then(
@@ -482,7 +500,12 @@ export function Plugins({
             return;
           }
           const { candidate, record } = prepared;
-          putFlow({ id, at: { step: "card", candidate, record, roster } });
+          putFlow({
+            id,
+            at: first
+              ? { step: "statement", candidate, record, roster }
+              : { step: "card", candidate, record, roster },
+          });
         },
         (error: unknown) => {
           if (flowNow.current !== started) return;
@@ -510,6 +533,16 @@ export function Plugins({
       },
     );
   }, [away, port, putFlow, takeFocus]);
+  // MK-O3D (MK-O1 B): the statement's Continue marks this desktop, and the card stands where it stood; the
+  // keyboard goes back to the field, as after a download. A mark that fails is no mark, so the next asks again.
+  const goOn = useCallback(() => {
+    const was = flowNow.current;
+    if (away || was === null || was.at.step !== "statement") return;
+    markShown();
+    const { candidate, record, roster } = was.at;
+    putFlow({ id: was.id, at: { step: "card", candidate, record, roster } });
+    if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+  }, [away, markShown, putFlow, takeFocus]);
   // a plate's opening presses its page's Install (`initialInstall`), and then the card's (`initialConfirm`)
   useEffect(() => {
     if (open && initialInstall && initialPage !== null) install(initialPage);
@@ -597,12 +630,19 @@ export function Plugins({
             state: catalog?.state ?? null,
             flow,
             away,
-            community: community === true,
+            community,
             snapshot,
             onMac,
           }),
     [shown, catalog, flow, away, community, snapshot, onMac],
   );
+  // MK-O3D (MK-O1 B): what an Install pressed reads, kept current: a community set's install shows the statement
+  // first while this desktop's mark is not read as shown
+  useLayoutEffect(() => {
+    statementFirst.current = (id) =>
+      shownHere !== true &&
+      catalog?.plugins.find((listed) => listed.id === id)?.listedAs === "community";
+  }, [catalog, shownHere]);
   const pressAct = useCallback((): boolean => {
     if (shown === null || act === null) return false;
     if ((act.kind === "install" || act.kind === "failed") && act.live) {
@@ -853,6 +893,8 @@ export function Plugins({
             onInstall={() => install(shown.id)}
             onConfirm={confirm}
             onCancel={cancelInstall}
+            onGoOn={goOn}
+            takeFocus={takeFocus}
           />
         ) : null
       }

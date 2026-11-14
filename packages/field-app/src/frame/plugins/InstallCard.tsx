@@ -1,7 +1,13 @@
-import type { ReactElement } from "react";
+import { type ReactElement, useLayoutEffect, useRef } from "react";
 import { OsMark } from "../../godview/os-marks";
 import type { InstallCard, PageAct } from "./plugins-install";
-import { CARD_WORDS, INSTALL_WORDS, PAGE_WORDS, SHELF_WORDS } from "./plugins-words";
+import {
+  CARD_WORDS,
+  COMMUNITY_WORDS,
+  INSTALL_WORDS,
+  PAGE_WORDS,
+  SHELF_WORDS,
+} from "./plugins-words";
 
 // A PAGE'S ACT, AND THE INSTALL CARD, AS DRAWN (O2-C; DESIGN.md §8 "Real progress" and the act
 // drawn under it, "Every install asks first"): where a page's act stands — Installed, Install,
@@ -9,6 +15,9 @@ import { CARD_WORDS, INSTALL_WORDS, PAGE_WORDS, SHELF_WORDS } from "./plugins-wo
 // after the download, read from the plugin downloaded. Its numbers are §8's, in `plugins.css`; its
 // words are `plugins-words.ts`'s. The view holds no state: the controller (`Plugins.tsx`) owns the
 // install under way and the keys (↵ presses the act or the card's Install, Esc the card's Cancel).
+// MK-O3D (James's MK-O1 pick B; §8 "The community tile", "Once on each desktop"): at this
+// desktop's first community install, the community statement stands where the card would, in its
+// chrome, with the tile's ask's acts; its Continue brings the card.
 
 /** A page's act, the foot's act's look, ↵ printed on it; one that takes no press says so in
  * tertiary ink. */
@@ -103,19 +112,62 @@ function InstallCardView({
   );
 }
 
+/** The community statement at this desktop's first community install (MK-O3D; James's MK-O1 pick
+ * B): in the card's place and chrome, its heading as the card's ask, the statement word for word,
+ * and the tile's ask's two acts — no ↵ printed, and the keyboard on Cancel as it stands, since
+ * going on to code nothing isolates is a press, never a key typed in the field. */
+function StatementView({
+  heading,
+  live,
+  takeFocus,
+  onGoOn,
+  onCancel,
+}: {
+  heading: string;
+  live: boolean;
+  takeFocus: boolean;
+  onGoOn: () => void;
+  onCancel: () => void;
+}): ReactElement {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    if (takeFocus) cancelRef.current?.focus({ preventScroll: true });
+  }, [takeFocus]);
+  return (
+    <section className="vf-plugins-card" aria-label={heading}>
+      <h3 className="vf-plugins-card-ask">{heading}</h3>
+      <p className="vf-plugins-community-statement">{COMMUNITY_WORDS.statement}</p>
+      <div className="vf-plugins-community-acts">
+        <button ref={cancelRef} type="button" className="vf-plugins-act" onClick={onCancel}>
+          {COMMUNITY_WORDS.cancel}
+        </button>
+        <button type="button" className="vf-plugins-act" disabled={!live} onClick={onGoOn}>
+          {INSTALL_WORDS.goOn}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export function PageActView({
   act,
   onInstall,
   onConfirm,
   onCancel,
+  onGoOn,
+  takeFocus,
 }: {
   act: PageAct;
   /** Install, or Try again: download it (again) */
   onInstall: () => void;
   /** the card's Install */
   onConfirm: () => void;
-  /** the card's Cancel */
+  /** the card's Cancel, and the community statement's */
   onCancel: () => void;
+  /** MK-O3D: the community statement's Continue */
+  onGoOn: () => void;
+  /** MK-O3D: whether the statement takes the keyboard to its Cancel; a plate's does not */
+  takeFocus: boolean;
 }): ReactElement | null {
   switch (act.kind) {
     case "none":
@@ -127,6 +179,16 @@ export function PageActView({
       return <p className="vf-plugins-page-act">{SHELF_WORDS.needsNewer}</p>;
     case "downloading":
       return <p className="vf-plugins-page-act">{INSTALL_WORDS.downloading}</p>;
+    case "statement":
+      return (
+        <StatementView
+          heading={act.heading}
+          live={act.live}
+          takeFocus={takeFocus}
+          onGoOn={onGoOn}
+          onCancel={onCancel}
+        />
+      );
     case "installing":
       return <p className="vf-plugins-page-act">{act.words}</p>;
     case "install":

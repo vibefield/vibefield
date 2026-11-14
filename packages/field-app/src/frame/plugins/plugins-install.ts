@@ -9,7 +9,7 @@ import {
 import { osOf } from "../../godview/monitor/devices";
 import type { MonitorDeviceFacet } from "../../godview/monitor/types";
 import { type PageLine, type PluginPage, powerWords } from "./plugins-model";
-import { CARD_WORDS, INSTALL_WORDS, PAGE_WORDS } from "./plugins-words";
+import { CARD_WORDS, INSTALL_WORDS, PAGE_WORDS, REMOVE_WORDS } from "./plugins-words";
 
 // THE INSTALL CARD'S WINDOW HALF (O2-C; DESIGN.md §8 "Every install asks first", "Real progress",
 // and the act drawn under it; MK-O2's A2, ruled by James 2026-11-11 22:33:48Z: "after the download,
@@ -17,13 +17,23 @@ import { CARD_WORDS, INSTALL_WORDS, PAGE_WORDS } from "./plugins-words";
 // what the plugin just downloaded adds, what it can do and where it installs, read from the row
 // fieldd answers and this desktop's roster; the card's Install installs what it showed
 // (`plugins.install.commit`), and its Cancel throws the download away (`plugins.install.discard`).
-// Pure: the controller holds the flow, and the tests read the same functions.
+// MK-O3D (James's MK-O1 pick B; §8 "The community tile", "Once on each desktop"): a community set's
+// first install at a desktop that hasn't shown the community statement shows it once the download
+// is in, where the card would stand; its Continue brings the card. A community set's Install while
+// community plugins are off says why. Pure: the controller holds the flow, and the tests read the
+// same functions.
 
 /** Where one install stands, for the plugin whose page holds it. The card's step keeps the row
  * fieldd answered and the roster read with it (null: it couldn't be read); the card's words are
- * built from them as drawn. */
+ * built from them as drawn. The statement's step (MK-O3D) keeps the same for its card. */
 export type InstallStep =
   | { readonly step: "downloading" }
+  | {
+      readonly step: "statement";
+      readonly candidate: string;
+      readonly record: PluginRecord;
+      readonly roster: readonly DeviceInfo[] | null;
+    }
   | {
       readonly step: "card";
       readonly candidate: string;
@@ -186,6 +196,7 @@ export type PageAct =
   | { readonly kind: "install"; readonly live: boolean; readonly note: string | null }
   | { readonly kind: "needs-newer" }
   | { readonly kind: "downloading" }
+  | { readonly kind: "statement"; readonly heading: string; readonly live: boolean }
   | { readonly kind: "card"; readonly card: InstallCard; readonly live: boolean }
   | { readonly kind: "installing"; readonly words: string }
   | { readonly kind: "failed"; readonly words: string; readonly live: boolean };
@@ -206,8 +217,8 @@ export function pageAct(input: {
   readonly state: PluginsCatalogState | null;
   readonly flow: InstallFlow | null;
   readonly away: boolean;
-  /** whether community plugins are on: a community set installs only while they are */
-  readonly community: boolean;
+  /** whether community plugins are on (null: not read); a community set installs only while on */
+  readonly community: boolean | null;
   readonly snapshot: PluginRegistrySnapshot | null;
   readonly onMac: boolean;
 }): PageAct {
@@ -216,12 +227,23 @@ export function pageAct(input: {
   // a page of a set this desktop doesn't have is read from the list's entry, so it always has one
   if (entry === undefined) return { kind: "none" };
   // a community set installs only while community plugins are on (fieldd refuses it otherwise,
-  // MK-2c); what its page says meanwhile is the community switch's slice's to draft
-  const closed = entry.listedAs === "community" && !community;
+  // MK-2c); while they are off its Install says why (MK-O3D), and while they are unread it says
+  // nothing, since they may be on
+  const closed = entry.listedAs === "community" && community !== true;
   if (flow !== null && flow.id === page.id) {
     switch (flow.at.step) {
       case "downloading":
         return { kind: "downloading" };
+      case "statement":
+        // MK-O3D: this desktop by the name the roster gives it, as the card names it; with no
+        // roster read, as the card says this desktop
+        return {
+          kind: "statement",
+          heading: INSTALL_WORDS.firstCommunity(
+            flow.at.roster?.find((device) => device.self)?.name ?? REMOVE_WORDS.here(onMac),
+          ),
+          live: !away,
+        };
       case "card":
         return {
           kind: "card",
@@ -249,6 +271,11 @@ export function pageAct(input: {
   return {
     kind: "install",
     live: installLive(state, away) && !busy && !closed,
-    note: state === "unreachable" ? INSTALL_WORDS.offline : null,
+    note:
+      state === "unreachable"
+        ? INSTALL_WORDS.offline
+        : closed && community === false
+          ? INSTALL_WORDS.communityOff
+          : null,
   };
 }

@@ -31,6 +31,7 @@ import {
 } from "../src/design-system/plugins-fixtures";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { FramePlugins, Plugins } from "../src/frame/plugins/Plugins";
+import type { CommunityStatementDoor } from "../src/frame/plugins/plugins-community";
 import { getPluginUpdates, resetPluginUpdates } from "../src/frame/plugins/plugins-count";
 import { pluginsLayout } from "../src/frame/plugins/plugins-model";
 import type { PluginsPort } from "../src/frame/plugins/plugins-port";
@@ -49,6 +50,7 @@ import {
 // a Built in or Development plugin's switches, each held by the fixture port's recorded calls. MK-4e adds Discover's
 // shelf and the page of a set this desktop doesn't have; O2-C its Install, the install card, and the requests the
 // card sends and throws away, each held by the port's recorded calls, and a refusal worded by its kind alone.
+// MK-O3D adds the community statement at this desktop's first community install, over a fixture mark.
 // No real fieldd, no network, no child.
 
 let host: HTMLDivElement;
@@ -1268,6 +1270,163 @@ describe("Install and the install card (O2-C; §8 'Every install asks first')", 
     openThings();
     expect(pageAct()?.disabled).toBe(true);
     expect(bodyText()).toContain(words.PLUGINS_AWAY);
+  });
+});
+
+/** This desktop's statement mark as fieldd's two doors answer it (MK-O3D; James's MK-O1 pick B), and the marks the
+ * window sent. */
+function marking(shown: boolean | "unread"): { door: CommunityStatementDoor; marks: string[] } {
+  const marks: string[] = [];
+  return {
+    marks,
+    door: {
+      shownHere: () =>
+        shown === "unread"
+          ? Promise.reject(new Error("the fixture's mark can't be read"))
+          : Promise.resolve(shown),
+      markShown: () => {
+        marks.push("shown");
+        return Promise.resolve();
+      },
+    },
+  };
+}
+/** Kanban, a community set, as this desktop would have it once installed: the row its download answers. */
+const KANBAN = PLUGINS_FIXTURE_LISTED_SNAPSHOT.plugins.find(
+  (plugin) => plugin.id === "acme.kanban",
+);
+/** The shelf's fixture port, whose download of Kanban answers its row. */
+function withKanban(): PluginsPort {
+  const inner = pluginsFixturePort(SHELF);
+  return {
+    ...inner,
+    prepare: (id) =>
+      id === "acme.kanban" && KANBAN !== undefined
+        ? Promise.resolve({ candidate: CANDIDATE, record: KANBAN })
+        : inner.prepare(id),
+  };
+}
+/** The popup over this desktop's mark, with community plugins as given (on unless said), on a page if given. */
+async function mountCommunity(
+  port: PluginsPort,
+  door: CommunityStatementDoor,
+  community: boolean | null = true,
+  initialPage: string | null = null,
+): Promise<void> {
+  act(() =>
+    root.render(
+      <Plugins
+        surface="plugins"
+        onSurfaceChange={() => undefined}
+        port={port}
+        snapshot={PLUGINS_FIXTURE_SNAPSHOT}
+        community={community}
+        statement={door}
+        initialPage={initialPage}
+        now={() => PLUGINS_FIXTURE_NOW}
+      />,
+    ),
+  );
+  await settle();
+}
+const clickKanbanTile = (): void => act(() => tile("Kanban")?.click());
+/** One of the statement's two acts, by its words. */
+const statementAct = (words_: string): HTMLButtonElement | null =>
+  [...document.body.querySelectorAll<HTMLButtonElement>(".vf-plugins-card button")].find(
+    (button) => button.textContent === words_,
+  ) ?? null;
+
+describe("the community statement at this desktop's first community install (MK-O3D; MK-O1 B)", () => {
+  it("stands in the card's place once the download is in; only Continue marks it and brings the card", async () => {
+    const { door, marks } = marking(false);
+    const { port, sent } = installs(withKanban());
+    await mountCommunity(port, door);
+    clickKanbanTile();
+    act(() => pageAct()?.click());
+    await settle();
+    expect(card()?.getAttribute("aria-label")).toBe("First community plugin on studio");
+    expect(card()?.textContent).toContain(words.COMMUNITY_WORDS.statement);
+    expect(cardInstall()).toBeNull();
+    // no ↵ printed on its acts; the keyboard on its Cancel, and ↵ in the field presses nothing
+    expect(card()?.querySelector("kbd")).toBeNull();
+    expect(document.activeElement).toBe(statementAct(words.COMMUNITY_WORDS.cancel));
+    press("Enter");
+    await settle();
+    expect([sent, marks]).toEqual([["prepare acme.kanban"], []]);
+    act(() => statementAct(words.INSTALL_WORDS.goOn)?.click());
+    await settle();
+    expect(marks).toEqual(["shown"]);
+    expect(card()?.getAttribute("aria-label")).toBe("Install Kanban?");
+    expect(document.activeElement).toBe(field());
+    act(() => cardInstall()?.click());
+    await settle();
+    expect(sent).toEqual(["prepare acme.kanban", `commit ${CANDIDATE}`]);
+  });
+
+  it("throws the download away on Cancel or Esc and marks nothing, so the next Install asks again", async () => {
+    const { door, marks } = marking(false);
+    const { port, sent } = installs(withKanban());
+    await mountCommunity(port, door);
+    clickKanbanTile();
+    act(() => pageAct()?.click());
+    await settle();
+    act(() => statementAct(words.COMMUNITY_WORDS.cancel)?.click());
+    expect(card()).toBeNull();
+    expect(document.activeElement).toBe(field());
+    act(() => pageAct()?.click());
+    await settle();
+    expect(card()?.getAttribute("aria-label")).toBe("First community plugin on studio");
+    esc();
+    expect(card()).toBeNull();
+    expect(pageTitle()).toBe("Kanban");
+    expect(sent).toEqual([
+      "prepare acme.kanban",
+      `discard ${CANDIDATE}`,
+      "prepare acme.kanban",
+      `discard ${CANDIDATE}`,
+    ]);
+    expect(marks).toEqual([]);
+  });
+
+  it("goes straight to the card at a desktop that has shown it, and for a set by VibeField", async () => {
+    const shown = marking(true);
+    const { port, sent } = installs(withKanban());
+    await mountCommunity(port, shown.door);
+    clickKanbanTile();
+    act(() => pageAct()?.click());
+    await settle();
+    expect(card()?.getAttribute("aria-label")).toBe("Install Kanban?");
+    expect(sent).toEqual(["prepare acme.kanban"]);
+    act(() => root.unmount());
+    root = createRoot(host);
+    const notShown = marking(false);
+    await mountCommunity(withKanban(), notShown.door);
+    openThings();
+    act(() => pageAct()?.click());
+    await settle();
+    expect(card()?.getAttribute("aria-label")).toBe("Install Desk things?");
+    expect([shown.marks, notShown.marks]).toEqual([[], []]);
+  });
+
+  it("shows it where the mark can't be read, and says why a community set's Install waits while off", async () => {
+    await mountCommunity(withKanban(), marking("unread").door);
+    clickKanbanTile();
+    act(() => pageAct()?.click());
+    await settle();
+    expect(card()?.getAttribute("aria-label")).toBe("First community plugin on studio");
+    act(() => root.unmount());
+    root = createRoot(host);
+    // off, a community set's page (opened as a plate opens one) takes no Install, and says why
+    await mountCommunity(withKanban(), marking(false).door, false, "acme.kanban");
+    expect(pageTitle()).toBe("Kanban");
+    expect(pageAct()?.disabled).toBe(true);
+    expect(actRow()).toContain(words.INSTALL_WORDS.communityOff);
+    act(() => root.unmount());
+    root = createRoot(host);
+    // unread, they may be on: no press, and nothing said of a switch the window hasn't read
+    await mountCommunity(withKanban(), marking(false).door, null, "acme.kanban");
+    expect(pageAct()?.disabled).toBe(true);
+    expect(actRow()).not.toContain(words.INSTALL_WORDS.communityOff);
   });
 });
 

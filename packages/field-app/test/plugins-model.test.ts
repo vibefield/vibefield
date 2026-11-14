@@ -956,6 +956,8 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
     [["Laptop", "Studio"], "Desk clock"],
   ],
   "REMOVE_WORDS.here": [[true], [false]],
+  // O3-E: the first community install's line
+  "INSTALL_WORDS.firstCommunity": [["this Mac"]],
 };
 
 /** The strings a value says: strings as they are, objects and arrays by their

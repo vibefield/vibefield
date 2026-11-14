@@ -24,8 +24,10 @@ import * as words from "../src/frame/plugins/plugins-words";
 // O2-C — the install card's window half (DESIGN.md §8 "Every install asks first", "Real progress"
 // and the act drawn under it; §9 "The install card", "Installing, and after"): the card read from
 // the row fieldd answers for a download and this desktop's roster, a page's act in every step, and
-// the port's three doors and its roster read, and a refusal worded by its kind alone. Pure, but for
-// the port over a recording client: no window, no fieldd, no network.
+// the port's three doors and its roster read, and a refusal worded by its kind alone. MK-O3D: the
+// community statement's act at this desktop's first community install, and a community set's
+// Install while community plugins are off. Pure, but for the port over a recording client: no
+// window, no fieldd, no network.
 
 const download = (id: string): PluginRecord => {
   const record = PLUGINS_FIXTURE_DOWNLOADS[id];
@@ -277,15 +279,41 @@ describe("a page's act (§8, the act drawn under 'Real progress')", () => {
     const kanban = CATALOG_SHELF.plugins.find((listed) => listed.id === "acme.kanban");
     const theirs = kanban === undefined ? null : listedPage(kanban);
     if (theirs === null) throw new Error("the fixture has no Kanban");
+    // MK-O3D: and says why
     expect(pageAct({ ...base, page: theirs, entry: kanban })).toEqual({
       kind: "install",
       live: false,
-      note: null,
+      note: words.INSTALL_WORDS.communityOff,
     });
+    // unread, they may be on: no press, and nothing said of a switch the window hasn't read
+    expect(pageAct({ ...base, page: theirs, entry: kanban, community: null })).toEqual(held);
     expect(pageAct({ ...base, page: theirs, entry: kanban, community: true })).toEqual({
       kind: "install",
       live: true,
       note: null,
+    });
+  });
+
+  it("stands the community statement in the card's place, naming this desktop (MK-O3D)", () => {
+    const record = download("vibefield.desk-things");
+    const statement = (roster: typeof PLUGINS_FIXTURE_ROSTER | null): InstallFlow =>
+      at({ step: "statement", candidate: PLUGINS_FIXTURE_CANDIDATE, record, roster });
+    expect(pageAct({ ...base, flow: statement(PLUGINS_FIXTURE_ROSTER) })).toEqual({
+      kind: "statement",
+      heading: "First community plugin on studio",
+      live: true,
+    });
+    // with no roster read, this desktop as the card says it; while fieldd isn't answering,
+    // Continue takes no press
+    expect(pageAct({ ...base, flow: statement(null), onMac: false })).toEqual({
+      kind: "statement",
+      heading: "First community plugin on this PC",
+      live: true,
+    });
+    expect(pageAct({ ...base, flow: statement(null), away: true })).toEqual({
+      kind: "statement",
+      heading: "First community plugin on this Mac",
+      live: false,
     });
   });
 

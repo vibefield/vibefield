@@ -239,7 +239,10 @@ export const CARD_WORDS = {
 /** An install's steps on a page's act (O2-C; §9 "Installing, and after"). "Downloading…" stands for §9's
  * "Downloading · 42%", since fieldd says nothing of a download's bytes (MK's, ‹draft›); the failure's line and Try
  * again are §9's (‹draft›); "Installing needs the internet" is §9's ruled offline word. Never fieldd's own text: a
- * refusal is worded by its kind (`plugins-install.ts`, `installRefusal`). */
+ * refusal is worded by its kind (`plugins-install.ts`, `installRefusal`). MK-O3D (§9 "Community plugins"): a
+ * community set's Install while community plugins are off says why (MK's, ‹draft›), and the statement at this
+ * desktop's first community install has James's page's heading and Continue (his MK-O1 pick B, ‹draft› there); its
+ * statement and its Cancel are `COMMUNITY_WORDS`'. */
 export const INSTALL_WORDS = {
   downloading: "Downloading…",
   installing: (objects: number) =>
@@ -247,6 +250,9 @@ export const INSTALL_WORDS = {
   failed: (title: string) => `VibeField didn't install ${title}. Nothing changed.`,
   tryAgain: "Try again",
   offline: "Installing needs the internet",
+  communityOff: "Installing needs community plugins turned on",
+  firstCommunity: (desktop: string) => `First community plugin on ${desktop}`,
+  goOn: "Continue",
 } as const;
 
 /** Names said as a list is: "Clock", "Clock and Ruler", "Clock, Calendar and Ruler" (MK's). */
