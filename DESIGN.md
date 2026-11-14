@@ -5608,6 +5608,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     asks that same function, so a row leaves here the day it widens. A plugin fieldd stopped after it
     kept crashing reads off here, as in Plugins…, its state "stopped", and turning it on starts it
     again.
+    *Corrected 2026-11-14 (MK-5; VF-PM 06:56Z, C22), ‹draft› for James's eye:* not "fieldd's
+    error in its own text": Settings → Plugins never prints fieldd's text. A refusal on a kept row
+    is one plain line chosen by its kind, in §9's words: its switch's, or a power's, "Couldn't turn
+    it on. Try again." or "Couldn't turn it off. Try again."; a setting's, "Couldn't load this
+    setting." when fieldd couldn't read it, and "Couldn't save that. Try again." when it couldn't
+    keep it or set it back to its default. A plugin with a last error says "‹plugin› isn't working
+    right now", whatever its kind, its details in Diagnostics' Plugins section (above), with no
+    **Try again** here (MK-5b's). No row offers **Uninstall**: fieldd uninstalls a plugin from the
+    plugin list alone (`plugin-install.ts`, `uninstall`), whose **Remove…** stands on its page (§8
+    "The destructive uninstall affordance"), and never a Sideloaded one.
   - **What left:** a Built in or Development plugin's switch, its **Capabilities +** and its settings'
     controls (its page has them, MK-4c2a, MK-4c2b); **Runtime +** (above); the "updates ▸" disclosure
     (§8 "The updates flow"); **More +** (§8 "The destructive uninstall affordance"); the folders that
@@ -9934,6 +9944,10 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     *Amended 2026-11-14 (MK-5; VF-PM 04:33Z):* not until MK-5, but until Plugins… carries those switches: they stay
     on Settings → Plugins' rows of a plugin from the plugin list or a Sideloaded one (§8 "Settings → Plugins, until
     Plugins… holds every switch"), unreached while no build lists or sideloads a plugin.
+    *Corrected the same day (VF-PM 06:56Z, C22), ‹draft›:* but not an error's own text: there a switch that
+    couldn't change, a power's too, says "Couldn't turn it off. Try again." or "Couldn't turn it on. Try
+    again." (above), and a plugin with a last error "‹plugin› isn't working right now" (§9 "Installed, off and
+    Remove…"). Settings → Plugins never prints fieldd's text.
   *Added 2026-11-11 (MK-4c2b; VF-PM 19:40:52Z), MK's words, ‹draft›, for James's eye; corrected the same day
   (James's MK-O6 pick, 22:34:31Z): the page's Undo and Redo left, with "Couldn't undo that. Try again.", "Couldn't
   redo that. Try again." and the page's use of §8's five outcomes, which stay Settings' own:*
@@ -9967,6 +9981,9 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     *Amended 2026-11-14 (MK-5; VF-PM 04:33Z):* not until MK-5. The form and its words stay whole on Settings →
     Plugins' rows of a plugin from the plugin list or a Sideloaded one until Plugins… carries their settings; a
     Built in or Development plugin is no longer there: its settings and their way back are on its page (MK-4c2c).
+    *Corrected the same day (VF-PM 06:56Z, C22), ‹draft›:* but not an error's own text: there a setting fieldd
+    couldn't read says "Couldn't load this setting.", and one it couldn't keep or set back to its default (its
+    **Reset**), "Couldn't save that. Try again." (above). Settings → Plugins never prints fieldd's text.
 - **Sources** (MK-D13; MK-E11). **Built in** (a bundled plugin, decided first) · **VibeField** (a listed plugin
   VibeField publishes) · the publisher's name otherwise, with **Community** beside it on a community row ·
   **Development** and **Sideloaded**, as today. Never "Registry", "Registry · ‹publisher›" or "Built by the registry";
@@ -10056,6 +10073,10 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     **Runtime +** with its rows, and a Built in or Development plugin's "Enable ‹plugin›" and "Disable ‹plugin›",
     **Capabilities +** and its settings' controls. A kept row keeps the rest of Settings' own words, as the two
     *Kept* notes above say.
+  - *Corrected the same day (VF-PM 06:56Z, C22), ‹draft›:* the rest a kept row keeps holds none of fieldd's
+    text: each error's own text left too, a refusal said by its kind in the words the two *Kept* notes'
+    corrections above name, and a last error as "‹plugin› isn't working right now". fieldd's own sentences
+    about a plugin are read in Settings → Diagnostics' Plugins section alone, with its other insides.
   - Settings → Diagnostics' Plugins section says, under its line, "Reading each plugin's runtime…" while its read
     is out, "Plugin runtime unavailable" when it fails, "No plugins are installed." (Settings → Plugins' own,
     moved) when fieldd has none, and "‹n› more plugins omitted by the bounded diagnostics budget." past fieldd's
