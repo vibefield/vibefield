@@ -95,8 +95,13 @@ async function boot(dataDir: string): Promise<FielddDaemon> {
   return daemon;
 }
 
-/** The product door the way the SIDECAR delivers a caller from `node`. */
-async function fromNode(daemon: FielddDaemon, mock: MockMgmtServer, node: string): Promise<WsRpc> {
+/** The product door the way the SIDECAR delivers a caller from `node`, whose hello says `kind`. */
+async function fromNode(
+  daemon: FielddDaemon,
+  mock: MockMgmtServer,
+  node: string,
+  kind = "ios",
+): Promise<WsRpc> {
   await until(() => mock.meshServes.get("product") !== undefined, 15_000, "the product serve");
   const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}${productDoorPath(mock)}`, {
     headers: { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": node },
@@ -110,7 +115,7 @@ async function fromNode(daemon: FielddDaemon, mock: MockMgmtServer, node: string
   await rpc.call("system.hello", {
     contractsVersion: CONTRACTS_VERSION,
     minCompatible: CONTRACTS_VERSION,
-    clientKind: "ios",
+    clientKind: kind,
   });
   return rpc;
 }
@@ -252,6 +257,30 @@ describe("F1 — fieldd's freeway half on a booted daemon", () => {
       retryable: true,
       details: { service: FREEWAY_APPROVAL.SERVICE, state: FREEWAY_APPROVAL.STATE_DOWN },
     });
+  }, 60_000);
+
+  // Item 406 (VF-PM's rulings of 2026-11-14, Q-PM2) — only a phone's hello carries an approval
+  // (FW-D6: a desktop's carries none), so the node fieldd mints one for is positively a phone, and
+  // the account's known phones remember it: its row carries the fact Remove is offered on.
+  it("406 — the node an approval is minted for is remembered as a phone; a desktop's node never is", async () => {
+    const { dataDir, mock } = await world(upState());
+    const daemon = await boot(dataDir);
+    await until(() => daemon.devices.get("dev-phone") !== undefined, 15_000, "the phone's row");
+    await until(() => daemon.devices.isDocHost("dev-desk-b"), 15_000, "the desktop's slice");
+    // a hello that does not say "ios", so the approval alone is the evidence: the desktop a phone
+    // reaches through its home sees no hello of the phone's at all (F1b), only the approval
+    const phone = await fromNode(daemon, mock, "node-phone", "debug");
+    FreewayApproveResult.parse(await phone.call("freeway.approve", {}));
+    await until(
+      () => daemon.devices.get("dev-phone")?.phone?.via === "freeway",
+      15_000,
+      "the phone remembered",
+    );
+    // a desktop's node: its hello says "ios" and its approval is refused, and neither makes it one
+    const desktop = await fromNode(daemon, mock, "node-desk-b");
+    expect((await desktop.callErr("freeway.approve", {})).data?.kind).toBe("FORBIDDEN_SCOPE");
+    expect([...(await daemon.settingsDoc.knownPhones()).keys()]).toEqual(["dev-phone"]);
+    expect(daemon.devices.get("dev-desk-b")?.phone).toBeUndefined();
   }, 60_000);
 
   it("audits each join and leave the host reports, in order, and says what the floor could not hold", async () => {

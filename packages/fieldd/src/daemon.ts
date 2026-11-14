@@ -810,6 +810,9 @@ export interface FielddDaemon {
   mesh: MeshClient;
   docs: DocumentService;
   devices: DeviceService;
+  /** Item 406 — the system settings document (D29′): tests read the account's refused and known
+   * phones here (`refusals`, `knownPhones`). */
+  settingsDoc: SettingsDocService;
   peers: PeerLink;
   /** DS-1 — the egress ROUTES port (E2): a loopback address that reaches a
    * door on a peer through this desktop's node, ref-counted per {peer, port}.
@@ -9427,6 +9430,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       mesh,
       docs,
       devices,
+      settingsDoc,
       peers,
       egressRoutes,
       federatedSubs,

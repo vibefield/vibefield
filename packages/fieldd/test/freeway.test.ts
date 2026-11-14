@@ -41,12 +41,21 @@ import { captureLog } from "./peer-roster";
 const LOGIN = "person@example.com";
 const SECRET = "ab".repeat(32);
 
-function roster(over: Partial<{ self: string; peers: string[]; desktops: string[] }> = {}) {
-  const state = { self: "dev-a", peers: ["dev-b", "dev-p"], desktops: ["dev-b"], ...over };
+function roster(
+  over: Partial<{ self: string; peers: string[]; desktops: string[]; refused: string[] }> = {},
+) {
+  const state = {
+    self: "dev-a",
+    peers: ["dev-b", "dev-p"],
+    desktops: ["dev-b"],
+    refused: [] as string[],
+    ...over,
+  };
   const view: FreewayRoster = {
     currentDeviceId: () => state.self,
     selfPeerDeviceIds: () => state.peers,
     isDocHost: (deviceId) => state.desktops.includes(deviceId),
+    isRefused: (deviceId) => state.refused.includes(deviceId),
   };
   return { state, view };
 }
@@ -192,6 +201,18 @@ describe("F1 — the declaration fieldd's roster calls for", () => {
     const declaration = freewayDeclaration(roster({ peers: [] }).view, false);
     expect(declaration.admit).toEqual([]);
     expect(declaration.exposure).toEqual({ terminals: false });
+  });
+
+  // Item 406 (VF-PM's rulings of 2026-11-14, Q-PM1) — a refused device drops out of `admit` (the
+  // host then closes its link 4410 and refuses a new one 4403), whatever the self-peer set still
+  // says: the declaration is pure, and the roster's own skip is the other half
+  // (device-service.test.ts).
+  it("406 — never admits a device Remove refused, whatever its role", () => {
+    const phoneRefused = freewayDeclaration(roster({ refused: ["dev-p"] }).view, true);
+    expect(phoneRefused.admit).toEqual([{ deviceId: "dev-b", role: "desktop" }]);
+    const bothRefused = freewayDeclaration(roster({ refused: ["dev-b", "dev-p"] }).view, true);
+    expect(bothRefused.admit).toEqual([]);
+    expect(bothRefused.deviceId).toBe("dev-a");
   });
 });
 

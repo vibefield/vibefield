@@ -582,6 +582,15 @@ export class DeviceService extends EventEmitter {
     return false;
   }
 
+  // 406 (red): STUBBED — nothing is refused (the green commit reads the account's refusals)
+  isRefused(_deviceId: string): boolean {
+    return false;
+  }
+
+  isRefusedNode(_nodeId: string): boolean {
+    return false;
+  }
+
   /** UA-P-0e — where a peer's product door is, DERIVED: its authenticated
    * MagicDNS name plus the registry's fixed product serve port, over plain `http`
    * because the product serve is declared `tls: false` — WireGuard is the wire's

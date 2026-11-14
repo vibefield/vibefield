@@ -1,10 +1,18 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SETTINGS_DOC_SECTIONS, standingDecision } from "@vibefield/contracts";
 import { LoroDoc } from "loro-crdt";
 import { afterEach, describe, expect, it } from "vitest";
-import { SettingsDocService } from "../src/settings-doc";
+import { type RefusalAct, SettingsDocService } from "../src/settings-doc";
 
 // PLUG-P7 — the D29′ system settings doc: fieldd's first live Loro doc.
 // This suite pins the three D29′ laws mechanically (design-03 §7.2):
@@ -345,5 +353,184 @@ describe("a removal across desktops (MK-2d)", () => {
     svc.hostDoc().commit();
     expect(await svc.installSet()).toEqual({});
     expect([...(await svc.removedPlugins())]).toEqual([PLUGIN]);
+  });
+});
+
+// Item 406 (track WI's Desktop slice; VF-PM's rulings of 2026-11-14 04:49Z, Q-PM1 and Q-PM2) — the
+// account's phones in the settings document. `devices.refused` is GROW-ONLY: one key per refusal
+// ever made (`[deviceId, eventId]`), so the merge is the union and a concurrent Remove is never
+// lost, written under a `no-undo:` origin, so no ⌘Z lifts one (law 2; the install-set's
+// revocations are the template). `devices.phones` holds the known phones: upserted when a node
+// speaks as a phone, deleted by Remove. Remove itself is S3's `device.remove` handler; these rows
+// write through the one writer it will call.
+describe("406 — the account's refused and known phones (Q-PM1, Q-PM2)", () => {
+  /** One call of the refusals' writer, as its caller makes it; true when it wrote. */
+  const refuse = async (
+    svc: SettingsDocService,
+    act: RefusalAct,
+    deviceId: string,
+    nodeIds: string[],
+  ): Promise<boolean> => (await svc.refuseDevice(act, deviceId, nodeIds, "dev-a")).wrote;
+
+  /** A node speaking as a phone, as a hello's door or the freeway's mint tells it; true when it
+   * wrote. */
+  const remember = async (
+    svc: SettingsDocService,
+    deviceId: string,
+    seen: { tailscaleId: string; via: "freeway" | "product"; name?: string },
+  ): Promise<boolean> => (await svc.rememberPhone(deviceId, seen, "dev-a")).wrote;
+
+  it("law 2 — ⌘Z never lifts a refusal: undo reverts the settings around it, and its stack never held it", async () => {
+    const svc = make(tempDataDir());
+    await svc.setUserValue(ID, "volume", 3, "pane");
+    expect(await refuse(svc, "remove", "dev-phone", ["node-phone"])).toBe(true);
+    await svc.setUserValue(ID, "volume", 9, "pane");
+
+    // first undo: volume=9 reverts; the refusal, written between, stands
+    expect(await svc.undo()).toEqual({ applied: true });
+    expect((await svc.userValues(ID))["volume"]).toBe(3);
+    expect((await svc.refusals()).deviceIds.has("dev-phone")).toBe(true);
+    // second undo: volume=3 reverts too, and nothing is left for ⌘Z — the refusal was never on it
+    expect(await svc.undo()).toEqual({ applied: true });
+    expect((await svc.userValues(ID))["volume"]).toBeUndefined();
+    expect(await svc.undo()).toEqual({ applied: false, reason: "empty-stack" });
+    expect(await svc.refusals()).toEqual({
+      deviceIds: new Set(["dev-phone"]),
+      nodeIds: new Set(["node-phone"]),
+    });
+  });
+
+  it("the append can never refuse a durable id Remove did not, and carries a node id only under one it did", async () => {
+    const svc = make(tempDataDir());
+    // never removed: the append writes nothing, whatever node it names
+    expect(await refuse(svc, "append", "dev-desk", ["node-desk"])).toBe(false);
+    expect(await svc.refusals()).toEqual({ deviceIds: new Set(), nodeIds: new Set() });
+    // removed: a node id seen under it is carried, once
+    expect(await refuse(svc, "remove", "dev-phone", ["node-old"])).toBe(true);
+    expect(await refuse(svc, "append", "dev-phone", ["node-new"])).toBe(true);
+    expect(await refuse(svc, "append", "dev-phone", ["node-new"])).toBe(false);
+    // a second Remove of a refused phone writes nothing (`DeviceRemoveResult.removed` false), and
+    // an append under a durable id Remove did not refuse writes nothing, a refused node or not
+    expect(await refuse(svc, "remove", "dev-phone", ["node-other"])).toBe(false);
+    expect(await refuse(svc, "append", "dev-desk", ["node-new"])).toBe(false);
+    expect(await svc.refusals()).toEqual({
+      deviceIds: new Set(["dev-phone"]),
+      nodeIds: new Set(["node-old", "node-new"]),
+    });
+    // every entry names the durable id Remove refused
+    const keys = svc.hostDoc().getMap(SETTINGS_DOC_SECTIONS.DEVICES_REFUSED).keys();
+    expect(keys).toHaveLength(2);
+    const named = new Set(keys.map((key) => (JSON.parse(key) as string[])[0]));
+    expect(named).toEqual(new Set(["dev-phone"]));
+  });
+
+  it("a merge from a second desktop's document refuses its phones here (the union: a concurrent Remove is never lost), and merged() announces both device sections", async () => {
+    const a = make(tempDataDir());
+    const b = make(tempDataDir());
+    // two desktops apart, each removing a phone, and both the same one
+    expect(await refuse(a, "remove", "dev-phone-1", ["node-1"])).toBe(true);
+    expect(await refuse(b, "remove", "dev-phone-2", ["node-2"])).toBe(true);
+    expect(await refuse(b, "remove", "dev-phone-1", ["node-1b"])).toBe(true);
+    const announced: string[] = [];
+    b.on("changed", (event: { section: string }) => announced.push(event.section));
+
+    // the host's merge, both ways: a peer's update imported, then its owner told (`hostOwner`)
+    b.hostDoc().import(a.hostDoc().export({ mode: "update", from: b.hostDoc().oplogVersion() }));
+    b.hostOwner().merged?.();
+    a.hostDoc().import(b.hostDoc().export({ mode: "update", from: a.hostDoc().oplogVersion() }));
+
+    for (const svc of [a, b]) {
+      expect(await svc.refusals()).toEqual({
+        deviceIds: new Set(["dev-phone-1", "dev-phone-2"]),
+        nodeIds: new Set(["node-1", "node-1b", "node-2"]),
+      });
+    }
+    // without these, another desktop's roster never passes again, and never forgets the phone
+    expect(announced).toContain(SETTINGS_DOC_SECTIONS.DEVICES_REFUSED);
+    expect(announced).toContain(SETTINGS_DOC_SECTIONS.DEVICES_PHONES);
+  });
+
+  it("known phones: upserted when a node speaks as one, kept across a reload, never a refused phone, and gone at Remove", async () => {
+    const dataDir = tempDataDir();
+    const a = make(dataDir);
+    const seen = { tailscaleId: "node-phone", via: "product" as const, name: "iPhone" };
+    expect(await remember(a, "dev-phone", seen)).toBe(true);
+    // the same phone saying the same again, by either evidence, moves nothing: a phone hellos at
+    // every connect, and the document keeps every write in its history
+    expect(await remember(a, "dev-phone", { ...seen, via: "freeway" })).toBe(false);
+    await a.dispose();
+
+    const b = make(dataDir);
+    expect((await b.knownPhones()).get("dev-phone")).toMatchObject({
+      tailscaleIds: ["node-phone"],
+      phone: { via: "product" },
+      name: "iPhone",
+    });
+    // the phone registered again: its new node id is remembered beside the old
+    expect(await remember(b, "dev-phone", { ...seen, tailscaleId: "node-two" })).toBe(true);
+    const ids = (await b.knownPhones()).get("dev-phone")?.tailscaleIds;
+    expect(ids).toEqual(["node-phone", "node-two"]);
+
+    // Remove forgets it, in the refusal's own transaction, and nothing brings it back: not the
+    // phone speaking again (a new node, or its refused node under another durable id), not ⌘Z
+    expect(await refuse(b, "remove", "dev-phone", ["node-phone", "node-two"])).toBe(true);
+    expect((await b.knownPhones()).has("dev-phone")).toBe(false);
+    expect(await remember(b, "dev-phone", { ...seen, tailscaleId: "node-three" })).toBe(false);
+    expect(await remember(b, "dev-other", seen)).toBe(false);
+    expect(await b.undo()).toEqual({ applied: false, reason: "empty-stack" });
+    expect((await b.knownPhones()).size).toBe(0);
+  });
+});
+
+// Item 406 (VF-PM's ruling, 2026-11-14 04:49Z) — the refusals have ONE writer, and it has exactly
+// the callers the ruling names. Read off the source, as item 172's read seam is
+// (record-stores.test.ts R7): each site is placed by the class method around it, or by the product
+// method whose handler holds it. At S2 the writer has one caller, DeviceService's registry pass
+// appending a node id under a durable id already refused. S3's `device.remove` handler adds the
+// second, `daemon.ts: device.remove ("remove")`, to the list below, which then holds exactly two.
+describe("406 — the refusals' one writer, and its callers", () => {
+  const src = join(import.meta.dirname, "../src");
+  const files = (readdirSync(src, { recursive: true, encoding: "utf8" }) as string[]).filter(
+    (file) => file.endsWith(".ts"),
+  );
+  const HANDLER = /api\.register(?:Subscription)?\("([^"]+)"/;
+  const METHOD = /^ {2}(?:(?:private|protected|public|static|async|override) )*(\w+)\s*[(<]/;
+  const KEYWORDS = new Set(["if", "for", "while", "switch", "catch", "return", "function"]);
+
+  /** Where line `at` sits: going up, the first class method or product handler that holds it. */
+  function placeOf(lines: readonly string[], at: number): string {
+    for (let i = at; i >= 0; i -= 1) {
+      const line = lines[i] ?? "";
+      const handler = HANDLER.exec(line)?.[1];
+      if (handler !== undefined) return handler;
+      const method = METHOD.exec(line)?.[1];
+      if (method !== undefined && !KEYWORDS.has(method)) return method;
+    }
+    return "(module)";
+  }
+
+  /** Every match of the global `pattern` in fieldd's source, as `file: place`, with what `say`
+   * reads off the match. */
+  function sitesOf(pattern: RegExp, say: (m: RegExpMatchArray) => string = () => ""): string[] {
+    return files
+      .flatMap((file) => {
+        const text = readFileSync(join(src, file), "utf8");
+        const lines = text.split("\n");
+        return [...text.matchAll(pattern)].map((match) => {
+          const at = text.slice(0, match.index ?? 0).split("\n").length - 1;
+          return `${file.split("\\").join("/")}: ${placeOf(lines, at)}${say(match)}`;
+        });
+      })
+      .sort();
+  }
+
+  it("the refusals' section is opened in two places, both the settings document's: its reader and THE writer", () => {
+    const opened = sitesOf(/getMap\(\s*(?:S|SETTINGS_DOC_SECTIONS)\.DEVICES_REFUSED\s*\)/g);
+    expect(opened).toEqual(["settings-doc.ts: readRefusals", "settings-doc.ts: refuseDevice"]);
+  });
+
+  it("the writer's callers are exactly the ones the ruling names: the registry pass's append (and, from S3, Remove)", () => {
+    const calls = sitesOf(/\.refuseDevice\(\s*("\w+")?/g, (m) => ` (${m[1] ?? "?"})`);
+    expect(calls).toEqual(['device-service.ts: refreshPeers ("append")']);
   });
 });

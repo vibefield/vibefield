@@ -5,7 +5,9 @@ import { join } from "node:path";
 import {
   APP_PREFERENCES_NEVER_UNDONE,
   InstallSetEntry,
+  type KnownPhone,
   LAYOUT,
+  type PhoneEvidence,
   SETTINGS_DOC_SECTIONS,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
@@ -124,6 +126,15 @@ export interface InstallSetChange {
    * writes the revoked decision, in the same transaction */
   revoke?: readonly string[];
 }
+
+/** Item 406 (Q-PM1) — the union of every entry of `devices.refused`. */
+export interface DeviceRefusals {
+  deviceIds: ReadonlySet<string>;
+  nodeIds: ReadonlySet<string>;
+}
+
+/** Item 406 — why the refusals' one writer writes: its two callers. */
+export type RefusalAct = "remove" | "append";
 
 const S = SETTINGS_DOC_SECTIONS;
 const ORIGIN_INSTALL_SET = "no-undo:install-set:";
@@ -621,6 +632,38 @@ export class SettingsDocService extends EventEmitter {
       revocationGeneration: generation,
     } as never);
     return generation;
+  }
+
+  // --- item 406: the account's phones ----------------------------------------
+  // 406 (red): STUBBED — nothing is read or written (the green commit's one writer and readers)
+
+  async refusals(): Promise<DeviceRefusals> {
+    await this.ready();
+    return { deviceIds: new Set(), nodeIds: new Set() };
+  }
+
+  async refuseDevice(
+    _act: RefusalAct,
+    _deviceId: string,
+    _tailscaleIds: readonly string[],
+    _by: string,
+  ): Promise<{ wrote: boolean }> {
+    await this.ready();
+    return { wrote: false };
+  }
+
+  async knownPhones(): Promise<Map<string, KnownPhone>> {
+    await this.ready();
+    return new Map();
+  }
+
+  async rememberPhone(
+    _deviceId: string,
+    _seen: { tailscaleId: string; via: PhoneEvidence; name?: string | undefined },
+    _by: string,
+  ): Promise<{ wrote: boolean }> {
+    await this.ready();
+    return { wrote: false };
   }
 
   // --- D29′ undo surface -----------------------------------------------------

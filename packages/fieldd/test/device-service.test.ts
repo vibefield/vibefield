@@ -20,6 +20,8 @@ import {
   type DeviceInfo,
   type DeviceListResult,
   DeviceNameFile,
+  DOC_SYNC_RECORD,
+  type FreewayDeclareParams,
   LAYOUT,
   PEER_FIELDD_SCOPES,
   PORTS,
@@ -28,7 +30,9 @@ import {
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { bootstrap } from "../src/index";
+import { bootstrap, DocumentService } from "../src/index";
+import { systemAccount, systemDocId } from "../src/library-doc";
+import { SettingsDocService } from "../src/settings-doc";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productPathSecret } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
@@ -1134,4 +1138,248 @@ describe("AU-3a — the app version a desktop says", () => {
       ),
     );
   });
+});
+
+// Item 406 (track WI's Desktop slice; VF-PM's rulings of 2026-11-14 04:49Z, Q-PM1 and Q-PM2) —
+// Remove refuses a phone in the settings document every desktop of the account shares
+// (`devices.refused`), and the roster is where the refusal becomes true on each desktop: a refused
+// phone is forgotten before anything correlates it. The known phones (`devices.phones`) give a
+// phone its POSITIVE fact, and a row after this desktop restarts. The act (`device.remove`) is
+// S3's; these rows write the refusal through the one writer that handler will call.
+describe("406 — a refused phone leaves the roster, and a known phone keeps its row", () => {
+  const SETTINGS_ID = systemDocId("settings", systemAccount(ACCOUNT, undefined));
+  const phone = (over: { id?: string } = {}): unknown =>
+    tailnetPeer({
+      id: "node-phone",
+      deviceId: "dev-phone",
+      login: ACCOUNT,
+      name: "my phone",
+      ...over,
+    });
+  const desk = (): unknown =>
+    tailnetPeer({ id: "node-desk", deviceId: "dev-desk", login: ACCOUNT, name: "desk" });
+
+  /** This root's settings document, written before a daemon boots on it (what another boot, or
+   * a merge, left there). */
+  async function beforeBoot(
+    dataDir: string,
+    write: (doc: SettingsDocService) => Promise<unknown>,
+  ): Promise<void> {
+    const doc = new SettingsDocService({ dataDir });
+    await write(doc);
+    await doc.dispose();
+  }
+
+  /** What a restart reads of this root's settings document. */
+  async function reopened(dataDir: string): Promise<SettingsDocService> {
+    const doc = new SettingsDocService({ dataDir });
+    cleanup.push(() => doc.dispose());
+    await doc.ready();
+    return doc;
+  }
+
+  async function eventually(fn: () => Promise<boolean>, label: string, ms = 8000): Promise<void> {
+    const deadline = Date.now() + ms;
+    while (!(await fn())) {
+      if (Date.now() > deadline) throw new Error(`timed out waiting for: ${label}`);
+      await sleep(25);
+    }
+  }
+
+  /** `to` reconnects to `from`: the doc-sync VERSION exchange against `to`'s own host (the
+   * receiver states its version, the sender answers what it lacks, the receiver's host merges
+   * it), as doc-service.test.ts's peer desktop drives it. True when something crossed. */
+  async function exchange(from: DocumentService, to: DocumentService): Promise<boolean> {
+    const theirs = await to.hostVersion(SETTINGS_ID);
+    const answer = theirs === null ? null : await from.hostAnswer(SETTINGS_ID, theirs);
+    if (answer === null || answer.update === null) return false;
+    const outcome = await to.applyRemoteRecord(SETTINGS_ID, {
+      kind: DOC_SYNC_RECORD.UPDATE,
+      meta: answer.meta,
+      payload: answer.update,
+    });
+    return outcome.applied;
+  }
+
+  it("a refused peer has no row, is absent from all four self-peer readers, and is never admitted to the freeway", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [phone(), desk()];
+    // Remove, written as the `device.remove` handler will write it, on another desktop
+    await beforeBoot(dataDir, (doc) =>
+      doc.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-other"),
+    );
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const devices = daemon.devices;
+    // the CONTROL: the account's other device, listed beside it, has its row
+    await until(() => devices.get("dev-desk") !== undefined, 8000, "the desktop's row");
+
+    expect(devices.list().map((d) => d.deviceId).sort()).toEqual(["dev-desk", "dev-self"]);
+    expect(devices.get("dev-phone")).toBeUndefined();
+    // the four readers every mesh service asks "is this peer mine?" through
+    expect(devices.selfPeerIds()).toEqual(["node-desk"]);
+    expect(devices.selfPeerDeviceIds()).toEqual(["dev-desk"]);
+    expect(devices.selfSyncPeers()).toEqual([{ id: "node-desk", online: true }]);
+    expect(devices.isSelfPeer("node-phone")).toBe(false);
+    expect(devices.isSelfPeer("node-desk")).toBe(true);
+    // forgotten before anything correlates it; the predicate S3's doors read holds it
+    expect(devices.deviceIdByNodeId("node-phone")).toBeUndefined();
+    expect(devices.isRefused("dev-phone")).toBe(true);
+    expect(devices.isRefusedNode("node-phone")).toBe(true);
+    expect(devices.isRefused("dev-desk")).toBe(false);
+    // and the freeway's host is never told to admit it
+    const admitted = (declaration: unknown): string[] =>
+      ((declaration as FreewayDeclareParams | undefined)?.admit ?? []).map((row) => row.deviceId);
+    await until(
+      () => admitted(mock.freewayDeclarations.at(-1)).includes("dev-desk"),
+      8000,
+      "the roster's declaration",
+    );
+    expect(mock.freewayDeclarations.flatMap(admitted)).not.toContain("dev-phone");
+  }, 30_000);
+
+  it("a refusal merged from a second desktop's document refuses the phone here", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [phone(), desk()];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    await until(() => daemon.devices.isSelfPeer("node-phone"), 8000, "the phone's row");
+
+    // the second desktop, where the person pressed Remove: its settings on its own disk and
+    // host, registered as its mountSystemDocs registers them
+    const peerDir = makeDataDir();
+    const peer = new SettingsDocService({ dataDir: peerDir });
+    cleanup.push(() => peer.dispose());
+    const peerDocs = new DocumentService({ dataDir: peerDir });
+    cleanup.push(() => peerDocs.dispose());
+    peerDocs.registerSystemDoc(SETTINGS_ID, "Settings", peer.hostDoc(), peer.hostOwner());
+    const removed = await peer.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk");
+    expect(removed).toEqual({ wrote: true });
+
+    expect(await exchange(peerDocs, daemon.docs), "the refusal crossed").toBe(true);
+    await until(() => daemon.devices.get("dev-phone") === undefined, 8000, "the merged refusal");
+    expect(daemon.devices.isSelfPeer("node-phone")).toBe(false);
+    expect(daemon.devices.selfPeerDeviceIds()).toEqual(["dev-desk"]);
+    expect(daemon.devices.isRefusedNode("node-phone")).toBe(true);
+  }, 30_000);
+
+  it("a refused phone that registers again: its new node id joins the refusal, and no other durable id is refused", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    await beforeBoot(dataDir, (doc) =>
+      doc.refuseDevice("remove", "dev-phone", ["node-old"], "dev-other"),
+    );
+    mock.meshPeers = [
+      // the phone, registered again: a new node under the same durable id
+      phone({ id: "node-new" }),
+      desk(),
+      // another account's node naming the refused durable id: refused, and never carried
+      tailnetPeer({ id: "node-stranger", deviceId: "dev-phone", login: "colleague@corp.example" }),
+    ];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    await until(() => daemon.devices.get("dev-desk") !== undefined, 8000, "the desktop's row");
+    // refused at once here, the doors' predicate with it
+    expect(daemon.devices.get("dev-phone")).toBeUndefined();
+    expect(daemon.devices.isRefusedNode("node-new")).toBe(true);
+    await eventually(
+      async () => (await daemon.settingsDoc.refusals()).nodeIds.has("node-new"),
+      "the node id carried into the refusals",
+    );
+    await daemon.stop();
+
+    // what every desktop the document reaches will read
+    expect(await (await reopened(dataDir)).refusals()).toEqual({
+      deviceIds: new Set(["dev-phone"]),
+      nodeIds: new Set(["node-old", "node-new"]),
+    });
+  }, 30_000);
+
+  it("a node that hellos as a phone is remembered as one: its row carries the fact, and the record outlives the daemon", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [phone(), desk()];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    await until(
+      () => daemon.health().mesh.serves.some((x) => x.name === "product" && x.url !== undefined),
+      8000,
+    );
+    await until(() => daemon.devices.deviceIdByNodeId("node-phone") === "dev-phone", 8000);
+    // before it has spoken as one, nothing says it is a phone
+    expect(daemon.devices.get("dev-phone")?.phone).toBeUndefined();
+
+    // the phone's product hello, as the sidecar delivers it from its node
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}/t/${productPathSecret(mock)}`, {
+      headers: { "Tailscale-User-Login": ACCOUNT, "Tailscale-Node-Id": "node-phone" },
+    });
+    cleanup.push(() => ws.close());
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    await new WsRpc(ws).call("system.hello", {
+      contractsVersion: CONTRACTS_VERSION,
+      minCompatible: CONTRACTS_VERSION,
+      clientKind: "ios",
+    });
+
+    await until(() => daemon.devices.get("dev-phone")?.phone?.via === "product", 8000);
+    // a desktop never carries it, nor does this one
+    expect(daemon.devices.get("dev-desk")?.phone).toBeUndefined();
+    expect(daemon.devices.list().find((d) => d.self)?.phone).toBeUndefined();
+    await daemon.stop();
+
+    const known = await (await reopened(dataDir)).knownPhones();
+    expect([...known.keys()]).toEqual(["dev-phone"]);
+    expect(known.get("dev-phone")).toMatchObject({
+      tailscaleIds: ["node-phone"],
+      phone: { via: "product" },
+      name: "my phone",
+    });
+  }, 30_000);
+
+  it("after a restart, a known phone the registry lists without its durable id keeps its row, positively a phone", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    // what an earlier boot remembered (the row above)
+    await beforeBoot(dataDir, (doc) =>
+      doc.rememberPhone(
+        "dev-phone",
+        { tailscaleId: "node-phone", via: "freeway", name: "my phone" },
+        "dev-self",
+      ),
+    );
+    // truffle holds a peer's durable id in memory only: after this desktop's restart the phone,
+    // still offline, is listed by its node and its login alone
+    mock.meshPeers = [
+      tailnetPeer({ id: "node-phone", login: ACCOUNT, name: "my phone", online: false }),
+      desk(),
+      // the CONTROL: a node no record names, publishing no durable id either, has no row
+      tailnetPeer({ id: "node-anon", login: ACCOUNT, name: "anon" }),
+    ];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    await until(() => daemon.devices.get("dev-phone") !== undefined, 8000, "the phone's row");
+
+    expect(daemon.devices.get("dev-phone")).toMatchObject({
+      name: "my phone",
+      self: false,
+      online: false,
+      state: "asleep",
+      tailscaleId: "node-phone",
+      phone: { via: "freeway" },
+    });
+    expect(daemon.devices.deviceIdByNodeId("node-phone")).toBe("dev-phone");
+    expect(daemon.devices.get("dev-desk")?.phone).toBeUndefined();
+    const ids = daemon.devices.list().map((d) => d.deviceId);
+    expect(ids.sort()).toEqual(["dev-desk", "dev-phone", "dev-self"]);
+  }, 30_000);
 });

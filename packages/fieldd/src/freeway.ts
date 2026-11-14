@@ -55,6 +55,8 @@ export interface FreewayRoster {
   currentDeviceId(): string;
   selfPeerDeviceIds(): readonly string[];
   isDocHost(deviceId: string): boolean;
+  // 406 (red): declared, and not yet read by the declaration below (the green commit drops it)
+  isRefused(deviceId: string): boolean;
 }
 
 /** fieldd's one declaration (§4.3), pure: the self peers, each with the hello its role opens
