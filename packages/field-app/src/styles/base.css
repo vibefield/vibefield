@@ -73,6 +73,21 @@ body {
   transform: scale(0.98);
 }
 
+/* PLUGINS OVER CANVAS (MK-D2; DESIGN.md §6 "Plugins", drawn at MK-4d): the desk recedes under the popup as the sheets
+   recede it, above, and the frame's box (`.field-recede`, after the scene in the window's order) recedes with it as
+   one, on the scene's point and duration in place of the Peek's (frame/peek.css), while no cover stands. Under a cover
+   the Peek's recede stands. Reduced motion: neither recedes (M6); the Peek's own rule keeps the frame's box still. */
+.field-scene[data-covered="false"] ~ .field-recede {
+  transform-origin: 50% 50%;
+  transition: transform 600ms var(--vf-ease-island);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field-scene[data-popup-recede="true"] {
+    transform: none;
+  }
+}
+
 /* Under a cover the scene does NOT recede (DK-15): the desk's STILL does
    (`field/desk/cover-still.css` — 0.98 over 560, transform only), so no
    transform reaches the desk's own box while a cover stands. */

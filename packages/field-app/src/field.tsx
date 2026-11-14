@@ -315,8 +315,11 @@ export function FieldView({
   const shelf = useShownShelf(surface, view);
   // The pill's sheet recedes the field on Canvas alone (DESIGN.md §8 "The
   // head"): under a cover the package circle grows it over the cover, and
-  // nothing transforms the desk's own box there (DK-15).
-  const sheetOpen = (shelf !== null && !covered) || chrome.showSettings;
+  // nothing transforms the desk's own box there (DK-15). Plugins over Canvas
+  // recedes it too, the frame's box with it as one (MK-D2; §6 "Plugins", drawn
+  // at MK-4d): one point and one duration, the desk's (styles/base.css).
+  const pluginsOverCanvas = surface === "plugins" && !covered;
+  const sheetOpen = (shelf !== null && !covered) || chrome.showSettings || pluginsOverCanvas;
 
   const [hudReturning, setHudReturning] = useState(false);
   const hudWasLoading = useRef(docState.phase === "loading");
@@ -352,7 +355,8 @@ export function FieldView({
   // you see recedes under them — the cover's still and the frame's chrome, in
   // `.field-recede` below — and the desk's own box never does (DK-15). The New
   // spark sheet (SP-1c; §8 "The New spark sheet") is the same kind of modal,
-  // and so is Plugins (MK-4a; §8 "Plugins — the frame's second popup").
+  // and so is Plugins (MK-4a; §8 "Plugins — the frame's second popup"), the
+  // one that opens over Canvas, where the desk recedes too (`sheetOpen`, above).
   const modal = surface === "search" || surface === "new-spark" || surface === "plugins";
 
   return (
@@ -369,7 +373,8 @@ export function FieldView({
         <PresentationContextReporter ce={ce} dark={dark} report={onPresentationContextChange} />
       )}
       {/* The recede (reference design): the canvas eases to 0.98 while a
-          sheet is up (the explorer, Settings — never the pegboard, DK-13).
+          sheet is up (the explorer, Settings — never the pegboard, DK-13),
+          and under Plugins over Canvas (MK-D2; reduced motion: it stays).
           Only the wrapper transforms, so the transient scale never skews
           engine picks. Under a cover the wrapper does NOT recede (DK-15): the
           desk's still does, so nothing transforms the desk's own box while a
@@ -384,6 +389,7 @@ export function FieldView({
         key={generation}
         className="field-scene"
         data-sheet-open={sheetOpen ? "true" : "false"}
+        data-popup-recede={pluginsOverCanvas ? "true" : "false"}
         data-covered={covered ? "true" : "false"}
         // Under a cover the field is out of reach: nothing in it may hold the
         // keyboard (a note being typed in when ⌘2 was pressed lets go of it).

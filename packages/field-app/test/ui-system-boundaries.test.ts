@@ -754,10 +754,11 @@ describe("UI system ownership boundaries", () => {
     // palette's run kind, act and two runs, ChromeLayer's surface call and case, and the Me menu's row key (VF-PM
     // 13:03:43Z: the table grows only by MK-4b's own lines). A new line anywhere is a red that makes someone read
     // it. The pegboard's More in Plugins… (MK-4d) adds none: it reaches the popup through ChromeLayer's
-    // `openPlugins`, by its `openPluginsOnDiscover`.
+    // `openPlugins`, by its `openPluginsOnDiscover`. The field's second line is the desk's recede under the popup
+    // over Canvas (MK-4d, the MK inventory's A1: `pluginsOverCanvas`).
     const PINNED: Readonly<Record<string, number>> = {
       "account/MeMenu.tsx": 1,
-      "field.tsx": 1,
+      "field.tsx": 2,
       "field/ChromeLayer.tsx": 2,
       "frame/frame-surface.ts": 1,
       "frame/palette-acts.ts": 4,
@@ -834,6 +835,41 @@ describe("UI system ownership boundaries", () => {
     expect(css).toContain("animation: vf-peek-pop 260ms var(--vf-ease-island);");
     const peek = source("frame/Peek.tsx");
     expect(peek).toContain("container === undefined ? document.body : container");
+  });
+
+  it("recedes the desk with the frame under Plugins over Canvas, as one: one point, one duration (MK-D2; MK-4d)", () => {
+    // DESIGN.md §6 "Plugins", drawn at MK-4d (the MK inventory's A1, ruled at its lean): over Canvas the desk's box
+    // recedes as the pill's sheet and Settings recede it, and the frame's box takes the desk's point and duration
+    // while no cover stands. Under a cover nothing transforms the desk's box (DK-15); reduced motion recedes neither.
+    const field = source("field.tsx");
+    expect(field).toContain('const pluginsOverCanvas = surface === "plugins" && !covered;');
+    expect(field).toContain(
+      "const sheetOpen = (shelf !== null && !covered) || chrome.showSettings || pluginsOverCanvas;",
+    );
+    expect(field).toContain('data-popup-recede={pluginsOverCanvas ? "true" : "false"}');
+    const base = source("styles/base.css");
+    const rule = (head: string): string => {
+      const at = base.indexOf(`${head} {`);
+      if (at < 0) return "";
+      return base.slice(at).split("}")[0] ?? "";
+    };
+    expect(rule('.field-scene[data-sheet-open="true"]')).toContain("transform: scale(0.98);");
+    // one duration: the frame's box moves on the scene's own transform transition, the island curve's 600ms
+    const scene = rule(".field-scene");
+    const frame = rule('.field-scene[data-covered="false"] ~ .field-recede');
+    expect(scene).toContain("transform 600ms var(--vf-ease-island)");
+    expect(frame).toContain("transition: transform 600ms var(--vf-ease-island);");
+    // one point: the scene sets none, so it recedes about its centre, the window's; the frame's box takes the same
+    expect(scene).not.toContain("transform-origin");
+    expect(frame).toContain("transform-origin: 50% 50%;");
+    expect(frame).not.toMatch(/transform:/u);
+    // reduced motion: the desk keeps still under the popup, as the Peek's own rule keeps the frame's box
+    expect(base).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\.field-scene\[data-popup-recede="true"\] \{\s*transform: none;/u,
+    );
+    expect(source("frame/peek.css")).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\[data-peek-recede="true"\] \{\s*transform: none;/u,
+    );
   });
 
   it("keeps the head's fixture an ADAPTER — the doors' facts, never the head's markup (FR-3)", () => {
@@ -1811,11 +1847,11 @@ describe("UI system ownership boundaries", () => {
     // the selection bar hides while the board is out; the selection persists under it
     expect(chrome).toMatch(/hidden=\{covered \|\| boardOut \|\| docsOpen \|\| showSettings\}/u);
     // the stage neither recedes nor dims for Objects: only the pill's sheet on Canvas — the
-    // owner's one reading of the shelf it shows, the head's and the circle's (HN-8) — and
-    // Settings recede it
+    // owner's one reading of the shelf it shows, the head's and the circle's (HN-8) — Settings
+    // and, since MK-4d, Plugins over Canvas recede it
     expect(field).toContain("const shelf = useShownShelf(surface, view);");
     expect(field).toContain(
-      "const sheetOpen = (shelf !== null && !covered) || chrome.showSettings;",
+      "const sheetOpen = (shelf !== null && !covered) || chrome.showSettings || pluginsOverCanvas;",
     );
     expect(field).not.toMatch(/surface === "objects"/u);
     // chrome does not dim by night: the anchor's night is never read, nor the night's dimming
