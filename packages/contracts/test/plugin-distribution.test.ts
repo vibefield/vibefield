@@ -174,3 +174,29 @@ describe("the bundled plugin index (WP8a)", () => {
     expect(BundledPluginIndex.safeParse(index).success).toBe(false);
   });
 });
+
+// Item 406 (VF-PM's rulings 2026-11-14 04:49Z, Q-PM1 and Q-PM2) — the settings document gains two
+// account sections for phones: the grow-only refusals and the known phones. The contract's half of
+// "only Remove writes the refusals": no generic settings write can name either section, because a
+// plugin's setting lands under PLUGIN_PREFIX and an app preference in APP. fieldd's half (only the
+// `device.remove` handler writes them, under a `no-undo:` origin) is S2/S3's test.
+describe("406 — the settings document's device sections (Q-PM1, Q-PM2)", () => {
+  it("names the refusals and the known phones as root sections apart from every other", () => {
+    expect(SETTINGS_DOC_SECTIONS.DEVICES_REFUSED).toBe("devices.refused");
+    expect(SETTINGS_DOC_SECTIONS.DEVICES_PHONES).toBe("devices.phones");
+    const all = Object.values(SETTINGS_DOC_SECTIONS);
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it("puts neither where a plugin's setting or an app preference is written", () => {
+    const sections = [SETTINGS_DOC_SECTIONS.DEVICES_REFUSED, SETTINGS_DOC_SECTIONS.DEVICES_PHONES];
+    for (const name of sections) {
+      expect(name.length, name).toBeGreaterThan(0);
+      expect(name.startsWith(SETTINGS_DOC_SECTIONS.PLUGIN_PREFIX), name).toBe(false);
+      expect(name, name).not.toBe(SETTINGS_DOC_SECTIONS.APP);
+      expect(name.startsWith("installSet"), name).toBe(false);
+      // Loro refuses a root container name holding "/" or NUL
+      expect(name.includes("/") || name.includes("\u0000"), name).toBe(false);
+    }
+  });
+});

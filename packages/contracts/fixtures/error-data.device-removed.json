@@ -1,0 +1,5 @@
+{
+  "kind": "UNAUTHORIZED",
+  "retryable": false,
+  "details": { "reason": "device-removed" }
+}

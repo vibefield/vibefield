@@ -1,0 +1,11 @@
+{
+  "deviceId": "01JAMESPHONEULID0000000000",
+  "name": "iPhone",
+  "self": false,
+  "online": true,
+  "lastSeenAt": 1794600000000,
+  "state": "awake",
+  "tailscaleId": "nPHONE1CNTRL",
+  "tailnetDnsName": "iphone.tail1234.ts.net",
+  "phone": { "via": "product", "at": 1794600000000 }
+}

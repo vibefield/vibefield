@@ -1150,3 +1150,31 @@ describe("item 177 — the sessions' records, one of fieldd's signed stores (REC
     });
   });
 });
+
+// Item 406 (track WI's Desktop slice; VF-PM's rulings 2026-11-14 04:49Z) — Remove for a phone,
+// declared beside the rename it copies. A phone must never reach it: the act refuses the phone
+// account-wide with no lift, so its scope stays out of every grant a tailnet caller is minted.
+describe("406 — device.remove, declared beside device.rename", () => {
+  const row = (method: string) => METHODS.find((m) => m.method === method);
+
+  it("is device.rename's row in all but its name: product, settings.manage, declarative, local", () => {
+    expect(row("device.remove")).toEqual({
+      surface: "product",
+      method: "device.remove",
+      scope: "settings.manage",
+      idempotent: true,
+      locality: "local",
+    });
+    expect({ ...row("device.remove"), method: "device.rename" }).toEqual(row("device.rename"));
+  });
+
+  it("no phone, guest or peer daemon reaches it: settings.manage is in no tailnet grant, and no plugin's", () => {
+    for (const preset of [TAILNET_SCOPES, TAILNET_GUEST_SCOPES, PEER_FIELDD_SCOPES])
+      expect(preset).not.toContain("settings.manage");
+    const def = row("device.remove");
+    expect(def).toBeDefined();
+    expect(def !== undefined && reachableFromTailnet(def)).toBe(false);
+    expect(def?.guestOk).toBeUndefined();
+    expect(PLUGIN_CAPABILITY_ELIGIBILITY).not.toHaveProperty(["settings.manage"]);
+  });
+});

@@ -154,7 +154,16 @@ import {
   SparkKeptRecord,
   SparkRecord,
 } from "../src/compose";
-import { DeviceInfo, DeviceNameFile, DeviceRenameParams, DeviceSlice } from "../src/devices";
+import {
+  DeviceInfo,
+  DeviceNameFile,
+  DeviceRemoveParams,
+  DeviceRemoveResult,
+  DeviceRenameParams,
+  DeviceSlice,
+  KnownPhone,
+  RefusedDevice,
+} from "../src/devices";
 import {
   AuditRecordV1,
   DiagnosticLeaseV1,
@@ -583,7 +592,7 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // UA-P-0e (D2) — TWO fixtures on purpose: the SELF row (everything, because
   // it is that process) and a SELF-PEER row (identity, liveness and a derived
   // door locator, with every slice-derived claim absent because the peer
-  // publishes nothing).
+  // publishes nothing). Item 406 adds a PHONE's row: the positive phone fact.
   "device-info": DeviceInfo,
   // UA-P-4 (RFC 025 §3.6) — TWO fixtures on purpose: a LINKED node (a login and
   // the one-entry gate it was built with) and a CAPTURING one (no login yet, so
@@ -786,6 +795,14 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // device-local file the name is kept in
   "device-rename-params": DeviceRenameParams,
   "device-name-file": DeviceNameFile,
+  // Item 406 (track WI's Desktop slice; VF-PM 2026-11-14) — Remove for a phone: the act's ask and
+  // answer, one entry of the settings document's grow-only refusals, one known phone. The phone's
+  // row rides `device-info.phone` above; the door's word to a removed phone is
+  // `error-data.device-removed` (the ErrorData prefix; its typed row in devices.test.ts).
+  "device-remove-params": DeviceRemoveParams,
+  "device-remove-result": DeviceRemoveResult,
+  "refused-device": RefusedDevice,
+  "known-phone": KnownPhone,
   // AO-6b (AO-D15) — the moments beside the steps, and one moment's answer
   "setup-ledger-moments": SetupLedger,
   "setup-moment-params": SetupMomentParams,

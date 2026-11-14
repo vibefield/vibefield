@@ -540,6 +540,9 @@ export const SETTINGS_DOC_SECTIONS = {
   /** MK-2d (2026-11-11, E10's R1): one grow-only key per removal, `[pluginId, uuid] → {at}`, never deleted, so a
    * removal reaches every desktop and "removed" is told apart from "never published" */
   INSTALL_SET_REMOVALS: "installSet.removals",
+  // 406 (red): STUBBED — empty names, which the section rows refuse (the green commit names them)
+  DEVICES_REFUSED: "",
+  DEVICES_PHONES: "",
 } as const;
 
 export const GrantDecision = z

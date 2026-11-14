@@ -20,6 +20,11 @@ export const DEVICE_LIMITS = {
   BOOT_ID_CHARS: 256,
   ENDPOINT_SERVE_CHARS: 128,
   ENDPOINT_URL_CHARS: 2_048,
+  /** Item 406 — a Tailscale stable node id, as the sidecar injects it and the peer registry names it. */
+  NODE_ID_CHARS: MESH_CONTROL_LIMITS.OWNER_CHARS,
+  /** Item 406 — the node ids one refusal or one known phone carries. A phone takes a new node id only when it
+   * registers again, so a handful is generous; the bound keeps every synced entry small. */
+  NODE_IDS_PER_ENTRY: 16,
 } as const;
 
 /** Honest per-device capability facts (D31: "capabilities honest per device"). */
@@ -202,6 +207,8 @@ export const DeviceInfo = z
      * absent from DeviceSlice: a peer may not self-assert the host used to bind
      * an Artifact Hub URL. */
     tailnetDnsName: z.string().min(1).max(253).optional(),
+    // 406 (red): STUBBED — refuses every value, so a row that carries the fact fails (the green commit's schema)
+    phone: z.custom<{ via: "freeway" | "product"; at: number }>(() => false).optional(),
   })
   .passthrough();
 export type DeviceInfo = z.infer<typeof DeviceInfo>;
@@ -230,3 +237,32 @@ export const DeviceNameFile = z
   })
   .passthrough();
 export type DeviceNameFile = z.infer<typeof DeviceNameFile>;
+
+// --- Item 406 (red): Remove for a phone. STUBS — every schema below refuses every value, so the
+// fixtures and rows that read them fail until the green commit writes them. The two constants are real.
+
+/** Item 406 (Q-PM5) — the refusal's word, as a contract string. */
+export const DEVICE_REFUSALS = {
+  REASON_REMOVED: "device-removed",
+} as const;
+
+export const DeviceRemoveParams = z.custom<{ deviceId: string }>(() => false);
+export type DeviceRemoveParams = z.infer<typeof DeviceRemoveParams>;
+
+export const DeviceRemoveResult = z.custom<{ removed: boolean; closed: number }>(() => false);
+export type DeviceRemoveResult = z.infer<typeof DeviceRemoveResult>;
+
+export const RefusedDevice = z.custom<{ tailscaleIds: string[]; removedAt: number; by: string }>(
+  () => false,
+);
+export type RefusedDevice = z.infer<typeof RefusedDevice>;
+
+export const KnownPhone = z.custom<{
+  tailscaleIds: string[];
+  phone: { via: "freeway" | "product"; at: number };
+  name?: string;
+}>(() => false);
+export type KnownPhone = z.infer<typeof KnownPhone>;
+
+export const DeviceRemovedDetails = z.custom<{ reason: "device-removed" }>(() => false);
+export type DeviceRemovedDetails = z.infer<typeof DeviceRemovedDetails>;
