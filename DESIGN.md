@@ -7619,7 +7619,34 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   **Desktops** — one row per desktop (its mark at 19 pt, its name, `1 working` or `asleep · 2h`,
   and a disclosure that folds its places out run-fold style: each place by its folder's name and
   a branch that says more, then its last use or why it cannot take a launch), then the sessions by
-  day. A **session row's** foot names where it ran — the desktop's mark and name, then the
+  day. A **session row's** second line carries **the desktop entry's figures, in the desktop's order**: its
+  messages, the span of its recorded activity, its tokens and its estimated cost, and then when it started, as
+  before: `88 msgs · 1h 53m · 182K · $1.24 · started 14:06` (*item 393, 2026-11-13. James, 23:28:32Z, session
+  qa-01, of a project's page on his phone: "for session entry item, they should also show the message count,
+  token count, cost, etc,just like as how desktop session entry is designed, align it". No text here ruled the
+  line; the code drew the span and the start alone, `1h 53m · started 14:06`, since SP-6 (2026-10-04), and that
+  is what this overturns.*) The figures are the ones the desktop's entry draws (rosetta's room,
+  `SessionListItem`: `N msgs · span · tokens · cost`) and they come from where the desktop's come from: the
+  session's row in its project's `contribution`, its subagents' folded in, which the phone already reads with
+  the project's figures (`project.figures`). The row is joined to its session by the desktop that recorded it
+  and its id there, and nothing is added to a contract. They are written in the phone's own words: the count
+  with its thousands separator, tokens as the tiles write them, cost as the ledger's row writes it (`+` on a
+  lower bound, `n/p` for usage with no list price). **A figure the phone does not hold leaves its place out; it
+  is never a 0, a dash or a placeholder**: tokens and cost stand only where tokens were counted, and a session
+  with no row in `contribution` keeps the line it had. **A project of up to a hundred sessions shows figures on
+  every entry; a project past a hundred shows them on its hundred heaviest sessions**, because a desktop answers
+  a phone a hundred of a project's `contribution` rows, the heaviest by tokens first (the cut the messages
+  figure wears as its `+`, item 353, below; a project that several desktops or several rosetta projects hold is
+  cut one of them at a time, so its hundred are the first ones' heaviest), **until the door answers each listed
+  session's figures, which is item 398** (the door's own change, HG's; not built with this). A subagent's own
+  row carries none, here as on the desktop: its figures are in its root's. One conversation that two desktops
+  both recorded has one `contribution` row, the first desktop's; a row that speaks the other desktop's copy is
+  not joined, and shows none. *Readings, not his rulings: "etc" is the rest of the desktop's line, which is the
+  span, already here; the span keeps the phone's spelling (`313h 54m`, where the desktop writes `13d 1h`) and
+  `started 14:06` stays, at the line's end; the line keeps its size and ink (12.5 pt, `inkFaint`, tabular
+  digits), which is the desktop's faint; `msgs` is the desktop's word, for one message too; a session still
+  being read whose row counts no message yet shows no figures, where the desktop shimmers.* A session row's
+  **foot** names where it ran — the desktop's mark and name, then the
   folder's name, never its path — and its last-word slot holds the session's act (Resume or Jump
   to, below) or the reason there is none. A session's document is read from its OWN desktop's door
   (the row's `device`); a desktop that does not answer shows what this phone kept, in the same words.
