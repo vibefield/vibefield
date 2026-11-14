@@ -97,6 +97,11 @@ final class AppsFeed {
     answer(page?.rows ?? [], words: words)
   }
 
+  /// K4 red: the phone sends no mark yet.
+  func mark(_ app: IndexAppRow, kept: Bool) async -> String? {
+    nil
+  }
+
   private func answer(_ rows: [IndexAppRow], words: String) {
     var next = reading
     next.matches = rows
