@@ -267,11 +267,44 @@ private func opened(_ door: TimelineDoor) async -> HistoryDesktopReader {
 }
 
 /// Item 362b (James, 2026-11-12 18:40:35Z, of the phone's History session view: "it does not load message
-/// progressively like desktop") — the rows above a document's top are read as the reader nears it, by the room's
-/// rule (rosetta `lib/transcript/history-window.ts`): on until they hold six messages, in at most five asks; one
-/// read at a time; and nothing that asks in a loop.
-@Suite("item 362b — the rows above a session's document are read in as the reader nears its top")
+/// progressively like desktop") — the rows above a document's top are read a batch at a time, by the room's rule
+/// (rosetta `lib/transcript/history-window.ts`): on until they hold six messages, in at most five asks; one read
+/// at a time; and nothing that asks in a loop.
+///
+/// *Corrected 2026-11-14 (item 418; James, 08:13:38Z, session qa-01: "it seems still trying to load everything …
+/// you pull down for load more"):* this said the rows above "are read as the reader nears it", and the suite was
+/// named "are read in as the reader nears its top". That was the page's half of 362b (`HistoryFollow.asksEarlier`):
+/// within a screen of the top the page asked by itself, and again after each batch. Item 418 overturned it: a batch
+/// is asked for by a pull at the top, or a press, and its rows are in HistoryOlderPullTests.swift. What these rows
+/// hold stands: what ONE ask reads.
+@Suite("item 362b — one ask for the rows above a session's document reads one batch, by the room's rule")
 struct HistoryEarlierTests {
+  /// Item 418 — the reader's half of "nothing above is read in by itself". It holds before the item as after it:
+  /// the reader never asked by itself, the page's rule did (`HistoryFollow.asksEarlier`, overturned).
+  @Test("a session that opens reads its newest page and nothing above it; one ask reads one batch and no more")
+  @MainActor
+  func nothingAboveByItself() async throws {
+    let door = TimelineDoor()
+    door.pages = [
+      [timelineRow("u9", 90, "user")],
+      (0..<6).map { timelineRow("u8\($0)", 80 + $0, "user") },
+      [timelineRow("u7", 70, "user")],
+    ]
+    let reader = await opened(door)
+    // long enough for a read that was going to start by itself to have started
+    try? await Task.sleep(for: .milliseconds(50))
+    #expect(door.earlierAsks().isEmpty)
+    #expect(reader.readingEarlier.isEmpty)
+    #expect(reader.corpus.document("s1")?.nextCursor == "1")
+    reader.need(.older(device: "dev-1", session: "s1"))
+    await settle("the read's end") { !reader.readingEarlier.contains("s1") }
+    #expect(door.earlierAsks() == ["1"], "six messages in one page: the batch is that page")
+    try? await Task.sleep(for: .milliseconds(50))
+    #expect(door.earlierAsks() == ["1"], "the batch above it waits for the next ask")
+    #expect(reader.corpus.document("s1")?.nextCursor == "2")
+    reader.close()
+  }
+
   @Test("one approach reads on until six messages are held: a page of thoughts alone does not end it")
   @MainActor
   func untilSixMessages() async throws {
@@ -339,10 +372,16 @@ struct HistoryEarlierTests {
     #expect(door.earlierAsks() == ["1"], "not followed round")
     let cursor = reader.corpus.document("s1")?.nextCursor
     #expect(cursor == "1")
-    // the view's half: a read that left the cursor where it was marks it, and the top stops asking
-    let follow = HistoryFollow(landed: false)
-    #expect(follow.asksEarlier(nearTop: true, cursor: cursor, stalled: nil, awake: true, reading: false))
-    #expect(follow.asksEarlier(nearTop: true, cursor: cursor, stalled: "1", awake: true, reading: false) == false)
+    // the page's half (item 418; it was `asksEarlier`'s `stalled`): a read that left the document's top where it
+    // was brought nothing. The line at the top says so, and the page asks for nothing again by itself.
+    var pull = HistoryOlderPull()
+    let asked = pull.pressed(ready: true)
+    #expect(asked)
+    pull.began()
+    pull.ended()
+    #expect(pull.failed)
+    let again = pull.rested(ready: true)
+    #expect(again == false, "a page at rest asks for nothing by itself")
     reader.close()
   }
 
@@ -362,32 +401,16 @@ struct HistoryEarlierTests {
     reader.close()
   }
 
-  @Test("the top asks by itself only near it, with rows above, an answering desktop, no read running and a cursor that moved")
-  func whenTheTopAsks() {
-    let follow = HistoryFollow(landed: false)
+  // RETIRED 2026-11-14 (item 418): `whenTheTopAsks` ("the top asks by itself only near it, with rows above, an
+  // answering desktop, no read running and a cursor that moved") and `theTopsWords` ("the rule at the top says where
+  // the rows above stand"). They held the page's half of 362b, `HistoryFollow.asksEarlier` and `HistoryFollow.head`.
+  // The top asks for nothing by itself now, in a document a search landed in as in any other, and the rule at the
+  // top is the pull's: both are held in HistoryOlderPullTests.swift (`nothingByItself`, `theLine`).
+
+  @Test("within a screen of the document's top is near it: the room's distance")
+  func nearTheTop() {
     #expect(HistoryFollow.nearTop(offset: 600, container: 600))
     #expect(HistoryFollow.nearTop(offset: 601, container: 600) == false)
-    #expect(follow.asksEarlier(nearTop: true, cursor: "c", stalled: nil, awake: true, reading: false))
-    #expect(follow.asksEarlier(nearTop: false, cursor: "c", stalled: nil, awake: true, reading: false) == false)
-    #expect(follow.asksEarlier(nearTop: true, cursor: nil, stalled: nil, awake: true, reading: false) == false)
-    #expect(follow.asksEarlier(nearTop: true, cursor: "c", stalled: nil, awake: false, reading: false) == false)
-    #expect(follow.asksEarlier(nearTop: true, cursor: "c", stalled: nil, awake: true, reading: true) == false)
-    #expect(follow.asksEarlier(nearTop: true, cursor: "c", stalled: "c", awake: true, reading: false) == false)
-    #expect(follow.asksEarlier(nearTop: true, cursor: "d", stalled: "c", awake: true, reading: false))
-    // a document a search landed in opens near its top: nothing is read in under the landing until a finger moves
-    var landed = HistoryFollow(landed: true)
-    #expect(landed.asksEarlier(nearTop: true, cursor: "c", stalled: nil, awake: true, reading: false) == false)
-    landed.dragged()
-    #expect(landed.asksEarlier(nearTop: true, cursor: "c", stalled: nil, awake: true, reading: false))
-  }
-
-  @Test("the rule at the top says where the rows above stand")
-  func theTopsWords() {
-    #expect(HistoryFollow.head(hasEarlier: false, reading: false, awake: true) == .start)
-    #expect(HistoryFollow.head(hasEarlier: false, reading: true, awake: false) == .start)
-    #expect(HistoryFollow.head(hasEarlier: true, reading: false, awake: true) == .earlier)
-    #expect(HistoryFollow.head(hasEarlier: true, reading: true, awake: true) == .reading)
-    #expect(HistoryFollow.head(hasEarlier: true, reading: false, awake: false) == .asleep)
   }
 
   @Test("a message is a person's prompt, or a reply with words or an attachment: never a parent's invocation or a tool")

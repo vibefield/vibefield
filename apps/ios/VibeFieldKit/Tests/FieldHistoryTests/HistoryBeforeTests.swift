@@ -200,6 +200,11 @@ struct HistoryBeforeTests {
 
 /// Item 396 — a press on the button is the reader's own move up the page: the document stops following, as it
 /// does for a finger, and the rows above are read in at its top, even in a document a search landed in.
+///
+/// *Corrected 2026-11-14 (item 418):* "the rows above are read in at its top" was the page asking by itself for a
+/// reader who stood near the top (`HistoryFollow.asksEarlier`, which a press unlocked in a landed document by
+/// counting as a finger's move). Nothing is read in for standing at the top now. At the first message read the
+/// press asks for the batch above itself, as a pull at the top does (`HistoryOlderPull.pressed`).
 @Suite("item 396 — a press on the button at the side stops the following")
 struct HistoryJumpFollowTests {
   @Test("a press stops a document that was following, and a row arriving below then leaves the place alone")
@@ -220,15 +225,19 @@ struct HistoryJumpFollowTests {
     #expect(follow.following == false)
   }
 
-  @Test("a press counts as moving the page by hand: at the top the rows above are read in, in a landed document too")
+  @Test("at the first message read a press asks for the batch above itself, in a landed document too")
   func readsTheRowsAbove() {
     var follow = HistoryFollow(landed: true)
-    #expect(
-      follow.asksEarlier(nearTop: true, cursor: "c1", stalled: nil, awake: true, reading: false) == false,
-      "a landed document waits for the reader to move it")
     follow.jumped()
-    #expect(follow.touched)
-    #expect(follow.asksEarlier(nearTop: true, cursor: "c1", stalled: nil, awake: true, reading: false))
+    #expect(follow.following == false)
     #expect(follow.opening == .landing, "where it opened is not rewritten")
+    // item 418 — the page the press went to the top of asks for nothing by standing there…
+    var pull = HistoryOlderPull()
+    let rests = pull.rested(ready: true)
+    #expect(rests == false, "a page at rest at its top asks for nothing")
+    // …so the press asks, at once, and the mark turns as it does for a pull let go armed
+    let asks = pull.pressed(ready: true)
+    #expect(asks)
+    #expect(pull.mark == .reading)
   }
 }
