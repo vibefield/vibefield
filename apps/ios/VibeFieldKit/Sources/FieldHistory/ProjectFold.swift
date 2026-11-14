@@ -249,26 +249,28 @@ extension FieldHistoryModel {
   /// A project's sessions under their days, each naming where it ran — its
   /// desktop and its folder's name — and the agent's own id Resume asks by.
   ///
-  /// Item 393 — `contribution` is the project's (`project.figures`): a session whose row it holds is to wear its
-  /// figures. The red's stub: it is taken and not read, so every row is as it was.
+  /// Item 393 — `contribution` is the project's (`project.figures`; none until it is read): a session whose row it
+  /// holds wears its figures, in its fields and in its line (`sessionFigures`, `figuresLine`). A session it holds
+  /// no row for is as it was.
   public static func projectSessionRows(
     _ rows: [IndexSessionRow], key: String, places: [ProjectPlace], desktops: [HistoryDevice], now: Date,
     contribution: [IndexContribution] = []
   ) -> [HistorySession] {
     let ordered = rows.sorted { (lastAt($0) ?? -1) > (lastAt($1) ?? -1) }
+    let held = figuresBySession(contribution)
     var previousDay: String?
     return ordered.map { row in
       let header = (row.startedAt ?? row.activity?.firstAt ?? lastAt(row)).map { dayHeader($0, now: now) } ?? "Undated"
       let day = header == previousDay ? nil : header
       previousDay = header
-      let plain = sessionRow(row, projectId: key, day: day, now: now)
+      let plain = sessionRow(row, projectId: key, day: day, now: now, figures: sessionFigures(row, in: held))
       let folder = row.place.flatMap { ref in places.first { $0.ref == ref }?.name }
       return HistorySession(
         id: plain.id, projectId: key, day: plain.day, title: plain.title, agent: plain.agent, meta: plain.meta,
         branch: "", last: plain.last, tone: plain.tone, device: row.device,
         deviceName: row.device.flatMap { device in desktops.first { $0.id == device }?.name },
         folder: folder, provider: row.provider, nativeSessionId: row.nativeSessionId.isEmpty ? nil : row.nativeSessionId,
-        lastAt: plain.lastAt)
+        lastAt: plain.lastAt, messages: plain.messages, tokens: plain.tokens, spend: plain.spend)
     }
   }
 
@@ -358,27 +360,52 @@ extension FieldHistoryModel {
 // past a hundred has rows for its hundred heaviest, and the door that would answer the rest is item 398.
 
 extension FieldHistoryModel {
-  /// A project's `contribution` rows by the session each is of: the desktop that recorded it and its id there, the
-  /// listing's own row identity.
-  ///
-  /// The red's stub: no row is held.
+  /// What a session's figures are joined by: the desktop that recorded it and its id there, the listing's own row
+  /// identity (`HistoryProjects.sessionKey`). An id alone is not one: each desktop gives its own.
+  static func figuresKey(device: String?, sessionId: String) -> String {
+    "\(device ?? "")\u{0}\(sessionId)"
+  }
+
+  /// A project's `contribution` rows by the session each is of. The door gives one row a conversation, and the
+  /// first given for a session stands.
   static func figuresBySession(_ contribution: [IndexContribution]) -> [String: IndexContribution] {
-    [:]
+    Dictionary(
+      contribution.map { (figuresKey(device: $0.device, sessionId: $0.sessionId), $0) },
+      uniquingKeysWith: { first, _ in first })
   }
 
-  /// A session's figures: its row in its project's `contribution`, or nil when the phone holds none for it.
+  /// A session's figures: its row in its project's `contribution`, or nil when the phone holds none for it (a
+  /// session past the door's hundred, a subagent's own row, a conversation whose row is another desktop's copy's).
   ///
-  /// The red's stub: no session has figures, as before item 393.
+  /// A row that counts no message while its session is still being read has not landed (the room's `landedFacts`,
+  /// `SessionListItem.tsx`: "a cooking session still counting from zero — is not a claim"): nil, where the desktop
+  /// shimmers. Read to its end, the index's own zero is a count and is said.
   static func sessionFigures(_ row: IndexSessionRow, in held: [String: IndexContribution]) -> IndexContribution? {
-    nil
+    guard let figures = held[figuresKey(device: row.device, sessionId: row.sessionId)] else { return nil }
+    return figures.messages > 0 || row.streamState == "indexed" ? figures : nil
   }
 
-  /// `214 msgs · 3h 12m · 48.2M · $31.40` — the figures of a session's entry, in the desktop's order; nil when the
-  /// session has none, and its entry keeps the line it had.
+  /// `214 msgs · 3h 12m · 48.2M · $31.40` — the figures of a session's entry, in the desktop's order (the room's
+  /// `SessionListItem`: messages, the span, tokens, cost) and in the phone's own words: the count as `figure`
+  /// writes it, tokens as `tokensWord`, cost as `spendWord` (`+` on a lower bound, `n/p` with no list price).
   ///
-  /// The red's stub: no entry has a figures line, as before item 393.
+  /// A figure the phone does not hold leaves its place out, and is never a 0 or a dash. Tokens and a cost stand
+  /// only where tokens were counted (the room's rule), and a spend that says nothing has no place. nil when the
+  /// session has no figure at all: its entry keeps the line it had.
   public static func figuresLine(messages: Int?, span: String?, tokens: Double?, spend: HistorySpend?) -> String? {
-    nil
+    guard messages != nil || tokens != nil || spend != nil else { return nil }
+    var parts: [String] = []
+    if let messages { parts.append("\(figure(messages)) msgs") }
+    if let span { parts.append(span) }
+    if let tokens, tokens > 0 {
+      let word = tokensWord(tokens)
+      parts.append(word.figure + word.unit)
+      if let spend, spend.coverage != .none {
+        let cost = spendWord(spend)
+        parts.append(cost.figure + cost.unit)
+      }
+    }
+    return parts.isEmpty ? nil : parts.joined(separator: " · ")
   }
 }
 

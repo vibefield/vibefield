@@ -504,6 +504,11 @@ private final class ManyDoor: HistoryDoor {
 /// The ledger's fold AS IT WAS before item 364, line for line, over the same values: what `HistoryProjects.folded`
 /// is held to. It read the reader's own state on the main actor at every answer; the only line that differs in the
 /// fold that replaced it is the scan this keeps (`projects.contains(where:)`), which is a `Set` there.
+///
+/// *Amended 2026-11-13 (item 393):* one line is no longer as it was. A project's session rows take its
+/// `contribution`, here as in `HistoryProjects.folded`, so both give a session its figures; without it every state
+/// that holds sessions and figures together would differ by that alone. What a row wears is held in
+/// SessionFiguresTests.
 private func foldAsItWas(_ inputs: HistoryProjects.LedgerInputs) -> HistoryCorpus {
   var corpus = inputs.ledger
   let clock = inputs.clock
@@ -538,7 +543,8 @@ private func foldAsItWas(_ inputs: HistoryProjects.LedgerInputs) -> HistoryCorpu
     total += Int(summary.sessions)
     if !rows.isEmpty {
       sessions[key] = FieldHistoryModel.projectSessionRows(
-        rows, key: key, places: summary.places, desktops: desktops, now: clock)
+        rows, key: key, places: summary.places, desktops: desktops, now: clock,
+        contribution: inputs.figures[key]?.contribution ?? [])
       live += rows.map { (key, $0) }
       agents.formUnion(rows.compactMap(\.provider))
     }

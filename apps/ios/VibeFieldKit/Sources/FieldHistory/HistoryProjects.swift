@@ -770,8 +770,10 @@ public final class HistoryProjects {
       projects.append(project)
       total += Int(summary.sessions)
       if !rows.isEmpty {
+        // Item 393 — each session wears its row of the project's `contribution`, once the project's figures are read
         sessions[key] = FieldHistoryModel.projectSessionRows(
-          rows, key: key, places: summary.places, desktops: desktops, now: clock)
+          rows, key: key, places: summary.places, desktops: desktops, now: clock,
+          contribution: inputs.figures[key]?.contribution ?? [])
         live += rows.map { (key, $0) }
         agents.formUnion(rows.compactMap(\.provider))
       }

@@ -299,10 +299,24 @@ extension FieldHistoryModel {
     row.activity?.lastAt ?? row.updatedAt ?? row.startedAt
   }
 
-  static func sessionRow(_ row: IndexSessionRow, projectId: String, day: String?, now: Date) -> HistorySession {
+  /// One listing row as a session's entry.
+  ///
+  /// Item 393 — `figures` is its row in its project's `contribution`, when the phone holds one (`sessionFigures`):
+  /// the entry carries them, and its line says them in the desktop's order before when it started
+  /// (`88 msgs · 1h 53m · 182K · $1.24 · started 14:06`). With none the line is the span and the start, as it was.
+  static func sessionRow(
+    _ row: IndexSessionRow, projectId: String, day: String?, now: Date, figures: IndexContribution? = nil
+  ) -> HistorySession {
     let span = (row.activity.map { $0.lastAt - $0.firstAt }).map(spanText)
+    // a count that is no whole number the phone can hold has no place in the line
+    let messages = figures.flatMap { Int(exactly: $0.messages.rounded()) }
+    let spend = figures.map {
+      HistorySpend(
+        costMicroUsd: $0.costMicroUsd, unpricedTokens: $0.unpricedTokens, unrecordedOutput: $0.unrecordedOutput)
+    }
+    let line = figuresLine(messages: messages, span: span, tokens: figures?.tokens, spend: spend) ?? span
     let meta = [
-      span,
+      line,
       "started \(clock(row.startedAt ?? row.activity?.firstAt))",
       row.streamState == "pending" ? "not read yet" : nil,
     ].compactMap { $0 }.joined(separator: " · ")
@@ -310,7 +324,8 @@ extension FieldHistoryModel {
       id: row.sessionId, projectId: projectId, day: day,
       title: row.title ?? row.summary ?? "untitled session", agent: row.provider ?? "agent",
       meta: meta, branch: "", last: lastWord(lastAt(row), now: now),
-      tone: row.streamState == "pending" ? .orange : nil, lastAt: lastAt(row))
+      tone: row.streamState == "pending" ? .orange : nil, lastAt: lastAt(row), messages: messages,
+      tokens: figures?.tokens, spend: spend)
   }
 
   /// The sessions that moved within `liveWithinMinutes`: a tap opens the
