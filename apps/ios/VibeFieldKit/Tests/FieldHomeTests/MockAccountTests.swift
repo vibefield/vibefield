@@ -74,7 +74,7 @@ struct MockAccountTests {
     // WI-L2 as amended 2026-11-13: no desktop answers, so the gate stands; two desktops, so it names none
     mock.standing = .reconnecting
     #expect(mock.door == .unreachable(desktop: nil))
-    // Try again is the mock's Sign in: studio answers again
+    // the mock's Sign in brings studio back (the page's Try again is held under a demo, RB-2)
     mock.signIn()
     #expect(mock.door == nil)
     mock.signOut()

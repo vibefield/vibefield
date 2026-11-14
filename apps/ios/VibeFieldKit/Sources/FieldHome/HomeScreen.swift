@@ -921,7 +921,7 @@ public struct HomeScreen: View {
       // Account's), on the way in for the reader's reason: the tabs are not mounted under it. Its Sign out goes back
       // through the dispatcher, which holds it under a demo; Cancel leaves the page as it was.
       .confirmationDialog(
-        SettingsWords.signOutTitle(login: accountLogin), isPresented: $wayInSignOutPending,
+        SettingsWords.signOutTitle(login: wayInSignOutLogin), isPresented: $wayInSignOutPending,
         titleVisibility: .visible
       ) {
         Button("Sign out", role: .destructive) { _ = wayInDispatch.signOut() }
@@ -991,7 +991,9 @@ public struct HomeScreen: View {
   /// (`FieldLink.lookAgain`), and the hold looks for another patience (the clock's key counts the attempt).
   private func tryAgain() {
     #if DEBUG
-      // the mock's desktop answers again, as its Sign in fills the corner; a stamped corner is a photograph
+      // Defensive only: on RB-2 a demo stands whenever the mock or a stamped corner does, and the dispatch holds
+      // Try again before it reaches here (`WayInDispatch.reachesOutside`). The mock's Sign in would bring studio
+      // back; a stamped corner is a photograph.
       if let mock {
         mock.signIn()
         return
@@ -3004,7 +3006,13 @@ public struct HomeScreen: View {
       // Coming to the front is the moment to look at the mesh again; the
       // background pauses a waiting re-dial (the node itself stays).
       if meshKeepsItselfUp {
-        if phase == .active { mesh.keepUp() } else if phase == .background { mesh.sceneDidEnterBackground() }
+        // WI-L2 as amended: while no desktop answers, coming back dials as Try again does (§9), a start that
+        // failed included, which `keepUp()` takes no step for; with one answering it keeps the mesh up as before
+        if phase == .active {
+          if reach.connected { mesh.keepUp() } else { mesh.tryAgain() }
+        } else if phase == .background {
+          mesh.sceneDidEnterBackground()
+        }
       }
       // IOS-4b / §5 — the field's own background rule, and the one place it
       // lives. The door's subscription and the stores' streams go; the mesh
@@ -3926,6 +3934,15 @@ public struct HomeScreen: View {
       faceStore.dealIfNeeded(login: login, userId: userId)
       identityEpoch += 1
     }
+  }
+
+  /// The account the way in's question names: under a demo, the fixtures' made-up login (item 367: a demo names
+  /// nobody real), as the face's seed does; else the account this phone would sign out of.
+  private var wayInSignOutLogin: String? {
+    #if DEBUG
+      if demoAccount != nil || mock != nil { return AccountFixtures.login }
+    #endif
+    return accountLogin
   }
 
   /// The tilt's seed: the login, so the face sits at one angle on every

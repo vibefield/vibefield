@@ -79,7 +79,7 @@ struct LaunchFixturesTests {
     #expect(none == .off)
   }
 
-  @Test("the picker offers exactly the 23 states the fixtures stamp, in the fixtures' order")
+  @Test("the picker offers exactly the fixtures' 23 named states, in the fixtures' order")
   func pickerParity() {
     let names = AccountFixtures.names
     let keys = DeveloperWords.accountStates.map { $0.key }

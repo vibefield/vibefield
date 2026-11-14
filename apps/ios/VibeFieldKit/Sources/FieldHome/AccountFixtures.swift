@@ -26,7 +26,8 @@
   enum AccountFixtures {
     static let argument = "-vf-demo-account"
     static let openArgument = "-vf-demo-account-open"
-    /// RB-2 — every state `demo(named:)` stamps, in the Developer page's order (DESIGN.md §9 "Developer"): Your
+    /// RB-2 — the states the Developer page offers, in its order (DESIGN.md §9 "Developer"); `demo(named:)` also
+    /// stamps the gate's four (reaching, unreachable, unreachable-one, offline) for the kit's rows alone. Your
     /// account's 13, then The way in's 10.
     static let names: [String] = [
       "signedin", "asleep", "attention", "noface", "guests", "refused", "firstrun", "failed-first", "approval", "none",
