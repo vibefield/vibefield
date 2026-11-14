@@ -678,7 +678,7 @@ describe("a made tile's state (§8: serving green, failed red, the rest muted, e
     expect(madeAppErrorWords(rpcError("FORBIDDEN_SCOPE"), "open", "Release notes", "studio")).toBe(
       "This window can't open apps yet.",
     );
-    // until slice 3h the home has no intent to write a mark to, and says so (3e's own word)
+    // an older home, from before slice 3h, has no intent to write a mark to, and says so (3e's own word)
     expect(
       madeAppErrorWords(
         rpcError("UNAVAILABLE", { service: "apps", state: "intent-unbuilt" }),
@@ -712,6 +712,22 @@ describe("a made tile's state (§8: serving green, failed red, the rest muted, e
     );
     expect(madeAppErrorWords(rpcError("NOT_FOUND"), "keep", "Release notes", "studio")).toBe(
       "Release notes is no longer in Apps.",
+    );
+  });
+
+  // K3, DESIGN.md §9 "Keep's words" (James's pick, its third line): a keep past
+  // MADE_APP_LIMITS.INTENTS says what to do. A retry changes nothing until one is stopped, so it never
+  // says "Try again".
+  it("says a keep past the bound in words that say what to do, never a retry", () => {
+    expect(
+      madeAppErrorWords(
+        rpcError("RESOURCE_EXHAUSTED", { limit: 4096 }),
+        "keep",
+        "Release notes",
+        "studio",
+      ),
+    ).toBe(
+      "You're keeping as many apps as VibeField holds. Stop keeping one to keep Release notes.",
     );
   });
 });
@@ -1070,7 +1086,7 @@ describe("<MadeApps> — the group over its client", () => {
     expect(actIn(tileOf("Release notes"), "Hide from Apps"), "no Hide").toBeUndefined();
   });
 
-  it("says honestly that Keep waits, while the home has no intent to write (until 3h)", async () => {
+  it("says honestly that Keep waits when an older home has no intent to write (one from before 3h)", async () => {
     const door = fakeClient({
       "index.apps.list": () => ({
         rows: [app(2, { title: "Release notes" })],
@@ -1086,6 +1102,26 @@ describe("<MadeApps> — the group over its client", () => {
     const alert = container?.querySelector('.vf-apps-error[role="alert"]');
     expect(alert?.textContent).toBe("Keeping apps isn't ready yet.");
     expect(tileTitles()).toEqual(["Release notes"]);
+    expect(actIn(tileOf("Release notes"), "Keep"), "Keep still offered").toBeDefined();
+  });
+
+  it("says a keep past the bound in its words on the tile's alert, and Keep stays offered", async () => {
+    const door = fakeClient({
+      "index.apps.list": () => ({
+        rows: [app(2, { title: "Release notes" })],
+        sources: [STUDIO_SOURCE],
+      }),
+      "artifact.mark": () => {
+        throw rpcError("RESOURCE_EXHAUSTED", { limit: 4096 });
+      },
+    });
+    await mount(door.client);
+    await press(actIn(tileOf("Release notes"), "Keep"));
+    expect(door.callsOf("artifact.mark")).toHaveLength(1);
+    const alert = container?.querySelector('.vf-apps-error[role="alert"]');
+    expect(alert?.textContent).toBe(
+      "You're keeping as many apps as VibeField holds. Stop keeping one to keep Release notes.",
+    );
     expect(actIn(tileOf("Release notes"), "Keep"), "Keep still offered").toBeDefined();
   });
 
