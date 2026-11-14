@@ -5140,6 +5140,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   once, the card's and a conversation's. It moves only while its work does (HG-L1, §6): a paused wait's mark stands at
   its rest, the reduced-motion pose, from a still the generator writes beside each ground, so a host swaps the file
   rather than reaching into one. Its other surfaces wait for their own rulings.
+  *Amended 2026-11-14 (item 417; James, 08:13:38Z, session qa-01: "message view initial loading should adopt latest
+  desktop design that uses our logo mark"):* on the phone the mark stands in one place in History, the hold over a
+  session's first reading (§8 "The phone's session document", Its first reading is the hold). The SVG is the
+  desktop's; the phone wears the launch's still there (`SplashMark`, §8 "The phone's splash"), at rest, and its
+  moving mark is owed.
 - **The phone's splash** (2026-11-01; `apps/ios/VibeFieldKit/Sources/FieldSplash`): the phone's first face
   is the field too, in its own design — vibefield-splash's **iPhone splash** (`splash/look-iphone.json`, tuned
   apart in the studio's iPhone window). By night (the window's Appearance, Settings › Appearance; Auto follows
@@ -7747,6 +7752,36 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   from top, does not like chat message flow in chat app"). A session's document is rosetta's room's transcript at
   touch pitch: where the room decides how a transcript behaves, the phone decides by the room's rule and says it in
   the room's words.
+  - **Its first reading is the hold** (item 417, 2026-11-14. James, 08:13:38Z, session qa-01: "message view
+    initial loading should adopt latest desktop design that uses our logo mark"). While a session's document is
+    first read from its desktop, its page is the hold the desktop stands a conversation's wait in (§8 "History",
+    HG-W1 and HG-W4; in rosetta's room, the transcript's loader in the host's mark): **VibeField's mark at the
+    centre of the page's place**, on the page's paper, and **one line 26 pt under it**, 14 regular in
+    `inkSecondary` with tabular figures. The line is the room's: **"Loading messages…"**, and **"Finding
+    message…"** for a session a search landed in. The place runs from the bar's foot to the top of what stands
+    over the page's foot (the app's bar, and the slot above it when one stands), so the mark is at the centre of
+    what is seen. It moves as History's holds do (§6): it is **late**, nothing for 120ms, so a session read sooner
+    shows no hold at all; then the line comes in over 180ms and the mark over 400ms, plain `ease`; a hold that has
+    begun to show **stands at least 800ms**; then it leaves over 280ms, fading from over the document, which is
+    laid out under it by then. Under Reduce Motion the three fades are 120, 160 and 120ms. While it stands whole
+    it takes the touch, and while it leaves the document under it does. It overturns no text: nothing ruled the
+    page of a session being read. The code has drawn a note there since SP-6 (2026-10-04), "Reading the session on
+    ‹desktop›" over "Its header, its newest rows and its tail arrive over the desktop's door.", at the page's top
+    left, at once and with no mark; that note is gone. A session whose desktop does not answer keeps its own note
+    ("This session has no document here"): that is no wait, and it wears no mark.
+    - **The mark is the launch's still, at rest** (§8 "The phone's splash", `SplashMark`: black on the page by
+      day and white by night, its lights the same on both), at the size the launch shows it, the ∞ about 95 pt
+      wide in the desktop's box of 99 × 44. It does not move. The mark that moves on the phone is the splash's
+      own Metal drawing, made with the field around it in a module History does not take (the kit's manifest),
+      and the design kit has no mark of its own. *This is short of the desktop, said plainly: there the mark
+      turns while the work moves, and a mark at rest says its work is paused (HG-L1, §6). A session being read
+      is not paused. The phone's moving mark is owed.*
+    - *Readings; he ruled none of them.* "Message view" is a session's page: the sheet a whole message opens on
+      has no loading, its words are held when it opens. The words are the room's two, with nothing under them and
+      no desktop named. The 800ms floor is §6's for History's holds; the room's own code keeps it for the view's
+      hold and lets a conversation's go the moment its rows are read. The hold stands over the document for its
+      floor and its leave, so a session read in 300ms is seen after about a second. The project's page keeps its
+      own note while its sessions are read ("Reading the sessions…").
   - **It opens at its end and keeps its end in view** (362a). The newest row stands above the bar when the document
     opens, and stays there as rows arrive, until you read up the page: a drag stops the following at once, and
     coming to rest within 24 pt of the end resumes it (Chat's figure). Up the page nothing moves under you: a row
