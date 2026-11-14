@@ -1218,7 +1218,12 @@ describe("406 — a refused phone leaves the roster, and a known phone keeps its
     // the CONTROL: the account's other device, listed beside it, has its row
     await until(() => devices.get("dev-desk") !== undefined, 8000, "the desktop's row");
 
-    expect(devices.list().map((d) => d.deviceId).sort()).toEqual(["dev-desk", "dev-self"]);
+    expect(
+      devices
+        .list()
+        .map((d) => d.deviceId)
+        .sort(),
+    ).toEqual(["dev-desk", "dev-self"]);
     expect(devices.get("dev-phone")).toBeUndefined();
     // the four readers every mesh service asks "is this peer mine?" through
     expect(devices.selfPeerIds()).toEqual(["node-desk"]);

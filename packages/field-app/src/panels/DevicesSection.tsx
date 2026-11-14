@@ -831,7 +831,9 @@ function YourDevices(props: DevicesSectionViewProps): ReactElement {
   }
   return (
     <SettingsSection title="Your devices">
-      <ul ref={list} className="vf-devices-rows">{items}</ul>
+      <ul ref={list} className="vf-devices-rows">
+        {items}
+      </ul>
       {linked ? (
         <div className="vf-devices-acts">
           <button type="button" className={buttonCls} onClick={() => props.onSheet("add-device")}>

@@ -830,8 +830,7 @@ export class SettingsDocService extends EventEmitter {
     const name = said !== undefined && said.length > 0 ? said : was?.name;
     const at = Date.now();
     if (
-      was !== undefined &&
-      was.tailscaleIds.includes(seen.tailscaleId) &&
+      was?.tailscaleIds.includes(seen.tailscaleId) &&
       was.name === name &&
       at - was.phone.at < KNOWN_PHONE_REFRESH_MS
     )
