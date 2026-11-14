@@ -423,10 +423,7 @@ export function ChromeSection({
           card carried out of the hand over a pane, its place kept in the fan, the pane ringed and
           saying "Paste into vibe-field" over the card; and where cards came from, each reached in
           turn — a paste with no caret by its act alone, a copy made in Settings by the view under
-          it, and one History's room made by History alone. The paper cards on this page wear the
-          press's print once it is made (§5 "the press"), for the page's theme and pixel density,
-          and the card picked up wears the print made at 2.4×; where WebGL2 is refused, the flat
-          stock.
+          it, and one History's room made by History alone.
         </p>
         <CardFacesPlate cards={CARD_FIXTURES} />
         <CardFacesPlate cards={CARD_FIXTURES} night />
@@ -442,6 +439,11 @@ export function ChromeSection({
           a picture called "2 objects"; and what another app, Settings and History deal — a file
           that is not words, its kind and size; a paste's words; a device's name copied in Settings;
           a path copied in History.
+        </p>
+        <p className="vf-ds-stage-caption">
+          The paper cards on this page wear the press's print once it is made (§5 "the press"),
+          for the page's theme and pixel density, and the card picked up wears the print made at
+          2.4×; where WebGL2 is refused, the flat stock.
         </p>
       </Specimen>
 
