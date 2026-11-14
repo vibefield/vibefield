@@ -791,3 +791,35 @@ describe("MA-3c — the JPEG's digest", () => {
     expect(readdirSync(targetDir), "no temp file is left").toEqual(["thumbnail.jpg"]);
   });
 });
+
+// The userinfo pins (VF-PM 07:18Z, 2026-11-14): the userinfo names a host the guard admits, and the real host is another.
+// The rows above already refuse `cdn.jsdelivr.net@evil.example` and `user:secret@cdn.jsdelivr.net`; these add the
+// forms that name an allowed host with a password, an empty one, or the default port, and the origin's own twin.
+describe("the userinfo forms stay refused by the capture's guard", () => {
+  const origin = "https://device.tail1234.ts.net:12000";
+  const allow = ["cdn.jsdelivr.net"];
+
+  it("refuses an allowHost named in the userinfo, as a script and as an image", () => {
+    const forms = [
+      "https://cdn.jsdelivr.net:x@127.0.0.1:13377/x.js",
+      "https://cdn.jsdelivr.net@127.0.0.1:13377/x.js",
+      "https://cdn.jsdelivr.net:443@127.0.0.1/x.js",
+    ];
+    for (const form of forms) {
+      for (const kind of ["script", "image"]) {
+        expect(isAllowedPreviewRequest(origin, form, kind, allow), `${kind} ${form}`).toBe(false);
+      }
+    }
+    expect(
+      isAllowedPreviewRequest(origin, "https://cdn.jsdelivr.net/x.js", "script", allow),
+      "the control",
+    ).toBe(true);
+  });
+
+  it("refuses the origin's host and port named in the userinfo, as a subresource and as a navigation", () => {
+    const twin = "https://device.tail1234.ts.net:12000@127.0.0.1:12000/";
+    expect(isAllowedPreviewRequest(origin, `${twin}x.js`, "script", allow)).toBe(false);
+    expect(isAllowedTopLevelNavigation(origin, twin)).toBe(false);
+    expect(isAllowedTopLevelNavigation(origin, `${origin}/next`), "the control").toBe(true);
+  });
+});
