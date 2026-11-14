@@ -9,8 +9,8 @@ import Testing
 /// session left while its older pages are being read, or while a picture's bytes are on their way.
 ///
 /// These rows hold the LAW, which is a count: the session ends at once when nothing is out; a close while a call is
-/// out is kept, and the last call back ends the session; a call that never comes back is ended by the bound, so no
-/// session stands for good; and nothing is ended twice.
+/// out is kept, and the last call back ends the session; a call that never comes back leaves the session standing,
+/// because nothing may end it under a call that is out; and nothing is ended twice.
 ///
 /// THE RACE ITSELF IS NOT FORCED HERE. It lies between a call's `await` on the main actor and the task rosetta's
 /// client makes for it, and a test has no hand on that moment without a seam inside rosetta's client. What these
@@ -64,20 +64,18 @@ struct HistorySessionLeaseTests {
     #expect(!late)
   }
 
-  @Test("a call that never comes back: the bound ends the session, and nothing ends it again")
+  @Test("a call that never comes back leaves the session standing: nothing ends it under a call that is out")
   func neverBack() {
     var lease = HistorySessionLease()
     lease.leave()
     let atOnce = lease.close()
     #expect(!atOnce, "the session was ended under a call that is out")
+    // the rider's red, against the bound: the green takes `expire()` out, and these two lines with it
     let bound = lease.expire()
-    #expect(bound, "a kept close was left standing past its bound")
-
-    let twice = lease.expire()
-    #expect(!twice)
-    // the call comes back after all: its session is already ended
-    let late = lease.back()
-    #expect(!late)
+    #expect(!bound, "a bound ended the session under a call that is out")
+    // only the call's own return ends it
+    let ended = lease.back()
+    #expect(ended, "the call's return did not end the session")
   }
 
   @Test("a bound that passes on a read that owes no close ends nothing")
