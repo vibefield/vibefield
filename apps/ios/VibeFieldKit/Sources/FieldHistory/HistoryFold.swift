@@ -629,18 +629,26 @@ extension FieldHistoryModel {
 
   // MARK: A prompt's kind (item 396)
 
-  /// Item 396 — what a prompt is where it is not a person's own message, by the room's rule (rosetta's
-  /// clients/room, lib/transcript/turns.ts, `buildPrompt`) on the row's projected facts. `answer` is the row right
-  /// after the prompt, in the prompt's own sitting.
-  /// - A machine's: its group is a parent agent's invocation, whatever its words. The room's other machine
-  ///   prompts are `collaboration` rows, which open no turn here: each is a `Team update` line in a group.
-  /// - A setting: a local command with nothing attached, and the `command_output` notice right after it is a
-  ///   value (`isSetting`). The room pairs the two by adjacency and nothing else.
+  /// The group kinds that make a `user` row a machine's prompt: a parent agent's invocation, and no other. The
+  /// room reads it so (`fromParent`, turns.ts:453 at the pin). `synthetic` and `system_cycle` are NOT here: the
+  /// room draws a `user` row as a person's prompt whatever its group (turns.ts:25-28), and `synthetic` is its
+  /// fallback wherever the source gave no boundary (turns.ts:19-23), so passing it over would pass over typed
+  /// prompts. A kind the phone has not heard of is not here either: an open kind changes nothing.
+  static let machineGroups: Set<String> = ["parent_invocation"]
+
+  /// Item 396 — what a prompt is where it is not a person's own message, by the room's rule on the row's projected
+  /// facts: rosetta's clients/room/src/lib/transcript/turns.ts at the pin (`00221b5b70f6`), `buildPrompt`
+  /// (:416-469). `answer` is the row right after the prompt, in the prompt's own sitting.
+  /// - A machine's: its group is a parent agent's invocation, whatever its words (`machineGroups`). The room's
+  ///   other machine prompts are `collaboration` rows (:454), which open no turn here: each is a `Team update`
+  ///   line in a group.
+  /// - A setting: a local command with nothing attached (:430), and the `command_output` notice right after it
+  ///   is a value (`isSetting`, :452). The room pairs the two by adjacency and nothing else (:741-777).
   /// - nil, a person's own: everything else, a slash command that is no setting among them.
   ///
   /// What the row does not carry whole is not guessed: a prompt or an answer the desktop cut is never a setting.
   static func promptKind(_ prompt: IndexTimelineRow, answer: IndexTimelineRow?) -> HistoryPromptKind? {
-    if prompt.groupKind == "parent_invocation" { return .machine }
+    if machineGroups.contains(prompt.groupKind) { return .machine }
     guard prompt.attachments.isEmpty, !isCut(prompt), let command = prompt.text, isLocalCommand(command),
       let answer, answer.kind == "notice", answer.notice == "command_output", !isCut(answer)
     else { return nil }
@@ -648,8 +656,9 @@ extension FieldHistoryModel {
   }
 
   /// Item 396 — whether a prompt's words are a local command as the person typed it: one line, a slash, a name
-  /// that begins with a letter, and then nothing or a space and its arguments. The room's `looksLocalCommand`,
-  /// `^\/[A-Za-z][\w:.-]*(?:\s+\S.*)?$` on the trimmed words; so `/usr/bin/env` is no command.
+  /// that begins with a letter, and then nothing or a space and its arguments. The room's `looksLocalCommand`
+  /// (turns.ts:136, :172-176), `^\/[A-Za-z][\w:.-]*(?:\s+\S.*)?$` on the trimmed words; so `/usr/bin/env` is no
+  /// command.
   static func isLocalCommand(_ text: String?) -> Bool {
     guard let line = text?.trimmingCharacters(in: .whitespacesAndNewlines), !line.contains(where: \.isNewline),
       line.first == "/"
@@ -660,7 +669,8 @@ extension FieldHistoryModel {
   }
 
   /// Item 396 — whether a command and the session's answer to it are a setting that took: the room's
-  /// `localSetting`. The answer is one line of 96 units at most. For `/effort` it is one word from a letter
+  /// `localSetting` (turns.ts:181-201). The answer is one line of 96 units at most. For `/effort` it is one word
+  /// from a letter
   /// (`^[a-z][\w-]*$`, either case); for `/model` it is anything that does not open with one of the CLI's own
   /// words (`^(?:set|invalid|unknown|error|failed|usage)\b`, either case), which are a sentence about the command
   /// and no value. No other command is a setting.

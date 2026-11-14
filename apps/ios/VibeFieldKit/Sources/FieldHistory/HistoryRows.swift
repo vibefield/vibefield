@@ -168,10 +168,11 @@ extension HistoryRow {
   /// Item 396 — the id the document's stack gives the prompt's row that `mark` names (`HistoryRow.id`), or nil
   /// when no prompt among `rows` wears that mark. A press asks for the row by this id as well as by its mark: a
   /// lazy stack knows a row it has not laid out by the id its own ForEach gave it, and knows the id a row's view
-  /// carries only once that row is laid out.
+  /// carries only once that row is laid out. Only a person's own prompt is answered for, as `before` only goes
+  /// to one: a setting command's mark and a machine's name no row.
   static func promptRow(marked mark: String, in rows: [HistoryRow]) -> String? {
     for row in rows {
-      if case .prompt(let turn) = row, promptMark(turn) == mark { return row.id }
+      if case .prompt(let turn) = row, turn.promptKind == nil, promptMark(turn) == mark { return row.id }
     }
     return nil
   }
