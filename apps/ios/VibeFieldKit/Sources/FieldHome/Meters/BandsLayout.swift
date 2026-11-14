@@ -473,6 +473,12 @@ enum BandsLayout {
   }
 
   /// The middle (the drawing's `centreSvg`).
+  ///
+  /// Not optimized, on purpose (2026-11-14): Swift 6.3.3 (Xcode 26.6, 17F113) crashes in its `CopyPropagation` pass on
+  /// this function in a Release build ("Found outside of lifetime use?!" on a borrowed `PlanMeter`, then "Found
+  /// ownership error?!"), which stops every archive. It lays out a handful of items; drop the attribute once a
+  /// compiler that archives without it is the pinned one.
+  @_optimize(none)
   private static func centre(
     _ c: Double, _ r: Double, _ level: Int, _ onCircle: [PlanMeter], _ options: BandsOptions
   ) -> [BandsCentreItem] {
