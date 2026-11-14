@@ -32,6 +32,7 @@ import {
   CardFacesPlate,
   CardsFromPlate,
   CardsPlate,
+  CardsPress,
   COPY_FIXTURES,
   FROM_FIXTURES,
   FROM_REACHED,
@@ -402,6 +403,7 @@ export function ChromeSection({
         source="frame/cards/* · DESIGN.md §8, §5, §6"
         bleed
       >
+        <CardsPress dark={dark} />
         <div className="vf-ds-cards-plates">
           {CARDS_STATES.map((state) => (
             <CardsPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} />
@@ -421,7 +423,10 @@ export function ChromeSection({
           card carried out of the hand over a pane, its place kept in the fan, the pane ringed and
           saying "Paste into vibe-field" over the card; and where cards came from, each reached in
           turn — a paste with no caret by its act alone, a copy made in Settings by the view under
-          it, and one History's room made by History alone.
+          it, and one History's room made by History alone. The paper cards on this page wear the
+          press's print once it is made (§5 "the press"), for the page's theme and pixel density,
+          and the card picked up wears the print made at 2.4×; where WebGL2 is refused, the flat
+          stock.
         </p>
         <CardFacesPlate cards={CARD_FIXTURES} />
         <CardFacesPlate cards={CARD_FIXTURES} night />

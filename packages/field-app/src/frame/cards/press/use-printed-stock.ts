@@ -9,6 +9,8 @@ import { CARD_DESIGN } from "./press-numbers";
  * window's pixel density, and again at a card picked up's 2.4×, for the theme's light, as four properties on the root,
  * with `data-vf-card-print="ready"` once the front has printed. They are printed after the window is idle and again only
  * when the theme or the pixel density changes. Until then, and where WebGL2 is refused, the cards wear the flat stock.
+ * The product's hand prints for the app's theme (`usePrintedStock`); the catalog hands its page's theme in
+ * (`usePrintedStockFor`), as a host hands the product its own, and never reaches the theme's owner (item 403).
  */
 
 const PROPS = {
@@ -45,8 +47,14 @@ function useDensity(): number {
   return density;
 }
 
+/** The hand's prints for the app's theme. */
 export function usePrintedStock(): void {
   const { dark } = useTheme();
+  usePrintedStockFor(dark);
+}
+
+/** The hand's prints for the theme handed in: by night, or by day. */
+export function usePrintedStockFor(night: boolean): void {
   const density = useDensity();
   useEffect(() => {
     let live = true;
@@ -55,7 +63,7 @@ export function usePrintedStock(): void {
       width: CARD_DESIGN.width,
       height: CARD_DESIGN.height,
       density: density * scale,
-      night: dark,
+      night,
     });
     const cancel = idle(() => {
       void Promise.all([
@@ -82,5 +90,5 @@ export function usePrintedStock(): void {
       live = false;
       cancel();
     };
-  }, [dark, density]);
+  }, [night, density]);
 }

@@ -30,6 +30,7 @@ import {
   TARGET_WORDS,
   WAITING_WORDS,
 } from "../frame/cards/cards-words";
+import { usePrintedStockFor } from "../frame/cards/press/use-printed-stock";
 
 // The hand's fixture ADAPTER (track HN; docs/UI_SYSTEM.md): the shipping fan —
 // `CardsView`, placed by the product's own model (`layoutCards`, `layoutRaised`,
@@ -260,6 +261,17 @@ const PANE_STAND_IN: CSSProperties = {
   background: "var(--vf-chrome-solid)",
   boxShadow: "0 0 0 1px var(--vf-hairline), var(--vf-shadow-island)",
 };
+
+/** The press for this page's cards (DESIGN.md §5 "the press"; item 403): the shipping hook,
+ * handed the page's theme as a host hands the product its own (never the theme's owner), prints
+ * the stock for that theme and the window's pixel density, and the page's paper cards wear the
+ * print as the product's do: the hand at rest at 1×, a card picked up at 2.4×. Where WebGL2 is
+ * refused, as in a browser without it, nothing is printed and they keep the flat stock. It draws
+ * nothing of its own. */
+export function CardsPress({ dark }: { readonly dark: boolean }): null {
+  usePrintedStockFor(dark);
+  return null;
+}
 
 /** The hand in one state, placed by the product's own model over the mat. The
  * line's place at the left (`CARDS_LINE_RIGHT`) is left empty. */
