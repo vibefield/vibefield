@@ -11,9 +11,9 @@ import SwiftUI
 // figure of its fades and its box. The views under it draw what the rule answers. The figures are the desktop's
 // (rosetta's room, `hold.css` and `use-standing-hold.ts`), so one of them changed here is changed against it.
 //
-// The mark is the launch's still, at rest, and that is short of the desktop, where the mark turns while the work
-// moves. The phone's moving mark is the splash's own drawing (FieldSplash), which this module does not take, and
-// the design kit has none. The still is the app's own asset, read by its name as the splash reads it.
+// Item 417b (2026-11-14) — the mark is the design kit's living mark (`LivingMark`, FieldDesign), which moves as the
+// desktop's does: it is the desktop's generated SVG, drawn by the phone. Until that item the hold wore the
+// launch's still (`SplashMark`, the app's own asset), at rest, which by the desktop's rule says a wait is paused.
 
 /// The hold a session's first reading stands in.
 enum HistoryOpening {
@@ -41,18 +41,14 @@ enum HistoryOpening {
   /// So a hold never flashes.
   static let floor: Duration = .milliseconds(800)
 
-  /// The mark's box, the desktop's. The launch's still is drawn at its own size on the box's centre: its ∞ is
-  /// about 95 pt wide, and the clear margin it carries hangs over the box's edges, where nothing else stands.
-  static let markBox = CGSize(width: 99, height: 44)
+  /// The mark's box, the desktop's: the living mark's own size, 99 by 44, its ∞ about 94 pt wide in it.
+  static let markBox = LivingMark.size
   /// The line's distance under the mark's box.
   static let wordsUnder: CGFloat = 26
   /// The line's size: 14 regular, in the secondary ink.
   static let lineSize: CGFloat = 14
   /// What the hold keeps clear at each side of its place.
   static let side: CGFloat = 24
-  /// The launch's still of the mark, by its name in the app's own asset catalog: black ink by day, white by night
-  /// (DESIGN.md §8 "The phone's splash"). A host without the app's assets (a test's, a preview's) draws no mark.
-  static let markAsset = "SplashMark"
 
   /// What the page of a session waits on: whether its document is `held`, whether its desktop is `awake`, and
   /// whether a search `landed` in it. A session whose document is held has no hold. Neither has one whose desktop
@@ -167,9 +163,14 @@ private struct HistoryOpeningModifier: ViewModifier {
 /// under it, and the line at the top of the third row. Its ground is the page's paper, whole, so a document laid out
 /// under it is not seen until the hold leaves. The mark and the line come in when the hold is first drawn, each
 /// over its own time; the mark only ever fades.
+///
+/// Item 417b — the mark is the kit's living mark, on the ground the page's scheme is: black ink by day, white by
+/// night. It moves from the moment it is first drawn, under its fade, and it is never told to rest: the hold
+/// stands only while a session is read, or for its floor after. Reduce Motion rests it, by the mark's own rule.
 private struct HistoryOpeningFace: View {
   let line: String
 
+  @Environment(\.colorScheme) private var scheme
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   /// The home screen's measures: the hold's place ends at the top of what stands over the page's foot.
   @Environment(\.rootHead) private var rootHead
@@ -179,7 +180,7 @@ private struct HistoryOpeningFace: View {
   var body: some View {
     VStack(spacing: 0) {
       Color.clear
-      Image(HistoryOpening.markAsset, bundle: .main)
+      LivingMark(ground: LivingMark.Ground(scheme), width: HistoryOpening.markBox.width)
         .frame(width: HistoryOpening.markBox.width, height: HistoryOpening.markBox.height)
         .opacity(markShown ? 1 : 0)
       Color.clear
