@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 /**
- * HN-1 — one card of the hand (HN-D1, "one stock, six faces"; DESIGN.md §5 "The hand's cards are
- * paper"): each kind's face on the shipping CardFace — its index printed twice, its name first,
- * the agent's dark card, the × only on a card reached, a drag's waiting faces — and the stock's
- * stylesheet and tokens held to the paper's rules.
+ * FACE-a (item 405) — one card of the hand, round 5's face (DESIGN.md §5 "The hand's cards are paper", §8 "A card";
+ * *Card Stock* round 5, ruled with CS-D5…D12 on 2026-11-09): three things and one line of words on the shipping
+ * CardFace — its type's glyph, then its name; the window, what it holds, seen; its faces along its foot — and no index
+ * in its corners. The agent's dark card until its window (FACE-b), the × only on a card reached, a drag's waiting
+ * faces, the same face at 2.4× when picked up, and the stock's stylesheet and tokens held to the paper's rules.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -12,25 +13,20 @@ import { AGENT_MARK_PROVIDERS } from "@vibefield/puppeteer-view-sdk/toolkit";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  CARD_INDEX,
-  CardFace,
-  cardLook,
-  cardTitle,
-  pictureRatio,
-} from "../src/frame/cards/CardFace";
+import { CardFace, cardLook, faceName } from "../src/frame/cards/CardFace";
 import {
   type Card,
   type CardStub,
+  cardType,
   fileCardOf,
   messageCardOf,
   pictureCardOf,
   sessionCardOf,
-  type TextFace,
   termCardOf,
   textCardOf,
 } from "../src/frame/cards/cards-model";
 import { cardName, WAITING_WORDS } from "../src/frame/cards/cards-words";
+import { TYPE_GLYPH } from "../src/frame/cards/type-glyphs";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -68,12 +64,6 @@ function rule(selector: string): string {
 }
 
 const base = (id: string): CardStub => ({ id, origin: { view: "godview", how: "copy" }, at: 0 });
-/** The words a text card prints: its first face's show. */
-const showOf = (card: Card) => {
-  const { show } = card.faces[0] as TextFace;
-  if (show.as !== "words") throw new Error("not a words card");
-  return show;
-};
 
 const TEXT = textCardOf("Never drop a paste unsaid. Say its size.", base("text"));
 const FILE = fileCardOf(
@@ -81,7 +71,7 @@ const FILE = fileCardOf(
     name: "routes.ts",
     path: "packages/fieldd/src/files/routes.ts",
     folder: "packages/fieldd/src/files/",
-    lines: "export const ROUTES = {};",
+    lines: "/** The files worker's routes. */\nexport const ROUTES = {};",
   },
   base("file"),
 );
@@ -97,82 +87,208 @@ const PICT_STILL = {
   path: "/tmp/vibefield-still-0007.png",
 } as const;
 const PICT = pictureCardOf(PICT_STILL, base("pict"));
+const LINK: Card = {
+  ...base("link"),
+  title: "VibeField",
+  about: "vibefield.dev",
+  faces: [
+    { id: "link", type: "link", label: "Link", url: "https://vibefield.dev/", title: "VibeField" },
+  ],
+};
+const STILL = { src: "blob:vibefield/still-q3", width: 400, height: 300 } as const;
+const REF: Card = {
+  ...base("ref"),
+  title: "Q3 plan",
+  about: "Mind map · 7 topics",
+  faces: [
+    {
+      id: "ref",
+      type: "ref",
+      label: "Live",
+      ref: "vf:obj/7hk2qx4m",
+      kindName: "Mind map",
+      title: "Q3 plan",
+      still: STILL,
+    },
+    { id: "picture", type: "image", label: "Picture", ...STILL },
+  ],
+};
+const PRINTED = [TEXT, FILE, TERM, MSG, PICT, LINK, REF];
 
-describe("one stock, six faces (HN-D1)", () => {
-  it("prints each kind's index twice — the top left a fanned hand shows, and the bottom right turned", () => {
-    expect(CARD_INDEX).toEqual({
-      text: "snippets",
-      file: "code",
-      agent: "agents",
-      term: "terminal",
-      msg: "message",
-      pict: "capture",
+/** A mounted card's one face. */
+const faceOf = (card: Card): HTMLElement | null =>
+  mount(<CardFace card={card} />).querySelector<HTMLElement>(".vf-card");
+
+describe("round 5's face: three things and one line of words (DESIGN.md §8 \"A card\")", () => {
+  it("wears each type's own glyph (§13 \"The six types\", CS-D10 A)", () => {
+    expect(TYPE_GLYPH).toEqual({
+      text: "type-text",
+      image: "type-image",
+      file: "document",
+      link: "link",
+      session: "agents",
+      ref: "type-ref",
     });
-    for (const card of [TEXT, FILE, AGENT, TERM, MSG, PICT]) {
-      const el = mount(<CardFace card={card} />);
-      const face = el.querySelector<HTMLElement>(".vf-card");
+  });
+
+  it("heads every card but the agent's with its type's glyph, then its name — and prints no index in its corners", () => {
+    for (const card of PRINTED) {
+      const face = faceOf(card);
       expect(face?.dataset.kind).toBe(cardLook(card));
       expect(face?.dataset.card).toBe(card.id);
-      const index = [...(face?.querySelectorAll(".vf-card-ix") ?? [])];
-      expect(index.map((glyph) => glyph.getAttribute("data-glyph"))).toEqual([
-        CARD_INDEX[cardLook(card)],
-        CARD_INDEX[cardLook(card)],
-      ]);
-      expect(index[1]?.getAttribute("class")).toContain("vf-card-ix-tail");
+      const type = face?.querySelector(".vf-card-head .vf-card-type");
+      expect(type?.getAttribute("data-glyph")).toBe(TYPE_GLYPH[cardType(card)]);
+      expect(type?.getAttribute("width")).toBe("10.4");
+      expect(face?.querySelector(".vf-card-head .vf-card-name")?.textContent).toBe(faceName(card));
+      // HN-D1's two indexes retire with round 5
+      expect(face?.querySelector(".vf-card-ix")).toBeNull();
       // the stock and its gloss, around the face
       expect(face?.querySelector(".vf-card-stock")).not.toBeNull();
       expect(face?.querySelector(".vf-card-gloss")).not.toBeNull();
     }
-    expect(rule(".vf-card-ix-tail")).toContain("transform: rotate(180deg);");
   });
 
-  it("leads every face with its name, and a picture's with the picture", () => {
-    const body = (card: Card): Element | null =>
-      mount(<CardFace card={card} />).querySelector(".vf-card-body");
-    const words = body(TEXT);
-    const title = words?.querySelector(".vf-card-words b");
-    expect(title?.textContent).toBe("Never drop a paste unsaid.");
-    expect(words?.textContent).toBe("Never drop a paste unsaid. Say its size.");
+  it("names a text card by its first sentence, a terminal copy by its command, and says it on one line", () => {
+    expect(faceName(TEXT)).toBe("Never drop a paste unsaid.");
+    expect(faceName(TERM)).toBe("pnpm test");
+    expect(faceName(MSG)).toBe("Vela: Hold the push.");
+    expect(faceName(FILE)).toBe("routes.ts");
+    expect(faceName(PICT)).toBe("Snapshot");
+    expect(faceName(REF)).toBe("Q3 plan");
+    const long = messageCardOf(
+      { speaker: "Vela", time: "14:09", words: "codex·2 wants to push.\nclaude·2 would hold." },
+      base("msg"),
+    );
+    expect(faceName(long)).toBe("Vela: codex·2 wants to push. claude·2 would hold.");
+    // no measure in this DOM: the name stands whole at its largest size, and the stylesheet holds it
+    const name = faceOf(TEXT)?.querySelector<HTMLElement>(".vf-card-name");
+    expect(name?.style.getPropertyValue("--card-name")).toBe("11.5px");
+  });
+
+  it("marks its faces along its foot as their types' glyphs, in the card's order — the first, what it is, the darker", () => {
+    const foot = faceOf(REF)?.querySelector(".vf-card-faces");
+    const marks = [...(foot?.querySelectorAll("[data-glyph]") ?? [])];
+    const glyphs = marks.map((mark) => mark.getAttribute("data-glyph"));
+    expect(glyphs).toEqual(["type-ref", "type-image"]);
+    expect(marks.map((mark) => mark.getAttribute("width"))).toEqual(["7.4", "7.4"]);
+    expect(rule(".vf-card-faces")).toContain("color: var(--vf-card-face-ink-2);");
+    expect(rule(".vf-card-faces > :first-child")).toContain("color: var(--vf-card-face-ink);");
+    // one face, one mark
+    expect(faceOf(FILE)?.querySelectorAll(".vf-card-faces [data-glyph]")).toHaveLength(1);
+  });
+
+  it("sets the head, the window and the foot on round 5's grid, in the card's own units", () => {
+    const type = rule(".vf-card-type");
+    expect(type).toContain("top: 11.7px;");
+    expect(type).toContain("left: 8.7px;");
+    expect(type).toContain("color: var(--vf-card-type-ink);");
+    const name = rule(".vf-card-name");
+    // its foot is its baseline, 21 down a 168 card
+    expect(name).toContain("bottom: 147px;");
+    expect(name).toContain("left: 21.4px;");
+    expect(name).toContain("max-width: 88.6px;");
+    expect(name).toContain("font-size: var(--card-name, 11.5px);");
+    expect(name).toContain("font-weight: 700;");
+    expect(name).toContain("letter-spacing: -0.22px;");
+    expect(name).toContain("text-box: trim-both cap alphabetic;");
+    expect(name).toContain("white-space: nowrap;");
+    const window = rule(".vf-card-window");
+    for (const set of ["top: 29px;", "left: 10px;", "width: 100px;", "height: 110px;"]) {
+      expect(window).toContain(set);
+    }
+    expect(window).toContain("border-radius: 3.5px;");
+    expect(window).toContain("background: var(--vf-card-plate);");
+    expect(rule(".vf-card-window::after")).toContain(
+      "box-shadow: inset 0 0 0 0.35px var(--vf-card-frame);",
+    );
+    const foot = rule(".vf-card-faces");
+    expect(foot).toContain("top: 148.9px;");
+    expect(foot).toContain("left: 9.075px;");
+    expect(foot).toContain("gap: 2.6px;");
+  });
+
+  it("holds what follows a text card's name in its window, or all of its words when that is all it says", () => {
+    const words = faceOf(TEXT)?.querySelector<HTMLElement>('[data-window="text"] .vf-card-words');
+    expect(words?.textContent).toBe("Say its size.");
+    // no measure in this DOM: the middle of its three sizes
+    expect(words?.style.getPropertyValue("--card-words")).toBe("7.4px");
+    expect(words?.style.getPropertyValue("--card-pitch")).toBe("10px");
+    expect(words?.style.getPropertyValue("--card-lines")).toBe("10");
+    const one = textCardOf("Hold the push.", base("one"));
+    expect(faceOf(one)?.querySelector(".vf-card-words")?.textContent).toBe("Hold the push.");
+    expect(faceOf(MSG)?.querySelector(".vf-card-words")?.textContent).toBe("Hold the push.");
+    // a long paste sets only what its window can hold
+    const paste = textCardOf(`Read this. ${"word ".repeat(400)}`, base("paste"));
+    expect(faceOf(paste)?.querySelector(".vf-card-words")?.textContent?.length).toBe(600);
     // its lines balanced as the page sets them, never a lone word on the last (R-D 20)
     expect(rule(".vf-card-words")).toContain("text-wrap: pretty;");
-    expect(body(FILE)?.firstElementChild?.textContent).toBe("routes.ts");
-    expect(body(FILE)?.querySelector(".vf-card-path")?.textContent).toBe(
-      "packages/fieldd/src/files/",
-    );
-    expect(body(FILE)?.querySelector(".vf-card-lines")?.textContent).toBe(
-      "export const ROUTES = {};",
-    );
-    expect(body(AGENT)?.firstElementChild?.textContent).toBe("claude·2");
-    expect(body(TERM)?.firstElementChild?.textContent).toBe("$ pnpm test");
-    expect(body(MSG)?.querySelector(".vf-card-who b")?.textContent).toBe("Vela");
-    expect(body(MSG)?.querySelector(".vf-card-who span")?.textContent).toBe("14:09");
-    const picture = body(PICT);
-    expect(picture?.firstElementChild?.className).toBe("vf-card-photo");
-    expect(picture?.querySelector(".vf-card-name")?.textContent).toBe("Snapshot");
-    expect(picture?.querySelector(".vf-card-size")?.textContent).toBe("1440 × 900");
+    expect(rule(".vf-card-words")).toContain("-webkit-line-clamp: var(--card-lines, 10);");
   });
 
-  it("titles a text card: a sentence keeps its own stop, a title that is one gets one, a bare line none", () => {
-    expect(cardTitle(showOf(TEXT))).toBe("Never drop a paste unsaid.");
-    expect(cardTitle({ title: "Release notes", bare: false })).toBe("Release notes.");
-    const bare = textCardOf("TypeError: x is undefined\n  at f (a.js:1)", base("bare"));
-    expect(cardTitle(showOf(bare))).toBe("TypeError: x is undefined");
-  });
-
-  it("names a terminal copy by its command and inks its passes; a copy from no prompt is all output", () => {
-    const out = mount(<CardFace card={TERM} />).querySelector(".vf-card-out");
-    expect(out?.querySelectorAll(".vf-card-pass")).toHaveLength(1);
-    expect(out?.querySelector(".vf-card-pass")?.textContent).toBe("✓");
-    expect(out?.querySelector("b")?.textContent).toBe("      Tests  3 passed (3)");
-    expect(out?.textContent).toBe(" ✓ a.test.ts (3)\n      Tests  3 passed (3)");
+  it("prints a terminal copy's output in its window, each line from its first mark, its passes in the pass ink", () => {
+    const out = faceOf(TERM)?.querySelector('[data-window="term"] .vf-card-out');
+    const lines = [...(out?.children ?? [])];
+    const said = lines.map((line) => line.textContent);
+    expect(said).toEqual(["✓ a.test.ts (3)", "Tests 3 passed (3)"]);
+    expect(lines[0]?.querySelector("b.vf-card-pass")?.textContent).toBe("✓");
+    expect(lines[1]?.hasAttribute("data-quiet")).toBe(true);
+    expect(lines[1]?.querySelector("b.vf-card-pass")?.textContent).toBe("3 passed");
+    // a copy from no prompt is named by its first line, and its window holds the rest
     const noPrompt = termCardOf("first line\nsecond line", base("plain"));
-    const el = mount(<CardFace card={noPrompt} />);
-    expect(el.querySelector(".vf-card-cmd")).toBeNull();
-    expect(el.querySelector(".vf-card-out")?.textContent).toBe("first line\nsecond line");
+    expect(faceName(noPrompt)).toBe("first line");
+    expect(faceOf(noPrompt)?.querySelector(".vf-card-out")?.textContent).toBe("second line");
+    // a command alone: its window shows it, its prompt quieter than the command
+    const ls = faceOf(termCardOf("$ ls", base("ls")))?.querySelector(".vf-card-out > div");
+    expect(ls?.querySelector(".vf-card-prompt")?.textContent).toBe("$ ");
+    expect(ls?.querySelector("b")?.textContent).toBe("ls");
     expect(rule(".vf-card-pass")).toContain("color: var(--vf-card-pass);");
+    expect(rule(".vf-card-out")).toContain("font-family: var(--vf-font-mono);");
   });
 
-  it("draws the agent's card on the dark stock, its mark the SDK's when it has one, else the agents glyph", () => {
+  it("pages a file's first lines in its window with no numbers, the comment quieter; a file that is not words is a blank page", () => {
+    const page = faceOf(FILE)?.querySelector('[data-window="file"] .vf-card-lines');
+    const lines = [...(page?.children ?? [])];
+    expect(lines.map((line) => line.textContent)).toEqual([
+      "/** The files worker's routes. */",
+      "export const ROUTES = {};",
+    ]);
+    expect(lines.map((line) => line.hasAttribute("data-quiet"))).toEqual([true, false]);
+    expect(rule(".vf-card-lines")).toContain(
+      "mask-image: linear-gradient(rgb(0 0 0) calc(100% - 30px), transparent);",
+    );
+    // a PDF: where it lives and what it is are not printed (its kind and size are said in the bar, held)
+    const pdf = fileCardOf({ name: "report.pdf", facts: "PDF · 2.4 MB" }, base("pdf"));
+    const blank = faceOf(pdf);
+    expect(blank?.querySelector('[data-window="file"]')?.textContent).toBe("");
+    expect(blank?.textContent).not.toContain("PDF · 2.4 MB");
+    expect(faceOf(FILE)?.textContent).not.toContain("packages/fieldd/src/files/");
+  });
+
+  it("fills an image's window with the picture, its ground until it loads, never a broken image; a ref shows its still", () => {
+    const window = faceOf(PICT)?.querySelector<HTMLElement>('[data-window="image"]');
+    const img = window?.querySelector("img");
+    expect(img?.getAttribute("src")).toBe(PICT_STILL.src);
+    expect(img?.getAttribute("draggable")).toBe("false");
+    // a still the ring no longer keeps: the picture's ground, never a broken image
+    act(() => {
+      img?.dispatchEvent(new Event("error"));
+    });
+    expect(window?.querySelector("img")).toBeNull();
+    const bare = faceOf(pictureCardOf({ ...PICT_STILL, src: "" }, base("bare")));
+    expect(bare?.querySelector("img")).toBeNull();
+    // its size is said in the bar over it, held, never printed
+    expect(faceOf(PICT)?.textContent).not.toContain("1440 × 900");
+    expect(rule('.vf-card-window:is([data-window="image"], [data-window="ref"])')).toContain(
+      "background: var(--vf-card-photo);",
+    );
+    expect(rule(".vf-card-window img")).toContain("object-fit: cover;");
+    // a ref's window is its still until its own window (FACE-b); a link's is its bare page
+    const still = faceOf(REF)?.querySelector('[data-window="ref"] img');
+    expect(still?.getAttribute("src")).toBe(STILL.src);
+    expect(faceOf(LINK)?.querySelector('[data-window="link"]')?.textContent).toBe("");
+  });
+
+  it("draws the agent's card on the dark stock until its window, its mark the SDK's when it has one, else the agents glyph", () => {
     const marked = AGENT_MARK_PROVIDERS[0];
     expect(marked).toBeDefined();
     const withMark = mount(
@@ -181,8 +297,12 @@ describe("one stock, six faces (HN-D1)", () => {
     const mark = withMark.querySelector(".vf-card-mark");
     expect(mark?.querySelector("svg path")).not.toBeNull();
     expect(mark?.querySelector("[data-glyph]")).toBeNull();
-    const without = mount(<CardFace card={AGENT} />).querySelector(".vf-card-mark");
-    expect(without?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("agents");
+    const without = mount(<CardFace card={AGENT} />);
+    const glyph = without.querySelector(".vf-card-mark [data-glyph]");
+    expect(glyph?.getAttribute("data-glyph")).toBe("agents");
+    // its own face: no head, no window, no foot, and no index (FACE-b gives it round 5's)
+    const printed = ".vf-card-head, .vf-card-window, .vf-card-faces, .vf-card-ix";
+    expect(without.querySelector(printed)).toBeNull();
     // an agent the toolkit has only a letter for takes the glyph, never a letter
     const lettered = mount(
       <CardFace
@@ -191,10 +311,8 @@ describe("one stock, six faces (HN-D1)", () => {
     );
     expect(lettered.querySelector(".vf-card-mark [data-glyph]")).not.toBeNull();
     // its project, and its state at its foot
-    expect(without?.parentElement?.querySelector(".vf-card-project")?.textContent).toBe(
-      "vibe-field",
-    );
-    const working = mount(<CardFace card={AGENT} />).querySelector<HTMLElement>(".vf-card-state");
+    expect(without.querySelector(".vf-card-project")?.textContent).toBe("vibe-field");
+    const working = without.querySelector<HTMLElement>(".vf-card-state");
     expect(working?.dataset.tone).toBe("working");
     expect(working?.textContent).toBe("Working");
     const waiting = mount(
@@ -281,64 +399,34 @@ describe("one stock, six faces (HN-D1)", () => {
 
   it("says only its kind while a drag from another app is on its way (HN-D2)", () => {
     const wait: CardStub = { ...base("w"), waiting: true };
-    const text = textCardOf("", wait);
-    const textFace = mount(<CardFace card={text} />);
-    expect(textFace.querySelector(".vf-card")?.hasAttribute("data-waiting")).toBe(true);
-    expect(textFace.querySelector(".vf-card-words")?.textContent).toBe(WAITING_WORDS.text);
-    const pict = pictureCardOf({ title: "", width: 0, height: 0, src: "" }, wait);
-    const pictFace = mount(<CardFace card={pict} />);
-    const photo = pictFace.querySelector(".vf-card-photo[data-waiting]");
-    expect(photo?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("capture");
-    expect(photo?.querySelector("img")).toBeNull();
-    expect(pictFace.querySelector(".vf-card-name")?.textContent).toBe("An image");
-    expect(pictFace.querySelector(".vf-card-size")).toBeNull();
-    // as the page draws it (R-D 20): the card's ink at 6% for a ground, a 0.5px hairline at 12%
-    const waiting = rule(".vf-card-photo[data-waiting]");
-    expect(waiting).toContain("background: color-mix(in srgb, var(--card-ink) 6%, transparent);");
-    expect(waiting).toContain(
-      "box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--card-ink) 12%, transparent);",
+    const text = faceOf(textCardOf("", wait));
+    expect(text?.hasAttribute("data-waiting")).toBe(true);
+    expect(text?.querySelector(".vf-card-name")?.textContent).toBe(WAITING_WORDS.text);
+    expect(text?.querySelector('[data-window="text"]')?.textContent).toBe("");
+    const pict = faceOf(pictureCardOf({ title: "", width: 0, height: 0, src: "" }, wait));
+    expect(pict?.querySelector(".vf-card-name")?.textContent).toBe("An image");
+    expect(pict?.querySelector('[data-window="image"][data-waiting]')).not.toBeNull();
+    expect(pict?.querySelector("img")).toBeNull();
+    // as the page draws it (R-D 20): the card's ink at 6% for a ground, under the window's own hairline
+    expect(rule(".vf-card-window[data-waiting]")).toContain(
+      "background: color-mix(in srgb, var(--card-ink) 6%, transparent);",
     );
-    expect(waiting).not.toContain("dashed");
-    const one = fileCardOf({ name: "" }, wait);
-    const oneFace = mount(<CardFace card={one} />);
-    expect(oneFace.querySelector(".vf-card-name")?.textContent).toBe("A file");
-    expect(oneFace.querySelector(".vf-card-path")?.textContent).toBe("Let go to see it");
-    const three = fileCardOf({ name: WAITING_WORDS.files(3) }, wait);
-    expect(mount(<CardFace card={three} />).querySelector(".vf-card-name")?.textContent).toBe(
-      "3 files",
+    const one = faceOf(fileCardOf({ name: "" }, wait));
+    expect(one?.querySelector(".vf-card-name")?.textContent).toBe("A file");
+    expect(one?.querySelector('[data-window="file"] .vf-card-wait')?.textContent).toBe(
+      "Let go to see it",
     );
+    const three = faceOf(fileCardOf({ name: WAITING_WORDS.files(3) }, wait));
+    expect(three?.querySelector(".vf-card-name")?.textContent).toBe("3 files");
   });
 
-  it("prints a picture at its own proportion, clamped to the face's column, and its ground with no still", () => {
-    expect(pictureRatio(PICT_STILL)).toBe(1.6);
-    expect(pictureRatio({ width: 3000, height: 500 })).toBe(2.2);
-    expect(pictureRatio({ width: 500, height: 3000 })).toBe(1);
-    expect(pictureRatio({ width: 0, height: 0 })).toBe(1.4);
-    const el = mount(<CardFace card={PICT} />);
-    const photo = el.querySelector<HTMLElement>(".vf-card-photo");
-    expect(photo?.style.getPropertyValue("--card-ar")).toBe("1.6");
-    const img = photo?.querySelector("img");
-    expect(img?.getAttribute("src")).toBe(PICT_STILL.src);
-    expect(img?.getAttribute("draggable")).toBe("false");
-    // a still the ring no longer keeps: the picture's ground, never a broken image
-    act(() => {
-      img?.dispatchEvent(new Event("error"));
-    });
-    expect(photo?.querySelector("img")).toBeNull();
-    expect(
-      mount(
-        <CardFace card={pictureCardOf({ ...PICT_STILL, src: "" }, base("pict"))} />,
-      ).querySelector("img"),
-    ).toBeNull();
-    expect(rule(".vf-card-photo")).toContain("background: var(--vf-card-photo);");
-    expect(rule(".vf-card-photo")).toContain("aspect-ratio: var(--card-ar, 1.4);");
-  });
-
-  it("sets a held card's type finer inside the same card (HN-D5)", () => {
+  it("is the same face at 2.4× when picked up: nothing is set finer (round 5 retires HN-D5's finer setting)", () => {
     const el = mount(<CardFace card={TEXT} held />);
     expect(el.querySelector(".vf-card")?.hasAttribute("data-held")).toBe(true);
+    expect(rule(".vf-card[data-held] .vf-card-face")).toBe("");
+    expect(CARDS_CSS).not.toContain("5.6px");
+    // the agent's own face keeps its ems of 9.5 until its window
     expect(rule(".vf-card-face")).toContain("font-size: 9.5px;");
-    expect(rule(".vf-card[data-held] .vf-card-face")).toContain("font-size: 5.6px;");
   });
 });
 
@@ -356,28 +444,33 @@ describe("the stock's rules (DESIGN.md §5 \"The hand's cards are paper\")", () 
     for (const [, property, value] of colours) {
       expect(`${property}: ${value}`).toMatch(PRINTED_FROM_A_TOKEN);
     }
-    // the stock's own inks are its tokens, never the chrome's
+    // the stock's own inks are its tokens, never the chrome's; the index's retired with the index
     const card = rule(".vf-card");
     expect(card).toContain("--card-stock: var(--vf-card-stock);");
     expect(card).toContain("--card-ink: var(--vf-card-stock-ink);");
-    expect(card).toContain("--card-ix: var(--vf-card-index);");
     expect(card).toContain("--card-cut: var(--vf-card-cut);");
     expect(card).toContain("filter: brightness(var(--vf-card-dim));");
     expect(card).toContain("var(--vf-card-shade)");
+    expect(CARDS_CSS).not.toMatch(/--card-ix|vf-card-ix|vf-card-index/u);
     expect(rule(".vf-card-stock::after")).toContain("background-image: var(--vf-card-grain);");
   });
 
-  it("defines one paper for both themes, but for the night's reading light", () => {
+  it("defines one paper for both themes, the press's own, but for the night's reading light", () => {
     const root = TOKENS.slice(TOKENS.indexOf(":root {"), TOKENS.indexOf("\n}\n"));
     const dark = TOKENS.slice(TOKENS.indexOf(".dark {"));
     for (const token of [
+      // the stock IS the press's paper: its hex is written once, in the token the press reads (item 403)
       "--vf-card-stock: var(--vf-card-press-paper);",
       "--vf-card-press-paper: #f4efe5;",
       "--vf-card-edge: #d6d0c3;",
       "--vf-card-stock-ink: #1c1611;",
       "--vf-card-stock-ink-2: rgb(28 22 17 / 64%);",
       "--vf-card-stock-ink-3: rgb(28 22 17 / 42%);",
-      "--vf-card-index: rgb(33 31 27 / 58%);",
+      "--vf-card-type-ink: rgb(28 22 17 / 86%);",
+      "--vf-card-face-ink: rgb(28 22 17 / 78%);",
+      "--vf-card-face-ink-2: rgb(28 22 17 / 34%);",
+      "--vf-card-frame: rgb(28 22 17 / 12%);",
+      "--vf-card-plate: #ebe4d7;",
       "--vf-card-cut: rgb(58 46 22 / 15%);",
       "--vf-card-pass: #2b8a4f;",
       "--vf-card-photo: #cfd3cf;",
@@ -388,11 +481,15 @@ describe("the stock's rules (DESIGN.md §5 \"The hand's cards are paper\")", () 
     ]) {
       expect(root).toContain(token);
     }
+    // HN-D1's indexes retire with round 5, and their inks with them
+    expect(TOKENS).not.toMatch(/--vf-card-(?:dark-)?index/u);
     expect(root).toMatch(/--vf-card-grain: url\("data:image\/svg\+xml,/u);
     expect(dark).toContain("--vf-card-dim: 0.86;");
     expect(dark).toContain("--vf-card-shade: 1.7;");
     // the same paper by night: nothing else of the stock is redefined
-    expect(dark).not.toMatch(/--vf-card-(?:stock|edge|index|cut|pass|photo|grain|dark)/u);
+    expect(dark).not.toMatch(
+      /--vf-card-(?:stock|edge|cut|pass|photo|grain|dark|type|face|frame|plate|press)/u,
+    );
     // §2.2's dark surface keeps its white ink — Settings → Terminal's miniature reads it
     expect(root).toContain("--vf-card-ink: #ffffff;");
   });

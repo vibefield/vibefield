@@ -215,6 +215,8 @@ describe('the composer as a place for cards (DESIGN.md §8 "Chat\'s composer", a
     expect(played).toEqual({ ok: true, note: "Added to your message to Vela" });
     const chip = editor().querySelector<HTMLElement>('[data-chip="card"]');
     expect(chip?.dataset.card).toBe("text");
+    // its mark is its type's glyph (§13 "The six types"), the card's own head's (item 405)
+    expect(chip?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe("type-text");
     expect(chip?.querySelector(".vf-chat-chip-label")?.textContent).toBe("Ship it");
     // HN-D4: the card stays in the hand — the place never touches the store
     expect(cardsStore.snapshot()).toBe(hand);

@@ -473,7 +473,7 @@ describe("whenVisible — a flight waits for a window it can be seen in (the 202
 });
 
 describe("a card picked up (HN-D5)", () => {
-  it("holds it at reading size in the middle over the window out of focus, its place kept, the bar under the head saying where it came from", () => {
+  it("holds it at reading size in the middle over the window out of focus, its place kept, the bar under the head saying what it is and where it came from", () => {
     const onPutBack = vi.fn();
     const onRemoveHeld = vi.fn();
     const held = { card: CARDS[1] as Card, phase: "up" as const };
@@ -492,6 +492,11 @@ describe("a card picked up (HN-D5)", () => {
     expect(bar?.querySelector(".vf-cards-bar-from")?.textContent).toBe(
       provenance(CARDS[1] as Card, NOW, "mac"),
     );
+    // what it is and how big, in bold, before where it came from (round 5: said, not printed)
+    const about = bar?.querySelector(".vf-cards-bar-about");
+    expect(about?.tagName).toBe("B");
+    expect(about?.textContent).toBe((CARDS[1] as Card).about);
+    expect(about?.nextElementSibling?.className).toBe("vf-cards-bar-from");
     const [remove, flip, done] = [...(bar?.querySelectorAll("button") ?? [])];
     expect([remove?.textContent, flip?.textContent, done?.textContent]).toEqual([
       "Remove",

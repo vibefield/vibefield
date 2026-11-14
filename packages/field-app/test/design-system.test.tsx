@@ -799,8 +799,8 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     const over = fromPlates.map((p) => p.querySelector(".vf-cards-label")?.textContent);
     expect(over).toEqual(["⌘V · just now", "Canvas · Settings · just now", "History · just now"]);
     // …and the faces on the shipping CardFace: the six kinds by day and by the Moon, a drag's two
-    // waiting faces, the two the desk's Copy deals (UI_SYSTEM's list), and what another app,
-    // Settings and History deal — a file that is not words by its kind and size (§9)
+    // waiting faces, the two the desk's Make a card deals (UI_SYSTEM's list), and what another app,
+    // Settings and History deal — a file that is not words a blank page (round 5's face, item 405)
     const faceRows = [...(container?.querySelectorAll(".vf-ds-card-faces") ?? [])];
     const kindsOf = (row: Element): string =>
       [...row.querySelectorAll<HTMLElement>(".vf-card")].map((card) => card.dataset.kind).join(" ");
@@ -819,12 +819,18 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       false,
     ]);
     expect(faceRows[0]?.querySelector('[data-kind="agent"] .vf-card-project i')).not.toBeNull();
-    const copyNote = faceRows[3]?.querySelector('[data-kind="text"] .vf-card-words b');
-    expect(copyNote?.textContent).toBe("Ship the hand on Thursday.");
+    // round 5's face (FACE-a, item 405): the name in the head, what follows it in the window
+    const copyNote = faceRows[3]?.querySelector('[data-kind="text"]');
+    const noteName = copyNote?.querySelector(".vf-card-name");
+    expect(noteName?.textContent).toBe("Ship the hand on Thursday.");
+    expect(copyNote?.querySelector(".vf-card-words")?.textContent).toBe(
+      "The deal, the fan and the play are in; the drag in waits for B2.",
+    );
     const copyPicture = faceRows[3]?.querySelector('[data-kind="pict"] .vf-card-name');
     expect(copyPicture?.textContent).toBe("2 objects");
-    const facts = faceRows[4]?.querySelector('[data-kind="file"] [data-facts]');
-    expect(facts?.textContent).toBe("PDF · 2.4 MB");
+    // a file that is not words is a blank page: its kind and size are said in the held bar, never printed
+    const pdf = faceRows[4]?.querySelector('[data-kind="file"]');
+    expect(pdf?.querySelector('[data-window="file"]')?.textContent).toBe("");
     // *Item 213 (2), 2026-11-07:* rows 6 and 7 mount their specimens alone now, so the page's own mounting of them —
     // which their old lookups of the two bloom wrappers and their page-wide caption count held — is held here
     // (the independent read's F1).
