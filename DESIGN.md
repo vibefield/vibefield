@@ -6902,6 +6902,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       before its pictures and its categories. Until a picture reaches the window (main's plugin scheme, MK-E9's
       second half, which no slice builds yet) a mat holds the `plugin` glyph; until the pegboard's names reach the
       popup (MK-4d) the shelf draws no categories and a tile no category among its facts.
+      *Corrected 2026-11-14 (MK-4d's third part, the names; VF-PM 06:56Z, C25):* the pegboard's names reach the
+      popup with MK-4d for a page's What it adds and Installed's line alone (below, and §9). The shelf still draws
+      no categories, and a tile none among its facts, until a part of its own draws them.
       - **The shelf** is the body's grid, padded 16: as many columns as fit 200 wide with 12 between them (four in
         the full 960, one at the narrowest), its tiles 12 apart. While no words are typed the featured set — the
         first of the list's `featured` the shelf shows — takes the first row whole. Then the sets VibeField
@@ -7332,6 +7335,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         12/400 in tertiary ink, as a power's Mac note stands; a command placed only somewhere else is not said;
         and they are said whether the plugin is on or off, as its objects are, though the palette lists a
         plugin's commands only while it is on. Their words are in §9.
+        *Drawn and built 2026-11-14 (MK-4d's third part, the names; James's MK-O10 pick A on his Plugins page,
+        its store 2026-11-11 23:03:24Z: "Names now, places with MK-4d"; VF-PM 2026-11-14 06:56Z, C25: "the names
+        are MK-4d's third part"), ‹draft› for James's eye; no new word:* the pegboard's names reach the popup by
+        the board's door, beside the act's (`useBoardNames`): each category the board hangs, and the board's own
+        name for it, the one its filters say. Under each object the board hangs, where it hangs, "Hangs under
+        Things" (§9), at 12/400 in tertiary ink, as a command's place stands under it: the board's name for its
+        category, never the category's id. An object that hangs nowhere says nothing under it, and no place is
+        said while the plugin is off (the board hangs no kind of an off plugin, P3c, as Show them on the
+        pegboard reads it), where the board hangs no such category now, or while the window reads no board (no
+        desk mounted, as in the catalog's plates). The name follows the board: a category it names anew is said
+        anew at once.
       - **What it can do**: each power it holds, in §9's plain words, the Mac's note under one on a Mac. A power
         it asked for and does not hold comes back with its switch (MK-4c2); until then Settings → Plugins shows
         it.
@@ -9743,6 +9757,15 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     (MK-4d), not for the plugin's page.* *Corrected 2026-11-14 (MK-4d's rider; VF-PM 04:33Z, MK-4d's Q3 at its
     lean): the board's door and its act came first, without the names; the names reach the popup in a later part,
     after the page's acts (§8 "Plugins — the frame's second popup", What it adds).*
+    *Built 2026-11-14 (MK-4d's third part, the names; James's MK-O10 pick A on his Plugins page, its store
+    2026-11-11 23:03:24Z: "Names now, places with MK-4d"; VF-PM 2026-11-14 06:56Z, C25):* the line says where a
+    set hangs, as ruled above, by the pegboard's own names: "4 objects · Things, Tools · 1.0.0", and "Hangs under
+    Things · 1.0.0" for a set of one; a built-in's still ends "· comes with VibeField". *MK's, ‹draft›, for
+    James's eye; no new word:* the places are its objects' categories, each named once, in the board's order (its
+    filters'); an object that hangs nowhere is counted and names no place ("3 objects · Things · 1.0.0" for a set
+    of three, one of which hangs); a plugin that is off says it is off, as above. While none of its places is
+    named — no board read, as in the catalog's plates or a remount's gap, or the board hangs none of them now —
+    the line says the set alone, as this block first drew it: "3 objects · 1.2.0".
   - A plugin with no object and one of the two says "No objects · a service" or "No objects · tools", and with
     neither, "No objects".
   - One of a thing is said as one: "1 plugin", "1 object".
@@ -9767,6 +9790,11 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     command the plugin puts in the palette is said by the plugin's own title for it, after its objects, with "In
     the palette (⌘K)" under it ‹draft›, and "In the palette (Ctrl+K)" off the Mac ‹draft›, as a key is spelled
     there.
+    *Added 2026-11-14 (MK-4d's names; James's MK-O10 pick A, "Names now, places with MK-4d", as above), ‹draft›
+    for his eye; no new word:* under each ‹object› the board hangs, "Hangs under ‹category›", ‹category› the
+    pegboard's own name for it ("Hangs under Things"): the words "The popup" above draws for What it adds, and
+    his page drew under each object for What it adds once MK-4d lands. Nothing is said under one that hangs
+    nowhere, nor while no place is named (Installed's line, above).
   - **What it can do** says each power it holds in the plain words below; one named by a plugin that isn't
     installed, "A power named by a plugin that isn't installed here"; with none, "Nothing beyond drawing its
     own objects" (the install card's) or, for a plugin with no object, "Nothing beyond its own work".
