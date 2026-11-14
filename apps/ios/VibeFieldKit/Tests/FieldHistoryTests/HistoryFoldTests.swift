@@ -586,15 +586,38 @@ struct HistoryPillLeadTests {
     #expect(FieldHistoryModel.clockLead(at(12, 25, 10, 0, year: 2025), now: newYear) == "25 Dec 2025 · 10:00")
   }
 
-  // RE-CUT (VF-PM's ruling, 2026-11-13 23:47Z; DESIGN.md §8, "a sitting stamped later than now, where two
-  // devices' clocks disagree, reads as today's: the clock alone"): this row held `Sat 14 Nov · 00:05` for a stamp
-  // on the day after today. It was cut on the text as it stood before that ruling was written into it.
-  @Test("a stamp later than now, from a desktop whose clock runs ahead, reads as today's: the clock alone")
-  func aDayAhead() {
-    #expect(FieldHistoryModel.clockLead(at(11, 13, 23, 30), now: now) == "23:30", "later today is today")
-    #expect(FieldHistoryModel.clockLead(at(11, 14, 0, 5), now: now) == "00:05", "the day after today")
-    #expect(FieldHistoryModel.clockLead(at(11, 20, 9, 0), now: now) == "09:00", "a week ahead")
-    #expect(FieldHistoryModel.clockLead(at(1, 2, 9, 5, year: 2027), now: now) == "09:05", "another year ahead")
+  /// The ruling of 2026-11-13 23:47Z (VF-PM, so the phone matches the room): a sitting stamped ahead of now, where
+  /// two devices' clocks disagree, reads in today's form, the clock alone, and never as a distance. This row said a
+  /// day after today was its day and its clock, `Sat 14 Nov · 00:05`.
+  @Test("a stamp ahead of now, where two devices' clocks disagree, reads as today's: the clock alone")
+  func aheadOfNow() throws {
+    #expect(FieldHistoryModel.clockLead(at(11, 13, 21, 1), now: now) == "21:01", "a minute ahead")
+    #expect(FieldHistoryModel.clockLead(at(11, 14, 21, 0), now: now) == "21:00", "a day ahead")
+    // a minute ahead and across midnight: the day after by the calendar, and still the clock alone
+    #expect(FieldHistoryModel.clockLead(at(11, 14, 0, 0), now: moment(11, 13, 23, 59)) == "00:00")
+    #expect(FieldHistoryModel.clockLead(at(11, 20, 21, 0), now: now) == "21:00", "a week ahead is no distance")
+    #expect(FieldHistoryModel.clockLead(at(1, 1, 0, 5, year: 2027), now: now) == "00:05", "nor is a year")
+    // through the fold, and as it is drawn: the clock alone until now passes it, then as any day behind is said
+    let rows = [try row("a1", 1, at: at(11, 13, 20, 0)), try row("a2", 2, at: at(11, 14, 21, 0))]
+    let pill = try #require(FieldHistoryModel.sittings(rows, now: now).last?.pill)
+    #expect(pill == HistoryDayPill(lead: "21:00", after: "after 25h 00m", resumedAt: at(11, 14, 21, 0)))
+    #expect(pill.leadWords(now: now) == "21:00")
+    #expect(pill.leadWords(now: moment(11, 14, 22, 0)) == "21:00", "its own day")
+    #expect(pill.leadWords(now: moment(11, 15, 8, 0)) == "Sat · 21:00", "the day after it")
+  }
+
+  /// The same ruling: "earlier" starts seven calendar days back. Days one to six before today are the weekday and
+  /// the clock, and the seventh and beyond the date and the clock.
+  @Test("earlier starts seven calendar days back: six days back to the minute is the weekday, seven is the date")
+  func sevenDaysBack() throws {
+    #expect(FieldHistoryModel.clockLead(at(11, 7, 21, 0), now: now) == "Sat · 21:00", "six days, to the minute")
+    #expect(FieldHistoryModel.clockLead(at(11, 6, 21, 0), now: now) == "Fri 6 Nov · 21:00", "seven, to the minute")
+    #expect(FieldHistoryModel.clockLead(at(11, 5, 21, 0), now: now) == "Thu 5 Nov · 21:00", "and beyond")
+    // James's own case, as it is drawn: seen on Fri 13 Nov 2026, a sitting of Fri 6 Nov 2026 that resumed at 20:21
+    let rows = [try row("a1", 1, at: at(11, 6, 16, 44)), try row("a2", 2, at: at(11, 6, 20, 21))]
+    let pill = try #require(FieldHistoryModel.sittings(rows, now: now).last?.pill)
+    #expect(pill.leadWords(now: now) == "Fri 6 Nov · 20:21")
+    #expect(pill.after == "after 3h 37m")
   }
 
   @Test("James's pill: a sitting of a week past says its day before its clock, and keeps the stamp it is said of")

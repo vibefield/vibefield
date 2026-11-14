@@ -692,16 +692,16 @@ extension FieldHistoryModel {
   /// today, never by hours, so a stamp two minutes back across midnight is the day before's:
   /// - today, the clock alone: `20:21`;
   /// - one of the six days before today, the weekday and the clock: `Fri · 20:21`, and never `Yesterday`;
-  /// - earlier, the day and the clock: `Fri 6 Nov · 20:21`, with its year when it is not this one,
-  ///   `6 Nov 2025 · 20:21`.
+  /// - earlier, from the seventh day back, the day and the clock: `Fri 6 Nov · 20:21`, with its year when it is
+  ///   not this one, `6 Nov 2025 · 20:21`.
   ///
-  /// A stamp later than now, on today or on a day after it (a desktop whose clock runs ahead of this phone's),
-  /// reads as today's, the clock alone (VF-PM's ruling, 2026-11-13 23:47Z, in the same paragraph): a day that
-  /// has not come is named by no one.
+  /// A stamp ahead of now, where two devices' clocks disagree, reads in today's form, the clock alone, and never
+  /// as a distance (VF-PM's ruling, 2026-11-13 23:47Z, so the phone matches the room): later today, and on any
+  /// day after today. It was said by its day, `Sat 14 Nov · 00:05`.
   static func clockLead(_ ms: Int64, now: Date) -> String {
     let today = calendar.startOfDay(for: now)
     let back = calendar.dateComponents([.day], from: calendar.startOfDay(for: date(ms)), to: today).day ?? .max
-    // today, or a day ahead of it
+    // today, and any day ahead of it
     if back <= 0 { return clock(ms) }
     if (1...6).contains(back) { return "\(weekdayWords(ms)) · \(clock(ms))" }
     // past the week: the day by name (`sittingDay` answers neither `Today` nor `Yesterday` of such a day), with
