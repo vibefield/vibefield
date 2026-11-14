@@ -54,8 +54,26 @@
       switch name {
       case "signedin":
         return make(.up, login: login, face: fox, desktops: [ready("studio")], asleep: [("dev-2", "mini")], hearing: true)
+      // WI-L2 as amended 2026-11-13 — both desktops asleep is the gate's business now. This state is the
+      // grace's own moment (a blip), the only one in which the corner still draws two desktops asleep.
       case "asleep":
-        return make(.reconnecting("the network went away"), remembered: login, face: fox, asleep: [("dev-1", "studio"), ("dev-2", "mini")])
+        return make(
+          .reconnecting("the network went away"), remembered: login, face: fox,
+          asleep: [("dev-1", "studio"), ("dev-2", "mini")], absence: .blip)
+      // WI-L2 as amended — the gate's three screens over the splash: the hold past the grace; Can’t reach your
+      // computer. past the patience, for an account with two desktops and for one with a single desktop, named;
+      // and You’re offline.
+      case "reaching":
+        return make(
+          .up, login: login, face: fox, asleep: [("dev-1", "studio"), ("dev-2", "mini")], absence: .looking)
+      case "unreachable":
+        return make(.up, login: login, face: fox, asleep: [("dev-1", "studio"), ("dev-2", "mini")])
+      case "unreachable-one":
+        return make(.up, login: login, face: fox, asleep: [("dev-1", "studio")])
+      case "offline":
+        return make(
+          .reconnecting("the network went away"), remembered: login, face: fox, asleep: [("dev-1", "studio")],
+          online: false)
       case "attention":
         return make(.needsLogin, remembered: login, face: fox, asleep: [("dev-1", "studio"), ("dev-2", "mini")])
       case "noface":
@@ -126,7 +144,8 @@
     private static func make(
       _ state: MeshModel.State, remembered: String? = nil, login: String? = nil, face: UserFace? = nil,
       desktops: [FieldDesktop] = [], asleep: [(String, String)] = [], foreign: Int = 0, hearing: Bool = false,
-      listedYet: Bool = true, expected: PhoneCodeExpectation? = nil
+      listedYet: Bool = true, expected: PhoneCodeExpectation? = nil, online: Bool = true,
+      absence: FieldHomeModel.Absence = .long
     ) -> Demo {
       Demo(
         face: FieldHomeModel.accountFace(
@@ -150,10 +169,11 @@
           listed: desktops.count,
           answering: FieldHomeModel.answering(desktops),
           remembered: asleep.count,
-          online: true,
+          online: online,
+          // a stamped state keeps no clock: it stamps how long the absence has run (long, unless it says)
           firstWayIn: false,
-          absence: .long,
-          desktop: nil,
+          absence: absence,
+          desktop: FieldHomeModel.awaitedDesktop(asleep.map { $0.1 }),
           machineName: machine,
           adminConsole: FieldTruffleRuntime.machinesAdminURL(controlURL: nil),
           signInNote: nil,

@@ -47,6 +47,13 @@ public struct HomeScreen: View {
   @State private var wayInEnding: FieldHomeModel.WayInStep?
   /// WI-2 — How it works, from the welcome: the page standing (0…3), or nil.
   @State private var tourPage: Int?
+  /// WI-L2 as amended 2026-11-13 — how long the phone has gone without a desktop answering: a launch begins
+  /// bare, under its grace (`keepAbsence` is its clock, `FieldHomeModel.doorPage` reads it).
+  @State private var absence: FieldHomeModel.Absence = .opening
+  /// Try again, and coming back to VibeField, each look again: the clock's key counts them.
+  @State private var reachAttempt = 0
+  /// Whether a first way in is under way (`FieldHomeModel.firstWayIn`): the gate's screens never stand in it.
+  @State private var firstWayIn = false
   /// TS-7b — the account a Mac's code said to expect, and its reader.
   private let expectationMemory = ExpectationMemory()
   @State private var macCodeReaderOpen = false
@@ -728,6 +735,10 @@ public struct HomeScreen: View {
   /// (`FieldHomeModel.tabsStand`), so the splash fades in over the tabs, not over the panel. The hooks that teach
   /// the account's memory live here, never on the tabs, so a first sign-in's listing is remembered while the way
   /// in still stands.
+  ///
+  /// *Amended 2026-11-13 (WI-L2):* signed in means a desktop answers now, so the same hold stands, and the
+  /// tabs go under it, when the last desktop stops answering or the phone loses its network. The absence's
+  /// clock lives here for the reason the memory's hooks do: the tabs are not mounted to keep it.
   private var standing: some View {
     ZStack {
       if FieldHomeModel.tabsStand(signedIn: wayInStep == nil, splashCovers: splashCovers) {
@@ -739,7 +750,15 @@ public struct HomeScreen: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .splashHolds(wayInStep != nil)
     .splashOverlay { wayIn }
-    .onChange(of: doorPage) { previous, next in
+    // WI-L2 as amended — the absence's clock: it starts again whenever what it runs on moves
+    .task(id: reach) { await keepAbsence() }
+    // coming back to VibeField looks again at once, as Try again does (`mesh.keepUp()` is the scene's own hook)
+    .onChange(of: scenePhase) { _, phase in
+      if phase == .active, !reach.connected { reachAttempt += 1 }
+    }
+    .onChange(of: doorPage, initial: true) { previous, next in
+      // a first way in begins at its own pages and ends at signed in; the gate's screens never stand in it
+      firstWayIn = FieldHomeModel.firstWayIn(firstWayIn, page: next)
       // How it works stands only over the welcome: another page ends it (L3)
       tourPage = FieldHomeModel.tourPage(tourPage, after: next)
       // WI-2 — the found beat: a page that stood for a first sign-in yields to signed in
@@ -797,6 +816,30 @@ public struct HomeScreen: View {
     FieldHomeModel.tabsStand(signedIn: wayInStep == nil, splashCovers: splashCovers)
   }
 
+  /// WI-L2 as amended 2026-11-13 — what the absence's clock runs on, from the real mesh and link: whether a
+  /// desktop answers on a network the phone has, whether Tailscale is asking, and the count of Try agains. A
+  /// mock or a stamped demo stamps its own page and never reads the absence, so the clock runs under it unread.
+  private var reach: FieldHomeModel.Reach {
+    FieldHomeModel.reach(
+      meshState: mesh.state, online: mesh.isOnline, answering: FieldHomeModel.answering(linkDesktops),
+      attempt: reachAttempt)
+  }
+
+  /// The absence's clock (`.task(id: reach)`, so every move of `reach` cancels it and starts it again). With a
+  /// desktop answering, the next drop begins as a blip. Without one it walks `FieldHomeModel.absenceCourse`
+  /// from where the absence stands: the grace, the hold, then the page. A cancelled sleep leaves the absence
+  /// where it was, for the next run to walk on from.
+  private func keepAbsence() async {
+    let now = self.reach
+    let stands = FieldHomeModel.absence(absence, at: now)
+    if stands != absence { absence = stands }
+    guard !now.connected, !now.asking else { return }
+    for step in FieldHomeModel.absenceCourse(from: stands) {
+      do { try await Task.sleep(for: step.after) } catch { return }
+      if absence != step.then { absence = step.then }
+    }
+  }
+
   #if DEBUG
     /// `-vf-demo-field-slice`: PG-3a's WITNESS remote board through the real home path (the comment where the launch
     /// reads it). Once (`link == nil`). Under WI-1's OWED witness's stamp, the self sign-in follows, and then the
@@ -834,7 +877,8 @@ public struct HomeScreen: View {
 
   @ViewBuilder
   private var wayIn: some View {
-    if let step = wayInStep {
+    // a launch's bare hold draws nothing: the splash stands as every launch looks (WI-L2 as amended 2026-11-13)
+    if let step = wayInStep, FieldHomeModel.wayInDraws(step) {
       WayInView(
         screen: FieldHomeModel.wayInScreen(step, lock: lockOffered, device: DeviceWord.current),
         face: wayInFace,
@@ -901,8 +945,22 @@ public struct HomeScreen: View {
         unlock: { Task { await lock.unlock() } },
         showTour: { page in tourPage = page },
         notNow: { wayInEnding = nil },
-        // RED — no screen offers it yet
-        tryAgain: {}))
+        tryAgain: { tryAgain() }))
+  }
+
+  /// WI-L2 as amended 2026-11-13 — Try again, on Can’t reach your computer.: the mesh dials now instead of at
+  /// its backoff's end, and the hold looks for another patience (the clock's key counts the attempt).
+  private func tryAgain() {
+    #if DEBUG
+      // the mock's desktop answers again, as its Sign in fills the corner; a stamped corner is a photograph
+      if let mock {
+        mock.signIn()
+        return
+      }
+      if demoAccount != nil { return }
+    #endif
+    if meshKeepsItselfUp { mesh.keepUp() }
+    reachAttempt += 1
   }
 
   // MARK: - IOS-9e: the pages, and the bar over them
@@ -3690,6 +3748,8 @@ public struct HomeScreen: View {
       fixtureOwnsTheField = Self.fixtureArguments || mockActive || fixtureLink || demoRemoteActive
     #endif
     _ = identityEpoch
+    // the desktops this account has, by the phone's memory: how many, and the one the gate's page can name
+    let remembered = accountLogin.map { desktopMemory.remembered(for: $0) } ?? []
     return FieldHomeModel.doorPage(
       fixtureOwnsTheField: fixtureOwnsTheField,
       meshState: mesh.state,
@@ -3698,13 +3758,12 @@ public struct HomeScreen: View {
       isGated: mesh.isGatedOnAccount,
       hasListed: link?.hasListed ?? false,
       listed: linkDesktops.count,
-      // RED — the amended law's inputs, not read yet
-      answering: 0,
-      remembered: accountLogin.map { desktopMemory.remembered(for: $0).count } ?? 0,
-      online: true,
-      firstWayIn: false,
-      absence: .long,
-      desktop: nil,
+      answering: FieldHomeModel.answering(linkDesktops),
+      remembered: remembered.count,
+      online: mesh.isOnline,
+      firstWayIn: firstWayIn,
+      absence: absence,
+      desktop: FieldHomeModel.awaitedDesktop(remembered.map(\.name)),
       machineName: mesh.machineName,
       adminConsole: mesh.adminConsoleURL,
       signInNote: mesh.signInNote,

@@ -123,6 +123,19 @@ extension FieldHomeModel {
     /// WI-W2a A (James, 2026-11-11; §9, ruled that day): a join that fails says so and nothing more. The network's
     /// own reason is VibeField's insides, and it stays off the screen.
     static let couldNotConnect = "Couldn’t connect."
+    /// WI-1's hold, and the gate's (WI-L2 as amended 2026-11-13): one title for a phone looking for a desktop.
+    static let looking = "Looking for your computer…"
+    /// The gate's own words (§9 "The way in", amended 2026-11-13; drafts pending James).
+    static let cantReach = "Can’t reach your computer."
+    static let offline = "You’re offline."
+    static let tryAgain = "Try again"
+    static let useAnotherAccount = "Use another account"
+    static func cantReachLine(desktop: String?) -> String {
+      "Open VibeField on \(desktop ?? "your computer"), and keep it awake and connected."
+    }
+    static func offlineLine(device: DeviceWord) -> String {
+      "Connect \(device.this) to the internet to reach your computer."
+    }
   }
 
   /// The way in's steps' names: its two, and the lock's while it will be offered (`lock`, the phone's method).
@@ -197,7 +210,7 @@ extension FieldHomeModel {
           note: note.map { _ in words.couldNotConnect }),
         acts: [
           .primary("Sign in again", .signInAgain),
-          .link("Use another account", .useAnotherAccount),
+          .link(words.useAnotherAccount, .useAnotherAccount),
         ])
 
     case .page(.anotherAccount(let current, let expected, let from, let byLink)):
@@ -228,7 +241,7 @@ extension FieldHomeModel {
       return WayInScreen(
         steps: .step(2),
         words: .init(
-          title: "Looking for your computer…",
+          title: words.looking,
           line: AttributedString("Open VibeField on your computer, signed in to Tailscale as \(login)."), hold: true))
 
     case .page(.noDesktops(let login)):
@@ -237,9 +250,23 @@ extension FieldHomeModel {
         words: .init(title: "No desktops yet.", line: noDesktopsLine(login: login)),
         acts: [.computerWaiting, .share(words.sendTheLink, primary: false)])
 
-    // RED — the gate's three screens are not written yet
-    case .page(.offline), .page(.reaching), .page(.unreachable):
-      return WayInScreen(words: .init(title: ""))
+    // WI-L2 as amended 2026-11-13 — the gate's three screens: no step of the first way in, so no bars, the mark
+    // in its place, and no found beat after them (§9 "The way in"; where each stands is §8 "The phone's way in")
+    case .page(.reaching):
+      // WI-1's title alone, since the phone has been here before; under a launch's grace it is not drawn at all
+      // (`wayInDraws`)
+      return WayInScreen(words: .init(title: words.looking, hold: true))
+
+    case .page(.unreachable(let desktop)):
+      // Try again leads, and the way out is Sign in again's: Settings is behind the gate
+      return WayInScreen(
+        words: .init(title: words.cantReach, line: AttributedString(words.cantReachLine(desktop: desktop))),
+        acts: [.primary(words.tryAgain, .tryAgain), .link(words.useAnotherAccount, .useAnotherAccount)])
+
+    case .page(.offline):
+      // no act: nothing on this screen brings a network back, and the gate lifts by itself when one returns
+      return WayInScreen(
+        words: .init(title: words.offline, line: AttributedString(words.offlineLine(device: device))))
 
     case .found(let name, let desktop):
       return WayInScreen(

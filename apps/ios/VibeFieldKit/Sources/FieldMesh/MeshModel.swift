@@ -143,6 +143,10 @@ public final class MeshModel {
   /// The network coming back is a reason to retry at once rather than at the
   /// end of the backoff.
   @ObservationIgnored private var pathMonitor: NWPathMonitor?
+  /// WI-L2 as amended 2026-11-13 — whether the phone has a network at all, as iOS's path says it: false only
+  /// while nothing can carry a byte (`pathIsOnline(_:)`). True until the first path is read, and on a phone that
+  /// is not signed in, where nothing watches (`keepUp()` starts the watch). The home gates on it.
+  public private(set) var isOnline = true
   /// UA-P-5's latch: one re-gate at a time. Set synchronously, because the
   /// account is re-read from several events and two restarts racing each
   /// other would leave a node nobody holds.
@@ -405,17 +409,25 @@ public final class MeshModel {
     }
   }
 
-  /// RED — every path reads as a network until the gate reads it (WI-L2 as amended 2026-11-13).
-  nonisolated static func pathIsOnline(_ status: NWPath.Status) -> Bool { true }
+  /// What a path's status says of the network (pinned by tests): offline only when it is unsatisfied. A path
+  /// that needs a connection made first (`requiresConnection`) is a network the phone can have, so it is not
+  /// called offline; whether anything answers on it is the desktops' to say.
+  nonisolated static func pathIsOnline(_ status: NWPath.Status) -> Bool {
+    status != .unsatisfied
+  }
 
-  /// The network coming back while a re-dial waits: dial now.
+  /// The network coming back while a re-dial waits: dial now. And the network itself, read for the home's
+  /// gate (`isOnline`), assigned only when it moves.
   private func watchNetwork() {
     guard pathMonitor == nil else { return }
     let monitor = NWPathMonitor()
     monitor.pathUpdateHandler = { [weak self] path in
-      guard path.status == .satisfied else { return }
+      let online = MeshModel.pathIsOnline(path.status)
+      let satisfied = path.status == .satisfied
       Task { @MainActor in
-        guard let self, case .reconnecting = self.state else { return }
+        guard let self else { return }
+        if self.isOnline != online { self.isOnline = online }
+        guard satisfied, case .reconnecting = self.state else { return }
         self.keepUp()
       }
     }

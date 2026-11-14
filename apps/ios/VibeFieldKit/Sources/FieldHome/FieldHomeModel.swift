@@ -606,46 +606,104 @@ enum FieldHomeModel {
     case unreachable(desktop: String?)
   }
 
-  // MARK: - The gate (WI-L2 as amended 2026-11-13) — RED: the names only, each still answering by the old law
+  // MARK: - The gate (WI-L2 as amended 2026-11-13: signed in means a desktop answers now)
 
+  /// How long the phone has gone without a desktop answering (DESIGN.md §9 "The way in", amended 2026-11-13).
   enum Absence: Equatable {
+    /// Under the grace, with a desktop answering until a moment ago: the tabs stay, and say it themselves.
     case blip
+    /// Under the grace with none since the launch: the splash holds bare.
     case opening
+    /// Past the grace: the hold says it is looking.
     case looking
+    /// Past the patience: the page says what to do.
     case long
   }
 
+  /// One turn of an absence: what it becomes, and how long after the turn before it.
   struct AbsenceStep: Equatable {
     let after: Duration
     let then: Absence
   }
 
+  /// How long a phone may be without a desktop before the splash comes back (§8 "The phone's way in").
   static let reachGrace: Duration = .seconds(5)
+  /// How long the hold looks before the page says a desktop can't be reached.
   static let reachPatience: Duration = .seconds(10)
 
-  static func absenceCourse(from absence: Absence) -> [AbsenceStep] { [] }
+  /// What an absence passes through from where it stands. A fresh one (a drop, a launch) waits out the grace,
+  /// then looks for the patience. One already past its grace (Try again, coming back to VibeField, a sign-in
+  /// that Tailscale asked for, a network that returned) looks again at once.
+  static func absenceCourse(from absence: Absence) -> [AbsenceStep] {
+    switch absence {
+    case .blip, .opening:
+      return [AbsenceStep(after: reachGrace, then: .looking), AbsenceStep(after: reachPatience, then: .long)]
+    case .looking, .long:
+      return [AbsenceStep(after: .zero, then: .looking), AbsenceStep(after: reachPatience, then: .long)]
+    }
+  }
 
+  /// What the absence's clock runs on: a change of any of these starts it again from where it stands.
   struct Reach: Equatable {
+    /// A desktop answers, and the phone has a network.
     var connected: Bool
+    /// Tailscale is asking (a sign-in, an admin's approval): the page is the asking's own, and no clock runs.
     var asking: Bool
     var online: Bool
+    /// Try again and coming back to VibeField each count one.
     var attempt: Int
   }
 
   static func reach(meshState: MeshModel.State, online: Bool, answering: Int, attempt: Int) -> Reach {
-    Reach(connected: false, asking: false, online: online, attempt: attempt)
+    let asking = meshState == .needsLogin || meshState == .needsMachineAuth
+    return Reach(connected: online && answering > 0, asking: asking, online: online, attempt: attempt)
   }
 
-  static func absence(_ was: Absence, at reach: Reach) -> Absence { was }
+  /// What the clock makes of an absence when its facts change, before any time passes: connected, the next drop
+  /// begins as a blip; asked by Tailscale, the absence is long, so the sign-in's end goes to the hold and never
+  /// through the tabs; else it stands as it was, and `absenceCourse` runs from there.
+  static func absence(_ was: Absence, at reach: Reach) -> Absence {
+    if reach.connected { return .blip }
+    return reach.asking ? .long : was
+  }
 
-  /// RED — the old law's count: every desktop the link lists.
-  static func answering(_ desktops: [FieldDesktop]) -> Int { desktops.count }
+  /// How many desktops answer: a door that is ready (the home's client, or another desktop's probe), and one
+  /// that answered and stopped this phone in its own words (`failed`: a build too old, a scope not granted).
+  /// That desktop is there, so the tabs stand and say why, as they did; "Can’t reach your computer." would be
+  /// false of it. Asleep, connecting, reconnecting, or with no address to dial, a desktop is known and does
+  /// not answer.
+  static func answering(_ desktops: [FieldDesktop]) -> Int {
+    desktops.filter { desktop in
+      switch desktop.state {
+      case .ready, .failed: return true
+      case .noDoor, .connecting, .reconnecting, .refusedDoor: return false
+      }
+    }.count
+  }
 
-  static func awaitedDesktop(_ names: [String]) -> String? { nil }
+  /// The desktop the gate's page names: the account's one desktop, or nil when it has none or several
+  /// ("on your computer").
+  static func awaitedDesktop(_ names: [String]) -> String? {
+    names.count == 1 ? names.first : nil
+  }
 
-  static func firstWayIn(_ was: Bool, page: DoorPage?) -> Bool { was }
+  /// Whether a first way in is under way. It begins when one of its own pages stands (no account, the desktop
+  /// that sent you, an admin's approval, joining, looking, No desktops yet) and ends at signed in; Sign in
+  /// again, Another account? and the gate's three screens leave it as it was. While it is under way the gate's
+  /// screens never stand in its place, so a desktop listed mid-way neither drops the steps nor loses the found
+  /// beat.
+  static func firstWayIn(_ was: Bool, page: DoorPage?) -> Bool {
+    guard let page else { return false }
+    switch page {
+    case .welcome, .fromCode, .approval, .joining, .looking, .noDesktops: return true
+    case .signInAgain, .anotherAccount, .offline, .reaching, .unreachable: return was
+    }
+  }
 
-  static func wayInDraws(_ step: WayInStep) -> Bool { true }
+  /// Whether the way in draws anything over the splash for this step: all but the launch's bare hold.
+  static func wayInDraws(_ step: WayInStep) -> Bool {
+    step != .page(.reaching(quiet: true))
+  }
 
   /// The found beat's subject (WI-2): the desktop the phone first reached.
   struct FoundDesktop: Equatable {
@@ -657,8 +715,14 @@ enum FieldHomeModel {
   static let foundBeatHold: Duration = .milliseconds(1200)
 
   /// WI-L2 — the way in's page, or nil for signed in: an account whose node is not asking, with a VibeField
-  /// desktop known (listed now, or remembered from an earlier listing). A desktop asleep keeps the phone
-  /// signed in; Tailscale asking again does not.
+  /// desktop answering now and a network on the phone (amended 2026-11-13, James: the phone is a companion to
+  /// VibeField on a computer, and offers nothing without one).
+  ///
+  /// *Errata (2026-11-13):* this said "with a VibeField desktop known (listed now, or remembered from an
+  /// earlier listing). A desktop asleep keeps the phone signed in". A desktop known and not answering now
+  /// gates a phone that has been here before (`remembered` > 0 and no first way in under way): nothing for a
+  /// blip, the bare splash at a launch, then the hold, then the page; with no network, You’re offline. A first
+  /// way in keeps its own pages until a desktop answers.
   static func doorPage(
     fixtureOwnsTheField: Bool,
     meshState: MeshModel.State,
@@ -678,7 +742,6 @@ enum FieldHomeModel {
     signInNote: String?,
     expected: PhoneCodeExpectation? = nil
   ) -> DoorPage? {
-    // RED — the amended law's inputs are taken and not read yet: the decision below is WI-L2 as it stood
     // A fixture's photograph is of the tabs it stages; a page over it would be
     // this decision's, not the fixture's (it stamps its own).
     if fixtureOwnsTheField { return nil }
@@ -691,12 +754,23 @@ enum FieldHomeModel {
       return .anotherAccount(
         current: account, expected: expected.login, from: expected.from, byLink: expected.arrival == .link)
     }
-    let known = listed + remembered > 0
     // No account: the welcome, or — for a code that came by its link — the desktop that sent you.
     func welcome(_ failure: String?) -> DoorPage {
       guard let expected else { return .welcome(failure: failure) }
       if expected.arrival == .link, failure == nil { return .fromCode(desktop: expected.from, login: expected.login) }
       return .welcome(failure: failure, expecting: expected.login)
+    }
+    // An account with no desktop answering. A phone that has been here before is gated by how long it has gone
+    // without one; a first way in stands on its own page (`first`) until one answers.
+    let returning = !firstWayIn && remembered > 0
+    func gate(_ first: DoorPage) -> DoorPage? {
+      guard returning else { return first }
+      switch absence {
+      case .blip: return nil
+      case .opening: return .reaching(quiet: true)
+      case .looking: return online ? .reaching(quiet: false) : .offline
+      case .long: return online ? .unreachable(desktop: desktop) : .offline
+      }
     }
     switch meshState {
     case .needsMachineAuth:
@@ -705,28 +779,30 @@ enum FieldHomeModel {
       return account == nil ? welcome(signInNote) : .signInAgain(note: signInNote)
     case .off, .starting, .stopping:
       guard let account else { return welcome(signInNote) }
-      return known ? nil : .joining(login: account, note: nil)
+      return gate(.joining(login: account, note: nil))
     case .failed(let reason):
       guard let account else { return welcome(reason) }
-      return known ? nil : .joining(login: account, note: reason)
+      return gate(.joining(login: account, note: reason))
     case .reconnecting:
       // the mesh reconnects only for a remembered account
       guard let account else { return .joining(login: nil, note: nil) }
-      return known ? nil : .joining(login: account, note: nil)
+      return gate(.joining(login: account, note: nil))
     case .up:
       // Up with no login yet is the beat before the re-gate: still joining.
       guard let account else { return .joining(login: nil, note: nil) }
-      if known { return nil }
-      // No desktops yet is an answer, never the blank before one.
-      guard isGated, hasListed else { return .looking(login: account) }
-      return .noDesktops(login: account)
+      // signed in: a desktop answers now, and the phone has a network to hear it on
+      if online, answering > 0 { return nil }
+      // No desktops yet is an answer, never the blank before one; a desktop known and not answering is looked for
+      guard isGated, hasListed, listed + remembered == 0 else { return gate(.looking(login: account)) }
+      return gate(.noDesktops(login: account))
     }
   }
 
   /// WI-2 — whether the way in ends here, with the found beat: a page that stood for a first sign-in yields to
   /// signed in. "Another account?" kept is no arrival, and a launch that is signed in from its first frame
   /// passes no page at all. Nor does Sign in again end the way in with a beat (WI-1's review, M4): §9 sets the
-  /// beat between the steps and the lock's offer, and Tailscale asking a remembered phone again is neither.
+  /// beat between the steps and the lock's offer, and Tailscale asking a remembered phone again is neither. Nor do
+  /// the gate's three screens (WI-L2 as amended 2026-11-13): a desktop answering again is a return, not an arrival.
   static func wayInEnds(previous: DoorPage?, next: DoorPage?) -> Bool {
     guard let previous, next == nil else { return false }
     switch previous {

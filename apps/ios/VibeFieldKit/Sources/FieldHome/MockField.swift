@@ -14,6 +14,9 @@
   /// there is no tailnet to sign in to). There is no Connect or Disconnect: the
   /// phone stays on the mesh by itself while signed in (2026-10-18), so a lost
   /// mesh is the `reconnecting` standing, stamped by `-vf-mock-reconnecting`.
+  /// *Amended 2026-11-13 (WI-L2):* with no desktop answering the phone is gated,
+  /// so that standing draws Can’t reach your computer. over the splash, and its
+  /// Try again brings the mock's desktop back (`MockAccount.door`).
   ///
   /// The PIXELS come from the shipping decisions over these inputs
   /// (`FieldHomeModel.accountFace`, the History views), never from a second
@@ -29,7 +32,8 @@
       case signedOut
       /// Signed in, the mesh up, studio answering and mini asleep.
       case up
-      /// Signed in, the mesh lost and re-dialling: both desktops asleep.
+      /// Signed in, the mesh lost and re-dialling: both desktops asleep, so the
+      /// gate stands (WI-L2 as amended 2026-11-13).
       case reconnecting
       /// TS-7 — signed in, and an admin of the network approves new devices
       /// (`-vf-mock-approval`).
@@ -111,7 +115,10 @@
       deviceId: "dev-1", name: "studio", platform: "darwin", lastSeen: AccountFixtures.heard)
 
     /// The way in's page, through the real decision (WI-1): the welcome signed
-    /// out, the approval page waiting, signed in (nil) otherwise.
+    /// out, the approval page waiting, signed in (nil) while studio answers.
+    /// *Amended 2026-11-13 (WI-L2):* `reconnecting` has no desktop answering,
+    /// and the mock keeps no clock, so it stamps the absence long: the gate's
+    /// page, naming no desktop since the account has two.
     var door: FieldHomeModel.DoorPage? {
       let state: MeshModel.State =
         switch standing {
