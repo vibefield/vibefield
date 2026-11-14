@@ -237,18 +237,20 @@ const PIN_EXPECTATIONS = [
   // to the line's end like ice's row, so a prerelease never passes for the release.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/rosetta-protocol":\s*0\.1\.6\s*$/m,
-    label: '"@vibefield/rosetta-protocol": 0.1.6',
+    re: /"@vibefield\/rosetta-protocol":\s*0\.1\.7\s*$/m,
+    label: '"@vibefield/rosetta-protocol": 0.1.7',
     package: "@vibefield/rosetta-protocol",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/rosetta-room":\s*0\.1\.6\s*$/m,
-    label: '"@vibefield/rosetta-room": 0.1.6',
+    re: /"@vibefield\/rosetta-room":\s*0\.1\.7\s*$/m,
+    label: '"@vibefield/rosetta-room": 0.1.7',
     package: "@vibefield/rosetta-room",
   },
-  // SP-7b D6: the kit's rosetta Swift row, the release of the two npm rows and rosettad's
-  // pin. It stands aside while the dev overlay links rosetta and renders it nil (RD-3).
+  // SP-7b D6: the kit's rosetta Swift row, the lock's `release.swift`. Since the EL8 to 0.1.7
+  // (2026-11-14) it is NOT the npm rows' release: 0.1.7 changes no Swift path, so the kit stays on
+  // v0.1.6 (DECISIONS RD, the dated split) while the npm rows and rosettad's pin are 0.1.7. It
+  // stands aside while the dev overlay links rosetta and renders it nil (RD-3).
   {
     file: "apps/ios/VibeFieldKit/Package.swift",
     re: /^let rosettaRelease: Version\? = "0\.1\.6"$/m,
