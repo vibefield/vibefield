@@ -7847,11 +7847,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       and the room's tooltip are `Previous message`.
     - **Which messages**: a prompt a person typed, and no other. A settings command and a prompt a machine
       wrote (an assignment) are passed over, and do not keep the button up (*VF-PM's ruling, 2026-11-13
-      23:47Z, so the two halves match*). **On the phone a settings command is still stepped on, for now**:
-      the phone tells a machine's prompt from a person's by the group its row stands in (an assignment, a
-      system or a synthetic row is passed over), and nothing in the rows names a settings command; the room
-      tells one by its words and the answer under it, and the phone takes that same rule in the commits that
-      follow this text (*VF-PM's rulings, 2026-11-14 00:32Z and 00:36Z*).
+      23:47Z, so the two halves match*). **The phone tells them by the room's own rule** (rosetta's
+      `buildPrompt`; *VF-PM's ruling, 2026-11-14 00:36Z: the phone's History matches the desktop's*): a
+      machine's prompt is one whose row stands in a parent agent's invocation; a settings command is a
+      one-line slash command with nothing attached, `/model` or `/effort`, whose very next row is the
+      session's answer and is a bare value. A slash command that is no setting (`/compact`), a setting the
+      session refused or answered in a sentence, and a prompt or an answer the desktop cut all stay a person's
+      message. Nothing is drawn differently for it: only where the button goes. A document the phone kept
+      before this counts every prompt as a person's until its desktop next answers. *(Corrected 2026-11-14:
+      for one commit, `8630c6d6a`, this said a settings command "is still stepped on, for now" and named
+      system and synthetic rows; the rule landed the same hour, and it is the room's: a parent's invocation
+      alone is a machine's.)*
     - **What a press does**: the document goes to the nearest message of the person's own (a prompt) that
       begins above the top of the view, and stands that message's top 12 under the head. (**The head**: the
       phone's document pins no pill at its top, so its head is the navigation bar's foot; the room measures the
