@@ -419,11 +419,11 @@ export function ChromeSection({
           came from above it; the same reach while Chat shows, the card rising only its tip to the
           panel's foot, never over the composer; raised (⇧⌘V), every card up and straight, the
           keyboard's card ringed; a card picked up, at reading size in the middle over the window
-          out of focus, the bar under the head saying where it came from, with Remove and Done; a
-          card carried out of the hand over a pane, its place kept in the fan, the pane ringed and
-          saying "Paste into vibe-field" over the card; and where cards came from, each reached in
-          turn — a paste with no caret by its act alone, a copy made in Settings by the view under
-          it, and one History's room made by History alone.
+          out of focus, the bar under the head saying where it came from, with Remove, Flip it and
+          Done; a card carried out of the hand over a pane, its place kept in the fan, the pane
+          ringed and saying "Paste into vibe-field" over the card; and where cards came from, each
+          reached in turn — a paste with no caret by its act alone, a copy made in Settings by the
+          view under it, and one History's room made by History alone.
         </p>
         <CardFacesPlate cards={CARD_FIXTURES} />
         <CardFacesPlate cards={CARD_FIXTURES} night />

@@ -445,9 +445,9 @@ export function Cards({
   // The hand's keys, on the window's capture phase — heard before a pane or the desk. ONE scope
   // owns each key, chosen once (the contract's rule):
   // - none while a drag carries a card: its keys are its own (Esc sends it home);
-  // - a card picked up is a modal: Esc puts it back, ⌫ removes it, Tab walks its bar's two buttons
-  //   and never out, and nothing under the scrim hears any other key — the bar's own buttons do,
-  //   and so do the product chords, the window's other capture listeners;
+  // - a card picked up is a modal: Esc puts it back, ⌫ removes it, Tab walks its bar (Remove,
+  //   Flip it, Done) and never out, and nothing under the scrim hears any other key — the bar's
+  //   own buttons do, and so do the product chords, the window's other capture listeners;
   // - the raised hand takes ← → Return ⌫ Esc from wherever the keyboard is (it is the open
   //   surface);
   // - at rest ⌫ removes the card the pointer is ON — never one it is merely near — unless a
@@ -462,7 +462,7 @@ export function Cards({
       took.current = event.key;
       run();
     };
-    /** Tab in the held card's bar: Remove ↔ Done, never out under the scrim. */
+    /** Tab in the held card's bar: Remove, Flip it, Done and round, never out under the scrim. */
     const walkBar = (back: boolean): void => {
       const buttons = heldEl.current?.querySelectorAll<HTMLElement>(".vf-cards-bar button");
       const bar: HTMLElement[] = buttons === undefined ? [] : Array.from(buttons);

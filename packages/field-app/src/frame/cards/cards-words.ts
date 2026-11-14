@@ -173,6 +173,8 @@ export const OUTSIDE_WORDS = {
 export const HAND_WORDS = {
   raise: "Your hand  ⇧⌘V",
   remove: "Remove",
+  /** the held card's turn (DESIGN.md §8 "Picking one up"): to its back, and again to its face */
+  flip: "Flip it",
   done: "Done",
   empty: "Nothing in your hand yet",
   removeKey: "Remove  ⌫",

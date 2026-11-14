@@ -692,7 +692,7 @@
 /* ── A CARD PICKED UP (HN-D5) ──────────────────────────────────────────────────────────────────
    As the desk opens a notebook: the card at reading size in the middle, the window behind it out
    of focus (blurred 14, dimmed 8%), and a bar under the head at the tools in hand's place (y 64)
-   saying where it came from, with Remove and Done. Above the line and the hand. */
+   saying where it came from, with Remove, Flip it and Done. Above the line and the hand. */
 .vf-cards-held {
   position: absolute;
   z-index: 64;
@@ -723,6 +723,8 @@
   left: 0;
   opacity: var(--vf-cards-o, 1);
   transform-origin: 50% 50%;
+  /* the turn is seen from 1000, in the card's own units (§8 Flip it) */
+  perspective: 1000px;
   transition:
     transform 560ms var(--vf-ease-island),
     opacity 120ms ease;
@@ -740,7 +742,67 @@
   transition: transform 280ms cubic-bezier(0.4, 0, 1, 1);
 }
 
-.vf-cards-held:not([data-phase="up"]) .vf-card {
+/* Flip it (DESIGN.md §8 "Picking one up"): the card picked up turns about its upright to its
+   printed back and again to its face, in 480ms on the island curve. Each side is hidden from
+   behind. */
+.vf-cards-flip {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 480ms var(--vf-ease-island);
+}
+
+.vf-cards-flip[data-side="back"] {
+  transform: rotateY(180deg);
+}
+
+.vf-cards-flip > .vf-card {
+  backface-visibility: hidden;
+}
+
+/* the back (§5 "the press", the back Pressed): its own side, wearing its own print and casting
+   the card's own shadow at a held card's full lift (§5's recipe at l = 1). Flat, until it has
+   printed and where WebGL2 is refused, it is its field and its rule alone; the mark is only ever
+   pressed. */
+.vf-card-back {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: var(--vf-card-stock);
+  box-shadow:
+    0 0.7px 0 0.15px var(--vf-card-edge),
+    0 0.6px 1.4px rgb(0 0 0 / calc(0.15 * var(--vf-card-shade))),
+    2px 9px 17px rgb(0 0 0 / calc(0.12 * var(--vf-card-shade))),
+    5px 27px 48px rgb(0 0 0 / calc(0.17 * var(--vf-card-shade)));
+  filter: brightness(var(--vf-card-dim));
+  transform: rotateY(180deg);
+  backface-visibility: hidden;
+  pointer-events: auto;
+}
+
+.vf-card-back::before {
+  content: "";
+  position: absolute;
+  inset: 5.5px;
+  border-radius: 3.6px;
+  background: var(--vf-card-back);
+  /* the rule: a hairline of 0.32 centred 2.6 inside the field's edge */
+  box-shadow:
+    inset 0 0 0 2.44px var(--vf-card-back),
+    inset 0 0 0 2.76px var(--vf-card-back-rule);
+}
+
+/* printed: the back wears the print made at a held card's size (only a card picked up shows it) */
+:root[data-vf-card-print="ready"] .vf-card-back {
+  background: center / 100% 100% no-repeat;
+  background-image: var(--vf-card-print-back-held, var(--vf-card-print-back));
+}
+
+:root[data-vf-card-print="ready"] .vf-card-back::before {
+  display: none;
+}
+
+/* on its way home, or removed, neither side takes the pointer */
+.vf-cards-held:not([data-phase="up"]) :is(.vf-card, .vf-card-back) {
   pointer-events: none;
 }
 
@@ -751,6 +813,30 @@
 
 .vf-cards-held[data-motion="reduced"] .vf-cards-scrim {
   transition-duration: 120ms;
+}
+
+/* M6, Flip it: no turn; the sides cross-fade in 90ms. These stand after the turn's own rules: the
+   hand's tests read a rule at the first selector that ends with its name. */
+.vf-cards-held[data-motion="reduced"] .vf-cards-flip {
+  transform: none;
+  transition: none;
+}
+
+.vf-cards-held[data-motion="reduced"] .vf-cards-flip > * {
+  transition: opacity 90ms ease;
+}
+
+.vf-cards-held[data-motion="reduced"] .vf-card-back {
+  transform: none;
+  opacity: 0;
+}
+
+.vf-cards-held[data-motion="reduced"] .vf-cards-flip[data-side="back"] > .vf-card {
+  opacity: 0;
+}
+
+.vf-cards-held[data-motion="reduced"] .vf-cards-flip[data-side="back"] > .vf-card-back {
+  opacity: 1;
 }
 
 /* the bar under the head, on the line's glass (§5) */

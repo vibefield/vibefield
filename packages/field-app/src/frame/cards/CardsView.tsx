@@ -2,6 +2,7 @@ import {
   type CSSProperties,
   type ReactElement,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
   useEffect,
@@ -435,7 +436,8 @@ function keepKeyInside(event: ReactKeyboardEvent<HTMLDivElement>): void {
 
 /** A card picked up (HN-D5): it leaves its place in the fan for the middle at reading size while
  * the window behind it goes out of focus, and the bar under the head says where it came from. Up,
- * it is a modal dialog named by the card. */
+ * it is a modal dialog named by the card. Flip it turns it to its printed back and again to its
+ * face (DESIGN.md §8 "Picking one up"); put back, it goes home face up. */
 function HeldLayer({
   held,
   slot,
@@ -459,6 +461,20 @@ function HeldLayer({
   }, [risen, held.phase]);
 
   const up = held.phase === "up";
+  // Flip it (DESIGN.md §8 "Picking one up"): which side is up while the card is up. Put back, it
+  // goes home face up, and comes up face up if it is picked up again.
+  const [turned, setTurned] = useState(false);
+  useEffect(() => {
+    if (!up) setTurned(false);
+  }, [up]);
+  const back = turned && up;
+  const flip = (): void => setTurned((was) => !was);
+  /** A double-click on the card turns it over, and goes no further: nothing under the scrim hears
+   * it. Only a card that is up turns. */
+  const turnOver = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    event.stopPropagation();
+    if (up) flip();
+  };
   const centre = heldCentre(win);
   let at = { x: centre.x, y: centre.y, s: centre.s, o: 1 };
   if (reducedMotion) {
@@ -491,8 +507,16 @@ function HeldLayer({
       onKeyDown={keepKeyInside}
     >
       <div className="vf-cards-scrim" aria-hidden="true" onClick={onPutBack} />
-      <div ref={box} className="vf-cards-heldcard" style={cardStyle as CSSProperties}>
-        <CardFace card={held.card} held />
+      <div
+        ref={box}
+        className="vf-cards-heldcard"
+        style={cardStyle as CSSProperties}
+        onDoubleClick={turnOver}
+      >
+        <div className="vf-cards-flip" data-side={back ? "back" : "face"}>
+          <CardFace card={held.card} held />
+          <div className="vf-card-back" aria-hidden="true" />
+        </div>
       </div>
       <div className="vf-cards-bar" {...(up ? { "data-on": "" } : {})} inert={!up}>
         <span className="vf-cards-bar-from">{provenance(held.card, now, keys)}</span>
@@ -504,6 +528,9 @@ function HeldLayer({
           onClick={onRemoveHeld}
         >
           {HAND_WORDS.remove}
+        </button>
+        <button type="button" aria-pressed={back} onClick={flip}>
+          {HAND_WORDS.flip}
         </button>
         <button
           type="button"
