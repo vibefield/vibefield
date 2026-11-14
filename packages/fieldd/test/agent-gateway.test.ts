@@ -556,6 +556,31 @@ describe("the refusal table — VibeField's sentences (AR-7b)", () => {
       `${TYPED_COMMAND} was not started: the adapter's own sentence. Change that, then run ${TYPED_COMMAND} again.`,
     );
   });
+
+  // item 278 (V1): a managed launch the agent's own adapter refuses because this Mac's install of it names no
+  // interpreter (`INTERPRETER_UNAVAILABLE`, puppeteer 0.4.1's Hermes gateway) is a missing install, VibeField's to say
+  // in James's words (A on j-278-hermes-words, 2026-11-13 00:36:05Z), naming the agent by its label. The adapter's
+  // sentence is about interpreters and wrappers, and "Change that" is no step a person can take.
+  it("says a launch refused for want of the agent's own install in DESIGN.md §9's pane line, naming the agent by its label", () => {
+    const refused = {
+      code: "launch-refused" as const,
+      reason:
+        "no interpreter is named for the Hermes gateway host, and no hermes wrapper on its PATH names one",
+      providerCode: "INTERPRETER_UNAVAILABLE",
+      providerId: TYPED_PROVIDER,
+      command: TYPED_COMMAND,
+    };
+    const words = agentRefusal(refused, "Hermes");
+    expect(words).toBe(
+      `${TYPED_COMMAND} was not started: VibeField can't find this Mac's Hermes install. Reinstall Hermes, then run ${TYPED_COMMAND} again.`,
+    );
+    expect(words).not.toMatch(/interpreter|wrapper|python/iu);
+    // as a pane prints it, the kit's label first: DESIGN.md §9's line, with the command as typed
+    const design = readFileSync(join(PACKAGE_ROOT, "..", "..", "DESIGN.md"), "utf8");
+    const paneLine = `${AGENT_GATEWAY_HOST_LABEL}: ${words.replaceAll(TYPED_COMMAND, "‹command›")}`;
+    expect(design.replace(/\s+/gu, " ")).toContain(`"${paneLine}"`);
+    expect(boundSpawnThroughText(words)).toBe(words);
+  });
 });
 
 // ── the unit box: the real kit and puppeteer's real runtime, no floor ──

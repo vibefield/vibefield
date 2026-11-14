@@ -2953,6 +2953,44 @@ describe("RV #1 — a launch refused for want of the file it observes agents wit
   });
 });
 
+// item 278 (V1) — puppeteer 0.4.1's Hermes adapter refuses a managed launch when this Mac's install of it names no
+// interpreter (`INTERPRETER_UNAVAILABLE`, neutral: no vendor's word). The person reads DESIGN.md §9's sentence
+// (James's A on j-278-hermes-words, 2026-11-13 00:36:05Z), naming the agent by its label, never the adapter's
+// sentence about interpreters and wrappers. The door answers it bare, as it does the forwarder's, for the app says
+// every door refusal after its own words. It is PRECONDITION_FAILED: a step the person takes, not a service down.
+describe("item 278 — a launch refused for want of the agent's own install (INTERPRETER_UNAVAILABLE)", () => {
+  it("is refused in DESIGN.md §9's sentence, bare, naming the agent by its label, not retryable, and nothing starts", async () => {
+    const { daemon, dataDir } = await setup({
+      floor: "mock",
+      launchRefusal: {
+        code: "INTERPRETER_UNAVAILABLE",
+        message:
+          "no interpreter is named for the Hermes gateway host, and no hermes wrapper on its PATH names one",
+      },
+    });
+    const win = await window(daemon, DECK, "i278");
+    const refused = await win.callErr("agent.spawn", { provider: "scripted" });
+    // the label is the catalog's, else the provider's id: this file's default catalog
+    // (SCRIPTED_CATALOG) holds SCRIPTED_ROW, labelled "Scripted", so the door names the label
+    expect(refused.message).toBe(
+      "VibeField can't find this Mac's Scripted install. Reinstall Scripted, then try again.",
+    );
+    // and never the id
+    expect(refused.message).not.toContain("this Mac's scripted install");
+    expect(refused.message).not.toMatch(/interpreter|wrapper|python/iu);
+    expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(refused.data?.retryable).toBe(false);
+    expect(refused.data?.details).toMatchObject({
+      provider: "scripted",
+      code: "AGENT_LAUNCH_REFUSED",
+      refusal: "INTERPRETER_UNAVAILABLE",
+      reason: "agent-install-missing",
+    });
+    // nothing was born: no record, no session
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
+  });
+});
+
 describe("PJ-7 — a launch names a place (agent.spawn {place})", () => {
   it("runs in the place's own folder, resolved from this desktop's place facts; the ledger names the ref, never the path; the birth hands the place to its project", async () => {
     const box = await setup({ floor: "real", profiles: true });
