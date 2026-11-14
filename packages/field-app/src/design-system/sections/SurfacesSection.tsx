@@ -11,7 +11,11 @@ import {
 import { LoadingVeilView } from "../../hud/LoadingVeil";
 import { AppearanceSectionView } from "../../panels/AppearanceSection";
 import { ProfileMark } from "../../panels/agents/ProfilesView";
-import { DevicesSectionView, type DevicesSheet } from "../../panels/DevicesSection";
+import {
+  DevicesSectionView,
+  type DevicesSheet,
+  type RemoveStep,
+} from "../../panels/DevicesSection";
 import { HistorySettingsView } from "../../panels/HistorySettings";
 import {
   SettingsDialog,
@@ -333,6 +337,8 @@ function DevicesSpecimenPage({ state }: { state: DevicesFixtureState }): ReactEl
   const [sheet, setSheet] = useState<DevicesSheet>(fixture.sheet);
   // ...and so does the switch for asking again (TS-4)
   const [connectAsks, setConnectAsks] = useState(fixture.connectAsks ?? true);
+  // ...and Remove for a phone (item 406): the confirm in place, and the line once it is done
+  const [remove, setRemove] = useState<RemoveStep>(fixture.remove ?? { kind: "idle" });
   const noop = (): void => undefined;
   return (
     <DevicesSectionView
@@ -358,6 +364,11 @@ function DevicesSpecimenPage({ state }: { state: DevicesFixtureState }): ReactEl
       onNewUser={noop}
       connectAsks={connectAsks}
       onConnectAsks={setConnectAsks}
+      remove={remove}
+      onRemoveAsk={(deviceId) =>
+        setRemove(deviceId === null ? { kind: "idle" } : { kind: "asking", deviceId })
+      }
+      onRemove={(device) => setRemove({ kind: "removed", deviceId: device.id, name: device.name })}
     />
   );
 }

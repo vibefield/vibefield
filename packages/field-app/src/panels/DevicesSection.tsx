@@ -1,7 +1,13 @@
-import { APP_PREFERENCE_KEYS, type AppPreferences, type DeviceInfo } from "@vibefield/contracts";
+import {
+  APP_PREFERENCE_KEYS,
+  type AppPreferences,
+  type DeviceInfo,
+  PhoneFact,
+} from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit";
+import { FielddRpcError } from "@vibefield/fieldd-client";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
-import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { AddPhoneCode } from "../account/door/add-phone-code";
 import {
   LINK_ACT_LABEL,
@@ -59,6 +65,16 @@ export type DisconnectStep =
   | { kind: "pending" }
   | { kind: "failed"; reason: string };
 
+/** Item 406 — Remove for a phone (DESIGN.md §8 "Settings → Devices", amended 2026-11-14): the
+ * confirm open under one phone's row, its act in flight, the refusal in the product's words, or
+ * the line said once after. Each names the row by its durable id. */
+export type RemoveStep =
+  | { kind: "idle" }
+  | { kind: "asking"; deviceId: string }
+  | { kind: "pending"; deviceId: string }
+  | { kind: "failed"; deviceId: string; reason: string }
+  | { kind: "removed"; deviceId: string; name: string };
+
 /** One device, as the quiet rows draw it: an OS mark, the name, one word. */
 export interface DevicesRow {
   readonly id: string;
@@ -68,6 +84,10 @@ export interface DevicesRow {
   readonly online: boolean;
   /** TS-3b — whether the person named it (so the computer's name is offered back) */
   readonly nameSource?: "user" | "hostname" | undefined;
+  /** Item 406 — the roster KNOWS it is a phone (`DeviceInfo.phone`, the positive fact), so its
+   * row ends in Remove…. Absent or false: This Mac, a desktop, or a row whose kind is not known
+   * yet, none of which is ever offered Remove (a refusal is never taken back). */
+  readonly phone?: boolean | undefined;
 }
 
 export interface DevicesSectionViewProps {
@@ -112,23 +132,60 @@ export interface DevicesSectionViewProps {
    * the preferences are read, absent where no controller lends it */
   connectAsks?: boolean | null | undefined;
   onConnectAsks?: ((on: boolean) => void) | undefined;
+  /** Item 406 — Remove for a phone: whose confirm is open, its act, or the line after */
+  remove: RemoveStep;
+  /** open the confirm under a phone's row (its durable id), or close it (null) */
+  onRemoveAsk: (deviceId: string | null) => void;
+  /** the confirm's Remove: `device.remove` for that row */
+  onRemove: (device: DevicesRow) => void;
 }
 
 /** TS-4 — the switch's words (DESIGN.md §9, "Asking again"). */
 export const CONNECT_ASKS_TITLE = "Suggest connecting where it helps";
 export const CONNECT_ASKS_LINE = "At most once a day, and each place once a month.";
 
+/** Item 406 — a refused Remove in the product's words, by fieldd's error kind, never its message.
+ * DESIGN.md §9 is silent on these: drafts, owed to it first and to James's word. A kind not named
+ * here (INTERNAL, a cut socket) is the one the person can try again, since the act is declarative.
+ * AUDIT_UNAVAILABLE never comes here: the phone WAS removed (`removeDone`). */
+export function removeRefusalWords(kind: string | undefined, name: string): string {
+  switch (kind) {
+    case "FORBIDDEN_SCOPE":
+      return "This window can't remove devices.";
+    case "PRECONDITION_FAILED":
+      return `${name} isn't known here as a phone, so it can't be removed.`;
+    case "NOT_FOUND":
+      return `${name} is no longer in your devices.`;
+    default:
+      return `Couldn't remove ${name}. Try again.`;
+  }
+}
+
+/** Item 406 — a failed answer that is still a Remove done: fieldd refuses and closes the phone
+ * even when its audit fails, and then says the audit's failure (`revokeWindowToken`'s law), so
+ * the person hears that the phone was removed and nothing alarming. */
+function removeDone(cause: unknown): boolean {
+  return cause instanceof FielddRpcError && cause.kind === "AUDIT_UNAVAILABLE";
+}
+
 /** "2 Nov": the renewal's day, in the person's own calendar words. */
 function dueDay(at: number): string {
   return new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
+/** A refusal, said inline in the attention ink (item 406 moved it off Tailwind's amber, the
+ * deviation DESIGN.md §8 named). */
 function Refusal({ reason }: { reason: string }): ReactElement {
   return (
-    <div className="text-right text-[12px] text-amber-600 dark:text-amber-400" role="alert">
+    <div className="text-right text-[12px] text-[var(--vf-ink-attention)]" role="alert">
       {reason}
     </div>
   );
+}
+
+/** The console's machines page: the floor's own address where the face carries one. */
+function consoleOf(face: LinkFace): string {
+  return ("adminUrl" in face ? face.adminUrl : null) ?? HOSTED_MACHINES_URL;
 }
 
 /** The card's state word: green when connected, muted when this Mac is alone,
@@ -580,25 +637,182 @@ function ThisMac(props: DevicesSectionViewProps): ReactElement {
   );
 }
 
+/** Item 406 — the confirm, in place under the phone's row (DESIGN.md §8 "Settings → Devices"
+ * and §9 "The link's words", amended 2026-11-14; drafts pending James): its title, what goes and
+ * what stays, the line that leaves the network side to Tailscale's admin console, then Cancel,
+ * leading and focused, and Remove in red text. Esc closes it, as it closes the page's sheets, and
+ * goes no further (the Settings dialog closes on an Escape the window hears). While it runs, both
+ * wait. */
+function RemoveConfirm({
+  name,
+  step,
+  consoleUrl,
+  onCancel,
+  onRemove,
+}: {
+  name: string;
+  step: RemoveStep;
+  consoleUrl: string;
+  onCancel: () => void;
+  onRemove: () => void;
+}): ReactElement {
+  const cancel = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+  const busy = step.kind === "pending";
+  useEffect(() => {
+    cancel.current?.focus();
+  }, []);
+  return (
+    <fieldset
+      className="vf-devices-remove"
+      aria-labelledby={titleId}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!busy) onCancel();
+      }}
+    >
+      <p id={titleId} className="vf-devices-remove-title">{`Remove ${name}?`}</p>
+      <p className={labelCls}>
+        {`${name} stops reaching your agents and your field. Everything on your computers stays.`}
+      </p>
+      <p className={labelCls}>
+        It stays on your Tailscale network until you remove it in Tailscale's admin console.
+      </p>
+      <div className="vf-devices-acts">
+        <a className={buttonCls} href={consoleUrl} target="_blank" rel="noreferrer">
+          Manage in Tailscale ↗
+        </a>
+      </div>
+      <div className="vf-devices-acts">
+        {step.kind === "failed" && <Refusal reason={step.reason} />}
+        <button ref={cancel} type="button" className={buttonCls} disabled={busy} onClick={onCancel}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={`${buttonCls} text-[var(--vf-red)]`}
+          disabled={busy}
+          data-running={busy ? "" : undefined}
+          onClick={onRemove}
+        >
+          {busy ? "Removing…" : "Remove"}
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+/** One quiet row: an OS mark, the name, one word. A row the roster knows to be a phone ends in
+ * Remove…, a fourth column in red text, and its confirm opens in place under it (item 406). */
+function DeviceRow({
+  device,
+  remove,
+  consoleUrl,
+  onRemoveAsk,
+  onRemove,
+}: {
+  device: DevicesRow;
+  remove: RemoveStep;
+  consoleUrl: string;
+  onRemoveAsk: (deviceId: string | null) => void;
+  onRemove: () => void;
+}): ReactElement {
+  // the positive fact alone: never This Mac, a desktop, or a row whose kind is not known yet
+  const removable = device.phone === true && !device.self;
+  const open =
+    removable &&
+    remove.kind !== "idle" &&
+    remove.kind !== "removed" &&
+    remove.deviceId === device.id;
+  const idle = remove.kind === "idle";
+  const opener = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    // closed by Cancel or Esc: the keyboard goes back to the act that opened it
+    if (wasOpen.current && !open && idle) opener.current?.focus();
+    wasOpen.current = open;
+  }, [open, idle]);
+  return (
+    <li
+      className="vf-devices-row"
+      data-self={device.self ? "" : undefined}
+      data-phone={removable ? "" : undefined}
+    >
+      <OsMark os={device.os} size={16} />
+      <span className="vf-devices-row-name">{device.name}</span>
+      <span className={labelCls}>
+        {device.self ? "This Mac" : device.online ? "Online" : "Away"}
+      </span>
+      {removable && (
+        <button
+          ref={opener}
+          type="button"
+          className={`${buttonCls} text-[var(--vf-red)]`}
+          aria-expanded={open}
+          disabled={remove.kind === "pending"}
+          onClick={() => onRemoveAsk(device.id)}
+        >
+          Remove…
+        </button>
+      )}
+      {open && (
+        <RemoveConfirm
+          name={device.name}
+          step={remove}
+          consoleUrl={consoleUrl}
+          onCancel={() => onRemoveAsk(null)}
+          onRemove={onRemove}
+        />
+      )}
+    </li>
+  );
+}
+
 function YourDevices(props: DevicesSectionViewProps): ReactElement {
   const linked = props.face.kind === "linked";
-  const rows =
+  const { remove } = props;
+  // item 406 — where the removed phone's row stood, so the line after is said in its place
+  const [slot, setSlot] = useState<number | null>(null);
+  const rows: readonly DevicesRow[] =
     props.devices.length > 0
       ? props.devices
       : [{ id: "self", name: "This Mac", os: osOf(props.platform), self: true, online: true }];
+  const consoleUrl = consoleOf(props.face);
+  const removed = remove.kind === "removed" ? remove : null;
+  // the answer can outrun the roster's pass, which forgets the phone: a row the answer names is
+  // not drawn while it lingers
+  const drawn = rows.filter((device) => device.id !== removed?.deviceId);
+  const items = drawn.map((device, index) => (
+    <DeviceRow
+      key={device.id}
+      device={device}
+      remove={remove}
+      consoleUrl={consoleUrl}
+      onRemoveAsk={props.onRemoveAsk}
+      onRemove={() => {
+        setSlot(index);
+        props.onRemove(device);
+      }}
+    />
+  ));
+  if (removed !== null) {
+    // said once (DESIGN.md §8, as Disconnect's missed sign-out is): no undo, no Allow again
+    items.splice(
+      Math.min(slot ?? items.length, items.length),
+      0,
+      <li key={`removed:${removed.deviceId}`} className="vf-devices-row vf-devices-removed">
+        <span className={labelCls}>{`${removed.name} was removed.`}</span>
+        <a className={buttonCls} href={consoleUrl} target="_blank" rel="noreferrer">
+          Manage in Tailscale ↗
+        </a>
+      </li>,
+    );
+  }
   return (
     <SettingsSection title="Your devices">
-      <ul className="vf-devices-rows">
-        {rows.map((device) => (
-          <li key={device.id} className="vf-devices-row" data-self={device.self ? "" : undefined}>
-            <OsMark os={device.os} size={16} />
-            <span className="vf-devices-row-name">{device.name}</span>
-            <span className={labelCls}>
-              {device.self ? "This Mac" : device.online ? "Online" : "Away"}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <ul className="vf-devices-rows">{items}</ul>
       {linked ? (
         <div className="vf-devices-acts">
           <button type="button" className={buttonCls} onClick={() => props.onSheet("add-device")}>
@@ -775,8 +989,20 @@ function rowsOf(roster: readonly DeviceInfo[] | null): DevicesRow[] {
     self: device.self,
     online: device.online,
     nameSource: device.nameSource,
+    phone: knownPhone(device),
   }));
   return rows.sort((a, b) => Number(b.self) - Number(a.self));
+}
+
+/** Item 406 — the row is positively a phone: the fact read as the contract reads it (a fact this
+ * build cannot read is no fact, so it errs toward offering no Remove), never This Mac, and never
+ * a row its own slice calls a desktop, whose Remove fieldd refuses. */
+function knownPhone(device: DeviceInfo): boolean {
+  return (
+    !device.self &&
+    device.capabilities?.docHost !== true &&
+    PhoneFact.safeParse(device.phone).success
+  );
 }
 
 export function DevicesSection({
@@ -802,6 +1028,31 @@ export function DevicesSection({
   const [sheet, setSheet] = useState<DevicesSheet>("none");
   const [disconnect, setDisconnect] = useState<DisconnectStep>({ kind: "idle" });
   const [signOutMissed, setSignOutMissed] = useState<{ adminUrl: string } | null>(null);
+  const [remove, setRemove] = useState<RemoveStep>({ kind: "idle" });
+
+  // Item 406 — Remove for a phone: `device.remove` by the row's durable id. fieldd answers after
+  // this desktop's sweep, and the row leaves through the roster (`device.subscribe`), never here.
+  const onRemove = (device: DevicesRow): void => {
+    const done: RemoveStep = { kind: "removed", deviceId: device.id, name: device.name };
+    const refused = (cause: unknown): RemoveStep => {
+      if (removeDone(cause)) return done;
+      const kind = cause instanceof FielddRpcError ? cause.kind : undefined;
+      const reason = removeRefusalWords(kind, device.name);
+      return { kind: "failed", deviceId: device.id, reason };
+    };
+    setRemove({ kind: "pending", deviceId: device.id });
+    void client.request("device.remove", { deviceId: device.id }).then(
+      // `removed` false is a phone refused already, here or merged from another computer: done
+      // all the same. `closed` is this desktop's own count, and is never said.
+      () => setRemove(done),
+      (cause: unknown) => setRemove(refused(cause)),
+    );
+  };
+  // the confirm opens and closes in place; an act in flight holds it (its acts are disabled)
+  const onRemoveAsk = (deviceId: string | null): void => {
+    const next: RemoveStep = deviceId === null ? { kind: "idle" } : { kind: "asking", deviceId };
+    setRemove((prior) => (prior.kind === "pending" ? prior : next));
+  };
 
   const onDisconnect = (): void => {
     // the console a missed sign-out leaves this Mac in, read before the face goes
@@ -891,6 +1142,9 @@ export function DevicesSection({
         }
       }}
       onNewUser={onNewUser}
+      remove={remove}
+      onRemoveAsk={onRemoveAsk}
+      onRemove={onRemove}
     />
   );
 }

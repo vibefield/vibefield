@@ -88,6 +88,42 @@
   white-space: nowrap;
 }
 
+/* Item 406 — a row the roster knows to be a phone ends in Remove…, a fourth column (DESIGN.md
+ * §8 "Settings → Devices", amended 2026-11-14); its confirm opens in place under it, across the
+ * row and under the name, and the line said once after stands where the row stood. */
+.vf-devices-row[data-phone] {
+  grid-template-columns: 16px 1fr auto auto;
+}
+
+.vf-devices-remove {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 6px 0 0 26px;
+}
+
+.vf-devices-remove > p {
+  margin: 0;
+}
+
+.vf-devices-remove-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vf-text-primary);
+}
+
+.vf-devices-removed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .vf-devices-kind {
   padding-bottom: 8px;
 }

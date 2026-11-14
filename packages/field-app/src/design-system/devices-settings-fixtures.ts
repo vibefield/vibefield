@@ -1,5 +1,10 @@
 import { type LinkFace, linkFace } from "../account/link";
-import type { DevicesRow, DevicesSheet } from "../panels/DevicesSection";
+import {
+  type DevicesRow,
+  type DevicesSheet,
+  type RemoveStep,
+  removeRefusalWords,
+} from "../panels/DevicesSection";
 
 // Settings → Devices in the catalog (TS-3a): the adapter supplies what a host
 // supplies — the link's wire snapshot, the roster's rows — and the production
@@ -20,6 +25,10 @@ export const DEVICES_FIXTURE_STATES = [
   "disconnect",
   "sign-out missed",
   "add a device",
+  "remove a phone",
+  "removing",
+  "remove refused",
+  "phone removed",
 ] as const;
 export type DevicesFixtureState = (typeof DEVICES_FIXTURE_STATES)[number];
 
@@ -60,6 +69,17 @@ const PEERS: readonly DevicesRow[] = [
   { id: "pc", name: "Workshop PC", os: "windows", self: false, online: false },
 ];
 const ROSTER: readonly DevicesRow[] = [SELF, ...PEERS];
+/** Item 406 — a phone the roster KNOWS (`DeviceInfo.phone`): Remove… is offered on its row
+ * alone. Its OS mark is today's (no phone mark in this slice). */
+const PHONE: DevicesRow = {
+  id: "phone",
+  name: "iPhone",
+  os: "unknown",
+  self: false,
+  online: false,
+  phone: true,
+};
+const WITH_PHONE: readonly DevicesRow[] = [...ROSTER, PHONE];
 
 export function devicesFixture(state: DevicesFixtureState): {
   face: LinkFace;
@@ -69,6 +89,8 @@ export function devicesFixture(state: DevicesFixtureState): {
   signOutMissed?: { readonly adminUrl: string };
   /** TS-4 — the switch for asking again (`mesh.connectAsks`); absent, on */
   connectAsks?: boolean;
+  /** Item 406 — Remove for a phone: its confirm, its act, a refusal, or the line after */
+  remove?: RemoveStep;
 } {
   const connected = linkFace("live", {
     ...QUIET,
@@ -150,6 +172,41 @@ export function devicesFixture(state: DevicesFixtureState): {
       };
     case "add a device":
       return { face: connected, sheet: "add-device", devices: ROSTER };
+    case "remove a phone":
+      // item 406 — the confirm, in place under the phone's row; Cancel has the focus
+      return {
+        face: connected,
+        sheet: "none",
+        devices: WITH_PHONE,
+        remove: { kind: "asking", deviceId: PHONE.id },
+      };
+    case "removing":
+      return {
+        face: connected,
+        sheet: "none",
+        devices: WITH_PHONE,
+        remove: { kind: "pending", deviceId: PHONE.id },
+      };
+    case "remove refused":
+      // the product's words for a refusal the person can try again (`device.remove` INTERNAL)
+      return {
+        face: connected,
+        sheet: "none",
+        devices: WITH_PHONE,
+        remove: {
+          kind: "failed",
+          deviceId: PHONE.id,
+          reason: removeRefusalWords("INTERNAL", PHONE.name),
+        },
+      };
+    case "phone removed":
+      // the roster's pass forgot the phone; the line is said once
+      return {
+        face: connected,
+        sheet: "none",
+        devices: ROSTER,
+        remove: { kind: "removed", deviceId: PHONE.id, name: PHONE.name },
+      };
     case "this Mac only":
       return {
         face: linkFace("live", { ...QUIET, linkState: "offline" }),
