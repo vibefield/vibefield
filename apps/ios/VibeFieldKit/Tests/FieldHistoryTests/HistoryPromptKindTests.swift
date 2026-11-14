@@ -119,6 +119,39 @@ struct HistoryPromptKindTests {
     #expect(kind(try prompt("/model opus", group: "parent_invocation"), try answer("opus")) == .machine)
   }
 
+  @Test("only a parent agent's invocation is a machine's: every other group, and one not heard of, is a person's")
+  func theGroupKinds() throws {
+    #expect(kind(try prompt("go", group: "human_turn"), nil) == nil)
+    #expect(kind(try prompt("go", group: "parent_invocation"), nil) == .machine)
+    // the room draws a `user` row as a person's prompt whatever its group: `synthetic` is its fallback where the
+    // source gave no boundary, and no group makes a row's words a machine's but a parent agent's invocation
+    #expect(kind(try prompt("go", group: "synthetic"), nil) == nil)
+    #expect(kind(try prompt("go", group: "system_cycle"), nil) == nil)
+    #expect(kind(try prompt("go", group: "agent_cycle"), nil) == nil)
+    // an open kind the phone has not heard of changes nothing (the tolerant reader)
+    #expect(kind(try prompt("go", group: "reviewer_cycle"), nil) == nil)
+  }
+
+  @Test("a command with a file attached is a person's message still, as the room keeps it")
+  func aFileAttached() throws {
+    let notes: JSONValue = .object(["id": .string("d1"), "kind": .string("file"), "available": .bool(true)])
+    #expect(kind(try prompt("/model opus", ["attachments": .array([notes])]), try answer("opus")) == nil)
+  }
+
+  @Test("a command whose answer is not yet read is a person's message until it is")
+  func theNextRowNotYetRead() throws {
+    // the command is the last row the phone holds
+    let held = [
+      try row("u1", 1, "user", ["text": .string("Fix the fade")]),
+      try row("a1", 2, "agent", ["text": .string("Done.")]),
+      try row("u2", 3, "user", ["text": .string("/model opus")]),
+    ]
+    #expect(try document(held).turns.map(\.promptKind) == [nil, nil])
+    // its answer arrives
+    let output = try row("n2", 4, "notice", ["notice": .string("command_output"), "text": .string("opus")])
+    #expect(try document(held + [output]).turns.map(\.promptKind) == [nil, .setting])
+  }
+
   @Test("the room's test of a local command: one line, a slash, a name, and then nothing or a space")
   func aLocalCommand() {
     for words in ["/model", "/model opus", "  /effort   high  ", "/a:b.c-d x", "/Model2_x"] {
@@ -246,6 +279,18 @@ struct HistoryOwnMessageTests {
       turn("t3", prompt: "Audit the rows", kind: .machine),
     ]
     #expect(before(between, ["head/t3": .above, "segment/t3/a": .below]) == .message("prompt-t2", near: false))
+  }
+
+  @Test("the stack's own id is answered for a person's prompt alone: a setting's mark and a machine's name no row")
+  func theMarkedRowPassesThem() {
+    let rows = HistoryRow.of(
+      [
+        turn("t1"), turn("t2", prompt: "/model opus", kind: .setting),
+        turn("t3", prompt: "Audit the rows", kind: .machine),
+      ], desktop: "studio")
+    #expect(HistoryRow.promptRow(marked: "prompt-t1", in: rows) == "prompt/t1")
+    #expect(HistoryRow.promptRow(marked: "prompt-t2", in: rows) == nil)
+    #expect(HistoryRow.promptRow(marked: "prompt-t3", in: rows) == nil)
   }
 
   @Test("with nothing above but a setting and a machine's prompt the button is gone, or goes to the top")
