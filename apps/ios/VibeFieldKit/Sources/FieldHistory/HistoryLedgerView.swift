@@ -82,6 +82,8 @@ public struct HistoryLedgerView: View {
       .toolbar(.hidden, for: .navigationBar)
       .navigationDestination(for: HistoryRouter.Route.self) { route in
         destination(route)
+          // Item 417 — a session's first reading is the hold, over the session's place (HistoryOpening.swift)
+          .historyOpening(opening(route))
       }
     }
     .tint(ChromePalette.ink)
@@ -93,6 +95,15 @@ public struct HistoryLedgerView: View {
 
   private func reader(_ device: String) -> HistoryDesktopReader? {
     history.reader(for: device)
+  }
+
+  /// Item 417 — what a pushed screen's hold waits on (`HistoryOpening.wait`): a session whose desktop answers and
+  /// has not handed its document over yet, and whether a search landed in it. A project's page has no hold.
+  private func opening(_ route: HistoryRouter.Route) -> HistoryOpening.Wait? {
+    guard case .session(let device, let id) = route, let desktop = reader(device) else { return nil }
+    return HistoryOpening.wait(
+      held: desktop.corpus.document(id) != nil, awake: desktop.standing.isAwake,
+      landed: router.landed.map { $0.sessionId == id && $0.device == device } ?? false)
   }
 
   @ViewBuilder
@@ -117,7 +128,11 @@ public struct HistoryLedgerView: View {
           router: router, arrivals: reader.arrivals[id] ?? 0, readingEarlier: reader.readingEarlier.contains(id),
           opens: reader.toolDetails[id] ?? [:], pictures: reader.pictures[id] ?? [:], onNeed: onNeed)
       } else if let reader = reader(device), reader.standing.isAwake {
-        QuietNote(title: "Reading the session on \(reader.name)", text: "Its header, its newest rows and its tail arrive over the desktop's door.")
+        // Item 417 — a session being read is the hold's, which stands over this place once it is late
+        // (`historyOpening`, on the destination). Under it the place is the page's paper alone. A note stood here
+        // at once: "Reading the session on ‹desktop›", over a sentence that named the door.
+        ChromePalette.paper
+          .ignoresSafeArea()
           .onAppear { onNeed(.session(device: device, id: id)) }
       } else {
         let note = FieldHistoryModel.sessionNotRead(device: DeviceWord.current)
