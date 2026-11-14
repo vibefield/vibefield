@@ -20,9 +20,13 @@ import {
 // adds a plugin's settings (§8 "Its settings"): a setting's value
 // (`storage.settings.get`, a secret's never sent to a window) and its new value
 // (`storage.settings.set`), the requests Settings → Plugins sends today, with
-// the same parameters. The port never has a reset (MK-4c2's C2), an undo or a
-// redo (James's MK-O6 pick, 2026-11-11: no Undo on a plugin's page until there
-// is one per plugin): going back stays in Settings. The catalog hands the
+// the same parameters. MK-4c2c adds a setting's way back (James's click,
+// 2026-11-14 08:19:36Z, "Yes, add them to the plugin's page"):
+// `storage.settings.reset`, the request Settings → Plugins' Reset sends today,
+// with the same parameters; fieldd answers it by setting the value back to its
+// default, or, for a secret, by deleting the one it keeps. The port still has
+// no undo and no redo (James's MK-O6 pick, 2026-11-11: no Undo on a plugin's
+// page until there is one per plugin). The catalog hands the
 // controller a fixture port instead. O2-C adds the install card's window half
 // (§8 "Every install asks first", MK-O2's A2): the three doors MK-O2B built —
 // `plugins.install.prepare` downloads and holds a plugin this desktop doesn't
@@ -53,6 +57,9 @@ export interface PluginsPort {
   settingsGet(id: string, key: string): Promise<SettingsGetResult>;
   /** Keep a setting's new value: settles when fieldd has answered. */
   settingsSet(id: string, key: string, value: unknown): Promise<void>;
+  /** MK-4c2c: set a setting back to its default, or delete a kept secret (`storage.settings.reset`): settles when
+   * fieldd has answered. */
+  settingsReset(id: string, key: string): Promise<void>;
   /** O2-C: download, check and hold a plugin this desktop doesn't have; its card is read from the row. */
   prepare(id: string): Promise<PluginsInstallPrepareResult>;
   /** MK-UC's UC-C: download, check and hold `version` of a plugin this desktop has; the answer says what it can do
@@ -98,6 +105,9 @@ export function pluginsPortOver(client: PluginsDoorClient): PluginsPort {
     },
     async settingsSet(id, key, value) {
       await client.request("storage.settings.set", { pluginId: id, key, value });
+    },
+    async settingsReset(id, key) {
+      await client.request("storage.settings.reset", { pluginId: id, key });
     },
     async prepare(id) {
       return PluginsInstallPrepareResult.parse(

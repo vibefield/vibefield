@@ -257,6 +257,13 @@ export function pluginsFixturePort(
         // a secret is kept as kept, never as its value
         kept.set(`${id}/${key}`, was?.secret === true ? { secret: true, kept: true } : { value });
       }),
+    // MK-4c2c: a setting back to its default, as fieldd's `storage.settings.reset` does: a kept secret is deleted, a
+    // value is no longer kept
+    settingsReset: (id, key) =>
+      act().then(() => {
+        const was = kept.get(`${id}/${key}`);
+        kept.set(`${id}/${key}`, was?.secret === true ? { secret: true, kept: false } : {});
+      }),
     prepare: (id) => {
       const record = PLUGINS_FIXTURE_DOWNLOADS[id];
       if (record === undefined) return Promise.reject(new Error(PLUGINS_FIXTURE_REFUSAL));

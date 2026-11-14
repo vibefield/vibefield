@@ -794,3 +794,14 @@ export function settingToSend(
   if (setting.kind === "text") return { value: draft };
   return null;
 }
+
+/** A setting's way back on its page (MK-4c2c; James's click, 2026-11-14 08:19:36Z, "Yes, add them to the plugin's
+ * page"): as Settings' Reset stands (`PluginSettingsForm.tsx`, while one is kept), a kept value goes back to its default
+ * in one press, and a kept secret is removed, asking first, since only typing it again brings it back. None while
+ * nothing is kept. fieldd's one door does both (`storage.settings.reset`). */
+export type SettingAct = "toDefault" | "forget";
+
+export function settingAct(setting: PageSetting, got: SettingsGetResult): SettingAct | null {
+  if (!got.isSet) return null;
+  return setting.kind === "secret" ? "forget" : "toDefault";
+}

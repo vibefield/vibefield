@@ -116,6 +116,7 @@ const NO_SWITCHES: Pick<
   | "grant"
   | "settingsGet"
   | "settingsSet"
+  | "settingsReset"
   | "prepare"
   | "prepareUpdate"
   | "commit"
@@ -128,6 +129,7 @@ const NO_SWITCHES: Pick<
   grant: () => Promise.reject(new Error("no switch is pressed in this test")),
   settingsGet: () => Promise.reject(new Error("no setting is read in this test")),
   settingsSet: () => Promise.reject(new Error("no setting is kept in this test")),
+  settingsReset: () => Promise.reject(new Error("no setting is set back in this test")),
   prepare: () => Promise.reject(new Error("nothing is installed in this test")),
   prepareUpdate: () => Promise.reject(new Error("nothing is updated in this test")),
   commit: () => Promise.reject(new Error("nothing is installed in this test")),

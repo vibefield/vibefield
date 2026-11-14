@@ -214,6 +214,13 @@ export const SETTINGS_WORDS = {
   /** The foot with none: they stay on this desktop (James's MK-O33 pick B, 2026-11-12 06:12:16Z). A page with
    * both kinds says `footSynced` alone, as before (VF-PM 2026-11-14 03:11Z, MK's lean). */
   footHere: "These settings stay on this desktop.",
+  /** MK-4c2c (James's click, 2026-11-14 08:19:36Z, "Yes, add them to the plugin's page"): a setting that is kept,
+   * set back to its default. MK's three words here are ‹draft›, for his after-land list. */
+  toDefault: "Back to default",
+  /** MK-4c2c: a kept secret, removed; it asks first (‹draft›). */
+  forget: "Remove the saved secret…",
+  /** MK-4c2c: what removing it does, said in place before it is done, over Remove…'s Cancel and Remove (‹draft›). */
+  forgetLine: "This deletes the saved secret. To use it again, you type it in again.",
 } as const;
 
 /** Discover's shelf (MK-4e; DESIGN.md §8 "Discover", §9 "The popup"'s MK-4e block). A tile's act is "Install" (§9
