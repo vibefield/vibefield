@@ -625,6 +625,86 @@
   font-weight: 600;
 }
 
+/* ── MK-O3D: Discover's community tile (§8 "The community tile", drawn
+   2026-11-14, ‹draft›): until the shelf, at the body's end, 8 in from its sides
+   and 8 above its foot; padded 12 16, corners 14 (an Installed row's), ringed
+   by the hairline, on no fill. Its title at 14/600 in primary ink and the kit's
+   switch 12 after it at its end; under them, 6 apart, its line and its state at
+   12/400 in tertiary ink (§2's Body, 1.45), and a refusal in the attention ink.
+   The ask, in place: the question at 14/600 in primary ink, the statement 6
+   under it at 13/400 in primary ink, and 12 under that Cancel and Turn on
+   community plugins at the tile's end, 8 apart, each cut as the foot's act
+   with no ↵ printed on it ── */
+.vf-plugins-community {
+  display: grid;
+  flex: none;
+  gap: 6px;
+  margin: 0 8px 8px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--vf-hairline);
+}
+
+.vf-plugins-community-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.vf-plugins-community-title,
+.vf-plugins-community-question {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  color: var(--vf-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.vf-plugins-community-line,
+.vf-plugins-community-refused {
+  margin: 0;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.vf-plugins-community-refused {
+  color: var(--vf-ink-attention);
+}
+
+.vf-plugins-community-ask {
+  display: grid;
+  gap: 6px;
+}
+
+.vf-plugins-community-statement {
+  margin: 0;
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.vf-plugins-community-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* the ask's two acts are the foot's act itself (`.vf-plugins-act`, its focus
+   ring too); one that takes no press says its words in tertiary ink, its fill
+   unchanged under the pointer */
+.vf-plugins-community-acts .vf-plugins-act:disabled {
+  color: var(--vf-text-tertiary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  cursor: default;
+}
+
 /* reduced motion: no pop — the scrim and the popup fade in over 120ms (the
    recede's own rule is peek.css's) */
 @media (prefers-reduced-motion: reduce) {

@@ -43,7 +43,9 @@ import "./plugins.css";
 // its powers' switches stand at their lines' ends. Each switch is the kit's,
 // named by what it turns and never by its state. MK-4c2b: a page's settings
 // section stands in its first column, after What it adds; the controller
-// mounts it and hands it here.
+// mounts it and hands it here. MK-O3D: Discover's community tile stands at
+// Discover's end, mounted by the controller and handed here the same way, and
+// a plugin held while community plugins are off says its row's line on its page.
 
 export interface PluginsViewProps {
   open: boolean;
@@ -62,6 +64,8 @@ export interface PluginsViewProps {
   page: PluginPage | null;
   /** MK-4c2b: the page's settings section, which the controller mounts and owns; null: none */
   pageSettings?: ReactNode;
+  /** MK-O3D: Discover's end, the community tile, which the controller mounts; null: none */
+  discoverEnd?: ReactNode;
   pageFrom: PluginsTab;
   /** Updates' count, the Me row's (null or 0: none) */
   updates: number | null;
@@ -292,6 +296,8 @@ function PageView({
             {away && (page.onOff !== null || page.powersLive) && (
               <p className="vf-plugins-page-note">{PLUGINS_AWAY}</p>
             )}
+            {/* MK-O3D: held while community plugins are off, it says its row's line */}
+            {page.held !== null && <p className="vf-plugins-page-note">{page.held}</p>}
             {page.readOnly !== null && <p className="vf-plugins-page-note">{page.readOnly}</p>}
             {page.elsewhere !== null && <p className="vf-plugins-page-note">{page.elsewhere}</p>}
           </div>
@@ -355,7 +361,7 @@ function PageView({
 export function PluginsView(props: PluginsViewProps): ReactElement {
   const { open, layout, tab, query, shelf, foot, installed, installedFoot, inputRef } = props;
   const { hot, page, pageFrom, updates, listRef, away, under, refused } = props;
-  const { pageSettings = null } = props;
+  const { pageSettings = null, discoverEnd = null } = props;
   const { onQuery, onTab, onClose, onShowInstalled, onOpenPage, onBack, onKeyDown } = props;
   const { onTurn, onTurnPower } = props;
   const body =
@@ -388,6 +394,12 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
           onTurn={onTurn}
         />
       )
+    ) : tab === "discover" && discoverEnd !== null ? (
+      // MK-O3D: the community tile stands at Discover's end, under the shelf's stand-in
+      <>
+        {shelfBody(tab, shelf)}
+        {discoverEnd}
+      </>
     ) : (
       shelfBody(tab, shelf)
     );

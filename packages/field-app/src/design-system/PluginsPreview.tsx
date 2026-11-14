@@ -6,6 +6,8 @@ import {
   CATALOG_COUNTED,
   CATALOG_FIXTURES,
   CATALOG_LISTED,
+  communityFixtureDoor,
+  PLUGINS_FIXTURE_HELD_SNAPSHOT,
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_SETTINGS,
@@ -35,7 +37,11 @@ import {
 // a Development plugin's while it is off, and a Built in plugin's whose settings
 // all stay on this desktop. No Undo and no Redo on any of them (James's MK-O6).
 // And the same Built in page with one setting fieldd refuses to read (§8 Its
-// settings, Unread), whose words are James's pick.
+// settings, Unread), whose words are James's pick. MK-O3D adds Discover's
+// community tile over a list that names a plugin by other people, off, and
+// with its ask standing (§8 "The community tile"), and a community plugin held
+// while community plugins are off, on Installed and on its page. A press on the
+// tile's switch is sent to a fixture door, which answers and moves nothing.
 
 export type PluginsPlateState =
   | "no-registry"
@@ -54,7 +60,11 @@ export type PluginsPlateState =
   | "settings"
   | "settings-off"
   | "settings-here"
-  | "settings-unread";
+  | "settings-unread"
+  | "community"
+  | "community-ask"
+  | "community-held"
+  | "community-held-page";
 
 const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   "no-registry": {
@@ -92,6 +102,10 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
     catalog: CATALOG_FIXTURES.unconfigured,
     refresh: CATALOG_FIXTURES.unconfigured,
   },
+  community: { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
+  "community-ask": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
+  "community-held": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
+  "community-held-page": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
 };
 
 /** The page a plate opens on, from Installed. */
@@ -105,11 +119,13 @@ const PLATE_PAGES: Readonly<Partial<Record<PluginsPlateState, string>>> = {
   "settings-off": "example.desk-clock",
   "settings-here": "vibefield.comment-pad",
   "settings-unread": "vibefield.simulator",
+  "community-held-page": "acme.kanban",
 };
 
 /** The plugins a plate's desktop has. */
 function plateSnapshot(state: PluginsPlateState) {
   if (state === "page-listed") return PLUGINS_FIXTURE_LISTED_SNAPSHOT;
+  if (state.startsWith("community-held")) return PLUGINS_FIXTURE_HELD_SNAPSHOT;
   if (state.startsWith("switches")) return PLUGINS_FIXTURE_SWITCHES_SNAPSHOT;
   if (state.startsWith("settings")) return PLUGINS_FIXTURE_SETTINGS_SNAPSHOT;
   return PLUGINS_FIXTURE_SNAPSHOT;
@@ -117,8 +133,14 @@ function plateSnapshot(state: PluginsPlateState) {
 
 function plateTab(state: PluginsPlateState): PluginsTab {
   if (state === "count") return "updates";
-  return state === "installed" || state in PLATE_PAGES ? "installed" : "discover";
+  return state === "installed" || state === "community-held" || state in PLATE_PAGES
+    ? "installed"
+    : "discover";
 }
+
+/** MK-O3D: the plates whose window has read the community switch, off, and sends it through a
+ * fixture door; every other plate's has not read it. */
+const communityPlate = (state: PluginsPlateState): boolean => state.startsWith("community");
 
 export function PluginsPlate({ state }: { state: PluginsPlateState }): ReactElement {
   const [surface, setSurface] = useState<FrameSurface | null>("plugins");
@@ -131,6 +153,9 @@ export function PluginsPlate({ state }: { state: PluginsPlateState }): ReactElem
     ),
   );
   const now = useCallback(() => PLUGINS_FIXTURE_NOW, []);
+  const [communityDoor] = useState(() =>
+    communityPlate(state) ? communityFixtureDoor() : undefined,
+  );
   const tab = plateTab(state);
   return (
     <div ref={setPlate} className="vf-ds-history-plate" data-state={`plugins-${state}`}>
@@ -146,6 +171,9 @@ export function PluginsPlate({ state }: { state: PluginsPlateState }): ReactElem
         initialPage={PLATE_PAGES[state] ?? null}
         updates={state === "count" ? CATALOG_COUNTED.updates : null}
         away={state === "switches-away"}
+        community={communityPlate(state) ? false : null}
+        onCommunity={communityDoor}
+        initialAsk={state === "community-ask"}
         onMac
         now={now}
       />

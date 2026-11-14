@@ -171,16 +171,19 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
     ).rejects.toThrow();
   });
 
-  it("refuses an ON for Community plugins until MK-4, lets an OFF through, audits each (D4, S2)", async () => {
+  it("takes an ON and an OFF for Community plugins once the switch is drawn, audits each (MK-O3D, S2)", async () => {
     const { daemon, dataDir } = await boot();
     const shell = await connect(daemon, daemon.shellToken, "shell-main");
     const grant = daemon.tokens.mint(["settings.manage"], "test-window");
     const renderer = await connect(daemon, grant.token, "renderer");
-    const refused = await shell.callErr("storage.appPreferences.set", {
-      key: "plugins.community",
-      value: true,
+    expect(
+      await shell.call("storage.appPreferences.set", { key: "plugins.community", value: true }),
+    ).toEqual({ ok: true });
+    expect(await shell.call("storage.appPreferences.get", {})).toMatchObject({
+      communityPlugins: true,
     });
-    expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
+    // the switch is the person's, synced; the statement's mark is this desktop's, marked by its own door alone
+    expect(await shell.call("plugins.community.statement.get", {})).toEqual({ shownHere: false });
     expect(
       await renderer.call("storage.appPreferences.set", { key: "plugins.community", value: false }),
     ).toEqual({ ok: true });
@@ -207,9 +210,11 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       principalKind: "local-token",
       clientKind: "renderer",
     });
-    expect(lines[1]).toMatchObject({ outcome: "denied", reasonCode: "COMMUNITY_SWITCH_CLOSED" });
-    expect(lines[3]).toMatchObject({ outcome: "succeeded" });
-    expect(lines[3]?.reasonCode).toBeUndefined();
+    // MK-O3D: the ON that MK-2a's door refused (outcome denied, COMMUNITY_SWITCH_CLOSED) now succeeds
+    for (const outcome of [lines[1], lines[3]]) {
+      expect(outcome).toMatchObject({ outcome: "succeeded" });
+      expect(outcome?.reasonCode).toBeUndefined();
+    }
     const written = JSON.stringify(lines);
     expect(written.includes(daemon.shellToken)).toBe(false);
     expect(written.includes(grant.token)).toBe(false);

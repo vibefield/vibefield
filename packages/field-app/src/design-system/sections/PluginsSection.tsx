@@ -7,7 +7,8 @@ import { PluginsPlate } from "../PluginsPreview";
 // controller in each state the read can be in, a plugin's page, read only
 // (MK-4c), Updates carrying the Me row's count, (MK-4c2a) a plugin's switches
 // and (MK-4c2b) its settings. Discover's shelf and Updates' rows come with later
-// MK-4 parts.
+// MK-4 parts. MK-O3D: Discover's community tile and its ask, and a community
+// plugin held while community plugins are off.
 
 export function PluginsSection(): ReactElement {
   return (
@@ -124,6 +125,34 @@ export function PluginsSection(): ReactElement {
         bleed
       >
         <PluginsPlate state="settings-unread" />
+      </Specimen>
+      <Specimen
+        title="Discover's community tile — community plugins off"
+        source="frame/plugins/CommunityTile.tsx · frame/plugins/plugins-community.ts"
+        bleed
+      >
+        <PluginsPlate state="community" />
+      </Specimen>
+      <Specimen
+        title="Turning community plugins on — the ask, with its statement"
+        source="frame/plugins/CommunityTile.tsx · frame/plugins/plugins-words.ts"
+        bleed
+      >
+        <PluginsPlate state="community-ask" />
+      </Specimen>
+      <Specimen
+        title="Installed — a community plugin held while community plugins are off"
+        source="frame/plugins/plugins-model.ts"
+        bleed
+      >
+        <PluginsPlate state="community-held" />
+      </Specimen>
+      <Specimen
+        title="A held community plugin's page"
+        source="frame/plugins/PluginsView.tsx · frame/plugins/plugins-model.ts"
+        bleed
+      >
+        <PluginsPlate state="community-held-page" />
       </Specimen>
     </Section>
   );

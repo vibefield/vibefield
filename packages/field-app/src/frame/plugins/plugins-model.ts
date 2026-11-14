@@ -12,6 +12,8 @@ import {
 } from "@vibefield/contracts";
 import {
   CATALOG_FOOT,
+  COMMUNITY_WORDS,
+  HELD_LINE,
   hasWords,
   INSTALLED_LINE,
   installedFootWords,
@@ -113,8 +115,14 @@ export interface FootSentence {
 }
 
 /** Discover's and Updates' foot: what the tab holds and when the list was
- * read (§9 "Reading the list"); none while nothing was read. */
-export function catalogFoot(read: PluginsRead, reading: boolean, now: number): FootSentence | null {
+ * read (§9 "Reading the list"); none while nothing was read. MK-O3D: a read
+ * list's foot ends "· community off" while the switch is read and off. */
+export function catalogFoot(
+  read: PluginsRead,
+  reading: boolean,
+  now: number,
+  communityOff = false,
+): FootSentence | null {
   const say = (words: string, attention = false): FootSentence => ({ words, attention });
   if (read.kind === "asking") return say(READING);
   if (read.kind === "away") return null;
@@ -131,7 +139,8 @@ export function catalogFoot(read: PluginsRead, reading: boolean, now: number): F
   if (catalog.state === "unreachable") return say(CATALOG_FOOT.unreachable(when));
   if (catalog.state === "refused") return say(CATALOG_FOOT.refused);
   if (catalog.state === "stale") return say(CATALOG_FOOT.stale, true);
-  return say(CATALOG_FOOT.ready(countWords(catalog), when));
+  const ready = CATALOG_FOOT.ready(countWords(catalog), when);
+  return say(communityOff ? `${ready} · ${COMMUNITY_WORDS.footOff}` : ready);
 }
 
 export interface InstalledRow {
@@ -299,12 +308,23 @@ export function powerSwitchOf(record: PluginRecord, capability: string): PowerSw
   };
 }
 
+/** What a plugin held while community plugins are off says, on its row and its page (MK-O3D;
+ * James's MK-O3 pick, "Stop"); null for any other. fieldd's `held` says why a row is off and
+ * decides nothing: a row it calls held that is on is read as on. */
+export function heldLine(record: PluginRecord): string | null {
+  if (record.enabled || record.held !== "community-off") return null;
+  if (record.contributions.objects.length > 0) return HELD_LINE.objects;
+  return runsService(record) ? HELD_LINE.service : HELD_LINE.bare;
+}
+
 function lineOf(record: PluginRecord): string {
   const objects = record.contributions.objects.length;
   const builtIn = record.source === "bundled";
   if (record.state === "invalid" || record.state === "incompatible") {
     return INSTALLED_LINE.broken(record.title);
   }
+  const held = heldLine(record);
+  if (held !== null) return held;
   if (!record.enabled) return objects > 0 ? INSTALLED_LINE.off : INSTALLED_LINE.offNoObject;
   if (objects === 0) {
     if (builtIn) return INSTALLED_LINE.builtInNoObject;
@@ -407,9 +427,10 @@ export interface PluginPage {
   /** What it adds: each object, then each command it puts in the palette, its tools and its
    * service, or "No objects" */
   readonly adds: readonly PageLine[];
-  /** What it can do: each power it holds; with switches here, each it asked for */
+  /** What it can do: each power it holds; off with no switches here, each it would hold once on
+   * (MK-O3D); with switches here, each it asked for (`powersListed`) */
   readonly powers: readonly PagePower[];
-  /** said under What it can do when it holds none; null when it holds any, named or not */
+  /** said under What it can do when that list is empty; null when it lists any, named or not */
   readonly nothing: string | null;
   /** Made by; null when the window can name no maker */
   readonly madeBy: string | null;
@@ -418,6 +439,8 @@ export interface PluginPage {
   readonly onOff: boolean | null;
   /** whether its powers' switches take a press: switches here, and it is on */
   readonly powersLive: boolean;
+  /** MK-O3D: said under its act while it is held because community plugins are off: its row's line */
+  readonly held: string | null;
   /** said where its switches would stand, when it has none here */
   readonly readOnly: string | null;
   /** said under its act, for a Built in plugin with switches: they reach your other desktops */
@@ -504,8 +527,20 @@ function powerWords(
   return { key: id, words: PAGE_WORDS.unnamed, under: null, whose: null };
 }
 
-/** What it can do. A plugin with no switches here lists each power it holds
- * (`grantedCapabilities`), read only (MK-4c). One with switches here (MK-4c2a,
+/** The powers a page lists, before one it can't name is left out: with switches here, each it
+ * asked for (MK-4c2a); with none, each it holds while it is on (MK-4c), and while it is off —
+ * turned off, or held while community plugins are off, when it holds none — each it asked for that
+ * fieldd does not deny it, which it would hold once on (MK-O3D; §8 "Read only first"). */
+function powersListed(record: PluginRecord): readonly string[] {
+  if (controlsHere(record)) return record.requestedCapabilities;
+  if (record.enabled) return record.grantedCapabilities;
+  return record.requestedCapabilities.filter(
+    (id) => !record.deniedCapabilities.some((entry) => entry.capability === id),
+  );
+}
+
+/** What it can do. A plugin with no switches here lists `powersListed`'s
+ * powers, read only (MK-4c). One with switches here (MK-4c2a,
  * §8 "Its switches") lists each power it asked for: its switch as
  * `powerSwitchOf` reads it, and for one it can't have here (any reason but
  * `revoked`), no switch and why. */
@@ -521,7 +556,7 @@ function powersOf(
     }
   }
   const switches = controlsHere(record);
-  const ids = switches ? record.requestedCapabilities : record.grantedCapabilities;
+  const ids = powersListed(record);
   const powers: PagePower[] = [];
   for (const id of ids) {
     const said = powerWords(id, record, declared, onMac);
@@ -562,9 +597,10 @@ export function pluginPage(
     powers,
     // "nothing" is decided by the list the page reads, not by what it can say: a power this build cannot name is
     // said as one VibeField can't describe (James's MK-O34 pick B), and the page never says it holds none (VF-PM
-    // 18:13:11Z, 1). With switches here, that list is every power it asked for (MK-4c2a).
+    // 18:13:11Z, 1). With switches here, that list is every power it asked for (MK-4c2a); off with
+    // none here, every one it would hold once on (MK-O3D).
     nothing:
-      (switches ? record.requestedCapabilities : record.grantedCapabilities).length > 0
+      powersListed(record).length > 0
         ? null
         : objects > 0
           ? PAGE_WORDS.nothing
@@ -573,6 +609,7 @@ export function pluginPage(
     version: record.version,
     onOff,
     powersLive: live,
+    held: heldLine(record),
     readOnly: switches ? null : SWITCH_WORDS.readOnly,
     // the install-set carries a Built in plugin's choices, never a Development one's (install-reconciler.ts:369)
     elsewhere:

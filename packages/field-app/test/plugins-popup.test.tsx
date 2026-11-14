@@ -444,7 +444,9 @@ describe("the Me row's count: every answer the popup takes (MK-4b; VF-PM's C1)",
   });
 });
 
-/** A window's fieldd as FramePlugins asks it: `plugins.catalog.get` and `refresh` answered by the test. */
+/** A window's fieldd as FramePlugins asks it: `plugins.catalog.get` and `refresh` answered by the test. MK-O3D:
+ * it also streams the window's app preferences, as fieldd's effective snapshot, community plugins off; a
+ * subscription is no request, so `asked` holds requests alone. */
 function fielddAnswering(
   answer: (method: string, call: number) => Promise<unknown>,
   status: "ready" | "reconnecting" = "ready",
@@ -460,6 +462,16 @@ function fielddAnswering(
       asked.push(method);
       return answer(method, asked.filter((m) => m === method).length);
     }),
+    subscribe: vi.fn(async () => ({
+      subId: "app-preferences",
+      snapshot: {
+        showTray: true,
+        backgroundShell: true,
+        syncPosture: "automatic",
+        communityPlugins: false,
+      },
+      unsubscribe: () => undefined,
+    })),
   } as unknown as FielddClient;
   return { client, asked };
 }

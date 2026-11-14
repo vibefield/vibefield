@@ -504,3 +504,50 @@ export const PLUGINS_FIXTURE_SETTINGS_UNREAD: PluginsFixtureSettings = {
     frameRate: { unread: true },
   },
 };
+
+/** MK-O3D: the same desktop as the stop holds it (O3-C; James's MK-O3 pick, "Stop"): Kanban, a
+ * plugin by other people, held while community plugins are off. It is off as if turned off, holds
+ * no power, draws nothing, and fieldd says why (`held`); the powers it asked for are the ones it
+ * holds when on (the listed plates' Kanban). */
+export const PLUGINS_FIXTURE_HELD_SNAPSHOT = PluginRegistrySnapshot.parse({
+  generation: 5,
+  problems: [],
+  plugins: [
+    ...PLUGINS_FIXTURE_SNAPSHOT.plugins,
+    {
+      ...record({
+        id: "acme.kanban",
+        title: "Kanban",
+        version: "2.1.0",
+        source: "registry",
+        enabled: false,
+        objects: [object("Board", "AcmeBoard", "Board"), object("Card", "AcmeCard", "Card")],
+        requested: ["canvas.write", "x.acme.kanban.sync"],
+        declares: [
+          {
+            id: "x.acme.kanban.sync",
+            title: "Keep your boards in step",
+            description: "Copies a board's cards to the boards you share.",
+            risk: "write",
+          },
+        ],
+      }),
+      renderer: "inactive",
+      held: "community-off",
+    },
+  ],
+});
+
+/** MK-O3D: a plate's or a test's community switch door: it answers at once, with a refusal, or
+ * never, as a switch's does, and moves nothing, as fieldd's answer moves nothing: the preferences
+ * a plate or a test hands next do. */
+export function communityFixtureDoor(
+  acts: PluginsFixtureActs = "answers",
+): (on: boolean) => Promise<void> {
+  return () =>
+    acts === "answers"
+      ? Promise.resolve()
+      : acts === "refuses"
+        ? Promise.reject(new Error(PLUGINS_FIXTURE_REFUSAL))
+        : new Promise<void>(() => undefined);
+}

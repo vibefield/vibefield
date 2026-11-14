@@ -300,6 +300,8 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
       // MK-4c2a: a Built in plugin carries its switches, and says they reach your other desktops
       onOff: true,
       powersLive: true,
+      // MK-O3D: it is not held while community plugins are off
+      held: null,
       readOnly: null,
       elsewhere: words.SWITCH_WORDS.elsewhere,
       offLine: null,
@@ -907,6 +909,8 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
   ],
   "INSTALLED_LINE.noObject": [[null], ["a service"]],
   "INSTALLED_LINE.broken": [["Desk clock"]],
+  // MK-O3D: the community tile's line, with no plugin by other people listed, one, and many
+  "COMMUNITY_WORDS.line": [[0], [1], [12]],
   hasWords: [
     [true, true],
     [true, false],

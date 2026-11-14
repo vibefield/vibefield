@@ -1,5 +1,5 @@
 import type { FrameView, PluginRegistrySnapshot, PluginsCatalog } from "@vibefield/contracts";
-import { useFielddClient, useFielddStatus } from "@vibefield/fieldd-client/react";
+import { useFielddClient, useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
 import {
   type KeyboardEvent,
   type ReactElement,
@@ -14,8 +14,16 @@ import { createPortal } from "react-dom";
 import { usePluginRegistrySnapshot } from "../../plugin-host/plugin-registry-store";
 import { useGodviewFindDoor } from "../find-door";
 import { type FrameSurface, foldSurface } from "../frame-surface";
+import { CommunityTileView, useCommunitySwitch } from "./CommunityTile";
 import { PluginSettings } from "./PluginSettings";
 import { PluginsView } from "./PluginsView";
+import {
+  type CommunityStatementDoor,
+  communityDoor,
+  communityFrom,
+  communityTile,
+  statementDoor,
+} from "./plugins-community";
 import {
   claimWindowAsk,
   primePluginUpdates,
@@ -69,6 +77,13 @@ import { type PluginsPort, pluginsPortOver } from "./plugins-port";
 // and Check plugins for updates, each through ChromeLayer's `openPlugins`; the
 // pegboard's pill is MK-4d's. The catalog mounts this controller over a
 // fixture port (`design-system/PluginsPreview.tsx`).
+// MK-O3D: Discover's community tile and its switch (§8 "The community tile",
+// drawn 2026-11-14): the switch as fieldd's app preferences say it, the ask in
+// place, which Esc answers first, and the one request. The statement is shown
+// once on each desktop (James's MK-O1 pick B): this desktop's mark is read
+// while the tile stands or community plugins are on, and its ask marks it. The
+// tile mounts at Discover's end, and a held list's foot says "· community off"
+// while it is off.
 
 function boxOf(container: HTMLElement | null | undefined): { width: number; height: number } {
   if (container !== null && container !== undefined) {
@@ -105,6 +120,14 @@ export interface PluginsProps {
   initialPage?: string | null;
   /** fieldd isn't answering this window (MK-4c2a): no switch takes a press. A plate passes a fixture's. */
   away?: boolean;
+  /** MK-O3D: community plugins on or off, as fieldd's app preferences say; null: not read. */
+  community?: boolean | null;
+  /** MK-O3D: the community switch's request (`communityDoor`); none: the tile's switch takes no press. */
+  onCommunity?: ((on: boolean) => Promise<void>) | undefined;
+  /** MK-O3D (MK-O1 B): this desktop's statement mark (`statementDoor`); none: it asks each time. */
+  statement?: CommunityStatementDoor | undefined;
+  /** MK-O3D: a plate drawn with the community tile's ask standing. */
+  initialAsk?: boolean;
   now?: () => number;
 }
 
@@ -132,6 +155,10 @@ export function Plugins({
   onMac = false,
   initialPage = null,
   away = false,
+  community = null,
+  onCommunity,
+  statement,
+  initialAsk = false,
   now = Date.now,
 }: PluginsProps): ReactElement | null {
   const open = surface === "plugins";
@@ -237,21 +264,55 @@ export function Plugins({
     if (takeFocus) inputRef.current?.focus({ preventScroll: true });
   }, [takeFocus]);
 
+  // MK-O3D: Discover's community tile, at its end, while it stands (§8 "The
+  // community tile"); the switch and its ask are held here so Esc answers the
+  // ask first, and an ask stands only with its tile. Either way the ask goes,
+  // the keyboard goes back to the field. This desktop's statement mark is read
+  // while the tile stands or community plugins are on (MK-O1 B).
+  const tile =
+    page === null && tab === "discover"
+      ? communityTile(
+          shelfState(read, reading),
+          read.kind === "answered" ? read.catalog : null,
+          community,
+        )
+      : null;
+  const communitySwitch = useCommunitySwitch({
+    open,
+    on: community,
+    away,
+    send: onCommunity,
+    statement,
+    markWanted: tile !== null || community === true,
+    initialAsk,
+  });
+  const { cancel: dropAsk, confirm: takeAsk } = communitySwitch;
+  const cancelAsk = useCallback(() => {
+    dropAsk();
+    if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+  }, [dropAsk, takeFocus]);
+  const confirmAsk = useCallback(() => {
+    takeAsk();
+    if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+  }, [takeAsk, takeFocus]);
+  const asking = communitySwitch.asking && tile !== null;
+
   // While open, Esc is the popup's before anything else hears it, and answers
-  // the nearest first (§8 "Keys"): a page goes back to its tab, then the popup
-  // folds. No question stands yet (MK-4c builds none).
+  // the nearest first (§8 "Keys"): the community tile's ask goes back (MK-O3D),
+  // a page goes back to its tab, then the popup folds.
   useEffect(() => {
     if (!open || !bindKeys) return;
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      if (page !== null) back();
+      if (asking) cancelAsk();
+      else if (page !== null) back();
       else fold();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, bindKeys, fold, page, back]);
+  }, [open, bindKeys, fold, page, back, asking, cancelAsk]);
 
   // QL-D2: over Godview, the stage holds its keys while the popup stands.
   const hold = open && bindKeys ? holdKeys : undefined;
@@ -284,7 +345,7 @@ export function Plugins({
   const layout = useMemo(() => pluginsLayout(box.width, box.height), [box]);
 
   const shelf = shelfState(read, reading);
-  const foot = catalogFoot(read, reading, now());
+  const foot = catalogFoot(read, reading, now(), community === false);
   const catalog = read.kind === "answered" ? read.catalog : null;
   // Q6: the field's words filter Installed's rows; Discover's and Updates'
   // search waits for the shelf, and the words are kept across the switch.
@@ -393,11 +454,16 @@ export function Plugins({
     },
     [page],
   );
-  const onTab = useCallback((next: PluginsTab) => {
-    setTab(next);
-    setPage(null);
-    setHot(0);
-  }, []);
+  // leaving Discover takes the community tile's ask back, unanswered (MK-O3D)
+  const onTab = useCallback(
+    (next: PluginsTab) => {
+      setTab(next);
+      setPage(null);
+      setHot(0);
+      if (next !== "discover") dropAsk();
+    },
+    [dropAsk],
+  );
 
   // The hot row stays in sight as the keys walk it (as the Peek's does).
   useEffect(() => {
@@ -463,6 +529,15 @@ export function Plugins({
           />
         ) : null
       }
+      discoverEnd={
+        tile === null ? null : (
+          <CommunityTileView
+            tile={tile}
+            control={{ ...communitySwitch, cancel: cancelAsk, confirm: confirmAsk }}
+            takeFocus={takeFocus}
+          />
+        )
+      }
       pageFrom={page?.from ?? tab}
       updates={updates}
       away={away}
@@ -500,7 +575,10 @@ const takeCount = (catalog: PluginsCatalog): void => takePluginUpdates(catalog.u
  * ChromeLayer's `getHost().platform === "darwin"`, the read it makes for the
  * Settings shortcut; with no platform named, no Mac note). MK-4c2a: its
  * switches take no press while this window's fieldd client isn't ready
- * (`useFielddStatus()`). */
+ * (`useFielddStatus()`). MK-O3D: the community switch as this window's app
+ * preferences say it (`storage.appPreferences.subscribe`, read as Settings'
+ * sections read it), sent through the one setter fieldd audits, and this
+ * desktop's statement mark over fieldd's two doors for it (MK-O1 B). */
 export function FramePlugins({
   view,
   surface,
@@ -520,6 +598,10 @@ export function FramePlugins({
   const godview = useGodviewFindDoor();
   const updates = usePluginUpdates();
   const away = useFielddStatus() !== "ready";
+  const preferences = useSubscription<unknown>("storage.appPreferences.subscribe", {});
+  const community = preferences.status === "live" ? communityFrom(preferences.data) : null;
+  const onCommunity = useMemo(() => communityDoor(fieldd), [fieldd]);
+  const statement = useMemo(() => statementDoor(fieldd), [fieldd]);
   useEffect(() => {
     if (!claimWindowAsk()) return;
     port.catalog().then(
@@ -539,6 +621,9 @@ export function FramePlugins({
       updates={updates}
       onMac={onMac}
       away={away}
+      community={community}
+      onCommunity={onCommunity}
+      statement={statement}
     />
   );
 }

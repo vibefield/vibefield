@@ -238,3 +238,39 @@ export function listTime(at: number, now: number): string {
     read.getDate() === today.getDate();
   return sameDay ? clock : `${MONTHS[read.getMonth()]} ${read.getDate()}, ${clock}`;
 }
+
+/** Discover's community tile and its ask (MK-D6, MK-E3; DESIGN.md §8 "The community tile", drawn 2026-11-14 at
+ * MK-O3D; §9 "Community plugins"). The title, "Off until you turn them on", the ask's question and its two acts are
+ * §9's, from James's page; the line with a count is §9's ‹draft›, which James took at MK's lean (2026-11-11
+ * 06:48:31Z); the statement is trust-and-distribution §7's, word for word (James's J1: "the switch states once that
+ * nothing isolates their code"); "community off" at a read list's foot is §9's, from his page. The line with no
+ * count and the state while on are MK's, ‹draft›, for James's eye. A switch that couldn't change says
+ * SWITCH_WORDS.refused, James's MK-O26 pick. */
+export const COMMUNITY_WORDS = {
+  /** The tile's title, and its switch's name to assistive tech: by what it turns. */
+  title: "Community plugins",
+  /** The tile's line: how many plugins by other people the list held names. */
+  line: (count: number) =>
+    `${count > 0 ? plural(count, "plugin", "plugins") : "Plugins"} by other people. VibeField checks each one before it's listed.`,
+  /** Its state while off. */
+  off: "Off until you turn them on",
+  /** Its state while on: what turning it off does (James's MK-O3 pick, "Stop"). */
+  on: "Turning them off stops the ones you have, on every desktop.",
+  /** The ask, in place, once on each desktop (James's MK-O1 pick B). */
+  ask: "Turn on community plugins?",
+  statement:
+    "Community plugins run with the app's access. VibeField reviews the first listing and rebuilds every version from source; nothing isolates their code from yours.",
+  cancel: "Cancel",
+  confirm: "Turn on community plugins",
+  /** The foot's end while the switch is off, after a held list's count and time (§9 "Reading the list"). */
+  footOff: "community off",
+} as const;
+
+/** Installed's line for a plugin held while community plugins are off (James's MK-O3 pick, "Stop"; §9 "Community
+ * plugins", ‹draft›, as his page drew them). One with no objects and no service says the first clause alone
+ * (MK's, ‹draft›). A held plugin's page says the same words under where its act stands. */
+export const HELD_LINE = {
+  objects: "Off while community plugins are off · its objects on your desks draw as missing",
+  service: "Off while community plugins are off · its service is stopped",
+  bare: "Off while community plugins are off",
+} as const;

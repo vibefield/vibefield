@@ -36,7 +36,8 @@ import { helloAs, until, WsRpc } from "./ws-rpc";
 // MK-2c — the install gate (MK-2's custody note §1 G1, G2, G4; VF-PM 2026-11-11 08:48:07Z, 10:08:59Z, 10:12:49Z).
 // Every registry here is the test's own: the real example plugin packed into an index the test builds and signs with
 // a key it makes, read over file:// or through an injected fetch, in temp roots it removes. No network, no real data
-// dir, no child. The only open gate is a predicate a test hands to an installer it builds itself.
+// dir, no child. The gate opens two ways: a predicate a test hands to an installer it builds itself, and, in the
+// doors' test, the daemon's own switch turned on through its door once the switch is drawn (MK-O3D).
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -333,8 +334,10 @@ describe("the install gate (MK-2c)", () => {
   });
 });
 
-describe("the doors with community plugins off (MK-2c)", () => {
-  it("plugins.install and the card's prepare refuse a community entry, audited as denied; an ON is refused", async () => {
+describe("the doors with community plugins off, then on (MK-2c, MK-O3D)", () => {
+  it("refuse a community entry while off, audited as denied; the drawn switch turns it on, and off holds it", {
+    timeout: 120_000,
+  }, async () => {
     const reg = await registry();
     const dataDir = temp("vf-gate-door-");
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -388,10 +391,24 @@ describe("the doors with community plugins off (MK-2c)", () => {
       ]);
     }
 
-    const on = await shell.callErr("storage.appPreferences.set", {
-      key: "plugins.community",
-      value: true,
-    });
-    expect(on.data?.kind).toBe("PRECONDITION_FAILED");
+    // MK-O3D: the switch is drawn, so its door takes an ON, and the install gate and the stop (O3-C) follow it
+    const turn = (value: boolean) =>
+      shell.call("storage.appPreferences.set", { key: "plugins.community", value });
+    expect(await turn(true)).toEqual({ ok: true });
+    await shell.call("plugins.install", { id: KV_ID });
+    const shape = () => {
+      const row = daemon.plugins.get(KV_ID);
+      return [row?.state, row?.enabled, row?.held];
+    };
+    const RUNS = ["enabled", true, undefined];
+    const HELD = ["disabled", false, "community-off"];
+    expect(shape()).toEqual(RUNS);
+    // turned off, it is held as if turned off; turned on again, it runs as it was
+    expect(await turn(false)).toEqual({ ok: true });
+    await until(() => shape()[2] === "community-off", 8000, "held once community plugins are off");
+    expect(shape()).toEqual(HELD);
+    expect(await turn(true)).toEqual({ ok: true });
+    await until(() => shape()[1] === true, 8000, "back as it was once they are on again");
+    expect(shape()).toEqual(RUNS);
   });
 });

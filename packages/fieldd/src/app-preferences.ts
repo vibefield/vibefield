@@ -32,8 +32,13 @@ export const DEFAULT_APP_PREFERENCES: Readonly<AppPreferences> = {
 /** MK-2c (2026-11-11; D4, VF-PM 08:48:07Z, 10:08:59Z): whether this build draws the Community plugins switch. The
  * ONE guard both community fences read: the switch's setter refuses an ON while it is false (MK-2a), and the install
  * gate refuses every community install while it is false, whatever the stored switch says (MK-2c). The slice that
- * draws the switch (MK-4) turns it true, and from then the gate reads the person's switch (S4). */
-export const COMMUNITY_SWITCH_DRAWN = false;
+ * draws the switch (MK-4) turns it true, and from then the gate reads the person's switch (S4).
+ * MK-O3D (2026-11-14): turned true by the slice that draws the switch — Discover's community tile, whose ask says
+ * the statement once on each desktop (James's MK-O1 pick B; the mark is `plugin-community-statement.ts`'s; DESIGN.md
+ * §8 "The community tile", drawn 2026-11-14). From here the setter takes an ON, audited as `plugin.community.set`
+ * with its outcome, and the install gate and the stop (O3-C, `daemon.ts`'s `communityAllowed`) follow the person's
+ * switch. It stays one constant, so a build that must close the door again changes this line alone. */
+export const COMMUNITY_SWITCH_DRAWN = true;
 
 export function effectiveAppPreferences(values: Readonly<Record<string, unknown>>): AppPreferences {
   const showTray = values[APP_PREFERENCE_KEYS.SHOW_TRAY];

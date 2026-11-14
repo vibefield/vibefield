@@ -1879,10 +1879,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // MK-2c (2026-11-11, G1, S4): a community plugin installs only once this build draws the switch (MK-4) and the
     // person's switch is on; until then, never, whatever the stored switch says (D4). MK-O3 (O3-C, 2026-11-12): and
     // runs only then, so the installer's gate and the registry's read this one closure. Read at each ask, after the
-    // settings doc below exists.
+    // settings doc below exists. MK-O3D (2026-11-14): with the switch drawn, it is the person's switch, read
+    // `=== true`: the contract types `communityPlugins` optional, though `effectiveAppPreferences` always sets it.
     const communityAllowed = async (): Promise<boolean> =>
       COMMUNITY_SWITCH_DRAWN &&
-      effectiveAppPreferences(await settingsDoc.appValues()).communityPlugins;
+      effectiveAppPreferences(await settingsDoc.appValues()).communityPlugins === true;
     // P7 §5.3.1 — fetch/verify/install (user-initiated only; no phone-home)
     const installer = new RegistryInstallService({
       dataDir: config.dataDir,
