@@ -585,13 +585,17 @@ extension FieldHistoryModel {
         }
       }
       let opens = group.prompt.map { sittingOf[$0.timelineId] ?? 0 }
+      // item 396 — what the prompt is where it is not a person's own message. A command's answer is the row right
+      // after it in the prompt's own sitting: the room pairs the two by adjacency, and never across a pill.
+      let answer = slices.first.flatMap { $0.sitting == opens ? $0.rows.first : nil }
+      let kind = group.prompt.flatMap { promptKind($0, answer: answer) }
       /// The prompt and what stands with it: on the first part, or alone when its reply began in a later sitting.
       func opener(_ segments: [HistorySegment], sitting: Int, headed: Bool) -> HistoryTurn {
         HistoryTurn(
           id: turnId, at: clockSeconds(at), dayPill: pill(opening: sitting), prompt: group.prompt?.text ?? "",
           promptAnchor: group.prompt?.timelineId, model: headed ? head : "", facts: headed ? facts : "",
           isLive: headed && isLive, segments: segments, promptAttachments: promptAttachments,
-          promptAttachmentIds: promptAttachmentIds, promptClipped: promptClipped)
+          promptAttachmentIds: promptAttachmentIds, promptClipped: promptClipped, promptKind: kind)
       }
       guard let first = slices.first else {
         turns.append(opener([], sitting: opens ?? 0, headed: true))
@@ -622,6 +626,23 @@ extension FieldHistoryModel {
       startDay: dayWords(header.startedAt ?? header.activity?.firstAt), turns: turns,
       liveSince: liveSince, nextCursor: nextCursor, watermark: watermark)
   }
+
+  // MARK: A prompt's kind (item 396)
+
+  /// Item 396 — what a prompt is where it is not a person's own message. `answer` is the row right after it.
+  ///
+  /// Stub (396 red 3): every prompt is a person's own, as it was.
+  static func promptKind(_ prompt: IndexTimelineRow, answer: IndexTimelineRow?) -> HistoryPromptKind? { nil }
+
+  /// Item 396 — whether a prompt's words are a local command.
+  ///
+  /// Stub (396 red 3): none are.
+  static func isLocalCommand(_ text: String?) -> Bool { false }
+
+  /// Item 396 — whether a command and the session's answer to it are a setting that took.
+  ///
+  /// Stub (396 red 3): none is.
+  static func isSetting(command: String, output: String?) -> Bool { false }
 
   // MARK: Sittings (item 362c)
 

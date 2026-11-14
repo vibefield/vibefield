@@ -460,6 +460,18 @@ public struct HistoryDocument: Identifiable, Equatable, Sendable, Codable {
   }
 }
 
+/// Item 396 (VF-PM's ruling, 2026-11-13 23:47Z, so the phone matches the desktop's room) — what a turn's prompt is,
+/// where it is not a person's own message. The button at the document's side goes to a person's own message alone
+/// (`HistoryRow.before`); the fold says which prompts are not one (`FieldHistoryModel.promptKind`), by the room's
+/// rule. A prompt of either kind is drawn as it was.
+public enum HistoryPromptKind: String, Equatable, Sendable, Codable {
+  /// A setting command that took: `/model` or `/effort`, and the value the session answered with. In the room it
+  /// is a label and a value, never a panel.
+  case setting
+  /// A prompt a machine wrote: what a parent agent sent the session it started (the room's `Assignment`).
+  case machine
+}
+
 public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
   public let id: String
   public let at: String
@@ -486,12 +498,16 @@ public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
   public let promptClipped: String?
   /// Item 362c — a later part of a reply that time cut: the same response, so no second head stands over it.
   public let continues: Bool
+  /// Item 396 — what the prompt is where it is not a person's own message (`HistoryPromptKind`). nil for a person's
+  /// own, for a turn with no prompt, and in a document kept before this item: the field is optional, so such a
+  /// document still decodes, and there every prompt counts as a person's own, as it did.
+  public let promptKind: HistoryPromptKind?
 
   public init(
     id: String, at: String, dayPill: HistoryDayPill? = nil, prompt: String, promptAnchor: String? = nil,
     model: String, facts: String, isLive: Bool = false, segments: [HistorySegment],
     promptAttachments: [String] = [], promptAttachmentIds: [String]? = nil, promptClipped: String? = nil,
-    continues: Bool = false
+    continues: Bool = false, promptKind: HistoryPromptKind? = nil
   ) {
     self.id = id
     self.at = at
@@ -506,6 +522,7 @@ public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
     self.promptAttachmentIds = promptAttachmentIds
     self.promptClipped = promptClipped
     self.continues = continues
+    self.promptKind = promptKind
   }
 }
 
