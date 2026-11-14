@@ -26,6 +26,7 @@ export * from "./made-app-network";
 export * from "./meshdata";
 export * from "./methods";
 export * from "./mgmt";
+export * from "./objects";
 export * from "./phone-code";
 export * from "./plugin-diagnostics";
 export * from "./plugin-distribution";
