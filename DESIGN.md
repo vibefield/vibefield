@@ -7645,7 +7645,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   span, already here; the span keeps the phone's spelling (`313h 54m`, where the desktop writes `13d 1h`) and
   `started 14:06` stays, at the line's end; the line keeps its size and ink (12.5 pt, `inkFaint`, tabular
   digits), which is the desktop's faint; `msgs` is the desktop's word, for one message too; a session still
-  being read whose row counts no message yet shows no figures, where the desktop shimmers.* A session row's
+  being read whose row counts no message yet shows no figures, where the desktop shimmers.* **The line holds
+  one line**: where its figures would run past the entry's width it is drawn smaller, down to 85% of its size,
+  and past that it is cut at its end, where `started 14:06` stands. (*A reading, 2026-11-14, not his ruling: by
+  arithmetic a heavy session's line is about as wide as a 393 pt phone's column, and a clock left alone on a
+  second line reads as a fault. Until this the line had no limit, because the span and the start never neared
+  the width.*) A session row's
   **foot** names where it ran — the desktop's mark and name, then the
   folder's name, never its path — and its last-word slot holds the session's act (Resume or Jump
   to, below) or the reason there is none. A session's document is read from its OWN desktop's door
