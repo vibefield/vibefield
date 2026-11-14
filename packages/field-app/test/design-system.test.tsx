@@ -798,7 +798,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     ]);
     const over = fromPlates.map((p) => p.querySelector(".vf-cards-label")?.textContent);
     expect(over).toEqual(["⌘V · just now", "Canvas · Settings · just now", "History · just now"]);
-    // …and the faces on the shipping CardFace: the six kinds by day and by the Moon, a drag's two
+    // …and the faces on the shipping CardFace: the six kinds by day and by the Moon, a drag's three
     // waiting faces, the two the desk's Make a card deals (UI_SYSTEM's list), and what another app,
     // Settings and History deal — a file that is not words a blank page (round 5's face, item 405)
     const faceRows = [...(container?.querySelectorAll(".vf-ds-card-faces") ?? [])];
@@ -807,10 +807,17 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(faceRows.map(kindsOf)).toEqual([
       "text file agent term msg pict",
       "text file agent term msg pict",
-      "pict file",
+      "pict file text",
       "text pict",
       "file text text text",
     ]);
+    // a drag of words from another app before it is let go (`waitingCardOf`'s text card): its kind's name in the head
+    // (HN-D2), its window the bare plate. The longest name a waiting card has, so the stage's look reads it whole or
+    // cut; this DOM measures nothing, so here it stands whole at 11.5 (item 405's review).
+    const waitingWords = faceRows[2]?.querySelector('[data-kind="text"]');
+    expect(waitingWords?.hasAttribute("data-waiting")).toBe(true);
+    expect(waitingWords?.querySelector(".vf-card-name")?.textContent).toBe("Text from another app");
+    expect(waitingWords?.querySelector('[data-window="text"]')?.textContent).toBe("");
     expect(faceRows.map((row) => row.classList.contains("dark"))).toEqual([
       false,
       true,
