@@ -203,13 +203,21 @@ export class ArtifactPreviewCapture {
       // Item 378 — WebRTC's ICE never passes webRequest, so the gate above cannot see a page's peer
       // connection. Its unproxied UDP is refused per contents (below); its TCP (a TURN relay over TCP
       // or TLS, ICE-TCP) takes this session's proxy, a dead one. `<-loopback>` takes away Chromium's
-      // implicit loopback bypass, so this Mac's own ports are no relay either. Per capture, never
+      // implicit loopback bypass, so this Mac's loopback ports are no relay either. Per capture, never
       // process-wide: the desk's own browser pages share a profile where a person may hold a call.
       // Both halves are measured on a real Electron by desk-gates row 38 (`smoke:capture-webrtc`).
+      // Item 415 — a bypass entry with no port matches EVERY port of its host, so the origin bypasses
+      // at its own port alone (any other port of this desktop's own name takes the dead proxy too),
+      // and each allowHost at 443, the one port the gate admits it on (https, `url.port === ""`).
+      const targetUrl = new URL(params.url);
       await captureSession.setProxy({
         mode: "fixed_servers",
         proxyRules: PREVIEW_DEAD_PROXY,
-        proxyBypassRules: [new URL(params.url).hostname, ...allowHosts, "<-loopback>"].join(","),
+        proxyBypassRules: [
+          `${targetUrl.hostname}:${targetUrl.port || "443"}`,
+          ...allowHosts.map((host) => `${host}:443`),
+          "<-loopback>",
+        ].join(","),
       });
       throwIfAborted(signal);
 
