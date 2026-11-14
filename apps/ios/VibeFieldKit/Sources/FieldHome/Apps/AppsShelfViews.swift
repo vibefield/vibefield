@@ -131,22 +131,40 @@ private struct AppsUnopenedMark: View {
   }
 }
 
-/// A project's folder, closed: a square of the inset fill with three icons at 62 and a cluster of the next four at 27.
+/// Where a folder's tile stands on the shelf, as it was last laid out. A box and not state: the shelf scrolls under
+/// it, and nothing is drawn again for that. A tap reads it.
+private final class AppsTilePlace {
+  var frame: CGRect = .zero
+}
+
+/// A project's folder, closed: a square of the inset fill with three icons at 62 and a cluster of the next four at 27
+/// (`AppsFolderFace`).
 private struct AppsFolderTile: View {
   let folder: AppsShelf.Folder
-  let onOpen: () -> Void
+  /// Its folder is drawn over the shelf: the tile has given it its place, and is not seen.
+  let lifted: Bool
+  /// Its folder is heading open: its name has gone to stand over the panel.
+  let unnamed: Bool
+  /// A tap, with the square's place on the shelf: where its folder grows from.
+  let onOpen: (CGRect) -> Void
+
+  @State private var place = AppsTilePlace()
 
   private static let nameGap: CGFloat = 8
 
   var body: some View {
-    Button(action: onOpen) {
+    Button {
+      onOpen(place.frame)
+    } label: {
       VStack(spacing: Self.nameGap) {
         tile
+          .opacity(lifted ? 0 : 1)
         Text(folder.name)
           .font(ChromeType.sans(AppsShelfChrome.folderName, .semibold))
           // Ruled 2026-11-12 (James, 06:07:01Z, PM board): the primary ink. Item 273.
           .foregroundStyle(ChromePalette.ink)
           .lineLimit(1)
+          .opacity(unnamed ? 0 : 1)
       }
     }
     .buttonStyle(AppsPressStyle())
@@ -154,61 +172,15 @@ private struct AppsFolderTile: View {
   }
 
   private var tile: some View {
-    let big = folder.big
     let square = RoundedRectangle(cornerRadius: AppsShelfChrome.folderRadius, style: .continuous)
-    return VStack {
-      HStack {
-        slot(big, 0)
-        Spacer(minLength: 0)
-        slot(big, 1)
+    return AppsFolderFace(folder: folder)
+      // under a finger the square darkens as one, never icon by icon
+      .environment(\.appsPressed, false)
+      .background { square.fill(ChromePalette.fill) }
+      .overlay { AppsPressDim(outline: square) }
+      .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(AppsFolderMotion.space)) } action: {
+        place.frame = $0
       }
-      Spacer(minLength: 0)
-      HStack {
-        slot(big, 2)
-        Spacer(minLength: 0)
-        cluster
-      }
-    }
-    .padding(AppsShelfChrome.folderInset)
-    .aspectRatio(1, contentMode: .fit)
-    // under a finger the square darkens as one, never icon by icon
-    .environment(\.appsPressed, false)
-    .background { square.fill(ChromePalette.fill) }
-    .overlay { AppsPressDim(outline: square) }
-  }
-
-  @ViewBuilder
-  private func slot(_ apps: [IndexAppRow], _ index: Int) -> some View {
-    if apps.indices.contains(index) {
-      AppIconView(app: apps[index], side: AppsShelfChrome.folderBig)
-    } else {
-      Color.clear.frame(width: AppsShelfChrome.folderBig, height: AppsShelfChrome.folderBig)
-    }
-  }
-
-  private var cluster: some View {
-    let small = folder.small
-    let gap = AppsShelfChrome.folderBig - 2 * AppsShelfChrome.folderSmall
-    return VStack(spacing: gap) {
-      HStack(spacing: gap) {
-        smallSlot(small, 0)
-        smallSlot(small, 1)
-      }
-      HStack(spacing: gap) {
-        smallSlot(small, 2)
-        smallSlot(small, 3)
-      }
-    }
-    .frame(width: AppsShelfChrome.folderBig, height: AppsShelfChrome.folderBig)
-  }
-
-  @ViewBuilder
-  private func smallSlot(_ apps: [IndexAppRow], _ index: Int) -> some View {
-    if apps.indices.contains(index) {
-      AppIconView(app: apps[index], side: AppsShelfChrome.folderSmall)
-    } else {
-      Color.clear.frame(width: AppsShelfChrome.folderSmall, height: AppsShelfChrome.folderSmall)
-    }
   }
 }
 
@@ -224,6 +196,13 @@ struct AppsShelfView: View {
   @State private var words = ""
   /// The icon the last open was asked from: the one its screen zooms out of, and back into.
   @State private var asked: AppsZoomAsk?
+  /// The folder drawn over the shelf, and where it is heading (item 419). The door's model says which is open.
+  @State private var stand = AppsFolderStand()
+  /// The shelf's own size, the pages' bounds: what an open folder's panel is placed in.
+  @State private var bounds: CGSize = .zero
+  @FocusState private var searching: Bool
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private static let groupGap: CGFloat = 28
   private static let headGap: CGFloat = 14
@@ -248,6 +227,25 @@ struct AppsShelfView: View {
 
   var body: some View {
     let shelf = self.shelf
+    let folder = shelf.folders.first { $0.key == stand.drawn }
+    // a folder heading open has the screen: the shelf under it takes no touch until the folder is let go
+    let held = folder != nil && stand.takesClose
+    behind(list(shelf), held: held, drawn: folder != nil)
+      .overlay { folderLayer(folder, shelf: shelf) }
+      .onChange(of: door.folder) { _, key in
+        if key == nil { folderLeaves() }
+      }
+      .onChange(of: folder?.key) { _, key in
+        // its project left the shelf while its folder was drawn over it
+        if key == nil, stand.drawn != nil {
+          stand.gone()
+          door.closeFolder()
+        }
+      }
+  }
+
+  /// The shelf's own list.
+  private func list(_ shelf: AppsShelf) -> some View {
     ScrollView {
       VStack(alignment: .leading, spacing: Self.groupGap) {
         field
@@ -266,7 +264,62 @@ struct AppsShelfView: View {
       .padding(.bottom, AppsShelfChrome.cardShowing + Self.groupGap)
     }
     .scrollIndicators(.hidden)
-    .background(ChromePalette.paper.ignoresSafeArea())
+  }
+
+  /// The list as it stands behind a folder (item 419): blurred, and drawn a little toward you about the folder's tile,
+  /// on the folder's own spring. While a folder is drawn it does not scroll, so the tile keeps the place it gave. The
+  /// paper is under it and does not move. The shelf's space and its size are named here, for the tiles and the panel.
+  private func behind(_ list: some View, held: Bool, drawn: Bool) -> some View {
+    let back = AppsFolderMotion.behind(progress: drawn ? stand.progress : 0)
+    return list
+      .scrollDisabled(drawn)
+      .allowsHitTesting(!held)
+      .accessibilityHidden(held)
+      .blur(radius: back.blur)
+      .modifier(
+        AppsShelfBehind(
+          scale: reduceMotion ? 1 : back.scale, about: CGPoint(x: stand.tile.midX, y: stand.tile.midY)
+        ).ignoredByLayout()
+      )
+      .background(ChromePalette.paper.ignoresSafeArea())
+      .coordinateSpace(name: AppsFolderMotion.space)
+      .onGeometryChange(for: CGSize.self) { $0.size } action: { bounds = $0 }
+  }
+
+  /// The folder drawn over the shelf, mounted where its tile stands.
+  @ViewBuilder
+  private func folderLayer(_ folder: AppsShelf.Folder?, shelf: AppsShelf) -> some View {
+    if let folder, bounds != .zero {
+      AppsFolderLayer(
+        folder: folder, stand: $stand, door: door, bounds: bounds, away: shelf.away, zoom: zoom, asked: asked,
+        reduced: reduceMotion, onOpen: { open($0, at: .folder(folder.key)) }, onAbout: onAbout
+      )
+      .id(folder.key)
+    }
+  }
+
+  /// A folder's tile was tapped: its folder is drawn where the tile stands, and the layer sends it open from there.
+  /// A folder still on its way home is not placed again: it turns back open from where it is.
+  private func openFolder(_ folder: AppsShelf.Folder, from tile: CGRect) {
+    searching = false
+    if stand.hides(folder.key) {
+      withAnimation(AppsFolderMotion.motion(reduced: reduceMotion)) { stand.rise() }
+    } else {
+      stand.place(folder.key, tile: tile)
+    }
+    door.openFolder(folder.key)
+  }
+
+  /// The door let the folder go (a tap outside it, a pinch, the card): it goes back into its tile on its spring, and
+  /// is drawn until it is there.
+  private func folderLeaves() {
+    guard stand.drawn != nil else { return }
+    let ask = stand.asks
+    withAnimation(AppsFolderMotion.motion(reduced: reduceMotion)) {
+      stand.leave()
+    } completion: {
+      stand.settled(ask: ask)
+    }
   }
 
   private var field: some View {
@@ -279,6 +332,7 @@ struct AppsShelfView: View {
         .foregroundStyle(ChromePalette.ink)
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
+        .focused($searching)
     }
     .padding(.horizontal, 16)
     .frame(height: AppsShelfChrome.searchHeight)
@@ -348,30 +402,16 @@ struct AppsShelfView: View {
     onOpen(app)
   }
 
-  /// A folder opens in place: it takes the Projects group, and its head closes it.
-  @ViewBuilder
+  /// The Projects group: each project's folder as a tile. An open folder is drawn over the shelf (`AppsFolderLayer`)
+  /// and its tile gives it its place, so the group never changes under it. *(Until item 419 a folder opened in
+  /// place: it took this group, and its head closed it.)* Under Reduce Motion nothing travels, so the tile stays.
   private func folders(_ shelf: AppsShelf) -> some View {
-    if let open = shelf.folders.first(where: { $0.key == door.folder }) {
-      VStack(alignment: .leading, spacing: Self.headGap) {
-        Button {
-          door.closeFolder()
-        } label: {
-          HStack(spacing: 6) {
-            Image(systemName: "chevron.down")
-              .accessibilityHidden(true)
-            Text(open.name)
-              .font(ChromeType.sans(AppsShelfChrome.folderName, .semibold))
-          }
-          .foregroundStyle(ChromePalette.ink)
-        }
-        .buttonStyle(.plain)
-        grid(open.apps, shelf: shelf, place: .folder(open.key))
-      }
-    } else {
-      LazyVGrid(columns: folderColumns, spacing: AppsShelfChrome.folderRowGap) {
-        ForEach(shelf.folders) { folder in
-          AppsFolderTile(folder: folder, onOpen: { door.openFolder(folder.key) })
-        }
+    LazyVGrid(columns: folderColumns, spacing: AppsShelfChrome.folderRowGap) {
+      ForEach(shelf.folders) { folder in
+        let drawn = !reduceMotion && stand.hides(folder.key)
+        AppsFolderTile(
+          folder: folder, lifted: drawn, unnamed: drawn && stand.open,
+          onOpen: { openFolder(folder, from: $0) })
       }
     }
   }
@@ -484,8 +524,8 @@ extension AppsShelfChrome {
 
 /// The one card the three tabs and their bar stand in (item 348). At rest it is the whole screen. Pulled, it follows
 /// the finger down while it shrinks and rounds toward the card at the foot, under its shadow. Open, it is that card,
-/// 106 of it showing: pushing it up, or tapping it, goes back. It reads the door's model in its own body, so a pull
-/// redraws the card and not the home screen.
+/// 106 of it showing: pushing it up, or tapping it, goes back (with a folder open on the shelf, it closes the folder
+/// first: item 419). It reads the door's model in its own body, so a pull redraws the card and not the home screen.
 struct AppsCard: ViewModifier {
   let door: AppsDoorModel
   /// The pages' height, the safe area's.
@@ -527,6 +567,7 @@ struct AppsCard: ViewModifier {
             .allowsHitTesting(false)
         }
       }
+      .overlay { folderDim(shape, shade: card.shade) }
       .allowsHitTesting(!open)
       .overlay(alignment: .top) {
         if card.shade > 0 {
@@ -548,20 +589,40 @@ struct AppsCard: ViewModifier {
             .frame(height: AppsShelfChrome.cardShowing)
             .contentShape(Rectangle())
             .ignoresSafeArea(.container, edges: .bottom)
-            .onTapGesture(perform: onBack)
+            .onTapGesture { goBack() }
             .gesture(
               DragGesture(minimumDistance: Self.back).onEnded { value in
-                if value.translation.height <= -Self.back { onBack() }
+                if value.translation.height <= -Self.back { goBack() }
               }
             )
             .accessibilityElement()
             .accessibilityLabel("Back")
             .accessibilityAddTraits(.isButton)
-            .accessibilityAction(.default, onBack)
+            .accessibilityAction(.default) { goBack() }
         }
       }
       .animation(reduceMotion ? nil : AppBar.motion, value: open)
       .animation(reduceMotion ? nil : AppBar.motion, value: door.peeking)
+  }
+
+  /// A push up or a tap on the card. With a folder open on the shelf it closes the folder first, as the Home gesture
+  /// does on the Home Screen, and the next one goes back to the tab (item 419).
+  private func goBack() {
+    if door.folder == nil { onBack() } else { door.closeFolder() }
+  }
+
+  /// Behind an open folder the card takes the shelf's dim (item 419), on the folder's spring, and no blur: its pages
+  /// are live.
+  @ViewBuilder
+  private func folderDim(_ shape: AppsCardShape, shade: Double) -> some View {
+    if shade > 0 {
+      let folder = door.folder != nil
+      shape
+        .fill(ChromePalette.searchScrim)
+        .opacity(folder ? shade : 0)
+        .animation(AppsFolderMotion.motion(reduced: reduceMotion), value: folder)
+        .allowsHitTesting(false)
+    }
   }
 }
 

@@ -5,9 +5,6 @@ import Foundation
 // finger", "The open app"): the Home Screen's folder and the system's app launch at the shelf's measure. Every number
 // that decides a motion stands here, once, and the views read it; how each feels under a finger is James's, on his
 // phone.
-//
-// STUBS (the red), still standing for the folder: each of its rules answers what the shelf did before item 419, or
-// nothing. The press, the long press and the zoom's source are real.
 
 /// An icon under a finger.
 enum AppsPress {
@@ -137,23 +134,40 @@ enum AppsFolderMotion {
 
   // MARK: - The rules
 
-  /// How many pages a folder of `count` apps has: nine to a page, and an empty folder still one. STUB: one, the
-  /// one grid a folder opened to in place.
-  static func pages(count: Int) -> Int { 1 }
+  /// How many pages a folder of `count` apps has: nine to a page, and an empty folder still one.
+  static func pages(count: Int) -> Int { max(1, (count + perPage - 1) / perPage) }
 
-  /// The apps on page `index`, in the folder's order. A page past the end holds none. STUB: every app on the first.
-  static func page<App>(_ index: Int, of apps: [App]) -> [App] { index == 0 ? apps : [] }
+  /// The apps on page `index`, in the folder's order. A page past the end holds none.
+  static func page<App>(_ index: Int, of apps: [App]) -> [App] {
+    let first = index * perPage
+    guard index >= 0, first < apps.count else { return [] }
+    return Array(apps[first..<min(first + perPage, apps.count)])
+  }
 
   /// Where the panel stands on a shelf of `bounds` (the pages' bounds, the safe area's): `panelSide` from each side,
-  /// and with its name centred in what the receded card leaves of the height. STUB: nowhere.
-  static func panel(in bounds: CGSize) -> CGRect { .zero }
+  /// and with its name centred in what the receded card leaves of the height. On a screen too short for both, the
+  /// name keeps the top.
+  static func panel(in bounds: CGSize) -> CGRect {
+    let head = nameLine + nameGap
+    let free = bounds.height - AppsShelfChrome.cardShowing
+    let top = max(0, (free - head - panelHeight) / 2)
+    return CGRect(
+      x: panelSide, y: (top + head).rounded(), width: max(0, bounds.width - 2 * panelSide), height: panelHeight)
+  }
 
-  /// Where the folder's name stands: over the panel, `panelInset` in from its leading edge. STUB: nowhere.
-  static func name(over panel: CGRect) -> CGRect { .zero }
+  /// Where the folder's name stands: over the panel, `panelInset` in from its leading edge.
+  static func name(over panel: CGRect) -> CGRect {
+    CGRect(
+      x: panel.minX + panelInset, y: panel.minY - nameGap - nameLine,
+      width: max(0, panel.width - 2 * panelInset), height: nameLine)
+  }
 
   /// Where the folder grows from: its tile's place. A tile that was never measured has none, and its folder grows
-  /// out of the panel's own middle, at half its size. STUB: the tile as given.
-  static func start(tile: CGRect, panel: CGRect) -> CGRect { tile }
+  /// out of the panel's own middle, at half its size.
+  static func start(tile: CGRect, panel: CGRect) -> CGRect {
+    guard tile.isEmpty else { return tile }
+    return panel.insetBy(dx: panel.width / 4, dy: panel.height / 4)
+  }
 
   /// The folder's square on its way.
   struct Plate: Equatable {
@@ -162,16 +176,25 @@ enum AppsFolderMotion {
   }
 
   /// The square at `progress`, 0 in its tile to 1 as the panel: its place, its size and its corners in step. The
-  /// spring may carry `progress` a hair past either end, and the square goes with it. STUB: the tile, which never
-  /// moved.
+  /// spring may carry `progress` a hair past either end, and the square goes with it, never to less than nothing.
   static func plate(tile: CGRect, panel: CGRect, progress: CGFloat) -> Plate {
-    Plate(rect: tile, radius: AppsShelfChrome.folderRadius)
+    func step(_ from: CGFloat, _ to: CGFloat) -> CGFloat { from + (to - from) * progress }
+    return Plate(
+      rect: CGRect(
+        x: step(tile.minX, panel.minX), y: step(tile.minY, panel.minY),
+        width: max(0, step(tile.width, panel.width)), height: max(0, step(tile.height, panel.height))),
+      radius: max(0, step(AppsShelfChrome.folderRadius, panelRadius)))
   }
 
   /// How a picture laid out for `whole` is drawn on `plate`: about the plate's middle, at the plate's width. The
   /// open folder's picture (its apps, its name) is laid out for the panel and the tile's face for the tile; each
-  /// rides the square, drawn smaller or larger and never laid out again. STUB: where it was laid out.
-  static func carry(_ whole: CGRect, onto plate: CGRect) -> CGAffineTransform { .identity }
+  /// rides the square, drawn smaller or larger and never laid out again.
+  static func carry(_ whole: CGRect, onto plate: CGRect) -> CGAffineTransform {
+    let scale = whole.width > 0 ? plate.width / whole.width : 1
+    return CGAffineTransform(translationX: plate.midX, y: plate.midY)
+      .scaledBy(x: scale, y: scale)
+      .translatedBy(x: -whole.midX, y: -whole.midY)
+  }
 
   /// What stands behind an open folder.
   struct Behind: Equatable {
@@ -182,23 +205,25 @@ enum AppsFolderMotion {
     var dim: Double
   }
 
-  /// The shelf behind a folder at `progress`. A spring past either end changes nothing here. STUB: the shelf as it
-  /// is.
-  static func behind(progress: CGFloat) -> Behind { Behind(scale: 1, blur: 0, dim: 0) }
+  /// The shelf behind a folder at `progress`. A spring past either end changes nothing here.
+  static func behind(progress: CGFloat) -> Behind {
+    let share = min(1, max(0, progress))
+    return Behind(scale: 1 + (behindScale - 1) * share, blur: behindBlur * share, dim: Double(share))
+  }
 
-  /// How far back toward its tile a pinch has taken the open folder, 0 to 1. Spreading the fingers takes it
-  /// nowhere. STUB: nowhere.
-  static func pull(magnification: CGFloat) -> CGFloat { 0 }
+  /// How far back toward its tile a pinch has taken the open folder, 0 to 1: the fingers at `pinchSpan` of their
+  /// spread are the whole way. Spreading them takes it nowhere.
+  static func pull(magnification: CGFloat) -> CGFloat {
+    min(1, max(0, (1 - magnification) / pinchSpan))
+  }
 
-  /// Whether a pinch let go at `pull` closes the folder. STUB: never.
-  static func closes(pull: CGFloat) -> Bool { false }
+  /// Whether a pinch let go at `pull` closes the folder.
+  static func closes(pull: CGFloat) -> Bool { pull >= pinchCloses }
 }
 
 /// The folder the shelf draws over itself, and where it is heading. The door's model says which folder is open
 /// (`AppsDoorModel.folder`); this is the drawing's own standing, which outlasts the model's word by one spring: a
 /// folder let go stays drawn until it is back in its tile.
-///
-/// STUB: nothing is ever drawn over the shelf, as before item 419.
 struct AppsFolderStand: Equatable {
   /// The folder drawn over the shelf.
   private(set) var drawn: String?
@@ -212,35 +237,65 @@ struct AppsFolderStand: Equatable {
   private(set) var asks = 0
 
   /// 0 in its tile, 1 open.
-  var progress: CGFloat { 0 }
+  var progress: CGFloat { open ? 1 - pull : 0 }
 
   /// Whether a tap outside the panel, a pinch or the card closes it: only a folder heading open. One already on its
   /// way back is left to arrive, and with none drawn there is nothing to close.
-  var takesClose: Bool { false }
+  var takesClose: Bool { drawn != nil && open }
 
   /// Whether `key`'s tile has given its place to the folder drawn over it.
-  func hides(_ key: String) -> Bool { false }
+  func hides(_ key: String) -> Bool { drawn == key }
 
   /// A tile was tapped: its folder is drawn where the tile stands, before it moves.
-  mutating func place(_ key: String, tile: CGRect) {}
+  mutating func place(_ key: String, tile: CGRect) {
+    drawn = key
+    self.tile = tile
+    open = false
+    pull = 0
+    asks += 1
+  }
 
   /// It heads open, from wherever it is.
-  mutating func rise() {}
+  mutating func rise() {
+    guard drawn != nil else { return }
+    open = true
+    pull = 0
+  }
 
   /// A pinch moves it by the fingers.
-  mutating func pinch(_ magnification: CGFloat) {}
+  mutating func pinch(_ magnification: CGFloat) {
+    guard takesClose else { return }
+    pull = AppsFolderMotion.pull(magnification: magnification)
+  }
 
   /// The fingers let go. True when the folder closes, from where the fingers left it; short of that it is whole
   /// again.
-  mutating func letGo() -> Bool { false }
+  mutating func letGo() -> Bool {
+    guard takesClose else { return false }
+    if AppsFolderMotion.closes(pull: pull) { return true }
+    pull = 0
+    return false
+  }
 
   /// It heads back into its tile, from wherever it is.
-  mutating func leave() {}
+  mutating func leave() {
+    open = false
+    pull = 0
+  }
 
   /// The spring that took the folder of tap `ask` home has ended. A tile tapped since is another folder's, and it
-  /// stays.
-  mutating func settled(ask: Int) {}
+  /// stays; so does a folder turned back open before it was home.
+  mutating func settled(ask: Int) {
+    guard ask == asks, !open else { return }
+    drawn = nil
+    tile = .zero
+  }
 
   /// Its project left the shelf: nothing is drawn.
-  mutating func gone() {}
+  mutating func gone() {
+    drawn = nil
+    tile = .zero
+    open = false
+    pull = 0
+  }
 }

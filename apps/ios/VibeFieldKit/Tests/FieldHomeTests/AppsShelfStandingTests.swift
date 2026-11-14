@@ -57,7 +57,9 @@ struct AppsShelfStandingTests {
     #expect(model.cues.dot == false)
   }
 
-  @Test("a folder opens in place and closes")
+  // Item 419: a folder no longer opens in place. The door's model still says which folder is open, and the drawing's
+  // own standing over the shelf is AppsFolderStand's (AppsMotionTests).
+  @Test("the door's model says which folder is open, and lets it go")
   func folderInPlace() throws {
     let model = try Self.primed(["a"])
     model.openFolder("project-1")
