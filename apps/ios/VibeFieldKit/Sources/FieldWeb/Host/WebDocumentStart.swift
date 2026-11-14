@@ -2,9 +2,10 @@
   import WebKit
 
   // SP-4c — the script WebKit runs at the start of every document, in every frame of an app's page and in the page's
-  // own world, before the page's scripts. WebRTC is left as any website has it (James, 2026-11-14 08:16:06Z, card
-  // j-made-apps-webrtc: "Allow it, like any website"). Camera, microphone and WebTransport stay closed pending his
-  // answer, and `sendBeacon` stays stubbed (reach, not WebRTC). The getters below also scrub a frame on the way out
+  // own world, before the page's scripts. WebRTC is left as any website has it: MA-D14 (James,
+  // 2026-11-14T08:16:06.968Z: "Allow it, like any website"). So are WebTransport and the camera and microphone's
+  // door: MA-D15 (James, 2026-11-14T17:18:37.520Z: "Let iOS ask for camera and mic; allow WebTransport too").
+  // `sendBeacon` stays stubbed (reach, not either question). The getters below also scrub a frame on the way out
   // of `contentWindow`/`contentDocument`. Item 373: this whole file compiles only in a Debug build or with SP-4d's
   // relay.
 
@@ -12,8 +13,8 @@
     /// The archive check's literal web marker: the script's own source name. Used here and nowhere else.
     static let tag = "vibefield.web-host.document-start.v1"
 
-    /// The globals removed from every frame. WebRTC's are NOT among them (James, 2026-11-14 08:16:06Z).
-    static let removed = ["WebTransport"]
+    /// The globals removed from every frame: none, since MA-D14 and MA-D15.
+    static let removed: [String] = []
 
     static var source: String {
       let names = removed.map { "\"\($0)\"" }.joined(separator: ", ")
@@ -30,7 +31,6 @@
               for (const name of names) pin(w, name, { value: undefined, writable: false });
               const nav = w.navigator;
               if (nav) {
-                pin(nav, "mediaDevices", { get: () => undefined });
                 pin(nav, "sendBeacon", { value: () => false, writable: false });
               }
             } catch (_) {}

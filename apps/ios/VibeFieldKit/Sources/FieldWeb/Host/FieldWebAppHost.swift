@@ -128,9 +128,11 @@
       return nil
     }
 
-    /// What an app's page gets when it asks for the camera, the microphone or both.
+    /// What an app's page gets when it asks for the camera, the microphone or both: iOS's own ask, naming the page;
+    /// nothing is granted without a tap. MA-D15 (James, 2026-11-14T17:18:37.520Z: "Let iOS ask for camera and
+    /// mic; allow WebTransport too").
     nonisolated static func mediaCaptureDecision(_ type: WKMediaCaptureType) -> WKPermissionDecision {
-      .deny
+      .prompt
     }
 
     /// Device motion and orientation were not in James's answer: denied.
