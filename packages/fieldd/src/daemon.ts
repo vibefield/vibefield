@@ -148,6 +148,7 @@ import {
   PluginsInstallDiscardParams,
   PluginsInstallParams,
   PluginsInstallPrepareParams,
+  type PluginsInstallPrepareResult,
   PluginsOpenRendererSessionParams,
   type PluginsOpenRendererSessionResult,
   PluginsReloadParams,
@@ -353,13 +354,20 @@ import {
 import { PeerLink } from "./peer-link";
 import { PluginCatalogService } from "./plugin-catalog";
 import { CommunityHold, communityGate } from "./plugin-community-hold";
-import { RegistryInstallService } from "./plugin-install";
+import { type PreparedRegistryInstall, RegistryInstallService } from "./plugin-install";
 import { InstallCards } from "./plugin-install-cards";
 import { PluginModuleAuthority } from "./plugin-modules";
 import { PluginRegistryService } from "./plugin-registry";
 import { PluginRuntimeDiagnostics } from "./plugin-runtime-diagnostics";
 import { PluginSettingsService, type SecretStore } from "./plugin-settings";
 import { PluginKvStore } from "./plugin-storage";
+import {
+  UPDATE_ASKS_MORE,
+  UPDATE_CARD_MOVED,
+  type UpdateCardBasis,
+  updateAsksFor,
+  updateCardMoved,
+} from "./plugin-update-asks";
 import type { PluginUpdateDeadlines } from "./plugin-update-coordinator";
 import { PluginUpdateManager } from "./plugin-update-manager";
 import { PluginUpdateTransport } from "./plugin-update-transport";
@@ -6841,6 +6849,108 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (event.section === "app") void communityHold.switchMoved();
     });
     void communityHold.switchMoved();
+    // MK-UC (2026-11-14; James's pick, 2026-11-12 06:08:01Z: "Yes: show the card when an update asks for more") —
+    // an update's commit, one road for plugins.install's one press and an update card's commit. Disabled plugins
+    // have no runtime authority to coordinate, so one that is off (or held) commits plainly, as an install does, and
+    // a failed commit throws its download away; every enabled replacement widens the pointer gap only inside the
+    // exact participant barrier (moved here whole from plugins.install, as it was).
+    const commitUpdate = async (prepared: PreparedRegistryInstall) => {
+      const existing = plugins.get(prepared.id);
+      if (existing === undefined || !existing.enabled) {
+        try {
+          await installer.commit(prepared);
+        } catch (error) {
+          await installer.discard(prepared).catch(() => false);
+          throw error;
+        }
+        const record = plugins.get(prepared.id);
+        if (record?.enabled === true && record.service !== "none")
+          void serviceHost?.restartFresh(prepared.id).catch(() => undefined);
+        if (record !== undefined) void reconciler?.publish(record, "install");
+        return { record: record ?? { id: prepared.id }, revoked: { count: 0, tokenIds: [] } };
+      }
+      let started: ReturnType<PluginUpdateManager["beginRegistryUpdate"]>;
+      try {
+        started = updateManager.beginRegistryUpdate({
+          runtime: prepared.runtime,
+          commitArtifact: async (commitEpoch) => {
+            await installer.commit(prepared, commitEpoch);
+          },
+          discardArtifact: async () => {
+            await installer.discard(prepared);
+          },
+        });
+      } catch (error) {
+        await installer.discard(prepared).catch(() => false);
+        throw error;
+      }
+      let outcome: Awaited<typeof started.completion>;
+      try {
+        outcome = await started.completion;
+      } catch (error) {
+        updateRetirements.delete(started.updateId);
+        throw error;
+      }
+      const revoked = updateRetirements.get(started.updateId) ?? {
+        count: 0,
+        tokenIds: [],
+      };
+      updateRetirements.delete(started.updateId);
+      if (outcome.outcome !== "committed") {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `${prepared.id}: candidate failed; retained old recovered`,
+          true,
+          { pluginKind: "PLUGIN_ACTIVATION_FAILED", updateId: started.updateId },
+        );
+      }
+      const record = plugins.get(prepared.id);
+      if (record !== undefined) void reconciler?.publish(record, "install"); // §16.6
+      return { record: record ?? { id: prepared.id }, revoked };
+    };
+    // MK-UC (the review's fix, 2026-11-14): an update card's Update, which can come fifteen minutes after its
+    // download. The candidate's row was read from this desktop's records at prepare, and the barrier mints the
+    // candidate's leases from it, starts its service by it, and holds the live row to it once the pointer moves
+    // (`plugin-update-manager.ts`, `plugin-modules.ts` promote). So it is read again here, from the same verified
+    // folder, with the signed entry's display copies prepare carried, and the records as they stand now. A card
+    // whose plugin changed (`updateCardMoved`: another version taken, its manifest not the pinned one, or the
+    // update now able to do something the card didn't name) changes nothing: its download is thrown away, and the
+    // door says so in §9's words. A power turned off, or the plugin turned off or on, is in the row read now.
+    const commitUpdateCard = async (prepared: PreparedRegistryInstall, card: UpdateCardBasis) => {
+      const shown = prepared.runtime.record.registry;
+      let runtime: PreparedRegistryInstall["runtime"];
+      try {
+        runtime = await plugins.inspectRegistryCandidate({
+          pluginId: prepared.id,
+          root: prepared.artifact.root,
+          artifactSha256: prepared.artifact.artifactSha256,
+          signed: {
+            ...(shown?.rung !== undefined ? { rung: shown.rung } : {}),
+            ...(shown?.publisherName !== undefined ? { publisherName: shown.publisherName } : {}),
+          },
+        });
+      } catch (error) {
+        await installer.discard(prepared).catch(() => false);
+        throw error;
+      }
+      const live = plugins.get(prepared.id);
+      const moved = updateCardMoved(card, live, runtime.record, prepared.pinnedManifestHash);
+      if (moved !== null) {
+        await installer.discard(prepared).catch(() => false);
+        logger.info(
+          "fieldd.plugin_install.update_card_moved",
+          "An update card's plugin changed before its Update; nothing changed",
+          { pluginId: prepared.id, moved },
+        );
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "This plugin changed before you pressed Update. Press Update again.",
+          false,
+          { reasonCode: UPDATE_CARD_MOVED },
+        );
+      }
+      return await commitUpdate({ ...prepared, runtime });
+    };
     api.register("plugins.install", async (ctx, params) => {
       const parsed = PluginsInstallParams.safeParse(params);
       if (!parsed.success)
@@ -6859,10 +6969,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         },
         async () => {
           const existing = parsed.data.id === undefined ? undefined : plugins.get(parsed.data.id);
-          // Disabled installs have no runtime authority to coordinate. First installs and this
-          // code-absent fast path keep the compatibility wrapper; every enabled replacement widens
-          // the pointer gap only inside the exact participant barrier.
-          if (existing === undefined || !existing.enabled) {
+          // First installs have no runtime authority to coordinate, and keep the compatibility wrapper
+          if (existing === undefined) {
             const { id } = await installer.install(parsed.data);
             const record = plugins.get(id);
             if (record?.enabled === true && record.service !== "none")
@@ -6872,45 +6980,29 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           }
 
           const prepared = await installer.prepare(parsed.data);
-          let started: ReturnType<PluginUpdateManager["beginRegistryUpdate"]>;
-          try {
-            started = updateManager.beginRegistryUpdate({
-              runtime: prepared.runtime,
-              commitArtifact: async (commitEpoch) => {
-                await installer.commit(prepared, commitEpoch);
-              },
-              discardArtifact: async () => {
-                await installer.discard(prepared);
-              },
-            });
-          } catch (error) {
-            await installer.discard(prepared).catch(() => false);
-            throw error;
-          }
-          let outcome: Awaited<typeof started.completion>;
-          try {
-            outcome = await started.completion;
-          } catch (error) {
-            updateRetirements.delete(started.updateId);
-            throw error;
-          }
-          const revoked = updateRetirements.get(started.updateId) ?? {
-            count: 0,
-            tokenIds: [],
-          };
-          updateRetirements.delete(started.updateId);
-          if (outcome.outcome !== "committed") {
+          // MK-UC: an update that can do more than the version you have asks first, on its card
+          // (plugins.install.prepare with `update`), so this one press takes only an update that asks for nothing
+          // new. Its download is thrown away and nothing moves. The log says how many powers, never which. A slot
+          // the store reused was there before this press (a card's own download among them), so it is left as found.
+          const asksFor = updateAsksFor(
+            plugins.get(prepared.id) ?? existing,
+            prepared.runtime.record,
+          );
+          if (asksFor.length > 0) {
+            if (!prepared.artifact.reused) await installer.discard(prepared).catch(() => false);
+            logger.info(
+              "fieldd.plugin_install.update_asks_more",
+              "An update that asks for more was refused at the one press",
+              { pluginId: prepared.id, asksForCount: asksFor.length },
+            );
             throw new RpcCallError(
               "PRECONDITION_FAILED",
-              `${prepared.id}: candidate failed; retained old recovered`,
-              true,
-              { pluginKind: "PLUGIN_ACTIVATION_FAILED", updateId: started.updateId },
+              "This update can do more than the version you have. Update it from Plugins.",
+              false,
+              { reasonCode: UPDATE_ASKS_MORE },
             );
           }
-          const id = prepared.id;
-          const record = plugins.get(id);
-          if (record !== undefined) void reconciler?.publish(record, "install"); // §16.6
-          return { record: record ?? { id }, revoked };
+          return await commitUpdate(prepared);
         },
         ({ record, revoked }) => {
           const installed = record as {
@@ -6941,39 +7033,74 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // alone. An update keeps plugins.install's one press, and an install arriving from another desktop shows no
     // card (the reconciler calls the installer itself). commit and discard take their card only inside the effect,
     // once the attempt row is written: an audit that fails before any effect leaves the card waiting.
+    // *Corrected 2026-11-14 (MK-UC; James's pick, 2026-11-12 06:08:01Z: "Yes: show the card when an update asks for
+    // more"):* an update keeps the one press only when it asks for nothing new. prepare with `update` downloads a
+    // newer version of a plugin this desktop has, holds it for its card the same way, and answers what it asks for;
+    // an update card's commit is held to what the card was read against and then takes `commitUpdate`'s road
+    // (`commitUpdateCard`), and its audit rows say plugin.update.
     const installCards = new InstallCards((prepared) => installer.discard(prepared));
     api.register("plugins.install.prepare", async (ctx, params) => {
       const parsed = PluginsInstallPrepareParams.safeParse(params);
       if (!parsed.success)
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { id, version? }", false);
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { id, version?, update? }", false);
       const { id, version } = parsed.data;
+      const update = parsed.data.update === true;
       return await audit.required(
         ctx,
         {
-          action: "plugin.install.prepare",
+          action: update ? "plugin.update.prepare" : "plugin.install.prepare",
           target: { kind: "plugin", id },
           attrs: { requestedVersion: version ?? "latest", source: "registry" },
         },
-        async () => {
-          if (plugins.get(id) !== undefined)
+        async (): Promise<PluginsInstallPrepareResult> => {
+          const installed = plugins.get(id);
+          if (!update && installed !== undefined)
             throw new RpcCallError(
               "PRECONDITION_FAILED",
               "This plugin is already installed.",
               false,
             );
+          // MK-UC: an update's card is for a plugin this desktop has
+          if (update && installed === undefined)
+            throw new RpcCallError("PRECONDITION_FAILED", "This plugin isn't installed.", false);
           const prepared = await installer.prepare({
             id,
             ...(version !== undefined ? { version } : {}),
           });
-          const candidate = await installCards.hold(prepared);
-          return { candidate, record: prepared.runtime.record };
+          const record = prepared.runtime.record;
+          // MK-UC: read against the row as it stands once the download is staged, so a power turned off meanwhile
+          // stays off
+          const now = plugins.get(id) ?? installed;
+          const asks =
+            update && now !== undefined
+              ? { from: now.version, asksFor: updateAsksFor(now, record) }
+              : undefined;
+          // MK-UC (the review's fix, 2026-11-14): an update's card keeps what it was read against, the version
+          // you have and the powers it names, for its Update to hold the plugin to (`commitUpdateCard`)
+          const basis: UpdateCardBasis | undefined =
+            asks !== undefined && now !== undefined
+              ? {
+                  installRevision: now.installRevision,
+                  manifestHash: now.manifestHash,
+                  asksFor: asks.asksFor,
+                }
+              : undefined;
+          const candidate = await installCards.hold(
+            prepared,
+            basis !== undefined ? { update: basis } : {},
+          );
+          return { candidate, record, ...(asks !== undefined ? { update: asks } : {}) };
         },
-        ({ candidate, record }) => ({
+        (answer) => ({
           attrs: {
-            candidate,
-            version: record.version,
-            manifestHash: record.manifestHash,
-            artifactSha256: record.registry?.artifactSha256 ?? "unknown",
+            candidate: answer.candidate,
+            version: answer.record.version,
+            manifestHash: answer.record.manifestHash,
+            artifactSha256: answer.record.registry?.artifactSha256 ?? "unknown",
+            // MK-UC: what an update asks for is recorded by count, never as a list
+            ...(answer.update !== undefined
+              ? { from: answer.update.from, asksForCount: answer.update.asksFor.length }
+              : {}),
           },
         }),
       );
@@ -6984,10 +7111,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         throw new RpcCallError("PRECONDITION_FAILED", "expected { candidate }", false);
       const { candidate } = parsed.data;
       const waiting = installCards.peek(candidate);
+      // MK-UC: an update's card commits on the update's road, audited as plugins.install's update is, and is
+      // held to what it was read against first (`commitUpdateCard`)
+      const card = installCards.updateBasis(candidate);
+      const update = card !== undefined;
       const result = await audit.required(
         ctx,
         {
-          action: "plugin.install",
+          action: update ? "plugin.update" : "plugin.install",
           target: { kind: "plugin", id: waiting?.id ?? "unknown-candidate" },
           attrs: { candidate, source: "registry", card: true },
         },
@@ -6999,6 +7130,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               "This install took too long. Press Install again.",
               false,
             );
+          if (card !== undefined) return await commitUpdateCard(prepared, card);
           try {
             await installer.commit(prepared);
           } catch (error) {
@@ -7009,9 +7141,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           if (record?.enabled === true && record.service !== "none")
             void serviceHost?.restartFresh(prepared.id).catch(() => undefined);
           if (record !== undefined) void reconciler?.publish(record, "install"); // §16.6
-          return { record: record ?? { id: prepared.id } };
+          return { record: record ?? { id: prepared.id }, revoked: { count: 0, tokenIds: [] } };
         },
-        ({ record }) => {
+        ({ record, revoked }) => {
           const installed = record as {
             version?: string;
             manifestHash?: string;
@@ -7023,6 +7155,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               manifestHash: installed.manifestHash ?? "unknown",
               artifactSha256: installed.registry?.artifactSha256 ?? "unknown",
               publisher: installed.registry?.publisher ?? "unknown",
+              // MK-UC: an update's commit names the grants it revoked, as plugins.install's update does
+              ...(update
+                ? { revokedGrantCount: revoked.count, revokedGrantIds: revoked.tokenIds }
+                : {}),
             },
           };
         },
@@ -7035,10 +7171,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         throw new RpcCallError("PRECONDITION_FAILED", "expected { candidate }", false);
       const { candidate } = parsed.data;
       const waiting = installCards.peek(candidate);
+      // MK-UC: an update card's Cancel leaves the version you have: the store never removes the folder its
+      // pointer selects (`plugin-artifact-store.ts`, `discard`)
+      const update = installCards.isUpdate(candidate);
       return await audit.required(
         ctx,
         {
-          action: "plugin.install.cancel",
+          action: update ? "plugin.update.cancel" : "plugin.install.cancel",
           target: { kind: "plugin", id: waiting?.id ?? "unknown-candidate" },
           attrs: { candidate },
         },

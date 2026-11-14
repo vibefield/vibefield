@@ -15,6 +15,7 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "./native-link";
 import {
   type ListingFileRead,
+  logUpdatesRead,
   REGISTRY_FETCH_TIMEOUT_MS,
   type RegistryInstallService,
   readFileCapped,
@@ -240,6 +241,8 @@ export class PluginCatalogService {
       return this.answerFrom(outcome.kept, this.lastRead);
     }
     this.lastRead = "ready";
+    // MK-UC (2026-11-14): what this read can't update for a plugin you have goes to the log, as `updatesCheck`'s does
+    logUpdatesRead(this.log, this.cfg.plugins.list(), index);
     // MK-2e: the pictures this list pins, inside the person's read; `get` says reading until the phase ends
     await this.picturesPhase(index, signed.indexRef);
     return this.answerFrom({ index, checkedAt: outcome.checkedAt }, "ready");

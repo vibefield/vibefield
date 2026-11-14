@@ -1,0 +1,42 @@
+{
+  "candidate": "7c1e0a9b3d5f4e2a8b6c0d1e2f3a4b5c",
+  "record": {
+    "id": "vibefield.example.kv",
+    "version": "0.2.0",
+    "title": "KV (example service)",
+    "source": "registry",
+    "manifestHash": "sha256:4d7e2a91c3b5f6e8d0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b",
+    "installRevision": "4d7e2a91c3b5",
+    "state": "enabled",
+    "compatible": true,
+    "enabled": true,
+    "requestedCapabilities": ["services.provide", "background", "storage.self", "net.outbound"],
+    "grantedCapabilities": ["services.provide", "background", "storage.self", "net.outbound"],
+    "deniedCapabilities": [],
+    "contributions": {
+      "objects": [],
+      "commands": [],
+      "surfaces": [],
+      "capabilities": [
+        {
+          "id": "x.vibefield.example.kv.use",
+          "title": "Use the example KV store",
+          "description": "Read and write keys in this plugin's in-memory key-value store.",
+          "risk": "write"
+        }
+      ]
+    },
+    "renderer": "none",
+    "service": "inactive",
+    "registry": {
+      "indexRef": "file:///registry/index.json",
+      "artifactSha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "publisher": "https://example.test/plugins/vibefield.example.kv",
+      "rung": "R1"
+    }
+  },
+  "update": {
+    "from": "0.1.0",
+    "asksFor": ["net.outbound"]
+  }
+}

@@ -232,6 +232,44 @@ export function semverNewer(candidate: string, installed: string): boolean {
   return false;
 }
 
+/** MK-UC (2026-11-14; DESIGN.md §8 "The updates flow", owed (MK) until now): what a read of the plugin list says of
+ * a plugin you have that it can't update goes to the log, one line each — a newer release that needs a newer
+ * VibeField, with the floors that are VibeField's insides, and a plugin the list no longer names. Both reads call it:
+ * `updatesCheck`, and the popup's (`PluginCatalogService.refresh`). Nothing here reaches a window. */
+export function logUpdatesRead(
+  log: Logger,
+  installed: ReadonlyArray<{
+    readonly id: string;
+    readonly version: string;
+    readonly source: string;
+  }>,
+  index: RegistryIndex,
+): void {
+  for (const record of installed) {
+    if (record.source !== "registry") continue;
+    const entry = index.plugins[record.id];
+    if (entry === undefined) {
+      log.info("fieldd.plugin_updates.unlisted", "A plugin you have is no longer listed", {
+        pluginId: record.id,
+        installedVersion: record.version,
+      });
+      continue;
+    }
+    if (
+      semverNewer(entry.latest.version, record.version) &&
+      !contractsRangeSatisfied(CONTRACTS_VERSION, entry.latest.minContracts)
+    ) {
+      log.info("fieldd.plugin_updates.incompatible", "An update needs a newer VibeField", {
+        pluginId: record.id,
+        installedVersion: record.version,
+        version: entry.latest.version,
+        minApp: entry.latest.minApp,
+        minContracts: entry.latest.minContracts,
+      });
+    }
+  }
+}
+
 export class RegistryInstallService {
   private readonly log: Logger;
   private readonly artifacts: PluginArtifactStore;
@@ -720,6 +758,8 @@ export class RegistryInstallService {
   /** §5.3.1 — user-initiated batch check; never a background feed. */
   async updatesCheck(): Promise<PluginsUpdatesCheckResult> {
     const { index } = await this.fetchIndex();
+    // MK-UC: what it can't update goes to the log too, never only to its caller
+    logUpdatesRead(this.log, this.cfg.plugins.list(), index);
     const updates: PluginUpdateInfo[] = [];
     const missing: string[] = [];
     for (const record of this.cfg.plugins.list()) {

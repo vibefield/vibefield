@@ -280,6 +280,7 @@ import {
   BundledPluginIndex,
   PluginsCatalog,
   PluginsInstallDiscardResult,
+  PluginsInstallPrepareParams,
   RegistryIndex,
   RegistryIndexV2,
   RegistryProvenance,
@@ -622,6 +623,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // MK-O2 (2026-11-12): the install card's prepare answer (a handle and the candidate's row) and its discard's
   "plugins-install-prepare-result": PluginsInstallPrepareResult,
   "plugins-install-discard-result": PluginsInstallDiscardResult,
+  // MK-UC (2026-11-14): an update's card rides the same doors — prepare's params with `update`, and its answer with
+  // the version you have and what the update asks for (`plugins-install-prepare-result.update`)
+  "plugins-install-prepare-params": PluginsInstallPrepareParams,
   "registry-provenance": RegistryProvenance,
   "update-policy": UpdatePolicy,
   // WP12a (build-wp12-updater.md D4): the channel heads every release carries (refusals in trust-root.test.ts).

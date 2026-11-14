@@ -360,7 +360,10 @@ export type PluginsInstallParams = z.infer<typeof PluginsInstallParams>;
 /** MK-O2 (2026-11-12): the install card's doors (DESIGN.md §8 "Every install asks first"). `prepare` downloads,
  * verifies and stages a plugin this desktop does not have, and answers its row, which the card is read from; `commit`
  * installs what the card showed; `discard` throws the download away. The candidate is fieldd's opaque handle, held in
- * its memory for fifteen minutes. It is not a secret: a caller that may use these doors may install directly. */
+ * its memory for fifteen minutes. It is not a secret: a caller that may use these doors may install directly.
+ * MK-UC (2026-11-14; James's pick, 2026-11-12 06:08:01Z: "Yes: show the card when an update asks for more"): the same
+ * doors serve an update's card. `prepare` with `update` downloads a newer version of a plugin this desktop has and
+ * answers what it asks for that the version you have does not; `commit` takes the update's road. */
 export const PluginsInstallCandidate = z.string().regex(/^[0-9a-f]{32}$/);
 export type PluginsInstallCandidate = z.infer<typeof PluginsInstallCandidate>;
 
@@ -368,6 +371,9 @@ export const PluginsInstallPrepareParams = z
   .object({
     id: PluginId,
     version: SemverString.optional(),
+    /** MK-UC: true for an update's card. Without it an installed id is refused, as before; with it, one this desktop
+     * does not have is. */
+    update: z.boolean().optional(),
   })
   .passthrough();
 export type PluginsInstallPrepareParams = z.infer<typeof PluginsInstallPrepareParams>;

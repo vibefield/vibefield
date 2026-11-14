@@ -228,6 +228,19 @@ export const PluginsInstallResult = z.union([
 ]);
 export type PluginsInstallResult = z.infer<typeof PluginsInstallResult>;
 
+/** MK-UC (2026-11-14; James's pick, 2026-11-12 06:08:01Z: "Yes: show the card when an update asks for more"): what an
+ * update's prepare adds. `from` is the version this desktop has. `asksFor` is each power the update could use that the
+ * version you have could not, by id, in the update's own order: what it asks for less what it is denied here, for
+ * either row, so a power turned off on this desktop stays off and is not listed. Empty, the update asks for nothing
+ * new, and the window commits it with no card. */
+export const PluginsInstallUpdateAsks = z
+  .object({
+    from: SemverString,
+    asksFor: z.array(z.string().min(1)),
+  })
+  .passthrough();
+export type PluginsInstallUpdateAsks = z.infer<typeof PluginsInstallUpdateAsks>;
+
 /** MK-O2 (2026-11-12): what plugins.install.prepare answers: the candidate's handle and its row, the row the registry
  * would load, built from the downloaded files once fieldd held them to the manifest inside the bytes the signed list
  * pins. The install card is read from it. Nothing is installed until plugins.install.commit, which answers as
@@ -236,6 +249,8 @@ export type PluginsInstallResult = z.infer<typeof PluginsInstallResult>;
 const PluginsInstallPrepareResultShape = {
   candidate: PluginsInstallCandidate,
   record: PluginRecord,
+  /** MK-UC: set only on an update's prepare (`update: true`) */
+  update: PluginsInstallUpdateAsks.optional(),
 };
 export const PluginsInstallPrepareResult: z.ZodObject<
   typeof PluginsInstallPrepareResultShape,
