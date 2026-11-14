@@ -68,7 +68,8 @@ describe("the product chords (GT-D21)", () => {
       "super+n",
       // the Peek (GV-D10, 2026-10-08): search, over ghostty's start_search
       "super+f",
-      // the desk's Copy (HN-D3): over ghostty's copy_to_clipboard, which keeps it in a pane
+      // the desk's Make a card (CS-D11 A; HN-D3's Copy): over ghostty's copy_to_clipboard, which
+      // keeps it in a pane
       "super+c",
       // One Frame FR-1 (FC-D4): the four views, over ghostty's goto_tab
       "super+1",
@@ -204,7 +205,7 @@ describe("the product chords (GT-D21)", () => {
     expect(PRODUCT_CHORDS.find((chord) => chord.id === "new-terminal")?.scope).toBeUndefined();
   });
 
-  it("⌘C is the desk's Copy — Ctrl+C off the Mac — never with ⇧ or ⌥, never the other platform's modifier, and SAYS when it is kept (HN-D3)", () => {
+  it("⌘C is the desk's Make a card — Ctrl+C off the Mac — never with ⇧ or ⌥, never the other platform's modifier, and SAYS when it is kept (HN-D3)", () => {
     const key = (init: Partial<KeyboardEvent>) => ({
       key: "c",
       metaKey: false,
@@ -225,7 +226,7 @@ describe("the product chords (GT-D21)", () => {
     expect(isCopyChord(key({ key: "v", metaKey: true }), "mac")).toBe(false);
     expect(PRODUCT_CHORDS.find((chord) => chord.id === "desk-copy")).toMatchObject({
       trigger: "super+c",
-      label: "Copy",
+      label: "Make a card",
       when: "on the desk, with something selected",
       scope: "desk",
     });

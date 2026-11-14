@@ -430,15 +430,18 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     await flush();
     expect(calls).toEqual([]);
     expect(store.snapshot().cards).toEqual([]);
-    expect(said).toEqual(["Not copied — it is off the screen"]);
-    expect(lastCopy()).toMatchObject({ card: null, refused: "Not copied — it is off the screen" });
+    expect(said).toEqual(["No card made — it is off the screen"]);
+    expect(lastCopy()).toMatchObject({
+      card: null,
+      refused: "No card made — it is off the screen",
+    });
     // a desk that cannot draw: the capture door answers nothing
     anchor = { ...anchor, box: BOX };
     gives = "none";
     expect(copySelection(desk, "bar", seams())).toBe(true);
     await flush();
     expect(store.snapshot().cards).toEqual([]);
-    expect(said.at(-1)).toBe("Not copied — the desk could not draw it");
+    expect(said.at(-1)).toBe("No card made — the desk could not draw it");
   });
 
   it("the record OBSERVES the selection: the person's own change while the still is taken is said, and nothing is written over it", async () => {

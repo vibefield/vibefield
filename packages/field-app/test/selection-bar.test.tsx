@@ -1055,7 +1055,7 @@ describe("Make a card — four doors deal ONE card (HN-D3)", () => {
     vi.useRealTimers();
     await settled();
     // this harness's desk draws nothing (its capture door answers none): no picture, no card — and the line is told
-    expect(lastCopy()?.refused).toBe("Not copied — the desk could not draw it");
+    expect(lastCopy()?.refused).toBe("No card made — the desk could not draw it");
     expect(cardsStore.snapshot().cards).toEqual([]);
   });
 });

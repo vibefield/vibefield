@@ -51,9 +51,12 @@ describe("the card the act dealt (HN-D3: a note's words a text card, anything el
     expect(judgeCard(copiedSeen(), { kind: "pict", title: "2 objects" })[0]).toMatch(
       /titled "Clock", not "2 objects"/u,
     );
-    const refused = copiedSeen({ card: null, refused: "Not copied — the desk could not draw it" });
+    const refused = copiedSeen({
+      card: null,
+      refused: "No card made — the desk could not draw it",
+    });
     expect(judgeCard(refused, { kind: "pict", title: "Clock" })).toEqual([
-      "no card was dealt (Not copied — the desk could not draw it)",
+      "no card was dealt (No card made — the desk could not draw it)",
     ]);
     expect(judgeCard(copiedSeen({ card: null }), { kind: "pict", title: "Clock" })).toEqual([
       "no card was dealt (and no reason was said)",
