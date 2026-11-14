@@ -384,6 +384,37 @@ function serviceActive(daemon: { plugins: PluginRegistryService }): boolean {
   return daemon.plugins.snapshot().plugins.find((p) => p.id === KV_ID)?.service === "active";
 }
 
+/** KV's stored grants as one comparable value: its generation and its granted powers. */
+function grantState(daemon: { plugins: PluginRegistryService }): string {
+  const row = daemon.plugins.get(KV_ID);
+  return `${row?.grantGeneration ?? "none"}:${(row?.grantedCapabilities ?? []).join(",")}`;
+}
+
+/** Resolves once `holds()` is true and `read` has answered the same value for `quietMs` on end;
+ * quiet while `holds()` is false does not end the wait. Rejects at `timeoutMs`. */
+async function settled(
+  read: () => string,
+  holds: () => boolean,
+  quietMs: number,
+  timeoutMs: number,
+  what: string,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let last = read();
+  let since = Date.now();
+  while (!holds() || Date.now() - since < quietMs) {
+    if (Date.now() > deadline) {
+      throw new Error(`settled: ${what} — not held and quiet within ${timeoutMs} ms`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const now = read();
+    if (now !== last || !holds()) {
+      last = now;
+      since = Date.now();
+    }
+  }
+}
+
 const UPDATE_DOORS = ["plugin.update.prepare", "plugin.update.cancel", "plugin.update"];
 
 describe("the update card's doors (MK-UC)", () => {
@@ -580,7 +611,20 @@ describe("the update card's doors (MK-UC)", () => {
     const storage = { id: KV_ID, capability: "storage.self" };
     await shell.call("plugins.grants.set", { ...storage, granted: false });
     await shell.call("plugins.grants.set", { ...storage, granted: true });
-    expect(daemon.plugins.get(KV_ID)?.grantGeneration).toBe(generation + 2);
+    // Item 437: the install reconciler can replay this desktop's own earlier "off"
+    // (`plugins.grants.set` publishes its decision unawaited; `install-reconciler.ts` applies a
+    // doc decision the record does not match), so the generation can move more than twice and the
+    // grant can flicker before it settles. This row holds what the product promises, and no number
+    // the race decides: once the grants are quiet, the last decision stands and the generation
+    // moved at least twice. The read row showed it (lanes/mk/fix-uc2/row-ucdiag.sh): generation
+    // 3 with the power off when the last on returned, then 4 and on again within 2 s. So the wait
+    // ends only when it is on and quiet. If the race ever leaves the grant off after the last on,
+    // this row goes red, and that red is item 437's, not the test's.
+    const granted = () =>
+      daemon.plugins.get(KV_ID)?.grantedCapabilities.includes("storage.self") === true;
+    await settled(() => grantState(daemon), granted, 500, 15_000, "the two grants, on and quiet");
+    expect(daemon.plugins.get(KV_ID)?.grantedCapabilities).toContain("storage.self");
+    expect(daemon.plugins.get(KV_ID)?.grantGeneration ?? 0).toBeGreaterThanOrEqual(generation + 2);
     await until(active, 15_000, "0.2.0's service after the two grants");
     const next = (await shell.call("plugins.install.commit", {
       candidate: second.candidate,
