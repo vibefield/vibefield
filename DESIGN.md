@@ -7838,14 +7838,80 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     system draws a material solid there and a solid band would hide the rows outright. *The head's look is
     known from James's words and from the code, which draws nothing there; the band has not been seen on a
     device.*
-  - **The rows above arrive as you read up** (362b). Within one screen of the top the rows above are read in by
-    themselves and land above your place. One approach reads on until what it brought holds six messages (a prompt,
-    or a reply with words or an attachment), in at most five asks of forty rows: the room's rule, so a stretch of
-    tool rows alone never lands as "earlier" with no message in it. One read at a time, and none in a loop: a read
-    that left the rows above where they were is not asked again until you press. The rule at the top says where the
-    rows above stand: `Earlier` (a press reads them too) · `Reading earlier…` · `Earlier · needs studio` while their
-    desktop does not answer · `Session start · Sat 12 Sep` at the record's top. The room's pull to reveal is not
-    kept: on a phone the rows land by themselves. A document a search landed in reads nothing in until you move it.
+  - **The rows above are read in when you pull down at the top** (*item 418, 2026-11-14. James, 08:13:38Z, session
+    qa-01: "i feel message progressive load is not there, because it seems still trying to load everything, what i
+    want is when you scroll to the top of the current loaded batch, there should be a clear pull down action like
+    real world chat apps, you pull down for load more, there will be visual indicator when you pull down, there
+    will be loading indicator when you release, all these motions should designs intuitively and nicely with clear
+    feedbacks". It overturns 362b, which stood here from 2026-11-12 and is kept word for word at this bullet's
+    foot: its "Within one screen of the top the rows above are read in by themselves", and its "The room's pull
+    to reveal is not kept: on a phone the rows land by themselves".*) A session opens on its latest batch and
+    reads nothing above it by itself, however near its top you stand. The rows above are read in by one act of
+    yours, a pull down at the document's top, one batch for each pull.
+    - **The line at the top.** The rule under the document's head says where the rows above stand, in the rule's
+      small capitals: `Earlier · pull down` while rows are above and their desktop answers · `Reading earlier…`
+      while a batch is read · `Couldn't read earlier · pull again` after a read that brought nothing ·
+      `Earlier · needs studio` while their desktop does not answer · `Session start · Sat 12 Sep` at the record's
+      top. `Earlier · pull down` and `Couldn't read earlier · pull again` ask something of you and are in the
+      secondary ink; the rest are faint, as they were.
+    - **The pull.** At its top the page goes past its top under a finger that keeps pulling down, on the system's
+      own rubber band, and the pull is that travel: how far the page stands past its top, counted from where it
+      stood when the finger came down. Only a finger on the page pulls. A page that runs past its top by itself
+      (a flick's bounce) shows nothing and reads nothing, and so does a page that only rests at its top.
+    - **The mark.** As you pull, a glass pill comes in over the gap the pull opens: 36 pt high, as the pill at
+      the foot is, centred, its top 8 pt under the navigation bar's foot. It holds a ring, 18 pt across on a 2 pt
+      line with `arrow.down` at 9 pt inside it, and the words "Pull down for earlier messages" at 13 pt medium,
+      both in the secondary ink. It is not drawn for the first 10 pt of travel and is whole by 40: its opacity
+      rises with the travel, and it grows from 0.86 of its size about its top (under Reduce Motion the opacity
+      alone). The ring fills clockwise from twelve o'clock in step with the travel and closes at 64 pt, so the
+      ring says how far there is to go.
+    - **Armed.** At 64 pt of travel the pull is armed, and says so three ways at once: a light haptic ticks
+      (impact, light, the texture the Apps door ticks with), the ring is closed and its arrow turns to point up,
+      and the words become "Release for earlier messages", ring and words in the primary ink. Pulled back inside
+      52 pt it is no longer armed and says "Pull down for earlier messages" again; the 12 pt between keep a
+      finger resting at the line from ticking twice. *A reading, not measured: the system's rubber band lets the
+      page travel about half as far as the finger, so 64 pt is about 125 pt under the finger on a phone 852 pt
+      tall, near the 132 pt of the finger's the Apps door opens at and the 120 px the room's own pull takes.*
+    - **Let go.** Short of armed, the page springs back on the system's own spring and the mark goes back with
+      it: nothing is read. Armed, the mark stays where it is, whole, while the page springs back under it: the
+      ring opens to an arc of seven tenths that turns once in 0.9 s (it stands still under Reduce Motion) and
+      the words become "Reading earlier messages…". The batch is asked for once the page has come to rest, so
+      the rows it brings meet a page at rest. A pull while a batch is owed or being read is ignored, not queued.
+    - **One pull reads one batch**, the batch 362b defined: pages are read on until what they brought holds six
+      messages (a prompt, or a reply with words or an attachment), in at most five asks of forty rows. It is the
+      room's rule, so a stretch of tool rows alone never lands with no message in it. One read at a time.
+    - **Arrived.** The rows land above your place: the rows you were reading stay where they are on the screen,
+      and the document's head and its line go up with its top. The mark fades over 200 ms, and the line, at the
+      new top, says where the rows above stand now.
+    - **Nothing more.** At the record's top the line says `Session start · Sat 12 Sep` and a pull does nothing:
+      no mark, and the page's own bounce.
+    - **A read that brought nothing** (the desktop refused it, or the document's top did not move) ends the mark
+      the same way, and the line says `Couldn't read earlier · pull again`, muted and never red: nothing was
+      lost. A pull asks again. While their desktop does not answer the line says `Earlier · needs studio` and a
+      pull does nothing.
+    - **A press reads too.** The line is also a button, as it has been since SP-6: a press on it reads the batch
+      above, and VoiceOver names it "Read the earlier messages", so the rows above never hang on a gesture. The
+      button at the side reads the batch above too, at the first message read (item 396, below). A press is
+      your own act, as a pull is; nothing is read without one.
+    - **It is not the Apps door's pull.** The door above the tabs is pulled on a root's list alone (§8 "The
+      phone's Apps": "A pushed screen (a project, a session, a thread) keeps its own scroll"), and a session's
+      document is a pushed screen: a pull down here is the document's own, and opens nothing.
+    - *What stood here from 2026-11-12 until this item, word for word:* **The rows above arrive as you read up**
+      (362b). Within one screen of the top the rows above are read in by themselves and land above your place.
+      One approach reads on until what it brought holds six messages (a prompt, or a reply with words or an
+      attachment), in at most five asks of forty rows: the room's rule, so a stretch of tool rows alone never
+      lands as "earlier" with no message in it. One read at a time, and none in a loop: a read that left the
+      rows above where they were is not asked again until you press. The rule at the top says where the rows
+      above stand: `Earlier` (a press reads them too) · `Reading earlier…` · `Earlier · needs studio` while
+      their desktop does not answer · `Session start · Sat 12 Sep` at the record's top. The room's pull to
+      reveal is not kept: on a phone the rows land by themselves. A document a search landed in reads nothing in
+      until you move it.
+    - *What of it stands:* the batch (six messages, five asks of forty rows), one read at a time, the rows
+      landing above your place, and the line's `Reading earlier…`, `Earlier · needs studio` and `Session start`.
+      *What is gone:* the rows arriving by themselves near the top, and with it the rule for a document a search
+      landed in, which now reads nothing in until you pull, as every document does.
+    - *None of this has been seen on a device: the travel a pull takes, the mark over the gap and the rows
+      landing above a page at rest are readings of the code.*
   - **Time cuts it into sittings** (362c), by the room's rule: a new sitting begins before a row that comes fifteen
     minutes or more after the row before it, or on another calendar day of this phone's. Each sitting opens with the
     room's pill, centred, 26 pt high on `fill`, 11.5 pt medium in `inkTertiary` with its trailing words in
@@ -7906,8 +7972,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **When it hides**: it is there only while a message of the person's own begins above the top of the
       view, or rows above are not yet read. It fades in and out over 200 ms; hidden, it takes no press.
     - **At the first message**: with nothing above it the button is gone. With rows above not yet read from
-      the desktop it stays, and a press goes to the document's top, where the rows above are read in as they
-      are for a reader who scrolls there; the next press finds the message among them.
+      the desktop it stays, and a press goes to the document's top and reads the batch above in, as a pull
+      there does; the next press finds the message among them. *(Amended 2026-11-14, item 418: this said "a
+      press goes to the document's top, where the rows above are read in as they are for a reader who scrolls
+      there". Nothing is read in for a reader who scrolls there now ("The rows above are read in when you pull
+      down at the top", above), so the press asks for the batch itself: the message it was pressed for is in
+      it, or in the one above it.)*
   - **Its words are read as Chat reads a spark's** (362d). A reply's words go through the phone's one reader
     (`ChatMarkdown.blocks`, the Mac's `markdownBlocksOf`) and the view Chat draws a spark's words with: paragraphs
     with their line breaks, bold, italic, `code`, fenced code that scrolls within itself, lists, quotes, a heading as
