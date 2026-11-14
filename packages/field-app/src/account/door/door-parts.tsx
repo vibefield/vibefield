@@ -31,7 +31,9 @@ export function PartnerLine({ compact = false }: { compact?: boolean }): ReactEl
   );
 }
 
-/** Five privacy facts. The wizard gives these the full body width, within its fixed frame. */
+/** Five privacy facts. The wizard gives these the full body width, within its fixed frame.
+ * Item 160 (DESIGN.md §8 "The Connect pane", corrected 2026-11-14): the fourth says the product
+ * bible's sentence as the phone ships it. Tailscale may relay, so none promises a direct path. */
 export const WHAT_VIBEFIELD_CAN_SEE: ReadonlyArray<readonly [string, string]> = [
   [
     "Your login and devices.",
@@ -46,8 +48,8 @@ export const WHAT_VIBEFIELD_CAN_SEE: ReadonlyArray<readonly [string, string]> = 
     "Others on a shared network can see that the device exists, but VibeField blocks their access.",
   ],
   [
-    "Encrypted from device to device.",
-    "Your work travels directly, encrypted end to end. VibeField runs no servers. Tailscale sees connections, never their contents.",
+    "Encrypted end to end.",
+    "Your phone and your other computers reach this Mac over your own Tailscale network. VibeField runs no session relay.",
   ],
   [
     "Disconnect whenever you like.",
