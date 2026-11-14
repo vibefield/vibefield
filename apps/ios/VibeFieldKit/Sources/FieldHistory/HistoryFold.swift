@@ -629,20 +629,64 @@ extension FieldHistoryModel {
 
   // MARK: A prompt's kind (item 396)
 
-  /// Item 396 — what a prompt is where it is not a person's own message. `answer` is the row right after it.
+  /// Item 396 — what a prompt is where it is not a person's own message, by the room's rule (rosetta's
+  /// clients/room, lib/transcript/turns.ts, `buildPrompt`) on the row's projected facts. `answer` is the row right
+  /// after the prompt, in the prompt's own sitting.
+  /// - A machine's: its group is a parent agent's invocation, whatever its words. The room's other machine
+  ///   prompts are `collaboration` rows, which open no turn here: each is a `Team update` line in a group.
+  /// - A setting: a local command with nothing attached, and the `command_output` notice right after it is a
+  ///   value (`isSetting`). The room pairs the two by adjacency and nothing else.
+  /// - nil, a person's own: everything else, a slash command that is no setting among them.
   ///
-  /// Stub (396 red 3): every prompt is a person's own, as it was.
-  static func promptKind(_ prompt: IndexTimelineRow, answer: IndexTimelineRow?) -> HistoryPromptKind? { nil }
+  /// What the row does not carry whole is not guessed: a prompt or an answer the desktop cut is never a setting.
+  static func promptKind(_ prompt: IndexTimelineRow, answer: IndexTimelineRow?) -> HistoryPromptKind? {
+    if prompt.groupKind == "parent_invocation" { return .machine }
+    guard prompt.attachments.isEmpty, !isCut(prompt), let command = prompt.text, isLocalCommand(command),
+      let answer, answer.kind == "notice", answer.notice == "command_output", !isCut(answer)
+    else { return nil }
+    return isSetting(command: command, output: answer.text) ? .setting : nil
+  }
 
-  /// Item 396 — whether a prompt's words are a local command.
-  ///
-  /// Stub (396 red 3): none are.
-  static func isLocalCommand(_ text: String?) -> Bool { false }
+  /// Item 396 — whether a prompt's words are a local command as the person typed it: one line, a slash, a name
+  /// that begins with a letter, and then nothing or a space and its arguments. The room's `looksLocalCommand`,
+  /// `^\/[A-Za-z][\w:.-]*(?:\s+\S.*)?$` on the trimmed words; so `/usr/bin/env` is no command.
+  static func isLocalCommand(_ text: String?) -> Bool {
+    guard let line = text?.trimmingCharacters(in: .whitespacesAndNewlines), !line.contains(where: \.isNewline),
+      line.first == "/"
+    else { return false }
+    let name = line.dropFirst().prefix { isWord($0) || ":.-".contains($0) }
+    guard let first = name.first, first.isLetter else { return false }
+    return line.dropFirst(1 + name.count).first.map(\.isWhitespace) ?? true
+  }
 
-  /// Item 396 — whether a command and the session's answer to it are a setting that took.
-  ///
-  /// Stub (396 red 3): none is.
-  static func isSetting(command: String, output: String?) -> Bool { false }
+  /// Item 396 — whether a command and the session's answer to it are a setting that took: the room's
+  /// `localSetting`. The answer is one line of 96 units at most. For `/effort` it is one word from a letter
+  /// (`^[a-z][\w-]*$`, either case); for `/model` it is anything that does not open with one of the CLI's own
+  /// words (`^(?:set|invalid|unknown|error|failed|usage)\b`, either case), which are a sentence about the command
+  /// and no value. No other command is a setting.
+  static func isSetting(command: String, output: String?) -> Bool {
+    guard let value = output?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty,
+      !value.contains(where: \.isNewline), value.utf16.count <= 96
+    else { return false }
+    let name = command.trimmingCharacters(in: .whitespacesAndNewlines).prefix { !$0.isWhitespace }.lowercased()
+    switch name {
+    case "/effort":
+      guard let first = value.first, first.isASCII, first.isLetter else { return false }
+      return value.allSatisfy { isWord($0) || $0 == "-" }
+    case "/model":
+      let lower = value.lowercased()
+      return !["set", "invalid", "unknown", "error", "failed", "usage"].contains { word in
+        lower.hasPrefix(word) && !(lower.dropFirst(word.count).first.map(isWord) ?? false)
+      }
+    default:
+      return false
+    }
+  }
+
+  /// The room's `\w`: an ASCII letter, a digit or the underscore.
+  private static func isWord(_ character: Character) -> Bool {
+    character.isASCII && (character.isLetter || character.isNumber || character == "_")
+  }
 
   // MARK: Sittings (item 362c)
 

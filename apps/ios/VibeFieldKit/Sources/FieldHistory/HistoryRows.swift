@@ -183,12 +183,18 @@ extension HistoryRow {
   /// gone to, and one that begins in the view is not, so a second press goes to the one before. It is near when
   /// its own row is laid out a screen above at most. With no such message the answer is the document's top
   /// while rows above are not yet read (`unread`), and nothing once they all are.
+  ///
+  /// A message of the person's own is a human prompt alone, as in the desktop's room (VF-PM's ruling, 2026-11-13
+  /// 23:47Z): a prompt the fold marked as a setting command or a machine's (`HistoryTurn.promptKind`) is passed
+  /// over, and does not make the button show.
   static func before(_ rows: [HistoryRow], standing: [String: Standing], unread: Bool) -> HistoryBefore {
     let otherwise: HistoryBefore = unread ? .top : .nothing
     let above = standing.filter { $0.value != .below }
     guard !above.isEmpty, let last = rows.lastIndex(where: { above[$0.id] != nil }) else { return otherwise }
     for row in rows[...last].reversed() {
-      if case .prompt(let turn) = row { return .message(promptMark(turn), near: standing[row.id] == .above) }
+      if case .prompt(let turn) = row, turn.promptKind == nil {
+        return .message(promptMark(turn), near: standing[row.id] == .above)
+      }
     }
     return otherwise
   }
