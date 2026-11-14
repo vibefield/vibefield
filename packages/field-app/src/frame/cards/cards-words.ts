@@ -218,14 +218,15 @@ export function captureRefusal(error: ScreenshotCaptureError): string {
   }
 }
 
-/** The desk's Copy when it deals no card (HN-D3), said on the line: a picture needs the desk to draw what is copied. */
+/** The desk's Make a card when it deals no card (HN-D3; DESIGN.md §8 "Make a card", item 400), said on the line in
+ * the button's own words: a picture needs the desk to draw what is copied. */
 export const COPY_WORDS = {
-  offScreen: "Not copied — it is off the screen",
-  notDrawn: "Not copied — the desk could not draw it",
+  offScreen: "No card made — it is off the screen",
+  notDrawn: "No card made — the desk could not draw it",
 } as const;
 
 /** HN-5 — a copy the system clipboard did not take deals no card (copy-door.ts), and says why
- * after "Not copied —", as the desk's Copy says its own (DESIGN.md §8 "Copy"). A refusal a door
+ * after "Not copied —", on the desk as in History (DESIGN.md §8 "Make a card"). A refusal a door
  * typed, and the copy door's own check of both bounds, say their terms: a size against its bound
  * as §9 counts them, the size rounded up and the bound down, so the two never read as equal.
  * Anything else is said in the door's one sentence, and the error a bridge threw is only logged:

@@ -34,7 +34,7 @@ import { isSettingsChord } from "./me-menu-wiring";
 // in neither — the row says WHEN, so Settings says it honestly rather than as
 // an always.
 //
-// ⌘C (HN-D3, 2026-10-29) is the desk's Copy: the selection bar claims it only on
+// ⌘C (HN-D3, 2026-10-29) is Make a card's: the selection bar claims it only on
 // Canvas, over a selection or an object in hand, and never from a field or a
 // kind that holds the keyboard (`SelectionBar.tsx`). A pane is never on the desk,
 // so Ghostty's copy_to_clipboard keeps ⌘C in Godview: the row is scoped to the
@@ -101,7 +101,7 @@ export function isSearchChord(event: ChordKey, keys: ViewKeys): boolean {
   return event.key === "f" || event.key === "F";
 }
 
-/** ⌘C (Ctrl+C off the Mac): the desk's Copy. Never with ⇧ or ⌥, and never the
+/** ⌘C (Ctrl+C off the Mac): the desk's Make a card. Never with ⇧ or ⌥, and never the
  * other platform's modifier — Ctrl+C on the Mac is a shell's interrupt. */
 export function isCopyChord(event: ChordKey, keys: ViewKeys): boolean {
   const command =
@@ -181,7 +181,7 @@ export const PRODUCT_CHORDS: readonly ProductChord[] = [
   {
     id: "desk-copy",
     trigger: "super+c",
-    label: "Copy",
+    label: "Make a card",
     when: "on the desk, with something selected",
     scope: "desk",
     matches: (event) => isCopyChord(event, viewKeysOf(getHost().platform)),
