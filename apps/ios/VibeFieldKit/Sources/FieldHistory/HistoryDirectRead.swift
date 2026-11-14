@@ -17,6 +17,11 @@ import RosettaClient
 // - (item 362g) a recorded picture's rendition, read by the same client under the same grant and the same renew-once
 //   rule (`picture(_:size:)`). Its bytes ride this ticketed road and never fieldd's RPC (EL2), and a picture that is
 //   not read ends nothing.
+// - (item 410) the session's end waits for the read's own calls. `URLSession` answers a task made after
+//   `invalidateAndCancel()` with an Objective-C exception, which ends the app, and a call that has left the main
+//   actor (an older page, a picture's bytes) makes its task a moment later. So a close while a call is out cancels
+//   what is on its way and leaves the session standing, and the last call back ends it, or a bound does
+//   (`HistorySessionLease`). rosetta's own inner reads are not counted here: they are its client's to guard.
 //
 // An older page is fetched and then REVEALED under the subscription, so it takes later patches and `onChange` hands
 // the whole visible list; a row is projected once, and again only when its entry changed (`HistoryProjectionCache`).
@@ -119,6 +124,11 @@ final class HistoryDirectRead {
 
   /// A failed renewal asks again this soon: the grant it holds is near its end.
   private static let renewRetry = Duration.seconds(30)
+  /// Item 410 — the longest a session stands after its read closed under a call that is out. The window it covers
+  /// is between a call's `await` and the task rosetta's client makes for it: moments, seconds on a loaded phone.
+  /// Thirty seconds is past any of that, and far short of a session standing for good behind a call that never
+  /// comes back.
+  private static let standingLimit = Duration.seconds(30)
 
   private let sessionId: String
   private let plane: HistoryDirectPlane
@@ -132,6 +142,11 @@ final class HistoryDirectRead {
   private var deadline: Task<Void, Never>?
   private var renewal: Task<Void, Never>?
   private var closed = false
+  /// Item 410 — the read's own calls that are out, and the close kept for the last of them.
+  private var lease = HistorySessionLease()
+  /// Item 410 — the session a close left standing under a call that is out, and the bound on how long it stands.
+  private var standing: URLSession?
+  private var standingBound: Task<Void, Never>?
 
   init(
     sessionId: String, plane: HistoryDirectPlane, sink: Sink, log: @escaping @MainActor (String) -> Void
@@ -287,6 +302,9 @@ final class HistoryDirectRead {
   /// page was revealed; false when it was not, and what follows is the subscription's or the owner's (`failed`).
   func older(cursor: String) async -> Bool {
     guard let subscription, !closed else { return false }
+    // item 410 — out from here until it returns: the session is not ended under it
+    lease.leave()
+    defer { callBack() }
     do {
       try await fetchAndReveal(cursor, subscription)
       return true
@@ -307,6 +325,8 @@ final class HistoryDirectRead {
 
   private func fetchAndReveal(_ cursor: String, _ subscription: SessionSubscription) async throws {
     let page = try await subscription.fetchPage(cursor: cursor, limit: HistoryReads.pageRows)
+    // item 410 — a page whose call outlived the close lands nothing: the session stood for the call, not for it
+    guard !closed else { throw CancellationError() }
     sink.page(page.cursor, page.watermark)
     subscription.reveal(page.entries)
   }
@@ -354,6 +374,9 @@ final class HistoryDirectRead {
   /// read on. A read closed before the bytes were asked for, or while they were on their way, hands none out.
   func picture(_ picture: HistoryPicture, size: HistoryPictureSize) async throws -> Data {
     guard let client, !closed else { throw HistoryPictureFailure.closed }
+    // item 410 — out from here until it returns or throws: the session is not ended under it
+    lease.leave()
+    defer { callBack() }
     let asset = picture.asset
     let variant: ImageVariant
     let bound: Int
@@ -423,9 +446,45 @@ final class HistoryDirectRead {
     renewal = nil
     subscription?.close()
     subscription = nil
-    urlSession?.invalidateAndCancel()
+    if let session = urlSession { end(session) }
     urlSession = nil
     client = nil
+  }
+
+  // MARK: The session's end (item 410)
+
+  /// The session ends at once when no call of the read's is out. One that is out makes its task a moment after it
+  /// left the main actor, and `URLSession` answers a task made on an invalidated session with an Objective-C
+  /// exception, which ends the app. So the session stands: what is already on its way is cancelled, each such call
+  /// comes back refused, and the last one back ends the session. A call that never comes back is ended by the
+  /// bound, so no session stands for good.
+  private func end(_ session: URLSession) {
+    if lease.close() {
+      session.invalidateAndCancel()
+      return
+    }
+    standing = session
+    session.getAllTasks { @Sendable tasks in
+      for task in tasks { task.cancel() }
+    }
+    let limit = Self.standingLimit
+    standingBound = Task { [weak self] in
+      try? await Task.sleep(for: limit)
+      guard !Task.isCancelled, let self else { return }
+      if self.lease.expire() { self.endStanding() }
+    }
+  }
+
+  /// A call of the read's is back: the last one ends the session a close left standing.
+  private func callBack() {
+    if lease.back() { endStanding() }
+  }
+
+  private func endStanding() {
+    standingBound?.cancel()
+    standingBound = nil
+    standing?.invalidateAndCancel()
+    standing = nil
   }
 }
 

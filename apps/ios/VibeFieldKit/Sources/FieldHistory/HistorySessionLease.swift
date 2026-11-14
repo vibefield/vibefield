@@ -22,26 +22,26 @@ struct HistorySessionLease: Equatable, Sendable {
   }
 
   /// A call is back. True when the session is to be ended NOW: it was the last one out and a close was kept for it.
-  ///
-  /// Item 410 (red) — a STUB so the rows compile: no close is ever kept, so no call back ends a session.
   mutating func back() -> Bool {
     out = max(0, out - 1)
+    guard out == 0, owed else { return false }
+    owed = false
+    return true
+  }
+
+  /// The read closes. True when the session is to be ended at once: nothing is out. False keeps the close for the
+  /// last call back: the session stands, and the caller cancels what is already on its way.
+  mutating func close() -> Bool {
+    guard out > 0 else { return true }
+    owed = true
     return false
   }
 
-  /// The read closes. True when the session is to be ended at once; false keeps the close for the last call back.
-  ///
-  /// Item 410 (red) — a STUB so the rows compile: the session is ended at once whatever is out, as
-  /// `HistoryDirectRead.shutDown()` ends it today.
-  mutating func close() -> Bool {
-    true
-  }
-
   /// The bound on a kept close passed. True when the session is to be ended NOW: its close is still owed, to a call
-  /// that did not come back.
-  ///
-  /// Item 410 (red) — a STUB so the rows compile: nothing is owed, so the bound ends nothing.
+  /// that did not come back. A call that returns after it ends nothing more.
   mutating func expire() -> Bool {
-    false
+    guard owed else { return false }
+    owed = false
+    return true
   }
 }
