@@ -1505,6 +1505,9 @@ inert) and nothing freezes: no cover stands, so M5's freeze is not taken, and th
 idle, as under a sheet. Inside the popup a tab or a plugin's page changes in place, and Install
 grows into the install card (M1); their timings are drawn at MK-4 and written here first. Reduced
 motion (M6): no pop and no recede — the scrim and the popup fade in over 120ms.
+*Drawn 2026-11-14 (O2-C), ‹draft› for James's eye:* a tab and a page change at once. The install card
+grows from where its act stood over 240ms on the island curve, from 0.96 and clear, its top left held;
+going back to **Install** it goes at once. Reduced motion: the card fades in over 120ms.
 
 **The hand (Cards in Hand; built at HN-1 and HN-4).** Every curve is the table's but one, the deal's arc
 (below). **The deal:** a card leaves its source's box as the card it will be — scaled to the box and turned
@@ -7049,6 +7052,52 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       `PLUGIN_ARTIFACT_MISMATCH`), said in plain words with a way to try again. So is a card whose plugin changed on
       this computer before its **Install**, or that waited longer than fifteen minutes.
       *Changed 2026-11-12 (MK-O2, as above):* the bar ran on to the steps with no card between them.
+    - *Drawn 2026-11-14 (O2-C, the card's window half; MK-O2's A2), ‹draft› for James's eye, its words in §9 "The
+      plugins' words":*
+      - **The act**, on the page of a set this desktop doesn't have, 12 under its head where **Installed** stands
+        on an installed one: **Install**, the foot's act's look (32 tall, corners 16, 12.5/600 on the ready fill,
+        14% under the pointer), ↵ printed on it in tertiary ink. It takes no press while fieldd isn't answering
+        (the page then says the popup's away sentence, as its switches do) or while the list held is past its date
+        (the foot says why); offline it takes none and says "Installing needs the internet" 6 under it at 12/400
+        in tertiary ink. A set that needs a newer VibeField has its act's words there, as words, and no control.
+        A community set's Install takes no press while community plugins are off (fieldd refuses it, MK-2c); what
+        its page says meanwhile is owed with the community switch's words (§9 "Community plugins").
+        On Discover the foot's act is the hot tile's **Install**, which opens its page and presses it there; a
+        tile installed, or one that can't be, offers none, and ↵ opens its page.
+      - **Downloading**: pressed, the act says **Downloading…** as words at 12.5/600 in tertiary ink. fieldd reads
+        the download whole and says nothing of its bytes (`plugin-install.ts`, `fetchBytes`), so no bar moves and
+        no share is said until a door says it; nothing spins.
+      - **The card** then grows where the act stood (§6 "Plugins"), the second column's width: padded 14, corners
+        16, on the ready fill. Its ask at 13/600 in primary ink, then its parts 10 apart, each part's line at
+        12/400 in secondary ink and its items 4 under it at 12/400 in primary ink: the objects by their labels;
+        its tools; "It can:" and each power in plain words, a Mac note or a power's own description under it at
+        12/400 in tertiary ink, and whose it is; and the desktops, each its OS mark 12 in tertiary ink, 6 before
+        its name. 12 under its last part, at its end, **Cancel** and **Install**, 8 apart: Cancel 32 tall,
+        corners 16, 12.5/600 in secondary ink with the ready fill under the pointer; Install the act's own look,
+        ↵ printed on it. ↵ presses Install and Esc presses Cancel (§8 "Keys": the nearest first).
+      - **What the card reads**: its objects, tools and powers from the row fieldd answers for the download
+        (`plugins.install.prepare`), and its desktops from the window's roster (`device.list`), read once per
+        card: this desktop and each one whose VibeField has said itself to the roster. A roster it can't read
+        leaves the desktops part unsaid, never guessed.
+      - **The card belongs to its page**: leaving the page — its back row, a tab, typed words — or folding the
+        popup is its Cancel, and a download still running when you leave is thrown away as it lands, so nothing
+        waits for a card no one sees; the window closing is its Cancel too. Install, the card's Install and its
+        Cancel leave the keyboard in the field, as a row's press does, so ↵ and Esc keep working.
+      - **Installing**: after the card's Install the act says **Installing ‹n› objects…** as words until the
+        plugins this desktop has hold it, and the page is then the installed one, its act **Installed**. One
+        install at a time: until then every other Install takes no press, and a second Install pressed while a
+        download or a card stands lets the first go.
+      - **An act that takes no press** says its words in tertiary ink and wears no fill under the pointer.
+      - **A failure** — the download or the install refused, or fieldd not answering — says §9's line 6 under the
+        act at 12/400 in the attention ink (§2.5), never the error's own text, and the act says **Try again**, ↵
+        printed on it, which downloads again and takes a press when Install would.
+        *Drawn 2026-11-14 (O2-C, the carry's F7), ‹draft›:* a failure is worded by its kind (the refusal's
+        `pluginKind`), never by its text, which can name VibeField's insides: item 322's refusal does ("the copy
+        of this release already in place does not match the artifact"). A plugin this VibeField can't run
+        (`PLUGIN_INCOMPATIBLE`: the release fieldd reads as it installs needs more than this VibeField, though the
+        list the popup held said it could run) says the words for a set that needs a newer VibeField where its act
+        stood, with no Try again, since trying again fails the same way until VibeField updates; every other kind,
+        an unknown one or none says §9's line with **Try again**.
     - **The acts** (MK-D13): **Install**, then **Installed** (a name survives its flow, §9); **Update** while one
       waits; **Show them on the pegboard** once a set with objects is installed (below); and **Remove…**, which asks
       — the two-step destructive confirm of §8 "The destructive uninstall affordance", naming the objects on your
@@ -7084,6 +7133,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       listing counts any; **Made by**, the list's word for its maker; **Version**, the list's latest; and no
       **What it can do**, for the list carries no powers: the install card says them, read from the plugin
       downloaded (MK-O2). Where its act will stand holds nothing until the install's slice (O2-C) draws it.
+      *Corrected 2026-11-14 (O2-C):* its act is drawn, with the card, under "Real progress" above.
       - **Its back row** stands at its top, 36 tall, padded 0 10, corners 10: the `chevron` 12 pointing back and
         the tab's word at 12/500 in secondary ink, the ready fill under the pointer. A press or Esc goes back.
         *Drawn 2026-11-11 (MK-4c's rider; VF-PM 17:54:22Z), ‹draft›:* it stands 8 under the body's top and 14
@@ -7231,6 +7281,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Redo (MK-4c2b's "Its settings", above), so where they stand is owed no more.
     *Drawn 2026-11-14 (MK-4e):* the grid, its tiles and the featured set, under Discover, the grid one column at
     the narrowest; the rest above stays owed.
+    *Drawn 2026-11-14 (O2-C):* the install card and the act it grows from, under "Real progress"; no bar, since
+    fieldd says nothing of a download's bytes.
   - **Its words** are in §9 "The plugins' words": the tabs, the acts, the sources, the statement, the powers in
     plain words and every state's sentence. Nothing in it names a key, a signature, a hash, a rung, a worker or a
     process, a restart or a reload, a repository's address, a power's id or a daemon (§9, VibeField's insides).
@@ -9403,6 +9455,22 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   then, after its **Install**, "Installing ‹n› objects…". A card whose plugin changed before its **Install**, or that
   waited longer than fifteen minutes, ends as a failed install does, "VibeField didn't install ‹plugin›. Nothing
   changed." with **Try again**, which downloads it again. No new word.
+  *Added 2026-11-14 (O2-C, the card's window half), MK's words, ‹draft›, for James's eye:*
+  - While the download runs the act says "Downloading…": fieldd says nothing of its bytes, so "Downloading · 42%"
+    waits for a door that says them.
+  - A set of one says "Installing 1 object…", and a plugin with no object "Installing…".
+  - On the card one of a thing is said as one: "It adds 1 object to your pegboard:", "It gives your agents 1 tool."
+  - A plugin with no object that asks for no power says "Nothing beyond its own work" in place of "It can:", the
+    page's word (MK-4c's block, below), so the card and the page say it one way.
+  - A power the card can't name says "A power VibeField can't describe", the word James picked for the page
+    (MK-O34 B, 2026-11-12 06:12:24.953Z), so no power it asks for goes unsaid; saying it on the card is MK's.
+  - The card is named to assistive tech by its ask, "Install ‹plugin›?".
+  - A failure is worded by its kind, never by fieldd's own text (§8, "A failure"): one this VibeField can't run says
+    "Needs a newer VibeField" where its act stood, with no **Try again** (MK-4e's words, above); every other says the
+    one line above, "VibeField didn't install ‹plugin›. Nothing changed.", with **Try again**. James picked three
+    plain lines for fieldd's install errors (his pick A on the PM board's j-mk-install-error-words, 2026-11-12
+    05:38:39Z: "Couldn't install this plugin. Nothing was changed.", "This install took too long. Press Install
+    again.", "This plugin is already installed."); they stay fieldd's words, which the window never prints.
 - **Updates** (MK-D5, MK-D11; MK-E6). The tab's head says "1 update · checked 14:02", or "Everything is up to date ·
   checked 14:02"; **Update all** while any wait; its foot, **Check again**. A row says "0.6.1 → 0.7.0 · Nov 7", what
   it changes in the set, "Adds Watch" · "Removes Burndown", and its notes, with **Update**. An update that removes an
