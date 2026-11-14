@@ -1285,6 +1285,40 @@ describe("Settings → Devices: Remove for a phone (item 406)", () => {
     }
   });
 
+  // The review's folds (9) — DESIGN.md §9 "The link's words": each Remove… is named by its phone,
+  // so a list of several reads apart to a screen reader; what it shows stays "Remove…".
+  it("names each Remove… for a screen reader by its phone: Remove ‹name›…", async () => {
+    host(null);
+    const pad = { ...PHONE, deviceId: "01JC3V8Q6TPADNE7Y2W4X9K5RM", name: "Studio iPad" };
+    await mount(client({ link: LINKED(), devices: [SELF, PHONE, DESKTOP, pad] }));
+    const removes = Array.from(container?.querySelectorAll("button") ?? []).filter(
+      (each) => each.textContent === "Remove…",
+    );
+    expect(removes.map((each) => each.getAttribute("aria-label"))).toEqual([
+      "Remove James’s iPhone…",
+      "Remove Studio iPad…",
+    ]);
+  });
+
+  // The review's folds (9) — DESIGN.md §8: the row and its confirm go with the phone, and the
+  // keyboard went with them to the page's body; it lands on the line said where the row stood.
+  it("puts the keyboard on the line's Manage in Tailscale ↗ once the phone is removed", async () => {
+    host(null);
+    const { fieldd } = rostered({
+      devices: [SELF, PHONE, DESKTOP],
+      request: async (method) =>
+        method === "device.remove" ? { removed: true, closed: 1 } : { ok: true },
+    });
+    await mount(fieldd);
+    await press("Remove…");
+    expect(document.activeElement).toBe(button("Cancel"));
+    await press("Remove");
+    await act(flush);
+    const manage = container?.querySelector(".vf-devices-removed a");
+    expect(manage?.textContent).toBe("Manage in Tailscale ↗");
+    expect(document.activeElement).toBe(manage);
+  });
+
   it("closes the confirm on Esc and on Cancel, asks nothing, and Esc goes no further", async () => {
     host(null);
     const fieldd = client({ link: LINKED(), devices: [SELF, PHONE] });

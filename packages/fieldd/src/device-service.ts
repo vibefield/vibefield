@@ -382,6 +382,11 @@ export class DeviceService extends EventEmitter {
     return row !== undefined && !row.self && row.capabilities?.docHost === true;
   }
 
+  // 406 (red, the review's folds): STUBBED — the slice's word now only (green remembers it)
+  seenAsDesktop(deviceId: string): boolean {
+    return this.isDocHost(deviceId);
+  }
+
   get(deviceId: string): DeviceInfo | undefined {
     return this.roster().find((d) => d.deviceId === deviceId);
   }

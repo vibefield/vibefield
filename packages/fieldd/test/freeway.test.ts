@@ -559,6 +559,24 @@ describe("F1 — the joins, the links and the revoke", () => {
     await down.floor.connected();
     expect(down.native.revoked).toEqual([]);
   });
+
+  // The review's folds (8) — the stream can arm on a frame that is no state yet (a floor answering
+  // the generic `{n:0}` first) and say its first state later, as a delta. A revoke owed to that
+  // first state is said as it arrives, never left until a reconnect that may not come.
+  it("406 — a revoke owed to an unread state is said when the first state arrives by the stream, once", async () => {
+    const { native, floor } = rig();
+    native.snapshot = { n: 0 };
+    await floor.connected(); // armed, and no state read
+    expect(floor.state()).toBeNull();
+    expect(await floor.revokeClient(`freeway:${LOGIN}#nPHONE07`)).toBe(0);
+    native.push?.(floorState()); // the first state, hb-1 up
+    await settled();
+    expect(native.revoked).toEqual([{ clientId: `freeway:${LOGIN}#nPHONE07~hb-1` }]);
+    native.push?.(floorState({ revision: 2 }));
+    await floor.connected();
+    await settled();
+    expect(native.revoked).toHaveLength(1);
+  });
 });
 
 describe("F1 — the freeway's serve", () => {

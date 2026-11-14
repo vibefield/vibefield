@@ -42,6 +42,8 @@ export interface RemovalRoster {
   currentDeviceId(): string;
   get(deviceId: string): DeviceInfo | undefined;
   isDocHost(deviceId: string): boolean;
+  /** the review's folds (5) — has this roster ever seen the device's slice say it is a desktop? */
+  seenAsDesktop(deviceId: string): boolean;
   selfPeerDeviceIds(): readonly string[];
   /** a registry pass: after it, the doors' predicate holds every refusal the document does */
   sync(): Promise<void>;

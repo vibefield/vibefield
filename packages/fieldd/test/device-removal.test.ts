@@ -59,6 +59,17 @@ const ROWS: Record<string, DeviceInfo> = {
     lastSeenAt: 0,
     tailscaleId: "node-q",
   },
+  // a desktop whose slice this roster has seen and which is away now, its row slice-less, with a
+  // known-phone record wrongly kept for it (the review's folds, (5))
+  "dev-was-desk": {
+    deviceId: "dev-was-desk",
+    name: "studio",
+    self: false,
+    online: false,
+    lastSeenAt: 0,
+    tailscaleId: "node-w",
+    phone: { via: "freeway", at: 1 },
+  },
 };
 
 /** Every seam, scripted: what each was asked, in one line, in order. `refused` is the account's
@@ -111,6 +122,7 @@ function rig(
     currentDeviceId: () => "dev-self",
     get: (deviceId) => ROWS[deviceId],
     isDocHost: (deviceId) => deviceId === "dev-home",
+    seenAsDesktop: (deviceId) => deviceId === "dev-home" || deviceId === "dev-was-desk",
     selfPeerDeviceIds: () => ["dev-home", "dev-phone", "dev-quiet"],
     sync: async () => {
       calls.push("sync");
@@ -201,11 +213,13 @@ describe("406 — Remove for a phone: the ask, the act and the sweep", () => {
     // the audit names the device by its id, never by its name
     expect(calls.join("\n")).not.toContain(PHONE_NAME);
 
-    // the same Remove again (a second press racing the first): nothing new is written
+    // the same Remove again, its ask made before the first was written (a second press racing the
+    // first): ruling (3), a second Remove writes NO audit row. Re-read inside the act's turn, the
+    // refusal stands, so nothing is audited, written or swept (the review's folds, (6))
     calls.length = 0;
     const second = await removal.remove(WINDOW, ask, write("dev-phone", ask.tailscaleIds));
-    expect(second.removed).toBe(false);
-    expect(calls.at(-1)).toContain('"outcome":"cancelled","reasonCode":"DEVICE_ALREADY_REMOVED"');
+    expect(second).toEqual({ removed: false, closed: 0 });
+    expect(calls).toEqual([]);
     // and the sweep its write set going finds nothing this desktop has not swept
     calls.length = 0;
     await removal.sweep();
@@ -237,6 +251,32 @@ describe("406 — Remove for a phone: the ask, the act and the sweep", () => {
       "transcripts peer-fieldd:dev-home#phone:dev-other",
       "connections node-9",
       `freeway freeway:${LOGIN}#node-9`,
+    ]);
+  });
+
+  // The review's folds (5) — "not a desktop" is no phone fact: a desktop's slice can be away (it
+  // is offline, or this desktop restarted), and a record can be wrongly kept for it. A device this
+  // roster has ever seen as a desktop is refused, whatever its row says now.
+  it("refuses a device ever seen as a desktop, even slice-less with a phone fact on its row", async () => {
+    const { removal, calls } = rig({ known: { "dev-was-desk": ["node-w"] } });
+    expect(await asked(removal, { deviceId: "dev-was-desk" })).toBe("PRECONDITION_FAILED");
+    expect(calls).toEqual([]);
+  });
+
+  // The review's folds (7) — the effect runs again only when the AUDIT failed before it ran
+  // (revocation preserves safety). An effect that threw has run: the refusal's write failed, and
+  // running it again would hide that failure behind a second attempt the caller never asked for.
+  it("an effect that throws is never run again: the caller hears its failure, once", async () => {
+    const { removal, calls } = rig();
+    const ask = { deviceId: "dev-phone", tailscaleIds: ["node-1"] };
+    const failing = async (): Promise<{ wrote: boolean }> => {
+      calls.push("write dev-phone node-1");
+      throw new Error("the disk is full");
+    };
+    await expect(removal.remove(WINDOW, ask, failing)).rejects.toThrow("the disk is full");
+    expect(calls).toEqual([
+      'audit caller device.remove dev-phone {"via":"remove"}',
+      "write dev-phone node-1",
     ]);
   });
 

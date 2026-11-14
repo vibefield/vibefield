@@ -22,10 +22,17 @@ import { SettingsDocService } from "../src/settings-doc";
 const gate = vi.hoisted(() => ({
   armed: false,
   release: null as null | (() => void),
+  /** item 406 — how many of the settings file's next content writes the disk refuses */
+  fail: 0,
 }));
 
-/** Park the first armed content write of the settings file; pass the rest. */
+/** Park the first armed content write of the settings file; pass the rest. A write the disk is
+ * set to refuse (`gate.fail`) rejects as a full disk does. */
 function held<T>(path: string, write: () => Promise<T>): Promise<T> {
+  if (gate.fail > 0 && path.includes(join("settings", "doc.loro"))) {
+    gate.fail -= 1;
+    return Promise.reject(Object.assign(new Error("no space left on device"), { code: "ENOSPC" }));
+  }
   if (!gate.armed || gate.release !== null || !path.includes(join("settings", "doc.loro")))
     return write();
   return new Promise<T>((resolve, reject) => {
@@ -63,6 +70,7 @@ let dirs: string[] = [];
 afterEach(() => {
   gate.armed = false;
   gate.release = null;
+  gate.fail = 0;
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
   dirs = [];
 });
@@ -132,6 +140,41 @@ describe("DS-5b × DS-5c — the settings document's file: one writer, fsync'd, 
     expect(readdirSync(settingsDir(dataDir)).some((f) => f.startsWith("doc.loro.torn-"))).toBe(
       true,
     );
+    await reloaded.dispose();
+  });
+
+  // Item 406, the review's folds (7) — a refusal is announced to the account's other desktops
+  // when it is committed (the host's local updates, doc-service.ts `registerSystemDoc`), and a
+  // refusal is never lifted. So it is committed only once a copy of the document holding it is on
+  // disk: a refusal the disk will not take is not made at all; the person's next try makes it.
+  it("406 — a refusal the disk will not take is not made: not in the document, not announced, and the next try writes it", async () => {
+    const dataDir = tmp();
+    const settings = new SettingsDocService({ dataDir });
+    await settings.setAppValue("theme", "dark", "test"); // the file exists
+    const announced: number[] = [];
+    const off = settings.hostDoc().subscribeLocalUpdates((bytes) => {
+      announced.push(bytes.byteLength);
+    });
+
+    gate.fail = 1;
+    await expect(
+      settings.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-self"),
+    ).rejects.toThrow("no space left on device");
+    expect(await settings.refusals()).toEqual({ deviceIds: new Set(), nodeIds: new Set() });
+    expect(announced).toEqual([]);
+
+    // the disk takes writes again: the person's next try is a whole refusal, announced once
+    const again = await settings.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-self");
+    expect(again).toEqual({ wrote: true });
+    expect(announced).toHaveLength(1);
+    off();
+    await settings.dispose();
+    const reloaded = new SettingsDocService({ dataDir });
+    expect(await reloaded.refusals()).toEqual({
+      deviceIds: new Set(["dev-phone"]),
+      nodeIds: new Set(["node-phone"]),
+    });
+    expect(await reloaded.appValues()).toEqual({ theme: "dark" });
     await reloaded.dispose();
   });
 });

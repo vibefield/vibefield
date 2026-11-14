@@ -1384,6 +1384,77 @@ describe("406 — a refused phone leaves the roster, and a known phone keeps its
     const ids = daemon.devices.list().map((d) => d.deviceId);
     expect(ids.sort()).toEqual(["dev-desk", "dev-phone", "dev-self"]);
   }, 30_000);
+
+  // The review's folds (4) — a node is a transport fact; the durable id a peer publishes is its
+  // claim. A removed phone whose client is tampered to publish a DESKTOP's durable id must not
+  // refuse that desktop: a refusal is never lifted, and every desktop would drop it from the
+  // freeway's admit and refuse its forwards. The refused node alone is skipped.
+  it("a refused node claiming a desktop's durable id leaves that desktop admitted and unrefused", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    await beforeBoot(dataDir, (doc) =>
+      doc.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-other"),
+    );
+    mock.meshPeers = [
+      // the removed phone, its client now publishing the desktop's durable id
+      tailnetPeer({ id: "node-phone", deviceId: "dev-desk", login: ACCOUNT, name: "my phone" }),
+      desk(),
+    ];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const devices = daemon.devices;
+    await until(() => devices.get("dev-desk") !== undefined, 8000, "the desktop's row");
+
+    expect(devices.isRefused("dev-desk")).toBe(false);
+    expect(devices.get("dev-desk")?.tailscaleId).toBe("node-desk");
+    // the node stays refused, and correlates to nothing
+    expect(devices.isRefusedNode("node-phone")).toBe(true);
+    expect(devices.deviceIdByNodeId("node-phone")).toBeUndefined();
+    expect(devices.isSelfPeer("node-phone")).toBe(false);
+    // the freeway's host is told to admit the desktop
+    const admitted = (declaration: unknown): string[] =>
+      ((declaration as FreewayDeclareParams | undefined)?.admit ?? []).map((row) => row.deviceId);
+    await until(
+      () => admitted(mock.freewayDeclarations.at(-1)).includes("dev-desk"),
+      8000,
+      "the desktop admitted",
+    );
+    // and no refusal was written for it
+    expect((await daemon.settingsDoc.refusals()).deviceIds).toEqual(new Set(["dev-phone"]));
+  }, 30_000);
+
+  // The review's folds (5) — a known-phone record wrongly kept for a desktop (a forwarded approval
+  // or a hello minted before its slice arrived) offered Remove on that desktop once its slice was
+  // away, as after a restart with it offline; and a Remove is never taken back. Once the roster
+  // sees the desktop's slice, the account's record of it as a phone goes, so no desktop reads it
+  // as one again.
+  it("a known-phone record kept for a desktop goes once its slice says it is one", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    await beforeBoot(dataDir, (doc) =>
+      doc.rememberPhone(
+        "dev-desk",
+        { tailscaleId: "node-desk", via: "freeway", name: "desk" },
+        "dev-other",
+      ),
+    );
+    mock.meshPeers = [desk()];
+    mock.storeSlices.set("dev-desk", desktopSlice("dev-desk", "desk"));
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    await until(() => daemon.devices.isDocHost("dev-desk"), 8000, "the desktop's slice");
+    expect(daemon.devices.get("dev-desk")?.phone).toBeUndefined();
+    expect(daemon.devices.seenAsDesktop("dev-desk")).toBe(true);
+    await eventually(
+      async () => !(await daemon.settingsDoc.knownPhones()).has("dev-desk"),
+      "the record forgotten",
+    );
+    await daemon.stop();
+    // what a restart reads, the desktop offline and slice-less: no record calls it a phone
+    expect((await (await reopened(dataDir)).knownPhones()).has("dev-desk")).toBe(false);
+  }, 30_000);
 });
 
 // Item 406, S3's fold (VF-PM's ruling of 2026-11-14 06:18Z, (5a)) — the door reads the refusals
