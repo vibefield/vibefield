@@ -71,7 +71,11 @@ struct MockAccountTests {
   func door() {
     let mock = MockAccount()
     #expect(mock.door == nil)
+    // WI-L2 as amended 2026-11-13: no desktop answers, so the gate stands; two desktops, so it names none
     mock.standing = .reconnecting
+    #expect(mock.door == .unreachable(desktop: nil))
+    // Try again is the mock's Sign in: studio answers again
+    mock.signIn()
     #expect(mock.door == nil)
     mock.signOut()
     #expect(mock.door == .welcome(failure: nil))
@@ -94,8 +98,9 @@ struct MockAccountTests {
   func fleetOnlyWithoutADoor() {
     let mock = MockAccount()
     #expect(mock.fieldIsLive)
+    // WI-L2 as amended 2026-11-13: none under the gate either
     mock.standing = .reconnecting
-    #expect(mock.fieldIsLive)
+    #expect(!mock.fieldIsLive)
     mock.standing = .approval
     #expect(!mock.fieldIsLive)
     mock.signOut()

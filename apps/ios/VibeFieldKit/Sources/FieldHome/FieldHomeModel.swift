@@ -595,7 +595,57 @@ enum FieldHomeModel {
     case looking(login: String)
     /// Up, the first listing answered, nothing online and nothing remembered.
     case noDesktops(login: String)
+    /// WI-L2 as amended 2026-11-13 — a phone that has been here before, and no network on it: nothing is reached
+    /// until it has one.
+    case offline
+    /// WI-L2 as amended — a phone that has been here before, looking for a desktop to answer: a hold, and no
+    /// step of the first way in. `quiet` under a launch's grace: the splash stands bare, as every launch looks.
+    case reaching(quiet: Bool)
+    /// WI-L2 as amended — it has looked for the patience and none answers: what to do about it. `desktop` is
+    /// the account's one desktop by name, nil when it has several.
+    case unreachable(desktop: String?)
   }
+
+  // MARK: - The gate (WI-L2 as amended 2026-11-13) — RED: the names only, each still answering by the old law
+
+  enum Absence: Equatable {
+    case blip
+    case opening
+    case looking
+    case long
+  }
+
+  struct AbsenceStep: Equatable {
+    let after: Duration
+    let then: Absence
+  }
+
+  static let reachGrace: Duration = .seconds(5)
+  static let reachPatience: Duration = .seconds(10)
+
+  static func absenceCourse(from absence: Absence) -> [AbsenceStep] { [] }
+
+  struct Reach: Equatable {
+    var connected: Bool
+    var asking: Bool
+    var online: Bool
+    var attempt: Int
+  }
+
+  static func reach(meshState: MeshModel.State, online: Bool, answering: Int, attempt: Int) -> Reach {
+    Reach(connected: false, asking: false, online: online, attempt: attempt)
+  }
+
+  static func absence(_ was: Absence, at reach: Reach) -> Absence { was }
+
+  /// RED — the old law's count: every desktop the link lists.
+  static func answering(_ desktops: [FieldDesktop]) -> Int { desktops.count }
+
+  static func awaitedDesktop(_ names: [String]) -> String? { nil }
+
+  static func firstWayIn(_ was: Bool, page: DoorPage?) -> Bool { was }
+
+  static func wayInDraws(_ step: WayInStep) -> Bool { true }
 
   /// The found beat's subject (WI-2): the desktop the phone first reached.
   struct FoundDesktop: Equatable {
@@ -617,12 +667,18 @@ enum FieldHomeModel {
     isGated: Bool,
     hasListed: Bool,
     listed: Int,
+    answering: Int,
     remembered: Int,
+    online: Bool,
+    firstWayIn: Bool,
+    absence: Absence,
+    desktop: String?,
     machineName: String?,
     adminConsole: URL?,
     signInNote: String?,
     expected: PhoneCodeExpectation? = nil
   ) -> DoorPage? {
+    // RED — the amended law's inputs are taken and not read yet: the decision below is WI-L2 as it stood
     // A fixture's photograph is of the tabs it stages; a page over it would be
     // this decision's, not the fixture's (it stamps its own).
     if fixtureOwnsTheField { return nil }
@@ -674,7 +730,7 @@ enum FieldHomeModel {
   static func wayInEnds(previous: DoorPage?, next: DoorPage?) -> Bool {
     guard let previous, next == nil else { return false }
     switch previous {
-    case .anotherAccount, .signInAgain: return false
+    case .anotherAccount, .signInAgain, .offline, .reaching, .unreachable: return false
     case .welcome, .fromCode, .approval, .joining, .looking, .noDesktops: return true
     }
   }

@@ -7,8 +7,9 @@ import Testing
 
 /// WI-1 — the phone's two states (DESIGN.md §9 "The way in"; WI-L1, WI-L2): which page of the way in stands while
 /// signed out (`FieldHomeModel.doorPage`), and nil — the three tabs — only for an account whose node is not
-/// asking, with a VibeField desktop known. TS-7's pages and TS-7b's code keep their rules inside it.
-@Suite("signed in is an account with a desktop known; everything else is a page of the way in")
+/// asking, with a VibeField desktop answering now (WI-L2 as amended 2026-11-13; it said "known"). TS-7's pages
+/// and TS-7b's code keep their rules inside it.
+@Suite("signed in is an account with a desktop answering now; everything else is a page of the way in")
 @MainActor
 struct DoorPageTests {
   private let login = "me@example.com"
@@ -16,14 +17,18 @@ struct DoorPageTests {
 
   private func page(
     fixture: Bool = false, _ state: MeshModel.State, remembered: String? = nil, login: String? = nil,
-    gated: Bool = true, hasListed: Bool = true, listed: Int = 0, rememberedDesktops: Int = 0,
+    gated: Bool = true, hasListed: Bool = true, listed: Int = 0, answering: Int = 0, rememberedDesktops: Int = 0,
+    online: Bool = true, first: Bool = false, absence: FieldHomeModel.Absence = .long, desktop: String? = nil,
     machine: String? = "iphone-17-pro", note: String? = nil
   ) -> FieldHomeModel.DoorPage? {
     FieldHomeModel.doorPage(
       fixtureOwnsTheField: fixture, meshState: state, rememberedLogin: remembered, login: login, isGated: gated,
-      hasListed: hasListed, listed: listed, remembered: rememberedDesktops, machineName: machine,
-      adminConsole: console, signInNote: note)
+      hasListed: hasListed, listed: listed, answering: answering, remembered: rememberedDesktops, online: online,
+      firstWayIn: first, absence: absence, desktop: desktop, machineName: machine, adminConsole: console,
+      signInNote: note)
   }
+
+  private let notUp: [MeshModel.State] = [.off, .starting, .stopping, .reconnecting("gone"), .failed("gone")]
 
   @Test("no account: the welcome, before, during and after a first sign-in that has not answered")
   func welcome() {
@@ -40,11 +45,169 @@ struct DoorPageTests {
     #expect(page(.needsLogin, note: "iOS did not open the sign-in sheet") == .welcome(failure: "iOS did not open the sign-in sheet"))
   }
 
-  @Test("WI-L2: an account with a desktop remembered is signed in while its node re-dials, fails or reconnects")
-  func rememberedIsSignedIn() {
-    for state: MeshModel.State in [.off, .starting, .stopping, .reconnecting("gone"), .failed("gone"), .up] {
-      #expect(page(state, remembered: login, rememberedDesktops: 1) == nil, "\(state)")
-      #expect(page(state, login: login, listed: 1) == nil, "\(state)")
+  // MARK: WI-L2 as amended 2026-11-13 — signed in means a desktop answers now
+
+  @Test("WI-L2 amended: signed in is a desktop answering now, on a network the phone has")
+  func answeringIsSignedIn() {
+    #expect(page(.up, login: login, listed: 1, answering: 1) == nil)
+    #expect(page(.up, login: login, listed: 2, answering: 1, rememberedDesktops: 2) == nil, "one asleep, one answers")
+    #expect(page(.up, remembered: login, listed: 1, answering: 1, rememberedDesktops: 1) == nil)
+    // however long the last absence ran, and in a first way in too: an answer ends it
+    for absence: FieldHomeModel.Absence in [.blip, .opening, .looking, .long] {
+      #expect(page(.up, login: login, listed: 1, answering: 1, rememberedDesktops: 1, absence: absence) == nil)
+    }
+    #expect(page(.up, login: login, listed: 1, answering: 1, first: true) == nil)
+  }
+
+  @Test("WI-L2 amended: a desktop remembered and none answering gates the phone: a blip, the hold, then the page")
+  func rememberedIsGated() {
+    for state in notUp + [.up] {
+      func gate(_ absence: FieldHomeModel.Absence) -> FieldHomeModel.DoorPage? {
+        page(state, remembered: login, rememberedDesktops: 1, absence: absence, desktop: "studio")
+      }
+      #expect(gate(.blip) == nil, "\(state): under the grace the tabs stay")
+      #expect(gate(.opening) == .reaching(quiet: true), "\(state): a launch holds bare")
+      #expect(gate(.looking) == .reaching(quiet: false), "\(state)")
+      #expect(gate(.long) == .unreachable(desktop: "studio"), "\(state)")
+    }
+    // a desktop listed and asleep, connecting or refusing is known, and does not answer
+    #expect(page(.up, login: login, listed: 1, rememberedDesktops: 1) == .unreachable(desktop: nil))
+    #expect(page(.up, login: login, listed: 2, rememberedDesktops: 2, absence: .looking) == .reaching(quiet: false))
+  }
+
+  @Test("WI-L2 amended: no network on the phone gates it too: You’re offline, once the grace has run")
+  func offline() {
+    for state in notUp + [.up] {
+      func gate(_ absence: FieldHomeModel.Absence) -> FieldHomeModel.DoorPage? {
+        page(state, remembered: login, rememberedDesktops: 1, online: false, absence: absence)
+      }
+      #expect(gate(.blip) == nil, "\(state)")
+      #expect(gate(.opening) == .reaching(quiet: true), "\(state): a launch holds bare, whatever the reason")
+      #expect(gate(.looking) == .offline, "\(state)")
+      #expect(gate(.long) == .offline, "\(state)")
+    }
+    // a desktop that still reads as answering is no answer without a network to hear it on
+    #expect(page(.up, login: login, listed: 1, answering: 1, rememberedDesktops: 1, online: false) == .offline)
+    #expect(
+      page(.up, login: login, listed: 1, answering: 1, rememberedDesktops: 1, online: false, absence: .blip) == nil)
+  }
+
+  @Test("WI-L2 amended: a first way in keeps its own pages until a desktop answers, listed or remembered or not")
+  func firstWayInKeepsItsPages() {
+    // nothing remembered: a desktop merely listed no longer ends it
+    #expect(page(.up, login: login, listed: 1) == .looking(login: login))
+    for state in notUp.dropLast() {
+      #expect(page(state, remembered: login, listed: 1) == .joining(login: login, note: nil), "\(state)")
+    }
+    // under way, a listing that the phone has remembered by now changes nothing
+    for absence: FieldHomeModel.Absence in [.blip, .opening, .looking, .long] {
+      #expect(
+        page(.up, login: login, listed: 1, rememberedDesktops: 1, first: true, absence: absence)
+          == .looking(login: login), "\(absence)")
+      #expect(
+        page(.starting, login: login, rememberedDesktops: 1, first: true, absence: absence)
+          == .joining(login: login, note: nil), "\(absence)")
+    }
+    // its words are its own with no network too (WI-W2a's note is the join's)
+    #expect(page(.starting, remembered: login, online: false) == .joining(login: login, note: nil))
+    #expect(page(.up, login: login, online: false) == .noDesktops(login: login))
+    #expect(page(.up, login: login, listed: 1, answering: 1, online: false) == .looking(login: login))
+  }
+
+  @Test("WI-L2 amended: Tailscale's asking outranks the gate, whatever the absence")
+  func askingOutranksTheGate() {
+    for absence: FieldHomeModel.Absence in [.blip, .opening, .looking, .long] {
+      #expect(
+        page(.needsLogin, remembered: login, rememberedDesktops: 2, absence: absence) == .signInAgain(note: nil))
+      #expect(
+        page(.needsMachineAuth, login: login, rememberedDesktops: 2, online: false, absence: absence)
+          == .approval(machine: "iphone-17-pro", adminConsole: console))
+    }
+  }
+
+  @Test("WI-L2 amended: an absence waits out its grace, then looks for its patience; past the grace it looks at once")
+  func absenceCourse() {
+    typealias Step = FieldHomeModel.AbsenceStep
+    #expect(FieldHomeModel.reachGrace == .seconds(5))
+    #expect(FieldHomeModel.reachPatience == .seconds(10))
+    let fresh = [Step(after: .seconds(5), then: .looking), Step(after: .seconds(10), then: .long)]
+    #expect(FieldHomeModel.absenceCourse(from: .blip) == fresh)
+    #expect(FieldHomeModel.absenceCourse(from: .opening) == fresh)
+    let again = [Step(after: .zero, then: .looking), Step(after: .seconds(10), then: .long)]
+    #expect(FieldHomeModel.absenceCourse(from: .long) == again, "Try again, and coming back to VibeField")
+    #expect(FieldHomeModel.absenceCourse(from: .looking) == again)
+  }
+
+  @Test("WI-L2 amended: the clock's facts: connected arms a blip, Tailscale's asking makes the absence long")
+  func reach() {
+    typealias Reach = FieldHomeModel.Reach
+    let up = FieldHomeModel.reach(meshState: .up, online: true, answering: 1, attempt: 0)
+    #expect(up == Reach(connected: true, asking: false, online: true, attempt: 0))
+    #expect(!FieldHomeModel.reach(meshState: .up, online: false, answering: 1, attempt: 0).connected)
+    #expect(!FieldHomeModel.reach(meshState: .up, online: true, answering: 0, attempt: 0).connected)
+    #expect(FieldHomeModel.reach(meshState: .needsLogin, online: true, answering: 0, attempt: 0).asking)
+    #expect(FieldHomeModel.reach(meshState: .needsMachineAuth, online: true, answering: 0, attempt: 0).asking)
+    for state in notUp + [.up] {
+      #expect(!FieldHomeModel.reach(meshState: state, online: true, answering: 0, attempt: 0).asking, "\(state)")
+    }
+    // Try again counts one, so the clock starts again on the same facts
+    #expect(up != FieldHomeModel.reach(meshState: .up, online: true, answering: 1, attempt: 1))
+    let lost = Reach(connected: false, asking: false, online: true, attempt: 0)
+    let asked = Reach(connected: false, asking: true, online: true, attempt: 0)
+    for was: FieldHomeModel.Absence in [.blip, .opening, .looking, .long] {
+      #expect(FieldHomeModel.absence(was, at: up) == .blip, "\(was)")
+      #expect(FieldHomeModel.absence(was, at: lost) == was, "\(was): it stands, and its course runs from there")
+      #expect(FieldHomeModel.absence(was, at: asked) == .long, "\(was): a sign-in's end goes to the hold")
+    }
+  }
+
+  @Test("WI-L2 amended: a desktop answers when its door is ready or says why not; the gate names the one desktop")
+  func answering() {
+    func desktop(_ id: String, _ state: FieldDesktop.State) -> FieldDesktop {
+      FieldDesktop(deviceId: id, name: id, platform: "darwin", state: state, feed: .none)
+    }
+    #expect(FieldHomeModel.answering([]) == 0)
+    let states: [FieldDesktop.State] = [.noDoor, .connecting, .reconnecting, .refusedDoor("no address")]
+    #expect(FieldHomeModel.answering(states.enumerated().map { desktop("dev-\($0.offset)", $0.element) }) == 0)
+    #expect(FieldHomeModel.answering([desktop("a", .ready), desktop("b", .noDoor), desktop("c", .ready)]) == 2)
+    // a door that answered and stopped this phone is there: the tabs say why, and the gate would be false of it
+    #expect(FieldHomeModel.answering([desktop("a", .failed("INCOMPATIBLE")), desktop("b", .noDoor)]) == 1)
+    #expect(FieldHomeModel.awaitedDesktop(["studio"]) == "studio")
+    #expect(FieldHomeModel.awaitedDesktop(["studio", "mini"]) == nil, "several: on your computer")
+    #expect(FieldHomeModel.awaitedDesktop([]) == nil)
+  }
+
+  @Test("WI-L2 amended: a first way in begins at its own pages and ends at signed in; the gate's leave it as it was")
+  func firstWayIn() {
+    let first: [FieldHomeModel.DoorPage] = [
+      .welcome(failure: nil), .fromCode(desktop: "Studio", login: login), .approval(machine: nil, adminConsole: nil),
+      .joining(login: login, note: nil), .looking(login: login), .noDesktops(login: login),
+    ]
+    for page in first {
+      #expect(FieldHomeModel.firstWayIn(false, page: page), "\(page)")
+      #expect(FieldHomeModel.firstWayIn(true, page: page), "\(page)")
+    }
+    let others: [FieldHomeModel.DoorPage] = [
+      .signInAgain(note: nil), .anotherAccount(current: "a@b", expected: login, from: "Studio", byLink: false),
+      .offline, .reaching(quiet: true), .reaching(quiet: false), .unreachable(desktop: "studio"),
+    ]
+    for page in others {
+      #expect(!FieldHomeModel.firstWayIn(false, page: page), "\(page)")
+      #expect(FieldHomeModel.firstWayIn(true, page: page), "\(page)")
+    }
+    #expect(!FieldHomeModel.firstWayIn(true, page: nil), "signed in ends it")
+    #expect(!FieldHomeModel.firstWayIn(false, page: nil))
+  }
+
+  @Test("WI-L2 amended: a launch's bare hold draws nothing over the splash; every other step draws")
+  func bareHold() {
+    #expect(!FieldHomeModel.wayInDraws(.page(.reaching(quiet: true))))
+    let drawn: [FieldHomeModel.WayInStep] = [
+      .page(.reaching(quiet: false)), .page(.unreachable(desktop: nil)), .page(.offline),
+      .page(.welcome(failure: nil)), .page(.looking(login: login)), .tour(0), .found(name: nil, desktop: nil),
+    ]
+    for step in drawn {
+      #expect(FieldHomeModel.wayInDraws(step), "\(step)")
     }
   }
 
@@ -68,7 +231,8 @@ struct DoorPageTests {
     #expect(
       FieldHomeModel.doorPage(
         fixtureOwnsTheField: false, meshState: .needsMachineAuth, rememberedLogin: nil, login: nil, isGated: false,
-        hasListed: false, listed: 0, remembered: 0, machineName: nil, adminConsole: nil, signInNote: nil)
+        hasListed: false, listed: 0, answering: 0, remembered: 0, online: true, firstWayIn: false, absence: .long,
+        desktop: nil, machineName: nil, adminConsole: nil, signInNote: nil)
         == .approval(machine: nil, adminConsole: nil))
   }
 
@@ -119,6 +283,14 @@ struct DoorPageTests {
     #expect(
       !FieldHomeModel.wayInEnds(
         previous: .anotherAccount(current: "a@b", expected: login, from: "Studio", byLink: false), next: nil))
+    // WI-L2 as amended 2026-11-13 — a desktop answering again is a return, not an arrival: no beat
+    let gate: [FieldHomeModel.DoorPage] = [
+      .offline, .reaching(quiet: true), .reaching(quiet: false), .unreachable(desktop: "studio"),
+      .unreachable(desktop: nil),
+    ]
+    for previous in gate {
+      #expect(!FieldHomeModel.wayInEnds(previous: previous, next: nil), "\(previous)")
+    }
   }
 
   @Test("M1: signed out, the tabs stay under the splash until it stands whole over them; signed in, they stand")
@@ -175,8 +347,8 @@ struct DoorPageTests {
   ) -> FieldHomeModel.DoorPage? {
     FieldHomeModel.doorPage(
       fixtureOwnsTheField: false, meshState: state, rememberedLogin: remembered, login: login, isGated: true,
-      hasListed: true, listed: 1, remembered: 1, machineName: nil, adminConsole: console, signInNote: failure,
-      expected: expectation)
+      hasListed: true, listed: 1, answering: 1, remembered: 1, online: true, firstWayIn: false, absence: .long,
+      desktop: nil, machineName: nil, adminConsole: console, signInNote: failure, expected: expectation)
   }
 
   @Test("another account than the code named: Another account?, at once and over any other page")
@@ -237,6 +409,11 @@ struct DoorPageTests {
       "from-code": .fromCode(desktop: "Studio", login: me),
       "joining": .joining(login: me, note: nil),
       "looking": .looking(login: me),
+      // WI-L2 as amended 2026-11-13: "asleep" above is the grace's own moment, and these are the gate's screens
+      "reaching": .reaching(quiet: false),
+      "unreachable": .unreachable(desktop: nil),
+      "unreachable-one": .unreachable(desktop: "studio"),
+      "offline": .offline,
       "tour-1": .welcome(failure: nil), "tour-4": .welcome(failure: nil),
       "another": .anotherAccount(current: AccountFixtures.otherLogin, expected: me, from: "Studio", byLink: false),
       "another-link": .anotherAccount(current: AccountFixtures.otherLogin, expected: me, from: "Studio", byLink: true),

@@ -58,6 +58,7 @@ struct WayInScreenTests {
       .page(.noDesktops(login: login)), .page(.joining(login: login, note: nil)), .page(.looking(login: login)),
       .page(.approval(machine: "iphone-17-pro", adminConsole: nil)), .found(name: "James", desktop: "studio"),
       .lockOffer(.faceID), .locked(.faceID),
+      .page(.reaching(quiet: false)), .page(.unreachable(desktop: "studio")), .page(.offline),
     ]
     for step in steps {
       let acts = FieldHomeModel.wayInScreen(step, device: .iPhone).acts
@@ -90,6 +91,7 @@ struct WayInScreenTests {
       .page(.anotherAccount(current: "a@b", expected: "c@d", from: "Mini", byLink: false)),
       .page(.joining(login: login, note: nil)), .page(.looking(login: login)), .page(.noDesktops(login: login)),
       .found(name: "James", desktop: "studio"),
+      .page(.reaching(quiet: false)), .page(.unreachable(desktop: "studio")), .page(.offline),
     ]
     for method in [LockMethod.faceID, .touchID, .passcode] {
       steps += [.lockOffer(method), .locked(method)]
@@ -137,6 +139,11 @@ struct WayInScreenTests {
     #expect(height(.page(.fromCode(desktop: "Studio", login: login))) == 146)
     #expect(height(.page(.joining(login: login, note: nil))) == 0, "a hold has no glass")
     #expect(height(.found(name: "James", desktop: "studio")) == 0)
+    // WI-L2 as amended 2026-11-13 — the gate: Try again and its link are a glass of two; its hold and You’re
+    // offline. hold nothing
+    #expect(height(.page(.unreachable(desktop: nil))) == 146)
+    #expect(height(.page(.reaching(quiet: false))) == 0)
+    #expect(height(.page(.offline)) == 0, "no act brings a network back")
     // one act is the pill and the glass's two 18s: the pill the glass draws is the wide pill's own height
     #expect(height(.tour(0)) - 36 == ChromePillStyle.wideHeight)
     var steps: [FieldHomeModel.WayInStep] = (0...3).map { .tour($0) }
@@ -145,6 +152,7 @@ struct WayInScreenTests {
       .page(.fromCode(desktop: "Studio", login: login)), .page(.signInAgain(note: nil)),
       .page(.approval(machine: "iphone-17-pro", adminConsole: nil)), .page(.noDesktops(login: login)),
       .page(.anotherAccount(current: "a@b", expected: "c@d", from: "Mini", byLink: true)),
+      .page(.unreachable(desktop: "studio")),
     ]
     for method in [LockMethod.faceID, .touchID, .passcode] {
       steps += [.lockOffer(method), .locked(method)]
@@ -183,6 +191,7 @@ struct WayInScreenTests {
       .page(.anotherAccount(current: "a@b", expected: "c@d", from: "Mini", byLink: false)),
       .page(.noDesktops(login: login)), .page(.joining(login: login, note: nil)), .page(.looking(login: login)),
       .page(.approval(machine: "iphone-17-pro", adminConsole: nil)), .found(name: "James", desktop: "studio"),
+      .page(.reaching(quiet: false)), .page(.unreachable(desktop: "studio")), .page(.offline),
     ]
     // L4's word pass: the lock's offer and its curtain take the word from DeviceWord, as every way-in word does
     for method in [LockMethod.faceID, .touchID, .passcode] {
@@ -203,6 +212,8 @@ struct WayInScreenTests {
     #expect(curtain.acts == [.primary("Unlock with Touch ID", .unlock), .note("Your iPad passcode works too.")])
     let iPad = line(FieldHomeModel.wayInScreen(.page(.signInAgain(note: nil)), device: .iPad))
     #expect(iPad == "This iPad can’t reach your desktops until you do. Nothing here is lost.")
+    let offline = line(FieldHomeModel.wayInScreen(.page(.offline), device: .iPad))
+    #expect(offline == "Connect this iPad to the internet to reach your computer.")
     let device = line(FieldHomeModel.wayInScreen(.tour(2), device: .unknown))
     #expect(
       device
@@ -310,6 +321,38 @@ struct WayInScreenTests {
     #expect(looking.acts.isEmpty)
   }
 
+  /// WI-L2 as amended 2026-11-13 (James, in session; DESIGN.md §9 "The way in", its words drafts pending him) — the
+  /// gate's three screens. They are no step of the first way in: no bars, the mark in its place, no note.
+  @Test("WI-L2 amended: the gate says Looking for your computer…, then Can’t reach your computer., or You’re offline.")
+  func gate() {
+    let hold = screen(.reaching(quiet: false))
+    #expect(hold.words == .init(title: "Looking for your computer…", hold: true), "WI-1's title alone")
+    #expect(hold.acts.isEmpty)
+    #expect(screen(.reaching(quiet: true)) == hold, "a launch's bare hold is the same screen, not drawn")
+    let one = screen(.unreachable(desktop: "studio"))
+    #expect(one.words.title == "Can’t reach your computer.")
+    #expect(line(one) == "Open VibeField on studio, and keep it awake and connected.")
+    #expect(!one.words.hold)
+    #expect(one.acts == [.primary("Try again", .tryAgain), .link("Use another account", .useAnotherAccount)])
+    let several = screen(.unreachable(desktop: nil))
+    #expect(line(several) == "Open VibeField on your computer, and keep it awake and connected.")
+    #expect(several.acts == one.acts)
+    let offline = screen(.offline)
+    #expect(offline.words.title == "You’re offline.")
+    #expect(line(offline) == "Connect this iPhone to the internet to reach your computer.")
+    #expect(!offline.words.hold)
+    #expect(offline.acts.isEmpty)
+    for page: FieldHomeModel.DoorPage in [.reaching(quiet: false), .unreachable(desktop: "studio"), .offline] {
+      let s = screen(page)
+      #expect(s.steps == nil, "\(page): no step of the first way in")
+      #expect(s.picture == .mark, "\(page)")
+      #expect(s.back == nil, "\(page)")
+      #expect(s.words.note == nil, "\(page)")
+    }
+    // the hold's title is the first way in's own, word for word
+    #expect(screen(.looking(login: login)).words.title == hold.words.title)
+  }
+
   @Test("No desktops yet: TS-7's words with “computer”, its row, and the link to send")
   func noDesktops() {
     let s = screen(.noDesktops(login: login))
@@ -409,6 +452,7 @@ struct WayInScreenTests {
       .page(.welcome(failure: nil)), .page(.signInAgain(note: nil)), .page(.noDesktops(login: login)),
       .page(.joining(login: login, note: nil)), .page(.looking(login: login)), .found(name: "James", desktop: "studio"),
       .lockOffer(.faceID), .lockOffer(.passcode), .locked(.faceID), .locked(.touchID),
+      .page(.reaching(quiet: false)), .page(.unreachable(desktop: "studio")), .page(.offline),
     ]
     for step in steps {
       let s = FieldHomeModel.wayInScreen(step, device: .iPhone)

@@ -40,6 +40,9 @@ extension FieldHomeModel {
     var showTour: (Int?) -> Void
     /// Not now: the hand-over, the lock left off.
     var notNow: () -> Void
+    /// WI-L2 as amended 2026-11-13 — Try again, on Can’t reach your computer.: the account's node dials now, and the
+    /// home looks again for a desktop to answer.
+    var tryAgain: () -> Void
   }
 
   /// The way in's acts, each the home's own call, held under a demo where the call would reach something real.
@@ -70,11 +73,12 @@ extension FieldHomeModel {
       return .made
     }
 
-    /// Whether an act's call reaches past the way in's own pages: the account, the lock, the reader or Safari.
+    /// Whether an act's call reaches past the way in's own pages: the account (Try again: its node and its desktops),
+    /// the lock, the reader or Safari.
     static func reachesOutside(_ act: WayInAct) -> Bool {
       switch act {
       case .continueWithTailscale, .signInAgain, .scanCode, .useAnotherAccount, .switchAccount, .keepAccount,
-        .startOver, .openAdminConsole, .lockOn:
+        .startOver, .openAdminConsole, .lockOn, .tryAgain:
         return true
       case .seeHowItWorks, .tour, .welcome, .notNow, .unlock:
         return false
@@ -107,6 +111,8 @@ extension FieldHomeModel {
         calls.notNow()
       case .unlock:
         calls.unlock()
+      case .tryAgain:
+        calls.tryAgain()
       }
     }
   }

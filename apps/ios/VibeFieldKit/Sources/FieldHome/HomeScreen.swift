@@ -900,7 +900,9 @@ public struct HomeScreen: View {
         // the curtain's own act; the way in never shows it
         unlock: { Task { await lock.unlock() } },
         showTour: { page in tourPage = page },
-        notNow: { wayInEnding = nil }))
+        notNow: { wayInEnding = nil },
+        // RED — no screen offers it yet
+        tryAgain: {}))
   }
 
   // MARK: - IOS-9e: the pages, and the bar over them
@@ -3696,7 +3698,13 @@ public struct HomeScreen: View {
       isGated: mesh.isGatedOnAccount,
       hasListed: link?.hasListed ?? false,
       listed: linkDesktops.count,
+      // RED — the amended law's inputs, not read yet
+      answering: 0,
       remembered: accountLogin.map { desktopMemory.remembered(for: $0).count } ?? 0,
+      online: true,
+      firstWayIn: false,
+      absence: .long,
+      desktop: nil,
       machineName: mesh.machineName,
       adminConsole: mesh.adminConsoleURL,
       signInNote: mesh.signInNote,

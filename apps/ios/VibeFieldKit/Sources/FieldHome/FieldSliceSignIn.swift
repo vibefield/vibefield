@@ -37,7 +37,8 @@
       FieldHomeModel.doorPage(
         fixtureOwnsTheField: false, meshState: signedIn ? .up : .off, rememberedLogin: nil,
         login: signedIn ? AccountFixtures.login : nil, isGated: true, hasListed: true, listed: signedIn ? 1 : 0,
-        remembered: 0, machineName: AccountFixtures.machine, adminConsole: nil, signInNote: nil)
+        answering: signedIn ? 1 : 0, remembered: 0, online: true, firstWayIn: false, absence: .long, desktop: nil,
+        machineName: AccountFixtures.machine, adminConsole: nil, signInNote: nil)
     }
   }
 #endif

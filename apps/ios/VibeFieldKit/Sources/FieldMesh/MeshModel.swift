@@ -405,6 +405,9 @@ public final class MeshModel {
     }
   }
 
+  /// RED — every path reads as a network until the gate reads it (WI-L2 as amended 2026-11-13).
+  nonisolated static func pathIsOnline(_ status: NWPath.Status) -> Bool { true }
+
   /// The network coming back while a re-dial waits: dial now.
   private func watchNetwork() {
     guard pathMonitor == nil else { return }

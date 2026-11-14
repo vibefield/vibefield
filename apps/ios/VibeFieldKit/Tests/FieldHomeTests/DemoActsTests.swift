@@ -44,7 +44,8 @@ struct DemoActsTests {
         lockOn: { made.calls.append("lockOn") },
         unlock: { made.calls.append("unlock") },
         showTour: { page in made.calls.append(page.map { "showTour(\($0))" } ?? "showTour(welcome)") },
-        notNow: { made.calls.append("notNow") }))
+        notNow: { made.calls.append("notNow") },
+        tryAgain: { made.calls.append("tryAgain") }))
   }
 
   private func held(_ acts: [Act]) -> (outcomes: [Outcome], calls: [String]) {
@@ -112,22 +113,30 @@ struct DemoActsTests {
     #expect(r.calls == [])
   }
 
+  /// WI-L2 as amended 2026-11-13 — the gate's own act goes through the same dispatcher.
+  @Test("Try again, on Can’t reach your computer., reaches no mesh and no desktop under a demo")
+  func tryAgainHeld() {
+    let r = held([.tryAgain])
+    #expect(r.outcomes == [.heldUnderDemo])
+    #expect(r.calls == [])
+  }
+
   @Test("with no demo every one of those acts makes its real call, so the hold cannot swallow the real path")
   func realPath() {
     let made = Made()
     let d = dispatch(.off, made)
     let acts: [Act] = [
       .continueWithTailscale, .signInAgain, .scanCode, .useAnotherAccount, .switchAccount, .keepAccount, .startOver,
-      .openAdminConsole(Self.console), .lockOn,
+      .openAdminConsole(Self.console), .lockOn, .tryAgain,
     ]
     let outcomes = acts.map { d.perform($0) }
     let received = [d.receive(code, arrival: .scanned), d.receive(code, arrival: .link)]
-    #expect(outcomes == Array(repeating: Outcome.made, count: 9))
+    #expect(outcomes == Array(repeating: Outcome.made, count: 10))
     #expect(received == [.made, .made])
     #expect(
       made.calls == [
         "signIn", "signIn", "openReader", "signOut", "switchAccount", "keepAccount", "keepAccount", "openURL", "lockOn",
-        "receive(scanned)", "receive(link)",
+        "tryAgain", "receive(scanned)", "receive(link)",
       ])
   }
 

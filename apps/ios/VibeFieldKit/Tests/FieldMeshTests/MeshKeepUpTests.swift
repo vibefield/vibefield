@@ -1,5 +1,6 @@
 import FieldProduct
 import Foundation
+import Network
 import Testing
 
 @testable import FieldMesh
@@ -11,6 +12,14 @@ import Testing
 /// that a signed-out phone starts nothing.
 @Suite("the mesh keeps itself up while signed in")
 struct MeshKeepUpTests {
+  /// WI-L2 as amended 2026-11-13 — the home gates on the phone's network, as iOS's path says it.
+  @Test("the phone is offline only while its path is unsatisfied; a path that needs a connection is a network")
+  func pathIsOnline() {
+    #expect(MeshModel.pathIsOnline(.satisfied))
+    #expect(MeshModel.pathIsOnline(.requiresConnection))
+    #expect(!MeshModel.pathIsOnline(.unsatisfied))
+  }
+
   @Test("signed in: no node starts one, a dead node is replaced, a living one is asked again, a moving one is left")
   func steps() {
     let cases: [(MeshModel.State, Bool, MeshModel.KeepUpStep)] = [

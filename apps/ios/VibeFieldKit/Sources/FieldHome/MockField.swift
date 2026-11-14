@@ -122,7 +122,8 @@
         }
       return FieldHomeModel.doorPage(
         fixtureOwnsTheField: false, meshState: state, rememberedLogin: nil, login: login, isGated: true,
-        hasListed: true, listed: standing == .up ? 1 : 0, remembered: standing == .signedOut ? 0 : 2,
+        hasListed: true, listed: standing == .up ? 1 : 0, answering: standing == .up ? 1 : 0,
+        remembered: standing == .signedOut ? 0 : 2, online: true, firstWayIn: false, absence: .long, desktop: nil,
         machineName: AccountFixtures.machine, adminConsole: FieldTruffleRuntime.machinesAdminURL(controlURL: nil),
         signInNote: nil)
     }
