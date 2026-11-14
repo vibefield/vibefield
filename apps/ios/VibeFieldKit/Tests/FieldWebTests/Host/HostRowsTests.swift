@@ -172,8 +172,8 @@ struct HostRowsTests {
     #expect(reached == 0)
   }
 
-  /// James, card j-made-apps-webrtc, 2026-11-14 08:16:06Z: "Allow it, like any website". A PIN of his ruling, green
-  /// from the red commit on: an app's own view keeps WebRTC as any website has it, so a later block shows red here.
+  /// MA-D14 (James, 2026-11-14T08:16:06.968Z: "Allow it, like any website"). A PIN of his ruling, green from the
+  /// red commit on: an app's own view keeps WebRTC as any website has it, so a later block shows red here.
   @Test("R2: WebRTC is there, as any website has it: the main frame and a same-origin frame", .rigMade)
   func r2() async throws {
     let rig = try Rig()
@@ -192,9 +192,11 @@ struct HostRowsTests {
     #expect(same == "function")
   }
 
-  /// Camera, microphone and WebTransport stay CLOSED pending James's answer (VF-PM 08:26:16Z: not in his WebRTC
-  /// click), and `sendBeacon` stays stubbed (reach, not WebRTC): in the main frame, a same-origin and a srcdoc frame.
-  @Test("R2b: camera, microphone and WebTransport stay closed, and sendBeacon sends nothing, in every frame", .rigMade)
+  /// WebTransport and `navigator.mediaDevices` stand as on any website: MA-D15 (James, 2026-11-14T17:18:37.520Z:
+  /// "Let iOS ask for camera and mic; allow WebTransport too"). `sendBeacon` stays stubbed (reach, not his
+  /// question): in the main frame, a same-origin and a srcdoc frame.
+  @Test("R2b: WebTransport and the camera and microphone's door stand as on any website, sendBeacon sends nothing",
+    .rigMade)
   func r2b() async throws {
     let rig = try Rig()
     defer { rig.stop() }
@@ -225,10 +227,28 @@ struct HostRowsTests {
       let transport = read[frame + "Transport"] as? String
       let media = read[frame + "Media"] as? String
       let beacon = read[frame + "Beacon"] as? String
-      #expect(transport == "undefined", "\(frame)")
-      #expect(media == "undefined", "\(frame)")
+      #expect(transport == "function", "\(frame)")
+      #expect(media == "object", "\(frame)")
       #expect(beacon == "false", "\(frame)")
     }
+  }
+
+  /// A page asking for the camera, the microphone or both gets iOS's own ask; nothing is granted without a tap
+  /// (MA-D15, James, 2026-11-14T17:18:37.520Z: "Let iOS ask for camera and mic; allow WebTransport too").
+  /// Device motion was not asked about and stays denied.
+  @Test("R2c: a page asking for the camera or the microphone gets iOS's own ask; device motion stays denied")
+  func r2c() {
+    let camera = FieldWebAppNavigation.mediaCaptureDecision(.camera)
+    let microphone = FieldWebAppNavigation.mediaCaptureDecision(.microphone)
+    let both = FieldWebAppNavigation.mediaCaptureDecision(.cameraAndMicrophone)
+    let motion = FieldWebAppNavigation.motionDecision()
+    print(
+      "SP4C-R2c camera=\(camera.rawValue) microphone=\(microphone.rawValue) both=\(both.rawValue)"
+        + " motion=\(motion.rawValue)")
+    #expect(camera == .prompt)
+    #expect(microphone == .prompt)
+    #expect(both == .prompt)
+    #expect(motion == .deny)
   }
 
   @Test("R3: a subresource redirected into the tailnet, and one to an undeclared host, never reach out", .rigMade)

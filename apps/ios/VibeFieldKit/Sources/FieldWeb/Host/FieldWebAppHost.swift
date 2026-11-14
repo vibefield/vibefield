@@ -128,18 +128,28 @@
       return nil
     }
 
+    /// What an app's page gets when it asks for the camera, the microphone or both.
+    nonisolated static func mediaCaptureDecision(_ type: WKMediaCaptureType) -> WKPermissionDecision {
+      .deny
+    }
+
+    /// Device motion and orientation were not in James's answer: denied.
+    nonisolated static func motionDecision() -> WKPermissionDecision {
+      .deny
+    }
+
     public func webView(
       _ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
       initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType
     ) async -> WKPermissionDecision {
-      .deny
+      Self.mediaCaptureDecision(type)
     }
 
     public func webView(
       _ webView: WKWebView, requestDeviceOrientationAndMotionPermissionFor origin: WKSecurityOrigin,
       initiatedByFrame frame: WKFrameInfo
     ) async -> WKPermissionDecision {
-      .deny
+      Self.motionDecision()
     }
 
     /// A navigation this delegate cancelled reports itself as interrupted: that is not a failure.
