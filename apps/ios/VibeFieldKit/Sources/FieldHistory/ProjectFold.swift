@@ -248,8 +248,12 @@ extension FieldHistoryModel {
 
   /// A project's sessions under their days, each naming where it ran — its
   /// desktop and its folder's name — and the agent's own id Resume asks by.
+  ///
+  /// Item 393 — `contribution` is the project's (`project.figures`): a session whose row it holds is to wear its
+  /// figures. The red's stub: it is taken and not read, so every row is as it was.
   public static func projectSessionRows(
-    _ rows: [IndexSessionRow], key: String, places: [ProjectPlace], desktops: [HistoryDevice], now: Date
+    _ rows: [IndexSessionRow], key: String, places: [ProjectPlace], desktops: [HistoryDevice], now: Date,
+    contribution: [IndexContribution] = []
   ) -> [HistorySession] {
     let ordered = rows.sorted { (lastAt($0) ?? -1) > (lastAt($1) ?? -1) }
     var previousDay: String?
@@ -338,6 +342,43 @@ extension FieldHistoryModel {
       ranked.prefix(3).map { HistoryAgentShare($0.key, Int((Double($0.value) / Double(total) * 100).rounded())) },
       max(0, ranked.count - 3)
     )
+  }
+}
+
+// Item 393 (James, 2026-11-13 23:28:32Z, session qa-01, of a project's page on his phone: "for session entry item,
+// they should also show the message count, token count, cost, etc,just like as how desktop session entry is
+// designed, align it") — A SESSION ENTRY'S FIGURES. The desktop's entry (rosetta's room, `SessionListItem`) prints
+// `N msgs · span · tokens · cost`, and its figures are the session's row in its project's `contribution`
+// (`HistoryRoom.tsx`: "Per-session facts (tokens + messages) from every loaded contribution."). The phone reads the
+// same rows with `project.figures` and summed them for the project's messages alone; these rules join them to the
+// listing.
+//
+// What the phone holds, and what it does not (DESIGN.md §8 says it): a desktop answers a phone a hundred of a
+// project's rows, the heaviest by tokens first. A project of up to a hundred sessions has a row for each; a project
+// past a hundred has rows for its hundred heaviest, and the door that would answer the rest is item 398.
+
+extension FieldHistoryModel {
+  /// A project's `contribution` rows by the session each is of: the desktop that recorded it and its id there, the
+  /// listing's own row identity.
+  ///
+  /// The red's stub: no row is held.
+  static func figuresBySession(_ contribution: [IndexContribution]) -> [String: IndexContribution] {
+    [:]
+  }
+
+  /// A session's figures: its row in its project's `contribution`, or nil when the phone holds none for it.
+  ///
+  /// The red's stub: no session has figures, as before item 393.
+  static func sessionFigures(_ row: IndexSessionRow, in held: [String: IndexContribution]) -> IndexContribution? {
+    nil
+  }
+
+  /// `214 msgs · 3h 12m · 48.2M · $31.40` — the figures of a session's entry, in the desktop's order; nil when the
+  /// session has none, and its entry keeps the line it had.
+  ///
+  /// The red's stub: no entry has a figures line, as before item 393.
+  public static func figuresLine(messages: Int?, span: String?, tokens: Double?, spend: HistorySpend?) -> String? {
+    nil
   }
 }
 

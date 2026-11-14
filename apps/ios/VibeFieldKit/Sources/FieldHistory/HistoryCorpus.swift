@@ -302,11 +302,22 @@ public struct HistorySession: Identifiable, Equatable, Sendable, Codable {
   /// **Your latest sessions** merges every project's by it. nil for the mock's rows and a row the index stamped none
   /// for; optional, so a session cached before SE-2 still reads.
   public let lastAt: Int64?
+  /// Item 393 — its figures, the desktop entry's own: its messages, its tokens and its estimated spend, its
+  /// subagents' folded in. They are its row in its project's `contribution` (`project.figures`), joined by the
+  /// desktop that recorded it and its id there (`FieldHistoryModel.sessionFigures`); `meta` says them. nil for a
+  /// session with no such row: a desktop answers a phone a hundred of a project's rows, the heaviest first, so a
+  /// project past a hundred has figures for those alone (the door for the rest is item 398). nil too for a
+  /// subagent's own row, for the mock's rows (their `meta` is the record's own line) and for a desktop's own
+  /// listing; optional, so a session cached before item 393 still reads.
+  public let messages: Int?
+  public let tokens: Double?
+  public let spend: HistorySpend?
 
   public init(
     id: String, projectId: String, day: String? = nil, title: String, agent: String, meta: String, branch: String,
     last: String, tone: Tone? = nil, device: String? = nil, deviceName: String? = nil, folder: String? = nil,
-    provider: String? = nil, nativeSessionId: String? = nil, lastAt: Int64? = nil
+    provider: String? = nil, nativeSessionId: String? = nil, lastAt: Int64? = nil, messages: Int? = nil,
+    tokens: Double? = nil, spend: HistorySpend? = nil
   ) {
     self.id = id
     self.projectId = projectId
@@ -323,6 +334,9 @@ public struct HistorySession: Identifiable, Equatable, Sendable, Codable {
     self.provider = provider
     self.nativeSessionId = nativeSessionId
     self.lastAt = lastAt
+    self.messages = messages
+    self.tokens = tokens
+    self.spend = spend
   }
 
   public var isLive: Bool { last == "now" }

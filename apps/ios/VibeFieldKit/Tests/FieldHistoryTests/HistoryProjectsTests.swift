@@ -227,6 +227,25 @@ struct HistoryProjectsTests {
     await settle("the move") { projects.moved("p1:asked-before-it-moved") == moved }
   }
 
+  // Item 393 (James, 2026-11-13 23:28:32Z, session qa-01: "for session entry item, they should also show the
+  // message count, token count, cost, etc,just like as how desktop session entry is designed, align it") — the
+  // reader hands the project's `contribution` to its session rows. The rules are held in SessionFiguresTests.
+
+  @Test("item 393 — an opened project's sessions wear their figures once the project's figures are read")
+  @MainActor
+  func sessionsWearTheirFigures() async throws {
+    let door = ProjectsDoor()
+    let projects = HistoryProjects(source: studio, door: door, roster: roster)
+    projects.start()
+    await settle("the ledger") { projects.corpus.projects.count == 2 }
+    projects.open(vibeField)
+    await settle("the figures on the row") { projects.corpus.sessions(of: vibeField).first?.messages == 88 }
+    let row = try #require(projects.corpus.sessions(of: vibeField).first)
+    #expect(row.tokens == 182_000 && row.spend == HistorySpend(costMicroUsd: 1_240_000))
+    #expect(row.meta.hasPrefix("88 msgs · 1h 53m · 182K · $1.24 · started "))
+    projects.close()
+  }
+
   @Test("no door: the cache's ledger, asleep; a door that stops answering dims what was read")
   @MainActor
   func cacheAndRefusal() async throws {
