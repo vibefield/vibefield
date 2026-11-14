@@ -20,8 +20,9 @@ import RosettaClient
 // - (item 410) the session's end waits for the read's own calls. `URLSession` answers a task made after
 //   `invalidateAndCancel()` with an Objective-C exception, which ends the app, and a call that has left the main
 //   actor (an older page, a picture's bytes) makes its task a moment later. So a close while a call is out cancels
-//   what is on its way and leaves the session standing, and the last call back ends it, or a bound does
-//   (`HistorySessionLease`). rosetta's own inner reads are not counted here: they are its client's to guard.
+//   what is on its way and leaves the session standing, and the last call back ends it (`HistorySessionLease`).
+//   Nothing else ends it: no bound, which would end it under a call that is out. rosetta's own inner reads are not
+//   counted here: they are its client's to guard.
 //
 // An older page is fetched and then REVEALED under the subscription, so it takes later patches and `onChange` hands
 // the whole visible list; a row is projected once, and again only when its entry changed (`HistoryProjectionCache`).
@@ -124,11 +125,6 @@ final class HistoryDirectRead {
 
   /// A failed renewal asks again this soon: the grant it holds is near its end.
   private static let renewRetry = Duration.seconds(30)
-  /// Item 410 — the longest a session stands after its read closed under a call that is out. The window it covers
-  /// is between a call's `await` and the task rosetta's client makes for it: moments, seconds on a loaded phone.
-  /// Thirty seconds is past any of that, and far short of a session standing for good behind a call that never
-  /// comes back.
-  private static let standingLimit = Duration.seconds(30)
 
   private let sessionId: String
   private let plane: HistoryDirectPlane
@@ -144,9 +140,8 @@ final class HistoryDirectRead {
   private var closed = false
   /// Item 410 — the read's own calls that are out, and the close kept for the last of them.
   private var lease = HistorySessionLease()
-  /// Item 410 — the session a close left standing under a call that is out, and the bound on how long it stands.
+  /// Item 410 — the session a close left standing under a call that is out: the last call back ends it.
   private var standing: URLSession?
-  private var standingBound: Task<Void, Never>?
 
   init(
     sessionId: String, plane: HistoryDirectPlane, sink: Sink, log: @escaping @MainActor (String) -> Void
@@ -456,8 +451,11 @@ final class HistoryDirectRead {
   /// The session ends at once when no call of the read's is out. One that is out makes its task a moment after it
   /// left the main actor, and `URLSession` answers a task made on an invalidated session with an Objective-C
   /// exception, which ends the app. So the session stands: what is already on its way is cancelled, each such call
-  /// comes back refused, and the last one back ends the session. A call that never comes back is ended by the
-  /// bound, so no session stands for good.
+  /// comes back refused, and the last one back ends the session.
+  ///
+  /// Nothing else ends it. A bound would end it under a call that is still out, which is the exception again (an
+  /// app suspended with a call out comes back with any bound overdue), so a call that never returns keeps its
+  /// session for good: a leak, where the other failure is the app ending.
   private func end(_ session: URLSession) {
     if lease.close() {
       session.invalidateAndCancel()
@@ -467,22 +465,11 @@ final class HistoryDirectRead {
     session.getAllTasks { @Sendable tasks in
       for task in tasks { task.cancel() }
     }
-    let limit = Self.standingLimit
-    standingBound = Task { [weak self] in
-      try? await Task.sleep(for: limit)
-      guard !Task.isCancelled, let self else { return }
-      if self.lease.expire() { self.endStanding() }
-    }
   }
 
   /// A call of the read's is back: the last one ends the session a close left standing.
   private func callBack() {
-    if lease.back() { endStanding() }
-  }
-
-  private func endStanding() {
-    standingBound?.cancel()
-    standingBound = nil
+    guard lease.back() else { return }
     standing?.invalidateAndCancel()
     standing = nil
   }

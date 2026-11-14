@@ -57,11 +57,9 @@ struct HistorySessionLeaseTests {
     let last = lease.back()
     #expect(last, "the last call back did not end the session")
 
-    // nothing is ended twice: not by a return that is counted again, not by the bound
+    // nothing is ended twice: a return that is counted again ends nothing
     let again = lease.back()
     #expect(!again)
-    let late = lease.expire()
-    #expect(!late)
   }
 
   @Test("a call that never comes back leaves the session standing: nothing ends it under a call that is out")
@@ -70,24 +68,12 @@ struct HistorySessionLeaseTests {
     lease.leave()
     let atOnce = lease.close()
     #expect(!atOnce, "the session was ended under a call that is out")
-    // the rider's red, against the bound: the green takes `expire()` out, and these two lines with it
-    let bound = lease.expire()
-    #expect(!bound, "a bound ended the session under a call that is out")
+    // there is no bound to ask: while the call is out the close stays owed to it, and the session stands
+    #expect(lease.out == 1)
+    #expect(lease.owed)
     // only the call's own return ends it
     let ended = lease.back()
     #expect(ended, "the call's return did not end the session")
-  }
-
-  @Test("a bound that passes on a read that owes no close ends nothing")
-  func nothingOwed() {
-    var lease = HistorySessionLease()
-    let idle = lease.expire()
-    #expect(!idle)
-
-    lease.leave()
-    let open = lease.expire()
-    #expect(!open, "an open read's session was ended by a bound")
-    let back = lease.back()
-    #expect(!back)
+    #expect(!lease.owed)
   }
 }
