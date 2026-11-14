@@ -395,14 +395,25 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
       true,
     );
     expect([pad.powers, pad.nothing]).toEqual([[], words.PAGE_WORDS.nothing]);
-    // a held power this build cannot name is not said, and the page does not say it holds none
+    // a held power this build cannot name is said as a power VibeField can't describe (James's MK-O34 B): one
+    // row, nothing under it and no whose; and the page does not say it holds none
     const unnamed = {
       ...recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.comment-pad"),
       requestedCapabilities: ["made.up"],
       grantedCapabilities: ["made.up"],
     };
     const odd = pluginPage(unnamed, null, PLUGINS_FIXTURE_SNAPSHOT, true);
-    expect([odd.powers, odd.nothing]).toEqual([[], null]);
+    expect(odd.powers).toEqual([
+      {
+        key: "made.up",
+        words: words.PAGE_WORDS.unnamed,
+        under: null,
+        whose: null,
+        switch: null,
+        cant: null,
+      },
+    ]);
+    expect(odd.nothing).toBeNull();
     const store = pluginPage(
       recordOf(PLUGINS_FIXTURE_SNAPSHOT, "example.kv-service"),
       null,
@@ -429,6 +440,46 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
     expect(pluginPage(bare, null, PLUGINS_FIXTURE_SNAPSHOT, true).adds).toEqual([
       { key: "none", words: "No objects" },
     ]);
+  });
+
+  it("says a power VibeField can't describe beside one it can, never its id (James's MK-O34 B), a line each (VF-PM 03:11Z)", () => {
+    // a page with no switches lists what it holds: a fieldd newer than the window can grant a power the window
+    // has no words for, and two such powers are two lines
+    const held = ["canvas.read", "made.up", "made.up.too"];
+    const sideloaded = {
+      ...recordOf(PLUGINS_FIXTURE_SNAPSHOT, "example.kv-service"),
+      requestedCapabilities: held,
+      grantedCapabilities: held,
+    };
+    const store = pluginPage(sideloaded, null, PLUGINS_FIXTURE_SNAPSHOT, true);
+    const lines = store.powers.map((power) => [power.key, power.words, power.under, power.whose]);
+    expect(lines).toEqual([
+      ["canvas.read", "Read what's on the desk", null, null],
+      ["made.up", words.PAGE_WORDS.unnamed, null, null],
+      ["made.up.too", words.PAGE_WORDS.unnamed, null, null],
+    ]);
+    expect(store.nothing).toBeNull();
+    const said = store.powers.flatMap((power) => [power.words, power.under, power.whose]);
+    expect(said.join(" ")).not.toContain("made.up");
+    // with switches here, one it asked for that no plugin may hold: no switch, and fieldd's reason under it
+    const simulators = recordOf(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator");
+    const asked: PluginRecord = {
+      ...simulators,
+      requestedCapabilities: [...simulators.requestedCapabilities, "made.up"],
+      deniedCapabilities: [
+        ...simulators.deniedCapabilities,
+        { capability: "made.up", reason: "entry-kind" },
+      ],
+    };
+    const page = pluginPage(asked, null, PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, false);
+    expect(page.powers.map((power) => [power.key, power.switch, power.cant])).toEqual([
+      ["surface.capture", true, null],
+      ["canvas.read", true, null],
+      ["canvas.write", false, null],
+      ["process.spawn", null, words.SWITCH_WORDS.cant["entry-kind"]],
+      ["made.up", null, words.SWITCH_WORDS.cant["entry-kind"]],
+    ]);
+    expect(page.powers[4]?.words).toBe(words.PAGE_WORDS.unnamed);
   });
 
   it("calls tools what a plugin brings your agents, never its commands — on Installed's row and its page alike (VF-PM 16:05:52Z)", () => {

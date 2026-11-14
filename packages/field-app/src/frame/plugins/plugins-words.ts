@@ -119,7 +119,8 @@ export function hasWords(service: boolean, tools: boolean): string | null {
 /** A plugin's page, read only (MK-4c; DESIGN.md §8 "Read only first", §9 MK-4c's block). Its section heads are
  * §9's ("The popup"); "Installed", where its act will stand, is the act's own word once true (§9 "Installing, and
  * after"), said as words; a Built in plugin's maker is §9's sentence ("Installed, off and Remove…"); "Nothing
- * beyond drawing its own objects" is the install card's (§9). The rest are MK's, ‹draft›, for James's eye. */
+ * beyond drawing its own objects" is the install card's (§9); `unnamed` is James's (§9, his MK-O34 pick B). The
+ * rest are MK's, ‹draft›, for James's eye. */
 export const PAGE_WORDS = {
   /** the back row's name to assistive tech (MK's) */
   back: (tab: string) => `Back to ${tab}`,
@@ -134,6 +135,9 @@ export const PAGE_WORDS = {
   service: "A service",
   /** What it can do, for a power whose declaring plugin is not installed here (MK's) */
   ownUnknown: "A power named by a plugin that isn't installed here",
+  /** What it can do, for a power VibeField has no words for (James's MK-O34 pick B, 2026-11-12 06:12:24Z): nothing
+   * under it says what it does or whose it is. A line for each such power (VF-PM 2026-11-14 03:11Z, MK's lean). */
+  unnamed: "A power VibeField can't describe",
   /** What it can do, when it holds no power: with objects (the install card's), and with none (MK's) */
   nothing: "Nothing beyond drawing its own objects",
   nothingNoObject: "Nothing beyond its own work",
@@ -141,10 +145,11 @@ export const PAGE_WORDS = {
   builtIn: "Comes with VibeField. It can be turned off, not removed.",
 } as const;
 
-/** A plugin's switches (MK-4c2a; DESIGN.md §8 "Its switches", §9 MK-4c2a's block): MK's words, ‹draft›, for James's
- * eye (VF-PM 2026-11-11 18:36:34Z, 18:39:16Z, 18:43:08Z). A switch is named by what it turns — the plugin's title,
- * or a power's plain words — and never by its state, which it says as a switch does. Settings → Plugins keeps its own
- * words until MK-5. */
+/** A plugin's switches (MK-4c2a; DESIGN.md §8 "Its switches", §9 MK-4c2a's block): MK's words (VF-PM 2026-11-11
+ * 18:36:34Z, 18:39:16Z, 18:43:08Z), each James's since his picks at A, as built, on 2026-11-12: `readOnly` (MK-O22),
+ * `elsewhere` (MK-O21), `off` (MK-O27), `cant` (MK-O23) and `refused` (MK-O26). A switch is named by what it turns —
+ * the plugin's title, or a power's plain words — and never by its state, which it says as a switch does. Settings →
+ * Plugins keeps its own words until MK-5. */
 export const SWITCH_WORDS = {
   /** A page of a plugin from the plugin list, or a Sideloaded one: no switches here (item 321). */
   readOnly: "Its switches aren't here yet.",
@@ -164,9 +169,10 @@ export const SWITCH_WORDS = {
 } as const;
 
 /** A plugin's settings (MK-4c2b; DESIGN.md §8 "Its settings", §9 MK-4c2b's block, as corrected for James's MK-O6
- * pick): MK's words, ‹draft›, for James's eye (VF-PM 2026-11-11 19:40:52Z), and the one §8 already holds, quoted. A
- * setting is named by its plugin's own title for it. The page has no Undo and no Redo: going back stays in Settings.
- * Settings → Plugins keeps its own words until MK-5. */
+ * pick): MK's words, ‹draft›, for James's eye (VF-PM 2026-11-11 19:40:52Z). James's: `off`, `refused`, `saved`,
+ * `choose` and `cantDraw` (his MK-O31 pick A, 2026-11-12 06:11:57Z), `unread` (his MK-O35 pick A) and `footHere`
+ * (his MK-O33 pick B). A setting is named by its plugin's own title for it. The page has no Undo and no Redo: going
+ * back stays in Settings. Settings → Plugins keeps its own words until MK-5. */
 export const SETTINGS_WORDS = {
   /** The section's head (§8 "Its settings"). */
   head: "Settings",
@@ -174,8 +180,8 @@ export const SETTINGS_WORDS = {
   off: "Turn it on to change its settings.",
   /** A setting fieldd refused to keep: never the error's own text. */
   refused: "Couldn't save that. Try again.",
-  /** A setting fieldd refused to read: never the error's own text, and no "Try again", since only
-   * the page's next opening reads it again (§8 Its settings, Unread; ‹draft›, James's pick). */
+  /** A setting fieldd refused to read: never the error's own text, and no "Try again", since only the page's next
+   * opening reads it again (§8 Its settings, Unread; James's MK-O35 pick A, 2026-11-12 06:12:28Z). */
   unread: "Couldn't load this setting.",
   /** A kept secret's empty field: it never shows what is kept. */
   saved: "Saved",
@@ -185,8 +191,9 @@ export const SETTINGS_WORDS = {
   cantDraw: "This setting can't be changed here.",
   /** The foot, with a setting in the synced history: where it can be undone (MK's, ‹draft›, for James's eye). */
   footSynced: "Synced settings can be undone in Settings.",
-  /** The foot with none: §8 "The settings undo affordance"'s device sentence (James's MK-O33 is open on it). */
-  footHere: "Device and secret settings stay on this device and are not part of settings history.",
+  /** The foot with none: they stay on this desktop (James's MK-O33 pick B, 2026-11-12 06:12:16Z). A page with
+   * both kinds says `footSynced` alone, as before (VF-PM 2026-11-14 03:11Z, MK's lean). */
+  footHere: "These settings stay on this desktop.",
 } as const;
 
 /** Installed, when no plugin holds every typed word (MK's, ‹draft›; the Peek's "Nothing in your past holds every

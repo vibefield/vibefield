@@ -260,7 +260,8 @@ export interface PowerSwitch {
 
 /** Whether the page can say a power: a core power in its plain words, or one
  * a plugin names (`x.`), by its declaring plugin's words or MK's. An id that is
- * neither is never said, so it never has a switch. */
+ * neither is said only as a power VibeField can't describe (James's MK-O34 pick
+ * B), and as before (MK-4c2a) it never has a switch. */
 function sayable(id: string): boolean {
   return pluginPowerWords(id, { onMac: false }) !== undefined || id.startsWith("x.");
 }
@@ -441,13 +442,16 @@ function addsOf(record: PluginRecord): PageLine[] {
  * core power in its plain words, the Mac's note under it on a Mac; a plugin's
  * own power by the title and description its declaring plugin wrote, and whose
  * it is; one whose declaring plugin is not installed here, by MK's words. Any
- * other id is no power the page can say: null, and it is not said. */
+ * other id is a power VibeField has no words for: it is said as one VibeField
+ * can't describe (James's MK-O34 pick B, 2026-11-12 06:12:24Z), with nothing
+ * under it and no "whose", and like any power it is a line of its own (VF-PM
+ * 2026-11-14 03:11Z, MK's lean). */
 function powerWords(
   id: string,
   record: PluginRecord,
   declared: ReadonlyMap<string, { title: string; description: string; by: PluginRecord }>,
   onMac: boolean,
-): Pick<PagePower, "key" | "words" | "under" | "whose"> | null {
+): Pick<PagePower, "key" | "words" | "under" | "whose"> {
   const core = pluginPowerWords(id, { onMac });
   if (core !== undefined) {
     const entry: PluginPowerWords = PLUGIN_POWER_WORDS[id as PluginPowerId];
@@ -470,7 +474,7 @@ function powerWords(
   if (id.startsWith("x.")) {
     return { key: id, words: PAGE_WORDS.ownUnknown, under: null, whose: null };
   }
-  return null;
+  return { key: id, words: PAGE_WORDS.unnamed, under: null, whose: null };
 }
 
 /** What it can do. A plugin with no switches here lists each power it holds
@@ -494,7 +498,6 @@ function powersOf(
   const powers: PagePower[] = [];
   for (const id of ids) {
     const said = powerWords(id, record, declared, onMac);
-    if (said === null) continue;
     if (!switches) {
       powers.push({ ...said, switch: null, cant: null });
       continue;
@@ -531,8 +534,8 @@ export function pluginPage(
     adds: addsOf(record),
     powers,
     // "nothing" is decided by the list the page reads, not by what it can say: a power this build cannot name is
-    // not said, and the page never says it holds none (VF-PM 18:13:11Z, 1). With switches here, that list is
-    // every power it asked for (MK-4c2a).
+    // said as one VibeField can't describe (James's MK-O34 pick B), and the page never says it holds none (VF-PM
+    // 18:13:11Z, 1). With switches here, that list is every power it asked for (MK-4c2a).
     nothing:
       (switches ? record.requestedCapabilities : record.grantedCapabilities).length > 0
         ? null
