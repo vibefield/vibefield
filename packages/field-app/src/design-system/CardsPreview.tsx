@@ -167,8 +167,9 @@ export const WAITING_FIXTURES: readonly Card[] = [
 ];
 
 /** What another app, Settings and History deal (HN-5, HN-6; DESIGN.md §8 "The hand"): a file
- * dragged in from another app — not words, so its kind and its size, in the product's own words —
- * words ⌘V brought in with no caret, a device's name copied in Settings over Canvas, and a path
+ * dragged in from another app — not words, so a blank page, its kind and its size (in the
+ * product's own words) said in the bar over it when it is picked up (round 5, item 405) — words
+ * ⌘V brought in with no caret, a device's name copied in Settings over Canvas, and a path
  * History's room copied. */
 export const FROM_FIXTURES: readonly Card[] = [
   fileCardOf(

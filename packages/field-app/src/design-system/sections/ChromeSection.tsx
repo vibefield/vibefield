@@ -419,11 +419,11 @@ export function ChromeSection({
           where it came from above it; the same reach while Chat shows, the card rising only its tip
           to the panel's foot, never over the composer; raised (⇧⌘V), every card up and straight,
           the keyboard's card ringed; a card picked up, at reading size in the middle over the
-          window out of focus, the bar under the head saying where it came from, with Remove, Flip
-          it and Done; a card carried out of the hand over a pane, its place kept in the fan, the
-          pane ringed and saying "Paste into vibe-field" over the card; and where cards came from,
-          each reached in turn — a paste with no caret by its act alone, a copy made in Settings by
-          the view under it, and one History's room made by History alone.
+          window out of focus, the bar under the head saying what it is and where it came from, with
+          Remove, Flip it and Done; a card carried out of the hand over a pane, its place kept in
+          the fan, the pane ringed and saying "Paste into vibe-field" over the card; and where cards
+          came from, each reached in turn — a paste with no caret by its act alone, a copy made in
+          Settings by the view under it, and one History's room made by History alone.
         </p>
         <CardFacesPlate cards={CARD_FIXTURES} />
         <CardFacesPlate cards={CARD_FIXTURES} night />
@@ -432,13 +432,13 @@ export function ChromeSection({
         <CardFacesPlate cards={FROM_FIXTURES} />
         <p className="vf-ds-stage-caption">
           One stock, six faces (HN-D1), twice their size: text, a file, an agent (the one dark card,
-          its project's dot before its project), a terminal's output, a message and a picture — each
-          its glyph in two corners and its name first; by this page's light, then by the Moon's
-          (86%, its shadow deeper); a drag from another app before it is let go, saying only its
-          kind; what the desk's Make a card deals — one note's words as a text card, two objects as
-          a picture called "2 objects"; and what another app, Settings and History deal — a file
-          that is not words, its kind and size; a paste's words; a device's name copied in Settings;
-          a path copied in History.
+          its project's dot before its project), a terminal's output, a message and a picture — the
+          other five each its type's glyph, then its name, its window and its faces along its foot;
+          by this page's light, then by the Moon's (86%, its shadow deeper); a drag from another app
+          before it is let go, saying only its kind; what the desk's Make a card deals — one note's
+          words as a text card, two objects as a picture called "2 objects"; and what another app,
+          Settings and History deal — a file that is not words, a blank page; a paste's words; a
+          device's name copied in Settings; a path copied in History.
         </p>
       </Specimen>
 
