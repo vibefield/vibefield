@@ -99,6 +99,28 @@ async function auditRecords(dataDir: string): Promise<AuditRecordV1[]> {
   return records;
 }
 
+// MK-2d (fix): a removal is whole only when its audit outcome is written. The reconciler's removeHere tears the
+// plugin down, removes its code (the folder goes), re-reads the plugin table (the row goes), retires it, and only
+// then writes the outcome. A busy host can read between those steps, so the test waits for the last of them. A
+// segment read mid-append is "not yet", never a red: the verified read after this wait is the one that asserts.
+async function untilAuditOutcome(dataDir: string, action: string, ms: number): Promise<void> {
+  const deadline = Date.now() + ms;
+  const root = join(dataDir, "audit");
+  for (;;) {
+    for (const name of readdirSync(root).filter((entry) => entry.endsWith(".jsonl"))) {
+      const verified = await verifyAuditSegment(join(root, name));
+      if (
+        verified.valid &&
+        verified.records.some((r) => r.action === action && r.phase === "outcome")
+      )
+        return;
+    }
+    if (Date.now() > deadline)
+      throw new Error(`untilAuditOutcome: no ${action} outcome within ${ms} ms`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 describe("install-set reconciliation (§16.6)", () => {
   it("a desired registry entry seeded in the doc installs, activates, and honors its grants", {
     timeout: 40_000,
@@ -807,7 +829,15 @@ describe("E10 on a booted daemon (MK-2d)", () => {
     await peer.dispose();
 
     const second = await boot(dataDir, registry);
-    await until(() => !existsSync(installed), 20_000);
+    // the code goes first (plugin-install.ts's uninstall), the table's row after its re-read, the audit outcome
+    // last: wait for all three before asserting any (V-MK1b read the row between the first two, at a load of 100+)
+    await until(
+      () => !existsSync(installed) && second.plugins.get(KV_ID) === undefined,
+      20_000,
+      "the code and the row gone",
+    );
+    await untilAuditOutcome(dataDir, "plugin.uninstall", 20_000);
+    expect(existsSync(installed)).toBe(false);
     expect(second.plugins.get(KV_ID)).toBeUndefined();
     expect(readFileSync(dataFile).equals(bytes)).toBe(true);
     const audit = await auditRecords(dataDir);
