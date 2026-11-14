@@ -248,12 +248,12 @@ The catalog currently mounts these shipping views directly:
   Installed, Updates and a narrow window — never a copy of its markup or CSS, and no catalog CSS
   owning a rule of the popup's
 - the desk's selection bar (DK-11): `SelectionBarView` over fixture selections, a plate per state —
-  one object with its kind's own act (drawn by the bar's one path renderer), two ("Send 2 to…"),
-  taped ("Lift the tape"), a missing face ("Clock · plugin off"), an act with no glyph and a name
-  the set lacks, and the bar grown up, down near the top, with Clean up, and scrolling where it fits
-  neither way — its cells and rows read by the product's own model (`barCells`, `menuGroups`,
-  `menuEyebrow`); and the status line's notices — a missing face's word, and its place under the
-  tools in hand
+  one object with its kind's own act (drawn by the bar's one path renderer), two ("Make a card";
+  *amended 2026-11-14, item 400: this said "Send 2 to…"*), taped ("Lift the tape"), a missing face
+  ("Clock · plugin off"), an act with no glyph and a name the set lacks, and the bar grown up, down
+  near the top, with Clean up, and scrolling where it fits neither way — its cells and rows read by
+  the product's own model (`barCells`, `menuGroups`, `menuEyebrow`); and the status line's notices —
+  a missing face's word, and its place under the tools in hand
 - the tools in hand (DK-12): the same `SelectionBarView` in its hand's role (`HandPlate`) under the
   head at y 64, over the four specimens' fixture hands — the notebook (‹ › · its four pens as dots in
   the product's inks · undo, "Page 1"), the whiteboard (four markers · the eraser · undo · redo), the
