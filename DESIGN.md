@@ -7849,7 +7849,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       wrote (an assignment) are passed over, and do not keep the button up (*VF-PM's ruling, 2026-11-13
       23:47Z, so the two halves match*).
     - **What a press does**: the document goes to the nearest message of the person's own (a prompt) that
-      begins above the top of the view, and stands that message's top 12 under the head. Pressed again it goes
+      begins above the top of the view, and stands that message's top 12 under the head. (**The head**: the
+      phone's document pins no pill at its top, so its head is the navigation bar's foot; the room measures the
+      12 under the band its pinned day pill holds, and that band is also its top of the view for "begins
+      above". *VF-PM's ruling, 2026-11-14 00:04Z, so the two halves match.*) Pressed again it goes
       to the one before that. A message more than a screen away is gone to at once and a nearer one on the
       300 ms ease (none under Reduce Motion), and the document stops following, as it does for any move up the
       page. Nothing else marks the message: its place at the top of the view is the mark.
