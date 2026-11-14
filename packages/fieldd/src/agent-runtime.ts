@@ -142,7 +142,12 @@ import { createDarwinSecretStore, type SecretStore } from "./plugin-settings";
 import type { ProfileDraftsStore } from "./profile-drafts";
 import type { OwnPlace } from "./projects/project-groups";
 import type { LaunchRecipe } from "./projects/project-records";
-import { FORWARDER_MISSING_REASON, FORWARDER_RUNTIME_UNAVAILABLE } from "./roles";
+import {
+  agentInstallMissing,
+  FORWARDER_MISSING_REASON,
+  FORWARDER_RUNTIME_UNAVAILABLE,
+  INTERPRETER_UNAVAILABLE,
+} from "./roles";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 import type { RunBegun, RunEntered } from "./run-entry";
 import type { GrantPrincipal } from "./terminal-grants";
@@ -5366,6 +5371,16 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         });
       }
       const label = this.labelFor(provider, provider);
+      // item 278 (V1) — a launch the agent's own adapter refused because this Mac's install of it names no
+      // interpreter (puppeteer 0.4.1's Hermes gateway): a missing install, said in DESIGN.md §9's sentence
+      // (James's A, 2026-11-13), bare as the forwarder's, never puppeteer's sentence about interpreters
+      if (refusal === INTERPRETER_UNAVAILABLE) {
+        return new RpcCallError("PRECONDITION_FAILED", agentInstallMissing(label), false, {
+          ...details,
+          refusal,
+          reason: "agent-install-missing",
+        });
+      }
       const notAt =
         act === "launch"
           ? `${label} was not started at the chosen model`

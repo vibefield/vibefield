@@ -130,6 +130,23 @@ export function forwarderUnavailable(): string {
  * nothing; the door and the gateway say it in DESIGN.md §9's words. */
 export const FORWARDER_RUNTIME_UNAVAILABLE = "FORWARDER_RUNTIME_UNAVAILABLE";
 
+/** puppeteer's neutral refusal (core `AgentLaunchRefusedError`'s code) of a
+ * managed launch whose agent's own install names no interpreter to run it
+ * with: since 0.4.1 (#80), Hermes's gateway, when no `hermes` wrapper on the
+ * launch's PATH names its Python and none is set. Spelled here beside the
+ * forwarder's; the door and the gateway say it in `agentInstallMissing`'s
+ * words (item 278, V1). */
+export const INTERPRETER_UNAVAILABLE = "INTERPRETER_UNAVAILABLE";
+
+/** DESIGN.md §9's reason ("When an agent's own install can't be found";
+ * James's A on j-278-hermes-words, 2026-11-13 00:36:05Z). Bare, as the
+ * forwarder's: the door answers this clause ("then try again"), and a pane's
+ * line puts its command in ("then run ‹command› again"). The agent is named
+ * by its label, never by a literal here (R23b). */
+export function agentInstallMissing(label: string, then = "try again"): string {
+  return `VibeField can't find this Mac's ${label} install. Reinstall ${label}, then ${then}.`;
+}
+
 export type FielddRole =
   | "files-host"
   | "transcript-host"

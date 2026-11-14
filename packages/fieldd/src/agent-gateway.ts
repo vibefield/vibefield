@@ -45,8 +45,10 @@ import { RpcCallError } from "./native-link";
 import {
   AGENT_SHIM_BUNDLE,
   AGENT_SHIM_ROLE_ARG,
+  agentInstallMissing,
   FORWARDER_MISSING_REASON,
   FORWARDER_RUNTIME_UNAVAILABLE,
+  INTERPRETER_UNAVAILABLE,
 } from "./roles";
 
 // A TYPED AGENT IS A MANAGED AGENT (AR-7b; thinking-ar7-typed-agents.md §5.2,
@@ -463,10 +465,14 @@ const REFUSAL_WORDS: Record<SpawnThroughDeclineCode, (facts: RefusalFacts) => st
   // sentence IS the reason (one plain line; the kit's bound is already on it)
   // — except one refusal that is VibeField's to say (RV #1, item 203): a copy that lost its sealed forwarder, in
   // DESIGN.md §9's pane line. The adapter's sentence is about hosts and forwarders, nothing a person can change
-  "launch-refused": ({ command, reason, providerCode }) =>
+  // — and one more (item 278, V1): an agent whose own install can't be found, in James's words, naming it by its
+  // label; its adapter's sentence is about interpreters and wrappers
+  "launch-refused": ({ command, label, reason, providerCode }) =>
     providerCode === FORWARDER_RUNTIME_UNAVAILABLE
       ? `${command} was not started: ${FORWARDER_MISSING_REASON}`
-      : `${command} was not started: ${reason}. Change that, then run ${command} again.`,
+      : providerCode === INTERPRETER_UNAVAILABLE
+        ? `${command} was not started: ${agentInstallMissing(label, `run ${command} again`)}`
+        : `${command} was not started: ${reason}. Change that, then run ${command} again.`,
   "prepare-failed": ({ command, label }) =>
     `${command} was not started: ${label} could not be prepared as a managed session. Run ${command} again.`,
   "terminal-conflict": ({ command }) =>
