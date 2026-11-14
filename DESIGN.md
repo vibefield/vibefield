@@ -9402,6 +9402,14 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     (`panels/PluginCapabilities.tsx`) and says one it can't give in `DENIAL_TEXT`'s words, "not eligible for this
     entry kind" or "blocked by source policy"; its updates say "artifact hash mismatch — discarded"
     (`installErrorText`, `panels/PluginUpdates.tsx`).
+    *Corrected 2026-11-14 (item 329):* its updates never say "artifact hash mismatch — discarded". fieldd keeps its own
+    kind on the wire and puts the mismatch in the error's details (`product-api.ts`), so the row's branch for it never
+    meets one, and the row shows fieldd's own text as it is: "artifact hash does not match the signed index —
+    discarded", among others. Item 329's three texts reach it the same way until the row goes (MK-5), and each names
+    no inside: "the plugin list is larger than VibeField reads — refused" ‹draft›, "the plugin's download is larger
+    than VibeField takes — discarded" ‹draft› and "the plugin's download took too long — stopped" ‹draft›. The
+    popup prints none of them: an install that fails there says "VibeField didn't install ‹plugin›. Nothing
+    changed." (**Installing, and after**, above).
 - **Settings and Diagnostics** (MK-D10; MK-E5, MK-E12). A plugin's settings are said on its page, under **Settings**,
   as Settings says its own; the page carries Settings' Undo and Redo, so the form's foot no longer sends you to the
   window toolbar ("Synced user settings can be undone from the window toolbar.", `panels/PluginSettingsForm.tsx`) and
