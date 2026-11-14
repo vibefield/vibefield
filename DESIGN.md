@@ -5292,6 +5292,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the phone's screen brings a network back. After 10s of the hold (`FieldHomeModel.reachPatience`) the page takes its
   place, the words crossfading as on any step. When a desktop answers, the splash leaves by its own exit and the tabs
   mount afresh, with no found beat.
+  *Amended 2026-11-14 (James on the page The Way In, 03:46:00Z to 03:47:32Z: WI-G9 B, WI-G1 A and WI-G3 A; §9 "The
+  way in" as ruled that day holds the words):* your face (§2.8, 96 pt) stands in the mark's place on the gate's three
+  screens that have words, the hold, **Can’t reach your computer.** and **You’re offline.**, as on **Sign in to
+  Tailscale again.** (WI-D8 A), crossfading with the mark in 280ms. A launch's bare first 5s keep the mark, since the
+  launch picture cannot hold a face; the face comes with the hold's status line. Where the phone holds no face, the
+  mark keeps its place. The gate's face waits on the mark's fade as the found beat's and Sign in again's do (WI-L3,
+  WI-W3; `WayInView.markFades`, shut), so until the splash's runtime can fade it the mark keeps its place on the gate
+  too. On **Can’t reach your computer.** the one desktop's name is the line's bold run, in `ink` and semibold
+  (`WayInView.inked`), as the account to pick is on **Connect to ‹desktop›.**; with several desktops the line has no
+  bold run. *Use another account*, on that page and under **Sign in to Tailscale again.**, asks the corner's own Sign
+  out question first: iOS's confirmation, its title shown, **Sign out** destructive and **Cancel**. The way in asks it
+  from its own view on the splash, since the tabs, which hold the corner's, are not mounted under the way in.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -9845,7 +9857,7 @@ desktop's code on a phone with no account: **Connect to ‹desktop›.** · "‹
 Tailscale as **‹login›**, so sign in with that account." · **Continue with Tailscale** · *Not yours? Start over*.
 When Tailscale asks a remembered phone again, the way in comes back with your face in the mark's place (WI-D8 A):
 **Sign in to Tailscale again.** · "This phone can’t reach your desktops until you do. Nothing here is lost." ·
-**Sign in again** · *Use another account*.
+**Sign in again** · *Use another account*. *(Ruled 2026-11-14, below: Use another account asks first.)*
 **The lock** (WI-3; WI-D3…D7 A). It is offered as the way in's last step, on by default: **Lock VibeField with
 Face ID.** · "This phone can type into your agents’ terminals. Face ID keeps that to you." · **Lock with Face
 ID** · **Not now** · "You can change this in Settings › Lock." iOS asks once, with VibeField's reason: "VibeField
@@ -9908,22 +9920,50 @@ under **Sign in to Tailscale again.** when its sign-in sheet could not open. A r
 codes; it is never said.
 *Amended 2026-11-13 (James, in session at 00:24Z and 00:34Z: the phone is a companion to VibeField on a computer, so
 "if it does not connect to desktop app, it should not provide any function"; "when all desktops disconnect, it should
-also gate, when mobile offline, also gate". WI-L2 is amended; the words added here are drafts pending James):*
+also gate, when mobile offline, also gate". WI-L2 is amended; the words added here are drafts pending James,
+*ruled 2026-11-14 below*):*
 **signed in** means connected: an account whose node is not asking, with a VibeField desktop **answering now**. A
 desktop that is known but asleep no longer keeps the phone signed in by itself. It does while another of the account's
 desktops answers, and the views say it is asleep, as before. A desktop that answers and stops this phone in its own
 words (a build too old, a scope not granted) is an answer: the tabs stand and say why, as they did, since "can’t
 reach" would be false of it. With none answering, or with no network on the phone, the splash stands and the way in
-says why, on three screens that are no step of the first way in: they carry no bars, the mark keeps its place, and no
-found beat follows them. The hold: **Looking for your computer…**, WI-1's title alone. Once it has looked for 10s:
-**Can’t reach your computer.** · "Open VibeField on ‹desktop›, and keep it awake and connected." (the account's one
-desktop by its name; "on your computer" when it has several) · **Try again** · *Use another account*. With no network:
-**You’re offline.** · "Connect this phone to the internet to reach your computer." A desktop that drops and answers
+says why, on three screens that are no step of the first way in: they carry no bars, the mark keeps its place *(ruled
+2026-11-14, below: your face takes it, WI-G9 B)*, and no found beat follows them. The hold: **Looking for your
+computer…**, WI-1's title alone. Once it has looked for 10s: **Can’t reach your computer.** · "Open VibeField on
+‹desktop›, and keep it awake and connected." (the account's one desktop by its name, *in bold since 2026-11-14, WI-G1
+A*; "on your computer" when it has several) · **Try again** · *Use another account* *(which asks first since
+2026-11-14, WI-G3 A)*. With no network: **You’re offline.** · "Connect this phone to the internet to reach your
+computer." A desktop that drops and answers
 again within 5s never brings the splash: the tabs stay and say it themselves, as they did. At a launch the splash
 holds bare for those 5s, as every launch looks, and the hold's line comes only after them. **Try again** dials at once
 and goes back to the hold, and so does coming back to VibeField. The first way in keeps its own words, and ends only
 when a desktop answers: until then it stays on **Looking for your computer…** with its line, where a desktop that was
 merely listed used to end it. **No desktops yet.** is still the answer "none".
+*Ruled 2026-11-14 (James on the page The Way In, its store: WI-G9 B at 03:46:00Z, WI-G1 A at 03:46:06Z, WI-G2 A at
+03:46:09Z, WI-G10 B at 03:46:32Z, WI-G3 A at 03:47:00Z, WI-G4 A at 03:47:18Z, WI-G5 A at 03:47:21Z, WI-G6 A at
+03:47:24Z, WI-G7 A at 03:47:29Z and WI-G8 A at 03:47:32Z; then in session vibe-field-3f at 03:48:55Z, "ruled, now
+start implement and land them"):* the amendment's drafts stand as written, with three changes. **Your face**
+(WI-G9 B): on **Looking for your computer…**, **Can’t reach your computer.** and **You’re offline.**, your face stands
+where the mark stands, as on **Sign in to Tailscale again.** (WI-D8 A). The phone keeps your face from your desktop's
+last answer and forgets it only at Sign out, so it has one to show with no desktop in reach; where it has none, the
+mark keeps its place. A launch's bare first 5s keep the mark, since the launch picture cannot hold a face, and your
+face comes with the hold's words. Both wait on the mark's fade (WI-W3), as the found beat's face does. **The desktop's
+name in bold** (WI-G1 A): "Open VibeField on **‹desktop›**, and keep it awake and connected.", set as the way in sets
+the account to pick, so "on studio" reads as a name; with several desktops, "Open VibeField on your computer, and keep
+it awake and connected." has nothing in bold. **Use another account asks first** (WI-G3 A): it signs this phone out,
+which forgets your desktops, the History this phone read and your face, so it asks the corner's own question: **Sign
+out of ‹login›?** ("Sign out of this account?" with no login) · "This phone forgets your Tailscale sign-in, your
+desktops and the History it read from them, your face and your project colours. Appearance, the terminal’s look,
+snippets and clipboard history stay." · **Sign out** · **Cancel**. **Sign out** does what the link did, and goes to
+the welcome; **Cancel** leaves the page as it was. The link under **Sign in to Tailscale again.** asks the same
+question, by the cost James picked with WI-G3 A: "Sign in to Tailscale again has the same link and signs out at one
+tap; it should ask too, in the same slice." Under a demo the question still asks, since asking reaches nothing, and
+its **Sign out** does nothing, as no button of the way in that reaches your account does under a demo (§8 "The
+phone's Settings", Developer). As built, with no change: **You’re offline.** (WI-G2 A), which a phone whose cellular
+data is off for VibeField says too, with no page of its own (WI-G10 B); the 5s grace (WI-G4 A); the hold's 10s before
+the page (WI-G5 A); a launch bare for its first 5s, then the hold's words (WI-G6 A); a desktop that answers and
+refuses this phone keeps the tabs, which say why (WI-G7 A); and what the tabs had open closes under the gate, as under
+a sign-out (WI-G8 A).
 *Added 2026-11-14 (item 406; drafts pending James's word — a reading of Q-J4: the phone's own screen is the iOS
 lane's later slice, and these words wait here for it):* **a removed phone.** A phone removed on one of your computers
 (§8 Settings → Devices) is told so: **This phone was removed.** · "It can't reach your computers. To use it here
