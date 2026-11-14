@@ -5,7 +5,9 @@ import { specimenFit } from "@vibecook/ice/kernel";
 // filters offer and where they stand in the board's clear header band, and where the specimens hang (the listbox's
 // options, and the row above or below for ↑ ↓). The keyboard's focus, its ← → walk, its scroll into view and its ring are
 // ICE's since desk.6 (I37 — `handle.tray.focus`, `anchor().focused`; DK-17b). No DOM, no engine: the controller hands it
-// the desk's facts (the tray's anchor, the specimens core laid) and writes what it answers.
+// the desk's facts (the tray's anchor, the specimens core laid) and writes what it answers. MK-4d: where More in
+// Plugins… stands at the board's foot (MK-D1), and what a showing of a set after an install does next (MK-D8's fallback
+// B, MK-E14).
 
 /** The canon's numbers (§8; §10 "The mat's places"). */
 export const PEGBOARD = {
@@ -15,6 +17,11 @@ export const PEGBOARD = {
   track: 36,
   /** The filters fade in over the slide's last 40 % (ICE's own bar: `smoothstep(0.6, 1, p)`). */
   fadeFrom: 0.6,
+  /**
+   * MORE IN PLUGINS… (MK-D1): 32 tall, its foot `foot` above the view's — a held object's reserve there, the line's 88
+   * and 12 (`DESK_HOLD.band`, `desk-layer.ts`; the model suite holds the two spellings together).
+   */
+  pill: { height: 32, foot: 100 },
 } as const;
 
 /** One filter: its id (`tray.category(id)`; `""` is All) and what it shows. */
@@ -81,6 +88,152 @@ export function placeFilters(drawer: DrawnDrawer | null): FiltersPlace | null {
     maxWidth: Math.max(0, drawer.w - 2 * PEGBOARD.inset),
     opacity: filtersOpacity(drawer.p),
   };
+}
+
+/**
+ * The drawer's slide as the controller has read it from the frames it saw (MK-4d): the view's height it was read in,
+ * the last frame's top and slide, and the TRAVEL — how far the drawer's top moves between shut and out — once two
+ * frames at different slides gave it. The anchor carries the drawer's top and its slide, never its resting top, and its
+ * top runs straight with its slide (ICE 0.17.0's `drawerRect`), so two frames of any slide say the travel exactly. It
+ * holds for one view height: a resize starts it again.
+ */
+export interface SlideRead {
+  readonly height: number;
+  readonly last: { readonly y: number; readonly p: number } | null;
+  readonly travel: number | null;
+}
+
+export const NO_SLIDE: SlideRead = { height: -1, last: null, travel: null };
+
+/** Two slides this close say nothing of the travel (a frame at rest, or the rubber band's, moves no slide). */
+const SLIDE_APART = 0.01;
+
+/** The read after one more frame of the drawer (`drawer`) in a view `height` tall. */
+export function readSlide(
+  was: SlideRead,
+  drawer: { readonly y: number; readonly p: number },
+  height: number,
+): SlideRead {
+  const same = was.height === height;
+  const last = same ? was.last : null;
+  const travel = same ? was.travel : null;
+  const now = { y: drawer.y, p: drawer.p };
+  if (last === null || Math.abs(now.p - last.p) < SLIDE_APART) {
+    return { height, last: now, travel };
+  }
+  const read = (last.y - now.y) / (now.p - last.p);
+  return { height, last: now, travel: read > 0 ? read : travel };
+}
+
+/** Where More in Plugins… stands: its centre's x, its top, and its opacity. */
+export interface PillPlace {
+  readonly cx: number;
+  readonly y: number;
+  readonly opacity: number;
+}
+
+/**
+ * MORE IN PLUGINS… (MK-D1; §8 "The pegboard"): once the board is out its foot stands 100 above the view's foot,
+ * centred on the drawer's centre line, as the filters are; it rides the drawer every frame of its slide — below its
+ * place by the part of the travel still to go — and fades in with the filters over the slide's last 40 %. Before a
+ * travel is read (the first frame of a view's first slide, which the fade keeps unseen) it stands at its place. Null
+ * with no drawer drawn: it is drawn only while the drawer is.
+ */
+export function placePill(
+  drawer: DrawnDrawer | null,
+  view: { readonly height: number },
+  travel: number | null,
+): PillPlace | null {
+  if (drawer === null) return null;
+  const rest = view.height - PEGBOARD.pill.foot - PEGBOARD.pill.height;
+  const left = 1 - Math.min(Math.max(drawer.p, 0), 1);
+  return {
+    cx: drawer.x + drawer.w / 2,
+    y: rest + (travel ?? 0) * left,
+    opacity: filtersOpacity(drawer.p),
+  };
+}
+
+/** The pill steps aside as ICE's own bar does: while an object is in hand, and while the board hangs nothing. */
+export function pillAside(anchor: { readonly held: boolean; readonly entries: number }): boolean {
+  return anchor.held || anchor.entries === 0;
+}
+
+/** Where a showing of a set lands (MK-D8's fallback B): the category the board shows, and the object focused there. */
+export interface RevealPlan {
+  readonly category: string;
+  readonly type: string;
+}
+
+/**
+ * MK-D8's fallback B (§8 "The pegboard", "After an install"): the set's first category in the BOARD's order — of the
+ * categories the filters offer (`offered`, the lay's order, P3c) the first any of the set's objects hangs under — and
+ * there the set's first object, in the set's own order. A set none of whose objects hangs under an offered category
+ * (its entries name none) shows under All, its first that hangs focused. Null while none of the set hangs yet — a
+ * kind the desk was mounted without (`off`), or one an install brings by a remount still to come — so the board waits.
+ */
+export function revealPlan(
+  set: readonly string[],
+  offered: readonly TrayCategory[],
+  hung: readonly HungType[],
+  off: ReadonlySet<string>,
+): RevealPlan | null {
+  const under = new Map<string, string>();
+  for (const h of hung) {
+    if (!off.has(h.type)) under.set(h.type, h.category);
+  }
+  const hangs = set.filter((type) => under.has(type));
+  const first = hangs[0];
+  if (first === undefined) return null;
+  for (const category of offered) {
+    const type = hangs.find((t) => under.get(t) === category.id);
+    if (type !== undefined) return { category: category.id, type };
+  }
+  return { category: "", type: first };
+}
+
+/** What a showing asks next of the frame: Canvas first, the board raised, the board out (its lay follows on the
+ * desk's publish), nothing yet, or nothing ever (the person moved on). */
+export type RevealStep = "canvas" | "raise" | "out" | "wait" | "drop";
+
+/** The facts a showing's next step is read from. */
+export interface RevealFacts {
+  /** A view covers the desk (every view but Canvas). */
+  readonly covered: boolean;
+  /** Canvas was asked for this showing. */
+  readonly askedCanvas: boolean;
+  /** The showing has stood on Canvas (no view covering the desk) since it was asked. */
+  readonly onCanvas: boolean;
+  /** The frame's open surface, as its owner holds it (`null`: none). */
+  readonly surface: string | null;
+  /** The board is out (the tray's `open`). */
+  readonly open: boolean;
+  /** An object is in hand: the desk refuses the board (R14). */
+  readonly held: boolean;
+  /** The desk mounted now, and the one this showing last saw the board out on (`null`: none yet). */
+  readonly desk: string;
+  readonly shownOn: string | null;
+}
+
+/**
+ * A showing's next step (MK-4d; MK-D8's fallback B, MK-E14). Over a covered view it asks for Canvas once, where the
+ * board is, and waits; if the popup folds there while the view stays covered (the person closed it, or the frame did
+ * not move) it is dropped, so no board rises on a later visit to Canvas. A cover that comes once the showing stood on
+ * Canvas is the person's own move (⌘2, ⌘3): it is dropped, and Canvas is never asked back. On Canvas it raises the
+ * board, unless the desk refuses it (in hand). Once out, the lay follows on the desk's publish. A board folded on the
+ * desk it was out on (Esc, a click on the dimmed desk, a lay, another surface) drops it; a new desk (the remount an
+ * install brings) raises it again, unless the person opened another surface meanwhile.
+ */
+export function revealStep(f: RevealFacts): RevealStep {
+  if (f.covered) {
+    if (f.onCanvas) return "drop";
+    if (!f.askedCanvas) return "canvas";
+    return f.surface === null ? "drop" : "wait";
+  }
+  if (f.open) return "out";
+  if (f.shownOn === f.desk || f.held) return "drop";
+  if (f.shownOn !== null && f.surface !== null && f.surface !== "objects") return "drop";
+  return "raise";
 }
 
 /** A rect on screen, CSS px. */

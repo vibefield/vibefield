@@ -60,8 +60,8 @@ export const NO_LIST = {
   refused: "VibeField couldn't use the plugin list · Diagnostics has the details",
 } as const;
 
-/** The popup's doors (MK-4b; DESIGN.md §9 "The doors", James's ruled page): the Me menu's row and the palette's two
- * acts say these, and import them from here rather than spell them. */
+/** The popup's doors (MK-4b; DESIGN.md §9 "The doors", James's ruled page): the Me menu's row, the palette's two
+ * acts and the pegboard's pill (MK-4d) say these, and import them from here rather than spell them. */
 export const PLUGINS_DOOR = {
   /** The Me menu's row and the palette's act. */
   name: "Plugins…",
@@ -71,6 +71,8 @@ export const PLUGINS_DOOR = {
   nameWhere: "Me menu",
   /** The palette's small line under Check plugins for updates. */
   checkWhere: "Plugins",
+  /** The pill at the pegboard's foot, which opens Discover (MK-D1, ruled by James 2026-11-11). */
+  more: "More in Plugins…",
 } as const;
 
 /** The Me menu row's end once a read found updates: "1 update", "2 updates" (§9 "The doors"); none at 0. */

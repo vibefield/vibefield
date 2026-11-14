@@ -190,8 +190,9 @@ export function ChromeLayer({
   );
   // MK-4b — the Plugins popup's one way in (DESIGN.md §9 "The doors"): the Me
   // menu's Plugins… opens it on Discover, the palette's Plugins… too, and its
-  // Check plugins for updates on Updates (MK-E7). Every door calls this; nothing
-  // else outside the popup's own files hands the frame `plugins`.
+  // Check plugins for updates on Updates (MK-E7); the pegboard's More in
+  // Plugins… on Discover (MK-4d). Every door calls this; nothing else outside
+  // the popup's own files hands the frame `plugins`.
   const [pluginsOpenOn, setPluginsOpenOn] = useState<"discover" | "updates">("discover");
   const openPlugins = useCallback(
     (tab: "discover" | "updates") => {
@@ -455,9 +456,9 @@ export function ChromeLayer({
           the frame's second popup"): drawn on the document's body over the
           search scrim, as the Peek is, so the view and the frame recede
           under it. One of the frame's open surfaces (`plugins`). Its doors
-          (MK-4b) are the Me menu's Plugins… and the palette's two acts, each
-          through `openPlugins` above, which says the tab it opens on; the
-          pegboard's pill is MK-4d's. */}
+          (MK-4b) are the Me menu's Plugins… and the palette's two acts, and
+          the pegboard's More in Plugins… (MK-4d), each through `openPlugins`
+          above, which says the tab it opens on. */}
       <FramePlugins
         view={view}
         surface={surface}
@@ -613,8 +614,16 @@ export function ChromeLayer({
           document, so Tab reaches the filters, then the board. While the board
           is out the selection bar hides (the desk is inert under it, plan
           addendum 47); the selection persists, and the bar returns as the
-          board folds. */}
-      <Pegboard surface={surface} onSurfaceChange={onSurfaceChange} />
+          board folds. MK-4d: its foot's More in Plugins… opens the Plugins
+          popup on Discover through `openPlugins`, as the Me menu's row does,
+          and a set shown on it after an install goes to Canvas first over a
+          covered view (MK-E14). */}
+      <Pegboard
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        covered={covered}
+        onMorePlugins={openPluginsOnDiscover}
+      />
 
       {/* THE STATUS LINE (DESIGN.md §8, §10): the desk's notices under the
           head — a degraded desk's banner and its Reload (R18), a type the desk

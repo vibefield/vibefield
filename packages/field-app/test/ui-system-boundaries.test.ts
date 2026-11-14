@@ -690,10 +690,12 @@ describe("UI system ownership boundaries", () => {
     expect(opens).toBeGreaterThan(-1);
     expect(hits[0]).toBeGreaterThan(opens);
     expect(hits[0]).toBeLessThan(closes);
-    // every door reaches it, and the popup opens on the tab its door asked for
+    // every door reaches it, and the popup opens on the tab its door asked for — the pegboard's More in Plugins…
+    // (MK-4d) on Discover, as the Me menu's row does
     expect(chrome).toMatch(/onOpenPlugins=\{openPluginsOnDiscover\}/u);
     expect(chrome).toMatch(/case "plugins":\s*openPlugins\(run\.tab\)/u);
     expect(chrome).toMatch(/openOn=\{pluginsOpenOn\}/u);
+    expect(chrome).toMatch(/<Pegboard\s[^>]*onMorePlugins=\{openPluginsOnDiscover\}/u);
     for (const name of ["account/MeMenu.tsx", "frame/palette-acts.ts", "hud/CommandPalette.tsx"]) {
       expect(source(name), name).not.toContain("onSurfaceChange(");
       expect(source(name), name).not.toMatch(sets);
@@ -712,13 +714,29 @@ describe("UI system ownership boundaries", () => {
     expect(taken).toEqual(["../frame/plugins/plugins-count", "../frame/plugins/plugins-words"]);
   });
 
+  it("lets the pegboard take only the doors' words from frame/plugins/ (MK-4d)", () => {
+    // The pill says PLUGINS_DOOR's words, as the Me menu's row does; the frame opens the popup (`openPlugins`), so
+    // the pegboard takes no controller, view, port or count of the popup's.
+    const taken = readdirSync(join(PACKAGE_ROOT, "src", "field", "desk", "pegboard"))
+      .filter((name) => /\.tsx?$/u.test(name))
+      .flatMap((name) =>
+        [
+          ...source(`field/desk/pegboard/${name}`).matchAll(
+            /from "((?:\.\.\/)+frame\/plugins\/[^"]+)"/gu,
+          ),
+        ].map((match) => `${name}: ${match[1]}`),
+      );
+    expect(taken).toEqual(["PegboardView.tsx: ../../../frame/plugins/plugins-words"]);
+  });
+
   it('pins every line outside Plugins\' own files that names "plugins" — a new one is read before it lands (MK-4a)', () => {
     // VF-PM 2026-11-11 12:29:46Z: the regex above misses a toggle, a chord's row or a kind, so every line of src
     // outside frame/plugins/ and design-system/ that holds the literal "plugins" is pinned here by file. Each is
     // Settings' own page, Agents' own list, the frame's surface and modal rule, or one of MK-4b's doors: the
     // palette's run kind, act and two runs, ChromeLayer's surface call and case, and the Me menu's row key (VF-PM
     // 13:03:43Z: the table grows only by MK-4b's own lines). A new line anywhere is a red that makes someone read
-    // it: the pegboard's door is MK-4d's.
+    // it. The pegboard's More in Plugins… (MK-4d) adds none: it reaches the popup through ChromeLayer's
+    // `openPlugins`, by its `openPluginsOnDiscover`.
     const PINNED: Readonly<Record<string, number>> = {
       "account/MeMenu.tsx": 1,
       "field.tsx": 1,
@@ -1093,7 +1111,9 @@ describe("UI system ownership boundaries", () => {
     // classes, never a stylesheet, never the desk's doors or the controller.
     const fixture = source("design-system/PegboardPreview.tsx");
     expect(fixture).toMatch(/<PegboardView\s/u);
-    for (const model of ["placeFilters(", "filterOptions("]) expect(fixture).toContain(model);
+    // MK-4d: More in Plugins… placed by the product's own model too
+    for (const model of ["placeFilters(", "filterOptions(", "placePill("])
+      expect(fixture).toContain(model);
     expect(fixture).not.toMatch(/className="vf-pegboard/u);
     expect(fixture).not.toContain("<style");
     for (const door of [/\bgetHost\b/u, /\bcurrentDesk\b/u, /\bpublishDesk\b/u, /<Pegboard\s/u])
@@ -1764,9 +1784,10 @@ describe("UI system ownership boundaries", () => {
     const chrome = source("field/ChromeLayer.tsx");
     const field = source("field.tsx");
     const css = source("field/desk/pegboard/pegboard.css");
-    // the pegboard's chrome over the desk, after the bar in the document (Tab: the filters, then the board)
+    // the pegboard's chrome over the desk, after the bar in the document (Tab: the filters, the board, then More in
+    // Plugins…); since MK-4d it is told whether a view covers the desk (MK-E14) and handed the popup's door
     expect(chrome).toMatch(
-      /<Pegboard surface=\{surface\} onSurfaceChange=\{onSurfaceChange\} \/>/u,
+      /<Pegboard\s+surface=\{surface\}\s+onSurfaceChange=\{onSurfaceChange\}\s+covered=\{covered\}\s+onMorePlugins=\{openPluginsOnDiscover\}\s*\/>/u,
     );
     expect(chrome.indexOf("<Pegboard")).toBeGreaterThan(chrome.indexOf("<SelectionBar"));
     // the selection bar hides while the board is out; the selection persists under it
@@ -1798,6 +1819,27 @@ describe("UI system ownership boundaries", () => {
     // reduced motion: the ring does not travel
     expect(css).toMatch(
       /@media \(prefers-reduced-motion: reduce\) \{[^@]*\.vf-pegboard-ring \{\s*transition: opacity 60ms ease-out;/su,
+    );
+  });
+  it("draws More in Plugins… on the line's glass at the board's foot, stepping aside as ICE's own bar does (MK-4d, MK-D1)", () => {
+    const css = source("field/desk/pegboard/pegboard.css");
+    // 32 tall, corners 16, padded 0 14, gap 8, on the line's glass with its hairline and the island shadow; 12.5/600
+    // in primary ink
+    expect(css).toMatch(
+      /\.vf-pegboard-more \{[^}]*height: 32px;[^}]*gap: 8px;[^}]*padding: 0 14px;[^}]*border-radius: 16px;[^}]*color: var\(--vf-text-primary\);[^}]*background: color-mix\(in srgb, var\(--vf-chrome-solid\) 88%, transparent\);[^}]*backdrop-filter: blur\(24px\);[^}]*var\(--vf-shadow-island\);[^}]*font-size: 12\.5px;[^}]*font-weight: 600;/su,
+    );
+    expect(css).toMatch(/\.dark \.vf-pegboard-more \{[^}]*94%[^}]*var\(--vf-hairline-strong\)/su);
+    // §7's hover and press
+    expect(css).toMatch(/\.vf-pegboard-more:hover \{\s*transform: scale\(1\.03\);/u);
+    expect(css).toMatch(/\.vf-pegboard-more:active \{\s*transform: scale\(0\.95\);/u);
+    // aside: out over 90 ms, back over 180 ms (ICE's bar's), taking no press
+    expect(css).toMatch(
+      /\.vf-pegboard-more\[data-aside\] \{[^}]*opacity: 0;[^}]*visibility: hidden;[^}]*pointer-events: none;[^}]*opacity 90ms ease-out/su,
+    );
+    expect(css).toMatch(/\.vf-pegboard-more \{[^}]*opacity 180ms ease-out/su);
+    // reduced motion: no scale, its fades halved (M6)
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[^@]*\.vf-pegboard-more:hover,\s*\.vf-pegboard-more:active \{\s*transform: none;/su,
     );
   });
   it("keeps the old Objects sheet, its tray island's state, its tile list and its preview silhouettes gone (DK-13, R21) — the pegboard replaced them", () => {

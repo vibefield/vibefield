@@ -12,7 +12,12 @@
  *     the view's centre (one undo step, selected; the board folds), Esc closes (before the desk's keymap), the pointer
  *     takes the ring away, the focus goes back where it was. Since DK-17b (ICE I37) the keys drive ICE's own doors — the
  *     door here keeps `tray.focus` / `anchor().focused` / `tray.lay` over core's real ops (`focusTray`, `trayFocus`,
- *     `ops.layFromTray`), the scroll into view core's lay's own.
+ *     `ops.layFromTray`), the scroll into view core's lay's own;
+ *   MORE IN PLUGINS… (MK-4d, MK-D1) — the pill at the board's foot, placed with the filters and riding the slide, aside
+ *     in hand or over an empty board, the third stop of Tab; a press hands the frame the board's category;
+ *   A SET SHOWN AFTER AN INSTALL (MK-4d; MK-D8's fallback B, MK-E14) — Canvas first over a covered view, the board
+ *     raised on the set's first category in the board's order with its first object focused, across an install's
+ *     remount.
  */
 import {
   Camera,
@@ -21,6 +26,7 @@ import {
   type Entity,
   ensureTray,
   focusTray,
+  hungTypes,
   openTray,
   Position,
   PrefabId,
@@ -54,7 +60,10 @@ import {
   publishDesk,
 } from "../src/field/desk/desk-door";
 import {
+  boardReveal,
   requestBoardFocus,
+  resetBoardRevealForTest,
+  showOnBoard,
   takeBoardFocusRequest,
   useBoardFacts,
   useBoardLineDoor,
@@ -62,9 +71,10 @@ import {
 import { readBoardStats, resetBoardStatsForTest } from "../src/field/desk/pegboard/board-stats";
 import { Pegboard } from "../src/field/desk/pegboard/Pegboard";
 import { moreOf, PegboardView } from "../src/field/desk/pegboard/PegboardView";
-import { boardSpecimens, placeFilters } from "../src/field/desk/pegboard/pegboard-model";
+import { boardSpecimens, PEGBOARD, placeFilters } from "../src/field/desk/pegboard/pegboard-model";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 import type { FrameSurface } from "../src/frame/frame-surface";
+import { type FieldHost, setHost } from "../src/host";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -88,6 +98,10 @@ let host: HTMLDivElement;
 let root: Root;
 let surfaceNow: FrameSurface | null;
 let setSurfaceNow: (next: FrameSurface | null) => void;
+/** Whether a view covers the desk, as ChromeLayer hands it (MK-E14). */
+let setCoveredNow: (next: boolean) => void;
+/** The categories More in Plugins… handed the frame, press by press (MK-4d). */
+let mores: string[];
 let clock = 0;
 let p = 1;
 /** A stand-in for ICE's keymap on the window's bubble phase: what reached it un-taken (its gate 1). */
@@ -202,9 +216,20 @@ function trayDoor(engine: CanvasEngine): TestDoor {
 
 function Harness(): ReactElement {
   const [surface, setSurface] = useState<FrameSurface | null>(null);
+  const [covered, setCovered] = useState(false);
   surfaceNow = surface;
   setSurfaceNow = setSurface;
-  return createElement(Pegboard, { surface, onSurfaceChange: setSurface });
+  setCoveredNow = setCovered;
+  return createElement(Pegboard, {
+    surface,
+    onSurfaceChange: setSurface,
+    covered,
+    // the frame's door, as ChromeLayer's `openPlugins` is: the popup is the frame's one open surface
+    onMorePlugins: (category: string) => {
+      mores.push(category);
+      setSurface("plugins");
+    },
+  });
 }
 
 const q = <T extends Element = HTMLElement>(selector: string): T => {
@@ -272,7 +297,7 @@ function ringRect(): { x0: number; y0: number; x1: number; y1: number } | null {
   };
 }
 
-async function mountDesk(off: ReadonlySet<string> = new Set()): Promise<void> {
+async function mountDesk(off: ReadonlySet<string> = new Set(), mount = 0): Promise<void> {
   ce = createFieldEngine(buildRegistry());
   await seedField(ce, ce.docs.create(), createDeskBlobStore());
   ce.world.setResource(Viewport, { w: VIEW.width, h: VIEW.height, dpr: 1 });
@@ -286,7 +311,7 @@ async function mountDesk(off: ReadonlySet<string> = new Set()): Promise<void> {
     engine: ce,
     handle: { tray: door } as unknown as MountedDesk["handle"],
     generation: 1,
-    mount: 0,
+    mount,
     theme: "light",
     off,
   };
@@ -295,6 +320,8 @@ async function mountDesk(off: ReadonlySet<string> = new Set()): Promise<void> {
 
 beforeEach(async () => {
   resetBoardStatsForTest();
+  resetBoardRevealForTest();
+  mores = [];
   keymapHeard = [];
   clock = 0;
   p = 1;
@@ -731,5 +758,317 @@ describe("past the band's width (R19)", () => {
     });
     expect(track.dataset.more).toBe("start");
     act(() => boxRoot.unmount());
+  });
+});
+
+/** More in Plugins… as the controller placed it: its centre's x, its top and its opacity. */
+function pillAt(): { cx: number; y: number; opacity: number } | null {
+  const place = q(".vf-pegboard-more-place");
+  const m = /^translate\(([-\d.e]+)px, ([-\d.e]+)px\) translateX\(-50%\)$/u.exec(
+    place.style.transform,
+  );
+  if (m === null) return null;
+  return { cx: Number(m[1]), y: Number(m[2]), opacity: Number(place.style.opacity) };
+}
+
+describe("More in Plugins… (MK-4d; MK-D1)", () => {
+  const pill = (): HTMLButtonElement => q<HTMLButtonElement>(".vf-pegboard-more");
+
+  it("says More in Plugins… wearing `plugin` at 15 — the third stop of Tab, after the filters and the board", () => {
+    openBoard();
+    expect(pill().textContent).toBe("More in Plugins…");
+    const glyph = pill().querySelector("svg");
+    expect(glyph?.getAttribute("data-glyph")).toBe("plugin");
+    expect(glyph?.getAttribute("width")).toBe("15");
+    expect(glyph?.getAttribute("aria-hidden")).toBe("true");
+    // the document's order is Tab's: the filters' track, the board, then the pill
+    const before = (a: Node, b: Node): boolean =>
+      (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(before(q(".vf-pegboard-track"), board())).toBe(true);
+    expect(before(board(), pill())).toBe(true);
+    expect(q(".vf-pegboard-more-place").hasAttribute("inert")).toBe(false);
+  });
+
+  it("stands its foot 100 above the view's foot on the drawer's centre line, riding its slide — placed, never rendered, per frame", () => {
+    openBoard();
+    const renders = readBoardStats().renders;
+    const rest = VIEW.height - PEGBOARD.pill.foot - PEGBOARD.pill.height;
+    for (const slide of [0.62, 0.7, 0.8, 0.9, 1]) {
+      door.publish({ p: slide });
+      const at = pillAt();
+      const drawer = door.anchor().drawer;
+      expect(at?.cx).toBe(DRAWER_OUT.x + DRAWER_OUT.w / 2);
+      // this drawer slides its whole height (its top VIEW.height − h·p), so the frames say a travel of h
+      expect(at?.y).toBeCloseTo(rest + DRAWER_OUT.h * (1 - slide), 6);
+      // the pill and the drawer's top move together, and it fades in with the filters
+      expect((at?.y ?? 0) - (drawer?.y ?? 0)).toBeCloseTo(rest - (VIEW.height - DRAWER_OUT.h), 6);
+      expect(at?.opacity).toBeCloseTo(Number(q(".vf-pegboard-filters").style.opacity), 6);
+    }
+    // out: 1180 × 748's 616…648, its foot 100 above the view's
+    expect(pillAt()?.y).toBeCloseTo(616, 6);
+    expect(readBoardStats().renders).toBe(renders);
+    const stats = readBoardStats();
+    expect(stats.placements).toBeLessThanOrEqual(2 * stats.publishes);
+  });
+
+  it("steps aside while an object is in hand and while the board hangs nothing — taking no press and no stop", () => {
+    openBoard();
+    expect(pill().hasAttribute("data-aside")).toBe(false);
+    const anchor = door.anchor.bind(door);
+    door.anchor = () => ({ ...anchor(), held: true });
+    door.publish();
+    expect(pill().getAttribute("data-aside")).toBe("true");
+    expect(q(".vf-pegboard-more-place").hasAttribute("inert")).toBe(true);
+    door.anchor = () => ({ ...anchor(), entries: 0 });
+    door.publish();
+    expect(pill().getAttribute("data-aside")).toBe("true");
+    door.anchor = anchor;
+    door.publish();
+    expect(pill().hasAttribute("data-aside")).toBe(false);
+    expect(q(".vf-pegboard-more-place").hasAttribute("inert")).toBe(false);
+  });
+
+  it("hands the frame the board's category — All as the empty id — and the board folds as the popup opens", () => {
+    openBoard();
+    act(() => pill().click());
+    expect(mores).toEqual([""]);
+    expect(surfaceNow).toBe("plugins");
+    expect(trayOpen(ce.world)).toBe(false);
+    // a category chosen: Discover's categories are the pegboard's own (MK-D2)
+    openBoard();
+    const second = trayCategories(ce.world)[1];
+    if (second === undefined) throw new Error("one category");
+    act(() => q<HTMLButtonElement>(`.vf-pegboard-track > button[data-id="${second.id}"]`).click());
+    door.publish();
+    act(() => pill().click());
+    expect(mores).toEqual(["", second.id]);
+  });
+});
+
+describe("a set shown after an install (MK-4d; MK-D8's fallback B, MK-E14)", () => {
+  /** A type hanging under the board's first category and one under its last, in the board's order. */
+  const ends = () => {
+    const categories = trayCategories(ce.world);
+    const under = (id: string): string => {
+      const type = hungTypes(ce.world).find((h) => h.tray?.category === id)?.type;
+      if (type === undefined) throw new Error(`nothing hangs under ${id}`);
+      return type;
+    };
+    const first = categories[0];
+    const last = categories[categories.length - 1];
+    if (first === undefined || last === undefined || first.id === last.id)
+      throw new Error("one category");
+    return {
+      first: { category: first.id, type: under(first.id) },
+      last: { category: last.id, type: under(last.id) },
+    };
+  };
+  /** The frames and microtasks a showing takes to land: the board out, its category laid, its object focused. */
+  const land = async (): Promise<void> => {
+    door.publish({ p: 1 });
+    await Promise.resolve();
+    door.publish();
+    await Promise.resolve();
+    door.publish();
+  };
+
+  it("raises the board over the popup on the set's first category in the board's order, its first object there focused, the board holding the keyboard", async () => {
+    const { first, last } = ends();
+    act(() => setSurfaceNow("plugins"));
+    // the set's own order names the last category's object first: the board's order chooses the category
+    act(() => showOnBoard([last.type, first.type]));
+    expect(surfaceNow).toBe("objects");
+    expect(trayOpen(ce.world)).toBe(true);
+    await land();
+    expect(trayCategory(ce.world)).toBe(first.category);
+    expect(trayFocus(ce.world)).toBe(first.type);
+    expect(document.activeElement).toBe(board());
+    expect(focusedType()).toBe(first.type);
+    expect(ringRect()).not.toBeNull();
+    expect(boardReveal()).toBeNull();
+    // ⏎ lays it, as the board's own keys do
+    const before = deskCensus(ce)[first.type] ?? 0;
+    key("Enter");
+    act(() => step());
+    expect(deskCensus(ce)[first.type]).toBe(before + 1);
+  });
+
+  it("goes to Canvas first over a covered view (MK-E14), and raises the board once the frame is there", async () => {
+    const asked: string[] = [];
+    setHost({
+      view: {
+        set: (view: string) => {
+          asked.push(view);
+          return Promise.resolve({ view });
+        },
+        onState: () => () => undefined,
+      },
+    } as unknown as FieldHost);
+    const { last } = ends();
+    act(() => {
+      setCoveredNow(true);
+      setSurfaceNow("plugins");
+    });
+    act(() => showOnBoard([last.type]));
+    expect(asked).toEqual(["canvas"]);
+    expect(trayOpen(ce.world)).toBe(false);
+    expect(surfaceNow).toBe("plugins");
+    // the frame is on Canvas: the board rises there, on the set
+    act(() => setCoveredNow(false));
+    expect(surfaceNow).toBe("objects");
+    await land();
+    expect(trayCategory(ce.world)).toBe(last.category);
+    expect(trayFocus(ce.world)).toBe(last.type);
+    expect(asked).toEqual(["canvas"]);
+  });
+
+  it("raises nothing on a later visit to Canvas once the popup folded over a cover that never moved", () => {
+    setHost({
+      view: { set: () => Promise.resolve(), onState: () => () => undefined },
+    } as unknown as FieldHost);
+    const { last } = ends();
+    act(() => {
+      setCoveredNow(true);
+      setSurfaceNow("plugins");
+    });
+    act(() => showOnBoard([last.type]));
+    act(() => setSurfaceNow(null));
+    expect(boardReveal()).toBeNull();
+    act(() => setCoveredNow(false));
+    expect(trayOpen(ce.world)).toBe(false);
+    expect(surfaceNow).toBeNull();
+  });
+
+  /** A host whose view door records each view asked of it: Canvas is the only one a showing may ask. */
+  const recordingHost = (): string[] => {
+    const asked: string[] = [];
+    setHost({
+      view: {
+        set: (view: string) => {
+          asked.push(view);
+          return Promise.resolve({ view });
+        },
+        onState: () => () => undefined,
+      },
+    } as unknown as FieldHost);
+    return asked;
+  };
+
+  it("goes, asking for no Canvas, when a view covers the desk while the board rises — before its first frame", async () => {
+    const asked = recordingHost();
+    const { last } = ends();
+    const before = trayCategory(ce.world);
+    expect(before).not.toBe(last.category);
+    act(() => setSurfaceNow("plugins"));
+    act(() => showOnBoard([last.type]));
+    expect(surfaceNow).toBe("objects");
+    // ⌘2 before the desk drew a frame of the rise: the person's own move, never taken back to Canvas
+    act(() => setCoveredNow(true));
+    expect(asked).toEqual([]);
+    expect(boardReveal()).toBeNull();
+    // the lay it had asked for finds no showing: the set's category is never laid
+    await land();
+    expect(trayCategory(ce.world)).toBe(before);
+    expect(asked).toEqual([]);
+  });
+
+  it("goes, asking for no Canvas, when a view covers the desk while the board waits for an install's remount", async () => {
+    const asked = recordingHost();
+    const pane = "vibefield.browser-pane";
+    act(() => root.unmount());
+    unpublish();
+    ce.dispose();
+    await mountDesk(new Set([pane]));
+    root = createRoot(host);
+    act(() => root.render(createElement(Harness)));
+    act(() => setSurfaceNow("plugins"));
+    act(() => showOnBoard([pane]));
+    await land();
+    // out, and waiting: the desk draws no pane yet
+    expect(trayOpen(ce.world)).toBe(true);
+    expect(boardReveal()).not.toBeNull();
+    // ⌘3: the person went to another view
+    act(() => setCoveredNow(true));
+    expect(asked).toEqual([]);
+    expect(boardReveal()).toBeNull();
+    // the install's remount then raises nothing, and asks for nothing
+    const old = ce;
+    await act(async () => {
+      await mountDesk(new Set(), 1);
+    });
+    old.dispose();
+    expect(trayOpen(ce.world)).toBe(false);
+    expect(asked).toEqual([]);
+  });
+
+  it("is dropped when the board folds before it lands, and asks nothing while an object is in hand (R14)", () => {
+    const { last } = ends();
+    act(() => setSurfaceNow("plugins"));
+    act(() => showOnBoard([last.type]));
+    door.publish({ p: 1 });
+    key("Escape", document.body);
+    door.publish();
+    expect(boardReveal()).toBeNull();
+    expect(surfaceNow).toBeNull();
+    // in hand the desk refuses the board: nothing rises, and nothing waits to
+    const anchor = door.anchor.bind(door);
+    door.anchor = () => ({ ...anchor(), held: true });
+    door.refuse = true;
+    act(() => setSurfaceNow("plugins"));
+    act(() => showOnBoard([last.type]));
+    expect(boardReveal()).toBeNull();
+    expect(trayOpen(ce.world)).toBe(false);
+    expect(surfaceNow).toBe("plugins");
+  });
+
+  it("goes when the person chooses on the board before it lands — a filter, or a key", async () => {
+    const { first, last } = ends();
+    act(() => setSurfaceNow("plugins"));
+    act(() => showOnBoard([last.type]));
+    door.publish({ p: 1 });
+    const filter = q<HTMLButtonElement>(`.vf-pegboard-track > button[data-id="${first.category}"]`);
+    act(() => filter.click());
+    expect(boardReveal()).toBeNull();
+    // the lay it had asked for finds no showing: the person's category stands
+    await Promise.resolve();
+    door.publish();
+    expect(trayCategory(ce.world)).toBe(first.category);
+    // a key on the board, the same
+    act(() => showOnBoard([last.type]));
+    act(() => board().focus());
+    key("ArrowRight");
+    expect(boardReveal()).toBeNull();
+  });
+
+  it("waits while the desk draws none of the set, and raises the board again on the desk an install's remount brings", async () => {
+    const pane = "vibefield.browser-pane";
+    act(() => root.unmount());
+    unpublish();
+    ce.dispose();
+    await mountDesk(new Set([pane]));
+    root = createRoot(host);
+    act(() => root.render(createElement(Harness)));
+    act(() => setSurfaceNow("plugins"));
+    act(() => showOnBoard([pane]));
+    // raised at once, the popup folding as it rises; the desk draws no pane, so nothing is laid or focused for it
+    expect(surfaceNow).toBe("objects");
+    await land();
+    expect(trayFocus(ce.world)).toBe("");
+    expect(boardReveal()).not.toBeNull();
+    // the install's remount: a new desk that draws the pane. The board on it is shut, so Objects folds, and the
+    // showing raises the board again there
+    const old = ce;
+    await act(async () => {
+      await mountDesk(new Set(), 1);
+    });
+    old.dispose();
+    expect(surfaceNow).toBe("objects");
+    expect(trayOpen(ce.world)).toBe(true);
+    await land();
+    const category = hungTypes(ce.world).find((h) => h.type === pane)?.tray?.category;
+    expect(category).toBeDefined();
+    expect(trayCategory(ce.world)).toBe(category);
+    expect(trayFocus(ce.world)).toBe(pane);
+    expect(boardReveal()).toBeNull();
   });
 });

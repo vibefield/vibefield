@@ -408,9 +408,22 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "Past the band's width — the far end fading",
       "Rising — 80 % of the slide",
       "A specimen in the keyboard's focus",
+      "An object in hand — More in Plugins… steps aside",
     ]);
     const boardPlate = (state: string): HTMLElement | undefined =>
       boardPlates.find((p) => p.dataset.state === state);
+    // MK-4d — More in Plugins… at the board's foot: standing on the board out on All, aside on the last plate
+    expect(boardPlate("Out — All")?.querySelector(".vf-pegboard-more")?.textContent).toBe(
+      "More in Plugins…",
+    );
+    expect(
+      boardPlate("Out — All")?.querySelector(".vf-pegboard-more")?.hasAttribute("data-aside"),
+    ).toBe(false);
+    expect(
+      boardPlate("An object in hand — More in Plugins… steps aside")
+        ?.querySelector(".vf-pegboard-more")
+        ?.getAttribute("data-aside"),
+    ).toBe("true");
     expect(
       [...(boardPlate("Out — All")?.querySelectorAll(".vf-pegboard-track > button") ?? [])].map(
         (b) => b.textContent,

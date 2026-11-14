@@ -5,14 +5,16 @@ import {
   type FiltersPlace,
   filterOptions,
   placeFilters,
+  placePill,
   type ScreenRect,
 } from "../field/desk/pegboard/pegboard-model";
 
 // THE PEGBOARD'S CHROME IN THE CATALOG (DK-13; DESIGN.md §8 "The pegboard — Objects, behind the line"; UI_SYSTEM's
 // catalog fidelity): the shipping view (`PegboardView`) over a fixture TRAY — the drawer where the desk would draw it,
 // its clear header band, the categories the lay would offer — placed by the product's own model (`placeFilters`,
-// `filterOptions`). The board itself is the desk's, drawn on the GPU behind the line; here a plain stand-in shows where
-// it lies, as the selection bar's plates stand an object in for the desk's (DK-11).
+// `filterOptions`, and since MK-4d `placePill` for More in Plugins… at its foot). The board itself is the desk's, drawn
+// on the GPU behind the line; here a plain stand-in shows where it lies, as the selection bar's plates stand an object
+// in for the desk's (DK-11).
 
 /** The categories the first board's lay offers: VibeField's comment pad, ICE's six built-ins, the example clock. */
 const CATEGORIES = [
@@ -28,6 +30,7 @@ export const PEGBOARD_STATES = [
   "Past the band's width — the far end fading",
   "Rising — 80 % of the slide",
   "A specimen in the keyboard's focus",
+  "An object in hand — More in Plugins… steps aside",
 ] as const;
 export type PegboardState = (typeof PEGBOARD_STATES)[number];
 
@@ -39,6 +42,8 @@ interface BoardFixture {
   /** stand-in specimens on the board (screen rects in the plate) */
   readonly specimens: readonly (ScreenRect & { readonly type: string; readonly label: string })[];
   readonly focused: string | null;
+  /** More in Plugins… steps aside (an object in hand; MK-4d). */
+  readonly aside?: boolean;
 }
 
 /** The drawer out at slide `p`: 520 wide, 220 tall in the plate, its bottom flush with the plate's foot when out. */
@@ -107,23 +112,33 @@ const FIXTURES: Record<PegboardState, () => BoardFixture> = {
     const drawer = drawerAt(1);
     return { drawer, category: "", specimens: SPECIMENS(drawer), focused: "desk.note" };
   },
+  "An object in hand — More in Plugins… steps aside": () => {
+    const drawer = drawerAt(1);
+    return { drawer, category: "", specimens: SPECIMENS(drawer), focused: null, aside: true };
+  },
 };
 
-/** The board's stand-in and the shipping chrome over it, placed from a fixture drawer. */
+/** The board's stand-in and the shipping chrome over it, placed from a fixture drawer in a view `height` tall. */
 export function BoardStandIn({
   drawer,
+  height,
   category,
   onCategory,
   specimens = [],
   focused = null,
+  aside = false,
 }: {
   drawer: DrawnDrawer & { readonly h: number };
+  height: number;
   category: string;
   onCategory: (id: string) => void;
   specimens?: BoardFixture["specimens"];
   focused?: string | null;
+  aside?: boolean;
 }): ReactElement {
   const place: FiltersPlace | null = placeFilters(drawer);
+  // the fixture drawer slides its whole height (its foot flush with the view's when out): that is its travel
+  const pill = placePill(drawer, { height }, drawer.h);
   const ring = specimens.find((s) => s.type === focused) ?? null;
   return (
     <>
@@ -149,6 +164,8 @@ export function BoardStandIn({
         specimens={specimens.map((s) => ({ type: s.type, label: s.label }))}
         focused={focused}
         ring={ring}
+        pill={pill}
+        pillAside={aside}
       />
     </>
   );
@@ -166,10 +183,12 @@ export function PegboardPlate({ state }: { state: PegboardState }): ReactElement
     >
       <BoardStandIn
         drawer={fixture.drawer}
+        height={PLATE.height}
         category={category}
         onCategory={setCategory}
         specimens={fixture.specimens}
         focused={fixture.focused}
+        aside={fixture.aside === true}
       />
       <span className="vf-ds-board-caption">{state}</span>
     </div>
@@ -209,8 +228,13 @@ export function StageBoard({ open }: { open: boolean }): ReactElement {
         })();
   return (
     <div ref={box} className="vf-ds-stage-board" data-open={open ? "true" : "false"}>
-      {drawer === null ? null : (
-        <BoardStandIn drawer={drawer} category={category} onCategory={setCategory} />
+      {drawer === null || size === null ? null : (
+        <BoardStandIn
+          drawer={drawer}
+          height={size.h}
+          category={category}
+          onCategory={setCategory}
+        />
       )}
     </div>
   );

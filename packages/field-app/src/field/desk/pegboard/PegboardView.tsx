@@ -1,3 +1,4 @@
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import {
   type CSSProperties,
@@ -8,16 +9,18 @@ import {
   useLayoutEffect,
   useRef,
 } from "react";
+import { PLUGINS_DOOR } from "../../../frame/plugins/plugins-words";
 import { boardStats } from "./board-stats";
-import type { FilterOption, FiltersPlace } from "./pegboard-model";
+import type { FilterOption, FiltersPlace, PillPlace } from "./pegboard-model";
 import "./pegboard.css";
 
 // THE PEGBOARD'S CHROME, controller-free (DK-13; DESIGN.md §8 "The pegboard — Objects, behind the line"; UI_SYSTEM's
 // controller/view split): the board itself is the DESK's — its specimens hung by category over their label tape,
 // drawn on the GPU behind the line — and what VibeField draws over it is screen-space chrome, lit by nothing and
 // following the theme: THE FILTERS (the kit's segmented control, cut for the wood) in the board's clear header band,
-// and the BOARD's keyboard stop — a listbox naming the specimens, its focused one ringed in the select ink over where
-// the desk draws it. The controller (`Pegboard.tsx`) places both imperatively each time the tray publishes; the catalog
+// the BOARD's keyboard stop — a listbox naming the specimens, its focused one ringed in the select ink over where
+// the desk draws it — and MORE IN PLUGINS… (MK-D1, MK-4d), a glass pill at the board's foot that opens the Plugins
+// popup on Discover. The controller (`Pegboard.tsx`) places them imperatively each time the tray publishes; the catalog
 // hands a fixture place.
 
 export interface PegboardViewProps {
@@ -46,6 +49,13 @@ export interface PegboardViewProps {
   readonly onBoardKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void;
   readonly onBoardFocus?: (event: FocusEvent<HTMLDivElement>) => void;
   readonly onBoardBlur?: (event: FocusEvent<HTMLDivElement>) => void;
+  /** Where More in Plugins… stands — the catalog's fixture; the product writes it imperatively through `pillRef`. */
+  readonly pill?: PillPlace | null;
+  readonly pillRef?: Ref<HTMLDivElement>;
+  /** It steps aside: an object in hand, or a board that hangs nothing (the anchor's `held`, its `entries` 0). */
+  readonly pillAside?: boolean;
+  /** A press on it: the controller opens the Plugins popup on Discover; the catalog's does nothing. */
+  readonly onMore?: () => void;
 }
 
 /** The listbox option's id for a specimen's type. */
@@ -59,6 +69,16 @@ export function filtersStyle(place: FiltersPlace | null | undefined): CSSPropert
   return {
     transform: `translate(${place.cx}px, ${place.y}px) translateX(-50%)`,
     maxWidth: `${place.maxWidth}px`,
+    opacity: place.opacity,
+    visibility: place.opacity > 0 ? "visible" : "hidden",
+  };
+}
+
+/** More in Plugins…'s place as a style (its centre at `cx`), lengths as CSS strings, as the filters' are. */
+export function pillStyle(place: PillPlace | null | undefined): CSSProperties {
+  if (place === null || place === undefined) return { opacity: 0, visibility: "hidden" };
+  return {
+    transform: `translate(${place.cx}px, ${place.y}px) translateX(-50%)`,
     opacity: place.opacity,
     visibility: place.opacity > 0 ? "visible" : "hidden",
   };
@@ -105,6 +125,10 @@ export function PegboardView({
   onBoardKeyDown,
   onBoardFocus,
   onBoardBlur,
+  pill,
+  pillRef,
+  pillAside = false,
+  onMore,
 }: PegboardViewProps): ReactElement {
   boardStats.renders += 1;
   const active = specimens.some((s) => s.type === focused) ? focused : null;
@@ -172,6 +196,25 @@ export function PegboardView({
         {...(ring === undefined || ring === null ? {} : { "data-shown": "true" })}
         style={ringStyle(ring)}
       />
+      {/* MORE IN PLUGINS… (MK-D1): the board's door to more objects, floating over its foot as its
+          filters float over its head — the third stop of Tab, after the board; aside, it takes no
+          press and no stop */}
+      <div
+        ref={pillRef}
+        className="vf-pegboard-more-place"
+        style={pillStyle(pill)}
+        inert={pillAside}
+      >
+        <button
+          type="button"
+          className="vf-pegboard-more"
+          {...(pillAside ? { "data-aside": "true" } : {})}
+          onClick={onMore}
+        >
+          <FieldGlyph name="plugin" size={15} />
+          <span>{PLUGINS_DOOR.more}</span>
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,10 +1,10 @@
 /* THE PEGBOARD'S CHROME (DK-13; DESIGN.md §8 "The pegboard — Objects, behind the line"; R14, R19; §5, §10). Tokens only.
- * The board is the DESK's (drawn on the GPU behind the line, its lay keeping 88 at the foot); over it VibeField draws
- * screen-space chrome, lit by nothing and following the theme — it stands over the desk and under the frame (§10):
- * above the canvas, with the selection bar (30), below the head (50), the cover (60), the status line (61) and the
- * line and the corner (62). Where the filters and the ring stand is written by the controller on each
- * publish of the tray (a transform, a width, an opacity); everything they look like is here. Chrome does not dim by
- * night: the anchor's `night` is never read. */
+ * The board is the DESK's (drawn on the GPU behind the line, its lay running under the line to 4 above the view's
+ * foot, under a 16 px fade: §10 "The mat's places"); over it VibeField draws screen-space chrome, lit by nothing and
+ * following the theme — it stands over the desk and under the frame (§10): above the canvas, with the selection bar
+ * (30), below the head (50), the cover (60), the status line (61) and the line and the corner (62). Where the filters,
+ * the ring and More in Plugins… stand is written by the controller on each publish of the tray (a transform, a width,
+ * an opacity); everything they look like is here. Chrome does not dim by night: the anchor's `night` is never read. */
 
 .vf-pegboard {
   position: absolute;
@@ -138,4 +138,96 @@
   .vf-pegboard-ring {
     transition: opacity 60ms ease-out;
   }
+}
+
+/* ── MORE IN PLUGINS… (MK-D1, MK-4d): one glass pill at the board's foot, the board's door to more objects ─────── */
+
+/* its place, written by the controller (a transform centring it on the drawer's centre line, an opacity) */
+.vf-pegboard-more-place {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+/* 32 tall, corners 16, padded 0 14, gap 8, on the line's glass (§5) with its hairline and the island shadow:
+   `plugin` at 15, then its words at 12.5/600, both in primary ink */
+.vf-pegboard-more {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    var(--vf-shadow-island);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 1;
+  pointer-events: auto;
+  user-select: none;
+  transition:
+    opacity 180ms ease-out,
+    transform 200ms var(--vf-ease-pop);
+}
+
+/* it hovers and presses as §7's buttons do */
+.vf-pegboard-more:hover {
+  transform: scale(1.03);
+}
+
+.vf-pegboard-more:active {
+  transform: scale(0.95);
+}
+
+.vf-pegboard-more:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* it steps aside as ICE's own bar does — out over 90 ms, back over 180 ms — while an object is in hand and while
+   the board hangs nothing */
+.vf-pegboard-more[data-aside] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 90ms ease-out,
+    visibility 0s linear 90ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* no scale under the pointer, and its fades halved (M6) */
+  .vf-pegboard-more {
+    transition: opacity 90ms ease-out;
+  }
+
+  .vf-pegboard-more:hover,
+  .vf-pegboard-more:active {
+    transform: none;
+  }
+
+  .vf-pegboard-more[data-aside] {
+    transition:
+      opacity 45ms ease-out,
+      visibility 0s linear 45ms;
+  }
+}
+
+/* by night the line's glass at 94 %, ringed by the strong hairline, with its 6 % top light (§5) */
+.dark .vf-pegboard-more {
+  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
 }

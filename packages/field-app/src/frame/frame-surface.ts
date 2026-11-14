@@ -59,7 +59,7 @@ export type FrameSurface =
   | "at"
   /** Plugins — the frame's second popup over the search scrim (MK-4a; `plugins/Plugins.tsx`;
    * DESIGN.md §8 "Plugins — the frame's second popup"). Its doors (MK-4b) are the Me menu's Plugins… and the
-   * palette's two acts, through ChromeLayer's `openPlugins`; the pegboard's pill is MK-4d's. */
+   * palette's two acts, and the pegboard's More in Plugins… (MK-4d), through ChromeLayer's `openPlugins`. */
   | "plugins";
 
 /** What a surface's own close asks of the owner: fold it if it is the one

@@ -23,24 +23,36 @@ import {
   useSyncExternalStore,
 } from "react";
 import { type FrameSurface, foldSurface } from "../../../frame/frame-surface";
+import { requestView } from "../../../frame/view-state";
 import { currentDesk } from "../desk-door";
 import {
   boardDoor,
+  boardReveal,
+  dropBoardReveal,
+  requestBoardFocus,
   subscribeBoard,
   subscribeBoardFocusRequest,
+  subscribeBoardReveal,
   takeBoardFocusRequest,
 } from "./board-door";
 import { boardStats } from "./board-stats";
-import { filtersStyle, PegboardView, ringStyle } from "./PegboardView";
+import { filtersStyle, PegboardView, pillStyle, ringStyle } from "./PegboardView";
 import {
   type BoardSpecimen,
   boardSpecimens,
   filterOptions,
   type HungType,
   type LaidSpecimen,
+  NO_SLIDE,
   offeredCategories,
+  pillAside,
   placeFilters,
+  placePill,
+  readSlide,
+  revealPlan,
+  revealStep,
   rowStep,
+  type SlideRead,
 } from "./pegboard-model";
 
 // THE PEGBOARD'S CONTROLLER (DK-13; DESIGN.md §8 "The pegboard — Objects, behind the line"; R14, R19, R21, P3c). The
@@ -60,6 +72,14 @@ import {
 //    the row above or below, focused by its id — ICE scrolls the least that shows it; the RING over the focused object
 //    where the last frame drew it (`anchor().focused.rect`, 2 out); ⏎ `tray.lay()` — the tray's own take at the view's
 //    centre, one undo step, selected, the board folding as a handed take's does; Esc closes the board.
+//  - MORE IN PLUGINS… (MK-D1, MK-4d): the pill at the board's foot, placed with the filters on each publish and
+//    riding the drawer's slide; it steps aside while an object is in hand and while the board hangs nothing, and a
+//    press hands the frame the board's category (`onMorePlugins`): the frame opens the Plugins popup, which folds the
+//    board.
+//  - A SET SHOWN AFTER AN INSTALL (MK-D8's fallback B, MK-E14; MK-4d): the popup's act asks it (`showOnBoard`); over
+//    a covered view Canvas first, then the board raised holding the keyboard, on the set's first category in the
+//    board's order with its first object focused, asked again on each publish until the board hangs the set. A view
+//    that covers the desk once the showing stood on Canvas is the person's move: the showing goes, Canvas not asked.
 
 const isEditable = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement &&
@@ -72,6 +92,8 @@ const isEditable = (target: EventTarget | null): boolean =>
 interface BoardState {
   readonly ready: boolean;
   readonly open: boolean;
+  /** More in Plugins… steps aside: an object in hand, or a board that hangs nothing (MK-4d). */
+  readonly aside: boolean;
   readonly category: string;
   readonly categories: readonly {
     readonly id: string;
@@ -82,7 +104,14 @@ interface BoardState {
   readonly desk: string;
 }
 
-const NO_BOARD: BoardState = { ready: false, open: false, category: "", categories: [], desk: "" };
+const NO_BOARD: BoardState = {
+  ready: false,
+  open: false,
+  aside: true,
+  category: "",
+  categories: [],
+  desk: "",
+};
 let lastKey = "";
 let lastState: BoardState = NO_BOARD;
 function boardState(): BoardState {
@@ -97,6 +126,7 @@ function boardState(): BoardState {
   const next: BoardState = {
     ready: true,
     open: a.open,
+    aside: pillAside(a),
     category: a.category,
     categories: a.categories.map((c) => ({ id: c.id, label: c.label, count: c.count })),
     desk: `${desk.generation}.${desk.mount}`,
@@ -113,6 +143,12 @@ const subscribeCounted = (fn: () => void): (() => void) =>
     boardStats.publishes += 1;
     fn();
   });
+
+/** The person chose on the board themselves (a filter, a key): a showing still standing goes (MK-4d). */
+function movedOn(): void {
+  const want = boardReveal();
+  if (want !== null) dropBoardReveal(want.id);
+}
 
 /** The types the board hangs with their categories (core's `hungTypes` — the engine catalog's tray entries). */
 function hungOf(engine: CanvasEngine): HungType[] {
@@ -164,14 +200,26 @@ function drawnSpecimens(): BoardSpecimen[] {
 export function Pegboard({
   surface,
   onSurfaceChange,
+  covered,
+  onMorePlugins,
 }: {
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
+  /** A view covers the desk (every view but Canvas): a showing asks for Canvas first (MK-E14). */
+  covered: boolean;
+  /**
+   * More in Plugins… pressed (MK-D1): the frame opens the Plugins popup on Discover. It is handed the board's
+   * category ("" All), which Discover's categories will take once Discover draws them (DESIGN.md §8 "The pegboard").
+   */
+  onMorePlugins: (category: string) => void;
 }): ReactElement {
   const state = useSyncExternalStore(subscribeCounted, boardState, () => NO_BOARD);
   const filtersRef = useRef<HTMLDivElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const ringRef = useRef<HTMLDivElement | null>(null);
+  const pillRef = useRef<HTMLDivElement | null>(null);
+  /** The drawer's slide as read from the frames it drew, so More in Plugins… rides it (MK-4d). */
+  const slide = useRef<SlideRead>(NO_SLIDE);
   /** The specimen the keyboard is on — ICE's (`anchor().focused`, I37), followed for the listbox's words — and whether
    * the ring shows (the board focused, by the keyboard). */
   const [focused, setFocused] = useState<string | null>(null);
@@ -180,6 +228,8 @@ export function Pegboard({
   const focusedThisOpen = useRef(false);
   /** A first focus asked of ICE from a publish, not yet run (one at a time — never a write inside the frame). */
   const firstAsked = useRef(false);
+  /** A showing's lay asked of ICE from a publish, not yet run (one at a time, as the first focus is; MK-4d). */
+  const revealAsked = useRef(false);
   /** Where the focus was before the board took it, to give it back when the board folds. */
   const returnFocus = useRef<HTMLElement | null>(null);
   /** The specimens the board hangs now — the listbox's options (re-set only when the list itself changes). */
@@ -193,6 +243,7 @@ export function Pegboard({
       offeredCategories(state.categories, hungOf(desk.engine), desk.off ?? new Set()),
     );
   }, [state]);
+  const category = options.some((o) => o.id === state.category) ? state.category : "";
 
   // a category whose every kind's plugin went off is no longer offered: the board shows All
   useEffect(() => {
@@ -217,11 +268,61 @@ export function Pegboard({
     boardStats.placements += 1;
   }, []);
 
+  // MK-4d — a showing's LAY, once the board is out and hangs the set: the set's first category in the board's order,
+  // then its first object there focused, the board holding the keyboard (so ⏎ lays it). WRITES, so asked a microtask
+  // after the frame that called for them, one at a time; a category changed is laid by the next frame, whose publish
+  // asks again for the focus, and ICE focuses nothing until the board is laid (I37), so each publish asks until it
+  // lands
+  const askLay = useCallback((): void => {
+    const want = boardReveal();
+    const desk = currentDesk();
+    const anchor = boardDoor()?.anchor() ?? null;
+    if (want === null || desk === null || anchor === null) return;
+    if (!anchor.open || anchor.drawer === null || revealAsked.current) return;
+    const off: ReadonlySet<string> = desk.off ?? new Set();
+    const hangs = hungOf(desk.engine);
+    const offered = offeredCategories(anchor.categories, hangs, off);
+    const plan = revealPlan(want.types, offered, hangs, off);
+    if (plan === null) return;
+    revealAsked.current = true;
+    queueMicrotask(() => {
+      revealAsked.current = false;
+      const door = boardDoor();
+      if (door === null || boardReveal()?.id !== want.id || !door.isOpen()) return;
+      if (door.category() !== plan.category) {
+        door.category(plan.category);
+        return;
+      }
+      const board = boardRef.current;
+      if (board !== null && document.activeElement !== board) {
+        focusedThisOpen.current = true;
+        board.focus({ preventScroll: true });
+      }
+      ringOn.current = true;
+      const to = door.focus(plan.type);
+      if (to !== plan.type) return;
+      dropBoardReveal(want.id);
+      setFocused(to);
+    });
+  }, []);
+
   const place = useCallback((): void => {
     const filters = filtersRef.current;
+    const pill = pillRef.current;
     const anchor = boardDoor()?.anchor() ?? null;
-    if (filters !== null) {
-      Object.assign(filters.style, filtersStyle(placeFilters(anchor?.drawer ?? null)));
+    const drawer = anchor?.drawer ?? null;
+    // the drawer's slide, read from the frames it drew: More in Plugins… rides it (MK-4d)
+    if (anchor !== null && drawer !== null) {
+      slide.current = readSlide(slide.current, drawer, anchor.view.height);
+    }
+    // the board's controls — the filters in its header band, More in Plugins… at its foot — written together, one
+    // placement a publish
+    if (filters !== null || pill !== null) {
+      if (filters !== null) Object.assign(filters.style, filtersStyle(placeFilters(drawer)));
+      if (pill !== null) {
+        const at = anchor === null ? null : placePill(drawer, anchor.view, slide.current.travel);
+        Object.assign(pill.style, pillStyle(at));
+      }
       boardStats.placements += 1;
     }
     // the list the board hangs (a lay: the board out, a category, a remount, a resize) — re-set only when it changes,
@@ -240,7 +341,8 @@ export function Pegboard({
     // ICE holds no focus — B raised the board before its first lay was laid (the focus comes as the drawer starts to
     // rise, and ICE's focus finds nothing hung yet), or ICE let it go with a category — the first it hangs (DK-13's
     // reading). A WRITE — and this runs inside the desk's frame (the tray's publish is its reflector's), so it is asked a
-    // microtask after it, one at a time, until ICE's anchor says a focus
+    // microtask after it, one at a time, until ICE's anchor says a focus. A showing lands its own object (MK-4d), so
+    // while one stands the first is not asked.
     if (
       anchor?.drawer != null &&
       document.activeElement === boardRef.current &&
@@ -251,16 +353,18 @@ export function Pegboard({
         focusedThisOpen.current = true;
         ringOn.current = true;
       }
-      if ((took || id === null) && !firstAsked.current) {
+      if ((took || id === null) && !firstAsked.current && boardReveal() === null) {
         firstAsked.current = true;
         queueMicrotask(() => {
           firstAsked.current = false;
-          if (document.activeElement === boardRef.current) boardDoor()?.focus("first");
+          if (document.activeElement === boardRef.current && boardReveal() === null)
+            boardDoor()?.focus("first");
         });
       }
     }
+    askLay();
     placeRing();
-  }, [placeRing]);
+  }, [placeRing, askLay]);
 
   useLayoutEffect(() => {
     place();
@@ -298,6 +402,54 @@ export function Pegboard({
       if (!door.isOpen() && !door.open()) onSurfaceChange(foldSurface(surface, "objects"));
     } else if (door.isOpen()) door.close();
   }, [surface, onSurfaceChange, state.ready]);
+
+  // ── MK-4d: a set shown on the board after an install (MK-D8's fallback B; MK-E14) ─────────────────────────────
+  // The popup's act hands the set here (`showOnBoard`), and `revealStep` says what the frame does next: over a covered
+  // view Canvas first; on Canvas the board raised holding the keyboard (the frame's one value, so the popup folds as it
+  // rises); once out, its lay on the desk's publish (`askLay`, above). It goes once the person moves on (a view
+  // covering the desk once it stood on Canvas is theirs too), and an install's remount (a new desk) raises the board
+  // again on the set.
+  const reveal = useSyncExternalStore(subscribeBoardReveal, boardReveal, () => null);
+  /** The showing the facts below are of, whether it asked for Canvas, whether it has stood on Canvas, and the desk it
+   * last saw the board out on. */
+  const revealFor = useRef<number | null>(null);
+  const revealAskedCanvas = useRef(false);
+  const revealOnCanvas = useRef(false);
+  const revealShownOn = useRef<string | null>(null);
+  useEffect(() => {
+    if (reveal === null) return;
+    if (revealFor.current !== reveal.id) {
+      revealFor.current = reveal.id;
+      revealAskedCanvas.current = false;
+      revealOnCanvas.current = false;
+      revealShownOn.current = null;
+    }
+    // read before the desk is: a showing on Canvas while no desk is mounted (a remount's gap) stood there too
+    if (!covered) revealOnCanvas.current = true;
+    if (!state.ready) return;
+    const door = boardDoor();
+    if (door === null) return;
+    const step = revealStep({
+      covered,
+      askedCanvas: revealAskedCanvas.current,
+      onCanvas: revealOnCanvas.current,
+      surface,
+      open: state.open,
+      held: door.anchor().held,
+      desk: state.desk,
+      shownOn: revealShownOn.current,
+    });
+    if (step === "canvas") {
+      revealAskedCanvas.current = true;
+      void requestView("canvas");
+    } else if (step === "raise") {
+      requestBoardFocus();
+      onSurfaceChange("objects");
+    } else if (step === "out") {
+      revealShownOn.current = state.desk;
+      askLay();
+    } else if (step === "drop") dropBoardReveal(reveal.id);
+  }, [reveal, covered, surface, state.ready, state.open, state.desk, onSurfaceChange, askLay]);
 
   // ── the focus: taken when the board was asked for from the keyboard; given back when it folds ──────────────────
   const takeFocus = useCallback((): void => {
@@ -359,6 +511,9 @@ export function Pegboard({
     };
   }, [state.open, placeRing]);
 
+  // ── MK-4d: More in Plugins… (MK-D1) — the board's category to the frame, whose popup folds the board ───────────
+  const onMore = useCallback(() => onMorePlugins(category), [onMorePlugins, category]);
+
   // ── the board's keys (R14), on ICE's doors (I37) ──────────────────────────────────────────────────────────────
   const onBoardKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -392,6 +547,7 @@ export function Pegboard({
       to = type === undefined ? door.focus("first") : door.focus(type);
     } else return;
     event.preventDefault();
+    movedOn();
     ringOn.current = true;
     setFocused(to === "" ? null : to);
     // the ring follows the frame this focus move asks for (ICE scrolls the specimen into the face in it)
@@ -401,8 +557,11 @@ export function Pegboard({
     const door = boardDoor();
     if (door !== null && !focusedThisOpen.current) {
       focusedThisOpen.current = true;
-      const to = door.focus("first");
-      setFocused(to === "" ? null : to);
+      // a showing lands its own object (MK-4d): the board's first is not asked while one stands
+      if (boardReveal() === null) {
+        const to = door.focus("first");
+        setFocused(to === "" ? null : to);
+      }
     }
     placeRing();
   };
@@ -415,8 +574,11 @@ export function Pegboard({
     <PegboardView
       open={state.open}
       options={options}
-      category={options.some((o) => o.id === state.category) ? state.category : ""}
-      onCategory={(id) => boardDoor()?.category(id)}
+      category={category}
+      onCategory={(id) => {
+        movedOn();
+        boardDoor()?.category(id);
+      }}
       filtersRef={filtersRef}
       specimens={hung}
       focused={focused}
@@ -425,6 +587,9 @@ export function Pegboard({
       onBoardKeyDown={onBoardKeyDown}
       onBoardFocus={onBoardFocus}
       onBoardBlur={onBoardBlur}
+      pillRef={pillRef}
+      pillAside={state.aside}
+      onMore={onMore}
     />
   );
 }

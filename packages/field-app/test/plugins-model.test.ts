@@ -1021,12 +1021,13 @@ describe("the popup's words (§9; James 2026-11-10 00:46Z: no insides)", () => {
     expect(all).not.toMatch(/registry|signature|\bkeys?\b|hash|daemon|worker|restart|reload/i);
   });
 
-  it("says the doors as §9 holds them, and a count only once a read found one (MK-4b)", () => {
+  it("says the doors as §9 holds them, and a count only once a read found one (MK-4b, MK-4d)", () => {
     expect(words.PLUGINS_DOOR).toEqual({
       name: "Plugins…",
       check: "Check plugins for updates",
       nameWhere: "Me menu",
       checkWhere: "Plugins",
+      more: "More in Plugins…",
     });
     expect(words.updatesWords(0)).toBeNull();
     expect(words.updatesWords(1)).toBe("1 update");

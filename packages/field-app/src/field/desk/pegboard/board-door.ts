@@ -8,6 +8,8 @@ import { currentDesk, type MountedDesk, subscribeDesk } from "../desk-door";
 // drawer as the last frame drew it — its slide, its clear header band — the hand, the categories) after each frame
 // that moved it, never at rest. The chrome lives outside the stage, so it reads the tray of the desk MOUNTED NOW: a
 // Reload, a kinds remount or a new document generation makes a new handle, and every reader follows it here, once.
+// MK-4d: the Plugins popup's door to the board is here too — a showing of a set after an install (`showOnBoard`), which
+// the pegboard's controller lands across that remount.
 
 /** The mounted desk's tray door — absent on a handle without one (a test's double), and with no desk. */
 export const trayOf = (desk: MountedDesk | null): DeskTrayDoor | null =>
@@ -89,6 +91,60 @@ export function subscribeBoardFocusRequest(fn: () => void): () => void {
 /** Drop a pending request (the board refused, or closed before it rose). */
 export function dropBoardFocusRequest(): void {
   focusWanted = false;
+}
+
+// ── a set shown on the board after an install (MK-4d; MK-D8's fallback B, MK-E14) ─────────────────────────────────
+/** A showing asked of the board: the set's object types, in the set's own order, and which asking it is. */
+export interface BoardReveal {
+  readonly id: number;
+  readonly types: readonly string[];
+}
+
+let reveal: BoardReveal | null = null;
+let reveals = 0;
+const revealListeners = new Set<() => void>();
+const announceReveal = (): void => {
+  for (const fn of [...revealListeners]) fn();
+};
+
+/**
+ * SHOW THEM ON THE PEGBOARD (MK-D8, ruled A by James 2026-11-11; its fallback B, VF-PM's MK-E2): the Plugins popup's
+ * act hands the set's object types here, in the set's own order. The pegboard's controller does the rest: over a
+ * covered view it asks for Canvas first (MK-E14), raises the board holding the keyboard, and shows the set's first
+ * category in the board's order with the set's first object there focused, asking again on each publish until the
+ * board hangs the set (an install brings its kinds by a remount, DK-9; ICE's focus answers nothing until the board is
+ * laid, I37). It stands until it lands or the person moves on, and a newer one replaces it. A set with no object asks
+ * nothing (the popup offers such a set no act).
+ */
+export function showOnBoard(types: readonly string[]): void {
+  if (types.length === 0) return;
+  reveals += 1;
+  reveal = { id: reveals, types: [...types] };
+  announceReveal();
+}
+
+/** The showing that stands now, or null. */
+export function boardReveal(): BoardReveal | null {
+  return reveal;
+}
+
+export function subscribeBoardReveal(fn: () => void): () => void {
+  revealListeners.add(fn);
+  return () => {
+    revealListeners.delete(fn);
+  };
+}
+
+/** The showing `id` landed, or the person moved on: it stands no more (a newer one is left as it is). */
+export function dropBoardReveal(id: number): void {
+  if (reveal?.id !== id) return;
+  reveal = null;
+  announceReveal();
+}
+
+/** Test seam: no showing stands. */
+export function resetBoardRevealForTest(): void {
+  reveal = null;
 }
 
 // ── the facts as a store: one snapshot per change of what they SAY (never one per frame of the slide) ───────────────
