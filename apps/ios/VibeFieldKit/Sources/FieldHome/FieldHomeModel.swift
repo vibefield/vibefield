@@ -661,10 +661,13 @@ enum FieldHomeModel {
 
   /// What the clock makes of an absence when its facts change, before any time passes: connected, the next drop
   /// begins as a blip; asked by Tailscale, the absence is long, so the sign-in's end goes to the hold and never
-  /// through the tabs; else it stands as it was, and `absenceCourse` runs from there.
+  /// through the tabs. Else a long absence looks again (a network back, a sign-in ended, Try again), and any
+  /// other stands as it was, for `absenceCourse` to run from. The home makes this turn in the pass that saw
+  /// the facts move, so Can’t reach your computer. never stands for a frame between two holds.
   static func absence(_ was: Absence, at reach: Reach) -> Absence {
     if reach.connected { return .blip }
-    return reach.asking ? .long : was
+    if reach.asking { return .long }
+    return was == .long ? .looking : was
   }
 
   /// How many desktops answer: a door that is ready (the home's client, or another desktop's probe), and one
@@ -688,15 +691,16 @@ enum FieldHomeModel {
   }
 
   /// Whether a first way in is under way. It begins when one of its own pages stands (no account, the desktop
-  /// that sent you, an admin's approval, joining, looking, No desktops yet) and ends at signed in; Sign in
-  /// again, Another account? and the gate's three screens leave it as it was. While it is under way the gate's
-  /// screens never stand in its place, so a desktop listed mid-way neither drops the steps nor loses the found
-  /// beat.
+  /// that sent you, joining, looking, No desktops yet) and ends at signed in; Sign in again, Another account?,
+  /// an admin's approval and the gate's three screens leave it as it was. Approval stands in a first way in
+  /// and over a phone that has been here before alike, so it begins none: a first way in has passed the
+  /// welcome before it. While one is under way the gate's screens never stand in its place, so a desktop listed
+  /// mid-way neither drops the steps nor loses the found beat.
   static func firstWayIn(_ was: Bool, page: DoorPage?) -> Bool {
     guard let page else { return false }
     switch page {
-    case .welcome, .fromCode, .approval, .joining, .looking, .noDesktops: return true
-    case .signInAgain, .anotherAccount, .offline, .reaching, .unreachable: return was
+    case .welcome, .fromCode, .joining, .looking, .noDesktops: return true
+    case .signInAgain, .anotherAccount, .approval, .offline, .reaching, .unreachable: return was
     }
   }
 

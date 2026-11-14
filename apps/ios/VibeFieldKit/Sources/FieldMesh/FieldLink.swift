@@ -656,8 +656,18 @@ public final class FieldLink {
     reconcile()
   }
 
-  /// RED — Try again's asking (WI-L2 as amended 2026-11-13), not written yet.
-  public func lookAgain() {}
+  /// WI-L2 as amended 2026-11-13 — the person asked (Try again, on Can’t reach your computer.): every desktop
+  /// whose door did not answer is asked now, not at its weather deadline, and a pass runs at once. A
+  /// stranger's door keeps its minutes (UA-P-1a) and a door that stopped this phone keeps its backoff
+  /// (SP-2 (e)): a tap changes neither.
+  public func lookAgain() {
+    guard started, !isPaused else { return }
+    for (deviceId, entry) in found {
+      guard case .unreachable = entry.admission else { continue }
+      found[deviceId]?.askAgainAt = nil
+    }
+    sweepSoon()
+  }
 
   public func stop() {
     started = false

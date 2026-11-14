@@ -750,8 +750,11 @@ public struct HomeScreen: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .splashHolds(wayInStep != nil)
     .splashOverlay { wayIn }
-    // WI-L2 as amended — the absence's clock: it starts again whenever what it runs on moves
+    // WI-L2 as amended — the absence's clock: it starts again whenever what it runs on moves. The turn the
+    // facts make at once is made here, in the pass that saw them move, and never a hop later in the task: a
+    // page drawn from the absence as it was would stand for a frame
     .task(id: reach) { await keepAbsence() }
+    .onChange(of: reach) { _, now in settleAbsence(at: now) }
     // coming back to VibeField looks again at once, as Try again does (`mesh.keepUp()` is the scene's own hook)
     .onChange(of: scenePhase) { _, phase in
       if phase == .active, !reach.connected { reachAttempt += 1 }
@@ -825,17 +828,28 @@ public struct HomeScreen: View {
       attempt: reachAttempt)
   }
 
+  /// What the facts make of the absence at once (`FieldHomeModel.absence(_:at:)`), assigned only when it moves.
+  @discardableResult
+  private func settleAbsence(at reach: FieldHomeModel.Reach) -> FieldHomeModel.Absence {
+    let stands = FieldHomeModel.absence(absence, at: reach)
+    if stands != absence { absence = stands }
+    return stands
+  }
+
   /// The absence's clock (`.task(id: reach)`, so every move of `reach` cancels it and starts it again). With a
   /// desktop answering, the next drop begins as a blip. Without one it walks `FieldHomeModel.absenceCourse`
-  /// from where the absence stands: the grace, the hold, then the page. A cancelled sleep leaves the absence
-  /// where it was, for the next run to walk on from.
+  /// from where the absence stands: the grace, the hold, then the page. A cancelled run writes nothing more:
+  /// a sleep whose timer fired as the cancel came returns normally, so the cancel is read again after it, or
+  /// a run that has been replaced would write over its successor's blip. The clock is the wall's, so a drop
+  /// seen just before the phone slept has run its course by the time VibeField is back, and coming back looks
+  /// again (the scene's hook above).
   private func keepAbsence() async {
     let now = self.reach
-    let stands = FieldHomeModel.absence(absence, at: now)
-    if stands != absence { absence = stands }
+    let stands = settleAbsence(at: now)
     guard !now.connected, !now.asking else { return }
     for step in FieldHomeModel.absenceCourse(from: stands) {
       do { try await Task.sleep(for: step.after) } catch { return }
+      guard !Task.isCancelled else { return }
       if absence != step.then { absence = step.then }
     }
   }
@@ -948,8 +962,9 @@ public struct HomeScreen: View {
         tryAgain: { tryAgain() }))
   }
 
-  /// WI-L2 as amended 2026-11-13 — Try again, on Can’t reach your computer.: the mesh dials now instead of at
-  /// its backoff's end, and the hold looks for another patience (the clock's key counts the attempt).
+  /// WI-L2 as amended 2026-11-13 — Try again, on Can’t reach your computer.: a mesh that is down dials now
+  /// instead of at its backoff's end, a mesh that is up asks every desktop that did not answer again
+  /// (`FieldLink.lookAgain`), and the hold looks for another patience (the clock's key counts the attempt).
   private func tryAgain() {
     #if DEBUG
       // the mock's desktop answers again, as its Sign in fills the corner; a stamped corner is a photograph
@@ -960,6 +975,7 @@ public struct HomeScreen: View {
       if demoAccount != nil { return }
     #endif
     if meshKeepsItselfUp { mesh.keepUp() }
+    link?.lookAgain()
     reachAttempt += 1
   }
 
