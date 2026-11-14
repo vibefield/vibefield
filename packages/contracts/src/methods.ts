@@ -1155,6 +1155,21 @@ export const METHODS: MethodDef[] = [
     idempotent: true, // declarative: the same name twice is written once
     locality: "local",
   }),
+  // Item 406 (track WI's Desktop slice; WI-W5b A; VF-PM's rulings 2026-11-14 04:49Z) — Remove a
+  // PHONE (`DeviceRemoveParams`): refuse it on every desktop of the account and close what it holds
+  // here. device.rename's row in all but its name. `settings.manage`, which no tailnet grant holds,
+  // so a phone never reaches it (the refusal is account-wide, with no lift). Declarative: a refused
+  // device is refused once (`DeviceRemoveResult.removed`). Local: the refusal reaches the other
+  // desktops by the settings document's merge, never by a forward. Desktop callers only, by the
+  // handler's own check. Declared at S1 and served from S3: until then the door answers it NOT_FOUND,
+  // "method not found", as it answers any unserved name.
+  defineMethod({
+    surface: "product",
+    method: "device.remove",
+    scope: "settings.manage",
+    idempotent: true, // declarative: a refused device is refused once
+    locality: "local",
+  }),
   // DS-2 (DS-D15, 2026-09-30) — the receipt of a keyed forwarded mutation, as
   // THIS daemon knows it: applied, refused, or outcome-unknown (the forward
   // left and its answer was lost), with `inFlight` while an attempt is out.

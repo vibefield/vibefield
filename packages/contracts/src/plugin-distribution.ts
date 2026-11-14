@@ -508,10 +508,17 @@ export type PluginsCatalogResult = z.infer<typeof PluginsCatalogResult>;
 //                                   key per revocation ever made, never deleted
 //   "installSet"                  → P7's layout (pluginId → one whole entry);
 //                                   read only to MIGRATE it, then emptied
+//   "devices.refused"             → [deviceId, eventId] → RefusedDevice: one
+//                                   key per refusal ever made, never deleted
+//                                   (item 406, Q-PM1)
+//   "devices.phones"              → deviceId → KnownPhone (item 406, Q-PM2)
 // Per-key LWW; op history retained (undo horizon = compaction epochs); every
 // write stamps principal provenance into op metadata. The install-set and the
 // grant decisions inside it are OUTSIDE the undo stack (D29′ law 2 — undo
 // never re-escalates; undoing a revocation requires the explicit grant flow).
+// So are the two device sections (item 406): no undo lifts a refusal, and none
+// brings a removed phone's entry back. Both belong to the account, never to one
+// device (law 1), and never reach a phone: document sync admits only desktops.
 //
 // DS-5b (PA-32, 2026-10-01) — why the install-set is one root map per FIELD.
 // P7 stored an entry as ONE last-writer-wins value, so a desktop offline across
@@ -540,9 +547,15 @@ export const SETTINGS_DOC_SECTIONS = {
   /** MK-2d (2026-11-11, E10's R1): one grow-only key per removal, `[pluginId, uuid] → {at}`, never deleted, so a
    * removal reaches every desktop and "removed" is told apart from "never published" */
   INSTALL_SET_REMOVALS: "installSet.removals",
-  // 406 (red): STUBBED — empty names, which the section rows refuse (the green commit names them)
-  DEVICES_REFUSED: "",
-  DEVICES_PHONES: "",
+  /** Item 406 (Q-PM1) — `[deviceId, eventId]` → `RefusedDevice` (devices.ts): the phones Remove
+   * refused, account-wide. Grow-only and never deleted; written only by the refusal's own writer
+   * (`device.remove`, and a refused phone's new node id appended), under a `no-undo:` origin, and
+   * never by a generic settings write. */
+  DEVICES_REFUSED: "devices.refused",
+  /** Item 406 (Q-PM2) — deviceId → `KnownPhone` (devices.ts): the account's known phones,
+   * upserted when a node speaks as a phone and deleted by Remove. A deleted entry, its name with
+   * it, stays in the document's history. */
+  DEVICES_PHONES: "devices.phones",
 } as const;
 
 export const GrantDecision = z
