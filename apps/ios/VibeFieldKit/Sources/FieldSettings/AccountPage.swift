@@ -145,9 +145,13 @@ struct AccountPage: View {
       }
       .padding(.vertical, 8)
       .accessibilityElement(children: .combine)
-      if account.standing == .signInAgain {
-        Button(action: actions.signIn) {
-          ChromeRow("Sign in again")
+      // The row under the state: Sign in again while Tailscale asks, and (WI-W2e A, 2026-11-14) Try again under
+      // "Couldn’t connect.", which leaves Settings open so the card's Connecting… is read here
+      if let act = SettingsModel.tailscaleAct(account.standing) {
+        Button {
+          actions.perform(act)
+        } label: {
+          ChromeRow(act.title)
         }
         .buttonStyle(.plain)
       }

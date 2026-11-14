@@ -2072,6 +2072,11 @@ public struct HomeScreen: View {
         setAccountMenu(open: false)
         performSignIn()
       },
+      // WI-W2e A — Try again, under the notice "Couldn’t connect.": the menu folds, as Sign in's does
+      onTryAgain: {
+        setAccountMenu(open: false)
+        tryConnectingAgain()
+      },
       onLockNow: onLockNow,
       // the row's meters are read only while the menu stands: its rows leave with their last drawing as it folds
       agentProfiles: accountMenuOpen
@@ -3628,8 +3633,9 @@ public struct HomeScreen: View {
         closeSettings()
         confirmSignOut()
       },
-      // RED — WI-W2e A: Try again calls nothing yet
-      tryAgain: {})
+      // WI-W2e A — Try again, under the card's "Couldn’t connect.": Settings stays open, so the card's Connecting… is
+      // read where it was asked for
+      tryAgain: { tryConnectingAgain() })
     #if DEBUG
       // RB-2 — the Developer page's Swarm lab: Settings leaves, then the lab opens over the home (`afterSettings`). It
       // is DEBUG's until the gate widens (PLAN-2c §1C, after item 367's pick), as the lab's door is (`swarmLabBinding`).
@@ -3989,6 +3995,27 @@ public struct HomeScreen: View {
   private var accountActsHeld: Bool {
     #if DEBUG || VF_TESTFLIGHT
       return Self.thisLaunch.holds(.account, scripted: Self.thisLaunchScripted)
+    #else
+      return false
+    #endif
+  }
+
+  /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z; DESIGN.md §9 "The way in", ruled that day) — Try
+  /// again, under "Couldn’t connect." on the corner's notice and on Tailscale's card in Settings › Account: the network
+  /// starts again now, from the start that failed, as it keeps itself up (`MeshModel.tryAgain`). It signs no one in or
+  /// out and forgets nothing. Not the way in's Try again (`tryAgain()`), which also looks again for a desktop. Under
+  /// any demo it is held, and no node starts under invented facts.
+  private func tryConnectingAgain() {
+    if tryAgainHeld { return }
+    guard meshKeepsItselfUp else { return }
+    mesh.tryAgain()
+  }
+
+  /// WI-W2e A — whether this open's demo holds the corner's and Settings' Try again: any demo does, a scripted run's
+  /// included (`LaunchFixtures.holds(.tryAgain)`), since no demo has a network to start.
+  private var tryAgainHeld: Bool {
+    #if DEBUG || VF_TESTFLIGHT
+      return Self.thisLaunch.holds(.tryAgain, scripted: Self.thisLaunchScripted)
     #else
       return false
     #endif

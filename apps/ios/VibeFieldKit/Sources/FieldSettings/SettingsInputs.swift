@@ -195,9 +195,7 @@ public struct SettingsActions {
   public func perform(_ act: SettingsModel.TailscaleAct) {
     switch act {
     case .signInAgain: signIn()
-    case .tryAgain:
-      // RED — WI-W2e A: Try again calls nothing yet
-      break
+    case .tryAgain: tryAgain()
     }
   }
 }

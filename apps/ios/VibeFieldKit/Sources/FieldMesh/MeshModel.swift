@@ -290,15 +290,19 @@ public final class MeshModel {
   nonisolated static func tryAgainStep(
     rememberedLogin: String?, loginName: String?, state: State, hasRuntime: Bool, regating: Bool
   ) -> KeepUpStep {
-    // RED — WI-W2e A: Try again starts nothing yet
-    .nothing
+    let kept = !(rememberedLogin?.isEmpty ?? true)
+    let reported = !(loginName?.isEmpty ?? true)
+    return keepUpStep(signedIn: kept || reported, state: state, hasRuntime: hasRuntime, regating: regating)
   }
 
   /// WI-W2e A — the person's Try again, under "Couldn’t connect." (the corner's notice, Tailscale's card in Settings ›
   /// Account): the network starts again at once, as `keepUp()` starts it, presenting no sign-in page. It signs no one
   /// in or out and forgets nothing.
   public func tryAgain() {
-    // RED — WI-W2e A: nothing starts yet
+    keep(
+      Self.tryAgainStep(
+        rememberedLogin: rememberedLogin, loginName: loginName, state: state, hasRuntime: runtime != nil,
+        regating: regating))
   }
 
   /// Keep this phone on the mesh while it is signed in. Idempotent; the home
@@ -308,6 +312,12 @@ public final class MeshModel {
     watchNetwork()
     let step = Self.keepUpStep(
       signedIn: rememberedLogin != nil, state: state, hasRuntime: runtime != nil, regating: regating)
+    keep(step)
+  }
+
+  /// One step of keeping the node up, made: a re-dial waiting on the backoff gives way, then the node is started,
+  /// replaced or asked again. `keepUp()` and `tryAgain()` each decide the step; this is the one place it is made.
+  private func keep(_ step: KeepUpStep) {
     if step != .nothing {
       retryTask?.cancel()
       retryTask = nil

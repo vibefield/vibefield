@@ -213,8 +213,7 @@ public enum SettingsModel {
   public static func tailscaleAct(_ standing: SettingsAccount.Standing) -> TailscaleAct? {
     switch standing {
     case .signInAgain: return .signInAgain
-    // RED — WI-W2e A: Couldn’t connect. carries no act yet
-    case .couldNotConnect: return nil
+    case .couldNotConnect: return .tryAgain
     case .signedOut, .connected, .connecting, .waitingForApproval: return nil
     }
   }

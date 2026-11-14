@@ -79,11 +79,8 @@ struct LaunchFixtures: Equatable, Sendable {
       switch act {
       case .account:
         return !scripted
-      case .lock:
+      case .lock, .tryAgain:
         return true
-      case .tryAgain:
-        // RED — WI-W2e A: Try again is not held yet
-        return false
       case .openSettings, .openDeveloper, .demoFieldSwitch, .accountPicker:
         return false
       }

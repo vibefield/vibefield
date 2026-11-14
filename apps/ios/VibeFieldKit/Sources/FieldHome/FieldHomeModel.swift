@@ -555,6 +555,11 @@ enum FieldHomeModel {
         .init(id: $0.deviceId, name: $0.name, word: AccountDisplay.asleep, wantsTheUser: false, platform: $0.platform)
       }
 
+    // WI-W2e A — Try again stands with the notice "Couldn’t connect.": a start that failed, which nothing retries by
+    // itself. A drop is `reconnecting`, re-dialled on its backoff, and Tailscale asking is Sign in's.
+    let startFailed: Bool
+    if case .failed = meshState { startFailed = true } else { startFailed = false }
+
     return AccountFace(
       control: control,
       wantsAttention: wantsAttention,
@@ -566,8 +571,7 @@ enum FieldHomeModel {
       desktops: rows,
       othersLine: AccountDisplay.othersLine(count: foreignDoors),
       offersSignIn: meshState == .needsLogin,
-      // RED — WI-W2e A: the notice carries no act yet
-      offersTryAgain: false,
+      offersTryAgain: startFailed,
       signInWord: AccountDisplay.signInWord(hasAccount: account != nil),
       canSignOut: account != nil)
   }

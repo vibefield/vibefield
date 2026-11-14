@@ -11,7 +11,8 @@ import SwiftUI
 /// face and folds it away. It reads bottom-up, nearest first: you · Agent
 /// Profiles (UM-4, while signed in) · your desktops · Settings… · Lock now
 /// (only while the lock is on, WI-3) · Sign in
-/// (only while the tailnet asks for it) · Sign out farthest from the thumb. There is no connect or disconnect: the phone
+/// (only while the tailnet asks for it), or Try again in its place (only under "Couldn’t connect.", WI-W2e A) · Sign
+/// out farthest from the thumb. There is no connect or disconnect: the phone
 /// stays on the mesh by itself while it is signed in (2026-10-18).
 ///
 /// Every word is `FieldHomeModel.accountFace`'s; this draws what it is handed.
@@ -37,6 +38,9 @@ struct AccountCornerView: View {
   let onSettings: () -> Void
   let onSignOut: () -> Void
   let onSignIn: () -> Void
+  /// WI-W2e A — Try again, under "Couldn’t connect.": the network starts again (DESIGN.md §8 "The phone's corner",
+  /// amended 2026-11-14).
+  let onTryAgain: () -> Void
   /// WI-3 — Lock now: the curtain at once, then Face ID. Nil while the lock is off, and the row is not drawn.
   let onLockNow: (() -> Void)?
   /// UM-4 (UM-D25 A) — the Agent Profiles row: every plan's circle at 26, the tightest word, and the page. It stands
@@ -333,7 +337,7 @@ struct AccountCornerView: View {
     var rows: [AccountMenuRowKind] = []
     if canSignOut { rows.append(.signOut) }
     if offersSignIn { rows.append(.signIn) }
-    // RED — WI-W2e A: Try again is not a row yet
+    if offersTryAgain { rows.append(.tryAgain) }
     rows.append(.theme)
     if lockOn { rows.append(.lockNow) }
     rows.append(.settings)
@@ -353,7 +357,9 @@ struct AccountCornerView: View {
           .padding(.bottom, 6)
       }
       ForEach(
-        Self.menuRows(canSignOut: face.canSignOut, offersSignIn: face.offersSignIn, lockOn: onLockNow != nil),
+        Self.menuRows(
+          canSignOut: face.canSignOut, offersSignIn: face.offersSignIn, offersTryAgain: face.offersTryAgain,
+          lockOn: onLockNow != nil),
         id: \.self
       ) { row in
         switch row {
@@ -362,8 +368,7 @@ struct AccountCornerView: View {
         case .signIn:
           AccountMenuRow(glyph: "key", label: face.signInWord, action: onSignIn)
         case .tryAgain:
-          // RED — WI-W2e A: no row draws it yet
-          EmptyView()
+          AccountMenuRow(glyph: "arrow.clockwise", label: face.tryAgainWord, action: onTryAgain)
         case .theme:
           ThemeMenuRow()
         case .lockNow:
