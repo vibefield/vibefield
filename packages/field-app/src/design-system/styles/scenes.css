@@ -362,13 +362,13 @@
 }
 
 .vf-ds-card-2x {
-  width: 208px;
-  height: 292px;
+  width: 240px;
+  height: 336px;
 }
 
 .vf-ds-card-2x-inner {
-  width: 104px;
-  height: 146px;
+  width: 120px;
+  height: 168px;
   transform: scale(2);
   transform-origin: 0 0;
 }
