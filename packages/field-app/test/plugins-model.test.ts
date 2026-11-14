@@ -1,4 +1,9 @@
-import { type PluginRecord, PluginRegistrySnapshot, PluginsCatalog } from "@vibefield/contracts";
+import {
+  type PluginRecord,
+  PluginRegistrySnapshot,
+  PluginsCatalog,
+  SettingsGetResult,
+} from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import {
   CATALOG_FIXTURES,
@@ -22,6 +27,7 @@ import {
   pluginsLayout,
   powerSwitchOf,
   refusalStale,
+  settingAct,
   settingDraft,
   settingKind,
   settingsOf,
@@ -815,7 +821,7 @@ describe("a plugin's settings (MK-4c2b; §8 'Its settings', corrected for James'
       words.SETTINGS_WORDS.footSynced,
       null,
     ]);
-    // no Undo and no Redo on the page (James's MK-O6), and no reset (C2)
+    // no Undo and no Redo on the page (James's MK-O6), and no "Reset": Back to default (MK-4c2c)
     expect(Object.keys(settings ?? {}).sort()).toEqual(["foot", "live", "offLine", "rows"]);
     expect(Object.values(words.SETTINGS_WORDS).join(" ")).not.toMatch(/\b(undo|redo|reset)\b/i);
     // the page carries the same section
@@ -837,6 +843,25 @@ describe("a plugin's settings (MK-4c2b; §8 'Its settings', corrected for James'
     // one whose settings all stay on this desktop
     const pad = settingsOf(recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.comment-pad"));
     expect(pad?.foot).toBe(words.SETTINGS_WORDS.footHere);
+  });
+
+  it("offers a kept setting its way back, a kept secret its removal, and one at its default none (MK-4c2c)", () => {
+    const simulators = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.simulator");
+    const rows = settingsOf(simulators)?.rows ?? [];
+    const of = (key: string): PageSetting => {
+      const found = rows.find((setting) => setting.key === key);
+      if (found === undefined) throw new Error(`no setting ${key}`);
+      return found;
+    };
+    const kept = SettingsGetResult.parse({ isSet: true, value: false });
+    const unset = SettingsGetResult.parse({ isSet: false });
+    const keptSecret = SettingsGetResult.parse({ isSet: true, secret: true });
+    const noSecret = SettingsGetResult.parse({ isSet: false, secret: true });
+    expect(settingAct(of("showFrame"), kept)).toBe("toDefault");
+    expect(settingAct(of("showFrame"), unset)).toBeNull();
+    expect(settingAct(of("sizes"), kept)).toBe("toDefault");
+    expect(settingAct(of("token"), keptSecret)).toBe("forget");
+    expect(settingAct(of("token"), noSecret)).toBeNull();
   });
 
   it("carries no section on a page that reads only, nor for a plugin that declares no setting (U2)", () => {
