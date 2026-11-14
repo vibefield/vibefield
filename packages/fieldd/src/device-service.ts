@@ -720,6 +720,14 @@ export class DeviceService extends EventEmitter {
     return this.refused.nodeIds.has(nodeId);
   }
 
+  /** Item 406 (S3, Q-PM6) — does any refusal stand, as the last registry pass
+   * read them? While one does, the door refuses a same-login hello the sidecar
+   * named no node for: without the node it cannot tell that caller from the
+   * removed phone. */
+  hasRefusals(): boolean {
+    return this.refused.deviceIds.size > 0;
+  }
+
   /** UA-P-0e — where a peer's product door is, DERIVED: its authenticated
    * MagicDNS name plus the registry's fixed product serve port, over plain `http`
    * because the product serve is declared `tls: false` — WireGuard is the wire's

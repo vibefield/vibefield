@@ -279,6 +279,7 @@ import {
   splitPathList,
 } from "./boot-env";
 import { openSwarmReplay } from "./debug/swarm-replay";
+import { DeviceRemoval } from "./device-removal";
 import {
   canonicalTailnetDnsName,
   DeviceService,
@@ -2472,6 +2473,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         const seen = devicesRef === null ? null : phoneAtHello(ctx, devicesRef);
         if (seen !== null) rememberPhone(seen, "product");
       },
+      // Item 406 (S3; Q-PM5, Q-PM6) — the account's refusals as the roster last read them: a
+      // removed phone's node is answered the word at its hello, a headerless same-login hello is
+      // refused while any stands, and a peer's forward for a removed phone is refused. Until the
+      // roster's first pass has read them (at the latest the `devices.sync()` right after the door
+      // listens, below), nothing is refused: a hello in that instant is a named gap.
+      isRefusedNode: (nodeId) => devicesRef?.isRefusedNode(nodeId) ?? false,
+      refusalsStand: () => devicesRef?.hasRefusals() ?? false,
+      isRefusedDevice: (deviceId) => devicesRef?.isRefused(deviceId) ?? false,
     });
     diagnosticsService.register(api);
     shellApi = api;
@@ -8491,6 +8500,46 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     devices.on("changed", () => void freewayFloor.declare());
     native.on("connected", () => void freewayFloor.connected());
     void freewayFloor.connected();
+    // Item 406, S3 (track WI's Desktop slice; WI-W5b A; VF-PM's rulings of 2026-11-14 04:49Z) —
+    // REMOVE FOR A PHONE (`device-removal.ts`). Here, after the freeway it revokes through: the act
+    // writes the refusal into the account's settings document through its ONE writer (S2), and
+    // every desktop of the account sweeps what the phone holds there as the merged list reaches it
+    // (revokeWindowToken's order: the audit, its transcripts, its product sockets, its freeway
+    // client). What stays open is DESIGN.md §9's to name: a terminal on a product-door grant until
+    // the grant ends (S4), an open History session (Q-PM3), made apps and stores until the console.
+    const deviceRemoval = new DeviceRemoval({
+      roster: devices,
+      doc: settingsDoc,
+      audit,
+      revokeTranscripts: (clientId) => transcriptTickets.revokeClient(clientId),
+      dropConnections: (nodeIds) => api.dropNodeConnections(nodeIds),
+      revokeFreeway: (minted) => freewayFloor.revokeClient(minted),
+      linkedLogin,
+      logger: logger.child({ component: "devices.removal" }),
+    });
+    // TS-3b's rename is the template (a desktop caller, a parsed ask, an audited act). The write is
+    // THE writer's, called here and from the roster's pass alone (settings-doc.test.ts pins both);
+    // `requireDesktopCaller` is restrict-only, so a copied window token passes it (EL7: the harm
+    // is denial, the audit names the caller, and no method lifts a refusal).
+    api.register("device.remove", async (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const ask = await deviceRemoval.ask(params);
+      if (ask === null) return { removed: false, closed: 0 };
+      return await deviceRemoval.remove(ctx, ask, () =>
+        settingsDoc.refuseDevice(
+          "remove",
+          ask.deviceId,
+          ask.tailscaleIds,
+          devices.currentDeviceId(),
+        ),
+      );
+    });
+    // what stood before this boot is taken as swept (no door has opened yet); every refusal after
+    // it, written here or merged from another desktop, is swept once
+    void deviceRemoval.seed();
+    settingsDoc.on("changed", (event: { section: string }) => {
+      if (event.section === SETTINGS_DOC_SECTIONS.DEVICES_REFUSED) void deviceRemoval.sweep();
+    });
     const artifacts = new ArtifactService({
       dataDir: config.dataDir,
       // UA-P-0c (D6) — the account an artifact's audience defaults to. The same

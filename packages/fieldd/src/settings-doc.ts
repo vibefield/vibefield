@@ -681,7 +681,17 @@ export class SettingsDocService extends EventEmitter {
    * dropped for a value this build cannot read. */
   async refusals(): Promise<DeviceRefusals> {
     await this.ready();
-    return this.readRefusals();
+    const { deviceIds, nodeIds } = this.readRefusals();
+    return { deviceIds, nodeIds };
+  }
+
+  /** Item 406 (S3) — the refusals by durable id: each refused device, with every
+   * node id its entries carry (none for an entry this build cannot read; the
+   * durable id still refuses). The sweep's reading (`DeviceRemoval`): what each
+   * desktop closes, and for whom it audits it. */
+  async refusedDevices(): Promise<ReadonlyMap<string, ReadonlySet<string>>> {
+    await this.ready();
+    return this.readRefusals().byDevice;
   }
 
   /** Item 406 (Q-PM1) — THE ONE WRITER of the refusals, and VF-PM's ruling gives
@@ -795,10 +805,12 @@ export class SettingsDocService extends EventEmitter {
     return { wrote: true };
   }
 
-  /** The refusals' union, read in one pass over the section (`refusals`). */
-  private readRefusals(): DeviceRefusals {
+  /** The refusals' union, and the same by durable id, read in one pass over the
+   * section (`refusals`, `refusedDevices`). */
+  private readRefusals(): DeviceRefusals & { byDevice: Map<string, Set<string>> } {
     const deviceIds = new Set<string>();
     const nodeIds = new Set<string>();
+    const byDevice = new Map<string, Set<string>>();
     const section = this.doc.getMap(S.DEVICES_REFUSED);
     for (const key of section.keys()) {
       const parts = readKey(key, 2);
@@ -806,10 +818,16 @@ export class SettingsDocService extends EventEmitter {
       const [deviceId] = parts as [string, string];
       if (deviceId.length === 0) continue;
       deviceIds.add(deviceId);
+      const nodes = byDevice.get(deviceId) ?? new Set<string>();
+      byDevice.set(deviceId, nodes);
       const entry = RefusedDevice.safeParse(section.get(key));
-      if (entry.success) for (const nodeId of entry.data.tailscaleIds) nodeIds.add(nodeId);
+      if (!entry.success) continue;
+      for (const nodeId of entry.data.tailscaleIds) {
+        nodeIds.add(nodeId);
+        nodes.add(nodeId);
+      }
     }
-    return { deviceIds, nodeIds };
+    return { deviceIds, nodeIds, byDevice };
   }
 
   // --- D29′ undo surface -----------------------------------------------------

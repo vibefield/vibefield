@@ -149,7 +149,9 @@ export type PhoneEvidence = z.infer<typeof PhoneEvidence>;
 export const PhoneFact = z
   .object({
     via: PhoneEvidence,
-    /** when a desktop of the account last saw it speak as a phone (unix ms) */
+    /** when a desktop of the account last wrote this fact (unix ms): a phone speaks as one at
+     * every connect, and the fact is refreshed at most daily (fieldd's `KNOWN_PHONE_REFRESH_MS`),
+     * so it is no last-seen time */
     at: z.number().int().nonnegative(),
   })
   .passthrough();
@@ -292,9 +294,10 @@ export type DeviceRemoveParams = z.infer<typeof DeviceRemoveParams>;
 /** Item 406 — what `device.remove` answers. DECLARATIVE (the method row's `idempotent`): a refused
  * device is refused once, so `removed` is false when the refusal already stood (a second Remove, or
  * another desktop's that this one has merged) and nothing new is written. `closed` counts the
- * phone's live connections THIS desktop closed in its sweep: product sockets, freeway links,
- * transcript readers. Every other desktop closes its own as the merged list reaches it, and no
- * answer here can say when that is. */
+ * phone's live connections THIS desktop closed in its sweep that it can count: its product sockets,
+ * and the freeway links the host says it closed. Its transcript readers close in the same sweep,
+ * but the transcript worker answers no count (S3). Every other desktop closes its own as the
+ * merged list reaches it, and no answer here can say when that is. */
 export const DeviceRemoveResult = z
   .object({
     removed: z.boolean(),
@@ -359,15 +362,22 @@ export const DEVICE_REFUSALS = {
  * before the hello is silent by the kit's policy, and an empty grant reads to the kit as another
  * account's desktop, so without this word the phone could only say its computer is out of reach,
  * which is false of a removed phone. It names nothing else: no time, no desktop, no id. A bare
- * UNAUTHORIZED (a bad token) carries no such reason and says nothing of a removal.
- * *Open, S3's to settle:* a same-login hello with NO node id is refused while any refusal stands
- * (Q-PM6), but such a hello cannot be known to be the removed phone, so it must not carry this
- * reason; its details are not ruled. */
+ * UNAUTHORIZED (a bad token) carries no such reason and says nothing of a removal. A peer daemon's
+ * forward FOR a removed phone (`onBehalfOf.clientDeviceId`) is answered the same, before it runs.
+ * A same-login hello with NO node id never carries it: `DeviceUnidentifiedDetails` (S3). */
 export const DeviceRemovedDetails = z
   .object({ reason: z.literal(DEVICE_REFUSALS.REASON_REMOVED) })
   .passthrough();
 export type DeviceRemovedDetails = z.infer<typeof DeviceRemovedDetails>;
 
-// 406 (red, S3): STUBBED — refuses every value, so the row that reads it fails (the green commit's schema)
-export const DeviceUnidentifiedDetails = z.custom<{ reason: "device-unidentified" }>(() => false);
+/** Item 406, S3 (Q-PM6) — the details of the UNAUTHORIZED, retryable false, that a desktop answers
+ * a same-login product hello with when the sidecar named no node for it while any refusal stands
+ * (`error-data.device-unidentified`). The node id is the only fact that tells one of the account's
+ * devices from another at the door, so without it the door cannot tell this caller from the
+ * removed phone. Nor can it tell that it IS the removed phone, so the word says only what the door
+ * knows: it could not tell which device is calling. The pinned sidecar always names the node; only
+ * an older one leaves it out, and it leaves it out again on a retry. */
+export const DeviceUnidentifiedDetails = z
+  .object({ reason: z.literal(DEVICE_REFUSALS.REASON_UNIDENTIFIED) })
+  .passthrough();
 export type DeviceUnidentifiedDetails = z.infer<typeof DeviceUnidentifiedDetails>;

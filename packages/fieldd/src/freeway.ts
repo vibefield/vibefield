@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import {
   approvalSigningInput,
   type CallerContext,
+  DEVICE_REFUSALS,
   type ForwardedFor,
   FREEWAY,
   FREEWAY_APPROVAL,
@@ -13,6 +14,7 @@ import {
   type FreewayApproveResult,
   type FreewayDeclareParams,
   FreewayJoinRow,
+  FreewayRevokeResult,
   FreewayState,
   GRANT_ALG,
   GRANT_ENVELOPE_VERSION,
@@ -151,7 +153,9 @@ export interface FreewayFloorOptions {
  * - A revoke (`revokeAll`, on unlink or sign-out): every phone link closes and the host walls every
  *   keyring it holds. Owed until the floor answers, and owed to THAT host: said again at the next
  *   connect while it is still the floor's, and settled when it is gone, its keyrings with it — so
- *   an owed revoke never lands on the links of a host that came up after a relink.
+ *   an owed revoke never lands on the links of a host that came up after a relink. Item 406's
+ *   one-client revoke (`revokeClient`, Remove for a phone) walls one phone's keyrings by the exact
+ *   id the host keys them by, and is owed the same way.
  */
 export class FreewayFloor extends EventEmitter {
   private readonly logger: Logger;
@@ -165,6 +169,9 @@ export class FreewayFloor extends EventEmitter {
   private joinsArming: Promise<void> | null = null;
   private joinsStream: { dispose: () => void } | null = null;
   private owed: HostBoot | null = null;
+  /** Item 406 — one-client revokes the floor did not take, by the exact client id, each owed to
+   * the host whose boot that id names */
+  private readonly owedClients = new Map<string, HostBoot>();
   /** The current floor boot's joins: the highest cursor taken and the `dropped` total said, the
    * cursor through which the audit wrote, and the one the floor took. */
   private joinsSeen: {
@@ -203,6 +210,10 @@ export class FreewayFloor extends EventEmitter {
       if (sameHost(owed, this.current)) await this.revokeAll();
       else this.owed = null;
     }
+    for (const [clientId, host] of [...this.owedClients]) {
+      if (sameHost(host, this.current)) await this.revokeExact(clientId, host);
+      else this.owedClients.delete(clientId);
+    }
     await this.declare();
   }
 
@@ -228,9 +239,38 @@ export class FreewayFloor extends EventEmitter {
     }
   }
 
-  // 406 (red, S3): STUBBED — says nothing to the floor (the green commit's single-client revoke)
-  async revokeClient(_minted: string): Promise<number> {
-    return 0;
+  /** Item 406 (S3) — close ONE phone's links and wall its keyrings: Remove for a phone, beside
+   * revokeAll's every phone. `minted` is the client id fieldd's approval names
+   * (`freewayClientId`); the host keys its keyrings by that with its own boot added, so the id said
+   * is `<minted>~<hostBootId>` of the host running now. With no host up there is nothing to wall
+   * (a host's keyrings go with it) and nothing is said; a declaration that no longer admits the
+   * phone keeps any later host from linking it. Owed to THAT host as revokeAll is (the class's
+   * law). Answers how many links the host says it closed: 0 when nothing was said or it is owed.
+   * Never throws. */
+  async revokeClient(minted: string): Promise<number> {
+    if (this.disposed) return 0;
+    const state = this.current;
+    if (state?.up !== true || state.hostBootId === undefined) return 0;
+    const host = { floorBootId: state.floorBootId, hostBootId: state.hostBootId };
+    return await this.revokeExact(`${minted}~${state.hostBootId}`, host);
+  }
+
+  /** `native.freeway.revoke {clientId}` for one exact keyring id; a refusal owes it to `host`. */
+  private async revokeExact(clientId: string, host: HostBoot): Promise<number> {
+    try {
+      const answer = await this.opts.native.request("native.freeway.revoke", { clientId });
+      this.owedClients.delete(clientId);
+      const read = FreewayRevokeResult.safeParse(answer);
+      return read.success ? read.data.closed : 0;
+    } catch (error) {
+      this.owedClients.set(clientId, host);
+      this.logger.warn(
+        "fieldd.freeway.revoke_deferred",
+        "The floor did not take the revoke; it is said again at the next connect while that host runs",
+        { error: String(error) },
+      );
+      return 0;
+    }
   }
 
   /** fieldd's word may have changed: declare it, unless this link already carries exactly it.
@@ -576,7 +616,8 @@ export class FreewayServeDriver extends RouteServeDriver {
 
 /** What `freeway.approve` reads of the roster: the calling node's device, and a device's row —
  * whose node (`tailscaleId`, the registry's; absent for this desktop's own row) a forwarded
- * approval binds to (F1b). */
+ * approval binds to (F1b) — and item 406's refusals, by durable id and by node
+ * (`DeviceService.isRefused`, `isRefusedNode`). */
 export interface FreewayApprovalRoster {
   deviceIdByNodeId(nodeId: string): string | undefined;
   get(deviceId: string):
@@ -586,7 +627,6 @@ export interface FreewayApprovalRoster {
         tailscaleId?: string | undefined;
       }
     | undefined;
-  // 406 (red, S3): declared, and not yet read by the approver (the green commit reads them)
   isRefused(deviceId: string): boolean;
   isRefusedNode(nodeId: string): boolean;
 }
@@ -605,6 +645,21 @@ export interface FreewayApproverOptions {
   now?: () => number;
   /** the approval's nonce (16 random bytes, base64url; a test seam) */
   nonce?: () => string;
+}
+
+/** The client id fieldd's approval names for a phone's node (`FreewayApprovalClaims.clientId`): the
+ * host keys that phone's keyrings by it with its own boot added (`~<hostBootId>`), which is what a
+ * one-client revoke names (`FreewayFloor.revokeClient`, item 406). One spelling for both. */
+export function freewayClientId(login: string, tailscaleId: string): string {
+  return `freeway:${login}#${tailscaleId}`;
+}
+
+/** Item 406 — a phone Remove refused, asking for an approval by either road: the removed word
+ * (`DeviceRemovedDetails`), not retryable. */
+function removedPhone(): RpcCallError {
+  return new RpcCallError("UNAUTHORIZED", "this phone was removed from this account", false, {
+    reason: DEVICE_REFUSALS.REASON_REMOVED,
+  });
 }
 
 /** What an approval is for, once every refusal has been said: the phone, as the roster knows it,
@@ -627,6 +682,9 @@ export interface FreewayApprovalAsk {
  *    agent): FORBIDDEN_SCOPE — an approval is the phone's;
  *  - a door whose sidecar injected no node id: PRECONDITION_FAILED — an approval binds to the node
  *    that holds it (the host refuses one naming another node, 4403);
+ *  - a node Remove refused (item 406): UNAUTHORIZED `{reason: "device-removed"}`, not retryable —
+ *    the roster forgot it, so without this line it would read `uncorrelated` and ask forever (the
+ *    door refuses its hello first; this is the approver's own line behind it);
  *  - a node the roster does not correlate to a device: UNAVAILABLE `uncorrelated`, retryable — a
  *    phone that just joined is correlated a moment later;
  *  - a device the roster says is a desktop (`docHost`) or is this one: FORBIDDEN_SCOPE — a desktop
@@ -649,6 +707,8 @@ export interface FreewayApprovalAsk {
  * it acts for). The approval is then the very one the phone's own ask here would get: the host
  * binds both to the phone's node alike. The refusals a forwarding peer hears, in order:
  *  - no phone behind it (the daemon on its own account, or a window): FORBIDDEN_SCOPE;
+ *  - a phone Remove refused (item 406): UNAUTHORIZED `{reason: "device-removed"}`, not retryable
+ *    (the door refuses such a forward first, for every method);
  *  - a desktop named (the carrier itself, another, or this one): FORBIDDEN_SCOPE;
  *  - a phone this roster does not know, or knows under no account: UNAVAILABLE `uncorrelated`,
  *    retryable;
@@ -680,6 +740,7 @@ export class FreewayApprover {
         "the door injected no node id, and an approval binds to the node that holds it",
         false,
       );
+    if (this.opts.roster.isRefusedNode(tailscaleId)) throw removedPhone();
     const deviceId = this.opts.roster.deviceIdByNodeId(tailscaleId);
     const row = deviceId === undefined ? undefined : this.opts.roster.get(deviceId);
     if (deviceId === undefined || row === undefined)
@@ -713,6 +774,7 @@ export class FreewayApprover {
         false,
         { method: "freeway.approve", principal: principal.kind },
       );
+    if (this.opts.roster.isRefused(deviceId)) throw removedPhone();
     const row = this.opts.roster.get(deviceId);
     if (row !== undefined && (row.self || row.capabilities?.docHost === true))
       throw new RpcCallError(
@@ -749,7 +811,7 @@ export class FreewayApprover {
     const claims: FreewayApprovalClaims = {
       audienceFloorBootId: state.floorBootId,
       // the minter's; the host's keyring id adds its own boot (`~<hostBootId>`)
-      clientId: `freeway:${ask.login}#${ask.tailscaleId}`,
+      clientId: freewayClientId(ask.login, ask.tailscaleId),
       principal: { kind: "tailnet", login: ask.login, tailscaleId: ask.tailscaleId },
       rights: ask.rights,
       issuedAt: now,

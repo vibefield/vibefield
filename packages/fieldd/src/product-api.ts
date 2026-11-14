@@ -5,6 +5,7 @@ import {
   type CallerContext,
   type ClientKind,
   CONTRACTS_VERSION,
+  DEVICE_REFUSALS,
   type ErrorKind,
   Hello,
   IdempotencyKey,
@@ -170,11 +171,30 @@ export interface ProductApiOptions {
    * answer is sent: the daemon remembers a phone that hellos as one (`phoneAtHello`). Never a
    * gate, and a listener that throws never touches the hello. */
   onHello?: (ctx: CallerContext) => void;
-  // 406 (red, S3): declared, and not yet read by the door (the green commit reads them)
+  /** Item 406 (S3; VF-PM's Q-PM5) — is this node one Remove refused (`DeviceService.isRefusedNode`,
+   * the account's refusals as the roster last read them)? Read at the upgrade on the secret path
+   * (`classifyDoor`), and its hello is answered the removed word. Unset: no node is. */
   isRefusedNode?: (nodeId: string) => boolean;
+  /** Item 406 (S3; Q-PM6) — does any refusal stand (`DeviceService.hasRefusals`)? While one does,
+   * a same-login caller the sidecar named no node for is refused in its own word: the door cannot
+   * tell it from the removed phone. Unset: none does. */
   refusalsStand?: () => boolean;
+  /** Item 406 (S3) — is this durable id one Remove refused (`DeviceService.isRefused`)? A peer
+   * daemon's forward FOR it (`onBehalfOf.clientDeviceId`) is refused before it runs. Unset:
+   * none is. */
   isRefusedDevice?: (deviceId: string) => boolean;
 }
+
+/** Item 406 (S3) — why the tailnet door refuses a caller of this account outright: the two words
+ * the contract gives (`DeviceRemovedDetails`, `DeviceUnidentifiedDetails`). */
+type DoorRefusal = (typeof DEVICE_REFUSALS)[keyof typeof DEVICE_REFUSALS];
+
+/** The refusal's message beside its typed word (the word is what a client reads). */
+const DOOR_REFUSAL_MESSAGES: Record<DoorRefusal, string> = {
+  [DEVICE_REFUSALS.REASON_REMOVED]: "this device was removed from this account's computers",
+  [DEVICE_REFUSALS.REASON_UNIDENTIFIED]:
+    "the calling device is not named, and this account has a removed device",
+};
 
 /** DS-L7/DS-D15 — `envelope` is what the forwarding hop adds beside the
  * method's params: `onBehalfOf`, built from the CALLING context (never from
@@ -282,6 +302,9 @@ interface ConnState {
   /** SP-1 — this connection's keepalive (`system.tick`), armed by its first
    * successful hello and cleared when it closes: one timer per connection. */
   tick: ReturnType<typeof setInterval> | null;
+  /** Item 406 (S3) — the upgrade's mark (`classifyDoor`): this caller's hello is answered this
+   * word and the door closes, before any credential is read. null: none. */
+  refused: DoorRefusal | null;
 }
 
 export class ProductApi extends EventEmitter {
@@ -370,9 +393,21 @@ export class ProductApi extends EventEmitter {
     return dropped;
   }
 
-  // 406 (red, S3): STUBBED — closes nothing (the green commit's node-id sweep)
-  dropNodeConnections(_nodeIds: readonly string[]): number {
-    return 0;
+  /** Item 406 (S3) — Remove's third step (`DeviceRemoval`): every connection the sidecar delivered
+   * from one of these nodes closes, its hello said or not yet (a refused phone's product sockets,
+   * as `dropTokenConnections` closes a revoked window's). Its client dials again and hears the
+   * removed word at its hello. Returns how many closed. */
+  dropNodeConnections(nodeIds: readonly string[]): number {
+    const nodes = new Set(nodeIds);
+    let dropped = 0;
+    for (const conn of [...this.liveConns]) {
+      const nodeId = conn.state.tailnetNodeId;
+      if (nodeId === null || !nodes.has(nodeId)) continue;
+      conn.ws.terminate();
+      this.liveConns.delete(conn);
+      dropped += 1;
+    }
+    return dropped;
   }
 
   /** P4 — arm the x.* dynamic-method path (the ServiceRegistry). */
@@ -723,6 +758,7 @@ export class ProductApi extends EventEmitter {
       abortController: new AbortController(),
       shellTransport,
       tick: null,
+      refused: door?.refused ?? null,
     };
     const conn = { ws, state };
     this.liveConns.add(conn);
@@ -744,10 +780,11 @@ export class ProductApi extends EventEmitter {
   /** Which door did this upgrade come through? null = the ordinary local door
    * (token-gated; any Tailscale-* headers are IGNORED — a same-uid local
    * caller can type headers but cannot know the route secret). An identity
-   * object = the sidecar-proxied door. "reject" = drop the socket. */
+   * object = the sidecar-proxied door, with item 406's mark (`refusalAt`).
+   * "reject" = drop the socket. */
   private classifyDoor(
     req: IncomingMessage,
-  ): { login: string; nodeId: string | null } | null | "reject" {
+  ): { login: string; nodeId: string | null; refused: DoorRefusal | null } | null | "reject" {
     const secret = this.opts.tailnetPathSecret;
     const path = req.url ?? "/";
     if (secret === undefined || secret.length === 0) return null;
@@ -764,11 +801,25 @@ export class ProductApi extends EventEmitter {
     // grant); the node id arrives only from v3+ sidecars (T1 §1) — absent
     // means an older proxy, so it stays optional through the fleet upgrade.
     if (typeof login !== "string" || login.length === 0) return "reject";
-    const nodeId = req.headers["tailscale-node-id"];
-    return {
-      login,
-      nodeId: typeof nodeId === "string" && nodeId.length > 0 ? nodeId : null,
-    };
+    const nodeHeader = req.headers["tailscale-node-id"];
+    const nodeId = typeof nodeHeader === "string" && nodeHeader.length > 0 ? nodeHeader : null;
+    return { login, nodeId, refused: this.refusalAt(login, nodeId) };
+  }
+
+  /** Item 406 (S3; VF-PM's Q-PM5, Q-PM6) — the refusal this door holds for a tailnet caller, judged
+   * at the upgrade from the transport's facts alone, on the secret path where they are the
+   * sidecar's (never a caller's): a node Remove refused hears the removed word; while any refusal
+   * stands, a caller of the LINKED login the sidecar named no node for hears its own word, since
+   * the node is the one fact that tells this account's devices apart and so the door can tell it
+   * neither from the removed phone nor that it is it. Another login is a guest, as it always was
+   * (never one of this account's devices), and so is every login on an unlinked desktop. */
+  private refusalAt(login: string, nodeId: string | null): DoorRefusal | null {
+    if (nodeId !== null)
+      return this.opts.isRefusedNode?.(nodeId) === true ? DEVICE_REFUSALS.REASON_REMOVED : null;
+    const linked = this.opts.getLinkedLogin?.() ?? null;
+    return linked !== null && login === linked && this.opts.refusalsStand?.() === true
+      ? DEVICE_REFUSALS.REASON_UNIDENTIFIED
+      : null;
   }
 
   private async onMessage(ws: WebSocket, state: ConnState, raw: string): Promise<void> {
@@ -804,6 +855,16 @@ export class ProductApi extends EventEmitter {
         // details — an unauthenticated caller learns only that the major differs
         reply(this.err(id, "INCOMPATIBLE", "contracts major mismatch", false));
         ws.close(1008, "incompatible");
+        return;
+      }
+      // Item 406 (S3; VF-PM's Q-PM5, Q-PM6) — a caller the upgrade marked (`refusalAt`) hears its
+      // typed word and the door closes, BEFORE the verified-token arm below, which otherwise wins
+      // on either door: no credential a removed phone carries buys it a grant. The word is the
+      // client's to read (a close before an answer is silent to the kit); the close is the door's.
+      if (state.refused !== null) {
+        const reason = state.refused;
+        reply(this.err(id, "UNAUTHORIZED", DOOR_REFUSAL_MESSAGES[reason], false, { reason }));
+        ws.close(1008, reason);
         return;
       }
       // DS-D15 — the connection's provenance, fixed at hello and carried on
@@ -1139,6 +1200,18 @@ export class ProductApi extends EventEmitter {
             reason: read.reason,
           }),
         );
+        return;
+      }
+      // Item 406 (S3) — the belt behind the phone's home: the home refuses a removed phone at its
+      // own door, and this desktop refuses a forward FOR one (by the durable id the home's roster
+      // correlated, F1b) before anything runs, not retryable, so no home asks again. Without it a
+      // forgotten phone reads as one this roster does not know: `freeway.approve`'s
+      // `uncorrelated`, retryable. A federated subscription carries no `onBehalfOf`; the home's own
+      // refusal is its gate.
+      const behind = read.onBehalfOf?.clientDeviceId;
+      if (behind !== undefined && this.opts.isRefusedDevice?.(behind) === true) {
+        const reason = DEVICE_REFUSALS.REASON_REMOVED;
+        reply(this.err(id, "UNAUTHORIZED", DOOR_REFUSAL_MESSAGES[reason], false, { reason }));
         return;
       }
       callParams = envelope.rest;
