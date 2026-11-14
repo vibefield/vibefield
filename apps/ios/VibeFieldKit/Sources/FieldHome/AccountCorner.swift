@@ -325,11 +325,15 @@ struct AccountCornerView: View {
   /// The acts above the desktops, top to bottom as they stand on screen: Sign out farthest from the thumb, then Sign
   /// in while the tailnet asks, Theme (IOS-10b), Lock now while the lock is on, and Settings…. Pure, and
   /// nonisolated, so a test holds the order: Theme stands above Settings…, and above Lock now, which keeps its place
-  /// just above Settings… (WI-3; DESIGN.md §8 "The phone's corner", amended 2026-11-11).
-  nonisolated static func menuRows(canSignOut: Bool, offersSignIn: Bool, lockOn: Bool) -> [AccountMenuRowKind] {
+  /// just above Settings… (WI-3; DESIGN.md §8 "The phone's corner", amended 2026-11-11). WI-W2e A — Try again, under
+  /// "Couldn’t connect.", stands in Sign in's place (§8 "The phone's corner", amended 2026-11-14).
+  nonisolated static func menuRows(
+    canSignOut: Bool, offersSignIn: Bool, offersTryAgain: Bool = false, lockOn: Bool
+  ) -> [AccountMenuRowKind] {
     var rows: [AccountMenuRowKind] = []
     if canSignOut { rows.append(.signOut) }
     if offersSignIn { rows.append(.signIn) }
+    // RED — WI-W2e A: Try again is not a row yet
     rows.append(.theme)
     if lockOn { rows.append(.lockNow) }
     rows.append(.settings)
@@ -357,6 +361,9 @@ struct AccountCornerView: View {
           AccountMenuRow(glyph: "rectangle.portrait.and.arrow.right", label: "Sign out", action: onSignOut)
         case .signIn:
           AccountMenuRow(glyph: "key", label: face.signInWord, action: onSignIn)
+        case .tryAgain:
+          // RED — WI-W2e A: no row draws it yet
+          EmptyView()
         case .theme:
           ThemeMenuRow()
         case .lockNow:
@@ -423,6 +430,8 @@ struct AccountCornerView: View {
 enum AccountMenuRowKind: Hashable, Sendable {
   case signOut
   case signIn
+  /// WI-W2e A — the next step under "Couldn’t connect.".
+  case tryAgain
   case theme
   case lockNow
   case settings

@@ -156,4 +156,36 @@ struct AccountFaceTests {
     #expect(corner.offersSignIn)
     #expect(!corner.canSignOut)
   }
+
+  // MARK: - WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z; DESIGN.md §9 "The way in", ruled that day)
+
+  @Test("a start that failed says Couldn’t connect. and offers its next step, Try again, in Sign in's place")
+  func couldNotConnect() {
+    // The one Couldn’t connect. a corner with an account stands in: the node reported its login, the phone could not
+    // keep it, and the start failed (`MeshModel.dropped` re-dials only a kept login, as `.reconnecting`).
+    let corner = face(meshState: .failed("tsnet: dial tcp 100.64.0.1:443: i/o timeout"), login: login, face: fox)
+    #expect(corner.notice == "Couldn’t connect.")
+    #expect(corner.offersTryAgain)
+    #expect(corner.tryAgainWord == "Try again")
+    #expect(!corner.offersSignIn)
+    #expect(corner.canSignOut)
+    let rows = AccountCornerView.menuRows(
+      canSignOut: corner.canSignOut, offersSignIn: corner.offersSignIn, offersTryAgain: corner.offersTryAgain,
+      lockOn: false)
+    #expect(rows == [.signOut, .tryAgain, .theme, .settings])
+  }
+
+  @Test("Try again stands only under Couldn’t connect.: a drop re-dials by itself, and Tailscale asking is Sign in's")
+  func tryAgainOnlyWhenFailed() {
+    let states: [MeshModel.State] = [
+      .off, .starting, .needsLogin, .needsMachineAuth, .up, .stopping, .reconnecting("the network went away"),
+    ]
+    for state in states {
+      let corner = face(meshState: state, remembered: login, face: fox)
+      #expect(!corner.offersTryAgain, "\(state)")
+    }
+    // in Sign in's place, above Theme, and Lock now keeps its place just above Settings…
+    let rows = AccountCornerView.menuRows(canSignOut: true, offersSignIn: false, offersTryAgain: true, lockOn: true)
+    #expect(rows == [.signOut, .tryAgain, .theme, .lockNow, .settings])
+  }
 }

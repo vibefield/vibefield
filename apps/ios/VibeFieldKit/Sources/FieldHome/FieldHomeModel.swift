@@ -450,10 +450,17 @@ enum FieldHomeModel {
     /// connect and no disconnect — the phone stays on the mesh by itself while
     /// it is signed in (James, 2026-10-18).
     var offersSignIn: Bool
+    /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z) — Try again, as a row in the menu: the next step
+    /// under the notice "Couldn’t connect.", in Sign in's place. The two never stand together: Sign in while the
+    /// tailnet asks, Try again after a start that failed, which nothing retries by itself (`MeshModel.dropped`).
+    var offersTryAgain: Bool
     /// TS-7 — that row's words: the act's own on a first sign-in, the
     /// desktop's "Sign in again" for an account the tailnet asks for again.
     var signInWord: String
     var canSignOut: Bool
+
+    /// WI-W2e A — Try again's row's words, the corner's own.
+    var tryAgainWord: String { AccountDisplay.tryAgain }
 
     /// Whether the menu's desktops section has anything in it — a desktop,
     /// or the line about other accounts' desktops — and so closes with a
@@ -559,6 +566,8 @@ enum FieldHomeModel {
       desktops: rows,
       othersLine: AccountDisplay.othersLine(count: foreignDoors),
       offersSignIn: meshState == .needsLogin,
+      // RED — WI-W2e A: the notice carries no act yet
+      offersTryAgain: false,
       signInWord: AccountDisplay.signInWord(hasAccount: account != nil),
       canSignOut: account != nil)
   }

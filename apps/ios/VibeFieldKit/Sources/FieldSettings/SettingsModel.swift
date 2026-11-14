@@ -191,6 +191,34 @@ public enum SettingsModel {
     }
   }
 
+  /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z; §8 "The phone's Settings", amended that day) — the
+  /// act on the row under Tailscale's card, by its state: Sign in again while Tailscale asks, Try again after a start
+  /// that failed ("Couldn’t connect.": a failure says the act and its next step, IS-282-1), none otherwise. The admin
+  /// console is a link, drawn beside approval.
+  public enum TailscaleAct: Equatable, Sendable {
+    /// The system's sign-in sheet (`SettingsActions.signIn`).
+    case signInAgain
+    /// The network started again, at once (`SettingsActions.tryAgain`).
+    case tryAgain
+
+    /// The row's words (§9 "The way in").
+    public var title: String {
+      switch self {
+      case .signInAgain: "Sign in again"
+      case .tryAgain: "Try again"
+      }
+    }
+  }
+
+  public static func tailscaleAct(_ standing: SettingsAccount.Standing) -> TailscaleAct? {
+    switch standing {
+    case .signInAgain: return .signInAgain
+    // RED — WI-W2e A: Couldn’t connect. carries no act yet
+    case .couldNotConnect: return nil
+    case .signedOut, .connected, .connecting, .waitingForApproval: return nil
+    }
+  }
+
   public static func tailscaleFoot(_ standing: SettingsAccount.Standing, device: DeviceWord) -> Line {
     switch standing {
     case .signInAgain:

@@ -195,6 +195,45 @@ struct SettingsModelTests {
     }
   }
 
+  // MARK: - WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z; §8 "The phone's Settings", amended that day)
+
+  @Test("Couldn’t connect. carries its next step, Try again, on the row under the card; Sign in again stands as it did")
+  func tailscaleAct() {
+    let failed = SettingsModel.tailscaleAct(.couldNotConnect("the network went away"))
+    let tryAgain: SettingsModel.TailscaleAct? = .tryAgain
+    #expect(failed == tryAgain)
+    #expect(failed?.title == "Try again")
+    let asked = SettingsModel.tailscaleAct(.signInAgain)
+    let signInAgain: SettingsModel.TailscaleAct? = .signInAgain
+    #expect(asked == signInAgain)
+    #expect(asked?.title == "Sign in again")
+    for standing: SettingsAccount.Standing in [.signedOut, .connected, .connecting, .waitingForApproval] {
+      let act = SettingsModel.tailscaleAct(standing)
+      #expect(act == nil, "\(standing)")
+    }
+    // the state's own words stay P1b's
+    #expect(
+      SettingsModel.tailscaleState(.couldNotConnect("the network went away"))
+        == .init("Couldn’t connect.", wantsTheUser: true))
+  }
+
+  /// The calls the card's acts made, by name, in order.
+  private final class Made {
+    var calls: [String] = []
+  }
+
+  @MainActor
+  @Test("the card's Try again calls the host's Try again, never a sign-in or a sign-out")
+  func tailscaleActCalls() {
+    let made = Made()
+    let actions = SettingsActions(
+      signIn: { made.calls.append("signIn") }, signOut: { made.calls.append("signOut") },
+      tryAgain: { made.calls.append("tryAgain") })
+    actions.perform(.tryAgain)
+    actions.perform(.signInAgain)
+    #expect(made.calls == ["tryAgain", "signIn"])
+  }
+
   @Test("your face: how it is framed; whose word it is rides on the tag, not the row")
   func faceWords() {
     #expect(SettingsModel.faceWords(.none, face: nil, device: .iPhone).value == "None yet")

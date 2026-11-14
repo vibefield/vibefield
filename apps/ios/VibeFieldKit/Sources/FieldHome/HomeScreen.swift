@@ -3627,7 +3627,9 @@ public struct HomeScreen: View {
       signOut: {
         closeSettings()
         confirmSignOut()
-      })
+      },
+      // RED — WI-W2e A: Try again calls nothing yet
+      tryAgain: {})
     #if DEBUG
       // RB-2 — the Developer page's Swarm lab: Settings leaves, then the lab opens over the home (`afterSettings`). It
       // is DEBUG's until the gate widens (PLAN-2c §1C, after item 367's pick), as the lab's door is (`swarmLabBinding`).

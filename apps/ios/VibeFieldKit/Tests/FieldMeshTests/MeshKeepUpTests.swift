@@ -92,4 +92,60 @@ struct MeshKeepUpTests {
     #expect(mesh.state == .off)
     #expect(!mesh.isRunning)
   }
+
+  // MARK: - WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z): Try again, under "Couldn’t connect."
+
+  @Test("Try again starts the network again from a failed start, for a kept login or one the node reported")
+  func tryAgainStarts() {
+    // The corner's and the card's Couldn’t connect.: the node reported its login, the phone could not keep it, and
+    // the start failed. `keepUp()` starts nothing for it, since nothing is kept; Try again starts it.
+    let keepUp = MeshModel.keepUpStep(signedIn: false, state: .failed("x"), hasRuntime: false, regating: false)
+    #expect(keepUp == .nothing)
+    let reported = MeshModel.tryAgainStep(
+      rememberedLogin: nil, loginName: "me@example.com", state: .failed("x"), hasRuntime: false, regating: false)
+    #expect(reported == .start)
+    let kept = MeshModel.tryAgainStep(
+      rememberedLogin: "me@example.com", loginName: nil, state: .failed("x"), hasRuntime: false, regating: false)
+    #expect(kept == .start)
+    // a node that stopped and still holds its runtime is stopped for good, then started again, as keepUp does
+    let stopped = MeshModel.tryAgainStep(
+      rememberedLogin: nil, loginName: "me@example.com", state: .off, hasRuntime: true, regating: false)
+    #expect(stopped == .restart)
+  }
+
+  @Test("Try again leaves a moving node and a re-gate alone, and with no account starts nothing")
+  func tryAgainLeaves() {
+    for state: MeshModel.State in [.starting, .stopping] {
+      let step = MeshModel.tryAgainStep(
+        rememberedLogin: nil, loginName: "me@example.com", state: state, hasRuntime: true, regating: false)
+      #expect(step == .nothing, "\(state)")
+    }
+    let regating = MeshModel.tryAgainStep(
+      rememberedLogin: "me@example.com", loginName: "me@example.com", state: .failed("x"), hasRuntime: false,
+      regating: true)
+    #expect(regating == .nothing)
+    // no account: the welcome's own act is Continue with Tailscale
+    for login: String? in [nil, ""] {
+      let step = MeshModel.tryAgainStep(
+        rememberedLogin: login, loginName: login, state: .failed("x"), hasRuntime: false, regating: false)
+      #expect(step == .nothing)
+    }
+  }
+
+  @MainActor
+  @Test("Try again on a phone with no account starts no node and forgets nothing")
+  func tryAgainNoAccount() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("vf-tryagain-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let mesh = MeshModel(stateDirectory: directory)
+    mesh.tryAgain()
+    #expect(mesh.state == .off)
+    #expect(!mesh.isRunning)
+    #expect(mesh.rememberedLogin == nil)
+    // the state directory is still there: Try again sweeps nothing
+    let kept = FileManager.default.fileExists(atPath: directory.path)
+    #expect(kept)
+  }
 }

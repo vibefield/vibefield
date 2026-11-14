@@ -282,6 +282,25 @@ public final class MeshModel {
     }
   }
 
+  /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z; DESIGN.md §9 "The way in", ruled that day) — what
+  /// `tryAgain()` does, pure (pinned by tests): `keepUp()`'s own step, for the account the phone shows, which is the
+  /// login it keeps or the one the node reported. That second is the one "Couldn’t connect." a phone with an account
+  /// stands in: `dropped` re-dials only a kept login, so `.failed` follows a start that failed on a phone that could
+  /// not keep the login its node reported, and `keepUp()` starts nothing for it.
+  nonisolated static func tryAgainStep(
+    rememberedLogin: String?, loginName: String?, state: State, hasRuntime: Bool, regating: Bool
+  ) -> KeepUpStep {
+    // RED — WI-W2e A: Try again starts nothing yet
+    .nothing
+  }
+
+  /// WI-W2e A — the person's Try again, under "Couldn’t connect." (the corner's notice, Tailscale's card in Settings ›
+  /// Account): the network starts again at once, as `keepUp()` starts it, presenting no sign-in page. It signs no one
+  /// in or out and forgets nothing.
+  public func tryAgain() {
+    // RED — WI-W2e A: nothing starts yet
+  }
+
   /// Keep this phone on the mesh while it is signed in. Idempotent; the home
   /// screen calls it at launch and on coming to the front, and the network
   /// returning calls it while a re-dial waits.

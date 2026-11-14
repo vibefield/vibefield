@@ -63,6 +63,10 @@ struct LaunchFixtures: Equatable, Sendable {
       case account
       /// This phone › Lock: its switch, either way, and the time it asks again.
       case lock
+      /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z) — the corner's and Settings' Try again, under
+      /// "Couldn’t connect.": it starts your account's network, and no demo has one to start, so any demo holds it, a
+      /// scripted run's included (the mock has no failed start of its own), as the way in's Try again is held.
+      case tryAgain
       /// The way to Developer and its two choices: the corner's Settings, This phone › Developer, the Demo field
       /// switch and the Account picker. Never held, so a demo can always be switched off.
       case openSettings, openDeveloper, demoFieldSwitch, accountPicker
@@ -77,6 +81,9 @@ struct LaunchFixtures: Equatable, Sendable {
         return !scripted
       case .lock:
         return true
+      case .tryAgain:
+        // RED — WI-W2e A: Try again is not held yet
+        return false
       case .openSettings, .openDeveloper, .demoFieldSwitch, .accountPicker:
         return false
       }

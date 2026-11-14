@@ -170,10 +170,14 @@ public struct SettingsOpening: Equatable, Sendable {
   public static let terminal = SettingsOpening([.terminal])
 }
 
-/// What Settings asks the host to do: the two acts that belong to the mesh.
+/// What Settings asks the host to do: the acts that belong to the mesh.
 public struct SettingsActions {
   public var signIn: () -> Void
   public var signOut: () -> Void
+  /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z) — Try again, on the row under Tailscale's card while
+  /// it says "Couldn’t connect.": the network starts again. It signs no one in or out, and Settings stays open (§8 "The
+  /// phone's Settings", amended that day).
+  public var tryAgain: () -> Void
   #if DEBUG || VF_TESTFLIGHT
     /// RB-2 — the Developer page's Labs, each opening its lab over the home with Settings closed first. Nil: the
     /// home has no such lab in this build, and its row is not drawn.
@@ -181,9 +185,20 @@ public struct SettingsActions {
     public var openInputCardStates: (() -> Void)? = nil
   #endif
 
-  public init(signIn: @escaping () -> Void, signOut: @escaping () -> Void) {
+  public init(signIn: @escaping () -> Void, signOut: @escaping () -> Void, tryAgain: @escaping () -> Void) {
     self.signIn = signIn
     self.signOut = signOut
+    self.tryAgain = tryAgain
+  }
+
+  /// The act on the row under Tailscale's card (`SettingsModel.tailscaleAct`), by its own call.
+  public func perform(_ act: SettingsModel.TailscaleAct) {
+    switch act {
+    case .signInAgain: signIn()
+    case .tryAgain:
+      // RED — WI-W2e A: Try again calls nothing yet
+      break
+    }
   }
 }
 

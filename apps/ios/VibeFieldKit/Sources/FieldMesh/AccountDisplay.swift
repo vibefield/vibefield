@@ -76,6 +76,11 @@ public enum AccountDisplay {
     }
   }
 
+  /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z; DESIGN.md §9 "The way in", ruled that day) — the
+  /// next step under "Couldn’t connect.": the menu's row, in Sign in's place. A failure says the act and its next
+  /// step (IS-282-1).
+  public static let tryAgain = "Try again"
+
   /// TS-7 — the menu's sign-in row: the act's own words on a first sign-in
   /// (DESIGN.md §9), the desktop's "Sign in again" for an account the tailnet
   /// asks for again (§9's expired pane).
