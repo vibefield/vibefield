@@ -5243,6 +5243,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   publisher's namespace in its place (MK-E11; ROADMAP §2's MK block), as the registry rung's index
   v2 reader will from its `publisher` (`plugin-distribution.ts`), and MK's rows never print the
   address.
+  *Corrected 2026-11-14 (item 330, MK-E11's fieldd half):* MK-2 did not record the namespace; it kept the
+  repository address. Item 330 records it, and the deviation is paid: the ‹publisher› fieldd records for a
+  registry install is the plugin's namespace, its id's first segment (`namespaceOf`, `plugin-install.ts`), the
+  segment index v2 holds an entry's `publisher` to (`plugin-distribution.ts`) and the one a bundled row names,
+  "vibefield". The pill would print it, never the address (still unreached: no build configures a registry).
   *Corrected 2026-10-28 (the housekeeping pass), to the shipped words (`panels/PluginsSection.tsx`,
   `SOURCE_LABEL`):* this said a `rounded px-1` chip with no fill and the words "built-in", "dev",
   "registry · reviewed" and "sideload". The catalog's ControlsSection still shows a
