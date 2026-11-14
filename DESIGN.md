@@ -3811,9 +3811,24 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   facts; the reasons and partner line do not remain beside or below it. **Back to your devices**
   restores the overview. The facts retain the same promises: VibeField learns your login and which of your devices are signed in; it joins as its own
   device, with no VPN prompt and no change to this Mac's network settings; only you can reach this
-  Mac; your work goes device to device and Tailscale sees which devices connect, never what they
-  send; VibeField sends Tailscale no device logs (TS-D15); Settings → Devices → Disconnect undoes
-  it. **One click to the browser** (TS-D5): the button
+  Mac; your phone and your other computers reach this Mac over your own Tailscale network, encrypted
+  end to end, and VibeField runs no session relay; Settings → Devices → Disconnect undoes it.
+  *Corrected 2026-11-14 (item 160, at its source; track WI's Desktop slice, item 406; VF-PM's ruling Q-PM7,
+  04:49Z):* the fourth fact said "your work goes device to device and Tailscale sees which devices connect, never what
+  they send", and a clause after it said "VibeField sends Tailscale no device logs (TS-D15)". Tailscale may relay a
+  connection, so no direct path is promised, and "device to device" promised one. The device-logs clause was never one
+  of the five facts the door shows, and it is not true of every device the line speaks for: the phone's embedded
+  Tailscale uploads its logs in build 6. This Mac's own logs are said where they are decided, in Network details'
+  **Device logs** (§9 "The link's words"). The fact now says the product bible's sentence as the phone ships it (§9
+  "The way in", How it works' third page), drafted for the Mac as **Encrypted end to end.** · "Your phone and your
+  other computers reach this Mac over your own Tailscale network. VibeField runs no session relay." — *a reading of
+  Q-J8, pending James's word.* **Owed, doc first:** the Mac's door still says the fourth fact as "Encrypted from device
+  to device." · "Your work travels directly, encrypted end to end. VibeField runs no servers. Tailscale sees
+  connections, never their contents." (`account/door/door-parts.tsx`, `WHAT_VIBEFIELD_CAN_SEE`). Item 160's code
+  slice changes it, with a test that asserts the new words and refuses "no servers", "device to device", "travels
+  directly" and "never their contents", as the phone's own test refuses the first two. The partner line's "Free for
+  personal use." is not this correction's — *a reading of Q-J6, pending James's word.*
+  **One click to the browser** (TS-D5): the button
   becomes its status ("Opening Tailscale…", M1), and the browser opens the moment the address
   arrives, once, because the person clicked. **Waiting** names two true steps — "Sign in or create
   an account at Tailscale" → "This Mac joins your network" — the live one breathing (§6's loop),
@@ -3859,6 +3874,28 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   (TS-D14; on truffle 0.7.24 it signs out first, and only a sign-out that could not reach
   Tailscale leaves the record in the admin console, which the page then says once) · **Add a
   device** (Phone | Computer) · **Use another account** → New user… (TS-D12).
+  *Amended 2026-11-14 (item 406, track WI's Desktop slice; WI-W5 A, 2026-11-11, and WI-W5b A, James 2026-11-14
+  03:48:09Z; VF-PM's rulings on the design note, 04:49Z; every word is §9's, "The link's words"):* **Remove… on a
+  phone.** Your devices is the one place phones are listed, so Remove lives there. A row the roster knows to be a
+  phone ends in **Remove…**, a fourth column, in `--vf-red` text as **Disconnect…** is drawn: red is text only, never a
+  filled alarm (§2.5). Knows means a positive fact (`DeviceInfo.phone`: the device spoke to a desktop of this account
+  as a phone, and the account's known phones keep that fact, so a lost phone that stays offline still has its row
+  after a restart). "Not a desktop" is not that fact: a desktop whose slice has not arrived reads as one, and a Remove
+  is never taken back. So Remove is never on This Mac, a desktop, or a row whose kind is not yet known. The confirm
+  opens in place under the phone's row (*a reading of Q-J2, pending James's word*), as the page's two-step
+  destructive confirm (below, "The destructive uninstall affordance"): its title; what goes and what stays; the line
+  that leaves the network side to Tailscale's admin console, with **Manage in Tailscale ↗** (the console's machines
+  page, the card's own link); then **Cancel**, leading and focused, and **Remove**, trailing in `--vf-red` text. While
+  it runs the act reads "Removing…" and both acts are disabled, as Disconnect's are. A refusal is said inline in
+  `--vf-ink-attention`. *Named deviation:* the page's `Refusal` wears Tailwind's amber today, outside the inks, and the
+  slice that draws Remove moves it onto the token. Esc closes the confirm, as it closes the page's sheets. After, the
+  row is gone, because the phone is forgotten, and in its place the page says once "‹name› was removed." with
+  **Manage in Tailscale ↗**, as Disconnect's missed sign-out is said once. Nothing undoes it. Settings' Undo never
+  covers a device (below, "The settings undo affordance"), and the refusal is written outside the undo stack, as the
+  install-set's revocations are. There is no **Allow again** either: a removed phone comes back only as a new phone,
+  after **Start over** on it (*a reading of Q-J3, pending James's word*). Phone rows keep today's mark; this slice
+  adds no phone mark (*a reading of Q-J7, pending James's word*). What Remove closes, and what it does not close yet,
+  is said in §9's lock ("A lost phone…"), as each part lands and never before.
 - **The sync question** (track TS, TS-D13 ruled A 2026-10-27; built at TS-6, 2026-10-29): a privacy
   choice, asked where it applies — once, at the first **New field** after this Mac connects, never on
   the success screen and no longer in the Setup Assistant. The moment a sign-in lands, before
@@ -8257,6 +8294,18 @@ the words new here as drafted, at the board on 2026-10-27 23:08:57Z: the card's 
 Device logs' two readings, Disconnect's sentences and Tailnet Lock's. While Tailnet Lock holds this
 Mac, the Me menu keeps the login line (23:08:59Z). The words for a network that requires logs are the
 thinking doc's §11, ruled with TS-D16.*
+*Amended 2026-11-14 (item 406, track WI's Desktop slice; WI-W5b A, James 03:48:09Z; VF-PM 04:49Z; drafts, each
+reading marked pending James's word):* **Remove a phone** (where each word stands is §8 Settings → Devices). The row's
+act is **Remove…**. The confirm: **Remove ‹name›?** · "‹name› stops reaching your agents and your field. Everything on
+your computers stays." (*a reading of Q-J1, pending James's word:* nothing is promised across computers, so no "on all
+your computers" and no "right away"; a computer that was off learns of the Remove at its next merge with one that
+knows) · "It stays on your Tailscale network until you remove it in Tailscale's admin console." with **Manage in
+Tailscale ↗** · **Cancel** · **Remove**; while it runs, "Removing…". After, said once where the row stood: "‹name› was
+removed." · **Manage in Tailscale ↗**. The confirm says nothing of keys, doors, credentials or Tailscale's insides,
+and nothing of the apps your agents made (*a reading of Q-J5, pending James's word:* the console's line covers the
+network side). No word here, on the phone or anywhere else says "from the moment you press Remove", "at once",
+"immediately" or any other immediacy: what Remove closes is said as each part lands, in the lock's amendment below
+(§9 "The way in").
 
 **The phone's door** (track TS, TS-7; TS-D11 A, and James's TS-7 picks "all six A — the leans",
 2026-10-29 05:29:27Z). The phone signs in through iOS's own sign-in sheet, which first asks to use
@@ -8359,6 +8408,18 @@ passcode in iOS Settings to lock VibeField." Nothing is answered from outside th
 approvals come (planned), a notification's act opens VibeField behind it. A lost phone is closed from elsewhere
 (WI-L7): removed from your Tailscale network, it reaches nothing, and its keys never leave it in a backup
 (truffle keeps their folder out of iCloud and computer backups).
+*Amended 2026-11-14 (WI-W5b A, James 03:48:09Z; item 406; VF-PM 04:49Z, Q-PM3 and Q-PM4):* closed from elsewhere is
+two acts. **Remove** on any of your computers (§8 Settings → Devices) has your computers refuse the phone: each one,
+as the Remove reaches it, forgets the phone, closes its connections and refuses it at every door VibeField controls.
+A computer that was off learns of it at its first merge with one that knows, and admits the phone until then. Taking
+it off your network in **Tailscale's admin console** is the whole close. What Remove closes is said as each part
+lands, and never before. With fieldd's part (item 406's S3), the phone's own connection to your field, its links to
+your computers and its transcript readers close, and nothing new is handed to it. Until field-native's part lands
+(S4, the slice's last), a terminal the phone already has open runs on until its grant ends, within 10 minutes. A
+History session the phone already has open stays open until it closes on its own: rosetta cannot yet close one
+client's session (VF-PM's Q-PM3 names the gap and declines a restart of the index on Remove; a petition to rosetta
+waits for James). The apps your agents made, and the field's shared stores, reach the phone until the console
+removes it. Its keys still never leave it in a backup.
 *As built 2026-11-04 (WI-3; the words added here are drafts pending James, carried by VF-PM beside L5's two):*
 every word names the method the phone has, by substitution. With Touch ID, "Touch ID" stands wherever "Face ID"
 does. With only a passcode: **Lock VibeField with your passcode.** · "This phone can type into your agents’
@@ -8383,6 +8444,15 @@ notice (TS-7's "Couldn’t connect — ‹reason›." in "The phone's door"), th
 Account (§8 "The phone's Settings" takes §9's words), the welcome's note when a first sign-in fails, and the note
 under **Sign in to Tailscale again.** when its sign-in sheet could not open. A reason may go to the log, as ids and
 codes; it is never said.
+*Added 2026-11-14 (item 406; drafts pending James's word — a reading of Q-J4: the phone's own screen is the iOS
+lane's later slice, and these words wait here for it):* **a removed phone.** A phone removed on one of your computers
+(§8 Settings → Devices) is told so: **This phone was removed.** · "It can't reach your computers. To use it here
+again, start over." · **Start over**. It is said only on the desktop's typed answer, the hello's UNAUTHORIZED with
+`{reason: "device-removed"}` (contracts `DeviceRemovedDetails`, item 406's S1), never on a silence. A closed socket or no answer
+keeps today's pages, because "removed" said of a phone that was not removed would be false. **Start over** signs the
+phone out and in again, so it joins your computers as a new phone (no **Allow again**: *a reading of Q-J3, pending
+James's word*). For that it must come back with a new device id, which is the kit's to show. The words name nothing
+internal, and "This phone" takes the platform's name ("This iPhone", by "The phone's legal words" below).
 
 **The phone's legal words** (track IOS, IOS-13a, 2026-11-05, from the 0.9 launch's "Fix what App Review would
 reject"; where each word stands is §8 "The phone's Settings" and "The phone's way in").
