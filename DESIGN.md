@@ -5145,6 +5145,30 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   session's first reading (§8 "The phone's session document", Its first reading is the hold). The SVG is the
   desktop's; the phone wears the launch's still there (`SplashMark`, §8 "The phone's splash"), at rest, and its
   moving mark is owed.
+  *Corrected 2026-11-14 (item 417b; qa-01's direction on the same words, not a new ruling of James's):* the phone
+  draws the mark itself, and it moves. **`LivingMark` in the phone's design kit**
+  (`apps/ios/VibeFieldKit/Sources/FieldDesign/LivingMark`) is this drawing made natively from the generated SVG's
+  own numbers. Its paths are carried as text into one Swift file that names the generator's stamp (look "Wormhole ·
+  edited", `517b24464e65`); nothing in it is drawn by hand. It draws what the SVG draws:
+  - **The ink.** The ∞ filled even-odd in the ground's ink (black on `light`, white on `dark`) with its hairline of
+    half a point, and the crossing's cover over it.
+  - **The twist.** The edge, the cover and the hole move through the SVG's thirteen keys in 9.52s, each stretch on
+    the SVG's own timing function (its three cubic-beziers in turn). Every key has one command structure, so mixing
+    two keys number for number is what a browser draws between them.
+  - **The lights.** Three, the same on both grounds: `#FF0054`, `#00F59B`, `#083CFF`. Each is five round-capped
+    strokes of the edge: three glows 170.01 wide at 13.34%, 15.4% and 18.2%, and two cores 40.48 wide at 50% and
+    100%, in the SVG's units (a hundred to the point at the mark's own size). Each stroke is a stretch of the
+    edge's length (80.05, 70.53, 60.06, 82.03 and 69.92 parts of 1000) about the light's place. The lights lap the
+    edge every 15.2672s, begun 14.2672s into the lap, and ride the twist; at the crossing they pass under the
+    near strand, clipped by the hole.
+  - **At rest** (`resting`, and always under Reduce Motion): the first key with each light at its own place, which
+    is the SVG's `-rest` still.
+  *What differs from the desktop's, said:* the phone's own graphics draw it, at most sixty times a second; a
+  light's place is reckoned on the edge's length by the phone's path measure, where a browser reckons the SVG's;
+  and its clock starts when it is first drawn, as the SVG's starts with its document. **No gate holds the Swift
+  file to the SVG yet.** Rows hold its own numbers (the stamp, the box, thirteen keys of one structure, the
+  periods, the timing functions, the lights), so a regenerated SVG is followed by hand until
+  `pnpm check:ios-fixtures` gains a row for it. The splash's Metal mark stays the splash's alone.
 - **The phone's splash** (2026-11-01; `apps/ios/VibeFieldKit/Sources/FieldSplash`): the phone's first face
   is the field too, in its own design — vibefield-splash's **iPhone splash** (`splash/look-iphone.json`, tuned
   apart in the studio's iPhone window). By night (the window's Appearance, Settings › Appearance; Auto follows
@@ -7776,6 +7800,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       and the design kit has no mark of its own. *This is short of the desktop, said plainly: there the mark
       turns while the work moves, and a mark at rest says its work is paused (HG-L1, §6). A session being read
       is not paused. The phone's moving mark is owed.*
+      *Corrected 2026-11-14 (item 417b; qa-01's direction on the same words of James's, not a new ruling of
+      his):* **the mark moves.** The phone's design kit has its own mark now (`LivingMark`, FieldDesign), made
+      from the numbers of the desktop's generated SVG, and the hold wears it in the desktop's box of 99 × 44: on
+      the light ground in black ink by day, on the dark in white by night. It draws every motion the desktop's
+      draws, the twist, the crossing and the lights' lap (§8 "The living mark, drawn as SVG", corrected the same
+      day), and stands at rest under Reduce Motion as the desktop's does. The hold no longer reads the launch's
+      still. A mark at rest is again what HG-L1 says it is: a wait whose work is paused, which this hold never
+      is.
     - *Readings; he ruled none of them.* "Message view" is a session's page: the sheet a whole message opens on
       has no loading, its words are held when it opens. The words are the room's two, with nothing under them and
       no desktop named. The 800ms floor is §6's for History's holds; the room's own code keeps it for the view's
