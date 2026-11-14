@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { accessSync, existsSync, constants as fsConstants, readFileSync } from "node:fs";
-import { homedir, release, tmpdir } from "node:os";
+import { homedir, networkInterfaces, release, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   APP_PREFERENCE_KEYS,
@@ -135,6 +135,8 @@ import {
 } from "./login-shell";
 import {
   CHAT_NIGHT_FLAG,
+  captureProbeHostResolverRules,
+  firstHostAddress,
   hasQuitGate,
   isSmokeLike,
   keepsFramesWhenCovered,
@@ -256,6 +258,15 @@ if (!keepsGpu(MODE, process.argv)) {
 if (keepsFramesWhenCovered(MODE, process.argv) || MODE === "godview-perf-lab") {
   app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
   app.commandLine.appendSwitch("disable-renderer-backgrounding");
+}
+// Item 415 — row 38's same-host legs: the fixture's two ts.net names resolve to the address the probe's
+// listeners bind on. Chromium reads its switches at start, so before ready; in `capture-webrtc-probe` alone
+// (modes.test.ts pins every other mode to none), and the probe gets the same address.
+const CAPTURE_PROBE_HOST =
+  MODE === "capture-webrtc-probe" ? firstHostAddress(networkInterfaces()) : undefined;
+const captureProbeRules = captureProbeHostResolverRules(MODE, CAPTURE_PROBE_HOST);
+if (captureProbeRules !== undefined) {
+  app.commandLine.appendSwitch("host-resolver-rules", captureProbeRules);
 }
 const VITE_URL = process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
 const PRELOAD_PATH = join(__dirname, "..", "preload", "index.cjs");
@@ -589,12 +600,13 @@ async function main(
   await app.whenReady();
   logger.info("desktop.lifecycle.ready", "Electron app is ready");
   // Item 378 — the preview capture's WebRTC fence, measured on a real Electron: the capture class on
-  // main's own adapter, twice over one fixture page. No daemon and no window of the app's; it exits
-  // with its own code (0 wanted, 1 red, 2 blind).
+  // main's own adapter, four times over a fixture page (item 415's two same-host legs among them).
+  // No daemon and no window of the app's; it exits with its own code (0 wanted, 1 red, 2 blind).
   if (MODE === "capture-webrtc-probe") {
     const code = await (await testing()).runCaptureWebRtcProbe({
       dataDir: app.getPath("userData"),
       native: electronArtifactPreviewNative(),
+      host: CAPTURE_PROBE_HOST,
     });
     app.exit(code);
     return;

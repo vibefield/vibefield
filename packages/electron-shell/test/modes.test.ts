@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   answersSetup,
+  captureProbeHostResolverRules,
+  firstHostAddress,
   isSmokeLike,
   keepsFramesWhenCovered,
   keepsGpu,
@@ -259,5 +261,40 @@ describe("PT-S3 (P2): a smoke's simctl developer directory", () => {
 
   it.each(ALL_MODES)("%s reads it exactly when it is smoke-like", (mode) => {
     expect(smokeSimctlDeveloperDir(mode, env)).toBe(isSmokeLike(mode) ? "/var/empty" : undefined);
+  });
+});
+
+// Item 415 — row 38's same-host legs need their two fixture names to resolve to the probe's listeners, and
+// Chromium's `host-resolver-rules` is process-wide: so it is set in `capture-webrtc-probe` alone, and a person's
+// shell (every other mode) resolves names as the system does.
+describe("item 415 — row 38's host-resolver-rules", () => {
+  it("are set in capture-webrtc-probe alone, mapping its two same-host names to the probe's address", () => {
+    for (const mode of ALL_MODES) {
+      const rules = captureProbeHostResolverRules(mode, "192.0.2.7");
+      if (mode === "capture-webrtc-probe") {
+        expect(rules).toBe(
+          "MAP fixture-same-control.ts.net 192.0.2.7,MAP fixture-same.ts.net 192.0.2.7",
+        );
+      } else {
+        expect(rules, mode).toBeUndefined();
+      }
+    }
+    expect(captureProbeHostResolverRules("capture-webrtc-probe", undefined)).toBeUndefined();
+  });
+
+  it("read the probe's address as the host's first non-loopback, non-link-local IPv4", () => {
+    expect(
+      firstHostAddress({
+        lo0: [{ family: "IPv4", internal: true, address: "127.0.0.1" }],
+        en0: [
+          { family: "IPv6", internal: false, address: "fe80::1" },
+          { family: "IPv4", internal: false, address: "169.254.3.4" },
+          { family: "IPv4", internal: false, address: "192.0.2.7" },
+        ],
+      }),
+    ).toBe("192.0.2.7");
+    expect(
+      firstHostAddress({ lo0: [{ family: "IPv4", internal: true, address: "127.0.0.1" }] }),
+    ).toBeUndefined();
   });
 });

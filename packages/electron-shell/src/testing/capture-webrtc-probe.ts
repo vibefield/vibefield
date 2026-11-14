@@ -16,23 +16,40 @@
 // itself completes (it needs a window server that paints) is recorded, never the verdict.
 // THE TCP HALF, honestly: if Chromium's P2P TCP does not take the capture session's proxy, the FENCED leg shows a
 // connection at the TURN listener and the probe is RED. Then the plan changes; the probe is never adjusted to pass.
+// ITEM 415, two more legs: a bypass entry with no port matched every port of its host, so the page's OWN name was
+// a way around the dead proxy. Each same-host leg puts its TURN server at the page's own name on the listener's
+// port (main maps the two names to the listeners' address with `host-resolver-rules`, in this mode alone):
+//   · SAME-HOST CONTROL: the fence's two calls left unmade. It MUST connect there, or the probe cannot see this half
+//     (exit 2, blind: the name did not resolve, or Chromium's P2P TCP did not dial it).
+//   · SAME HOST: the capture as it ships. It must not connect (exit 1, red: the bypass is wider than its origin's
+//     port). Read on 378's rule (a bare host), this leg is the reading of item 415's leak; if it does not arrive
+//     there, Chromium's P2P TCP did not take the bypass on this Electron, and that is reported, never adjusted.
 
 import { createSocket } from "node:dgram";
 import { type AddressInfo, createServer, type Socket } from "node:net";
-import { networkInterfaces } from "node:os";
 import {
   ArtifactPreviewCapture,
   type ArtifactPreviewCaptureNative,
 } from "../main/artifact-preview-capture";
+import { CAPTURE_PROBE_SAME_HOSTS } from "../main/modes";
 
 export interface CaptureWebRtcProbeOptions {
   /** where the capture writes its thumbnails: the run's own fresh profile */
   dataDir: string;
   /** main's own Electron adapter (`electronArtifactPreviewNative`) */
   native: ArtifactPreviewCaptureNative;
+  /** the address main read before ready (`firstHostAddress`): the listeners bind on it, and its host rules map the
+   * same-host legs' names to it. Absent: the host has no non-loopback IPv4, and the probe is blind. */
+  host: string | undefined;
 }
 
-type Leg = "control" | "fenced";
+type Leg = "control" | "fenced" | "same-control" | "same";
+
+/** The legs that run the capture as it ships; the others leave the fence's two calls unmade. */
+const SHIPPING: ReadonlySet<Leg> = new Set<Leg>(["fenced", "same"]);
+/** The legs whose TURN and STUN servers are the page's own name (item 415). */
+const SAME_HOST: ReadonlySet<Leg> = new Set<Leg>(["same-control", "same"]);
+const [SAME_CONTROL_NAME, SAME_NAME] = CAPTURE_PROBE_SAME_HOSTS;
 
 interface LegResult {
   leg: Leg;
@@ -63,10 +80,15 @@ const LEGS: Record<Leg, { artifactId: string; url: string }> = {
     url: "https://fixture-control.ts.net:41378/",
   },
   fenced: { artifactId: "01JD3780000000000000000002", url: "https://fixture-fenced.ts.net:41379/" },
+  "same-control": {
+    artifactId: "01JD4150000000000000000001",
+    url: `https://${SAME_CONTROL_NAME}:41380/`,
+  },
+  same: { artifactId: "01JD4150000000000000000002", url: `https://${SAME_NAME}:41381/` },
 };
 
 export async function runCaptureWebRtcProbe(options: CaptureWebRtcProbeOptions): Promise<number> {
-  const host = hostAddress();
+  const host = options.host;
   if (host === undefined) {
     emit({ kind: "blind", why: "no non-loopback IPv4 address to bind the listeners on" });
     return 2;
@@ -75,10 +97,21 @@ export async function runCaptureWebRtcProbe(options: CaptureWebRtcProbeOptions):
   emit({ kind: "leg", ...control });
   const fenced = await runLeg(options, "fenced", host);
   emit({ kind: "leg", ...fenced });
+  const sameControl = await runLeg(options, "same-control", host);
+  emit({ kind: "leg", ...sameControl });
+  const same = await runLeg(options, "same", host);
+  emit({ kind: "leg", ...same });
   if (control.datagrams + control.connections === 0) {
     emit({
       kind: "blind",
       why: "the CONTROL capture reached neither listener: this probe cannot see what it measures",
+    });
+    return 2;
+  }
+  if (sameControl.connections === 0) {
+    emit({
+      kind: "blind",
+      why: "the SAME-HOST CONTROL never connected at its own name: this probe cannot see item 415",
     });
     return 2;
   }
@@ -87,6 +120,12 @@ export async function runCaptureWebRtcProbe(options: CaptureWebRtcProbeOptions):
     ...(fenced.connections > 0
       ? ["TCP: WebRTC's TCP did not take the capture session's proxy; the plan changes"]
       : []),
+    ...(same.datagrams > 0
+      ? ["UDP (same host): the contents' WebRTC IP handling policy did not hold"]
+      : []),
+    ...(same.connections > 0
+      ? ["TCP (same host): the page's own name on another port went direct (item 415)"]
+      : []),
   ];
   if (leaked.length > 0) {
     emit({ kind: "red", leaked });
@@ -94,7 +133,7 @@ export async function runCaptureWebRtcProbe(options: CaptureWebRtcProbeOptions):
   }
   emit({
     kind: "wanted",
-    why: "the control reached the listeners; the fenced capture reached neither",
+    why: "both controls reached their listeners; neither shipping capture reached one",
   });
   return 0;
 }
@@ -107,7 +146,8 @@ async function runLeg(
   const listeners = await listen(host);
   try {
     const reports: string[] = [];
-    const page = fixturePage(host, listeners.udpPort, listeners.tcpPort);
+    const iceHost = SAME_HOST.has(leg) ? new URL(LEGS[leg].url).hostname : host;
+    const page = fixturePage(iceHost, listeners.udpPort, listeners.tcpPort);
     const answer = async (url: string): Promise<Response> => {
       const { pathname, searchParams } = new URL(url);
       if (pathname === "/") {
@@ -151,8 +191,9 @@ async function runLeg(
   }
 }
 
-/** The capture's adapter for one leg: the fixture answered on every capture session, and on the CONTROL leg the
- * fence's two calls left unmade (a session whose `setProxy` does nothing, contents whose policy call does nothing).
+/** The capture's adapter for one leg: the fixture answered on every capture session, and the
+ * fence's two calls left unmade on each CONTROL leg (a session whose `setProxy` does nothing, contents whose policy
+ * call does nothing).
  * The capture's own code runs unchanged on both legs. */
 function probeNative(
   base: ArtifactPreviewCaptureNative,
@@ -165,11 +206,11 @@ function probeNative(
       (session as unknown as ProtocolSession).protocol.handle("https", (request) =>
         answer(request.url),
       );
-      return leg === "fenced" ? session : replacing(session, "setProxy", async () => undefined);
+      return SHIPPING.has(leg) ? session : replacing(session, "setProxy", async () => undefined);
     },
     createWindow: (options) => {
       const window = base.createWindow(options);
-      if (leg === "fenced") return window;
+      if (SHIPPING.has(leg)) return window;
       const contents = replacing(window.webContents, "setWebRTCIPHandlingPolicy", () => undefined);
       return replacing(window, "webContents", contents);
     },
@@ -194,10 +235,11 @@ function replacing<T extends object>(target: T, key: PropertyKey, value: unknown
   });
 }
 
-function fixturePage(host: string, udpPort: number, tcpPort: number): string {
+/** The fixture page; `iceHost` is the listeners' address, or on a same-host leg the page's own name. */
+function fixturePage(iceHost: string, udpPort: number, tcpPort: number): string {
   const servers = JSON.stringify([
-    { urls: `stun:${host}:${udpPort}` },
-    { urls: `turn:${host}:${tcpPort}?transport=tcp`, username: "probe", credential: "probe" },
+    { urls: `stun:${iceHost}:${udpPort}` },
+    { urls: `turn:${iceHost}:${tcpPort}?transport=tcp`, username: "probe", credential: "probe" },
   ]);
   const report = 'fetch("/report?c=" + encodeURIComponent(JSON.stringify(seen)))';
   return [
@@ -262,18 +304,6 @@ async function listen(host: string): Promise<Listeners> {
       await new Promise<void>((resolve) => udp.close(() => resolve()));
     },
   };
-}
-
-/** The host's first non-loopback, non-link-local IPv4. */
-function hostAddress(): string | undefined {
-  for (const entries of Object.values(networkInterfaces())) {
-    for (const entry of entries ?? []) {
-      if (entry.family === "IPv4" && !entry.internal && !entry.address.startsWith("169.254.")) {
-        return entry.address;
-      }
-    }
-  }
-  return undefined;
 }
 
 function emit(record: Record<string, unknown>): void {

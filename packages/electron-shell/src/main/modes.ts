@@ -186,3 +186,43 @@ export function shutdownPolicy(mode: ShellMode): "stop-owned" | "leave-running" 
     ? "stop-owned"
     : "leave-running";
 }
+
+/** Item 415 — row 38's same-host legs (`capture-webrtc-probe`, src/testing/capture-webrtc-probe.ts): the two fixture
+ * names a same-host leg's page and its TURN server share, its CONTROL's first. */
+export const CAPTURE_PROBE_SAME_HOSTS = [
+  "fixture-same-control.ts.net",
+  "fixture-same.ts.net",
+] as const;
+
+/** Item 415 — Chromium's `host-resolver-rules` for row 38 alone: the same-host legs' two names resolve to the address
+ * the probe binds its listeners on, so a DIRECT connection to one arrives and a proxied one dies at the dead proxy.
+ * Every other mode, and a host with no address, sets none: a person's shell resolves names as the system does. */
+export function captureProbeHostResolverRules(
+  mode: ShellMode,
+  address: string | undefined,
+): string | undefined {
+  if (mode !== "capture-webrtc-probe" || address === undefined) return undefined;
+  return CAPTURE_PROBE_SAME_HOSTS.map((host) => `MAP ${host} ${address}`).join(",");
+}
+
+/** One interface address, as `os.networkInterfaces()` lists it. */
+export interface HostInterfaceAddress {
+  family: string | number;
+  internal: boolean;
+  address: string;
+}
+
+/** Row 38's listeners' address: the host's first non-loopback, non-link-local IPv4 (Chromium need not gather over
+ * loopback). Read once in main, before ready, so the host rules and the listeners name the same address. */
+export function firstHostAddress(
+  interfaces: Readonly<Record<string, readonly HostInterfaceAddress[] | undefined>>,
+): string | undefined {
+  for (const entries of Object.values(interfaces)) {
+    for (const entry of entries ?? []) {
+      if (entry.family === "IPv4" && !entry.internal && !entry.address.startsWith("169.254.")) {
+        return entry.address;
+      }
+    }
+  }
+  return undefined;
+}
