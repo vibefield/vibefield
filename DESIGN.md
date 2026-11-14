@@ -9213,6 +9213,15 @@ him and are not invented here.
 - **The acts.** An app's acts are **Open**, **Keep** (or **Stop keeping**), **Versions**, **About this app**,
   **Reload**, **Open on ‹desktop›**, **Open in ‹host›** (only with a hosted link) and, for a live app, **Copy link**.
   *Hide from Apps dropped 2026-11-13 (James, 01:29:54Z).*
+- **Keep's words.** A keep or a stop that did not go through says why, in a sentence, never a code. On the
+  desktop: when keeping cannot be saved yet, "Keeping apps isn't ready yet."; a window without permission, "This
+  window can't keep apps yet."; and when you already keep the most VibeField holds, "You're keeping as many apps
+  as VibeField holds. Stop keeping one to keep ‹app›." On the phone: when a keep fails, "Couldn't keep ‹app›.";
+  and when stopping a keep fails, "Couldn't stop keeping ‹app›." *Ruled 2026-11-14 on James's click on the PM
+  board, "Use all five as written (Recommended)" (08:16:49.919Z); the card's ‹title› is ‹app›
+  here. "Couldn't hide ‹app›. Try again." went with Hide.* ‹draft, a reading of the lead's for James's list
+  after the land, not his: the phone also says the desktop's first and third, for the same two refusals, so a full
+  keep never reads as a bare "Couldn't keep ‹app›."›
 - **About** says "Made by ‹agent›", its session and project, "on ‹desktop›" and its date, and opens the session in
   History. Before an app has a preview it says "No preview yet — it's drawn the first time the app opens".
   ‹for James: the line for a capture that failed›. Before MA-5, an app this phone cannot run yet says "This app
