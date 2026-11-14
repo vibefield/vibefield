@@ -586,10 +586,15 @@ struct HistoryPillLeadTests {
     #expect(FieldHistoryModel.clockLead(at(12, 25, 10, 0, year: 2025), now: newYear) == "25 Dec 2025 · 10:00")
   }
 
-  @Test("a stamp on a day after today, from a desktop whose clock runs ahead, is its day and its clock")
+  // RE-CUT (VF-PM's ruling, 2026-11-13 23:47Z; DESIGN.md §8, "a sitting stamped later than now, where two
+  // devices' clocks disagree, reads as today's: the clock alone"): this row held `Sat 14 Nov · 00:05` for a stamp
+  // on the day after today. It was cut on the text as it stood before that ruling was written into it.
+  @Test("a stamp later than now, from a desktop whose clock runs ahead, reads as today's: the clock alone")
   func aDayAhead() {
-    #expect(FieldHistoryModel.clockLead(at(11, 14, 0, 5), now: now) == "Sat 14 Nov · 00:05")
     #expect(FieldHistoryModel.clockLead(at(11, 13, 23, 30), now: now) == "23:30", "later today is today")
+    #expect(FieldHistoryModel.clockLead(at(11, 14, 0, 5), now: now) == "00:05", "the day after today")
+    #expect(FieldHistoryModel.clockLead(at(11, 20, 9, 0), now: now) == "09:00", "a week ahead")
+    #expect(FieldHistoryModel.clockLead(at(1, 2, 9, 5, year: 2027), now: now) == "09:05", "another year ahead")
   }
 
   @Test("James's pill: a sitting of a week past says its day before its clock, and keeps the stamp it is said of")
