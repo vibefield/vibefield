@@ -7615,7 +7615,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   23:28:32Z, session qa-01, of a project's page on his phone: "[Image #18] redesign this header area to match same
   redesign of the project header, so it is simple showing project name and a bubble showing the session count, and
   remove other text". It overturns PJ-7's "`N places on` and the marks" (2026-10-14), which stood here after the
-  head; a project's places are still under Desktops, below.*), the four tiles, Overview, Live now, then
+  head; a project's places are still under Desktops, below.* *Corrected 2026-11-14, item 416: the head stands in
+  the bar over the page, on the back button's row (§8 "The roots' heads", A project's head stands on the back
+  button's row), and the page under the bar begins with the tiles.*), the four tiles, Overview, Live now, then
   **Desktops** — one row per desktop (its mark at 19 pt, its name, `1 working` or `asleep · 2h`,
   and a disclosure that folds its places out run-fold style: each place by its folder's name and
   a branch that says more, then its last use or why it cannot take a launch), then the sessions by
@@ -8456,11 +8458,34 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Nothing else stands in the head. It overturns the line under the name, `N places on` and the desktops' marks
     (§8 "The phone's History is one ledger of projects"), and the bar's inline title, which said the name a second
     time: the bar over the page holds the back button alone. The page keeps its name for the session pushed over
-    it, whose back button says it. The name was 28 bold, in the code alone.
+    it, whose back button says it. The name was 28 bold, in the code alone. *Corrected 2026-11-14 (item 416, "A
+    project's head stands on the back button's row", below): the head no longer stands under the bar, and the bar
+    no longer holds the back button alone.*
     - *Readings; he ruled none of them.* The cap stays: it is the project's mark, not text. A name too long for its
       line is drawn smaller, down to the 28 it was, before it is cut; the bubble is never cut. A project whose
       sessions are not read yet wears no bubble, as the root does with no project. The index's sentence, while it
-      is not ready (fix7), still stands under the head: it says the page is not whole.
+      is not ready (fix7), still stands under the head: it says the page is not whole. *Corrected 2026-11-14 (item
+      416, below): a project's name is no longer drawn smaller before it is cut.*
+  - **A project's head stands on the back button's row** (item 416, 2026-11-14. James, 08:13:38Z, session qa-01, of
+    a project's page on his phone: "in project page, the project title and count bubble should be at the same row
+    as the back button so it is aligned with the history projects line. and if the project title too long it should
+    be omitted properly"). The head leaves the page and stands in the bar over it: after the back button, on its
+    row and centred on it, from the left, the cap (4 × 26), the name in the root's type (34 bold in the ink) and,
+    10 pt on, the root's bubble with how many sessions the page lists. So a project's name stands at the top of its
+    page as **Projects** stands at the top of the root. Under the bar the page begins with its four tiles. **A name
+    too long for the row is cut at its end with an ellipsis**, at its own size. The bubble is never cut, and neither
+    the bubble nor the back button gives way to a name. The name and its bubble are still read as one heading,
+    `rosetta, 62 sessions`. It overturns, of item 392 above: "the bar over the page holds the back button alone",
+    the head's place under the bar, and the reading "A name too long for its line is drawn smaller, down to the 28
+    it was, before it is cut".
+    - *Readings; he ruled none of them.* The cap stays, before the name: it is the project's mark, not text (item
+      392's reading). The name keeps the root's 34 bold on the row, so a name of more than about a dozen letters
+      is cut on a phone 393 pt wide (reckoned from the row's parts, not seen on a device). "Omitted properly" is
+      the ellipsis alone: a long name is not drawn smaller first. The back button is the system's and is not
+      touched. The row is the system's bar, and the name is centred on the back button in it; it is not moved to
+      the root's band, whose top (56 on an island phone, §8 "The phone's Stories row") stands 3 pt above the
+      bar's (the safe area's line, 59). The index's sentence, while it is not ready (fix7), stands first on the
+      page, above the tiles. The roots' own titles keep item 392's rule, which "Projects" and "Chat" never reach.
 - **The phone's Chat** (track IOS, ruled 2026-11-04 from the design page *Chat in a Pocket*: PC-D1 and PC-D3…D8 A,
   James; PC-D2 carried A; the laws PC-L1…L5). Nothing is drawn yet: IOS-12a carries the wire, and IOS-12b…g draw it,
   in that order. One Chat, two sizes (PC-L1): the Mac's sparks, words, statuses and rulings at touch pitch. Every
