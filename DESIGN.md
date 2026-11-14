@@ -5272,6 +5272,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     06:48:31Z at MK's lean; §9 "The plugins' words"). A download that didn't match is logged today
     (`fieldd.plugin_install.artifact_mismatch`); a read's incompatible and vanished entries are
     not, since `updatesCheck` hands them only to its caller, and logging them is *owed (MK)*.
+    *Built 2026-11-14 (MK-UC, the doors' commit after this rider):* each read logs them, one line
+    per plugin you have: an update that needs a newer VibeField as
+    `fieldd.plugin_updates.incompatible`, with the version it needs and its app and contracts
+    floors, and a plugin the list no longer names as `fieldd.plugin_updates.unlisted`. Both
+    reads say them: `updatesCheck`, which Settings → Plugins' old updates row asks, and the popup's
+    own read once it lands (`plugins.catalog.refresh`). Neither line reaches a window.
     *To be built by track MK. Until then* Settings → Plugins keeps its section-top "updates ▸"
     disclosure (`panels/PluginUpdates.tsx`), which never checks on its own: opening it reveals a
     "check for updates" action, and nothing fetches on mount, on expand or on a timer. A compatible
@@ -6905,6 +6911,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     you take it — the objects it adds or removes (MK-D4) — over its notes, with **Update**; one that removes an
     object asks first, because the objects of that kind on your desks would wear the missing face. Nothing installs
     on its own; going back a version (PA §2.2) has no MK slice and no act here yet.
+    *Added 2026-11-14 (James's pick on the board, 2026-11-12 06:08:01Z: "Yes: show the card when an update asks for
+    more"; track MK, MK-UC), ‹draft› for his eye:* an update that can do more than the version you have asks first
+    too, with **the update card**, the install card's own (below). Whether it can do more is known only once it is
+    downloaded, so **Update** downloads first, its act saying how far, and the card grows where the act stood, as an
+    install's does (MK-O2's A2). It names only what the update can do that the version you have can't, read from the
+    plugin just downloaded: a power you turned off on this desktop stays off and is not named; one the version you
+    have asked for but couldn't use, and the update can, is. Its **Cancel** throws the download away and leaves the
+    version you have. Its **Update** takes the plugin as it stands then: a power turned off, or the plugin turned off
+    or on, while the card waits is taken as it is. A card whose plugin changed while it waited (another version of it
+    taken here, or the update now able to do something the card didn't name) changes nothing, as an install card's
+    does, and says so with a way to try again. An update that asks for nothing new still takes its one press, with no
+    card. Its words are §9's ("Updates"). How **Update all** meets a card among its updates is drawn with Updates'
+    rows, which no slice has built yet.
   - **A plugin's page opens in place** (MK-D2): a press on a tile or a row, or ↵ on the hot one, turns the body to
     the page, and **‹ Discover** at its top (‹ Installed or ‹ Updates when it opened from there) or Esc goes back.
     As drawn it holds two columns. **The first is the set, then each object** (MK-D4): the picture — the set's
@@ -9250,12 +9269,38 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   "Updating…"; then its row says "Updated to 0.7.0" and the plugin's page **Installed** with the new version. An
   update to a plugin with objects brings the window back fresh first, and the popup reopens on that plugin's page
   saying **Installed**: no word says it reloaded or restarted (MK-E6). The tab's note: "Plugins look for updates when
-  you open Plugins. Updates never install on their own. An update that removes an object asks first." ‹draft›
+  you open Plugins. Updates never install on their own. An update that removes an object, or that can do more, asks
+  first." ‹draft›
   (the page's "Nothing installs on its own, and going back a version is always your choice.", less the clause no
   MK slice builds). A plugin's own
   look when VibeField starts (MK-D5; PA §5.3.1's per-plugin opt-in) is its page's switch, **Check for updates on its
   own**, with the note's clause "A plugin's page can also let it look when VibeField starts."; neither shows until
   that check is built, for fieldd checks only when asked (`updatesCheck`) and no MK slice builds it.
+  *Added 2026-11-14 (James's pick on the board, 2026-11-12 06:08:01Z: "Yes: show the card when an update asks for
+  more"; MK-UC), ‹draft› for his eye:* **the update card** is the install card's own, read from the plugin just
+  downloaded (MK-O2's A2). It asks **Update ‹plugin›?**, then "This version can also:" with each new power in its
+  plain words (below), the page's own, so the card and the page never word one power two ways. It names the new
+  powers alone: one you turned off on this desktop stays off and is not named, and one the version you have asked for
+  but couldn't use, which this version can, is. With a removed object, the line above stands under them, "Burndown
+  objects on your desks will draw as missing.", one card saying both. Then "It updates on this Mac." ("this PC" off
+  the Mac) · **Cancel** · **Update** ↵. **Cancel** throws the download away and says nothing; the act says **Update**
+  again. A row's act says **Update**, with no "…", unless the list says it removes an object: whether it can do more
+  is known only once it is downloaded, so the card stands between "Downloading · 42%" and "Updating…". An update that
+  asks for nothing new takes its one press, with no card. The doors' own words, which only Settings → Plugins'
+  updates row shows until MK-5: an update asked of a plugin this desktop doesn't have, "This plugin isn't
+  installed."; and that row's one press, refused for an update that can do more, "This update can do more than the
+  version you have. Update it from Plugins.", nothing changed. The card's **Update** takes the plugin as it stands
+  then: a power turned off, or the plugin turned off or on, while the card waits is taken as it is. A card whose
+  plugin changed while it waited, another version of it taken here or the update now able to do something the card
+  didn't name, changes nothing and throws its download away; its door says "This plugin changed before you pressed
+  Update. Press Update again.", which no window shows yet (what the card says for it is UC-C's, with a failed
+  update's words).
+  *Changed 2026-11-14 (as above):* the tab's note said "An update that removes an object asks first."
+  *Not said, and why (MK-UC, 2026-11-14):* the install card's "It installs on your ‹n› desktops, because your desktops
+  share one set of plugins." has no update twin. An update reaches this desktop alone today: a desktop that has the
+  plugin keeps its version, for the install-set's reconciler installs a plugin only where it is missing
+  (`fieldd/src/install-reconciler.ts`, `applyEntry`). Whether an update reaches your other desktops is open, James's
+  to call (MK, 2026-11-14), and the card says this Mac until it does.
 - **Installed, off and Remove…** (MK-D9, MK-D13; MK-E10). A row says its set and where it hangs, "4 objects · Things,
   Tools · 1.0.0", or for a set of one "Hangs under Things · 1.0.0", with its switch; a built-in's ends "· comes with
   VibeField", and its page says "Comes with VibeField. It can be turned off, not removed." A plugin with no object
