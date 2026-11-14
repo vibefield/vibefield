@@ -1,0 +1,55 @@
+{
+  "generation": 4,
+  "plugins": [
+    {
+      "id": "acme.burndown",
+      "version": "0.6.1",
+      "title": "Burndown",
+      "source": "registry",
+      "manifestHash": "sha256:1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f",
+      "installRevision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "registry": {
+        "indexRef": "index@1762819200000",
+        "artifactSha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "publisher": "https://github.com/acme/burndown"
+      },
+      "state": "disabled",
+      "compatible": true,
+      "enabled": false,
+      "requestedCapabilities": ["canvas.read"],
+      "grantedCapabilities": [],
+      "deniedCapabilities": [],
+      "grantGeneration": 0,
+      "contributions": { "objects": [], "commands": [], "surfaces": [] },
+      "renderer": "inactive",
+      "service": "none",
+      "held": "community-off"
+    },
+    {
+      "id": "vibefield.desk-things",
+      "version": "1.1.0",
+      "title": "Desk things",
+      "source": "registry",
+      "manifestHash": "sha256:2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f70",
+      "installRevision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "registry": {
+        "indexRef": "index@1762819200000",
+        "artifactSha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "publisher": "https://github.com/vibefield/desk-things",
+        "rung": "R1",
+        "publisherName": "VibeField"
+      },
+      "state": "enabled",
+      "compatible": true,
+      "enabled": true,
+      "requestedCapabilities": [],
+      "grantedCapabilities": [],
+      "deniedCapabilities": [],
+      "grantGeneration": 0,
+      "contributions": { "objects": [], "commands": [], "surfaces": [] },
+      "renderer": "inactive",
+      "service": "none"
+    }
+  ],
+  "problems": []
+}

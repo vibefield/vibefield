@@ -343,6 +343,7 @@ import {
 } from "./native-supervisor";
 import { PeerLink } from "./peer-link";
 import { PluginCatalogService } from "./plugin-catalog";
+import { CommunityHold, communityGate } from "./plugin-community-hold";
 import { RegistryInstallService } from "./plugin-install";
 import { InstallCards } from "./plugin-install-cards";
 import { PluginModuleAuthority } from "./plugin-modules";
@@ -1687,6 +1688,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ...(listKeyed ? { installed: [installedRoot] } : {}),
       },
       ...(config.bundledTrust !== undefined ? { bundledTrust: config.bundledTrust } : {}),
+      // MK-O3 (O3-C, 2026-11-12): every plugin from the plugin list is held until the community gate is set below
+      communityHold: true,
     });
     await plugins.refresh();
     // P8b (ESP §8.4): the module authority reads the registry and mints opaque
@@ -1843,6 +1846,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     supervisor.on("transition", (state: NativeLinkState) => {
       if (state === "up") void startLanes();
     });
+    // MK-2c (2026-11-11, G1, S4): a community plugin installs only once this build draws the switch (MK-4) and the
+    // person's switch is on; until then, never, whatever the stored switch says (D4). MK-O3 (O3-C, 2026-11-12): and
+    // runs only then, so the installer's gate and the registry's read this one closure. Read at each ask, after the
+    // settings doc below exists.
+    const communityAllowed = async (): Promise<boolean> =>
+      COMMUNITY_SWITCH_DRAWN &&
+      effectiveAppPreferences(await settingsDoc.appValues()).communityPlugins;
     // P7 §5.3.1 — fetch/verify/install (user-initiated only; no phone-home)
     const installer = new RegistryInstallService({
       dataDir: config.dataDir,
@@ -1851,12 +1861,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.registryPublicKey !== undefined
         ? { registryPublicKey: config.registryPublicKey }
         : {}),
-      // MK-2c (2026-11-11, G1, S4): a community plugin installs only once this build draws the switch (MK-4)
-      // and the person's switch is on; until then, never, whatever the stored switch says (D4). Read at each
-      // install, after the settings doc and the catalog below exist.
-      communityAllowed: async () =>
-        COMMUNITY_SWITCH_DRAWN &&
-        effectiveAppPreferences(await settingsDoc.appValues()).communityPlugins,
+      communityAllowed,
       // MK-2c (the floor): an install's or an updates check's index is held to the held list's `generatedAt`
       indexFloor: (): Promise<number | null> => catalog.heldGeneratedAt(),
       // MK-O3 (O3-B, 2026-11-12; James's pick, 03:42:10Z): an install holds the list it verified, here and on every
@@ -1928,6 +1933,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (event.section === "app") void refreshSyncPosture();
     });
     await refreshSyncPosture();
+    // MK-O3 (O3-C, 2026-11-12; James's pick "Stop"): community plugins off means none of their code runs. The
+    // registry's first refresh, above, had no gate, so it held every plugin from the plugin list. The gate reads the
+    // switch and the held plugin list once per refresh. The second refresh runs now, long before anything can ask for a
+    // plugin's code: the API listens far below.
+    plugins.setCommunityGate(
+      communityGate({
+        allowed: communityAllowed,
+        listedAs: () => catalog.listedAsLookup(),
+        logger,
+      }),
+    );
+    await plugins.refresh();
     // DS-5 (DS-D6, DS-D18) — the SETTINGS document and the LIBRARY join the
     // Loro-level host as SYSTEM documents, under well-known ids derived from
     // the ACCOUNT (the linked login, else this user root), so every desktop of
@@ -6742,6 +6759,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const teardownPlugin = async (id: string): Promise<void> => {
       await teardownPluginWithResult(id);
     };
+    // MK-O3 (O3-C, 2026-11-12): the hold on code already running. Whatever refreshes the registry, a plugin newly held
+    // is torn down as plugins.disable's is, and one let go that the person wants on starts fresh. It refreshes when the
+    // answer to "may community plugins run" moves, here or on another desktop, and after a plugin list read afresh;
+    // its first call, now, catches a move that arrived since the second refresh. It writes no record and publishes
+    // nothing to your other desktops.
+    const communityHold = new CommunityHold({
+      plugins,
+      allowed: communityAllowed,
+      teardown: teardownPlugin,
+      restart: (id) => void serviceHost?.restartFresh(id).catch(() => undefined),
+      logger,
+    });
+    settingsDoc.on("changed", (event: { section: string }) => {
+      if (event.section === "app") void communityHold.switchMoved();
+    });
+    void communityHold.switchMoved();
     api.register("plugins.install", async (ctx, params) => {
       const parsed = PluginsInstallParams.safeParse(params);
       if (!parsed.success)
@@ -6993,7 +7026,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       audit.required(
         ctx,
         { action: "plugin.catalog.refresh", target: { kind: "plugin-registry", id: "catalog" } },
-        () => catalog.refresh(),
+        async () => {
+          const read = await catalog.refresh();
+          // MK-O3 (O3-C): a list read afresh can move a plugin between community and VibeField's own
+          if (read.state === "ready") void communityHold.refresh();
+          return read;
+        },
         (read) => ({ attrs: { state: read.state, count: read.plugins.length } }),
       ),
     );

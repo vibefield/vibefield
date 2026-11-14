@@ -129,6 +129,13 @@ export type SanitizedContributions = z.infer<typeof SanitizedContributions>;
 export const PluginRecordState = z.enum(["invalid", "incompatible", "disabled", "enabled"]);
 export type PluginRecordState = z.infer<typeof PluginRecordState>;
 
+/** MK-O3 (O3-C, 2026-11-12; James's pick "Stop"): why a registered row is off although the person wants it on. One
+ * reason so far: community plugins are off on this desktop, so a community plugin is held as if turned off. It is for
+ * the window alone and decides nothing: every reader decides by `enabled` and `state`. Tolerant: a reason this build
+ * does not know reads as absent. */
+export const PluginHeldReason = z.enum(["community-off"]);
+export type PluginHeldReason = z.infer<typeof PluginHeldReason>;
+
 export const PluginRecord = z
   .object({
     id: PluginId,
@@ -157,6 +164,8 @@ export const PluginRecord = z
     renderer: PublicEntryState,
     service: PublicEntryState,
     lastError: PluginErrorSummary.optional(),
+    /** MK-O3 (O3-C): set only on a row held off, with `enabled: false` and state `disabled` */
+    held: PluginHeldReason.optional().catch(undefined),
   })
   .passthrough();
 export type PluginRecord = z.infer<typeof PluginRecord>;

@@ -38,6 +38,9 @@ import { contractsRangeSatisfied, type PluginRegistryService } from "./plugin-re
 // write. The re-verify holds a rung or an entry to the signature; the rollback floor holds against the network, not
 // against that (custody note, addenda 2026-11-11). Nothing at load reads this list yet (`listedAsFor`, G3's read):
 // whether a community plugin still loads while the switch is off is James's.
+// *Corrected 2026-11-12 (MK-O3, O3-C; James's pick "Stop", his docket 2026-11-11 22:33:55Z): the load reads it now.
+// The registry asks once per refresh (`listedAsLookup`), and holds each registry plugin the list does not name as
+// VibeField's while community plugins are off.*
 //
 // MK-O3 (O3-B, 2026-11-12; custody note addendum "an install holds the list it verified", accepted 02:58:44Z; James's
 // pick on the board, 03:42:10Z): the held list has a second writer. An install hands over the index it read and
@@ -158,12 +161,24 @@ export class PluginCatalogService {
   }
 
   /** G3's read (custody note §1): the signed rung for an id, from the held, re-verified list. An id the list does
-   * not name, or no list, reads as community (closed, MK-1). Nothing at load calls it until James answers. */
+   * not name, or no list, reads as community (closed, MK-1). The load reads it through `listedAsLookup`. */
   async listedAsFor(id: string): Promise<RegistryListedAs> {
     const held = await this.readHeld();
     if (held === null || held === "refused") return "community";
     const entry = held.index.plugins[id];
     return entry === undefined ? "community" : registryListedAs(entry);
+  }
+
+  /** MK-O3 (O3-C, 2026-11-12): G3's read for one registry refresh. The held list is read and re-verified once, and the
+   * lookup answers each id as `listedAsFor` would; an id the list does not hold as its own key reads as community. */
+  async listedAsLookup(): Promise<(id: string) => RegistryListedAs> {
+    const held = await this.readHeld();
+    if (held === null || held === "refused") return () => "community";
+    const { plugins } = held.index;
+    return (id) => {
+      const entry = Object.hasOwn(plugins, id) ? plugins[id] : undefined;
+      return entry === undefined ? "community" : registryListedAs(entry);
+    };
   }
 
   /** MK-2c (2026-11-11; the floor, VF-PM 10:08:59Z): the held list's `generatedAt`, re-verified, for the installer's

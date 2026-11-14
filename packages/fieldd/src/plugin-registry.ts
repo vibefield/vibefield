@@ -14,6 +14,7 @@ import {
   type PluginRecord,
   type PluginRegistryProblem,
   type PluginRegistrySnapshot,
+  type RegistryListedAs,
   RegistryProvenance,
   type RegistryRung,
   SemverString,
@@ -50,7 +51,19 @@ export interface PluginRegistryConfig {
    * against `rootKeys` (the app's embedded root, handed over by the shell — never read from the root it
    * protects). Unset ⇒ a bundled root walks by manifest as before: the developer's own tree. */
   bundledTrust?: { trustRootPath: string; rootKeys: readonly string[] };
+  /** MK-O3 (O3-C, 2026-11-12; James's pick "Stop"): community plugins off means none of their code runs. Set (the
+   * daemon alone), a registry row is held as if turned off while the community gate says so (`setCommunityGate`),
+   * and every registry row is held until a gate is set, or when it fails. Unset (a registry a test builds alone),
+   * nothing is held. Bundled and development rows are never held. */
+  communityHold?: true;
 }
+
+/** MK-O3 (O3-C): the community gate's answer for one refresh. Allowed, nothing is held; else each registry id the held
+ * plugin list does not name as VibeField's is held (`plugin-catalog.ts`, `listedAsLookup`). */
+export type CommunityVerdict =
+  | { readonly allowed: true }
+  | { readonly allowed: false; readonly listedAs: (id: string) => RegistryListedAs };
+export type CommunityGate = () => Promise<CommunityVerdict>;
 
 interface InstallRecordsFile {
   version: 1;
@@ -130,6 +143,19 @@ const summary = (kind: PluginErrorSummary["kind"], message: string): PluginError
   message: message.slice(0, 500),
 });
 
+/** MK-O3 (O3-C): a registered row held as if turned off: not enabled, no grants, and why. Null for a row that is
+ * invalid or incompatible, which is off already and stays as it is. */
+function heldOff(row: PluginRecord): PluginRecord | null {
+  if (row.state !== "enabled" && row.state !== "disabled") return null;
+  return {
+    ...row,
+    enabled: false,
+    grantedCapabilities: [],
+    state: "disabled",
+    held: "community-off",
+  };
+}
+
 export class PluginRegistryService extends EventEmitter {
   private generation = 0;
   private rows = new Map<string, PluginRecord>();
@@ -159,6 +185,10 @@ export class PluginRegistryService extends EventEmitter {
   private records: InstallRecordsFile | null = null;
   private readonly recordsPath: string;
   private lastSnapshotJson = "";
+  /** MK-O3 (O3-C): the community gate (`setCommunityGate`), and the registry ids the last refresh held. The set, never
+   * the row's `held`, is what decides: `setEnabled` keeps a held row held, and the daemon's hold reads it. */
+  private communityGate: CommunityGate | null = null;
+  private heldIds = new Set<string>();
 
   constructor(private readonly cfg: PluginRegistryConfig) {
     super();
@@ -168,6 +198,9 @@ export class PluginRegistryService extends EventEmitter {
   /** Full §9.2 re-scan. Emits ONE "changed" (coalesced) when the snapshot moved. */
   async refresh(): Promise<void> {
     const records = await this.loadRecords();
+    // MK-O3 (O3-C): the gate is asked once per refresh, before the walk
+    const holds = await this.communityHolds();
+    const heldIds = new Set<string>();
     const rows = new Map<string, PluginRecord>();
     const rootPaths = new Map<string, string>();
     const commitEpochs = new Map<string, number>();
@@ -300,6 +333,13 @@ export class PluginRegistryService extends EventEmitter {
           });
           continue; // first-discovered wins; bundled scans first (§9.1)
         }
+        // MK-O3 (O3-C): a registry row the community gate holds is held as if turned off. Nothing is written: the
+        // person's own switch stays in the records, and the row comes back as it was when the hold lifts.
+        const held = source === "registry" && holds(row.id) ? heldOff(row) : null;
+        if (held !== null) {
+          row = held;
+          heldIds.add(row.id);
+        }
         rows.set(row.id, row);
         rootPaths.set(row.id, pluginRoot);
         commitEpochs.set(row.id, commitEpoch);
@@ -311,7 +351,44 @@ export class PluginRegistryService extends EventEmitter {
     this.commitEpochs = commitEpochs;
     this.serviceDecls = nextDecls;
     this.problems = problems;
+    this.heldIds = heldIds;
     this.publish();
+  }
+
+  /** MK-O3 (O3-C): the daemon sets the gate once both of its reads exist (the settings doc and the catalog), then
+   * refreshes. */
+  setCommunityGate(gate: CommunityGate): void {
+    this.communityGate = gate;
+  }
+
+  /** MK-O3 (O3-C), DAEMON-INTERNAL: whether the last refresh held this registry id. */
+  isHeld(id: string): boolean {
+    return this.heldIds.has(id);
+  }
+
+  /** MK-O3 (O3-C), DAEMON-INTERNAL: the person's own switch for a plugin, as the records hold it (absent: on). A held
+   * row reads off whatever it says; the reconciler holds a synced wish to this one. */
+  async wantsEnabled(id: string): Promise<boolean> {
+    const records = await this.loadRecords();
+    return records.plugins[id]?.enabled ?? true;
+  }
+
+  /** MK-O3 (O3-C): which registry ids this refresh holds. Without `communityHold`, none. With it, every one until a
+   * gate is set and every one when the gate fails (closed, VF-PM's ask 6); else each id that does not list as
+   * VibeField's while community plugins are not allowed. */
+  private async communityHolds(): Promise<(id: string) => boolean> {
+    if (this.cfg.communityHold !== true) return () => false;
+    const gate = this.communityGate;
+    if (gate === null) return () => true;
+    let verdict: CommunityVerdict;
+    try {
+      verdict = await gate();
+    } catch {
+      return () => true;
+    }
+    if (verdict.allowed) return () => false;
+    const { listedAs } = verdict;
+    return (id) => listedAs(id) !== "vibefield";
   }
 
   /** WP8c (WP8-D5, D7): a keyed bundled root. The trust-root first, against the app's root keys; then the index
@@ -743,15 +820,17 @@ export class PluginRegistryService extends EventEmitter {
     records.plugins[id] = { ...(records.plugins[id] ?? {}), enabled };
     await this.saveRecords(records);
     const registered = row.state === "enabled" || row.state === "disabled";
+    // MK-O3 (O3-C): the person's wish is recorded as ever, and a held row stays held until the hold lifts
+    const on = registered && enabled && !this.heldIds.has(id);
     const grants = this.effectiveGrantsFor(row, records);
     const next: PluginRecord = {
       ...row,
-      enabled: registered && enabled,
+      enabled: on,
       // §15.2 through the same algorithm as buildRow — enable never resurrects
       // an ineligible or revoked capability
-      grantedCapabilities: registered && enabled ? grants.granted : [],
+      grantedCapabilities: on ? grants.granted : [],
       deniedCapabilities: grants.denied,
-      state: registered ? (enabled ? "enabled" : "disabled") : row.state,
+      state: registered ? (on ? "enabled" : "disabled") : row.state,
     };
     this.rows.set(id, next);
     this.publish();
@@ -776,7 +855,9 @@ export class PluginRegistryService extends EventEmitter {
         { pluginKind: "PLUGIN_CAPABILITY_DENIED" },
       );
     const records = await this.loadRecords();
-    const prior = records.plugins[id] ?? { enabled: row.enabled };
+    // MK-O3 (O3-C): a held row reads off whatever the person wants. With no record, its wish is the default (on),
+    // never the hold's off, which would keep it off when the hold lifts
+    const prior = records.plugins[id] ?? { enabled: this.heldIds.has(id) || row.enabled };
     records.plugins[id] = {
       ...prior,
       grants: { ...(prior.grants ?? {}), [capability]: granted },

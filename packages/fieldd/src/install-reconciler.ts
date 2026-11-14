@@ -222,8 +222,13 @@ export class InstallSetReconciler {
     // dev-linked/sideload rows never take doc-driven state (§16.6)
     if (record.source === "dev-linked" || record.source === "sideload") return;
 
-    // enablement (desire only — effective stays per-device)
-    if (record.enabled !== entry.enabled) {
+    // enablement (desire only — effective stays per-device). MK-O3 (O3-C, 2026-11-12): a row held while community
+    // plugins are off reads off whatever the person wants, so its synced wish is held to the wish recorded here; else
+    // every reconcile would enable it again, audited, to no effect
+    const enabledHere = this.cfg.plugins.isHeld(entry.pluginId)
+      ? await this.cfg.plugins.wantsEnabled(entry.pluginId)
+      : record.enabled;
+    if (enabledHere !== entry.enabled) {
       if (entry.enabled) {
         record = await this.cfg.audit.requiredSystem(
           {

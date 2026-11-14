@@ -268,6 +268,11 @@ class MemoryRegistry {
     return id === PA32_ID && !this.#gone ? this.record : undefined;
   }
 
+  /** MK-O3 (O3-C): this desktop holds nothing for community plugins being off. */
+  isHeld(_id: string): boolean {
+    return false;
+  }
+
   /** MK-2d: the code removed (gone) or installed again (back). */
   forget(): void {
     this.#gone = true;

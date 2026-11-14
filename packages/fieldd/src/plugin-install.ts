@@ -131,8 +131,9 @@ async function slotManifestHash(root: string): Promise<string | null> {
   return read.ok ? hashOfManifestBytes(read.bytes) : null;
 }
 
-/** MK-O3 (O3-B): a failure as its reason code alone, its kind or its code and never its text (rule 22) */
-function failureCode(error: unknown): string {
+/** MK-O3 (O3-B): a failure as its reason code alone, its kind or its code and never its text (rule 22). O3-C's hold
+ * says its failures the same way (`plugin-community-hold.ts`). */
+export function failureCode(error: unknown): string {
   const code =
     error instanceof RpcCallError ? error.kind : (error as { code?: unknown } | null)?.code;
   return typeof code === "string" ? code.slice(0, 64) : "UNKNOWN";

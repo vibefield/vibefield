@@ -15,7 +15,7 @@ import {
   registryListedAs,
   Sha256Pin,
 } from "../src/plugin-distribution";
-import { PluginsInstallResult } from "../src/plugin-registry";
+import { PluginRecord, PluginRegistrySnapshot, PluginsInstallResult } from "../src/plugin-registry";
 import {
   PLUGIN_POWER_GROUPS,
   PLUGIN_POWER_WORDS,
@@ -265,5 +265,32 @@ describe("Community plugins: a synced switch, never undone, absent is off (MK-D6
   it("an older daemon's snapshot says nothing of it (absent; off is fieldd's default, MK-2)", () => {
     const older = AppPreferences.parse(fixture("app-preferences.older-daemon.json"));
     expect(older.communityPlugins).toBeUndefined();
+  });
+});
+
+describe("a held row says why it is off, and the reason decides nothing (MK-O3, O3-C)", () => {
+  type HeldSnapshot = { plugins: Array<Record<string, unknown>> };
+  const snapshot = (): HeldSnapshot =>
+    clone(fixture("plugin-registry-snapshot.held.json")) as HeldSnapshot;
+
+  it("a community row held off carries its reason; a VibeField row beside it carries none", () => {
+    const parsed = PluginRegistrySnapshot.parse(snapshot());
+    const [held, loaded] = parsed.plugins;
+    expect([held?.held, held?.enabled, held?.state]).toEqual(["community-off", false, "disabled"]);
+    expect([loaded?.held, loaded?.enabled, loaded?.state]).toEqual([undefined, true, "enabled"]);
+  });
+
+  it("a reason this build does not know reads as absent, and the row still parses", () => {
+    const row = { ...snapshot().plugins[0], held: "switch-gone" };
+    const parsed = PluginRecord.safeParse(row);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.held).toBeUndefined();
+    expect(parsed.success && [parsed.data.enabled, parsed.data.state]).toEqual([false, "disabled"]);
+  });
+
+  it("an older daemon's row, with no reason, parses as before", () => {
+    const { held: _held, ...older } = snapshot().plugins[0]!;
+    const parsed = PluginRecord.parse(older);
+    expect(parsed.held).toBeUndefined();
   });
 });
