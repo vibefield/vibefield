@@ -226,6 +226,9 @@ export class DeviceRemoval {
     });
   }
 
+  // 406 (red, S3's fold): STUBBED — sweeps nothing (the green commit's boot sweep)
+  async sweepSeeded(): Promise<void> {}
+
   private async sweepAsSystem(
     deviceId: string,
     nodeIds: readonly string[],

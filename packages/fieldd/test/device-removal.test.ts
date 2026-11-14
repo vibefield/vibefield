@@ -7,6 +7,7 @@
 // it did not write as the merged list reaches it, once per durable id and once per node id. The
 // booted daemon's rows are freeway-daemon.test.ts's; the door's, tailnet-door.test.ts's.
 import type { CallerContext, DeviceInfo, KnownPhone } from "@vibefield/contracts";
+import type { Logger } from "@vibefield/logging";
 import { describe, expect, it } from "vitest";
 import type { AuditMutation, AuditMutationOutcome } from "../src/audit-service";
 import {
@@ -16,6 +17,7 @@ import {
   type RemovalRoster,
 } from "../src/device-removal";
 import { RpcCallError } from "../src/native-link";
+import { captureLog } from "./peer-roster";
 
 const LOGIN = "person@example.com";
 const PHONE_NAME = "pocket-7q";
@@ -60,8 +62,18 @@ const ROWS: Record<string, DeviceInfo> = {
 };
 
 /** Every seam, scripted: what each was asked, in one line, in order. `refused` is the account's
- * refusals by durable id (the settings document's `refusedDevices`), `known` its known phones. */
-function rig(over: { refused?: Record<string, string[]>; known?: Record<string, string[]> } = {}) {
+ * refusals by durable id (the settings document's `refusedDevices`), `known` its known phones;
+ * `live` the nodes with a product connection here and `links` those whose freeway link the host
+ * closes (every node, unless a row says). */
+function rig(
+  over: {
+    refused?: Record<string, string[]>;
+    known?: Record<string, string[]>;
+    live?: string[];
+    links?: string[];
+    logger?: Logger;
+  } = {},
+) {
   const calls: string[] = [];
   const state = { auditDown: false };
   const refused = new Map(
@@ -117,13 +129,16 @@ function rig(over: { refused?: Record<string, string[]>; known?: Record<string, 
     },
     dropConnections: (nodeIds) => {
       calls.push(`connections ${nodeIds.join(",")}`);
-      return nodeIds.length;
+      const live = over.live;
+      return live === undefined ? nodeIds.length : nodeIds.filter((n) => live.includes(n)).length;
     },
     revokeFreeway: async (minted) => {
       calls.push(`freeway ${minted}`);
-      return 1;
+      const node = minted.slice(minted.indexOf("#") + 1);
+      return over.links === undefined || over.links.includes(node) ? 1 : 0;
     },
     linkedLogin: () => LOGIN,
+    ...(over.logger !== undefined ? { logger: over.logger } : {}),
   });
   /** The handler's write, as THE writer answers it: true only while the refusal did not stand. */
   const write = (deviceId: string, nodes: string[]) => async () => {
@@ -225,9 +240,9 @@ describe("406 — Remove for a phone: the ask, the act and the sweep", () => {
     ]);
   });
 
-  it("a refusal merged from another desktop is swept once, as this desktop's own act; a node id carried later is swept alone; what stood at boot is seeded, never swept", async () => {
+  it("a refusal merged from another desktop is swept once, as this desktop's own act; a node id carried later is swept alone; what stood at boot is seeded, never swept as a merge", async () => {
     const { removal, calls, refused } = rig({ refused: { "dev-old": ["node-old"] } });
-    // nothing of a phone lives in a daemon whose door has not opened yet
+    // what stood at boot is the boot sweep's (the row below), never audited again as a merge
     await removal.seed();
     await removal.sweep();
     expect(calls).toEqual(["sync"]);
@@ -261,5 +276,43 @@ describe("406 — Remove for a phone: the ask, the act and the sweep", () => {
       `freeway freeway:${LOGIN}#node-2`,
       'outcome {"outcome":"succeeded","attrs":{"closed":2}}',
     ]);
+  });
+
+  // S3's fold (VF-PM's ruling of 2026-11-14 06:18Z, (5b)) — the seed took what stood at boot as
+  // swept, but field-native outlives fieldd: a daemon stopped between a refusal's merge and its
+  // sweep (a crash, or a same-uid process killing it) left the freeway host holding the phone's
+  // keyrings, and a door opened before the refusals were read could have let it in. So once the
+  // roster has passed, the boot sweep closes them after all: no audit row (nothing was decided here),
+  // and ONE diagnostics line per refusal whose sweep closed something, its code and counts alone.
+  it("at boot, what stood is swept with no audit row: its connections by node id, then its freeway clients; ONE line per refusal that closed something, its code and counts alone", async () => {
+    const log = captureLog();
+    const { removal, calls } = rig({
+      refused: { "dev-old": ["node-old"], "dev-far": ["node-far"], "dev-gone": ["node-gone"] },
+      live: ["node-old"],
+      links: ["node-far"],
+      logger: log.logger,
+    });
+    await removal.seed();
+    await removal.sweepSeeded();
+    expect(calls).toEqual([
+      "connections node-old",
+      `freeway freeway:${LOGIN}#node-old`,
+      "connections node-far",
+      `freeway freeway:${LOGIN}#node-far`,
+      "connections node-gone",
+      `freeway freeway:${LOGIN}#node-gone`,
+    ]);
+    // the line's whole shape: its code, and how many product sockets and freeway links it closed;
+    // no id, token, address or host name. A refusal that closed nothing says nothing.
+    expect(log.events("fieldd.devices.removal_swept_at_boot")).toEqual([
+      { connections: 1, links: 0 },
+      { connections: 0, links: 1 },
+    ]);
+    // once a boot: a second call, and the merged sweep after it, find nothing to do
+    calls.length = 0;
+    await removal.sweepSeeded();
+    await removal.sweep();
+    expect(calls).toEqual(["sync"]);
+    expect(log.events("fieldd.devices.removal_swept_at_boot")).toHaveLength(2);
   });
 });

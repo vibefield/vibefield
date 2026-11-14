@@ -728,6 +728,9 @@ export class DeviceService extends EventEmitter {
     return this.refused.deviceIds.size > 0;
   }
 
+  // 406 (red, S3's fold): STUBBED — reads nothing (the green commit loads the refusals)
+  async loadRefusals(): Promise<void> {}
+
   /** UA-P-0e — where a peer's product door is, DERIVED: its authenticated
    * MagicDNS name plus the registry's fixed product serve port, over plain `http`
    * because the product serve is declared `tls: false` — WireGuard is the wire's

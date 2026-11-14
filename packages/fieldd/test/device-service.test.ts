@@ -30,8 +30,10 @@ import {
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
+import { DeviceService } from "../src/device-service";
 import { bootstrap, DocumentService } from "../src/index";
 import { systemAccount, systemDocId } from "../src/library-doc";
+import type { MeshClient } from "../src/mesh-client";
 import { SettingsDocService } from "../src/settings-doc";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productPathSecret } from "./link-fixture";
@@ -1382,4 +1384,62 @@ describe("406 — a refused phone leaves the roster, and a known phone keeps its
     const ids = daemon.devices.list().map((d) => d.deviceId);
     expect(ids.sort()).toEqual(["dev-desk", "dev-phone", "dev-self"]);
   }, 30_000);
+});
+
+// Item 406, S3's fold (VF-PM's ruling of 2026-11-14 06:18Z, (5a)) — the door reads the refusals
+// off the roster (`isRefusedNode`, `hasRefusals`), and the roster read them only at the start of a
+// registry pass. The first pass of a boot ran after the door was listening, so a removed phone's
+// hello in that instant was admitted, and a same-uid process can open that instant at will by
+// making fieldd restart. The roster now loads them from the settings document on its own, with no
+// registry pass, and the daemon does so before its door listens.
+describe("406 — the door's refusals are read before the door listens", () => {
+  it("the roster loads the account's refusals from the settings document with no registry pass: the mesh is never asked", async () => {
+    const dataDir = makeDataDir();
+    const doc = new SettingsDocService({ dataDir });
+    cleanup.push(() => doc.dispose());
+    await doc.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-other");
+    const asked: string[] = [];
+    const down = async (): Promise<never> => {
+      asked.push("mesh");
+      throw new Error("mesh down");
+    };
+    const mesh = Object.assign(new EventEmitter(), {
+      getSlice: down,
+      subscribePeers: down,
+      peers: down,
+      subscribeStoreManaged: down,
+      setSlice: down,
+    }) as unknown as MeshClient;
+    const devices = new DeviceService({
+      dataDir,
+      mesh,
+      bootId: "boot-1",
+      fielddVersion: "0.0.0",
+      contractsVersion: CONTRACTS_VERSION,
+      productEndpoint: () => ({ serve: "product" }),
+      devicesDoc: doc,
+    });
+    cleanup.push(() => devices.dispose());
+    // nothing has read them yet: the instant the fold closes
+    expect(devices.isRefusedNode("node-phone")).toBe(false);
+
+    await devices.loadRefusals();
+    expect(devices.isRefusedNode("node-phone")).toBe(true);
+    expect(devices.isRefused("dev-phone")).toBe(true);
+    expect(devices.hasRefusals()).toBe(true);
+    expect(devices.isRefusedNode("node-other")).toBe(false);
+    expect(asked).toEqual([]);
+  });
+
+  it("the daemon loads them before its door listens: the load is in bootstrap, ahead of the one listen", () => {
+    const source = readFileSync(join(import.meta.dirname, "../src/daemon.ts"), "utf8");
+    const load = source.indexOf("await devices.loadRefusals()");
+    const listen = source.indexOf("await api.listen()");
+    expect(load, "the daemon loads the refusals").toBeGreaterThan(-1);
+    expect(listen, "the door listens").toBeGreaterThan(-1);
+    // one door, one listen: no second listen can come before the load
+    expect(source.indexOf("api.listen(", listen + "await api.listen(".length)).toBe(-1);
+    expect(source.indexOf("api.listen(")).toBe(listen + "await ".length);
+    expect(load).toBeLessThan(listen);
+  });
 });

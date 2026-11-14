@@ -537,6 +537,28 @@ describe("F1 — the joins, the links and the revoke", () => {
     await floor.revokeAll();
     expect(native.revoked.at(-1)).toEqual({});
   });
+
+  // Item 406, S3's fold (VF-PM's ruling of 2026-11-14 06:18Z, (5b)) — the boot sweep asks before
+  // the floor has said which host runs: field-native outlives fieldd, so a host may still hold the
+  // phone's keyrings. The revoke is owed to the first host the floor names, said once; a host that
+  // is down holds no keyrings (they go with it), so nothing is said, then or to a later host.
+  it("406 — a one-client revoke asked before the floor's state is read is owed to the first host it names, said once; none when no host is up", async () => {
+    const { native, floor } = rig();
+    expect(await floor.revokeClient(`freeway:${LOGIN}#nPHONE05`)).toBe(0);
+    expect(native.revoked).toEqual([]);
+    await floor.connected(); // the floor's state: hb-1, up
+    expect(native.revoked).toEqual([{ clientId: `freeway:${LOGIN}#nPHONE05~hb-1` }]);
+    await floor.connected();
+    expect(native.revoked).toHaveLength(1);
+
+    const down = rig();
+    down.native.snapshot = floorState({ up: false });
+    expect(await down.floor.revokeClient(`freeway:${LOGIN}#nPHONE06`)).toBe(0);
+    await down.floor.connected();
+    down.native.push?.(floorState({ revision: 2, hostBootId: "hb-2" }));
+    await down.floor.connected();
+    expect(down.native.revoked).toEqual([]);
+  });
 });
 
 describe("F1 — the freeway's serve", () => {

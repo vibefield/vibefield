@@ -7,7 +7,15 @@
 // leave the host reports is an audit row, and what the floor could not hold is said; an unlink
 // revokes every link; and Remove for a phone (item 406) revokes that phone's alone.
 import { createHmac } from "node:crypto";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { verifyAuditSegment } from "@vibefield/audit";
@@ -609,5 +617,43 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     });
     const refused = await helloRefused(daemon, mock, "node-phone");
     expect(refused.data).toEqual(removedWord);
+  }, 60_000);
+
+  // S3's fold (VF-PM's ruling of 2026-11-14 06:18Z, (5b)) — a refusal that stood before this boot:
+  // merged, then the daemon stopped before its sweep (a crash, or a same-uid kill). field-native
+  // outlived it, so its freeway host may still hold the phone's keyrings. After the roster's first
+  // pass the boot sweep revokes the phone's client by its exact id, writes no audit row, and any
+  // line it says is its code and its counts alone. The door refuses the phone from its first hello.
+  it("a refusal standing at boot is swept after the roster's first pass: its exact freeway client revoked, no audit row, and its line carries its code and counts alone", async () => {
+    const { dataDir, mock } = await phoneWorld();
+    mock.freewayRevokeCloses = 1;
+    const before = new SettingsDocService({ dataDir });
+    await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
+    await before.dispose();
+    const daemon = await boot(dataDir);
+    const clientId = `freeway:${TEST_LOGIN}#node-phone~hb-1`;
+    const asked = (params: unknown) => (params as { clientId?: unknown } | null)?.clientId;
+    await until(
+      () => mock.freewayRevokes.some((params) => asked(params) === clientId),
+      15_000,
+      "the boot sweep's revoke",
+    );
+    expect((await auditRecords(daemon)).filter((r) => r.action === "device.remove")).toEqual([]);
+    await until(() => mock.meshServes.get("product") !== undefined, 15_000, "the product serve");
+    expect(await helloRefused(daemon, mock, "node-phone")).toMatchObject({ data: removedWord });
+    // whichever line the sweep said (the host's count reaches it only once the floor has named
+    // its host), it is the code and two counts, and nothing that names the phone or the account
+    const file = join(dataDir, "logs", "system", "fieldd.ndjson");
+    const lines = existsSync(file)
+      ? readFileSync(file, "utf8")
+          .split("\n")
+          .filter((line) => line.includes("fieldd.devices.removal_swept_at_boot"))
+      : [];
+    for (const line of lines) {
+      const record = JSON.parse(line) as { attrs?: Record<string, unknown> };
+      expect(Object.keys(record.attrs ?? {}).sort()).toEqual(["connections", "links"]);
+      for (const named of [TEST_LOGIN, "node-phone", "dev-phone", NAME, "freeway:", "ts.net"])
+        expect(line).not.toContain(named);
+    }
   }, 60_000);
 });

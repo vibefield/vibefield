@@ -8420,6 +8420,12 @@ History session the phone already has open stays open until it closes on its own
 client's session (VF-PM's Q-PM3 names the gap and declines a restart of the index on Remove; a petition to rosetta
 waits for James). The apps your agents made, and the field's shared stores, reach the phone until the console
 removes it. Its keys still never leave it in a backup.
+*Amended 2026-11-14 (item 406, S3's fold; VF-PM 06:18Z):* beside the History session, one transcript reader stays
+open: a reader the phone opened on a computer through a second computer that relayed it for the phone's home. Remove
+closes a reader by the exact key its computer gave it, and names the keys of the phone's own two roads (straight to
+that computer, and through its home), never a relay's. Such a reader stays open until it closes on its own; an unused
+ticket for one lapses within its minute. A named gap: closing it needs the transcript worker to close a key by the
+phone's own ending of it.
 *As built 2026-11-04 (WI-3; the words added here are drafts pending James, carried by VF-PM beside L5's two):*
 every word names the method the phone has, by substitution. With Touch ID, "Touch ID" stands wherever "Face ID"
 does. With only a passcode: **Lock VibeField with your passcode.** · "This phone can type into your agents’
