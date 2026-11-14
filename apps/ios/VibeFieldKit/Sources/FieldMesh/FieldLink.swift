@@ -656,6 +656,9 @@ public final class FieldLink {
     reconcile()
   }
 
+  /// RED — Try again's asking (WI-L2 as amended 2026-11-13), not written yet.
+  public func lookAgain() {}
+
   public func stop() {
     started = false
     isPaused = false

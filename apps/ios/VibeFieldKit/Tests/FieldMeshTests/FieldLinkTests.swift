@@ -366,6 +366,47 @@ private func clockedLink(
     try await waitUntil("the second ask") { await probe.asks >= 2 }
   }
 
+  /// WI-L2 as amended 2026-11-13 (the review's fold 4) — Try again, on Can’t reach your computer.: the person
+  /// asked, so a door that did not answer is asked NOW, inside its weather window. Without this the hold after
+  /// Try again could pass with no door asked at all.
+  @Test func lookAgainAsksAnUnansweredDoorNow() async throws {
+    let clock = MovableClock(Date(timeIntervalSince1970: 1_757_808_001))
+    let probe = LinkProbe(
+      fallback: .unreachable("connection refused"), answerDelay: .milliseconds(150))
+    let (link, mesh, counter) = await clockedLink(clock: clock, probe: probe)
+    defer { link.stop() }
+
+    try await waitUntil("the first ask") { await probe.asks >= 1 }
+    try await waitUntil("the verdict applied") { link.desktops.first?.state == .noDoor }
+
+    // PIN THE PRECONDITION: inside the window a pass asks nobody
+    clock.advance(10)
+    try await sweepNow(mesh, counter)
+    #expect(await probe.asks == 1, "not yet")
+
+    // the clock has not moved: only the person's asking can explain a second ask
+    link.lookAgain()
+    try await waitUntil("the second ask") { await probe.asks >= 2 }
+  }
+
+  /// A tap is no reason to knock on a stranger's door: a refused login keeps its minutes (UA-P-1a).
+  @Test func lookAgainLeavesARefusedLoginItsWindow() async throws {
+    let clock = MovableClock(Date(timeIntervalSince1970: 1_757_808_001))
+    let probe = LinkProbe(
+      answers: [studioDoorHost: .status(403)], answerDelay: .milliseconds(150))
+    let (link, mesh, counter) = await clockedLink(clock: clock, probe: probe)
+    defer { link.stop() }
+
+    try await waitUntil("the first ask") { await probe.asks >= 1 }
+    try await waitUntil("the refusal applied") { link.foreignDoors["dev-studio"] != nil }
+
+    link.lookAgain()
+    // two passes after it, so one of them began after the asking
+    try await sweepNow(mesh, counter)
+    try await sweepNow(mesh, counter)
+    #expect(await probe.asks == 1, "a refusal is not re-asked inside its window, tapped or not")
+  }
+
   /// A desktop whose door is OPEN is never probed again: the socket is its own
   /// liveness, and a sweep that re-asked would be paying for an answer it
   /// already has, on a radio.

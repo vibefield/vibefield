@@ -156,9 +156,14 @@ struct DoorPageTests {
     let asked = Reach(connected: false, asking: true, online: true, attempt: 0)
     for was: FieldHomeModel.Absence in [.blip, .opening, .looking, .long] {
       #expect(FieldHomeModel.absence(was, at: up) == .blip, "\(was)")
-      #expect(FieldHomeModel.absence(was, at: lost) == was, "\(was): it stands, and its course runs from there")
       #expect(FieldHomeModel.absence(was, at: asked) == .long, "\(was): a sign-in's end goes to the hold")
     }
+    for was: FieldHomeModel.Absence in [.blip, .opening, .looking] {
+      #expect(FieldHomeModel.absence(was, at: lost) == was, "\(was): it stands, and its course runs from there")
+    }
+    // the review's fold 1: a long absence looks again in the pass that saw the facts move (a network back, a
+    // sign-in ended, Try again), so Can’t reach your computer. never stands for a frame between two holds
+    #expect(FieldHomeModel.absence(.long, at: lost) == .looking)
   }
 
   @Test("WI-L2 amended: a desktop answers when its door is ready or says why not; the gate names the one desktop")
@@ -180,15 +185,18 @@ struct DoorPageTests {
   @Test("WI-L2 amended: a first way in begins at its own pages and ends at signed in; the gate's leave it as it was")
   func firstWayIn() {
     let first: [FieldHomeModel.DoorPage] = [
-      .welcome(failure: nil), .fromCode(desktop: "Studio", login: login), .approval(machine: nil, adminConsole: nil),
+      .welcome(failure: nil), .fromCode(desktop: "Studio", login: login),
       .joining(login: login, note: nil), .looking(login: login), .noDesktops(login: login),
     ]
     for page in first {
       #expect(FieldHomeModel.firstWayIn(false, page: page), "\(page)")
       #expect(FieldHomeModel.firstWayIn(true, page: page), "\(page)")
     }
+    // the review's fold 5a: an admin's approval stands in a first way in and over a phone that has been here
+    // before alike, so it begins none: after it, a returning phone gets the gate, not the steps and the beat
     let others: [FieldHomeModel.DoorPage] = [
       .signInAgain(note: nil), .anotherAccount(current: "a@b", expected: login, from: "Studio", byLink: false),
+      .approval(machine: nil, adminConsole: nil),
       .offline, .reaching(quiet: true), .reaching(quiet: false), .unreachable(desktop: "studio"),
     ]
     for page in others {
