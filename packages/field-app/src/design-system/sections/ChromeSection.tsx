@@ -433,10 +433,10 @@ export function ChromeSection({
           its project's dot before its project), a terminal's output, a message and a picture — each
           its glyph in two corners and its name first; by this page's light, then by the Moon's
           (86%, its shadow deeper); a drag from another app before it is let go, saying only its
-          kind; what the desk's Copy deals — one note's words as a text card, two objects as a
-          picture called "2 objects"; and what another app, Settings and History deal — a file that
-          is not words, its kind and size; a paste's words; a device's name copied in Settings; a
-          path copied in History.
+          kind; what the desk's Make a card deals — one note's words as a text card, two objects as
+          a picture called "2 objects"; and what another app, Settings and History deal — a file
+          that is not words, its kind and size; a paste's words; a device's name copied in Settings;
+          a path copied in History.
         </p>
       </Specimen>
 
@@ -474,13 +474,13 @@ export function ChromeSection({
         </div>
         <p className="vf-ds-stage-caption">
           The desk's object chrome (DK-11): the bar on the line's glass, 10 above the selection's
-          brackets (or 10 below under the safe top) — Copy · rule · the kind's acts · Duplicate ·
-          Tape it down · More · rule · Delete. Copy (HN-D3, ⌘C) deals the selection into the hand as
-          one card, one object or several. A kind's own drawing is the bar's one path renderer (the
-          clock's stopwatch); an act with no glyph is its label; a name the set lacks is the
-          `missing` mark. Taped, Lift the tape and no Duplicate; a missing face names its type and
-          word where the acts would stand. More grows the same element into its solid menu — up, or
-          down near the top — nearest first, the eyebrow at the far end.
+          brackets (or 10 below under the safe top) — Make a card · rule · the kind's acts ·
+          Duplicate · Tape it down · More · rule · Delete. Make a card (CS-D11 A, ⌘C) deals the
+          selection into the hand as one card, one object or several. A kind's own drawing is the
+          bar's one path renderer (the clock's stopwatch); an act with no glyph is its label; a name
+          the set lacks is the `missing` mark. Taped, Lift the tape and no Duplicate; a missing face
+          names its type and word where the acts would stand. More grows the same element into its
+          solid menu — up, or down near the top — nearest first, the eyebrow at the far end.
         </p>
       </Specimen>
 
@@ -497,10 +497,10 @@ export function ChromeSection({
         <p className="vf-ds-stage-caption">
           An object picked up (DK-12): the same element travels into the hand — 560 ms on the island
           curve, its contents cross-fading over the last 120 — and stands under the head at y 64,
-          the held object's reading fit keeping 116 above it and 100 below. Copy · rule · the kind's
-          tools in their declared order (a 6 gap where the run changes between pages, inks and
-          tools) · the readout · rule · Done. A pen or a marker is a dot in its own ink, the one in
-          hand ringed; a mode without a swatch (the eraser, the calendar's pen) is the inverted
+          the held object's reading fit keeping 116 above it and 100 below. Make a card · rule · the
+          kind's tools in their declared order (a 6 gap where the run changes between pages, inks
+          and tools) · the readout · rule · Done. A pen or a marker is a dot in its own ink, the one
+          in hand ringed; a mode without a swatch (the eraser, the calendar's pen) is the inverted
           solid while in hand; the clock draws its own five through the bar's one path renderer.
         </p>
       </Specimen>

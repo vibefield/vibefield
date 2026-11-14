@@ -7,9 +7,10 @@
 // the bar's counters, the status line's said notices):
 //   ONE      — the clock selected: the bar over its brackets (centred, its foot 10 above them, or 10 below under the
 //              safe top; 16 from the sides; 40 tall), in the canon's order with the clock's own act drawn by the bar's
-//              ONE path renderer and no key printed for it; "Tape it down  ⇧⌘L" and "Copy  ⌘C" printed (R23
-//              reversed; HN-D3);
-//   TWO      — ⇧ and the note: one Copy for both (never counted), and More grows "Clean up" under "2 OBJECTS";
+//              ONE path renderer and no key printed for it; "Tape it down  ⇧⌘L" and "Make a card  ⌘C" printed
+//              (R23 reversed; HN-D3, CS-D11 A);
+//   TWO      — ⇧ and the note: one Make a card for both (never counted), and More grows "Clean up" under
+//              "2 OBJECTS";
 //   TAPED    — the note taped from the bar: "Lift the tape" wearing `lift`, no Duplicate; lifted again;
 //   MENU     — More on the note: the grown menu nearest first under "NOTE", at least 244 wide, inside 94…the line's
 //              reserve, the bar's own row unmoved; Esc folds it;
@@ -56,7 +57,7 @@ export interface BarSeen {
   readonly dir: string | null;
   /** the cells in order: their acts, `|` for a rule, `words:<label>` for a missing face's words */
   readonly cells: readonly string[];
-  /** the Copy pill's word (HN-D3) */
+  /** the Make a card pill's word (HN-D3, CS-D11 A) */
   readonly copy: string | null;
   readonly tips: Readonly<Record<string, string>>;
   /** each kind act's drawn glyph (`data-glyph`) */
@@ -403,9 +404,10 @@ export async function selectionBarRows(d: BarRowsDriver): Promise<string[]> {
     problems.push(
       `ONE: the bar's cells were ${JSON.stringify(one.cells)}, not ${JSON.stringify(oneOrder)}`,
     );
-  if (one.copy !== "Copy") problems.push(`ONE: Copy read ${JSON.stringify(one.copy)}`);
-  if (one.tips["copy"] !== "Copy  ⌘C")
-    problems.push(`ONE: Copy's tip read ${JSON.stringify(one.tips["copy"])}`);
+  if (one.copy !== "Make a card")
+    problems.push(`ONE: Make a card read ${JSON.stringify(one.copy)}`);
+  if (one.tips["copy"] !== "Make a card  ⌘C")
+    problems.push(`ONE: Make a card's tip read ${JSON.stringify(one.tips["copy"])}`);
   if (one.glyphs[`act:${BAR_CLOCK_ACT}`] !== "kind")
     problems.push(
       `ONE: the clock's act was not drawn by the bar's path renderer (${JSON.stringify(one.glyphs)})`,
@@ -427,11 +429,11 @@ export async function selectionBarRows(d: BarRowsDriver): Promise<string[]> {
     await theme("light");
   }
 
-  // ── TWO: ⇧ and the note — one Copy for both, and More grows Clean up under "2 OBJECTS" ────────────────────
+  // ── TWO: ⇧ and the note — one Make a card for both, and More grows Clean up under "2 OBJECTS" ─────────────
   await select("desk.note", ["shift"]);
   const two = await settled(
     "the bar over two",
-    `(() => { const b = ${READ_BAR}; return b !== null && b.shown && b.copy === "Copy" && globalThis.__vfDesk.anchor()?.count === 2; })()`,
+    `(() => { const b = ${READ_BAR}; return b !== null && b.shown && b.copy === "Make a card" && globalThis.__vfDesk.anchor()?.count === 2; })()`,
   );
   await pressCell("more");
   const twoMenu = await settled(

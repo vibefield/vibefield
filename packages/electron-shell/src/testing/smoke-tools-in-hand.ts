@@ -592,7 +592,7 @@ export async function toolsInHandRows(d: HandRowsDriver): Promise<string[]> {
     const timing = travelTiming(rec?.transitions ?? [], declared);
     problems.push(...judgeHandPlace(view, seen).map(row));
     problems.push(...judgeReadingFit(view, held?.frame ?? null).map(row));
-    // Copy leads the bar in hand as it leads the bar at rest (HN-D3, HN-3: the desk's Send to… is Copy)
+    // Make a card leads the bar in hand as it leads the bar at rest (CS-D11 A; HN-3's Copy, once Send to…)
     const expected = [
       "copy",
       "|",
@@ -612,10 +612,10 @@ export async function toolsInHandRows(d: HandRowsDriver): Promise<string[]> {
       problems.push(row(`the readout read ${JSON.stringify(seen.readout)}`));
     if (seen.tips["done"] !== "Put it down  Esc")
       problems.push(row(`Done's tip read ${JSON.stringify(seen.tips["done"])}`));
-    // the hand's Copy is handCells' own cell, apart from the bar at rest's (whose tip the selection bar's ONE row
-    // judges), so its tip and the desk's key are judged here
-    if (seen.tips["copy"] !== "Copy  ⌘C")
-      problems.push(row(`Copy's tip read ${JSON.stringify(seen.tips["copy"])}`));
+    // the hand's Make a card is handCells' own cell, apart from the bar at rest's (whose tip the selection bar's
+    // ONE row judges), so its tip and the desk's key are judged here
+    if (seen.tips["copy"] !== "Make a card  ⌘C")
+      problems.push(row(`Make a card's tip read ${JSON.stringify(seen.tips["copy"])}`));
     problems.push(...judgeTravel(timing).map((p) => `TRAVEL (${s.name}): ${p}`));
 
     // the stills: the specimen in hand as it came, by day and by night (before a tool is used — no cell under the pointer)
