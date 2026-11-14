@@ -29,7 +29,7 @@ extension FieldHomeModel {
     /// WI-G3 A (James on the page The Way In, 2026-11-14 03:47:00Z) — Use another account, on Can’t reach your
     /// computer. and on Sign in to Tailscale again.: the corner's own Sign out question, asked first. It moves nothing.
     var askSignOut: () -> Void
-    /// The question's Sign out, after Use another account: the full sign-out.
+    /// The question's Sign out, after Use another account: the corner's own Sign out, the full sign-out.
     var signOut: () -> Void
     /// "Another account?"'s Sign in again.
     var switchAccount: () -> Void

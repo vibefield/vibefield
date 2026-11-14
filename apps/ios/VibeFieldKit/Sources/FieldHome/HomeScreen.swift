@@ -966,10 +966,9 @@ public struct HomeScreen: View {
         receive: { code, arrival in receive(code, arrival: arrival) },
         // Use another account (Tailscale asking again, or no desktop answering): the corner's question first (WI-G3 A)
         askSignOut: { wayInSignOutPending = true },
-        // the question's Sign out: the full sign-out, then the welcome. The link's own, as it was: the account a
-        // desktop's code named is kept, as the sweep keeps it for "Another account?" (the corner's
-        // `confirmSignOut` forgets it first)
-        signOut: { signOut() },
+        // the question's Sign out: the corner's own (`confirmSignOut`: the account a desktop's code named is set
+        // aside, then the full sign-out), since the link asks the corner's question (VF-PM, 2026-11-14 04:49Z)
+        signOut: { confirmSignOut() },
         switchAccount: { switchAccount() },
         // the desktop's code is set aside: the welcome, or the account kept
         keepAccount: { keepAccount() },

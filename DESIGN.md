@@ -9968,8 +9968,8 @@ it awake and connected." has nothing in bold. **Use another account asks first**
 which forgets your desktops, the History this phone read and your face, so it asks the corner's own question: **Sign
 out of ‹login›?** ("Sign out of this account?" with no login) · "This phone forgets your Tailscale sign-in, your
 desktops and the History it read from them, your face and your project colours. Appearance, the terminal’s look,
-snippets and clipboard history stay." · **Sign out** · **Cancel**. **Sign out** does what the link did, and goes to
-the welcome; **Cancel** leaves the page as it was. The link under **Sign in to Tailscale again.** asks the same
+snippets and clipboard history stay." · **Sign out** · **Cancel**. **Sign out** does what the corner's **Sign out** does,
+and goes to the welcome; **Cancel** leaves the page as it was. The link under **Sign in to Tailscale again.** asks the same
 question, by the cost James picked with WI-G3 A: "Sign in to Tailscale again has the same link and signs out at one
 tap; it should ask too, in the same slice." Under a demo the question still asks, since asking reaches nothing, and
 its **Sign out** does nothing, as no button of the way in that reaches your account does under a demo (§8 "The
