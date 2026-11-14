@@ -1,9 +1,10 @@
-import type { PluginRegistrySnapshot } from "@vibefield/contracts";
+import type { PluginRecord, PluginRegistrySnapshot } from "@vibefield/contracts";
 
 // THE BAR'S WORDS FOR AN OBJECT (DK-9, DK-11; DK-D18 as amended — "ICE's MISSING FACE is the one face, and
 // VibeField's selection bar prints the type's name"; DESIGN.md §8 "The missing face", R11, R12, R24): what the
 // chrome says of an object, above all of one the desk draws as missing — its type's human name (the manifest's
-// title, a built-in's tray label, else the type id) and WHY it wears that face, in one of five words:
+// title, a built-in's tray label, the title this window staged its plugin with, else "Object" — never the type id
+// since MK-4d, the MK inventory's N23) and WHY it wears that face, in one of five words:
 //
 //   "plugin off"          — its plugin is disabled (the desk was remounted without its kind);
 //   "plugin gone"         — its plugin was uninstalled (a staged plugin whose record left the registry);
@@ -27,7 +28,8 @@ export type ObjectWordState =
 
 export interface ObjectWords {
   readonly type: string;
-  /** The type's human name: its plugin's object row title, a built-in's tray label, else the type id. */
+  /** The type's human name: its plugin's object row title, a built-in's tray label, the title this window staged
+   * its plugin with, else `UNNAMED_OBJECT` — never the type id. */
   readonly title: string;
   /** Why the desk draws it as missing; null when its kind draws it. */
   readonly state: ObjectWordState | null;
@@ -46,6 +48,26 @@ export interface ObjectWordFacts {
   readonly kinded: boolean;
   /** the desk's own titles, by type (its six) */
   readonly builtIn?: Readonly<Record<string, string>>;
+  /** the titles this window staged its plugins' objects with, by type (`stagedTitles`, read at the desk's mount):
+   * with no record to read — its plugin removed, or the registry not read — an object keeps its name until the
+   * window opens again (MK-4d, N23) */
+  readonly staged?: Readonly<Record<string, string>>;
+}
+
+/** What the bar names an object it has no name for (MK-4d, the MK inventory's N23; DESIGN.md §9 "The plugins'
+ * words", "Never on screen", MK's word, ‹draft›): never its type id — "Object · can't draw here". */
+export const UNNAMED_OBJECT = "Object";
+
+/** The titles a window staged its plugins' objects with, by type — each staged plugin's record at staging
+ * (`WindowKinds.current().staged`), which the window keeps after its record leaves the registry. */
+export function stagedTitles(
+  staged: readonly { readonly record: PluginRecord }[],
+): Readonly<Record<string, string>> {
+  const titles: Record<string, string> = {};
+  for (const { record } of staged) {
+    for (const row of record.contributions.objects ?? []) titles[row.type] = row.title;
+  }
+  return titles;
 }
 
 export function objectWords(type: string, facts: ObjectWordFacts): ObjectWords {
@@ -53,7 +75,7 @@ export function objectWords(type: string, facts: ObjectWordFacts): ObjectWords {
     (record.contributions.objects ?? []).some((row) => row.type === type),
   );
   const row = owner?.contributions.objects?.find((candidate) => candidate.type === type);
-  const title = row?.title ?? facts.builtIn?.[type] ?? type;
+  const title = row?.title ?? facts.builtIn?.[type] ?? facts.staged?.[type] ?? UNNAMED_OBJECT;
   const state = stateOf(type, facts, owner?.enabled);
   return { type, title, state, label: state === null ? title : `${title} · ${state}` };
 }

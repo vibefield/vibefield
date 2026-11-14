@@ -206,6 +206,16 @@ async function mountStage(refused: boolean = false, kinds?: unknown, seeded = fa
   return ce;
 }
 
+/** The comment pad's record as the window staged it: what names its object while the registry has none (MK-4d). */
+const STAGED_PAD = [
+  {
+    record: {
+      id: "vibefield.comment-pad",
+      contributions: { objects: [{ type: "vibefield.comment-pad", title: "Comment pad" }] },
+    },
+  },
+];
+
 /** The window's kinds as the stage reads them (DK-9): the types left off the desk, and a version. */
 function fakeKinds(off: readonly string[] = []) {
   const listeners = new Set<() => void>();
@@ -213,6 +223,8 @@ function fakeKinds(off: readonly string[] = []) {
   let current = new Set(off);
   return {
     off: () => current,
+    /** The plugins the window staged (MK-4d, N23: the bar's words read their titles). */
+    current: () => ({ staged: STAGED_PAD }),
     version: () => version,
     subscribe: (fn: () => void) => {
       listeners.add(fn);
@@ -605,11 +617,16 @@ describe("the Canvas stage mounts the desk", () => {
     const door = (
       globalThis as { __vfDesk?: { words(type: string): { label: string; state: string | null } } }
     ).__vfDesk;
-    expect(door?.words("vibefield.comment-pad")).toMatchObject({ state: "plugin off" });
+    // MK-4d (N23): with no record to read, its name is the one the window staged its plugin with
+    expect(door?.words("vibefield.comment-pad")).toMatchObject({
+      state: "plugin off",
+      label: "Comment pad · plugin off",
+    });
     expect(door?.words("desk.note")).toMatchObject({ state: null });
+    // and a type nothing here names is "Object", never its type id
     expect(door?.words("vendor.absent.thing")).toMatchObject({
       state: "can't draw here",
-      label: "vendor.absent.thing · can't draw here",
+      label: "Object · can't draw here",
     });
   });
 
@@ -628,11 +645,11 @@ describe("the Canvas stage mounts the desk", () => {
     const once = [
       {
         id: "missing:vibefield.comment-pad:plugin off",
-        text: "vibefield.comment-pad · plugin off",
+        text: "Comment pad · plugin off",
       },
     ];
     expect(statusLineSaid()).toEqual(once);
-    expect(getStatusNotice()?.text).toBe("vibefield.comment-pad · plugin off");
+    expect(getStatusNotice()?.text).toBe("Comment pad · plugin off");
     await wait(STATUS_STAND_MS + 50); // said, and gone: the line's own dedupe no longer stands in for "once"
     expect(getStatusNotice()).toBeNull();
     // the window's kinds move again with the pad still off — a new mount: its word is not said a second time

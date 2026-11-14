@@ -45,7 +45,7 @@ import { feedDesk } from "./desk/desk-feed";
 import { deskGpu, HEAL_DELAYS_MS, type HealKind, healDelay, healKind } from "./desk/desk-gpu";
 import { deskLook, fieldDeskLayer } from "./desk/desk-layer";
 import { announceMissing } from "./desk/desk-notices";
-import { objectWords } from "./desk/desk-object-words";
+import { objectWords, stagedTitles } from "./desk/desk-object-words";
 import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./desk/desk-words";
 import { PeersOnTheMat } from "./desk/peers/PeersOnTheMat";
 import { bindDeskZoomFeedback } from "./desk/zoom-feedback";
@@ -116,6 +116,8 @@ export function CanvasStage({
   const handleRef = useRef<DeskLayerHandle | null>(null);
   /** The types the mounted layer was made WITHOUT (DK-9's off set, as read at its mount — DK-11's words). */
   const mountedOffRef = useRef<ReadonlySet<string>>(new Set());
+  /** The titles the window staged its plugins' objects with, read at the mount (MK-4d, N23: the bar's words). */
+  const mountedStagedRef = useRef<Readonly<Record<string, string>>>({});
   const deskRef = useRef<MountedDesk | null>(null);
   /** The mounted layer's own device once it arrived (DK-16 — the smokes' GPU faults reach it through the door). */
   const deviceRef = useRef<GPUDevice | null>(null);
@@ -214,6 +216,8 @@ export function CanvasStage({
     // the kinds of what is ON (DK-9): a plugin that is off has its types left out of the catalog the
     // layer is mounted with — read once, at the mount, as ICE reads it
     const off = kinds?.off() ?? new Set<string>();
+    // and the titles its plugins were staged with, kept after a record leaves the registry (MK-4d, N23)
+    const staged = stagedTitles(kinds?.current().staged ?? []);
     const layer: LayerFactory = (ctx) => {
       deviceRef.current = null; // the new layer's own device arrives with its boot
       const handle =
@@ -227,6 +231,7 @@ export function CanvasStage({
             });
       handleRef.current = handle;
       mountedOffRef.current = off;
+      mountedStagedRef.current = staged;
       wornRef.current = dressed;
       return handle;
     };
@@ -271,6 +276,7 @@ export function CanvasStage({
     // the chrome's words for a type ON THIS MOUNT: against the kinds the layer was made without (I25 — a plugin
     // turned on again draws only at the next mount: "reload to draw it"), the registry and the desk's faults now
     const mountedOff = mountedOffRef.current;
+    const staged = mountedStagedRef.current;
     const builtIn = Object.fromEntries(
       ce.catalog
         .widgetTypes()
@@ -284,6 +290,7 @@ export function CanvasStage({
         faults: (handle.status().faults ?? []).map((fault) => fault.kind),
         kinded: objectKindOf(ce.catalog.widget(type)) !== undefined,
         builtIn,
+        staged,
       });
     const desk: MountedDesk = {
       engine: ce,
