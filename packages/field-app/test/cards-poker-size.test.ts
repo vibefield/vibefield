@@ -50,4 +50,14 @@ describe("the poker card (CS-D8 A)", () => {
     expect(css).toContain(`width: ${CARD_W}px;`);
     expect(css).toContain(`height: ${CARD_H}px;`);
   });
+
+  it("draws Studio's 2× plate at twice the model's size, the card inside it at its own", () => {
+    const css = readFileSync(join(__dirname, "../src/design-system/styles/scenes.css"), "utf8");
+    const rule = (selector: string): string => css.split(`${selector} {`)[1]?.split("}")[0] ?? "";
+    expect(rule(".vf-ds-card-2x")).toContain(`width: ${CARD_W * 2}px;`);
+    expect(rule(".vf-ds-card-2x")).toContain(`height: ${CARD_H * 2}px;`);
+    expect(rule(".vf-ds-card-2x-inner")).toContain(`width: ${CARD_W}px;`);
+    expect(rule(".vf-ds-card-2x-inner")).toContain(`height: ${CARD_H}px;`);
+    expect(rule(".vf-ds-card-2x-inner")).toContain("transform: scale(2);");
+  });
 });
