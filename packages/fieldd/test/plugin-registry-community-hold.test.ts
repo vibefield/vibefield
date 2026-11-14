@@ -104,6 +104,8 @@ const shape = (registry: PluginRegistryService, id: string) => {
   return [row?.state, row?.enabled, row?.held, row?.grantedCapabilities, registry.isHeld(id)];
 };
 const HELD = ["disabled", false, "community-off", [], true];
+/** MK-O3D (O3-C's rider): held, and turned off by the person, so no reason is said: it is off as they left it. */
+const HELD_OFF = ["disabled", false, undefined, [], true];
 const LOADED = ["enabled", true, undefined, ["canvas.read"], false];
 
 describe("the registry holds plugins from the plugin list while community plugins are off (MK-O3, O3-C)", () => {
@@ -172,6 +174,21 @@ describe("the registry holds plugins from the plugin list while community plugin
     expect(shape(registry, COMMUNITY)).toEqual(LOADED);
   });
 
+  it("says why only while the person wants it on: one they turn off is held with no reason, refreshed too", async () => {
+    const { registry } = await fixture();
+    registry.setCommunityGate(closed);
+    await registry.refresh();
+    expect(shape(registry, COMMUNITY)).toEqual(HELD);
+    const off = await registry.disable(COMMUNITY);
+    expect([off.enabled, off.held]).toEqual([false, undefined]);
+    expect(shape(registry, COMMUNITY)).toEqual(HELD_OFF);
+    // the next refresh reads the wish from the records, and says no reason either
+    await registry.refresh();
+    expect(shape(registry, COMMUNITY)).toEqual(HELD_OFF);
+    await registry.enable(COMMUNITY);
+    expect(shape(registry, COMMUNITY)).toEqual(HELD);
+  });
+
   it("a plugin the person turned off stays off when the hold lifts", async () => {
     const { registry } = await fixture();
     const state = { allowed: false };
@@ -235,7 +252,8 @@ describe("a synced wish for a held plugin (MK-O3, O3-C)", () => {
     await reconciler.reconcile();
     expect(acts).toEqual(["plugin.disable"]);
     expect(await registry.wantsEnabled(COMMUNITY)).toBe(false);
-    expect(shape(registry, COMMUNITY)).toEqual(HELD);
+    // MK-O3D (O3-C's rider): still held, and off as the person left it, so no reason is said
+    expect(shape(registry, COMMUNITY)).toEqual(HELD_OFF);
   });
 
   it("a capability decided while it is held keeps the person's switch, never the hold's off", async () => {

@@ -144,7 +144,9 @@ const summary = (kind: PluginErrorSummary["kind"], message: string): PluginError
 });
 
 /** MK-O3 (O3-C): a registered row held as if turned off: not enabled, no grants, and why. Null for a row that is
- * invalid or incompatible, which is off already and stays as it is. */
+ * invalid or incompatible, which is off already and stays as it is. MK-O3D (2026-11-14, O3-C's rider): `held` says
+ * why a row the person wants on is off (the contract's rule), so a row whose wish is off (`buildRow`'s `enabled`, the
+ * wish of a registered row) is held without it: it reads off as the person left it. */
 function heldOff(row: PluginRecord): PluginRecord | null {
   if (row.state !== "enabled" && row.state !== "disabled") return null;
   return {
@@ -152,7 +154,7 @@ function heldOff(row: PluginRecord): PluginRecord | null {
     enabled: false,
     grantedCapabilities: [],
     state: "disabled",
-    held: "community-off",
+    held: row.enabled ? "community-off" : undefined,
   };
 }
 
@@ -831,6 +833,8 @@ export class PluginRegistryService extends EventEmitter {
       grantedCapabilities: on ? grants.granted : [],
       deniedCapabilities: grants.denied,
       state: registered ? (on ? "enabled" : "disabled") : row.state,
+      // MK-O3D (O3-C's rider): a held row says why only while the person wants it on, as `heldOff` does
+      held: registered && enabled && this.heldIds.has(id) ? "community-off" : undefined,
     };
     this.rows.set(id, next);
     this.publish();
