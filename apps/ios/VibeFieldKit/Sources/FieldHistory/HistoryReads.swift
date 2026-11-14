@@ -82,11 +82,16 @@ public enum HistoryReads {
   /// the head: 240 rows, so a reset's newest `INDEX_TAILNET_LIMITS.MAX_ROWS` (100) and a hole of up to 140
   /// rows below them close. Past them the rows below the last page read are dropped, and the log says so.
   public static let fillPages = 6
-  /// Item 362b — an approach to a document's top reads pages on until they hold this many MESSAGES (a prompt, or a
-  /// reply with words or an attachment), so a page of nothing but tool rows does not land as "earlier" with no
-  /// message in it: the room's rule and figure (rosetta `lib/transcript/history-window.ts`, six primary messages)…
+  /// Item 362b — one ask for the rows above a document's top reads pages on until they hold this many MESSAGES (a
+  /// prompt, or a reply with words or an attachment), so a page of nothing but tool rows does not land as "earlier"
+  /// with no message in it: the room's rule and figure (rosetta `lib/transcript/history-window.ts`, six primary
+  /// messages)…
   public static let earlierMessages = 6
-  /// …in at most this many asks of `pageRows`, the room's hard bound for enormous tool runs: 200 rows an approach.
+  /// …in at most this many asks of `pageRows`, the room's hard bound for enormous tool runs: 200 rows an ask.
+  ///
+  /// *Corrected 2026-11-14 (item 418):* these two said "an approach to a document's top" and "200 rows an approach".
+  /// Nothing is read for approaching the top now: the two figures are the batch ONE PULL at the top reads
+  /// (`HistoryOlderPull`), or one press. The figures themselves are unchanged.
   public static let earlierPages = 5
   /// SE-P1 — the most live runs one Live now ask names: the contract's own bound on `nativeSessionIds`
   /// (`IndexSearchParams`, `.max(256)`); a field past it is asked for its first runs, in the field's order.
@@ -607,6 +612,10 @@ public final class HistoryDesktopReader: Identifiable {
   /// Item 362b — the rows above the document's top, read on until they hold `earlierMessages` messages, in at most
   /// `earlierPages` asks. One read a session at a time; a cursor that does not advance ends it (a door that goes
   /// round is not followed), and so does the session's start.
+  ///
+  /// Item 418 — this is ONE BATCH, and it is read only when it is asked for (`need(.older)`: a pull at the
+  /// document's top, or a press). The reader never asked by itself, and still does not; the page did, and no
+  /// longer does.
   private func readOlder(_ sessionId: String) {
     guard let door, !closed, cursors[sessionId] != nil, tasks["older/\(sessionId)"] == nil else { return }
     readingEarlier.insert(sessionId)

@@ -86,7 +86,7 @@ public final class HistoryRouter {
 
 /// SP-6 — what a History screen ASKS its source for (the reads are lazy: a
 /// project's sessions and figures when it opens, a session's document and tail
-/// when it opens, the older page when the reader reaches the top). The views
+/// when it opens, the older batch when the reader pulls down at its top). The views
 /// hand these up; the home screen routes each to the desktop's reader. The
 /// mock answers none — its corpus is whole.
 public enum HistoryNeed: Equatable, Sendable {
@@ -95,7 +95,9 @@ public enum HistoryNeed: Equatable, Sendable {
   case project(id: String)
   /// A session was opened: its header, its newest page and its tail.
   case session(device: String, id: String)
-  /// The reader reached the document's top: the next older page.
+  /// The reader asked for the rows above the document's top, by a pull down there or a press: the next older
+  /// batch. *Corrected 2026-11-14 (item 418): this said "The reader reached the document's top: the next older
+  /// page". Reaching the top asks for nothing now.*
   case older(device: String, session: String)
   /// The reader saw the document's end: the arrivals are read.
   case seen(device: String, session: String)

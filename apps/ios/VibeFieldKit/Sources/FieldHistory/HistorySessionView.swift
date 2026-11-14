@@ -29,6 +29,13 @@ import SwiftUI
 /// straight from the desktop's index the projection now keeps which recorded image an attachment is, beside the
 /// row (`HistoryPicture`). Since the item's third slice the view is handed the pictures a direct read holds
 /// (`pictures`, the paragraph on item 362g above) and draws one as a tile; through the door it is the placeholder.
+///
+/// *Corrected 2026-11-14 (item 418; James, 08:13:38Z, session qa-01: "it seems still trying to load everything …
+/// you pull down for load more"):* SP-6's `"Earlier" at the top asks the page door for the older page` was a press
+/// alone, and item 362b then had the page ask by itself within a screen of its top. Neither stands as written. The
+/// document opens on its latest batch and reads nothing above it by itself; a pull down at its top reads the batch
+/// above in (`HistoryOlderPull`; its mark and the line under the head are in HistoryOlderPullView.swift), and the
+/// line under the head still takes a press.
 struct HistorySessionView: View {
   let document: HistoryDocument
   /// the document's own desktop's corpus (its reader's)
@@ -62,10 +69,13 @@ struct HistorySessionView: View {
   @State private var follow: HistoryFollow
   @State private var scroll: ScrollPosition
   @State private var reach = HistoryFollow.Reach(atFoot: true, away: false)
-  /// Item 362b — within a screen of the top; the cursor the last ask went out on, and one a read left unmoved.
+  /// Within a screen of the top: the button at the side eases to a top that near (item 396). Item 418 — nothing is
+  /// read in for standing there (it was 362b's trigger, with the cursor the last ask went out on and one a read
+  /// left unmoved, which the pull keeps for itself now).
   @State private var nearTop = false
-  @State private var askedCursor: String?
-  @State private var stalledCursor: String?
+  /// Item 418 — the pull at the top that reads the batch above in. Its mark and the line under the head read it;
+  /// the document only tells it what the page does.
+  @State private var older = HistoryOlderSight()
   @State private var settling: Task<Void, Never>?
   /// Item 381 — the scroll is at rest (no finger on it, no move carrying it), and the page stands past its end.
   @State private var resting = true
@@ -128,10 +138,13 @@ struct HistorySessionView: View {
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 0) {
           head
-          switch HistoryFollow.head(hasEarlier: document.nextCursor != nil, reading: readingEarlier, awake: awake) {
-          case .start: RuleLine(text: "Session start · \(document.startDay)")
-          case .reading: RuleLine(text: "Reading earlier…")
-          case .earlier, .asleep: earlier
+          // Item 418 — the rule under the head says where the rows above stand, and takes a press where a pull
+          // would read (`HistoryOlderLine`)
+          HistoryOlderLine(
+            sight: older, hasEarlier: document.nextCursor != nil, awake: awake, desktop: corpus.desktop,
+            startDay: document.startDay
+          ) {
+            pressEarlier()
           }
           // Item 381 — a row is one part of a turn, never a whole turn (`HistoryRow.of`)
           ForEach(HistoryRow.of(document.turns, desktop: corpus.desktop)) { row in
@@ -165,6 +178,10 @@ struct HistorySessionView: View {
         default: break
         }
         putBack(proxy, past: past, resting: phase == .idle)
+        // Item 418 — only a finger on the page pulls; a pull let go armed is asked for once the page has come to
+        // rest, so the rows it brings meet a page at rest
+        older.touch(phase == .tracking || phase == .interacting)
+        if phase == .idle, older.rested(ready: readsEarlier) { askEarlier() }
       }
       // Item 381 — a page found at rest past its end stands on nothing: it is put back on its end
       .onScrollGeometryChange(for: Bool.self) { geometry in
@@ -183,8 +200,10 @@ struct HistorySessionView: View {
       } action: { _, now in
         reach = now
       }
-      // Item 362b — within a screen of the top the rows above are read in by themselves. The document's height
-      // rides in the value so the first layout is heard, whatever the offset was when it was first reckoned.
+      // Within a screen of the top, for the button at the side's ease (item 396). The document's height rides in
+      // the value so the first layout is heard, whatever the offset was when it was first reckoned. *Corrected
+      // 2026-11-14 (item 418): this was 362b's trigger, "within a screen of the top the rows above are read in by
+      // themselves". Nothing is read in for standing here now.*
       .onScrollGeometryChange(for: TopReach.self) { geometry in
         TopReach(
           near: HistoryFollow.nearTop(
@@ -193,17 +212,22 @@ struct HistorySessionView: View {
       } action: { _, now in
         if nearTop != now.near { nearTop = now.near }
       }
-      .onChange(of: wantsEarlier, initial: true) { _, wants in
-        if wants { askEarlier() }
+      // Item 418 — how far the page stands past its top is the pull's travel (`HistoryOlderPull.depth`): the
+      // scroll's own rubber band under the finger, and no gesture of ours
+      .onScrollGeometryChange(for: CGFloat.self) { geometry in
+        HistoryOlderPull.depth(offset: geometry.contentOffset.y, topInset: geometry.contentInsets.top)
+      } action: { _, depth in
+        older.moved(to: depth, ready: readsEarlier)
       }
       .onChange(of: readingEarlier, initial: true) { was, reading in
         if reading {
           // what the read adds lands above the reader's place
           settling?.cancel()
           follow.askedEarlier()
+          older.began()
         } else if was {
-          // a read that left the cursor where it was is not asked again by itself
-          if document.nextCursor == askedCursor { stalledCursor = askedCursor }
+          // a read that left the document's top where it was brought nothing, and the line at the top says so
+          older.ended()
           settling = Task { @MainActor in
             try? await Task.sleep(for: Self.earlierSettles)
             guard !Task.isCancelled else { return }
@@ -211,6 +235,8 @@ struct HistorySessionView: View {
           }
         }
       }
+      // Item 418 — the document's top moved: rows landed above, or the record's start was reached
+      .onChange(of: document.nextCursor) { older.landed() }
       // The arrival pill's one fact: whether the document's END is on screen.
       // Read from the scroll's geometry, not an `onAppear` on the end marker —
       // a lazy stack lays its last rows out ahead of the viewport, which read
@@ -230,6 +256,8 @@ struct HistorySessionView: View {
       .historyFootFade(height: HistoryFootFade.height(foot: rootHead.foot))
       .overlay(alignment: .bottom) { footPill(proxy) }
       .overlay(alignment: .bottomTrailing) { jumpButton(proxy) }
+      // Item 418 — the pull's mark, over the gap the pull opens under the navigation bar's foot
+      .overlay(alignment: .top) { HistoryOlderMark(sight: older) }
       // Item 396 — the document's own space, which its rows measure in: its top is the top of the view
       .coordinateSpace(name: HistorySight.space)
       .toolbar {
@@ -322,16 +350,22 @@ struct HistorySessionView: View {
     proxy.scrollTo(Self.endRow, anchor: .bottom)
   }
 
-  /// Item 362b — the rows above are wanted now (`HistoryFollow.asksEarlier`).
-  private var wantsEarlier: Bool {
-    follow.asksEarlier(
-      nearTop: nearTop, cursor: document.nextCursor, stalled: stalledCursor, awake: awake, reading: readingEarlier)
+  /// Item 418 — the rows above can be read in: there are rows above, and their desktop answers.
+  private var readsEarlier: Bool {
+    HistoryOlderPull.ready(hasEarlier: document.nextCursor != nil, awake: awake)
   }
 
+  /// Item 418 — the batch above is asked for. Only the pull's rule sends it here (`HistoryOlderPull.rested`, a
+  /// pull let go armed, and `pressed`), never the page by itself: it was `wantsEarlier`, which asked whenever the
+  /// page stood within a screen of its top (362b's `HistoryFollow.asksEarlier`), and again after each batch.
   private func askEarlier() {
-    guard document.nextCursor != nil, awake, !readingEarlier else { return }
-    askedCursor = document.nextCursor
     onNeed(.older(device: corpus.deviceId, session: document.id))
+  }
+
+  /// Item 418 — a press asked for the batch above: the line under the head, or the button at the side at the
+  /// first message read. It is asked for at once, unless a read is owed or running.
+  private func pressEarlier() {
+    if older.pressed(ready: readsEarlier) { askEarlier() }
   }
 
   /// What the top's geometry says: near it, and the document's height (so a first layout is a change).
@@ -340,30 +374,8 @@ struct HistorySessionView: View {
     var height: CGFloat
   }
 
-  /// SP-6 — the older page's door: a rule with a button in it. Item 362b — the rows above arrive by themselves as
-  /// the reader nears the top; the press stays, and asks again after a read that brought nothing.
-  private var earlier: some View {
-    HStack(spacing: 10) {
-      Rectangle().fill(ChromePalette.ruleStrong).frame(height: 1)
-      Button {
-        // a press asks again where a read by itself would not
-        stalledCursor = nil
-        askEarlier()
-      } label: {
-        Text(awake ? "Earlier" : "Earlier · needs \(corpus.desktop)")
-          .font(ChromeType.sans(10.5, .medium))
-          .textCase(.uppercase)
-          .tracking(ChromeType.tracking(0.07, of: 10.5))
-          .foregroundStyle(awake ? ChromePalette.inkSecondary : ChromePalette.inkFaint)
-          .fixedSize()
-      }
-      .buttonStyle(.plain)
-      .disabled(!awake)
-      .accessibilityLabel("Read the earlier rows")
-      Rectangle().fill(ChromePalette.ruleStrong).frame(height: 1)
-    }
-    .padding(.vertical, 18)
-  }
+  // SP-6's `earlier`, the older page's door ("a rule with a button in it"), is `HistoryOlderLine` now
+  // (HistoryOlderPullView.swift, item 418): the same rule and the same button, with the pull's words.
 
   /// SP-6 — the arrival pill: rows the tail appended while the reader was
   /// up the page; a tap scrolls to the end and the count clears. Item 362a —
@@ -424,8 +436,9 @@ struct HistorySessionView: View {
   /// Item 396 — a press on the button at the side. It is the reader's own move up the page, so the document stops
   /// following (`HistoryFollow.jumped`). The message's row is asked for by the id its view carries, lined up so
   /// its top stands 12 pt under the head (`HistoryBefore.anchor`); with no message above among the rows read the
-  /// page goes to its top, where the rows above are read in. It goes at once, or on the 300 ms ease when the place
-  /// is a screen away at most and Reduce Motion is off (`HistoryBefore.eases`).
+  /// page goes to its top and the press asks for the batch above (*item 418, 2026-11-14: this said "where the rows
+  /// above are read in", which was the page asking by itself there*). It goes at once, or on the 300 ms ease when
+  /// the place is a screen away at most and Reduce Motion is off (`HistoryBefore.eases`).
   private func goBefore(_ before: HistoryBefore, _ proxy: ScrollViewProxy) {
     switch before {
     case .nothing:
@@ -453,6 +466,9 @@ struct HistorySessionView: View {
       } else {
         scroll.scrollTo(edge: .top)
       }
+      // item 418 — the message before is in a batch not yet read, and nothing is read in for standing at the
+      // top: the press asks for the batch above itself, as a pull there does
+      pressEarlier()
     }
   }
 

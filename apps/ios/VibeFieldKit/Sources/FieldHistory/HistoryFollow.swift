@@ -54,23 +54,13 @@ struct HistoryFollow: Equatable, Sendable {
     var away: Bool
   }
 
-  /// Item 362b — what the rule at the document's top says.
-  enum Head: Equatable, Sendable {
-    /// Nothing is above: `Session start · Sat 12 Sep`.
-    case start
-    /// Rows are above and none is being read: `Earlier`, which a press reads too.
-    case earlier
-    /// Rows above are being read: `Reading earlier…`.
-    case reading
-    /// Rows are above and their desktop does not answer: `Earlier · needs studio`.
-    case asleep
-  }
+  // RETIRED 2026-11-14 (item 418): `Head` and `head(hasEarlier:reading:awake:)`, item 362b's "what the rule at the
+  // document's top says". The rule is the pull's now and says more (`HistoryOlderPull.Top`): `Earlier · pull down`
+  // where this said `Earlier`, and a read that brought nothing.
 
   let opening: Opening
   /// The document keeps its foot in view.
   private(set) var following: Bool
-  /// A finger has moved this page at least once.
-  private(set) var touched = false
   /// A page above was asked for and has not settled: what it adds lands above the reader's place.
   private(set) var holding = false
   /// Item 386 — the pill was pressed and the page is on its way to its end: only a finger stops it.
@@ -86,7 +76,6 @@ struct HistoryFollow: Equatable, Sendable {
   mutating func dragged() {
     following = false
     returning = false
-    touched = true
   }
 
   /// The page came to rest: at the foot it follows, off it it does not.
@@ -115,13 +104,15 @@ struct HistoryFollow: Equatable, Sendable {
   }
 
   /// Item 396 — the button at the document's side was pressed: the page goes up to a message, which is the
-  /// reader's own move up the page. The following stops and a return ends, as for a finger, and the page counts as
-  /// moved by hand, so at its top the rows above are read in, in a document a search landed in too. A landing
-  /// does not fit: it leaves a landed document waiting for a finger.
+  /// reader's own move up the page. The following stops and a return ends, as for a finger.
+  ///
+  /// *Corrected 2026-11-14 (item 418):* this went on "and the page counts as moved by hand, so at its top the rows
+  /// above are read in, in a document a search landed in too. A landing does not fit: it leaves a landed document
+  /// waiting for a finger." That was `touched`, which only `asksEarlier` read; both are retired (below). At the
+  /// first message read the press asks for the batch above itself (`HistoryOlderPull.pressed`).
   mutating func jumped() {
     following = false
     returning = false
-    touched = true
   }
 
   /// A page above was asked for.
@@ -190,26 +181,19 @@ struct HistoryFollow: Equatable, Sendable {
   /// Which edge a change in height leaves alone.
   var growth: Growth { following || holding ? .foot : .head }
 
-  // MARK: Earlier rows (item 362b)
+  // MARK: Near the top (item 362b)
 
-  /// Within one screen of the document's top (the room's distance: `scrollTop <= clientHeight`).
+  /// Within one screen of the document's top (the room's distance: `scrollTop <= clientHeight`). The button at the
+  /// side eases to a top that near (item 396); since item 418 nothing is read in for standing there.
   static func nearTop(offset: CGFloat, container: CGFloat) -> Bool { offset <= container }
 
-  /// Whether the rows above are asked for now, by themselves: the reader is within a screen of the top, rows are
-  /// above (`cursor`), their desktop answers, and none is being read. A cursor a finished read left where it was
-  /// (`stalled`) is never asked by itself again, so nothing asks in a loop at the top of a page that will not grow;
-  /// a press on `Earlier` still asks. A document a search landed in waits for a finger, so the landing stays put.
-  func asksEarlier(nearTop: Bool, cursor: String?, stalled: String?, awake: Bool, reading: Bool) -> Bool {
-    guard let cursor, nearTop, awake, !reading else { return false }
-    guard opening == .end || touched else { return false }
-    return cursor != stalled
-  }
-
-  static func head(hasEarlier: Bool, reading: Bool, awake: Bool) -> Head {
-    guard hasEarlier else { return .start }
-    if reading { return .reading }
-    return awake ? .earlier : .asleep
-  }
+  // RETIRED 2026-11-14 (item 418; James, 08:13:38Z, session qa-01: "it seems still trying to load everything …
+  // you pull down for load more"): `asksEarlier(nearTop:cursor:stalled:awake:reading:)`, item 362b's "whether the
+  // rows above are asked for now, by themselves", and with it `touched` ("a finger has moved this page at least
+  // once"), which nothing else read. Within a screen of the top it asked, and again after each batch for as long as
+  // the page stood there; a session whose first batch was under two screens tall was asked for at once. The rows
+  // above are asked for by a pull at the top or by a press, and by nothing else (`HistoryOlderPull`). What a page
+  // asked for above still does to the reader's place is `askedEarlier` and `earlierSettled`, above, unchanged.
 
   static func words(_ pill: Pill) -> String {
     switch pill {
