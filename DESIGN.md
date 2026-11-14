@@ -8306,6 +8306,12 @@ and nothing of the apps your agents made (*a reading of Q-J5, pending James's wo
 network side). No word here, on the phone or anywhere else says "from the moment you press Remove", "at once",
 "immediately" or any other immediacy: what Remove closes is said as each part lands, in the lock's amendment below
 (§9 "The way in").
+A refusal is said inline under the confirm, in the attention ink, in these words and never fieldd's own (*drafts,
+pending James's word*): when the window asking may not remove devices, "This window can't remove devices."; when
+‹name› is not known here as a phone, "‹name› isn't known here as a phone, so it can't be removed."; when it has left
+the list, "‹name› is no longer in your devices."; anything else, "Couldn't remove ‹name›. Try again." The acts come
+back with it. An answer that the phone was already removed, here or by another computer, reads as done, and so does a
+Remove whose record could not be written, since the phone is removed either way: neither is a refusal.
 
 **The phone's door** (track TS, TS-7; TS-D11 A, and James's TS-7 picks "all six A — the leans",
 2026-10-29 05:29:27Z). The phone signs in through iOS's own sign-in sheet, which first asks to use
