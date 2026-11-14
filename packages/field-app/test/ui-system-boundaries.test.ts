@@ -1061,6 +1061,13 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("<style");
     for (const door of [/\bgetHost\b/u, /\bcardsStore\b/u, /\buseCards\b/u, /<Cards\s/u])
       expect(fixture).not.toMatch(door);
+    // item 403 (§5 "the press"): the plates wear the press's print by the shipping hook, handed the page's theme as a
+    // host hands the product its own — never the theme's owner — and mounted with the hand's plates
+    expect(fixture).toContain("usePrintedStockFor(dark)");
+    expect(fixture).not.toMatch(/\buse(?:App)?Theme\b/u);
+    expect(source("design-system/sections/ChromeSection.tsx")).toMatch(
+      /<CardsPress dark=\{dark\} \/>\s*<div className="vf-ds-cards-plates">/u,
+    );
   });
 
   it("keeps the selection bar's fixture an ADAPTER — the product's own model over fixture selections, never the bar's markup (DK-11)", () => {
