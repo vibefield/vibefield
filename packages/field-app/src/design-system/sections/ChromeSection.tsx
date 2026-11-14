@@ -440,11 +440,6 @@ export function ChromeSection({
           that is not words, its kind and size; a paste's words; a device's name copied in Settings;
           a path copied in History.
         </p>
-        <p className="vf-ds-stage-caption">
-          The paper cards on this page wear the press's print once it is made (§5 "the press"), for
-          the page's theme and pixel density, and the card picked up wears the print made at 2.4×;
-          where WebGL2 is refused, the flat stock.
-        </p>
       </Specimen>
 
       <Specimen
