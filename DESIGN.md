@@ -5400,7 +5400,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the page of every installed plugin but a Built in one, which turns off and is never removed (the
   ruled page draws it so); fieldd removes registry installs alone today (`plugin-install.ts`), and
   sideloads are not built, so what Remove… does for a Development plugin is *open (MK,
-  2026-11-11)*. It asks in place, on the page: "Remove ‹title›?", over "Its settings and data stay
+  2026-11-11)*. *Closed 2026-11-14 (MK-4f; VF-PM 04:33Z, the inventory's A5 ruled at MK's lean),
+  ‹draft› for James's eye: a Development plugin's page carries no Remove…, for its folder is its
+  developer's; a Sideloaded one's carries none while fieldd removes no sideload (§8 "Plugins — the
+  frame's second popup", the acts).* It asks in place, on the page: "Remove ‹title›?", over "Its
+  settings and data stay
   on your desktops, so installing it again brings them back. ‹Clock and Ruler› objects on your desks
   draw as missing on your desktops until then." (§9 "The plugins' words"; the ruled page's words,
   "on your desktops" in place of "on this Mac" by MK-E10, ruled by James 2026-11-11 06:48:31Z at MK's
@@ -5443,6 +5447,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   here first and then in the string.
   *Paid 2026-11-11 (MK), from spec §16.5 and §8 "The missing face": what stays is said above, in
   objects; the string follows when MK builds **Remove…**.*
+  *Built 2026-11-14 (MK-4f):* **Remove…** on the page of a plugin from the plugin list (§8 "Plugins —
+  the frame's second popup", drawn under "Real progress"), in §9's words, its objects named. Settings
+  → Plugins' **More +** above, and its old string, stand beside it until MK-5.
 - **The settings undo affordance** (P7 D29′; spec §16.6; *amended 2026-11-11, MK-E5*): **Undo** and
   **Redo** in the Settings dialog's toolbar, beside its close — one pill of two buttons (glyph and
   word, 11px medium in the muted ramp, `disabled:opacity-30` when there is nothing to reach),
@@ -7098,6 +7105,30 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         list the popup held said it could run) says the words for a set that needs a newer VibeField where its act
         stood, with no Try again, since trying again fails the same way until VibeField updates; every other kind,
         an unknown one or none says §9's line with **Try again**.
+    - *Drawn 2026-11-14 (MK-4f, Remove…), ‹draft› for James's eye, its words in §9 "Installed, off and Remove…":*
+      - **Where**: **Remove…** stands at the second column's foot, 20 after **Version** (the column's gap): 32 tall,
+        padded 0 14, corners 16, 12.5/600 in secondary ink, the ready fill under the pointer (the card's Cancel's
+        look). It stands on a plugin from the plugin list alone: fieldd removes those and refuses every other
+        (`plugin-install.ts`, `uninstall`). A Built in page never carries it; a Development page carries none (the
+        call closed under "The acts", below); a Sideloaded page carries none while fieldd removes no sideload.
+      - **The question** stands in its place, the install card's look (padded 14, corners 16, on the ready fill,
+        growing as it does, §6 "Plugins"): its ask at 13/600 in primary ink, its sentences 10 under it and 4 apart
+        at 12/400 in secondary ink, and 12 under them, at its end, **Cancel** (the card's Cancel, leading and
+        focused) and **Remove** (the act's look, no ↵: Cancel holds the keyboard), 8 apart. 10 under them, at its
+        start, **Remove it and its data…**, 32 tall, padded 0 14, corners 16, 12.5/600 in the danger ink (§2.5 red,
+        text only, never a filled alarm), the ready fill under the pointer.
+      - **Remove it and its data…** turns the question into its second, in place: its ask, its sentences, then
+        **Cancel** (focused) and **Remove data**, the act's look in the danger ink. Its sentences name this desktop
+        and your others from the window's roster (`device.list`), read as Remove… is pressed, as the card's are; a
+        roster it can't read leaves the second sentence unsaid, never guessed.
+      - **Esc** answers the question first (its Cancel), then the page, then the popup (§8 "Keys"); leaving the
+        page or folding the popup is its Cancel too. However the question goes — cancelled, refused or done — the
+        keyboard goes back to the field.
+      - **Under way**, its buttons take no press and nothing spins; the question stands until the plugins this
+        desktop has no longer hold the plugin, and its page is then the list's (its act **Install**) or, for one
+        the list doesn't hold, the page closes to its tab. **Refused**, the question goes and one line under
+        Remove…, at 12/400 in the attention ink (§2.5), says it couldn't, never the error's own text, until it is
+        pressed again or the page is left. **Away**, Remove… takes no press.
     - **The acts** (MK-D13): **Install**, then **Installed** (a name survives its flow, §9); **Update** while one
       waits; **Show them on the pegboard** once a set with objects is installed (below); and **Remove…**, which asks
       — the two-step destructive confirm of §8 "The destructive uninstall affordance", naming the objects on your
@@ -7108,6 +7139,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       *open (MK, 2026-11-11)*. It takes the set off every desktop, its settings and data kept, and **Remove it and
       its data…** "stays the separate red, two-step act" (MK-E10, ruled by James 2026-11-11 06:48:31Z at MK's lean:
       "everywhere, with settings and data kept").
+      *Closed 2026-11-14 (MK-4f; VF-PM 04:33Z, the inventory's A5 ruled at MK's lean), ‹draft› for James's eye:*
+      a Development plugin's page carries no Remove…. Its folder is its developer's, and fieldd removes a plugin
+      from the plugin list alone; so Remove… stands on a plugin from the list alone, and a Sideloaded one's page
+      carries none while fieldd removes no sideload (Remove… drawn under "Real progress", above).
     - **Its settings** (MK-D10; MK-E12, item 282-6's plugin half): the plugin's settings form leaves Settings for its
       page, and its runtime detail — its controllers, its behaviors and the Doctor's issues — becomes a Plugins
       section in Settings → Diagnostics. The form stays on the same undo history as Settings (MK-E5) — the page carries
@@ -9537,6 +9572,18 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   ‹Your other desktops› remove ‹plugin› too, and keep their copy of its data." ‹this desktop› and ‹your other
   desktops› are their names, as his page drew them ("This Mac"; "mini and studio"); with no other desktop, the
   second sentence is not said.
+  *Added 2026-11-14 (MK-4f, Remove… on a plugin's page), MK's words, ‹draft›, for James's eye:*
+  - ‹this desktop› is said as the card says it, "this Mac" ("this PC" off the Mac), in lower case mid-sentence
+    (his page drew "This Mac"); ‹your other desktops› are the names the roster gives them, joined as a list is
+    ("mini and studio", "mini, studio and tower"), and with no roster read the second sentence is not said.
+  - With one other desktop, the second sentence says it as one (his is drawn for two or more): "‹mini› removes
+    ‹plugin› too, and keeps its copy of its data."
+  - The objects a removal leaves missing are named by their pegboard labels, joined the same way ("Clock,
+    Calendar and Ruler objects …"); a plugin with no object says the first sentence alone.
+  - A removal fieldd refused says "Couldn't remove it. Try again." under **Remove…** (the switches' pattern).
+  - To assistive tech, each question is named by its ask, "Remove ‹plugin›?" and "Remove ‹plugin› and its data?",
+    as the install card is by its own.
+  - A Development plugin's page says nothing of Remove…: no act stands there, and no new word says why.
   *Added 2026-11-11 (MK-4a's code; VF-PM 12:07:40Z), MK's words, ‹draft›, for James's eye:*
   - Installed's line, until the plugin's page (MK-4c), says no place: "3 objects · 1.2.0", "1 object · 0.1.0". It
     differs from the ruled line above, which says where a set hangs ("4 objects · Things, Tools · 1.0.0"; "Hangs under
