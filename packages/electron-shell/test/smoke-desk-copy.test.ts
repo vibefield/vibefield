@@ -1,4 +1,4 @@
-// HN-D3 — THE DESK'S COPY, ITS SMOKE JUDGES (testing/smoke-desk-copy.ts; DESIGN.md §8 "The desk's Copy"): the card the act
+// HN-D3 — THE DESK'S COPY, ITS SMOKE JUDGES (testing/smoke-desk-copy.ts; DESIGN.md §8 "Make a card"): the card the act
 // dealt (its kind and title, or the reason none was), the still a picture card carries (the anchor's box less the
 // brackets' 6 at the device's px; asked without the selection's marks, the selection standing — ICE I40, DK-17b), the
 // selection unchanged frame by frame (no blink), and the bar standing through it (nothing waits on the line any more).

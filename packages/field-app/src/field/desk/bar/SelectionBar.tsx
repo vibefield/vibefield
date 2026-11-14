@@ -56,7 +56,7 @@ import { type SelectionBarHandle, SelectionBarView } from "./SelectionBarView";
 // `ops.putDown()`. While the object flies home (`landing`) the bar steps aside, and comes back over it 200 ms after it
 // lands, as the bar over the selection again.
 //
-// COPY (HN-D3, where Send to… stood; §8 "The desk's Copy"): its four doors — the bar's pill, the grown menu's row, the
+// MAKE A CARD (HN-D3, where Send to… stood; §8 "Make a card"): four doors — the bar's pill, the grown menu's row, the
 // pill in hand, and ⌘C over the desk — run ONE act (copy/copy-to-hand.ts): the selection, or the object in hand, dealt
 // into the hand as one card. Nothing is drafted and nothing waits on the line, so the bar never steps aside for it;
 // the tools in hand stay under the head (plan addendum (50)).

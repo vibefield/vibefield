@@ -662,7 +662,7 @@ export function SelectionBarView({
     }
   };
 
-  // THE TOOLS IN HAND's cells (§8 "Tools in hand"): Copy · rule · the kind's tools · the readout · rule · Done
+  // THE TOOLS IN HAND's cells (§8 "Tools in hand"): Make a card · rule · the kind's tools · the readout · rule · Done
   const handNode = (cell: HandCell, index: number): ReactElement => {
     const stop = {
       "data-cell": index,

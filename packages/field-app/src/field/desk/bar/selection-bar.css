@@ -108,7 +108,7 @@
   transition: opacity var(--vf-bar-row-ms, 240ms) ease var(--vf-bar-firm-ms, 160ms);
 }
 
-/* ── THE ROW: Copy · rule · the kind's acts · Duplicate · Tape · More · rule · Delete ─────────────────── */
+/* ── THE ROW: Make a card · rule · the kind's acts · Duplicate · Tape · More · rule · Delete ──────────── */
 
 /* each row stands centred on the element; the one the bar SHOWS (`data-face`) is in, the other out — they cross-fade
    over 120 ms at the travel's end, the glass's width following them (the view's) */
@@ -260,7 +260,7 @@
   cursor: default;
 }
 
-/* ── THE TOOLS IN HAND: Copy · rule · the kind's tools · the readout · rule · Done ───────────────────── */
+/* ── THE TOOLS IN HAND: Make a card · rule · the kind's tools · the readout · rule · Done ────────────── */
 
 /* a 6 gap where the run changes between pages, inks and tools (the row's 2 and 4 of its own) */
 .vf-bar-row--hand [data-gap] {

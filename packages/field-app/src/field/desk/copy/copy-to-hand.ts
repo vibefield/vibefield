@@ -10,7 +10,7 @@ import { encodePng, type PngEncoder } from "../desk-stills";
 import { type CopiedObject, copiedWords, copyName, noteWords } from "./copy-face";
 import { beginCopyRecord, type CopyFrom, noteCopy, type ViewBox } from "./copy-record";
 
-// THE DESK'S COPY — THE ACT (HN-D3, HN-D2; DESIGN.md §8 "The desk's Copy"; R15, DK-D26; plan addendum (50); ICE I23,
+// THE DESK'S COPY — THE ACT (HN-D3, HN-D2; DESIGN.md §8 "Make a card"; R15, DK-D26; plan addendum (50); ICE I23,
 // I40). Pressed on the bar, in the bar grown into its menu, on the tools in hand, or by ⌘C over the desk, the selection —
 // or the object in hand — is dealt into the hand as ONE card, flying from the objects' own box, through the one copy
 // door (`copyToHand`, HN-5): a lone NOTE is a TEXT card of its writing; anything else a PICTURE card titled by its name

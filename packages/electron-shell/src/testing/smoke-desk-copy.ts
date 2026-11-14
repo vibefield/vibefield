@@ -1,5 +1,5 @@
-// HN-D3 — THE DESK'S COPY, IN THE PRODUCT (smoke:canvas; DESIGN.md §8 "The desk's Copy", "The missing face"; R25, DK-D26;
-// plan addendum (50)). Where Send to… stood, Copy deals the selection into the hand as ONE card — pressed on the bar, in
+// HN-D3 — THE DESK'S COPY, IN THE PRODUCT (smoke:canvas; DESIGN.md §8 "Make a card", "The missing face"; R25, DK-D26;
+// plan addendum (50)). Where Send to… stood, Make a card deals the selection into the hand as ONE card — on the bar, in
 // the bar grown into its menu, on the tools in hand, or by ⌘C over the desk. Each row presses the real chrome where it
 // stands (or the real key) and reads back off a page-side recorder (the bar's `data-shown` and the selection's count,
 // every frame from the press) and off the desk's door (`__vfDesk.copied()` — the act's record: the objects, the words

@@ -1,7 +1,7 @@
 import { NOTE_TYPE } from "@vibecook/ice/desk/objects";
 import type { ObjectWords } from "../desk-object-words";
 
-// THE DESK'S COPY — WHAT A SELECTION IS CALLED, AND THE WORDS IT KEEPS (HN-D3; DESIGN.md §8 "The desk's Copy", "The
+// THE DESK'S COPY — WHAT A SELECTION IS CALLED, AND THE WORDS IT KEEPS (HN-D3; DESIGN.md §8 "Make a card", "The
 // missing face"; R15 as amended 13:40Z, DK-D26, PT-4 ruling 5). Pure: from the selected objects as the host reads them —
 // each one's type, its words (the mount's human name and, for a missing face, why) and its durable props.
 //   ITS NAME — the title its picture card carries into the hand: ANY KIND its name ("Clock"); SEVERAL "N objects"; a

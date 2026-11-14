@@ -2,11 +2,12 @@
 /**
  * DK-11 — WHAT THE SELECTION BAR AND ITS MENU SAY (field/desk/bar/bar-model.ts; DESIGN.md §8 "The selection bar" —
  * Order, Keyboard; "The bar grown" — the order nearest first, the eyebrow; R1, R3, R4, R10, R11, R23 reversed, DK-D24,
- * DK-D29; HN-D3). The bar: Copy · rule · the kind's acts · Duplicate · Tape it down · More · rule · Delete — Copy
- * for one object or several; taped, no Duplicate and "Lift the tape" wearing `lift`; a missing face, its name and word
- * where the acts would stand, Duplicate still offered. Tooltips the frame's way with the DESK's keys — Copy's ⌘C among
- * them — a kind's act prints none. The menu, nearest first: the kind's acts · Open · Comment · Copy | Duplicate · Bring
- * to front · Send to back · Clean up | Tape | Delete; the eyebrow names what it acts on.
+ * DK-D29; HN-D3, CS-D11 A). The bar: Make a card · rule · the kind's acts · Duplicate · Tape it down · More · rule ·
+ * Delete — Make a card for one object or several; taped, no Duplicate and "Lift the tape" wearing `lift`; a missing
+ * face, its name and word where the acts would stand, Duplicate still offered. Tooltips the frame's way with the DESK's
+ * keys — Make a card's ⌘C among them — a kind's act prints none. The menu, nearest first: the kind's acts · Open ·
+ * Comment · Make a card | Duplicate · Bring to front · Send to back · Clean up | Tape | Delete; the eyebrow names what
+ * it acts on.
  */
 import { describe, expect, it } from "vitest";
 import {

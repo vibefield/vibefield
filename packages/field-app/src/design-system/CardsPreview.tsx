@@ -134,9 +134,9 @@ function copied(type: string, title: string): CopiedObject {
   return { type, words: { type, title, state: null, label: title }, props: {} };
 }
 
-/** What the desk's Copy deals (HN-D3; §8 "The desk's Copy"): one note's words as a text card, and
- * anything else as a picture of the selection, named as the product names it ("2 objects"). Both
- * from Canvas, by Copy — no place of their own. */
+/** What the desk's Make a card deals (HN-D3, CS-D11 A; §8 "Make a card"): one note's words as a
+ * text card, and anything else as a picture of the selection, named as the product names it
+ * ("2 objects"). Both from Canvas, by Make a card — no place of their own. */
 export const COPY_FIXTURES: readonly Card[] = [
   textCardOf(
     "Ship the hand on Thursday. The deal, the fan and the play are in; the drag in waits for B2.",

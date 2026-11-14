@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * HN-D3 — THE DESK'S COPY (DESIGN.md §8 "The desk's Copy", "The missing face"; R15 as amended, DK-D26, PT-4; plan
+ * HN-D3 — THE DESK'S COPY (DESIGN.md §8 "Make a card", "The missing face"; R15 as amended, DK-D26, PT-4; plan
  * addendum (50)): what a copy is called and the words it keeps (copy-face.ts), and THE ACT (copy-to-hand.ts) over a real
  * field engine and a desk handle that keeps ICE's doors' contract — a lone note dealt as a TEXT card of its writing;
  * anything else as a PICTURE card, its still the anchor's box less the brackets' outset, taken WITHOUT the selection's
