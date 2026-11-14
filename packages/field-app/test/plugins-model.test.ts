@@ -973,6 +973,8 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
   "UPDATE_CARD_WORDS.here": [[true], [false]],
   "UPDATE_CARD_WORDS.missing": [["2"]],
   releaseDay: [[PLUGINS_FIXTURE_READ_AT]],
+  // MK-4d: the act that shows a set on the pegboard
+  showWords: [[1], [3]],
 };
 
 /** The strings a value says: strings as they are, objects and arrays by their

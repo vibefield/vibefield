@@ -6,6 +6,7 @@ import type {
   PluginsCatalogState,
 } from "@vibefield/contracts";
 import {
+  boardSet,
   cardPowers,
   type InstallCard,
   type InstallRefusal,
@@ -25,7 +26,9 @@ import { listNames, listTime, releaseDay, UPDATE_CARD_WORDS, UPDATE_WORDS } from
 // removes no object it is taken at once, still one press, and otherwise the update card stands
 // where the act stood: the install card (`plugins-install.ts`, `InstallCard.tsx`), its ask, its
 // lead and its act's word its own, naming the new powers alone. Pure: the controller holds the
-// flow, and the tests read the same functions.
+// flow, and the tests read the same functions. MK-4d (K4 at its lean, pending VF-PM's ruling): a
+// page whose update is taken, or can't run here, says Installed with the set Show them on the
+// pegboard hands the board (`boardSet` of the snapshot's record, read by the row's act).
 
 /** fieldd's own compare (`fieldd/src/plugin-install.ts`, `semverNewer`): a.b.c only, a prerelease
  * tag dropped, so the window lists the updates fieldd counts for the Me menu's row. */
@@ -226,15 +229,17 @@ export function updateCard(
   };
 }
 
-/** What stands at a row's end, or under it (§8 "Its steps"). */
+/** What stands at a row's end, or under it (§8 "Its steps"). MK-4d (K4 at its lean): one whose
+ * plugin stands installed (its update can't run here, or is taken) carries `show`, the set its
+ * page's Installed hands the board (`boardSet` of the snapshot's record), which no row draws. */
 export type RowAct =
   | { readonly kind: "update"; readonly live: boolean; readonly asks: boolean }
-  | { readonly kind: "needs-newer" }
+  | { readonly kind: "needs-newer"; readonly show: readonly string[] }
   | { readonly kind: "downloading" }
   | { readonly kind: "card"; readonly card: InstallCard; readonly live: boolean }
   | { readonly kind: "updating" }
   | { readonly kind: "failed"; readonly live: boolean }
-  | { readonly kind: "updated" };
+  | { readonly kind: "updated"; readonly show: readonly string[] };
 
 /** A row's act, from the row, the update under way, the updates that didn't happen (by the kind of
  * their refusal, as an install's: `installRefusal`), whether another update or an install holds the
@@ -251,7 +256,9 @@ export function rowAct(input: {
   readonly onMac: boolean;
 }): RowAct {
   const { row, flow, failed, busy, state, away, snapshot, onMac } = input;
-  if (row.done !== null) return { kind: "updated" };
+  // MK-4d (K4): the set the board hangs of the plugin as the snapshot holds it now
+  const hung = (): string[] => boardSet(snapshot?.plugins.find((plugin) => plugin.id === row.id));
+  if (row.done !== null) return { kind: "updated", show: hung() };
   if (flow !== null && flow.id === row.id) {
     switch (flow.at.step) {
       case "downloading":
@@ -267,7 +274,7 @@ export function rowAct(input: {
     }
   }
   const refusal = failed.get(row.id);
-  if (!row.compatible || refusal === "incompatible") return { kind: "needs-newer" };
+  if (!row.compatible || refusal === "incompatible") return { kind: "needs-newer", show: hung() };
   const live = installLive(state, away) && !busy;
   if (refusal !== undefined) return { kind: "failed", live };
   return { kind: "update", live, asks: row.asksFirst };
@@ -276,13 +283,14 @@ export function rowAct(input: {
 /** A page's act from its row's (§8 "A page's act"): Update where Installed stood, its steps the
  * install's words but its own Updating… and failure, and Installed again once it is taken. One
  * whose update can't run here keeps Installed: the plugin you have runs, only its update can't,
- * and its row on Updates says so. */
+ * and its row on Updates says so. MK-4d (K4 at its lean, pending VF-PM's ruling): either
+ * Installed carries its row's set, so Show them on the pegboard stands again with it. */
 export function updatePageAct(act: RowAct, title: string): PageAct {
   switch (act.kind) {
     case "update":
       return { kind: "update", live: act.live, asks: act.asks };
     case "needs-newer":
-      return { kind: "installed" };
+      return { kind: "installed", show: act.show };
     case "downloading":
       return { kind: "downloading" };
     case "card":
@@ -292,7 +300,7 @@ export function updatePageAct(act: RowAct, title: string): PageAct {
     case "failed":
       return { kind: "failed", words: UPDATE_WORDS.failed(title), live: act.live };
     case "updated":
-      return { kind: "installed" };
+      return { kind: "installed", show: act.show };
   }
 }
 

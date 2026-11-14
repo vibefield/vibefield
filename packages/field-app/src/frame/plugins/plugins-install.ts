@@ -21,7 +21,8 @@ import { CARD_WORDS, INSTALL_WORDS, PAGE_WORDS, REMOVE_WORDS } from "./plugins-w
 // first install at a desktop that hasn't shown the community statement shows it once the download
 // is in, where the card would stand; its Continue brings the card. A community set's Install while
 // community plugins are off says why. Pure: the controller holds the flow, and the tests read the
-// same functions.
+// same functions. MK-4d: an installed plugin's act also carries the set the pegboard is shown
+// (`boardSet`, Show them on the pegboard).
 
 /** Where one install stands, for the plugin whose page holds it. The card's step keeps the row
  * fieldd answered and the roster read with it (null: it couldn't be read); the card's words are
@@ -195,10 +196,11 @@ export function installCard(
 }
 
 /** What stands where a page's act stands (§8, the act drawn under "Real progress"): words, a
- * control, or the card. `live`: whether its control takes a press. */
+ * control, or the card. `live`: whether its control takes a press. Installed's `show` is the set
+ * Show them on the pegboard hands the board (MK-4d; `boardSet`): empty, it offers no such act. */
 export type PageAct =
   | { readonly kind: "none" }
-  | { readonly kind: "installed" }
+  | { readonly kind: "installed"; readonly show: readonly string[] }
   | { readonly kind: "install"; readonly live: boolean; readonly note: string | null }
   | { readonly kind: "needs-newer" }
   | { readonly kind: "downloading" }
@@ -209,6 +211,19 @@ export type PageAct =
   /** MK-UC's UC-C: an installed plugin's page whose update waits; `asks` when the list says it
    * removes an object (Update…) */
   | { readonly kind: "update"; readonly live: boolean; readonly asks: boolean };
+
+/** SHOW THEM ON THE PEGBOARD (MK-4d; MK-D8, ruled A by James 2026-11-11, its fallback B; DESIGN.md
+ * §8 "The pegboard", "After an install"): the object types an installed plugin's act hands the
+ * board, in the set's own order — those with a pegboard entry, for an object with none hangs
+ * nowhere (contracts `TrayEntryContribution`). None while the plugin is off, turned off or held
+ * off while community plugins are off (`state`, the one truth every reader decides by): the desk
+ * is mounted without its kinds (P3c), so a board shown them would wait for nothing. */
+export function boardSet(record: PluginRecord | undefined): string[] {
+  if (record === undefined || record.state !== "enabled") return [];
+  return record.contributions.objects
+    .filter((object) => object.tray !== undefined)
+    .map((object) => object.type);
+}
 
 /** Whether an Install may be pressed now: fieldd answers, and the list held is neither offline nor
  * past its date (§8 "The read on open": offline an Install waits, saying why; a list past its date
@@ -232,7 +247,10 @@ export function pageAct(input: {
   readonly onMac: boolean;
 }): PageAct {
   const { page, entry, state, flow, away, community, snapshot, onMac } = input;
-  if (page.installed) return { kind: "installed" };
+  if (page.installed) {
+    const record = snapshot?.plugins.find((plugin) => plugin.id === page.id);
+    return { kind: "installed", show: boardSet(record) };
+  }
   // a page of a set this desktop doesn't have is read from the list's entry, so it always has one
   if (entry === undefined) return { kind: "none" };
   // a community set installs only while community plugins are on (fieldd refuses it otherwise,

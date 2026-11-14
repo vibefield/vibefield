@@ -110,7 +110,8 @@ export function PluginsUpdates({
       {rows.length > 0 && (
         <ul ref={listRef} className="vf-plugins-list" aria-label={PLUGINS_TAB_WORDS.updates}>
           {rows.map((row, index) => {
-            const act: RowAct = acts.get(row.id) ?? { kind: "updated" };
+            // MK-4d (K4): a row never draws its page's set, so its stand-in carries none
+            const act: RowAct = acts.get(row.id) ?? { kind: "updated", show: [] };
             const failed = act.kind === "failed";
             return (
               <li

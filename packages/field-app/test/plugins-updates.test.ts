@@ -197,8 +197,10 @@ describe("a row's and a page's act (§8 'Its steps', 'A page's act')", () => {
       asks: false,
     });
     expect(rowAct({ ...settled, row: rowOf("vibefield.timers") })).toMatchObject({ asks: true });
+    // MK-4d (K4): with the set its page's Installed hands the board, Burndown's one object
     expect(rowAct({ ...settled, row: rowOf("vibefield.burndown") })).toEqual({
       kind: "needs-newer",
+      show: ["VfBurndownChart"],
     });
   });
 
@@ -227,9 +229,11 @@ describe("a row's and a page's act (§8 'Its steps', 'A page's act')", () => {
       kind: "failed",
       live: true,
     });
-    // refused as needing a newer VibeField, by its kind alone: it says so, with no Try again
+    // refused as needing a newer VibeField, by its kind alone: it says so, with no Try again;
+    // MK-4d (K4): Notes adds no object, so its page's Installed hands the board none
     expect(rowAct({ ...settled, row, failed: refused("incompatible") })).toEqual({
       kind: "needs-newer",
+      show: [],
     });
     expect(rowAct({ ...settled, row, busy: true })).toMatchObject({ kind: "update", live: false });
     expect(rowAct({ ...settled, row, away: true })).toMatchObject({ kind: "update", live: false });
@@ -250,9 +254,40 @@ describe("a row's and a page's act (§8 'Its steps', 'A page's act')", () => {
       words: "VibeField didn't update Notes. Nothing changed.",
       live: true,
     });
-    expect(updatePageAct({ kind: "updated" }, "Notes")).toEqual({ kind: "installed" });
+    // MK-4d (K4 at its lean): Installed carries its row's set, for Show them on the pegboard
+    expect(updatePageAct({ kind: "updated", show: [] }, "Notes")).toEqual({
+      kind: "installed",
+      show: [],
+    });
     // the plugin you have runs: only its update can't, and Updates' row says so, never its page
-    expect(updatePageAct({ kind: "needs-newer" }, "Burndown")).toEqual({ kind: "installed" });
+    expect(updatePageAct({ kind: "needs-newer", show: ["VfBurndownChart"] }, "Burndown")).toEqual({
+      kind: "installed",
+      show: ["VfBurndownChart"],
+    });
+  });
+
+  it("hands a page whose update is taken, or can't run here, the set the board hangs now (MK-4d, K4 at its lean)", () => {
+    // Timers taken: the version it now has hangs its Timer and its new Alarm, not the Stopwatch
+    const taken = new Map([["vibefield.timers", "1.1.0"]]);
+    const withTimers = {
+      ...PLUGINS_FIXTURE_OUTDATED_SNAPSHOT,
+      plugins: PLUGINS_FIXTURE_OUTDATED_SNAPSHOT.plugins.map((plugin) =>
+        plugin.id === "vibefield.timers" ? download("vibefield.timers") : plugin,
+      ),
+    };
+    const timers = rowOf("vibefield.timers", updateRows(withTimers, CATALOG_UPDATES, "", taken));
+    const done = rowAct({ ...settled, snapshot: withTimers, row: timers });
+    expect(done).toEqual({ kind: "updated", show: ["VfTimer", "VfAlarm"] });
+    expect(updatePageAct(done, "Timers")).toEqual({
+      kind: "installed",
+      show: ["VfTimer", "VfAlarm"],
+    });
+    // Burndown's update can't run here: the version you have runs, and its one object hangs
+    const burndown = rowAct({ ...settled, row: rowOf("vibefield.burndown") });
+    expect(updatePageAct(burndown, "Burndown")).toEqual({
+      kind: "installed",
+      show: ["VfBurndownChart"],
+    });
   });
 });
 

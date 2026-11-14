@@ -729,6 +729,24 @@ describe("UI system ownership boundaries", () => {
     expect(taken).toEqual(["PegboardView.tsx: ../../../frame/plugins/plugins-words"]);
   });
 
+  it("lets the popup take only Show them on the pegboard's door from the desk (MK-4d)", () => {
+    // The page's act hands the board a set (`showOnBoard`), and the pegboard's controller does the rest (Canvas
+    // first, the rise, the lay), so the popup takes nothing else of the desk's: never the board's anchor, its facts,
+    // its line door or its controller.
+    const fromDesk = /from "((?:\.\.\/)+field\/[^"]+)"/gu;
+    const taken: string[] = [];
+    for (const name of readdirSync(join(PACKAGE_ROOT, "src", "frame", "plugins"))) {
+      if (!/\.tsx?$/u.test(name)) continue;
+      for (const match of source(`frame/plugins/${name}`).matchAll(fromDesk)) {
+        taken.push(`${name}: ${match[1]}`);
+      }
+    }
+    expect(taken).toEqual(["Plugins.tsx: ../../field/desk/pegboard/board-door"]);
+    expect(source("frame/plugins/Plugins.tsx")).toMatch(
+      /import \{ showOnBoard \} from "\.\.\/\.\.\/field\/desk\/pegboard\/board-door";/u,
+    );
+  });
+
   it('pins every line outside Plugins\' own files that names "plugins" — a new one is read before it lands (MK-4a)', () => {
     // VF-PM 2026-11-11 12:29:46Z: the regex above misses a toggle, a chord's row or a kind, so every line of src
     // outside frame/plugins/ and design-system/ that holds the literal "plugins" is pinned here by file. Each is

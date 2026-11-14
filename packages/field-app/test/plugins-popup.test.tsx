@@ -32,6 +32,7 @@ import {
   type PluginsFixtureRead,
   pluginsFixturePort,
 } from "../src/design-system/plugins-fixtures";
+import { boardReveal, resetBoardRevealForTest } from "../src/field/desk/pegboard/board-door";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { FramePlugins, Plugins } from "../src/frame/plugins/Plugins";
 import { keepCarry } from "../src/frame/plugins/plugins-carry";
@@ -53,7 +54,8 @@ import {
 // MK-4c adds a plugin's page, read only (it asks fieldd nothing), Installed's hot row and Updates' count. MK-4c2a adds
 // a Built in or Development plugin's switches, each held by the fixture port's recorded calls. MK-4e adds Discover's
 // shelf and the page of a set this desktop doesn't have; O2-C its Install, the install card, and the requests the
-// card sends and throws away, each held by the port's recorded calls, and a refusal worded by its kind alone.
+// card sends and throws away, each held by the port's recorded calls, and a refusal worded by its kind alone. MK-4d
+// its Show them on the pegboard, held by the board's door (`boardReveal`), with no pegboard mounted.
 // MK-O3D adds the community statement at this desktop's first community install, over a fixture mark.
 // MK-UC's UC-C adds Updates' rows, the update card, Update all and Check again, and the note the window comes back
 // fresh by (MK-E6), each held by the port's recorded calls and the window's own session, which each test leaves
@@ -76,6 +78,8 @@ afterEach(() => {
   for (const node of document.body.querySelectorAll(".vf-plugins")) node.remove();
   // MK-UC's UC-C: no test's note (MK-E6) reaches the next
   sessionStorage.clear();
+  // MK-4d: a showing a press asked stands in the board's door until it lands; none lands here
+  resetBoardRevealForTest();
 });
 
 function counting(inner: PluginsPort): {
@@ -715,7 +719,9 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first')", () => {
   it("says Installed where its act will stand as words: no button, no fill, no stop of Tab, never in the walk", async () => {
     await mount(NO_REGISTRY);
     toInstalled();
-    act(() => rows()[1]?.click());
+    // Comment pad: its one object hangs nowhere on the pegboard, so its page offers no Show them on the pegboard
+    // (MK-4d), and Installed stands alone
+    act(() => rows()[0]?.click());
     const said = document.body.querySelector(".vf-plugins-page-act");
     expect(said?.tagName).toBe("P");
     expect(said?.textContent).toBe(words.PAGE_WORDS.installed);
@@ -730,7 +736,7 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first')", () => {
     // ↑ ↓ and ↵ on a page walk nothing and press nothing
     press("ArrowDown");
     press("Enter");
-    expect(pageTitle()).toBe("Simulators");
+    expect(pageTitle()).toBe("Comment pad");
     expect(document.body.querySelector('[data-hot="true"]')).toBeNull();
     // no fill: its rule draws no ground, and nothing of it answers the pointer
     const css = readFileSync(
@@ -864,6 +870,85 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first')", () => {
     } finally {
       resetPluginUpdates();
     }
+  });
+});
+
+/** MK-4d: Show them on the pegboard, after Installed in the page's act row (an Install stands in its own stack). */
+const showAct = (): HTMLButtonElement | null =>
+  document.body.querySelector<HTMLButtonElement>(".vf-plugins-page-act-row > .vf-plugins-act");
+/** Installed's row of the plugin titled `title`, pressed: its page opens. */
+const openInstalled = (title: string): void =>
+  act(() =>
+    [...document.body.querySelectorAll<HTMLLIElement>(".vf-plugins-item")]
+      .find((item) => item.querySelector(".vf-plugins-title")?.textContent === title)
+      ?.querySelector<HTMLButtonElement>(".vf-plugins-row")
+      ?.click(),
+  );
+
+describe("Show them on the pegboard (MK-4d; MK-D8's fallback B, §8 'The pegboard')", () => {
+  it("hands the board the set's objects that hang there, in its own order, on a press and on ↵, folding nothing itself", async () => {
+    const { port: read, calls } = counting(
+      pluginsFixturePort({ catalog: CATALOG_LISTED, refresh: CATALOG_LISTED }),
+    );
+    const { port, acts: sent } = recording(read);
+    act(() => root.render(<Window port={port} snapshot={PLUGINS_FIXTURE_LISTED_SNAPSHOT} open />));
+    await settle();
+    toInstalled();
+    openInstalled("Kanban");
+    expect(pageTitle()).toBe("Kanban");
+    expect(showAct()?.textContent).toBe(`${words.showWords(2)}↵`);
+    act(() => showAct()?.click());
+    expect(boardReveal()?.types).toEqual(["AcmeBoard", "AcmeCard"]);
+    // the board's rise folds the popup (the pegboard's; over a covered view, Canvas first): the press alone leaves
+    // it standing on the page
+    expect(pop()).not.toBeNull();
+    expect(pageTitle()).toBe("Kanban");
+    // ↵ from the field presses it too, a newer showing each time
+    const first = boardReveal()?.id;
+    press("Enter");
+    expect(boardReveal()?.types).toEqual(["AcmeBoard", "AcmeCard"]);
+    expect(boardReveal()?.id).not.toBe(first);
+    // it asks fieldd nothing
+    await settle();
+    expect(sent).toEqual([]);
+    expect(calls).toEqual({ catalog: 1, refresh: 1 });
+  });
+
+  it("says Show on the pegboard for a set of one, and offers none where the board hangs none of the set or the plugin is off", async () => {
+    await mount(NO_REGISTRY);
+    toInstalled();
+    // Simulators: its Phone and Tablet hang nowhere, its Watch does
+    openInstalled("Simulators");
+    expect(showAct()?.textContent).toBe(`${words.showWords(1)}↵`);
+    act(() => showAct()?.click());
+    expect(boardReveal()?.types).toEqual(["SimWatch"]);
+    resetBoardRevealForTest();
+    // Comment pad's one object hangs nowhere, Desk clock is turned off, Key-value store adds no object
+    for (const title of ["Comment pad", "Desk clock", "Key-value store"]) {
+      esc();
+      openInstalled(title);
+      expect(pageTitle()).toBe(title);
+      expect(showAct()).toBeNull();
+      // ↵ on its page presses nothing
+      press("Enter");
+      expect(boardReveal()).toBeNull();
+    }
+  });
+
+  it("takes no ↵ from the field while Remove…'s question stands on the page (MK-4f)", async () => {
+    await openKanban(pluginsFixturePort(LISTED));
+    act(() => removeAct()?.click());
+    await settle();
+    expect(question()).not.toBeNull();
+    act(() => field()?.focus());
+    press("Enter");
+    expect(boardReveal()).toBeNull();
+    expect(question()).not.toBeNull();
+    // the question answered, ↵ shows the set again
+    esc();
+    expect(question()).toBeNull();
+    press("Enter");
+    expect(boardReveal()?.types).toEqual(["AcmeBoard", "AcmeCard"]);
   });
 });
 
@@ -1082,8 +1167,16 @@ describe("Install and the install card (O2-C; §8 'Every install asks first')", 
     act(() => root.render(<Window port={port} snapshot={WITH_THINGS} open />));
     await settle();
     expect(pageTitle()).toBe("Desk things");
-    expect(actRow()).toBe(words.PAGE_WORDS.installed);
+    // MK-4d: then Show them on the pegboard, for the four objects the board hangs, which a press hands the board
+    expect(actRow()).toBe(`${words.PAGE_WORDS.installed}${words.showWords(4)}↵`);
     expect(bodyText()).toContain(words.PAGE_WORDS.can);
+    act(() => showAct()?.click());
+    expect(boardReveal()?.types).toEqual([
+      "DeskThingsClock",
+      "DeskThingsCalendar",
+      "DeskThingsTimer",
+      "DeskThingsRuler",
+    ]);
   });
 
   it("throws the download away on Cancel, on Esc, and on leaving the page, and goes back to Install", async () => {
@@ -1855,7 +1948,8 @@ describe("Updates' rows and the update card (MK-UC's UC-C; §8 'Updates')", () =
     act(() => updateRow("Burndown")?.querySelector<HTMLButtonElement>(".vf-plugins-row")?.click());
     expect(pageTitle()).toBe("Burndown");
     // the plugin you have runs: only its update can't, and its row on Updates says so
-    expect(actRow()).toBe(words.PAGE_WORDS.installed);
+    // MK-4d (K4 at its lean): Show on the pegboard after it, for the one object the board hangs
+    expect(actRow()).toBe(`${words.PAGE_WORDS.installed}${words.showWords(1)}↵`);
     expect(pageAct()).toBeNull();
     esc();
     toInstalled();
@@ -1864,7 +1958,7 @@ describe("Updates' rows and the update card (MK-UC's UC-C; §8 'Updates')", () =
     );
     act(() => burndown?.querySelector<HTMLButtonElement>(".vf-plugins-row")?.click());
     expect(pageTitle()).toBe("Burndown");
-    expect(actRow()).toBe(words.PAGE_WORDS.installed);
+    expect(actRow()).toBe(`${words.PAGE_WORDS.installed}${words.showWords(1)}↵`);
     // a download refused as needing a newer VibeField: its row says so, its page Installed
     act(() => root.unmount());
     root = createRoot(host);
@@ -1949,7 +2043,9 @@ describe("the window coming back fresh (MK-E6; MK-UC's UC-C)", () => {
       expect(document.body.querySelector(".vf-plugins-back")?.textContent).toBe(
         words.PLUGINS_TAB_WORDS.updates,
       );
-      expect(actRow()).toBe(words.PAGE_WORDS.installed);
+      // MK-4d: then Show them on the pegboard, for the version taken's Timer and Alarm (no row of
+      // Updates stands for it, so the act is the installed page's own, `pageAct`)
+      expect(actRow()).toBe(`${words.PAGE_WORDS.installed}${words.showWords(2)}↵`);
       expect(sessionStorage.getItem(NOTE_KEY)).toBeNull();
     } finally {
       setPluginRegistrySnapshot(before ?? { generation: 0, problems: [], plugins: [] });

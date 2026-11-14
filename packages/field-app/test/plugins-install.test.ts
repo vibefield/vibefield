@@ -10,6 +10,7 @@ import {
   PLUGINS_FIXTURE_SNAPSHOT,
 } from "../src/design-system/plugins-fixtures";
 import {
+  boardSet,
   cardDesktops,
   type InstallFlow,
   installCard,
@@ -241,7 +242,11 @@ describe("a page's act (§8, the act drawn under 'Real progress')", () => {
       words: "VibeField didn't install Desk things. Nothing changed.",
       live: true,
     });
-    expect(pageAct({ ...base, page: { ...page, installed: true } })).toEqual({ kind: "installed" });
+    // MK-4d: this desktop's plugins hold no Desk things here, so Installed offers no set to show
+    expect(pageAct({ ...base, page: { ...page, installed: true } })).toEqual({
+      kind: "installed",
+      show: [],
+    });
   });
 
   it("words a refusal by its kind: one this VibeField can't run needs a newer one, with no Try again", () => {
@@ -327,6 +332,77 @@ describe("a page's act (§8, the act drawn under 'Real progress')", () => {
   it("says installing with no object, and one object as one", () => {
     expect(words.INSTALL_WORDS.installing(0)).toBe("Installing…");
     expect(words.INSTALL_WORDS.installing(1)).toBe("Installing 1 object…");
+  });
+});
+
+/** A plugin this desktop has, as the fixture's snapshot holds it (Kanban, from the list, among
+ * them). */
+const mine = (id: string): PluginRecord => {
+  const record = PLUGINS_FIXTURE_LISTED_SNAPSHOT.plugins.find((plugin) => plugin.id === id);
+  if (record === undefined) throw new Error(`the fixture has no ${id}`);
+  return record;
+};
+
+describe("Show them on the pegboard (MK-4d; MK-D8's fallback B, §8 'The pegboard')", () => {
+  it("hands the board the objects that hang there, in the set's own order, while the plugin is on", () => {
+    expect(boardSet(mine("acme.kanban"))).toEqual(["AcmeBoard", "AcmeCard"]);
+    // the set's own order, whatever it is
+    const things = download("vibefield.desk-things").contributions.objects;
+    expect(boardSet(shaped({ objects: [...things].reverse() }))).toEqual([
+      "DeskThingsRuler",
+      "DeskThingsTimer",
+      "DeskThingsCalendar",
+      "DeskThingsClock",
+    ]);
+    // Simulators' Phone and Tablet have no pegboard entry: they hang nowhere, so Watch alone is
+    // shown
+    expect(boardSet(mine("vibefield.simulator"))).toEqual(["SimWatch"]);
+    // once this desktop has Desk things, its page's act carries its four
+    const entry = CATALOG_SHELF.plugins.find((listed) => listed.id === "vibefield.desk-things");
+    if (entry === undefined) throw new Error("the fixture has no Desk things");
+    const listed = listedPage(entry);
+    if (listed === null) throw new Error("Desk things has no page from the list");
+    const withThings = {
+      ...PLUGINS_FIXTURE_SNAPSHOT,
+      plugins: [...PLUGINS_FIXTURE_SNAPSHOT.plugins, download("vibefield.desk-things")],
+    };
+    expect(
+      pageAct({
+        page: { ...listed, installed: true },
+        entry,
+        state: "ready",
+        flow: null,
+        away: false,
+        community: false,
+        snapshot: withThings,
+        onMac: true,
+      }),
+    ).toEqual({
+      kind: "installed",
+      show: ["DeskThingsClock", "DeskThingsCalendar", "DeskThingsTimer", "DeskThingsRuler"],
+    });
+  });
+
+  it("offers none for a plugin that adds no object the board hangs, or one that is off", () => {
+    // Comment pad's one object hangs nowhere; Key-value store adds none; Desk clock is turned off
+    expect(boardSet(mine("vibefield.comment-pad"))).toEqual([]);
+    expect(boardSet(mine("example.kv-service"))).toEqual([]);
+    expect(boardSet(mine("example.desk-clock"))).toEqual([]);
+    // held off while community plugins are off (MK-O3, "Stop"): the desk draws none of its kinds
+    const held = PluginRecord.parse({
+      ...mine("acme.kanban"),
+      enabled: false,
+      state: "disabled",
+      held: "community-off",
+    });
+    expect(boardSet(held)).toEqual([]);
+    expect(boardSet(undefined)).toEqual([]);
+  });
+
+  it("says Show on the pegboard for one, and Show them on the pegboard for more (§9)", () => {
+    expect(words.showWords(1)).toBe("Show on the pegboard");
+    expect(words.showWords(2)).toBe("Show them on the pegboard");
+    expect(words.showWords(4)).toBe("Show them on the pegboard");
   });
 });
 

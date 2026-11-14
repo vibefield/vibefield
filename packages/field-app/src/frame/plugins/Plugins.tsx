@@ -16,6 +16,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { showOnBoard } from "../../field/desk/pegboard/board-door";
 import { usePluginRegistrySnapshot } from "../../plugin-host/plugin-registry-store";
 import { useGodviewFindDoor } from "../find-door";
 import { type FrameSurface, foldSurface } from "../frame-surface";
@@ -162,8 +163,11 @@ import { RemoveView } from "./RemoveQuestion";
 // opens the popup where it stood (`FramePlugins`); folding lets the note go.
 // Its doors (MK-4b) are the Me menu's Plugins… row and the palette's Plugins…
 // and Check plugins for updates, each through ChromeLayer's `openPlugins`; the
-// pegboard's pill is MK-4d's. The catalog mounts this controller over a
-// fixture port (`design-system/PluginsPreview.tsx`).
+// pegboard's More in Plugins… (MK-4d) is one more, on Discover. MK-4d: an
+// installed page's act also offers Show them on the pegboard, handing the set
+// to the board's door (`showOnBoard`, the popup's one import from the desk);
+// ↵ presses it, never while Remove…'s question stands. The catalog mounts this
+// controller over a fixture port (`design-system/PluginsPreview.tsx`).
 // MK-O3D: Discover's community tile and its switch (§8 "The community tile",
 // drawn 2026-11-14): the switch as fieldd's app preferences say it, the ask in
 // place, which Esc answers first, and the one request. The statement is shown
@@ -943,6 +947,14 @@ export function Plugins({
   }, [catalog, shownHere]);
   const pressAct = useCallback((): boolean => {
     if (shown === null || act === null) return false;
+    // MK-4d: an installed plugin's page presses Show them on the pegboard, for a set the board hangs, never
+    // while Remove…'s question stands on it (MK-4f). The press folds nothing itself: the board's rise folds the
+    // popup, or over a covered view the move to Canvas
+    if (act.kind === "installed") {
+      if (act.show.length === 0 || removing !== null) return false;
+      showOnBoard(act.show);
+      return true;
+    }
     if (pageUpdate !== null) {
       if ((act.kind === "update" || act.kind === "failed") && act.live) {
         startUpdate(shown.id, "page", false);
@@ -963,7 +975,7 @@ export function Plugins({
       return true;
     }
     return false;
-  }, [shown, act, pageUpdate, startUpdate, confirmUpdate, install, confirm]);
+  }, [shown, act, removing, pageUpdate, startUpdate, confirmUpdate, install, confirm]);
   // MK-4f: Remove… stands on the page of an installed plugin from the list, with its question when one stands
   const removeShown = useMemo(() => {
     if (shown === null || !shown.installed) return undefined;
@@ -1284,6 +1296,7 @@ export function Plugins({
         shown !== null && act !== null ? (
           <PageActView
             act={act}
+            onShow={showOnBoard}
             onInstall={
               pageUpdate !== null
                 ? () => startUpdate(shown.id, "page", false)

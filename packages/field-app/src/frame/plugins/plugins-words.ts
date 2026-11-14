@@ -238,6 +238,13 @@ export const CARD_WORDS = {
   cancel: "Cancel",
 } as const;
 
+/** The act after Installed on a plugin's page whose objects hang on the pegboard (MK-4d; MK-D8, ruled A, its
+ * fallback B): §9's words ("Installing, and after"), "Show on the pegboard" for a set of one. It completes as pressed
+ * and wears no "…" (§9 "The '…'"). */
+export function showWords(objects: number): string {
+  return objects === 1 ? "Show on the pegboard" : "Show them on the pegboard";
+}
+
 /** An install's steps on a page's act (O2-C; §9 "Installing, and after"). "Downloading…" stands for §9's
  * "Downloading · 42%", since fieldd says nothing of a download's bytes (MK's, ‹draft›); the failure's line and Try
  * again are §9's (‹draft›); "Installing needs the internet" is §9's ruled offline word. Never fieldd's own text: a

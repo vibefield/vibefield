@@ -7,6 +7,7 @@ import {
   INSTALL_WORDS,
   PAGE_WORDS,
   SHELF_WORDS,
+  showWords,
   UPDATE_WORDS,
 } from "./plugins-words";
 
@@ -23,6 +24,8 @@ import {
 // and its act's word its own, and the objects it would leave missing under its powers; a page whose
 // update waits says Update where Installed stood; and Updates' rows draw their acts and their card
 // with the same two parts (`PluginsUpdates.tsx`).
+// MK-4d: after Installed, Show them on the pegboard for a set the board hangs (DESIGN.md §8 "The
+// pegboard", "After an install"), the act's own look; a press hands the board the set.
 
 /** A page's act, the foot's act's look, ↵ printed on it; one that takes no press says so in
  * tertiary ink. MK-UC: an Updates row that is not the hot one prints no ↵ (`printed`). */
@@ -165,6 +168,7 @@ function StatementView({
 
 export function PageActView({
   act,
+  onShow,
   onInstall,
   onConfirm,
   onCancel,
@@ -172,6 +176,8 @@ export function PageActView({
   takeFocus,
 }: {
   act: PageAct;
+  /** MK-4d: Show them on the pegboard — hands the board the set's objects it hangs */
+  onShow: (types: readonly string[]) => void;
   /** Install, Update, or Try again: download it (again) */
   onInstall: () => void;
   /** the card's Install, or its Update */
@@ -186,9 +192,19 @@ export function PageActView({
   switch (act.kind) {
     case "none":
       return null;
-    case "installed":
-      // words, not a control (VF-PM 13:56:27Z, 4)
-      return <p className="vf-plugins-page-act">{PAGE_WORDS.installed}</p>;
+    case "installed": {
+      // words, not a control (VF-PM 13:56:27Z, 4); then (MK-4d) Show them on the pegboard, 12 after
+      // them in the act's row, for a set the board hangs
+      const set = act.show;
+      return (
+        <>
+          <p className="vf-plugins-page-act">{PAGE_WORDS.installed}</p>
+          {set.length > 0 && (
+            <ActButton words={showWords(set.length)} live onPress={() => onShow(set)} />
+          )}
+        </>
+      );
+    }
     case "needs-newer":
       return <p className="vf-plugins-page-act">{SHELF_WORDS.needsNewer}</p>;
     case "downloading":
