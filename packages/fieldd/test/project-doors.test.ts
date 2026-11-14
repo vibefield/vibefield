@@ -1355,6 +1355,134 @@ describe("PJ-4 — project.figures: one merged figure, honest when partial (H2)"
   });
 });
 
+describe("item 398 — project.figures asked by id; its totals over every row gathered", () => {
+  const pair = (device: string, sessionId: string) => ({ device, sessionId });
+
+  it("a tailnet caller asking for rows past its bound gets exactly those, uncut, and no totals", async () => {
+    const f = figuresWorld();
+    const answer = ProjectFiguresResult.parse(
+      await f.doors.figures(
+        {
+          key: f.keyOfPlace("pl-app"),
+          ...WINDOW_ASK,
+          sessions: [pair("dev-a", "s5"), pair("dev-a", "s2")],
+        },
+        2,
+      ),
+    );
+    // the plan's order cuts at dev-b's t1 and t2; dev-a's s2 and s5 lie past it
+    expect(answer.contribution.map((c) => [c.device, c.sessionId])).toEqual([
+      ["dev-a", "s2"],
+      ["dev-a", "s5"],
+    ]);
+    // dev-b was left unasked: the daily figures are dev-a's alone, and say so
+    expect(answer).toMatchObject({ clipped: false, lifetimePartial: false, partial: true });
+    expect(answer.totals).toBeUndefined();
+    // only the desktop an asked pair names is asked, with its ids
+    expect(f.peerAsks).toEqual([]);
+    expect(f.local.asked).toEqual([
+      {
+        method: "index.project",
+        params: { projectId: "r-app", ...WINDOW_ASK, sessionIds: ["s5", "s2"] },
+      },
+    ]);
+  });
+
+  it("each desktop is handed its own ids, a peer's included, so its byte budget cannot drop an asked row", async () => {
+    const f = figuresWorld();
+    const answer = ProjectFiguresResult.parse(
+      await f.doors.figures({
+        key: f.keyOfPlace("pl-app"),
+        ...WINDOW_ASK,
+        sessions: [pair("dev-b", "t1"), pair("dev-a", "s1")],
+      }),
+    );
+    expect(f.peerAsks).toEqual([
+      {
+        device: "dev-b",
+        method: "index.project",
+        params: { projectId: "r-app", ...WINDOW_ASK, sessionIds: ["t1"] },
+      },
+    ]);
+    expect(f.local.asked).toEqual([
+      {
+        method: "index.project",
+        params: { projectId: "r-app", ...WINDOW_ASK, sessionIds: ["s1"] },
+      },
+    ]);
+    // the fake desktops answer every row, as a peer of an earlier build does:
+    // the merge keeps the asked pairs alone
+    expect(answer.contribution.map((c) => [c.device, c.sessionId])).toEqual([
+      ["dev-b", "t1"],
+      ["dev-a", "s1"],
+    ]);
+    // both desktops asked: the daily figures are whole, as unasked
+    expect(answer.partial).toBe(false);
+  });
+
+  it("unasked, a tailnet caller's rows are cut as before, and totals sum every row gathered before the cut", async () => {
+    const f = figuresWorld();
+    const key = f.keyOfPlace("pl-app");
+    const whole = ProjectFiguresResult.parse(await f.doors.figures({ key, ...WINDOW_ASK }));
+    const cut = ProjectFiguresResult.parse(await f.doors.figures({ key, ...WINDOW_ASK }, 2));
+    expect(cut.contribution.map((c) => c.sessionId)).toEqual(["t1", "t2"]);
+    expect(cut).toMatchObject({ clipped: true, lifetimePartial: true });
+    const sum = (pick: (c: (typeof whole.contribution)[number]) => number) =>
+      whole.contribution.reduce((n, c) => n + pick(c), 0);
+    const expected = {
+      conversations: 5,
+      messages: sum((c) => c.messages),
+      tokens: f.lifetime(["dev-a s1", "dev-a s2", "dev-a s5", "dev-b t1", "dev-b t2"]),
+      costMicroUsd: sum((c) => c.costMicroUsd ?? 0),
+    };
+    // the clipped page's sum would say 2 conversations and t1's and t2's figures alone
+    expect(cut.totals).toEqual(expected);
+    expect(whole.totals).toEqual(expected);
+  });
+
+  it("one conversation two desktops recorded answers ONE row for its pairs; asked by one pair, that pair's own row", async () => {
+    const f = figuresWorld({ sharedConversation: true });
+    const key = f.keyOfPlace("pl-app");
+    const both = ProjectFiguresResult.parse(
+      await f.doors.figures({
+        key,
+        ...WINDOW_ASK,
+        sessions: [pair("dev-a", "s5"), pair("dev-b", "t2")],
+      }),
+    );
+    // DS-D10: the copy of the desktop listed first speaks (the project's order)
+    expect(both.contribution.map((c) => [c.device, c.sessionId])).toEqual([["dev-b", "t2"]]);
+    const one = ProjectFiguresResult.parse(
+      await f.doors.figures({ key, ...WINDOW_ASK, sessions: [pair("dev-a", "s5")] }),
+    );
+    expect(one.contribution.map((c) => [c.device, c.sessionId])).toEqual([["dev-a", "s5"]]);
+  });
+
+  it("EL7: a pair this project does not hold answers no row and no refusal — the same answer as a pair that exists nowhere", async () => {
+    const f = figuresWorld();
+    const key = f.keyOfPlace("pl-app");
+    // s3 is the notes' session (another project on this desktop); dev-c is no desktop of this project
+    const elsewhere = ProjectFiguresResult.parse(
+      await f.doors.figures({
+        key,
+        ...WINDOW_ASK,
+        sessions: [pair("dev-a", "s3"), pair("dev-c", "x1")],
+      }),
+    );
+    const nowhere = ProjectFiguresResult.parse(
+      await f.doors.figures({ key, ...WINDOW_ASK, sessions: [pair("dev-a", "no-such")] }),
+    );
+    const shape = (a: ProjectFiguresResult) => ({
+      ...a,
+      sources: a.sources.map(({ tookMs: _tookMs, ...s }) => s),
+    });
+    expect(elsewhere.contribution).toEqual([]);
+    expect(shape(elsewhere)).toEqual(shape(nowhere));
+    // dev-c is asked nothing
+    expect(f.peerAsks.some((a) => a.device === "dev-c")).toBe(false);
+  });
+});
+
 describe("PJ-4 — project.figuresDay: one day's hours over the same parts", () => {
   it("sums the whole parts' hours by model, across desktops", async () => {
     const f = figuresWorld();

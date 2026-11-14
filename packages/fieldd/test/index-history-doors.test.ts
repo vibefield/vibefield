@@ -449,6 +449,38 @@ describe("index.project — a project's panels in one answer (AR-8b, AR-D39 (a))
     );
     expect(bounded.clipped).toBe(true);
   }, 30_000);
+
+  it("item 398: asked BY ID (a merging daemon's hand-down), the phone gets exactly those rows, kept before its bound; an id the project does not hold answers no row", async () => {
+    const rows = Array.from({ length: INDEX_TAILNET_LIMITS.MAX_ROWS + 50 }, (_, i) => ({
+      session_id: `s${i}`,
+      project_id: "p1",
+      commits: 0,
+      edits: 0,
+      loc: 0,
+      messages: 1,
+      ...figures,
+    }));
+    const world = await setup({ aggregates: { contribution: { rows } } });
+    await ready(world.daemon);
+    const phone = await phoneOf(world.daemon, world.mock);
+    // s120 and s130 lie past the bound's first 100 rows; s-none is no row of p1
+    const asked = IndexProjectResult.parse(
+      await phone.call("index.project", {
+        projectId: "p1",
+        sessionIds: ["s130", "s120", "s-none"],
+      }),
+    );
+    // rosetta's order, never the ask's
+    expect(asked.contribution.map((r) => r.sessionId)).toEqual(["s120", "s130"]);
+    expect(asked.clipped).toBe(false);
+    expect(asked.omitted).toBeUndefined();
+    // a page's worth at most: one id past it is the caller's to fix
+    const win = await windowOf(world.daemon, ["index.search"]);
+    const tooMany = Array.from({ length: INDEX_TAILNET_LIMITS.MAX_ROWS + 1 }, (_, i) => `s${i}`);
+    expect(
+      (await win.callErr("index.project", { projectId: "p1", sessionIds: tooMany })).data?.kind,
+    ).toBe("PRECONDITION_FAILED");
+  }, 30_000);
 });
 
 describe("index.projectDay — one day's hours (AR-8b)", () => {

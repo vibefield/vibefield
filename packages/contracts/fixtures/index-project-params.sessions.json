@@ -1,0 +1,7 @@
+{
+  "//": "Item 398 — `index.project` asked BY ID by a merging daemon (its `project.figures` ask by id, handed down): only these sessions' contribution rows, kept before the peer's byte budget, so no asked row is dropped by it.",
+  "projectId": "p1",
+  "sinceMs": 1756166400000,
+  "offsetMinutes": 120,
+  "sessionIds": ["ses-9b2f0c7d", "ses-31c0de55"]
+}

@@ -246,6 +246,8 @@ const projectFixtures = [
   "project-get.moved.json",
   "project-sessions.valid.json",
   "project-figures.valid.json",
+  // item 398: an answer's totals over every row gathered, and the ask by id
+  "project-figures.totals.json",
   "project-figures-day.valid.json",
   "project-changes-open.snapshot.json",
   "project-changes-delta.regrouped.json",
@@ -258,6 +260,7 @@ const projectFixtures = [
   "project-get-params.anchor.json",
   "project-sessions-params.valid.json",
   "project-figures-params.valid.json",
+  "project-figures-params.sessions.json",
   "project-figures-day-params.valid.json",
   "project-subscribe-params.valid.json",
 ];

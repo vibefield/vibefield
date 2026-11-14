@@ -1,0 +1,16 @@
+{
+  "//": "Item 398 — `project.figures` asked BY ID: the phone's second ask, for the conversations its listed page shows (`project.sessions` rows' `device` and `sessionId`), at most INDEX_TAILNET_LIMITS.MAX_ROWS. The answer holds exactly the asked pairs this project holds, before any cut, and no `totals`.",
+  "key": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
+  "sinceMs": 1727568000000,
+  "offsetMinutes": -420,
+  "sessions": [
+    {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "sessionId": "ses-9b2f0c7d"
+    },
+    {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "sessionId": "ses-31c0de55"
+    }
+  ]
+}
