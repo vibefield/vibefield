@@ -793,7 +793,7 @@
 
 /* printed: the back wears the print made at a held card's size (only a card picked up shows it) */
 :root[data-vf-card-print="ready"] .vf-card-back {
-  background: center / 100% 100% no-repeat;
+  background: var(--vf-card-print-back) center / 100% 100% no-repeat;
   background-image: var(--vf-card-print-back-held, var(--vf-card-print-back));
 }
 
