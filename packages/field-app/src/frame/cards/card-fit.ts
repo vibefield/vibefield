@@ -73,7 +73,10 @@ function longestThatFits(
 function cutEnd(text: string, room: number, width: (text: string) => number): string {
   const words = text.split(" ");
   for (let n = words.length - 1; n > 0; n--) {
-    const kept = `${words.slice(0, n).join(" ").replace(/[,;:·]$/u, "")}…`;
+    const kept = `${words
+      .slice(0, n)
+      .join(" ")
+      .replace(/[,;:·]$/u, "")}…`;
     const w = width(kept);
     if (w <= room) {
       if (w >= room * 0.55) return kept;

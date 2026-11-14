@@ -119,8 +119,8 @@ const PRINTED = [TEXT, FILE, TERM, MSG, PICT, LINK, REF];
 const faceOf = (card: Card): HTMLElement | null =>
   mount(<CardFace card={card} />).querySelector<HTMLElement>(".vf-card");
 
-describe("round 5's face: three things and one line of words (DESIGN.md §8 \"A card\")", () => {
-  it("wears each type's own glyph (§13 \"The six types\", CS-D10 A)", () => {
+describe('round 5\'s face: three things and one line of words (DESIGN.md §8 "A card")', () => {
+  it('wears each type\'s own glyph (§13 "The six types", CS-D10 A)', () => {
     expect(TYPE_GLYPH).toEqual({
       text: "type-text",
       image: "type-image",
