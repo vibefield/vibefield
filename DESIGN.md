@@ -4479,6 +4479,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   plugin from the registry may add objects, VibeField's own and community plugins alike, a community
   plugin's only once community plugins are turned on (MK's J1, ruled by James 2026-11-11 06:43:00Z;
   §8 "Plugins — the frame's second popup").
+  *Drawn 2026-11-14 (MK-UC's UC-C), what was owed (MK-4c) above:* the install's window coming back
+  fresh is the update's: the popup's note reopens it on the plugin's page, its act saying
+  **Installed** (§8 "Plugins — the frame's second popup", "Updates", "The window coming back
+  fresh"). **Show them on the pegboard** stands there once MK-4d builds it.
 
   **One object at a time waits** (MK-D9, ruled A by James 2026-11-11: each object its own pegboard
   switch; not buildable on ICE 0.17.0, VF-PM's MK-E2): until ICE's door, a plugin's objects hang
@@ -6966,6 +6970,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     *Corrected 2026-11-14 (MK-4e):* Discover's shelf is drawn (above) and stands without its pictures, so with a
     list held Discover shows its sets; Updates says the count until its rows are built, and so does Discover
     when the list holds no set it shows.
+    *Corrected 2026-11-14 (MK-UC's UC-C):* with a list held, Updates shows its head, its rows and its note
+    ("Updates", below), never the list's count.
   - **The read on open** (MK-D5): opening the popup is your act, so each opening reads the registry's signed list —
     one read, carrying no identity, on no timer and with no push feed. The list it last read shows at once, with its
     time in the foot ("checked 14:02"), never implied fresh, and the foot says a read is under way until it lands;
@@ -7034,6 +7040,69 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     does, and says so with a way to try again. An update that asks for nothing new still takes its one press, with no
     card. Its words are §9's ("Updates"). How **Update all** meets a card among its updates is drawn with Updates'
     rows, which no slice has built yet.
+    *Corrected 2026-11-14 (MK-UC's UC-C):* Updates' rows are built, Update all with them (drawn below).
+    *Drawn 2026-11-14 (MK-UC's UC-C; the inventory's A3, ruled at its lean by VF-PM 04:33Z), ‹draft› for James's
+    eye, its words in §9 "The plugins' words":*
+    - **The tab**, over a list held: its head, its rows and its note, and the foot's **Check again**. With no list
+      held, while it is read, or while VibeField's plugins don't answer, it says the states above ("Its states, in
+      the body"). Typed words keep the rows whose plugin holds every word, as Installed's do.
+    - **Which updates**: each plugin this desktop has from the plugin list, whose list entry's latest release is
+      newer than its version (fieldd's own compare, a.b.c). One the list says can't run here is listed, saying so,
+      and offers no act; it is not counted, as the Me menu's "1 update" counts only what can be taken.
+    - **The head** stands at the body's top, padded 14 22 6: "1 update · checked 14:02", or "Everything is up to
+      date · checked 14:02", at 12/500 in secondary ink with tabular figures; and at its end, while any row can be
+      taken, **Update all** in the card's Cancel's look (32 tall, corners 16, 12.5/600 in secondary ink, the ready
+      fill under the pointer), **Update all…** while one of them removes an object.
+    - **A row** has Installed's shape, padded 8 under the head: its picture slot, its title with its source pill,
+      and under it its line at 12/400 in tertiary ink with tabular figures, "0.6.1 → 0.7.0 · Nov 7" (the day the
+      list says the release was published); then, when the list's listing says what it adds or removes, that line
+      at 12/400 in secondary ink, "Adds Watch · Removes Burndown". Its picture, title and lines are one press that
+      opens its page, from Updates. Its act stands at its end, 12 after its text and 12 in from the row's end:
+      **Update** in the act's look, ↵ printed on the hot row's alone; **Update…** when the list says it removes
+      an object; and for one that can't run here, its words in tertiary ink, as a tile's.
+    - **Its steps** stand where its act stood, as words in tertiary ink: "Downloading…"; then the update card, when
+      the plugin just downloaded can do more than the version you have or removes an object; then "Updating…";
+      then the row's line says "Updated to 0.7.0" and its act is gone, until the popup folds. An update that asks
+      for nothing new goes from "Downloading…" to "Updating…" with no card: one press. One that didn't happen
+      says so in the row's line, in the attention ink (§2.5), with **Try again** where its act stood, which
+      downloads it again.
+    - **The card on a row** grows under the row's lines from where its act stood, with the install card's look,
+      numbers and motion (above, "Real progress"), inset to the row's text (56 from the row's start, 12 from its
+      end) and at most 440 wide; the act's place stands empty while it does. Its parts, 10 apart: the ask; "This
+      version can also:" over the new powers, said only when there is one; the objects that will draw as missing;
+      where it updates; then **Cancel** and **Update**, ↵ printed on it.
+    - **A page's act**: an installed plugin's page whose update waits says **Update** (or **Update…**) where
+      **Installed** stood, in the act's look with ↵ printed on it, and takes the same steps there, the card standing
+      where the act stood, as the install card does. Once the update is taken it says **Installed** again. A page
+      whose update can't run here, as the list says or as its download's refusal says, keeps **Installed**: the
+      plugin you have runs, only its update can't, and its row on Updates says so.
+    - **One at a time**, with installs: while one update or install downloads or runs, no other **Update**,
+      **Update all** or **Install** takes a press. A card's download is thrown away by its **Cancel**, Esc, leaving
+      the place it stands (the tab, or the page, by a tab or the back row), words typed that hide its row, and the
+      popup folding, as the install card's is; one whose card's **Update** was pressed is fieldd's, and is kept
+      until fieldd's snapshot holds the new version.
+    - **Update all** takes the rows the tab shows that can be taken, one at a time, plugins with no object first
+      and then the rows' order, each as its own **Update** would: one that asks for nothing new is taken; one that
+      stops at its card waits there for its **Update** or its **Cancel**, and Update all goes on once either is
+      pressed; one that fails says so on its row, and the rest go on. Leaving Updates (a tab, or a row's page) or
+      folding the popup stops it after the update under way; a row that words typed since have hidden is passed.
+    - **Keys**: ↑ ↓ walk the rows, kept in sight, as Installed's; ↵ presses the hot row's act, or a card's
+      **Update** while one stands; Esc answers a card first (its **Cancel**).
+    - **The foot** says the tab's sentence and offers **Check again**, in the act's look with no ↵ (↵ is the rows'):
+      it reads the list again, one read per press, and takes no press while a read runs. Each read is the person's
+      act, as an opening is (MK-D5).
+    - **Its note** stands 16 under the last row, padded 0 22, at 12/400 in tertiary ink (§9's words).
+    - **Not drawn yet**: a row's notes. The list VibeField reads (index v1) carries none; v2's `notes` is the
+      registry rung's reader (TD §9 TD-4), and a row says them once the list carries them.
+    - **The window coming back fresh** (MK-E6; and the install's own case, owed (MK-4c) at §8 "The pegboard"): as
+      an **Install** or an **Update** for a plugin with objects is sent, the popup keeps a note in the window's own
+      session (`sessionStorage`, which outlives the renderer, as the board the window reopens does): the page it
+      stands on and the tab it came from, and, during **Update all**, the updates still to take and those taken.
+      If the window comes back fresh within a minute, its first frame opens the popup again from the note — on that
+      page, its act saying **Installed**, or, during Update all, on Updates, the rows it took saying "Updated to …",
+      going on with the rest — and the note is read once and gone. The popup folding lets the note go, so a window
+      that never came back keeps none. Nothing on screen says the window came back (§9). An install whose objects
+      come on a new board behind the veil (§8 "The pegboard") keeps the same note and lets it go as it folds.
   - **A plugin's page opens in place** (MK-D2): a press on a tile or a row, or ↵ on the hot one, turns the body to
     the page, and **‹ Discover** at its top (‹ Installed or ‹ Updates when it opened from there) or Esc goes back.
     As drawn it holds two columns. **The first is the set, then each object** (MK-D4): the picture — the set's
@@ -7158,7 +7227,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       settings", below; their words in §9).
     - **An update brings the window back fresh** when the plugin adds objects (MK-E6): the popup opens again on that
       plugin's page, saying Installed, and nothing on screen says the window came back (§9: no reload or restart
-      word).
+      word). *Drawn 2026-11-14 (MK-UC's UC-C):* by the note the popup keeps in the window's own session, one for an
+      install and an update alike ("Updates", above, "The window coming back fresh").
     - **Read only first** (*drawn and built 2026-11-11, MK-4c; VF-PM 13:56:27Z*; ‹draft› for James's eye, its
       words in §9 "The plugins' words"): until the acts above are built, a page holds none of them. In every
       build only Installed's rows open one (Discover's tiles and Updates' rows are not built). As shipped on
@@ -7171,6 +7241,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       **What it can do**, for the list carries no powers: the install card says them, read from the plugin
       downloaded (MK-O2). Where its act will stand holds nothing until the install's slice (O2-C) draws it.
       *Corrected 2026-11-14 (O2-C):* its act is drawn, with the card, under "Real progress" above.
+      *Corrected 2026-11-14 (MK-UC's UC-C):* Updates' rows open a page too, from Updates, and a page whose update
+      waits says **Update** where its act stands ("Updates", above).
       - **Its back row** stands at its top, 36 tall, padded 0 10, corners 10: the `chevron` 12 pointing back and
         the tab's word at 12/500 in secondary ink, the ready fill under the pointer. A press or Esc goes back.
         *Drawn 2026-11-11 (MK-4c's rider; VF-PM 17:54:22Z), ‹draft›:* it stands 8 under the body's top and 14
@@ -9549,6 +9621,27 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   plugin keeps its version, for the install-set's reconciler installs a plugin only where it is missing
   (`fieldd/src/install-reconciler.ts`, `applyEntry`). Whether an update reaches your other desktops is open, James's
   to call (MK, 2026-11-14), and the card says this Mac until it does.
+  *Added 2026-11-14 (MK-UC's UC-C, Updates' rows; §8 "Updates"), MK's words, ‹draft›, for James's eye:*
+  - The head, a row's line, its act, its steps, **Update all**, **Check again** and the note say the words above, one
+    of a thing said as one ("1 update"). A row says the day the list says its release was published, "Nov 7", as
+    "checked Nov 6, 14:02" says a day.
+  - What a row changes in the set names its objects by their labels as a list is said: "Adds Watch", "Adds Watch
+    and Timer", "Removes Burndown", the two joined by " · "; a card's missing line the same way, "Burndown and Gantt
+    objects on your desks will draw as missing."
+  - An update that can't run here says "Needs a newer VibeField" where its act would stand, as a tile's does.
+  - "Downloading…" stands for "Downloading · 42%", as the install's does: fieldd says nothing of a download's bytes.
+  - An update that didn't happen — its download refused, its card's **Update** refused, or a card that waited
+    longer than fifteen minutes or whose plugin changed while it waited — says "VibeField didn't update ‹plugin›.
+    Nothing changed." with **Try again**, the install's twin; never fieldd's own text, so "This plugin changed
+    before you pressed Update. Press Update again." stays the door's and the log's. One refused because it needs a
+    newer VibeField says "Needs a newer VibeField" where its act stood, with no **Try again**, as an install's
+    refusal of that kind does (read by its kind alone).
+  - A card that stands only for an object it removes says no "This version can also:".
+  - The update card is named to assistive tech by its ask, "Update ‹plugin›?"; Updates' list by the tab's word,
+    "Updates".
+  - A page whose update waits says **Update** or **Update…** where **Installed** stood, and **Installed** again once
+    it is taken. One whose update can't run here keeps **Installed**: "Needs a newer VibeField" is its row's alone.
+  - Nothing says the window came back fresh, for an install or an update: the popup is open again where it stood.
 - **Installed, off and Remove…** (MK-D9, MK-D13; MK-E10). A row says its set and where it hangs, "4 objects · Things,
   Tools · 1.0.0", or for a set of one "Hangs under Things · 1.0.0", with its switch; a built-in's ends "· comes with
   VibeField", and its page says "Comes with VibeField. It can be turned off, not removed." A plugin with no object
