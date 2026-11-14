@@ -149,7 +149,7 @@ describe("the install gate (MK-2c)", () => {
     expect(existsSync(join(installedRoot, KV_ID))).toBe(false);
   });
 
-  it("installs VibeField's own entry, carrying the signed verdict and its display copies", async () => {
+  it("installs VibeField's own entry, its display copies carried in memory alone (item 330)", async () => {
     const reg = await registry("R1");
     resign(reg, (index) => {
       const entry = (index.plugins as Record<string, Record<string, unknown>>)[KV_ID]!;
@@ -158,14 +158,24 @@ describe("the install gate (MK-2c)", () => {
     const { installer, plugins } = await installerFor(reg);
     const candidate = await installer.prepare({ id: KV_ID });
     expect(candidate.listedAs).toBe("vibefield");
+    // the file beside the slot: the list's address, the hash, and the plugin's namespace as its
+    // publisher (MK-E11), never the repository's address; no display copy
+    const written = {
+      indexRef: reg.url,
+      artifactSha256: candidate.artifact.artifactSha256,
+      publisher: "vibefield",
+    };
     const sidecar = JSON.parse(
       readFileSync(join(candidate.artifact.root, ".vf-registry.json"), "utf8"),
     ) as Record<string, unknown>;
-    expect([sidecar.rung, sidecar.publisherName]).toEqual(["R1", "VibeField"]);
+    expect(sidecar).toEqual(written);
+    // the candidate the card is read from shows the signed entry's copies, carried from prepare
     const shown = candidate.runtime.record.registry;
     expect([shown?.rung, shown?.publisherName]).toEqual(["R1", "VibeField"]);
+    // once installed, the row is read from the folder, which holds no copy: G3's read of the held
+    // list says whose it is (`plugin-catalog.ts`, `listedAsFor`)
     await installer.commit(candidate);
-    expect(plugins.get(KV_ID)?.registry?.rung).toBe("R1");
+    expect(plugins.get(KV_ID)?.registry).toEqual(written);
   });
 
   it("installs a community entry when the installer's own gate is open", async () => {

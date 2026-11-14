@@ -185,6 +185,10 @@ const sha256hex = (bytes: Buffer): string =>
 /** MK-2e: an index-relative path as URL segments, each percent-encoded. */
 const encodePath = (path: string): string => path.split("/").map(encodeURIComponent).join("/");
 
+/** Item 330 (MK-E11, 2026-11-14): a plugin's namespace, its id's first segment. Index v2 holds an entry's `publisher`
+ * to it (`RegistryPluginEntryV2`), and a bundled row's provenance names "vibefield" (`plugin-registry.ts`). */
+const namespaceOf = (pluginId: string): string => pluginId.split(".")[0] ?? pluginId;
+
 /** MK-2e: a regular file's bytes, at most `maxBytes`, opened without following a link at its last component. The
  * size is read from the open handle, and the read stops one byte past it: a file that grew while it was read is
  * refused (past the cap, `size`; under it, `unreachable`), never read on. Item 329 (2026-11-14): `followLink` opens
@@ -482,7 +486,9 @@ export class RegistryInstallService {
     // fetched). An update is an install, so it meets the same gate.
     const listedAs = registryListedAs(entry);
     await this.assertListedAllowed(params.id, listedAs, index.generatedAt);
-    // G2, G4: the signed entry's display copies, carried in memory to the candidate and written beside the slot
+    // G2: the signed entry's display copies, carried in memory to the candidate alone. Item 330 (2026-11-14): never
+    // written beside the slot, as G4 had them: item 322 compares that file with a folder already at the slot, and the
+    // list may change a copy without changing the release
     const publisherName = entry.listing?.publisherName;
     const signedCopies = {
       ...(entry.rung !== undefined ? { rung: entry.rung } : {}),
@@ -532,6 +538,9 @@ export class RegistryInstallService {
     const base = await this.artifacts.current(params.id);
     const baseSlot = base?.pointer.slot ?? null;
     const baseCommitEpoch = base?.pointer.commitEpoch ?? 0;
+    // Item 330: the namespace is read here, where `params.id` is known to be set; the stage's callback below is a
+    // closure, in which TypeScript no longer holds that narrowing.
+    const publisher = namespaceOf(params.id);
     const artifact = await this.artifacts.stage({
       pluginId: params.id,
       artifactSha256: release.sha256,
@@ -564,21 +573,14 @@ export class RegistryInstallService {
             { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
           );
         }
-        // §6.3 provenance sidecar — written by fieldd, never by the artifact. MK-2c (G4): with the signed
-        // entry's display copies, which decide nothing (`RegistryProvenance`); a fresh slot only, as before.
+        // §6.3 provenance sidecar — written by fieldd, never by the artifact.
+        // Item 330 (2026-11-14): item 322 compares this file with a folder already at the slot, so it holds no word
+        // the signed list may change while the release stays the same: no display copy (G4 taken back), and the
+        // publisher is the plugin's namespace (MK-E11), in place of the repository's address.
         await rm(join(staging, ".vf-registry.json"), { force: true });
         await writeFile(
           join(staging, ".vf-registry.json"),
-          `${JSON.stringify(
-            {
-              indexRef,
-              artifactSha256: release.sha256,
-              publisher: entry.repo,
-              ...signedCopies,
-            },
-            null,
-            2,
-          )}\n`,
+          `${JSON.stringify({ indexRef, artifactSha256: release.sha256, publisher }, null, 2)}\n`,
         );
       },
     });

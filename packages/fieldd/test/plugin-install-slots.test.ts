@@ -14,6 +14,7 @@ import {
   buildFixtureRegistry,
   generateRegistryKeypair,
   packVfplugin,
+  signRegistryIndex,
 } from "@vibefield/plugin-build";
 import { afterEach, describe, expect, it } from "vitest";
 import { PLUGIN_CURRENT_POINTER_FILE } from "../src/plugin-artifact-store";
@@ -221,5 +222,66 @@ describe("PRC-5b registry installer slots", () => {
     expect(plugins.commitEpoch(KV_ID)).toBe(1);
     // the flat manifest is still there, and nothing reads it
     expect(existsSync(join(flat, "vibefield.plugin.json"))).toBe(true);
+  });
+
+  // Item 330 — what fieldd writes beside the artifact's files is compared with a folder already at
+  // the slot (item 322), so it holds no word the signed list may change while the release stays the
+  // same. Here the list renames the release's maker and moves its repository after an earlier
+  // prepare left its folder at the slot, as a restart while its install card waits leaves it. The
+  // folder is reused, and the file beside it names the list's address, the hash and the plugin's
+  // namespace alone (MK-E11).
+  it("item 330: a folder left at the slot is reused after the list renames the maker and moves the repository", async () => {
+    const dataDir = temp("vf-install-slots-data-");
+    const registryDir = temp("vf-install-slots-registry-");
+    const releaseWork = temp("vf-install-slots-releases-");
+    const installedRoot = join(dataDir, "plugins", "installed");
+    mkdirSync(installedRoot, { recursive: true });
+
+    const only = await release(releaseWork, "0.1.0");
+    const keys = generateRegistryKeypair();
+    buildFixtureRegistry({ dir: registryDir, secretKey: keys.secretKey, plugins: [only] });
+    // the test's own list, signed again with its own key: a maker's name and a repository
+    const relist = (publisherName: string, repo: string) => {
+      const indexPath = join(registryDir, "index.json");
+      const index = JSON.parse(readFileSync(indexPath, "utf8")) as {
+        plugins: Record<string, Record<string, unknown>>;
+      };
+      const entry = index.plugins[KV_ID]!;
+      entry.listing = { title: "Key-value store", publisherName };
+      entry.repo = repo;
+      const bytes = Buffer.from(JSON.stringify(index), "utf8");
+      writeFileSync(indexPath, bytes);
+      writeFileSync(join(registryDir, "index.json.sig"), signRegistryIndex(bytes, keys.secretKey));
+    };
+    relist("Example Maker", "https://example.test/maker/kv");
+
+    const plugins = new PluginRegistryService({
+      dataDir,
+      roots: { bundled: [], devLinked: [], installed: [installedRoot] },
+    });
+    cleanup.push(() => plugins.dispose());
+    await plugins.refresh();
+    const indexRef = pathToFileURL(join(registryDir, "index.json")).href;
+    const installer = new RegistryInstallService({
+      dataDir,
+      plugins,
+      registryUrl: indexRef,
+      registryPublicKey: keys.publicKey,
+    });
+
+    const first = await installer.prepare({ id: KV_ID, version: "0.1.0" });
+    relist("Example Maker, renamed", "https://example.test/moved/kv");
+    const again = await installer.prepare({ id: KV_ID, version: "0.1.0" });
+    expect([again.artifact.slot, again.artifact.reused]).toEqual([first.artifact.slot, true]);
+    const provenance = JSON.parse(
+      readFileSync(join(again.artifact.root, ".vf-registry.json"), "utf8"),
+    ) as Record<string, unknown>;
+    expect(provenance).toEqual({
+      indexRef,
+      artifactSha256: first.artifact.artifactSha256,
+      publisher: "vibefield",
+    });
+    // nothing is published
+    expect(existsSync(join(installedRoot, KV_ID, PLUGIN_CURRENT_POINTER_FILE))).toBe(false);
   });
 });

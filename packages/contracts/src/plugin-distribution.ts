@@ -427,7 +427,12 @@ export const RegistryProvenance = z
      * writes indexRef, artifactSha256 and publisher alone, `fieldd/src/plugin-install.ts`). They decide NOTHING: a
      * process running as the same user can rewrite what a folder says about itself (item 321), so whether a plugin is
      * VibeField's own or a community one is read from the signed index entry alone (`registryListedAs`). A bad value
-     * reads as absent, so neither reader of this file can fail on them. */
+     * reads as absent, so neither reader of this file can fail on them.
+     * *Corrected 2026-11-14 (item 330): fieldd no longer writes them beside the folder. Item 322 compares that file
+     * with a folder already at the slot, and the list may change a copy without changing the release, so they ride
+     * the install's candidate row in memory alone (`inspectRegistryCandidate`'s `signed`). A file that carries them,
+     * an older build's or one written by hand, still parses, and its copies still decide nothing. For the same reason
+     * fieldd writes the plugin's namespace as `publisher` (MK-E11), where it wrote the repository's address.* */
     rung: RegistryRung.optional().catch(undefined),
     publisherName: z.string().min(1).max(120).optional().catch(undefined),
   })
