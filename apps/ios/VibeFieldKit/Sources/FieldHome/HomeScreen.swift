@@ -999,7 +999,9 @@ public struct HomeScreen: View {
       }
       if demoAccount != nil { return }
     #endif
-    if meshKeepsItselfUp { mesh.keepUp() }
+    // WI-W2e: the mesh's own Try again, the step keepUp() takes for a kept login, and a fresh start where the start
+    // failed for a login the phone could not keep (keepUp() starts nothing there): "Try again dials at once" (§9)
+    if meshKeepsItselfUp { mesh.tryAgain() }
     link?.lookAgain()
     reachAttempt += 1
   }
