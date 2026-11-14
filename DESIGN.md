@@ -8906,6 +8906,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       *Corrected 2026-11-12 (item 348):* open, the card was the tab cut at the safe area's top line, and "the bar
       steps aside" was the bar fading where it stood. The card is the screen itself now, bar and all, so its top is
       the screen's top and the status bar's band of the page is the card's first rows.
+      *Amended 2026-11-14 (item 419):* while a folder stands open on the shelf, pushing the card up, or tapping it,
+      closes the folder first, and goes back the next time ("A folder, open", below).
     - **Search opens on Apps as well.** Before you type, a strip headed **Apps** stands above History's search: the
       Recent row and **All apps**, in the secondary ink (`--vf-select` is the selection ring's alone, §2; *ruled
       2026-11-12, James, 06:07:01Z, the PM board*). The place is one tap from a control that is always on screen, and
@@ -8952,6 +8954,59 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       inset fill (`ChromePalette.fill`, corners 28, 13 in) holding three icons at 62 and a cluster of the next four
       at 27, its name under it at 13/600 in the primary ink. *Ruled 2026-11-12 (James, 06:07:01Z, the PM board): the
       primary ink, over the page's project ink, since §2.9 says an ink is never text.* A folder opens in place.
+      *Overturned 2026-11-14 (item 419): a folder opens over the shelf, as the Home Screen's does ("A folder, open",
+      below). "A folder opens in place" was MA-6e's build: the open folder took the Projects group, its head closed
+      it, and nothing moved.*
+    - **A folder, open** (item 419; James, 2026-11-14 08:13:38Z, session qa-01: "for the projects shelf, i want the
+      folder open interaction to feel exactly like IOS's app folder interaction, all the interaction and motions in
+      the app shelf should all follow IOS system app open beahvior and app folder behavior, help me design and
+      implement them properly"). The shelf follows the Home Screen's folder, phase by phase. The numbers are the
+      kit's `AppsFolderMotion` and `AppsPress` (the phone's alone, so no CSS token), one place each, so that James
+      can say more or less of any of them once he has seen it on his phone. None of it has been seen on a device.
+      - **It grows from its tile.** A tap on a folder's tile draws the folder over the shelf exactly where the tile
+        stands, and the tile gives it its place. The tile's square then grows into the panel on one spring: its
+        place, its size and its corners (28 to **38**) in step, its fill the tile's own inset fill
+        (`ChromePalette.fill`) all the way. The tile's face, its three icons and its cluster, rides the growing
+        square and gives way to the panel's apps on a plain `ease` fade of **180ms**. The apps arrive at the
+        tile's measure and grow with the square, cut at its edge, drawn and never laid out again.
+      - **The panel** stands **28** from the screen's sides (346 wide on the page's 402). It holds **three across
+        and three rows**, each app as it stands on the shelf (its icon 60, its name under it), on a fixed pitch of
+        91 with 14 between rows, **22** in from the top and the sides, over a band of **30** at its foot for the
+        page dots. So it is 353 tall on every phone and for any number of apps, as the Home Screen's is one size.
+        With its name it stands centred in what the receded card leaves of the screen.
+      - **Its name** stands over the panel: **30**/600 in the primary ink, one line, 14 above the panel and 22 in
+        from its leading edge. It comes with the panel, and the 13 name under the tile gives way to it.
+      - **Behind it** the shelf blurs to **20** under the search scrim (`--vf-search-scrim`, §5: the phone's one
+        dim, so no new colour) and comes toward you a little, to **1.06** about the tile, as the Home Screen dives
+        into its folder. It takes no touch and does not scroll. The receded card at the foot takes the scrim and no
+        blur, since its pages are live.
+      - **More than nine apps** are pages of nine. A swipe across goes to the next page and lands on it (the
+        system's paging). The dots in the foot band are 7, 9 apart: the page shown in the primary ink, the others
+        in the faint. A folder of nine or fewer has no dots and does not move sideways.
+      - **It closes** back into its tile, along the way it came. What closes it: a tap outside the panel; a pinch
+        in, which the panel follows toward its tile (the fingers at half their spread are the whole way), closing
+        when let go a **quarter** of the way back or more and springing open again short of that; the card at the
+        foot, tapped or pushed up, which closes the folder first, as the Home gesture does, and goes back to the tab
+        the next time; VoiceOver's escape. On the way back the tile's face returns on the same fade, **100ms** after
+        the close begins, so the apps are most of the way home first. A tap inside the panel, off an app, does
+        nothing.
+      - **The spring** is response **0.42**, damping **0.84**: the bar's numbers (`AppBar.motion`), so §6 gains no
+        curve. They are the folder's own to tune. It turns mid-flight: a tap outside while the folder opens sends
+        it back from where it is, and a tile tapped while another folder is still on its way home opens at once.
+      - **An app in it** is a tile as on the shelf: it darkens under a finger, a long press lifts it, and a tap
+        zooms it open out of that icon ("The open app", below). The folder stays open under the app, and the app
+        comes back into it.
+      - **Reduced motion** (M6): nothing travels. The panel fades in where it stands and out again (140ms), the
+        tile keeps its place, and the shelf behind blurs and dims without moving.
+    - **Under a finger** (item 419) an icon darkens, as a Home Screen icon does: black at **40%** over its
+      squircle alone, and over a folder's whole square, at once. The dark lifts in **250ms** on plain `ease` when
+      the finger goes. Nothing scales under a tap, and the name does not change. *Until item 419 a tile was the
+      system's plain button, which fades its whole label, name and all.* The search sheet's Recent row presses the
+      same way.
+    - **Left as they are** (item 419's pass over every motion the shelf has): the shelf's own scroll and its bounce
+      are the system's; the pull and the card are item 348's, in James's own words; the drop falls and rises on
+      the island curve; the search field has no motion of its own. Nothing on the shelf is edited in place, so
+      there is no jiggle and no drag.
     - A group's head is its name at 20/650 with its count at 13 in the tertiary ink.
     - The foot says what is true (§9).
   - **The icon** (MA-D10 B): a squircle at iOS's continuous corner (22.5% of its side) holding the app's preview,
@@ -8967,9 +9022,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       board): the narrow reading.* The dot sits at the squircle's top right, 3 outside it, ringed 2 in the paper.
     - An asleep desktop's apps stand at 45%.
     - A long press opens the system's context menu over the preview: Open, Keep, Versions, About. *Hide dropped
-      2026-11-13 (James, 01:29:54Z).*
+      2026-11-13 (James, 01:29:54Z).* *Amended 2026-11-14 (item 419): the system lifts the icon alone, its squircle,
+      and never its name, as a Home Screen icon is lifted. As built at M272 it lifted the whole tile, name and all,
+      on the system's plate.*
   - **The open app** (MA-D11 A, MA-D12 A): it zooms out of its icon (iOS 18's `navigationTransition(.zoom)`) and
     fills the screen, edge to edge.
+    *Amended 2026-11-14 (item 419; James's words are under "A folder, open"):* this is the system's own app
+    launch already, and it stays the system's. Two things are made true of it.
+    - **It zooms out of the icon that was tapped, and back into that one.** An app stands in Recent and in its own
+      group both, and in its open folder, so each standing of it is a source of its own, and only the one asked
+      carries the app's key (`AppsZoomSource`). As built at M272 every standing carried the same key, the system
+      chose among them, and a screen could leave one icon and return into another.
+    - **The source is the squircle**, at its own corner (22.5% of its side), so the screen leaves and returns in
+      the icon's shape and not as a square over it.
     - One glass row stands at the bottom, Safari's iOS 26 grammar at the bar's measure: 62 tall, 21 from the sides
       and the foot, as the bar (`AppBar.height`, `AppBar.margin`). It holds a ✕ circle (the system's `xmark`, §13),
       a capsule, and a ··· circle (`ellipsis`). The circles are 62, and the capsule stands 24 from each, as the
@@ -8991,6 +9056,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Honest states** (MA-L10), each in §9's words: nothing is a blank, and no spinner stands without words. An app
     that cannot open shows its icon at 92 over its state's words on paper, with its one act under them.
   - **Reduced motion** (M6): the zoom becomes a fade (140ms), and the drop and the peek appear in place.
+    *Amended 2026-11-14 (item 419): an open folder fades in where it stands, in the same 140ms ("A folder, open").*
   - The desktop's half is §8 "Artifacts — the Artifacts shelf's contents", as amended 2026-11-05.
 - **The phone's search — a glass sheet over the field** (track SE, ruled 2026-11-06 from the page *The Bands
   Meter*: SE-D3, SE-D4 and SE-D5 A, and UM-D28 A; the drawing is `draft/profile-meters/round4/src/p6-psearch.js` and
