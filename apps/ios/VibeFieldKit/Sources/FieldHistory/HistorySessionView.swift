@@ -426,11 +426,18 @@ struct HistorySessionView: View {
   }
 
   /// Item 362c — the pill a sitting opens with, centred.
+  ///
+  /// Item 395 — its lead is made here, as the pill is drawn, from the sitting's own stamp
+  /// (`HistoryDayPill.leadWords`): how far back a day is depends on the day it is read, and the document is held,
+  /// and kept in the phone's cache, as it was folded. It is made again each minute the pill stands, on the
+  /// schedule Chat's words of time run on, so a document left open over midnight says the new day's words.
   private func sitting(_ pill: HistoryDayPill) -> some View {
     HStack {
       Spacer()
       HStack(spacing: 6) {
-        Text(pill.lead)
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+          Text(pill.leadWords(now: context.date))
+        }
         if let after = pill.after {
           Text(after).foregroundStyle(ChromePalette.inkFaint)
         }

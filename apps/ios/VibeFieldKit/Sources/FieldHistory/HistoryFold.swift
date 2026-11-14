@@ -657,26 +657,64 @@ extension FieldHistoryModel {
       return Sitting(
         rowIds: sitting.rows.map(\.timelineId),
         pill: pillWords(
-          day: started.map { sittingDay($0, now: now) }, dayChanged: sitting.dayChanged,
-          resumedAt: sitting.resumedAt, pauseMs: sitting.pauseMs))
+          startedAt: started, dayChanged: sitting.dayChanged, resumedAt: sitting.resumedAt,
+          pauseMs: sitting.pauseMs, now: now))
     }
   }
 
-  /// The room's pill (`DayPill.tsx` `pillText`): `Mon 31 Aug` for a day cut, `Tue 1 Sep · 00:02` and `after 44m`
-  /// when a pause crossed a day, `12:31` and `after 12h 18m` within one.
-  static func pillWords(day: String?, dayChanged: Bool, resumedAt: Int64?, pauseMs: Int64?) -> HistoryDayPill? {
+  /// A sitting's pill. Where the reader came back after a pause it carries a clock and `after 44m`; where the day
+  /// turned with no pause it is the day alone, `Mon 31 Aug`; a sitting that is neither has none.
+  ///
+  /// Item 395 (James, 2026-11-13 23:38:00Z, session qa-01: "it only show time when it is today, show weekday if
+  /// it was within a week, and show date if outside a week ago") — a pill that carries a clock says how far back
+  /// it is (`clockLead`), where the day turned and inside a day alike. It was the room's `pillText` as it stood
+  /// (`DayPill.tsx`): the day in the lead only where the day turned (`Tue 1 Sep · 00:02`, the day said as
+  /// `Today`, `Yesterday` or its name), and the clock alone inside one day, `12:31`, however old the day. A pill
+  /// of the day alone is said as it was (`sittingDay`).
+  ///
+  /// The pill keeps the stamp its lead is said of, so the view makes the lead again as it draws
+  /// (`HistoryDayPill.leadWords`); the lead made here is what it reads at the fold's `now`.
+  static func pillWords(
+    startedAt: Int64?, dayChanged: Bool, resumedAt: Int64?, pauseMs: Int64?, now: Date
+  ) -> HistoryDayPill? {
     let after = pauseMs.map { "after \(pauseText($0))" }
-    let resumed = resumedAt.map { clock($0) }
-    if dayChanged, let day {
-      return HistoryDayPill(lead: resumed.map { "\(day) · \($0)" } ?? day, after: after)
+    if let resumedAt {
+      return HistoryDayPill(lead: clockLead(resumedAt, now: now), after: after, resumedAt: resumedAt)
     }
-    if let resumed { return HistoryDayPill(lead: resumed, after: after) }
+    if dayChanged, let startedAt {
+      return HistoryDayPill(lead: sittingDay(startedAt, now: now), after: after, startedAt: startedAt)
+    }
     return nil
   }
 
-  /// Item 395 (red) — a stub: the lead of a pill that carries a clock. It answers what a pill inside one day
-  /// says, the clock alone, however far back the day is. Nothing calls it yet.
-  static func clockLead(_ ms: Int64, now: Date) -> String { clock(ms) }
+  /// Item 395 — the lead of a pill that carries a clock: how far back its day is, then the clock (DESIGN.md §8
+  /// "The phone's session document", "Time cuts it into sittings"). By this phone's calendar days counted from
+  /// today, never by hours, so a stamp two minutes back across midnight is the day before's:
+  /// - today, the clock alone: `20:21`;
+  /// - one of the six days before today, the weekday and the clock: `Fri · 20:21`, and never `Yesterday`;
+  /// - earlier, the day and the clock: `Fri 6 Nov · 20:21`, with its year when it is not this one,
+  ///   `6 Nov 2025 · 20:21`.
+  ///
+  /// A stamp on a day after today (a desktop whose clock runs ahead of this phone's) is said as an earlier one
+  /// is, by its day: it is not today, and not one of the six days before.
+  static func clockLead(_ ms: Int64, now: Date) -> String {
+    let today = calendar.startOfDay(for: now)
+    let back = calendar.dateComponents([.day], from: calendar.startOfDay(for: date(ms)), to: today).day ?? .max
+    if back == 0 { return clock(ms) }
+    if (1...6).contains(back) { return "\(weekdayWords(ms)) · \(clock(ms))" }
+    // past the week, or ahead of today: the day by name (`sittingDay` answers neither `Today` nor `Yesterday`
+    // of such a day), with its year when it is not this one
+    return "\(sittingDay(ms, now: now)) · \(clock(ms))"
+  }
+
+  /// `Fri` — a weekday, as `dayWords` names it.
+  static func weekdayWords(_ ms: Int64) -> String {
+    let formatter = DateFormatter()
+    formatter.calendar = calendar
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "EEE"
+    return formatter.string(from: date(ms))
+  }
 
   /// `Today` · `Yesterday` · `Mon 31 Aug`, and the year only when it is not this one: `24 Aug 2025` (the room's
   /// `sittingDayLabel`).

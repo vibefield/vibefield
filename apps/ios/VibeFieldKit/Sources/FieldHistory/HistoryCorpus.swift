@@ -497,14 +497,23 @@ public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
 
 /// Item 362c — where time cut the document, said once: the day when it turned, the clock when the reader came
 /// back, and how long it had been (the room's pill). It was the clock and the gap between two turns.
+///
+/// Item 395 (2026-11-13) — the pill keeps the stamp its lead is said of, beside the lead. How far back a day is
+/// depends on the day the pill is read, and a document is held as it was folded: in memory until rows next land,
+/// and in the phone's cache, which puts it back without folding it again. So the view makes the lead from the
+/// stamp as it draws (`leadWords(now:)`), and the lead kept here is only what it read on the day of the fold.
 public struct HistoryDayPill: Equatable, Sendable, Codable {
-  /// `Mon 31 Aug` · `Tue 1 Sep · 00:02` · `12:31`
+  /// `Mon 31 Aug` · `Fri 6 Nov · 20:21` · `Fri · 20:21` · `12:31` — the lead as it read on the day the document
+  /// was folded. It is drawn as it is only for a pill with no stamp: one in a document kept before item 395.
   public let lead: String
   /// `after 44m`; nil for a day that turned without a pause.
   public let after: String?
-  /// Item 395 (red) — the stamp a pill of the day alone names its day from, in milliseconds. Nothing fills it yet.
+  /// Item 395 — for a pill of the day alone, the sitting's earliest stamp, in milliseconds: the day it names. nil
+  /// for a pill that carries a clock, and in a document kept before this item: the field is optional, so such a
+  /// document still decodes.
   public let startedAt: Int64?
-  /// Item 395 (red) — the stamp a pill with a clock is said of, in milliseconds. Nothing fills it yet.
+  /// Item 395 — for a pill that carries a clock, the stamp the reader came back at, in milliseconds: its clock,
+  /// and the day that clock is of. nil for a pill of the day alone, and in a document kept before this item.
   public let resumedAt: Int64?
 
   public init(lead: String, after: String? = nil, startedAt: Int64? = nil, resumedAt: Int64? = nil) {
@@ -514,8 +523,15 @@ public struct HistoryDayPill: Equatable, Sendable, Codable {
     self.resumedAt = resumedAt
   }
 
-  /// Item 395 (red) — a stub: the lead as the pill is drawn. It answers the words the fold made, whatever the day.
-  func leadWords(now: Date) -> String { lead }
+  /// Item 395 — the lead as it reads at `now`, made from the pill's own stamp by the fold's two rules: a pill
+  /// with a clock says how far back it is (`FieldHistoryModel.clockLead`), and a pill of the day alone names its
+  /// day (`sittingDay`). So a pill folded today and drawn tomorrow says tomorrow's words. A pill with no stamp
+  /// says the words it was kept with.
+  func leadWords(now: Date) -> String {
+    if let resumedAt { return FieldHistoryModel.clockLead(resumedAt, now: now) }
+    if let startedAt { return FieldHistoryModel.sittingDay(startedAt, now: now) }
+    return lead
+  }
 }
 
 public enum HistorySegment: Identifiable, Equatable, Sendable, Codable {
