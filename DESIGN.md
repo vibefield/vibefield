@@ -6983,6 +6983,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - **What it adds**: each object by its pegboard label, or by its title when it hangs nowhere; then its
         tools and its service; or that it adds none. Where each hangs waits for the pegboard's names to reach
         the popup (MK-4d).
+        *Changed 2026-11-14 (James's MK-O14 pick B, 2026-11-11 23:03:25Z: "With the count: 6 tools for your
+        agents"; his MK-O20 pick A, 23:03:26Z: "Name each under What it adds"; both at their leans on his
+        Plugins page, built on VF-PM's ruling of 2026-11-14 04:33Z that his picks there are rulings):* its tools
+        are said with their count, and each command it puts in the palette is named, by the plugin's own title
+        for it, with where it is under its words. *Drawn the same day, MK's, ‹draft› for James's eye:* the
+        commands stand after its objects and before its tools and its service; under each, where it is, at
+        12/400 in tertiary ink, as a power's Mac note stands; a command placed only somewhere else is not said;
+        and they are said whether the plugin is on or off, as its objects are, though the palette lists a
+        plugin's commands only while it is on. Their words are in §9.
       - **What it can do**: each power it holds, in §9's plain words, the Mac's note under one on a Mac. A power
         it asked for and does not hold comes back with its switch (MK-4c2); until then Settings → Plugins shows
         it.
@@ -9291,6 +9300,14 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   - **What it adds** says each ‹object› (one that hangs nowhere, by its title), then "Tools for your agents"
     when it brings tools and "A service" when it runs one ("service" is near VibeField's insides, so it is
     James's to keep or strike); with none of them, "No objects".
+    *Changed 2026-11-14 (James's MK-O14 pick B, 2026-11-11 23:03:25Z: "With the count: 6 tools for your agents"),
+    his words, as round 1's page drew them:* its tools are said with their count, "6 tools for your agents", in
+    place of "Tools for your agents"; one is said as one, "1 tool for your agents" ‹draft›. A command is never
+    counted as a tool, and Installed's line keeps "tools" ("No objects · tools").
+    *Added 2026-11-14 (James's MK-O20 pick A, 2026-11-11 23:03:26Z: "Name each under What it adds"):* each
+    command the plugin puts in the palette is said by the plugin's own title for it, after its objects, with "In
+    the palette (⌘K)" under it ‹draft›, and "In the palette (Ctrl+K)" off the Mac ‹draft›, as a key is spelled
+    there.
   - **What it can do** says each power it holds in the plain words below; one named by a plugin that isn't
     installed, "A power named by a plugin that isn't installed here"; with none, "Nothing beyond drawing its
     own objects" (the install card's) or, for a plugin with no object, "Nothing beyond its own work".
