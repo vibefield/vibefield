@@ -323,10 +323,13 @@ struct HistoryProjectView: View {
             Spacer(minLength: 0)
             AgentMark(agent: session.agent)
           }
+          // Item 393 — the figures line holds one line: drawn smaller, down to 85%, before it is cut at its end
           Text(session.meta)
             .font(ChromeType.sans(12.5))
             .monospacedDigit()
             .foregroundStyle(ChromePalette.inkFaint)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
             .opacity(awake ? 1 : 0.55)
           HStack(spacing: 10) {
             // PJ-7 — where it ran: the desktop's mark and name, then the folder
