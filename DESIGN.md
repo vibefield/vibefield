@@ -958,8 +958,8 @@ up wears a print at 2.4×). Until it has printed, and wherever WebGL2 is refused
   in the middle, is pressed into the stock with no ink, a deboss whose band is a little darker where it is pressed. Only
   its three lights are printed (`#FF0054`, `#00F59B`, `#083CFF`, at 473.28, 157 and 795.69 of 1000 along its one edge), in
   a bright ink that holds its colour in shadow and glows a little by night. **Flat** (until the back has printed, and
-  where WebGL2 is refused) the back is its field and its rule alone: `--vf-card-back` (`#2d4824`) inside 5.5 of
-  `--vf-card-stock`, corners 3.6, and `--vf-card-back-rule` (`#eee4c8`) a hairline of 0.32 at 2.6 inside the field's edge.
+  where WebGL2 is refused) the back is its field and its rule alone: the sage `--vf-card-back` inside 5.5 of
+  `--vf-card-stock`, corners 3.6, and the cream `--vf-card-back-rule` a hairline of 0.32 at 2.6 inside the field's edge.
   The mark is only ever pressed, never drawn flat. Only a card picked up shows its back (§8 "Picking one up", Flip it).
 - **Why WebGL2 and not WebGPU:** the desk's WebGPU device is the desk's own, made and dropped with each desk. Its cover's
   witness counts every `queue.submit`, whoever makes it, so cards drawn on it would break "a cover costs nothing". A device
