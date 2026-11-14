@@ -492,6 +492,8 @@ const MADE_PAGE_REQUESTS: ReadonlyArray<RigRequest & { admitted: boolean }> = [
 // refuses its unproxied UDP per contents, and sends its TCP (a TURN relay over TCP or TLS, ICE-TCP) to a dead proxy on
 // its own session. Only its origin and allowHosts bypass that proxy, and `<-loopback>` takes away Chromium's implicit
 // loopback bypass. The fence is per capture, never process-wide: the desk's browser pages share one profile.
+// Item 415: a bypass entry with no port matches EVERY port of its host, so the origin bypasses at its own port alone
+// and each allowHost at 443, the one port the request gate admits it on (`url.port === ""`).
 describe("item 378 — a capture's WebRTC reaches nothing", () => {
   it("a made capture's session sends WebRTC's TCP to a dead proxy that only its origin and allowHosts bypass (this Mac's own ports too: <-loopback>), and its contents refuse unproxied UDP, both before the page loads", async () => {
     const rig = captureRig();
@@ -503,7 +505,11 @@ describe("item 378 — a capture's WebRTC reaches nothing", () => {
     expect(rig.captureSession.setProxy).toHaveBeenCalledExactlyOnceWith({
       mode: "fixed_servers",
       proxyRules: "127.0.0.1:9",
-      proxyBypassRules: ["device.tail1234.ts.net", ...ALLOW_HOSTS, "<-loopback>"].join(","),
+      proxyBypassRules: [
+        "device.tail1234.ts.net:14211",
+        ...ALLOW_HOSTS.map((host) => `${host}:443`),
+        "<-loopback>",
+      ].join(","),
     });
     expect(rig.window.webContents.setWebRTCIPHandlingPolicy).toHaveBeenCalledExactlyOnceWith(
       "disable_non_proxied_udp",
@@ -518,9 +524,24 @@ describe("item 378 — a capture's WebRTC reaches nothing", () => {
     expect(rig.captureSession.setProxy).toHaveBeenCalledExactlyOnceWith({
       mode: "fixed_servers",
       proxyRules: "127.0.0.1:9",
-      proxyBypassRules: "device.tail1234.ts.net,<-loopback>",
+      proxyBypassRules: "device.tail1234.ts.net:14211,<-loopback>",
     });
     expect(rig.order).toEqual(["proxy", "webrtc", "load"]);
+  });
+
+  it("item 415 — no entry of the bypass list is a bare host: the origin at its own port, each allowHost at 443", async () => {
+    const rig = captureRig();
+    const capture = new ArtifactPreviewCapture({ dataDir: dataDir(), native: rig.native });
+    await capture.capture(
+      { artifactId: ARTIFACT_ID, url: MADE_URL, allowHosts: ALLOW_HOSTS },
+      new AbortController().signal,
+    );
+    const [config] = rig.captureSession.setProxy.mock.calls[0] ?? [];
+    const rules = String((config as { proxyBypassRules?: string }).proxyBypassRules).split(",");
+    const bare = rules.filter((rule) => rule !== "<-loopback>" && !/:\d+$/.test(rule));
+    expect(bare, "bare hosts").toEqual([]);
+    expect(rules, "the origin at its own port").toContain("device.tail1234.ts.net:14211");
+    expect(rules, "no origin entry without its port").not.toContain("device.tail1234.ts.net");
   });
 });
 
