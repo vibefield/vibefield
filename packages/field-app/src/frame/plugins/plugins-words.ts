@@ -129,9 +129,13 @@ export const PAGE_WORDS = {
   can: "What it can do",
   madeBy: "Made by",
   version: "Version",
-  /** What it adds: a plugin's tools for your agents, and a service it runs (MK's; "service" is James's to keep or
-   * strike, with Q5) */
-  tools: "Tools for your agents",
+  /** What it adds: under a command it puts in the palette, which is said by its own title, where the command is
+   * (James's MK-O20 pick A, 2026-11-11 23:03:26Z; these words ‹draft›): ⌘K on the Mac, Ctrl+K off it. */
+  inPalette: (onMac: boolean) => `In the palette (${onMac ? "⌘K" : "Ctrl+K"})`,
+  /** What it adds: a plugin's tools for your agents, with their count (James's MK-O14 pick B, 2026-11-11
+   * 23:03:25Z: "6 tools for your agents"; one said as one, MK's, ‹draft›), and a service it runs (MK's; "service"
+   * is James's to keep or strike, with Q5) */
+  tools: (count: number) => `${plural(count, "tool", "tools")} for your agents`,
   service: "A service",
   /** What it can do, for a power whose declaring plugin is not installed here (MK's) */
   ownUnknown: "A power named by a plugin that isn't installed here",

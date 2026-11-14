@@ -720,9 +720,41 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first')", () => {
     expect(pageTitle()).toBe("Kanban");
     expect(bodyText()).toContain("Acme Tools");
     expect(bodyText()).toContain("A board and its cards, for the work on your desk.");
-    expect(bodyText()).toContain(words.PAGE_WORDS.tools);
+    expect(bodyText()).toContain(words.PAGE_WORDS.tools(1));
     expect(bodyText()).toContain("A power of its own, named by Kanban");
     expect(bodyText()).not.toContain("Someone Else");
+  });
+
+  it("names each command a plugin puts in the palette under What it adds, where it is under it (James's MK-O20 A)", async () => {
+    const commands = [
+      { id: "pad.new", title: "New comment pad", placements: ["palette"] },
+      { id: "pad.pin", title: "Pin the pad", placements: ["object-context"] },
+    ] as unknown as PluginRegistrySnapshot["plugins"][number]["contributions"]["commands"];
+    const snapshot: PluginRegistrySnapshot = {
+      ...PLUGINS_FIXTURE_SNAPSHOT,
+      plugins: PLUGINS_FIXTURE_SNAPSHOT.plugins.map((plugin) =>
+        plugin.id === "vibefield.comment-pad"
+          ? { ...plugin, contributions: { ...plugin.contributions, commands } }
+          : plugin,
+      ),
+    };
+    await mount(NO_REGISTRY, snapshot);
+    toInstalled();
+    act(() => rows()[0]?.click());
+    expect(pageTitle()).toBe("Comment pad");
+    // What it adds is the page's first list: its object, then its command, where it is under it
+    const list = document.body.querySelector("ul.vf-plugins-page-lines");
+    const adds = [...(list?.children ?? [])];
+    expect(adds.map((line) => line.firstChild?.textContent)).toEqual([
+      "Comment pad",
+      "New comment pad",
+    ]);
+    expect(adds.map((line) => line.querySelector(".vf-plugins-page-under")?.textContent)).toEqual([
+      undefined,
+      words.PAGE_WORDS.inPalette(false),
+    ]);
+    // a command placed only on an object's menu is not said
+    expect(bodyText()).not.toContain("Pin the pad");
   });
 
   it("carries the count on Updates, after its word, and none at 0 or with none given", async () => {

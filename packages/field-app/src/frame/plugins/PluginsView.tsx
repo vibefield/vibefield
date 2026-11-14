@@ -244,7 +244,13 @@ function PageView({
           <PageSection head={PAGE_WORDS.adds}>
             <ul className="vf-plugins-page-lines">
               {page.adds.map((line) => (
-                <li key={line.key}>{line.words}</li>
+                <li key={line.key}>
+                  {line.words}
+                  {/* a command's: where it is (James's MK-O20 pick A), as a power's note stands */}
+                  {line.under !== undefined && (
+                    <span className="vf-plugins-page-under">{line.under}</span>
+                  )}
+                </li>
               ))}
             </ul>
           </PageSection>

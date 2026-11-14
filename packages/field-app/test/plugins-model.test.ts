@@ -341,7 +341,11 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
   it("says a plugin's own power by its declaring plugin's words, and one named by a plugin not installed here", () => {
     const kanban = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban");
     const page = pluginPage(kanban, CATALOG_LISTED, PLUGINS_FIXTURE_LISTED_SNAPSHOT, true);
-    expect(page.adds.map((line) => line.words)).toEqual(["Board", "Card", "Tools for your agents"]);
+    expect(page.adds.map((line) => line.words)).toEqual([
+      "Board",
+      "Card",
+      "1 tool for your agents",
+    ]);
     // a plugin from the list reads only: no switch on any power (MK-4c2a)
     expect(page.powers).toEqual([
       {
@@ -513,8 +517,69 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
     expect([bringsTools(withTools), lineOf(withTools), adds(withTools)]).toEqual([
       true,
       "No objects · tools",
-      [words.PAGE_WORDS.tools],
+      [words.PAGE_WORDS.tools(1)],
     ]);
+  });
+
+  it("names each command it puts in the palette, where it is under it, and counts its tools (James's MK-O20 A, MK-O14 B)", () => {
+    const pad = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.comment-pad");
+    // two in the palette (one also on an object's menu), and one placed only on an object's menu
+    const commands = [
+      { id: "pad.new", title: "New comment pad", placements: ["palette"] },
+      { id: "pad.clear", title: "Clear the pad", placements: ["object-context", "palette"] },
+      { id: "pad.pin", title: "Pin the pad", placements: ["object-context"] },
+    ] as unknown as PluginRecord["contributions"]["commands"];
+    const tools = Array.from({ length: 6 }, (_, at) => ({
+      name: `tool_${at}`,
+      title: `Tool ${at}`,
+      description: "Does a thing.",
+      method: `tool.${at}`,
+    }));
+    const full: PluginRecord = {
+      ...pad,
+      service: "active",
+      contributions: { ...pad.contributions, commands, mcp: { tools, servers: [] } },
+    };
+    const lines = (record: PluginRecord, onMac: boolean) => {
+      const page = pluginPage(record, null, PLUGINS_FIXTURE_SNAPSHOT, onMac);
+      return page.adds.map((line) => [line.key, line.words, line.under]);
+    };
+    // after its objects, before its tools and its service; one placed only elsewhere is not said
+    expect(lines(full, true)).toEqual([
+      ["object:commentPad", "Comment pad", undefined],
+      ["command:pad.new", "New comment pad", "In the palette (⌘K)"],
+      ["command:pad.clear", "Clear the pad", "In the palette (⌘K)"],
+      ["tools", "6 tools for your agents", undefined],
+      ["service", words.PAGE_WORDS.service, undefined],
+    ]);
+    // off the Mac, the key as it is spelled there
+    expect(lines(full, false)[1]).toEqual([
+      "command:pad.new",
+      "New comment pad",
+      "In the palette (Ctrl+K)",
+    ]);
+    // off, its commands are said as its objects are, though the palette lists them only while on
+    const off: PluginRecord = { ...full, enabled: false, state: "disabled" };
+    expect(lines(off, true)).toEqual(lines(full, true));
+    // with no object, its command and its tool alone, never "No objects"; one tool is said as one.
+    // Sideloaded, as the case above: a Built in plugin with no object has a line of its own
+    const kv = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "example.kv-service");
+    const bare: PluginRecord = {
+      ...kv,
+      service: "none",
+      contributions: {
+        ...kv.contributions,
+        commands: commands.slice(0, 1),
+        mcp: { tools: tools.slice(0, 1), servers: [] },
+      },
+    };
+    expect(lines(bare, true).map((line) => line[1])).toEqual([
+      "New comment pad",
+      "1 tool for your agents",
+    ]);
+    // Installed's line keeps "tools", and never counts a command as one
+    const row = installedRows({ generation: 1, problems: [], plugins: [bare] }, null)[0];
+    expect(row?.line).toBe("No objects · tools");
   });
 
   it("walks Installed's hot row one step, held at the first row and the last", () => {
@@ -859,6 +924,8 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
   ],
   updatesWords: [[0], [1], [2]],
   "PAGE_WORDS.back": [["Installed"]],
+  "PAGE_WORDS.inPalette": [[true], [false]],
+  "PAGE_WORDS.tools": [[1], [6]],
   "SWITCH_WORDS.refused": [[true], [false]],
 };
 

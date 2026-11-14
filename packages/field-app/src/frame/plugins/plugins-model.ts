@@ -191,17 +191,32 @@ function sourceOf(
   return { source: SOURCE_WORDS.community, community: false };
 }
 
+/** How many tools a plugin brings your agents: its MCP tools
+ * (`contributions.mcp.tools`), which What it adds counts (James's MK-O14 pick
+ * B, 2026-11-11 23:03:25Z). */
+function toolCount(record: PluginRecord): number {
+  return record.contributions.mcp?.tools.length ?? 0;
+}
+
 /** Whether a plugin brings tools: tools for your agents, its MCP tools
  * (`contributions.mcp.tools`). A command is a palette entry, not a tool (VF-PM
  * 2026-11-11 16:05:52Z): MK-4a's line counted commands, and Installed's line
  * and the page now say the same of one plugin. */
 export function bringsTools(record: PluginRecord): boolean {
-  return (record.contributions.mcp?.tools.length ?? 0) > 0;
+  return toolCount(record) > 0;
 }
 
 /** Whether a plugin runs a service of its own. */
 function runsService(record: PluginRecord): boolean {
   return record.service !== "none";
+}
+
+/** The commands a plugin puts in the palette, in its own order: each placed
+ * there, as the palette reads them (`hud/CommandPalette.tsx`). One placed only
+ * somewhere else is not among them. The palette lists them only while the
+ * plugin is on; this list does not ask. */
+function paletteCommands(record: PluginRecord): PluginRecord["contributions"]["commands"] {
+  return record.contributions.commands.filter((command) => command.placements.includes("palette"));
 }
 
 /** Whether a plugin's switches stand in Plugins (MK-4c2a; VF-PM 2026-11-11
@@ -354,11 +369,14 @@ export function walkHot(at: number, key: "ArrowUp" | "ArrowDown", rows: number):
   return Math.min(rows - 1, Math.max(0, key === "ArrowDown" ? at + 1 : at - 1));
 }
 
-/** One line of What it adds: an object, its tools or its service. `key`
- * tells lines apart and is never shown. */
+/** One line of What it adds: an object, a command it puts in the palette, its
+ * tools or its service. `key` tells lines apart and is never shown. `under` is
+ * said under a command's words: where it is (James's MK-O20 pick A); no other
+ * line has one. */
 export interface PageLine {
   readonly key: string;
   readonly words: string;
+  readonly under?: string;
 }
 
 /** One power on a plugin's page: what it lets the plugin do; under it, a core
@@ -386,7 +404,8 @@ export interface PluginPage {
   /** its own words: the signed list's summary, for a registry plugin in the
    * list held alone; null otherwise */
   readonly summary: string | null;
-  /** What it adds: each object, then its tools and its service, or "No objects" */
+  /** What it adds: each object, then each command it puts in the palette, its tools and its
+   * service, or "No objects" */
   readonly adds: readonly PageLine[];
   /** What it can do: each power it holds; with switches here, each it asked for */
   readonly powers: readonly PagePower[];
@@ -424,15 +443,23 @@ function madeByOf(record: PluginRecord, listed: ReadonlyMap<string, Listed>): st
 }
 
 /** What it adds: each object by its pegboard label (`tray.label`), or by its
- * title when it hangs nowhere; then its tools and its service; "No objects"
- * with none of them. Where each hangs waits for the pegboard's names (MK-4d). */
-function addsOf(record: PluginRecord): PageLine[] {
+ * title when it hangs nowhere; then each command it puts in the palette, by
+ * its own title, with where it is under it (James's MK-O20 pick A, 2026-11-11
+ * 23:03:26Z), whether the plugin is on or off, as its objects are; then its
+ * tools, with their count (MK-O14 B), and its service; "No objects" with none
+ * of them. Where each object hangs waits for the pegboard's names (MK-4d). */
+function addsOf(record: PluginRecord, onMac: boolean): PageLine[] {
   const adds: PageLine[] = [
     ...record.contributions.objects.map((object) => ({
       key: `object:${object.type}`,
       words: object.tray?.label ?? object.title,
     })),
-    ...(bringsTools(record) ? [{ key: "tools", words: PAGE_WORDS.tools }] : []),
+    ...paletteCommands(record).map((command) => ({
+      key: `command:${command.id}`,
+      words: command.title,
+      under: PAGE_WORDS.inPalette(onMac),
+    })),
+    ...(bringsTools(record) ? [{ key: "tools", words: PAGE_WORDS.tools(toolCount(record)) }] : []),
     ...(runsService(record) ? [{ key: "service", words: PAGE_WORDS.service }] : []),
   ];
   return adds.length > 0 ? adds : [{ key: "none", words: INSTALLED_LINE.noObject(null) }];
@@ -531,7 +558,7 @@ export function pluginPage(
     title: record.title,
     ...sourceOf(record, listed),
     summary: record.source === "registry" ? (listed.get(record.id)?.summary ?? null) : null,
-    adds: addsOf(record),
+    adds: addsOf(record, onMac),
     powers,
     // "nothing" is decided by the list the page reads, not by what it can say: a power this build cannot name is
     // said as one VibeField can't describe (James's MK-O34 pick B), and the page never says it holds none (VF-PM
