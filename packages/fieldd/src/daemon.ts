@@ -139,6 +139,7 @@ import {
   NeedsListParams,
   NeedsSubscribeParams,
   needsOutcomeOf,
+  type PhoneEvidence,
   PluginsDisableParams,
   PluginsEnableParams,
   PluginsGetParams,
@@ -170,6 +171,7 @@ import {
   ROWS,
   SCOPES,
   type Scope,
+  SETTINGS_DOC_SECTIONS,
   SETUP_STEPS,
   SettingsGetParams,
   SettingsResetParams,
@@ -277,7 +279,13 @@ import {
   splitPathList,
 } from "./boot-env";
 import { openSwarmReplay } from "./debug/swarm-replay";
-import { canonicalTailnetDnsName, DeviceService, localDeviceIdAt } from "./device-service";
+import {
+  canonicalTailnetDnsName,
+  DeviceService,
+  localDeviceIdAt,
+  type PhoneSeen,
+  phoneAtHello,
+} from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
@@ -2407,6 +2415,27 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // a hello racing the bootstrap window resolves to undefined (claim
     // fallback), never a TDZ crash (the C6-6 supersession lesson).
     let devicesRef: DeviceService | null = null;
+    // Item 406 (Q-PM2) — a node that speaks to this desktop as a phone (its product hello says
+    // "ios", or fieldd mints its freeway approval, which only a phone's hello carries) is
+    // remembered in the account's known phones: its row's positive fact, and its row after a
+    // restart. Never awaited by the door that heard it; a write that fails is a line, and the
+    // phone's next hello tries again. Declared before the api, so a hello racing the boot finds it.
+    const rememberPhone = (seen: PhoneSeen, via: PhoneEvidence): void => {
+      const roster = devicesRef;
+      if (roster === null) return;
+      const name = roster.get(seen.deviceId)?.name;
+      const remembered = settingsDoc.rememberPhone(
+        seen.deviceId,
+        { tailscaleId: seen.tailscaleId, via, name },
+        roster.currentDeviceId(),
+      );
+      void remembered.catch((error: unknown) =>
+        logger.warn("fieldd.devices.phone_not_remembered", "A phone was not remembered", {
+          deviceId: seen.deviceId,
+          error: String(error),
+        }),
+      );
+    };
     // WIN-D5 — what "please stop" means is the process owner's to define
     // (bin.ts: graceful stop then exit); late-bound because stop() closes over
     // resources constructed after the api below.
@@ -2437,6 +2466,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       onConnectionClosed: (connectionId) => {
         shellLeaseRef?.closed(connectionId);
         agentScreensRef?.connectionClosed(connectionId);
+      },
+      // Item 406 (Q-PM2) — a phone's product hello is its positive fact (`phoneAtHello`)
+      onHello: (ctx) => {
+        const seen = devicesRef === null ? null : phoneAtHello(ctx, devicesRef);
+        if (seen !== null) rememberPhone(seen, "product");
       },
     });
     diagnosticsService.register(api);
@@ -5676,9 +5710,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         const url = s?.status === "active" ? capabilityUrl(s.url) : undefined;
         return { serve: "product", ...(url !== undefined ? { url } : {}) };
       },
+      // Item 406 — the account's refused and known phones, which every registry pass reads; the
+      // document is loaded by now (mountSystemDocs awaited its `ready()` above)
+      devicesDoc: settingsDoc,
     });
     devicesForAgents = devices;
     devicesRef = devices; // arms the tailnet door's node-id correlation (T1 §1)
+    // Item 406 — the refusals or the known phones moved (a write here, or another desktop's
+    // merged, which `hostOwner().merged` announces): the roster passes again, so a refused phone
+    // leaves its rows and every self-peer reader, and the freeway's declaration follows the
+    // roster's change. Without this a second desktop never forgets a phone Removed elsewhere.
+    settingsDoc.on("changed", (event: { section: string }) => {
+      if (
+        event.section === SETTINGS_DOC_SECTIONS.DEVICES_REFUSED ||
+        event.section === SETTINGS_DOC_SECTIONS.DEVICES_PHONES
+      )
+        void devices.sync();
+    });
     // item 190 — the swarm replay stamps each frame as it plays, within 2 s of boot; a mesh identity a
     // slow floor gives later reaches the frame it holds when the roster moves (debug/swarm-replay.ts)
     if (swarm !== null) devices.on("changed", () => swarm.restamp());
@@ -8415,15 +8463,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     api.register("freeway.approve", async (ctx, params) => {
       const ask = freewayApprover.check(ctx, params);
-      return await audit.required(
+      const approved = await audit.required(
         ctx,
         { action: "freeway.approval.mint", target: { kind: "device", id: ask.deviceId } },
         () => freewayApprover.mint(ask),
-        (approved) => ({
+        (approval) => ({
           outcome: "succeeded",
-          attrs: { expiresAt: approved.expiresAt, rights: [...ask.rights] },
+          attrs: { expiresAt: approval.expiresAt, rights: [...ask.rights] },
         }),
       );
+      // Item 406 (Q-PM2) — only a phone's freeway hello carries an approval (FW-D6), so the node
+      // one is minted for is positively a phone, forwarded by its home (F1b) or asked directly
+      rememberPhone({ deviceId: ask.deviceId, tailscaleId: ask.tailscaleId }, "freeway");
+      return approved;
     });
     // Unlink, sign-out, another account: every phone link the old login's approvals opened closes,
     // and the host walls every keyring it holds, so the cells floor the grants already out (§6).

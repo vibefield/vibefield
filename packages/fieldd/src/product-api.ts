@@ -166,6 +166,10 @@ export interface ProductApiOptions {
   tickIntervalMs?: number;
   /** AL-7 — a connection closed: the shell lease reads its holders' closes (`shell-lease.ts`) */
   onConnectionClosed?: (connectionId: string) => void;
+  /** Item 406 (Q-PM2) — a hello this door accepted, with the context it fixed, told after its
+   * answer is sent: the daemon remembers a phone that hellos as one (`phoneAtHello`). Never a
+   * gate, and a listener that throws never touches the hello. */
+  onHello?: (ctx: CallerContext) => void;
 }
 
 /** DS-L7/DS-D15 — `envelope` is what the forwarding hop adds beside the
@@ -1017,6 +1021,7 @@ export class ProductApi extends EventEmitter {
         },
       });
       this.armTick(ws, state);
+      if (state.ctx !== null) this.tellHello(state.ctx);
       return;
     }
 
@@ -1484,6 +1489,20 @@ export class ProductApi extends EventEmitter {
     clearInterval(state.tick);
     this.ticks.delete(state.tick);
     state.tick = null;
+  }
+
+  /** Item 406 — tell `onHello` of an accepted hello. Its listener never touches the hello: one
+   * that throws is logged, and the connection stands as it was answered. */
+  private tellHello(ctx: CallerContext): void {
+    try {
+      this.opts.onHello?.(ctx);
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.product_api.hello_listener_failed",
+        "A hello's listener threw; the hello stands",
+        { error: String(error) },
+      );
+    }
   }
 
   /** How many keepalive timers are live — one per hello'd connection that has

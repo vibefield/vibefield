@@ -49,28 +49,32 @@ import { rightsFor } from "./terminal-grants";
 // audits (FW-L3: it is the only writer).
 
 /** What fieldd's declaration reads of the roster: THIS desktop's own id (the welcome names it,
- * FW-L9), its self peers in the roster keyspace, and the ONE desktop predicate (FW-DF-1:
- * `capabilities.docHost`, a phone the rest). */
+ * FW-L9), its self peers in the roster keyspace, the ONE desktop predicate (FW-DF-1:
+ * `capabilities.docHost`, a phone the rest), and item 406's refusal (`DeviceService.isRefused`). */
 export interface FreewayRoster {
   currentDeviceId(): string;
   selfPeerDeviceIds(): readonly string[];
   isDocHost(deviceId: string): boolean;
-  // 406 (red): declared, and not yet read by the declaration below (the green commit drops it)
   isRefused(deviceId: string): boolean;
 }
 
 /** fieldd's one declaration (§4.3), pure: the self peers, each with the hello its role opens
  * with; the doors the host splices product streams to (FD1's, none in F1); and the owner's word on
  * off-device terminals. A desktop whose slice has not arrived reads as a phone until it does
- * (FW-DF-1), and the roster's change then declares again. */
+ * (FW-DF-1), and the roster's change then declares again. Item 406 — a device Remove refused is
+ * never admitted, whatever the self-peer set says (the roster forgets it too): dropped from
+ * `admit`, the host closes its link (4410) and refuses a new one (4403). */
 export function freewayDeclaration(
   roster: FreewayRoster,
   terminals: boolean,
 ): FreewayDeclareParams {
-  const admit: FreewayAdmitRow[] = roster.selfPeerDeviceIds().map((deviceId) => ({
-    deviceId,
-    role: roster.isDocHost(deviceId) ? "desktop" : "phone",
-  }));
+  const admit: FreewayAdmitRow[] = roster
+    .selfPeerDeviceIds()
+    .filter((deviceId) => !roster.isRefused(deviceId))
+    .map((deviceId) => ({
+      deviceId,
+      role: roster.isDocHost(deviceId) ? "desktop" : "phone",
+    }));
   return { deviceId: roster.currentDeviceId(), admit, doors: {}, exposure: { terminals } };
 }
 

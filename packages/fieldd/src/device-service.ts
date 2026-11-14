@@ -4,20 +4,24 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  type CallerContext,
   CONTRACTS_VERSION,
   DEVICE_LIMITS,
   type DeviceInfo,
   DeviceNameFile,
   DeviceSlice,
   type DeviceState,
+  type KnownPhone,
   LAYOUT,
   PeerInfo,
+  type PhoneFact,
   type ProductEndpoint,
   STORES,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import type { MeshClient } from "./mesh-client";
+import type { DeviceRefusals } from "./settings-doc";
 
 // DeviceService (design-04 §3.1, D31 — C4 P1-lite): the device directory.
 // Roster = self-slice ⋈ store peer-slices ⋈ tailnet peer liveness; presence
@@ -55,6 +59,39 @@ import type { MeshClient } from "./mesh-client";
 // control plane is not a claim at all. Either way it carries no key — the route
 // secret is the sidecar's target path. SELF keeps its own published endpoint:
 // it is this process, composed by the daemon that owns the serve.
+//
+// A REFUSED PHONE IS FORGOTTEN (item 406, track WI; VF-PM's rulings of
+// 2026-11-14 04:49Z). Remove refuses a phone in the settings document every
+// desktop of the account shares (`devices.refused`), and each registry pass
+// reads it: a peer whose durable id or node id is refused gets no row, no place
+// in the self-peer set (so none of its four readers names it), no door
+// coordinate and no node correlation. The account's known phones
+// (`devices.phones`) are the other half: the POSITIVE phone fact on a row, and
+// the node → durable id correlation a phone offline across this desktop's
+// restart needs, since truffle holds a peer's durable id in memory only.
+
+/** Item 406 — what the roster reads of the account's two device sections in the
+ * settings document (SettingsDocService), and the ONE write it may make there:
+ * a node id seen under a durable id ALREADY refused (`"append"`; `"remove"` is
+ * the `device.remove` handler's alone). Structural, so this file never holds the
+ * document. */
+export interface DevicesDoc {
+  refusals(): Promise<DeviceRefusals>;
+  knownPhones(): Promise<ReadonlyMap<string, KnownPhone>>;
+  refuseDevice(
+    act: "append",
+    deviceId: string,
+    tailscaleIds: readonly string[],
+    by: string,
+  ): Promise<{ wrote: boolean }>;
+}
+
+/** Item 406 (Q-PM2) — a node of this account that spoke as a phone, by its
+ * durable id and the node id it spoke from. */
+export interface PhoneSeen {
+  deviceId: string;
+  tailscaleId: string;
+}
 
 export interface DeviceServiceOptions {
   dataDir: string;
@@ -95,6 +132,10 @@ export interface DeviceServiceOptions {
    * goes quietly wrong. Defaults to the no-op logger for focused unit tests. */
   logger?: Logger;
   now?: () => number;
+  /** Item 406 — the account's refused and known phones (the daemon passes its
+   * settings document). Absent (a focused rig): nothing is refused or known,
+   * and nothing is appended. */
+  devicesDoc?: DevicesDoc;
 }
 
 /** UA-P-0e — what the tailnet's own registry says about one peer, which after
@@ -252,6 +293,17 @@ export class DeviceService extends EventEmitter {
   private ownName: string | null;
   /** C5/D32 — wired post-construction (PeerLink is built after DeviceService) */
   private peers?: PeerLinkView;
+  /** Item 406 — the refusals as the last registry pass read them, with a node id
+   * that pass saw under a refused durable id counted at once (its append). */
+  private refused: { deviceIds: Set<string>; nodeIds: Set<string> } = {
+    deviceIds: new Set(),
+    nodeIds: new Set(),
+  };
+  /** Item 406 — the durable ids the last registry pass forgot, by their own id or
+   * by a refused node's */
+  private refusedPeers = new Set<string>();
+  /** Item 406 (Q-PM2) — the account's known phones as the last pass read them */
+  private knownPhones: ReadonlyMap<string, KnownPhone> = new Map();
   private disposed = false;
 
   constructor(private readonly opts: DeviceServiceOptions) {
@@ -362,6 +414,10 @@ export class DeviceService extends EventEmitter {
 
   private async doSync(): Promise<void> {
     if (this.disposed) return;
+    // Item 406 — the account's refused and known phones, read at every pass and first: the
+    // registry pass below judges by them, and the doors' predicate holds them even while the
+    // mesh is down. Never throws.
+    await this.readDevicesDoc();
     try {
       // Identity first (D30): the store's own device id IS the mesh identity.
       // UA-P-0e keeps this read — it asks the floor for OUR OWN durable ULID and
@@ -498,7 +554,14 @@ export class DeviceService extends EventEmitter {
     this.tsByUlid.clear();
     this.dnsByUlid.clear();
     this.selfPeers.clear();
+    this.refusedPeers.clear();
     const flipped: string[] = [];
+    // Item 406 — node ids this pass saw under a durable id Remove refused
+    const appends: PhoneSeen[] = [];
+    // Item 406 (Q-PM2) — node id → durable id, off the account's own record of its phones
+    const knownNodes = new Map<string, string>();
+    for (const [deviceId, phone] of this.knownPhones)
+      for (const nodeId of phone.tailscaleIds) knownNodes.set(nodeId, deviceId);
     for (const p of raw) {
       const parsed = PeerInfo.safeParse(p);
       if (!parsed.success) continue; // tolerant: a malformed peer never breaks the roster
@@ -508,31 +571,55 @@ export class DeviceService extends EventEmitter {
         ...(typeof lastSeen === "number" ? { lastSeen } : {}),
       });
       // a peer without a published ULID stays uncorrelated — its slice (if
-      // any) reads offline honestly rather than joining on a guessed key
-      if (parsed.data.deviceId === undefined) continue;
-      // S6 — the node's `online` moved since the last pass (slept, or woke)
-      const was = this.lastOnline.get(parsed.data.deviceId);
-      this.lastOnline.set(parsed.data.deviceId, parsed.data.online);
-      if (was !== undefined && was !== parsed.data.online) flipped.push(parsed.data.deviceId);
-      this.tsByUlid.set(parsed.data.deviceId, parsed.data.id);
-      const dnsName = canonicalTailnetDnsName(parsed.data.whois?.deviceName);
-      if (dnsName !== undefined) this.dnsByUlid.set(parsed.data.deviceId, dnsName);
-
+      // any) reads offline honestly rather than joining on a guessed key.
+      // Item 406 (Q-PM2) — unless the account's own record of a known phone
+      // names its node: a phone offline across this desktop's restart publishes
+      // no durable id until it wakes. The registry still vouches for the node
+      // and its login, below; the record only says which device it is.
+      const deviceId = parsed.data.deviceId ?? knownNodes.get(parsed.data.id);
+      if (deviceId === undefined) continue;
       // UA-P-0e — SELF OR NOTHING. The login comes from the tailnet's control
       // plane (the floor WhoIs-es each peer's address), so it is a fact about
       // the peer and not a claim by it; the comparison is the same stored-login
       // one UA-D13 gives the door. A peer the tailnet will not name has no
       // login to compare and is therefore not this account's.
       const login = parsed.data.whois?.login;
-      if (account === null || login === undefined || login.toLowerCase() !== account.toLowerCase())
+      const mine =
+        account !== null && login !== undefined && login.toLowerCase() === account.toLowerCase();
+      // Item 406 — A REFUSED PHONE IS FORGOTTEN, by its durable id or by its
+      // node, before anything correlates it. A node of this account seen under a
+      // durable id Remove refused is the phone registered again: its node id is
+      // carried into the refusals (`appends`), so the doors, which see only the
+      // node, refuse it too. Never another account's node, and never under a
+      // durable id Remove did not refuse.
+      if (this.refused.deviceIds.has(deviceId) || this.refused.nodeIds.has(parsed.data.id)) {
+        this.refusedPeers.add(deviceId);
+        this.lastOnline.delete(deviceId);
+        if (
+          mine &&
+          this.refused.deviceIds.has(deviceId) &&
+          !this.refused.nodeIds.has(parsed.data.id)
+        ) {
+          this.refused.nodeIds.add(parsed.data.id);
+          appends.push({ deviceId, tailscaleId: parsed.data.id });
+        }
         continue;
+      }
+      // S6 — the node's `online` moved since the last pass (slept, or woke)
+      const was = this.lastOnline.get(deviceId);
+      this.lastOnline.set(deviceId, parsed.data.online);
+      if (was !== undefined && was !== parsed.data.online) flipped.push(deviceId);
+      this.tsByUlid.set(deviceId, parsed.data.id);
+      const dnsName = canonicalTailnetDnsName(parsed.data.whois?.deviceName);
+      if (dnsName !== undefined) this.dnsByUlid.set(deviceId, dnsName);
+      if (!mine) continue;
       // UA-P-4 — a device the registry now lists is no longer "unlisted": clear
       // its log latch so a LATER fall-out is reported instead of swallowed.
-      this.unlistedLogged.delete(parsed.data.deviceId);
-      this.selfPeers.set(parsed.data.deviceId, {
-        deviceId: parsed.data.deviceId,
+      this.unlistedLogged.delete(deviceId);
+      this.selfPeers.set(deviceId, {
+        deviceId,
         tailscaleId: parsed.data.id,
-        name: parsed.data.name ?? parsed.data.deviceId,
+        name: parsed.data.name ?? this.knownPhones.get(deviceId)?.name ?? deviceId,
         online: parsed.data.online,
         lastSeen: typeof lastSeen === "number" ? lastSeen : 0,
         ...(dnsName !== undefined ? { dnsName } : {}),
@@ -544,6 +631,42 @@ export class DeviceService extends EventEmitter {
     // door on a LIVE node). After the pass, so the roster a `door-changed`
     // re-emits is already whole.
     for (const deviceId of flipped) this.peers?.clearSilent?.(deviceId);
+    // Item 406 — the refusals' ONE writer, and this pass is one of its exactly
+    // two callers by VF-PM's ruling (settings-doc.test.ts pins them): `"append"`
+    // only, under a durable id already refused. Awaited in the pass, so the next
+    // pass reads the document with it; a write that fails leaves the node
+    // refused on this desktop, and the next pass carries it again.
+    for (const { deviceId, tailscaleId } of appends) {
+      try {
+        await this.opts.devicesDoc?.refuseDevice("append", deviceId, [tailscaleId], this.deviceId);
+      } catch (error) {
+        this.logger.warn(
+          "fieldd.devices.refusal_not_carried",
+          "A refused phone's new node id was not carried into the account's refusals",
+          { deviceId, error: String(error) },
+        );
+      }
+    }
+  }
+
+  /** Item 406 — the account's refused and known phones, as the settings document
+   * holds them now (`doSync`, at every pass). A read that fails keeps what the
+   * last pass read: forgetting the refusals is the one answer that would let a
+   * refused phone back in. */
+  private async readDevicesDoc(): Promise<void> {
+    const doc = this.opts.devicesDoc;
+    if (doc === undefined) return;
+    try {
+      const [refusals, phones] = await Promise.all([doc.refusals(), doc.knownPhones()]);
+      this.refused = { deviceIds: new Set(refusals.deviceIds), nodeIds: new Set(refusals.nodeIds) };
+      this.knownPhones = phones;
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.devices.devices_doc_unreadable",
+        "The account's refused and known phones could not be read; the last reading stands",
+        { error: String(error) },
+      );
+    }
   }
 
   /** UA-P-0e (D2) — the peers this account owns, in the DIAL keyspace. The one
@@ -582,13 +705,19 @@ export class DeviceService extends EventEmitter {
     return false;
   }
 
-  // 406 (red): STUBBED — nothing is refused (the green commit reads the account's refusals)
-  isRefused(_deviceId: string): boolean {
-    return false;
+  /** Item 406 — is this durable id refused? Remove refused it (`devices.refused`),
+   * or the last registry pass forgot it because one of its node ids is refused.
+   * The freeway's declaration drops it (`freewayDeclaration`). */
+  isRefused(deviceId: string): boolean {
+    return this.refused.deviceIds.has(deviceId) || this.refusedPeers.has(deviceId);
   }
 
-  isRefusedNode(_nodeId: string): boolean {
-    return false;
+  /** Item 406 — is this node refused? The doors' predicate (S3): a door sees only
+   * the node id the sidecar injects, never the durable id. As the last registry
+   * pass read the refusals, with a node id it saw under a refused durable id
+   * counted at once, before its append lands in the document. */
+  isRefusedNode(nodeId: string): boolean {
+    return this.refused.nodeIds.has(nodeId);
   }
 
   /** UA-P-0e — where a peer's product door is, DERIVED: its authenticated
@@ -709,7 +838,9 @@ export class DeviceService extends EventEmitter {
     for (const [deviceId, slice] of this.slices) {
       const self = deviceId === this.deviceId;
       if (!self && !this.selfPeers.has(deviceId)) {
-        this.noteUnlistedSlice(deviceId);
+        // item 406 — a refused phone's slice is forgotten as the phone is: no
+        // row, and no line saying the registry does not list it
+        if (!this.isRefused(deviceId)) this.noteUnlistedSlice(deviceId);
         continue;
       }
       // ULID slice key → tailscale id → liveness. Joining peerLiveness by the
@@ -769,6 +900,8 @@ export class DeviceService extends EventEmitter {
         ...(tailscaleId !== undefined ? { tailscaleId } : {}),
         ...(tailnetDnsName !== undefined ? { tailnetDnsName } : {}),
         ...(link !== undefined ? { link } : {}),
+        // item 406 (Q-PM2) — never self's; a slice that says `docHost` outranks any record
+        ...(self ? {} : this.phoneOf(deviceId, slice.capabilities.docHost)),
       });
       seen.add(deviceId);
     }
@@ -818,9 +951,21 @@ export class DeviceService extends EventEmitter {
         tailscaleId: peer.tailscaleId,
         ...(peer.dnsName !== undefined ? { tailnetDnsName: peer.dnsName } : {}),
         ...(link !== undefined ? { link } : {}),
+        // item 406 (Q-PM2) — a slice-less row has said nothing of itself, so only the record speaks
+        ...this.phoneOf(peer.deviceId, undefined),
       });
     }
     return rows;
+  }
+
+  /** Item 406 (Q-PM2) — the POSITIVE phone fact a peer row carries: the account's
+   * known phones name the device, and its row is no desktop (a slice that says
+   * `docHost` outranks any record). Never "not a desktop": a desktop whose slice
+   * has not arrived says nothing either, and a refusal is never lifted. Copied
+   * field by field, as every fact this narrow writer keeps. */
+  private phoneOf(deviceId: string, docHost: boolean | undefined): { phone?: PhoneFact } {
+    const known = docHost === true ? undefined : this.knownPhones.get(deviceId);
+    return known === undefined ? {} : { phone: { via: known.phone.via, at: known.phone.at } };
   }
 
   private emitRoster(): void {
@@ -852,12 +997,37 @@ export class DeviceService extends EventEmitter {
         // AU-3a — the app version a desktop says: Settings → Updates' "Your devices" reads it
         // live, and a peer that updated in place moves nothing else in this signature
         d.appVersion ?? null,
+        // item 406 — a phone remembered moves nothing else in it either, and Remove is
+        // offered on this fact alone
+        d.phone ?? null,
       ]),
     );
     if (sig === this.lastRosterSig) return;
     this.lastRosterSig = sig;
     this.emit("changed", roster);
   }
+}
+
+/** Item 406 (Q-PM2) — the phone an accepted product hello came from, or null. A
+ * phone is a hello that SAID `clientKind: "ios"` (`PhoneEvidence` `product`),
+ * over the tailnet door, as this account (`tailnet`, `self`), from a node the
+ * sidecar named and the roster correlates to a device that is neither this one
+ * nor a desktop (`isDocHost`). The kind is the hello's claim; the node, the
+ * login and the correlation are the transport's facts, so the claim can only
+ * say which of the account's own devices is a phone. A refused node correlates
+ * to nothing, so it is never one. */
+export function phoneAtHello(
+  ctx: CallerContext,
+  roster: Pick<DeviceService, "currentDeviceId" | "deviceIdByNodeId" | "isDocHost">,
+): PhoneSeen | null {
+  const principal = ctx.principal;
+  if (principal.kind !== "tailnet" || principal.self !== true) return null;
+  if (ctx.connection?.helloClientKind !== "ios") return null;
+  const tailscaleId = principal.tailscaleId;
+  if (tailscaleId === undefined) return null;
+  const deviceId = roster.deviceIdByNodeId(tailscaleId);
+  if (deviceId === undefined || deviceId === roster.currentDeviceId()) return null;
+  return roster.isDocHost(deviceId) ? null : { deviceId, tailscaleId };
 }
 
 /** This user root's own device id, persisted at `LAYOUT.DEVICE_ID` (minted on

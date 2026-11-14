@@ -4,10 +4,12 @@ import { readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import {
   APP_PREFERENCES_NEVER_UNDONE,
+  DEVICE_LIMITS,
   InstallSetEntry,
-  type KnownPhone,
+  KnownPhone,
   LAYOUT,
   type PhoneEvidence,
+  RefusedDevice,
   SETTINGS_DOC_SECTIONS,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
@@ -95,6 +97,25 @@ import { SystemDocFile } from "./system-doc-file";
 //     An `ensure` keeps an entry and never makes one for a removed plugin (R2); an explicit install does, stamped.
 //     The removal key carries `{at}` alone: what a removal reaches on another desktop is the plugin's code, never its
 //     data (`install-reconciler.ts`, R3).
+//
+// THE ACCOUNT'S PHONES (item 406, track WI; VF-PM's rulings of 2026-11-14
+// 04:49Z, Q-PM1 and Q-PM2). Two more sections, both OUTSIDE the undo stack
+// (law 2: no ⌘Z lifts a refusal, none brings a removed phone back), both the
+// account's (law 1), and neither ever a phone's to read: document sync admits
+// only desktops.
+//   - `devices.refused`: the phones Remove refused, the install-set's
+//     revocations' shape — one key per refusal ever made (`[deviceId,
+//     eventId]`), never deleted, so the merge is the union and a concurrent
+//     Remove is never lost. A phone is refused when its durable id or any of
+//     its node ids is in the union. ONE writer (`refuseDevice`), with exactly
+//     two callers by the ruling, which a source-reading test pins: the
+//     `device.remove` handler, and the roster's registry pass carrying a node
+//     id it saw under a durable id ALREADY refused (the phone registered again).
+//   - `devices.phones`: the known phones, by durable id — their node ids, the
+//     positive phone fact, and the name a row needs (`rememberPhone`). Remove
+//     deletes the entry in the refusal's own transaction. A deleted entry leaves
+//     the document's STATE only: its name stays in the operation history the
+//     snapshots keep (law 3), so nothing may promise that Remove erases it.
 
 export interface SettingsDocConfig {
   dataDir: string;
@@ -127,19 +148,35 @@ export interface InstallSetChange {
   revoke?: readonly string[];
 }
 
-/** Item 406 (Q-PM1) — the union of every entry of `devices.refused`. */
+/** Item 406 (Q-PM1) — the union of every entry of `devices.refused`: a phone is
+ * refused when its durable id or any of its node ids is here. */
 export interface DeviceRefusals {
+  /** the refused durable ids (the roster's ULIDs, D30): every entry's key names one */
   deviceIds: ReadonlySet<string>;
+  /** every node id an entry carries: what a door sees (the sidecar's node id header) */
   nodeIds: ReadonlySet<string>;
 }
 
-/** Item 406 — why the refusals' one writer writes: its two callers. */
+/** Item 406 — why the refusals' ONE writer (`refuseDevice`) writes, one word per
+ * caller VF-PM's ruling admits:
+ *  - `"remove"`: the `device.remove` handler (S3) refuses a phone not refused yet;
+ *  - `"append"`: DeviceService's registry pass carries a node id it saw under a
+ *    durable id ALREADY refused (the phone registered again). */
 export type RefusalAct = "remove" | "append";
 
 const S = SETTINGS_DOC_SECTIONS;
 const ORIGIN_INSTALL_SET = "no-undo:install-set:";
 /** MK-2a (S1): an app preference that must never be undone (`APP_PREFERENCES_NEVER_UNDONE`). */
 const ORIGIN_APP_NEVER_UNDONE = "no-undo:app:";
+/** Item 406 — both device sections commit under it: outside the undo stack (law 2). */
+const ORIGIN_DEVICES = "no-undo:devices:";
+/** Item 406 (Q-PM2) — how old a known phone's fact may grow before a hello
+ * writes it again. A phone hellos at every connect, and the document keeps every
+ * write in its history, so the record moves only when its node id or its name
+ * does, or once a day. */
+const KNOWN_PHONE_REFRESH_MS = 24 * 60 * 60 * 1000;
+/** Every section a peer's merge may have moved (`hostOwner().merged`). */
+const MERGED_SECTIONS = ["app", "settings", "installSet", S.DEVICES_REFUSED, S.DEVICES_PHONES];
 
 /** `[pluginId, capability]` — a JSON tuple, so no id alphabet can collide. */
 function grantKey(pluginId: string, capability: string): string {
@@ -226,7 +263,9 @@ export class SettingsDocService extends EventEmitter {
 
   /** DS-5 — what the host needs after merging a peer's settings: persist (never
    * before this device's own file has loaded — a merge must not be written over
-   * a doc that has not read its disk yet), then tell every section's listeners. */
+   * a doc that has not read its disk yet), then tell every section's listeners.
+   * Item 406 — the device sections too: a refusal another desktop wrote reaches
+   * this desktop's roster only through this announcement. */
   hostOwner(): SystemDocOwner {
     return {
       persist: async () => {
@@ -234,7 +273,7 @@ export class SettingsDocService extends EventEmitter {
         await this.persistNow();
       },
       merged: () => {
-        for (const section of ["app", "settings", "installSet"]) this.emit("changed", { section });
+        for (const section of MERGED_SECTIONS) this.emit("changed", { section });
       },
     };
   }
@@ -634,36 +673,143 @@ export class SettingsDocService extends EventEmitter {
     return generation;
   }
 
-  // --- item 406: the account's phones ----------------------------------------
-  // 406 (red): STUBBED — nothing is read or written (the green commit's one writer and readers)
+  // --- item 406: the account's phones (OUTSIDE undo, law 2) -------------------
 
+  /** Item 406 (Q-PM1) — the union of every refusal. Tolerant: an entry whose key
+   * is not `[deviceId, eventId]` is skipped; one whose value fails its schema
+   * still refuses its durable id and loses only its node ids — a refusal is never
+   * dropped for a value this build cannot read. */
   async refusals(): Promise<DeviceRefusals> {
     await this.ready();
-    return { deviceIds: new Set(), nodeIds: new Set() };
+    return this.readRefusals();
   }
 
+  /** Item 406 (Q-PM1) — THE ONE WRITER of the refusals, and VF-PM's ruling gives
+   * it exactly two callers (`RefusalAct`; settings-doc.test.ts pins them off the
+   * source). Grow-only: it adds entries and never deletes one, and no method
+   * lifts a refusal.
+   *  - `"remove"` refuses a durable id not refused yet, with the node ids its
+   *    caller knows (none is lawful: the durable id alone refuses the row), and
+   *    deletes the phone's known-phone entry in the same transaction. A durable
+   *    id already refused writes nothing (`DeviceRemoveResult.removed` false).
+   *  - `"append"` writes ONLY under a durable id already refused, and only the
+   *    node ids the refusals do not hold yet, so it can never refuse a durable
+   *    id Remove did not, whatever node id it carries.
+   * `by` is the writing desktop's roster id (`RefusedDevice.by`). Every entry is
+   * checked before any is written, so a refused input throws having written
+   * nothing; one write commits under the `no-undo:` origin. */
   async refuseDevice(
-    _act: RefusalAct,
-    _deviceId: string,
-    _tailscaleIds: readonly string[],
-    _by: string,
+    act: RefusalAct,
+    deviceId: string,
+    tailscaleIds: readonly string[],
+    by: string,
   ): Promise<{ wrote: boolean }> {
     await this.ready();
-    return { wrote: false };
+    if (deviceId.length === 0 || deviceId.length > DEVICE_LIMITS.DEVICE_ID_CHARS)
+      throw new RangeError("a refusal names one device by its durable id");
+    const standing = this.readRefusals();
+    const refused = standing.deviceIds.has(deviceId);
+    if (act === "remove" ? refused : !refused) return { wrote: false };
+    const fresh = [...new Set(tailscaleIds)].filter((nodeId) => !standing.nodeIds.has(nodeId));
+    if (act === "append" && fresh.length === 0) return { wrote: false };
+    const removedAt = Date.now();
+    // one entry per NODE_IDS_PER_ENTRY node ids, and one with none when Remove knew none
+    const entries: RefusedDevice[] = [];
+    for (let at = 0; at === 0 || at < fresh.length; at += DEVICE_LIMITS.NODE_IDS_PER_ENTRY) {
+      const nodeIds = fresh.slice(at, at + DEVICE_LIMITS.NODE_IDS_PER_ENTRY);
+      entries.push(RefusedDevice.parse({ tailscaleIds: nodeIds, removedAt, by }));
+    }
+    const section = this.doc.getMap(S.DEVICES_REFUSED);
+    for (const entry of entries) {
+      section.set(JSON.stringify([deviceId, randomUUID()]), entry as never);
+    }
+    const phones = this.doc.getMap(S.DEVICES_PHONES);
+    const forgot = act === "remove" && phones.get(deviceId) !== undefined;
+    if (forgot) phones.delete(deviceId);
+    this.doc.commit({ origin: `${ORIGIN_DEVICES}${act}:${by}` });
+    await this.persistNow();
+    this.emit("changed", { section: S.DEVICES_REFUSED });
+    if (forgot) this.emit("changed", { section: S.DEVICES_PHONES });
+    return { wrote: true };
   }
 
+  /** Item 406 (Q-PM2) — the account's known phones, by durable id. Tolerant: an
+   * entry that fails its schema is skipped, so no row is called a phone on a
+   * record nobody can read. */
   async knownPhones(): Promise<Map<string, KnownPhone>> {
     await this.ready();
-    return new Map();
+    const phones = this.doc.getMap(S.DEVICES_PHONES);
+    const out = new Map<string, KnownPhone>();
+    for (const deviceId of phones.keys()) {
+      const parsed = KnownPhone.safeParse(phones.get(deviceId));
+      if (parsed.success) out.set(deviceId, parsed.data);
+    }
+    return out;
   }
 
+  /** Item 406 (Q-PM2) — a node spoke to a desktop of this account as a phone
+   * (`via`): remember it under its durable id, with its node id and its name (the
+   * one thing the row of a phone offline across a restart needs; nothing else
+   * about the phone is kept). Never a refused phone, by its durable id or by
+   * this node: a refusal is never lifted, and a record would offer Remove again.
+   * Writes only when the record moves (a new phone, a new node id, a new name,
+   * or a fact older than KNOWN_PHONE_REFRESH_MS), keeping the newest
+   * NODE_IDS_PER_ENTRY node ids, under the `no-undo:` origin. */
   async rememberPhone(
-    _deviceId: string,
-    _seen: { tailscaleId: string; via: PhoneEvidence; name?: string | undefined },
-    _by: string,
+    deviceId: string,
+    seen: { tailscaleId: string; via: PhoneEvidence; name?: string | undefined },
+    by: string,
   ): Promise<{ wrote: boolean }> {
     await this.ready();
-    return { wrote: false };
+    if (deviceId.length === 0 || deviceId.length > DEVICE_LIMITS.DEVICE_ID_CHARS)
+      throw new RangeError("a known phone is named by its durable id");
+    const refusals = this.readRefusals();
+    if (refusals.deviceIds.has(deviceId) || refusals.nodeIds.has(seen.tailscaleId))
+      return { wrote: false };
+    const phones = this.doc.getMap(S.DEVICES_PHONES);
+    const prior = KnownPhone.safeParse(phones.get(deviceId));
+    const was = prior.success ? prior.data : undefined;
+    const said = seen.name?.slice(0, DEVICE_LIMITS.NAME_CHARS);
+    const name = said !== undefined && said.length > 0 ? said : was?.name;
+    const at = Date.now();
+    if (
+      was !== undefined &&
+      was.tailscaleIds.includes(seen.tailscaleId) &&
+      was.name === name &&
+      at - was.phone.at < KNOWN_PHONE_REFRESH_MS
+    )
+      return { wrote: false };
+    const tailscaleIds = [
+      ...(was?.tailscaleIds ?? []).filter((nodeId) => nodeId !== seen.tailscaleId),
+      seen.tailscaleId,
+    ].slice(-DEVICE_LIMITS.NODE_IDS_PER_ENTRY);
+    const entry = KnownPhone.parse({
+      tailscaleIds,
+      phone: { via: seen.via, at },
+      ...(name !== undefined ? { name } : {}),
+    });
+    phones.set(deviceId, entry as never);
+    this.doc.commit({ origin: `${ORIGIN_DEVICES}phone:${by}` });
+    await this.persistNow();
+    this.emit("changed", { section: S.DEVICES_PHONES });
+    return { wrote: true };
+  }
+
+  /** The refusals' union, read in one pass over the section (`refusals`). */
+  private readRefusals(): DeviceRefusals {
+    const deviceIds = new Set<string>();
+    const nodeIds = new Set<string>();
+    const section = this.doc.getMap(S.DEVICES_REFUSED);
+    for (const key of section.keys()) {
+      const parts = readKey(key, 2);
+      if (parts === null) continue;
+      const [deviceId] = parts as [string, string];
+      if (deviceId.length === 0) continue;
+      deviceIds.add(deviceId);
+      const entry = RefusedDevice.safeParse(section.get(key));
+      if (entry.success) for (const nodeId of entry.data.tailscaleIds) nodeIds.add(nodeId);
+    }
+    return { deviceIds, nodeIds };
   }
 
   // --- D29′ undo surface -----------------------------------------------------
