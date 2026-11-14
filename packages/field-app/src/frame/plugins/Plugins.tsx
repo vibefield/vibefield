@@ -16,7 +16,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { showOnBoard } from "../../field/desk/pegboard/board-door";
+import { showOnBoard, useBoardNames } from "../../field/desk/pegboard/board-door";
 import { usePluginRegistrySnapshot } from "../../plugin-host/plugin-registry-store";
 import { useGodviewFindDoor } from "../find-door";
 import { type FrameSurface, foldSurface } from "../frame-surface";
@@ -165,9 +165,13 @@ import { RemoveView } from "./RemoveQuestion";
 // and Check plugins for updates, each through ChromeLayer's `openPlugins`; the
 // pegboard's More in Plugins… (MK-4d) is one more, on Discover. MK-4d: an
 // installed page's act also offers Show them on the pegboard, handing the set
-// to the board's door (`showOnBoard`, the popup's one import from the desk);
-// ↵ presses it, never while Remove…'s question stands. The catalog mounts this
-// controller over a fixture port (`design-system/PluginsPreview.tsx`).
+// to the board's door (`showOnBoard`); ↵ presses it, never while Remove…'s
+// question stands. MK-4d's names (James's MK-O10 pick A): Installed's lines
+// and a page's What it adds say where a set hangs by the pegboard's own names,
+// read from the same door (`useBoardNames`; with no desk mounted, as in the
+// catalog, no place is said). Those two are the popup's only imports from the
+// desk. The catalog mounts this controller over a fixture port
+// (`design-system/PluginsPreview.tsx`).
 // MK-O3D: Discover's community tile and its switch (§8 "The community tile",
 // drawn 2026-11-14): the switch as fieldd's app preferences say it, the ask in
 // place, which Esc answers first, and the one request. The statement is shown
@@ -833,11 +837,14 @@ export function Plugins({
   const shelf = shelfState(read, reading);
   const foot = catalogFoot(read, reading, now(), community === false);
   const catalog = read.kind === "answered" ? read.catalog : null;
+  // MK-4d's names: the pegboard's own names for its categories, by which a row's line and a page's
+  // What it adds say where a set hangs; null with no desk mounted, and then no place is said
+  const names = useBoardNames();
   // Q6: the field's words filter Installed's rows and (MK-4e) Discover's shelf;
   // Updates' search waits for its rows, and the words are kept across the switch.
   const installed = useMemo(
-    () => (snapshot === null ? null : installedRows(snapshot, catalog, query)),
-    [snapshot, catalog, query],
+    () => (snapshot === null ? null : installedRows(snapshot, catalog, query, names)),
+    [snapshot, catalog, query, names],
   );
   // MK-4e: Discover's shelf, over a held list with a set to show or typed words to answer; its columns fit the
   // popup's width, and its tiles in the order the keys walk them
@@ -902,11 +909,11 @@ export function Plugins({
     if (page === null) return null;
     const record = snapshot?.plugins.find((plugin) => plugin.id === page.id);
     if (record !== undefined && snapshot !== null) {
-      return pluginPage(record, catalog, snapshot, onMac);
+      return pluginPage(record, catalog, snapshot, onMac, names);
     }
     const entry = catalog?.plugins.find((listed) => listed.id === page.id);
     return entry === undefined ? null : listedPage(entry);
-  }, [page, snapshot, catalog, onMac]);
+  }, [page, snapshot, catalog, onMac, names]);
   // MK-4f: so a page whose plugin went closes to its tab (one removed that the list doesn't hold), and its keys
   // walk again, once both the snapshot and a list have answered; before either, nothing is known gone
   useEffect(() => {

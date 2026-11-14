@@ -96,12 +96,19 @@ export const SOURCE_WORDS = {
   sideload: "Sideloaded",
 } as const;
 
-/** An Installed row's one line (§9 "Installed, off and Remove…"). Where a set hangs ("Things, Tools") is the
- * desk's pegboard's to name, which the frame's popup does not read: MK-4a's line leaves it out (MK's, ‹draft›),
- * and it waits for the pegboard's names to reach the popup (MK-4d), not for the plugin's page (corrected at MK-4c,
- * as DESIGN.md §9 says). */
+/** An Installed row's one line (§9 "Installed, off and Remove…"). Where a set hangs is said by the
+ * pegboard's own names (MK-4d's names; James's MK-O10 pick A, "Names now, places with MK-4d"), as
+ * §9's ruled line says it: "4 objects · Things, Tools · 1.0.0", or "Hangs under Things · 1.0.0" for
+ * a set of one. While the popup reads no name for any of its objects' places — no board to read, an
+ * object that hangs nowhere, a plugin that is off — the line says the set alone, as MK-4a's did
+ * (MK's, ‹draft›). */
 export const INSTALLED_LINE = {
   set: (objects: number, version: string) => `${plural(objects, "object", "objects")} · ${version}`,
+  /** a set and where it hangs: `places` are the board's names, each once, in the board's order */
+  placed: (objects: number, places: readonly string[], version: string) =>
+    objects === 1
+      ? `${hangsUnder(places.join(", "))} · ${version}`
+      : `${plural(objects, "object", "objects")} · ${places.join(", ")} · ${version}`,
   builtIn: "comes with VibeField",
   noObject: (has: string | null) => (has === null ? "No objects" : `No objects · ${has}`),
   builtInNoObject: "Comes with VibeField · no object on the desk",
@@ -116,6 +123,13 @@ export function hasWords(service: boolean, tools: boolean): string | null {
   if (service) return "a service";
   if (tools) return "tools";
   return null;
+}
+
+/** Where an object hangs on the pegboard, by the board's own name for its category, never its id:
+ * §9's "Hangs under ‹category›" ("The popup"'s What it adds, and the ruled Installed line of a set
+ * of one), as James's Plugins page drew it under each object once MK-4d lands (MK-O10). */
+export function hangsUnder(place: string): string {
+  return `Hangs under ${place}`;
 }
 
 /** A plugin's page, read only (MK-4c; DESIGN.md §8 "Read only first", §9 MK-4c's block). Its section heads are

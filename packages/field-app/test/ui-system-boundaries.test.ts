@@ -729,10 +729,12 @@ describe("UI system ownership boundaries", () => {
     expect(taken).toEqual(["PegboardView.tsx: ../../../frame/plugins/plugins-words"]);
   });
 
-  it("lets the popup take only Show them on the pegboard's door from the desk (MK-4d)", () => {
+  it("lets the popup take only Show them on the pegboard's door and the board's names from the desk (MK-4d)", () => {
     // The page's act hands the board a set (`showOnBoard`), and the pegboard's controller does the rest (Canvas
     // first, the rise, the lay), so the popup takes nothing else of the desk's: never the board's anchor, its facts,
     // its line door or its controller.
+    // MK-4d's names (James's MK-O10 pick A): the controller reads the board's names from the same
+    // door (`useBoardNames`) and hands them to the model, which imports nothing of the desk.
     const fromDesk = /from "((?:\.\.\/)+field\/[^"]+)"/gu;
     const taken: string[] = [];
     for (const name of readdirSync(join(PACKAGE_ROOT, "src", "frame", "plugins"))) {
@@ -743,7 +745,7 @@ describe("UI system ownership boundaries", () => {
     }
     expect(taken).toEqual(["Plugins.tsx: ../../field/desk/pegboard/board-door"]);
     expect(source("frame/plugins/Plugins.tsx")).toMatch(
-      /import \{ showOnBoard \} from "\.\.\/\.\.\/field\/desk\/pegboard\/board-door";/u,
+      /import \{ showOnBoard, useBoardNames \} from "\.\.\/\.\.\/field\/desk\/pegboard\/board-door";/u,
     );
   });
 

@@ -909,6 +909,11 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
     [1, "0.1.0"],
     [3, "1.2.0"],
   ],
+  // MK-4d's names: a set and where it hangs, and a set of one
+  "INSTALLED_LINE.placed": [
+    [4, ["Things", "Tools"], "1.0.0"],
+    [1, ["Things"], "1.0.0"],
+  ],
   "INSTALLED_LINE.noObject": [[null], ["a service"]],
   "INSTALLED_LINE.broken": [["Desk clock"]],
   // MK-O3D: the community tile's line, with no plugin by other people listed, one, and many
@@ -919,6 +924,7 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
     [false, true],
     [false, false],
   ],
+  hangsUnder: [["Things"]],
   noMatchWords: [["clock"]],
   installedFootWords: [
     [6, 14, 1],
@@ -1034,5 +1040,120 @@ describe("the popup's words (§9; James 2026-11-10 00:46Z: no insides)", () => {
     expect(words.updatesWords(0)).toBeNull();
     expect(words.updatesWords(1)).toBe("1 update");
     expect(words.updatesWords(2)).toBe("2 updates");
+  });
+});
+
+/** The pegboard's names as the board's door hands them (MK-4d's names): each category's id and the
+ * board's own name for it, in the board's order. The fixtures' objects that hang, hang under
+ * "devices". */
+const BOARD: ReadonlyMap<string, string> = new Map([
+  ["things", "Things"],
+  ["devices", "Devices"],
+  ["tools", "Tools"],
+]);
+
+type Objects = PluginRecord["contributions"]["objects"];
+
+/** A fixture plugin with its objects changed as `change` says, the rest as the fixture holds it. */
+function reshaped(record: PluginRecord, change: (objects: Objects) => Objects): PluginRecord {
+  return {
+    ...record,
+    contributions: { ...record.contributions, objects: change(record.contributions.objects) },
+  };
+}
+
+/** Kanban's Card moved under "things", so its set hangs across two categories. */
+function cardUnderThings(object: Objects[number]): Objects[number] {
+  if (object.type !== "AcmeCard" || object.tray === undefined) return object;
+  return { ...object, tray: { ...object.tray, category: "things" } };
+}
+
+describe("the pegboard's names in the popup (MK-4d's names; James's MK-O10 pick A)", () => {
+  it("says where a set hangs on Installed's line by the board's names, as §9's ruled line", () => {
+    const rows = installedRows(PLUGINS_FIXTURE_LISTED_SNAPSHOT, CATALOG_LISTED, "", BOARD);
+    const line = (id: string) => rows.find((row) => row.id === id)?.line;
+    // Simulators' Watch hangs under Devices; its Phone and Tablet hang nowhere, and still count
+    expect(line("vibefield.simulator")).toBe("3 objects · Devices · 1.2.0 · comes with VibeField");
+    expect(line("acme.kanban")).toBe("2 objects · Devices · 2.1.0");
+    // Comment pad's one object hangs nowhere: its set alone; off, and no object, as before
+    expect(line("vibefield.comment-pad")).toBe("1 object · 0.1.0 · comes with VibeField");
+    expect(line("example.desk-clock")).toBe(words.INSTALLED_LINE.off);
+    expect(line("example.kv-service")).toBe("No objects · a service");
+    // the words, as §9 rules them
+    expect(words.INSTALLED_LINE.placed(4, ["Things", "Tools"], "1.0.0")).toBe(
+      "4 objects · Things, Tools · 1.0.0",
+    );
+    expect(words.INSTALLED_LINE.placed(1, ["Things"], "1.0.0")).toBe("Hangs under Things · 1.0.0");
+  });
+
+  it("says a set of one as hanging, and a set across categories once each, in the board's order", () => {
+    const simulators = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator");
+    const watch = reshaped(simulators, (objects) => objects.filter((o) => o.type === "SimWatch"));
+    const kanban = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban");
+    // its Card moved under Things: the board names Things before Devices
+    const across = reshaped(kanban, (objects) => objects.map(cardUnderThings));
+    const twice = reshaped(kanban, (objects) => [...objects, ...objects]);
+    const lines = (plugins: PluginRecord[]) =>
+      installedRows({ ...PLUGINS_FIXTURE_SNAPSHOT, plugins }, null, "", BOARD).map((r) => r.line);
+    expect(lines([watch])).toEqual(["Hangs under Devices · 1.2.0 · comes with VibeField"]);
+    expect(lines([across])).toEqual(["2 objects · Things, Devices · 2.1.0"]);
+    expect(lines([twice])).toEqual(["4 objects · Devices · 2.1.0"]);
+  });
+
+  it("says under each object in What it adds where it hangs, and nothing under one that hangs nowhere", () => {
+    const simulators = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator");
+    expect(pluginPage(simulators, null, PLUGINS_FIXTURE_SNAPSHOT, true, BOARD).adds).toEqual([
+      { key: "object:SimPhone", words: "Phone" },
+      { key: "object:SimTablet", words: "Tablet" },
+      { key: "object:SimWatch", words: "Apple Watch", under: "Hangs under Devices" },
+    ]);
+    // its tools keep their own line, with nothing under it
+    const kanban = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban");
+    const page = pluginPage(kanban, CATALOG_LISTED, PLUGINS_FIXTURE_LISTED_SNAPSHOT, true, BOARD);
+    expect(page.adds.map((line) => [line.words, line.under])).toEqual([
+      ["Board", "Hangs under Devices"],
+      ["Card", "Hangs under Devices"],
+      ["1 tool for your agents", undefined],
+    ]);
+    expect(words.hangsUnder("Things")).toBe("Hangs under Things");
+  });
+
+  it("says no place with no board to read, where the board names none, or while the plugin is off", () => {
+    const simulators = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator");
+    const set = "3 objects · 1.2.0 · comes with VibeField";
+    for (const names of [null, new Map([["things", "Things"]]), new Map<string, string>()]) {
+      const page = pluginPage(simulators, null, PLUGINS_FIXTURE_SNAPSHOT, true, names);
+      expect(page.adds.map((line) => line.under)).toEqual([undefined, undefined, undefined]);
+      const rows = installedRows(PLUGINS_FIXTURE_SNAPSHOT, null, "", names);
+      expect(rows.find((row) => row.id === "vibefield.simulator")?.line).toBe(set);
+    }
+    // the default, as every caller but the popup's controller asks: no names
+    expect(installedRows(PLUGINS_FIXTURE_SNAPSHOT, null)).toEqual(
+      installedRows(PLUGINS_FIXTURE_SNAPSHOT, null, "", null),
+    );
+    // off, turned off or held while community plugins are off: the board hangs none of its kinds
+    const kanban = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban");
+    const turnedOff: PluginRecord = { ...kanban, enabled: false, state: "disabled" };
+    const held: PluginRecord = { ...turnedOff, held: "community-off" };
+    for (const off of [turnedOff, held]) {
+      const snapshot = { ...PLUGINS_FIXTURE_LISTED_SNAPSHOT, plugins: [off] };
+      const page = pluginPage(off, CATALOG_LISTED, snapshot, true, BOARD);
+      expect(page.adds.some((line) => line.under !== undefined)).toBe(false);
+      expect(installedRows(snapshot, CATALOG_LISTED, "", BOARD)[0]?.line).toBe(
+        off.held === undefined ? words.INSTALLED_LINE.off : words.HELD_LINE.objects,
+      );
+    }
+  });
+
+  it("says a place by the board's own name for it, never its category's id", () => {
+    const names = new Map([["devices", "On the bench"]]);
+    const rows = installedRows(PLUGINS_FIXTURE_LISTED_SNAPSHOT, CATALOG_LISTED, "", names);
+    const kanban = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban");
+    const page = pluginPage(kanban, CATALOG_LISTED, PLUGINS_FIXTURE_LISTED_SNAPSHOT, true, names);
+    expect(rows.find((row) => row.id === "acme.kanban")?.line).toBe(
+      "2 objects · On the bench · 2.1.0",
+    );
+    expect(page.adds[0]?.under).toBe("Hangs under On the bench");
+    expect(JSON.stringify([rows, page])).not.toContain("devices");
   });
 });

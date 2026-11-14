@@ -67,6 +67,7 @@ import {
   takeBoardFocusRequest,
   useBoardFacts,
   useBoardLineDoor,
+  useBoardNames,
 } from "../src/field/desk/pegboard/board-door";
 import { readBoardStats, resetBoardStatsForTest } from "../src/field/desk/pegboard/board-stats";
 import { Pegboard } from "../src/field/desk/pegboard/Pegboard";
@@ -1070,5 +1071,44 @@ describe("a set shown after an install (MK-4d; MK-D8's fallback B, MK-E14)", () 
     expect(trayCategory(ce.world)).toBe(category);
     expect(trayFocus(ce.world)).toBe(pane);
     expect(boardReveal()).toBeNull();
+  });
+});
+
+describe("the board's names, for the popup (MK-4d's names; James's MK-O10 pick A)", () => {
+  it("names each category the board hangs by the board's own name, in its order, and renders only when they change", async () => {
+    const seen: (ReadonlyMap<string, string> | null)[] = [];
+    function Names(): null {
+      seen.push(useBoardNames());
+      return null;
+    }
+    const said = (): [string, string][] => [...(seen.at(-1) ?? [])];
+    const probe = createRoot(document.createElement("div"));
+    act(() => probe.render(createElement(Names)));
+    try {
+      const categories = trayCategories(ce.world);
+      expect(categories.length).toBeGreaterThan(1);
+      expect(said()).toEqual(categories.map((c) => [c.id, c.label]));
+      // the board out, its slide frame by frame, another category chosen: the same names, no render
+      const renders = seen.length;
+      openBoard();
+      door.publish({ p: 0.5 });
+      door.publish({ p: 1 });
+      const second = categories[1];
+      if (second === undefined) throw new Error("one category");
+      act(() => setTrayCategory(ce.world, second.id));
+      door.publish();
+      expect(seen.length).toBe(renders);
+      // the desk gone: no names; the next desk mounted: its board's
+      act(() => unpublish());
+      expect(seen.at(-1)).toBeNull();
+      const old = ce;
+      await act(async () => {
+        await mountDesk(new Set(), 1);
+      });
+      old.dispose();
+      expect(said()).toEqual(trayCategories(ce.world).map((c) => [c.id, c.label]));
+    } finally {
+      act(() => probe.unmount());
+    }
   });
 });

@@ -14,6 +14,7 @@ import {
   CATALOG_FOOT,
   COMMUNITY_WORDS,
   HELD_LINE,
+  hangsUnder,
   hasWords,
   INSTALLED_LINE,
   installedFootWords,
@@ -33,6 +34,8 @@ import {
 // registry snapshot the window already holds, (MK-4c) a plugin's page and the
 // walk of Installed's hot row, (MK-4c2a) which plugins carry switches here
 // and where each switch stands, and (MK-4c2b) a plugin's settings on its page.
+// MK-4d's names: where a set hangs, on its row and its page, by the pegboard's
+// own names, which the controller reads from the board's door and hands in.
 // Pure: the controller and the tests read the same functions.
 
 /** The popup as drawn (MK-D2): 960 × 640. */
@@ -318,7 +321,36 @@ export function heldLine(record: PluginRecord): string | null {
   return runsService(record) ? HELD_LINE.service : HELD_LINE.bare;
 }
 
-function lineOf(record: PluginRecord): string {
+/** The pegboard's names (MK-4d's names; James's MK-O10 pick A, "Names now, places with MK-4d"):
+ * each category the board hangs, by its id — never shown — and the board's own name for it, in the
+ * board's order. The controller reads them from the board's door (`useBoardNames`); null while the
+ * window reads no board (no desk mounted: the catalog, a harness, a remount's gap). */
+export type BoardNames = ReadonlyMap<string, string>;
+
+/** Where one of a plugin's objects hangs, by the board's own name for its category: null where it
+ * hangs nowhere (no pegboard entry), where the board names no such category now, and while the
+ * plugin is off, for the board hangs no kind of an off plugin (P3c; `boardSet` reads the same
+ * `state`). */
+function placeOf(
+  object: PluginRecord["contributions"]["objects"][number],
+  record: PluginRecord,
+  names: BoardNames | null,
+): string | null {
+  if (names === null || record.state !== "enabled" || object.tray === undefined) return null;
+  return names.get(object.tray.category) ?? null;
+}
+
+/** Where a plugin's set hangs, for Installed's line: the board's names of its objects' places,
+ * each once, in the board's order; none while none is named (`placeOf`). */
+function placesOf(record: PluginRecord, names: BoardNames | null): string[] {
+  if (names === null) return [];
+  const hung = record.contributions.objects.map((object) => placeOf(object, record, names));
+  return [...new Set(names.values())].filter((name) => hung.includes(name));
+}
+
+/** Installed's line for a plugin (§9 "Installed, off and Remove…"); a set says where it hangs once
+ * the board names a place of it (MK-4d's names), and the set alone otherwise, as MK-4a's line. */
+function rowLine(record: PluginRecord, names: BoardNames | null): string {
   const objects = record.contributions.objects.length;
   const builtIn = record.source === "bundled";
   if (record.state === "invalid" || record.state === "incompatible") {
@@ -331,7 +363,11 @@ function lineOf(record: PluginRecord): string {
     if (builtIn) return INSTALLED_LINE.builtInNoObject;
     return INSTALLED_LINE.noObject(hasWords(runsService(record), bringsTools(record)));
   }
-  const set = INSTALLED_LINE.set(objects, record.version);
+  const places = placesOf(record, names);
+  const set =
+    places.length > 0
+      ? INSTALLED_LINE.placed(objects, places, record.version)
+      : INSTALLED_LINE.set(objects, record.version);
   return builtIn ? `${set} · ${INSTALLED_LINE.builtIn}` : set;
 }
 
@@ -354,12 +390,15 @@ export function installedMatches(record: PluginRecord, query: string): boolean {
 }
 
 /** Installed's rows: every plugin this desktop has that holds the typed
- * words, Built in first, then by title (§8 "Installed"). */
+ * words, Built in first, then by title (§8 "Installed"). MK-4d's names: each
+ * row's line says where its set hangs by the board's `names`. */
 export function installedRows(
   snapshot: PluginRegistrySnapshot,
   catalog: PluginsCatalog | null,
   query = "",
+  names: BoardNames | null = null,
 ): InstalledRow[] {
+  const lineOf = (record: PluginRecord): string => rowLine(record, names);
   const listed = listedFrom(catalog);
   return snapshot.plugins
     .filter((record) => installedMatches(record, query))
@@ -392,8 +431,9 @@ export function walkHot(at: number, key: "ArrowUp" | "ArrowDown", rows: number):
 
 /** One line of What it adds: an object, a command it puts in the palette, its
  * tools or its service. `key` tells lines apart and is never shown. `under` is
- * said under a command's words: where it is (James's MK-O20 pick A); no other
- * line has one. */
+ * said under a command's words: where it is (James's MK-O20 pick A); and under
+ * an object's, where it hangs on the pegboard (MK-4d's names; his MK-O10 pick
+ * A). No other line has one. */
 export interface PageLine {
   readonly key: string;
   readonly words: string;
@@ -470,17 +510,22 @@ function madeByOf(record: PluginRecord, listed: ReadonlyMap<string, Listed>): st
 }
 
 /** What it adds: each object by its pegboard label (`tray.label`), or by its
- * title when it hangs nowhere; then each command it puts in the palette, by
- * its own title, with where it is under it (James's MK-O20 pick A, 2026-11-11
- * 23:03:26Z), whether the plugin is on or off, as its objects are; then its
- * tools, with their count (MK-O14 B), and its service; "No objects" with none
- * of them. Where each object hangs waits for the pegboard's names (MK-4d). */
-function addsOf(record: PluginRecord, onMac: boolean): PageLine[] {
+ * title when it hangs nowhere, with where it hangs under it while the board
+ * names its place (`placeOf`; MK-4d's names, James's MK-O10 pick A, 2026-11-11
+ * 23:03:24Z); then each command it puts in the palette, by its own title, with
+ * where it is under it (James's MK-O20 pick A, 2026-11-11 23:03:26Z), whether
+ * the plugin is on or off, as its objects are; then its tools, with their count
+ * (MK-O14 B), and its service; "No objects" with none of them. */
+function addsOf(record: PluginRecord, onMac: boolean, names: BoardNames | null): PageLine[] {
   const adds: PageLine[] = [
-    ...record.contributions.objects.map((object) => ({
-      key: `object:${object.type}`,
-      words: object.tray?.label ?? object.title,
-    })),
+    ...record.contributions.objects.map((object): PageLine => {
+      const place = placeOf(object, record, names);
+      return {
+        key: `object:${object.type}`,
+        words: object.tray?.label ?? object.title,
+        ...(place === null ? {} : { under: hangsUnder(place) }),
+      };
+    }),
     ...paletteCommands(record).map((command) => ({
       key: `command:${command.id}`,
       words: command.title,
@@ -578,12 +623,14 @@ function powersOf(
 }
 
 /** A plugin's page, from the registry snapshot the window holds and the plugin
- * list the popup already read: nothing here asks fieldd anything. */
+ * list the popup already read: nothing here asks fieldd anything. MK-4d's
+ * names: What it adds says where each object hangs by the board's `names`. */
 export function pluginPage(
   record: PluginRecord,
   catalog: PluginsCatalog | null,
   snapshot: PluginRegistrySnapshot,
   onMac: boolean,
+  names: BoardNames | null = null,
 ): PluginPage {
   const listed = listedFrom(catalog);
   const powers = powersOf(record, snapshot, onMac);
@@ -598,7 +645,7 @@ export function pluginPage(
     title: record.title,
     ...sourceOf(record, listed),
     summary: record.source === "registry" ? (listed.get(record.id)?.summary ?? null) : null,
-    adds: addsOf(record, onMac),
+    adds: addsOf(record, onMac, names),
     powers,
     // "nothing" is decided by the list the page reads, not by what it can say: a power this build cannot name is
     // said as one VibeField can't describe (James's MK-O34 pick B), and the page never says it holds none (VF-PM

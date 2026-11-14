@@ -282,7 +282,8 @@ function PageView({
               {page.adds.map((line) => (
                 <li key={line.key}>
                   {line.words}
-                  {/* a command's: where it is (James's MK-O20 pick A), as a power's note stands */}
+                  {/* a command's: where it is (James's MK-O20 pick A); an object's: where it
+                      hangs (MK-4d's names; MK-O10 A). Each stands as a power's note does */}
                   {line.under !== undefined && (
                     <span className="vf-plugins-page-under">{line.under}</span>
                   )}

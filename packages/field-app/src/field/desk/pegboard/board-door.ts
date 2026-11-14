@@ -1,5 +1,5 @@
 import type { DeskTrayDoor, TrayAnchor } from "@vibecook/ice/desk";
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { currentDesk, type MountedDesk, subscribeDesk } from "../desk-door";
 
 // THE PEGBOARD'S DOOR, followed across mounts (DK-13; DESIGN.md §8 "The pegboard — Objects, behind the line", "The
@@ -10,6 +10,9 @@ import { currentDesk, type MountedDesk, subscribeDesk } from "../desk-door";
 // Reload, a kinds remount or a new document generation makes a new handle, and every reader follows it here, once.
 // MK-4d: the Plugins popup's door to the board is here too — a showing of a set after an install (`showOnBoard`), which
 // the pegboard's controller lands across that remount.
+// MK-4d's names (James's MK-O10 pick A): the popup reads the board's names here too
+// (`useBoardNames`) — each category the board hangs and the board's own name for it — by which
+// What it adds and Installed's line say where a set hangs.
 
 /** The mounted desk's tray door — absent on a handle without one (a test's double), and with no desk. */
 export const trayOf = (desk: MountedDesk | null): DeskTrayDoor | null =>
@@ -178,4 +181,29 @@ export function useBoardLineDoor(): BoardLineDoor | null {
       return open;
     },
   };
+}
+
+// ── the board's names, for the popup (MK-4d's names; James's MK-O10 pick A) ────────────────
+/** The names as one string: each category's id and the board's name for it, in the board's order —
+ * never its count, so a count that moves says nothing new. */
+const namesKey = (): string => {
+  const door = boardDoor();
+  if (door === null) return NO_DESK;
+  return JSON.stringify(door.anchor().categories.map((c) => [c.id, c.label]));
+};
+
+/**
+ * THE PEGBOARD'S NAMES: each category the board of the desk mounted now hangs — its id, never
+ * shown — and the board's own name for it, the one its filters say, in the board's order, as the
+ * desk last published them (`anchor().categories`). The Plugins popup says where a set hangs by
+ * them: under each object in What it adds, and on Installed's line. Null with no desk, or a handle
+ * with no board (the catalog, a harness, a remount's gap). One snapshot per change of what they
+ * SAY: the slide's frames, a count or the category chosen re-render nothing.
+ */
+export function useBoardNames(): ReadonlyMap<string, string> | null {
+  const key = useSyncExternalStore(subscribeBoard, namesKey, () => NO_DESK);
+  return useMemo(
+    () => (key === NO_DESK ? null : new Map(JSON.parse(key) as [string, string][])),
+    [key],
+  );
 }

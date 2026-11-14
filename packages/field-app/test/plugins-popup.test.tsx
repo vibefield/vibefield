@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { DeskTrayDoor } from "@vibecook/ice/desk";
 import {
   PluginRegistrySnapshot,
   PluginsCatalog,
@@ -32,6 +33,7 @@ import {
   type PluginsFixtureRead,
   pluginsFixturePort,
 } from "../src/design-system/plugins-fixtures";
+import { type MountedDesk, publishDesk } from "../src/field/desk/desk-door";
 import { boardReveal, resetBoardRevealForTest } from "../src/field/desk/pegboard/board-door";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { FramePlugins, Plugins } from "../src/frame/plugins/Plugins";
@@ -56,6 +58,8 @@ import {
 // shelf and the page of a set this desktop doesn't have; O2-C its Install, the install card, and the requests the
 // card sends and throws away, each held by the port's recorded calls, and a refusal worded by its kind alone. MK-4d
 // its Show them on the pegboard, held by the board's door (`boardReveal`), with no pegboard mounted.
+// MK-4d's names: where a set hangs, on Installed's lines and under What it adds, over a desk double
+// whose board names its categories.
 // MK-O3D adds the community statement at this desktop's first community install, over a fixture mark.
 // MK-UC's UC-C adds Updates' rows, the update card, Update all and Check again, and the note the window comes back
 // fresh by (MK-E6), each held by the port's recorded calls and the window's own session, which each test leaves
@@ -949,6 +953,105 @@ describe("Show them on the pegboard (MK-4d; MK-D8's fallback B, §8 'The pegboar
     expect(question()).toBeNull();
     press("Enter");
     expect(boardReveal()?.types).toEqual(["AcmeBoard", "AcmeCard"]);
+  });
+});
+
+/** A board's category as its door says it: its id, the board's name for it, how many it hangs. */
+interface BoardCategory {
+  readonly id: string;
+  readonly label: string;
+  readonly count: number;
+}
+
+/** MK-4d's names: a desk mounted for one test, its board a double whose door says `categories` as
+ * the desk last published them; `publish` is the desk's next frame, `unmount` the desk going. */
+function mountBoard(categories: readonly BoardCategory[]): {
+  publish: (next: readonly BoardCategory[]) => void;
+  unmount: () => void;
+} {
+  let now = categories;
+  const listeners = new Set<() => void>();
+  const door = {
+    anchor: () => ({ categories: now }),
+    subscribe: (fn: () => void) => {
+      listeners.add(fn);
+      return () => {
+        listeners.delete(fn);
+      };
+    },
+  } as unknown as DeskTrayDoor;
+  const unpublish = publishDesk({
+    engine: {} as MountedDesk["engine"],
+    handle: { tray: door } as unknown as MountedDesk["handle"],
+    generation: 1,
+    mount: 0,
+    theme: "light",
+  });
+  return {
+    publish(next) {
+      now = next;
+      act(() => {
+        for (const fn of [...listeners]) fn();
+      });
+    },
+    unmount: () => act(() => unpublish()),
+  };
+}
+/** Installed's line of the plugin titled `title`. */
+const lineSaid = (title: string): string | null =>
+  [...document.body.querySelectorAll(".vf-plugins-item")]
+    .find((item) => item.querySelector(".vf-plugins-title")?.textContent === title)
+    ?.querySelector(".vf-plugins-line")?.textContent ?? null;
+/** What it adds, as the open page says it: each line's words, and what is said under it. */
+const addsSaid = (): (string | null)[][] =>
+  [...(document.body.querySelector("ul.vf-plugins-page-lines")?.children ?? [])].map((line) => [
+    line.firstChild?.textContent ?? null,
+    line.querySelector(".vf-plugins-page-under")?.textContent ?? null,
+  ]);
+
+describe("the pegboard's names in the popup (MK-4d's names; James's MK-O10 pick A)", () => {
+  it("says where each set hangs on Installed's lines and under What it adds, following the board", async () => {
+    const board = mountBoard([{ id: "devices", label: "Devices", count: 3 }]);
+    try {
+      await mount(
+        { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
+        PLUGINS_FIXTURE_LISTED_SNAPSHOT,
+      );
+      toInstalled();
+      expect(lineSaid("Simulators")).toBe("3 objects · Devices · 1.2.0 · comes with VibeField");
+      expect(lineSaid("Kanban")).toBe("2 objects · Devices · 2.1.0");
+      expect(lineSaid("Comment pad")).toBe("1 object · 0.1.0 · comes with VibeField");
+      openInstalled("Simulators");
+      expect(addsSaid()).toEqual([
+        ["Phone", null],
+        ["Tablet", null],
+        ["Apple Watch", words.hangsUnder("Devices")],
+      ]);
+      // the board names the category anew on its next frame: the page follows, never by its id
+      board.publish([{ id: "devices", label: "On the bench", count: 3 }]);
+      expect(addsSaid()[2]).toEqual(["Apple Watch", words.hangsUnder("On the bench")]);
+      expect(bodyText()).not.toContain("devices");
+      // a board that hangs that category no more: no place
+      board.publish([{ id: "things", label: "Things", count: 1 }]);
+      expect(addsSaid()[2]).toEqual(["Apple Watch", null]);
+    } finally {
+      board.unmount();
+    }
+  });
+
+  it("says each set alone once no desk is mounted, as the catalog's popup does", async () => {
+    const board = mountBoard([{ id: "devices", label: "Devices", count: 3 }]);
+    try {
+      await mount(NO_REGISTRY);
+      toInstalled();
+      expect(lineSaid("Simulators")).toBe("3 objects · Devices · 1.2.0 · comes with VibeField");
+    } finally {
+      board.unmount();
+    }
+    // the desk gone (a remount's gap, or none mounted): no name to say a place by
+    expect(lineSaid("Simulators")).toBe("3 objects · 1.2.0 · comes with VibeField");
+    openInstalled("Simulators");
+    expect(addsSaid().map(([, under]) => under)).toEqual([null, null, null]);
   });
 });
 
