@@ -3826,8 +3826,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   to device." · "Your work travels directly, encrypted end to end. VibeField runs no servers. Tailscale sees
   connections, never their contents." (`account/door/door-parts.tsx`, `WHAT_VIBEFIELD_CAN_SEE`). Item 160's code
   slice changes it, with a test that asserts the new words and refuses "no servers", "device to device", "travels
-  directly" and "never their contents", as the phone's own test refuses the first two. The partner line's "Free for
-  personal use." is not this correction's — *a reading of Q-J6, pending James's word.*
+  directly" and "never their contents", as the phone's own test refuses the first two. *Landed 2026-11-14 (item 406
+  S6; the errata rule, at its source):* the owed note above is history now. The door says the drafted fact word for
+  word, and `onboarding-connect-view.test.tsx` asserts it and refuses all four retired phrases; "still says" was the
+  door before S6. The partner line's "Free for personal use." is not this correction's — *a reading of Q-J6, pending
+  James's word.*
   **One click to the browser** (TS-D5): the button
   becomes its status ("Opening Tailscale…", M1), and the browser opens the moment the address
   arrives, once, because the person clicked. **Waiting** names two true steps — "Sign in or create
@@ -3881,21 +3884,30 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   filled alarm (§2.5). Knows means a positive fact (`DeviceInfo.phone`: the device spoke to a desktop of this account
   as a phone, and the account's known phones keep that fact, so a lost phone that stays offline still has its row
   after a restart). "Not a desktop" is not that fact: a desktop whose slice has not arrived reads as one, and a Remove
-  is never taken back. So Remove is never on This Mac, a desktop, or a row whose kind is not yet known. The confirm
+  is never taken back. So Remove is never on This Mac, a desktop, or a row whose kind is not yet known. *Amended
+  2026-11-14 (item 406, the review's folds):* nor on a device once seen as a desktop. When its slice says so, the
+  account forgets any record that called it a phone, and Remove refuses it from then on, even while its slice is away.
+  A device's word that it is a desktop is never second-guessed here, because a Remove cannot be taken back. The confirm
   opens in place under the phone's row (*a reading of Q-J2, pending James's word*), as the page's two-step
   destructive confirm (below, "The destructive uninstall affordance"): its title; what goes and what stays; the line
   that leaves the network side to Tailscale's admin console, with **Manage in Tailscale ↗** (the console's machines
   page, the card's own link); then **Cancel**, leading and focused, and **Remove**, trailing in `--vf-red` text. While
   it runs the act reads "Removing…" and both acts are disabled, as Disconnect's are. A refusal is said inline in
   `--vf-ink-attention`. *Named deviation:* the page's `Refusal` wears Tailwind's amber today, outside the inks, and the
-  slice that draws Remove moves it onto the token. Esc closes the confirm, as it closes the page's sheets. After, the
-  row is gone, because the phone is forgotten, and in its place the page says once "‹name› was removed." with
-  **Manage in Tailscale ↗**, as Disconnect's missed sign-out is said once. Nothing undoes it. Settings' Undo never
-  covers a device (below, "The settings undo affordance"), and the refusal is written outside the undo stack, as the
-  install-set's revocations are. There is no **Allow again** either: a removed phone comes back only as a new phone,
-  after **Start over** on it (*a reading of Q-J3, pending James's word*). Phone rows keep today's mark; this slice
-  adds no phone mark (*a reading of Q-J7, pending James's word*). What Remove closes, and what it does not close yet,
-  is said in §9's lock ("A lost phone…"), as each part lands and never before.
+  slice that draws Remove moves it onto the token. *Landed 2026-11-14 (item 406 S5; the errata rule, at its source):*
+  the deviation is closed. `Refusal` says its line in `--vf-ink-attention`; "today" was the page before S5. The confirm
+  takes focus when it opens (on **Cancel**), and Esc closes it while focus is in it, giving focus back to the row's
+  **Remove…**. *Corrected 2026-11-14 (item 406, the review's folds):* this said "Esc closes the confirm, as it closes
+  the page's sheets". A sheet hears Esc from the whole window; the confirm hears it only while it holds focus, so its
+  Esc never reaches past it to the Settings window. After, the row is gone, because the phone is forgotten, and in its
+  place the page says once "‹name› was removed." with **Manage in Tailscale ↗**, as Disconnect's missed sign-out is
+  said once. The row and its confirm are gone, so the keyboard lands on that **Manage in Tailscale ↗** (*added
+  2026-11-14, the review's folds*). Nothing undoes it. Settings' Undo never covers a device (below, "The settings
+  undo affordance"), and the refusal is written outside the undo stack, as the install-set's revocations are. There
+  is no **Allow again** either: a removed phone comes back only as a new phone, after **Start over** on it (*a reading
+  of Q-J3, pending James's word*). Phone rows keep today's mark; this slice adds no phone mark (*a reading of Q-J7,
+  pending James's word*). What Remove closes, and what it does not close yet, is said in §9's lock ("A lost
+  phone…"), as each part lands and never before.
 - **The sync question** (track TS, TS-D13 ruled A 2026-10-27; built at TS-6, 2026-10-29): a privacy
   choice, asked where it applies — once, at the first **New field** after this Mac connects, never on
   the success screen and no longer in the Setup Assistant. The moment a sign-in lands, before
@@ -8296,12 +8308,13 @@ Mac, the Me menu keeps the login line (23:08:59Z). The words for a network that 
 thinking doc's §11, ruled with TS-D16.*
 *Amended 2026-11-14 (item 406, track WI's Desktop slice; WI-W5b A, James 03:48:09Z; VF-PM 04:49Z; drafts, each
 reading marked pending James's word):* **Remove a phone** (where each word stands is §8 Settings → Devices). The row's
-act is **Remove…**. The confirm: **Remove ‹name›?** · "‹name› stops reaching your agents and your field. Everything on
-your computers stays." (*a reading of Q-J1, pending James's word:* nothing is promised across computers, so no "on all
-your computers" and no "right away"; a computer that was off learns of the Remove at its next merge with one that
-knows) · "It stays on your Tailscale network until you remove it in Tailscale's admin console." with **Manage in
-Tailscale ↗** · **Cancel** · **Remove**; while it runs, "Removing…". After, said once where the row stood: "‹name› was
-removed." · **Manage in Tailscale ↗**. The confirm says nothing of keys, doors, credentials or Tailscale's insides,
+act is **Remove…**, and its accessible name is **Remove ‹name›…**, so several phones read apart to a screen reader
+(*added 2026-11-14, the review's folds*). The confirm: **Remove ‹name›?** · "‹name› stops reaching your agents and
+your field. Everything on your computers stays." (*a reading of Q-J1, pending James's word:* nothing is promised
+across computers, so no "on all your computers" and no "right away"; a computer that was off learns of the Remove at
+its next merge with one that knows) · "It stays on your Tailscale network until you remove it in Tailscale's admin
+console." with **Manage in Tailscale ↗** · **Cancel** · **Remove**; while it runs, "Removing…". After, said once
+where the row stood: "‹name› was removed." · **Manage in Tailscale ↗**. The confirm says nothing of keys, doors, credentials or Tailscale's insides,
 and nothing of the apps your agents made (*a reading of Q-J5, pending James's word:* the console's line covers the
 network side). No word here, on the phone or anywhere else says "from the moment you press Remove", "at once",
 "immediately" or any other immediacy: what Remove closes is said as each part lands, in the lock's amendment below
@@ -8311,7 +8324,10 @@ pending James's word*): when the window asking may not remove devices, "This win
 ‹name› is not known here as a phone, "‹name› isn't known here as a phone, so it can't be removed."; when it has left
 the list, "‹name› is no longer in your devices."; anything else, "Couldn't remove ‹name›. Try again." The acts come
 back with it. An answer that the phone was already removed, here or by another computer, reads as done, and so does a
-Remove whose record could not be written, since the phone is removed either way: neither is a refusal.
+Remove whose record could not be written, since the phone is removed either way: neither is a refusal. *Clarified
+2026-11-14 (item 406, the review's folds):* the record is the audit's. A refusal this computer cannot save is not
+made at all: nothing is refused, nothing reaches your other computers, and the person hears "Couldn't remove ‹name›.
+Try again."
 
 **The phone's door** (track TS, TS-7; TS-D11 A, and James's TS-7 picks "all six A — the leans",
 2026-10-29 05:29:27Z). The phone signs in through iOS's own sign-in sheet, which first asks to use
