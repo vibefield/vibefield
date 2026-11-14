@@ -6833,6 +6833,36 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **A tile** says its title, its act (**Install**, or **Installed** once it is), its summary, and its facts:
       where it comes from — **Built in · VibeField · ‹publisher›**, with **Community** on a community plugin's
       (MK-D13, MK-E11; §8 "The plugin source badge") — and its categories.
+    - *Drawn 2026-11-14 (MK-4e), ‹draft› for James's eye, its words in §9 "The plugins' words":* the shelf stands
+      before its pictures and its categories. Until a picture reaches the window (main's plugin scheme, MK-E9's
+      second half, which no slice builds yet) a mat holds the `plugin` glyph; until the pegboard's names reach the
+      popup (MK-4d) the shelf draws no categories and a tile no category among its facts.
+      - **The shelf** is the body's grid, padded 16: as many columns as fit 200 wide with 12 between them (four in
+        the full 960, one at the narrowest), its tiles 12 apart. While no words are typed the featured set — the
+        first of the list's `featured` the shelf shows — takes the first row whole. Then the sets VibeField
+        publishes, by title, and, while community plugins are on, the community's after them, by title. A plugin
+        the list holds with no listing is not shown (MK-1: one bad listing goes unshown), and a held list with no
+        set to show says its count, as before the shelf.
+      - **A tile** is one press that opens its page, padded 12, corners 16; the hot tile and the one under the
+        pointer wear the ready fill, as a row does. The mat on top, 96 tall, corners 10, on the ready fill, holds
+        the `plugin` glyph 24 in tertiary ink and, 8 in from its foot and its start, its count at §2's Data small
+        (12 · medium · `tabular-nums`, as Updates' count is) in secondary ink ("3 objects"; none on a plugin with
+        no object). 10 under it the title at 14/600 in primary
+        ink, ellipsised, with its act at the line's end as words at 12/600 in tertiary ink; 4 under it its
+        summary at 12/400 in secondary ink, two lines at most; 8 under it its source pill (§8 "The plugin source
+        badge"), **Community** 8 after it on a community set; and, 6 under them, when typed words found it by one
+        of its objects, that object's line at 12/400 in tertiary ink ("Has Watch"). Its act is **Installed** when this
+        desktop has it, **Install** when it doesn't, and the words for a set that needs a newer VibeField when
+        the list says it can't run here (the catalog's `compatible`), with no Install.
+      - **The featured tile** lays the same parts side by side: its mat 240 wide and 136 tall, its words 16
+        after it, its title at 15/600 (§2's Title).
+      - **Keys** (the caret's share, owed in "Keys" below): ↑ ↓ walk the tiles a row at a time, from the
+        featured tile to the grid's first and back; ← → walk them one at a time while the field holds no words,
+        and move the caret once it holds any. The hot tile stays in sight as a row does, and ↵ opens its page.
+      - **Search**: typed words keep the sets whose title, summary or objects' labels hold every word, in the
+        shelf's order, with no featured row; a set found by one of its objects says which. When none is found
+        the body says so, centred as Installed's state is; while community plugins are off and the list holds
+        community sets, the results say their objects aren't searched (§9).
     - **The community tile** (MK-D6; TD-17) stands at Discover's end, its switch off by default. Turned on the first
       time, it asks once, in place, with trust-and-distribution §7's statement word for word: "Community plugins run
       with the app's access. VibeField reviews the first listing and rebuilds every version from source; nothing
@@ -6921,6 +6951,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     rows not yet built (MK-4a stops there: the shelf waits on its pictures, which reach the window through main's
     plugin scheme, and on its own numbers, owed below), both say the list's count and offer nothing ‹draft›, a state
     no build reaches today, since none configures a registry. The last two ‹draft› lines are MK's, for James's eye.
+    *Corrected 2026-11-14 (MK-4e):* Discover's shelf is drawn (above) and stands without its pictures, so with a
+    list held Discover shows its sets; Updates says the count until its rows are built, and so does Discover
+    when the list holds no set it shows.
   - **The read on open** (MK-D5): opening the popup is your act, so each opening reads the registry's signed list —
     one read, carrying no identity, on no timer and with no push feed. The list it last read shows at once, with its
     time in the foot ("checked 14:02"), never implied fresh, and the foot says a read is under way until it lands;
@@ -7045,6 +7078,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       build only Installed's rows open one (Discover's tiles and Updates' rows are not built). As shipped on
       2026-11-11 no build configures a registry, so the pages a person can open are Built in plugins' and, under a
       developer's roots, Development ones'.
+      *Corrected 2026-11-14 (MK-4e):* Discover's tiles open a page too. A set this desktop has opens the page
+      above. A set it doesn't have opens a page read from the list held: the listing's summary as its own
+      words; **What it adds**, each object by its label, then "‹n› tools for your agents" or "A service" when the
+      listing counts any; **Made by**, the list's word for its maker; **Version**, the list's latest; and no
+      **What it can do**, for the list carries no powers: the install card says them, read from the plugin
+      downloaded (MK-O2). Where its act will stand holds nothing until the install's slice (O2-C) draws it.
       - **Its back row** stands at its top, 36 tall, padded 0 10, corners 10: the `chevron` 12 pointing back and
         the tab's word at 12/500 in secondary ink, the ready fill under the pointer. A press or Esc goes back.
         *Drawn 2026-11-11 (MK-4c's rider; VF-PM 17:54:22Z), ‹draft›:* it stands 8 under the body's top and 14
@@ -7176,6 +7215,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     **Install**; **Esc** answers the nearest first, on the window's capture phase before anything else hears it: an
     open question (the install card, Remove…'s question, the community statement), then a plugin's page, which goes
     back to its tab, then the popup, which folds. Over Godview it holds the stage's keys, as the Peek does (QL-D2).
+    *Drawn 2026-11-14 (MK-4e):* how ← → share the field's caret on Discover is under Discover, its **Keys**.
     **One surface at a time**: the popup is one of the frame's open surfaces, **`plugins`** (§10). Opening it folds
     the Peek, the palette, the Me menu, the pill's sheet, Objects, the hand raised, every other surface and
     Settings; any of them, Settings or a change of view folds it. ⌘K over it opens the palette, and ⌘F over it opens
@@ -7189,6 +7229,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Q7): this gave the catalog's plates to MK-6; MK-4a builds them with their boundary rule.*
     *Corrected 2026-11-14, at its source (James's MK-O6 pick, 2026-11-11 22:34:31Z):* the page has no Undo and no
     Redo (MK-4c2b's "Its settings", above), so where they stand is owed no more.
+    *Drawn 2026-11-14 (MK-4e):* the grid, its tiles and the featured set, under Discover, the grid one column at
+    the narrowest; the rest above stays owed.
   - **Its words** are in §9 "The plugins' words": the tabs, the acts, the sources, the statement, the powers in
     plain words and every state's sentence. Nothing in it names a key, a signature, a hash, a rung, a worker or a
     process, a restart or a reload, a repository's address, a power's id or a daemon (§9, VibeField's insides).
@@ -9266,6 +9308,16 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   **Discover**, or the tab it came from) goes back; its sections are **What it adds** (each ‹object›, "Hangs under
   ‹category›", then its tools and services), **Settings**, **What it can do**, **Made by** (its maker; for a listed
   plugin, "Reviewed by ‹name›", who reviewed its first listing) and **Version**.
+  *Added 2026-11-14 (MK-4e, Discover's shelf), MK's words, ‹draft›, for James's eye:*
+  - A mat says its count as Installed's line does, one as one: "3 objects", "1 object"; a plugin with no object,
+    none.
+  - A set that needs a newer VibeField says "Needs a newer VibeField" where its act stands. §9 drew "Needs 0.10"
+    from its `engines.app` floor (below); the catalog the popup reads says only whether it can run here, so the
+    version waits for the list to carry it in a form the popup reads.
+  - Discover, when no set holds every typed word: "No plugin in the list matches “‹words›”." (Installed's
+    "None of your plugins matches …" is its pattern.) While community plugins are off, the results end with
+    their ruled line, "Community plugins are off, so their objects aren't searched." (below).
+  - To assistive tech, Discover's grid is named "Discover", as Installed's list is named "Installed".
 - **Reading the list** (MK-D5). Opening the popup reads the plugin list, and the list it already holds shows at once,
   its time always said and never implied fresh. While a read runs the foot says **Reading the plugin list…**
   ‹draft› · "showing the list from 14:02" (with no list held yet, **Reading the plugin list…** alone
