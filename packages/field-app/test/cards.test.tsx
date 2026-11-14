@@ -488,7 +488,7 @@ describe("a card picked up is a modal (R-B 1, R-D 11)", () => {
     }
   });
 
-  it("is a dialog named by its card: the keyboard moves to Done, Tab walks Remove and Done and never out, a key on its own button goes no further, and Esc gives the keyboard back", () => {
+  it("is a dialog named by its card: the keyboard moves to Done, Tab walks Remove, Flip it and Done and never out, a key on its own button goes no further, and Esc gives the keyboard back", () => {
     const store = handOf("a", "b", "c");
     const el = mount(<Owned store={store} host={fakeHost()} />);
     const under = paneHears();
@@ -498,15 +498,17 @@ describe("a card picked up is a modal (R-B 1, R-D 11)", () => {
     expect(layer?.getAttribute("aria-modal")).toBe("true");
     expect(layer?.getAttribute("aria-label")).toBe("Words of b.");
     const bar = layer?.querySelectorAll<HTMLElement>(".vf-cards-bar button") ?? [];
-    const [remove, done] = [...bar];
-    if (remove === undefined || done === undefined) throw new Error("no bar");
+    const [remove, flip, done] = [...bar];
+    if (remove === undefined || flip === undefined || done === undefined) throw new Error("no bar");
     expect(document.activeElement).toBe(done);
     expect(press(done, { key: "Tab" }).defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(remove);
     press(remove, { key: "Tab" });
+    expect(document.activeElement).toBe(flip);
+    press(flip, { key: "Tab" });
     expect(document.activeElement).toBe(done);
     press(done, { key: "Tab", shiftKey: true });
-    expect(document.activeElement).toBe(remove);
+    expect(document.activeElement).toBe(flip);
     const desk = deskHears();
     try {
       press(remove, { key: "b" });

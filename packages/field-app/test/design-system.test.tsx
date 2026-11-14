@@ -778,7 +778,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(heldLayer?.dataset.phase).toBe("up");
     expect(heldLayer?.getAttribute("role")).toBe("dialog");
     const heldBar = [...(heldLayer?.querySelectorAll(".vf-cards-bar button") ?? [])];
-    expect(heldBar.map((b) => b.textContent)).toEqual(["Remove", "Done"]);
+    expect(heldBar.map((b) => b.textContent)).toEqual(["Remove", "Flip it", "Done"]);
     expect(document.activeElement?.closest(".vf-ds-cards-plate")).toBeFalsy();
     const carriedPlate = cardPlate("carried");
     const keptPlace = carriedPlate?.querySelector('[data-slot="fx-text"]');

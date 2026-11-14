@@ -492,8 +492,12 @@ describe("a card picked up (HN-D5)", () => {
     expect(bar?.querySelector(".vf-cards-bar-from")?.textContent).toBe(
       provenance(CARDS[1] as Card, NOW, "mac"),
     );
-    const [remove, done] = [...(bar?.querySelectorAll("button") ?? [])];
-    expect([remove?.textContent, done?.textContent]).toEqual(["Remove", "Done"]);
+    const [remove, flip, done] = [...(bar?.querySelectorAll("button") ?? [])];
+    expect([remove?.textContent, flip?.textContent, done?.textContent]).toEqual([
+      "Remove",
+      "Flip it",
+      "Done",
+    ]);
     act(() => remove?.click());
     expect(onRemoveHeld).toHaveBeenCalledTimes(1);
     act(() => done?.click());
@@ -510,8 +514,9 @@ describe("a card picked up (HN-D5)", () => {
     expect(layer?.getAttribute("aria-modal")).toBe("true");
     expect(layer?.getAttribute("aria-label")).toBe("Words of b.");
     const bar = layer?.querySelectorAll<HTMLElement>(".vf-cards-bar button") ?? [];
-    const [remove, done] = [...bar];
-    // the keys said, never printed (FR-5)
+    const [remove, flip, done] = [...bar];
+    // the keys said, never printed (FR-5); Flip it has none (its other way is a double-click)
+    expect(flip?.hasAttribute("aria-keyshortcuts")).toBe(false);
     expect(remove?.getAttribute("title")).toBe("Remove  ⌫");
     expect(remove?.getAttribute("aria-keyshortcuts")).toBe("Backspace");
     expect(done?.getAttribute("title")).toBe("Done  Esc");
