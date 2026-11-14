@@ -6,6 +6,7 @@ import {
   CATALOG_COUNTED,
   CATALOG_FIXTURES,
   CATALOG_LISTED,
+  CATALOG_SHELF,
   communityFixtureDoor,
   PLUGINS_FIXTURE_HELD_SNAPSHOT,
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
@@ -42,6 +43,9 @@ import {
 // with its ask standing (§8 "The community tile"), and a community plugin held
 // while community plugins are off, on Installed and on its page. A press on the
 // tile's switch is sent to a fixture door, which answers and moves nothing.
+// MK-4e adds Discover's shelf over a list held — its featured set, the sets
+// VibeField publishes, one that needs a newer VibeField — and the page of a set
+// this desktop doesn't have, read from the list, opened from Discover.
 
 export type PluginsPlateState =
   | "no-registry"
@@ -64,7 +68,9 @@ export type PluginsPlateState =
   | "community"
   | "community-ask"
   | "community-held"
-  | "community-held-page";
+  | "community-held-page"
+  | "shelf"
+  | "shelf-page";
 
 const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   "no-registry": {
@@ -106,6 +112,8 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   "community-ask": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
   "community-held": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
   "community-held-page": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
+  shelf: { catalog: CATALOG_SHELF, refresh: CATALOG_SHELF },
+  "shelf-page": { catalog: CATALOG_SHELF, refresh: CATALOG_SHELF },
 };
 
 /** The page a plate opens on, from Installed. */
@@ -120,6 +128,7 @@ const PLATE_PAGES: Readonly<Partial<Record<PluginsPlateState, string>>> = {
   "settings-here": "vibefield.comment-pad",
   "settings-unread": "vibefield.simulator",
   "community-held-page": "acme.kanban",
+  "shelf-page": "vibefield.desk-things",
 };
 
 /** The plugins a plate's desktop has. */
@@ -133,6 +142,8 @@ function plateSnapshot(state: PluginsPlateState) {
 
 function plateTab(state: PluginsPlateState): PluginsTab {
   if (state === "count") return "updates";
+  // MK-4e: the shelf's plates stand on Discover, and a page opens from there
+  if (state.startsWith("shelf")) return "discover";
   return state === "installed" || state === "community-held" || state in PLATE_PAGES
     ? "installed"
     : "discover";

@@ -95,6 +95,65 @@ export const CATALOG_LISTED = PluginsCatalog.parse({
  * count, which Updates carries). */
 export const CATALOG_COUNTED = PluginsCatalog.parse({ ...CATALOG_FIXTURES.ready, updates: 2 });
 
+/** A release the list pins, as a fixture entry's `latest`. */
+function release(id: string, version: string): Record<string, unknown> {
+  return {
+    version,
+    artifactUrl: `artifacts/${id}-${version}.vfplugin`,
+    sha256: PIN,
+    minApp: "0.9.0",
+    minContracts: "0.1.0",
+    publishedAt: PLUGINS_FIXTURE_READ_AT,
+  };
+}
+
+/** A list held with sets to show (MK-4e's shelf plates): Simulators, featured, which this desktop has as a
+ * Built in plugin; Desk things, four objects it doesn't have; Burndown, which needs a newer VibeField; Kanban, a
+ * community set, shown only while community plugins are on; and one the list holds with no listing, never
+ * shown. */
+export const CATALOG_SHELF = PluginsCatalog.parse({
+  ...CATALOG_LISTED,
+  plugins: [
+    ...CATALOG_LISTED.plugins,
+    {
+      id: "vibefield.desk-things",
+      listedAs: "vibefield",
+      latest: release("vibefield.desk-things", "1.0.0"),
+      compatible: true,
+      listing: {
+        title: "Desk things",
+        summary: "Small things that keep time and measure, for the desk.",
+        publisherName: "VibeField",
+        objects: [
+          { type: "vibefield.desk-things.clock", label: "Clock", category: "things" },
+          { type: "vibefield.desk-things.calendar", label: "Calendar", category: "things" },
+          { type: "vibefield.desk-things.timer", label: "Timer", category: "things" },
+          { type: "vibefield.desk-things.ruler", label: "Ruler", category: "tools" },
+        ],
+        tools: 0,
+        services: 0,
+      },
+    },
+    {
+      id: "vibefield.burndown",
+      listedAs: "vibefield",
+      latest: release("vibefield.burndown", "0.7.0"),
+      compatible: false,
+      listing: {
+        title: "Burndown",
+        summary: "How much is left, drawn as it goes.",
+        objects: [{ type: "vibefield.burndown.chart", label: "Burndown", category: "things" }],
+      },
+    },
+    {
+      id: "acme.unlisted",
+      listedAs: "community",
+      latest: release("acme.unlisted", "0.1.0"),
+      compatible: true,
+    },
+  ],
+});
+
 /** How a plate's fixture port answers: a list, a door that fails, or a read
  * still under way (it never ends, so the plate holds the reading state). */
 export interface PluginsFixtureRead {

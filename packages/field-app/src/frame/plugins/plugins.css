@@ -341,6 +341,179 @@
   color: var(--vf-ink-attention);
 }
 
+/* ── Discover's shelf (MK-4e; §8 "Discover", drawn 2026-11-14, ‹draft›): the
+   body's grid, padded 16, as many columns as fit 200 wide with 12 between them
+   (the controller's, projected inline), its tiles 12 apart; the featured tile
+   takes its first row whole. A tile is one press, padded 12, corners 16, the
+   hot one and the pointer's in the ready fill: the mat on top, 96 tall, corners
+   10, on the ready fill, the `plugin` glyph 24 in tertiary ink and the count 8
+   in from its foot and its start at §2's Data small (12/500, tabular) in
+   secondary ink; 10 under it the title at 14/600 with its act at the line's end
+   at 12/600 in tertiary ink; 4 under it the summary at 12/400 in secondary ink,
+   two lines at most; 8 under it its pills, 8 apart; 6 under them the object it
+   was found by, at 12/400 in tertiary ink. The featured tile lays them side by
+   side: its mat 240 × 136, its words 16 after it, its title at 15/600 (§2's
+   Title). Typed words that find none: the state centred in the body, as
+   Installed's is. ── */
+.vf-plugins-shelf {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 16px;
+}
+
+.vf-plugins-shelf[data-none="true"] {
+  flex: 1;
+  align-content: center;
+}
+
+.vf-plugins-grid {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vf-plugins-tile-item {
+  display: flex;
+  min-width: 0;
+  border-radius: 16px;
+}
+
+.vf-plugins-tile-item[data-featured="true"] {
+  grid-column: 1 / -1;
+}
+
+.vf-plugins-tile-item:hover,
+.vf-plugins-tile-item[data-hot="true"] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-plugins-tile {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 0;
+  border-radius: 16px;
+  color: inherit;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vf-plugins-tile-item[data-featured="true"] .vf-plugins-tile {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.vf-plugins-mat {
+  position: relative;
+  display: grid;
+  height: 96px;
+  flex: none;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--vf-text-tertiary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-plugins-tile-item[data-featured="true"] .vf-plugins-mat {
+  width: 240px;
+  height: 136px;
+}
+
+.vf-plugins-mat-count {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.vf-plugins-tile-text {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  align-content: start;
+}
+
+.vf-plugins-tile-head {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.vf-plugins-tile-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--vf-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-plugins-tile-item[data-featured="true"] .vf-plugins-tile-title {
+  font-size: 15px;
+}
+
+.vf-plugins-tile-act {
+  flex: none;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.vf-plugins-tile-summary {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.vf-plugins-tile-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.vf-plugins-tile-has {
+  margin-top: 6px;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+/* while community plugins are off, the results end with why their sets aren't there */
+.vf-plugins-shelf-note {
+  margin: 0;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: center;
+}
+
 /* ── a plugin's page, read only (MK-4c; §8 "Read only first", drawn 2026-11-11,
    ‹draft›): its back row at its top, 36 tall, padded 0 10, corners 10, the
    `chevron` 12 turned back and the tab's word at 12/500 in secondary ink, the

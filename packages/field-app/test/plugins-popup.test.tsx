@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   type PluginRegistrySnapshot,
-  type PluginsCatalog,
+  PluginsCatalog,
   pluginPowerWords,
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CATALOG_FIXTURES,
   CATALOG_LISTED,
+  CATALOG_SHELF,
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_READ_AT,
@@ -212,10 +213,13 @@ describe("the read on open (MK-D5)", () => {
       refresh: () => Promise.resolve(CATALOG_FIXTURES.ready),
     };
     await mount(port);
-    expect(bodyText()).toContain("1 plugin, 3 objects");
+    // MK-4e: the held list's count is the foot's; the body is its shelf
+    expect(footText()).toContain("1 plugin, 3 objects");
+    expect(bodyText()).toContain("Simulators");
     await act(async () => answerHeld(CATALOG_FIXTURES.unread));
     await settle();
-    expect(bodyText()).toContain("1 plugin, 3 objects");
+    expect(footText()).toContain("1 plugin, 3 objects");
+    expect(bodyText()).toContain("Simulators");
   });
 });
 
@@ -265,11 +269,23 @@ describe("its states, in the body — never a blank", () => {
     expect(bodyText()).toBe(words.NO_LIST.refused);
   });
 
-  it("a list held, before the shelf is built: its count, and when it was read", async () => {
+  it("a list held: Discover's shelf (MK-4e), and the foot's count and when it was read", async () => {
     await mount({ catalog: CATALOG_FIXTURES.ready, refresh: CATALOG_FIXTURES.ready });
-    expect(bodyText()).toBe("1 plugin, 3 objects");
+    const featured = document.body.querySelector('.vf-plugins-tile-item[data-featured="true"]');
+    expect(featured?.querySelector(".vf-plugins-tile-title")?.textContent).toBe("Simulators");
+    expect(bodyText()).not.toContain("1 plugin, 3 objects");
     const when = words.listTime(PLUGINS_FIXTURE_READ_AT, PLUGINS_FIXTURE_NOW);
     expect(footText()).toBe(`1 plugin, 3 objects · checked ${when}`);
+  });
+
+  it("a list held with no set to show says its count, as before the shelf (MK-4e)", async () => {
+    const communityOnly = PluginsCatalog.parse({
+      ...CATALOG_LISTED,
+      featured: [],
+      plugins: CATALOG_LISTED.plugins.filter((entry) => entry.listedAs === "community"),
+    });
+    await mount({ catalog: communityOnly, refresh: communityOnly });
+    expect(bodyText()).toBe("1 plugin, 2 objects");
   });
 
   it("neither door answering is said in IS-282-2's words", async () => {
@@ -816,6 +832,126 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first')", () => {
     } finally {
       resetPluginUpdates();
     }
+  });
+});
+
+const tileTitles = (): (string | null)[] =>
+  [...document.body.querySelectorAll(".vf-plugins-tile-title")].map((node) => node.textContent);
+const tileActs = (): (string | null)[] =>
+  [...document.body.querySelectorAll(".vf-plugins-tile-act")].map((node) => node.textContent);
+const hotTile = (): string | null =>
+  document.body.querySelector('.vf-plugins-tile-item[data-hot="true"] .vf-plugins-tile-title')
+    ?.textContent ?? null;
+const tile = (title: string): HTMLButtonElement | null =>
+  [...document.body.querySelectorAll<HTMLButtonElement>(".vf-plugins-tile")].find(
+    (button) => button.querySelector(".vf-plugins-tile-title")?.textContent === title,
+  ) ?? null;
+/** Words typed in the field, as a person types them. */
+const typeWords = (value: string): void =>
+  act(() => {
+    const input = field();
+    if (input === null) return;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+const SHELF: PluginsFixtureRead = { catalog: CATALOG_SHELF, refresh: CATALOG_SHELF };
+
+describe("Discover's shelf (MK-4e; §8 'Discover')", () => {
+  it("shows the featured set, then VibeField's, each saying its act, and asks fieldd nothing more", async () => {
+    const { port, calls } = counting(pluginsFixturePort(SHELF));
+    await mount(port);
+    expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things"]);
+    expect(tileActs()).toEqual([
+      words.PAGE_WORDS.installed,
+      words.SHELF_WORDS.needsNewer,
+      words.SHELF_WORDS.install,
+    ]);
+    expect(bodyText()).toContain("4 objects");
+    // a community set waits for community plugins, and one with no listing is never shown
+    expect(bodyText()).not.toContain("Kanban");
+    // a tile is no stop of Tab: the field keeps the keys
+    expect(tile("Desk things")?.tabIndex).toBe(-1);
+    // each tile carries its plugin's id for the market's smoke rows (MK-6's A4), never on screen
+    expect(
+      [...document.body.querySelectorAll(".vf-plugins-body [data-plugin]")].map((node) =>
+        node.getAttribute("data-plugin"),
+      ),
+    ).toEqual(["vibefield.simulator", "vibefield.burndown", "vibefield.desk-things"]);
+    expect(bodyText()).not.toContain("vibefield.desk-things");
+    expect(calls).toEqual({ catalog: 1, refresh: 1 });
+  });
+
+  it("walks its tiles from the field, ↓ ↑ a row and ← → one, and ↵ opens the hot one's page", async () => {
+    await mount(SHELF);
+    expect(hotTile()).toBe("Simulators");
+    press("ArrowDown");
+    expect(hotTile()).toBe("Burndown");
+    press("ArrowRight");
+    expect(hotTile()).toBe("Desk things");
+    press("ArrowLeft");
+    expect(hotTile()).toBe("Burndown");
+    press("ArrowUp");
+    expect(hotTile()).toBe("Simulators");
+    press("ArrowDown");
+    press("ArrowRight");
+    press("Enter");
+    expect(pageTitle()).toBe("Desk things");
+    const back = document.body.querySelector<HTMLButtonElement>(".vf-plugins-back");
+    expect(back?.getAttribute("aria-label")).toBe(words.PAGE_WORDS.back("Discover"));
+    expect(bodyText()).toContain("Calendar");
+    expect(bodyText()).toContain("Small things that keep time and measure, for the desk.");
+    // a set this desktop doesn't have says no power, and stands no act yet
+    expect(bodyText()).not.toContain(words.PAGE_WORDS.can);
+    expect(document.body.querySelector(".vf-plugins-page-act")).toBeNull();
+    esc();
+    expect(pageTitle()).toBeNull();
+    expect(chosen()).toBe(words.PLUGINS_TAB_WORDS.discover);
+  });
+
+  it("opens a set's page on a press, and a set this desktop has opens its own page", async () => {
+    await mount(SHELF);
+    act(() => tile("Simulators")?.click());
+    expect(pageTitle()).toBe("Simulators");
+    expect(bodyText()).toContain(words.PAGE_WORDS.can);
+    expect(document.body.querySelector(".vf-plugins-page-act")?.textContent).toBe(
+      words.PAGE_WORDS.installed,
+    );
+  });
+
+  it("searches its sets by typed words, says the object it found one by, and leaves ← → to the caret", async () => {
+    await mount(SHELF);
+    typeWords("ruler");
+    expect(tileTitles()).toEqual(["Desk things"]);
+    expect(bodyText()).toContain(words.SHELF_WORDS.has("Ruler"));
+    expect(bodyText()).toContain(words.SHELF_WORDS.communityOff);
+    // "desk" finds two sets (Simulators by its summary). → would walk to the second, so the hot
+    // tile staying says → is the caret's while words are typed
+    typeWords("desk");
+    expect(tileTitles()).toEqual(["Desk things", "Simulators"]);
+    expect(hotTile()).toBe("Desk things");
+    press("ArrowRight");
+    expect(hotTile()).toBe("Desk things");
+    typeWords("nothing here");
+    expect(bodyText()).toContain(words.SHELF_WORDS.none("nothing here"));
+    expect(tileTitles()).toEqual([]);
+  });
+
+  it("adds the community's sets after VibeField's while community plugins are on", async () => {
+    act(() =>
+      root.render(
+        <Plugins
+          surface="plugins"
+          onSurfaceChange={() => undefined}
+          port={pluginsFixturePort(SHELF)}
+          snapshot={PLUGINS_FIXTURE_SNAPSHOT}
+          community
+          now={() => PLUGINS_FIXTURE_NOW}
+        />,
+      ),
+    );
+    await settle();
+    expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things", "Kanban"]);
+    expect(bodyText()).not.toContain(words.SHELF_WORDS.communityOff);
   });
 });
 

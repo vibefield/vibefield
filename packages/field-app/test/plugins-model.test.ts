@@ -307,6 +307,8 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
       offLine: null,
       // MK-4c2b: it declares no setting here, so its page has no Settings section
       settings: null,
+      // MK-4e: this desktop has it
+      installed: true,
     });
     // off the Mac, no Mac note
     const offMac = pluginPage(simulators, null, PLUGINS_FIXTURE_SNAPSHOT, false);
@@ -931,6 +933,10 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
   "PAGE_WORDS.inPalette": [[true], [false]],
   "PAGE_WORDS.tools": [[1], [6]],
   "SWITCH_WORDS.refused": [[true], [false]],
+  // MK-4e (acts a): Discover's shelf, a set's picture, a search that finds none
+  "SHELF_WORDS.count": [[0], [1], [3]],
+  "SHELF_WORDS.has": [["Clock"]],
+  "SHELF_WORDS.none": [["clock"]],
 };
 
 /** The strings a value says: strings as they are, objects and arrays by their

@@ -200,6 +200,24 @@ export const SETTINGS_WORDS = {
   footHere: "These settings stay on this desktop.",
 } as const;
 
+/** Discover's shelf (MK-4e; DESIGN.md §8 "Discover", §9 "The popup"'s MK-4e block). A tile's act is "Install" (§9
+ * "Installing, and after"), or "Installed" (`PAGE_WORDS.installed`), or, for a set the list says can't run here,
+ * MK's words; a mat says its count as Installed's line does; "Has Watch" and the community line are §9's. The rest
+ * are MK's, ‹draft›, for James's eye. */
+export const SHELF_WORDS = {
+  install: "Install",
+  /** a set the list says can't run on this VibeField (MK's) */
+  needsNewer: "Needs a newer VibeField",
+  /** the mat's count: "3 objects", "1 object" */
+  count: (objects: number) => plural(objects, "object", "objects"),
+  /** a set typed words found by one of its objects (§9 "The popup") */
+  has: (label: string) => `Has ${label}`,
+  /** no set holds every typed word (MK's; Installed's line below is its pattern) */
+  none: (query: string) => `No plugin in the list matches “${query.trim()}”.`,
+  /** while community plugins are off, at the results' end (§9 "Community plugins") */
+  communityOff: "Community plugins are off, so their objects aren't searched.",
+} as const;
+
 /** Installed, when no plugin holds every typed word (MK's, ‹draft›; the Peek's "Nothing in your past holds every
  * word of “q”" is its pattern). */
 export function noMatchWords(query: string): string {

@@ -6,8 +6,9 @@ import { PluginsPlate } from "../PluginsPreview";
 // frame's second popup as it opens today, on fixture ports — the shipping
 // controller in each state the read can be in, a plugin's page, read only
 // (MK-4c), Updates carrying the Me row's count, (MK-4c2a) a plugin's switches
-// and (MK-4c2b) its settings. Discover's shelf and Updates' rows come with later
-// MK-4 parts. MK-O3D: Discover's community tile and its ask, and a community
+// and (MK-4c2b) its settings, and (MK-4e) Discover's shelf over a list held, with
+// the page of a set this desktop doesn't have. Updates' rows come with a later
+// MK-4 part. MK-O3D: Discover's community tile and its ask, and a community
 // plugin held while community plugins are off.
 
 export function PluginsSection(): ReactElement {
@@ -47,11 +48,25 @@ export function PluginsSection(): ReactElement {
         <PluginsPlate state="refused" />
       </Specimen>
       <Specimen
-        title="A list held, before Discover's shelf is built"
-        source="frame/plugins/plugins-model.ts"
+        title="Discover — a list held of one set, featured"
+        source="frame/plugins/plugins-shelf.ts"
         bleed
       >
         <PluginsPlate state="held" />
+      </Specimen>
+      <Specimen
+        title="Discover's shelf — the featured set, then VibeField's, one needing a newer VibeField"
+        source="frame/plugins/PluginsShelf.tsx · frame/plugins/plugins-shelf.ts"
+        bleed
+      >
+        <PluginsPlate state="shelf" />
+      </Specimen>
+      <Specimen
+        title="A set this desktop doesn't have — its page, read from the list"
+        source="frame/plugins/plugins-shelf.ts"
+        bleed
+      >
+        <PluginsPlate state="shelf-page" />
       </Specimen>
       <Specimen
         title="VibeField's plugins don't answer"

@@ -47,6 +47,15 @@ import {
   walkHot,
 } from "./plugins-model";
 import { type PluginsPort, pluginsPortOver } from "./plugins-port";
+import {
+  discoverShelf,
+  isShelfKey,
+  listedPage,
+  shelfColumns,
+  shelfOrder,
+  shelfShows,
+  walkShelf,
+} from "./plugins-shelf";
 
 // THE PLUGINS POPUP'S CONTROLLER (MK-4a; DESIGN.md §8 "Plugins — the frame's
 // second popup"): the frame's second popup, built the way search is. It is one
@@ -72,7 +81,13 @@ import { type PluginsPort, pluginsPortOver } from "./plugins-port";
 // a section the controller mounts once per page opening and hands the view, so
 // the view holds no state; each setting reads and keeps its value over the
 // requests Settings → Plugins sends today. No Undo and no Redo on the page
-// (James's MK-O6 pick): going back stays in Settings.
+// (James's MK-O6 pick): going back stays in Settings. MK-4e: over a held list
+// Discover draws its shelf (`plugins-shelf.ts`) from the list this popup
+// already read and the snapshot the window holds; ↑ ↓ walk its tiles a row at
+// a time and ← → one at a time while the field holds no words, kept in sight;
+// a tile, or ↵ on the hot one, opens its page, and a set this desktop doesn't
+// have opens a page read from the list alone. Community sets join only while
+// community plugins are on (`community`, which the switch's slice feeds).
 // Its doors (MK-4b) are the Me menu's Plugins… row and the palette's Plugins…
 // and Check plugins for updates, each through ChromeLayer's `openPlugins`; the
 // pegboard's pill is MK-4d's. The catalog mounts this controller over a
@@ -116,7 +131,7 @@ export interface PluginsProps {
   updates?: number | null;
   /** Whether a page says a power's Mac note (and "this Mac" where a power names the machine). */
   onMac?: boolean;
-  /** A plugin whose page each opening starts on, from Installed (a plate's; the product passes none). */
+  /** A plugin whose page each opening starts on, from the tab it starts on (a plate's; the product passes none). */
   initialPage?: string | null;
   /** fieldd isn't answering this window (MK-4c2a): no switch takes a press. A plate passes a fixture's. */
   away?: boolean;
@@ -137,8 +152,9 @@ interface OpenPage {
   readonly from: PluginsTab;
 }
 
-const pageAt = (id: string | null | undefined): OpenPage | null =>
-  id === null || id === undefined ? null : { id, from: "installed" };
+/** A plate's starting page, opened from the tab it starts on (MK-4e: a set's page from Discover). */
+const pageAt = (id: string | null | undefined, from: PluginsTab): OpenPage | null =>
+  id === null || id === undefined ? null : { id, from };
 
 export function Plugins({
   surface,
@@ -167,7 +183,7 @@ export function Plugins({
   const [read, setRead] = useState<PluginsRead>({ kind: "asking" });
   const [reading, setReading] = useState(false);
   const [box, setBox] = useState(() => boxOf(container));
-  const [page, setPage] = useState<OpenPage | null>(() => pageAt(initialPage));
+  const [page, setPage] = useState<OpenPage | null>(() => pageAt(initialPage, initialTab));
   const [hot, setHot] = useState(0);
   // the switches whose request is out, and those fieldd refused, by key (with
   // whose each is and the way it was turning); the set is also kept in a ref, so
@@ -198,7 +214,7 @@ export function Plugins({
     if (open) {
       setTab(initialTab);
       setQuery("");
-      setPage(pageAt(initialPage));
+      setPage(pageAt(initialPage, initialTab));
       setHot(0);
       setRefused(new Map());
       // the last opening's "neither door answered" is not this one's: it says
@@ -347,21 +363,35 @@ export function Plugins({
   const shelf = shelfState(read, reading);
   const foot = catalogFoot(read, reading, now(), community === false);
   const catalog = read.kind === "answered" ? read.catalog : null;
-  // Q6: the field's words filter Installed's rows; Discover's and Updates'
-  // search waits for the shelf, and the words are kept across the switch.
+  // Q6: the field's words filter Installed's rows and (MK-4e) Discover's shelf;
+  // Updates' search waits for its rows, and the words are kept across the switch.
   const installed = useMemo(
     () => (snapshot === null ? null : installedRows(snapshot, catalog, query)),
     [snapshot, catalog, query],
   );
-  // the hot row, held to the rows there are
-  const hotAt = installed === null ? 0 : Math.max(0, Math.min(hot, installed.length - 1));
-  // a page reads the record the window holds; a plugin gone from it closes its page
+  // MK-4e: Discover's shelf, over a held list with a set to show or typed words to answer; its columns fit the
+  // popup's width, and its tiles in the order the keys walk them
+  const discover = useMemo(() => {
+    if (catalog === null || shelf.kind !== "counted") return null;
+    const built = discoverShelf(catalog, snapshot, query, community === true);
+    return shelfShows(built) ? built : null;
+  }, [catalog, shelf.kind, snapshot, query, community]);
+  const columns = shelfColumns(layout.width);
+  const tiles = useMemo(() => (discover === null ? [] : shelfOrder(discover)), [discover]);
+  // the hot row or tile, held to those there are
+  const walked =
+    tab === "installed" ? (installed?.length ?? 0) : tab === "discover" ? tiles.length : 0;
+  const hotAt = Math.max(0, Math.min(hot, walked - 1));
+  // a page reads the record the window holds; a plugin gone from it closes its page, unless the list held
+  // offers it (MK-4e: a set this desktop doesn't have, read from the list alone)
   const shown = useMemo(() => {
-    const record =
-      page === null ? undefined : snapshot?.plugins.find((plugin) => plugin.id === page.id);
-    return record === undefined || snapshot === null
-      ? null
-      : pluginPage(record, catalog, snapshot, onMac);
+    if (page === null) return null;
+    const record = snapshot?.plugins.find((plugin) => plugin.id === page.id);
+    if (record !== undefined && snapshot !== null) {
+      return pluginPage(record, catalog, snapshot, onMac);
+    }
+    const entry = catalog?.plugins.find((listed) => listed.id === page.id);
+    return entry === undefined ? null : listedPage(entry);
   }, [page, snapshot, catalog, onMac]);
 
   // A switch's one request (§8 "Its switches"): none while fieldd isn't
@@ -465,43 +495,64 @@ export function Plugins({
     [dropAsk],
   );
 
-  // The hot row stays in sight as the keys walk it (as the Peek's does).
+  // The hot row, or Discover's hot tile (MK-4e), stays in sight as the keys walk it (as the Peek's does).
   useEffect(() => {
-    if (!open || page !== null || tab !== "installed") return;
+    if (!open || page !== null || tab === "updates") return;
     const row = listRef.current?.querySelector<HTMLElement>('[data-hot="true"]');
     if (row !== null && row !== undefined && typeof row.scrollIntoView === "function") {
       row.scrollIntoView({ block: "nearest" });
     }
   }, [open, page, tab, hotAt]);
 
-  // The field holds the keys (a row is no stop of Tab): on Installed ↑ ↓ walk
-  // the hot row and ↵ opens its page; ↵ presses Show installed on Discover's
-  // no-registry state. A page has no act yet, so ↵ there does nothing; a button
-  // keeps its own Return.
+  // The field holds the keys (a row or a tile is no stop of Tab): on Installed ↑ ↓ walk the hot row; on
+  // Discover's shelf ↑ ↓ walk the tiles a row at a time and ← → one at a time while the field holds no words
+  // (MK-4e; once it holds any, they move the caret); ↵ opens the hot one's page. ↵ presses Show installed on
+  // Discover's no-registry state. A page has no act yet, so ↵ there does nothing; a button keeps its own Return.
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.nativeEvent.isComposing || page !== null) return;
       const rows = tab === "installed" && installed !== null ? installed : [];
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      const key = event.key;
+      if (tab === "discover" && discover !== null && isShelfKey(key)) {
+        // once the field holds words, ← → are the caret's
+        if ((key === "ArrowLeft" || key === "ArrowRight") && query !== "") return;
+        if (event.target !== inputRef.current || tiles.length === 0) return;
+        event.preventDefault();
+        const featured = discover.featured !== null;
+        setHot((at) => walkShelf(at, key, tiles.length, columns, featured));
+        return;
+      }
+      if (key === "ArrowDown" || key === "ArrowUp") {
         if (event.target !== inputRef.current || rows.length === 0) return;
         event.preventDefault();
-        const key = event.key;
         setHot((at) => walkHot(Math.min(at, rows.length - 1), key, rows.length));
         return;
       }
-      if (event.key !== "Enter" || event.target instanceof HTMLButtonElement) return;
+      if (key !== "Enter" || event.target instanceof HTMLButtonElement) return;
       if (tab === "discover" && shelf.kind === "unconfigured") {
         event.preventDefault();
         showInstalled();
         return;
       }
-      const row = rows[hotAt];
-      if (row !== undefined) {
+      const id = tab === "discover" ? tiles[hotAt]?.id : rows[hotAt]?.id;
+      if (id !== undefined) {
         event.preventDefault();
-        openPage(row.id);
+        openPage(id);
       }
     },
-    [tab, shelf.kind, showInstalled, page, installed, hotAt, openPage],
+    [
+      tab,
+      shelf.kind,
+      showInstalled,
+      page,
+      installed,
+      hotAt,
+      openPage,
+      discover,
+      tiles,
+      query,
+      columns,
+    ],
   );
 
   const target = container === undefined ? document.body : container;
@@ -517,6 +568,8 @@ export function Plugins({
       installed={installed}
       installedFoot={snapshot === null ? null : installedFoot(snapshot)}
       hot={hotAt}
+      discover={discover}
+      columns={columns}
       page={shown}
       pageSettings={
         shown !== null && shown.settings !== null ? (

@@ -1,6 +1,7 @@
 import { EmptyState, UiPill, UiSwitch } from "@vibefield/design-kit";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import type { KeyboardEvent, ReactElement, ReactNode, RefObject } from "react";
+import { PluginsShelf } from "./PluginsShelf";
 import type {
   FootSentence,
   InstalledRow,
@@ -11,6 +12,7 @@ import type {
   ShelfState,
 } from "./plugins-model";
 import { PLUGINS_TABS, switchKey } from "./plugins-model";
+import type { Shelf } from "./plugins-shelf";
 import {
   NO_REGISTRY,
   noMatchWords,
@@ -46,6 +48,9 @@ import "./plugins.css";
 // mounts it and hands it here. MK-O3D: Discover's community tile stands at
 // Discover's end, mounted by the controller and handed here the same way, and
 // a plugin held while community plugins are off says its row's line on its page.
+// MK-4e: over a held list Discover draws its shelf (`PluginsShelf.tsx`), and a
+// page of a set this desktop doesn't have, read from the list, says no power
+// and stands no act yet.
 
 export interface PluginsViewProps {
   open: boolean;
@@ -58,8 +63,12 @@ export interface PluginsViewProps {
   /** Installed's rows; null: the window holds no plugins yet */
   installed: readonly InstalledRow[] | null;
   installedFoot: string | null;
-  /** Installed's hot row */
+  /** Installed's hot row, or (MK-4e) Discover's hot tile */
   hot: number;
+  /** MK-4e: Discover's shelf over a held list with a set to show (or typed words to answer); null: its state */
+  discover?: Shelf | null;
+  /** MK-4e: the shelf's columns (`shelfColumns`) */
+  columns?: number;
   /** The page shown in the body, and the tab it opened from; null: the tab's own body */
   page: PluginPage | null;
   /** MK-4c2b: the page's settings section, which the controller mounts and owns; null: none */
@@ -278,8 +287,9 @@ function PageView({
               </div>
             </div>
             <div className="vf-plugins-page-act-row">
-              {/* where its act will stand: words, not a control (VF-PM 13:56:27Z, 4) */}
-              <p className="vf-plugins-page-act">{PAGE_WORDS.installed}</p>
+              {/* where its act will stand: words, not a control (VF-PM 13:56:27Z, 4); MK-4e: none yet on
+                  a set this desktop doesn't have */}
+              {page.installed && <p className="vf-plugins-page-act">{PAGE_WORDS.installed}</p>}
               {page.onOff !== null && (
                 <UiSwitch
                   checked={page.onOff}
@@ -301,49 +311,52 @@ function PageView({
             {page.readOnly !== null && <p className="vf-plugins-page-note">{page.readOnly}</p>}
             {page.elsewhere !== null && <p className="vf-plugins-page-note">{page.elsewhere}</p>}
           </div>
-          <PageSection head={PAGE_WORDS.can}>
-            {page.offLine !== null && <p className="vf-plugins-page-under">{page.offLine}</p>}
-            {page.nothing !== null ? (
-              <p className="vf-plugins-page-lines">{page.nothing}</p>
-            ) : (
-              <ul className="vf-plugins-page-lines">
-                {page.powers.map((power) => {
-                  const key = switchKey.power(page.id, power.key);
-                  const powerTurning = refused.get(key)?.turningOn;
-                  return (
-                    <li key={power.key} className="vf-plugins-power">
-                      <span className="vf-plugins-power-text">
-                        {power.words}
-                        {power.under !== null && (
-                          <span className="vf-plugins-page-under">{power.under}</span>
+          {/* MK-4e: a set this desktop doesn't have says no power: the install card says them */}
+          {page.installed && (
+            <PageSection head={PAGE_WORDS.can}>
+              {page.offLine !== null && <p className="vf-plugins-page-under">{page.offLine}</p>}
+              {page.nothing !== null ? (
+                <p className="vf-plugins-page-lines">{page.nothing}</p>
+              ) : (
+                <ul className="vf-plugins-page-lines">
+                  {page.powers.map((power) => {
+                    const key = switchKey.power(page.id, power.key);
+                    const powerTurning = refused.get(key)?.turningOn;
+                    return (
+                      <li key={power.key} className="vf-plugins-power">
+                        <span className="vf-plugins-power-text">
+                          {power.words}
+                          {power.under !== null && (
+                            <span className="vf-plugins-page-under">{power.under}</span>
+                          )}
+                          {power.whose !== null && (
+                            <span className="vf-plugins-page-under">{power.whose}</span>
+                          )}
+                          {power.cant !== null && (
+                            <span className="vf-plugins-page-under">{power.cant}</span>
+                          )}
+                          {powerTurning !== undefined && (
+                            <span className="vf-plugins-page-refused">
+                              {SWITCH_WORDS.refused(powerTurning)}
+                            </span>
+                          )}
+                        </span>
+                        {power.switch !== null && (
+                          <UiSwitch
+                            checked={power.switch}
+                            disabled={away || !page.powersLive || under.has(key)}
+                            label={power.words}
+                            className="vf-plugins-switch"
+                            onChange={(on) => onTurnPower(page.id, power.key, on)}
+                          />
                         )}
-                        {power.whose !== null && (
-                          <span className="vf-plugins-page-under">{power.whose}</span>
-                        )}
-                        {power.cant !== null && (
-                          <span className="vf-plugins-page-under">{power.cant}</span>
-                        )}
-                        {powerTurning !== undefined && (
-                          <span className="vf-plugins-page-refused">
-                            {SWITCH_WORDS.refused(powerTurning)}
-                          </span>
-                        )}
-                      </span>
-                      {power.switch !== null && (
-                        <UiSwitch
-                          checked={power.switch}
-                          disabled={away || !page.powersLive || under.has(key)}
-                          label={power.words}
-                          className="vf-plugins-switch"
-                          onChange={(on) => onTurnPower(page.id, power.key, on)}
-                        />
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </PageSection>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </PageSection>
+          )}
           {page.madeBy !== null && (
             <PageSection head={PAGE_WORDS.madeBy}>
               <p className="vf-plugins-page-lines">{page.madeBy}</p>
@@ -361,7 +374,7 @@ function PageView({
 export function PluginsView(props: PluginsViewProps): ReactElement {
   const { open, layout, tab, query, shelf, foot, installed, installedFoot, inputRef } = props;
   const { hot, page, pageFrom, updates, listRef, away, under, refused } = props;
-  const { pageSettings = null, discoverEnd = null } = props;
+  const { pageSettings = null, discoverEnd = null, discover = null, columns = 1 } = props;
   const { onQuery, onTab, onClose, onShowInstalled, onOpenPage, onBack, onKeyDown } = props;
   const { onTurn, onTurnPower } = props;
   const body =
@@ -394,6 +407,18 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
           onTurn={onTurn}
         />
       )
+    ) : tab === "discover" && discover !== null ? (
+      <>
+        <PluginsShelf
+          shelf={discover}
+          hot={hot}
+          columns={columns}
+          listRef={listRef}
+          label={PLUGINS_TAB_WORDS.discover}
+          onOpen={onOpenPage}
+        />
+        {discoverEnd}
+      </>
     ) : tab === "discover" && discoverEnd !== null ? (
       // MK-O3D: the community tile stands at Discover's end, under the shelf's stand-in
       <>

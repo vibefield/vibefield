@@ -73,7 +73,8 @@ export type PluginsRead =
 
 /** What Discover and Updates show in their body (§8 "Its states, in the
  * body"). MK-4a stops before Discover's shelf and Updates' rows, so a held
- * list is said by its count. */
+ * list is said by its count. MK-4e: over a held list Discover draws its shelf
+ * (`plugins-shelf.ts`) when it has a set to show; Updates still says the count. */
 export type ShelfState =
   | { readonly kind: "unconfigured" }
   | { readonly kind: "reading" }
@@ -449,6 +450,9 @@ export interface PluginPage {
   readonly offLine: string | null;
   /** MK-4c2b: its settings, when its switches stand here and it declares one; null otherwise */
   readonly settings: PageSettings | null;
+  /** MK-4e: whether this desktop has it. A set it doesn't have opens from Discover, read from the list held
+   * (`plugins-shelf.ts`, `listedPage`), and says no power */
+  readonly installed: boolean;
 }
 
 /** Made by (§9 MK-4c's block): a Built in plugin's sentence; for a registry
@@ -618,6 +622,7 @@ export function pluginPage(
         : null,
     offLine: switches && !record.enabled && powerSwitches ? SWITCH_WORDS.off : null,
     settings: settingsOf(record),
+    installed: true,
   };
 }
 
