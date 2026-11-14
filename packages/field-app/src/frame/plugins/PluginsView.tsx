@@ -25,6 +25,7 @@ import {
   PLUGINS_TAB_WORDS,
   READING,
   READING_YOURS,
+  SHELF_WORDS,
   SOURCE_WORDS,
   SWITCH_WORDS,
 } from "./plugins-words";
@@ -49,8 +50,10 @@ import "./plugins.css";
 // Discover's end, mounted by the controller and handed here the same way, and
 // a plugin held while community plugins are off says its row's line on its page.
 // MK-4e: over a held list Discover draws its shelf (`PluginsShelf.tsx`), and a
-// page of a set this desktop doesn't have, read from the list, says no power
-// and stands no act yet.
+// page of a set this desktop doesn't have, read from the list, says no power.
+// O2-C: the page's act — Installed, Install, the install card — is the
+// controller's, handed here, and the foot on Discover offers the hot tile's
+// Install.
 
 export interface PluginsViewProps {
   open: boolean;
@@ -75,6 +78,10 @@ export interface PluginsViewProps {
   pageSettings?: ReactNode;
   /** MK-O3D: Discover's end, the community tile, which the controller mounts; null: none */
   discoverEnd?: ReactNode;
+  /** O2-C: what stands where the page's act stands (`InstallCard.tsx`'s PageActView), the controller's */
+  pageAct?: ReactNode;
+  /** O2-C: the foot's act on Discover, the hot tile's Install; null: none */
+  onInstallHot?: (() => void) | null;
   pageFrom: PluginsTab;
   /** Updates' count, the Me row's (null or 0: none) */
   updates: number | null;
@@ -216,11 +223,12 @@ function PageSection({ head, children }: { head: string; children: ReactNode }):
 
 /** A plugin's page, read only (MK-4c; DESIGN.md §8 "Read only first"): its back
  * row, then two columns — the plugin's own words and What it adds; its head,
- * "Installed" where its act will stand (words, never a control), What it can do,
- * Made by and Version. */
+ * its act (O2-C: the controller's — "Installed" as words on an installed one),
+ * What it can do, Made by and Version. */
 function PageView({
   page,
   settings,
+  act,
   from,
   away,
   under,
@@ -231,6 +239,7 @@ function PageView({
 }: {
   page: PluginPage;
   settings: ReactNode;
+  act: ReactNode;
   from: PluginsTab;
   away: boolean;
   under: ReadonlySet<string>;
@@ -287,9 +296,8 @@ function PageView({
               </div>
             </div>
             <div className="vf-plugins-page-act-row">
-              {/* where its act will stand: words, not a control (VF-PM 13:56:27Z, 4); MK-4e: none yet on
-                  a set this desktop doesn't have */}
-              {page.installed && <p className="vf-plugins-page-act">{PAGE_WORDS.installed}</p>}
+              {/* O2-C: its act, the controller's — Installed as words, Install, or the install card */}
+              {act}
               {page.onOff !== null && (
                 <UiSwitch
                   checked={page.onOff}
@@ -303,7 +311,8 @@ function PageView({
             {turning !== undefined && (
               <p className="vf-plugins-page-refused">{SWITCH_WORDS.refused(turning)}</p>
             )}
-            {away && (page.onOff !== null || page.powersLive) && (
+            {/* O2-C: an Install takes no press either, so its page says why */}
+            {away && (page.onOff !== null || page.powersLive || !page.installed) && (
               <p className="vf-plugins-page-note">{PLUGINS_AWAY}</p>
             )}
             {/* MK-O3D: held while community plugins are off, it says its row's line */}
@@ -375,6 +384,7 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
   const { open, layout, tab, query, shelf, foot, installed, installedFoot, inputRef } = props;
   const { hot, page, pageFrom, updates, listRef, away, under, refused } = props;
   const { pageSettings = null, discoverEnd = null, discover = null, columns = 1 } = props;
+  const { pageAct = null, onInstallHot = null } = props;
   const { onQuery, onTab, onClose, onShowInstalled, onOpenPage, onBack, onKeyDown } = props;
   const { onTurn, onTurnPower } = props;
   const body =
@@ -382,6 +392,7 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
       <PageView
         page={page}
         settings={pageSettings}
+        act={pageAct}
         from={pageFrom}
         away={away}
         under={under}
@@ -430,6 +441,8 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
     );
   const said = tab === "installed" ? installedFoot : (foot?.words ?? null);
   const act = page === null && tab === "discover" && shelf.kind === "unconfigured";
+  // O2-C: on Discover's shelf the foot offers the hot tile's Install
+  const install = page === null && tab === "discover" ? onInstallHot : null;
   const count = updates !== null && updates > 0 ? updates : null;
   return (
     <div className="vf-plugins" data-open={open ? "true" : "false"}>
@@ -506,6 +519,17 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
                 onClick={onShowInstalled}
               >
                 {NO_REGISTRY.act}
+                <kbd className="vf-plugins-act-key">↵</kbd>
+              </button>
+            )}
+            {install !== null && (
+              <button
+                type="button"
+                className="vf-plugins-act"
+                aria-keyshortcuts="Enter"
+                onClick={install}
+              >
+                {SHELF_WORDS.install}
                 <kbd className="vf-plugins-act-key">↵</kbd>
               </button>
             )}

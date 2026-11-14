@@ -1,4 +1,10 @@
-import { PluginsCatalog, SettingsGetResult } from "@vibefield/contracts";
+import {
+  type DeviceInfo,
+  DeviceListResult,
+  PluginsCatalog,
+  PluginsInstallPrepareResult,
+  SettingsGetResult,
+} from "@vibefield/contracts";
 
 // THE PLUGINS POPUP'S PORT (MK-4a; DESIGN.md §8 "Plugins — the frame's second
 // popup", "The read on open"): the questions the popup asks, over this
@@ -17,7 +23,14 @@ import { PluginsCatalog, SettingsGetResult } from "@vibefield/contracts";
 // the same parameters. The port never has a reset (MK-4c2's C2), an undo or a
 // redo (James's MK-O6 pick, 2026-11-11: no Undo on a plugin's page until there
 // is one per plugin): going back stays in Settings. The catalog hands the
-// controller a fixture port instead; nothing here installs or removes a plugin.
+// controller a fixture port instead. O2-C adds the install card's window half
+// (§8 "Every install asks first", MK-O2's A2): the three doors MK-O2B built —
+// `plugins.install.prepare` downloads and holds a plugin this desktop doesn't
+// have and answers its row, which the card is read from; `commit` installs what
+// the card showed; `discard` throws the download away — and this desktop's
+// roster (`device.list`), which the card's desktops are read from. A commit's
+// answer is not read: the snapshot fieldd pushes next says Installed (the P5
+// law). Nothing here removes a plugin.
 
 export interface PluginsPort {
   /** The list fieldd holds, its state and its time. */
@@ -34,6 +47,14 @@ export interface PluginsPort {
   settingsGet(id: string, key: string): Promise<SettingsGetResult>;
   /** Keep a setting's new value: settles when fieldd has answered. */
   settingsSet(id: string, key: string, value: unknown): Promise<void>;
+  /** O2-C: download, check and hold a plugin this desktop doesn't have; its card is read from the row. */
+  prepare(id: string): Promise<PluginsInstallPrepareResult>;
+  /** O2-C: install what the card showed: settles when fieldd has answered. */
+  commit(candidate: string): Promise<void>;
+  /** O2-C: throw a card's download away. */
+  discard(candidate: string): Promise<void>;
+  /** O2-C: this desktop's roster, which the card's desktops are read from. */
+  desktops(): Promise<readonly DeviceInfo[]>;
 }
 
 /** What the port asks of a fieldd client: one request door. */
@@ -65,6 +86,20 @@ export function pluginsPortOver(client: PluginsDoorClient): PluginsPort {
     },
     async settingsSet(id, key, value) {
       await client.request("storage.settings.set", { pluginId: id, key, value });
+    },
+    async prepare(id) {
+      return PluginsInstallPrepareResult.parse(
+        await client.request("plugins.install.prepare", { id }),
+      );
+    },
+    async commit(candidate) {
+      await client.request("plugins.install.commit", { candidate });
+    },
+    async discard(candidate) {
+      await client.request("plugins.install.discard", { candidate });
+    },
+    async desktops() {
+      return DeviceListResult.parse(await client.request("device.list", {})).devices;
     },
   };
 }

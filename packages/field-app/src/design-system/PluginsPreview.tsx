@@ -16,6 +16,7 @@ import {
   PLUGINS_FIXTURE_SETTINGS_UNREAD,
   PLUGINS_FIXTURE_SNAPSHOT,
   PLUGINS_FIXTURE_SWITCHES_SNAPSHOT,
+  type PluginsFixtureInstall,
   type PluginsFixtureRead,
   pluginsFixturePort,
 } from "./plugins-fixtures";
@@ -45,7 +46,12 @@ import {
 // tile's switch is sent to a fixture door, which answers and moves nothing.
 // MK-4e adds Discover's shelf over a list held — its featured set, the sets
 // VibeField publishes, one that needs a newer VibeField — and the page of a set
-// this desktop doesn't have, read from the list, opened from Discover.
+// this desktop doesn't have, read from the list, opened from Discover. O2-C
+// adds that page with its Install pressed as the plate opens: the download
+// under way, the install card read from the plugin downloaded (four objects,
+// two powers, three desktops), the card's Install pressed too, Installing…
+// until the plugins this desktop has hold it, and a download refused. Nothing a
+// plate presses installs anything.
 
 export type PluginsPlateState =
   | "no-registry"
@@ -70,7 +76,11 @@ export type PluginsPlateState =
   | "community-held"
   | "community-held-page"
   | "shelf"
-  | "shelf-page";
+  | "shelf-page"
+  | "shelf-downloading"
+  | "shelf-card"
+  | "shelf-installing"
+  | "shelf-failed";
 
 const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   "no-registry": {
@@ -114,6 +124,19 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   "community-held-page": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
   shelf: { catalog: CATALOG_SHELF, refresh: CATALOG_SHELF },
   "shelf-page": { catalog: CATALOG_SHELF, refresh: CATALOG_SHELF },
+  "shelf-downloading": { catalog: CATALOG_SHELF, refresh: CATALOG_SHELF },
+  "shelf-card": { catalog: CATALOG_SHELF, refresh: CATALOG_SHELF },
+  "shelf-installing": { catalog: CATALOG_SHELF, refresh: CATALOG_SHELF },
+  "shelf-failed": { catalog: CATALOG_SHELF, refresh: CATALOG_SHELF },
+};
+
+/** O2-C: how a plate's install answers, for the plates that press their page's Install as they open: its
+ * download under way, its card, the card's Install under way (its install never ends), or a download refused. */
+const PLATE_INSTALLS: Readonly<Partial<Record<PluginsPlateState, PluginsFixtureInstall>>> = {
+  "shelf-downloading": { prepare: "pending" },
+  "shelf-card": {},
+  "shelf-installing": { commit: "pending" },
+  "shelf-failed": { prepare: "refuses" },
 };
 
 /** The page a plate opens on, from Installed. */
@@ -129,6 +152,10 @@ const PLATE_PAGES: Readonly<Partial<Record<PluginsPlateState, string>>> = {
   "settings-unread": "vibefield.simulator",
   "community-held-page": "acme.kanban",
   "shelf-page": "vibefield.desk-things",
+  "shelf-downloading": "vibefield.desk-things",
+  "shelf-card": "vibefield.desk-things",
+  "shelf-installing": "vibefield.desk-things",
+  "shelf-failed": "vibefield.desk-things",
 };
 
 /** The plugins a plate's desktop has. */
@@ -161,6 +188,7 @@ export function PluginsPlate({ state }: { state: PluginsPlateState }): ReactElem
       PLATE_READS[state],
       "answers",
       state === "settings-unread" ? PLUGINS_FIXTURE_SETTINGS_UNREAD : PLUGINS_FIXTURE_SETTINGS,
+      PLATE_INSTALLS[state] ?? {},
     ),
   );
   const now = useCallback(() => PLUGINS_FIXTURE_NOW, []);
@@ -185,6 +213,8 @@ export function PluginsPlate({ state }: { state: PluginsPlateState }): ReactElem
         community={communityPlate(state) ? false : null}
         onCommunity={communityDoor}
         initialAsk={state === "community-ask"}
+        initialInstall={state in PLATE_INSTALLS}
+        initialConfirm={state === "shelf-installing"}
         onMac
         now={now}
       />

@@ -15,6 +15,7 @@ import { usePluginRegistrySnapshot } from "../../plugin-host/plugin-registry-sto
 import { useGodviewFindDoor } from "../find-door";
 import { type FrameSurface, foldSurface } from "../frame-surface";
 import { CommunityTileView, useCommunitySwitch } from "./CommunityTile";
+import { PageActView } from "./InstallCard";
 import { PluginSettings } from "./PluginSettings";
 import { PluginsView } from "./PluginsView";
 import {
@@ -30,6 +31,7 @@ import {
   takePluginUpdates,
   usePluginUpdates,
 } from "./plugins-count";
+import { type InstallFlow, installLive, installRefusal, pageAct } from "./plugins-install";
 import {
   catalogFoot,
   installedFoot,
@@ -88,6 +90,17 @@ import {
 // a tile, or ↵ on the hot one, opens its page, and a set this desktop doesn't
 // have opens a page read from the list alone. Community sets join only while
 // community plugins are on (`community`, which the switch's slice feeds).
+// O2-C: such a page's act is Install (`plugins-install.ts`), also the foot's on
+// Discover for the hot tile. It downloads first (`prepare`) and the act says so;
+// then the install card stands where the act stood, read from the row fieldd
+// answered and this desktop's roster; its Install installs what it showed
+// (`commit`), and the act says Installing… until the snapshot holds the plugin;
+// its Cancel, Esc, leaving the page or folding the popup throws the download
+// away (`discard`), and a download that lands after its page was left is thrown
+// away as it lands. One install at a time. A failure is worded by its kind,
+// never fieldd's text (`installRefusal`): one this VibeField can't run says it
+// needs a newer VibeField, and every other §9's line with Try again. ↵ on a
+// page presses its act or the card's Install.
 // Its doors (MK-4b) are the Me menu's Plugins… row and the palette's Plugins…
 // and Check plugins for updates, each through ChromeLayer's `openPlugins`; the
 // pegboard's pill is MK-4d's. The catalog mounts this controller over a
@@ -143,6 +156,12 @@ export interface PluginsProps {
   statement?: CommunityStatementDoor | undefined;
   /** MK-O3D: a plate drawn with the community tile's ask standing. */
   initialAsk?: boolean;
+  /** O2-C: whether each opening presses its starting page's Install, so a plate shows the download, the card or
+   * a failure (a plate's; the product passes none). */
+  initialInstall?: boolean;
+  /** O2-C: whether that opening then presses the card's Install once it stands, so a plate shows Installing… (a
+   * plate's; the product passes none). */
+  initialConfirm?: boolean;
   now?: () => number;
 }
 
@@ -175,6 +194,8 @@ export function Plugins({
   onCommunity,
   statement,
   initialAsk = false,
+  initialInstall = false,
+  initialConfirm = false,
   now = Date.now,
 }: PluginsProps): ReactElement | null {
   const open = surface === "plugins";
@@ -191,6 +212,14 @@ export function Plugins({
   const underRef = useRef(new Set<string>());
   const [under, setUnder] = useState<ReadonlySet<string>>(() => new Set());
   const [refused, setRefused] = useState<ReadonlyMap<string, Refusal>>(() => new Map());
+  // O2-C: the one install under way, kept in a ref too, so an answer that lands late knows whether its install
+  // is still the one the window holds
+  const flowNow = useRef<InstallFlow | null>(null);
+  const [flow, setFlow] = useState<InstallFlow | null>(null);
+  const putFlow = useCallback((next: InstallFlow | null) => {
+    flowNow.current = next;
+    setFlow(next);
+  }, []);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const returnFocus = useRef<Element | null>(null);
@@ -313,22 +342,109 @@ export function Plugins({
   }, [takeAsk, takeFocus]);
   const asking = communitySwitch.asking && tile !== null;
 
+  // O2-C: an install the window lets go of. A card standing throws its download away (`discard`); a download
+  // still running is thrown away as it lands (`install`, below); a failure's line goes. An install whose card's
+  // Install was pressed is fieldd's now, and is kept until the snapshot holds its plugin.
+  const dropInstall = useCallback(() => {
+    const was = flowNow.current;
+    if (was === null || was.at.step === "installing") return;
+    if (was.at.step === "card") void port.discard(was.at.candidate).catch(() => undefined);
+    putFlow(null);
+  }, [port, putFlow]);
+  // the card's Cancel, pressed or Esc: its download goes, and the keyboard goes back to the field
+  const cancelInstall = useCallback(() => {
+    dropInstall();
+    if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+  }, [dropInstall, takeFocus]);
+
   // While open, Esc is the popup's before anything else hears it, and answers
-  // the nearest first (§8 "Keys"): the community tile's ask goes back (MK-O3D),
-  // a page goes back to its tab, then the popup folds.
+  // the nearest first (§8 "Keys"): the install card (its Cancel), then the
+  // community tile's ask goes back (MK-O3D), then a page goes back to its tab,
+  // then the popup folds.
   useEffect(() => {
     if (!open || !bindKeys) return;
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      if (asking) cancelAsk();
+      if (flowNow.current?.at.step === "card") cancelInstall();
+      else if (asking) cancelAsk();
       else if (page !== null) back();
       else fold();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, bindKeys, fold, page, back, asking, cancelAsk]);
+  }, [open, bindKeys, fold, page, back, asking, cancelAsk, cancelInstall]);
+
+  // O2-C: the install belongs to its page. Leaving the page — its back row, a tab, typed words — or folding the
+  // popup lets it go, so nothing waits in fieldd for a card no one sees. The window closing, or its port changing,
+  // lets it go too: the install the window held is no longer its, so a download still running is thrown away as
+  // it lands.
+  useEffect(() => {
+    const was = flowNow.current;
+    if (was !== null && (!open || page === null || page.id !== was.id)) dropInstall();
+  }, [open, page, dropInstall]);
+  useEffect(() => () => dropInstall(), [dropInstall]);
+  // O2-C: an install is done when the plugins this desktop has hold it; its page then reads the installed record
+  useEffect(() => {
+    if (flow?.at.step !== "installing") return;
+    if (snapshot?.plugins.some((plugin) => plugin.id === flow.id) === true) putFlow(null);
+  }, [snapshot, flow, putFlow]);
+
+  // O2-C: Install, or Try again — download it, and read the roster with it; then the card stands, unless the
+  // window let this install go meanwhile, when the download is thrown away as it lands. A second install drops
+  // the first. No press while fieldd isn't answering. A refusal is kept by its kind alone (`installRefusal`),
+  // never its text, which can name VibeField's insides. The keyboard stays in the field, as a row's press keeps it.
+  const install = useCallback(
+    (id: string) => {
+      // one install at a time: an Install pressed is fieldd's until the snapshot holds it
+      if (away || flowNow.current?.at.step === "installing") return;
+      dropInstall();
+      const started: InstallFlow = { id, at: { step: "downloading" } };
+      putFlow(started);
+      if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+      Promise.all([port.prepare(id), port.desktops().catch(() => null)]).then(
+        ([prepared, roster]) => {
+          if (flowNow.current !== started) {
+            void port.discard(prepared.candidate).catch(() => undefined);
+            return;
+          }
+          const { candidate, record } = prepared;
+          putFlow({ id, at: { step: "card", candidate, record, roster } });
+        },
+        (error: unknown) => {
+          if (flowNow.current !== started) return;
+          putFlow({ id, at: { step: "failed", refusal: installRefusal(error) } });
+        },
+      );
+    },
+    [away, port, putFlow, dropInstall, takeFocus],
+  );
+  // O2-C: the card's Install installs what it showed; the act says Installing… until the snapshot holds it
+  const confirm = useCallback(() => {
+    const was = flowNow.current;
+    if (away || was === null || was.at.step !== "card") return;
+    const installing: InstallFlow = {
+      id: was.id,
+      at: { step: "installing", objects: was.at.record.contributions.objects.length },
+    };
+    putFlow(installing);
+    if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+    port.commit(was.at.candidate).then(
+      () => undefined,
+      (error: unknown) => {
+        if (flowNow.current !== installing) return;
+        putFlow({ id: was.id, at: { step: "failed", refusal: installRefusal(error) } });
+      },
+    );
+  }, [away, port, putFlow, takeFocus]);
+  // a plate's opening presses its page's Install (`initialInstall`), and then the card's (`initialConfirm`)
+  useEffect(() => {
+    if (open && initialInstall && initialPage !== null) install(initialPage);
+  }, [open, initialInstall, initialPage, install]);
+  useEffect(() => {
+    if (open && initialConfirm && flow?.at.step === "card") confirm();
+  }, [open, initialConfirm, flow, confirm]);
 
   // QL-D2: over Godview, the stage holds its keys while the popup stands.
   const hold = open && bindKeys ? holdKeys : undefined;
@@ -393,6 +509,48 @@ export function Plugins({
     const entry = catalog?.plugins.find((listed) => listed.id === page.id);
     return entry === undefined ? null : listedPage(entry);
   }, [page, snapshot, catalog, onMac]);
+  // O2-C: what stands where its act stands, and what ↵ on the page presses
+  const act = useMemo(
+    () =>
+      shown === null
+        ? null
+        : pageAct({
+            page: shown,
+            entry: catalog?.plugins.find((listed) => listed.id === shown.id),
+            state: catalog?.state ?? null,
+            flow,
+            away,
+            community: community === true,
+            snapshot,
+            onMac,
+          }),
+    [shown, catalog, flow, away, community, snapshot, onMac],
+  );
+  const pressAct = useCallback((): boolean => {
+    if (shown === null || act === null) return false;
+    if ((act.kind === "install" || act.kind === "failed") && act.live) {
+      install(shown.id);
+      return true;
+    }
+    if (act.kind === "card" && act.live) {
+      confirm();
+      return true;
+    }
+    return false;
+  }, [shown, act, install, confirm]);
+  // O2-C: the foot's act on Discover — the hot tile's Install opens its page and presses it there
+  const hotTile = tab === "discover" && page === null ? tiles[hotAt] : undefined;
+  const live = installLive(catalog?.state ?? null, away) && flow?.at.step !== "installing";
+  const installHot = useMemo(
+    () =>
+      hotTile?.act === "install" && live
+        ? () => {
+            setPage({ id: hotTile.id, from: "discover" });
+            install(hotTile.id);
+          }
+        : null,
+    [hotTile, live, install],
+  );
 
   // A switch's one request (§8 "Its switches"): none while fieldd isn't
   // answering or while its last is out; a refusal is kept to say it, and the
@@ -506,11 +664,17 @@ export function Plugins({
 
   // The field holds the keys (a row or a tile is no stop of Tab): on Installed ↑ ↓ walk the hot row; on
   // Discover's shelf ↑ ↓ walk the tiles a row at a time and ← → one at a time while the field holds no words
-  // (MK-4e; once it holds any, they move the caret); ↵ opens the hot one's page. ↵ presses Show installed on
-  // Discover's no-registry state. A page has no act yet, so ↵ there does nothing; a button keeps its own Return.
+  // (MK-4e; once it holds any, they move the caret); ↵ opens the hot one's page, or (O2-C) presses the foot's
+  // Install for a hot tile this desktop doesn't have. ↵ presses Show installed on Discover's no-registry state,
+  // and on a page (O2-C) its act: Install, Try again or the card's Install. A button keeps its own Return.
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.nativeEvent.isComposing || page !== null) return;
+      if (event.nativeEvent.isComposing) return;
+      if (page !== null) {
+        if (event.key !== "Enter" || event.target instanceof HTMLButtonElement) return;
+        if (pressAct()) event.preventDefault();
+        return;
+      }
       const rows = tab === "installed" && installed !== null ? installed : [];
       const key = event.key;
       if (tab === "discover" && discover !== null && isShelfKey(key)) {
@@ -534,6 +698,11 @@ export function Plugins({
         showInstalled();
         return;
       }
+      if (installHot !== null) {
+        event.preventDefault();
+        installHot();
+        return;
+      }
       const id = tab === "discover" ? tiles[hotAt]?.id : rows[hotAt]?.id;
       if (id !== undefined) {
         event.preventDefault();
@@ -552,6 +721,8 @@ export function Plugins({
       tiles,
       query,
       columns,
+      pressAct,
+      installHot,
     ],
   );
 
@@ -591,6 +762,17 @@ export function Plugins({
           />
         )
       }
+      pageAct={
+        shown !== null && act !== null ? (
+          <PageActView
+            act={act}
+            onInstall={() => install(shown.id)}
+            onConfirm={confirm}
+            onCancel={cancelInstall}
+          />
+        ) : null
+      }
+      onInstallHot={installHot}
       pageFrom={page?.from ?? tab}
       updates={updates}
       away={away}

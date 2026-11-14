@@ -3,11 +3,12 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  type PluginRegistrySnapshot,
+  PluginRegistrySnapshot,
   PluginsCatalog,
+  type PluginsInstallPrepareResult,
   pluginPowerWords,
 } from "@vibefield/contracts";
-import type { FielddClient } from "@vibefield/fieldd-client";
+import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -16,6 +17,8 @@ import {
   CATALOG_FIXTURES,
   CATALOG_LISTED,
   CATALOG_SHELF,
+  PLUGINS_FIXTURE_CANDIDATE,
+  PLUGINS_FIXTURE_DOWNLOADS,
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_READ_AT,
@@ -43,7 +46,9 @@ import {
 // goes to its field and back; every state is said, never a blank. MK-4b adds the Me row's count (every answer the
 // popup takes, and the window's one ask, over a fixture client in a FielddProvider) and the tab a door opens it on.
 // MK-4c adds a plugin's page, read only (it asks fieldd nothing), Installed's hot row and Updates' count. MK-4c2a adds
-// a Built in or Development plugin's switches, each held by the fixture port's recorded calls.
+// a Built in or Development plugin's switches, each held by the fixture port's recorded calls. MK-4e adds Discover's
+// shelf and the page of a set this desktop doesn't have; O2-C its Install, the install card, and the requests the
+// card sends and throws away, each held by the port's recorded calls, and a refusal worded by its kind alone.
 // No real fieldd, no network, no child.
 
 let host: HTMLDivElement;
@@ -83,17 +88,29 @@ function counting(inner: PluginsPort): {
   };
 }
 
-/** A port's switches and settings (MK-4c2b), for a test that presses and reads none: each refuses, so a stray press
- * or read is never a quiet pass. */
+/** A port's switches and settings (MK-4c2b), and (O2-C) its install's doors, for a test that presses and reads
+ * none: each refuses, so a stray press or read is never a quiet pass. */
 const NO_SWITCHES: Pick<
   PluginsPort,
-  "enable" | "disable" | "grant" | "settingsGet" | "settingsSet"
+  | "enable"
+  | "disable"
+  | "grant"
+  | "settingsGet"
+  | "settingsSet"
+  | "prepare"
+  | "commit"
+  | "discard"
+  | "desktops"
 > = {
   enable: () => Promise.reject(new Error("no switch is pressed in this test")),
   disable: () => Promise.reject(new Error("no switch is pressed in this test")),
   grant: () => Promise.reject(new Error("no switch is pressed in this test")),
   settingsGet: () => Promise.reject(new Error("no setting is read in this test")),
   settingsSet: () => Promise.reject(new Error("no setting is kept in this test")),
+  prepare: () => Promise.reject(new Error("nothing is installed in this test")),
+  commit: () => Promise.reject(new Error("nothing is installed in this test")),
+  discard: () => Promise.reject(new Error("nothing is installed in this test")),
+  desktops: () => Promise.reject(new Error("nothing is installed in this test")),
 };
 
 /** The requests a port's switches sent, in order (MK-4c2a). */
@@ -900,9 +917,11 @@ describe("Discover's shelf (MK-4e; §8 'Discover')", () => {
     expect(back?.getAttribute("aria-label")).toBe(words.PAGE_WORDS.back("Discover"));
     expect(bodyText()).toContain("Calendar");
     expect(bodyText()).toContain("Small things that keep time and measure, for the desk.");
-    // a set this desktop doesn't have says no power, and stands no act yet
+    // a set this desktop doesn't have says no power; O2-C: ↵ on it pressed the foot's Install, so it downloads
     expect(bodyText()).not.toContain(words.PAGE_WORDS.can);
-    expect(document.body.querySelector(".vf-plugins-page-act")).toBeNull();
+    expect(document.body.querySelector(".vf-plugins-page-act")?.textContent).toBe(
+      words.INSTALL_WORDS.downloading,
+    );
     esc();
     expect(pageTitle()).toBeNull();
     expect(chosen()).toBe(words.PLUGINS_TAB_WORDS.discover);
@@ -952,6 +971,301 @@ describe("Discover's shelf (MK-4e; §8 'Discover')", () => {
     await settle();
     expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things", "Kanban"]);
     expect(bodyText()).not.toContain(words.SHELF_WORDS.communityOff);
+  });
+});
+
+/** The install's requests a port sent, in order (O2-C). */
+function installs(inner: PluginsPort): { port: PluginsPort; sent: string[] } {
+  const sent: string[] = [];
+  return {
+    sent,
+    port: {
+      ...inner,
+      prepare: (id) => {
+        sent.push(`prepare ${id}`);
+        return inner.prepare(id);
+      },
+      commit: (candidate) => {
+        sent.push(`commit ${candidate}`);
+        return inner.commit(candidate);
+      },
+      discard: (candidate) => {
+        sent.push(`discard ${candidate}`);
+        return inner.discard(candidate);
+      },
+    },
+  };
+}
+const actRow = (): string =>
+  document.body.querySelector(".vf-plugins-page-act-row")?.textContent ?? "";
+const pageAct = (): HTMLButtonElement | null =>
+  document.body.querySelector<HTMLButtonElement>(".vf-plugins-page-act-stack .vf-plugins-act");
+const card = (): HTMLElement | null => document.body.querySelector<HTMLElement>(".vf-plugins-card");
+const cardInstall = (): HTMLButtonElement | null =>
+  card()?.querySelector<HTMLButtonElement>(".vf-plugins-card-acts .vf-plugins-act") ?? null;
+const cardCancel = (): HTMLButtonElement | null =>
+  card()?.querySelector<HTMLButtonElement>(".vf-plugins-card-cancel") ?? null;
+const openThings = (): void => act(() => tile("Desk things")?.click());
+const CANDIDATE = PLUGINS_FIXTURE_CANDIDATE;
+/** The desktop once fieldd's snapshot holds Desk things. */
+const WITH_THINGS = PluginRegistrySnapshot.parse({
+  ...PLUGINS_FIXTURE_SNAPSHOT,
+  generation: 9,
+  plugins: [
+    ...PLUGINS_FIXTURE_SNAPSHOT.plugins,
+    PLUGINS_FIXTURE_DOWNLOADS["vibefield.desk-things"],
+  ],
+});
+
+describe("Install and the install card (O2-C; §8 'Every install asks first')", () => {
+  it("downloads first and says so, then the card stands where the act stood, read from the plugin", async () => {
+    const pending = installs(pluginsFixturePort(SHELF, "answers", {}, { prepare: "pending" }));
+    await mount(pending.port);
+    openThings();
+    expect(pageAct()?.textContent).toBe(`${words.SHELF_WORDS.install}↵`);
+    act(() => pageAct()?.click());
+    expect(actRow()).toBe(words.INSTALL_WORDS.downloading);
+    expect(pending.sent).toEqual(["prepare vibefield.desk-things"]);
+    act(() => root.unmount());
+    root = createRoot(host);
+    const { port } = installs(pluginsFixturePort(SHELF));
+    await mount(port);
+    openThings();
+    act(() => pageAct()?.click());
+    await settle();
+    expect(card()?.getAttribute("aria-label")).toBe("Install Desk things?");
+    const said = card()?.textContent ?? "";
+    for (const line of [
+      "It adds 4 objects to your pegboard:",
+      "Clock",
+      "Ruler",
+      "It can:",
+      "Read what's on the desk",
+      "Keep its own data",
+      "It installs on your 3 desktops, because your desktops share one set of plugins.",
+      "studio",
+      "mini",
+      "tower",
+    ]) {
+      expect(said).toContain(line);
+    }
+    // a device on the tailnet that runs no VibeField is never counted
+    expect(said).not.toContain("iPhone");
+  });
+
+  it("installs what the card showed, says Installing until the snapshot holds it, then Installed", async () => {
+    const { port, sent } = installs(pluginsFixturePort(SHELF));
+    await mount(port);
+    openThings();
+    act(() => pageAct()?.click());
+    await settle();
+    act(() => cardInstall()?.click());
+    await settle();
+    expect(sent).toEqual(["prepare vibefield.desk-things", `commit ${CANDIDATE}`]);
+    expect(card()).toBeNull();
+    expect(actRow()).toBe(words.INSTALL_WORDS.installing(4));
+    act(() => root.render(<Window port={port} snapshot={WITH_THINGS} open />));
+    await settle();
+    expect(pageTitle()).toBe("Desk things");
+    expect(actRow()).toBe(words.PAGE_WORDS.installed);
+    expect(bodyText()).toContain(words.PAGE_WORDS.can);
+  });
+
+  it("throws the download away on Cancel, on Esc, and on leaving the page, and goes back to Install", async () => {
+    const { port, sent } = installs(pluginsFixturePort(SHELF));
+    await mount(port);
+    openThings();
+    act(() => pageAct()?.click());
+    await settle();
+    act(() => cardCancel()?.click());
+    expect(card()).toBeNull();
+    expect(pageAct()?.textContent).toBe(`${words.SHELF_WORDS.install}↵`);
+    // the Cancel pressed is gone, so the keyboard goes back to the field
+    expect(document.activeElement).toBe(field());
+    // Esc answers the card first, and the page stays
+    act(() => pageAct()?.click());
+    await settle();
+    esc();
+    expect(card()).toBeNull();
+    expect(pageTitle()).toBe("Desk things");
+    // its back row lets it go too
+    act(() => pageAct()?.click());
+    await settle();
+    act(() => document.body.querySelector<HTMLButtonElement>(".vf-plugins-back")?.click());
+    await settle();
+    expect(sent.filter((line) => line.startsWith("discard"))).toEqual([
+      `discard ${CANDIDATE}`,
+      `discard ${CANDIDATE}`,
+      `discard ${CANDIDATE}`,
+    ]);
+    expect(sent.some((line) => line.startsWith("commit"))).toBe(false);
+  });
+
+  it("lets the card go for a tab pressed, words typed, or the popup folding", async () => {
+    const { port, sent } = installs(pluginsFixturePort(SHELF));
+    await mount(port);
+    const discards = (): number => sent.filter((line) => line.startsWith("discard")).length;
+    const cardUp = async (): Promise<void> => {
+      openThings();
+      act(() => pageAct()?.click());
+      await settle();
+      expect(card()).not.toBeNull();
+    };
+    await cardUp();
+    act(() => part(words.PLUGINS_TAB_WORDS.installed)?.click());
+    await settle();
+    expect(discards()).toBe(1);
+    act(() => part(words.PLUGINS_TAB_WORDS.discover)?.click());
+    await cardUp();
+    typeWords("desk");
+    await settle();
+    expect(discards()).toBe(2);
+    typeWords("");
+    await cardUp();
+    act(() => setSurface(null));
+    await settle();
+    expect(discards()).toBe(3);
+    expect(card()).toBeNull();
+    expect(sent.some((line) => line.startsWith("commit"))).toBe(false);
+  });
+
+  it("throws away a download that lands after its page was left, or after the window closed", async () => {
+    let land: (value: PluginsInstallPrepareResult) => void = () => undefined;
+    const inner = pluginsFixturePort(SHELF);
+    const { port, sent } = installs({
+      ...inner,
+      prepare: () => new Promise((resolve) => (land = resolve)),
+    });
+    await mount(port);
+    openThings();
+    act(() => pageAct()?.click());
+    act(() => document.body.querySelector<HTMLButtonElement>(".vf-plugins-back")?.click());
+    const record = PLUGINS_FIXTURE_DOWNLOADS["vibefield.desk-things"];
+    if (record === undefined) throw new Error("the fixture's download is missing");
+    await act(async () => land({ candidate: CANDIDATE, record }));
+    await settle();
+    expect(sent).toEqual(["prepare vibefield.desk-things", `discard ${CANDIDATE}`]);
+    expect(card()).toBeNull();
+    // the window closing lets its install go: a download landing after it is thrown away too
+    openThings();
+    act(() => pageAct()?.click());
+    act(() => root.unmount());
+    root = createRoot(host);
+    await act(async () => land({ candidate: CANDIDATE, record }));
+    await settle();
+    expect(sent.filter((line) => line.startsWith("discard"))).toHaveLength(2);
+  });
+
+  it("says a failure in §9's words, never fieldd's text, and Try again downloads again", async () => {
+    const { port, sent } = installs(
+      pluginsFixturePort(SHELF, "answers", {}, { prepare: "refuses" }),
+    );
+    await mount(port);
+    openThings();
+    act(() => pageAct()?.click());
+    await settle();
+    expect(bodyText()).toContain(words.INSTALL_WORDS.failed("Desk things"));
+    expect(bodyText()).not.toContain(PLUGINS_FIXTURE_REFUSAL);
+    expect(pageAct()?.textContent).toBe(`${words.INSTALL_WORDS.tryAgain}↵`);
+    act(() => pageAct()?.click());
+    expect(sent).toEqual(["prepare vibefield.desk-things", "prepare vibefield.desk-things"]);
+    // an install refused after the card says the same
+    act(() => root.unmount());
+    root = createRoot(host);
+    await mount(pluginsFixturePort(SHELF, "answers", {}, { commit: "refuses" }));
+    openThings();
+    act(() => pageAct()?.click());
+    await settle();
+    act(() => cardInstall()?.click());
+    await settle();
+    expect(bodyText()).toContain(words.INSTALL_WORDS.failed("Desk things"));
+  });
+
+  it("words a refusal by its kind, never its text: one this VibeField can't run needs a newer one", async () => {
+    const refusing = (error: FielddRpcError): PluginsPort => ({
+      ...pluginsFixturePort(SHELF),
+      prepare: () => Promise.reject(error),
+    });
+    // item 322's refusal names an inside (the carry's F7), so the page says §9's line
+    const slot =
+      "the copy of this release already in place does not match the artifact — not installed";
+    await mount(
+      refusing(
+        new FielddRpcError("PRECONDITION_FAILED", slot, false, {
+          pluginKind: "PLUGIN_ARTIFACT_MISMATCH",
+        }),
+      ),
+    );
+    openThings();
+    act(() => pageAct()?.click());
+    await settle();
+    expect(bodyText()).toContain(words.INSTALL_WORDS.failed("Desk things"));
+    expect(bodyText()).not.toContain(slot);
+    act(() => root.unmount());
+    root = createRoot(host);
+    await mount(
+      refusing(
+        new FielddRpcError("PRECONDITION_FAILED", "requires contracts ^9.0.0", false, {
+          pluginKind: "PLUGIN_INCOMPATIBLE",
+        }),
+      ),
+    );
+    openThings();
+    act(() => pageAct()?.click());
+    await settle();
+    // no Try again: it would fail the same way until VibeField updates
+    expect(actRow()).toBe(words.SHELF_WORDS.needsNewer);
+    expect(pageAct()).toBeNull();
+    expect(bodyText()).not.toContain("contracts");
+  });
+
+  it("presses the page's act and the card's Install with ↵ from the field", async () => {
+    const { port, sent } = installs(pluginsFixturePort(SHELF));
+    await mount(port);
+    openThings();
+    press("Enter");
+    await settle();
+    expect(card()).not.toBeNull();
+    press("Enter");
+    await settle();
+    expect(sent).toEqual(["prepare vibefield.desk-things", `commit ${CANDIDATE}`]);
+  });
+
+  it("offers the hot tile's Install in Discover's foot, and none for a set this desktop has", async () => {
+    const { port, sent } = installs(pluginsFixturePort(SHELF));
+    await mount(port);
+    const footAct = (): HTMLButtonElement | null =>
+      document.body.querySelector<HTMLButtonElement>(".vf-plugins-foot .vf-plugins-act");
+    // Simulators, featured, is installed here: no act
+    expect(footAct()).toBeNull();
+    press("ArrowDown");
+    press("ArrowRight");
+    expect(hotTile()).toBe("Desk things");
+    expect(footAct()?.textContent).toBe(`${words.SHELF_WORDS.install}↵`);
+    act(() => footAct()?.click());
+    await settle();
+    expect(pageTitle()).toBe("Desk things");
+    expect(card()).not.toBeNull();
+    expect(sent).toEqual(["prepare vibefield.desk-things"]);
+  });
+
+  it("waits offline, saying why, and takes no press while fieldd isn't answering", async () => {
+    const offline = PluginsCatalog.parse({ ...CATALOG_SHELF, state: "unreachable" });
+    await mount({ catalog: offline, refresh: offline });
+    openThings();
+    expect(pageAct()?.disabled).toBe(true);
+    expect(actRow()).toContain(words.INSTALL_WORDS.offline);
+    act(() => root.unmount());
+    root = createRoot(host);
+    act(() =>
+      root.render(
+        <Window port={pluginsFixturePort(SHELF)} snapshot={PLUGINS_FIXTURE_SNAPSHOT} open away />,
+      ),
+    );
+    await settle();
+    openThings();
+    expect(pageAct()?.disabled).toBe(true);
+    expect(bodyText()).toContain(words.PLUGINS_AWAY);
   });
 });
 

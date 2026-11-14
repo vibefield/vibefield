@@ -7,9 +7,10 @@ import { PluginsPlate } from "../PluginsPreview";
 // controller in each state the read can be in, a plugin's page, read only
 // (MK-4c), Updates carrying the Me row's count, (MK-4c2a) a plugin's switches
 // and (MK-4c2b) its settings, and (MK-4e) Discover's shelf over a list held, with
-// the page of a set this desktop doesn't have. Updates' rows come with a later
-// MK-4 part. MK-O3D: Discover's community tile and its ask, and a community
-// plugin held while community plugins are off.
+// the page of a set this desktop doesn't have, and (O2-C) its Install: the
+// download, the install card, Installing… and a failure. Updates' rows come with
+// a later MK-4 part. MK-O3D: Discover's community tile and its ask, and a
+// community plugin held while community plugins are off.
 
 export function PluginsSection(): ReactElement {
   return (
@@ -67,6 +68,34 @@ export function PluginsSection(): ReactElement {
         bleed
       >
         <PluginsPlate state="shelf-page" />
+      </Specimen>
+      <Specimen
+        title="Install pressed — the download under way"
+        source="frame/plugins/InstallCard.tsx · frame/plugins/plugins-install.ts"
+        bleed
+      >
+        <PluginsPlate state="shelf-downloading" />
+      </Specimen>
+      <Specimen
+        title="The install card — read from the plugin downloaded, where its act stood"
+        source="frame/plugins/InstallCard.tsx · frame/plugins/plugins-install.ts"
+        bleed
+      >
+        <PluginsPlate state="shelf-card" />
+      </Specimen>
+      <Specimen
+        title="Installing — the card's Install pressed, until the plugins this desktop has hold it"
+        source="frame/plugins/InstallCard.tsx · frame/plugins/plugins-install.ts"
+        bleed
+      >
+        <PluginsPlate state="shelf-installing" />
+      </Specimen>
+      <Specimen
+        title="An install that didn't happen — and Try again"
+        source="frame/plugins/InstallCard.tsx · frame/plugins/plugins-words.ts"
+        bleed
+      >
+        <PluginsPlate state="shelf-failed" />
       </Specimen>
       <Specimen
         title="VibeField's plugins don't answer"

@@ -1,4 +1,11 @@
-import { PluginRegistrySnapshot, PluginsCatalog, SettingsGetResult } from "@vibefield/contracts";
+import {
+  DeviceListResult,
+  PluginRecord,
+  PluginRegistrySnapshot,
+  PluginsCatalog,
+  PluginsInstallPrepareResult,
+  SettingsGetResult,
+} from "@vibefield/contracts";
 import type { PluginsPort } from "../frame/plugins/plugins-port";
 
 // The Plugins popup's fixtures (MK-4a; DESIGN.md §8 "Plugins — the frame's
@@ -10,7 +17,9 @@ import type { PluginsPort } from "../frame/plugins/plugins-port";
 // switches — at once, with a refusal, or never — and moves nothing itself, as
 // fieldd's answer moves nothing: the snapshot a plate or a test hands next
 // does. MK-4c2b: the port also keeps a plugin's settings, as fieldd answers a
-// window — a secret only as kept or not, never its value. No fieldd, no
+// window — a secret only as kept or not, never its value. O2-C: the port also
+// answers an install — the row fieldd would answer for a download, this
+// desktop's roster, and the install itself — and moves nothing. No fieldd, no
 // network, no child.
 
 /** The clock every plate reads: twelve minutes after its list was read. */
@@ -188,21 +197,34 @@ export type PluginsFixtureSettings = Readonly<
   Record<string, Readonly<Record<string, PluginsFixtureSetting>>>
 >;
 
+/** How a plate's fixture port answers an install (O2-C): its download (`prepare`, which answers the row
+ * `PLUGINS_FIXTURE_DOWNLOADS` holds for a plugin, and refuses any other) and its install (`commit`), each at once,
+ * with a refusal, or never. Either answers at once when not said. */
+export interface PluginsFixtureInstall {
+  readonly prepare?: PluginsFixtureActs;
+  readonly commit?: PluginsFixtureActs;
+}
+
+/** The handle a fixture's download answers with: fieldd's opaque candidate, as its shape holds it. */
+export const PLUGINS_FIXTURE_CANDIDATE = "c".repeat(32);
+
 export function pluginsFixturePort(
   read: PluginsFixtureRead,
   acts: PluginsFixtureActs = "answers",
   settings: PluginsFixtureSettings = {},
+  install: PluginsFixtureInstall = {},
 ): PluginsPort {
   const answer = (value: PluginsCatalog | "fails"): Promise<PluginsCatalog> =>
     value === "fails"
       ? Promise.reject(new Error("the fixture's door does not answer"))
       : Promise.resolve(value);
-  const act = (): Promise<void> =>
-    acts === "answers"
-      ? Promise.resolve()
-      : acts === "refuses"
+  const settle = <T>(how: PluginsFixtureActs, value: T): Promise<T> =>
+    how === "answers"
+      ? Promise.resolve(value)
+      : how === "refuses"
         ? Promise.reject(new Error(PLUGINS_FIXTURE_REFUSAL))
-        : new Promise<void>(() => undefined);
+        : new Promise<T>(() => undefined);
+  const act = (): Promise<void> => settle(acts, undefined);
   // this port's own copy, so a set on one plate or test never reaches another
   const kept = new Map<string, PluginsFixtureSetting>(
     Object.entries(settings).flatMap(([id, keys]) =>
@@ -234,6 +256,19 @@ export function pluginsFixturePort(
         // a secret is kept as kept, never as its value
         kept.set(`${id}/${key}`, was?.secret === true ? { secret: true, kept: true } : { value });
       }),
+    prepare: (id) => {
+      const record = PLUGINS_FIXTURE_DOWNLOADS[id];
+      if (record === undefined) return Promise.reject(new Error(PLUGINS_FIXTURE_REFUSAL));
+      const prepared = PluginsInstallPrepareResult.parse({
+        candidate: PLUGINS_FIXTURE_CANDIDATE,
+        record,
+      });
+      return settle(install.prepare ?? "answers", prepared);
+    },
+    // an install moves nothing here, as fieldd's answer moves nothing: only a snapshot does
+    commit: () => settle(install.commit ?? "answers", undefined),
+    discard: () => Promise.resolve(),
+    desktops: () => Promise.resolve(PLUGINS_FIXTURE_ROSTER),
   };
 }
 
@@ -610,3 +645,64 @@ export function communityFixtureDoor(
         ? Promise.reject(new Error(PLUGINS_FIXTURE_REFUSAL))
         : new Promise<void>(() => undefined);
 }
+
+/** What a fixture's fieldd answers for a download (O2-C), by plugin: the row the card is read from. Desk things,
+ * from the shelf's list, adds four objects and asks for two powers. Any other plugin's download is refused. */
+export const PLUGINS_FIXTURE_DOWNLOADS: Readonly<Record<string, PluginRecord>> = {
+  "vibefield.desk-things": PluginRecord.parse(
+    record({
+      id: "vibefield.desk-things",
+      title: "Desk things",
+      version: "1.0.0",
+      source: "registry",
+      objects: [
+        object("Clock", "DeskThingsClock", "Clock"),
+        object("Calendar", "DeskThingsCalendar", "Calendar"),
+        object("Timer", "DeskThingsTimer", "Timer"),
+        object("Ruler", "DeskThingsRuler", "Ruler"),
+      ],
+      granted: ["canvas.read", "storage.self"],
+    }),
+  ),
+};
+
+/** This desktop's roster as a fixture's fieldd answers it (O2-C): studio, the desktop the plate stands on; mini and
+ * tower, whose VibeField has said itself; and a phone on the tailnet that runs none, which no card counts. */
+export const PLUGINS_FIXTURE_ROSTER = DeviceListResult.parse({
+  devices: [
+    {
+      deviceId: "fixture-studio",
+      name: "studio",
+      platform: "darwin",
+      fielddVersion: "0.9.0",
+      self: true,
+      online: true,
+      lastSeenAt: PLUGINS_FIXTURE_READ_AT,
+    },
+    {
+      deviceId: "fixture-tower",
+      name: "tower",
+      platform: "win32",
+      fielddVersion: "0.9.0",
+      self: false,
+      online: false,
+      lastSeenAt: PLUGINS_FIXTURE_READ_AT,
+    },
+    {
+      deviceId: "fixture-mini",
+      name: "mini",
+      platform: "darwin",
+      fielddVersion: "0.9.0",
+      self: false,
+      online: true,
+      lastSeenAt: PLUGINS_FIXTURE_READ_AT,
+    },
+    {
+      deviceId: "fixture-phone",
+      name: "iPhone",
+      self: false,
+      online: true,
+      lastSeenAt: PLUGINS_FIXTURE_READ_AT,
+    },
+  ],
+}).devices;

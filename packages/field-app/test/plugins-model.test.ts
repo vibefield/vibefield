@@ -937,6 +937,14 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
   "SHELF_WORDS.count": [[0], [1], [3]],
   "SHELF_WORDS.has": [["Clock"]],
   "SHELF_WORDS.none": [["clock"]],
+  // acts b: the install card and its steps
+  "CARD_WORDS.ask": [["Desk clock"]],
+  "CARD_WORDS.adds": [[1], [3]],
+  "CARD_WORDS.tools": [[1], [4]],
+  "CARD_WORDS.here": [[true], [false]],
+  "CARD_WORDS.reaches": [[2], [3]],
+  "INSTALL_WORDS.installing": [[0], [1], [3]],
+  "INSTALL_WORDS.failed": [["Desk clock"]],
 };
 
 /** The strings a value says: strings as they are, objects and arrays by their

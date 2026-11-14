@@ -218,6 +218,37 @@ export const SHELF_WORDS = {
   communityOff: "Community plugins are off, so their objects aren't searched.",
 } as const;
 
+/** The install card (O2-C; DESIGN.md §9 "The install card", and its O2-C block under "Installing, and after"): §9's
+ * words, one of a thing said as one (MK's), and, for a power it can't name, the word James picked for the page
+ * (MK-O34, B, ‹draft›). "‹plugin›" is the title the downloaded plugin's manifest writes. */
+export const CARD_WORDS = {
+  ask: (title: string) => `Install ${title}?`,
+  adds: (objects: number) => `It adds ${plural(objects, "object", "objects")} to your pegboard:`,
+  tools: (tools: number) => `It gives your agents ${plural(tools, "tool", "tools")}.`,
+  can: "It can:",
+  /** for the powers it can't name, the page's own line, read from it (VF-PM 2026-11-14 04:33Z) */
+  unnamed: PAGE_WORDS.unnamed,
+  /** one desktop: this one ("this PC" off the Mac) */
+  here: (onMac: boolean) => (onMac ? "It installs on this Mac." : "It installs on this PC."),
+  /** more than one: how many, and the page's reason */
+  reaches: (desktops: number) =>
+    `It installs on your ${desktops} desktops, because your desktops share one set of plugins.`,
+  cancel: "Cancel",
+} as const;
+
+/** An install's steps on a page's act (O2-C; §9 "Installing, and after"). "Downloading…" stands for §9's
+ * "Downloading · 42%", since fieldd says nothing of a download's bytes (MK's, ‹draft›); the failure's line and Try
+ * again are §9's (‹draft›); "Installing needs the internet" is §9's ruled offline word. Never fieldd's own text: a
+ * refusal is worded by its kind (`plugins-install.ts`, `installRefusal`). */
+export const INSTALL_WORDS = {
+  downloading: "Downloading…",
+  installing: (objects: number) =>
+    objects === 0 ? "Installing…" : `Installing ${plural(objects, "object", "objects")}…`,
+  failed: (title: string) => `VibeField didn't install ${title}. Nothing changed.`,
+  tryAgain: "Try again",
+  offline: "Installing needs the internet",
+} as const;
+
 /** Installed, when no plugin holds every typed word (MK's, ‹draft›; the Peek's "Nothing in your past holds every
  * word of “q”" is its pattern). */
 export function noMatchWords(query: string): string {

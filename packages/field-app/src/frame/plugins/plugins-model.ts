@@ -499,8 +499,9 @@ function addsOf(record: PluginRecord, onMac: boolean): PageLine[] {
  * other id is a power VibeField has no words for: it is said as one VibeField
  * can't describe (James's MK-O34 pick B, 2026-11-12 06:12:24Z), with nothing
  * under it and no "whose", and like any power it is a line of its own (VF-PM
- * 2026-11-14 03:11Z, MK's lean). */
-function powerWords(
+ * 2026-11-14 03:11Z, MK's lean). O2-C: the install card says its powers with
+ * the same words (`plugins-install.ts`). */
+export function powerWords(
   id: string,
   record: PluginRecord,
   declared: ReadonlyMap<string, { title: string; description: string; by: PluginRecord }>,

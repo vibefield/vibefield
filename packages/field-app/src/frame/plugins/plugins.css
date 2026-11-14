@@ -785,8 +785,15 @@
   cursor: pointer;
 }
 
-.vf-plugins-act:hover {
+.vf-plugins-act:not(:disabled):hover {
   background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
+}
+
+/* O2-C: an act that takes no press says its words in tertiary ink, with no
+   fill under the pointer */
+.vf-plugins-act:disabled {
+  color: var(--vf-text-tertiary);
+  cursor: default;
 }
 
 .vf-plugins-act-key {
@@ -878,6 +885,117 @@
   cursor: default;
 }
 
+/* ── a page's act and the install card (O2-C; §8 "Real progress", the act
+   drawn under it, ‹draft›): the act, the foot's act's look, with its line 6
+   under it; the card where the act stood, the second column's width, padded
+   14, corners 16, on the ready fill, growing over 240ms on the island curve
+   from 0.96 and clear, its top left held (§6 "Plugins"). Its ask at 13/600 in
+   primary ink, its parts 10 apart, each part's line at 12/400 in secondary
+   ink and its items 4 under it at 12/400 in primary ink, a desktop's OS mark
+   12 in tertiary ink 6 before its name; 12 under its last part, at its end,
+   Cancel and Install 8 apart — Cancel 32 tall, corners 16, 12.5/600 in
+   secondary ink, the ready fill under the pointer. ── */
+.vf-plugins-page-act-stack {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  justify-items: start;
+  gap: 6px;
+}
+
+.vf-plugins-card {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  transform-origin: top left;
+  animation: vf-plugins-card-grow 240ms var(--vf-ease-island);
+}
+
+@keyframes vf-plugins-card-grow {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.vf-plugins-card-ask {
+  margin: 0;
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.vf-plugins-card-part {
+  display: grid;
+  gap: 4px;
+}
+
+.vf-plugins-card-line {
+  margin: 0;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.vf-plugins-card-items {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  color: var(--vf-text-primary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  list-style: none;
+}
+
+.vf-plugins-card-desktop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vf-plugins-card-desktop > .vf-os-mark {
+  flex: none;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-plugins-card-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.vf-plugins-card-cancel {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  color: var(--vf-text-secondary);
+  background: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.vf-plugins-card-cancel:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-plugins-card-cancel:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
 /* reduced motion: no pop — the scrim and the popup fade in over 120ms (the
    recede's own rule is peek.css's) */
 @media (prefers-reduced-motion: reduce) {
@@ -887,6 +1005,11 @@
   }
 
   .vf-plugins-pop {
+    animation: vf-plugins-fade 120ms ease;
+  }
+
+  /* O2-C: the install card fades in over 120ms */
+  .vf-plugins-card {
     animation: vf-plugins-fade 120ms ease;
   }
 }
