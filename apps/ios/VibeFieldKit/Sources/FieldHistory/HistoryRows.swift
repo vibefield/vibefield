@@ -165,6 +165,15 @@ extension HistoryRow {
   /// both ask for the row by it.
   static func promptMark(_ turn: HistoryTurn) -> String { turn.promptAnchor ?? "prompt-\(turn.id)" }
 
+  /// Item 396 — the id the document's stack gives the prompt's row that `mark` names (`HistoryRow.id`), or nil
+  /// when no prompt among `rows` wears that mark. A press asks for the row by this id as well as by its mark: a
+  /// lazy stack knows a row it has not laid out by the id its own ForEach gave it, and knows the id a row's view
+  /// carries only once that row is laid out.
+  static func promptRow(marked mark: String, in rows: [HistoryRow]) -> String? {
+    // STUB (red): no row is found
+    nil
+  }
+
   /// Item 396 — where a press on the button at the side goes: to the nearest message of the person's own that
   /// begins above the top of the view. `standing` is where each row that is laid out begins, by the row's id; a
   /// row that is not laid out says nothing. The last row, in the document's order, that begins above the top is

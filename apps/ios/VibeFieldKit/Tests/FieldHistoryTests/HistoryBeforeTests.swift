@@ -132,6 +132,21 @@ struct HistoryBeforeTests {
     #expect(before(landed, ["head/t1": .above, "segment/t1/a": .below]) == .message("hit-1", near: false))
   }
 
+  @Test("a marked prompt's row is also named by the id the stack gives it, which finds a row not yet laid out")
+  func theMarkedRow() {
+    #expect(HistoryRow.promptRow(marked: "prompt-t2", in: three) == "prompt/t2")
+    let landed = rows([turn("t1", anchor: "hit-1"), turn("t2")])
+    #expect(HistoryRow.promptRow(marked: "hit-1", in: landed) == "prompt/t1")
+    #expect(HistoryRow.promptRow(marked: "prompt-t2", in: landed) == "prompt/t2")
+    // the id it answers is the row's own, the one the ForEach is given
+    let marked = HistoryRow.promptRow(marked: "prompt-t3", in: three)
+    #expect(three.contains { $0.id == marked })
+    // a mark no prompt wears, and a turn with no prompt
+    #expect(HistoryRow.promptRow(marked: "prompt-gone", in: three) == nil)
+    #expect(HistoryRow.promptRow(marked: "prompt-t0", in: rows([turn("t0", prompt: "")])) == nil)
+    #expect(HistoryRow.promptRow(marked: "prompt-t1", in: []) == nil)
+  }
+
   @Test("a row begins above the top of the view past a point of slack, and away past a screen")
   func whereARowBegins() {
     // a view 600 pt tall; `top` is the row's top below the top of the view
