@@ -51,8 +51,11 @@ export interface RegistryInstallConfig {
   registryPublicKey?: string;
   fetchImpl?: typeof fetch;
   /** MK-2b (2026-11-11, MK-D5): how long one registry fetch may take before it answers as unreachable;
-   * tests shorten it */
+   * tests shorten it. Item 329 (2026-11-14): also how long a plugin's download may go with no byte. */
   fetchTimeoutMs?: number;
+  /** Item 329 (2026-11-14): the tests' seams alone (daemon.ts never passes them): the caps and the download's
+   * deadline. */
+  fetchBounds?: { artifactMaxBytes?: number; artifactDeadlineMs?: number; indexMaxBytes?: number };
   /** MK-2c (2026-11-11, G1): whether a community plugin may install now. Absent, none may. daemon.ts passes
    * `COMMUNITY_SWITCH_DRAWN && the person's switch`; a test passes its own to an installer it builds. */
   communityAllowed?: () => Promise<boolean>;
@@ -71,6 +74,43 @@ export const COMMUNITY_SWITCH_CLOSED = "COMMUNITY_SWITCH_CLOSED";
 
 /** MK-2b (MK-D5): a registry host that does not answer is offline, never a hang. */
 export const REGISTRY_FETCH_TIMEOUT_MS = 20_000;
+
+/** Item 329 (2026-11-14): the most bytes one plugin's download may have. A body past it is refused while it is read,
+ * before the hash, so it is never held whole. */
+export const ARTIFACT_MAX_BYTES = 64 * 1024 * 1024;
+/** Item 329: how long one plugin's download may take, start to end. One that gets no byte for the list's timeout
+ * (`REGISTRY_FETCH_TIMEOUT_MS`) ends sooner. Either way it answers as unreachable. */
+export const ARTIFACT_FETCH_DEADLINE_MS = 5 * 60_000;
+/** Item 329: the most bytes the plugin list may have, sized as the catalog's 4,096 entries at 2 KiB each. The schema
+ * does not hold an entry to 2 KiB: one with a long history runs larger, and a list past the cap is refused whole. */
+export const REGISTRY_INDEX_MAX_BYTES = 8 * 1024 * 1024;
+/** Item 329: the most bytes the list's signature may have (an Ed25519 signature is 88 characters in base64) */
+export const REGISTRY_SIGNATURE_MAX_BYTES = 4 * 1024;
+
+/** Item 329: one fetch's bounds. `maxBytes` holds on every road. On http(s), `stallMs` ends a read that gets no byte
+ * for that long and `deadlineMs` one that has not ended by then; a file is read at most its cap, with no clock. */
+interface FetchBounds {
+  maxBytes: number;
+  stallMs: number;
+  deadlineMs: number;
+}
+
+/** Item 329: a bounded fetch stopped, by its cap or by its clock. Its caller says it and gives it its kind. */
+class FetchStopped extends Error {
+  readonly reason: "size" | "time";
+
+  constructor(reason: "size" | "time", detail: string) {
+    super(detail);
+    this.name = "FetchStopped";
+    this.reason = reason;
+  }
+}
+
+/** MK-2b (MK-D5): the one unreachable answer. The catalog reads it as offline; it is worth trying again. */
+const unreachable = (detail: string): RpcCallError =>
+  new RpcCallError("UNAVAILABLE", `registry unreachable: ${detail}`, true, {
+    pluginKind: "PLUGIN_SOURCE_UNAVAILABLE",
+  });
 
 /** MK-2e (2026-11-11; MK-E9, B1): one listing picture's read. Its bytes are not checked here: the catalog hashes them
  * against the pin (`plugin-catalog.ts`). */
@@ -147,9 +187,16 @@ const encodePath = (path: string): string => path.split("/").map(encodeURICompon
 
 /** MK-2e: a regular file's bytes, at most `maxBytes`, opened without following a link at its last component. The
  * size is read from the open handle, and the read stops one byte past it: a file that grew while it was read is
- * refused (past the cap, `size`; under it, `unreachable`), never read on. */
-export async function readFileCapped(file: string, maxBytes: number): Promise<ListingFileRead> {
-  const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+ * refused (past the cap, `size`; under it, `unreachable`), never read on. Item 329 (2026-11-14): `followLink` opens
+ * through one, for the plugin list's and the download's file roads, which followed one with `readFile` before. */
+export async function readFileCapped(
+  file: string,
+  maxBytes: number,
+  opts: { followLink?: boolean } = {},
+): Promise<ListingFileRead> {
+  const flags =
+    opts.followLink === true ? constants.O_RDONLY : constants.O_RDONLY | constants.O_NOFOLLOW;
+  const handle = await open(file, flags);
   try {
     const stat = await handle.stat();
     if (!stat.isFile()) return { ok: false, reason: "unreachable" };
@@ -278,9 +325,23 @@ export class RegistryInstallService {
         "no registry verify key is configured — unsigned indexes never install",
         false,
       );
+    // MK-2b's timeout bounds each of the two fetches start to end; item 329 (2026-11-14) gives each its cap
     const timeoutMs = this.cfg.fetchTimeoutMs ?? REGISTRY_FETCH_TIMEOUT_MS;
-    const bytes = await this.fetchBytes(url, timeoutMs);
-    const signature = (await this.fetchBytes(`${url}.sig`, timeoutMs)).toString("utf8").trim();
+    const bounds = (maxBytes: number): FetchBounds => ({
+      maxBytes,
+      stallMs: timeoutMs,
+      deadlineMs: timeoutMs,
+    });
+    const indexMaxBytes = this.cfg.fetchBounds?.indexMaxBytes ?? REGISTRY_INDEX_MAX_BYTES;
+    let bytes: Buffer;
+    let signature: string;
+    try {
+      bytes = await this.fetchBytes(url, bounds(indexMaxBytes));
+      const sig = await this.fetchBytes(`${url}.sig`, bounds(REGISTRY_SIGNATURE_MAX_BYTES));
+      signature = sig.toString("utf8").trim();
+    } catch (error) {
+      throw this.listStopped(error);
+    }
     if (!this.verifyIndex(bytes, signature)) {
       this.refused("signature");
       throw new RpcCallError(
@@ -320,11 +381,26 @@ export class RegistryInstallService {
   }
 
   /** L2 (custody note §6): "Diagnostics has the details" is true only if the refusal is logged. */
-  private refused(reason: "signature" | "not-json" | "schema"): void {
+  private refused(reason: "signature" | "not-json" | "schema" | "size"): void {
     this.log.warn(
       "fieldd.plugin_install.index_refused",
       "A plugin list arrived that VibeField could not use, and was refused",
       { reason },
+    );
+  }
+
+  /** Item 329 (2026-11-14): a stop of the list's fetch, said as MK-2b and L2 say the list's other ends. Past its cap,
+   * the list or its signature is refused, by its reason (the catalog reads that as refused), in words that name no
+   * inside: Settings → Plugins' update row shows this text as it is. By the clock it is unreachable (offline),
+   * MK-2b's answer and text as before. Anything else passes as it came. */
+  private listStopped(error: unknown): unknown {
+    if (!(error instanceof FetchStopped)) return error;
+    if (error.reason === "time") return unreachable(error.message);
+    this.refused("size");
+    return new RpcCallError(
+      "PRECONDITION_FAILED",
+      "the plugin list is larger than VibeField reads — refused",
+      false,
     );
   }
 
@@ -431,7 +507,10 @@ export class RegistryInstallService {
         { pluginKind: "PLUGIN_INCOMPATIBLE" },
       );
 
-    const artifactBytes = await this.fetchBytes(this.resolveArtifactUrl(indexRef, release));
+    const artifactBytes = await this.fetchArtifact(
+      params.id,
+      this.resolveArtifactUrl(indexRef, release),
+    );
     const actual = sha256hex(artifactBytes);
     if (actual !== release.sha256) {
       this.log.warn(
@@ -735,38 +814,119 @@ export class RegistryInstallService {
     return `${base}${release.artifactUrl}`;
   }
 
-  /** `timeoutMs` bounds the index's two small fetches alone (MK-2b, 2026-11-11, MK-D5), the body's read
-   * included; an artifact's download keeps today's unbounded fetch. The timer is cleared however
-   * the fetch ends, so nothing is left running after it. */
-  private async fetchBytes(url: string, timeoutMs?: number): Promise<Buffer> {
-    const abort = timeoutMs !== undefined ? new AbortController() : undefined;
-    const timer =
-      abort !== undefined
-        ? setTimeout(() => abort.abort(new Error(`no answer in ${timeoutMs} ms`)), timeoutMs)
-        : undefined;
+  /** Item 329 (2026-11-14): the plugin's download, bounded (`fetchBytes`). Past its cap it is refused while it is
+   * read and before the hash, as a download that is not the one the list pins (PLUGIN_ARTIFACT_MISMATCH, as a hash
+   * that differs). Stopped by the clock it is unreachable and retryable, as the list is. Either stop is said once in
+   * the log by its reason, never with a byte of the body, and to its caller in words that name no inside: Settings →
+   * Plugins' update row shows the text as it is. */
+  private async fetchArtifact(pluginId: string, url: string): Promise<Buffer> {
+    const bounds = this.cfg.fetchBounds;
     try {
-      if (url.startsWith("file://")) return await readFile(fileURLToPath(url));
-      if (!/^https?:\/\//.test(url)) return await readFile(fileURLToPath(pathToFileURL(url).href));
-      const fetcher = this.cfg.fetchImpl ?? fetch;
-      const res = await fetcher(url, {
-        redirect: "follow",
-        ...(abort !== undefined ? { signal: abort.signal } : {}),
+      return await this.fetchBytes(url, {
+        maxBytes: bounds?.artifactMaxBytes ?? ARTIFACT_MAX_BYTES,
+        stallMs: this.cfg.fetchTimeoutMs ?? REGISTRY_FETCH_TIMEOUT_MS,
+        deadlineMs: bounds?.artifactDeadlineMs ?? ARTIFACT_FETCH_DEADLINE_MS,
       });
-      if (!res.ok)
+    } catch (error) {
+      if (!(error instanceof FetchStopped)) throw error;
+      this.log.warn(
+        "fieldd.plugin_install.download_stopped",
+        "A plugin's download was stopped before it ended; nothing was installed",
+        { pluginId, reason: error.reason },
+      );
+      if (error.reason === "time")
+        throw new RpcCallError(
+          "UNAVAILABLE",
+          "the plugin's download took too long — stopped",
+          true,
+          { pluginKind: "PLUGIN_SOURCE_UNAVAILABLE" },
+        );
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the plugin's download is larger than VibeField takes — discarded",
+        false,
+        { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" },
+      );
+    }
+  }
+
+  /** Every fetch is bounded (item 329, 2026-11-14; `FetchBounds`): the list and its signature by MK-2b's timeout,
+   * start to end (2026-11-11, MK-D5), and by their caps; the download by its own (`fetchArtifact`). A stop by size
+   * or by the clock is thrown as `FetchStopped` for the caller to say; any other failure is unreachable, as before. */
+  private async fetchBytes(url: string, bounds: FetchBounds): Promise<Buffer> {
+    try {
+      if (/^https?:\/\//.test(url)) return await this.fetchHttp(url, bounds);
+      const file = url.startsWith("file://")
+        ? fileURLToPath(url)
+        : fileURLToPath(pathToFileURL(url).href);
+      const read = await readFileCapped(file, bounds.maxBytes, { followLink: true });
+      if (read.ok) return read.bytes;
+      if (read.reason === "size") throw new FetchStopped("size", `over ${bounds.maxBytes} bytes`);
+      throw new Error("not a regular file, or it changed while it was read");
+    } catch (e) {
+      if (e instanceof RpcCallError || e instanceof FetchStopped) throw e;
+      throw unreachable(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  /** Item 329: an http(s) fetch read as a stream and counted against its cap, under two clocks: the stall, set again
+   * by each chunk that comes, and the deadline. The fetch and each read race the clocks, so a host, or a `fetchImpl`,
+   * that ignores the abort still ends. The timers are cleared, and a body stopped part way is cancelled, however it
+   * ends, so nothing is left running after it. A cancel is never waited on: a body whose cancel does not settle
+   * cannot hold the fetch. */
+  private async fetchHttp(url: string, bounds: FetchBounds): Promise<Buffer> {
+    const abort = new AbortController();
+    const stopAfter = (ms: number) =>
+      setTimeout(() => abort.abort(new FetchStopped("time", `no answer in ${ms} ms`)), ms);
+    const deadline = stopAfter(bounds.deadlineMs);
+    let stall = stopAfter(bounds.stallMs);
+    const stopped = new Promise<never>((_resolve, reject) => {
+      abort.signal.addEventListener("abort", () => reject(abort.signal.reason), { once: true });
+    });
+    stopped.catch(() => undefined);
+    try {
+      const fetcher = this.cfg.fetchImpl ?? fetch;
+      const res = await Promise.race([
+        fetcher(url, { redirect: "follow", signal: abort.signal }),
+        stopped,
+      ]);
+      if (!res.ok) {
+        void res.body?.cancel().catch(() => undefined);
         throw new RpcCallError("UNAVAILABLE", `registry fetch failed: HTTP ${res.status}`, true, {
           pluginKind: "PLUGIN_SOURCE_UNAVAILABLE",
         });
-      return Buffer.from(await res.arrayBuffer());
-    } catch (e) {
-      if (e instanceof RpcCallError) throw e;
-      throw new RpcCallError(
-        "UNAVAILABLE",
-        `registry unreachable: ${e instanceof Error ? e.message : String(e)}`,
-        true,
-        { pluginKind: "PLUGIN_SOURCE_UNAVAILABLE" },
-      );
+      }
+      if (Number(res.headers.get("content-length") ?? 0) > bounds.maxBytes) {
+        void res.body?.cancel().catch(() => undefined);
+        throw new FetchStopped("size", `declares over ${bounds.maxBytes} bytes`);
+      }
+      if (res.body === null) return Buffer.alloc(0);
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let total = 0;
+      try {
+        for (;;) {
+          const { done, value } = await Promise.race([reader.read(), stopped]);
+          if (done) return Buffer.concat(chunks, total);
+          total += value.byteLength;
+          if (total > bounds.maxBytes)
+            throw new FetchStopped("size", `over ${bounds.maxBytes} bytes`);
+          chunks.push(value);
+          clearTimeout(stall);
+          stall = stopAfter(bounds.stallMs);
+        }
+      } catch (error) {
+        void reader.cancel().catch(() => undefined);
+        throw error;
+      }
+    } catch (error) {
+      if (error instanceof FetchStopped) throw error;
+      // a fetch that rejects with an abort error of its own is said by the clock that stopped it
+      const reason: unknown = abort.signal.reason;
+      throw abort.signal.aborted && reason instanceof FetchStopped ? reason : error;
     } finally {
-      if (timer !== undefined) clearTimeout(timer);
+      clearTimeout(deadline);
+      clearTimeout(stall);
     }
   }
 }
