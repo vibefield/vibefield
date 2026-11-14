@@ -4485,8 +4485,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   cannot draw it — and the note says why: "No card made — it is off the screen", "No card made — the
   desk could not draw it".
   **A copy the clipboard refuses deals nothing** — the card is dealt only once its contents are on
-  the clipboard — and the note says why, in the button's voice: "Not copied — the clipboard did not take
-  the picture", "Not copied — the picture could not be read", or its size against the clipboard's
+  the clipboard — and the note says why, in the copy door's words, which History's room says too:
+  "Not copied — the clipboard did not take the picture", "Not copied — the picture could not be
+  read", or its size against the clipboard's
   bound, counted as §9 counts — the size rounded up, the bound down ("Not copied — the words hold
   80 KB; the clipboard takes at most 65 KB"); words that fit the clipboard but not the one request a
   copy sends say that bound instead ("Not copied — the words hold 66 KB as sent; a copy sends at most
@@ -4501,8 +4502,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   list opened; the bar stepped aside from the press while the chip flew. It left with the line's
   draft (LN-D3, HN-2). *Until HN-5* only the text half reached the system clipboard.
   *Amended 2026-11-14 (item 400): the two refusals with no picture said "Not copied — it is off the screen" and
-  "Not copied — the desk could not draw it", and the clipboard's were said "in Copy's voice". The clipboard's keep
-  "Not copied — …", the copy door's one sentence, which History's room says too.*
+  "Not copied — the desk could not draw it". The clipboard's keep "Not copied — …".*
 - **The missing face** (DK-D18 as amended 2026-10-03: no VibeField kind; ICE I24; R11, R12, R24):
   an object the desk cannot draw — its type has **no kind** on this desk (a plugin off or gone, a
   type this build never registered — ghost stubs register faceless types only — or one registered
