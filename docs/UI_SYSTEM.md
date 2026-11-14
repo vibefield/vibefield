@@ -197,10 +197,12 @@ The catalog currently mounts these shipping views directly:
   capture. @'s `AtMenuView` and the draft's plates left with the draft (LN-D3); @ came back in
   Chat's composer at SP-1d, as `AtRowsView` (above), never on the line
 - the hand (Cards in Hand, HN-1): the shipping `CardsView` and `CardFace` over fixture cards
-  (`CardsPreview`) — the six faces in both lights, the fan at rest, a card reached with its ×, the
-  same card reached while Chat shows (SP-1d: the product's `CHAT_REACH`, its tip risen to the
-  panel's foot), the hand raised with a card in the keyboard's focus, a card picked up over its
-  scrim, and a card from another app still waiting
+  (`CardsPreview`) — the six faces in both lights, the fan at rest, a card reached with its chip on
+  its top right corner (CS-D7 B), the same card reached while Chat shows (SP-1d: the product's
+  `CHAT_REACH`, its tip risen to the panel's foot), the hand raised with a card in the keyboard's
+  focus, a card picked up over its scrim, and a card from another app still waiting (*amended
+  2026-11-14, item 402: this said "a card reached with its ×", HN's 18-round × inside the corner,
+  which the chip replaced*)
 - the head (One Frame FR-3; its package and the pill's sheet on two shelves since HN-8, PL-D1 and
   PL-D2): `HeadView` in every state the page's head plates draw — the field's name at its top, the
   package after the chevron's rule and, in a plate of its own, its standing dot, the crumbs folded
