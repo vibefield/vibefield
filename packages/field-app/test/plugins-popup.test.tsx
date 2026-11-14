@@ -17,20 +17,24 @@ import {
   CATALOG_FIXTURES,
   CATALOG_LISTED,
   CATALOG_SHELF,
+  CATALOG_UPDATES,
   PLUGINS_FIXTURE_CANDIDATE,
   PLUGINS_FIXTURE_DOWNLOADS,
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
+  PLUGINS_FIXTURE_OUTDATED_SNAPSHOT,
   PLUGINS_FIXTURE_READ_AT,
   PLUGINS_FIXTURE_REFUSAL,
   PLUGINS_FIXTURE_SNAPSHOT,
   PLUGINS_FIXTURE_SWITCHES_SNAPSHOT,
+  PLUGINS_FIXTURE_UPDATE_DOWNLOADS,
   type PluginsFixtureActs,
   type PluginsFixtureRead,
   pluginsFixturePort,
 } from "../src/design-system/plugins-fixtures";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { FramePlugins, Plugins } from "../src/frame/plugins/Plugins";
+import { keepCarry } from "../src/frame/plugins/plugins-carry";
 import type { CommunityStatementDoor } from "../src/frame/plugins/plugins-community";
 import { getPluginUpdates, resetPluginUpdates } from "../src/frame/plugins/plugins-count";
 import { pluginsLayout } from "../src/frame/plugins/plugins-model";
@@ -51,6 +55,9 @@ import {
 // shelf and the page of a set this desktop doesn't have; O2-C its Install, the install card, and the requests the
 // card sends and throws away, each held by the port's recorded calls, and a refusal worded by its kind alone.
 // MK-O3D adds the community statement at this desktop's first community install, over a fixture mark.
+// MK-UC's UC-C adds Updates' rows, the update card, Update all and Check again, and the note the window comes back
+// fresh by (MK-E6), each held by the port's recorded calls and the window's own session, which each test leaves
+// empty.
 // No real fieldd, no network, no child.
 
 let host: HTMLDivElement;
@@ -67,6 +74,8 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   for (const node of document.body.querySelectorAll(".vf-plugins")) node.remove();
+  // MK-UC's UC-C: no test's note (MK-E6) reaches the next
+  sessionStorage.clear();
 });
 
 function counting(inner: PluginsPort): {
@@ -90,8 +99,8 @@ function counting(inner: PluginsPort): {
   };
 }
 
-/** A port's switches and settings (MK-4c2b), (O2-C) its install's doors and (MK-4f) Remove…, for a test that
- * presses and reads none: each refuses, so a stray press or read is never a quiet pass. */
+/** A port's switches and settings (MK-4c2b), (O2-C) its install's doors, (MK-4f) Remove… and (MK-UC) an update's
+ * download, for a test that presses and reads none: each refuses, so a stray press or read is never a quiet pass. */
 const NO_SWITCHES: Pick<
   PluginsPort,
   | "enable"
@@ -100,6 +109,7 @@ const NO_SWITCHES: Pick<
   | "settingsGet"
   | "settingsSet"
   | "prepare"
+  | "prepareUpdate"
   | "commit"
   | "discard"
   | "desktops"
@@ -111,6 +121,7 @@ const NO_SWITCHES: Pick<
   settingsGet: () => Promise.reject(new Error("no setting is read in this test")),
   settingsSet: () => Promise.reject(new Error("no setting is kept in this test")),
   prepare: () => Promise.reject(new Error("nothing is installed in this test")),
+  prepareUpdate: () => Promise.reject(new Error("nothing is updated in this test")),
   commit: () => Promise.reject(new Error("nothing is installed in this test")),
   discard: () => Promise.reject(new Error("nothing is installed in this test")),
   desktops: () => Promise.reject(new Error("nothing is installed in this test")),
@@ -1582,6 +1593,385 @@ describe("Remove… on a plugin's page (MK-4f; §8 'The destructive uninstall af
     act(() => removeAct()?.click());
     await settle();
     expect(bodyText()).not.toContain(words.REMOVE_WORDS.refused);
+  });
+});
+
+/** An update's requests a port sent, in order (MK-UC's UC-C). */
+function updating(inner: PluginsPort): { port: PluginsPort; sent: string[] } {
+  const sent: string[] = [];
+  return {
+    sent,
+    port: {
+      ...inner,
+      prepareUpdate: (id, version) => {
+        sent.push(`prepareUpdate ${id} ${version}`);
+        return inner.prepareUpdate(id, version);
+      },
+      commit: (candidate) => {
+        sent.push(`commit ${candidate}`);
+        return inner.commit(candidate);
+      },
+      discard: (candidate) => {
+        sent.push(`discard ${candidate}`);
+        return inner.discard(candidate);
+      },
+    },
+  };
+}
+const UPDATES: PluginsFixtureRead = { catalog: CATALOG_UPDATES, refresh: CATALOG_UPDATES };
+const NOTE_KEY = "vf-plugins-carry";
+/** Updates' row of the plugin titled `title`. */
+const updateRow = (title: string): HTMLLIElement | null =>
+  [...document.body.querySelectorAll<HTMLLIElement>(".vf-plugins-update")].find(
+    (item) => item.querySelector(".vf-plugins-title")?.textContent === title,
+  ) ?? null;
+const rowUpdate = (title: string): HTMLButtonElement | null =>
+  updateRow(title)?.querySelector<HTMLButtonElement>(".vf-plugins-update-act .vf-plugins-act") ??
+  null;
+const rowCard = (): HTMLElement | null =>
+  document.body.querySelector<HTMLElement>(".vf-plugins-update-card .vf-plugins-card");
+const cardButton = (words_: string): HTMLButtonElement | null =>
+  [...(card()?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((button) =>
+    button.textContent?.startsWith(words_),
+  ) ?? null;
+const updatesHead = (): string =>
+  document.body.querySelector(".vf-plugins-updates-said")?.textContent ?? "";
+const footButton = (words_: string): HTMLButtonElement | null =>
+  [...document.body.querySelectorAll<HTMLButtonElement>(".vf-plugins-foot button")].find(
+    (button) => button.textContent === words_,
+  ) ?? null;
+async function openUpdates(port: PluginsPort): Promise<void> {
+  await mount(port, PLUGINS_FIXTURE_OUTDATED_SNAPSHOT);
+  act(() => part(words.PLUGINS_TAB_WORDS.updates)?.click());
+}
+/** The download an update's fixture answers for `id`. */
+const downloaded = (id: string) => {
+  const download = PLUGINS_FIXTURE_UPDATE_DOWNLOADS[id];
+  if (download === undefined) throw new Error(`the fixture has no update for ${id}`);
+  return download.record;
+};
+/** The desktop once fieldd's snapshot holds the update of `id`. */
+const takenOn = (id: string): PluginRegistrySnapshot =>
+  PluginRegistrySnapshot.parse({
+    ...PLUGINS_FIXTURE_OUTDATED_SNAPSHOT,
+    generation: 7,
+    plugins: PLUGINS_FIXTURE_OUTDATED_SNAPSHOT.plugins.map((plugin) =>
+      plugin.id === id ? downloaded(id) : plugin,
+    ),
+  });
+
+describe("Updates' rows and the update card (MK-UC's UC-C; §8 'Updates')", () => {
+  it("lists each plugin from the list with a newer release: its head, line, changes, act and note", async () => {
+    await openUpdates(pluginsFixturePort(UPDATES));
+    const when = words.listTime(PLUGINS_FIXTURE_READ_AT, PLUGINS_FIXTURE_NOW);
+    expect(updatesHead()).toBe(`2 updates · checked ${when}`);
+    const titles = [...document.body.querySelectorAll(".vf-plugins-update .vf-plugins-title")].map(
+      (node) => node.textContent,
+    );
+    expect(titles).toEqual(["Burndown", "Notes", "Timers"]);
+    expect(updateRow("Notes")?.textContent).toContain("0.6.1 → 0.7.0 · Nov 7");
+    expect(rowUpdate("Notes")?.textContent).toBe(words.UPDATE_WORDS.update);
+    // the list's listing says Timers keeps its Timer, adds an Alarm and drops the Stopwatch, so it asks first
+    expect(updateRow("Timers")?.textContent).toContain("Adds Alarm · Removes Stopwatch");
+    expect(rowUpdate("Timers")?.textContent).toBe(words.UPDATE_WORDS.updateAsks);
+    // one that can't run here says so, with no act, and is not counted
+    expect(updateRow("Burndown")?.textContent).toContain(words.SHELF_WORDS.needsNewer);
+    expect(rowUpdate("Burndown")).toBeNull();
+    const all = document.body.querySelector<HTMLButtonElement>(".vf-plugins-updates-all");
+    expect(all?.textContent).toBe(words.UPDATE_WORDS.allAsks);
+    expect(bodyText()).toContain(words.UPDATE_WORDS.note);
+    expect(footButton(words.UPDATE_WORDS.again)).not.toBeNull();
+  });
+
+  it("stops at its card when it can do more, naming only the new power; Cancel and Esc throw it away", async () => {
+    const { port, sent } = updating(pluginsFixturePort(UPDATES));
+    await openUpdates(port);
+    act(() => rowUpdate("Notes")?.click());
+    expect(updateRow("Notes")?.textContent).toContain(words.INSTALL_WORDS.downloading);
+    await settle();
+    expect(rowCard()?.getAttribute("aria-label")).toBe("Update Notes?");
+    const said = rowCard()?.textContent ?? "";
+    expect(said).toContain(words.UPDATE_CARD_WORDS.can);
+    expect(said).toContain(pluginPowerWords("net.outbound", { onMac: false }) ?? "net.outbound");
+    // a power the version you have holds already is not named
+    const held = pluginPowerWords("storage.self", { onMac: false }) ?? "storage.self";
+    expect(said).not.toContain(held);
+    expect(said).toContain(words.UPDATE_CARD_WORDS.here(false));
+    act(() => cardButton(words.CARD_WORDS.cancel)?.click());
+    await settle();
+    expect(rowCard()).toBeNull();
+    expect(rowUpdate("Notes")?.textContent).toBe(words.UPDATE_WORDS.update);
+    act(() => rowUpdate("Notes")?.click());
+    await settle();
+    esc();
+    expect(rowCard()).toBeNull();
+    expect(pop()).not.toBeNull();
+    expect(sent).toEqual([
+      "prepareUpdate vibefield.notes 0.7.0",
+      `discard ${CANDIDATE}`,
+      "prepareUpdate vibefield.notes 0.7.0",
+      `discard ${CANDIDATE}`,
+    ]);
+  });
+
+  it("takes what its card showed: Updating… until the snapshot holds the version, then Updated to", async () => {
+    const { port, sent } = updating(pluginsFixturePort(UPDATES));
+    await openUpdates(port);
+    act(() => rowUpdate("Notes")?.click());
+    await settle();
+    act(() => cardButton(words.UPDATE_CARD_WORDS.confirm)?.click());
+    await settle();
+    expect(sent).toEqual(["prepareUpdate vibefield.notes 0.7.0", `commit ${CANDIDATE}`]);
+    expect(rowCard()).toBeNull();
+    expect(updateRow("Notes")?.textContent).toContain(words.UPDATE_WORDS.updating);
+    // a plugin with no object brings no window back fresh, so no note is kept
+    expect(sessionStorage.getItem(NOTE_KEY)).toBeNull();
+    act(() => root.render(<Window port={port} snapshot={takenOn("vibefield.notes")} open />));
+    await settle();
+    expect(updateRow("Notes")?.textContent).toContain(words.UPDATE_WORDS.updated("0.7.0"));
+    expect(rowUpdate("Notes")).toBeNull();
+    const when = words.listTime(PLUGINS_FIXTURE_READ_AT, PLUGINS_FIXTURE_NOW);
+    expect(updatesHead()).toBe(`1 update · checked ${when}`);
+  });
+
+  it("takes an update that asks for nothing new and drops nothing in one press, with no card", async () => {
+    const inner = pluginsFixturePort(UPDATES);
+    const quiet: PluginsInstallPrepareResult = {
+      candidate: CANDIDATE,
+      record: downloaded("vibefield.notes"),
+      update: { from: "0.6.1", asksFor: [] },
+    };
+    const { port, sent } = updating({ ...inner, prepareUpdate: () => Promise.resolve(quiet) });
+    await openUpdates(port);
+    act(() => rowUpdate("Notes")?.click());
+    await settle();
+    expect(sent).toEqual(["prepareUpdate vibefield.notes 0.7.0", `commit ${CANDIDATE}`]);
+    expect(rowCard()).toBeNull();
+    expect(updateRow("Notes")?.textContent).toContain(words.UPDATE_WORDS.updating);
+  });
+
+  it("asks first for one that drops an object, saying what will draw as missing, and keeps the note", async () => {
+    const { port, sent } = updating(pluginsFixturePort(UPDATES));
+    await openUpdates(port);
+    act(() => rowUpdate("Timers")?.click());
+    await settle();
+    const said = rowCard()?.textContent ?? "";
+    expect(said).toContain(words.UPDATE_CARD_WORDS.missing("Stopwatch"));
+    expect(said).not.toContain(words.UPDATE_CARD_WORDS.can);
+    act(() => cardButton(words.UPDATE_CARD_WORDS.confirm)?.click());
+    await settle();
+    expect(sent).toEqual(["prepareUpdate vibefield.timers 1.1.0", `commit ${CANDIDATE}`]);
+    // MK-E6: a plugin with objects can bring the window back fresh, so the note says where the popup stood
+    expect(JSON.parse(sessionStorage.getItem(NOTE_KEY) ?? "null")).toMatchObject({
+      v: 1,
+      page: { id: "vibefield.timers", from: "updates" },
+      rest: [],
+      done: [],
+    });
+    // folding the popup lets the note go
+    act(() => setSurface(null));
+    expect(sessionStorage.getItem(NOTE_KEY)).toBeNull();
+  });
+
+  it("says a failure in its words, never fieldd's text, and Try again downloads again", async () => {
+    const refusing = pluginsFixturePort(UPDATES, "answers", {}, { prepare: "refuses" });
+    const { port, sent } = updating(refusing);
+    await openUpdates(port);
+    act(() => rowUpdate("Notes")?.click());
+    await settle();
+    expect(updateRow("Notes")?.textContent).toContain(words.UPDATE_WORDS.failed("Notes"));
+    expect(bodyText()).not.toContain(PLUGINS_FIXTURE_REFUSAL);
+    expect(rowUpdate("Notes")?.textContent).toBe(words.INSTALL_WORDS.tryAgain);
+    act(() => rowUpdate("Notes")?.click());
+    expect(sent).toEqual([
+      "prepareUpdate vibefield.notes 0.7.0",
+      "prepareUpdate vibefield.notes 0.7.0",
+    ]);
+  });
+
+  it("Update all takes them one at a time, plugins with no object first, waiting at each card", async () => {
+    const { port, sent } = updating(pluginsFixturePort(UPDATES));
+    await openUpdates(port);
+    act(() => document.body.querySelector<HTMLButtonElement>(".vf-plugins-updates-all")?.click());
+    await settle();
+    expect(sent).toEqual(["prepareUpdate vibefield.notes 0.7.0"]);
+    expect(rowCard()?.getAttribute("aria-label")).toBe("Update Notes?");
+    // its Cancel answers it, and Update all goes on to Timers; Burndown, which can't run here, is passed
+    act(() => cardButton(words.CARD_WORDS.cancel)?.click());
+    await settle();
+    expect(rowCard()?.getAttribute("aria-label")).toBe("Update Timers?");
+    act(() => cardButton(words.UPDATE_CARD_WORDS.confirm)?.click());
+    await settle();
+    expect(sent).toEqual([
+      "prepareUpdate vibefield.notes 0.7.0",
+      `discard ${CANDIDATE}`,
+      "prepareUpdate vibefield.timers 1.1.0",
+      `commit ${CANDIDATE}`,
+    ]);
+    // during Update all the note reopens on Updates, with what it took
+    expect(JSON.parse(sessionStorage.getItem(NOTE_KEY) ?? "null")).toMatchObject({
+      page: null,
+      rest: [],
+      done: [["vibefield.timers", "1.1.0"]],
+    });
+  });
+
+  it("walks its rows with ↑ ↓, and ↵ presses the hot row's Update, then its card's", async () => {
+    const { port, sent } = updating(pluginsFixturePort(UPDATES));
+    await openUpdates(port);
+    press("ArrowDown");
+    expect(rowUpdate("Notes")?.textContent).toBe(`${words.UPDATE_WORDS.update}↵`);
+    press("Enter");
+    await settle();
+    expect(rowCard()).not.toBeNull();
+    press("Enter");
+    await settle();
+    expect(sent).toEqual(["prepareUpdate vibefield.notes 0.7.0", `commit ${CANDIDATE}`]);
+  });
+
+  it("says Update on a page whose update waits, and takes the same steps there", async () => {
+    const { port, sent } = updating(pluginsFixturePort(UPDATES));
+    await openUpdates(port);
+    act(() => updateRow("Notes")?.querySelector<HTMLButtonElement>(".vf-plugins-row")?.click());
+    expect(pageTitle()).toBe("Notes");
+    expect(document.body.querySelector(".vf-plugins-back")?.textContent).toBe(
+      words.PLUGINS_TAB_WORDS.updates,
+    );
+    expect(pageAct()?.textContent).toBe(`${words.UPDATE_WORDS.update}↵`);
+    act(() => pageAct()?.click());
+    await settle();
+    expect(card()?.getAttribute("aria-label")).toBe("Update Notes?");
+    act(() => cardButton(words.UPDATE_CARD_WORDS.confirm)?.click());
+    await settle();
+    expect(actRow()).toBe(words.UPDATE_WORDS.updating);
+    act(() => root.render(<Window port={port} snapshot={takenOn("vibefield.notes")} open />));
+    await settle();
+    expect(actRow()).toBe(words.PAGE_WORDS.installed);
+    expect(sent).toEqual(["prepareUpdate vibefield.notes 0.7.0", `commit ${CANDIDATE}`]);
+  });
+
+  it("keeps Installed on the page of a plugin whose update can't run here, opened from Updates or Installed", async () => {
+    await openUpdates(pluginsFixturePort(UPDATES));
+    act(() => updateRow("Burndown")?.querySelector<HTMLButtonElement>(".vf-plugins-row")?.click());
+    expect(pageTitle()).toBe("Burndown");
+    // the plugin you have runs: only its update can't, and its row on Updates says so
+    expect(actRow()).toBe(words.PAGE_WORDS.installed);
+    expect(pageAct()).toBeNull();
+    esc();
+    toInstalled();
+    const burndown = [...document.body.querySelectorAll<HTMLLIElement>(".vf-plugins-item")].find(
+      (item) => item.querySelector(".vf-plugins-title")?.textContent === "Burndown",
+    );
+    act(() => burndown?.querySelector<HTMLButtonElement>(".vf-plugins-row")?.click());
+    expect(pageTitle()).toBe("Burndown");
+    expect(actRow()).toBe(words.PAGE_WORDS.installed);
+    // a download refused as needing a newer VibeField: its row says so, its page Installed
+    act(() => root.unmount());
+    root = createRoot(host);
+    const incompatible = new FielddRpcError(
+      "PRECONDITION_FAILED",
+      "requires contracts ^9.0.0",
+      false,
+      { pluginKind: "PLUGIN_INCOMPATIBLE" },
+    );
+    await openUpdates({
+      ...pluginsFixturePort(UPDATES),
+      prepareUpdate: () => Promise.reject(incompatible),
+    });
+    act(() => rowUpdate("Notes")?.click());
+    await settle();
+    expect(updateRow("Notes")?.textContent).toContain(words.SHELF_WORDS.needsNewer);
+    act(() => updateRow("Notes")?.querySelector<HTMLButtonElement>(".vf-plugins-row")?.click());
+    expect(pageTitle()).toBe("Notes");
+    expect(actRow()).toBe(words.PAGE_WORDS.installed);
+    expect(bodyText()).not.toContain("requires contracts");
+  });
+
+  it("keeps the rows typed words hold, letting a card go with its row; Update all takes those shown", async () => {
+    const { port, sent } = updating(pluginsFixturePort(UPDATES));
+    await openUpdates(port);
+    act(() => rowUpdate("Notes")?.click());
+    await settle();
+    expect(rowCard()).not.toBeNull();
+    typeWords("stopwatch");
+    await settle();
+    expect(updateRow("Notes")).toBeNull();
+    expect(rowCard()).toBeNull();
+    act(() => document.body.querySelector<HTMLButtonElement>(".vf-plugins-updates-all")?.click());
+    await settle();
+    expect(rowCard()?.getAttribute("aria-label")).toBe("Update Timers?");
+    act(() => cardButton(words.CARD_WORDS.cancel)?.click());
+    await settle();
+    expect(sent).toEqual([
+      "prepareUpdate vibefield.notes 0.7.0",
+      `discard ${CANDIDATE}`,
+      "prepareUpdate vibefield.timers 1.1.0",
+      `discard ${CANDIDATE}`,
+    ]);
+  });
+
+  it("reads the list again on Check again, once per press, and takes no press while a read runs", async () => {
+    const { port, calls } = counting(pluginsFixturePort(UPDATES));
+    await openUpdates(port);
+    expect(calls.refresh).toBe(1);
+    act(() => footButton(words.UPDATE_WORDS.again)?.click());
+    await settle();
+    expect(calls.refresh).toBe(2);
+    act(() => root.unmount());
+    root = createRoot(host);
+    await openUpdates(pluginsFixturePort({ catalog: CATALOG_UPDATES, refresh: "pending" }));
+    expect(footButton(words.UPDATE_WORDS.again)?.disabled).toBe(true);
+  });
+});
+
+/** A window as it comes back fresh: the frame's popup over a fixture fieldd, its surface its own. */
+function FreshWindow({ client }: { client: FielddClient }): ReactElement {
+  const [surface, set] = useState<FrameSurface | null>(null);
+  return (
+    <FielddProvider client={client}>
+      <FramePlugins view="canvas" surface={surface} onSurfaceChange={set} />
+    </FielddProvider>
+  );
+}
+
+describe("the window coming back fresh (MK-E6; MK-UC's UC-C)", () => {
+  it("opens the popup once on the page the note names, saying Installed, and the note is gone", async () => {
+    const before = getPluginRegistrySnapshot();
+    resetPluginUpdates();
+    setPluginRegistrySnapshot(takenOn("vibefield.timers"));
+    try {
+      keepCarry({ page: { id: "vibefield.timers", from: "updates" }, rest: [], done: [] });
+      const { client } = fielddAnswering(async () => CATALOG_UPDATES);
+      act(() => root.render(<FreshWindow client={client} />));
+      await settle();
+      expect(pop()).not.toBeNull();
+      expect(pageTitle()).toBe("Timers");
+      expect(document.body.querySelector(".vf-plugins-back")?.textContent).toBe(
+        words.PLUGINS_TAB_WORDS.updates,
+      );
+      expect(actRow()).toBe(words.PAGE_WORDS.installed);
+      expect(sessionStorage.getItem(NOTE_KEY)).toBeNull();
+    } finally {
+      setPluginRegistrySnapshot(before ?? { generation: 0, problems: [], plugins: [] });
+      resetPluginUpdates();
+    }
+  });
+
+  it("opens nothing for a note older than a minute, or with none", async () => {
+    resetPluginUpdates();
+    try {
+      keepCarry(
+        { page: { id: "vibefield.timers", from: "updates" }, rest: [], done: [] },
+        Date.now() - 61_000,
+      );
+      const { client } = fielddAnswering(async () => CATALOG_UPDATES);
+      act(() => root.render(<FreshWindow client={client} />));
+      await settle();
+      expect(pop()).toBeNull();
+      expect(sessionStorage.getItem(NOTE_KEY)).toBeNull();
+    } finally {
+      resetPluginUpdates();
+    }
   });
 });
 

@@ -958,6 +958,21 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
   "REMOVE_WORDS.here": [[true], [false]],
   // O3-E: the first community install's line
   "INSTALL_WORDS.firstCommunity": [["this Mac"]],
+  // UC-C: Updates' rows and the update card
+  "UPDATE_WORDS.head": [
+    [1, "14:02"],
+    [3, "14:02"],
+  ],
+  "UPDATE_WORDS.current": [["14:02"]],
+  "UPDATE_WORDS.line": [["1.0.0", "1.1.0", "Nov 6"]],
+  "UPDATE_WORDS.adds": [["Timer"]],
+  "UPDATE_WORDS.removes": [["Timer"]],
+  "UPDATE_WORDS.updated": [["1.1.0"]],
+  "UPDATE_WORDS.failed": [["Desk clock"]],
+  "UPDATE_CARD_WORDS.ask": [["Desk clock"]],
+  "UPDATE_CARD_WORDS.here": [[true], [false]],
+  "UPDATE_CARD_WORDS.missing": [["2"]],
+  releaseDay: [[PLUGINS_FIXTURE_READ_AT]],
 };
 
 /** The strings a value says: strings as they are, objects and arrays by their

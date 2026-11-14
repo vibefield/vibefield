@@ -3,14 +3,15 @@ import type { FrameSurface } from "../frame/frame-surface";
 import { Plugins } from "../frame/plugins/Plugins";
 import type { PluginsTab } from "../frame/plugins/plugins-model";
 import {
-  CATALOG_COUNTED,
   CATALOG_FIXTURES,
   CATALOG_LISTED,
   CATALOG_SHELF,
+  CATALOG_UPDATES,
   communityFixtureDoor,
   PLUGINS_FIXTURE_HELD_SNAPSHOT,
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
+  PLUGINS_FIXTURE_OUTDATED_SNAPSHOT,
   PLUGINS_FIXTURE_SETTINGS,
   PLUGINS_FIXTURE_SETTINGS_SNAPSHOT,
   PLUGINS_FIXTURE_SETTINGS_UNREAD,
@@ -51,7 +52,10 @@ import {
 // under way, the install card read from the plugin downloaded (four objects,
 // two powers, three desktops), the card's Install pressed too, Installing…
 // until the plugins this desktop has hold it, and a download refused. Nothing a
-// plate presses installs anything.
+// plate presses installs anything. MK-UC's UC-C draws Updates' count plate over
+// a list held: its head, a row that asks first, one taken in one press, one that
+// needs a newer VibeField, and its note; and adds a row's Update pressed as the
+// plate opens, its update card naming the one new power.
 
 export type PluginsPlateState =
   | "no-registry"
@@ -80,7 +84,8 @@ export type PluginsPlateState =
   | "shelf-downloading"
   | "shelf-card"
   | "shelf-installing"
-  | "shelf-failed";
+  | "shelf-failed"
+  | "update-card";
 
 const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   "no-registry": {
@@ -95,7 +100,7 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   away: { catalog: "fails", refresh: "fails" },
   page: { catalog: CATALOG_FIXTURES.unconfigured, refresh: CATALOG_FIXTURES.unconfigured },
   "page-listed": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
-  count: { catalog: CATALOG_COUNTED, refresh: CATALOG_COUNTED },
+  count: { catalog: CATALOG_UPDATES, refresh: CATALOG_UPDATES },
   switches: { catalog: CATALOG_FIXTURES.unconfigured, refresh: CATALOG_FIXTURES.unconfigured },
   "switches-off": {
     catalog: CATALOG_FIXTURES.unconfigured,
@@ -128,6 +133,13 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   "shelf-card": { catalog: CATALOG_SHELF, refresh: CATALOG_SHELF },
   "shelf-installing": { catalog: CATALOG_SHELF, refresh: CATALOG_SHELF },
   "shelf-failed": { catalog: CATALOG_SHELF, refresh: CATALOG_SHELF },
+  "update-card": { catalog: CATALOG_UPDATES, refresh: CATALOG_UPDATES },
+};
+
+/** MK-UC's UC-C: the plates that stand on Updates' rows, and the row whose Update a plate presses as it opens. */
+const UPDATES_PLATES: readonly PluginsPlateState[] = ["count", "update-card"];
+const PLATE_UPDATES: Readonly<Partial<Record<PluginsPlateState, string>>> = {
+  "update-card": "vibefield.notes",
 };
 
 /** O2-C: how a plate's install answers, for the plates that press their page's Install as they open: its
@@ -160,6 +172,7 @@ const PLATE_PAGES: Readonly<Partial<Record<PluginsPlateState, string>>> = {
 
 /** The plugins a plate's desktop has. */
 function plateSnapshot(state: PluginsPlateState) {
+  if (UPDATES_PLATES.includes(state)) return PLUGINS_FIXTURE_OUTDATED_SNAPSHOT;
   if (state === "page-listed") return PLUGINS_FIXTURE_LISTED_SNAPSHOT;
   if (state.startsWith("community-held")) return PLUGINS_FIXTURE_HELD_SNAPSHOT;
   if (state.startsWith("switches")) return PLUGINS_FIXTURE_SWITCHES_SNAPSHOT;
@@ -168,7 +181,7 @@ function plateSnapshot(state: PluginsPlateState) {
 }
 
 function plateTab(state: PluginsPlateState): PluginsTab {
-  if (state === "count") return "updates";
+  if (UPDATES_PLATES.includes(state)) return "updates";
   // MK-4e: the shelf's plates stand on Discover, and a page opens from there
   if (state.startsWith("shelf")) return "discover";
   return state === "installed" || state === "community-held" || state in PLATE_PAGES
@@ -208,13 +221,14 @@ export function PluginsPlate({ state }: { state: PluginsPlateState }): ReactElem
         takeFocus={false}
         initialTab={tab}
         initialPage={PLATE_PAGES[state] ?? null}
-        updates={state === "count" ? CATALOG_COUNTED.updates : null}
+        updates={UPDATES_PLATES.includes(state) ? CATALOG_UPDATES.updates : null}
         away={state === "switches-away"}
         community={communityPlate(state) ? false : null}
         onCommunity={communityDoor}
         initialAsk={state === "community-ask"}
         initialInstall={state in PLATE_INSTALLS}
         initialConfirm={state === "shelf-installing"}
+        initialUpdate={PLATE_UPDATES[state] ?? null}
         onMac
         now={now}
       />

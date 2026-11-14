@@ -94,14 +94,19 @@ export interface InstallCard {
   readonly objects: readonly PageLine[];
   /** "It gives your agents 2 tools."; null with none */
   readonly tools: string | null;
-  /** "It can:", over its powers; or what it does when it asks for none */
-  readonly can: string;
+  /** "It can:", over its powers; or what it does when it asks for none. MK-UC: the update card's
+   * "This version can also:", or null when it names no new power */
+  readonly can: string | null;
   readonly powers: readonly CardPower[];
   /** where it installs: here alone, or your ‹n› desktops, each by name; null while the roster can't
    * be read */
   readonly reaches: string | null;
   /** the desktops it names, this one first: listed only when there is more than one */
   readonly desktops: readonly CardDesktop[];
+  /** MK-UC: the update card's objects that will draw as missing; none on an install's card */
+  readonly missing?: string | null;
+  /** MK-UC: its act's word, "Update" on the update card; "Install" when not said */
+  readonly confirm?: string;
 }
 
 /** The desktops a card names (§8 "What the card reads"): this desktop, then each the roster lists
@@ -122,11 +127,12 @@ export function cardDesktops(roster: readonly DeviceInfo[] | null): CardDesktop[
 
 /** What the card says it can do (§9 "The install card"): each power the downloaded plugin asks for,
  * in its plain words, as its page says them; one VibeField can't name, once, in James's word for
- * it, so none goes unsaid. */
-function cardPowers(
+ * it, so none goes unsaid. MK-UC: the update card says only `ids`, the powers that are new. */
+export function cardPowers(
   record: PluginRecord,
   snapshot: PluginRegistrySnapshot | null,
   onMac: boolean,
+  ids: readonly string[] = record.requestedCapabilities,
 ): CardPower[] {
   const declared = new Map<string, { title: string; description: string; by: PluginRecord }>();
   for (const plugin of [...(snapshot?.plugins ?? []), record]) {
@@ -136,7 +142,7 @@ function cardPowers(
   }
   const powers: CardPower[] = [];
   let unnamed = false;
-  for (const id of record.requestedCapabilities) {
+  for (const id of ids) {
     const said = powerWords(id, record, declared, onMac);
     // the page says each power VibeField can't describe as a line of its own, in James's word;
     // the card says that line once, where the page says the first, and keys it by no power's id.
@@ -199,7 +205,10 @@ export type PageAct =
   | { readonly kind: "statement"; readonly heading: string; readonly live: boolean }
   | { readonly kind: "card"; readonly card: InstallCard; readonly live: boolean }
   | { readonly kind: "installing"; readonly words: string }
-  | { readonly kind: "failed"; readonly words: string; readonly live: boolean };
+  | { readonly kind: "failed"; readonly words: string; readonly live: boolean }
+  /** MK-UC's UC-C: an installed plugin's page whose update waits; `asks` when the list says it
+   * removes an object (Update…) */
+  | { readonly kind: "update"; readonly live: boolean; readonly asks: boolean };
 
 /** Whether an Install may be pressed now: fieldd answers, and the list held is neither offline nor
  * past its date (§8 "The read on open": offline an Install waits, saying why; a list past its date

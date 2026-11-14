@@ -32,7 +32,11 @@ import {
 // answer is not read: the snapshot fieldd pushes next says Installed (the P5
 // law). MK-4f adds Remove… (`plugins.uninstall`, `{ id, removeData }`, the
 // request Settings → Plugins sends today): its answer is not read either; the
-// snapshot that no longer holds the plugin is.
+// snapshot that no longer holds the plugin is. MK-UC's UC-C adds an update's
+// download (`plugins.install.prepare` with `update: true`, MK-UC's door, pinned
+// to the version Updates' row showed): fieldd answers the downloaded row and,
+// for an update, what it can do that the version you have can't. Its card's
+// Update and Cancel are the install card's `commit` and `discard`.
 
 export interface PluginsPort {
   /** The list fieldd holds, its state and its time. */
@@ -51,6 +55,9 @@ export interface PluginsPort {
   settingsSet(id: string, key: string, value: unknown): Promise<void>;
   /** O2-C: download, check and hold a plugin this desktop doesn't have; its card is read from the row. */
   prepare(id: string): Promise<PluginsInstallPrepareResult>;
+  /** MK-UC's UC-C: download, check and hold `version` of a plugin this desktop has; the answer says what it can do
+   * that the version you have can't (`update.asksFor`). */
+  prepareUpdate(id: string, version: string): Promise<PluginsInstallPrepareResult>;
   /** O2-C: install what the card showed: settles when fieldd has answered. */
   commit(candidate: string): Promise<void>;
   /** O2-C: throw a card's download away. */
@@ -95,6 +102,11 @@ export function pluginsPortOver(client: PluginsDoorClient): PluginsPort {
     async prepare(id) {
       return PluginsInstallPrepareResult.parse(
         await client.request("plugins.install.prepare", { id }),
+      );
+    },
+    async prepareUpdate(id, version) {
+      return PluginsInstallPrepareResult.parse(
+        await client.request("plugins.install.prepare", { id, version, update: true }),
       );
     },
     async commit(candidate) {

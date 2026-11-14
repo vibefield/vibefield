@@ -7,6 +7,7 @@ import {
   INSTALL_WORDS,
   PAGE_WORDS,
   SHELF_WORDS,
+  UPDATE_WORDS,
 } from "./plugins-words";
 
 // A PAGE'S ACT, AND THE INSTALL CARD, AS DRAWN (O2-C; DESIGN.md §8 "Real progress" and the act
@@ -18,33 +19,39 @@ import {
 // MK-O3D (James's MK-O1 pick B; §8 "The community tile", "Once on each desktop"): at this
 // desktop's first community install, the community statement stands where the card would, in its
 // chrome, with the tile's ask's acts; its Continue brings the card.
+// MK-UC's UC-C: the update card is this card (one card, never a second drawing), its ask, its lead
+// and its act's word its own, and the objects it would leave missing under its powers; a page whose
+// update waits says Update where Installed stood; and Updates' rows draw their acts and their card
+// with the same two parts (`PluginsUpdates.tsx`).
 
 /** A page's act, the foot's act's look, ↵ printed on it; one that takes no press says so in
- * tertiary ink. */
-function ActButton({
+ * tertiary ink. MK-UC: an Updates row that is not the hot one prints no ↵ (`printed`). */
+export function ActButton({
   words,
   live,
   onPress,
+  printed = true,
 }: {
   words: string;
   live: boolean;
   onPress: () => void;
+  printed?: boolean;
 }): ReactElement {
   return (
     <button
       type="button"
       className="vf-plugins-act"
-      aria-keyshortcuts="Enter"
+      aria-keyshortcuts={printed ? "Enter" : undefined}
       disabled={!live}
       onClick={onPress}
     >
       {words}
-      <kbd className="vf-plugins-act-key">↵</kbd>
+      {printed && <kbd className="vf-plugins-act-key">↵</kbd>}
     </button>
   );
 }
 
-function InstallCardView({
+export function InstallCardView({
   card,
   live,
   onConfirm,
@@ -69,24 +76,31 @@ function InstallCardView({
         </div>
       )}
       {card.tools !== null && <p className="vf-plugins-card-line">{card.tools}</p>}
-      <div className="vf-plugins-card-part">
-        <p className="vf-plugins-card-line">{card.can}</p>
-        {card.powers.length > 0 && (
-          <ul className="vf-plugins-card-items">
-            {card.powers.map((power) => (
-              <li key={power.key}>
-                {power.words}
-                {power.under !== null && (
-                  <span className="vf-plugins-page-under">{power.under}</span>
-                )}
-                {power.whose !== null && (
-                  <span className="vf-plugins-page-under">{power.whose}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {/* MK-UC: an update card that names no new power has no such part */}
+      {(card.can !== null || card.powers.length > 0) && (
+        <div className="vf-plugins-card-part">
+          {card.can !== null && <p className="vf-plugins-card-line">{card.can}</p>}
+          {card.powers.length > 0 && (
+            <ul className="vf-plugins-card-items">
+              {card.powers.map((power) => (
+                <li key={power.key}>
+                  {power.words}
+                  {power.under !== null && (
+                    <span className="vf-plugins-page-under">{power.under}</span>
+                  )}
+                  {power.whose !== null && (
+                    <span className="vf-plugins-page-under">{power.whose}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {/* MK-UC: what an update leaves missing stands under its powers, one card saying both */}
+      {card.missing !== undefined && card.missing !== null && (
+        <p className="vf-plugins-card-line">{card.missing}</p>
+      )}
       {card.reaches !== null && (
         <div className="vf-plugins-card-part">
           <p className="vf-plugins-card-line">{card.reaches}</p>
@@ -106,7 +120,7 @@ function InstallCardView({
         <button type="button" className="vf-plugins-card-cancel" onClick={onCancel}>
           {CARD_WORDS.cancel}
         </button>
-        <ActButton words={SHELF_WORDS.install} live={live} onPress={onConfirm} />
+        <ActButton words={card.confirm ?? SHELF_WORDS.install} live={live} onPress={onConfirm} />
       </div>
     </section>
   );
@@ -158,9 +172,9 @@ export function PageActView({
   takeFocus,
 }: {
   act: PageAct;
-  /** Install, or Try again: download it (again) */
+  /** Install, Update, or Try again: download it (again) */
   onInstall: () => void;
-  /** the card's Install */
+  /** the card's Install, or its Update */
   onConfirm: () => void;
   /** the card's Cancel, and the community statement's */
   onCancel: () => void;
@@ -196,6 +210,16 @@ export function PageActView({
         <div className="vf-plugins-page-act-stack">
           <ActButton words={SHELF_WORDS.install} live={act.live} onPress={onInstall} />
           {act.note !== null && <p className="vf-plugins-page-note">{act.note}</p>}
+        </div>
+      );
+    case "update":
+      return (
+        <div className="vf-plugins-page-act-stack">
+          <ActButton
+            words={act.asks ? UPDATE_WORDS.updateAsks : UPDATE_WORDS.update}
+            live={act.live}
+            onPress={onInstall}
+          />
         </div>
       );
     case "failed":

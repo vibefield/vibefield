@@ -8,9 +8,10 @@ import { PluginsPlate } from "../PluginsPreview";
 // (MK-4c), Updates carrying the Me row's count, (MK-4c2a) a plugin's switches
 // and (MK-4c2b) its settings, and (MK-4e) Discover's shelf over a list held, with
 // the page of a set this desktop doesn't have, and (O2-C) its Install: the
-// download, the install card, Installing… and a failure. Updates' rows come with
-// a later MK-4 part. MK-O3D: Discover's community tile and its ask, and a
-// community plugin held while community plugins are off.
+// download, the install card, Installing… and a failure. MK-UC's UC-C: Updates'
+// rows over a list held, under its count, and a row's update card. MK-O3D:
+// Discover's community tile and its ask, and a community plugin held while
+// community plugins are off.
 
 export function PluginsSection(): ReactElement {
   return (
@@ -118,8 +119,19 @@ export function PluginsSection(): ReactElement {
       >
         <PluginsPlate state="page-listed" />
       </Specimen>
-      <Specimen title="Updates, carrying its count" source="frame/plugins/PluginsView.tsx" bleed>
+      <Specimen
+        title="Updates, carrying its count — one row asks first, one needs a newer VibeField"
+        source="frame/plugins/PluginsUpdates.tsx · frame/plugins/plugins-updates.ts"
+        bleed
+      >
         <PluginsPlate state="count" />
+      </Specimen>
+      <Specimen
+        title="The update card — only what the new version can also do, under its row"
+        source="frame/plugins/PluginsUpdates.tsx · frame/plugins/InstallCard.tsx"
+        bleed
+      >
+        <PluginsPlate state="update-card" />
       </Specimen>
       <Specimen
         title="A plugin's switches — its one switch and its powers', one taken back, one it can't have"

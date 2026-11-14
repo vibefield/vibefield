@@ -255,6 +255,41 @@ export const INSTALL_WORDS = {
   goOn: "Continue",
 } as const;
 
+/** Updates (MK-UC's UC-C; DESIGN.md §9 "Updates" and its UC-C block): §9's words — the head, a row's line and what
+ * it changes in the set, Update, Update…, Update all, Update all…, Check again, Updating…, Updated to and the tab's
+ * note, all ‹draft› but the ruled ones — and MK's, ‹draft›, for James's eye: a failed update, the install's twin.
+ * "‹plugin›" is the installed plugin's title. */
+export const UPDATE_WORDS = {
+  head: (count: number, when: string) => `${plural(count, "update", "updates")} · checked ${when}`,
+  current: (when: string) => `Everything is up to date · checked ${when}`,
+  all: "Update all",
+  /** while one of the updates it would take removes an object */
+  allAsks: "Update all…",
+  again: "Check again",
+  /** "0.6.1 → 0.7.0 · Nov 7": the version you have, the update's, and the day the list says it was published */
+  line: (from: string, to: string, day: string) => `${from} → ${to} · ${day}`,
+  adds: (objects: string) => `Adds ${objects}`,
+  removes: (objects: string) => `Removes ${objects}`,
+  update: "Update",
+  /** an update the list says removes an object asks first */
+  updateAsks: "Update…",
+  updating: "Updating…",
+  updated: (version: string) => `Updated to ${version}`,
+  failed: (title: string) => `VibeField didn't update ${title}. Nothing changed.`,
+  note: "Plugins look for updates when you open Plugins. Updates never install on their own. An update that removes an object, or that can do more, asks first.",
+} as const;
+
+/** The update card (MK-UC; DESIGN.md §9 "Updates", James's pick on the board, 2026-11-12 06:08:01Z: "Yes: show the
+ * card when an update asks for more"), ‹draft› for his eye: the install card's own, its ask and its lead changed;
+ * where it updates is this desktop alone (the reconciler installs only a missing plugin). */
+export const UPDATE_CARD_WORDS = {
+  ask: (title: string) => `Update ${title}?`,
+  can: "This version can also:",
+  here: (onMac: boolean) => (onMac ? "It updates on this Mac." : "It updates on this PC."),
+  missing: (objects: string) => `${objects} objects on your desks will draw as missing.`,
+  confirm: "Update",
+} as const;
+
 /** Names said as a list is: "Clock", "Clock and Ruler", "Clock, Calendar and Ruler" (MK's). */
 export function listNames(names: readonly string[]): string {
   if (names.length <= 1) return names[0] ?? "";
@@ -360,3 +395,9 @@ export const HELD_LINE = {
   service: "Off while community plugins are off · its service is stopped",
   bare: "Off while community plugins are off",
 } as const;
+
+/** The day a release was published, as an update's row says it: "Nov 7" (MK-UC's UC-C). */
+export function releaseDay(at: number): string {
+  const day = new Date(at);
+  return `${MONTHS[day.getMonth()]} ${day.getDate()}`;
+}

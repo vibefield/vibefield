@@ -19,8 +19,11 @@ import type { PluginsPort } from "../frame/plugins/plugins-port";
 // does. MK-4c2b: the port also keeps a plugin's settings, as fieldd answers a
 // window — a secret only as kept or not, never its value. O2-C: the port also
 // answers an install — the row fieldd would answer for a download, this
-// desktop's roster, and the install itself — and moves nothing. No fieldd, no
-// network, no child.
+// desktop's roster, and the install itself — and moves nothing. MK-UC's UC-C:
+// a list held with three updates for plugins the desktop has from it (one that
+// needs a newer VibeField), and what an update's download answers — the row and
+// what it can do that the version you have can't. No fieldd, no network, no
+// child.
 
 /** The clock every plate reads: twelve minutes after its list was read. */
 export const PLUGINS_FIXTURE_READ_AT = 1762823100000;
@@ -99,10 +102,6 @@ export const CATALOG_LISTED = PluginsCatalog.parse({
     },
   ],
 });
-
-/** A list held that found two updates (MK-4c's count plate; the Me row's
- * count, which Updates carries). */
-export const CATALOG_COUNTED = PluginsCatalog.parse({ ...CATALOG_FIXTURES.ready, updates: 2 });
 
 /** A release the list pins, as a fixture entry's `latest`. */
 function release(id: string, version: string): Record<string, unknown> {
@@ -264,6 +263,20 @@ export function pluginsFixturePort(
       const prepared = PluginsInstallPrepareResult.parse({
         candidate: PLUGINS_FIXTURE_CANDIDATE,
         record,
+      });
+      return settle(install.prepare ?? "answers", prepared);
+    },
+    // MK-UC's UC-C: an update's download answers the row and what it can do that the version you have can't, as
+    // fieldd's does; the version a row pins must be the one the fixture holds
+    prepareUpdate: (id, version) => {
+      const download = PLUGINS_FIXTURE_UPDATE_DOWNLOADS[id];
+      if (download === undefined || download.record.version !== version) {
+        return Promise.reject(new Error(PLUGINS_FIXTURE_REFUSAL));
+      }
+      const prepared = PluginsInstallPrepareResult.parse({
+        candidate: PLUGINS_FIXTURE_CANDIDATE,
+        record: download.record,
+        update: { from: download.from, asksFor: download.asksFor },
       });
       return settle(install.prepare ?? "answers", prepared);
     },
@@ -667,6 +680,135 @@ export const PLUGINS_FIXTURE_DOWNLOADS: Readonly<Record<string, PluginRecord>> =
       granted: ["canvas.read", "storage.self"],
     }),
   ),
+};
+
+/** MK-UC's UC-C: the plugins a desktop has, with three from the plugin list that the list holds newer releases of
+ * (Updates' plates): Burndown 0.6.0, one object; Notes 0.6.1, no object, a service; Timers 1.0.0, a Timer and a
+ * Stopwatch. */
+export const PLUGINS_FIXTURE_OUTDATED_SNAPSHOT = PluginRegistrySnapshot.parse({
+  generation: 5,
+  problems: [],
+  plugins: [
+    ...PLUGINS_FIXTURE_SNAPSHOT.plugins,
+    record({
+      id: "vibefield.burndown",
+      title: "Burndown",
+      version: "0.6.0",
+      source: "registry",
+      objects: [object("Burndown", "VfBurndownChart", "Burndown")],
+      granted: ["canvas.read"],
+    }),
+    record({
+      id: "vibefield.notes",
+      title: "Notes",
+      version: "0.6.1",
+      source: "registry",
+      service: "active",
+      granted: ["storage.self"],
+    }),
+    record({
+      id: "vibefield.timers",
+      title: "Timers",
+      version: "1.0.0",
+      source: "registry",
+      objects: [
+        object("Timer", "VfTimer", "Timer"),
+        object("Stopwatch", "VfStopwatch", "Stopwatch"),
+      ],
+      granted: ["canvas.read"],
+    }),
+  ],
+});
+
+/** MK-UC's UC-C: the list held for Updates' plates: Burndown 0.7.0, which needs a newer VibeField; Notes 0.7.0,
+ * published Nov 7; Timers 1.1.0, whose listing keeps the Timer, adds an Alarm and drops the Stopwatch. Two of
+ * them can be taken, as the Me row counts. */
+export const CATALOG_UPDATES = PluginsCatalog.parse({
+  ...CATALOG_FIXTURES.ready,
+  updates: 2,
+  plugins: [
+    ...CATALOG_FIXTURES.ready.plugins,
+    {
+      id: "vibefield.burndown",
+      listedAs: "vibefield",
+      latest: release("vibefield.burndown", "0.7.0"),
+      compatible: false,
+      listing: {
+        title: "Burndown",
+        objects: [{ type: "VfBurndownChart", label: "Burndown", category: "things" }],
+      },
+    },
+    {
+      id: "vibefield.notes",
+      listedAs: "vibefield",
+      latest: {
+        ...release("vibefield.notes", "0.7.0"),
+        // Nov 7, 2025, at noon UTC: the row says "Nov 7" in every time zone from UTC−12 to UTC+11
+        publishedAt: Date.UTC(2025, 10, 7, 12),
+      },
+      compatible: true,
+      listing: { title: "Notes", publisherName: "VibeField", objects: [] },
+    },
+    {
+      id: "vibefield.timers",
+      listedAs: "vibefield",
+      latest: release("vibefield.timers", "1.1.0"),
+      compatible: true,
+      listing: {
+        title: "Timers",
+        publisherName: "VibeField",
+        objects: [
+          { type: "VfTimer", label: "Timer", category: "things" },
+          { type: "VfAlarm", label: "Alarm", category: "things" },
+        ],
+      },
+    },
+  ],
+});
+
+/** MK-UC's UC-C: what a fixture's fieldd answers for an update's download. */
+export interface PluginsFixtureUpdateDownload {
+  /** the row the card is read from */
+  readonly record: PluginRecord;
+  /** the version you have */
+  readonly from: string;
+  /** what it can do that the version you have can't */
+  readonly asksFor: string[];
+}
+
+type UpdateDownloads = Readonly<Record<string, PluginsFixtureUpdateDownload>>;
+
+/** MK-UC's UC-C: an update's download, by plugin: Notes 0.7.0 can also reach the internet; Timers 1.1.0 asks for
+ * nothing new and drops the Stopwatch. Any other plugin's, or another version's, is refused. */
+export const PLUGINS_FIXTURE_UPDATE_DOWNLOADS: UpdateDownloads = {
+  "vibefield.notes": {
+    record: PluginRecord.parse(
+      record({
+        id: "vibefield.notes",
+        title: "Notes",
+        version: "0.7.0",
+        source: "registry",
+        service: "active",
+        granted: ["storage.self", "net.outbound"],
+      }),
+    ),
+    from: "0.6.1",
+    asksFor: ["net.outbound"],
+  },
+  "vibefield.timers": {
+    record: PluginRecord.parse(
+      record({
+        id: "vibefield.timers",
+        title: "Timers",
+        version: "1.1.0",
+        source: "registry",
+        objects: [object("Timer", "VfTimer", "Timer"), object("Alarm", "VfAlarm", "Alarm")],
+        granted: ["canvas.read"],
+      }),
+    ),
+    from: "1.0.0",
+    asksFor: [],
+  },
 };
 
 /** This desktop's roster as a fixture's fieldd answers it (O2-C): studio, the desktop the plate stands on; mini and

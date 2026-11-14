@@ -28,6 +28,7 @@ import {
   SHELF_WORDS,
   SOURCE_WORDS,
   SWITCH_WORDS,
+  UPDATE_WORDS,
 } from "./plugins-words";
 import "./plugins.css";
 
@@ -54,7 +55,9 @@ import "./plugins.css";
 // O2-C: the page's act — Installed, Install, the install card — is the
 // controller's, handed here, and the foot on Discover offers the hot tile's
 // Install. MK-4f: Remove… and its question stand at the second column's foot,
-// the controller's too.
+// the controller's too. MK-UC's UC-C: over a held list Updates is its head, its
+// rows and its note (`PluginsUpdates.tsx`), the controller's, and its foot
+// offers Check again, with no ↵ (↵ is the rows').
 
 export interface PluginsViewProps {
   open: boolean;
@@ -85,6 +88,12 @@ export interface PluginsViewProps {
   onInstallHot?: (() => void) | null;
   /** MK-4f: Remove… and its question at the second column's foot (`RemoveQuestion.tsx`), the controller's */
   pageRemove?: ReactNode;
+  /** MK-UC's UC-C: Updates over a held list (`PluginsUpdates.tsx`), the controller's; null: its state */
+  updatesList?: ReactNode;
+  /** MK-UC's UC-C: the foot's Check again on Updates; null: none */
+  onCheckAgain?: (() => void) | null;
+  /** MK-UC's UC-C: a read runs, so Check again takes no press */
+  checking?: boolean;
   pageFrom: PluginsTab;
   /** Updates' count, the Me row's (null or 0: none) */
   updates: number | null;
@@ -392,6 +401,7 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
   const { hot, page, pageFrom, updates, listRef, away, under, refused } = props;
   const { pageSettings = null, discoverEnd = null, discover = null, columns = 1 } = props;
   const { pageAct = null, onInstallHot = null, pageRemove = null } = props;
+  const { updatesList = null, onCheckAgain = null, checking = false } = props;
   const { onQuery, onTab, onClose, onShowInstalled, onOpenPage, onBack, onKeyDown } = props;
   const { onTurn, onTurnPower } = props;
   const body =
@@ -444,6 +454,8 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
         {shelfBody(tab, shelf)}
         {discoverEnd}
       </>
+    ) : tab === "updates" && updatesList !== null ? (
+      updatesList
     ) : (
       shelfBody(tab, shelf)
     );
@@ -539,6 +551,17 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
               >
                 {SHELF_WORDS.install}
                 <kbd className="vf-plugins-act-key">↵</kbd>
+              </button>
+            )}
+            {/* MK-UC's UC-C: Updates' foot reads the list again; ↵ is its rows' */}
+            {onCheckAgain !== null && (
+              <button
+                type="button"
+                className="vf-plugins-act"
+                disabled={checking}
+                onClick={onCheckAgain}
+              >
+                {UPDATE_WORDS.again}
               </button>
             )}
           </div>

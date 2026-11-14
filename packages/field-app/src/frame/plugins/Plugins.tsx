@@ -1,4 +1,9 @@
-import type { FrameView, PluginRegistrySnapshot, PluginsCatalog } from "@vibefield/contracts";
+import type {
+  FrameView,
+  PluginRecord,
+  PluginRegistrySnapshot,
+  PluginsCatalog,
+} from "@vibefield/contracts";
 import { useFielddClient, useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
 import {
   type KeyboardEvent,
@@ -17,7 +22,9 @@ import { type FrameSurface, foldSurface } from "../frame-surface";
 import { CommunityTileView, useCommunitySwitch } from "./CommunityTile";
 import { PageActView } from "./InstallCard";
 import { PluginSettings } from "./PluginSettings";
+import { PluginsUpdates } from "./PluginsUpdates";
 import { PluginsView } from "./PluginsView";
+import { dropCarry, keepCarry, type PluginsCarry, takeCarry } from "./plugins-carry";
 import {
   type CommunityStatementDoor,
   communityDoor,
@@ -31,7 +38,13 @@ import {
   takePluginUpdates,
   usePluginUpdates,
 } from "./plugins-count";
-import { type InstallFlow, installLive, installRefusal, pageAct } from "./plugins-install";
+import {
+  type InstallFlow,
+  type InstallRefusal,
+  installLive,
+  installRefusal,
+  pageAct,
+} from "./plugins-install";
 import {
   catalogFoot,
   installedFoot,
@@ -59,6 +72,20 @@ import {
   shelfShows,
   walkShelf,
 } from "./plugins-shelf";
+import {
+  asksFirst,
+  type RowAct,
+  removedObjects,
+  rowAct,
+  takeable,
+  type UpdateFlow,
+  type UpdateRow,
+  updateAllAct,
+  updateAllOrder,
+  updatePageAct,
+  updateRows,
+  updatesHead,
+} from "./plugins-updates";
 import { RemoveView } from "./RemoveQuestion";
 
 // THE PLUGINS POPUP'S CONTROLLER (MK-4a; DESIGN.md §8 "Plugins — the frame's
@@ -119,6 +146,20 @@ import { RemoveView } from "./RemoveQuestion";
 // Remove…, never fieldd's text. Esc, leaving the page or folding the popup is
 // its Cancel; whichever way it goes, the keyboard goes back to the field. A
 // page whose plugin neither the snapshot nor the list holds closes to its tab.
+// MK-UC's UC-C: over a held list Updates draws its head, its rows and its note
+// (`plugins-updates.ts`, `PluginsUpdates.tsx`), and an installed plugin's page
+// whose update waits says Update. An Update downloads first (`prepareUpdate`);
+// when fieldd says the plugin downloaded can do no more than the version you
+// have and it removes no object, it is taken at once (`commit`), and otherwise
+// the update card — the install card's own — stands where the act stood, its
+// Update taking it and its Cancel throwing the download away (`discard`). One
+// update or install at a time; leaving where it stands lets a card go, as an
+// install's; the snapshot holding the new version ends it, and its row says
+// Updated to until the popup folds. Update all takes the rows one at a time,
+// waiting at each card. Check again reads the list once per press. MK-E6: as an
+// install or an update of a plugin with objects is sent, a note is kept in the
+// window's own session (`plugins-carry.ts`), so a window that comes back fresh
+// opens the popup where it stood (`FramePlugins`); folding lets the note go.
 // Its doors (MK-4b) are the Me menu's Plugins… row and the palette's Plugins…
 // and Check plugins for updates, each through ChromeLayer's `openPlugins`; the
 // pegboard's pill is MK-4d's. The catalog mounts this controller over a
@@ -180,6 +221,12 @@ export interface PluginsProps {
   /** O2-C: whether that opening then presses the card's Install once it stands, so a plate shows Installing… (a
    * plate's; the product passes none). */
   initialConfirm?: boolean;
+  /** MK-UC's UC-C (MK-E6): the updates Update all took and still had to take when the window came back fresh,
+   * which the next opening shows and goes on with (`FramePlugins`' note; a plate passes none). */
+  resume?: Pick<PluginsCarry, "rest" | "done"> | null;
+  /** MK-UC's UC-C: a plugin whose row's Update each opening presses once Updates' rows are read, so a plate shows
+   * the download or the update card (a plate's; the product passes none). */
+  initialUpdate?: string | null;
   now?: () => number;
 }
 
@@ -214,6 +261,8 @@ export function Plugins({
   initialAsk = false,
   initialInstall = false,
   initialConfirm = false,
+  resume = null,
+  initialUpdate = null,
   now = Date.now,
 }: PluginsProps): ReactElement | null {
   const open = surface === "plugins";
@@ -241,6 +290,31 @@ export function Plugins({
   // MK-4f: Remove…'s question standing on a page, and the plugin whose last removal fieldd refused
   const [removing, setRemoving] = useState<RemoveAsk | null>(null);
   const [removeRefused, setRemoveRefused] = useState<string | null>(null);
+  // MK-UC's UC-C: the one update under way, in a ref too as the install's is; the updates this opening took (by
+  // plugin, the version taken) and those that didn't happen; what Update all still has to take; and the newest of
+  // what an answer that lands late reads (the snapshot, the page, Updates' rows), each kept in a ref
+  const updateNow = useRef<UpdateFlow | null>(null);
+  const [update, setUpdate] = useState<UpdateFlow | null>(null);
+  const putUpdate = useCallback((next: UpdateFlow | null) => {
+    updateNow.current = next;
+    setUpdate(next);
+  }, []);
+  const [updated, setUpdated] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const [unmade, setUnmade] = useState<ReadonlyMap<string, InstallRefusal>>(() => new Map());
+  const [allRest, setAllRest] = useState<readonly string[]>([]);
+  const updatedNow = useRef(updated);
+  const allRestNow = useRef(allRest);
+  const snapshotNow = useRef(snapshot);
+  const pageNow = useRef<OpenPage | null>(null);
+  const updatesNow = useRef<readonly UpdateRow[] | null>(null);
+  // Check again's read: a later one, or a new opening, leaves an earlier answer untaken
+  const checkTurn = useRef(0);
+  useLayoutEffect(() => {
+    updatedNow.current = updated;
+    allRestNow.current = allRest;
+    snapshotNow.current = snapshot;
+    pageNow.current = page;
+  }, [updated, allRest, snapshot, page]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const returnFocus = useRef<Element | null>(null);
@@ -277,6 +351,11 @@ export function Plugins({
       // the read until this one's doors answer (a held list stays, shown at once)
       setRead((was) => (was.kind === "away" ? { kind: "asking" } : was));
       setBox(boxOf(container));
+      // MK-UC's UC-C: each opening's Updates starts with nothing taken and nothing failed, but for what Update all
+      // took and had left to take when the window came back fresh (MK-E6)
+      setUpdated(new Map(resume?.done ?? []));
+      setUnmade(new Map());
+      setAllRest(resume?.rest ?? []);
       if (takeFocus) {
         const before = document.activeElement;
         returnFocus.current = before !== null && before !== document.body ? before : null;
@@ -294,6 +373,8 @@ export function Plugins({
     let fresh = false;
     let heldAnswered = false;
     let refreshFailed = false;
+    // a Check again from an earlier opening is not this one's
+    checkTurn.current += 1;
     setReading(true);
     port.catalog().then(
       (catalog) => {
@@ -387,6 +468,111 @@ export function Plugins({
     if (takeFocus) inputRef.current?.focus({ preventScroll: true });
   }, [dropInstall, takeFocus]);
 
+  // MK-UC's UC-C: an update the window lets go of — its card's Cancel, Esc, leaving where it stands, the popup
+  // folding. A card standing throws its download away (`discard`); a download still running is thrown away as it
+  // lands (`startUpdate`, below). One whose Update was sent is fieldd's now, kept until the snapshot holds it.
+  const dropUpdate = useCallback(() => {
+    const was = updateNow.current;
+    if (was === null || was.at.step === "updating") return;
+    if (was.at.step === "card") void port.discard(was.at.candidate).catch(() => undefined);
+    putUpdate(null);
+  }, [port, putUpdate]);
+  // the update card's Cancel, pressed or Esc, as the install card's: the keyboard goes back to the field
+  const cancelUpdate = useCallback(() => {
+    dropUpdate();
+    if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+  }, [dropUpdate, takeFocus]);
+  // an update that didn't happen says so on its row and its page, by its refusal's kind alone, never its text
+  // (`installRefusal`, as an install's): Try again, or Needs a newer VibeField; its note goes
+  const failUpdate = useCallback(
+    (id: string, error: unknown) => {
+      setUnmade((was) => new Map(was).set(id, installRefusal(error)));
+      putUpdate(null);
+      dropCarry();
+    },
+    [putUpdate],
+  );
+  // its Update sent: the act says Updating… until the snapshot holds the version. For a plugin with objects the
+  // note is kept first (MK-E6): the page it stands on and the tab it came from, or, during Update all, what it took
+  // (this one with it) and what it still has to take.
+  const takeUpdate = useCallback(
+    (from: UpdateFlow, candidate: string, record: PluginRecord) => {
+      const taking: UpdateFlow = { ...from, at: { step: "updating", version: record.version } };
+      putUpdate(taking);
+      const installed = snapshotNow.current?.plugins.find((plugin) => plugin.id === from.id);
+      const objects =
+        (installed?.contributions.objects.length ?? 0) + record.contributions.objects.length;
+      if (objects > 0) {
+        const opened = from.where === "page" ? (pageNow.current?.from ?? "updates") : "updates";
+        keepCarry({
+          page: from.all ? null : { id: from.id, from: opened },
+          rest: from.all ? allRestNow.current : [],
+          done: from.all ? [...updatedNow.current, [from.id, record.version]] : [],
+        });
+      }
+      port.commit(candidate).then(
+        () => undefined,
+        (error: unknown) => {
+          if (updateNow.current === taking) failUpdate(from.id, error);
+        },
+      );
+    },
+    [port, putUpdate, failUpdate],
+  );
+  // Update, Update…, Try again, or Update all's next: download it, pinned to the version its row shows. When fieldd
+  // says it can do no more than the version you have and it leaves no object missing, it is taken at once (one
+  // press); otherwise its card stands where its act stood. One update or install at a time; a card standing
+  // elsewhere is let go. No press while fieldd isn't answering. The keyboard stays in the field, as an Install's.
+  const startUpdate = useCallback(
+    (id: string, where: "row" | "page", all: boolean) => {
+      const step = updateNow.current?.at.step;
+      const installing = flowNow.current?.at.step;
+      if (away || step === "downloading" || step === "updating") return;
+      if (installing === "downloading" || installing === "installing") return;
+      const row = updatesNow.current?.find((candidate) => candidate.id === id);
+      if (row === undefined || !takeable(row)) return;
+      dropUpdate();
+      setUnmade((was) => {
+        if (!was.has(id)) return was;
+        const next = new Map(was);
+        next.delete(id);
+        return next;
+      });
+      const started: UpdateFlow = { id, where, all, at: { step: "downloading" } };
+      putUpdate(started);
+      if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+      port.prepareUpdate(id, row.to).then(
+        (prepared) => {
+          if (updateNow.current !== started) {
+            void port.discard(prepared.candidate).catch(() => undefined);
+            return;
+          }
+          const installed = snapshotNow.current?.plugins.find((plugin) => plugin.id === id);
+          const removes = installed === undefined ? [] : removedObjects(installed, prepared.record);
+          // fieldd says what it can do that the version you have can't; one that doesn't say asks first
+          const asksFor = prepared.update?.asksFor ?? null;
+          if (!asksFirst(asksFor, removes)) {
+            takeUpdate(started, prepared.candidate, prepared.record);
+            return;
+          }
+          const { candidate, record } = prepared;
+          putUpdate({ ...started, at: { step: "card", candidate, record, asksFor, removes } });
+        },
+        (error: unknown) => {
+          if (updateNow.current === started) failUpdate(id, error);
+        },
+      );
+    },
+    [away, port, putUpdate, dropUpdate, takeUpdate, failUpdate, takeFocus],
+  );
+  // the card's Update takes what it showed
+  const confirmUpdate = useCallback(() => {
+    const was = updateNow.current;
+    if (away || was === null || was.at.step !== "card") return;
+    takeUpdate(was, was.at.candidate, was.at.record);
+    if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+  }, [away, takeUpdate, takeFocus]);
+
   // MK-4f: Remove… asks, and reads the roster for its second question's names (none said if it can't be read)
   const askRemove = useCallback(
     (id: string) => {
@@ -451,6 +637,8 @@ export function Plugins({
       event.stopPropagation();
       const step = flowNow.current?.at.step;
       if (step === "card" || step === "statement") cancelInstall();
+      // MK-UC's UC-C: the update card's Cancel, as the install card's
+      else if (updateNow.current?.at.step === "card") cancelUpdate();
       else if (removing !== null) cancelRemove();
       else if (asking) cancelAsk();
       else if (page !== null) back();
@@ -458,7 +646,42 @@ export function Plugins({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, bindKeys, fold, page, back, asking, cancelAsk, cancelInstall, removing, cancelRemove]);
+  }, [
+    open,
+    bindKeys,
+    fold,
+    page,
+    back,
+    asking,
+    cancelAsk,
+    cancelInstall,
+    cancelUpdate,
+    removing,
+    cancelRemove,
+  ]);
+
+  // MK-UC's UC-C: an update belongs to where it stands — a row's to Updates' list, a page's to its page. Leaving it
+  // (a tab, a page, the back row) or folding the popup lets a card or a download go, and Update all stops after the
+  // update under way. Folding lets the note go (MK-E6), and so does the window closing the popup, or its port
+  // changing, as the install's goodbye does; a window coming back fresh runs no such goodbye, so its note stands.
+  useEffect(() => {
+    const onUpdates = open && page === null && tab === "updates";
+    if (!onUpdates) setAllRest([]);
+    const was = updateNow.current;
+    if (was === null) return;
+    const here = !open ? false : was.where === "page" ? page?.id === was.id : onUpdates;
+    if (!here) dropUpdate();
+  }, [open, page, tab, dropUpdate]);
+  useEffect(() => {
+    if (!open) dropCarry();
+  }, [open]);
+  useEffect(
+    () => () => {
+      dropUpdate();
+      dropCarry();
+    },
+    [dropUpdate],
+  );
 
   // O2-C: the install belongs to its page. Leaving the page — its back row, a tab, typed words — or folding the
   // popup lets it go, so nothing waits in fieldd for a card no one sees. The window closing, or its port changing,
@@ -474,6 +697,16 @@ export function Plugins({
     if (flow?.at.step !== "installing") return;
     if (snapshot?.plugins.some((plugin) => plugin.id === flow.id) === true) putFlow(null);
   }, [snapshot, flow, putFlow]);
+  // MK-UC's UC-C: an update is done when the plugins this desktop has hold its version: its row then says Updated
+  // to, and its page Installed. A plugin gone from them ends it with nothing to say.
+  useEffect(() => {
+    const at = update?.at;
+    if (update === null || at === undefined || at.step !== "updating" || snapshot === null) return;
+    const record = snapshot.plugins.find((plugin) => plugin.id === update.id);
+    if (record !== undefined && record.version !== at.version) return;
+    if (record !== undefined) setUpdated((was) => new Map(was).set(update.id, at.version));
+    putUpdate(null);
+  }, [snapshot, update, putUpdate]);
 
   // O2-C: Install, or Try again — download it, and read the roster with it; then the card stands, unless the
   // window let this install go meanwhile, when the download is thrown away as it lands. A second install drops
@@ -486,8 +719,11 @@ export function Plugins({
   const statementFirst = useRef<(id: string) => boolean>(() => false);
   const install = useCallback(
     (id: string) => {
-      // one install at a time: an Install pressed is fieldd's until the snapshot holds it
+      // one install at a time: an Install pressed is fieldd's until the snapshot holds it; MK-UC: and none while
+      // an update downloads or runs
+      const updating = updateNow.current?.at.step;
       if (away || flowNow.current?.at.step === "installing") return;
+      if (updating === "downloading" || updating === "updating") return;
       dropInstall();
       const started: InstallFlow = { id, at: { step: "downloading" } };
       const first = statementFirst.current(id);
@@ -525,11 +761,20 @@ export function Plugins({
     };
     putFlow(installing);
     if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+    // MK-UC's UC-C (MK-E6): the install's own note, as an update's, for a plugin with objects
+    if (was.at.record.contributions.objects.length > 0) {
+      keepCarry({
+        page: { id: was.id, from: pageNow.current?.from ?? "discover" },
+        rest: [],
+        done: [],
+      });
+    }
     port.commit(was.at.candidate).then(
       () => undefined,
       (error: unknown) => {
         if (flowNow.current !== installing) return;
         putFlow({ id: was.id, at: { step: "failed", refusal: installRefusal(error) } });
+        dropCarry();
       },
     );
   }, [away, port, putFlow, takeFocus]);
@@ -599,9 +844,53 @@ export function Plugins({
   }, [catalog, shelf.kind, snapshot, query, community]);
   const columns = shelfColumns(layout.width);
   const tiles = useMemo(() => (discover === null ? [] : shelfOrder(discover)), [discover]);
+  // MK-UC's UC-C: Updates' rows over a held list — every one, which a page and an Update read, and those that hold
+  // the field's words, which the tab shows — with what holds the presses (an update or an install downloading or
+  // sent) and each row's act
+  const updatesAll = useMemo(
+    () =>
+      catalog === null || shelf.kind !== "counted" || snapshot === null
+        ? null
+        : updateRows(snapshot, catalog, "", updated),
+    [catalog, shelf.kind, snapshot, updated],
+  );
+  const updateList = useMemo(
+    () =>
+      catalog === null || shelf.kind !== "counted" || snapshot === null
+        ? null
+        : updateRows(snapshot, catalog, query, updated),
+    [catalog, shelf.kind, snapshot, query, updated],
+  );
+  useLayoutEffect(() => {
+    updatesNow.current = updatesAll;
+  }, [updatesAll]);
+  const updateBusy = update !== null && update.at.step !== "card";
+  const busy = updateBusy || flow?.at.step === "downloading" || flow?.at.step === "installing";
+  const actOfRow = useCallback(
+    (row: UpdateRow): RowAct =>
+      rowAct({
+        row,
+        flow: update,
+        failed: unmade,
+        busy,
+        state: catalog?.state ?? null,
+        away,
+        snapshot,
+        onMac,
+      }),
+    [update, unmade, busy, catalog, away, snapshot, onMac],
+  );
+  const rowActs = useMemo(
+    () => new Map<string, RowAct>((updateList ?? []).map((row) => [row.id, actOfRow(row)])),
+    [updateList, actOfRow],
+  );
   // the hot row or tile, held to those there are
   const walked =
-    tab === "installed" ? (installed?.length ?? 0) : tab === "discover" ? tiles.length : 0;
+    tab === "installed"
+      ? (installed?.length ?? 0)
+      : tab === "discover"
+        ? tiles.length
+        : (updateList?.length ?? 0);
   const hotAt = Math.max(0, Math.min(hot, walked - 1));
   // a page reads the record the window holds; a plugin gone from it closes its page, unless the list held
   // offers it (MK-4e: a set this desktop doesn't have, read from the list alone)
@@ -619,22 +908,31 @@ export function Plugins({
   useEffect(() => {
     if (open && page !== null && shown === null && snapshot !== null && catalog !== null) back();
   }, [open, page, shown, snapshot, catalog, back]);
+  // MK-UC's UC-C: an installed plugin's page whose update waits, or is under way, takes its row's act
+  const pageUpdate = useMemo(() => {
+    if (shown === null || !shown.installed) return null;
+    const row = updatesAll?.find((candidate) => candidate.id === shown.id);
+    return row === undefined ? null : actOfRow(row);
+  }, [shown, updatesAll, actOfRow]);
   // O2-C: what stands where its act stands, and what ↵ on the page presses
   const act = useMemo(
     () =>
       shown === null
         ? null
-        : pageAct({
-            page: shown,
-            entry: catalog?.plugins.find((listed) => listed.id === shown.id),
-            state: catalog?.state ?? null,
-            flow,
-            away,
-            community,
-            snapshot,
-            onMac,
-          }),
-    [shown, catalog, flow, away, community, snapshot, onMac],
+        : pageUpdate !== null
+          ? updatePageAct(pageUpdate, shown.title)
+          : pageAct({
+              page: shown,
+              entry: catalog?.plugins.find((listed) => listed.id === shown.id),
+              state: catalog?.state ?? null,
+              flow,
+              // MK-UC: no Install takes a press while an update downloads or runs
+              away: away || updateBusy,
+              community,
+              snapshot,
+              onMac,
+            }),
+    [shown, pageUpdate, catalog, flow, away, updateBusy, community, snapshot, onMac],
   );
   // MK-O3D (MK-O1 B): what an Install pressed reads, kept current: a community set's install shows the statement
   // first while this desktop's mark is not read as shown
@@ -645,6 +943,17 @@ export function Plugins({
   }, [catalog, shownHere]);
   const pressAct = useCallback((): boolean => {
     if (shown === null || act === null) return false;
+    if (pageUpdate !== null) {
+      if ((act.kind === "update" || act.kind === "failed") && act.live) {
+        startUpdate(shown.id, "page", false);
+        return true;
+      }
+      if (act.kind === "card" && act.live) {
+        confirmUpdate();
+        return true;
+      }
+      return false;
+    }
     if ((act.kind === "install" || act.kind === "failed") && act.live) {
       install(shown.id);
       return true;
@@ -654,7 +963,7 @@ export function Plugins({
       return true;
     }
     return false;
-  }, [shown, act, install, confirm]);
+  }, [shown, act, pageUpdate, startUpdate, confirmUpdate, install, confirm]);
   // MK-4f: Remove… stands on the page of an installed plugin from the list, with its question when one stands
   const removeShown = useMemo(() => {
     if (shown === null || !shown.installed) return undefined;
@@ -664,7 +973,8 @@ export function Plugins({
   const removeAsking = removing !== null && removing.id === removeShown?.id ? removing : null;
   // O2-C: the foot's act on Discover — the hot tile's Install opens its page and presses it there
   const hotTile = tab === "discover" && page === null ? tiles[hotAt] : undefined;
-  const live = installLive(catalog?.state ?? null, away) && flow?.at.step !== "installing";
+  const live =
+    installLive(catalog?.state ?? null, away) && flow?.at.step !== "installing" && !updateBusy;
   const installHot = useMemo(
     () =>
       hotTile?.act === "install" && live
@@ -675,6 +985,57 @@ export function Plugins({
         : null,
     [hotTile, live, install],
   );
+
+  // MK-UC's UC-C: Update all — the rows the tab shows that can be taken, plugins with no object first, one at a
+  // time; it goes on once the update under way is done, didn't happen, or its card was answered (never while the
+  // popup is folded or Updates is left, which stop it), and passes a row typed words have since hidden
+  const onAll = useCallback(() => {
+    const [first, ...rest] = updateAllOrder(updateList ?? []);
+    if (first === undefined) return;
+    setAllRest(rest);
+    startUpdate(first, "row", true);
+  }, [updateList, startUpdate]);
+  useEffect(() => {
+    if (!open || update !== null || allRest.length === 0 || updateList === null) return;
+    const [next, ...rest] = allRest;
+    setAllRest(rest);
+    if (next !== undefined && updateList.some((row) => row.id === next)) {
+      startUpdate(next, "row", true);
+    }
+  }, [open, update, allRest, updateList, startUpdate]);
+  // a row's card or download goes with its row: typed words that hide the row let it go
+  useEffect(() => {
+    const was = updateNow.current;
+    if (was === null || was.where !== "row" || updateList === null) return;
+    if (!updateList.some((row) => row.id === was.id)) dropUpdate();
+  }, [updateList, dropUpdate]);
+  // a plate's opening presses a row's Update (`initialUpdate`) once, as soon as its rows are read
+  const platePressed = useRef(false);
+  useEffect(() => {
+    if (!open) platePressed.current = false;
+    if (!open || initialUpdate === null || updatesAll === null || platePressed.current) return;
+    platePressed.current = true;
+    startUpdate(initialUpdate, "row", false);
+  }, [open, initialUpdate, updatesAll, startUpdate]);
+  // Check again: one read per press, the person's act (MK-D5), none while a read runs; its answer is taken as an
+  // opening's is, the Me row's count with it
+  const checkAgain = useCallback(() => {
+    if (reading || away) return;
+    checkTurn.current += 1;
+    const turn = checkTurn.current;
+    setReading(true);
+    port.refresh().then(
+      (answer) => {
+        if (checkTurn.current !== turn) return;
+        setRead({ kind: "answered", catalog: answer });
+        setReading(false);
+        heard.current?.(answer);
+      },
+      () => {
+        if (checkTurn.current === turn) setReading(false);
+      },
+    );
+  }, [reading, away, port]);
 
   // A switch's one request (§8 "Its switches"): none while fieldd isn't
   // answering or while its last is out; a refusal is kept to say it, and the
@@ -777,9 +1138,10 @@ export function Plugins({
     [dropAsk],
   );
 
-  // The hot row, or Discover's hot tile (MK-4e), stays in sight as the keys walk it (as the Peek's does).
+  // The hot row, Discover's hot tile (MK-4e) or (MK-UC) Updates' hot row stays in sight as the keys walk it (as
+  // the Peek's does).
   useEffect(() => {
-    if (!open || page !== null || tab === "updates") return;
+    if (!open || page !== null) return;
     const row = listRef.current?.querySelector<HTMLElement>('[data-hot="true"]');
     if (row !== null && row !== undefined && typeof row.scrollIntoView === "function") {
       row.scrollIntoView({ block: "nearest" });
@@ -791,6 +1153,8 @@ export function Plugins({
   // (MK-4e; once it holds any, they move the caret); ↵ opens the hot one's page, or (O2-C) presses the foot's
   // Install for a hot tile this desktop doesn't have. ↵ presses Show installed on Discover's no-registry state,
   // and on a page (O2-C) its act: Install, Try again or the card's Install. A button keeps its own Return.
+  // MK-UC's UC-C: on Updates ↑ ↓ walk its rows, and ↵ presses the hot row's act (Update, or Try again), or a card's
+  // Update while one stands.
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.nativeEvent.isComposing) return;
@@ -799,8 +1163,34 @@ export function Plugins({
         if (pressAct()) event.preventDefault();
         return;
       }
-      const rows = tab === "installed" && installed !== null ? installed : [];
       const key = event.key;
+      if (tab === "updates") {
+        const list = updateList ?? [];
+        if (key === "ArrowDown" || key === "ArrowUp") {
+          if (event.target !== inputRef.current || list.length === 0) return;
+          event.preventDefault();
+          setHot((at) => walkHot(Math.min(at, list.length - 1), key, list.length));
+          return;
+        }
+        if (key !== "Enter" || event.target instanceof HTMLButtonElement) return;
+        if (updateNow.current?.at.step === "card") {
+          event.preventDefault();
+          confirmUpdate();
+          return;
+        }
+        const row = list[hotAt];
+        const rowNow = row === undefined ? undefined : rowActs.get(row.id);
+        const pressable =
+          rowNow !== undefined &&
+          (rowNow.kind === "update" || rowNow.kind === "failed") &&
+          rowNow.live;
+        if (row !== undefined && pressable) {
+          event.preventDefault();
+          startUpdate(row.id, "row", false);
+        }
+        return;
+      }
+      const rows = tab === "installed" && installed !== null ? installed : [];
       if (tab === "discover" && discover !== null && isShelfKey(key)) {
         // once the field holds words, ← → are the caret's
         if ((key === "ArrowLeft" || key === "ArrowRight") && query !== "") return;
@@ -847,6 +1237,10 @@ export function Plugins({
       columns,
       pressAct,
       installHot,
+      updateList,
+      rowActs,
+      confirmUpdate,
+      startUpdate,
     ],
   );
 
@@ -890,14 +1284,37 @@ export function Plugins({
         shown !== null && act !== null ? (
           <PageActView
             act={act}
-            onInstall={() => install(shown.id)}
-            onConfirm={confirm}
-            onCancel={cancelInstall}
+            onInstall={
+              pageUpdate !== null
+                ? () => startUpdate(shown.id, "page", false)
+                : () => install(shown.id)
+            }
+            onConfirm={pageUpdate !== null ? confirmUpdate : confirm}
+            onCancel={pageUpdate !== null ? cancelUpdate : cancelInstall}
             onGoOn={goOn}
             takeFocus={takeFocus}
           />
         ) : null
       }
+      updatesList={
+        updateList === null || catalog === null ? null : (
+          <PluginsUpdates
+            head={updatesHead(updatesAll ?? updateList, catalog, now())}
+            all={updateAllAct(updateList, busy, catalog.state, away)}
+            rows={updateList}
+            acts={rowActs}
+            hot={hotAt}
+            listRef={listRef}
+            onAll={onAll}
+            onOpen={openPage}
+            onUpdate={(id) => startUpdate(id, "row", false)}
+            onConfirm={confirmUpdate}
+            onCancel={cancelUpdate}
+          />
+        )
+      }
+      onCheckAgain={tab === "updates" && page === null && updateList !== null ? checkAgain : null}
+      checking={reading}
       pageRemove={
         removeShown !== undefined ? (
           <RemoveView
@@ -989,13 +1406,29 @@ export function FramePlugins({
       () => undefined,
     );
   }, [port]);
+  // MK-UC's UC-C (MK-E6): the note an install or an update kept as the window came back fresh, read once as the
+  // frame first mounts. The popup opens on it once — on its page, or on Updates for Update all — and every later
+  // opening is a door's.
+  const [carried, setCarried] = useState<PluginsCarry | null>(() => takeCarry());
+  const carriedOpened = useRef(false);
+  useEffect(() => {
+    if (carried === null) return;
+    if (surface === "plugins") {
+      carriedOpened.current = true;
+      return;
+    }
+    if (carriedOpened.current) setCarried(null);
+    else onSurfaceChange("plugins");
+  }, [carried, surface, onSurfaceChange]);
   return (
     <Plugins
       surface={surface}
       onSurfaceChange={onSurfaceChange}
       port={port}
       snapshot={snapshot}
-      initialTab={openOn}
+      initialTab={carried === null ? openOn : (carried.page?.from ?? "updates")}
+      initialPage={carried?.page?.id ?? null}
+      resume={carried}
       holdKeys={view === "godview" ? godview?.holdKeys : undefined}
       onCatalog={takeCount}
       updates={updates}

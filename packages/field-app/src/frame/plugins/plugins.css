@@ -996,6 +996,118 @@
   outline-offset: 2px;
 }
 
+/* ── Updates (MK-UC's UC-C; §8 "Updates", drawn 2026-11-14, ‹draft›): its
+   head padded 14 22 6 — how many and when, at 12/500 in secondary ink with
+   tabular figures, and Update all at its end in the card's Cancel's look; its
+   rows Installed's shape, each line at 12/400 (the versions tabular, what it
+   changes in secondary ink), its act 12 after its text and 12 in from the
+   row's end; the update card under a row's lines, inset to its text (56) and
+   12 from its end, at most 440 wide; the note 16 under the last row, padded
+   0 22, at 12/400 in tertiary ink. ── */
+.vf-plugins-updates {
+  display: grid;
+  align-content: start;
+}
+
+.vf-plugins-updates-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px 6px;
+}
+
+.vf-plugins-updates-said {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-plugins-updates-all {
+  height: 32px;
+  flex: none;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  color: var(--vf-text-secondary);
+  background: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.vf-plugins-updates-all:not(:disabled):hover {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-plugins-updates-all:disabled {
+  color: var(--vf-text-tertiary);
+  cursor: default;
+}
+
+.vf-plugins-updates-all:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* a row holds its press and its act; a card standing takes a line of its own under them */
+.vf-plugins-update {
+  flex-wrap: wrap;
+}
+
+.vf-plugins-update-line {
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-plugins-update-changes {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-plugins-update-act {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-right: 12px;
+}
+
+.vf-plugins-update-act:empty {
+  display: none;
+}
+
+.vf-plugins-update-card {
+  display: flex;
+  width: 100%;
+  padding: 0 12px 10px 56px;
+}
+
+.vf-plugins-update-card > .vf-plugins-card {
+  max-width: 440px;
+}
+
+.vf-plugins-updates-note {
+  margin: 16px 22px;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
 /* ── Remove… (MK-4f; §8, drawn 2026-11-14, ‹draft›): at the second column's
    foot, the card's Cancel's look, its refusal 6 under it in the attention ink;
    pressed, its question in the card's look, Remove trailing in the act's look
