@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { BACK_MARK, markLength } from "../src/frame/cards/press/back-mark";
 import {
   PRESS,
+  PRESS_TOKENS,
   type PressDeps,
   pressKey,
   printStock,
@@ -14,13 +15,31 @@ import { PRESS_FS } from "../src/frame/cards/press/press-shader";
 
 // THE PRESS (CS-D5 A, CS-D6 C; DESIGN.md §5 "The stock is printed, once — the press"): every card wears one printed stock,
 // so it is printed once per size, density and light, by one WebGL2 context that is then let go. The GPU itself is not
-// here; a recording stand-in for WebGL2 holds what the press asks of it.
+// here; a recording stand-in for WebGL2 holds what the press asks of it. Its colours are tokens (§5 "Its colours are
+// tokens"; item 403), read from the root when it prints: here a reader over tokens.css stands in for the root.
 
 afterEach(() => resetPressForTest());
+
+const TOKENS = readFileSync(join(process.cwd(), "../design-kit/src/tokens.css"), "utf8");
+
+/** One theme's block of tokens.css, as written. */
+function block(theme: ":root" | ".dark"): string {
+  const start = TOKENS.indexOf(`\n${theme} {`);
+  return start < 0 ? "" : TOKENS.slice(start, TOKENS.indexOf("\n}", start));
+}
+
+/** A token as the root holds it by day: its value in tokens.css's `:root`, a `var()` followed to its own. */
+function tokenOf(name: string): string {
+  const value = new RegExp(`\\s${name}:\\s*([^;]+);`).exec(block(":root"))?.[1]?.trim() ?? "";
+  const alias = /^var\((--[\w-]+)\)$/.exec(value)?.[1];
+  return alias === undefined ? value : tokenOf(alias);
+}
 
 /** A WebGL2 stand-in: every call is a no-op that is counted; shaders compile and programs link. */
 function fakeGl() {
   const calls: string[] = [];
+  /** every call and its arguments, in order */
+  const log: Array<readonly [string, unknown[]]> = [];
   /** every texImage2D's arguments, in order */
   const uploads: unknown[][] = [];
   const lose = vi.fn();
@@ -34,13 +53,24 @@ function fakeGl() {
         if (/^[A-Z_0-9]+$/.test(name)) return 0;
         return (...args: unknown[]) => {
           calls.push(name);
+          log.push([name, args]);
           if (name === "texImage2D") uploads.push(args);
           return name.startsWith("create") || name.startsWith("get") ? { name, args } : undefined;
         };
       },
     },
   );
-  return { gl, calls, lose, uploads };
+  return { gl, calls, lose, uploads, log };
+}
+
+/** A uniform's value as the press set it: the `uniform*` call at `name`'s location (the stand-in's location is the
+ * `getUniformLocation` call itself, its arguments the program and the name). */
+function uniform(made: ReturnType<typeof fakeGl> | undefined, name: string): unknown {
+  const set = made?.log.find(
+    ([call, args]) =>
+      call.startsWith("uniform") && (args[0] as { args?: unknown[] } | null)?.args?.[1] === name,
+  );
+  return set?.[1][1];
 }
 
 function deps(webgl2: boolean) {
@@ -64,16 +94,28 @@ function deps(webgl2: boolean) {
       urls.push(u);
       return u;
     },
+    token: tokenOf,
   };
   return { d, made, urls };
 }
 
+/** What the press prints with when the root holds tokens.css's own values. */
+const TOKENS_COLOURS = {
+  paper: [244, 239, 229],
+  field: [45, 72, 36],
+  rule: [238, 228, 200],
+  deboss: "rgb(20 36 14 / 16%)",
+  lights: new Map([
+    ["--vf-mark-rose", "#ff0054"],
+    ["--vf-mark-mint", "#00f59b"],
+    ["--vf-mark-cobalt", "#083cff"],
+  ]),
+};
+
 const FRONT = { side: "front", width: 120, height: 168, density: 2, night: false } as const;
 
 describe("the press's numbers are the round's (DESIGN.md §5)", () => {
-  it("prints the front's paper, weave, varnish and light", () => {
-    expect(PRESS.paper).toBe("#f4efe5");
-    expect(PRESS.ink).toBe("#1c1611");
+  it("prints the front's weave, varnish and light", () => {
     expect(PRESS.lamp).toEqual([0.78, -0.475, 0.41]);
     expect(PRESS.room).toEqual([0.18, -0.55, 0.82]);
     expect(PRESS.ambient).toEqual({ day: 0.68, night: 0.55 });
@@ -84,19 +126,35 @@ describe("the press's numbers are the round's (DESIGN.md §5)", () => {
   });
 
   it("prints the pressed back", () => {
-    expect(PRESS.back).toEqual({
-      sage: "#2d4824",
-      cream: "#eee4c8",
-      inset: 5.5,
-      corner: 3.6,
-      rule: 2.6,
-      mark: 60,
-    });
+    expect(PRESS.back).toEqual({ inset: 5.5, corner: 3.6, rule: 2.6, mark: 60 });
     expect(BACK_MARK.lights).toEqual([
-      ["#FF0054", 473.28],
-      ["#00F59B", 157],
-      ["#083CFF", 795.69],
+      ["--vf-mark-rose", 473.28],
+      ["--vf-mark-mint", 157],
+      ["--vf-mark-cobalt", 795.69],
     ]);
+  });
+
+  it("holds the round's colours in the tokens, the same by day and by night (§5 'Its colours are tokens', item 403)", () => {
+    expect(PRESS_TOKENS).toEqual({
+      paper: "--vf-card-press-paper",
+      field: "--vf-card-back",
+      rule: "--vf-card-back-rule",
+      deboss: "--vf-card-press-deboss",
+    });
+    expect(Object.values(PRESS_TOKENS).map(tokenOf)).toEqual([
+      "#f4efe5",
+      "#2d4824",
+      "#eee4c8",
+      "rgb(20 36 14 / 16%)",
+    ]);
+    expect(BACK_MARK.lights.map(([name]) => tokenOf(name))).toEqual([
+      "#ff0054",
+      "#00f59b",
+      "#083cff",
+    ]);
+    const night = block(".dark");
+    for (const name of [...Object.values(PRESS_TOKENS), ...BACK_MARK.lights.map(([n]) => n)])
+      expect(night).not.toContain(`${name}:`);
   });
 });
 
@@ -148,6 +206,59 @@ describe("the press", () => {
     expect(paint).toHaveBeenCalledOnce();
     expect(made).toHaveLength(2);
   });
+
+  it("prints with the tokens' colours: the front's paper, and the back's field, rule, band and lights (item 403)", async () => {
+    const { d, made } = deps(true);
+    const paint = vi.fn(d.paintBack);
+    await printStock({ ...FRONT, side: "back" }, { ...d, paintBack: paint });
+    expect(uniform(made[0], "uPaperC")).toEqual([244 / 255, 239 / 255, 229 / 255]);
+    expect(paint).toHaveBeenCalledOnce();
+    expect(paint.mock.calls[0]?.[1]).toEqual(TOKENS_COLOURS);
+  });
+
+  it("prints with what the root's tokens hold when it prints, never colours of its own (item 403)", async () => {
+    const { d, made } = deps(true);
+    const paint = vi.fn(d.paintBack);
+    const restyled: Record<string, string> = {
+      "--vf-card-press-paper": "#ffffff",
+      "--vf-card-back": "rgb(10 20 30)",
+      "--vf-card-back-rule": "#abc",
+      "--vf-card-press-deboss": "rgb(1 2 3 / 50%)",
+      "--vf-mark-rose": "#010203",
+    };
+    const token = (name: string): string => restyled[name] ?? tokenOf(name);
+    await printStock({ ...FRONT, side: "back" }, { ...d, paintBack: paint, token });
+    expect(uniform(made[0], "uPaperC")).toEqual([1, 1, 1]);
+    expect(paint.mock.calls[0]?.[1]).toEqual({
+      paper: [255, 255, 255],
+      field: [10, 20, 30],
+      rule: [170, 187, 204],
+      deboss: "rgb(1 2 3 / 50%)",
+      lights: new Map([
+        ["--vf-mark-rose", "#010203"],
+        ["--vf-mark-mint", "#00f59b"],
+        ["--vf-mark-cobalt", "#083cff"],
+      ]),
+    });
+  });
+
+  it("prints nothing where a token cannot be read: no context is made, and no answer kept (item 403)", async () => {
+    const { d, made, urls } = deps(true);
+    const missing: PressDeps = {
+      ...d,
+      token: (name) => (name === "--vf-card-back" ? "" : tokenOf(name)),
+    };
+    const garbled: PressDeps = {
+      ...d,
+      token: (name) => (name === "--vf-card-press-deboss" ? "a little darker" : tokenOf(name)),
+    };
+    expect(await printStock(FRONT, missing)).toBeNull();
+    expect(await printStock(FRONT, garbled)).toBeNull();
+    expect(made).toHaveLength(0);
+    // once the sheet holds them, the same key prints
+    expect(await printStock(FRONT, d)).toBe("blob:press/1");
+    expect(urls).toHaveLength(1);
+  });
 });
 
 describe("what the cards wear", () => {
@@ -168,6 +279,9 @@ describe("what the press prints from", () => {
     expect(svg).toContain(BACK_MARK.edge);
     expect(svg).toContain(BACK_MARK.cover);
     expect(svg).toContain(BACK_MARK.hole);
+    // …and its lights the kit's own, light for light: each token holds the stroke the mark draws it with
+    for (const [name] of BACK_MARK.lights)
+      expect(svg).toContain(`stroke="${tokenOf(name).toUpperCase()}"`);
     expect(markLength()).toBeGreaterThan(10000);
     expect(markLength()).toBe(markLength());
   });

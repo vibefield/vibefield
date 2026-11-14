@@ -1504,6 +1504,27 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
+  it("keeps the press's code free of hex — every colour it prints with is a token's, read from the root (item 403)", () => {
+    // VF-PM's ruling (2026-11-14, 04:09Z): the press's hex leaves its code for tokens, not an exception — DESIGN.md
+    // first (§5 "the press", "Its colours are tokens"), projected into tokens.css, and read from the root when it
+    // prints. Its relief's and its mask's channels are data the shader reads, never a colour anyone sees, and are
+    // spelled without hex too.
+    const press = join(PACKAGE_ROOT, "src", "frame", "cards", "press");
+    const modules = readdirSync(press).filter((name) => name.endsWith(".ts"));
+    expect(modules).toContain("press-colours.ts");
+    const offenders: string[] = [];
+    for (const name of modules) {
+      const text = source(`frame/cards/press/${name}`);
+      text.split("\n").forEach((line, index) => {
+        if (/#[\da-f]{3,8}\b/i.test(line)) offenders.push(`${name}:${index + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+    expect(source("frame/cards/press/press-colours.ts")).toContain(
+      "getComputedStyle(document.documentElement)",
+    );
+  });
+
   it("gives the chrome slot its rule — the profiles column stands at the stage's top left (AR-5b; UM-3)", () => {
     // The review's blocker (AR-5b): the slot's class had a comment and no rule, so the
     // column laid out in flow — below the clipped swarm, across the list. UM-D21: the slot
