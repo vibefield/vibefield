@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { PHONE_CODE_HOST, PHONE_CODE_SCHEME } from "@vibefield/contracts/phone-code";
-import type { FielddClient } from "@vibefield/fieldd-client";
+import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, type ComponentProps, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -233,6 +233,11 @@ describe("Settings → Devices: the Tailscale card (TS-D1, TS-D2, TS-D4)", () =>
     await act(async () => linkAct()?.click());
     await act(flush);
     expect(container?.querySelector('[role="alert"]')?.textContent).toContain("/x/link.json");
+    // item 406 — a refusal wears the attention ink, never Tailwind's amber (DESIGN.md §8, moved)
+    expect(container?.querySelector('[role="alert"]')?.className).toContain(
+      "text-[var(--vf-ink-attention)]",
+    );
+    expect(container?.querySelector('[role="alert"]')?.className).not.toContain("amber");
     expect(linkAct()).not.toBeUndefined();
   });
 
@@ -975,5 +980,335 @@ describe("Settings → Devices: a copy deals a card from its button (HN-5)", () 
     await act(settle);
     expect(cardsStore.snapshot().cards).toEqual([]);
     expect(button("Couldn't copy")).not.toBeUndefined();
+  });
+});
+
+/** `client` over a linked desktop, with a hand on the roster: `push` moves `device.subscribe` for
+ * every subscriber (the page's and Network details'), as the daemon's pass does after a Remove. */
+function rostered(options: {
+  devices: unknown[];
+  request: (method: string, params: unknown) => Promise<unknown>;
+}): { fieldd: FielddClient; push: (devices: unknown[]) => Promise<void> } {
+  const fieldd = client({ link: LINKED(), devices: options.devices });
+  const onRoster: Array<(devices: unknown) => void> = [];
+  const subscribe = fieldd.subscribe as unknown as ReturnType<typeof vi.fn>;
+  const base = subscribe.getMockImplementation();
+  subscribe.mockImplementation(
+    async (method: string, params: unknown, onEvent?: (devices: unknown) => void) => {
+      if (method === "device.subscribe" && onEvent !== undefined) onRoster.push(onEvent);
+      return base?.(method, params, onEvent);
+    },
+  );
+  (fieldd.request as ReturnType<typeof vi.fn>).mockImplementation(options.request);
+  return {
+    fieldd,
+    push: async (devices) => {
+      await act(async () => {
+        for (const onEvent of onRoster) onEvent(devices);
+      });
+    },
+  };
+}
+
+// Item 406 (track WI's Desktop slice; WI-W5b A) — Remove for a phone, DESIGN.md §8 "Settings →
+// Devices" and §9 "The link's words" as amended 2026-11-14. Remove is offered on a row the roster
+// KNOWS to be a phone (`DeviceInfo.phone`) and nowhere else; its confirm opens in place under the
+// row, Cancel leading and focused; the act is `device.remove` by the row's durable id; the row
+// leaves through the roster, and the page says once, where it stood, that the phone was removed.
+describe("Settings → Devices: Remove for a phone (item 406)", () => {
+  const SELF = {
+    deviceId: "d-self",
+    name: "Studio",
+    platform: "darwin",
+    self: true,
+    online: true,
+    lastSeenAt: 0,
+  };
+  /** A desktop: its slice says it hosts documents. */
+  const DESKTOP = {
+    deviceId: "d-air",
+    name: "MacBook Air",
+    platform: "darwin",
+    self: false,
+    online: true,
+    lastSeenAt: 0,
+    capabilities: { terminalHost: true, docHost: true },
+  };
+  /** A phone the roster KNOWS: it spoke to a desktop of this account as one. */
+  const PHONE = {
+    deviceId: "01JC3V8Q6TPHQNE7Y2W4X9K5RM",
+    name: "James’s iPhone",
+    self: false,
+    online: true,
+    lastSeenAt: 0,
+    tailscaleId: "nPh0neStable",
+    phone: { via: "freeway", at: 1_763_100_000_000 },
+  };
+  /** The console the floor names for this tailnet: the card's own link. */
+  const CONSOLE = "https://login.tailscale.com/admin/machines?tailnet=example.ts.net";
+  const REMOVED = "James’s iPhone was removed.";
+
+  const rowOf = (name: string): HTMLLIElement | undefined =>
+    Array.from(container?.querySelectorAll<HTMLLIElement>(".vf-devices-row") ?? []).find(
+      (row) => row.querySelector(".vf-devices-row-name")?.textContent === name,
+    );
+  const confirmBox = (): HTMLElement | null | undefined =>
+    container?.querySelector<HTMLElement>(".vf-devices-remove");
+  /** how many times the page says the phone was removed */
+  const said = (): number => text().split(REMOVED).length - 1;
+  const press = async (label: string): Promise<void> => {
+    await act(async () => button(label)?.click());
+  };
+  /** Your devices' rows, as a person reads them, in order */
+  const rowsText = (): Array<string | null> =>
+    Array.from(container?.querySelectorAll(".vf-devices-rows > li") ?? []).map(
+      (row) => row.textContent,
+    );
+
+  it("offers Remove… only on a row the roster knows to be a phone, in red text", async () => {
+    host(null);
+    const fieldd = client({
+      link: LINKED(),
+      devices: [
+        // never This Mac, even were it to carry the fact
+        { ...SELF, phone: { via: "product", at: 0 } },
+        DESKTOP,
+        // a desktop's own word stands over a phone fact, as fieldd's act refuses it
+        { ...DESKTOP, deviceId: "d-mini", name: "Mac mini", phone: { via: "product", at: 0 } },
+        // a row whose kind is not known yet: no slice, no fact (the freeway reads it as a phone)
+        { deviceId: "d-new", name: "workshop", self: false, online: true, lastSeenAt: 0 },
+        // a fact this build cannot read is no fact
+        { ...PHONE, deviceId: "d-odd", name: "Odd iPhone", phone: { via: "pigeon", at: 0 } },
+        PHONE,
+      ],
+    });
+    await mount(fieldd);
+    const offered = Array.from(container?.querySelectorAll(".vf-devices-row") ?? [])
+      .filter((row) =>
+        Array.from(row.querySelectorAll("button")).some((each) => each.textContent === "Remove…"),
+      )
+      .map((row) => row.querySelector(".vf-devices-row-name")?.textContent);
+    expect(offered).toEqual(["James’s iPhone"]);
+    // the row keeps its one word, and Remove… is its fourth column
+    expect(rowOf("James’s iPhone")?.textContent).toBe("James’s iPhoneOnlineRemove…");
+    expect(button("Remove…")?.className).toContain("text-[var(--vf-red)]");
+    expect(fieldd.request).not.toHaveBeenCalled();
+  });
+
+  it("opens the confirm in place under the phone's row: its words, Cancel leading and focused, nothing asked", async () => {
+    host(null);
+    const fieldd = client({
+      link: LINKED({ adminUrl: CONSOLE }),
+      devices: [SELF, PHONE, DESKTOP],
+    });
+    await mount(fieldd);
+    await press("Remove…");
+    const box = rowOf("James’s iPhone")?.querySelector<HTMLElement>(".vf-devices-remove");
+    expect(box?.tagName).toBe("FIELDSET");
+    expect(container?.querySelectorAll(".vf-devices-remove")).toHaveLength(1);
+    const title = document.getElementById(box?.getAttribute("aria-labelledby") ?? "");
+    expect(title?.textContent).toBe("Remove James’s iPhone?");
+    const words = box?.textContent ?? "";
+    expect(words).toContain(
+      "James’s iPhone stops reaching your agents and your field. Everything on your computers stays.",
+    );
+    expect(words).toContain(
+      "It stays on your Tailscale network until you remove it in Tailscale's admin console.",
+    );
+    // no word promises immediacy, or reach across every computer (Q-J1, Q-PM4)
+    for (const promise of [
+      "right away",
+      "immediately",
+      "at once",
+      "from the moment",
+      "all your computers",
+    ]) {
+      expect(words).not.toContain(promise);
+    }
+    const manage = box?.querySelector("a");
+    expect(manage?.textContent).toBe("Manage in Tailscale ↗");
+    expect(manage?.getAttribute("href")).toBe(CONSOLE);
+    expect(manage?.getAttribute("target")).toBe("_blank");
+    const acts = Array.from(box?.querySelectorAll("button") ?? []);
+    expect(acts.map((each) => each.textContent)).toEqual(["Cancel", "Remove"]);
+    expect(document.activeElement).toBe(acts[0]);
+    expect(acts[1]?.className).toContain("text-[var(--vf-red)]");
+    expect(fieldd.request).not.toHaveBeenCalled();
+  });
+
+  it("removes by the row's durable id, and reads Removing… with every act disabled while it runs", async () => {
+    host(null);
+    let answer: (result: unknown) => void = () => undefined;
+    const { fieldd } = rostered({
+      devices: [SELF, PHONE],
+      request: (method) =>
+        method === "device.remove"
+          ? new Promise((resolve) => {
+              answer = resolve;
+            })
+          : Promise.resolve({ ok: true }),
+    });
+    await mount(fieldd);
+    await press("Remove…");
+    await press("Remove");
+    expect(fieldd.request).toHaveBeenCalledTimes(1);
+    expect(fieldd.request).toHaveBeenCalledWith("device.remove", { deviceId: PHONE.deviceId });
+    expect(button("Removing…")?.disabled).toBe(true);
+    expect(button("Cancel")?.disabled).toBe(true);
+    expect(button("Remove…")?.disabled).toBe(true);
+    // Esc is Cancel's key, and Cancel waits with the act
+    await act(async () => {
+      confirmBox()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(button("Removing…")).not.toBeUndefined();
+    await act(async () => answer({ removed: true, closed: 1 }));
+    await act(flush);
+    expect(confirmBox()).toBeNull();
+    expect(said()).toBe(1);
+    expect(fieldd.request).toHaveBeenCalledTimes(1);
+  });
+
+  it("says once, where the row stood, that the phone was removed — never what it closed", async () => {
+    host(null);
+    const { fieldd, push } = rostered({
+      devices: [SELF, PHONE, DESKTOP],
+      request: async (method) =>
+        method === "device.remove" ? { removed: true, closed: 41 } : { ok: true },
+    });
+    await mount(fieldd);
+    await press("Remove…");
+    await press("Remove");
+    await act(flush);
+    const after = ["StudioThis Mac", `${REMOVED}Manage in Tailscale ↗`, "MacBook AirOnline"];
+    // the answer can outrun the roster's pass: the row it names is not drawn while it lingers
+    expect(rowsText()).toEqual(after);
+    // the roster's pass forgets the phone; the line stays where the row stood, said once
+    await push([SELF, DESKTOP]);
+    expect(rowsText()).toEqual(after);
+    await push([SELF, DESKTOP]);
+    expect(said()).toBe(1);
+    expect(text()).not.toContain("41");
+    const manage = Array.from(container?.querySelectorAll(".vf-devices-rows a") ?? []).find(
+      (anchor) => anchor.textContent === "Manage in Tailscale ↗",
+    );
+    expect(manage?.getAttribute("href")).toBe("https://login.tailscale.com/admin/machines");
+    // no undo, no Allow again
+    expect(button("Undo")).toBeUndefined();
+    expect(button("Allow again")).toBeUndefined();
+    // said once: the page opened again says nothing of it
+    act(() => root?.unmount());
+    root = null;
+    container?.remove();
+    await mount(client({ link: LINKED(), devices: [SELF, DESKTOP] }));
+    expect(said()).toBe(0);
+  });
+
+  it("takes a phone already refused, here or merged from another computer, as done", async () => {
+    host(null);
+    const { fieldd } = rostered({
+      devices: [SELF, PHONE],
+      request: async (method) =>
+        method === "device.remove" ? { removed: false, closed: 0 } : { ok: true },
+    });
+    await mount(fieldd);
+    await press("Remove…");
+    await press("Remove");
+    await act(flush);
+    expect(confirmBox()).toBeNull();
+    expect(container?.querySelector('[role="alert"]')).toBeNull();
+    expect(said()).toBe(1);
+  });
+
+  it("says nothing alarming when the audit failed: the phone was removed all the same", async () => {
+    host(null);
+    const { fieldd } = rostered({
+      devices: [SELF, PHONE],
+      request: async (method) => {
+        if (method !== "device.remove") return { ok: true };
+        throw new FielddRpcError("AUDIT_UNAVAILABLE", "fieldd's audit sink refused the row", true);
+      },
+    });
+    await mount(fieldd);
+    await press("Remove…");
+    await press("Remove");
+    await act(flush);
+    expect(confirmBox()).toBeNull();
+    expect(container?.querySelector('[role="alert"]')).toBeNull();
+    expect(text()).not.toContain("audit");
+    expect(said()).toBe(1);
+  });
+
+  it("says each refusal inline in the attention ink, in the product's words, never fieldd's", async () => {
+    for (const [cause, words] of [
+      [
+        new FielddRpcError("FORBIDDEN_SCOPE", "fieldd: a trusted desktop caller is required"),
+        "This window can't remove devices.",
+      ],
+      [
+        new FielddRpcError("PRECONDITION_FAILED", "fieldd: only a device known to be a phone"),
+        "James’s iPhone isn't known here as a phone, so it can't be removed.",
+      ],
+      [
+        new FielddRpcError("NOT_FOUND", "fieldd: this desktop's roster lists no such device"),
+        "James’s iPhone is no longer in your devices.",
+      ],
+      [
+        new FielddRpcError("INTERNAL", "fieldd: the settings document refused the write"),
+        "Couldn't remove James’s iPhone. Try again.",
+      ],
+      [new Error("fieldd: the socket closed"), "Couldn't remove James’s iPhone. Try again."],
+    ] as const) {
+      host(null);
+      const { fieldd } = rostered({
+        devices: [SELF, PHONE],
+        request: async (method) => {
+          if (method === "device.remove") throw cause;
+          return { ok: true };
+        },
+      });
+      await mount(fieldd);
+      await press("Remove…");
+      await press("Remove");
+      await act(flush);
+      const alert = confirmBox()?.querySelector('[role="alert"]');
+      expect(alert?.textContent).toBe(words);
+      expect(alert?.className).toContain("text-[var(--vf-ink-attention)]");
+      expect(text()).not.toContain("fieldd:");
+      // the confirm stays with its acts again, and nothing says the phone went
+      expect(button("Remove")?.disabled).toBe(false);
+      expect(button("Cancel")?.disabled).toBe(false);
+      expect(said()).toBe(0);
+      act(() => root?.unmount());
+      root = null;
+      container?.remove();
+      container = null;
+    }
+  });
+
+  it("closes the confirm on Esc and on Cancel, asks nothing, and Esc goes no further", async () => {
+    host(null);
+    const fieldd = client({ link: LINKED(), devices: [SELF, PHONE] });
+    await mount(fieldd);
+    // the Settings dialog closes on an Escape the window hears; the confirm's is its own
+    const beyond = vi.fn();
+    window.addEventListener("keydown", beyond);
+    try {
+      await press("Remove…");
+      await act(async () => {
+        document.activeElement?.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+      });
+      expect(confirmBox()).toBeNull();
+      expect(beyond).not.toHaveBeenCalled();
+      // the keyboard goes back to the act that opened it
+      expect(document.activeElement).toBe(button("Remove…"));
+      await press("Remove…");
+      await press("Cancel");
+      expect(confirmBox()).toBeNull();
+      expect(fieldd.request).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("keydown", beyond);
+    }
   });
 });
