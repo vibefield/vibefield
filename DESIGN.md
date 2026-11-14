@@ -8993,6 +8993,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - **The spring** is response **0.42**, damping **0.84**: the bar's numbers (`AppBar.motion`), so §6 gains no
         curve. They are the folder's own to tune. It turns mid-flight: a tap outside while the folder opens sends
         it back from where it is, and a tile tapped while another folder is still on its way home opens at once.
+        A folder's own place, tapped while the folder is on its way home, turns it back open from where it is.
       - **An app in it** is a tile as on the shelf: it darkens under a finger, a long press lifts it, and a tap
         zooms it open out of that icon ("The open app", below). The folder stays open under the app, and the app
         comes back into it.
