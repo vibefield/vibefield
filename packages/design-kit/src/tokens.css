@@ -228,7 +228,8 @@
   --vf-card-dark-ink-3: rgb(255 255 255 / 40%);
   --vf-card-dark-index: rgb(255 255 255 / 46%);
   --vf-card-dark-cut: rgb(255 255 255 / 9%);
-  /* the back's field and its rule (DESIGN.md §5 "the press", its colours are tokens): the press prints them */
+  /* the back's field and its rule (DESIGN.md §5 "the press", its colours are tokens): the press prints them, and the
+     back wears them flat until it has printed, and where WebGL2 is refused (item 404) */
   --vf-card-back: #2d4824;
   --vf-card-back-rule: #eee4c8;
   --vf-card-dim: 1;
