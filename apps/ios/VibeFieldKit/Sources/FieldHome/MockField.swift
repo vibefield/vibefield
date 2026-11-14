@@ -15,8 +15,10 @@
   /// phone stays on the mesh by itself while signed in (2026-10-18), so a lost
   /// mesh is the `reconnecting` standing, stamped by `-vf-mock-reconnecting`.
   /// *Amended 2026-11-13 (WI-L2):* with no desktop answering the phone is gated,
-  /// so that standing draws Can’t reach your computer. over the splash, and its
-  /// Try again brings the mock's desktop back (`MockAccount.door`).
+  /// so that standing draws Can’t reach your computer. over the splash. Its Try
+  /// again is held, as RB-2 holds every way-in act that reaches something real
+  /// under a scripted run; `MockAccount.signIn()` is what would bring the mock's
+  /// desktop back (`MockAccount.door`), and the rows call it directly.
   ///
   /// The PIXELS come from the shipping decisions over these inputs
   /// (`FieldHomeModel.accountFace`, the History views), never from a second
