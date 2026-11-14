@@ -322,6 +322,7 @@ import {
 import { SetupAnswerParams, SetupLedger, SetupMomentParams } from "../src/setup";
 import {
   AppPreferences,
+  CommunityStatement,
   FielddLinkUnavailable,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
@@ -1091,6 +1092,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "user-me": UserMeResult,
   // SD-2 — the effective preferences fieldd answers, with Play sounds and a Quiet, and an older daemon's without them
   "app-preferences": AppPreferences,
+  // MK-O3D — the community statement's mark, as both of its doors answer it: this desktop has shown it
+  "community-statement": CommunityStatement,
   // CP-4a1 — flows: the window's doors' params and answers, the static read, and the two records fieldd keeps (the
   // unsigned body; the signature rides the passthrough). A flow's needs-you items are `needs-item.flow-*`, above.
   "flows-list": FlowsListResult,

@@ -270,7 +270,12 @@ import {
   resolveSyncIntent,
 } from "./app-preferences";
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
-import { AuditService, type AuditWriterTestHooks } from "./audit-service";
+import {
+  type AuditMutation,
+  type AuditMutationOutcome,
+  AuditService,
+  type AuditWriterTestHooks,
+} from "./audit-service";
 import {
   ensureNativeSocketDir,
   nativeAlive,
@@ -354,7 +359,12 @@ import {
 import { PeerLink } from "./peer-link";
 import { PluginCatalogService } from "./plugin-catalog";
 import { CommunityHold, communityGate } from "./plugin-community-hold";
-import { type PreparedRegistryInstall, RegistryInstallService } from "./plugin-install";
+import { CommunityStatementMark } from "./plugin-community-statement";
+import {
+  COMMUNITY_SWITCH_CLOSED,
+  type PreparedRegistryInstall,
+  RegistryInstallService,
+} from "./plugin-install";
 import { InstallCards } from "./plugin-install-cards";
 import { PluginModuleAuthority } from "./plugin-modules";
 import { PluginRegistryService } from "./plugin-registry";
@@ -6951,13 +6961,48 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       }
       return await commitUpdate({ ...prepared, runtime });
     };
+    // MK-O3D (N26; MK-2c left it "for MK-4"): an install door the community switch refuses audits its outcome as
+    // `denied`, with the switch's own reason code, as the switch's setter audits a refused ON (MK-2a); any other
+    // failure is `failed` by its kind, as before. The refusal leaves the effect as a value, so the outcome row can say
+    // it, and is thrown once that row is written: the caller meets the same refusal. An update whose commit the switch
+    // refuses inside the update coordinator is the coordinator's own failure, and says `failed` as before.
+    class CommunityRefused {
+      constructor(readonly error: RpcCallError) {}
+    }
+    const requiredInstall = async <T>(
+      ctx: CallerContext,
+      mutation: AuditMutation,
+      effect: () => Promise<T>,
+      describe: (value: T) => AuditMutationOutcome,
+    ): Promise<T> => {
+      const done = await audit.required<T | CommunityRefused>(
+        ctx,
+        mutation,
+        async () => {
+          try {
+            return await effect();
+          } catch (error) {
+            const reason = (error as { details?: { reasonCode?: unknown } } | null)?.details;
+            if (!(error instanceof RpcCallError) || reason?.reasonCode !== COMMUNITY_SWITCH_CLOSED)
+              throw error;
+            return new CommunityRefused(error);
+          }
+        },
+        (value) =>
+          value instanceof CommunityRefused
+            ? { outcome: "denied", reasonCode: COMMUNITY_SWITCH_CLOSED }
+            : describe(value),
+      );
+      if (done instanceof CommunityRefused) throw done.error;
+      return done;
+    };
     api.register("plugins.install", async (ctx, params) => {
       const parsed = PluginsInstallParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { id, version? }", false);
       const upgrading = parsed.data.id !== undefined && plugins.get(parsed.data.id) !== undefined;
       const targetId = parsed.data.id ?? "sideload-request";
-      const result = await audit.required(
+      const result = await requiredInstall(
         ctx,
         {
           action: upgrading ? "plugin.update" : "plugin.install",
@@ -7045,7 +7090,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         throw new RpcCallError("PRECONDITION_FAILED", "expected { id, version?, update? }", false);
       const { id, version } = parsed.data;
       const update = parsed.data.update === true;
-      return await audit.required(
+      return await requiredInstall(
         ctx,
         {
           action: update ? "plugin.update.prepare" : "plugin.install.prepare",
@@ -7115,7 +7160,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // held to what it was read against first (`commitUpdateCard`)
       const card = installCards.updateBasis(candidate);
       const update = card !== undefined;
-      const result = await audit.required(
+      const result = await requiredInstall(
         ctx,
         {
           action: update ? "plugin.update" : "plugin.install",
@@ -7521,6 +7566,28 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           settingsDoc.off("changed", onChanged);
         },
       };
+    });
+    // MK-O3D (2026-11-14; James's MK-O1 pick B) — the community statement's mark: whether THIS desktop has shown it
+    // (`plugin-community-statement.ts`), a file of fieldd's own that never syncs and never enters the settings doc.
+    // The switch's trusted-desktop posture; marking is audited, as every ask of the switch is. Nothing here reads the
+    // mark to decide anything: the switch is the fence.
+    const communityStatement = new CommunityStatementMark(config.dataDir);
+    api.register("plugins.community.statement.get", async (ctx) => {
+      requireDesktopCaller(ctx);
+      return { shownHere: await communityStatement.shownHere() };
+    });
+    api.register("plugins.community.statement.shown", async (ctx) => {
+      requireDesktopCaller(ctx);
+      await audit.required(
+        ctx,
+        {
+          action: "plugin.community.statement",
+          target: { kind: "device", id: "self" },
+          attrs: { principalKind: ctx.principal.kind, clientKind: ctx.clientKind ?? "unstated" },
+        },
+        () => communityStatement.markShown(),
+      );
+      return { shownHere: true };
     });
     // AO-2 — the Setup Assistant's ledger. The same trusted-desktop posture as
     // the preferences above: the wizard writes its answers here, and Settings'

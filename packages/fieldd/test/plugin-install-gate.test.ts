@@ -284,7 +284,7 @@ describe("the install gate (MK-2c)", () => {
 });
 
 describe("the doors with community plugins off (MK-2c)", () => {
-  it("plugins.install refuses a community entry, audited as failed; the switch still refuses an ON", async () => {
+  it("plugins.install and the card's prepare refuse a community entry, audited as denied; an ON is refused", async () => {
     const reg = await registry();
     const dataDir = temp("vf-gate-door-");
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -312,21 +312,31 @@ describe("the doors with community plugins off (MK-2c)", () => {
     expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
     expect(refused.data?.details).toMatchObject({ ...CLOSED, generatedAt: reg.index.generatedAt });
     expect(daemon.plugins.get(KV_ID)).toBeUndefined();
+    const card = await shell.callErr("plugins.install.prepare", { id: KV_ID });
+    expect(card.data?.details).toMatchObject({ ...CLOSED, generatedAt: reg.index.generatedAt });
 
-    const ledger = () => {
+    const ledger = (action: string) => {
       const dir = join(dataDir, ...LAYOUT.AUDIT_DIR);
       if (!existsSync(dir)) return [] as Array<Record<string, unknown>>;
       return readdirSync(dir)
         .filter((f) => f.startsWith("plugins.") && f.endsWith(".jsonl"))
         .flatMap((f) => readFileSync(join(dir, f), "utf8").split("\n").filter(Boolean))
         .map((line) => JSON.parse(line) as Record<string, unknown>)
-        .filter((l) => l.action === "plugin.install");
+        .filter((l) => l.action === action);
     };
-    await until(() => ledger().some((l) => l.phase === "outcome"));
-    const lines = ledger();
-    expect(lines.map((l) => l.phase)).toEqual(["attempt", "outcome"]);
-    // Q3 (VF-PM 10:08:59Z): the install ledger says `failed`, by the error's kind; a `denied` is MK-4's
-    expect([lines[1]?.outcome, lines[1]?.reasonCode]).toEqual(["failed", "PRECONDITION_FAILED"]);
+    const doors = ["plugin.install", "plugin.install.prepare"];
+    await until(() => doors.every((action) => ledger(action).some((l) => l.phase === "outcome")));
+    for (const action of doors) {
+      const lines = ledger(action);
+      expect(lines.map((l) => l.phase)).toEqual(["attempt", "outcome"]);
+      // MK-O3D (N26): `denied`, with the switch's own reason code; MK-2c's Q3 (VF-PM 10:08:59Z) said `failed`, by
+      // the error's kind, and left a `denied` for MK-4
+      expect([action, lines[1]?.outcome, lines[1]?.reasonCode]).toEqual([
+        action,
+        "denied",
+        "COMMUNITY_SWITCH_CLOSED",
+      ]);
+    }
 
     const on = await shell.callErr("storage.appPreferences.set", {
       key: "plugins.community",

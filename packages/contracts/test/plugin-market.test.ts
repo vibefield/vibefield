@@ -29,6 +29,7 @@ import {
   AppPreferenceKey,
   AppPreferenceSetParams,
   AppPreferences,
+  CommunityStatement,
 } from "../src/shell";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
@@ -265,6 +266,24 @@ describe("Community plugins: a synced switch, never undone, absent is off (MK-D6
   it("an older daemon's snapshot says nothing of it (absent; off is fieldd's default, MK-2)", () => {
     const older = AppPreferences.parse(fixture("app-preferences.older-daemon.json"));
     expect(older.communityPlugins).toBeUndefined();
+  });
+
+  it("the statement's mark is this desktop's: two local doors on the switch's posture, never a key (MK-O1 B)", () => {
+    const row = (method: string) => METHODS.find((m) => m.method === method);
+    for (const method of ["plugins.community.statement.get", "plugins.community.statement.shown"])
+      expect(row(method)).toMatchObject({
+        scope: "settings.manage",
+        idempotent: true,
+        locality: "local",
+      });
+    expect(CommunityStatement.parse(fixture("community-statement.valid.json"))).toEqual({
+      shownHere: true,
+    });
+    expect(CommunityStatement.safeParse({}).success).toBe(false);
+    expect(CommunityStatement.safeParse({ shownHere: "yes" }).success).toBe(false);
+    // no app preference names it, so the settings doc, which syncs, never carries it
+    const keys: readonly string[] = Object.values(APP_PREFERENCE_KEYS);
+    expect(keys.some((key) => key.includes("statement"))).toBe(false);
   });
 });
 

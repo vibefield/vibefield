@@ -247,3 +247,47 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
     );
   });
 });
+
+describe("the community statement's mark (MK-O3D; James's MK-O1 pick B)", () => {
+  it("is this desktop's alone, never an app preference, marked by a desktop caller and audited", async () => {
+    const { daemon, dataDir } = await boot();
+    const shell = await connect(daemon, daemon.shellToken, "shell-main");
+    const grant = daemon.tokens.mint(["settings.manage"], "test-window");
+    const renderer = await connect(daemon, grant.token, "renderer");
+    const defaults = await shell.call("storage.appPreferences.get", {});
+    expect(await shell.call("plugins.community.statement.get", {})).toEqual({ shownHere: false });
+    expect(await renderer.call("plugins.community.statement.shown", {})).toEqual({
+      shownHere: true,
+    });
+    expect(await shell.call("plugins.community.statement.get", {})).toEqual({ shownHere: true });
+    // a file of fieldd's own, and the preferences every desktop shares say nothing of it
+    expect(existsSync(join(dataDir, "fieldd", "plugins", "community-statement.json"))).toBe(true);
+    expect(await shell.call("storage.appPreferences.get", {})).toEqual(defaults);
+
+    // the switch's posture: a debug client and a plugin's token are refused, before any audit
+    const debug = await connect(daemon, daemon.shellToken, "debug");
+    expect((await debug.callErr("plugins.community.statement.shown", {})).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+    const pluginGrant = daemon.tokens.mint(["settings.manage"], "hostile-plugin", {
+      pluginId: "vibefield.hostile",
+    });
+    const plugin = await connect(daemon, pluginGrant.token, "renderer");
+    expect((await plugin.callErr("plugins.community.statement.get", {})).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+
+    const marked = () =>
+      pluginsLedger(dataDir).filter((l) => l.action === "plugin.community.statement");
+    await until(() => marked().some((l) => l.phase === "outcome"));
+    const lines = marked();
+    expect(lines.map((l) => [l.phase, l.outcome])).toEqual([
+      ["attempt", undefined],
+      ["outcome", "succeeded"],
+    ]);
+    expect(lines[0]?.attrs).toEqual({ principalKind: "local-token", clientKind: "renderer" });
+    // a boolean, so a red prints no token's text
+    const written = JSON.stringify(lines);
+    expect(written.includes(daemon.shellToken) || written.includes(grant.token)).toBe(false);
+  });
+});

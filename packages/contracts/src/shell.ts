@@ -523,7 +523,10 @@ export const APP_PREFERENCE_KEYS = {
    * "statement seen" flag syncs with it or stays per desktop; no flag is typed until he rules. Since MK-2a fieldd
    * reads it (absent, or anything not a boolean, is off), and its setter refuses a true until the slice that draws the
    * switch (MK-4) opens it. *Corrected 2026-11-11 (MK-1c, at MK-2a-r): this said every app preference commits as
-   * undoable (`settings-doc.ts:348`) and the key is read by nothing until MK-2; MK-2a made both untrue.* */
+   * undoable (`settings-doc.ts:348`) and the key is read by nothing until MK-2; MK-2a made both untrue.*
+   * *Corrected 2026-11-14 (MK-O3D): James answered the call, per desktop (his MK-O1 pick B, "Once on each desktop"
+   * as his page names it, in its store at 2026-11-11T23:03:22.544Z; built on VF-PM's ruling, 2026-11-14 04:33Z). The
+   * mark is `CommunityStatement` below: this desktop's alone, never synced, and never a key of this map.* */
   COMMUNITY_PLUGINS: "plugins.community",
 } as const;
 
@@ -597,6 +600,20 @@ export const AppPreferenceSetParams = z
           : typeof value === "boolean",
     "preference value does not match its key",
   );
+
+/** MK-O3D (2026-11-14; James's MK-O1 pick B, "Once on each desktop"; DESIGN.md §8 "The community tile"): whether
+ * THIS desktop has shown the community statement, and the person went on past it here. Each desktop shows it once.
+ * Device scope and never synced: fieldd keeps it in a file of its own beside its plugin records
+ * (`fieldd/src/plugin-community-statement.ts`), never in the settings doc, whose keys are user scope alone (its law
+ * 1), so the switch above syncs and the mark does not. It decides nothing fieldd does: the switch is the fence. The
+ * answer of `plugins.community.statement.get` and of `.shown`, which marks it; a mark fieldd can't read is `false`,
+ * so the statement is shown again, never skipped. */
+export const CommunityStatement = z
+  .object({
+    shownHere: z.boolean(),
+  })
+  .passthrough();
+export type CommunityStatement = z.infer<typeof CommunityStatement>;
 
 // SD-2 (DESIGN.md §14 "Where it plays", §8 "Settings → Sound") — what the window and main trade about sound, over
 // IPC_CHANNELS.soundAttention, .soundPreview and .soundState. The cues are the family's ids in `@vibefield/sound`,

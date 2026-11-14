@@ -1489,6 +1489,24 @@ export const METHODS: MethodDef[] = [
     locality: "sync",
     subscription: true,
   }),
+  // MK-O3D (2026-11-14; James's MK-O1 pick B) — the community statement's mark (`CommunityStatement`, shell.ts):
+  // whether THIS desktop has shown the statement, and marking it once the person goes on past it here. The switch's
+  // own trusted desktop posture (`settings.manage`, a window or the shell), and `local`: the mark is this desktop's
+  // and never synced. Marking twice is marking once.
+  defineMethod({
+    surface: "product",
+    method: "plugins.community.statement.get",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "plugins.community.statement.shown",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+  }),
   // AO-2 (track AO; design-03 §4.3's `setup.*` ledger, setup.ts) — the Setup
   // Assistant's steps: which a person answered and which they put off. A trusted
   // desktop caller's (the wizard, Settings' "Finish setting up"), on
