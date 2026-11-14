@@ -378,9 +378,12 @@ struct HistorySittingTests {
     #expect(FieldHistoryModel.sittings(rows, now: now).map(\.rowIds) == [["u1", "a1", "u2"], ["u3"]])
     let turns = try document(rows).turns
     #expect(turns.map(\.id) == ["u1", "u2", "u3"])
-    #expect(turns[0].dayPill == HistoryDayPill(lead: "Tue 1 Sep"))
+    #expect(turns[0].dayPill == HistoryDayPill(lead: "Tue 1 Sep", startedAt: at(9, 1, 10, 0)))
     #expect(turns[1].dayPill == nil, "fourteen minutes after the reply")
-    #expect(turns[2].dayPill == HistoryDayPill(lead: "10:30", after: "after 15m"))
+    // item 395 — a month past, the clock wears its day; it was `10:30`
+    #expect(
+      turns[2].dayPill
+        == HistoryDayPill(lead: "Tue 1 Sep · 10:30", after: "after 15m", resumedAt: at(9, 1, 10, 30)))
   }
 
   @Test("a session of one sitting wears no pill at all")
@@ -392,19 +395,23 @@ struct HistorySittingTests {
     #expect(try document(rows).turns.allSatisfy { $0.dayPill == nil })
   }
 
-  @Test("a day that turns without a pause is the day alone; a pause across a day is the day, the clock and the gap")
+  @Test("a day that turns without a pause is the day alone; a pause a month past is the day, the clock and the gap")
   func theDay() throws {
     let quiet = [try row("a1", 1, "agent", at: at(8, 31, 23, 55)), try row("a2", 2, "agent", at: at(9, 1, 0, 2))]
     #expect(
-      FieldHistoryModel.sittings(quiet, now: now).map(\.pill)
-        == [HistoryDayPill(lead: "Mon 31 Aug"), HistoryDayPill(lead: "Tue 1 Sep")])
+      FieldHistoryModel.sittings(quiet, now: now).map(\.pill) == [
+        HistoryDayPill(lead: "Mon 31 Aug", startedAt: at(8, 31, 23, 55)),
+        HistoryDayPill(lead: "Tue 1 Sep", startedAt: at(9, 1, 0, 2)),
+      ])
     let paused = [try row("a1", 1, "agent", at: at(8, 31, 23, 18)), try row("a2", 2, "agent", at: at(9, 1, 0, 2))]
     #expect(
       FieldHistoryModel.sittings(paused, now: now).last?.pill
-        == HistoryDayPill(lead: "Tue 1 Sep · 00:02", after: "after 44m"))
+        == HistoryDayPill(lead: "Tue 1 Sep · 00:02", after: "after 44m", resumedAt: at(9, 1, 0, 2)))
+    // item 395 — inside one day the pill names the day too, a month past; it was `12:31`
     let within = [try row("a1", 1, "agent", at: at(9, 1, 0, 13)), try row("a2", 2, "agent", at: at(9, 1, 12, 31))]
     #expect(
-      FieldHistoryModel.sittings(within, now: now).last?.pill == HistoryDayPill(lead: "12:31", after: "after 12h 18m"))
+      FieldHistoryModel.sittings(within, now: now).last?.pill
+        == HistoryDayPill(lead: "Tue 1 Sep · 12:31", after: "after 12h 18m", resumedAt: at(9, 1, 12, 31)))
   }
 
   @Test("the day is Today, Yesterday, a named day, and wears its year only when it is not this one")
@@ -437,7 +444,10 @@ struct HistorySittingTests {
     #expect(turns[1].id == "t2" && turns[1].continues)
     #expect(turns[1].prompt == "" && turns[1].promptAnchor == nil)
     #expect(turns[1].model == "" && turns[1].facts == "", "the head stands once, on the reply's first part")
-    #expect(turns[1].dayPill == HistoryDayPill(lead: "10:40", after: "after 39m"))
+    // item 395 — it was `10:40`
+    #expect(
+      turns[1].dayPill
+        == HistoryDayPill(lead: "Tue 1 Sep · 10:40", after: "after 39m", resumedAt: at(9, 1, 10, 40)))
     #expect(turns[1].segments.map(\.id) == ["t2", "a1"])
     #expect(turns[0].facts.hasPrefix("40m"), "the reply's span is the whole reply's")
   }
@@ -450,9 +460,11 @@ struct HistorySittingTests {
     let turns = try document(rows).turns
     #expect(turns.map(\.id) == ["u1", "a1"])
     #expect(turns[0].prompt == "words of u1" && turns[0].segments.isEmpty)
-    #expect(turns[0].dayPill == HistoryDayPill(lead: "Mon 31 Aug"))
+    #expect(turns[0].dayPill == HistoryDayPill(lead: "Mon 31 Aug", startedAt: at(8, 31, 23, 50)))
     #expect(turns[1].continues == false, "it carries the reply's head")
-    #expect(turns[1].dayPill == HistoryDayPill(lead: "Tue 1 Sep · 00:30", after: "after 40m"))
+    #expect(
+      turns[1].dayPill
+        == HistoryDayPill(lead: "Tue 1 Sep · 00:30", after: "after 40m", resumedAt: at(9, 1, 0, 30)))
   }
 
   @Test("a row with no stamp never cuts, a stamp that runs backwards is no pause, and the rule starts at the first row's")
@@ -502,6 +514,182 @@ struct HistorySittingTests {
     #expect(cache.latestDocument(device: "dev-1", session: "s1") == nil)
     cache.keep(kept, key: key)
     #expect(cache.latestDocument(device: "dev-1", session: "s1")?.document == kept)
+  }
+}
+
+// MARK: - Item 395
+
+/// Item 395 (James, 2026-11-13 23:38:00Z, session qa-01, of a sitting's pill that read `20:21 · after 3h 37m` over
+/// a message a week old: "it only show time when it is today, show weekday if it was within a week, and show date
+/// if outside a week ago") — a pill that carries a clock says how far back it is, by this phone's calendar days
+/// counted from today (DESIGN.md §8 "The phone's session document", "Time cuts it into sittings"). Until this item
+/// a pill inside one day said the clock alone however old the day was, and a pill's words were made once, when
+/// the document was folded.
+///
+/// Every stamp is built on this phone's own calendar, so the rows hold in any time zone.
+@Suite("item 395 — a pill that carries a clock says how far back it is")
+struct HistoryPillLeadTests {
+  private let calendar = Calendar.autoupdatingCurrent
+
+  private func moment(_ month: Int, _ day: Int, _ hour: Int, _ minute: Int, year: Int = 2026) -> Date {
+    calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
+  }
+
+  private func at(_ month: Int, _ day: Int, _ hour: Int, _ minute: Int, year: Int = 2026) -> Int64 {
+    Int64(moment(month, day, hour, minute, year: year).timeIntervalSince1970 * 1000)
+  }
+
+  /// Friday 2026-11-13 21:00 on this phone: the evening James read a sitting of Friday the 6th.
+  private var now: Date { moment(11, 13, 21, 0) }
+
+  private func row(_ id: String, _ ordinal: Int, at: Int64) throws -> IndexTimelineRow {
+    let fields: [String: JSONValue] = [
+      "timelineId": .string(id), "sessionId": .string("s1"), "ordinal": .int(Int64(ordinal)),
+      "kind": .string("agent"), "group": .object(["id": .string("g"), "kind": .string("agent_cycle")]),
+      "text": .string("words of \(id)"), "at": .int(at),
+    ]
+    return try IndexTimelineRow(json: .object(fields))
+  }
+
+  @Test("today the clock alone; on the six days before, the weekday; earlier the day, with its year when not this one")
+  func howFarBack() {
+    #expect(FieldHistoryModel.clockLead(at(11, 13, 20, 21), now: now) == "20:21")
+    #expect(FieldHistoryModel.clockLead(at(11, 12, 20, 21), now: now) == "Thu · 20:21", "never `Yesterday`")
+    #expect(FieldHistoryModel.clockLead(at(11, 7, 20, 21), now: now) == "Sat · 20:21", "the sixth day before today")
+    #expect(FieldHistoryModel.clockLead(at(11, 6, 20, 21), now: now) == "Fri 6 Nov · 20:21", "the seventh: his pill")
+    #expect(FieldHistoryModel.clockLead(at(1, 2, 9, 5), now: now) == "Fri 2 Jan · 09:05")
+    #expect(FieldHistoryModel.clockLead(at(11, 6, 20, 21, year: 2025), now: now) == "6 Nov 2025 · 20:21")
+  }
+
+  @Test("the days are this phone's calendar days, never hours: a minute either side of midnight is another day")
+  func byCalendarDays() {
+    // a minute past midnight, Friday the 13th
+    let early = moment(11, 13, 0, 1)
+    #expect(FieldHistoryModel.clockLead(at(11, 13, 0, 0), now: early) == "00:00")
+    #expect(FieldHistoryModel.clockLead(at(11, 12, 23, 59), now: early) == "Thu · 23:59", "two minutes back")
+    #expect(FieldHistoryModel.clockLead(at(11, 7, 0, 0), now: early) == "Sat · 00:00")
+    #expect(
+      FieldHistoryModel.clockLead(at(11, 6, 23, 59), now: early) == "Fri 6 Nov · 23:59",
+      "six days and two minutes back, on the seventh day before")
+    // a minute before midnight, the same Friday
+    let late = moment(11, 13, 23, 59)
+    #expect(FieldHistoryModel.clockLead(at(11, 13, 0, 0), now: late) == "00:00", "a minute short of a day back")
+    #expect(FieldHistoryModel.clockLead(at(11, 12, 23, 59), now: late) == "Thu · 23:59")
+    #expect(
+      FieldHistoryModel.clockLead(at(11, 7, 0, 0), now: late) == "Sat · 00:00",
+      "a minute short of seven days back, on the sixth day before")
+    #expect(FieldHistoryModel.clockLead(at(11, 6, 23, 59), now: late) == "Fri 6 Nov · 23:59")
+    // a minute into a new year: the day before is its weekday, and the year is said only of a day past the week
+    let newYear = moment(1, 1, 0, 1)
+    #expect(FieldHistoryModel.clockLead(at(12, 31, 23, 59, year: 2025), now: newYear) == "Wed · 23:59")
+    #expect(FieldHistoryModel.clockLead(at(12, 26, 10, 0, year: 2025), now: newYear) == "Fri · 10:00")
+    #expect(FieldHistoryModel.clockLead(at(12, 25, 10, 0, year: 2025), now: newYear) == "25 Dec 2025 · 10:00")
+  }
+
+  @Test("a stamp on a day after today, from a desktop whose clock runs ahead, is its day and its clock")
+  func aDayAhead() {
+    #expect(FieldHistoryModel.clockLead(at(11, 14, 0, 5), now: now) == "Sat 14 Nov · 00:05")
+    #expect(FieldHistoryModel.clockLead(at(11, 13, 23, 30), now: now) == "23:30", "later today is today")
+  }
+
+  @Test("James's pill: a sitting of a week past says its day before its clock, and keeps the stamp it is said of")
+  func aWeekPast() throws {
+    let rows = [try row("a1", 1, at: at(11, 6, 16, 44)), try row("a2", 2, at: at(11, 6, 20, 21))]
+    #expect(
+      FieldHistoryModel.sittings(rows, now: now).map(\.pill) == [
+        HistoryDayPill(lead: "Fri 6 Nov", startedAt: at(11, 6, 16, 44)),
+        HistoryDayPill(lead: "Fri 6 Nov · 20:21", after: "after 3h 37m", resumedAt: at(11, 6, 20, 21)),
+      ])
+  }
+
+  @Test("inside today the clock alone; a pause across midnight into yesterday is the weekday, never `Yesterday`")
+  func nearDays() throws {
+    let today = [try row("a1", 1, at: at(11, 13, 9, 0)), try row("a2", 2, at: at(11, 13, 12, 31))]
+    #expect(
+      FieldHistoryModel.sittings(today, now: now).last?.pill
+        == HistoryDayPill(lead: "12:31", after: "after 3h 31m", resumedAt: at(11, 13, 12, 31)))
+    let yesterday = [try row("a1", 1, at: at(11, 11, 23, 18)), try row("a2", 2, at: at(11, 12, 0, 2))]
+    #expect(
+      FieldHistoryModel.sittings(yesterday, now: now).last?.pill
+        == HistoryDayPill(lead: "Thu · 00:02", after: "after 44m", resumedAt: at(11, 12, 0, 2)))
+  }
+
+  @Test("a pill with no clock keeps its day alone: Today, Yesterday, a named day, its year when it is not this one")
+  func theDayAlone() throws {
+    // a day that turns with no pause: each side of midnight is a sitting, and neither pill has a clock
+    let quiet = [try row("a1", 1, at: at(11, 12, 23, 55)), try row("a2", 2, at: at(11, 13, 0, 2))]
+    #expect(
+      FieldHistoryModel.sittings(quiet, now: now).map(\.pill) == [
+        HistoryDayPill(lead: "Yesterday", startedAt: at(11, 12, 23, 55)),
+        HistoryDayPill(lead: "Today", startedAt: at(11, 13, 0, 2)),
+      ])
+    let past = [try row("a1", 1, at: at(11, 5, 23, 55)), try row("a2", 2, at: at(11, 6, 0, 2))]
+    #expect(FieldHistoryModel.sittings(past, now: now).map { $0.pill?.lead } == ["Thu 5 Nov", "Fri 6 Nov"])
+    let lastYear = [
+      try row("a1", 1, at: at(11, 5, 23, 55, year: 2025)), try row("a2", 2, at: at(11, 6, 0, 2, year: 2025)),
+    ]
+    #expect(FieldHistoryModel.sittings(lastYear, now: now).map { $0.pill?.lead } == ["5 Nov 2025", "6 Nov 2025"])
+  }
+
+  @Test("the words are made when the pill is drawn: folded today, it says tomorrow's words tomorrow")
+  func madeWhenDrawn() throws {
+    let rows = [try row("a1", 1, at: at(11, 13, 9, 0)), try row("a2", 2, at: at(11, 13, 12, 31))]
+    let pills = FieldHistoryModel.sittings(rows, now: now).compactMap(\.pill)
+    #expect(pills.count == 2)
+    let day = try #require(pills.first)
+    let clock = try #require(pills.last)
+    #expect(day.lead == "Today" && clock.lead == "12:31", "as they read on the day they were folded")
+    #expect(day.leadWords(now: now) == "Today" && clock.leadWords(now: now) == "12:31")
+    let tomorrow = moment(11, 14, 8, 0)
+    #expect(day.leadWords(now: tomorrow) == "Yesterday")
+    #expect(clock.leadWords(now: tomorrow) == "Fri · 12:31")
+    let nextWeek = moment(11, 20, 8, 0)
+    #expect(day.leadWords(now: nextWeek) == "Fri 13 Nov")
+    #expect(clock.leadWords(now: nextWeek) == "Fri 13 Nov · 12:31")
+    let nextYear = moment(1, 5, 8, 0, year: 2027)
+    #expect(day.leadWords(now: nextYear) == "13 Nov 2026")
+    #expect(clock.leadWords(now: nextYear) == "13 Nov 2026 · 12:31")
+  }
+
+  @Test("a document kept before this item still decodes, and its pills draw the words they were kept with")
+  func aDocumentKeptBefore() throws {
+    let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("vf-history-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let cache = HistoryCache(directory: directory)
+    let key = HistoryCache.Key(device: "dev-1", session: "s1", stamp: "1")
+    let header = try IndexSessionResult(json: try Fixture.json("index-session.valid")).session
+    let kept = FieldHistoryModel.document(
+      header: header, rows: [try row("a1", 1, at: at(11, 6, 16, 44)), try row("a2", 2, at: at(11, 6, 20, 21))],
+      desktop: "studio", agentLabel: "Claude", nextCursor: nil, watermark: nil, liveSince: nil, now: now)
+    #expect(kept.turns.compactMap(\.dayPill).count == 2)
+    cache.keep(kept, key: key)
+    #expect(cache.document(key: key)?.document == kept, "a pill's stamp comes back as it was kept")
+    // as a build before item 395 kept it: a pill of its words alone, as that build made them
+    let names = FileManager.default.enumerator(atPath: directory.path)?.allObjects as? [String] ?? []
+    let file = directory.appendingPathComponent(try #require(names.first { $0.hasSuffix(".json") }))
+    var whole = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+    var document = try #require(whole["document"] as? [String: Any])
+    let turns = try #require(document["turns"] as? [[String: Any]])
+    document["turns"] = turns.map { turn -> [String: Any] in
+      var older = turn
+      if let pill = older["dayPill"] as? [String: Any] {
+        let words: [String: String] =
+          pill["after"] == nil ? ["lead": "Fri 6 Nov"] : ["lead": "20:21", "after": "after 3h 37m"]
+        older["dayPill"] = words
+      }
+      return older
+    }
+    whole["document"] = document
+    try JSONSerialization.data(withJSONObject: whole).write(to: file)
+    // it is read, not dropped
+    let older = try #require(cache.document(key: key)?.document)
+    #expect(
+      older.turns.map(\.dayPill) == [
+        HistoryDayPill(lead: "Fri 6 Nov"), HistoryDayPill(lead: "20:21", after: "after 3h 37m"),
+      ])
+    // with no stamp to make them from, they stay the words of the day they were folded
+    #expect(older.turns.compactMap { $0.dayPill?.leadWords(now: now) } == ["Fri 6 Nov", "20:21"])
   }
 }
 

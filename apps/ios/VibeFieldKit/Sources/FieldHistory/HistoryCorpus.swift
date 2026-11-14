@@ -502,11 +502,20 @@ public struct HistoryDayPill: Equatable, Sendable, Codable {
   public let lead: String
   /// `after 44m`; nil for a day that turned without a pause.
   public let after: String?
+  /// Item 395 (red) — the stamp a pill of the day alone names its day from, in milliseconds. Nothing fills it yet.
+  public let startedAt: Int64?
+  /// Item 395 (red) — the stamp a pill with a clock is said of, in milliseconds. Nothing fills it yet.
+  public let resumedAt: Int64?
 
-  public init(lead: String, after: String? = nil) {
+  public init(lead: String, after: String? = nil, startedAt: Int64? = nil, resumedAt: Int64? = nil) {
     self.lead = lead
     self.after = after
+    self.startedAt = startedAt
+    self.resumedAt = resumedAt
   }
+
+  /// Item 395 (red) — a stub: the lead as the pill is drawn. It answers the words the fold made, whatever the day.
+  func leadWords(now: Date) -> String { lead }
 }
 
 public enum HistorySegment: Identifiable, Equatable, Sendable, Codable {

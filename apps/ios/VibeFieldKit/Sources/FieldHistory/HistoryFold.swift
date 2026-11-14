@@ -674,6 +674,10 @@ extension FieldHistoryModel {
     return nil
   }
 
+  /// Item 395 (red) — a stub: the lead of a pill that carries a clock. It answers what a pill inside one day
+  /// says, the clock alone, however far back the day is. Nothing calls it yet.
+  static func clockLead(_ ms: Int64, now: Date) -> String { clock(ms) }
+
   /// `Today` · `Yesterday` · `Mon 31 Aug`, and the year only when it is not this one: `24 Aug 2025` (the room's
   /// `sittingDayLabel`).
   static func sittingDay(_ ms: Int64, now: Date) -> String {
