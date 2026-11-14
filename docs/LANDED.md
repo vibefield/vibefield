@@ -49169,3 +49169,146 @@ fast-forward as M298, over M297, on VF-PM's LAND GO. One stack, one land (VF-PM,
 
 **Not done, and not claimed:** no smoke, no app run and no Electron row for these commits; no V on the combined tip
 (ruled); nothing pushed.
+
+## Item 378 — a made app's preview capture reaches no STUN or TURN host: its contents refuse unproxied UDP, and its own session sends WebRTC's TCP to a dead proxy (M299)
+
+(2026-11-14; three commits on M298's records `a5025d1fa`, branch `i378/capture-webrtc-on-a5025d1fa` in the ma-6 lane,
+`lanes/ma-6/vibe-field`: `f02a0e572` (red), `1855d44f0` (green) and `dcf62fca4` (desk-gates row 38; tree
+`9a593a4ecc1e`). Cut by the ma-6 lead (ma-6) on `cdb72d97d` as `4bcd78f16`, `ec2317f23` and `d37758c11`,
+validated there by run mini-ma6b on the old mini, and carried onto `a5025d1fa` byte for byte. Lands by the fixer by
+fast-forward as M299, over M298, with item 167, on James's click on the PM board, "Both desktops down now: land the
+two and unblock" (2026-11-14 08:14:09Z), and VF-PM's land GO.)
+
+**Why.** A made app's preview capture photographs the page as it runs, behind a request gate (`webRequest`) that
+admits its origin and its allowHosts alone. WebRTC's ICE never passes `webRequest`, so a captured page could still
+reach a STUN or TURN host, or this Mac's own ports, through a peer connection. The plan is
+`lanes/ma-6/PLAN-served-csp-webrtc.md` Part 3 (`e0a1ca9fb5f3fce0`), accepted by VF-PM at 2026-11-13 02:48Z. The brief
+is `lanes/ma-6/hidekeep/i378/BRIEF-mini-378-on-cdb72d97d.md` (`b0727531e04ed568`, its C3b re-cut).
+
+**What moved** (13 paths, +421 −25):
+- red `f02a0e572`, `packages/electron-shell/test/artifact-preview-capture.test.ts` (+48 −1): item 378's describe,
+  two rows. A made capture's session takes a dead proxy that only its origin and allowHosts bypass, with
+  `<-loopback>`, and its contents refuse unproxied UDP, both before the page loads; a live capture bypasses its
+  origin alone.
+- green `1855d44f0`, `packages/electron-shell/src/main/artifact-preview-capture.ts` (+25):
+  - the capture's OWN ephemeral session is proxied to `127.0.0.1:9` (`PREVIEW_DEAD_PROXY`, a port nothing serves),
+    its bypass list its origin's host, its allowHosts and `<-loopback>` (which takes away Chromium's implicit
+    loopback bypass);
+  - after the window is made and before it loads, its contents refuse unproxied UDP
+    (`setWebRTCIPHandlingPolicy("disable_non_proxied_udp")`);
+  - per capture, never process-wide: the desk's browser pages share one profile where a person may hold a call.
+    The page's own HTTP is unchanged.
+- row 38 `dcf62fca4`, 11 paths:
+  - `src/testing/capture-webrtc-probe.ts` (+285): the REAL capture class on main's own Electron adapter, twice over
+    one fixture page with a STUN listener (UDP) and a TURN listener (TCP) on the host's first non-loopback IPv4. A
+    CONTROL leg with the fence's two calls left unmade must reach a listener, or the probe is blind (exit 2). The
+    FENCED leg, as it ships, must reach neither (exit 1, red, naming the half that leaked).
+  - `artifact-preview-native.ts` (+31), `index.ts` (+13 −23), `modes.ts` (+4), `testing/smoke.ts` (+3): the
+    `capture-webrtc-probe` mode and its wiring.
+  - `pnpm smoke:capture-webrtc` (`package.json`, `apps/desktop/package.json`), `scripts/gate-landing.mjs` (+3) and
+    its test, and `docs/desk-gates.md`: row 38, landing-only, in `gate:landing` after 29.
+
+**The witness: mini-ma6b** (the old mini, ended 07:23:32Z; `.done` `30fe2da229566c2f`; results
+`lanes/ts6/ma6b-a9-results`). 378, on `cdb72d97d`, ran to its end, every row as written:
+- A1 at C1, red as written: the brief's 2 titles;
+- A2 23/23 and A2T (tsc electron-shell) at C2, green;
+- A3 102/102, A3T, AB (biome over the 12 biome paths of the 13), AW (`check:walls`) at C3b, green;
+- AV, `pnpm verify` whole at `d37758c11`, exit 0 (374 s; dev-runner 483/483), its reads kept as `v-378` (SHA256SUMS
+  `75fa5e0be1423b2d`);
+- AC, the compare against mini-hg4r5a's V at `5749798c2`: readings, 5 same and 5 moved (count lines, singles,
+  biome, the per-file table, the census), not judged. The census held: its assert lines and its count, 124 files
+  across 8 packages.
+- The carry onto `a5025d1fa` (`carry-378-a5025d1fa.sh`, `29d295aa28d89a80`, VF-PM's GO, run once 07:35Z; proof
+  `dfebffcdeef6fc31`): each pick's patch-id equal to its original's, through the hook; the hook's command over the
+  carried tree exit 0; the 13 paths byte for byte as at `d37758c11`. M298's 7 paths and 378's 13 do not meet.
+
+**Found.**
+- mini-ma6a (the first run, on `cdb72d97d`) stopped 378 at AB: biome's `organizeImports` read C3's export of
+  `./capture-webrtc-probe` after `./terminal-door-probe` in `testing/smoke.ts`'s sorted run. C3b moves that export to
+  the head of the run and changes nothing else (1 file, +3 −3). It was cut by `hk378b.sh` (`3a60c9ed87f29459`) on
+  VF-PM's GO, onto a new branch at C2, and mini-ma6b ran it.
+- **Item 415** (VF-PM's number, 07:18Z): the bypass names the origin's HOST, not host:port, and an entry with no port
+  matches every port of its host. So WebRTC's TCP to another port on the desktop's own ts.net name goes direct, not to
+  the dead proxy, against the comment's "this Mac's own ports" (`<-loopback>` does not cover the tailnet address).
+  Ruled: 378 lands as cut and tested (it adds a fence where main had none); 415 narrows the bypass to
+  `${hostname}:${port}`, with each allowHost at `:443`, as its own red-then-green slice on main after M299. Its red is
+  drafted (`lanes/ma-6/i415/C415r.patch`, `da995072bbf242ba`).
+- The desktop's reach decisions against the userinfo forms (`name:x@host`, `name@host`), read at `a5025d1fa` on
+  VF-PM's ask after the phone lane's finding (07:18Z): every URL-level decision reads the PARSED host. The three raw
+  patterns (the root-URL claim, the capture's target, fieldd's claim copy) are anchored, their host class excludes
+  `@` and `:`, and they end at the port. No red row could exist. The pins are owed (below).
+
+**Owed.**
+- Row 38, `pnpm smoke:capture-webrtc`, on the landed tip: a landing gate at James's unlock, with `gate:landing`. The
+  TCP half is Chromium's behaviour, measured there, not assumed.
+- Item 415, its own slice, after M299, with row 38's third leg ("same host", the honest clause as VF-PM worded it).
+- The userinfo pins: one test-only commit (`4899c19e0`, on `dcf62fca4`, branch `ma/userinfo-pins`), green on arrival
+  once its five door rows run. It lands right after 378.
+
+**Not done, and not claimed:** row 38 has not run on any tip (no Electron row, no smoke, no app run for these
+commits); nothing pushed.
+
+## Item 167 — the terminal's keyboard row stands its window up without a scene; the red was the test's (M299)
+
+(2026-11-14; one commit, `df6fc8ad7`, 2 paths (+15 −3). Cut by fa (vibe-field-61) in the gvt lane as `ad5620d53` on
+M297's records `cdb72d97d`, after James's answer on the PM board (06:38:31Z: "Yes: git-only steps
+may run while my dev app is up"); carried by `carry-167.sh` (`eb8011df`) onto M298 `a5025d1fa` as `830ed98ec`, tree
+`da92c48d9226`, with the land's own message; then by the fixer over item 378's tip as `df6fc8ad7`, the same author and
+dates, its message the same but for the `Claude-Session:` line, dropped on James's click on the PM board (2026-11-14
+08:18:25Z: "Drop the session link from now on; keep the rest (Recommended)").
+Validated by run mini-kt167a on the old mini at `ad5620d53`. Lands as M299 on VF-PM's LAND GO.)
+
+**Why.**
+- `TerminalSurfaceKeyboardTests.scrollingKeepsTheKeyboardDownAndExplicitFocusStillWorks()` has been red at
+  `TerminalSurfaceKeyboardTests.swift:31` in every kit run that read it since 2026-11-04, on four hosts. It was filed
+  as item 167, and the same row was filed again as item 261 and as item 399.
+- The red was the test's, not the product's. Line 31 required a connected `UIWindowScene`
+  (`try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)`), before the window was built, the
+  surface mounted or anything asserted. FieldTerminalTests is a SwiftPM test target with no host app (the project has
+  one native target, no `TEST_HOST`, and an empty TestAction), so no scene is connected in any package run, alone or
+  whole. Nothing the row asserts was ever reached in one.
+- The read and the plan: `lanes/gvt/notes/item-399-read.md` (`49583101`) and its addendum 1 (`3fec1373`); VF-PM
+  ruled the probe at 2026-11-14 00:22Z.
+
+**What moved.**
+- `apps/ios/VibeFieldKit/Tests/FieldTerminalTests/TerminalSurfaceKeyboardTests.swift` (+13 −3): the row takes the
+  scene where one is connected and otherwise builds `UIWindow(frame:)`, as `TerminalSurfaceResizeTests` and three
+  other kit tests already do. None of its assertions changes. Its own control judges the window: the explicit
+  keyboard request must make the terminal first responder, so a window that cannot grant focus fails there.
+- `apps/ios/README.md` (+2): the Host Xcodes paragraph said this test "needs a window scene no package-hosted run
+  has". Corrected at its source with a dated line.
+
+**The witness: mini-kt167a** (the old mini, ended 07:39:54Z; `.done` `59b97fa825cbfca6`, its results
+`lanes/ts6/kt167-a9-results`; a renamed cut of the operator's kit runner, at `ad5620d53`; Xcode 27.2 (27B52), the
+iPhone 17 simulator).
+- KB green: the kit builds for testing. This was the change's first compile.
+- KT green, FieldTerminalTests whole: 177 passed of 177 in 35 suites, 0 failed, 0 skipped, 0 crash lines. The target
+  holds 177 `@Test` lines at that commit, so every row ran, this one among them.
+- KH, KM, KS and KW green beside it (131, 705, 41 and 44).
+- The log stays on the mini. That the row passed by name, with no "timed out waiting for" line and no issue line
+  naming the file, is the operator's read of it, relayed by VF-PM at 07:44Z.
+- The control is by construction: the file's blob at `cdb72d97d` is `e46bf3c5`, unchanged since `0c4590d7a` wrote it
+  (2026-11-02), and the same at `a5025d1fa`.
+- The carry: main's six commits from `cdb72d97d` to `a5025d1fa` touch no path under `apps/ios`, so `apps/ios` at
+  `830ed98ec` is tree `d968c56443ec`, the tree the run built and tested.
+  Item 378 under it touches no path under apps/ios either, so the same holds at df6fc8ad7.
+
+**Found.**
+- One row, three numbers. Item 399 was numbered without a search for the line (VF-PM's own miss, in its words) and
+  was retired as a duplicate of item 167 after fa's read; item 261 was an earlier refile of the same row. A red at
+  `:31` of this file, at a commit before M299, is this item.
+- The repo carries no route on which the row could have passed as written. `0c4590d7a`'s validation line names a
+  native UI test and a signed iPhone build, so it was probably run app-hosted, through a host the repo does not
+  carry. That is an inference from the commit's words; no such host was found or run.
+- The probe's message said the green was owed as "184 of 184". 184 is the QA batch's count; main's target holds 177.
+  The land's message carries the count that was run.
+- The fix merges clean onto the QA batch (`qa/346` at `60b93832e`, by `merge-tree`), but the batch changes 107 paths
+  under `apps/ios`, so this run is not its witness. Nothing was picked into it (VF-PM, 07:49Z).
+
+**Owed.**
+- The QA batch's KT: red as known (this item) until the batch is next carried onto a main that holds M299, and green
+  only by a KT run on the batch.
+- The row on hardware: an app-hosted run takes the scene path, which this commit leaves as it was.
+
+**Not done, and not claimed:** no compile and no test at the landed commit (the run was at `ad5620d53`); no phone,
+no desktop row, no `pnpm verify` for it (a Swift test file and a README line); nothing pushed.
