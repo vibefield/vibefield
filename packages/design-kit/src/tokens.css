@@ -205,20 +205,26 @@
   --vf-folder-ink: #eaeaf4;
   --vf-folder-muted: #8b8ba6;
 
-  /* §5 "The hand's cards are paper" (track HN, HN-D1): one white stock for every kind, the same in
-     both themes but for the night's reading light (`.dark` below: it keeps 86% of its day, and its
-     shadow deepens) — the stock and its inks, the index printed in two corners, the cut edge, a
-     pass line in a terminal's output, a picture's ground before it loads, the grain, and the
-     agent's card, the one dark stock. The stock's inks are its own, never the chrome's:
-     `--vf-card-ink` is §2.2's dark surface's, so the stock's are named for the stock. */
-  --vf-card-stock: #fbfaf7;
+  /* §5 "The hand's cards are paper" (track HN, HN-D1; round 5's face, item 405): one stock for every kind, the same
+     in both themes but for the night's reading light (`.dark` below: it keeps 86% of its day, and its shadow
+     deepens) — the stock and its inks (the press's paper and ink: the stock is `--vf-card-press-paper`, below, so
+     the paper is written once), the face's own (its type, its faces, the window's frame and plate), the index
+     printed in two corners until the face retires it, the cut edge, a pass line in a terminal's output, a picture's
+     ground before it loads, the grain, and the agent's card, the one dark stock. The stock's inks are its own,
+     never the chrome's: `--vf-card-ink` is §2.2's dark surface's, so the stock's are named for the stock. */
+  --vf-card-stock: var(--vf-card-press-paper);
   --vf-card-edge: #d6d0c3;
-  --vf-card-stock-ink: rgb(33 31 27 / 92%);
-  --vf-card-stock-ink-2: rgb(33 31 27 / 64%);
-  --vf-card-stock-ink-3: rgb(33 31 27 / 42%);
+  --vf-card-stock-ink: #1c1611;
+  --vf-card-stock-ink-2: rgb(28 22 17 / 64%);
+  --vf-card-stock-ink-3: rgb(28 22 17 / 42%);
+  --vf-card-type-ink: rgb(28 22 17 / 86%);
+  --vf-card-face-ink: rgb(28 22 17 / 78%);
+  --vf-card-face-ink-2: rgb(28 22 17 / 34%);
+  --vf-card-frame: rgb(28 22 17 / 12%);
+  --vf-card-plate: #ebe4d7;
   --vf-card-index: rgb(33 31 27 / 58%);
   --vf-card-cut: rgb(58 46 22 / 15%);
-  --vf-card-pass: #1f7a36;
+  --vf-card-pass: #2b8a4f;
   --vf-card-photo: #cfd3cf;
   --vf-card-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .2  0 0 0 0 .18  0 0 0 0 .14  0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23n)'/%3E%3C/svg%3E");
   --vf-card-dark-stock: #1c1c1e;
@@ -237,7 +243,8 @@
   --vf-paper-card-shadow: 0 0 0 0.5px rgb(58 46 22 / 22%), -1px 1.5px 3px rgb(0 0 0 / 28%);
   --vf-card-chip-shadow: 0 0 0 2px rgb(255 255 255 / 90%), 0 4px 14px rgb(0 0 0 / 35%);
   /* §5 "the press" (CS-D5 A, CS-D6 C; item 403): the rest of what the press prints with, read from the root when it
-     prints and the same in both themes (its night is its lamp's) — the front's paper, which is the back's margin too;
+     prints and the same in both themes (its night is its lamp's) — the front's paper, which is the back's margin and
+     the stock too (`--vf-card-stock` above reads it, round 5's face);
      the band pressed into the back, a little darker over its field; and the living mark's three lights */
   --vf-card-press-paper: #f4efe5;
   --vf-card-press-deboss: rgb(20 36 14 / 16%);

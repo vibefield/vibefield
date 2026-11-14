@@ -371,14 +371,15 @@ describe("the stock's rules (DESIGN.md §5 \"The hand's cards are paper\")", () 
     const root = TOKENS.slice(TOKENS.indexOf(":root {"), TOKENS.indexOf("\n}\n"));
     const dark = TOKENS.slice(TOKENS.indexOf(".dark {"));
     for (const token of [
-      "--vf-card-stock: #fbfaf7;",
+      "--vf-card-stock: var(--vf-card-press-paper);",
+      "--vf-card-press-paper: #f4efe5;",
       "--vf-card-edge: #d6d0c3;",
-      "--vf-card-stock-ink: rgb(33 31 27 / 92%);",
-      "--vf-card-stock-ink-2: rgb(33 31 27 / 64%);",
-      "--vf-card-stock-ink-3: rgb(33 31 27 / 42%);",
+      "--vf-card-stock-ink: #1c1611;",
+      "--vf-card-stock-ink-2: rgb(28 22 17 / 64%);",
+      "--vf-card-stock-ink-3: rgb(28 22 17 / 42%);",
       "--vf-card-index: rgb(33 31 27 / 58%);",
       "--vf-card-cut: rgb(58 46 22 / 15%);",
-      "--vf-card-pass: #1f7a36;",
+      "--vf-card-pass: #2b8a4f;",
       "--vf-card-photo: #cfd3cf;",
       "--vf-card-dark-stock: #1c1c1e;",
       "--vf-card-dark-edge: #050506;",

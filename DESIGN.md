@@ -921,23 +921,27 @@ sheets, the menus (and the edges, until HN-8). What the desk's materials mean is
 
 **The hand's cards are paper, not chrome** (Cards in Hand, HN-D1 ruled 2026-10-29; built at HN-1): a
 card in the hand (§8 "The hand") is an object you hold, so it is drawn as the desk draws paper (§5.1)
-— opaque and lit — never as glass, and the same in both themes. **The stock:** `--vf-card-stock` (`#fbfaf7`),
+— opaque and lit — never as glass, and the same in both themes. **The stock:** `--vf-card-stock`, the press's paper
+(`#f4efe5`: it is `var(--vf-card-press-paper)`, so the paper has one source; `#fbfaf7` until round 5's face),
 under a fine grain (`--vf-card-grain`, multiplied at 5%), a catch of light down its face (a 170°
 gradient, white 60% to nothing by 36%, and a 3.5% darker foot) and along its top (an inset 1px white
 line at 90%), its cut edge (an inset 0.5px `--vf-card-cut`) and its thickness under it — a 0.7px lip
 of `--vf-card-edge` (`#d6d0c3`) before any shadow; the cut is `rgb(58 46 22 / 15%)`. Its inks are its own, never the theme's: `--vf-card-stock-ink`,
-`--vf-card-stock-ink-2`, `--vf-card-stock-ink-3` (`rgb(33 31 27)` at 92 / 64 / 42%), the index `--vf-card-index` (58%), a
-pass line `--vf-card-pass` (`#1f7a36`), and `--vf-card-photo` (`#cfd3cf`) under a picture until it draws (`--vf-card-ink`,
-§2.2's white, stays Settings → Terminal's). **The agent's card** is the one dark stock
+`--vf-card-stock-ink-2`, `--vf-card-stock-ink-3` (the press's ink `#1c1611`, then `rgb(28 22 17)` at 64 / 42%); the
+face's own (round 5): its type `--vf-card-type-ink` (86%), its faces `--vf-card-face-ink` (78%, the first) and
+`--vf-card-face-ink-2` (34%), its window's hairline `--vf-card-frame` (12%) over `--vf-card-plate` (`#ebe4d7`); a pass
+line `--vf-card-pass` (`#2b8a4f`, round 5's green), and `--vf-card-photo` (`#cfd3cf`) under a picture until it draws
+(`--vf-card-ink`, §2.2's white, stays Settings → Terminal's). **The agent's card** is the one dark stock
 (`--vf-card-dark-stock` `#1c1c1e`, `--vf-card-dark-edge` `#050506`, its cut `--vf-card-dark-cut`, white at 9%; its inks
-`--vf-card-dark-ink`, `-2`, `-3`, white at 92 / 62 / 40%, its index `--vf-card-dark-index` at 46%), the
+`--vf-card-dark-ink`, `-2`, `-3`, white at 92 / 62 / 40%), the
 session card's. **Its shadow is cast down and a little right**, as the desk's objects cast theirs, and
 grows as the card rises — for its lift `l` (0…1): `0 0.7px 0 0.15px` the edge · `0 0.6px 1.4px`
 black at 15% · `(0.5 + 1.5l)px (2 + 7l)px (5 + 12l)px` black at (7 + 5l)% · `(1 + 4l)px (7 + 20l)px
 (18 + 30l)px` black at (8 + 9l)%, every alpha times `--vf-card-shade`. **By night** a card keeps 86% of
 its day (`--vf-card-dim`, a brightness on the whole card — the reading light a held object keeps) and
 its shadow deepens (`--vf-card-shade` 1.7). A thin gloss crosses its face as it turns (white 9%,
-screen).
+screen). *HN-D1's two corner indexes and their inks, `--vf-card-index` and `--vf-card-dark-index`, retired with round
+5's face (2026-11-14, item 405).*
 
 **The stock is printed, once — the press** (CS-D5 A linen and CS-D6 C the pressed back, ruled by James 2026-11-09 on
 *Card Stock*; the renderer on his word of 21:30Z, "choose the most performant way possible and should introduce the least
@@ -947,7 +951,7 @@ density, by day and by night, into images every card then wears under its face, 
 and in motion the hand asks nothing of the GPU**: the browser moves the printed cards as layers, so a reach, a deal, a carry
 and a flip are transforms. It prints again only when the theme, the pixel density or a printed size changes (a card picked
 up wears a print at 2.4×). Until it has printed, and wherever WebGL2 is refused, a card wears the flat stock above.
-- **The front:** the paper `#f4efe5` and its ink `#1c1611` (the stock's inks, above, move to them with the round 5 face).
+- **The front:** the paper `#f4efe5` and its ink `#1c1611` (the stock and its inks, above, are them).
   The desk's own paper (ICE's `paperTexture`, the notebook's pages') gives its mottle and fibres over 64 units and its
   tooth over 9.6. Under it, **linen**: a fine embossed weave 1.35 apart, its tip 0.11, under a satin varnish (shininess 34,
   at 0.22). It is lit as the round lit it: the mat's lamp up and to the right and low (toward 0.78, −0.475, 0.41), the
@@ -971,13 +975,14 @@ up wears a print at 2.4×). Until it has printed, and wherever WebGL2 is refused
 - **Its colours are tokens** (item 403, 2026-11-14; VF-PM's ruling at 04:09Z: the press's hex leaves its code). The
   press reads every colour it prints with from the root as it stands when it prints, so a print is made in its theme's
   own values and the press's code holds none: the front's paper `--vf-card-press-paper` (`#f4efe5`), which is the
-  back's margin too; the back's field `--vf-card-back` (`#2d4824`) and its rule `--vf-card-back-rule` (`#eee4c8`); the
-  band pressed into the stock, darker by `--vf-card-press-deboss` (`rgb(20 36 14 / 16%)` over the field); and the
-  mark's three lights, the living mark's own, `--vf-mark-rose` (`#FF0054`), `--vf-mark-mint` (`#00F59B`) and
-  `--vf-mark-cobalt` (`#083CFF`). Each is the same by day and by night, for the night is the lamp's. A token it cannot
-  read is no print, so the cards keep the flat stock. The front's ink `#1c1611` is never printed: it is the face's,
-  which the stock's inks move to with the round 5 face. The lamp's and the room's light stay the press's own numbers,
-  above: they are light, not ink.
+  back's margin too, and the flat stock (`--vf-card-stock` is `var(--vf-card-press-paper)` since round 5's face, so
+  the paper is written once); the back's field `--vf-card-back` (`#2d4824`) and its rule `--vf-card-back-rule`
+  (`#eee4c8`); the band pressed into the stock, darker by `--vf-card-press-deboss` (`rgb(20 36 14 / 16%)` over the
+  field); and the mark's three lights, the living mark's own, `--vf-mark-rose` (`#FF0054`), `--vf-mark-mint`
+  (`#00F59B`) and `--vf-mark-cobalt` (`#083CFF`). Each is the same by day and by night, for the night is the lamp's.
+  A token it cannot read is no print, so the cards keep the flat stock. The front's ink `#1c1611` is never printed:
+  it is the face's, the stock's own ink `--vf-card-stock-ink` since round 5's face. The lamp's and the room's light
+  stay the press's own numbers, above: they are light, not ink.
 
 ### 5.1 The material book — what the desk's materials mean (DK-D5; a stub)
 
@@ -2465,8 +2470,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   field under it (§8 "The hand"), so let go there it plays straight in as a chip (below).
   **The chip** (D1, ruled 12 Sep): a token in the sentence, 24 tall, corners 7, 12.5/500, its glyph
   13, padded 0 8 0 6, ringed 1px; it never splits a word, Backspace takes it as one character and ×
-  on hover removes it. A picture wears `capture` on the select blue at 14%; a card's chip wears its
-  kind's index glyph (§8 "The hand").
+  on hover removes it. A picture's chip is on the select blue at 14%; a card's chip wears its
+  type's glyph (§13 "The six types"), its head's own — a picture's `type-image`.
   - **@'s rows in Chat** (CH-D5 A, "Agents to start, and sessions running"; EW-D4: @ offers only its scope). There are
     two groups, read bottom-up, nearest first. Each lists only what the spark's own tools reach.
     - *Amended 2026-11-01 (TU-1; Q3, and its rule ruled (a′) by VF-PM):* this said "but for the one residual below",
@@ -2541,8 +2546,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **An agent:** its mark at 15, then its label, and its model and effort once chosen, in the sheet's spelling
       ("Claude Code · Opus 5.5 · high"). When the spark has more than one profile, " · Work" follows.
     - **A session:** its mark at 15, then its handle in mono ("vibe-field", "vibe-field·2").
-    - **A card:** its kind's index glyph at 13 (§8 "The hand"), then its name as an outcome says it (one line, cut at
-      60), in mono for a terminal card. A picture's chip wears `capture` on the select blue at 14%.
+    - **A card:** its type's glyph at 13 (§13 "The six types"), then its name as an outcome says it (one line, cut at
+      60), in mono for a terminal card. A picture's chip wears `type-image`, as its card does, on the select blue at
+      14%.
   - **What a send carries** is the message as it is queued, in the draft's order:
     - the words as typed, their ends trimmed;
     - an agent chip as its words: "Claude Code", or "Claude Code at Opus 5.5 · high", either followed by " under Work"
@@ -2776,20 +2782,32 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Godview (HN-L1). It stands with the frame, above the cover (§10), in the middle of the foot beside
   the line.
   - **A card** (HN-D1, one stock and six faces; CS-D8 A, ruled by James 2026-11-09, a fifth wider than HN's 104 × 146): poker size and proportion, **120 × 168**, corners 6.
-    Every card is the same card — one white stock (§5 "The hand's cards are paper"), its kind's glyph
-    printed in two corners as playing cards print their index (the top left, the one corner a fanned
-    hand shows, and the bottom right turned 180°, in the card's index ink) — and one thing on its
-    face, its name first, in one column 1em inside the card's sides. Every measure is in ems of a
-    9.5px face, so a card picked up sets the same design finer and reads more of itself. **Text**
-    (`snippets`): its first sentence run in bold, then its words, seven lines at most. **Picture**
-    (`capture`): the print at its own proportion across the column, then its name and its size in
-    mono. **File** (`code`): its name, its folder in mono, its first lines fading out — or, for a file
-    that is not words, its kind and size in mono ("PDF · 12 KB"). **Agent**
-    (`agents`): the one dark card, in the session card's stock — its handle with the project's dot on
-    top (so it shows at rest), the agent's mark, the state dot. **Terminal** (`terminal`): the first
-    line in mono 500, the rest cut by a right fade, a pass line in the card's pass ink. **Message**
-    (`message`): the speaker and the time, then the words. No rules, holes, stamps or bands — round
-    1's six desk materials (HN-D1 B) were not taken.
+    Every card is the same printed stock (§5 "The hand's cards are paper", "the press") under one face of **three
+    things and one line of words** (*Card Stock* round 5, ruled with CS-D5…D12 on 2026-11-09; OB-D2's "these types are
+    just marked on the card"), every line 10 inside the card's sides, in the card's own units (a card picked up is the
+    same face at 2.4×):
+    - **its type, then its name** — the type's glyph (§13 "The six types") at 10.4, centred on 16.9 with its ink on
+      the column (its box 3/24 of its size left of it), in `--vf-card-type-ink`; then the name, 700 at 11.5 on
+      baseline 21 from x 21.4, tracked −0.22, in the stock's ink, set down in quarter steps to 10 before it is ever
+      cut. A file's name is cut in the middle, as Finder cuts one, so its extension stays. A text card is named by its
+      first sentence, a terminal copy by its command (without its prompt), a message by who said it and what.
+    - **the window**, 29–139 (100 × 110, corner 3.5): what the card holds, seen, with nothing said about it, on
+      `--vf-card-plate` under a hairline of `--vf-card-frame` (0.35). **Text:** what follows its name, as a mail's body
+      under its subject (all its words when that is all it says), at the largest of 8.4, 7.4 and 6.4 at which they
+      fit. **Terminal:** what it printed, mono at 5.9 on 11, each line from its first mark, a prompt's command in bold
+      and a pass in the pass ink. **File:** its first lines as a page, mono at 4.3 on 5.8, no line numbers, the comment
+      quieter than the code, fading out over its last 30; a file that is not words is a blank page. **Image:** the
+      picture, filling the window about its middle. *Until FACE-b:* a ref shows its still; a link its bare page.
+    - **its faces** — each face as its type's glyph at 7.4 on 152.6, 10 apart from the column, in the order the
+      bloom opens them; the first, what it is, in `--vf-card-face-ink`, the rest in `--vf-card-face-ink-2`.
+      *(2026-11-14, item 405: the card's bloom waits for OB-1b; until then each card has one face, so the foot shows
+      its one glyph.)*
+    The fan's top 68 shows the glyph, the name and the window's top 39. No index is printed in its corners any more
+    (round 5 retires HN-D1's two). **Said, not printed:** what it is and how big (`about`: "PDF · 2.4 MB",
+    "PNG · 1440 × 900") is said in bold in the bar over a card picked up, before where it came from; where it came
+    from stays above a card reached for. Where it is (a path, an address, a session, a ref) is not shown: playing that
+    face pastes it. **The agent's card** keeps its own face until its window (FACE-b): the one dark stock, its handle
+    with the project's dot on top, the agent's mark, the state dot, in ems of a 9.5px face.
   - **Holding them**: at rest the hand shows the top **68** of every card — their tips on y 712,
     level with the line's top — fanned about a point below the window: up to **76** apart, never
     steeper than **±6.5°** at its ends, the ends a little lower; centred on the window and pushed
@@ -2852,7 +2870,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     picture, a file as its path — from the pointer (files first: a copy whose words come with a
     picture of them, a spreadsheet's cells, is one thing, its picture); a drag from another app
     becomes a card the moment it enters the window, carried as one from the hand is, showing only its
-    kind — its index and its kind's name ("Text from another app", "An image", "3 files"; "Let go to
+    kind — its type's glyph and its kind's name ("Text from another app", "An image", "3 files"; "Let go to
     see it") — until the drop says what it holds; let go on a pane or Chat's prompt it plays straight in,
     only once, and a place that refuses what it turned out to be says so on the note while the card
     settles into the hand; let go on a field, the field takes it as it always has; anywhere else it
@@ -2892,7 +2910,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Picking one up** (HN-D5): a click picks a card up the way the desk opens its whiteboard — it flies
     to the window's centre and grows to reading size, **2.4×** (288 × 403), in 560ms on the island curve, while
     the window behind it blurs 14 and dims 8% (the desk's held object, §8); the bar under the head,
-    at the tools in hand's place (y 64), says where it came from and holds **Remove**, **Flip it** and **Done**.
+    at the tools in hand's place (y 64), says what it is, in bold, and where it came from, and holds **Remove**,
+    **Flip it** and **Done**.
     **Flip it**, or a double-click on the card, turns it over about its upright to show its printed back (§5 "the
     press"), and again to show its face: 480ms on the island curve, seen from 1000 (a perspective in the card's own
     units, so the turn reads as a card's and not a door's), the back drawn from its own print and never through the
@@ -9671,7 +9690,8 @@ I-5) and never a colour of its own. Two constructions, one set:
 **One thing on the chrome is not a glyph: the paper card** (CS-D12 E, ruled by James 2026-11-09, *The
 Card Button*). Make a card (§8) wears the thing it makes: a card **13.5 × 19**, corners 2.4, in the
 hand's own stock and ink (`--vf-card-stock`, `--vf-card-stock-ink`), its cut edge and its shadow
-`--vf-paper-card-shadow`, turned **−7°**, with `type-ref` at 9 printed on it. Under the pointer it
+`--vf-paper-card-shadow`, turned **−7°**, with `type-ref` at 9 printed on it (*2026-11-14, item 405: the Live face
+waits for OB-1b; until then Make a card deals a picture or a text card, under the ◇*). Under the pointer it
 turns to −11° and rises 1.5, in 180ms on the pop curve; reduced motion (M6), no turn and no rise. It
 is the only paper on the glass, and the one exception to this section's law: a small component of
 the bar (`PaperCard`), not a name in the set, in the card's inks and not `currentColor`, drawn
@@ -9717,11 +9737,12 @@ Working mark is a ring, never a glyph. **The six types** (CS-D10 A, ruled by Jam
 the hand's six indexes, HN-D1): one glyph says a card's type — `type-text` (ragged lines: words, not a menu) · `type-image` (a
 picture in its frame) · `document` (a file) · `link` · `agents` (a session) · `type-ref` (a ◇ with its heart, the mark a design
 tool gives a live instance: the object itself) — in the card's ink, never a colour of its own (§5). It heads the card's name,
-marks each of its faces along its foot, and is what the bloom's buds wear. `type-text`, `type-image` and `type-ref` are
-Instrument drawings, the desktop's alone and not among the phone's picks; they made the set 68, so every "the 65" above was
-true when it was written. `document` left Studio only with them. `snippets`, `capture`, `code`, `terminal` and `message` keep
-their other wearers. `clipboard` left the selection bar with CS-D12 and is the phone's Clipboard history (its notch had left
-with the clipboard's tray, HN-1).
+marks each of its faces along its foot, and is what the bloom's buds wear (*2026-11-14, item 405: the card's bloom waits
+for OB-1b; until then each card has one face, so the foot shows its one glyph*). `type-text`, `type-image` and
+`type-ref` are Instrument drawings, the desktop's alone and not among the phone's picks; they made the set 68, so every
+"the 65" above was true when it was written. `document` left Studio only with them. `snippets`, `capture`, `code`,
+`terminal` and `message` keep their other wearers. `clipboard` left the selection bar with CS-D12 and is the phone's
+Clipboard history (its notch had left with the clipboard's tray, HN-1).
 **The update** (track AU, AU-D7 ruled A 2026-10-29) needs no glyph of its own either: a download is `arrow` turned
 180 (down), the restart and Settings → Updates' rail are `reset`, an update that has installed is `check`. The dot
 beside the face is not a glyph: it is the badge slot's state (§2.8 I-5, §2.5). The status item's update image — the
