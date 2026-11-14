@@ -49516,3 +49516,839 @@ and VF-PM's GO.)
 - no Windows build: the windows-sys edges are main's, unmoved, and no gate builds field-native on Windows;
 - `pnpm preflight` through pnpm was never green in this run;
 - nothing pushed.
+
+## MK-1 — the plugin market's first part: the Plugins popup, a plugin's page and fieldd's gates (M303)
+
+(2026-11-14; 37 commits, `a7e3d4e08`…`ec3c08306`, 84 paths (38 A, 46 M), and one fix commit over the train's cards,
+`7d135455b` (`MK-2d: the E10 booted-daemon test waits for the whole removal …`, cut as `0ab1c5850` on `ec3c08306`),
+carried over the cards' `54ed3d58c` as `7d135455bdfb9f450b717299dce308530b54b888` by `lanes/mk/fix-e10/carry-e10.sh`
+(`b713116a`), its patch-id the original's. Cut by the MK lane as mk/mk-1 M01–M37 on `cdb72d97d` (M37 `5196c7b3f`).
+Carried by `lanes/mk/land/carry-mk1.sh` (`ff3ee914` as filled) onto M302 `b16e65c1e` as `mk/mk1-on-b16e65c1e` =
+`ec3c08306`, after its objects-only trial (`trial-mk1.sh`, `f99ed42e`, exit 0). Each message is the original less its
+`Claude-Session:` line (36 in 37 messages before, 0 after), by James's click on the PM board (2026-11-14 08:18:25Z:
+"Drop the session link from now on; keep the rest (Recommended)"); the authors and the author dates are the
+originals'. Lands with the train, main moving once to its top, on James's word: 03:06:11Z in MK's session
+(vibe-field-c7), "just go now, i want entire MK work land ASAP, fan out subagents in workflows to work in parallel",
+and 19:42:10Z in VF-PM's session, "I'm currently away from my Mac, so anything needs me to do on Mac I can not do right
+now, so just push forward on implementation progress, you can also run test on my Mac , and merge to main when things
+done and push to remote"; and VF-PM's GO.)
+
+**What is real.**
+- **The docs** (M01, M02; riders M12–M14, M16, M18, M19, M21, M22, M24, M25, M27, M29, M31–M33): DESIGN.md §8 and §9
+  draw the Plugins popup, its doors, a plugin's page, its switches, its settings and its words before their code;
+  DECISIONS' MK row and its MK-D1…MK-D13; UI_SYSTEM's catalog line.
+- **The contracts** (M03, M04, M07): `listing` and `featured` on the registry index, each listing picture carrying the
+  hash of its bytes, the catalog door (`ready`, `unconfigured`, `unreachable`, `unread`), the community preference, the
+  powers' plain words; the install's prepare and discard results (M34).
+- **fieldd** (M05, M06, M08–M11, M34–M37):
+  - community plugins cannot be turned on until the switch is drawn, never by undo, and every ask is audited (MK-2a);
+  - the plugin list fieldd holds, re-verified against its signature on every read, read afresh only when the person
+    asks (MK-2b); the pictures it pins, each checked against its hash on a refresh (MK-2e);
+  - a community plugin refused at install while community plugins are off (MK-2c);
+  - a removal on one desktop reaches every desktop, its data kept (MK-2d, E10);
+  - an install asks first: fieldd holds the download for its card and installs only what the card showed (O2B);
+  - an install keeps the plugin list it verified, on every desktop it reaches (O3B);
+  - community plugins off means none of their code runs: each is held as if turned off, and comes back as it was (O3C).
+- **field-app** (M15, M17, M20, M23, M26, M28, M30): the Plugins popup over the frame (its states; Installed, read
+  once per opening); its doors (the Me menu's Plugins… above Settings…, the palette's two acts); a plugin's page;
+  a Built in or Development plugin's switches on its row and page; its settings on its page, with no Undo or Redo
+  there; a setting fieldd won't read says so and takes no input; Discover with no plugin list says "Nothing to discover
+  yet", and no word in the popup says "registry".
+
+**What is stubbed or not yet there.**
+- No build configures a registry: nothing sets fieldd's `registryUrl` (`daemon.ts:698`), so every build's Discover says
+  "Nothing to discover yet" until the registry rung (TD §9 TD-4). No MK-3: the CI that writes `listing` is that rung's.
+- Settings → Plugins stays `panels/PluginsSection.tsx` until MK-5. The pegboard's pill is MK-4d's. The install card
+  over a real registry, the update card and the market smoke are the stack's (MK-4c2c, MK-6).
+- The packaged app still bundles the comment pad alone (FL-2, M267).
+- D8's token and D9's per-object switches wait for ICE's door (I54, MK-7).
+
+**The tests each slice added** (A new, M changed):
+- MK-1 (M03): A `contracts/test/plugin-market.test.ts`, eight fixtures (the catalog's ready, unconfigured, unreachable;
+  the install result's two forms; the market index; provenance's two); M `test/fixtures.test.ts`. MK-1b (M04) and
+  MK-1c (M07, A the `unread` fixture) grow plugin-market.test.ts.
+- MK-2a (M05, M06): M fieldd `app-preferences.integration.test.ts`, `app-preferences.test.ts`, `settings-doc.test.ts`;
+  M06 makes the audit test's red print a boolean, never a token's text.
+- MK-2b (M08): A fieldd `plugin-catalog.test.ts`; MK-2e (M11) grows it.
+- MK-2c (M09): A `plugin-install-gate.test.ts`; M `install-reconciler.test.ts`, `plugin-install-slots.test.ts`,
+  `plugin-install.test.ts`, `plugin-update-e2e.test.ts`.
+- MK-2d (M10): M contracts `plugin-distribution.test.ts`; fieldd `install-reconciler.test.ts` (E10 on a booted
+  daemon), `plugin-install-gate.test.ts`, `settings-doc.test.ts`.
+- MK-4a (M15): A field-app `plugins-model.test.ts`, `plugins-popup.test.tsx`; M `design-system-shell.test.tsx`,
+  `ui-system-boundaries.test.ts`. MK-4b (M17): M `app-theme`, `command-palette`, `frame-owner`, `head-model`,
+  `me-menu`, plugins-model, plugins-popup, ui-system-boundaries. MK-4c (M20) and MK-4c2a (M23) grow plugins-model and
+  plugins-popup. MK-4c2b (M26): A `plugins-settings.test.tsx`; M28 grows it. O5 (M30) grows plugins-model.
+- O2B (M34): A fieldd `plugin-install-card.test.ts`, contracts' prepare and discard fixtures; M `fixtures.test.ts`,
+  `tooling/plugin-build/test/pack.test.ts`. M37 fixes plugin-install-card's door tests (they wait for the installed
+  service before fieldd stops; a teardown says what did not stop).
+- O3B (M35): A fieldd `plugin-install-holds-list.test.ts`.
+- O3C (M36): A fieldd `plugin-community-hold.test.ts`, `plugin-community-hold-boot.test.ts`,
+  `plugin-registry-community-hold.test.ts`, the `plugin-registry-snapshot.held` fixture; M `install-reconciler.test.ts`,
+  contracts `plugin-market.test.ts`.
+
+**The witness.**
+- Two red runs of `pnpm verify` at `ec3c08306` on James's Mac, by qa-01, said plainly:
+  - V-MK1 (ended 20:19:54Z): exit 1 on ONE test that was the HARNESS's, not MK's. tooling/dev-runner's
+    siblings-javascript.test.mjs shells out to npm, and npm 12.0.1 refused the harness's two config names pointing at
+    one empty file. 27 of 28 projects' tests passed.
+  - V-MK1 ALSO fetched Electron 43.1.1's own binary at run time (electron-v43.1.1-darwin-arm64.zip, 122,054,683 bytes,
+    born 20:16:18Z in the run's stand-in HOME; `Downloading Electron binary` x4 in its log; lanes/mk's install had no
+    dist), undeclared and anonymous (env -i, the stand-in HOME), unseen in its END and found at 20:42Z. Since then every
+    row and V on this Mac holds the dist before and counts the line after; V-MK1b and the fix's row read x0.
+  - V-MK1b (STEP 3 20:27:59Z to 20:33:22Z, at a 1-min load of 100–180): exit 1 on MK's own test,
+    install-reconciler.test.ts "E10 on a booted daemon (MK-2d)": the test read the plugin table one step before the
+    removal re-read it (the folder gone, the row still listed). The product's order is right (install-reconciler.ts
+    :165–170; plugin-install.ts :629, :636); the fix commit makes the test wait for the code, the row and the audit
+    outcome before it asserts.
+- The fix's own row on this Mac (`row-e10.sh` `2420f8f7`, in lanes/mk/vibe-field at `0ab1c5850`, 20:59:15Z to 21:00:26Z,
+  under the env -i harness): GREEN. fieldd's typecheck exit 0 (0 error lines); the file five times in series, 5 of 5
+  "(17 tests)", "Test Files 1 passed (1)", "Tests 17 passed (17)", 7.19–7.37 s each; Electron downloads x0; the lane
+  returned to `ec3c08306`, porcelain 0; no ref written (`run.log` `ebce5bdfd3975349`).
+- `pnpm verify` whole at the train's top, the one green that moves main: exit 0 on 2026-11-14 at 21:55:33Z after 1,788 s
+  (qa-01's V-TRAIN1); 27 vitest projects with no failed file, 15,204 tests passed; cargo 38 of 38 ok; `verify.clean.log`
+  `b30c41c93e5404a0`. Its booted-daemon, listen, spawn and signal files ran here on James's 19:42:10Z word (VF-PM's
+  reading).
+- Before the carry: mini-mkv1c on the old mini, DONE 12:30:15Z, 17 of 17 GREEN (R01–R15 each alone, `pnpm verify`
+  whole, the compare), HOSTS NONE held, at M37 `5196c7b3f` on `cdb72d97d`.
+- At the carry, on this Mac: tsc for contracts exit 0; biome over the 84 paths exit 0 (one warning, pre-existing on
+  main, `settings-doc.ts:192`).
+- mini-mkv1d (the same rows at the carried tip on the new ground) is sealed (`72497dc4`) and dried in part (15 of 33
+  modes AS WANTED, the rest waiting a slot); it did not run, the old mini's link being down (VF-PM 19:43:27Z).
+
+**Owed.**
+- `pnpm gate:landing`, deferred, not waived, at James's unlock: rows 20 smoke:kind-faults, 21 smoke:plugin-restart,
+  22 smoke:plugin and 29 smoke:bundled read MK's change; the rest is the standing set.
+- James's eye on the popup in both themes.
+- The stack above MK-1 (MK-4c2c, MK-4d, MK-5, MK-6 and the rest), re-stacked onto main after this land, its own V
+  and land.
+
+**Not done, and not claimed:** no run on the old mini at the carried tip; R01's three booted rows by name, each row
+alone, the census against v-017 and the clean-room fences (the pnpm fence, HOSTS NONE) at the carried tip, which only
+mini-mkv1d gives; no gate:landing; no Windows or iOS build (no path of MK's is theirs).
+
+## Item 415 — the capture's bypass at its origin's own port, each allowHost at 443; row 38's same-host legs (M304)
+
+(2026-11-14; three commits carried onto MK-1's tip `ec3c08306` by `lanes/ma-6/run-415/carry-415.py` (plumbing, each pick
+clean with its original's patch-id, its author and message byte for byte; ref `i415/capture-bypass-port-on-ec3c08306`):
+`20c130fdbf0724c1893777017e91d63aa976518d` (red), `6a07b1c714930a4e0d2cfd81094ea10ee59af209` (green) and
+`2e4437a876301d8929ee4504bb1943a0e5aa2532` (row 38's legs; tree `2bd834d15a45`). Cut first on M300 `5cf8eebe7` as
+`d5b0d4d65`, `4e431d405` and `e15e9b91f`. Cut by the ma-6 lead (ma-6). Lands in the train on MK-1 as M304, on James's
+word (19:42:10Z, in VF-PM's session) and VF-PM's GO.)
+
+**Why.** Found while item 378 was read (LANDED "Item 378", Found): 378's bypass named the origin's HOST, and a bypass
+entry with no port matches every port of its host, so WebRTC's TCP to another port of the desktop's own ts.net name went
+direct, not to the dead proxy (`<-loopback>` does not cover a tailnet address). VF-PM numbered it (07:18Z) and accepted
+its plan, `lanes/ma-6/i415/PLAN-415.md` (07:34Z): allowHosts at 443; Chromium's `host-resolver-rules` in the probe's
+mode alone, pinned by a test; the honest clause. Two same-host legs, a control first, in place of the plan's one (VF-PM
+08:42Z).
+
+**What moved** (7 paths, +180 −32; none of them is touched by main since M300, by MK-1 or by item 406, read by git):
+- red, `packages/electron-shell/test/artifact-preview-capture.test.ts` (+23 −2): 378's two setProxy expectations name
+  the origin at its own port (`device.tail1234.ts.net:14211`) and each allowHost at `:443`; a new row, "item 415 — no
+  entry of the bypass list is a bare host: the origin at its own port, each allowHost at 443".
+- green, `artifact-preview-capture.ts` (+10 −2): `proxyBypassRules` is `${hostname}:${port}`, each allowHost at `:443`,
+  then `<-loopback>`. 443 is the one port the request gate admits an allowHost on (https, `url.port === ""`), so the
+  page loads nothing it did not load before.
+- row 38, 5 paths:
+  - `src/testing/capture-webrtc-probe.ts` (+54 −24): two more legs with STUN and TURN at the page's OWN name: the
+    SAME-HOST CONTROL (the fence's calls unmade) must connect there, else BLIND (exit 2); SAME HOST (as it ships) must
+    not, else RED (exit 1). Read on 378's rule, the same-host leg is the reading of the leak; if it does not arrive
+    there, Chromium's P2P TCP did not take the bypass on that Electron, and that is reported, never adjusted.
+  - `src/main/modes.ts` (+40): `captureProbeHostResolverRules` (a MAP for each name, in `capture-webrtc-probe` alone)
+    and `firstHostAddress` (moved from the probe); `src/main/index.ts` (+15 −3): the switch before ready in that mode
+    alone, and the same address handed to the probe; `test/modes.test.ts` (+37): none in every other mode, and the
+    address rule; `docs/desk-gates.md` row 38: four legs.
+
+**The witness:** on this Mac, `lanes/ma-6/run-415/rows-ma6c-mac.sh` through the lane's door, at the carried commits,
+under an empty HOME of the run's own with the fences, each run with ONE frozen offline install at the tip (its lockfile
+verdict made against the declared registry.npmjs.org, a reading). R1 to R3 as wanted, R4 stopped at STOP 31 on
+Electron's own download, R5 to R7 by the second run, the whole suite by the train's V:
+- the first run (r4b, 20:38:50Z to 20:40:02Z): R1 at the red, vitest electron-shell
+  `test/artifact-preview-capture.test.ts` RED AS WRITTEN, 3 of 26 failed: 378's two setProxy rows and "item 415 — no
+  entry of the bypass list is a bare host: the origin at its own port, each allowHost at 443"; R2 at the green, the same
+  file, 26 of 26; R3, tsc electron-shell, main and renderer, exit 0. R4, vitest electron-shell WHOLE at the tip, STOPPED
+  at STOP 31: Electron 43.1.1's own `index.js` downloaded its binary (122,054,683 bytes) when the lane's install had
+  none, printing `Downloading Electron binary...` in eight test files. Its suite read 188 of 189 files; the one red,
+  `test/sound-player.test.ts`, is the built-addon witness, whose addon the lane had not built.
+- the second run (r5, 20:45:35Z to 20:46:12Z; electron's dist and `path.txt` held before and after its install, and
+  `Downloading Electron binary` x0 in every log): R5, tsc electron-shell at the tip, exit 0; R6, biome over the six TS
+  paths, "Checked 6 files … No fixes applied."; R7, `pnpm check:walls`, clean; the lane after on its branch, porcelain
+  0.
+- the whole suite, electron-shell's included: `pnpm verify` at the train's top, exit 0 (qa-01's V-TRAIN1, 2026-11-14
+  21:25:43Z to 21:55:33Z; electron-shell 189 files and 2,901 tests passed, 3 skipped; `verify.clean.log`
+  `b30c41c93e5404a0`).
+
+**Not done, and not claimed:** row 38, `smoke:capture-webrtc`, has run on no tip, its new legs included: at James's
+unlock. No mini run for these commits. Nothing pushed by this lane.
+- Landing gates: OWED: `pnpm gate:landing` on this Mac at James's unlock, on the landed tip; deferred, not waived.
+
+## Item 406 — Remove for a phone: a desktop refuses a phone the account removed, at its door, from boot (M305)
+
+(2026-11-14; 19 commits, `6670e1b29` → `a2a99e4b3` (`i406/remove-phone-r3`, tree `0ee3085868e5`), 37 paths and the
+19th's one line, no manifest, lock or workspace file. Track WI's Desktop slice (WI-W5 A), cut by vibe-field-3f/-c2 in
+`lanes/wi-desk` and `lanes/wi-gate/vibe-field`, under VF-PM's rulings of 2026-11-14 04:49Z (Q-PM1, Q-PM2) and 06:18Z
+((1) to (6)). Authored on M298 `a5025d1fa` as r1, re-cut as r2 (`9d1d7ff6a`) after the first run found a test that could
+never pass, then carried by a linear replay onto 415's tip `2e4437a87` (over MK-1's `ec3c08306`) on VF-PM's ruling of
+17:57:41Z, with no merge commit. Lands as M305 in the MK-1 train, on James's word typed in VF-PM's session at 19:42:10Z
+(in part: "so just push forward on implementation progress, you can also run test on my Mac , and merge to main when
+things done and push to remote") and VF-PM's GO.)
+
+**What it does.**
+- A desktop's Devices panel shows **Remove…** on a row the roster knows to be a phone, and only there. Its confirm
+  stands in place under the row, with Cancel leading and focused. While it acts, **Removing…** holds every act. A
+  refusal is said in the product's words, in the attention ink, and "‹name› was removed." is said once where the row
+  stood (field-app `DevicesSection.tsx`).
+- `device.remove` (contracts, a desktop's caller only) writes the refusal into the account's settings document.
+  `devices.refused` is GROW-ONLY, one key per refusal (`[deviceId, eventId]`), so a merge is the union and a concurrent
+  Remove is never lost. It is written under a `no-undo:` origin, so no ⌘Z lifts one. `devices.phones` keeps the known
+  phones and deletes the removed one in the same transaction. A deleted entry leaves the STATE only: its name stays in
+  the operation history the snapshots keep.
+- The door refuses a refused phone with **device-removed** before any credential. A headerless hello while a refusal
+  stands is **device-unidentified**, ratified by VF-PM as a contract word. The four self-peer readers and the freeway
+  admit forget a refused phone. The sweep closes its connections and its freeway clients on every desktop, in
+  revokeWindowToken's order.
+- At boot (F3, VF-PM 06:18Z (5)): fieldd reads the refusals from the settings document BEFORE its door listens
+  (`await devices.loadRefusals()` ahead of `await api.listen()`). Once the roster's first pass is through, what stood at
+  boot is swept: no audit row, one line of counts (`fieldd.devices.removal_swept_at_boot`, attrs
+  `{connections, links}`).
+- The audit actor is the caller; a second Remove writes no audit row (VF-PM 06:18Z (2), (3)). R-a: a refusal the disk
+  will not take is not made (save first). R-b: a device once seen as a desktop is never removable, and its phone record
+  goes.
+- Item 160's privacy line on the Mac's door: "Encrypted end to end." · "Your phone and your other computers reach this
+  Mac over your own Tailscale network. VibeField runs no session relay." DESIGN.md §8 and §9 take every word first (D1,
+  D2, D3).
+
+**The proofs.**
+- **mini-i406va** (the old mini, 10:50:04Z; `.done` `a992e7295a984f5d`), on the authored chain r1 (`0c4847854`). 22
+  rows: 8 red as declared, 9 green, and five rows off for ONE test, device-service.test.ts's order row ("the daemon
+  loads them before its door listens"): F3G, R1GF, TF and V red where green was wanted, and R1RF NOT AS DECLARED. The
+  test could never pass: `source.indexOf("api.listen(", listen + 1)` found the same call six characters in. The daemon's
+  order was right and the assertion's offset was wrong. Before this run, every per-commit red and green had been
+  DECLARED, NOT RUN: this Mac ran only the tip, and only files that do not boot fieldd.
+- **The fix, r2** (packet-406-r2, VF-PM's GO at 11:03Z): F3r to B1 re-cut as `9d1d7ff6a` with the one line
+  `listen + "await api.listen(".length`. Each of the eleven trees differs from r1's by that line alone; D1 to S3g are
+  the same commits.
+- **mini-i406vb** (the old mini, 18:05:30Z to 18:17:26Z; `.done` `22762f3d91c39f83`; its runner carries the pnpm fence
+  and the install witness, and its dry was 29 of 29 modes with 86 of 86 mutations refused). It ran on the authored chain
+  r2, its last run on the old ground (lock f82b5d84, rosetta-pin 00221b5b7). 23 rows:
+  - **RED as declared, 9:** C1R 15, S2R 13, S3RC 1, S3RF 15, F3R 5, S5R 9, S6R 1, R1RF 7, R1RA 2. Each has its named
+    titles failing, none outside them, and none named and not failing.
+  - **GREEN, 13:** the nine green steps; TC (contracts whole) 1996 of 1996; TA (field-app whole) 4729 of 4729; V
+    (`pnpm verify` WHOLE at `9d1d7ff6a`, exit 0, 364 s, dev-runner 488 of 488, cargo ok 38); VC (readings against
+    mini-hg4r5a's V, not judged).
+  - **TF (fieldd whole at `9d1d7ff6a`): RED where green is wanted, BY THE RUNNER'S RULE ALONE.** Every named file was
+    seen passed, with 0 FAIL lines and 0 crash lines. vitest's own line was exit 0, 3884 passed, 0 failed, 15 skipped
+    tests, `Test Files 272 passed | 5 skipped (277)`. The whole row's GREEN wanted `Test Files N passed (N)` alone, a
+    new line of 406's cuts that copied the template vrow's named-files test, and a suite with skipped files can never
+    meet it. **V, which runs fieldd's suite itself, proves fieldd whole at `9d1d7ff6a`: green.** TF stays red here; the
+    template's rule 28 corrects the rule.
+  - The fence stood (summary line 48, `pnpm_config_verify_deps_before_run=error`). R1RA printed one new host word,
+    `login.tailscale.com`, on two URL lines of printed text (the "Manage in Tailscale" line's test), with 0 fetch-class
+    lines.
+- **The carry, r3** (packet-406-r3, `cb1cc30e3fd0d503`, its script read whole by VF-PM at 19:59Z; ran 20:23:36 to
+  20:23:54Z): r2's 18 replayed onto `2e4437a87` under the hook. 4 steps conflicted (C1r and C1g in
+  plugin-distribution.ts, S2r and S2g in settings-doc.ts and its test), each block additive: MK-1's
+  INSTALL_SET_REMOVALS, origin, paragraph and describe beside 406's own, and the contracts import as a sorted union.
+  Every block was resolved by one rule set and read by VF-PM. 4 patch-ids changed; the other 14 equal r2's. **The 18th
+  tree `1cfb0e3dce8b` equals the tree of ONE merge of r2's tip onto `2e4437a87`**, so the replay and a merge end on the
+  same bytes. The 9 re-cut patches were not re-run commit by commit: **the per-commit reds and greens are mini-i406vb's,
+  on the authored chain; the carried chain is proven at its tip.**
+- **The 19th commit, C19** (test-only, VF-PM 17:59Z): `expect(announced).toContain("installSet");` in
+  settings-doc.test.ts's merge test. It pins the union's one semantic point: 406's `MERGED_SECTIONS` holds "installSet",
+  the section MK-1's removals are announced under. A pin, green by reading; observed by the train's V below.
+- **The train's V** (this Mac, James's word above): `pnpm verify` whole at the train's top `f020ad8f2`, exit 0 (qa-01's
+  V-TRAIN1, 2026-11-14 21:25:43Z to 21:55:33Z; fieldd 279 files passed, 5 skipped, 3,975 tests passed, 15 skipped;
+  `verify.clean.log` `b30c41c93e5404a0`). In its log, fieldd's test/settings-doc.test.ts (C19's line),
+  test/device-service.test.ts, test/freeway-daemon.test.ts and test/tailnet-door.test.ts: each passed, with 20, 37, 11
+  and 18 tests (the clean log's :15575, :15002, :15476 and :15673).
+
+**Found.**
+- A per-commit green that only the mini can see was written as green. It is "declared, not run" until a run sees it.
+- A text test over source was declared green by reading; its indexOf arithmetic is now checked against the real file
+  before a declaration.
+- A whole-suite row's GREEN copied from a named-files row cannot meet a suite with skipped files (rule 28).
+- The dry's stub mini had no `@` in it, so the launch refused its own filled copy at the first arm (the marks are now
+  tested by name).
+
+**Owed.**
+- Item 423, the order's booted proof. Its first question is whether the door's route secret survives a restart; if it is
+  minted per boot, 423 closes with "the window is unreachable in production, the text row is enough".
+- The relayed transcript readers, a NAMED GAP (DESIGN.md §9): the worker closes a reader by its exact clientId only.
+- The kit's mirror and reader of device-removed and device-unidentified, owed to the phone's slice.
+- James's words: Q-J1 to Q-J8 and the four refusal words (DESIGN.md §9, drafts pending him).
+- On James's after-land list, R-b in plain words: a phone that pretends to be a desktop cannot be removed from
+  VibeField; you remove it in Tailscale's console.
+
+**Not done, and not claimed:** no per-commit re-run of the carried chain; no smoke; nothing on the phone; no
+`pnpm gate:landing`, which is OWED at James's unlock: deferred, not waived, as at every land since M296.
+
+## Item 400 — the Card Button: the selection bar's one word is Make a card, it wears the paper card, and the set holds the six types' glyphs (M306)
+
+(2026-11-14; eleven commits on 406's tip `a2a99e4b3`, the train beneath the cards (MK-1 `ec3c08306`, 415 `2e4437a87`,
+406): the doc `ce1990aa7`, the red `e874d6a0f`, the green `7e2ac6cad`, and the riders `cbfaff4b0`, `61ba79223`,
+`2a746ec86` (the refusals: doc, red, green), `13ae3ec9c` (smoke:canvas and the catalog's captions), `10eabeaf7` and
+`ebb3aa4c0` (the comments that cite §8), `16f8dc9d4` (the clipboard's refusals, doc) and `1eda35924` (UI_SYSTEM.md's
+line). The first three were cut by ow-design on `ob/ui` as `9dfb94d8a`, `cb44eec53` and `85bf20dac` on 2026-11-09. The
+riders were cut by agent A on `cs/riders`. The seven items land together as ONE M on branch `cs/land-m303` (tip
+`54ed3d58c`, tree `c660f7b51115`), in the cs lane `lanes/cs/vibe-field`. Cut by ow-design. Validated by `pnpm verify`,
+whole, at the train's top `f020ad8f2` on James's Mac (qa-01's V-TRAIN1, 2026-11-14 21:25:43Z to 21:55:33Z, exit 0;
+field-app 348 files and 4,881 tests passed; `verify.clean.log` `b30c41c93e5404a0`). Lands by the fixer as M306 in ONE
+fast-forward of main over the whole train, M303 (MK-1) to M307 (398): M304 (415) and M305 (406) beneath the cards, MK's
+one fix commit and M307 (398) above them. It lands at 2026-11-14 21:58:27Z, on VF-PM's LAND GO of 2026-11-14 21:57:47Z
+and James's click on the PM board at 2026-11-14 17:19:23.508Z, "Down now: land it, and keep a copy of the history index
+first (Recommended)", which put both desktops down for M301 (LANDED "EL8 — Rosetta 0.1.7"); they have stayed down since,
+and no UP has been given, and on James's words typed at VF-PM's session on 2026-11-14 at 19:42:10Z, in part: "and merge
+to main when things done and push to remote"; the packet is `lanes/cs-plan/packet-m306/` (SHA256SUMS
+`f16b7c8e86993d76`).) James picked CS-D11 A, "Make a card" (2026-11-09T04:18:45.509Z), and CS-D12 E, the paper card
+(04:18:46.476Z), on *The Card Button* (https://claude.ai/artifact/HB7bnc4JWXMbYrgHrLwyBr, db `decisions`; 2026-11-14
+21:10Z: not found on the account in use since the 17:15Z switch; its republish waits James's word). He picked CS-D10 A,
+the six types as one family (03:28:54.221Z), on *Card Stock* (https://claude.ai/artifact/Bw5JvitHdKzUmN528AkWzh;
+2026-11-14 21:10Z: not found on the account in use since the 17:15Z switch; its republish waits James's word). See
+DECISIONS "CS-D1…CS-D12". The land is on James's words, typed at ow-design's session on 2026-11-14 at 03:21:55Z (whole):
+"now i want you to land card stock and the card button soon, plan, split works and fanout agents in workflows to work in
+parallel". VF-PM ruled at 03:23Z that the cards land ahead of OB's custody hold, with no custody piece.
+
+**What landed, DESIGN.md first.**
+- The doc (`ce1990aa7`; DESIGN.md +48 −30, tokens.css +1):
+  - §8 "Make a card", which was "Copy" (CS-D11 A and CS-D12 E, on OB-D3). It is the bar's one word, on the bar, in its
+    grown menu and in hand, and the desk's ⌘C is the same act.
+  - The word is the desk's alone: a pane's, History's and Settings' Copy still say Copy.
+  - The bar's Order, States and tooltip ("Make a card  ⌘C") follow.
+  - §13: "68 named glyphs"; the paper card (CS-D12 E), the one thing on the chrome that is not a glyph, with its shadow
+    `--vf-paper-card-shadow`; and "The six types" (CS-D10 A, on OB-D1 A) in place of the hand's six indexes (HN-D1).
+- The red (`e874d6a0f`; four field-app test files, +37 −26): glyphs, selection-bar-model, selection-bar-hand and
+  selection-bar.
+- The green (`7e2ac6cad`; 11 files, +148 −41):
+  - `bar-model.ts`'s `MAKE_CARD_LABEL` and its tooltip;
+  - `PaperCard.tsx` (new), `SelectionBarView.tsx`, `selection-bar.css` and `bar-hand.ts`;
+  - the three new drawings (`tooling/glyphs/drawings.mjs`, `build.mjs`, `design-kit/src/glyphs/data.ts`);
+  - three of the red's tests.
+  The set holds 68 names from here; the catalog's count follows at item 304.
+- The refusals (`cbfaff4b0` doc, DESIGN.md +7 −1 and UI_SYSTEM.md +6 −4; `61ba79223` red, four tests; `2a746ec86`
+  green, `product-chords.ts` and `cards-words.ts`):
+  - the desk's Make a card, when it deals no card, says "No card made — it is off the screen" or "No card made — the
+    desk could not draw it", in the button's voice, where it said "Not copied — …";
+  - ⌘C's row in the key list names Make a card.
+  `16f8dc9d4` (DESIGN.md +4 −4) says the clipboard's own refusals in the copy door's words, as the code says them.
+- smoke:canvas (`13ae3ec9c`): `smoke-selection-bar.ts` and `smoke-tools-in-hand.ts` read "Make a card" on the bar and in
+  hand, and ChromeSection's captions say it.
+- The pointers (`10eabeaf7`, 10 files; `ebb3aa4c0`, 11 files): the comments that cite DESIGN.md §8 "Copy" for the desk's
+  button follow it to "Make a card". These are comments, not code: every changed line in the two commits is a comment
+  (read 11:37Z).
+- UI_SYSTEM.md (`1eda35924`): the selection-bar line names the two-object plate by what the shipping bar says.
+
+**What a person sees, by reading the code** (at `54ed3d58c`, each cited line re-read there; nothing was watched in a
+running app):
+- The desk's selection bar leads with "Make a card" and the paper card (`bar-model.ts:37`; `PaperCard.tsx`). Its tooltip
+  and its grown menu's row say "Make a card  ⌘C" (`bar-model.ts:40`, `:94`, `:159`).
+- A card the desk cannot make says "No card made — it is off the screen" or "No card made — the desk could not draw it"
+  on the line's note (`cards-words.ts:240-241`, said at `copy-to-hand.ts:228-234`).
+- What the card holds and where it goes are unchanged (HN's): ⌘C on Canvas with a selection deals the same card.
+- The three new glyphs are drawn only on the paper card until round 5's face (item 405, the same land).
+
+**The land, for all seven.** By the fixer's door pair `train-land.zsh` (`39080e547bbf1c98`) and `train-land-inner.zsh`
+(`3706433839bd031b`), with `land-stack5.sh` (`4a1d62d4c8e79f03`), on VF-PM's LAND GO of 2026-11-14 21:57:47Z: main
+`b16e65c1e` → the train's top `f020ad8f2`, ONE fast-forward of 112 commits over M303 (MK-1) to M307 (398), the cards
+M306 under MK's one fix commit `7d135455b` and 398's two; the guard and the dev-stack check read 0 and 0; the reflog
+line `main@{2026-11-14T21:58:27Z} merge f020ad8f2a40aed331d11de881cf0e1f59387213: Fast-forward`; origin's main stays
+`8fffb13c7`, nothing pushed..
+- The cards' tip `54ed3d58c` is 50 commits on `a2a99e4b3`: 85 files, +4397 −1596; 18 added, none deleted or renamed.
+  None touches pnpm-lock.yaml.
+- It got there in nine steps, each with its log in `lanes/cs-plan/logs/`:
+  1. `carry-s1.sh` carried ob/ui's 13 onto `cdb72d97d` at 04:32:18Z, making the stage-1 tip `95808efe0`, with no ref
+     written (`carry-s1-043127Z.log`).
+  2. Stage 2's agents cut the riders: A on `cs/riders`, D on `cs/press-riders` and B on `cs/flip`. 405a's carry, agent
+     C, made `cs/face-carry` at `0ab93b5ab` (`carry-405a-052654Z.log`, 05:28:05Z).
+  3. `integrate.sh` made `cs/land` at `7fe08d155`, 28 on `95808efe0`, at 05:37:44Z (`integrate-053536Z.log`, map
+     `integrate/run/map.txt`). That was 27 picks plus one made caption commit. tokens.css was merged by hand at pick
+     20, 404's doc (blob `9a183a8cb566`).
+  4. Agent F cut 405b on `cs/face` as 7 commits (workflow `wf_88b52b71-e67`).
+  5. `integrate-2.sh` made `cs/land` at `350713119` at 06:46:51Z: a fast-forward of 405b's 7, plus the made press-line
+     commit (`integrate2-064552Z.log`).
+  6. `integrate-3.sh` made `cs/land` at `36b0446e9` at 07:51:58Z, adding the made 405b biome commit
+     (`integrate3-074842Z.log`).
+  7. `carry-main.sh` (`carry-m300/`, its SCRIPT.SHA256 read by VF-PM) carried `cs/land` once onto main `5cf8eebe7` at
+     09:37:43Z, making `cs/land-main` at `a64e7d315` (`carry-main-092833Z.log`).
+     - The checks: "50 messages, authors and patch-ids equal, each to its source's".
+     - The hook's `render --prod --check` at the tip exited 0.
+     - `cs/land` stays at `36b0446e9`.
+  8. `carry-main.sh` (`carry-m302/`, its SCRIPT.SHA256 read by VF-PM) carried `cs/land-main` once onto main `b16e65c1e`
+     (M302) at 17:47:58Z, making `cs/land-m302` at `011bd172f` (`carry-m302-174715Z.log`): "50 messages, authors and
+     patch-ids equal, each to its source's"; the hook's `render --prod --check` at the tip exited 0.
+  9. `carry-main.sh` (`carry-m303/`, made by `make-m303.py`) carried `cs/land-m302` onto 406's tip `a2a99e4b3`, the
+     train beneath the cards (MK-1 `ec3c08306`, 415 `2e4437a87`, 406). Its first cut, `b8d21094` (read whole by VF-PM at
+     20:28:25Z, who passed the line), started at 20:29:03Z and stopped at 20:38Z at its :94 with no ref written
+     (`$i[…]`, a zsh subscript, on a branch only a differing patch-id reaches; `carry-m303-202903Z.log`). Re-cut by that
+     one line as `90f87bff`, it ran 20:42:08–20:42:20Z and made `cs/land-m303` at `54ed3d58c`
+     (`carry-m303-204123Z.log`).
+     - The train and the cards meet in 7 paths: DESIGN.md, docs/UI_SYSTEM.md, contracts' `index.ts` and `shell.ts`,
+       `ChromeSection.tsx`, `devices-section.test.tsx` and `ui-system-boundaries.test.ts`.
+     - The tip's tree `c660f7b51115` is the whole three-way merge-tree's, proven first per commit, objects only.
+     - The checks: "50 messages and authors equal, each to its source's; patch-ids equal but 1, each touching a meeting
+       path: 24[docs/UI_SYSTEM.md]" (one wanted: k 24, on UI_SYSTEM.md, a meeting path).
+     - The hook's `render --prod --check` at the tip: exit 0.
+- No commit carries a session-link trailer. James's click (2026-11-14T08:18:25.634Z, the PM board): "Drop the session
+  link from now on; keep the rest (Recommended)".
+
+**The witnesses, for all seven.** Each row ran on `cs/land`, `cs/land-main`, `cs/land-m302` or `cs/land-m303` through
+the cs lane's door, at load under 8, from its own log:
+- **S1**, at the stage-1 tip `95808efe0` (`s1-044307Z.log`): the lane's install, then tsc for field-app, design-kit,
+  electron-shell (both programs) and contracts, each 0 errors (04:48:54Z to 05:11:00Z).
+- **rows-p1**, at `95808efe0` (`rows-p1-051848Z.log`, done 05:30:20Z):
+  - biome over 32 files, 0 errors (1 info);
+  - field-app, 16 files, 293 tests green;
+  - electron-shell's three smoke unit tests (smoke-desk-copy, smoke-tools-in-hand, smoke-catalog), 3 files, 45 tests:
+    green. Its header expected them red until A's rider, and the header was wrong: at `95808efe0` none of the three
+    names the bar's word. The stale "Copy" stood in the smokes' own sources (`smoke-selection-bar.ts:406-407` and
+    `:434`, `smoke-tools-in-hand.ts:617`), which only a live smoke reads (smoke:canvas, row 17, at the landing table
+    (Item 400's `pnpm gate:landing` line)); A's `13ae3ec9c` moves them to "Make a card";
+  - check:walls clean;
+  - the glyphs `--check` fresh: "68 names, 10 hardware, 29 on iOS".
+- **rows-tip**, at `7fe08d155` (`rows-tip-053940Z.log`, done 06:07:25Z):
+  - biome RED on one file, `press.ts`'s format, from D's riders;
+  - render 0; contracts 1 file, 2 tests; field-app 35 files, 676 tests; electron-shell 3 files, 45 tests;
+  - walls and glyphs 0.
+- **S2**, at `7fe08d155` (`s2-061005Z.log`, done 06:45:49Z):
+  - tsc ×5, each 0 errors;
+  - field-app 337 files, 4699 tests. It left out 7 that boot daemons, spawn children or send signals; those are V's.
+  - electron-shell 17 files, 276 tests;
+  - contracts 65 files, 1980 tests;
+  - the DESIGN.md readers in packages/sound, 4 files, 108 tests;
+  - `gen:check` rc 0.
+  Its plugin-readers row matched no file: a gap in ow-design's script, closed at rows-face-r2.
+- **rows-face-r2**, at `350713119` (`rows-face-065004Z.log`, done 07:46:24Z): "1 of 13 rows RED: biome".
+  - The red was two 405b format lines, in `card-fit.ts` and `card-face.test.tsx`.
+  - Green: render, walls and glyphs; tsc ×4, 0 errors; field-app 338 files, 4710 tests; electron-shell 17 files, 276
+    tests; the readers in plugins/simulator (5 files, 46 tests), plugins/comment-pad (1, 7) and packages/sound (4, 108).
+- **rows-i3**, at `36b0446e9` (`rows-i3-075158Z.log`, done 08:04:09Z): all 3 green. biome 0 errors over 82 files
+  (1 info); card-face 1 file, 17 tests; render 0.
+- **rows-main**, at `a64e7d315` (`rows-main-093940Z.log`, done 09:56:56Z): "all 9 rows green". VF-PM accepted it at
+  09:57Z.
+  - biome over 83 handed (82 checked), 0 errors, 1 info;
+  - main's moved tests in the packages the cards touch: contracts `userinfo-reach` and `objects` (2 files, 5 tests);
+    electron-shell `artifact-preview-capture` and `modes` (2, 127); field-app `history-doors` (1, 67);
+  - tsc for field-app, design-kit, electron-shell (both programs) and contracts, each 0 errors.
+- **rows-m302**, at `011bd172f` (`rows-m302-180002Z.log`, done 18:09:29Z): "all 8 rows green". biome 0 errors (82
+  checked, 1 info); field-app's rosetta readers, 10 files, 237 tests; tsc for field-app, design-kit, electron-shell
+  (both programs) and contracts, each 0 errors.
+- **pairs-mac** (`lanes/cs-plan/pairs-mac-r3`, SHA256SUMS `add0dd64895ab657`, accepted by VF-PM 20:05:17Z): the eleven
+  pairs red-first, 24 rows, each at its own commit of `cs/land-m303`, vitest by path under `env -i` with a HOME of its
+  own: pairs-mac-r3 (`add0dd64895ab657`, run-20261114T204357Z, 20:43:57–21:03:14Z, ROWS.SHA256 `a1a6770cd06f3321`): 19
+  of 24 rows as wanted; PR4 and PR5 NOT, by the runner's expectations, not the code — PR4's load class named
+  paper-texture, where its red fails on back-mark, which its green adds; PR5's electron-shell file is a carried test its
+  green does not touch. Then pairs-mac-r4 (`269e0dc74236268c`), PR4 and PR5 alone (run-20261114T211833Z,
+  21:18:33–21:22:34Z, ROWS.SHA256 `5a8106c7dcadc799`):
+  "6 of 6 rows AS WANTED (6 wanted, from the table); the pairs [PR4:AS PR5:AS]".
+- **The red proof** (`lanes/cs-plan/redproof/run-091950Z.log`): two reds read at their own commits, with the lane
+  returned clean to `cs/land` at `36b0446e9`. See items 400 and 405.
+- `pnpm verify`, whole, at the train's top `f020ad8f2` on James's Mac (qa-01's V-TRAIN1, 2026-11-14 21:25:43Z to
+  21:55:33Z, exit 0; field-app 348 files and 4,881 tests passed; `verify.clean.log` `b30c41c93e5404a0`).
+- `pnpm gate:landing` (smoke:canvas, row 17, reads the bar's "Make a card"; `pnpm still`): deferred, not waived —
+  owed at James's unlock.
+
+**This item's own rows.**
+- The ob/ui cut's rows, as the green's message records them (2026-11-09, on `ob/ui`'s own base, not this tree):
+  named vitest on field-app green; the glyph build's `--check` and check:walls exit 0; biome clean; field-app's tsc
+  showing only `@vibecook/mille/remote`.
+- The red, at its source commit `8bce0f6ef` (carried as `e874d6a0f`): vitest exit 1, "Test Files 3 failed (3)",
+  "Tests 17 failed | 39 passed (56)", class "ITS TESTS RAN AND FAILED". All 17 failing titles were in the row's own
+  three files: selection-bar-hand (6), selection-bar-model (6) and selection-bar (5).
+
+**Owed.**
+- James's answers to readings 2 and 3, the refusal words and the paper card's ◇: not answered at this land; built as
+  read (the six readings wait in ow-design's turn to James at ow-design's session, 2026-11-14 06:48:57Z).
+- The card's bloom (OB-D12) waits for OB's custody fix. Until it lands, a card let go flies home or plays directly, as
+  before.
+
+**Not done, and not claimed:**
+- The paper card and its turn on the bar have not been seen in a window, by day or by night: owed: James's eye on the
+  cards in a window; both desktops are down, and nothing is shown before his word.
+- No app run; nothing pushed.
+
+## Item 304 — the catalog's glyph count is 68, as DESIGN.md says it, with the hand's three type glyphs (M306)
+
+(2026-11-14; one commit, `d6c8844f8`, on 406's tip `a2a99e4b3`, the train beneath the cards (MK-1 `ec3c08306`, 415
+`2e4437a87`, 406), straight after item 400's green. It was cut by ow-design on `ob/ui` as `7189cfb7c` on 2026-11-10, on
+VF-PM's item of 12:59:45Z. Lands with the cards as M306; see "Item 400", The land.)
+
+**What landed.** `packages/field-app/test/design-system.test.tsx`, +4 −3: the catalog's inventory row counts 68
+glyphs, where it counted 65, and its comment says how the set got there (SD-2's `sound` made it 65; item 400's three
+type glyphs make it 68). It is test only: DESIGN.md §13 says 68 from item 400's doc.
+
+**The witnesses.**
+- On `ob/ui` (2026-11-10, as its message records them): biome clean; vitest `design-system.test.tsx` alone, 6 passed;
+  field-app's typecheck, 0 errors.
+- On `cs/land`: field-app whole at S2 (4699 tests) and rows-face-r2 (4710), each with `design-system.test.tsx` in it
+  (see "Item 400", The witnesses).
+- `pnpm verify`, whole, at the train's top `f020ad8f2` on James's Mac (qa-01's V-TRAIN1, 2026-11-14 21:25:43Z to
+  21:55:33Z, exit 0; field-app 348 files and 4,881 tests passed; `verify.clean.log` `b30c41c93e5404a0`).
+
+**Not done, and not claimed:** no row read the count red at item 400's green on `cs/land`. The red proof read 400's own
+red, not this one. Its red stands as its ob/ui message records it: pairs-mac has no pair for it (its one commit, k 4,
+stands between the pairs 2/3 and 6/7).
+
+## Item 401 — the size: a card is poker's 120 × 168, and the fan's numbers follow (M306)
+
+(2026-11-14; five commits on 406's tip `a2a99e4b3`, the train beneath the cards (MK-1 `ec3c08306`, 415 `2e4437a87`,
+406):
+- from ob/ui: the doc `b31b5790b`, the red `f33eef903` and the green `f60462c1b`, cut by ow-design on `ob/ui` as
+  `4b3b894dc`, `103d86f0b` and `2e9be71b6` on 2026-11-09;
+- the riders `e0a01cce4` (red) and `e7b9591d8` (green), cut by agent A on `cs/riders`.
+Lands with the cards as M306; see "Item 400", The land.)
+James picked CS-D8 A, poker 120 × 168, on *Card Stock* (2026-11-09T03:28:57.575Z; DECISIONS "CS-D1…CS-D12").
+
+**What landed, DESIGN.md first.**
+- The doc (`b31b5790b`; DESIGN.md +5 −5): §8 "A card" is **120 × 168**, "a fifth wider than HN's 104 × 146" (CS-D8 A).
+  The numbers that follow, in §6 and §8:
+  - the fan is up to 76 apart, where it was 66;
+  - the reach lifts a card up to 108 within 138 of the pointer, where it was 86 within 120;
+  - a card picked up grows to 2.4× (288 × 403), where it was 2.6×.
+- The red (`f33eef903`): `cards-poker-size.test.ts` (new, 53 lines).
+- The green (`f60462c1b`; 7 files, +35 −34): `cards-model.ts`, `cards.css` and `CardsView.tsx`, and four of the hand's
+  tests (card-drag, cards-outside, cards-view, cards).
+- The rider (`e0a01cce4` red, +10 in `cards-poker-size.test.ts`; `e7b9591d8` green, `scenes.css` +4 −4): Studio's 2×
+  card plate boxes the poker card, 240 × 336, and a test holds it.
+
+**What a person sees, by reading the code.**
+- Every card in the hand is 120 × 168.
+- The fan spreads and lifts by the new numbers.
+- A card picked up is 288 × 403.
+- Studio's 2× plate draws the same card at twice the size.
+
+**The witnesses.** The ob/ui cut's rows, as the green's message records them (on `ob/ui`'s own base): the hand's eleven
+test files and ui-system-boundaries in field-app; biome; field-app's tsc showing only `@vibecook/mille/remote`. On
+`cs/land`: the rows in "Item 400", The witnesses. Its red was not read on `cs/land`; it stands as its ob/ui message
+records it until pairs-mac read it on this Mac (pairs-mac-r3, run-20261114T204357Z): PR2, 6/7 (`f33eef903`,
+`f60462c1b`), and PR6, 19/20 (`e0a01cce4`, `e7b9591d8`), each red as wanted (its tests ran and failed), then green. The
+same for the landing table (Item 400's `pnpm gate:landing` line).
+
+**Found.** carry-s1's log printed the green's patch-id as differing from its source's (`d9a21a9c3e09` against
+`2ae1386e90cc`). Its `-U0` changed lines are its source's, line for line (read 2026-11-14 04:51Z): the difference is
+context, main's lines beside the hunks, which moved since `ob/ui`'s base.
+
+**Not done, and not claimed:** the fan at 120 × 168, its reach and the 2.4× hold have not been seen in a window:
+owed: James's eye on the cards in a window; both desktops are down, and nothing is shown before his word.
+
+## Item 402 — the chip: a card leaves the hand by the chip on its corner, half off the card (M306)
+
+(2026-11-14; five commits on 406's tip `a2a99e4b3`, the train beneath the cards (MK-1 `ec3c08306`, 415 `2e4437a87`,
+406):
+- from ob/ui: the doc `d039b5a8f`, the red `76078d350` and the green `bcfdbe608`, cut by ow-design on `ob/ui` as
+  `c7b855d9e`, `7cffd51dc` and `9df4683b9` on 2026-11-09;
+- the riders `32eb70b8d` (UI_SYSTEM.md, agent A) and `db12feff0` (the catalog's hand caption, made by `integrate.sh`).
+Lands with the cards as M306; see "Item 400", The land.) On James's words, typed at ow-design's session on 2026-11-06 at
+21:38:17Z, in part, from his message of round 3:
+"for the leaving, i only like the chip on the corner design, dont like the other two". They ruled CS-D7 B (DECISIONS
+"CS-D1…CS-D12"; the whole message is in `draft/card-stock/v3/RECORD.md`).
+
+**What landed, DESIGN.md first.**
+- The doc (`d039b5a8f`; DESIGN.md +7 −3, tokens.css +1): §8 "Holding them": a card wears its **chip** (CS-D7 B). It is
+  the only way a card leaves but ⌫, and it replaced HN's 18-round × inside the corner.
+  - It is 30 round, centred on the card's top right corner so half stands off the card, and 44 to hit.
+  - It is a white × at 13 on `--vf-card-dark-stock`, ringed and shadowed by `--vf-card-chip-shadow`, popping in 280ms
+    on the pop curve.
+  - Under the pointer it is `--vf-red` and 1.12× (`--vf-ease-lift`, 180ms).
+  - The reach holds across the chip's outer half, and a card let go below the hand goes home.
+- The red (`76078d350`): `cards-chip.test.tsx` (new, 78 lines).
+- The green (`bcfdbe608`; 3 files, +43 −14): `CardFace.tsx`, `cards.css` and `card-face.test.tsx`.
+- The riders: `docs/UI_SYSTEM.md`'s hand line names the chip on the card's corner (`32eb70b8d`), and the catalog's hand
+  caption says the reached card's chip, on its top right corner (`db12feff0`).
+
+**What a person sees, by reading the code.**
+- A card reached for shows its chip on its top right corner, half off the card.
+- Under the pointer the chip turns red and grows.
+- A press on it removes the card, as ⌫ does.
+- A card let go below the hand goes home.
+
+**The witnesses.** The ob/ui cut's rows, as the green's message records them (on `ob/ui`'s own base): named vitest for
+the hand, bloom and bar; biome; field-app's tsc showing only `@vibecook/mille/remote`. On `cs/land`: the rows in
+"Item 400", The witnesses. Its red was not read on `cs/land`; it stands as its ob/ui message records it until pairs-mac
+read it on this Mac (pairs-mac-r3, run-20261114T204357Z): PR3, 9/10 (`76078d350`, `bcfdbe608`), red as wanted (its tests
+ran and failed), then green. The same for the landing table (Item 400's `pnpm gate:landing` line).
+
+**Found.** carry-s1's log printed the doc's patch-id as differing (`e6a47dbb2aea` against `5ed635ba7983`). Its `-U0`
+changed lines are its source's (read 04:51Z): the difference is DESIGN.md's context, which main moved.
+
+**Not done, and not claimed:** the chip's pop, its hover and its hit area have not been seen under a real pointer:
+owed: James's eye on the cards in a window; both desktops are down, and nothing is shown before his word.
+
+## Item 403 — the press: one WebGL2 press prints the linen stock and the pressed back once, and lets its context go (M306)
+
+(2026-11-14; twelve commits on 406's tip `a2a99e4b3`, the train beneath the cards (MK-1 `ec3c08306`, 415 `2e4437a87`,
+406):
+- from ob/ui: the doc `056a8b9f3`, the red `eb0823b0b` and the green `669b7672c`, cut by ow-design on `ob/ui` as
+  `960291a68`, `c5465c149` and `5a77c1521` (2026-11-09 and 11-10);
+- agent D's riders on `cs/press-riders`:
+  - the colours as tokens: `b276d9617` doc, `6cf31c2b1` red, `6399a073d` green;
+  - the catalog's print: `fc3b1c6ff` red, `e0bf25d54` green;
+  - the caption: `fa75ca41a`, `85aa4ea82`, `2719f27cd`;
+- `4030c3426`, biome's form of the press's paper-colour line, made by `integrate-2.sh`.
+Lands with the cards as M306; see "Item 400", The land.) James picked CS-D5 A, linen (2026-11-09T03:29:03.623Z), and
+CS-D6 C, the pressed back (03:29:00.909Z), on *Card Stock* (DECISIONS "CS-D1…CS-D12"). The renderer is ow-design's
+choice on his words, typed at ow-design's session on 2026-11-09 at 21:30:24Z:
+"1. WebGL or WebGPU, choose the most performant way possible and should introduce the least overheads to our app" (in
+part: the first of two lines). VF-PM ruled on 2026-11-14 at 04:09Z that the press's colours are tokens, not an
+exception.
+
+**What landed, DESIGN.md first.**
+- The doc (`056a8b9f3`; DESIGN.md +31 −1): §5 "The stock is printed, once — the press".
+  - One WebGL2 context on an OffscreenCanvas prints the front and the back at a card's size, at the window's pixel
+    density, by day and by night, into images every card wears under its face. Then it lets its context go.
+  - At rest and in motion the hand asks nothing of the GPU. It prints again only when the theme, the pixel density or a
+    printed size changes.
+  - Until it has printed, and wherever WebGL2 is refused, a card wears the flat stock.
+  - It also covers the front (linen, CS-D5 A), the back (Pressed, CS-D6 C), why WebGL2 and not WebGPU, and what it
+    costs.
+- The red (`eb0823b0b`): `card-press.test.ts` (new, 182 lines).
+- The green (`669b7672c`; 9 files, +834 −12):
+  - `frame/cards/press/` (new): `press.ts`, `press-shader.ts`, `press-numbers.ts`, `back-mark.ts`, `back-print.ts` and
+    `use-printed-stock.ts`;
+  - `Cards.tsx` wears the print, and `cards.css` reads `--vf-card-print-front` and its held print.
+- The colours as tokens (`b276d9617` DESIGN.md +10 and tokens.css +11; `6cf31c2b1` `card-press.test.ts` and
+  `ui-system-boundaries.test.ts`; `6399a073d` `press-colours.ts` new, and `press.ts`, `press-numbers.ts`, `back-mark.ts`
+  and `back-print.ts`):
+  - the paper, the back's field and rule, the pressed band, and the mark's three lights (`--vf-mark-rose`, `-mint` and
+    `-cobalt`) are tokens, read from the root when the press prints;
+  - a test holds that the press's code has no hex left.
+  - The press's light stays as numbers in its code (ow-design's reading 6).
+- The catalog's print (`fc3b1c6ff` `card-press-catalog.test.tsx` new and ui-system-boundaries; `e0bf25d54`
+  `CardsPreview.tsx`, `ChromeSection.tsx` and `use-printed-stock.ts`): the catalog's cards wear the press's print.
+  `CardsPress` mounts the shipping hook with the page's theme, not a copy.
+- The caption (`fa75ca41a`, `85aa4ea82`, `2719f27cd`; ChromeSection only): the press's sentence stood as its own
+  caption and took biome's fill. Then it was HELD for James's word, and `2719f27cd` takes it out. The mount stays.
+
+**What a person sees, by reading the code.**
+- Every card wears the printed linen once the press has printed, and the flat stock before that or where WebGL2 is
+  refused.
+- A card picked up wears a print made at 2.4×.
+- The pressed back is printed but seen only by Flip it (item 404).
+
+**The witnesses.** The ob/ui cut's rows, as the green's message records them (2026-11-10, on `ob/ui`'s own base):
+- biome with no `--write` (one info);
+- named vitest for the press, the hand, bloom and bar (23 files, 409 tests);
+- field-app's tsc after mille's build (0 errors);
+- check:walls clean.
+On `cs/land`: the rows in "Item 400", The witnesses. rows-tip's one red was `press.ts`'s format, from D's riders; it is
+`4030c3426`, green at rows-face-r2. Its reds were not read on `cs/land`; they stand as their messages record them until
+pairs-mac read them on this Mac. PR7, 26/27 (`6cf31c2b1`, `6399a073d`), and PR8, 28/29 (`fc3b1c6ff`, `e0bf25d54`): each
+red as wanted (its tests ran and failed), then green (pairs-mac-r3, run-20261114T204357Z). PR4, 12/13 (`eb0823b0b`,
+`669b7672c`), was read twice: NOT as wanted in pairs-mac-r3, run-20261114T204357Z, by the runner's expectation, not the
+code (it named paper-texture as the module the red fails to load, where the red fails on back-mark, which its green
+adds), its green not run; then in pairs-mac-r4, run-20261114T211833Z, red as wanted (a file failed to load, on the
+module its green makes), then green. The same for the landing table (Item 400's `pnpm gate:landing` line), with
+`pnpm still` (row 15) byte-equal expected.
+
+**Not done, and not claimed:**
+- The linen and the pressed back have not been seen in a real window, by day and by night, at rest and held, and neither
+  has the catalog's print: owed: James's eye on the cards in a window; both desktops are down, and nothing is shown
+  before his word.
+- The press's caption is held for James.
+
+## Item 404 — Flip it: a card picked up turns over to show its pressed back, and back again (M306)
+
+(2026-11-14; five commits on 406's tip `a2a99e4b3`, the train beneath the cards (MK-1 `ec3c08306`, 415 `2e4437a87`,
+406): the doc `d6b353bc5`, the red `4ff7422fe`, the green `1d658bcfb`, and two fixes, `5f10f3b8c` (doc) and `ebe35a923`
+(green).
+- They were cut by agent B on `cs/flip` from the stage-1 tip.
+- The doc and the red were re-cut from ow-design's work in progress on `ob/flip-wip` (`9a9f40675..05056c288`,
+  2026-11-10) and `lanes/ob-ui/pending/flip/cards-flip.test.tsx`.
+- The green was re-cut from `lanes/ob-ui/pending/flip/green-edits.md`.
+- The doc's tokens.css was merged by hand at `integrate.sh`'s pick 20 (blob `9a183a8cb566`).
+Lands with the cards as M306; see "Item 400", The land.) Flip it is ow-design's reading 1, told to James at ow-design's
+session on 2026-11-14 at 06:48:57Z: CS-D6 C, the pressed back, can be seen only by turning a card over (DECISIONS
+"CS-D1…CS-D12"). James has not answered it at this land; it is built as read (the six readings wait in ow-design's turn
+to James at ow-design's session, 2026-11-14 06:48:57Z).
+
+**What landed, DESIGN.md first.**
+- The doc (`d6b353bc5`; DESIGN.md +8 −3, tokens.css +2 −1):
+  - §5 the flat back (`--vf-card-back`, `--vf-card-back-rule`), worn where the press has not printed or WebGL2 is
+    refused;
+  - §8 "Picking one up": Flip it, the turn seen from 1000.
+  `5f10f3b8c` names the flat back's tokens by their colours, the sage and the cream, and leaves their hex to the
+  sentence above.
+- The red (`4ff7422fe`): `cards-flip.test.tsx` (new, 214 lines), and the bar's three buttons in cards-view, cards (the
+  Tab walk) and design-system.
+- The green (`1d658bcfb`; 5 files, +129 −14): `cards-words.ts` (`flip`), `CardsView.tsx`, `cards.css` (the turn, and
+  the reduced-motion rules after the base rules), `Cards.tsx` and the catalog's caption. `ebe35a923` makes the printed
+  back's shorthand carry its print, so every colour the stock prints is a token again.
+
+**What a person sees, by reading the code.**
+- A card picked up has Flip it in its bar, beside Remove and Done (`CardsView.tsx:534-536`, `aria-pressed`).
+- Flip it, or a double-click, turns the card to its pressed back and again to its face.
+- Under reduced motion it cross-fades in 90ms.
+- A card put back goes home face up.
+
+**The witnesses.** On `cs/land`: the rows in "Item 400", The witnesses (field-app whole at S2 and rows-face-r2, with
+cards-flip in it). `pnpm verify`, whole, at the train's top `f020ad8f2` on James's Mac (qa-01's V-TRAIN1, 2026-11-14
+21:25:43Z to 21:55:33Z, exit 0; field-app 348 files and 4,881 tests passed; `verify.clean.log` `b30c41c93e5404a0`). The
+same for the landing table (Item 400's `pnpm gate:landing` line).
+
+**Owed.** James's answer to reading 1: not answered at this land; built as read (the six readings wait in ow-design's
+turn to James at ow-design's session, 2026-11-14 06:48:57Z).
+
+**Not done, and not claimed:**
+- The turn, its timing and its reduced-motion fade have not been seen in a window: owed: James's eye on the cards in a
+  window; both desktops are down, and nothing is shown before his word.
+- No row read cards-flip red on `cs/land`. It stands as agent B's red message records it until pairs-mac read it on this
+  Mac (pairs-mac-r3, run-20261114T204357Z): PR9, 34/35 (`4ff7422fe`, `1d658bcfb`), red as wanted (its tests ran and
+  failed), then green.
+
+## Item 405 — the face: a card is its faces, and round 5's face prints one line of words, the window, and its faces as their types' glyphs (M306)
+
+(2026-11-14; eleven commits on 406's tip `a2a99e4b3`, the train beneath the cards (MK-1 `ec3c08306`, 415 `2e4437a87`,
+406):
+- **405a, the carry**, cut by agent C on `cs/face-carry` on ob-foundation's yes: `fde0c1793` (OB-0's types, trimmed),
+  `7f7556e6c` (OB-1a, from `2ef1cf584`) and `403328acd` (`06a20d1c1`'s two `Cards.tsx` hunks). No custody piece rides.
+- **405b, round 5's face**, cut by agent F on `cs/face` (workflow `wf_88b52b71-e67`), drafted from
+  `lanes/ob-ui/pending/face/` (FACE-a, 2026-11-10) without its CardBloomView hunk:
+  - the doc `a8f25af7a`, the red `dad896bbf` and the green `d54942c2a`;
+  - the riders `448d57e36` (doc), `01e29cf97` (red) and `fd2ac8a28` (green);
+  - `744c0e5c0`, the catalog's two captions, kept by VF-PM at 06:34Z;
+  - `54ed3d58c`, biome's form of two lines, made by `integrate-3.sh`.
+Lands with the cards as M306; see "Item 400", The land.) Round 5's face is ruled by James's picks on the round-5 page
+and by his words, typed at ow-design's session on 2026-11-09 at 12:43:46Z (whole):
+"good, i've done my ruling, now let's start the implemtation, please coordinate with another agent called ow-foundation, who will be inplementing the foundational code and refactoring for this objects at work concepts, and you will be implemeting our ruled ui designs".
+That reading is ow-design's (reading 4), told to James at ow-design's session on 2026-11-14 at 06:48:57Z (DECISIONS
+"CS-D1…CS-D12"). James has not answered it at this land; it is built as read (the six readings wait in ow-design's turn
+to James at ow-design's session, 2026-11-14 06:48:57Z).
+
+**What landed: 405a, the carry (not red and green; a carry).**
+- OB-0's types, trimmed (`fde0c1793`; 3 files, +32): `packages/contracts/src/objects.ts` holds `CHIP_TYPES`,
+  `ChipType`, `OBJECT_REF_PATTERN` and `ObjectRef` alone (OB-D1 A). contracts' index adds `export * from "./objects"`,
+  and `contracts/test/objects.test.ts` holds the ChipType and ObjectRef rows.
+- OB-1a (`7f7556e6c`; 32 files, +1029 −816): a card is its faces. `CardKind` retires, `faces` is never empty, and a
+  card's type is its first face's.
+- `403328acd` (`Cards.tsx`, +2 −1): the hand frees a card's pictures through its faces.
+
+**What landed: 405b, DESIGN.md first.**
+- The doc (`a8f25af7a`; DESIGN.md +61 −40, tokens.css +19 −12, UI_SYSTEM.md +3 −1, and `card-face.test.tsx` +6 −5):
+  - §5: the stock's paper and ink are the press's, with the face's own inks. HN-D1's two corner indexes and their inks
+    retire, dated.
+  - §8 "A card": one face of three things and one line of words:
+    - its type's glyph and its name;
+    - the window, holding what the card holds with nothing said about it;
+    - its faces as their types' glyphs along the foot.
+  - `about` is said in bold in the bar over a card picked up.
+  - `448d57e36` says what the window prints (its inks, insets and tracking) and the held bar's type, so DESIGN.md holds
+    what `cards.css` draws.
+- The red (`dad896bbf`; 5 files): `card-face.test.tsx` (replaced), `card-fit.test.ts` (new), and rows in cards-view,
+  chat-prompt-target and design-system.
+- The green (`d54942c2a`; 7 files, +618 −407): `CardFace.tsx`, `card-fit.ts` (new), `type-glyphs.ts` (new), the face's
+  block in `cards.css`, `CardsView.tsx`, `ChatComposerView.tsx` and tokens.css.
+- The catalog (`01e29cf97`, `fd2ac8a28`, `744c0e5c0`):
+  - `WAITING_FIXTURES` deals a drag of words, so the catalog's waiting plate shows how the head sets "Text from another
+    app";
+  - the two captions read round 5's face.
+
+**What a person sees, by reading the code.**
+- Each card prints its type's glyph and its name on one line, then a window of what it holds.
+- Along its foot is one glyph, the same as its head, until OB-1b gives a card more than one face.
+- No index is printed in its corners.
+- A card picked up says what it is in bold above where it came from: "Text · 3 lines · 1 KB", "PNG · 1440 × 900 ·
+  412 KB", "Agent session" (`cards-words.ts:88-100`).
+- Until FACE-b, a ref's window shows its still, a link's window its bare page, and an agent's card keeps its dark face.
+
+**The witnesses.**
+- 405a: on `cs/land`, gen:check rc 0, contracts 65 files and 1980 tests, and tsc ×5, each 0 errors, at S2. At
+  rows-main, contracts' `objects` beside main's `userinfo-reach` (2 files, 5 tests). See "Item 400", The witnesses.
+- 405b's red, at its source commit `fccd86c0b` (carried as `dad896bbf`; `redproof/run-091950Z.log`): vitest exit 1,
+  "Tests no tests", class "A FILE FAILED TO LOAD":
+  `test/card-fit.test.ts: Error: Failed to resolve import "../src/frame/cards/card-fit" from "test/card-fit.test.ts". Does the file exist?`.
+  The module the red imports is absent at the red and present at its green (`d54942c2a` adds `card-fit.ts`).
+- 405b green: rows-face-r2 (field-app 338 files, 4710 tests; biome red on its two format lines), then rows-i3
+  (card-face 17 tests; biome 0 errors). See "Item 400", The witnesses.
+- `pnpm verify`, whole, at the train's top `f020ad8f2` on James's Mac (qa-01's V-TRAIN1, 2026-11-14 21:25:43Z to
+  21:55:33Z, exit 0; field-app 348 files and 4,881 tests passed; `verify.clean.log` `b30c41c93e5404a0`). The landing
+  table and `pnpm still`: the landing table (Item 400's `pnpm gate:landing` line).
+
+**Owed.** Each of these waits for OB's custody fix:
+- the card's bloom (OB-D12: `58833edce`, `fe66b81c0`, `e925def3a`, `e29d2c4c4` and `efb8866d0` on `ob/ui`, and item
+  309);
+- Live ref cards and FACE-b (the link, session and ref windows);
+- ENDED_AGENT's words, with item 293. Item 293's rider ("Couldn't send to ‹name›. Try again.", DESIGN.md first) is owed
+  on ob/ui's re-cut.
+James's answer to reading 4: not answered at this land; built as read (the six readings wait in ow-design's turn to
+James at ow-design's session, 2026-11-14 06:48:57Z).
+
+**Not done, and not claimed:**
+- The face has not run in a window, and the waiting head "Text from another app" may be cut by the new fit: owed:
+  James's eye on the cards in a window; both desktops are down, and nothing is shown before his word.
+- One biome info stays at `Cards.tsx:471` (`useIndexOf`). It was ruled out of this lane.
+
+## Item 398, slice 1 — project.figures asked by id, and totals over every row gathered: contracts and fieldd (M307)
+
+(2026-11-14; two commits, red then green, 15 files +661 −17. Cut by HG on MK-1's tip `ec3c08306` as red `f86b0df3a`
+and green `e5f31f783` (HG's worktree `lanes/hg/i398-wt`), in the shape VF-PM ruled (B, 2026-11-14 20:02Z), under
+James's word relayed by VF-PM at 19:42:10Z. The shape (B) was VF-PM's choice, made while James was away, and it is
+James's to overrule. Carried by `carry-398.sh` (`c2921c65a1e7bc5f`) onto MK's fix commit
+`7d135455b` (itself carried over the cards' tip `54ed3d58c`), as red `0f282d562` and green `f020ad8f2` (branch
+`hg/i398-on-7d135455b`), each by `cherry-pick --no-commit` and a commit through the hook, its message and author
+the original's, its patch-id held. It rides at the train's top (M307); main moves once, on James's word and VF-PM's
+GO.)
+
+**Why.**
+- The phone's project "messages" stat is a sum over `project.figures`' `contribution`
+  (`HistoryFold.swift:171`). A tailnet caller's contribution is cut at `INDEX_TAILNET_LIMITS.MAX_ROWS` (100) in PLAN
+  order, so past 100 conversations the stat undercounts, with nothing said.
+- The phone's session rows show no per-session figures. To show them, it must be able to ask for exactly the rows
+  it lists.
+
+**What moved.**
+- contracts:
+  - `project-doors.ts`: `ProjectFiguresSession` `{device, sessionId}`, and `ProjectFiguresParams.sessions`
+    (1…MAX_ROWS);
+  - `ProjectFiguresTotals` `{conversations, messages, tokens, costMicroUsd | null}`, and `ProjectFiguresResult.totals`;
+  - `agent-index.ts`: `IndexProjectParams.sessionIds` (1…MAX_ROWS).
+  - All are optional and passthrough; nothing is renamed or removed.
+- fieldd (`projects/project-figures.ts`):
+  - Asked by id, only the desktops an asked pair names are asked, each handed its own ids. The merge keeps exactly
+    the asked pairs this project holds, before the cut.
+  - DS-D10's one row per conversation holds. A desktop left unasked makes the daily figures `partial`. An ask by id
+    gets no `totals`.
+  - Unasked, `totals` sums the merged contribution before the cut.
+- fieldd (`agent-index.ts` `project()`): `sessionIds` keeps those rows before the tailnet and byte cuts. `daemon.ts`
+  and `project-doors.ts` pass the new fields; the refusal words name them.
+- EL7: a pair this project does not hold answers no row and no refusal, the same answer as a pair that exists nowhere.
+- New goldens (append-only): `project-figures.totals.json`, `project-figures-params.sessions.json`,
+  `index-project-params.sessions.json`. The first two are mirrored into the kit's `Tests/FieldProductTests/Fixtures`
+  and named in `check-ios-fixtures.mjs`. `project-figures.valid.json` is byte-equal.
+- `pnpm gen`: not needed; no generator covers these shapes, and no generated file moves.
+
+**The rows: `rows-398.sh`** (`dadf22d7f8e12a95`) in `lanes/cs/vibe-field`, on this Mac in VF-PM's slot,
+2026-11-14 21:06:04Z → 21:16:38Z. The lane stood on `cs/land-m303` at the cards' tip `54ed3d58c`; the rows detached at
+the carried red, then the carried green, each row through the door under `env -i`. Its 24 self-tests read as they must.
+- At the red, the three "item 398" selections were RED AS WANTED, each class "ITS TESTS RAN AND FAILED", every failing
+  title under "item 398":
+  - contracts `project-figures-sessions.test.ts`: 3 failed, 2 passed (5);
+  - fieldd `project-doors.test.ts` `-t "item 398"`: 5 failed (47, 42 skipped);
+  - fieldd `index-history-doors.test.ts` `-t "item 398"`: 1 failed (10, 9 skipped).
+- At the green: the same three GREEN (5 of 5; 5 passed, 42 skipped; 1 passed, 9 skipped); PJ-4 GREEN (18 passed);
+  SP-D13 GREEN (1 passed); contracts' `fixtures.test.ts` GREEN (743 of 743); check-ios-fixtures "ios fixtures: 456
+  copies identical to packages/contracts/fixtures"; the contracts and fieldd `tsc --noEmit` exit 0, no `error TS` line.
+- Its last line: "ROWS-398 DONE: 12 of 12 rows AS WANTED (12 wanted, from the table)", exit 0. No ref moved, the lane
+  was returned to `cs/land-m303` at `54ed3d58c` with porcelain 0, and every row's log held 0 "Downloading Electron
+  binary" lines.
+- fieldd's test setup rebuilt field-native into the shared cargo target during the second row (its mtime 21:09:10Z).
+  Main to the cards' tip moves no Rust path, so that binary is main's Rust source.
+- The train's V: `pnpm verify` whole at `f020ad8f2`, exit 0 (qa-01's V-TRAIN1, 2026-11-14 21:25:43Z to 21:55:33Z;
+  contracts 68 files and 2,042 tests passed; fieldd 279 files passed, 5 skipped, 3,975 tests passed, 15 skipped;
+  `verify.clean.log` `b30c41c93e5404a0`).
+
+**Found.**
+- The item as recorded was wrong in three places, corrected by reading: the phone shows no per-session figures; it
+  lists through `project.sessions` (`IndexCatalogSession`), not `IndexSession`; and the cut is in plan order, not the
+  newest 100.
+- What the cut harms today is the phone's messages stat. It is that stat's undercount this slice ends, once slice 2
+  reads `totals`.
+
+**Owed.**
+- Slice 2, the kit: the phone's reader of `totals` and of the by-id ask, and the row's figures. It waits for a kit
+  build, and for the row's look in DESIGN.md.
+- The figures' LOOK on a phone row is James's to give. Nothing is drawn on a phone row by this slice, and nothing is
+  installed on his phone.
+- `pnpm gate:landing`: deferred, not waived; owed at James's unlock, with the train.
+
+**Not done, and not claimed:**
+- no kit build or Swift test (the kit's change is two fixture mirrors);
+- no Electron witness;
+- nothing pushed.
