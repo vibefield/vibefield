@@ -162,6 +162,47 @@ describe("the hold on code already running (MK-O3, O3-C)", () => {
     expect(registry.refreshes).toBe(2);
   });
 
+  it("a move to allowed calls `opened` once its refresh is done; the first answer never does (C40)", async () => {
+    const registry = new FakeRegistry();
+    const order: string[] = [];
+    registry.onRefresh = () => {
+      order.push(`refresh ${registry.refreshes}`);
+    };
+    // undefined: the read fails
+    let answer: boolean | undefined = true;
+    const community = new CommunityHold({
+      plugins: registry,
+      allowed: async () => {
+        if (answer === undefined) throw new Error("the switch could not be read");
+        return answer;
+      },
+      teardown: async () => undefined,
+      restart: () => undefined,
+      opened: () => {
+        order.push("opened");
+      },
+    });
+    await community.switchMoved(); // the first answer: boot's, which walks the set itself
+    answer = false;
+    await community.switchMoved();
+    answer = true;
+    await community.switchMoved(); // a move to allowed
+    await community.switchMoved(); // unmoved
+    answer = undefined;
+    await community.switchMoved();
+    answer = true;
+    await community.switchMoved(); // allowed after a read that failed: a move too
+    expect(order).toEqual([
+      "refresh 1",
+      "refresh 2",
+      "refresh 3",
+      "opened",
+      "refresh 4",
+      "refresh 5",
+      "opened",
+    ]);
+  });
+
   it("a teardown that fails is said by its code, and the next act still runs", async () => {
     const registry = new FakeRegistry();
     registry.rows = [

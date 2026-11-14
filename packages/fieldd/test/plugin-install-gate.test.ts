@@ -24,6 +24,7 @@ import { bootstrap } from "../src/index";
 import { InstallSetReconciler } from "../src/install-reconciler";
 import { PLUGIN_CURRENT_POINTER_FILE } from "../src/plugin-artifact-store";
 import { PluginCatalogService } from "../src/plugin-catalog";
+import { CommunityHold } from "../src/plugin-community-hold";
 import { RegistryInstallService } from "../src/plugin-install";
 import { PluginRegistryService } from "../src/plugin-registry";
 import type { SettingsDocService } from "../src/settings-doc";
@@ -280,6 +281,55 @@ describe("the install gate (MK-2c)", () => {
     await reconciler.reconcile();
     expect(parked().length).toBe(2);
     expect(plugins.get(KV_ID)).toBeUndefined();
+  });
+
+  it("a parked community entry is tried once more when the answer moves to allowed, and installs (MK-O3D, C40)", async () => {
+    const reg = await registry();
+    const logs: CapturedLog[] = [];
+    let allowed = false;
+    const communityAllowed = async () => allowed;
+    const { installer, plugins } = await installerFor(reg, { communityAllowed });
+    const reconciler = new InstallSetReconciler({
+      settingsDoc: {
+        installSet: async () => ({
+          [KV_ID]: { pluginId: KV_ID, source: "registry", enabled: true, grants: [] },
+        }),
+        removedPlugins: async () => new Set<string>(),
+      } as unknown as SettingsDocService,
+      plugins,
+      installer,
+      teardown: async () => undefined,
+      restart: () => undefined,
+      audit: {
+        requiredSystem: async (_mutation: unknown, effect: () => Promise<unknown>) => effect(),
+      } as unknown as Pick<AuditService, "requiredSystem">,
+      logger: captureLogger(logs),
+    });
+    // as `daemon.ts` wires them: one read for the install gate and the hold, and the hold's
+    // `opened` walks the install set once more. The install set here never moves.
+    const walks: Array<Promise<void>> = [];
+    const community = new CommunityHold({
+      plugins,
+      allowed: communityAllowed,
+      teardown: async () => undefined,
+      restart: () => undefined,
+      opened: () => {
+        walks.push(reconciler.reconcile());
+      },
+    });
+    const parked = () => logs.filter((l) => l.event === "fieldd.install_reconciler.entry_parked");
+    await community.switchMoved(); // boot's first answer: off
+    await reconciler.reconcile(); // boot's walk: the community entry parks
+    expect([parked().length, plugins.get(KV_ID)]).toEqual([1, undefined]);
+    await community.switchMoved(); // another app preference moved, not the answer
+    expect(walks.length).toBe(0);
+    allowed = true;
+    await community.switchMoved();
+    expect(walks.length).toBe(1);
+    await Promise.all(walks);
+    expect(plugins.get(KV_ID)?.source).toBe("registry");
+    await community.switchMoved(); // still allowed: no second walk
+    expect([walks.length, parked().length]).toEqual([1, 1]);
   });
 });
 

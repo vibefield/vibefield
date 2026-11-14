@@ -6853,6 +6853,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       allowed: communityAllowed,
       teardown: teardownPlugin,
       restart: (id) => void serviceHost?.restartFresh(id).catch(() => undefined),
+      // MK-O3D (C40, 2026-11-14): a move to allowed walks the install set once more, so an
+      // entry parked while community plugins were off installs then
+      opened: () => void reconciler?.reconcile(),
       logger,
     });
     settingsDoc.on("changed", (event: { section: string }) => {

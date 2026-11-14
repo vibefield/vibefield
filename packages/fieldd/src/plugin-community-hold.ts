@@ -19,6 +19,11 @@ import type { CommunityGate, CommunityVerdict, PluginRegistryService } from "./p
 //     your other desktops: the hold is not the person's act on that plugin. Each move logs one
 //     diagnostics line, never an audit row (VF-PM's ask 7).
 //
+// MK-O3D (C40, VF-PM 2026-11-14 06:56Z): when the answer moves to allowed, the hold says so
+// (`opened`) once its refresh is done, and the daemon walks the install set once more, so an entry
+// parked while community plugins were off installs then, not at a later boot or install-set move.
+// That install is the reconciler's, as every synced install is, and waits for no statement (C41).
+//
 // The row's `held` field decides nothing here: the registry's own set does (`isHeld`).
 
 export interface CommunityGateDeps {
@@ -64,6 +69,10 @@ export interface CommunityHoldDeps {
   teardown: (pluginId: string) => Promise<void>;
   /** a fresh start, as an enable's */
   restart: (pluginId: string) => void;
+  /** MK-O3D (C40): the answer moved to allowed from one read before that was not (off, or a read
+   * that failed); called once that refresh is done. The daemon walks the install set once more.
+   * Never for the first answer: boot walks it already. */
+  opened?: () => void;
   logger?: Logger;
 }
 
@@ -76,6 +85,8 @@ export class CommunityHold {
   private refreshes: Promise<void> = Promise.resolve();
   /** the last answer `switchMoved` read; null before the first, and after a read that failed */
   private allowedWas: boolean | null = null;
+  /** MK-O3D (C40): whether `switchMoved` has read once; the first answer is boot's, not a move */
+  private answered = false;
 
   constructor(private readonly deps: CommunityHoldDeps) {
     this.log = (deps.logger ?? createNoopLogger()).child({ component: "plugin.community" });
@@ -86,12 +97,16 @@ export class CommunityHold {
   /** An app preference moved, here or on another desktop (the settings doc says `changed` for `app`
    * on every merge). The registry is read again only when the answer to "may community plugins run"
    * moved; the first call always reads, and so does one after a failed answer, whose refresh the
-   * gate then holds closed. */
+   * gate then holds closed. MK-O3D (C40): a move to allowed, after the first answer, calls
+   * `opened` once that refresh is done. */
   async switchMoved(): Promise<void> {
     const now = await this.deps.allowed().catch(() => null);
     if (now !== null && now === this.allowedWas) return;
+    const opened = now === true && this.answered;
     this.allowedWas = now;
+    this.answered = true;
     await this.refresh();
+    if (opened) this.deps.opened?.();
   }
 
   /** The registry refreshed, one call at a time, so the gate is read again; what moved is acted on
