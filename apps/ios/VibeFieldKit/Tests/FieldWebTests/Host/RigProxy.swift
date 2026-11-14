@@ -130,7 +130,9 @@ final class RigProxy: @unchecked Sendable {
         }
       case .failed, .waiting:
         upstream.cancel()
-        self.reply(client, 5)
+        // Once the client has its reply the tunnel is its: a far side failing after it closes the tunnel, and never
+        // writes a second reply into it (route B's T0 logged a 5 under a 200).
+        if self.replies.contains(where: { $0.client === client }) { client.cancel() } else { self.reply(client, 5) }
       default: break
       }
     }

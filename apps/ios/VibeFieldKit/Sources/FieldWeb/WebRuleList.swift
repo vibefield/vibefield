@@ -8,7 +8,10 @@ import Foundation
 //
 // WebKit's url-filter is a small regular language with no alternation, so every scheme is its own rule. Filters are
 // case-insensitive by default. The origin is admitted at its own port only; a declared host at any port, over TLS
-// only (https and wss).
+// only (https and wss). Every admitted name ENDS at its port or its path: a userinfo that starts with a declared
+// name (`https://cdn.jsdelivr.net:x@127.0.0.1/`, whose host is the address) never reads as that name. That matters
+// because WebKit sends a loopback address around its proxy (route B's P1a-ip, 2026-11-14), and the proxy dials an
+// address or another tailnet name it is handed; for a page's own loads, this list is the fence.
 
 public enum WebRuleList {
   /// One rule: its url-filter and what it does.
@@ -24,8 +27,10 @@ public enum WebRuleList {
     rules.append(Rule(filter: "^https://\(host):\(origin.port)/", block: false))
     rules.append(Rule(filter: "^wss://\(host):\(origin.port)/", block: false))
     for name in admitted(reach) {
-      rules.append(Rule(filter: "^https://\(escaped(name))[:/]", block: false))
-      rules.append(Rule(filter: "^wss://\(escaped(name))[:/]", block: false))
+      for scheme in ["https", "wss"] {
+        rules.append(Rule(filter: "^\(scheme)://\(escaped(name))/", block: false))
+        rules.append(Rule(filter: "^\(scheme)://\(escaped(name)):[0-9]+/", block: false))
+      }
     }
     for scheme in ["about", "data", "blob"] {
       rules.append(Rule(filter: "^\(scheme):", block: false))

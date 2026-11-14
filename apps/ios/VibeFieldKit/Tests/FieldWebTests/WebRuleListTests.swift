@@ -36,13 +36,16 @@ struct WebRuleListTests {
       filters == [
         ".*",
         "^https://studio\\.tail1234\\.ts\\.net:13377/", "^wss://studio\\.tail1234\\.ts\\.net:13377/",
-        "^https://cdn\\.jsdelivr\\.net[:/]", "^wss://cdn\\.jsdelivr\\.net[:/]",
-        "^https://cdnjs\\.cloudflare\\.com[:/]", "^wss://cdnjs\\.cloudflare\\.com[:/]",
-        "^https://unpkg\\.com[:/]", "^wss://unpkg\\.com[:/]",
+        "^https://cdn\\.jsdelivr\\.net/", "^https://cdn\\.jsdelivr\\.net:[0-9]+/",
+        "^wss://cdn\\.jsdelivr\\.net/", "^wss://cdn\\.jsdelivr\\.net:[0-9]+/",
+        "^https://cdnjs\\.cloudflare\\.com/", "^https://cdnjs\\.cloudflare\\.com:[0-9]+/",
+        "^wss://cdnjs\\.cloudflare\\.com/", "^wss://cdnjs\\.cloudflare\\.com:[0-9]+/",
+        "^https://unpkg\\.com/", "^https://unpkg\\.com:[0-9]+/",
+        "^wss://unpkg\\.com/", "^wss://unpkg\\.com:[0-9]+/",
         "^about:", "^data:", "^blob:",
       ])
     let blocks = rules.map(\.block)
-    #expect(blocks == [true] + Array(repeating: false, count: 11))
+    #expect(blocks == [true] + Array(repeating: false, count: 17))
     #expect(filters.allSatisfy { !$0.contains("|") })
   }
 
@@ -52,7 +55,8 @@ struct WebRuleListTests {
     for url in [
       "https://studio.tail1234.ts.net:13377/", "https://studio.tail1234.ts.net:13377/assets/a.js",
       "wss://studio.tail1234.ts.net:13377/hmr", "https://cdn.jsdelivr.net/npm/x@1/x.js",
-      "https://cdnjs.cloudflare.com:443/ajax/libs/x.js", "wss://unpkg.com/", "data:image/png;base64,AA==",
+      "https://cdnjs.cloudflare.com:443/ajax/libs/x.js", "wss://unpkg.com/", "wss://unpkg.com:8443/",
+      "data:image/png;base64,AA==",
       "blob:https://studio.tail1234.ts.net:13377/0b5c", "about:blank",
     ] {
       let passes = try admits(rules, url)
@@ -103,11 +107,11 @@ struct WebRuleListTests {
     let data = try #require(text.data(using: .utf8))
     let parsed = try JSONSerialization.jsonObject(with: data)
     let array = try #require(parsed as? [[String: [String: String]]])
-    #expect(array.count == 8)
+    #expect(array.count == 10)
     #expect(array.first?["action"]?["type"] == "block")
     #expect(array.first?["trigger"]?["url-filter"] == ".*")
     let types = array.dropFirst().compactMap { $0["action"]?["type"] }
-    #expect(types == Array(repeating: "ignore-previous-rules", count: 7))
+    #expect(types == Array(repeating: "ignore-previous-rules", count: 9))
     #expect(!text.contains("\\/"))
   }
 
