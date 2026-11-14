@@ -56,6 +56,11 @@ async function main(): Promise<void> {
   // daemon — never a silent ignore (debug/swarm-replay.ts; the shell blanks it for a package too)
   const { debugSwarmCorpusOf } = await import("./debug/swarm-replay");
   const debugSwarmCorpus = debugSwarmCorpusOf(process.env, isSea());
+  // MK-6 — development only: the plugin list a smoke stages, and the public key that verifies it.
+  // A packaged fieldd handed either fails its boot here, by name, before it writes a root or loads
+  // the daemon (registry-seam.ts; the shell blanks both for a package too)
+  const { pluginRegistryOf } = await import("./registry-seam");
+  const pluginRegistry = pluginRegistryOf(process.env, isSea());
   // FS-1a — the daemon's module graph loads HERE, never at the bundle's top:
   // the same bundle runs as the files worker and the agent shim (below), which
   // must not carry it
@@ -220,6 +225,8 @@ async function main(): Promise<void> {
     ...(rosettadBin !== undefined ? { rosettadBin } : {}),
     ...(agentSearchPath !== undefined ? { agentSearchPath } : {}),
     ...(debugSwarmCorpus !== undefined ? { debugSwarmCorpus } : {}),
+    // MK-6 — the list a development run named (registry-seam.ts); unset, "no plugin registry is configured"
+    ...(pluginRegistry !== undefined ? pluginRegistry : {}),
     // AR-S1c — this is the product's daemon: read the agents' installs at boot.
     agentInventoryWarm: true,
     ...(process.env["FIELDD_BUILD_ID"] ? { buildId: process.env["FIELDD_BUILD_ID"] } : {}),

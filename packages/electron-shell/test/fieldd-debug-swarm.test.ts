@@ -1,7 +1,11 @@
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FIELDD_DEBUG_SWARM_CORPUS_ENV } from "@vibefield/contracts";
+import {
+  FIELDD_DEBUG_SWARM_CORPUS_ENV,
+  FIELDD_PLUGIN_REGISTRY_KEY_ENV,
+  FIELDD_PLUGIN_REGISTRY_URL_ENV,
+} from "@vibefield/contracts";
 import { createNoopLogger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -12,6 +16,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // swarm-replay-packaged.test.ts). Development passes the launching shell's value through, as it passes
 // every other. `electron` and the supervisor are mocked, the house way (fieldd-rosettad.test.ts): what
 // is proven is the environment the pair would be spawned with.
+//
+// MK-6 (2026-11-14) — and a package reads no plugin list its launching shell named: the plugin list's
+// development seam (FIELDD_PLUGIN_REGISTRY_URL and _KEY, fieldd `registry-seam.ts`) is blanked the same
+// way, and a packaged fieldd handed either refuses to boot (fieldd's registry-seam-packaged.test.ts). The
+// same harness proves it, in its own describe below.
 
 const stub = vi.hoisted(() => ({
   created: [] as { environment?: Record<string, string | undefined> }[],
@@ -34,13 +43,24 @@ const { resolveDevelopmentResources, resolvePackagedResources } = await import(
 );
 
 const CORPUS = "/corpora/n20-60s-s1.jsonl.gz";
+/** MK-6: a list's address and a public key, as smoke:market's stager hands them (no real key:
+ * nothing verifies here) */
+const LIST = "file:///tmp/vf-market-fixture-test/listed/index.json";
+const PUBLIC = "MCowBQYDK2VwAyEAplaceholderplaceholderplaceholderplace=";
+const SEAMS = [
+  FIELDD_DEBUG_SWARM_CORPUS_ENV,
+  FIELDD_PLUGIN_REGISTRY_URL_ENV,
+  FIELDD_PLUGIN_REGISTRY_KEY_ENV,
+] as const;
 const cleanup: (() => void)[] = [];
-const savedEnv = process.env[FIELDD_DEBUG_SWARM_CORPUS_ENV];
+const savedEnv = new Map(SEAMS.map((name) => [name, process.env[name]] as const));
 afterEach(() => {
   for (const fn of cleanup.splice(0).reverse()) fn();
   stub.created.length = 0;
-  if (savedEnv === undefined) delete process.env[FIELDD_DEBUG_SWARM_CORPUS_ENV];
-  else process.env[FIELDD_DEBUG_SWARM_CORPUS_ENV] = savedEnv;
+  for (const [name, saved] of savedEnv) {
+    if (saved === undefined) delete process.env[name];
+    else process.env[name] = saved;
+  }
 });
 
 /** A packaged layout on disk: fieldd (buildSupervisor refuses a missing launch target) and the
@@ -117,5 +137,30 @@ describe("buildSupervisor — the debug swarm never reaches a packaged fieldd (P
     // Item 365: a boolean, never the environment itself, so a red cannot print this process's whole environment.
     const handed = spawnEnvironment("smoke", developmentLayout());
     expect(FIELDD_DEBUG_SWARM_CORPUS_ENV in handed).toBe(false);
+  });
+});
+
+describe("buildSupervisor — a plugin list the shell named never reaches a packaged fieldd (MK-6)", () => {
+  it("blanks both halves of the seam for a packaged fieldd, whatever the launching shell holds", () => {
+    process.env[FIELDD_PLUGIN_REGISTRY_URL_ENV] = LIST;
+    process.env[FIELDD_PLUGIN_REGISTRY_KEY_ENV] = PUBLIC;
+    const environment = spawnEnvironment("production", packagedLayout());
+    expect(environment[FIELDD_PLUGIN_REGISTRY_URL_ENV]).toBe("");
+    expect(environment[FIELDD_PLUGIN_REGISTRY_KEY_ENV]).toBe("");
+  });
+
+  it("passes the launching shell's two values through in development, and adds none of its own", () => {
+    process.env[FIELDD_PLUGIN_REGISTRY_URL_ENV] = LIST;
+    process.env[FIELDD_PLUGIN_REGISTRY_KEY_ENV] = PUBLIC;
+    const environment = spawnEnvironment("smoke", developmentLayout());
+    expect(environment[FIELDD_PLUGIN_REGISTRY_URL_ENV]).toBe(LIST);
+    expect(environment[FIELDD_PLUGIN_REGISTRY_KEY_ENV]).toBe(PUBLIC);
+    delete process.env[FIELDD_PLUGIN_REGISTRY_URL_ENV];
+    delete process.env[FIELDD_PLUGIN_REGISTRY_KEY_ENV];
+    // booleans, never the environment itself, as item 365 holds the debug swarm's row above: a red
+    // cannot print this process's whole environment
+    const bare = spawnEnvironment("smoke", developmentLayout());
+    expect(FIELDD_PLUGIN_REGISTRY_URL_ENV in bare).toBe(false);
+    expect(FIELDD_PLUGIN_REGISTRY_KEY_ENV in bare).toBe(false);
   });
 });

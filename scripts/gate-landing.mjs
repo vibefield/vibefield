@@ -93,6 +93,9 @@ export const LANDING = [
   // WP8d (W7, desk-gates row 29): the app's own plugins under a verified index — it loads, a corrupted copy is refused
   // on its row, a forged index refuses the root; three launches GPU-less
   { name: "smoke:bundled", run: pnpm("smoke:bundled") },
+  // MK-6 (desk-gates row 37): the Plugins popup over a plugin list of the run's own, signed with dev keys — listed,
+  // tampered, forged, offline and update; five launches, keeping the GPU (the board's rise reads the drawn desk)
+  { name: "smoke:market", run: pnpm("smoke:market") },
   // item 378 (desk-gates row 38): the preview capture's WebRTC fence on a real Electron — a control capture reaches a
   // STUN and a TURN listener, the shipped capture reaches neither; its capture paints, so it needs the unlocked console
   { name: "smoke:capture-webrtc", run: pnpm("smoke:capture-webrtc") },
@@ -189,6 +192,7 @@ const SAYS = [
   /^SMOKE_\w*failed.*$|^\w+ failed: .*$/u,
   /^STUDIO_PHYSICAL .*$/u,
   /^BUNDLED_FIXTURE_DONE .*$/u,
+  /^MARKET_FIXTURE_DONE .*$/u,
   /^(?:ok|fail)\s+try\s+.*$/u,
   /^icons current.*$|^ios (?:fixtures|pins): .*$/u,
 ];

@@ -12,11 +12,14 @@ import { describe, expect, it } from "vitest";
 const testing = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "testing");
 const read = (file: string): string => readFileSync(join(testing, file), "utf8");
 
-/** The desk smokes' row modules — everything smoke:canvas, smoke:kind-faults and smoke:plugin-restart drive. */
+/** The desk smokes' row modules — everything smoke:canvas, smoke:kind-faults and smoke:plugin-restart drive, and
+ * smoke:market (MK-6), which is smoke:canvas's `--market` branch. */
 const ROWS = [
   "smoke-covers.ts",
   "smoke-desk-copy.ts",
   "smoke-desk-rig.ts",
+  "smoke-market.ts",
+  "smoke-more.ts",
   "smoke-pegboard.ts",
   "smoke-peers.ts",
   "smoke-rest.ts",

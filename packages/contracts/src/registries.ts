@@ -2087,6 +2087,15 @@ export const BUNDLED_PLUGIN_INDEX_SIGNATURE_FILE = "bundled-plugins.json.sig" as
  * `release-identity.json` (the ledger's public fields, the root keys, the key class). */
 export const IDENTITY_DIR = "identity" as const;
 export const RELEASE_IDENTITY_FILE = "release-identity.json" as const;
+/** MK-6 (2026-11-14) — DEVELOPMENT ONLY: the plugin list a development fieldd reads, a file:// or http(s):// address
+ * (fieldd `registry-seam.ts`). No build sets it: no build configures a plugin list until the registry rung (TD §9
+ * TD-4), and `pnpm smoke:market` stages a list of its own, signed by keys it mints in memory. Both of these or
+ * neither. A packaged fieldd refuses to boot under either, and the shell blanks both for a packaged fieldd. TS-only,
+ * like the names above and the trust anchor's two below. */
+export const FIELDD_PLUGIN_REGISTRY_URL_ENV = "FIELDD_PLUGIN_REGISTRY_URL" as const;
+/** …and the PUBLIC key that list's signature is verified with (base64 SPKI DER, as plugin-build's
+ * `generateRegistryKeypair` answers it). No secret is ever handed to fieldd here. */
+export const FIELDD_PLUGIN_REGISTRY_KEY_ENV = "FIELDD_PLUGIN_REGISTRY_KEY" as const;
 /** The shell hands fieldd the staged trust-root document's path here (WP8-D3 amended; never ambient in a
  * packaged app, WP8-D9). */
 export const FIELDD_TRUST_ROOT_ENV = "FIELDD_TRUST_ROOT" as const;

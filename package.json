@@ -21,6 +21,7 @@
     "smoke:plugin-restart": "pnpm --filter @vibefield/desktop smoke:plugin-restart",
     "smoke:kind-faults": "pnpm --filter @vibefield/desktop smoke:kind-faults",
     "smoke:bundled": "pnpm --filter @vibefield/desktop smoke:bundled",
+    "smoke:market": "pnpm --filter @vibefield/desktop smoke:market",
     "smoke:update": "pnpm --filter @vibefield/desktop smoke:update",
     "smoke:plugin": "pnpm --filter @vibefield/desktop smoke:plugin",
     "smoke:phone": "pnpm --filter @vibefield/desktop smoke:phone",

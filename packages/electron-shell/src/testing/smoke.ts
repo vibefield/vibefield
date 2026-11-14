@@ -1,5 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -169,6 +170,14 @@ import { FRAMES_FLAG, type FramesDriver, framesRows as framesPaneRows } from "./
 import { HONEST_FLAG, type HonestRowsDriver, honestPaneRows } from "./smoke-honest-pane";
 import { type LastStillDriver, lastStillRows, STILL_FLAG } from "./smoke-last-still";
 import { LIVE_FLAG, type LiveRowsDriver, livePaneRows } from "./smoke-live-pane";
+import {
+  MARKET_FLAG,
+  marketFixture,
+  marketRows,
+  marketRowsLine,
+  marketRunRows,
+} from "./smoke-market";
+import { moreRows } from "./smoke-more";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
 import { PHONE_FLAG, type PhoneRowsDriver, phoneRows as phonePaneRows } from "./smoke-phone";
@@ -1237,6 +1246,55 @@ export async function runSmokeCanvas(opts: {
     app.exit(ok ? 0 : 2);
     return;
   }
+  if (process.argv.includes(MARKET_FLAG)) {
+    // MK-6 — THE PLUGINS POPUP OVER A PLUGIN LIST OF THE RUN'S OWN (`pnpm smoke:market`, desk-gates row 37): a signed
+    // list staged on file:// with dev keys and handed to fieldd's development seam (packaging/stage-market-fixture.mjs),
+    // the run's rows judged in smoke-market.ts — none of the canvas witnesses below. The product's first board, drawn
+    // on the GPU (the board's rise reads ICE's focus off the drawn frame) and revealed before the first row.
+    try {
+      const read = marketFixture(process.env);
+      if ("problem" in read) throw new Error(read.problem);
+      const picked = marketRows(read.fixture.run, process.env);
+      const { rows, unknown } = picked;
+      if (unknown.length > 0) throw new Error(`no market row is named ${unknown.join(", ")}`);
+      // its rows and each parked row with why, said before the GPU's or the desk's red (C36)
+      console.log(marketRowsLine(read.fixture.run, picked));
+      if (!gpu || noWebgpu)
+        throw new Error("the market's rows need the GPU: the board's rise reads the drawn desk");
+      const canvasReady = waitForConsole(win, "CANVAS_READY ", 45_000);
+      const deskVerdict = waitForConsole(win, "DESK_READY ", 60_000);
+      await loadRenderer(win, "smoke-canvas", opts.viteUrl);
+      console.log(`SMOKE_CANVAS ${await canvasReady}`);
+      const problems = [...smokeProfileFailures()];
+      console.log(`SMOKE_CANVAS_DESK DESK_READY ${await deskVerdict}`);
+      deskSaid.stop();
+      await bootRevealed(win, "the market's desk revealed");
+      const names = rows.map((row) => row.name);
+      const judged = await marketRunRows({
+        win,
+        fixture: read.fixture,
+        rows,
+        request: (method, params) => opts.handle.client.request(method, params),
+        copy: (from, to) => copyFileSync(from, to),
+        shotDir,
+        say: (line) => console.log(line),
+      });
+      problems.push(...judged.problems);
+      if (win.webContents.isCrashed()) problems.push("the renderer crashed");
+      if (cspViolations.length > 0) problems.push(`CSP refused: ${cspViolations.join(" | ")}`);
+      console.log(
+        `SMOKE_MARKET ${JSON.stringify({ run: read.fixture.run, rows: names, problems: problems.length, ok: problems.length === 0 })}`,
+      );
+      if (problems.length > 0) throw new Error(problems.join(" · "));
+      ok = true;
+      console.log(`SMOKE_MARKET_OK ${read.fixture.run}`);
+    } catch (e) {
+      console.error(`SMOKE_MARKET failed: ${e instanceof Error ? e.message : e}`);
+    }
+    await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
+    app.exit(ok ? 0 : 2);
+    return;
+  }
   try {
     const canvasReady = waitForConsole(win, "CANVAS_READY ", 45_000);
     const drawing = gpu && !noWebgpu;
@@ -1465,6 +1523,14 @@ export async function runSmokeCanvas(opts: {
           );
         } catch (error) {
           problems.push(`DK-13: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        // MK-6: More in Plugins… at the board's foot — its place, the third stop of Tab, ↵ and a press opening the
+        // Plugins popup on Discover with the board folded, and its step aside with an object in hand
+        // (testing/smoke-more.ts)
+        try {
+          problems.push(...(await moreRows({ win, shotDir, say: (line) => console.log(line) })));
+        } catch (error) {
+          problems.push(`MK-6 MORE: ${error instanceof Error ? error.message : String(error)}`);
         }
         // DK-18: the product desk rig's missing acts — every kind the board hangs taken off it by the pointer and dropped where
         // nothing picks, its face drawn there, one undo step back; the take's landing timed by the K-H discipline
