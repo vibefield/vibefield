@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
  * HN-5 — THE COPY DOOR (frame/cards/copy-door.ts; DESIGN.md §8 "The hand", where cards come
- * from, and §8 "Copy"): every copy puts what it copied on the system clipboard FIRST — words
+ * from, and §8 "Make a card"): every copy puts what it copied on the system clipboard FIRST — words
  * through the host's copy door, a picture through the clipboard's picture door — and deals its
  * card only once the write was taken; both bounds are checked before either door; a refusal
  * deals nothing and comes back in Copy's voice — a door's typed refusal in its terms, anything

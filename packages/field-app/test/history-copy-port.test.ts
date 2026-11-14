@@ -4,8 +4,8 @@
  * other — on the system clipboard through the one copy door, then a text card that rises into
  * its place (no button's box reaches the port) and says History; a refusal rejects with Copy's
  * whole sentence — the room shows it as the action's receipt, so never a bare clause and never a
- * bridge's error (DESIGN.md §8 "Copy") — and deals nothing. The window's ports hand the room that
- * port.
+ * bridge's error (DESIGN.md §8 "Make a card") — and deals nothing. The window's ports hand the room
+ * that port.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cardsStore } from "../src/frame/cards/cards-store";

@@ -3,15 +3,15 @@ import type { DealFrom } from "./cards-store";
 import { COPY_BUTTON_WORDS } from "./cards-words";
 import { dealFromElement } from "./copy-door";
 
-/** How long a copy's button says how the copy went (DESIGN.md §8 "Copy"). */
+/** How long a copy's button says how the copy went (DESIGN.md §8 "Make a card"). */
 const SAID_MS = 2_000;
 
 /** HN-5 — a copy's button on a sheet over the frame: Settings' (a sign-in link, a device's name,
- * the exact version, a diagnostics record) and the Setup Assistant's (DESIGN.md §8 "Copy", LC-22).
- * What it copies is dealt into the hand from the button's own box, under the sheet, and the button
- * says how it went for two seconds in its own words: "Copied", the copy's sign while the sheet
- * stands, or "Couldn't copy". Why a copy was refused is the log's (`renderer.cards.copy_refused`),
- * never the button's. Each sheet dresses it as its own buttons. */
+ * the exact version, a diagnostics record) and the Setup Assistant's (DESIGN.md §8 "Make a card",
+ * LC-22). What it copies is dealt into the hand from the button's own box, under the sheet, and the
+ * button says how it went for two seconds in its own words: "Copied", the copy's sign while the
+ * sheet stands, or "Couldn't copy". Why a copy was refused is the log's
+ * (`renderer.cards.copy_refused`), never the button's. Each sheet dresses it as its own buttons. */
 export function CopyButton({
   label,
   copy,

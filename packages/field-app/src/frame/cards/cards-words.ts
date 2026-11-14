@@ -259,8 +259,8 @@ export const COPY_DOOR_WORDS = {
 } as const;
 
 /** HN-5 — a copy made in Settings or the Setup Assistant keeps its button's own words, said on
- * the button for two seconds (DESIGN.md §8 "Copy"): under the sheet, "Copied" is the copy's sign
- * while the sheet stands. */
+ * the button for two seconds (DESIGN.md §8 "Make a card"): under the sheet, "Copied" is the copy's
+ * sign while the sheet stands. */
 export const COPY_BUTTON_WORDS = {
   copied: "Copied",
   refused: "Couldn't copy",

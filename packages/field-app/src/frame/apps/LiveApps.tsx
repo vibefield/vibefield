@@ -251,8 +251,8 @@ export function LiveApps({ client }: { client: MadeAppsClient }): ReactElement {
     [beginPending, client, finishPending],
   );
 
-  // A copy like any other (DESIGN.md §8 "Copy"; item 111): the words through the window's door, a
-  // card dealt into the hand under the sheet, and the row says how it went.
+  // A copy like any other (DESIGN.md §8 "Make a card"; item 111): the words through the window's
+  // door, a card dealt into the hand under the sheet, and the row says how it went.
   const copyUrl = useCallback(
     async (artifact: ArtifactView, from: DealFrom | null): Promise<boolean> => {
       if (artifact.url === undefined) return false;

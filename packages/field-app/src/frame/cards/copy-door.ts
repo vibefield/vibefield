@@ -9,7 +9,7 @@ import { COPY_DOOR_WORDS } from "./cards-words";
 
 /**
  * THE COPY DOOR (HN-5; HN-L1, HN-D2, LC-9; DESIGN.md §8 "The hand", where cards come from,
- * and §8 "Copy"): every copy VibeField makes puts what it copied on the system clipboard AND
+ * and §8 "Make a card"): every copy VibeField makes puts what it copied on the system clipboard AND
  * deals its card, in that order — the clipboard is written first, and the card is dealt only
  * once the write was taken, so the newest card is what the clipboard holds. A refusal deals
  * nothing and comes back in Copy's voice, for the source to say where it says things (the

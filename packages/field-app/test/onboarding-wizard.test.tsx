@@ -1177,8 +1177,8 @@ describe("Setup Assistant", () => {
   });
 
   it("deals a copy from its button's box, under the glass (HN-5)", async () => {
-    // DESIGN.md §8 "Copy" (LC-22): a copy made under a sheet is dealt into the hand under it,
-    // from the button pressed, and the button's "Copied" is its sign while the sheet stands
+    // DESIGN.md §8 "Make a card" (LC-22): a copy made under a sheet is dealt into the hand under
+    // it, from the button pressed, and the button's "Copied" is its sign while the sheet stands
     const copied: string[] = [];
     host(
       vi.fn(async () => ({ ...FRESH, color: "accent-2" }) as FieldUserProfile),

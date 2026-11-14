@@ -358,7 +358,7 @@ export type ClipboardWriteImageRefusal = Extract<
 /** preload → page: why a copy's write was refused, typed (HN-5) — the one shape both copy
  * doors reject with, the words' (`copyText`, over the diagnostics port) and the picture's
  * (`writeImage`), for the page to say in Copy's voice, its sizes as §9 counts them, and never
- * a bridge's error (DESIGN.md §8 "Copy"). A plain record, never an Error: the context bridge
+ * a bridge's error (DESIGN.md §8 "Make a card"). A plain record, never an Error: the context bridge
  * carries an Error across as its message alone, so a refusal's terms would not reach the page.
  *  · `too-large` — `bytes` is past `max`: the words' UTF-8 (`words`) or the picture's PNG
  *    (`picture`) against the clipboard's bound (`SHELL_CLIPBOARD`), or the words as the words'

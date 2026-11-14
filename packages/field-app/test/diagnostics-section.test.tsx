@@ -292,10 +292,10 @@ describe("Diagnostics' last exit (AL-12)", () => {
   });
 });
 
-// HN-5 — a record's copy (DESIGN.md §8 "The hand", §8 "Copy"): the record's JSON on the system
-// clipboard first, then a text card dealt from the button pressed, named by the record's own name
-// — its event, over its message — never by the JSON's first "{"; the button says how it went in
-// Settings' own words, "Copied" or "Couldn't copy", as Devices' do.
+// HN-5 — a record's copy (DESIGN.md §8 "The hand", §8 "Make a card"): the record's JSON on the
+// system clipboard first, then a text card dealt from the button pressed, named by the record's own
+// name — its event, over its message — never by the JSON's first "{"; the button says how it went
+// in Settings' own words, "Copied" or "Couldn't copy", as Devices' do.
 describe("a diagnostics record's copy (HN-5)", () => {
   const BOX = { left: 900, top: 210, width: 30, height: 16 };
 

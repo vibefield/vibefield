@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 /**
- * HN-5 — A COPY'S BUTTON ON A SHEET (frame/cards/CopyButton.tsx; DESIGN.md §8 "Copy", LC-22):
- * Settings' copies and the Setup Assistant's deal their card from the button's own box, and the
- * button says how the copy went for two seconds in its own words, "Copied" or "Couldn't copy",
+ * HN-5 — A COPY'S BUTTON ON A SHEET (frame/cards/CopyButton.tsx; DESIGN.md §8 "Make a card",
+ * LC-22): Settings' copies and the Setup Assistant's deal their card from the button's own box, and
+ * the button says how the copy went for two seconds in its own words, "Copied" or "Couldn't copy",
  * then its label again. In a Diagnostics record's summary its press is its own: the row is never
  * toggled by it, and the row's own handler never hears it; elsewhere the press is the page's too.
  */
