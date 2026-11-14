@@ -19,7 +19,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import type { AuditWriterTestHooks } from "../src/audit-service";
-import { bootstrap } from "../src/index";
+import { bootstrap, type FielddDaemon } from "../src/index";
 import { PLUGIN_CURRENT_POINTER_FILE } from "../src/plugin-artifact-store";
 import { type PreparedRegistryInstall, RegistryInstallService } from "../src/plugin-install";
 import { INSTALL_CARD_TTL_MS, InstallCards } from "../src/plugin-install-cards";
@@ -33,18 +33,36 @@ import { helloAs, until, WsRpc } from "./ws-rpc";
 // (mk-o2/PLAN.md and its addendum on item 322). Every registry here is the test's own: the real
 // example plugin packed into an index the test builds and signs with a key it makes, read over
 // file://, in temp roots it removes. A manifest is rewritten only inside the test's own temp root.
-// No network, no real data dir, no child.
+// No network, no real data dir, no child process. A card's commit starts the example's service
+// in a worker thread (the door's restartFresh): each door test waits for it to be active before
+// fieldd stops, as plugin-install.test.ts does.
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
-  for (const fn of cleanup.reverse()) await fn();
+  // every step runs, and a step that throws is said by its own message: ServiceHost.stopAll's
+  // AggregateError names each service that did not stop and what it retained (mini-mkv1b's R08
+  // printed only its summary)
+  const failures: string[] = [];
+  for (const fn of cleanup.reverse()) {
+    try {
+      await fn();
+    } catch (error) {
+      const inner: unknown[] = error instanceof AggregateError ? error.errors : [error];
+      failures.push(...inner.map((e) => (e instanceof Error ? e.message : String(e))));
+    }
+  }
   cleanup = [];
+  if (failures.length > 0) throw new Error(`teardown did not finish: ${failures.join("; ")}`);
 });
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const KV_DIR = join(HERE, "..", "..", "..", "examples", "plugins", "kv-service");
 const KV_ID = "vibefield.example.kv";
 const MISMATCH = { pluginKind: "PLUGIN_ARTIFACT_MISMATCH" };
+
+/** The installed example's service is active: its worker started and acknowledged. */
+const serviceActive = (daemon: FielddDaemon) =>
+  daemon.plugins.snapshot().plugins.find((p) => p.id === KV_ID)?.service === "active";
 
 function temp(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -233,7 +251,9 @@ async function shellOn(
 type Prepared = { candidate: string; record: { id: string; manifestHash: string } };
 
 describe("the install card's doors (MK-O2)", () => {
-  it("prepare, discard and commit; a gone handle and an installed id refused; audited with no token", async () => {
+  it("prepare, discard and commit; a gone handle and an installed id refused; audited with no token", {
+    timeout: 40_000,
+  }, async () => {
     const { dataDir, daemon, shell } = await shellOn(await registry());
 
     // prepare answers a handle and the row; nothing is installed. Discard throws it away, once.
@@ -255,6 +275,7 @@ describe("the install card's doors (MK-O2)", () => {
     })) as { id: string; manifestHash: string };
     expect([installed.id, installed.manifestHash]).toEqual([KV_ID, second.record.manifestHash]);
     expect(daemon.plugins.get(KV_ID)?.manifestHash).toBe(second.record.manifestHash);
+    await until(() => serviceActive(daemon), 15_000);
     const again = await shell.callErr("plugins.install.prepare", { id: KV_ID });
     expect(again.data?.kind).toBe("PRECONDITION_FAILED");
 
@@ -285,7 +306,9 @@ describe("the install card's doors (MK-O2)", () => {
     expect(JSON.stringify(ledger()).includes(daemon.shellToken)).toBe(false);
   });
 
-  it("an attempt row that cannot be written leaves the card waiting: the same card installs after", async () => {
+  it("an attempt row that cannot be written leaves the card waiting: the same card installs after", {
+    timeout: 40_000,
+  }, async () => {
     let failWrites = false;
     const { daemon, shell } = await shellOn(await registry(), {
       beforeWrite: () => {
@@ -309,5 +332,6 @@ describe("the install card's doors (MK-O2)", () => {
     const installed = (await shell.call("plugins.install.commit", { candidate })) as { id: string };
     expect(installed.id).toBe(KV_ID);
     expect(daemon.plugins.get(KV_ID)?.id).toBe(KV_ID);
+    await until(() => serviceActive(daemon), 15_000);
   });
 });
