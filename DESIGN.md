@@ -9813,6 +9813,20 @@ of VibeField is missing the file it observes agents with. Reinstall VibeField." 
 In development an agent's forwarder runs on puppeteer's own script runner (a real Node, or Electron's), and none of
 these lines can be reached.
 
+**When an agent's own install can't be found** (item 278, V1, at the EL8 to puppeteer 0.4.2, which carries 0.4.1's
+#80; the words James's, A on `j-278-hermes-words`, 2026-11-13 00:36:05Z). Since puppeteer 0.4.1 a Hermes launch
+starts Hermes only through the Python its own install names. When VibeField can't find that install, nothing
+starts, and Hermes's adapter refuses the launch (`INTERPRETER_UNAVAILABLE`, a neutral code). Its sentence is about
+interpreters and wrappers, nothing a person can act on, so VibeField says its own, naming the agent by its label:
+- "Hermes was not started: VibeField can't find this Mac's Hermes install. Reinstall Hermes, then try again."
+
+Each surface frames it as it frames the forwarder's refusal above. fieldd's launch door answers it bare, a clause the
+app says after its own words: "VibeField can't find this Mac's Hermes install. Reinstall Hermes, then try again." A
+name typed in a pane is refused as every launcher's refusal is said, the kit's label first and the command as typed:
+"VibeField: ‹command› was not started: VibeField can't find this Mac's Hermes install. Reinstall Hermes, then run
+‹command› again." No line names an interpreter, a wrapper, a path or Python. Any other refusal of an adapter's
+keeps its own sentence.
+
 **The link's words** (track TS, TS-D1 and TS-D2 ruled 2026-10-27). The act is **Continue with
 Tailscale** on every button that starts it — the Connect pane, Settings → Devices, the phone — and
 the place that holds it says **Connect your devices**; the state is **Connected**. A desktop that
