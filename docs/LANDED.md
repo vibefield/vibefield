@@ -13077,7 +13077,7 @@ the grant to the last row.
 - **The gate-host deviation, James's call (2026-10-21 21:43Z):** `docs/desk-gates.md` names this Mac's GPU. The five
   interaction rows ran on his Mac mini instead. verify, the stages and list A ran here.
   - The host:
-    - `jaspers-Mac-mini.local`: Apple M4 (10-core GPU, Metal 4), 16 GiB RAM, macOS 26.3 (25D125);
+    - the Mac mini: Apple M4 (10-core GPU, Metal 4), 16 GiB RAM, macOS 26.3 (25D125);
     - one 1920×1080 @ 60 Hz main display, online and kept awake by `caffeinate -d` for the run;
     - the screen unlocked by James (21:56Z), and unlocked at every arm and every row's end;
     - node v26.5.0, pnpm 11.13.1 and rustc 1.97.1 (`8bab26f4f`), the same as this Mac's.
@@ -13163,7 +13163,7 @@ the grant to the last row.
 - **The gate ran on James's Mac mini, by his call at 22:40Z.** It is a gate-host deviation, as the D6 landing's
   list B was. Every row of it ran there.
   - **The host:**
-    - `jaspers-Mac-mini.local`: Apple M4 (10 cores), 16 GiB, macOS 26.3 (25D125), one 1920×1080 display.
+    - the Mac mini: Apple M4 (10 cores), 16 GiB, macOS 26.3 (25D125), one 1920×1080 display.
     - node v26.5.0, pnpm 11.13.1, cargo-typify 0.7.0.
     - rustc 1.99.1 (`58cf8f9c35b355199727627d07ae34a4e2846d67`, 2026-10-13), with clippy 0.1.99 and rustfmt 1.10.0
       from the same build. rustup 1.29.2 installed it from the toml. The mini's `rustup default` stays 1.97.1, and the
@@ -14814,7 +14814,7 @@ release metadata; and the old release-age row goes in the same commit after the 
     changed (TYPED items 2–5, the `--bare` refusal among them), the launch, the bloom under a profile with its
     no-sign-in refusal, spend and the timeline. Its teardown left nothing (`left: []`).
   - **`smoke:terminal-direct` ok, exit 0, 33 s.**
-  - Both ran 2026-10-26 13:50:31–13:53:24Z on jaspers-Mac-mini (Apple M4, macOS 26.3, its one 1920×1080 display, the
+  - Both ran 2026-10-26 13:50:31–13:53:24Z on the Mac mini (Apple M4, macOS 26.3, its one 1920×1080 display, the
     offscreen preload, canvas2d), unlocked by James (VF-PM 13:49Z). Each armed at idle ≥ 120 s, load 1.5, 21 GiB free.
     Toolchain: node v26.5.0, pnpm 11.13.1, rustc 1.99.1. Never `-u`; the run's `caffeinate -d -i -w` ended with it.
   - The mini is a gate-host deviation from desk-gates.md's "this Mac's GPU", as for the earlier mini rows.
@@ -19023,7 +19023,7 @@ asks the question when New field is next pressed.
   outside the diff (items 101 and 91; the load 17 → 460, then 18 → 471 with James away). VF-PM read the reds as the
   verify's own fan-out on this host (08:58Z), and James picked the Mac mini's verify lane (09:05:11Z). The lane started
   on his typed "go" (17:50:20Z).
-- **The gate host (a deviation, said here):** jaspers-Mac-mini, Apple M4, 16 GiB, macOS 26.7.2 (25G332), node v26.5.0,
+- **The gate host (a deviation, said here):** the Mac mini, Apple M4, 16 GiB, macOS 26.7.2 (25G332), node v26.5.0,
   pnpm 11.13.1, rustc 1.99.1, TMPDIR=/tmp, the lane `~/vf-lanes/verify` (`ts6-mini.sh`; setup 17:51:19–17:54:45Z, a
   blobless clone, rosetta-pin `434854583`, mille-pin `c8160d585`; preflight green with one R23 candidate warning).
 - **The mini, run one (`ts6-1`) at `26b331dbc`** (17:55:55–17:59:53Z): exit 1 on ONE row outside the diff —
@@ -34297,7 +34297,7 @@ under its new 30,000 ms limit.
   - B177 alone (`-t "B177"`): 1 passed | 83 skipped (84), on its first run;
   - the full fieldd suite: Test Files 235 passed | 4 skipped (239); Tests 3086 passed | 14 skipped (3100), 0 failed;
   - the fieldd typecheck: 0.
-  - The host: jaspers-Mac-mini, Apple M4, macOS 26.7.2, node v26.5.0, rustc 1.99.1. field-native was built from the
+  - The host: the Mac mini, Apple M4, macOS 26.7.2, node v26.5.0, rustc 1.99.1. field-native was built from the
     tree, and preflight was 0 with R23's standing `acp` line. Logs:
     `/Volumes/SamsungRed/lanes/ts6/logs/mini/co-items177-29ee93377/items177-29ee93377/`.
 - **This Mac** (light; nice 19, guard clear; fieldd vitest only as named unit speed runs, never a witness): each
@@ -37587,7 +37587,7 @@ phone's preset: a self phone may now read its home's usage batch.
     `packages/field-app/test/fixtures/usage/*.golden.json` (:77–79 at `um/1-mint`, the UM-1 comment and its "!"
     pattern), so the usage bands golden is the one name not checked: 27 names, 26 files.
   - No fieldd row, no tsc and no verify ran on the MacBook.
-- **The pre-light** (a9, the old mini `jaspers-Mac-mini`, Apple M4, 16 GiB, macOS 26.7.2; 07:53:04–07:59:19Z, at
+- **The pre-light** (a9, the old mini, Apple M4, 16 GiB, macOS 26.7.2; 07:53:04–07:59:19Z, at
   `0c79b15d2` on `1c0f7b748`). Brief `lanes/um/briefs/a9-brief-m-u1-prelight.md` (sha256 `79364a835f5d…`), bundle
   `m-u1-prelight-0c79b15d2-on-1c0f7b748.bundle` (207,783 bytes, sha256 `9bdc29a68241…`), logs
   `/Volumes/SamsungRed/lanes/ts6/logs/oldmini/mu1-pre/` (`mu1.out` `98ce720c5e7b…`):
@@ -38523,7 +38523,7 @@ everywhere (SE-D1, SE-D2). The phone still draws nothing: M-phone (UM-4, then SE
   (sha256 `58a7e5b1f147…` after the call 74 erratum, `6f288b84…` before it), bundle
   `m-desk-prelight-c3eca081a-on-c9493b957.bundle` (224,022 bytes, sha256 `d61e3ffd35dd…`; both in
   `lanes/um/SHA256SUMS-m-desk-c3eca081a`):
-  - **Run 1, every red then its green** (the old mini `jaspers-Mac-mini`, 10:18:36–10:27:11Z; 96 calls over 42
+  - **Run 1, every red then its green** (the old mini, 10:18:36–10:27:11Z; 96 calls over 42
     commits, one field-app vitest file each; `lanes/ts6/logs/mini/mdesk-c3eca081a/`, `calls.tsv` `310988e219f2…`,
     `mdesk.out` `f791d1dae17f…`): 38 calls red and 58 green; 95 of 96 as briefed, each of their reds on
     AssertionErrors alone; `git status` empty at every SHA; no birth under `/private/tmp`. Call 74 is the erratum
@@ -40033,7 +40033,7 @@ sheet names the two slots MA-D7's Apps strip fills.
   "clean" (`48db15e2f`, `f6b0a6420`), and `8904c16ad` compared its two mirrors with `cmp`. Every other row in the
   bodies is an expectation read from the code, "NOT RUN … owed to vf-m1 through a9". The re-cuts and the mint are git
   plumbing alone, with no worktree touched.
-- **The pre-light** (a9, the old mini `jaspers-Mac-mini` at Xcode 27.2 (27B52), its iPhone 17 simulator `1F155533`),
+- **The pre-light** (a9, the old mini at Xcode 27.2 (27B52), its iPhone 17 simulator `1F155533`),
   four packets, each brief and bundle in its `lanes/um/SHA256SUMS-m-phone-*`, and each log folder after the first in
   `lanes/um/logs/m-phone/`:
   - **The first packet**, `9635317bf` on `6095a9bb8` (brief `a9-brief-m-phone-prelight-9635317bf.md`,
