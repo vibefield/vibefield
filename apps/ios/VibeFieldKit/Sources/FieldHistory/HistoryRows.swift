@@ -170,8 +170,10 @@ extension HistoryRow {
   /// lazy stack knows a row it has not laid out by the id its own ForEach gave it, and knows the id a row's view
   /// carries only once that row is laid out.
   static func promptRow(marked mark: String, in rows: [HistoryRow]) -> String? {
-    // STUB (red): no row is found
-    nil
+    for row in rows {
+      if case .prompt(let turn) = row, promptMark(turn) == mark { return row.id }
+    }
+    return nil
   }
 
   /// Item 396 — where a press on the button at the side goes: to the nearest message of the person's own that

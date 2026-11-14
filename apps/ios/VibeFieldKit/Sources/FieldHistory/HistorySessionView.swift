@@ -433,10 +433,18 @@ struct HistorySessionView: View {
     case .message(let mark, let near):
       follow.jumped()
       let anchor = UnitPoint(x: 0.5, y: HistoryBefore.anchor(screen: sight.screen))
-      if HistoryBefore.eases(near: near, reduceMotion: reduceMotion) {
-        withAnimation(FieldMotion.ease(HistoryBefore.ease)) { proxy.scrollTo(mark, anchor: anchor) }
-      } else {
+      // The row is asked for twice: by the id the stack's own ForEach gives it, which a lazy stack knows of a row
+      // it has not laid out, then by the mark its view carries, which it knows once the row is laid out. Both
+      // name the one message, so where both are known the second asks for the place the first did.
+      let row = HistoryRow.promptRow(marked: mark, in: HistoryRow.of(document.turns, desktop: corpus.desktop))
+      let go = {
+        if let row { proxy.scrollTo(row, anchor: anchor) }
         proxy.scrollTo(mark, anchor: anchor)
+      }
+      if HistoryBefore.eases(near: near, reduceMotion: reduceMotion) {
+        withAnimation(FieldMotion.ease(HistoryBefore.ease)) { go() }
+      } else {
+        go()
       }
     case .top:
       follow.jumped()
