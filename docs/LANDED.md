@@ -49312,3 +49312,40 @@ iPhone 17 simulator).
 
 **Not done, and not claimed:** no compile and no test at the landed commit (the run was at `ad5620d53`); no phone,
 no desktop row, no `pnpm verify` for it (a Swift test file and a README line); nothing pushed.
+
+## The userinfo pins — the desktop's reach decisions keep refusing a host named in a URL's userinfo (test-only, M300)
+
+(2026-11-14; one commit, `4899c19e0` on 378's carried tip `dcf62fca4`, branch `ma/userinfo-pins` in the ma-6 lane,
+`lanes/ma-6/vibe-field`, carried onto M299's records `03a4dd86a` as 96d93accf by the fixer. Cut by the ma-6 lead (ma-6).
+Lands by fast-forward as M300, on VF-PM's land GO.)
+
+**Why.** The phone lane (SP-4) found a declared host admitted by a pattern over the RAW URL: a userinfo that names a
+declared host (`https://cdn.jsdelivr.net:x@127.0.0.1:13377/`) passed as that host. On VF-PM's ask (07:13Z) the ma-6
+lead read every reach decision of the desktop at `a5025d1fa`. Each reads the PARSED host, or an anchored pattern whose
+host class holds no `@` and no `:` (LANDED "Item 378", Found). No red row could exist; these rows keep it so, and an
+edit that opens one is red here.
+
+**What moved** (test-only, 2 paths, +87):
+- `packages/contracts/test/userinfo-reach.test.ts` (new, 3 rows), over the forms `name:x@host`, `name@host` and
+  `name:443@host`:
+  - `artifactRootUrlClaim` claims none of them, and the plain root URL still claims;
+  - `ShellArtifactPreviewUrl` refuses each;
+  - `MadeAppReachHost` is never one, and `readMadeAppEnvironment` strips each as unreadable, so a policy names no host.
+- `packages/electron-shell/test/artifact-preview-capture.test.ts` (+32, 2 rows):
+  - `isAllowedPreviewRequest` refuses each form naming an allowHost, as a script and as an image;
+  - it and `isAllowedTopLevelNavigation` refuse the origin's own host and port named in the userinfo. The controls
+    pass.
+
+**The witness:** rows on this Mac at `4899c19e0`, each alone through the door:
+- vitest contracts, `userinfo-reach.test.ts`: 3/3;
+- vitest electron-shell, the capture test: 25/25 (378's 23 and these 2);
+- tsc contracts: exit 0;
+- tsc electron-shell (main and renderer): exit 0, after the lane's frozen install. Its first run was red on two imports
+  the lane's 11-08 install could not resolve, in fieldd's sources and none in these paths;
+- biome over the two paths: no fixes;
+- `pnpm check:walls` (the import walls and the test temp roots, each with its self-test): exit 0,
+  "check-test-temp-roots: clean — 270 of 1164 test files make a temp root; all remove";
+- `pnpm check:retired`: exit 0, "check-retired-names: clean — no retired name in code".
+
+**Not done, and not claimed:** no `pnpm verify` whole and no mini run for this commit. It is test-only, and no product
+source moved. Nothing pushed.
