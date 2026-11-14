@@ -23,6 +23,54 @@ extension EnvironmentValues {
   }
 }
 
+private struct AppsPressedKey: EnvironmentKey {
+  static let defaultValue = false
+}
+
+extension EnvironmentValues {
+  /// Whether a finger is on the tile this view stands in (`AppsPressStyle`).
+  var appsPressed: Bool {
+    get { self[AppsPressedKey.self] }
+    set { self[AppsPressedKey.self] = newValue }
+  }
+}
+
+/// A tile under a finger (DESIGN.md §8 "The phone's Apps", "Under a finger"; item 419): the press reaches the tile's
+/// icon, which darkens as a Home Screen icon does (`AppsPressDim`). Nothing scales, and the name does not change.
+struct AppsPressStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .contentShape(Rectangle())
+      .environment(\.appsPressed, configuration.isPressed)
+  }
+}
+
+/// The dark over what a finger is on: there at once, lifting when the finger goes (`AppsPress`).
+struct AppsPressDim<Outline: Shape>: View {
+  let outline: Outline
+
+  @Environment(\.appsPressed) private var pressed
+
+  var body: some View {
+    outline
+      .fill(Color.black.opacity(AppsPress.dim(pressed: pressed)))
+      .animation(pressed ? nil : FieldMotion.plainEase(AppsPress.lifts), value: pressed)
+      .allowsHitTesting(false)
+      .accessibilityHidden(true)
+  }
+}
+
+/// What a long press lifts out of a tile: the icon alone, its squircle at the tile's top centre, never its name
+/// (`AppIcon.lift`).
+struct AppsIconLift: Shape {
+  let side: CGFloat
+
+  func path(in rect: CGRect) -> Path {
+    RoundedRectangle(cornerRadius: AppIcon.corner(side: side), style: .continuous)
+      .path(in: AppIcon.lift(in: rect, side: side))
+  }
+}
+
 /// One app on the shelf: its icon with §8's marks, its name under it, and the long press.
 struct AppsTile: View {
   let app: IndexAppRow
@@ -33,11 +81,9 @@ struct AppsTile: View {
   let onOpen: () -> Void
   let onAbout: () -> Void
 
-  private static let nameGap: CGFloat = 5
-
   var body: some View {
     Button(action: onOpen) {
-      VStack(spacing: Self.nameGap) {
+      VStack(spacing: AppsShelfChrome.nameGap) {
         icon
         Text(app.title)
           .font(ChromeType.sans(AppsShelfChrome.nameSize))
@@ -48,7 +94,9 @@ struct AppsTile: View {
       .frame(maxWidth: .infinity, alignment: .top)
       .opacity(away ? AppIcon.awayOpacity : 1)
     }
-    .buttonStyle(.plain)
+    .buttonStyle(AppsPressStyle())
+    // the system lifts the icon, as it lifts a Home Screen icon, and leaves the name where it is
+    .contentShape(.contextMenuPreview, AppsIconLift(side: side))
     .contextMenu {
       Button("Open", action: onOpen)
       Button("About this app", action: onAbout)
@@ -99,12 +147,13 @@ private struct AppsFolderTile: View {
           .lineLimit(1)
       }
     }
-    .buttonStyle(.plain)
+    .buttonStyle(AppsPressStyle())
     .accessibilityLabel(folder.name)
   }
 
   private var tile: some View {
     let big = folder.big
+    let square = RoundedRectangle(cornerRadius: AppsShelfChrome.folderRadius, style: .continuous)
     return VStack {
       HStack {
         slot(big, 0)
@@ -120,10 +169,10 @@ private struct AppsFolderTile: View {
     }
     .padding(AppsShelfChrome.folderInset)
     .aspectRatio(1, contentMode: .fit)
-    .background {
-      RoundedRectangle(cornerRadius: AppsShelfChrome.folderRadius, style: .continuous)
-        .fill(ChromePalette.fill)
-    }
+    // under a finger the square darkens as one, never icon by icon
+    .environment(\.appsPressed, false)
+    .background { square.fill(ChromePalette.fill) }
+    .overlay { AppsPressDim(outline: square) }
   }
 
   @ViewBuilder

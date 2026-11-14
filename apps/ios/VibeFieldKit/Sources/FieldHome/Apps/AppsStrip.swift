@@ -102,6 +102,8 @@ struct AppIconView: View {
             .overlay { shape.strokeBorder(ChromePalette.separator, lineWidth: AppIcon.hairline) }
         }
       }
+      // under a finger (item 419): dark over the squircle alone, whatever it holds
+      .overlay { AppsPressDim(outline: shape) }
       .frame(width: side, height: side)
       .task(id: "\(digest ?? "")|\(source == nil ? 0 : 1)") { await want() }
       .onChange(of: held, initial: true) { _, bytes in image = bytes.flatMap(UIImage.init(data:)) }
@@ -186,7 +188,8 @@ struct AppsStripView: View {
       .frame(maxWidth: .infinity)
       .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
+    // the shelf's own press (item 419): the icon darkens under a finger
+    .buttonStyle(AppsPressStyle())
     .accessibilityLabel(app.title)
   }
 }

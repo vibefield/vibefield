@@ -6,8 +6,8 @@ import Foundation
 // that decides a motion stands here, once, and the views read it; how each feels under a finger is James's, on his
 // phone.
 //
-// STUBS (the red): each rule below answers what the shelf did before item 419, or nothing. The numbers are the
-// doc's already.
+// STUBS (the red), still standing for the zoom's source and the folder: each of those rules answers what the shelf
+// did before item 419, or nothing. The press and the long press are real.
 
 /// An icon under a finger.
 enum AppsPress {
@@ -16,14 +16,16 @@ enum AppsPress {
   /// How long the dark takes to lift once the finger has gone. It arrives at once.
   static let lifts: Double = 0.25
 
-  /// The dark over an icon. STUB: none, as before item 419.
-  static func dim(pressed: Bool) -> Double { 0 }
+  /// The dark over an icon.
+  static func dim(pressed: Bool) -> Double { pressed ? dim : 0 }
 }
 
 extension AppIcon {
   /// What a long press lifts out of a tile `rect`: the icon alone, the squircle at the tile's top centre, never its
-  /// name. STUB: the whole tile, as before item 419.
-  static func lift(in rect: CGRect, side: CGFloat) -> CGRect { rect }
+  /// name.
+  static func lift(in rect: CGRect, side: CGFloat) -> CGRect {
+    CGRect(x: rect.midX - side / 2, y: rect.minY, width: side, height: side)
+  }
 }
 
 extension AppsShelfChrome {
