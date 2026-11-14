@@ -2792,12 +2792,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       cut. A file's name is cut in the middle, as Finder cuts one, so its extension stays. A text card is named by its
       first sentence, a terminal copy by its command (without its prompt), a message by who said it and what.
     - **the window**, 29–139 (100 × 110, corner 3.5): what the card holds, seen, with nothing said about it, on
-      `--vf-card-plate` under a hairline of `--vf-card-frame` (0.35). **Text:** what follows its name, as a mail's body
-      under its subject (all its words when that is all it says), at the largest of 8.4, 7.4 and 6.4 at which they
-      fit. **Terminal:** what it printed, mono at 5.9 on 11, each line from its first mark, a prompt's command in bold
-      and a pass in the pass ink. **File:** its first lines as a page, mono at 4.3 on 5.8, no line numbers, the comment
-      quieter than the code, fading out over its last 30; a file that is not words is a blank page. **Image:** the
-      picture, filling the window about its middle. *Until FACE-b:* a ref shows its still; a link its bare page.
+      `--vf-card-plate` under a hairline of `--vf-card-frame` (0.35), in the stock's ink at a strength of its own.
+      **Text:** what follows its name, as a mail's body under its subject (all its words when that is all it says), at
+      the largest of 8.4, 7.4 and 6.4 (on 11.2, 10 and 8.8) at which they fit, tracked −0.05, 6 inside the window's
+      sides and 5 under its top, in the ink at 84%. **Terminal:** what it printed, mono at 5.9 on 11, 6 inside the
+      window, in the ink at 74%, each line from its first mark: a prompt's `$` at 36% and its command in bold (600) at
+      90%, the test runner's summary line at 50%, and a pass (its ✓, the summary's count) in the pass ink.
+      **File:** its first lines as a page, mono at 4.3 on 5.8, 6 inside the window's sides and 5 under its top, no line
+      numbers, the code in the ink at 78% and the comment quieter, at 36%, fading out over its last 30; a file that is
+      not words is a blank page. **Image:** the picture, filling the window about its middle. **Still on its way** in
+      from another app, the window waits: words on the bare plate, a picture on a ground of the ink at 6%, a file
+      saying "Let go to see it" in its middle at 7.4 in `--vf-card-stock-ink-3`. *Until FACE-b:* a ref shows its
+      still; a link its bare page.
     - **its faces** — each face as its type's glyph at 7.4 on 152.6, 10 apart from the column, in the order the
       bloom opens them; the first, what it is, in `--vf-card-face-ink`, the rest in `--vf-card-face-ink-2`.
       *(2026-11-14, item 405: the card's bloom waits for OB-1b; until then each card has one face, so the foot shows
@@ -2910,8 +2916,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Picking one up** (HN-D5): a click picks a card up the way the desk opens its whiteboard — it flies
     to the window's centre and grows to reading size, **2.4×** (288 × 403), in 560ms on the island curve, while
     the window behind it blurs 14 and dims 8% (the desk's held object, §8); the bar under the head,
-    at the tools in hand's place (y 64), says what it is, in bold, and where it came from, and holds **Remove**,
-    **Flip it** and **Done**.
+    at the tools in hand's place (y 64), says what it is, in bold (12/600 in the primary ink), and where it came from
+    (12/500 in the secondary), and holds **Remove**, **Flip it** and **Done**.
     **Flip it**, or a double-click on the card, turns it over about its upright to show its printed back (§5 "the
     press"), and again to show its face: 480ms on the island curve, seen from 1000 (a perspective in the card's own
     units, so the turn reads as a card's and not a door's), the back drawn from its own print and never through the
