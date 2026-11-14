@@ -94,7 +94,11 @@ struct AppsCardTests {
   @Test("open, the card shows 106 above the home indicator's inset; the first peek stands 136 down, as at the commit")
   func standing() {
     let open = AppsPull.Card.receded(bounds: 778, safeTop: 62)
-    #expect(open.offset == 62 + 778 - 106)
+    // Hoisted into a typed `let` (mini-kit362a, 2026-11-14): #expect reads each side of its comparison alone, and a
+    // side that is nothing but integer literals is read as an Int, which a CGFloat never equals. The row said
+    // `open.offset == 62 + 778 - 106` and answered false with 734.0 on its left and 734 on its right.
+    let shown: CGFloat = 62 + 778 - 106
+    #expect(open.offset == shown)
     #expect(open.scale == 0.92)
     #expect(open.radius == 44)
     #expect(open.shade == 1)
