@@ -33,6 +33,7 @@ import {
   settingsOf,
   settingToSend,
   shelfState,
+  stoppedAfterCrashes,
   walkHot,
 } from "../src/frame/plugins/plugins-model";
 import * as words from "../src/frame/plugins/plugins-words";
@@ -256,6 +257,110 @@ describe("Installed (§8 'Installed', read only)", () => {
     expect(new Set(none.map((pill) => JSON.stringify(pill)))).toEqual(
       new Set(['["Community",false]']),
     );
+  });
+});
+
+describe("Installed's honest rows (MK-5, N21; §9 'Installed, off and Remove…')", () => {
+  /** The same desktop with one plugin changed, as fieldd's next snapshot would say it. */
+  const changed = (
+    snapshot: PluginRegistrySnapshot,
+    id: string,
+    change: Partial<PluginRecord>,
+  ): PluginRegistrySnapshot => ({
+    ...snapshot,
+    plugins: snapshot.plugins.map((plugin) =>
+      plugin.id === id ? { ...plugin, ...change } : plugin,
+    ),
+  });
+  const row = (snapshot: PluginRegistrySnapshot, catalog: PluginsCatalog | null, id: string) =>
+    installedRows(snapshot, catalog).find((candidate) => candidate.id === id);
+  const stopped = changed(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator", {
+    service: "quarantined",
+  });
+
+  it("says a plugin fieldd stopped after it kept crashing in the attention ink, its switch off on its row and its page", () => {
+    const simulators = row(stopped, null, "vibefield.simulator");
+    expect([simulators?.line, simulators?.attention, simulators?.onOff]).toEqual([
+      words.INSTALLED_LINE.stopped,
+      true,
+      false,
+    ]);
+    const record = recordOf(stopped, "vibefield.simulator");
+    expect(stoppedAfterCrashes(record)).toBe(true);
+    expect(pluginPage(record, null, stopped, false).onOff).toBe(false);
+    // running, it says its set in the line's own ink, its switch on
+    const running = row(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, null, "vibefield.simulator");
+    expect([running?.line, running?.attention, running?.onOff]).toEqual([
+      "3 objects · 1.2.0 · comes with VibeField",
+      undefined,
+      true,
+    ]);
+    // fieldd starting it again after a crash is no stop
+    const restarting = changed(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator", {
+      service: "restarting",
+    });
+    expect(row(restarting, null, "vibefield.simulator")?.onOff).toBe(true);
+    // a plugin from the list says it too, with no switch here (item 321)
+    const kanban = changed(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban", {
+      service: "quarantined",
+    });
+    const listed = row(kanban, CATALOG_LISTED, "acme.kanban");
+    expect([listed?.line, listed?.onOff]).toEqual([words.INSTALLED_LINE.stopped, null]);
+  });
+
+  it("says first that a plugin is off, or isn't working, never that it stopped", () => {
+    const off = changed(stopped, "vibefield.simulator", { enabled: false, state: "disabled" });
+    expect(row(off, null, "vibefield.simulator")?.line).toBe(words.INSTALLED_LINE.off);
+    const broken = changed(stopped, "vibefield.simulator", { state: "invalid" });
+    expect(row(broken, null, "vibefield.simulator")?.line).toBe(
+      words.INSTALLED_LINE.broken("Simulators"),
+    );
+  });
+
+  it("takes a press on a stopped plugin's switch as turning it on, its refusal kept until it runs", () => {
+    const turningOn = { id: "vibefield.simulator", capability: null, turningOn: true };
+    expect(refusalStale(turningOn, stopped)).toBe(false);
+    expect(refusalStale(turningOn, PLUGINS_FIXTURE_SWITCHES_SNAPSHOT)).toBe(true);
+  });
+
+  it("says a plugin from the list that the list held no longer names keeps working, with no more updates", () => {
+    const kanban = (catalog: PluginsCatalog | null) =>
+      row(PLUGINS_FIXTURE_LISTED_SNAPSHOT, catalog, "acme.kanban");
+    // the list held names it: its set
+    expect(kanban(CATALOG_LISTED)?.line).toBe("2 objects · 2.1.0");
+    // a list held that names it no more, in every state a held list stands in
+    for (const state of ["ready", "reading", "stale", "unreachable"] as const) {
+      const catalog = PluginsCatalog.parse({ ...CATALOG_FIXTURES.ready, state });
+      expect(kanban(catalog)?.line).toBe(words.INSTALLED_LINE.unlisted);
+    }
+    // in the line's own ink, with its pill and no switch, as before
+    const unlisted = kanban(CATALOG_FIXTURES.ready);
+    expect([unlisted?.attention, unlisted?.source, unlisted?.onOff]).toEqual([
+      undefined,
+      "Community",
+      null,
+    ]);
+    // no list held — none read, none configured, or none VibeField could use: nothing said of it
+    const none = [
+      null,
+      CATALOG_FIXTURES.unread,
+      CATALOG_FIXTURES.unconfigured,
+      CATALOG_FIXTURES.refused,
+    ];
+    for (const catalog of none) expect(kanban(catalog)?.line).toBe("2 objects · 2.1.0");
+    // a plugin that isn't from the list is never said to have left it
+    const sideloaded = row(
+      PLUGINS_FIXTURE_LISTED_SNAPSHOT,
+      CATALOG_FIXTURES.ready,
+      "example.kv-service",
+    );
+    expect(sideloaded?.line).toBe("No objects · a service");
+    // off, it says it is off
+    const off = changed(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban", {
+      enabled: false,
+      state: "disabled",
+    });
+    expect(row(off, CATALOG_FIXTURES.ready, "acme.kanban")?.line).toBe(words.INSTALLED_LINE.off);
   });
 });
 

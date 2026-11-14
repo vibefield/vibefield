@@ -2322,6 +2322,32 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
     expect(document.body.querySelector(".vf-plugins-page-refused")).toBeNull();
   });
 
+  it("says a plugin stopped after it kept crashing in the attention ink, its switch off, and a press turns it on (MK-5, N21)", async () => {
+    const { port, sent } = await mountSwitches();
+    const stopped = {
+      ...PLUGINS_FIXTURE_SWITCHES_SNAPSHOT,
+      generation: PLUGINS_FIXTURE_SWITCHES_SNAPSHOT.generation + 1,
+      plugins: PLUGINS_FIXTURE_SWITCHES_SNAPSHOT.plugins.map((plugin) =>
+        plugin.id === "vibefield.simulator"
+          ? { ...plugin, service: "quarantined" as const }
+          : plugin,
+      ),
+    };
+    act(() => root.render(<Window port={port} snapshot={stopped} open />));
+    await settle();
+    toInstalled();
+    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    expect(line?.textContent).toBe(words.INSTALLED_LINE.stopped);
+    expect(line?.getAttribute("data-tone")).toBe("attention");
+    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("false");
+    act(() => rowSwitch("Simulators")?.click());
+    await settle();
+    expect(sent).toEqual(["enable vibefield.simulator"]);
+    // its page's switch says the same
+    openRow("Simulators");
+    expect(pageSwitch()?.getAttribute("aria-checked")).toBe("false");
+  });
+
   it("takes no press anywhere while fieldd isn't answering, and says so on the page", async () => {
     const { sent } = await mountSwitches("answers", true);
     toInstalled();

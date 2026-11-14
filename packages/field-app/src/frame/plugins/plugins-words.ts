@@ -80,8 +80,9 @@ export function updatesWords(count: number): string | null {
   return count > 0 ? plural(count, "update", "updates") : null;
 }
 
-/** The window's fieldd did not answer either door: IS-282-2's ruled words (§9 "Installed, off and Remove…"); its
- * Try again is MK-5's (MK-E12). */
+/** The window's fieldd did not answer either door: IS-282-2's ruled words (§9 "Installed, off and Remove…"). Installed
+ * says it with no act, for the window keeps its last plugins and heals on its own; Try again stands on Discover's and
+ * Updates' away state alone, and is MK-5b's (VF-PM 2026-11-14 04:33Z, MK-5's ask 3 at its lean). */
 export const PLUGINS_AWAY = "Plugins aren't available right now.";
 
 /** Installed before the window holds its plugins (IS-282-2's ruled words). */
@@ -115,6 +116,12 @@ export const INSTALLED_LINE = {
   off: "Off · its objects on your desks draw as missing until it's on",
   offNoObject: "Off · its service is stopped",
   broken: (title: string) => `${title} isn't working right now`,
+  /** MK-5 (N21): a plugin that is on whose service fieldd stopped after it kept crashing, in the attention ink, its
+   * switch off; a press turns it on, which starts it again (the ruled page's row, §9) */
+  stopped: "Stopped after 3 crashes · turn it on to try again",
+  /** MK-5 (N21): a plugin from the plugin list that the list held no longer names (James's ruled words in place of
+   * "dropped from registry", 2026-11-11 06:48:31Z at MK's lean; §9) */
+  unlisted: "No longer listed · it keeps working here, with no more updates",
 } as const;
 
 /** What a plugin with no object has, for its line: §9's "a service and tools" (MK's when one is missing). */
@@ -169,7 +176,8 @@ export const PAGE_WORDS = {
  * 18:36:34Z, 18:39:16Z, 18:43:08Z), each James's since his picks at A, as built, on 2026-11-12: `readOnly` (MK-O22),
  * `elsewhere` (MK-O21), `off` (MK-O27), `cant` (MK-O23) and `refused` (MK-O26). A switch is named by what it turns —
  * the plugin's title, or a power's plain words — and never by its state, which it says as a switch does. Settings →
- * Plugins keeps its own words until MK-5. */
+ * Plugins keeps its own words until Plugins… carries those plugins' switches (MK-5; VF-PM
+ * 2026-11-14 04:33Z). */
 export const SWITCH_WORDS = {
   /** A page of a plugin from the plugin list, or a Sideloaded one: no switches here (item 321). */
   readOnly: "Its switches aren't here yet.",
@@ -192,7 +200,8 @@ export const SWITCH_WORDS = {
  * pick): MK's words, ‹draft›, for James's eye (VF-PM 2026-11-11 19:40:52Z). James's: `off`, `refused`, `saved`,
  * `choose` and `cantDraw` (his MK-O31 pick A, 2026-11-12 06:11:57Z), `unread` (his MK-O35 pick A) and `footHere`
  * (his MK-O33 pick B). A setting is named by its plugin's own title for it. The page has no Undo and no Redo: going
- * back stays in Settings. Settings → Plugins keeps its own words until MK-5. */
+ * back stays in Settings. Settings → Plugins keeps its own words until Plugins… carries those
+ * plugins' switches (MK-5; VF-PM 2026-11-14 04:33Z). */
 export const SETTINGS_WORDS = {
   /** The section's head (§8 "Its settings"). */
   head: "Settings",

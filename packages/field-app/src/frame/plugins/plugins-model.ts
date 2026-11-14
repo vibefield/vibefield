@@ -155,6 +155,8 @@ export interface InstalledRow {
   /** "Community", beside a community plugin's publisher */
   readonly community: boolean;
   readonly line: string;
+  /** MK-5 (N21): its line is said in the attention ink (§2.5), for a plugin stopped after it kept crashing */
+  readonly attention?: true;
   /** its one switch: on or off; null when it has none here (MK-4c2a) */
   readonly onOff: boolean | null;
 }
@@ -236,8 +238,9 @@ function paletteCommands(record: PluginRecord): PluginRecord["contributions"]["c
  * 18:36:34Z, 2): a Built in or Development plugin's alone. A record's source and
  * id are what its folder can say (item 321), so a plugin from the plugin list —
  * whatever the list held says of it, a "VibeField" listing included — and a
- * Sideloaded one are read only here. Settings → Plugins keeps its switches
- * until MK-5. The row, the page and every power's switch ask this one function. */
+ * Sideloaded one are read only here. Settings → Plugins keeps their switches
+ * until this widens to them, and asks this same function (MK-5; VF-PM 2026-11-14
+ * 04:33Z). The row, the page and every power's switch ask this one function. */
 export function controlsHere(record: PluginRecord): boolean {
   return record.source === "bundled" || record.source === "dev-linked";
 }
@@ -267,7 +270,7 @@ export function refusalStale(refusal: Refusal, snapshot: PluginRegistrySnapshot)
   const shown =
     refusal.capability === null
       ? switchable(record)
-        ? record.enabled
+        ? shownOn(record)
         : undefined
       : powerSwitchOf(record, refusal.capability)?.on;
   return shown === undefined || shown === refusal.turningOn;
@@ -277,6 +280,21 @@ export function refusalStale(refusal: Refusal, snapshot: PluginRegistrySnapshot)
  * (on or off; one that isn't working has none, as Settings → Plugins' row). */
 export function switchable(record: PluginRecord): boolean {
   return controlsHere(record) && (record.state === "enabled" || record.state === "disabled");
+}
+
+/** MK-5 (N21; §9 "Installed, off and Remove…"): whether fieldd stopped a plugin's
+ * service after it kept crashing, three times in ten minutes (the service host's
+ * ladder, `fieldd/src/service-host.ts`). The plugin is still on; turning it on
+ * again (`plugins.enable`) starts it fresh. */
+export function stoppedAfterCrashes(record: PluginRecord): boolean {
+  return record.enabled && record.state === "enabled" && record.service === "quarantined";
+}
+
+/** What a plugin's one switch shows: on while it is on and running, off while it
+ * is off or stopped after it kept crashing, so a press turns it on (§9: "turn it
+ * on to try again"). The row, the page and a refusal read it here. */
+function shownOn(record: PluginRecord): boolean {
+  return record.enabled && !stoppedAfterCrashes(record);
 }
 
 /** A power's switch on a plugin's page (MK-4c2a; §8 "Its switches"): what it
@@ -371,6 +389,26 @@ function rowLine(record: PluginRecord, names: BoardNames | null): string {
   return builtIn ? `${set} · ${INSTALLED_LINE.builtIn}` : set;
 }
 
+/** MK-5 (N21; §8 "The read on open": a plugin "stopped after it kept failing and
+ * one no longer listed each say so on their row"): what a plugin that is on and
+ * working says in place of its set — that fieldd stopped its service after it
+ * kept crashing, in the attention ink, or, for a plugin from the plugin list,
+ * that the list held names it no more. Null for any other; a plugin that is off
+ * or isn't working says that first (`lineOf`), and with no list held nothing is
+ * said of a listing. */
+function honestLine(
+  record: PluginRecord,
+  listed: ReadonlyMap<string, Listed>,
+  listHeld: boolean,
+): { readonly line: string; readonly attention?: true } | null {
+  if (!record.enabled || record.state !== "enabled") return null;
+  if (stoppedAfterCrashes(record)) return { line: INSTALLED_LINE.stopped, attention: true };
+  if (record.source === "registry" && listHeld && !listed.has(record.id)) {
+    return { line: INSTALLED_LINE.unlisted };
+  }
+  return null;
+}
+
 /** Whether a plugin holds every typed word, in its title or in one of its
  * objects' names — its title or its label on the pegboard (Q6, ruled at
  * MK's lean 2026-11-11 11:40:58Z; §8: search finds a set by its objects). */
@@ -400,6 +438,7 @@ export function installedRows(
 ): InstalledRow[] {
   const lineOf = (record: PluginRecord): string => rowLine(record, names);
   const listed = listedFrom(catalog);
+  const listHeld = catalog !== null && held(catalog);
   return snapshot.plugins
     .filter((record) => installedMatches(record, query))
     .sort((a, b) => {
@@ -410,8 +449,8 @@ export function installedRows(
       id: record.id,
       title: record.title,
       ...sourceOf(record, listed),
-      line: lineOf(record),
-      onOff: switchable(record) ? record.enabled : null,
+      ...(honestLine(record, listed, listHeld) ?? { line: lineOf(record) }),
+      onOff: switchable(record) ? shownOn(record) : null,
     }));
 }
 
@@ -636,7 +675,7 @@ export function pluginPage(
   const powers = powersOf(record, snapshot, onMac);
   const objects = record.contributions.objects.length;
   const switches = controlsHere(record);
-  const onOff = switchable(record) ? record.enabled : null;
+  const onOff = switchable(record) ? shownOn(record) : null;
   const powerSwitches = powers.some((power) => power.switch !== null);
   // whether its powers' switches take a press: `powerSwitchOf`'s `live`, the same for each of them
   const live = powers.some((power) => powerSwitchOf(record, power.key)?.live === true);

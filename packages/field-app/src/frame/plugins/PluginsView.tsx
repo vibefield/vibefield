@@ -191,7 +191,12 @@ function InstalledList({
                   )}
                 </span>
                 {turning === undefined ? (
-                  <span className="vf-plugins-line">{row.line}</span>
+                  <span
+                    className="vf-plugins-line"
+                    data-tone={row.attention ? "attention" : undefined}
+                  >
+                    {row.line}
+                  </span>
                 ) : (
                   <span className="vf-plugins-line" data-tone="attention">
                     {SWITCH_WORDS.refused(turning)}
