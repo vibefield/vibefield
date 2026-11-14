@@ -77,3 +77,92 @@ enum HistoryRow: Identifiable, Equatable, Sendable {
     return rows
   }
 }
+
+// Item 396 (James, 2026-11-13 23:38:00Z, session qa-01: "a good addition design should be added to both desktop and
+// mobile is that we should have a floating button on the side for user to quick jump to previous user message so user
+// can quick navigate, help me design and implement nicely") — THE MESSAGE BEFORE. A round button at the document's
+// side goes to the nearest message of the person's own that begins above the top of the view. DESIGN.md §8 "The
+// phone's session document", "A button at the side goes to the message before".
+//
+// Pure: each row that is laid out says where it begins against the top of the view (`HistorySight`), and the rules
+// below say where a press goes, how it goes there, and whether the button is there at all.
+
+/// Item 396 — where a press on the button at the document's side goes.
+enum HistoryBefore: Equatable, Sendable {
+  /// No message of the person's own begins above the top of the view, and no row above waits to be read: the
+  /// button is gone.
+  case nothing
+  /// The nearest message of the person's own that begins above the top of the view, by the id its row is found by
+  /// (`HistoryRow.promptMark`). It is `near` when it begins a screen above at most: the page eases to it.
+  case message(String, near: Bool)
+  /// No such message among the rows read, and rows above are not yet read: the document's top, where they are
+  /// read in.
+  case top
+
+  /// The button is a 40 pt circle with a 44 pt hit area, its glyph at 15 pt, 16 pt in from the screen's edge.
+  static let size: CGFloat = 40
+  static let reach: CGFloat = 44
+  static let glyph: CGFloat = 15
+  static let side: CGFloat = 16
+  /// The pill it stands level with is 36 pt tall.
+  static let pill: CGFloat = 36
+  /// How far under the head the message's top is stood.
+  static let air: CGFloat = 12
+  /// A row begins above the top of the view when its top is more than this far above it. A message a press has
+  /// just stood under the head is never counted as above, whatever the rounding, so the next press goes on.
+  static let slack: CGFloat = 1
+  /// The ease to a message a screen away at most, and the button's own fade, in seconds.
+  static let ease: Double = 0.3
+  static let fade: Double = 0.2
+
+  /// The button is there while a press has somewhere to go.
+  var shows: Bool { self != .nothing }
+
+  /// Where the button's foot stands above the safe area's line.
+  ///
+  /// Stub (396 red): nothing.
+  static func foot(bar: CGFloat) -> CGFloat { 0 }
+
+  /// The share of the view's height at which the message's row and the view are lined up.
+  ///
+  /// Stub (396 red): the top itself.
+  static func anchor(screen: CGFloat) -> CGFloat { 0 }
+
+  /// Whether the page eases to the place.
+  ///
+  /// Stub (396 red): never.
+  static func eases(near: Bool, reduceMotion: Bool) -> Bool { false }
+}
+
+extension HistoryRow {
+  /// Item 396 — where a row that is laid out begins, against the top of the view (the foot of the head).
+  enum Standing: Equatable, Sendable {
+    /// At the top of the view or below it: on screen, or under the screen's foot.
+    case below
+    /// Above the top of the view, by a screen at most.
+    case above
+    /// More than a screen above the top of the view.
+    case away
+  }
+
+  /// Item 396 — what a laid-out row says of itself: where it begins, and the view's height as it measured it (0
+  /// where it could not).
+  struct Seen: Equatable, Sendable {
+    var standing: Standing
+    var screen: CGFloat
+  }
+
+  /// Item 396 — where a row begins.
+  ///
+  /// Stub (396 red): no row begins above the top of the view.
+  static func standing(top: CGFloat, screen: CGFloat) -> Standing { .below }
+
+  /// The id a prompt's row is found by in the document: the hit's where a search landed on it, else its turn's.
+  /// It is what the view has always set on the row (`HistorySessionView.prompt`), said here once.
+  static func promptMark(_ turn: HistoryTurn) -> String { turn.promptAnchor ?? "prompt-\(turn.id)" }
+
+  /// Item 396 — where a press on the button at the side goes.
+  ///
+  /// Stub (396 red): nowhere, as before there was a button.
+  static func before(_ rows: [HistoryRow], standing: [String: Standing], unread: Bool) -> HistoryBefore { .nothing }
+}

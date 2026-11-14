@@ -114,6 +114,11 @@ struct HistoryFollow: Equatable, Sendable {
     returning = true
   }
 
+  /// Item 396 — the button at the document's side was pressed: the page goes up to a message.
+  ///
+  /// Stub (396 red): it does nothing, as before there was a button.
+  mutating func jumped() {}
+
   /// A page above was asked for.
   mutating func askedEarlier() { holding = true }
 
