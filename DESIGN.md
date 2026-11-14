@@ -5283,6 +5283,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   welcome's foot under a gap of 10). So a glass with one act is 86 tall, with two 146 (the curtain's: its act and
   its note), with three 182 while the third is one line, and the welcome's, with its foot, about 206, where every
   glass was 210. The primary keeps the glass's first slot; the glass's top moves with what it holds.
+  *Amended 2026-11-13 (James, in session; §9 "The way in" as amended that day holds the words):* the splash also comes
+  back over the tabs when the last desktop stops answering or the phone loses its network, by the same 240ms fade,
+  once 5s have passed without one (`FieldHomeModel.reachGrace`). What the tabs had open closes under it, as under a
+  sign-out. The three screens stand in the way in's places with no top. The hold is a status line (17 semibold) and no
+  glass. **Can’t reach your computer.** is a title, a line and a glass of two, 146 tall: **Try again** in the first
+  slot and *Use another account* under it. **You’re offline.** is a title and a line with no glass, since nothing on
+  the phone's screen brings a network back. After 10s of the hold (`FieldHomeModel.reachPatience`) the page takes its
+  place, the words crossfading as on any step. When a desktop answers, the splash leaves by its own exit and the tabs
+  mount afresh, with no found beat.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -9809,7 +9818,9 @@ approval, No desktops yet, Another account? and Sign in to Tailscale again.
 **The way in** (track WI, 2026-11-02; WI-L1…L7; where each word stands is §8 "The phone's way in"). The phone has
 two states (WI-L1). **Signed in** means Tailscale's node keeps itself up for an account and a VibeField desktop is
 known, listed or remembered: a desktop asleep keeps the phone signed in, and each view says so, while Tailscale
-asking again does not (WI-L2). Signed in, the phone shows the three tabs and no page ever stands on one. **Signed
+asking again does not (WI-L2). *(Amended 2026-11-13, below: signed in means a desktop answers now, so one asleep
+keeps the phone signed in only while another answers.)* Signed in, the phone shows the three tabs and no page
+ever stands on one. **Signed
 out** it shows the way in. The **welcome** (WI-D1 A, one welcome with two doors; WI-D2 A, Continue leads): **Your
 agents, in your pocket.** · "See what needs you and open your agents’ terminals, while VibeField runs on your
 computer." · "Use the same Tailscale account as VibeField on your computer." · **Continue with Tailscale** ·
@@ -9895,6 +9906,24 @@ notice (TS-7's "Couldn’t connect — ‹reason›." in "The phone's door"), th
 Account (§8 "The phone's Settings" takes §9's words), the welcome's note when a first sign-in fails, and the note
 under **Sign in to Tailscale again.** when its sign-in sheet could not open. A reason may go to the log, as ids and
 codes; it is never said.
+*Amended 2026-11-13 (James, in session at 00:24Z and 00:34Z: the phone is a companion to VibeField on a computer, so
+"if it does not connect to desktop app, it should not provide any function"; "when all desktops disconnect, it should
+also gate, when mobile offline, also gate". WI-L2 is amended; the words added here are drafts pending James):*
+**signed in** means connected: an account whose node is not asking, with a VibeField desktop **answering now**. A
+desktop that is known but asleep no longer keeps the phone signed in by itself. It does while another of the account's
+desktops answers, and the views say it is asleep, as before. A desktop that answers and stops this phone in its own
+words (a build too old, a scope not granted) is an answer: the tabs stand and say why, as they did, since "can’t
+reach" would be false of it. With none answering, or with no network on the phone, the splash stands and the way in
+says why, on three screens that are no step of the first way in: they carry no bars, the mark keeps its place, and no
+found beat follows them. The hold: **Looking for your computer…**, WI-1's title alone. Once it has looked for 10s:
+**Can’t reach your computer.** · "Open VibeField on ‹desktop›, and keep it awake and connected." (the account's one
+desktop by its name; "on your computer" when it has several) · **Try again** · *Use another account*. With no network:
+**You’re offline.** · "Connect this phone to the internet to reach your computer." A desktop that drops and answers
+again within 5s never brings the splash: the tabs stay and say it themselves, as they did. At a launch the splash
+holds bare for those 5s, as every launch looks, and the hold's line comes only after them. **Try again** dials at once
+and goes back to the hold, and so does coming back to VibeField. The first way in keeps its own words, and ends only
+when a desktop answers: until then it stays on **Looking for your computer…** with its line, where a desktop that was
+merely listed used to end it. **No desktops yet.** is still the answer "none".
 *Added 2026-11-14 (item 406; drafts pending James's word — a reading of Q-J4: the phone's own screen is the iOS
 lane's later slice, and these words wait here for it):* **a removed phone.** A phone removed on one of your computers
 (§8 Settings → Devices) is told so: **This phone was removed.** · "It can't reach your computers. To use it here
