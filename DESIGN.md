@@ -6937,6 +6937,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         marks nothing. Nothing installs before the card's Install either way. Its words are §9's. *To be built
         by O3-D's install rider, which stacks after the page's Install (O2-C); until it lands, a desktop where
         community plugins came on at another desktop takes its first community install straight to the card.*
+        *Built 2026-11-14 (MK-O3D's install rider, after O2-C's Install), as drawn: "until it lands" no longer
+        holds.*
         A mark that can't be read is no mark, so the statement is shown again, never skipped. The mark decides
         nothing VibeField's plugins do: the switch is the fence (J1), so a plugin installed at another desktop
         arrives here as the switch allows, with no statement (his B; C would have held it until the statement
@@ -9456,7 +9458,8 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   foot's "· community off" is said while the switch is off. While community plugins are off, a community set's
   **Install** takes no press and says "Installing needs community plugins turned on" under it, as "Installing
   needs the internet" is said offline; before the window has read the switch it takes no press and says nothing,
-  since they may be on. *To be said by O3-D's install rider, after the page's Install (O2-C).*
+  since they may be on. *To be said by O3-D's install rider, after the page's Install (O2-C).* *Said from
+  2026-11-14 (MK-O3D's install rider).*
   *Ruled 2026-11-14 (James's MK-O1 pick B, "Once on each desktop", his plugins page's store 2026-11-11
   23:03:22.544Z; built on VF-PM's ruling, 2026-11-14 04:33Z):* "Turning it on asks once, in place" and "Once seen
   it is not asked again" hold for each desktop: the statement is shown once on each, and the once MK's J1 names is
