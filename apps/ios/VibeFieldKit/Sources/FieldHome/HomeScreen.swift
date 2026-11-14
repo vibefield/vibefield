@@ -1430,7 +1430,7 @@ public struct HomeScreen: View {
     if appsDoor.shelfOpen {
       AppsShelfView(
         reading: apps.reading, door: appsDoor, here: Self.appsHere, zoom: appsZoom,
-        onOpen: { openApp($0) }, onAbout: { appsAboutApp = $0 })
+        onOpen: { openApp($0) }, onKeep: { await apps.mark($0, kept: $1) }, onAbout: { appsAboutApp = $0 })
     }
   }
 

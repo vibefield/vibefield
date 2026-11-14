@@ -81,6 +81,8 @@ struct AppsTile: View {
   /// The key its icon carries for the zoom: the app's own when this is the icon asked (`AppsZoomSource`).
   let source: String
   let onOpen: () -> Void
+  /// Keep (true) or Stop keeping (false), through the home (MA-3h, K4).
+  let onKeep: (Bool) -> Void
   let onAbout: () -> Void
 
   var body: some View {
@@ -100,10 +102,20 @@ struct AppsTile: View {
     // the system lifts the icon, as it lifts a Home Screen icon, and leaves the name where it is
     .contentShape(.contextMenuPreview, AppsIconLift(side: side))
     .contextMenu {
-      Button("Open", action: onOpen)
-      Button("About this app", action: onAbout)
+      ForEach(AppsTileAct.of(app), id: \.self) { act in
+        Button(act.word) { perform(act) }
+      }
     }
     .accessibilityLabel(app.title)
+  }
+
+  private func perform(_ act: AppsTileAct) {
+    switch act {
+    case .open: onOpen()
+    case .keep: onKeep(true)
+    case .stopKeeping: onKeep(false)
+    case .about: onAbout()
+    }
   }
 
   private var icon: some View {
@@ -191,6 +203,8 @@ struct AppsShelfView: View {
   let here: String
   let zoom: Namespace.ID
   let onOpen: (IndexAppRow) -> Void
+  /// Keeps an app or stops keeping it through the home; what to say when the home did not take it (MA-3h, K4).
+  let onKeep: @MainActor (IndexAppRow, Bool) async -> String?
   let onAbout: (IndexAppRow) -> Void
 
   @State private var words = ""
@@ -200,6 +214,8 @@ struct AppsShelfView: View {
   @State private var stand = AppsFolderStand()
   /// The shelf's own size, the pages' bounds: what an open folder's panel is placed in.
   @State private var bounds: CGSize = .zero
+  /// What the last keep the home did not take says, until the next keep.
+  @State private var keepWords: String?
   @FocusState private var searching: Bool
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -254,6 +270,11 @@ struct AppsShelfView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: Self.groupGap) {
         field
+        if let keepWords {
+          Text(keepWords)
+            .font(ChromeType.sans(Self.footSize))
+            .foregroundStyle(ChromePalette.inkSecondary)
+        }
         let matched = AppsShelf.matching(words, in: reading.apps)
         if !words.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
           grid(matched, shelf: shelf, place: .matched)
@@ -395,7 +416,8 @@ struct AppsShelfView: View {
           app: app, side: AppsShelfChrome.icon, away: shelf.away.contains(app.appKey),
           unopened: door.cues.unopened.contains(app.foldKey), zoom: zoom,
           source: AppsZoomSource.id(appKey: app.appKey, at: place, asked: asked),
-          onOpen: { open(app, at: place) }, onAbout: { onAbout(app) })
+          onOpen: { open(app, at: place) }, onKeep: { keep(app, kept: $0) },
+          onAbout: { onAbout(app) })
       }
     }
   }
@@ -405,6 +427,12 @@ struct AppsShelfView: View {
   private func open(_ app: IndexAppRow, at place: AppsPlace) {
     asked = AppsZoomAsk(place: place, appKey: app.appKey)
     onOpen(app)
+  }
+
+  /// One mark, once; its words stand until the next keep.
+  private func keep(_ app: IndexAppRow, kept: Bool) {
+    keepWords = nil
+    Task { keepWords = await onKeep(app, kept) }
   }
 
   /// The Projects group: each project's folder as a tile. An open folder is drawn over the shelf (`AppsFolderLayer`)

@@ -35,7 +35,8 @@ struct AppsShelf: Equatable {
 
   /// The newest four by the door, an app opened on this phone heading them.
   let recent: [IndexAppRow]
-  /// Empty until `artifact.mark`'s handler lands (3h, DR-2): the door sends no `kept`.
+  /// Empty until `artifact.mark`'s handler lands (3h, DR-2): the door sends no `kept`. *Corrected 2026-11-13 (MA-3h,
+  /// K4): the home keeps an app (`AppsFeed.mark`), and its next page says `kept`.*
   let kept: [IndexAppRow]
   let folders: [Folder]
   /// Apps with no project, or a project this phone has no name for: the last group.

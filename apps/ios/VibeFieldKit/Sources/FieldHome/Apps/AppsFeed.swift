@@ -5,6 +5,7 @@ import Observation
 // MA-6c — the phone's reading of the apps doors through its home: `index.apps.list {scope: "mesh"}`, every page, the
 // pings of `index.apps.subscribe`, and the project names of `project.list`. The door has folded already, so a row seen
 // on two pages counts once and nothing else is done to it. The phone calls no `artifact.open` before MA-5.
+// MA-3h (K4, 2026-11-13): its one act is the keep, `artifact.mark` through the home (`mark`).
 
 @MainActor
 @Observable
@@ -97,9 +98,18 @@ final class AppsFeed {
     answer(page?.rows ?? [], words: words)
   }
 
-  /// K4 red: the phone sends no mark yet.
+  /// Keeps an app, or stops keeping it, through the home: `artifact.mark {foldKey, kept}`, sent once. The home's write
+  /// moves its fold, whose ping reads the shelf again, so the Kept group fills from the door's next page and nothing is
+  /// written here. Nil when the home took it; otherwise what to say.
   func mark(_ app: IndexAppRow, kept: Bool) async -> String? {
-    nil
+    guard let door else { return AppsKeepWords.failed(nil, kept: kept, title: app.title) }
+    let params: JSONValue = .object(["foldKey": .string(app.foldKey), "kept": .bool(kept)])
+    do {
+      _ = try await door.call("artifact.mark", params: params)
+      return nil
+    } catch {
+      return AppsKeepWords.failed(error, kept: kept, title: app.title)
+    }
   }
 
   private func answer(_ rows: [IndexAppRow], words: String) {
