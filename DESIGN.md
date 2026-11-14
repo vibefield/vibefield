@@ -6850,6 +6850,65 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       your desks draw as missing, and nothing is removed, so turning community plugins back on brings them back as
       they were. The switch syncs, so turning it off at one desktop stops them at every desktop.
       *To be built by track MK (O3-C); until then nothing stops them, and no build has one.*
+      *Corrected 2026-11-14 (MK-O3D): O3-C built the stop, so "until then nothing stops them" no longer holds. With
+      no switch drawn it held every plugin from the plugin list that the list does not name as VibeField's; from
+      this drawing it follows the person's switch.*
+      *Drawn 2026-11-14 (MK-O3D, the slice that draws the switch; ‹draft› for James's eye, its words in §9
+      "Community plugins"):*
+      - **Where it stands until the shelf.** Discover's shelf is not built yet, so the tile stands at the body's
+        end, under the list's count, 8 in from the body's sides and 8 above its foot. It stands while a list is held
+        that names a plugin by other people, or while community plugins are on, so they can always be turned off
+        here. **Nothing to discover yet**, a read with no list held and VibeField's plugins not answering show no
+        tile. Once the shelf is built, the tile stands at its grid's end, as above.
+      - **The tile**: padded 12 16, corners 14 (an Installed row's), ringed by the hairline, on no fill. Its title,
+        **Community plugins**, at 14/600 in primary ink, and the kit's switch 12 after it at the tile's end, named
+        by what it turns. Under them, 6 apart, its line and its state at 12/400 in tertiary ink (§2's Body, 1.45).
+      - **The ask, in place.** Pressing the switch on, at a desktop that has not shown the statement, never turns
+        it on by itself: the tile's line and state give way to the question at 14/600 in primary ink, the statement
+        6 under it at 13/400 in primary ink, and 12 under that **Cancel** and **Turn on community plugins** at the
+        tile's end, 8 apart, each the foot's act (32 tall, corners 16, 12.5/600 on the ready fill, 14% under the
+        pointer) with no ↵ printed on either: turning on code that nothing isolates is a press, never a key typed
+        in the field. One that takes no press says its words in tertiary ink, its fill unchanged under the pointer.
+        The keyboard goes to **Cancel** as the ask stands. **Cancel**, Esc (the nearest first, Keys below) or
+        leaving Discover takes it back, sends nothing and keeps no mark, and the keyboard goes back to the field.
+        **Turn on community plugins** marks this desktop as one that has shown the statement and sends the one
+        request, and the ask goes. The switch stays off until fieldd says it is on.
+      - **Off** asks nothing: an off is the safe way, sent as pressed. While it is on, its state says what turning
+        it off does.
+      - **Under way**, the switch keeps its place and takes no press, and nothing spins. **Refused**, it stays where
+        fieldd has it, and one line under the tile's state, at 12/400 in the attention ink (§2.5), says it couldn't
+        change, never the error's own text, until it is pressed again or fieldd shows it the way it was turning.
+        **Away**, it takes no press. Before this window has read the switch, no tile stands, as with VibeField's
+        plugins not answering: a tile then would say off for a switch that may be on, turned on at another
+        desktop. An ask standing as the switch goes unread goes with the tile.
+      - **Once on each desktop** (James's MK-O1 pick B, "Once on each desktop", his plugins page's store
+        2026-11-11 23:03:22.544Z; built on VF-PM's ruling, 2026-11-14 04:33Z). Each desktop shows the statement
+        once, and keeps a mark of its own that it has, which never syncs (the settings doc keeps user-scope keys
+        alone; the mark is a file of VibeField's own on that desktop). Turned on at a desktop with the mark, the
+        switch asks nothing and is sent as pressed. Turned on at another desktop, community plugins are on here
+        too, and this desktop shows the statement before its first community install here (his page's B): once
+        the download is in, where the install card would stand and in its chrome (the page's act and card,
+        below), "First community plugin on ‹desktop›" ‹draft› as the card's ask (‹desktop› this desktop by the
+        name the card gives it, or "this Mac" / "this PC" when the roster can't be read), the statement word for
+        word 10 under it at 13/400 in primary ink, and 16 under that **Cancel** · **Continue** ‹draft› at its
+        end, 8 apart, the ask's acts above: no ↵ printed, the keyboard on **Cancel** as it stands, and ↵ in the
+        field presses nothing. **Continue** marks this desktop, and the card stands in its place; **Cancel**,
+        Esc, leaving the page or folding the popup throws the download away, as the card's Cancel does, and
+        marks nothing. Nothing installs before the card's Install either way. Its words are §9's. *To be built
+        by O3-D's install rider, which stacks after the page's Install (O2-C); until it lands, a desktop where
+        community plugins came on at another desktop takes its first community install straight to the card.*
+        A mark that can't be read is no mark, so the statement is shown again, never skipped. The mark decides
+        nothing VibeField's plugins do: the switch is the fence (J1), so a plugin installed at another desktop
+        arrives here as the switch allows, with no statement (his B; C would have held it until the statement
+        was seen here).
+        *This corrects, above, "with a flag that the statement was seen": the mark is each desktop's own, never
+        the switch's, and never synced. "Turned on the first time, it asks once" and "It is the once MK's J1
+        names" now read once on each desktop.*
+      - **Its door opens with this drawing.** fieldd refused an on until the slice that draws the switch (MK-2a,
+        by D4, VF-PM 2026-11-11 08:48:07Z: "a refusal in code is a guard, a landing order is a promise"). From
+        this slice it takes one, audited as every ask of it is, and the install gate and the stop (O3-C) follow
+        the person's switch. A community install refused while it is off is audited as denied, with the switch's
+        own reason, as a refused on was (MK-2c left it failed, for MK-4).
     - **Nothing to discover yet** (every build until the registry rung, above): Discover is one state, never a blank
       (§8 "Empty / degraded states") — the words **Nothing to discover yet**, saying the plugins that come with
       VibeField are in Installed, with a press that shows them. Installed works without a registry.
@@ -6907,6 +6966,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     line gives way to §9's words, "Couldn't turn it off. Try again." or "Couldn't turn it on. Try again.", in the
     attention ink (§2.5, where a refusal is said in it), until the switch is pressed again or fieldd's next snapshot
     shows it the way it was turning, as a page's refusal line goes too.
+    *Drawn 2026-11-14 (MK-O3D; James's MK-O3 pick "Stop"), ‹draft›, its words in §9 "Community plugins":* a
+    community plugin held while community plugins are off is off as if turned off, so its row says why in its
+    line, in tertiary ink as any line, and has no switch (a plugin from the plugin list has none here, above).
+    fieldd says which are held (the row's `held`, said only for one the person wants on; one they turned off is
+    off for their own reason and its line says off); the window decides nothing by it, for on or off is fieldd's
+    `enabled`. The tab's foot counts it among the off.
   - **Updates** is what the last read found, its time at its head. Each update says how it changes the set before
     you take it — the objects it adds or removes (MK-D4) — over its notes, with **Update**; one that removes an
     object asks first, because the objects of that kind on your desks would wear the missing face. Nothing installs
@@ -7024,6 +7089,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         321); a Development or Sideloaded plugin has none. Who reviewed it is not said: the plugin list does not
         carry it yet.
       - **Version**: its version.
+      - *Drawn 2026-11-14 (MK-O3D), ‹draft›:* a community plugin held while community plugins are off says its
+        row's line 12 under where its act stands, at 12/400 in tertiary ink, before "Its switches aren't here
+        yet." (a name survives its flow, §9). An off plugin, turned off or held, holds no power, so **What it can
+        do** says each power it asked for and would hold once on (each it asked for, less one fieldd denies it),
+        and "Nothing beyond…" only when it asked for none. *This corrects "each power it holds" above for a
+        plugin that is off and has no switches here: its page said "Nothing beyond drawing its own objects"
+        whatever it asked for.*
       - Esc on a page goes back to its tab before it folds the popup (Keys, below); a tab pressed on a page
         leaves the page for that tab; words typed on a page go back to its tab's list, filtered. The foot keeps
         its tab's sentence and offers no act.
@@ -9235,6 +9307,24 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   objects on your desks draw as missing", or, for one with no objects that runs a service, "Off while community
   plugins are off · its service is stopped" ("service" as under **What it adds** below, James's to keep or strike).
   MK-4 draws the row with the switch.
+  *Added 2026-11-14 (MK-O3D, the slice that draws the switch), ‹draft› for James's eye:* the tile's switch is named
+  "Community plugins" to assistive tech, by what it turns. While the list held names no plugin by other people,
+  its line says "Plugins by other people. VibeField checks each one before it's listed." While community plugins
+  are on, its state says "Turning them off stops the ones you have, on every desktop." in place of "Off until you
+  turn them on". A switch that couldn't change says the plugins' switch words, "Couldn't turn it on. Try again."
+  or "Couldn't turn it off. Try again." (James's MK-O26 pick). A held plugin with no objects and no service says
+  "Off while community plugins are off" alone, and a held plugin's page says its row's line, the same words. The
+  foot's "· community off" is said while the switch is off. While community plugins are off, a community set's
+  **Install** takes no press and says "Installing needs community plugins turned on" under it, as "Installing
+  needs the internet" is said offline; before the window has read the switch it takes no press and says nothing,
+  since they may be on. *To be said by O3-D's install rider, after the page's Install (O2-C).*
+  *Ruled 2026-11-14 (James's MK-O1 pick B, "Once on each desktop", his plugins page's store 2026-11-11
+  23:03:22.544Z; built on VF-PM's ruling, 2026-11-14 04:33Z):* "Turning it on asks once, in place" and "Once seen
+  it is not asked again" hold for each desktop: the statement is shown once on each, and the once MK's J1 names is
+  once on each desktop. A desktop where community plugins came on at another desktop shows it before its first
+  community install there, under "First community plugin on ‹desktop›" ‹draft› (his page's heading, ‹desktop›
+  this desktop's name, or "this Mac" / "this PC" ‹draft› when the roster can't be read), with the statement word
+  for word and **Cancel** · **Continue** ‹draft›, once its download is in and before its card.
 - **The install card** (MK-D7). It asks **Install ‹plugin›?**, then says "It adds ‹n› objects to your pegboard:" with
   each ‹object›; "It gives your agents ‹n› tools." when it brings tools; "It can:" with its powers in their plain
   words (below), or "Nothing beyond drawing its own objects" when it asks for none (for a plugin with no object that
