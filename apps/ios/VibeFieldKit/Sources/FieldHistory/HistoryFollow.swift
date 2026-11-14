@@ -114,10 +114,15 @@ struct HistoryFollow: Equatable, Sendable {
     returning = true
   }
 
-  /// Item 396 — the button at the document's side was pressed: the page goes up to a message.
-  ///
-  /// Stub (396 red): it does nothing, as before there was a button.
-  mutating func jumped() {}
+  /// Item 396 — the button at the document's side was pressed: the page goes up to a message, which is the
+  /// reader's own move up the page. The following stops and a return ends, as for a finger, and the page counts as
+  /// moved by hand, so at its top the rows above are read in, in a document a search landed in too. A landing
+  /// does not fit: it leaves a landed document waiting for a finger.
+  mutating func jumped() {
+    following = false
+    returning = false
+    touched = true
+  }
 
   /// A page above was asked for.
   mutating func askedEarlier() { holding = true }

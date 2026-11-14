@@ -50,6 +50,8 @@ struct HistorySessionView: View {
   @Environment(\.colorScheme) private var scheme
   /// Items 387 and 389 — the home screen's measures: what stands over this page's foot is `rootHead.bar`.
   @Environment(\.rootHead) private var rootHead
+  /// Item 396 — under Reduce Motion the button at the side goes to a message with no move to watch.
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var expanded: Set<String> = []
   /// Item 362f — the message whose whole text is open on its own sheet.
   @State private var whole: HistoryWholeMessage?
@@ -68,6 +70,8 @@ struct HistorySessionView: View {
   /// Item 381 — the scroll is at rest (no finger on it, no move carrying it), and the page stands past its end.
   @State private var resting = true
   @State private var past = false
+  /// Item 396 — where each laid-out row begins against the top of the view, for the button at the side.
+  @State private var sight = HistorySight()
 
   init(
     document: HistoryDocument, corpus: HistoryCorpus, ledger: HistoryCorpus? = nil,
@@ -131,7 +135,8 @@ struct HistorySessionView: View {
           }
           // Item 381 — a row is one part of a turn, never a whole turn (`HistoryRow.of`)
           ForEach(HistoryRow.of(document.turns, desktop: corpus.desktop)) { row in
-            rowView(row)
+            // item 396 — while it is laid out a row says where it begins against the top of the view
+            rowView(row).sighted(row.id, by: sight)
           }
           if let since = document.liveSince, awake {
             RuleLine(text: "Live · new since \(since)", tone: ChromePalette.green, rule: ChromePalette.green.opacity(0.38))
@@ -224,6 +229,9 @@ struct HistorySessionView: View {
       // Item 391 — the band over the foot, under the pill: as tall as what stands over the foot, and 24 more
       .historyFootFade(height: HistoryFootFade.height(foot: rootHead.foot))
       .overlay(alignment: .bottom) { footPill(proxy) }
+      .overlay(alignment: .bottomTrailing) { jumpButton(proxy) }
+      // Item 396 — the document's own space, which its rows measure in: its top is the top of the view
+      .coordinateSpace(name: HistorySight.space)
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
           Menu {
@@ -401,6 +409,45 @@ struct HistorySessionView: View {
     }
   }
 
+  /// Item 396 — the button at the side that goes to the message before, level with the pill and clear of whatever
+  /// stands over the page's foot as the pill is (`HistoryBefore.foot`). It is handed the document's rows and reads
+  /// where they begin itself (`HistoryJumpButton`).
+  private func jumpButton(_ proxy: ScrollViewProxy) -> some View {
+    HistoryJumpButton(
+      rows: HistoryRow.of(document.turns, desktop: corpus.desktop), unread: document.nextCursor != nil,
+      sight: sight, foot: HistoryBefore.foot(bar: overFoot)
+    ) { before in
+      goBefore(before, proxy)
+    }
+  }
+
+  /// Item 396 — a press on the button at the side. It is the reader's own move up the page, so the document stops
+  /// following (`HistoryFollow.jumped`). The message's row is asked for by the id its view carries, lined up so
+  /// its top stands 12 pt under the head (`HistoryBefore.anchor`); with no message above among the rows read the
+  /// page goes to its top, where the rows above are read in. It goes at once, or on the 300 ms ease when the place
+  /// is a screen away at most and Reduce Motion is off (`HistoryBefore.eases`).
+  private func goBefore(_ before: HistoryBefore, _ proxy: ScrollViewProxy) {
+    switch before {
+    case .nothing:
+      return
+    case .message(let mark, let near):
+      follow.jumped()
+      let anchor = UnitPoint(x: 0.5, y: HistoryBefore.anchor(screen: sight.screen))
+      if HistoryBefore.eases(near: near, reduceMotion: reduceMotion) {
+        withAnimation(FieldMotion.ease(HistoryBefore.ease)) { proxy.scrollTo(mark, anchor: anchor) }
+      } else {
+        proxy.scrollTo(mark, anchor: anchor)
+      }
+    case .top:
+      follow.jumped()
+      if HistoryBefore.eases(near: nearTop, reduceMotion: reduceMotion) {
+        withAnimation(FieldMotion.ease(HistoryBefore.ease)) { scroll.scrollTo(edge: .top) }
+      } else {
+        scroll.scrollTo(edge: .top)
+      }
+    }
+  }
+
   // MARK: - A row
 
   /// Item 381 — one part of a turn, drawn: the lazy stack lays out a part at a time (`HistoryRow`).
@@ -473,7 +520,7 @@ struct HistorySessionView: View {
         RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ChromePalette.attention, lineWidth: 1.5)
       }
     }
-    .id(turn.promptAnchor ?? "prompt-\(turn.id)")
+    .id(HistoryRow.promptMark(turn))
   }
 
   private func responseHead(_ turn: HistoryTurn) -> some View {

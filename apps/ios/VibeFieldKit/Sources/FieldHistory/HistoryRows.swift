@@ -118,20 +118,19 @@ enum HistoryBefore: Equatable, Sendable {
   /// The button is there while a press has somewhere to go.
   var shows: Bool { self != .nothing }
 
-  /// Where the button's foot stands above the safe area's line.
-  ///
-  /// Stub (396 red): nothing.
-  static func foot(bar: CGFloat) -> CGFloat { 0 }
+  /// Where the button's foot stands above the safe area's line: its centre on the pill's centre line, so it
+  /// clears whatever stands over the page's foot as the pill does (`HistoryFollow.pillFoot`). Over the bar alone
+  /// it is 90 pt.
+  static func foot(bar: CGFloat) -> CGFloat { HistoryFollow.pillFoot(bar: bar) + (pill - size) / 2 }
 
-  /// The share of the view's height at which the message's row and the view are lined up.
-  ///
-  /// Stub (396 red): the top itself.
-  static func anchor(screen: CGFloat) -> CGFloat { 0 }
+  /// The share of the view's height at which the message's row and the view are lined up, so the message's top
+  /// stands 12 pt under the head: the point that share of the way down the row meets the point that share of the
+  /// way down the view. The row's own share is taken off the 12, so a short message stands a point nearer the
+  /// head and one that fills half the view stands at 6. With the view's height not known it is 0, the top itself.
+  static func anchor(screen: CGFloat) -> CGFloat { screen > air ? air / screen : 0 }
 
-  /// Whether the page eases to the place.
-  ///
-  /// Stub (396 red): never.
-  static func eases(near: Bool, reduceMotion: Bool) -> Bool { false }
+  /// The page eases to a place a screen away at most, and never under Reduce Motion.
+  static func eases(near: Bool, reduceMotion: Bool) -> Bool { near && !reduceMotion }
 }
 
 extension HistoryRow {
@@ -152,17 +151,34 @@ extension HistoryRow {
     var screen: CGFloat
   }
 
-  /// Item 396 — where a row begins.
-  ///
-  /// Stub (396 red): no row begins above the top of the view.
-  static func standing(top: CGFloat, screen: CGFloat) -> Standing { .below }
+  /// Item 396 — where a row begins. `top` is how far its top is below the top of the view, negative above it;
+  /// `screen` is the view's height. A row begins above the top once it is more than `HistoryBefore.slack` above
+  /// it, and is away once it is more than a screen above it. With the view's height not known every row above is
+  /// away, so it is gone to at once.
+  static func standing(top: CGFloat, screen: CGFloat) -> Standing {
+    if top >= -HistoryBefore.slack { return .below }
+    return -top <= screen ? .above : .away
+  }
 
   /// The id a prompt's row is found by in the document: the hit's where a search landed on it, else its turn's.
-  /// It is what the view has always set on the row (`HistorySessionView.prompt`), said here once.
+  /// The view sets it on the row (`HistorySessionView.prompt`), and a landed search and the button at the side
+  /// both ask for the row by it.
   static func promptMark(_ turn: HistoryTurn) -> String { turn.promptAnchor ?? "prompt-\(turn.id)" }
 
-  /// Item 396 — where a press on the button at the side goes.
-  ///
-  /// Stub (396 red): nowhere, as before there was a button.
-  static func before(_ rows: [HistoryRow], standing: [String: Standing], unread: Bool) -> HistoryBefore { .nothing }
+  /// Item 396 — where a press on the button at the side goes: to the nearest message of the person's own that
+  /// begins above the top of the view. `standing` is where each row that is laid out begins, by the row's id; a
+  /// row that is not laid out says nothing. The last row, in the document's order, that begins above the top is
+  /// found, and the prompt at that row or nearest before it is the message: one the top of the view cuts is
+  /// gone to, and one that begins in the view is not, so a second press goes to the one before. It is near when
+  /// its own row is laid out a screen above at most. With no such message the answer is the document's top
+  /// while rows above are not yet read (`unread`), and nothing once they all are.
+  static func before(_ rows: [HistoryRow], standing: [String: Standing], unread: Bool) -> HistoryBefore {
+    let otherwise: HistoryBefore = unread ? .top : .nothing
+    let above = standing.filter { $0.value != .below }
+    guard !above.isEmpty, let last = rows.lastIndex(where: { above[$0.id] != nil }) else { return otherwise }
+    for row in rows[...last].reversed() {
+      if case .prompt(let turn) = row { return .message(promptMark(turn), near: standing[row.id] == .above) }
+    }
+    return otherwise
+  }
 }
