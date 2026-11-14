@@ -49058,3 +49058,114 @@ path; pin-class and release-class 0.
 - Item 379 (HG's), and the phone's `AppReviewTests.swift` comment-only follow-up (LANDED "EL8 — Rosetta 0.1.6", Owed).
 
 **Not done, and not claimed:** no smoke, no app run and no Electron row for these commits; nothing pushed.
+
+## Items 379 and 385 — the committed Go record is both shipped Go binaries' own; History's figures wait out a wait, and say "failed" only when it is true (M298)
+
+(2026-11-14; five commits on M297's records `cdb72d97d`, branch `hg/i385-on-i379-data` in the hg lane,
+`lanes/hg/vibe-field`: `3c4c32d3a` (379 red), `424d379d9` (379 green), `23bf59a46` (379 data), `ade028f13` (385 red,
+carried) and `6e56276d6` (385 green, carried; tree `24bc352d5016`), with these records over them. Cut by HG
+(vibe-field-12). Validated by run mini-hg379385a on the old mini, each part on `cdb72d97d`. Lands by the fixer by
+fast-forward as M298, over M297, on VF-PM's LAND GO. One stack, one land (VF-PM, 2026-11-13 23:33:45Z).)
+
+**Why.**
+- 379: the EL8 to rosetta 0.1.6 found that the phone's acknowledgements could not regenerate on a host with no Go
+  module cache (LANDED "EL8 — Rosetta 0.1.6", Found; el8r016's STOP 30). The committed Go record covered the mesh
+  sidecar alone, while the iOS record also lists TailscaleKit's Go modules. The plan, `lanes/hg/i379/PLAN-379.md`
+  (`03cd1dbb`), was ruled by VF-PM at 2026-11-13 22:56Z.
+- 385: History said "Figures for N projects failed · retrying" while a figure was only waiting. The room counts any
+  throw from the port as a failure, and the port threw a refusal that fieldd marks as one to ask again. Item 385 came
+  from the QA lists; its plan (`59844d2e`) was ruled by VF-PM, and the read is `lanes/hg/i385/READ-385.md`.
+
+**What moved.**
+- 379, three commits, 3 paths (+378 −68):
+  - red `3c4c32d3a`: five rows in `tooling/dev-runner/test/third-party-notices.test.mjs` (R1–R5), each red on
+    `cdb72d97d` for its own reason.
+  - green `424d379d9`, `scripts/third-party-notices.mjs`:
+    - `goRefresh` reads both Go binaries (every installed sidecar's build info and the kit's TailscaleKit at
+      Package.resolved's pin), and refuses, writing nothing, with either missing.
+    - `goSnapshot` keeps a recorded module's texts with no cache read.
+    - `goModCacheDir` reads a module cache only when asked (`--gomodcache`, VF-PM's ruling, 22:56Z). Before, every
+      `--ios` and `--refresh-go-modules` call read `$GOMODCACHE`, go's env file under the home and `~/go`.
+  - data `23bf59a46`, `apps/desktop/packaging/notices/go-modules.json` alone (12 1): made on the old mini by the
+    refresh itself, through the repo's hook. 31 → 32 modules (klauspost/compress v1.20.0 for TailscaleKit, text
+    `000c1296f033`), and the record names TailscaleKit (`d1dc45d0…` at truffle 0.7.26).
+  - The module's text came from a tar fetched on this Mac (GD, one door row, `gd-klauspost-compress-v1.20.0.tar`,
+    88,408,064 B, sha256 `7d37b7ba…9c4e`), carried to the mini, unpacked and read there. No go binary ran and no host
+    was named in the run.
+- 385, two commits, 2 paths (+375 −14):
+  - red `76651c602` (carried as `ade028f13`): "item 385: a figure's wait is a wait" in
+    `packages/field-app/test/history-doors.test.ts`, nine rows W1–W9, W3 a guard green by design, eight red.
+  - green `b87b3a888` (carried as `6e56276d6`), `packages/field-app/src/history/doors.ts` alone:
+    - `projectStats`, `usage` and `dayUsage` hand the room an answer, or a refusal that is true.
+    - A refusal that may be answered is asked again (500 ms doubling to 10 s) for up to 30 s, then thrown as it
+      came. A partial answer whose part is still building is asked again up to three times.
+    - The room's signal ends a wait at once.
+    - The words go once per key to the renderer log, with no path, URL or query.
+    - What a person sees: the room's own "Loading activity summaries…" until the figure arrives; "failed ·
+      retrying" only past the bound, and then true.
+- The carry: 385 was cut and run on `cdb72d97d`, and is carried onto `23bf59a46` by `carry-379385.sh` (`c7ae3f96`;
+  VF-PM's GO 05:50Z; run once at 05:50:35Z). It is plumbing alone:
+  - the data commit fetched from the run's bundle (`1021a1a1…`, 2,231 B) as `hg/i379-data`, create-only;
+  - then `merge-tree --write-tree` and `commit-tree` for each of 385's commits, each message and author kept byte for
+    byte;
+  - each carried tree held before its commit (`9786010e`, `24bc352d`), and each carried commit's plain and -U0
+    patch-ids, numstat and message held equal to its original's;
+  - no HEAD moved.
+
+**The witness: mini-hg379385a** (the old mini, ended 05:22:53Z; `.done` `5490d7dce387b144`, its results
+`lanes/hg/runhg3795-results`).
+- 379 ran to its end, every row as written:
+  - AUR red (28/23/5, the five named);
+  - AUG red (28/26/2);
+  - AB, AGD (474 files, the LICENSE's text `000c1296f033`) and AGG (the wrote line whole; 31 → 32 modules, every row
+    kept) green;
+  - AGI green: `--ios` with no module cache, "144 components, 116 distinct licence texts, 2 skipped, 0 errors, 0
+    gaps", and EQUAL to the committed acknowledgements;
+  - AMK and AUD green (28/28/0);
+  - AV, `pnpm verify` whole at `23bf59a46`, exit 0 (dev-runner 488);
+  - AC green, 9 of 9.
+- 385, green through V:
+  - BUR red ("Tests 8 failed | 59 passed (67)", the eight named);
+  - BUG (67/67), BHV (28/28), BHC (1/1), BTA (tsc, 0 errors) and BB green;
+  - BV, `pnpm verify` whole at `b87b3a888`, exit 0;
+  - BC, the compare, 8 of 9 as the brief wrote it: OFF [census]. Read through BRIEF-385's ADDENDUM 1 (below), it is
+    9 of 9.
+- After the run, in the `.done`'s words: the lane "BACK at the HEAD recorded at the start", rosetta-pin "UNMOVED",
+  "NONE OF THE RUN LEFT", and the three new refs written and kept on the mini.
+
+**Found.**
+- My brief's miss. BRIEF-385's moves named field-app's Tests line and history-doors' row of the per-file table, but
+  not the package census's TOTAL line. That line carries the packaged app's bytes, and doors.ts ships.
+  - At 385's tip it read 44,110,489 bytes against the baseline's 44,108,773 (+1,716 B). 124 files, 8 packages, the
+    two `census assert` lines and the rounded 42.07 MB were unmoved.
+  - `hold-census-385.py` (`eda9f3e6…`) held it to VF-PM's (a)–(d): ALL HOLD.
+  - ADDENDUM 1 (`lanes/hg/i385/BRIEF-385.addendum-1.md`, `9806a740…`, accepted 05:45Z) corrects the claim at its
+    source.
+  - The baseline read is 379's census read, which 379's own compare held equal to mini-hg4r5a's v-base.
+  - From here, a brief of HG's that changes a packaged source file names that line in its moves.
+- The same cause moved one READING, not one of the nine: the bundle assert's line, History's chunk name alone
+  (`HistoryRoomView-BZ4HqMEj.js` → `-OvdfVVB1.js`), with every size equal at 0.1 KB. That is consistent with
+  doors.ts sitting in a shared chunk the assert does not size (it is imported by History and by Godview's monitor).
+  Not proven here: no build's chunk list was read.
+- The data commit carries two trailers, `Co-Authored-By: Claude Opus 5.5` and `Claude Fable 5.2`, as its staged
+  message (`msg-data.txt`, `a4f4e0d3…`) carried them. They stay: it is the commit the run made and V'd, and it is not
+  re-made for a trailer (VF-PM 05:50Z).
+- The combined tip takes no V of its own (VF-PM 05:50Z). The grounds:
+  - the paths are disjoint;
+  - the carried trees are held blob for blob;
+  - neither part's rows read the other's paths: the notices rows read no field-app source, and 385's rows read no
+    notices file;
+  - each part's `pnpm verify` ran whole on the same base, `cdb72d97d`.
+  - The merged counts are each part's own move: dev-runner 488 from 379, field-app 4718 from 385.
+- My check's fault, in GD's first row: a `node -e` read that put the script's path at argv[1] ran its CLI (it wrote
+  nothing). The erratum is in GD's row log; `finish-gd-379.sh` passes paths by environment.
+
+**Owed.**
+- `gate:landing` at James's unlock, on the landed tip.
+- James's eye on the hold (LANDED "HG-4", Owed).
+- The phone's `AppReviewTests.swift` comment-only follow-up (LANDED "EL8 — Rosetta 0.1.6", Owed).
+- The EL8 to rosetta 0.1.7, drafted, once James's tags publish it: the npm plane and rosettad, the kit's Swift row
+  staying 0.1.6. It carries 395r and 396r (rosetta #56). Then item 398, last.
+
+**Not done, and not claimed:** no smoke, no app run and no Electron row for these commits; no V on the combined tip
+(ruled); nothing pushed.

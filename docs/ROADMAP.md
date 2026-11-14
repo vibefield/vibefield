@@ -1050,7 +1050,7 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   `smoke:chat-night`'s first real window (row 36, a Mac landing row, on James's word).
 
 **HG — History's first view and its waits, "The Room Behind Glass" and "The Mark Holds"** · vibe-field-12 (lane
-`lanes/hg`, branch `hg/hold-r5`) · law DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and
+`lanes/hg`, branch `hg/i385-on-i379-data`) · law DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and
 `9ByDzaNGQaijgSHW6GrZUb`)
 - Ruled 11-08 (James, in words; the pages keep no picks): page 1 "good" (05:56:00Z), page 2 "good, go with your lean
   and start implementation" (06:35:59Z), every mark at its lean (DECISIONS "HG-D1…HG-D6 · HG-W1…HG-W5 · HG-L1").
@@ -1072,11 +1072,15 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   LANDED "HG-4"): History's first open is a hold in the living mark. The room's waits wear the mark (`waitMark`)
   and its first hold carries the opening, so the mark stands on at the handover; the mark rests on the kit's
   stills; item 264's two nits rode it; the census's baseline names the mark's two moving files.
-- Next: **item 379** (owed, below), then the phone's `AppReviewTests.swift` comment-only follow-up (LANDED "EL8 —
-  Rosetta 0.1.6", Owed).
-- Owed: **item 379**, the committed Go snapshot covers the phone's TailscaleKit too, so the iOS record regenerates
-  with no Go module cache. Until it lands, every runner that regenerates the record seeds a module cache of its
-  own from the committed record (LANDED "EL8 — Rosetta 0.1.6", Found).
+- Landed 11-14: **items 379 and 385** (`3c4c32d3a` → `6e56276d6`, M298, run mini-hg379385a on the old mini, an ff
+  of `cdb72d97d`; LANDED "Items 379 and 385"): the committed Go record is both shipped Go binaries' own, so the
+  phone's acknowledgements regenerate with no Go module cache; History's figures wait out a wait, and "failed ·
+  retrying" is said only past the bound, when it is true. BC read through BRIEF-385's addendum (the census's
+  bytes, +1,716 B).
+- Next: **the EL8 to rosetta 0.1.7**, drafted, once James's tags publish it: the npm plane and rosettad, the kit's
+  Swift row staying 0.1.6. It carries 395r and 396r (rosetta #56: the day pill says how far back it is; a button
+  goes to the message before). Then the phone's `AppReviewTests.swift` comment-only follow-up (LANDED "EL8 —
+  Rosetta 0.1.6", Owed), and item 398 last.
 - Ruled with it: a slice that adds a lazy import or a new module to field-app runs the census assert as a door row
   (the LANDED entry's second finding).
 - Owed: James's eye on the built room and on the hold (the opening, the handover, the mark at rest, by day and by
@@ -1175,7 +1179,7 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
   LANDED "EL8 — Rosetta 0.1.6"): the two npm rows, the lock, the pin and the kit's Swift row; rosetta is MIT in the
   notices. The Mac's rows after the land are that entry's addendum, landed with HG-4's records.
 - Watch: the kit's Swift plane (0.7.26) rejoins the desktop's truffle 0.7.27 at the first ghosttea that declares it.
-  Until item 379 lands, an EL8 that regenerates the iOS record seeds a module cache of its own from the record.
+  Since item 379 (M298), the iOS record regenerates with no Go module cache.
   Next events: a later
   puppeteer release (§3 item 3; 0.3.0 pinned 10-28, `1469639a6`), mille's first release. The next event's kit pre-boots the
   simulator (`/Volumes/SamsungRed/lanes/hl-k1/kit-template.sh`, item 77's k1). CLAUDE.md names no pin since its dated pass (2026-10-28), so an EL8 event leaves it alone.
@@ -1769,7 +1773,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
 | CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140), CP-4a1 (`1a3ca5f24`, mint M143), SP-1e2's fieldd half (`068cab410`, mint M146), TH-1/TH-2 (`d5c6995fb`, mint M147), SP-1e2's card (`320d4b882`, mint M156), CP-4a2a (`c07039551`, mint M159), CP-4a2b's M-h (`aebd6a80b`, mint M163) and M-r1 (`c92b33692`, mint M168) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | SP-1e4 · CP-4a2b…4f · CP-5b…d |
 | ES — Chat's empty state | ACTIVE since 11-08 (ES-D1…D7 ruled at the leans); ES-1 + ES-2 landed 11-08 (M226 `6b8a4b09f`), ES-3 + ES-4 landed 11-08 (M238 `2c34727a3`), ES-4 (role) landed 11-09 (M241 `7d7019a23`), ES-6 landed 11-09 (M260 `f3cbbc469`), ES-Q1 + ES-5a to 5d landed 11-09 (M270 `e6de35f09`) | DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`) | 5e (a device and James); ES-6's first real window (row 36) |
-| HG — History's first view and its waits | ACTIVE since 11-08 (HG-D1…D6, HG-W1…W5 and HG-L1 ruled at the leans); HG-1 + HG-2 landed 11-08 (M235 `3264c54f1`); items 263 + 264 landed 11-08 (M239 `9d2b8d03d`); item 267 landed 11-09 (M242 `519132f1a`); the EL8 to rosetta 0.1.6 landed 11-13 (M296 `31abf8792` → `ea26b0464`); HG-4 landed 11-13 (M297 `b399703d0` → `5749798c2`) | DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and `9ByDzaNGQaijgSHW6GrZUb`) | item 379 → the `AppReviewTests.swift` comment follow-up |
+| HG — History's first view and its waits | ACTIVE since 11-08 (HG-D1…D6, HG-W1…W5 and HG-L1 ruled at the leans); HG-1 + HG-2 landed 11-08 (M235 `3264c54f1`); items 263 + 264 landed 11-08 (M239 `9d2b8d03d`); item 267 landed 11-09 (M242 `519132f1a`); the EL8 to rosetta 0.1.6 landed 11-13 (M296 `31abf8792` → `ea26b0464`); HG-4 landed 11-13 (M297 `b399703d0` → `5749798c2`); items 379 + 385 landed 11-14 (M298 `3c4c32d3a` → `6e56276d6`) | DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and `9ByDzaNGQaijgSHW6GrZUb`) | the EL8 to rosetta 0.1.7 (395r, 396r) → the `AppReviewTests.swift` comment follow-up → item 398 |
 | NR — native re-arm | ACTIVE since 11-08 (opened by VF-PM 19:53Z, Q1–Q5 answered); S0–S2 landed 11-08 (M240 `33162a078`) | `draft/thinking-native-replay-rearm.md`; DECISIONS NR | S3 with the integration lane after EL8-TRUFFLE; the named follow-ups (LANDED "NR S0 + S1 + S2", Not this entry) |
 | OB — Objects at Work | ACTIVE since 11-09, the plugin folders first since 11-11; item 322 landed 11-12 (M286 `864d7aca3`, run 314); item 279's S2 landed 11-12 (M293 `82e166608`, run279) | `draft/thinking-objects-at-work.md`; `lanes/ob-build/ITEMS-279-321-322-PLAN.md`; DECISIONS "items 279 · 321 · 322" | S3 with item 333, after the 0.9 tag; item 321; the desk tools in puppeteer 0.4.2 |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | — |
