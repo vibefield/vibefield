@@ -184,7 +184,10 @@ async function press(
     gl.uniform1i(u("uSide"), spec.side === "back" ? 1 : 0);
     gl.uniform2f(u("uSize"), CARD_DESIGN.width, CARD_DESIGN.height);
     gl.uniform1f(u("uRadius"), PRESS.corner);
-    gl.uniform3fv(u("uPaperC"), colours.paper.map((channel) => channel / 255));
+    gl.uniform3fv(
+      u("uPaperC"),
+      colours.paper.map((channel) => channel / 255),
+    );
     gl.uniform3fv(u("uLight"), [...PRESS.lamp]);
     gl.uniform3fv(u("uRoom"), [...PRESS.room]);
     gl.uniform3fv(u("uLamp"), [...(spec.night ? LAMP_COLOUR.night : LAMP_COLOUR.day)]);
