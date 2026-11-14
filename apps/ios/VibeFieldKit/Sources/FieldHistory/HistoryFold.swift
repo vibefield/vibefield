@@ -695,15 +695,17 @@ extension FieldHistoryModel {
   /// - earlier, the day and the clock: `Fri 6 Nov · 20:21`, with its year when it is not this one,
   ///   `6 Nov 2025 · 20:21`.
   ///
-  /// A stamp on a day after today (a desktop whose clock runs ahead of this phone's) is said as an earlier one
-  /// is, by its day: it is not today, and not one of the six days before.
+  /// A stamp later than now, on today or on a day after it (a desktop whose clock runs ahead of this phone's),
+  /// reads as today's, the clock alone (VF-PM's ruling, 2026-11-13 23:47Z, in the same paragraph): a day that
+  /// has not come is named by no one.
   static func clockLead(_ ms: Int64, now: Date) -> String {
     let today = calendar.startOfDay(for: now)
     let back = calendar.dateComponents([.day], from: calendar.startOfDay(for: date(ms)), to: today).day ?? .max
-    if back == 0 { return clock(ms) }
+    // today, or a day ahead of it
+    if back <= 0 { return clock(ms) }
     if (1...6).contains(back) { return "\(weekdayWords(ms)) · \(clock(ms))" }
-    // past the week, or ahead of today: the day by name (`sittingDay` answers neither `Today` nor `Yesterday`
-    // of such a day), with its year when it is not this one
+    // past the week: the day by name (`sittingDay` answers neither `Today` nor `Yesterday` of such a day), with
+    // its year when it is not this one
     return "\(sittingDay(ms, now: now)) · \(clock(ms))"
   }
 
