@@ -93,6 +93,9 @@ export const LANDING = [
   // WP8d (W7, desk-gates row 29): the app's own plugins under a verified index — it loads, a corrupted copy is refused
   // on its row, a forged index refuses the root; three launches GPU-less
   { name: "smoke:bundled", run: pnpm("smoke:bundled") },
+  // item 378 (desk-gates row 38): the preview capture's WebRTC fence on a real Electron — a control capture reaches a
+  // STUN and a TURN listener, the shipped capture reaches neither; its capture paints, so it needs the unlocked console
+  { name: "smoke:capture-webrtc", run: pnpm("smoke:capture-webrtc") },
 ];
 
 /** A terminal's colour codes, which vitest and nx print, left out of what a reading reads. */

@@ -18,6 +18,7 @@
     "start": "pnpm build:all && electron .",
     "smoke": "pnpm build:shell && node packaging/run-smoke.mjs --smoke",
     "smoke:terminal-door": "pnpm build:shell && node packaging/run-smoke.mjs --terminal-door-probe",
+    "smoke:capture-webrtc": "pnpm build:shell && node packaging/run-smoke.mjs --capture-webrtc-probe",
     "spike:loro": "pnpm build:shell && VITE_SPIKE=1 pnpm build:renderer && node packaging/run-smoke.mjs --spike-loro",
     "lab:live-surfaces": "pnpm build:shell && pnpm --filter @vibefield/electron-shell build:live-surfaces-lab && node packaging/run-smoke.mjs --live-surfaces-lab -ApplePersistenceIgnoreState YES",
     "lab:live-surfaces:sck": "pnpm build:shell && node packaging/build-live-surface-capture.mjs --with-fixture && pnpm --filter @vibefield/electron-shell build:live-surfaces-lab && VF_LIVE_SURFACES_SCK_LAB=1 node packaging/run-smoke.mjs --live-surfaces-lab -ApplePersistenceIgnoreState YES",

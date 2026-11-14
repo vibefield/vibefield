@@ -69,6 +69,7 @@ import { installAppMenu } from "./app-menu";
 import type { AppMenuState } from "./app-menu-model";
 import { installAppProtocol } from "./app-protocol";
 import { ArtifactPreviewCapture, isArtifactPreviewSession } from "./artifact-preview-capture";
+import { electronArtifactPreviewNative } from "./artifact-preview-native";
 import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
 import { ConnectAsks, workingAgents } from "./connect-asks";
@@ -587,6 +588,17 @@ async function main(
   };
   await app.whenReady();
   logger.info("desktop.lifecycle.ready", "Electron app is ready");
+  // Item 378 — the preview capture's WebRTC fence, measured on a real Electron: the capture class on
+  // main's own adapter, twice over one fixture page. No daemon and no window of the app's; it exits
+  // with its own code (0 wanted, 1 red, 2 blind).
+  if (MODE === "capture-webrtc-probe") {
+    const code = await (await testing()).runCaptureWebRtcProbe({
+      dataDir: app.getPath("userData"),
+      native: electronArtifactPreviewNative(),
+    });
+    app.exit(code);
+    return;
+  }
   try {
     await crashes.initialize();
   } catch (error) {
@@ -1279,29 +1291,7 @@ async function main(
     });
     const artifactPreviewCapture = new ArtifactPreviewCapture({
       dataDir: userRoot,
-      native: {
-        createSession: (partition) => session.fromPartition(partition, { cache: false }),
-        createWindow: ({ width, height, partition, webPreferences }) =>
-          new BrowserWindow({
-            show: false,
-            frame: false,
-            focusable: false,
-            resizable: false,
-            skipTaskbar: true,
-            width,
-            height,
-            useContentSize: true,
-            paintWhenInitiallyHidden: true,
-            webPreferences: {
-              partition,
-              ...webPreferences,
-              experimentalFeatures: false,
-              spellcheck: false,
-              backgroundThrottling: false,
-            },
-          }),
-        decodeImage: (bytes) => nativeImage.createFromBuffer(bytes),
-      },
+      native: electronArtifactPreviewNative(),
     });
     // P8b-2: keep the plugin protocol's authority pointed at the LIVE client.
     // Read at call time rather than captured, for the same reason the roster

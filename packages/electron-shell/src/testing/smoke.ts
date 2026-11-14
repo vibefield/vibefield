@@ -229,6 +229,9 @@ import {
   typedAgentAnswer,
 } from "./typed-agent";
 
+// Item 378 — the preview capture's WebRTC fence, measured on a real Electron; main reaches it through this
+// bundle's one door, as it does the terminal door probe below.
+export { runCaptureWebRtcProbe } from "./capture-webrtc-probe";
 // MV-0 — the Godview perf lab rides the same bundle, for the same reason.
 export { runGodviewPerfLab } from "./godview-perf-lab";
 // Item 212 (RV #29) — main reads the plugin-runtime soak's own fieldd recovery

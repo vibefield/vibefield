@@ -28,6 +28,7 @@ const ALL_MODES: readonly ShellMode[] = [
   "terminal-perf-lab",
   "godview-perf-lab",
   "terminal-door-probe",
+  "capture-webrtc-probe",
   "spike-loro",
 ];
 
@@ -94,6 +95,7 @@ describe("isSmokeLike", () => {
     "terminal-perf-lab",
     "godview-perf-lab",
     "terminal-door-probe",
+    "capture-webrtc-probe",
     "spike-loro",
   ]);
 
@@ -187,6 +189,8 @@ describe("shutdownPolicy", () => {
     "godview-perf-lab": "stop-owned",
     // TP-S3a: the door probe is the perf lab's shape — its own pair, stop-owned.
     "terminal-door-probe": "stop-owned",
+    // item 378: the WebRTC probe boots no daemon, so it has none to stop
+    "capture-webrtc-probe": "leave-running",
     "spike-loro": "leave-running",
   };
 

@@ -31,6 +31,7 @@
     "plugin": "node tooling/plugin-cli/bin/vibefield-plugin.mjs",
     "smoke:godview": "pnpm --filter @vibefield/desktop smoke:godview",
     "smoke:terminal-door": "pnpm --filter @vibefield/desktop smoke:terminal-door",
+    "smoke:capture-webrtc": "pnpm --filter @vibefield/desktop smoke:capture-webrtc",
     "smoke:terminal-direct": "pnpm --filter @vibefield/desktop smoke:terminal-direct",
     "smoke:chat-night": "pnpm --filter @vibefield/desktop smoke:chat-night",
     "smoke:first-run": "pnpm --filter @vibefield/desktop smoke:first-run",

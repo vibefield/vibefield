@@ -13,6 +13,7 @@ export type ShellMode =
   | "terminal-perf-lab"
   | "godview-perf-lab"
   | "terminal-door-probe"
+  | "capture-webrtc-probe"
   | "spike-loro";
 
 /** Precedence mirrors the pre-split dispatch order in main(). */
@@ -21,6 +22,7 @@ export function parseMode(argv: readonly string[]): ShellMode {
   if (argv.includes("--terminal-perf-lab")) return "terminal-perf-lab";
   if (argv.includes("--godview-perf-lab")) return "godview-perf-lab";
   if (argv.includes("--terminal-door-probe")) return "terminal-door-probe";
+  if (argv.includes("--capture-webrtc-probe")) return "capture-webrtc-probe";
   if (argv.includes("--spike-loro")) return "spike-loro";
   if (argv.includes("--smoke-plugin-restart")) return "smoke-plugin-restart";
   if (argv.includes("--smoke-godview")) return "smoke-godview";
@@ -56,6 +58,8 @@ export function isSmokeLike(mode: ShellMode): boolean {
     mode === "terminal-perf-lab" ||
     mode === "godview-perf-lab" ||
     mode === "terminal-door-probe" ||
+    // item 378: the preview capture's WebRTC fence on a real Electron; it boots no daemon (leave-running below)
+    mode === "capture-webrtc-probe" ||
     mode === "spike-loro"
   );
 }
