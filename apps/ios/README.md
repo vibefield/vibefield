@@ -95,6 +95,8 @@ class of desk-gates row 30's 2026-10-23 finding: a host prerequisite nobody prob
 **Host Xcodes (item 257, 2026-11-08).** The kit's tests build on Xcode 26.3 and pass under Xcode 27.3's test
 runner on vf-m2, all but item 167's one test, which needs a window scene no package-hosted run has; 26.3's own
 runner does not connect there (item 260). *(The witness: M233, `b3a5930b2`; LANDED "Item 257".)*
+*Corrected 2026-11-14 (item 167): that test asks for no scene now. With none connected it stands its window up
+without one, and its own explicit keyboard request is what proves the window can grant focus.*
 
 This machine's `xcode-select` points at CommandLineTools, so every invocation
 passes `DEVELOPER_DIR` (the Ghosttea convention). Since IOS-3 the tree also

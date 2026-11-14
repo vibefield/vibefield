@@ -28,9 +28,19 @@ struct TerminalSurfaceKeyboardTests {
     }
 
     let host = UIHostingController(rootView: surface(focus: .release, epoch: 0))
-    let windowScene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
-    let previousKeyWindow = windowScene.windows.first(where: \.isKeyWindow)
-    let window = UIWindow(windowScene: windowScene)
+    // Item 167 (2026-11-14): a package test run has no host app, so no scene is
+    // ever connected, and requiring one kept this row red on every kit run.
+    // Take the scene where there is one; otherwise stand the window up without
+    // one, as TerminalSurfaceResizeTests does. The explicit keyboard request
+    // below judges that window: one that cannot grant focus fails there.
+    let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+    let previousKeyWindow = windowScene?.windows.first(where: \.isKeyWindow)
+    let window: UIWindow
+    if let windowScene {
+      window = UIWindow(windowScene: windowScene)
+    } else {
+      window = UIWindow(frame: CGRect(x: 0, y: 0, width: 360, height: 600))
+    }
     window.rootViewController = host
     window.makeKeyAndVisible()
     defer {
