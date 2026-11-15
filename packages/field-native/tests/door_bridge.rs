@@ -22,6 +22,9 @@ use tokio::time::{timeout, timeout_at, Instant};
 
 const TICK: &str = "native.lifecycle.tick";
 
+/// Every row that boots a floor ends with `daemon.shutdown().await`, as `mgmt_server.rs` says (item 196): a floor
+/// still running when its `TempDir` drops leaves cells it is still starting, and under load they bind inside the
+/// removal and keep the root (item 443).
 async fn boot_at(dir: &Path) -> RunningDaemon {
     bootstrap(NativeConfig::for_data_dir(dir.to_path_buf()))
         .await
@@ -295,6 +298,7 @@ async fn the_bridge_is_a_child_the_door_names_by_its_pid_and_start_and_carries_w
         (closed["state"].as_str(), closed["reason"].as_str()),
         (Some("closed"), Some("eof"))
     );
+    daemon.shutdown().await;
 }
 
 /// THE FLOOR WALKS through the real binary: this test's parent stands in for a pane root the floor lists, so the
@@ -324,6 +328,7 @@ async fn the_bridge_run_inside_a_listed_pane_names_the_pane_two_steps_above_it()
     );
     drop(child.stdin.take());
     assert_eq!(exit_code(&mut child).await, Some(EXIT_OK));
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -369,6 +374,7 @@ async fn the_bridge_dials_again_after_its_door_closes_and_a_line_written_meanwhi
     assert_eq!(line, "{\"id\":3,\"result\":{}}\n");
     drop(stdin);
     assert_eq!(exit_code(&mut child).await, Some(EXIT_OK));
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -402,6 +408,7 @@ async fn the_bridge_outlives_a_floor_restart_and_dials_the_next_floor() {
     assert_eq!(bytes.read_lane(lane_id, 9).await, b"{\"id\":4}\n");
     drop(stdin);
     assert_eq!(exit_code(&mut child).await, Some(EXIT_OK));
+    daemon.shutdown().await;
 }
 
 /// No daemon and no config: a bridge refused its arguments, or with no door to dial, exits at once and writes nothing
@@ -495,11 +502,12 @@ async fn a_line_past_the_cap_ends_the_bridge_with_4() {
         .unwrap();
     assert_eq!(code, EXIT_LINE_TOO_LONG);
     writer.abort();
+    daemon.shutdown().await;
 }
 
 /// The bridge, in process, on a short budget, closing every door it opens through the floor's own handle the moment
 /// it opens, for `rounds` doors or until the bridge ends. Each door is held open `lifetime` first. Returns the doors
-/// opened and the bridge's exit code, if it ended.
+/// opened and the bridge's exit code, if it ended, once its floor is stopped.
 async fn close_every_door(
     backoff: Backoff,
     lifetime: Duration,
@@ -515,15 +523,15 @@ async fn close_every_door(
         tokio::spawn(async move { bridge(&endpoint, bridge_in, bridge_out, backoff).await });
     let mut opened = 0;
     let deadline = Instant::now() + Duration::from_secs(20);
-    loop {
+    let ended = loop {
         tokio::select! {
-            code = &mut run => return (opened, Some(code.unwrap())),
+            code = &mut run => break (opened, Some(code.unwrap())),
             event = events.recv() => {
                 if let Ok(field_native::services::door::DoorEvent::Opened(open)) = event {
                     opened += 1;
                     if opened > rounds {
                         run.abort();
-                        return (opened, None);
+                        break (opened, None);
                     }
                     tokio::time::sleep(lifetime).await;
                     assert!(daemon.state.door.close(open.conn_id.as_str(), "closed-by-fieldd"));
@@ -531,10 +539,12 @@ async fn close_every_door(
             }
             _ = tokio::time::sleep_until(deadline) => {
                 run.abort();
-                return (opened, None);
+                break (opened, None);
             }
         }
-    }
+    };
+    daemon.shutdown().await;
+    ended
 }
 
 /// The CO lead's ruling (2026-10-29): a door fieldd keeps closing comes back for at most one budget of delays, and

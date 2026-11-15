@@ -18,6 +18,9 @@ use tokio::time::{timeout, timeout_at, Instant};
 
 const TICK: &str = "native.lifecycle.tick";
 
+/// Every row that boots a floor ends with `daemon.shutdown().await`, as `mgmt_server.rs` says (item 196): a floor
+/// still running when its `TempDir` drops leaves cells it is still starting, and under load they bind inside the
+/// removal and keep the root (item 443).
 async fn boot() -> (tempfile::TempDir, RunningDaemon) {
     let dir = tempfile::tempdir().unwrap();
     let daemon = bootstrap(NativeConfig::for_data_dir(dir.path().to_path_buf()))
@@ -243,6 +246,7 @@ async fn the_door_binds_beside_mgmt_for_its_owner_alone_and_says_how_to_reach_it
             .any(|u| u["unit"] == "door" && u["state"] == "up"),
         "{units:?}"
     );
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -290,6 +294,7 @@ async fn a_door_names_its_caller_and_carries_bytes_both_ways_on_a_lane_the_mesh_
         "a door's lane closes through its door: {close}"
     );
     assert_eq!(daemon.state.door.open_count(), 1);
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -339,6 +344,7 @@ async fn a_door_outlives_fieldd_and_what_it_held_follows_the_next_subscription_i
     // and the live door goes on in order
     door.write_all(b"after\n").await.unwrap();
     assert_eq!(bytes.read_lane(lane_id, 6).await, b"after\n");
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -352,6 +358,7 @@ async fn a_door_past_its_hold_is_closed_and_its_bytes_released() {
     assert!(hung_up(&mut door).await);
     assert!(settles(|| daemon.state.door.open_count() == 0).await);
     assert_eq!(daemon.state.door.held_bytes(), 0);
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -376,6 +383,7 @@ async fn fieldd_closes_a_door_once_and_its_caller_is_hung_up_on() {
         .call("native.door.close", json!({"connId": conn_id}))
         .await;
     assert_eq!(again["result"], json!({"closed": false}));
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -398,6 +406,7 @@ async fn the_door_past_the_limit_is_refused_opens_no_lane_and_is_never_announced
     let note = mgmt.door_note().await;
     assert_eq!(note["params"]["payload"]["state"], "closed", "{note}");
     assert_eq!(note["params"]["payload"]["reason"], "eof");
+    daemon.shutdown().await;
 }
 
 /// EL7, the CO lead's ruling: a caller churning doors faster than fieldd reads must never close the management
@@ -453,6 +462,7 @@ async fn a_burst_of_doors_coalesces_into_a_snapshot_and_never_closes_the_managem
     let ping = mgmt.call("native.lifecycle.ping", json!({})).await;
     assert!(ping.get("result").is_some(), "{ping}");
     drop(kept);
+    daemon.shutdown().await;
 }
 
 /// THE FLOOR WALKS, on the real kernel: this test process's parent stands in for a pane root the floor lists, so the
@@ -488,4 +498,5 @@ async fn a_door_from_inside_a_listed_pane_names_the_pane_and_how_far_up_its_root
     let _outside = UnixStream::connect(door_endpoint(&daemon)).await.unwrap();
     let open = mgmt.door_note().await;
     assert!(open["params"]["payload"].get("pane").is_none(), "{open}");
+    daemon.shutdown().await;
 }
