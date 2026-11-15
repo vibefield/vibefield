@@ -8394,12 +8394,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // declared the serve with NO allow, which the sidecar reads as "anyone the
     // tailnet verified" — an open door under a UI that said "not linked". The
     // cells serve already refused this shape; the product serve does now too.)
+    // Item 429 — THE DOOR'S PORT, set only once the roster's first pass has ended (below, after
+    // `devices.sync()`). Until then the product serve is NOT declared, whatever declares: the pass is
+    // what carries a refused phone's NEW node into the refusals (`appends`), and the door sees only
+    // the node, so a door up before it admitted that phone. It also never carries `port: undefined`
+    // (ServeConfig refused that spec and left a serve error). Its one reader is `productServeSpec`,
+    // through its one caller `desiredServes()`, whose every caller hands the set to `setServes`.
+    let doorPort: number | undefined;
     const productServeSpec = (): ServeSpec | null => {
       const login = linkedLogin();
       if (login === null) return null;
+      if (doorPort === undefined) return null;
       return {
         name: "product",
-        target: { kind: "port", port: controlPort },
+        target: { kind: "port", port: doorPort },
         // UA-P-0e (D2) — the TAILNET listener is the registry's fixed port, not
         // whatever ephemeral number the loopback control plane bound. With
         // nothing content-bearing on the bus there is no published slice to
@@ -8446,6 +8454,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     links.on("changed", () => {
       const login = linkedLogin();
       if (login === lastServeAllowLogin) return;
+      // Item 429 — a login before the door is declared has nothing to gate yet: the door's own
+      // declare after the first pass places the serve under the login it reads then, and records
+      // it. An unlink still withdraws at once (below).
+      if (login !== null && doorPort === undefined) return;
       lastServeAllowLogin = login;
       // UA-P-0a — a link transition now includes null in BOTH directions, so
       // this runs before the artifact service has declared anything: a capture
@@ -9042,6 +9054,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // post-bind service initialization. A migration/storage failure may not
       // leave a zombie ProductAPI listener behind.
       await devices.sync();
+      // Item 429 — the door's OWN declare, the first that carries its port, once the roster's first
+      // pass has ended: every refusal it adds (a refused phone's new node) stands before any hello
+      // can arrive on the tailnet. It waits on the floor's answers and no other subsystem; a floor
+      // that never answers keeps the door shut.
+      doorPort = controlPort;
+      lastServeAllowLogin = linkedLogin();
+      void mesh.setServes(desiredServes()).catch((error: unknown) => {
+        // mesh down/degraded: the next declare re-runs the reconcile, as the links path's says
+        serveLog.debug("fieldd.serve.door_declare_deferred", "the door's serve deferred", {
+          error: String(error),
+        });
+      });
       // S3's fold, (5b) — the roster has passed: what stood at boot is swept now, by node id and
       // exact freeway client (field-native outlived the last fieldd, and may hold its keyrings).
       // No audit row; one diagnostics line per refusal that closed something. Never rejects.

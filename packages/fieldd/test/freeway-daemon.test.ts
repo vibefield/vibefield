@@ -708,15 +708,12 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     }
   }, 60_000);
 
-  // Item 423 — a refused phone's hello inside the roster's first pass. The route secret is minted per boot (daemon.ts,
-  // `servePathSecret`), so the serve a restarted fieldd's floor still holds cannot carry a hello into the new door. But
-  // the NEW product serve is placed by every serve declare, and no declare is ordered against the roster's first pass.
-  // A phone therefore reaches the new door between its listen and that pass's end. Here the pass is held at its peer
-  // stream, the freeway coming up makes a declare fire inside it, and the refused phone's hello on the new route must
-  // hear the word. The row holds that the refusals are read before the peer stream is held, by EITHER of two reads:
-  // the boot read before the listen, or the pass's own first read. It does not hold the boot read's place before the
-  // listen; device-service.test.ts's source-order row does.
-  it("423 — between the door's listen and the roster's first pass, a refused phone's hello on the new route hears the word", async () => {
+  // Item 423, as item 429 leaves it. The route secret is minted per boot (daemon.ts, `servePathSecret`), so the serve
+  // a restarted fieldd's floor still holds cannot carry a hello into the new door; and the NEW product serve is now
+  // declared only once the roster's first pass has ended (item 429), so no hello reaches the door inside it. Here the
+  // pass is held at its peer stream with a declare fired inside it, and the refused phone's first hello, after the
+  // pass, hears the word.
+  it("423 — no hello reaches the door before the roster's first pass ends; the refused phone's first hello after it hears the word", async () => {
     const { dataDir, mock } = await phoneWorld(downState(1));
     const before = new SettingsDocService({ dataDir });
     await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
@@ -734,26 +731,15 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     });
     await until(() => mock.heldPeersSubscribeCount > 0, 15_000, "the roster's first pass held");
     mock.pushDelta("native.freeway.state.subscribe", upState({ revision: 2 }));
-    await until(
-      () =>
-        mock.meshAddParams.some(
-          (spec) =>
-            spec["name"] === "product" &&
-            (spec["target"] as { port?: unknown } | undefined)?.port === port,
-        ),
-      15_000,
-      "the new door's product serve, placed inside the held pass",
-    );
-    expect(settled).toBe(false);
-    expect(await helloRefused({ controlPort: port }, mock, "node-phone")).toMatchObject({
-      data: removedWord,
-    });
-    // still held: the word came from a read of the settings document made before the peer stream was held, never
-    // from the roster
-    expect(mock.heldPeersSubscribeCount).toBeGreaterThan(0);
+    await until(() => mock.meshServes.get("freeway") !== undefined, 15_000, "the declare");
+    expect(productAt(mock, port)).toBe(false);
     expect(settled).toBe(false);
     mock.releasePeersSubscribes();
     await starting;
+    await until(() => productAt(mock, port), 15_000, "the door's product serve, after the pass");
+    expect(await helloRefused({ controlPort: port }, mock, "node-phone")).toMatchObject({
+      data: removedWord,
+    });
   }, 60_000);
 
   // Item 429 — the door's route is declared only once the roster's first pass has ended. The pass is what
