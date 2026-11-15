@@ -368,6 +368,8 @@ async function desktop(
     revoked?: readonly string[];
     source?: PluginRecord["source"];
     calls?: RemovalCalls;
+    /** test-only: the installer's first step, awaited before it refuses as it always has (the grant race's row) */
+    install?: (id: string) => Promise<void>;
   } = {},
 ): Promise<Desktop> {
   const dataDir = mkdtempSync(join(tmpdir(), `vf-pa32-${name}-`));
@@ -396,7 +398,8 @@ async function desktop(
     settingsDoc: settings,
     plugins: registry as unknown as PluginRegistryService,
     installer: {
-      install: async () => {
+      install: async (request: { id: string }) => {
+        await opts.install?.(request.id);
         throw new Error("this harness installs nothing");
       },
       uninstall: async (id: string, removeData: boolean) => {
@@ -444,6 +447,12 @@ async function settle(d: Desktop): Promise<void> {
 
 /** A reconnect from `from` to `to`: the VERSION exchange the doc-sync lane runs. */
 async function deliver(from: Desktop, to: Desktop): Promise<void> {
+  await merge(from, to);
+  await settle(to);
+}
+
+/** The exchange alone: `to`'s host merges what it lacks and tells its listeners; nothing waits for the walk. */
+async function merge(from: Desktop, to: Desktop): Promise<void> {
   const theirs = await to.docs.hostVersion(SETTINGS_ID);
   if (theirs === null) throw new Error(`${to.name} does not host the settings document`);
   const answer = await from.docs.hostAnswer(SETTINGS_ID, theirs);
@@ -456,7 +465,6 @@ async function deliver(from: Desktop, to: Desktop): Promise<void> {
     });
     expect(outcome.applied, `${from.name} → ${to.name}`).toBe(true);
   }
-  await settle(to);
 }
 
 /** Both ways, in the order the row names. */
@@ -847,5 +855,239 @@ describe("E10 on a booted daemon (MK-2d)", () => {
       ["outcome", "succeeded"],
     ]);
     expect(removal[0]?.attrs).toMatchObject({ origin: "settings-doc", removeData: false });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// The grant race (2026-11-15). A person's grant act is the last word on this desktop until their next act. The
+// handler (`plugins.grants.set`) moves the registry, recycles the plugin's principals, and only then publishes; a
+// walk raised in that gap (by this desktop's own earlier publication, or by any peer merge) read the doc's OLDER
+// decision and applied it over the act: in OFF, the plugin restarted holding a capability the person had just
+// revoked, and the handler answered the re-granted record. A walk already past its wait did the same after the
+// act had published. `actInGap` stands where the handler stands after its registry move; the function it returns
+// is the rest of the handler.
+//
+// Time: no row's GREEN depends on it. A walk the fix holds back cannot reach its power, however long the row
+// waits. `walkNow` gives an unheld walk 25 ms to run (it is in memory, no I/O) before the row samples the gap;
+// a slower host only moves the walk's power later, where the trace still records it.
+
+const BLOCKER = "a.fixture.blocker"; // a registry entry this desktop lacks; its install is the row's to hold
+
+type Trace = { by: "person" | "walk"; granted: boolean }[];
+const marks = new WeakMap<Desktop, () => void>();
+
+/** One desktop holding a seeded, settled install-set entry. */
+async function solo(
+  grants: GrantDecision[],
+  install?: (id: string) => Promise<void>,
+): Promise<Desktop> {
+  const revoked = grants.filter((g) => g.decision === "revoked").map((g) => g.capability);
+  const d = await desktop("A", { revoked, ...(install !== undefined ? { install } : {}) });
+  await d.settings.setInstallSetEntry(
+    { pluginId: PA32_ID, source: "bundled", enabled: true, grants },
+    "seed",
+  );
+  await settle(d);
+  d.audit.length = 0;
+  return d;
+}
+
+/** Every registry move of `capability` from now on, in order, marked the person's (by `actInGap`) or a walk's:
+ * every state a read could see. */
+function traceGrants(d: Desktop, capability: string): Trace {
+  const trace: Trace = [];
+  const setGrant = d.registry.setGrant.bind(d.registry);
+  let person = false;
+  marks.set(d, () => {
+    person = true;
+  });
+  d.registry.setGrant = async (id, cap, granted) => {
+    const by = person ? "person" : "walk";
+    person = false;
+    const out = await setGrant(id, cap, granted);
+    if (cap === capability)
+      trace.push({ by, granted: out.record.grantedCapabilities.includes(capability) });
+    return out;
+  };
+  return trace;
+}
+
+/** The person's act up to the handler's gap: the registry moved, the handler's own audit row, NO publication.
+ * The returned function is the rest of the handler: `latest` read after the recycle (daemon.ts, `plugins.grants.set`),
+ * then `publish`; its promise is the publication's. */
+async function actInGap(
+  d: Desktop,
+  capability: string,
+  granted: boolean,
+): Promise<() => Promise<void>> {
+  marks.get(d)?.();
+  const { changed } = await d.registry.setGrant(PA32_ID, capability, granted);
+  d.audit.push({
+    action: granted ? "capability.grant" : "capability.revoke",
+    capability,
+    origin: "local",
+  });
+  return () => d.reconciler.publish(d.registry.record, "grants", { capability, granted, changed });
+}
+
+const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** A walk raised now, given 25 ms to run unheld; the walk itself, boxed, for the row to await once the act is done.
+ * Boxed because an async function that returns a promise adopts it: its caller would wait for the walk to end. */
+async function walkNow(d: Desktop): Promise<{ walk: Promise<void> }> {
+  const walk = d.reconciler.reconcile();
+  await Promise.race([walk, pause(25)]);
+  return { walk };
+}
+
+/** The doc's next install-set write throws, once: the disk refused it. */
+function failNextInstallSetWrite(d: Desktop): void {
+  const write = d.settings.updateInstallSet.bind(d.settings);
+  let failed = false;
+  d.settings.updateInstallSet = async (
+    ...args: Parameters<SettingsDocService["updateInstallSet"]>
+  ) => {
+    if (!failed) {
+      failed = true;
+      throw new Error("the disk refused the write (the row's)");
+    }
+    return write(...args);
+  };
+}
+
+/** The invariant, held three ways after the person's LAST act:
+ * (1) every registry state from that act on equals it (the trace);
+ * (2) the record the handler answers (`latest`, read at its end) equals it — the row reads it in the gap;
+ * (3) the ledger holds no settings-doc act of the opposite sense for the capability after it. */
+function heldToLastAct(d: Desktop, trace: Trace, granted: boolean, ledgerFrom: number): void {
+  const last = trace.map((t) => t.by).lastIndexOf("person");
+  expect(last, "the person's last act is in the trace").toBeGreaterThanOrEqual(0);
+  expect(
+    trace.slice(last).map((t) => t.granted),
+    "every state after the person's last act",
+  ).toEqual(trace.slice(last).map(() => granted));
+  const opposite = granted ? "capability.revoke" : "capability.grant";
+  expect(
+    d.audit
+      .slice(ledgerFrom)
+      .filter(
+        (row) => row.origin === "settings-doc" && row.capability === CAP && row.action === opposite,
+      ),
+    `no settings-doc ${opposite} after the person's last act`,
+  ).toEqual([]);
+}
+
+describe("the grant race: a person's act is the last word here until their next act", () => {
+  for (const [dir, first, second] of [
+    ["OFF (a grant, then a revoke while the grant still publishes)", true, false],
+    ["ON (a revoke, then a grant while the revoke still publishes)", false, true],
+  ] as const) {
+    it(`${dir}: the walk raised by this desktop's own earlier act`, async () => {
+      const seed = grantRow(CAP, first ? "revoked" : "granted");
+      const d = await solo([seed, grantRow(BYSTANDER, "granted")]);
+      const trace = traceGrants(d, CAP);
+
+      const rest1 = await actInGap(d, CAP, first); // act 1, in its gap
+      const done1 = rest1(); // act 1's handler ends; its publication runs, unawaited by it
+      const rest2 = await actInGap(d, CAP, second); // act 2, in its gap
+      const ledgerFrom = d.audit.length;
+      await done1; // act 1's publication persisted and emitted; the walk it raised waited for act 1 alone
+      const { walk } = await walkNow(d);
+
+      expect(isGranted(d, CAP), "in act 2's gap, the registry holds act 2").toBe(second); // RED today
+      await rest2();
+      await walk;
+      await settle(d);
+      expect(isGranted(d, CAP), "after act 2's publication").toBe(second);
+      heldToLastAct(d, trace, second, ledgerFrom);
+    });
+
+    it(`${dir}: the walk raised by a peer's merge of an unrelated setting`, async () => {
+      const seed = grantRow(CAP, first ? "revoked" : "granted");
+      const [a, b] = await sharedPair([seed, grantRow(BYSTANDER, "granted")]);
+      await decide(a, CAP, first); // act 1, published, settled, and carried to B
+      await reconnect(a, b, "A first");
+      const trace = traceGrants(a, CAP);
+      const rest2 = await actInGap(a, CAP, second); // act 2, in its gap
+      const ledgerFrom = a.audit.length;
+      // B moves a setting that is not a grant; the merge raises `changed {installSet}` on A all the same
+      await b.settings.setAppValue("desktop.showTray", false, "pane");
+      await merge(b, a);
+      const { walk } = await walkNow(a);
+
+      expect(isGranted(a, CAP), "in act 2's gap, the registry holds act 2").toBe(second); // RED today
+      await rest2();
+      await walk;
+      await settle(a);
+      expect(isGranted(a, CAP), "after act 2's publication").toBe(second);
+      heldToLastAct(a, trace, second, ledgerFrom);
+    });
+  }
+
+  it("a walk already past its wait never applies the doc it read before the act over the act", async () => {
+    let reached: () => void = () => undefined;
+    const atInstall = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let held = false;
+    const d = await solo([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")], async (id) => {
+      if (id !== BLOCKER || held) return;
+      held = true;
+      reached();
+      await gate; // the walk holds the doc it read, inside the blocker's install
+    });
+    await d.settings.setInstallSetEntry(
+      { pluginId: BLOCKER, source: "registry", version: "1.0.0", enabled: true, grants: [] },
+      "seed",
+    );
+    const order = Object.keys(await d.settings.installSet());
+    // the harness's own precondition: a doc that orders PA-32 first makes this row prove nothing
+    expect(order.indexOf(BLOCKER), "the blocker's entry is walked before PA-32's").toBeLessThan(
+      order.indexOf(PA32_ID),
+    );
+    await atInstall;
+    const walk = d.reconciler.reconcile(); // the walk in flight, its `desired` read before the act
+    const trace = traceGrants(d, CAP);
+    const rest = await actInGap(d, CAP, false);
+    const ledgerFrom = d.audit.length;
+    await rest(); // the whole act: the registry, the recycle, the publication
+    // an act never waits for a walk to end: its publication commits while this walk is still held in the install
+    let committed = false;
+    for (let i = 0; i < 40 && !committed; i++) {
+      committed =
+        (await entryOf(d))?.grants.find((g) => g.capability === CAP)?.decision === "revoked";
+      if (!committed) await pause(25);
+    }
+    expect(committed, "the act's publication committed while the walk was held").toBe(true);
+    release();
+    await walk;
+    await settle(d);
+
+    expect(isGranted(d, CAP), "after the walk ended").toBe(false); // a later pass revoked again, so this holds today
+    heldToLastAct(d, trace, false, ledgerFrom); // RED today: the trace holds the walk's re-grant
+  });
+
+  it("a revoke whose publication parked is never re-granted here; a later publication carries it", async () => {
+    const d = await solo([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")]);
+    const trace = traceGrants(d, CAP);
+    failNextInstallSetWrite(d);
+    const rest = await actInGap(d, CAP, false);
+    const ledgerFrom = d.audit.length;
+    await rest(); // its publication parks: `publish` catches and logs
+    await settle(d);
+    await settle(d);
+
+    expect(isGranted(d, CAP), "after the parked revoke").toBe(false); // RED today: the walk re-granted it
+    heldToLastAct(d, trace, false, ledgerFrom);
+    const entry = await entryOf(d);
+    expect(
+      entry?.grants.find((g) => g.capability === CAP)?.decision,
+      "a later publication carried the revoke to the doc",
+    ).toBe("revoked");
+    expect(entry?.revocationGenerations?.[CAP]).toBe(1);
   });
 });
