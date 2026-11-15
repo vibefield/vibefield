@@ -50911,3 +50911,180 @@ red before green wherever a value could hold the decision):
 
 **What it does not cover.** The batch on hardware beyond what James tried on his own iPhone. The Release archive
 (build 5.1) cut from the batch's tip plus item 427 waits his own upload; nothing here uploads or installs.
+
+## Items 440 and 441 — a person's disable, enable, update or removal is the last word here (M317)
+
+(2026-11-15; thirteen commits, `2f410092f` to `e2e02d4b3`, made on main `d630b5e90` and cut on the create-only ref
+`rv/i44x-on-d630b5e90` by `lanes/rv/i44x/cut-draft/cut-i44x.sh` (`198ae0c1`) from the trees of
+`lanes/rv/i44x/at-d630b5e9075c-r2` (seal `9a1273e6`), each through the hook, each commit's fourteen files held to
+its step's tree by blob and its message byte for byte. No message carries a `Claude-Session:` line or a board card
+id. Lands on James's word, 2026-11-14 19:42:10Z in VF-PM's session, "I'm currently away from my Mac, so anything
+needs me to do on Mac I can not do right now, so just push forward on implementation progress, you can also run test
+on my Mac , and merge to main when things done and push to remote"; and VF-PM's GO. A fourteenth commit, `9bc6f02d2`, is
+`pnpm gen`'s output at the thirteenth, cut on the create-only ref `rv/i44x-gen-on-d630b5e90` by
+`lanes/rv/i44x/gen/cut-gen.sh` (`52533c39`), its diff over the five generated paths held to the gen row's patch.)
+
+**What is real.**
+- **Item 440, the disable race** (`2f410092f`, `3f0bd667a`, `4d5d07d0a`). A person's enable, disable or update
+  (`localAct`) holds the plugin's lane from before its registry move until its publication settles, and a walk's
+  enablement section reads the doc and the record inside the lane. So a walk raised in the act's gap can no longer
+  turn the plugin back.
+  - An install publication of a PRESENT entry writes its identity only: its enablement goes through `ensure`, where
+    none stands. So an update follows the account's on/off, as James picked on the PM board,
+    2026-11-15T01:22:08.253Z: "Fix before the 0.9 tag, and yes: an install follows the account's on/off
+    (Recommended)".
+- **Item 441, the uninstall race** (`4dec9df23`, `31b6cc443`). A person's removal (`uninstallAct`) holds the lane
+  until its publication settles; `unpublish` runs in the desktop's publishing order; a walk's presence and removal
+  sections run in the lane. So a plugin just removed is no longer installed again by a walk before its removal commits.
+- **The lane re-entry guard** (`ee5adac9a`, `a92f34a48`). Every lane user takes the lane through `hold`, and a lane
+  asked for by the async context that already holds it is refused at once (`LaneReenteredError`), so a callback under
+  a walk's hold can never wait behind itself. A booted daemon's walk disables a plugin with its real teardown under
+  the lane, and ends.
+- **A switch behind an update gives up and says so** (`a58c58b94` to `e2e02d4b3`), James's pick on the PM board,
+  2026-11-15T06:18:23.908Z: "B: give up after a few seconds and say so in a sentence (Recommended)".
+  - contracts: `PLUGIN_LIMITS.SWITCH_WAIT_MS` (5 s) and `PluginErrorKind` `PLUGIN_UPDATING`.
+  - fieldd: a person's enable or disable waits for its plugin's lane up to the bound; when an update holds it then,
+    the switch is refused with `PLUGIN_UPDATING` and its move never runs. Behind anything else it keeps waiting.
+  - DESIGN.md §9: the sentence, marked as a draft for James's eye, with its dated note.
+  - field-app: `refusedWhileUpdating` reads the refusal's kind, never its text; the Installed rows and a plugin's
+    page say "This plugin is updating. Try again in a moment." in the switch's refusal place.
+- **The rows, red then green**: in `packages/fieldd/test/install-reconciler.test.ts` (the disable, uninstall and
+  update races; the re-entry guard and its booted witness; the switch behind an update), and in field-app's
+  `plugins-install.test.ts` and `plugins-popup.test.tsx` (the reader; the window's two rows). Every commit
+  typechecks.
+- **Run**: `lanes/rv/i44x/row/row-i44x.sh` (`9d8d7415`) on James's Mac, its second run, 2026-11-15
+  08:55:17Z–09:03:05Z, GREEN.
+  - Each commit in turn, at its own tree: every red by its own assert, every green as wanted (12 of 12 judged
+    steps); field-app's typecheck at the window's red-rows commit exit 0.
+  - At the top: the typechecks of fieldd, contracts and field-app exit 0; biome over the thirteen code files exit 0
+    (one warning, settings-doc.ts's constructor `cfg`, main's own); fieldd's whole suite 4055 of 4070 passed, 15
+    pending (291 files); contracts' 2048 of 2048 (69 files); field-app's 5077 of 5077 (354 files).
+  - Run under the env -i harness, in MK's installed lane, with qa-01's ssh stand-in first on PATH.
+- **The generated files** (`9bc6f02d2`). The train's first whole verify was RED at the plugin kit's docs freshness:
+  the thirteen added `SWITCH_WAIT_MS` to contracts' `PLUGIN_LIMITS`, which `gen:docs` writes into the manifest page,
+  and not the page itself,
+  and that verify stopped before its Rust stage and the generators' own check. The fourteenth commit is `pnpm gen`'s
+  output at the thirteenth, nothing by hand: one line, the manifest page's `SWITCH_WAIT_MS` row. At its tree (the gen
+  row, 2026-11-15 09:48:10Z–10:13:07Z) a second `pnpm gen` leaves the tree byte-equal, `cargo fmt --check` exits 0,
+  the plugin kit's suite passes 115 of 115, contracts' 2048 of 2048, and `cargo test --workspace` 629 (0 failed, 15
+  ignored).
+- **The first run** (08:40:12Z–08:48:30Z) was RED at biome alone, and stays recorded so: every judged step and all
+  three suites were green, and biome refused two drafted lines (an import order in the guard's commit, and one
+  page-refusal line in the view's commit that fits on one line). Both were mended in the generators; the second run
+  is of the mended trees.
+
+**What is not covered (open).**
+- **Item 450, a power's switch behind an update**: a capability switch tapped while its plugin updates waits for the
+  update and is then applied; it is not bounded here. The question is open with James.
+- **Item 451, the rest of row B**: a walk's enable, a person's disable during a walk's grant section and a grant act
+  behind a disable, each on a running daemon with a live doc merge; and a switch behind an update on a booted daemon.
+- **Item 452, a failed publication**: a person's enable, disable or removal whose publication FAILED is not held
+  against a walk, so a later walk that reads the doc's older entry turns the plugin back. Its home is with 442's
+  persisted record.
+- **Item 442, a parked revoke across a restart**, as M314 said; item 449 rides it.
+- **Nothing was looked at in a window.** The sentence's place in the Installed rows and on a plugin's page is proven
+  by field-app's rows alone, with no Electron witness.
+- `pnpm verify` ran whole at the 18-commit top before the land, exit 0 (fieldd 4055 passed, 15 skipped).
+  `pnpm gate:landing`: deferred, not waived; owed at James's unlock.
+
+## Item 453 — the listener row dials its fresh connections once the floor has room for them (M318)
+
+(2026-11-15; one commit, 1 file +48 −8, test-only. Cut by c2 on main `d630b5e90` as `264ba68e2` on branch
+`i453/test-on-d630b5e90`. Main moves once, on James's word and VF-PM's GO. On main it is `137cc18a8`; every
+other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was red.**
+- One pre-push whole verify on 2026-11-15 (its log ends 08:02:04Z) failed `listener_accept_pressure` on the door
+  alone. Its words: "door: fresh served not within 30 s, degraded while it retried true, up after not within 30 s;
+  mgmt: fresh served 20 ms; meshdata: fresh served 21 ms, … up after 123 ms. doors taken 40". The run took 31.04 s.
+- The floor's log, from the run's kept root:
+  - The door, mgmt and the bridge each logged one `accept_failing` at the triggers.
+  - The floor closed its forty doors some 30 ms after the row dropped them.
+  - mgmt and the bridge logged `accept_recovered` (failures 1) in the millisecond the last door closed.
+  - The door logged no `accept_recovered`, and no new door opened in the 30 s.
+- Why, most likely (the fate of the fresh door was not recorded then, so this is not proven):
+  - The row dialed its fresh door the instant it dropped its own forty, so that door could reach a floor still at its
+    descriptor ceiling.
+  - On macOS a connection whose accept fails for a descriptor is closed by the kernel. A second failed accept then
+    took the fresh door, and the door's loop had no connection left to accept.
+  - The row's claim is about the next connection after the floor has descriptors again, and that dial was not it.
+- Not a product fault on this evidence: the door's accept loop has no await between accepts.
+
+**What moved (the test file alone).**
+- After the release, the row waits until the floor's own descriptor count leaves room for one connection per
+  listener, and only then dials. The wait is bounded at 5 s (`FREED_WITHIN`) and polled every 5 ms.
+- The verdict's 5 s for each fresh serve, and each unit's "up after", are still timed from the release, not from the
+  wait's end. A floor slow to free its descriptors spends its own 5 s, so the wait cannot hide a slow serve.
+- A floor that never leaves room within 5 s fails the row with "this row proves nothing", as an unshown ceiling
+  already did.
+- The readings now say when the room came and what became of the fresh door by the window's end (closed by the kernel,
+  or open). They are data, never asserted, and are printed on a failure only.
+- The doc comment's step 3 says the new order.
+
+**The proof.**
+- `rows-453.sh` (`1d31469dfdc46cde`), on this Mac through the door, at main `d630b5e90` with the change in the working
+  tree, 2026-11-15 08:52:33Z → 08:54:47Z: **GREEN** (run.log `57db5476cb61e1e8`).
+  - `cargo fmt --check`: exit 0, no diff line.
+  - `cargo test -p field-native --test listener_accept_pressure` twenty times: twenty of twenty "test result: ok. 1
+    passed; 0 failed". The test itself took 2.38 to 2.65 s each run. Run 1 built (79 s, one Compiling line); runs 2
+    to 20 took 2 to 3 s each with none.
+  - The patch was reversed after, and the lane returned with its refs equal (2477 = 2477).
+- How long the twenty waits for room took was NOT measured: a passing run prints no readings, and it removes its root.
+- The commit's tree is that working tree's, the one path at blob `dfd1672b1aa1`.
+- The train's V: `pnpm verify` whole at the train's top `91e31393c`, exit 0; this row passed there in 1.37 s.
+
+**Not covered.**
+- Item 454: a unit whose failed accepts end with nothing queued reads degraded until its next accepted connection.
+  The floor folds it into `native.state`, so Settings → System status shows the door and the native row "degraded"
+  while the floor is quiet. It is a product observation, kept apart. Its fix shape is a note only, with no row and no
+  patch.
+- In that fix shape, whether the listener's first poll makes its accept call on Windows (named pipes) is unproven.
+- The row runs on macOS; nothing here is proven on Windows or Linux.
+
+**Not done, and not claimed:** no product change; no Electron or phone witness; nothing pushed.
+
+## MA — the phone's Keep: K4's two and one rider, so a folder's app offers Keep too (M319)
+
+(2026-11-15; 3 commits on main `d630b5e9075c`, `deb1a1604`…`91e31393c`, 7 paths.
+K4's two (cut on K3's old tip `753eeaaa7`) were carried onto `d630b5e90` by `lanes/ma-6/run-k4/carry-k4.py` (plumbing:
+`git merge-tree --write-tree` and `git commit-tree`, each author and message byte for byte, each patch-id the
+original's outside the resolved path; one create-only ref, `ma/k4-on-d630b5e90`). One pick met main's text: K4's
+green, in `AppsShelfViews.swift`, two regions, resolved from `git merge-file`'s own regions, merge style forced, each
+held by its content and the text around it, every line of both sides kept but the ones a rule names. The shelf's state
+gains K4's `keepWords` beside item 419's; the grid's call gains `onKeep` between `onOpen` and `onAbout`; K4's
+`keep(_:kept:)` stands after item 419's `open(_:at:)`, and main's rewritten folder comment stands. The resolved blob
+was pinned from the dry and held at the carry. One rider, made on the carried tip's text: item 419's folder layer
+builds its own `AppsTile`, whose `onKeep` K4 made required, so `AppsFolderLayer` takes the shelf's own keep and hands
+it to each tile, and `AppsShelfView.folderLayer` hands it down (two files, 3 1 and 2 1). The pre-commit hook's own
+command ran over the tip before the ref was written, exit 0. Its tree is the dry's. Lands on James's word, 2026-11-14
+19:42:10Z in VF-PM's session, "I'm currently away from my Mac, so anything needs me to do on Mac I can not do right
+now, so just push forward on implementation progress, you can also run test on my Mac , and merge to main when things
+done and push to remote", and VF-PM's GO.)
+
+**Why.** Keep goes the short path, James's item 2, "agree", 2026-11-13 01:29:54Z, typed in VF-PM's session; landed for
+the desk as M312. Keep's words are DESIGN.md §9's five, his click "Use all five as written (Recommended)" (2026-11-14
+08:16:49.919Z). K4 brings the same act to the phone.
+
+**What is real.**
+- **The red** (K4's first): `AppsKeepTests.swift` (new, FieldHomeTests), four rows over a fake home that keeps on
+  `artifact.mark` and pings as its fold moves; the seam (`AppsKeep.swift` with today's long press, `AppsFeed.mark`
+  sending nothing) so each row is red alone.
+- **The green** (K4's second): the long press is Open, Keep (or Stop keeping), About this app (DESIGN.md §8); one mark,
+  `artifact.mark {foldKey, kept}`, goes through the home, and the phone writes nothing of its own: the home's write
+  moves its fold, whose ping reads the shelf again, so the Kept group fills from the home's next page. A keep the home
+  did not take says why in a line under the field until the next keep: lines 4 and 5 of §9 for the phone, lines 1 and
+  3 the desk's, ‹draft› on the phone. After the cut James answered, typed in VF-PM's session at 2026-11-15
+  10:11:20Z, "go with lean" (VF-PM's reading, said back to him: this reading stands, and a folder's app offers Keep);
+  item 455 takes the ‹draft› marks off in a later commit.
+- **The rider**: a folder's app offers Keep and Stop keeping on its long press, the same act as the shelf's.
+
+**The witness**: GREEN on James's Mac, 2026-11-15 09:45:31Z to 09:47:39Z, at the stack's top as cut, in qa-01's row:
+the phone's Debug device build, "** BUILD SUCCEEDED **", 0 error lines; and the typechecks of the kit's test targets,
+FieldHistoryTests, FieldHomeTests (83 files, AppsKeepTests.swift among them) and FieldDesignTests, each with 0 error
+lines. Nothing installed, nothing launched. No kit test reaches the views the rider touches, so the rider's proof is
+the compile alone. The carry's dry and the carry itself, in ma-6's lane through its door: five self-tests that must
+stop, stopped; the dry green; the carry's tree the dry's.
+
+**Not done, and not claimed:** AppsKeepTests' four rows are owed with the kit's other rows (no `swift test` on this
+Mac); nothing was looked at on a phone; the open app's ··· Keep and Versions on the phone (MA-5, after SP-4).
+Nothing pushed by this lane.
