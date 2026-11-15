@@ -50518,3 +50518,330 @@ push of 02:16:32Z sent it with the plugin market: main and origin at `635eb8430`
   test block, so fieldd's own summary line is on no record of that run. qa-01's row-i447 then ran fieldd's suite whole
   at `9d9a51d82` (main `635eb8430` and the one-commit ssh test fix): "Test Files 284 passed | 5 skipped (289)", "Tests
   4013 passed | 15 skipped (4028)" (`lanes/clean-run/i447/row-i447/run.log` `eed6ec12752fe07d`).
+
+## Item 447 — fieldd's tests answer `ssh -G` from a stand-in on PATH, never from the machine's ssh (M310)
+
+**What it rests on.** Found by reading on 2026-11-15, while tracing what a whole `pnpm verify` under a stand-in HOME
+can still reach of the person's own files. The place read asks `ssh -G <host>` about every ssh host a remote names
+(`workspace/host/places.ts`, C10) and finds `ssh` on the PATH of the process it runs in. Two fieldd test files gave it
+such a remote and no ssh of their own: `place-scanner.test.ts` (every repository its `repo()` makes has
+`git@github.com:acme/<name>.git`, read through the real `readPlaces`) and `workspace-places.test.ts` (the checkout
+row's `upstream`, the insteadOf row's origin). So every run of fieldd's suite started the machine's
+`ssh -G github.com`, once per file. It opens no connection; but ssh finds the person's configuration through the
+account record, whatever HOME says (from knowledge of OpenSSH, not measured here), so a unit test read a developer's
+own ssh configuration and its answer depended on it. VF-PM numbered it 447 and ruled the smaller of two fixes: a
+stand-in on PATH for fieldd's whole project; `-F` would have needed a seam through the product and was not drafted.
+
+**What** (4 files, +44 −2; fieldd's tests only, no product source):
+- `test/fixtures/fake-bin/ssh` (mode 755, beside `fake-claude`'s precedent): answers `-G <host>` with
+  `hostname <host>`, as ssh does for a host with no alias, and reads nothing; anything else asked of it exits 64 and
+  says so on stderr.
+- `test/fake-ssh-env.ts`, a second setup file beside item 345's: every worker's PATH leads with that folder before a
+  file's rows run. fieldd booted in-process reads this process's PATH, and the files worker a booted daemon starts
+  gets this process's environment less the daemon's own prefixes, so both find the stand-in. A row's own ssh put
+  before it still wins: the alias row is unchanged.
+- A witness row in `workspace-places.test.ts`, "the suite's own ssh is the stand-in on PATH, never the machine's":
+  it resolves the name on PATH by hand and runs nothing, so a setup that did not reach a worker is red without the
+  machine's ssh starting.
+- `vitest.config.ts`: the second `setupFiles` entry and its comment.
+
+**The row** (once, under an `env -i` harness with a stand-in HOME and the same stand-in leading the harness PATH):
+fieldd's typecheck, biome over the three TypeScript paths, `pnpm check:walls` and `pnpm check:ios-fixtures`: exit 0
+each. The two place files alone: 2 files, 28 tests passed, the witness row among them. fieldd's suite whole:
+`Test Files 284 passed | 5 skipped (289)`, `Tests 4013 passed | 15 skipped (4028)`: the 4012 of the head before and
+this one test. The stand-in's refusal text in every log of the row: 0 lines. No gate needed a new allow-list row:
+the walls read by extension, biome skips unknown files, and no script reads a fixture's mode.
+
+**What it does not cover.** win32 has no stand-in (a shell script); its rows run as before. fieldd's project only:
+field-app's and electron-shell's tests that boot fieldd hold no ssh remote today (a search for the URL forms), and
+nothing stops a later row there from adding one. A booted daemon handed a place inside a real checkout would read
+that checkout's own remotes; no row was found doing so.
+
+## Item 443 — field-native's door tests stop every floor they boot, and a gate holds every test to it (M311)
+
+(2026-11-15; two commits, red then green, 4 files +467 −7: red `b14c058d9`, green `945d792eb`, on `635eb8430`.)
+
+**What it rests on.** Whole test runs on a loaded Mac left a temp root behind, `.tmpXXXXXX/native/run` holding two
+terminal sockets and two crumb files. Read from source on 2026-11-15:
+- 15 floor runs from 14 sites are booted on a bare `tempfile::tempdir()` root and never stopped: all 8 tests of
+  `tests/door.rs`, and 7 runs in `tests/door_bridge.rs` (5 tests, the second floor of a restart test, and a helper
+  used by two tests).
+- The repo already held the rule, in `tests/mgmt_server.rs` (item 196): a floor still running when its `TempDir`
+  drops leaves cells it is still starting, and they bind inside the removal and keep the root.
+- What such a floor leaves is processes as well as files. Each floor starts two `field-terminal-host` cells. They are
+  child processes, not killed on drop, and leashed only by stdin, so they outlive the test binary until they drain.
+- Every other floor under `tests/` is stopped, including six the first trace did not list.
+
+**What.**
+- `scripts/check-floor-shutdown.mjs` (new), in `check:walls` with its self-test.
+  - It reads the git-listed `packages/field-native/tests/*.rs`, comments and literals blanked.
+  - A floor is a call of field_native's `bootstrap`, or of a same-file helper whose return type names
+    `RunningDaemon`; the helper's callers owe the stop.
+  - Every other function binds each floor by `let` and calls `<name>.shutdown()` after it, before the name is
+    bound again.
+  - ALLOW is empty, and a stale entry is red.
+  - Its header says what it cannot read: a floor handed to another file, moved into a struct or a stopping helper,
+    or stopped on one branch only.
+- `tests/door.rs` and `tests/door_bridge.rs`: each of the 15 runs ends with `daemon.shutdown().await`, in
+  `mgmt_server.rs`'s form. `close_every_door`'s three `return`s become `break`s out of one loop, then the stop.
+  `boot()` and `boot_at()` carry the rule as a doc comment.
+- The stop closes each cell's stdin and waits for its exit, killing it past its drain budget. The floor's own wait on
+  its cells is bounded.
+
+**The rows**, on this Mac, through the door, under `env -i` with a stand-in HOME:
+- The gate rows, once:
+  - the gate's self-test;
+  - at the red, the gate exits 1 naming exactly the 14 sites;
+  - at the green, it is clean: "160 floors booted in 37 field-native test files; all stopped";
+  - `check:walls`, biome on the gate, and `cargo fmt --check`: exit 0 each (6 of 6 rows as wanted).
+- The cargo rows, once, built with `CARGO_INCREMENTAL=0`: `cargo test -p field-native --test door --test door_bridge`.
+  Each run had a fresh TMPDIR of its own, and the roots left were counted by name.
+  - At the red, one run: 17 passed, 0 roots left at a load near 4.5. The race needs load, so this is said, not judged.
+  - At the green, five runs: each passed 17 and left 0 roots, 0 sockets, and nothing under `native/run`.
+- At the red, the floors' cells may have outlived the test binary's end. Nobody looked: no process is read on this
+  Mac. At the green, the door tests leave 0 roots.
+
+**What it does not cover.**
+- The lib's own `src/` tests are not read by the gate (they stop their floors today).
+- A panicking test still drops its floor running, as in `mgmt_server.rs`: `RunningDaemon` has no `Drop`.
+- These rows ran at low load. No run showed the leftover at the red, so the fix's effect on it is shown by source and
+  by the gate, not by a red leftover measured beside a green.
+- Not determined:
+  - which of the 15 left each root seen before;
+  - whether a cell can still be alive minutes later;
+  - ghosttea's bind on a missing parent;
+  - tracing's stderr on EPIPE;
+  - tempfile's removal of a folder that gains a file.
+- `pnpm gate:landing`: deferred, not waived; owed at James's unlock, with the train.
+
+## MA — Hide dropped, Keep on the short path, and Keep's words: Hide/Keep's eleven and K3's three, and one rider (M312)
+
+(2026-11-15; 15 commits on main `635eb84307f7`, `210b8b411`…`eb6f78d7e`, 24 paths.
+Hide/Keep's 11 (cut on `cdb72d97d`) and K3's 3 were carried onto `635eb8430` by `lanes/ma-6/run-hk3/carry-hk3.py`
+(plumbing: `git merge-tree --write-tree` and `git commit-tree`, each author and message byte for byte, each patch-id the
+original's outside the resolved paths; one create-only ref, `ma/hidekeep-k3-on-635eb8430` = `d849bd604`). Three picks
+met main's text and were resolved from `git merge-file`'s own regions, merge style forced, each region held by its
+content and the text around it, every line of both sides kept but the ones a rule names, the five resolved blobs pinned
+from the dry and held at the carry: K1 (contracts' kept map: `plugin-distribution.ts` and its test), K2r (fieldd's red:
+`settings-doc.test.ts`) and K2g (fieldd's green: `settings-doc.ts`, and `daemon.ts`, whose `settingsDoc` member and
+handle entry stand once, item 406's, its comment naming both uses). Its tree is the dry's. One rider, cut through the
+hook by `lanes/ma-6/run-hk3/rider/cut-rider.sh` (ref `ma/hidekeep-k3r-on-635eb8430`): the made-app intents' import in
+`daemon.ts` sorted as biome asks; the line had stood unsorted since Hide/Keep's fieldd green, and the stack's rows found
+it. Lands on James's word, 2026-11-14 19:42:10Z in VF-PM's session, "I'm currently away from my Mac, so anything needs
+me to do on Mac I can not do right now, so just push forward on implementation progress, you can also run test on
+my Mac , and merge to main when things done and push to remote", and VF-PM's GO.)
+
+**Why.** James, 2026-11-13 01:29:54Z, typed in VF-PM's session, his list: item 2, "agree" (Keep goes the short path: a
+row of fieldd's settings document, never the drive's intents); item 3, "drop" (Hide from Apps is dropped). Keep's words
+are the five on the PM board, "Use all five as written (Recommended)" (2026-11-14 08:16:49.919Z).
+
+**What is real.**
+- **Hide dropped** (the first seven): DESIGN.md §8's tile, the phone's long press and the open app's ··· menu, and §9's
+  acts, lose Hide from Apps, each with its dated note. Contracts retire Hide's fields, never deleting them, and a mark
+  requires kept: hidden alone is refused, beside kept it is ignored. fieldd ignores an intent's hidden (the app opens,
+  stays listed, `includeHidden` is inert), and the made-app service and the fold hold no Hide. The desk: the tile's menu
+  holds Keep and Versions, no Hide button, no hidden filter.
+- **Keep, the short path** (K1–K2t): the settings document's root map `madeApps.kept`, the fold key's sha256 → the
+  writer's clock (the fold key itself is never stored), outside the undo stack; the mark keeps an app for real, and the
+  fold and the made-app service read it; a keep travels across desktops with the document. The tests' merge calls are
+  `merged?.()`, as the house's own tests call it.
+- **Keep's words** (K3): DESIGN.md §9 first, the five lines as James chose them; the desk says what to do when a keep
+  is past `MADE_APP_LIMITS.INTENTS` ("You're keeping as many apps as VibeField holds. Stop keeping one to keep" and
+  the app's name),
+  and an older home's wait says it is older.
+- **The rider**: one import line's order; nothing changes at run time.
+
+**The witness**, on this Mac, in ma-6's lane through its door, under row-e10's harness (an empty HOME of the run's own,
+the shared cargo target named, no install):
+- `lanes/ma-6/run-hk3/rows-hk3-mac.sh` at `d849bd604` (03:49:55Z–03:52:16Z): fieldd's tsc at K2g RED AS WRITTEN (exit 2,
+  six TS2722, the calls K2t mends); contracts' and fieldd's tsc GREEN at K2g, K2t and the tip; contracts' vitest
+  (made-apps, plugin-distribution) 51 of 51; fieldd's vitest over the stack's five files 114 of 114; `index-apps.e2e`
+  alone 9 of 9. Biome over the five resolved paths: at K1 and K2r one warning (main's own, `settings-doc.ts:240`
+  noUnusedPrivateClassMembers), and at K2g one ERROR, the import the rider sorts.
+- `lanes/ma-6/run-hk3/rider/rows-hk3r-mac.sh` at the rider (04:20:45Z–04:21:15Z): biome over the stack's 21
+  TypeScript paths, "Checked 21 files … No fixes applied.", exit 0, no error, five warnings (said, not refused:
+  suppressions/unused x3, useOptionalChain x1, noUnusedPrivateClassMembers x1, each on a line main already holds);
+  contracts' and fieldd's tsc, exit 0.
+- The whole suite: `pnpm verify` at the train's top, `9ea1c0a0c`, exit 0 (fieldd 4045 passed, 15 skipped).
+
+**Not done, and not claimed:** the phone's Keep and Versions (MA-5, after SP-4); K4 (after item 419); a drive that holds
+apps needs one migration slice (James's short-path note); `pnpm gate:landing` at James's unlock.
+Nothing pushed by this lane.
+
+## Items 423, 429 and 430 — no removed phone gets in while a desktop starts or before a desktop has seen it (M313)
+
+(2026-11-15; five commits, 7 files +535 −12. Cut by c2 first on main `1877f7737` as T `71b382010`, R429 `d9acdbc46`,
+G429 `fe3b5da14`, R430 `04ce17146` and G430 `b476b8819`, then carried onto main `635eb8430` in VF-PM's ruling (a)
+(2026-11-15 03:22:10Z) by `carry-a-cut.sh` (`49111f2b5cf7793f`) as `f333671e1` `0fbaf6bb5` `6dafadbf1` `7ebf0c8d8`
+`12859cc45`, with T's two test comments and its message corrected and R430's mock typed. R430's message was then mended
+at its source in VF-PM's ruling (carry-b, 04:03:55Z) by `carry-b-cut.sh` (`e153c5abe3656945`): R430'' `ff8f25adc` and
+G430'' `3b0e61eca` with carry-a's trees exactly (`git diff 12859cc45 3b0e61eca` empty), on branch
+`i423-430/carry-b-on-635eb8430`. James's pick for 430, his PM-board click at 2026-11-14T23:06:40.956Z: "Both: a device
+the desktop has not seen before waits for the device list while any phone is removed, and the Remove sheet says a phone
+signed in again must be removed in Tailscale (Recommended)". Main moves once, on James's word and VF-PM's GO.
+On main they are `51365ee12` (423 test), `912e7fc37` (429 red), `1271da379` (429 green), `767ed67c7` (430 red) and
+`1bf1532be` (430 green); every other id here is a side commit's, where it was cut or where a row ran.)
+
+**Why.**
+- 423: a refused phone could reach a restarted desktop's new door between its listen and the roster's first pass.
+  Item 406's order (the refusals read before the listen) already guards it; this adds a booted row for that window.
+- 429 (found by 423's read): the door's product serve was declared before the roster's first pass ended, so a refused
+  phone registered again on a NEW node was admitted in that window.
+- 430: past the first pass, a refused phone registered again on a node no pass had seen yet was admitted until a pass
+  listed it.
+
+**What moved.**
+- 423, test-only: `mock-mgmt.ts`'s `peersSubscribeGate`, `heldPeersSubscribeCount` and `releasePeersSubscribes()`;
+  the booted row in `freeway-daemon.test.ts`, its comments saying it holds that the refusals are read before the peer
+  stream is held by EITHER of two reads (the boot read before the listen, or the pass's own first read), and not the
+  boot read's place before the listen (device-service.test.ts's source-order row holds that).
+- 429: `daemon.ts`: `doorPort` is set only after `await devices.sync()`; `productServeSpec()` is null until then; the
+  links handler declares nothing before it; the door's own declare follows the pass, before `sweepSeeded`. Two booted
+  rows, red then green.
+- 430:
+  - `device-service.ts`: `confirmNode(nodeId)` answers seen, refused or unseen; seen means listed WITH an id that is not
+    refused, or a known phone's record naming the node; an unseen node waits for ONE shared, not-yet-started pass
+    (`queuedConfirmPass`), bounded by `DEVICE_LIMITS.UNSEEN_NODE_PASS_MS` (10 000, contracts `devices.ts`; no schema
+    reads it, so `pnpm gen` does not move).
+  - `product-api.ts`: while a refusal stands, a linked-login hello from a node is refused (device-removed, close 1008)
+    or answered UNAVAILABLE `{service: "devices", state: "confirming"}`, retryable, close 1013.
+  - `daemon.ts` wires it; DESIGN.md §9 gains the Remove sheet's line, as a draft for James's word.
+  - Seven booted rows (five red, two guards) and the mock's `peersListGate`.
+
+**The rows.**
+- `rows-423-429.sh` (`845a7dc9`), on the OLD base (1877f7737), 2026-11-15 03:16:56Z → 03:21:16Z: **RED** on T's mutation
+  step alone (M-red, the boot read moved after the pass, PASSED: the pass's own first read masks it). R429's reds as
+  written; G429 3 of 3; fieldd whole green (279 passed | 5 skipped files; 3,978 passed | 15 skipped tests), without
+  item 447's ssh cover.
+- `rows-430.sh` (`e79823c2`), the old base, 03:24:12Z → 03:24:29Z: **STOPPED** at R430's typecheck (mock-mgmt.ts(966,36)
+  TS2322: `i430-commit.sh` made R430 and G430 with no typecheck). No test ran.
+- `rows-a.sh` (`de3898dc`) on carry-a, 03:56:08Z → 04:02:03Z, in `lanes/mk/vibe-field` through the door, item 447's
+  cover on the harness PATH: **RED**, recorded as printed: "the mutants M-red AS-WANTED, M-ctl AS-WANTED, M-red2 NOT; …
+  R430's reds NO". Both reds are of its judging words:
+  - M-red2 (both reads late) failed the 423 row alone with "Error: expected system.hello to fail" through `helloRefused`
+    (the refused phone's hello ADMITTED); the judge wanted an AssertionError.
+  - R430's five reds failed and no other ("5 failed | 2 passed | 14 skipped (21)"), but the ten-hellos row failed on
+    "the passes the ten hellos asked: expected 1 to be greater than or equal to 2", not on the predicted words (the
+    prediction, in R430's message too, was mended at its source by carry-b).
+  - Every other step GREEN: biome and every typecheck at all five; T's file 12 of 12; R429's reds as written; G429 and
+    G430 3 of 3 each; contracts' devices file 18 of 18; fieldd whole at G430' (284 passed | 5 skipped files; 4,022
+    passed | 15 skipped tests; JSON 0 failed); the cover's refusal text x0.
+- `rows-a2.sh` (`aee867f5`) on carry-b, the two steps alone with the mended judge and the fifth word, 04:21:45Z →
+  04:22:39Z, through the door with the cover: **GREEN**, "the mutant M-red2 AS-WANTED (the mended judge); R430's reds
+  AS-WRITTEN (the fifth word the row's own)":
+  - at T': biome and the typecheck exit 0; M-red2 exit 1, "1 failed | 11 skipped (12)", the 423 FAIL line x1, another
+    title x0, "Error: expected system.hello to fail" through helloRefused; reversed to T''s blobs;
+  - at R430'' `ff8f25adc`: biome and the typecheck exit 0; "5 failed | 2 passed | 14 skipped (21)", the five red titles
+    and no other, the words x3 x3 x3 x3 x4;
+  - field-native unchanged (sha16 6b229dc47fa61753); the cover's refusal
+    text x0; refs 2473 = 2473; the lane back at ec3c08306b6c, porcelain 0.
+- WHAT STANDS FROM rows-a for carry-b: its every green, fieldd whole included, by tree equality (carry-b's five trees
+  are carry-a's; `git diff 12859cc45 3b0e61eca` empty).
+- The train's V: `pnpm verify` whole at the train's top `9ea1c0a0c`, exit 0 (fieldd 4045 passed, 15 skipped).
+
+**Found.**
+- T's first message claimed the row witnessed the boot read's order and "sees this row fail alone"; its run passed on
+  that mutation. Corrected at its source in the carry.
+- `i430-commit.sh` committed without a typecheck; the row's typecheck caught it. Corrected in the carry (R430's mock).
+- R430's message predicted the ten-hellos red's words wrongly; mended at its source (carry-b).
+- Both are corrected at their source in the lane's own record too: `lanes/wi-desk/i430/README.md` carries two dated
+  corrections (2026-11-15 04:04Z), one at its red table's fifth row (the ten-hellos red) and one to its scripts'
+  section (R430 and G430 committed with no typecheck).
+
+**Owed.**
+- The Remove sheet's words: James's word on the draft line in DESIGN.md §9, then the view in its own commit.
+- design-02's "Boot:" hunk (the pass, then the door's declare, and 430's wait), through the draft queue.
+- Truffle: when it sets a remote peer's id, relative to the peer's first listing (VF-PM carries it).
+- Item 438: which phone view shows `lastError` while the kit re-dials, with the phone's slice.
+- `pnpm gate:landing`: deferred, not waived; owed at James's unlock, with the train.
+
+**Not done, and not claimed:**
+- the boot read's place before the listen has no booted witness (no seam holds the settings document's read);
+- no kit build, no phone, no Electron witness;
+- nothing pushed.
+
+## Items 437 and 439 — a person's grant or revoke is the last word here until their next one (M314)
+
+(2026-11-15; four commits: `d66ecb885` (437, red rows), `c738171c1` (437, the lane), `75a02714b` (439, red
+row) and `cea03ef57` (439, the generation seen). They were made on main `635eb8430` and
+cut as `5950a92d8`, `37aeeb0c0`, `543dc530e`, `e7201b76f` on the create-only ref `rv/i437-on-635eb8430`,
+by `lanes/rv/i437/cut-draft/cut-i437.sh` (`1c049247`) from the trees of `lanes/rv/i437/at-635eb84307f7-r2` (seal
+`fa7ece57`), each through the hook, each commit's four files held to the stage's tree by blob and its message byte for
+byte. No message carries a `Claude-Session:` line or a board card id. Lands on James's word, 2026-11-14 19:42:10Z
+in VF-PM's session, "I'm currently away from my Mac, so anything needs me to do on Mac I can not do right now, so just
+push forward on implementation progress, you can also run test on my Mac , and merge to main when things done and push
+to remote"; and VF-PM's GO.)
+
+**What is real.**
+- **Item 437, the grant race** (`d66ecb885`, `c738171c1`). fieldd's install reconciler keeps one lane per plugin.
+  - A person's grant act (`plugins.grants.set`, through `grantAct`) holds the lane from before its registry move until
+    its publication to the settings doc settles.
+  - A walk's grant section reads the doc's decisions and the record inside the lane, so a walk raised in the act's gap
+    can no longer apply the doc's older decision over the act.
+  - A revoke whose publication failed is parked: no walk grants it here, and the next publication carries it.
+  - An act waits for a walk's grant section alone (one doc read, at most one audited move per decision), never for a
+    walk to end.
+- **Item 439, the generation a grant names** (`75a02714b`, `cea03ef57`). A grant act reads the capability's revocation
+  generation before its move, and its publication stamps no later one (`min(seen, held)`). So a peer's revocation
+  merged in the act's gap stays newer than the grant, and the bias to revocation (DS-5b) holds.
+- **The rows, red then green**, in `packages/fieldd/test/install-reconciler.test.ts`. They are OFF and ON with the walk
+  raised by this desktop's own act and by a peer's merge, a walk already past its wait, a parked revoke, and the
+  generation's two rows.
+  - The past-wait row also holds that the act's publication commits while a walk is held.
+- **Run**: `lanes/rv/i437/row/row-i437-r4.sh` (`66b8323d`) on James's Mac, 2026-11-15 04:08:32Z–04:12:27Z, GREEN.
+  - Each patch in turn: 6 of 6 red, then 23 of 23, then the generation row red by its own words, then 25 of 25.
+  - fieldd's typecheck and biome exit 0.
+  - fieldd's whole suite once: Test Files 284 passed | 5 skipped (289), Tests 4020 passed | 15 skipped (4035).
+  - Run under the env -i harness, with qa-01's ssh stand-in first on PATH (its refusal text x0).
+- **The first row** (`row-i437.sh`, 02:53:13Z–03:04:06Z) was RED, and stays recorded so. The rows' `walkNow` helper
+  returned the walk's promise from an async function, so its caller waited for the walk to end, and under the lane the
+  row waited on itself (five 30 s timeouts, every other file green). The rows were mended in test alone; the product
+  code is byte-equal to what that row ran.
+
+**What is not covered (open).**
+- **Item 440, the disable race**: a disable in its gap can still be enabled again by a walk, and an update's install
+  publication writes `enabled` from a record snapshot.
+- **Item 441, the uninstall race**: a plugin just removed can be installed again by a walk before its removal commits.
+- **Item 442, a parked revoke across a restart**: the parked set lives in memory, so a fieldd restart between a failed
+  publication and the next one forgets it. 442 adds it to the plugin records file, after 431. Item 449, the records
+  folder's mkdir, rides 442.
+- `pnpm verify` ran whole at the 32-commit top before the land, exit 0 (fieldd 4045 passed, 15 skipped).
+  `pnpm gate:landing`: deferred, not waived; owed at James's unlock.
+
+## MK-H1 — fieldd's plugin files are LAYOUT rows, one constant counts the crash ladder, every key is named (M315)
+
+(2026-11-15; items 431, 432 and 436, three commits on main `635eb8430`; they are the train's first three. The train's
+fourth is their docs commit: item 445's DESIGN.md lines and M309's entry. Whole `pnpm verify` at `9ea1c0a0c`: exit 0.)
+
+- 431: the four files fieldd keeps for plugins are `LAYOUT` rows in contracts, spelled once and generated into Rust:
+  the install records, the plugin list's folder and the signed list held in it, and this desktop's mark that the
+  community statement was shown. No path changes on disk. The vector pins the four by hand; `layout.test.ts` holds the
+  held list in the list's folder and the mark beside the records. fieldd's three modules read the rows, and so do the
+  nine fieldd tests that spelled the paths or imported the old name. `COMMUNITY_STATEMENT_FILE` leaves
+  `plugin-community-statement.ts`.
+- 432: `PLUGIN_SERVICE_QUARANTINE_AT = 3` in contracts is the crash ladder's count. fieldd's service host takes its
+  default from it, and the window's "Stopped after 3 crashes" words are a template on it; the words do not change. One
+  test in each package holds its half and fails if its file spells the number again.
+- 436: the preferences setter's refusal is built from the list of keys it checks, so it names `plugins.community`, which
+  the old typed text left out, and names a new key the day it is added. Two keys say their kind; every other is a
+  switch. A new contracts test holds each key's named kind to what the setter's own check takes and refuses.
+- The first cut was RED on James's Mac (03:07:52Z to 03:14:22Z): 431 removed `COMMUNITY_STATEMENT_FILE` on the word that
+  nothing else imported it, and `plugin-community-statement.test.ts` did. fieldd's typecheck: "error TS2305: Module
+  '"../src/plugin-community-statement"' has no exported member 'COMMUNITY_STATEMENT_FILE'."; fieldd's nine files: 3
+  of 83 tests failed, all in that file. The search behind that word was piped through `head -30`, which cut the test's
+  lines. The three were cut again from 635eb8430 with the test and six more fieldd tests on `LAYOUT`, inside 431; the
+  red's ref was kept.
+- Proven on James's Mac (03:28:44Z to 03:31:16Z, the env -i harness): the typechecks of contracts, fieldd and
+  field-app; biome over the 22 TypeScript files; contracts' two files, 20 tests; field-app's two, 50 tests;
+  field-native's `layout_vector`; fieldd's ten files, "Test Files 10 passed (10)", "Tests 93 passed (93)".
+- The train's first whole verify was RED at `cargo fmt --check` on 431's generated `registries.rs` (the long row's
+  const line at 108 columns, its `ALL` entry's items at 66), and a rider at the train's top teaches the generator
+  rustfmt's two wraps and regenerates the file with exactly those two hunks.
+- 445: five places in MK's DESIGN.md lines named a PM-board card beside James's pick or click. Each drops the card's
+  name and nothing else; the pick or click, its date and his words stay. Seven lines change: two names crossed a line
+  break, and one added line over 120 is wrapped at a word.
+
+**Not done, and not claimed:** items 433 (smoke:market's CARRY row, parked until Discover draws its categories) and
+435 (`build-fieldd-sea --verify` does not prove the packaged fieldd's refusal of the plugin-list seam); 434 is OB's.
+Item 449 (the records' save makes their folder from a hand-spelled path, not from the row) rides RV's 442. No run on
+the old mini, no Windows or iOS build.
