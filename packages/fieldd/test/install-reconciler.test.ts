@@ -372,6 +372,8 @@ async function desktop(
     install?: (id: string) => Promise<void>;
     /** test-only: the teardown's own work, awaited after its call is recorded (the lane re-entry guard's row) */
     teardown?: (id: string) => Promise<void>;
+    /** test-only: how long a person's switch waits behind an update */
+    switchWaitMs?: number;
   } = {},
 ): Promise<Desktop> {
   const dataDir = mkdtempSync(join(tmpdir(), `vf-pa32-${name}-`));
@@ -418,6 +420,7 @@ async function desktop(
     },
     ...(calls !== undefined ? { logger: captureLogger(calls.logs) } : {}),
     restart: () => undefined,
+    ...(opts.switchWaitMs !== undefined ? { switchWaitMs: opts.switchWaitMs } : {}),
     audit: {
       requiredSystem: async (
         mutation: Parameters<AuditService["requiredSystem"]>[0],
@@ -885,9 +888,14 @@ const marks = new WeakMap<Desktop, () => void>();
 async function solo(
   grants: GrantDecision[],
   install?: (id: string) => Promise<void>,
+  switchWaitMs?: number,
 ): Promise<Desktop> {
   const revoked = grants.filter((g) => g.decision === "revoked").map((g) => g.capability);
-  const d = await desktop("A", { revoked, ...(install !== undefined ? { install } : {}) });
+  const d = await desktop("A", {
+    revoked,
+    ...(install !== undefined ? { install } : {}),
+    ...(switchWaitMs !== undefined ? { switchWaitMs } : {}),
+  });
   await d.settings.setInstallSetEntry(
     { pluginId: PA32_ID, source: "bundled", enabled: true, grants },
     "seed",
@@ -1419,7 +1427,14 @@ describe("the disable race, as an update's publication meets it", () => {
   });
 
   it("one desktop's publications land in its acts' order: a disable after an update stands", async () => {
-    const d = await solo([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")]);
+    // The disable waits behind the update's lane hold for as long as the gate holds the update's write. This row
+    // holds the order of the two publications, not the switch's bound, so its bound is one no clock reaches (the
+    // largest a timer takes): the row turns on its writes alone, never on a slow host. The bound's rows are below.
+    const d = await solo(
+      [grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")],
+      undefined,
+      2 ** 31 - 1,
+    );
     const trace = traceEnabled(d);
     const gate = holdNextInstallSetWrite(d);
     const updating = updateAct(d); // the update's publication: its write is held by the gate
@@ -1555,5 +1570,80 @@ describe("the lane's booted witness (row B; items 440 and 441): a real callback 
       ["outcome", "succeeded"],
     ]);
     expect(disable[0]?.attrs).toMatchObject({ origin: "settings-doc" });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// A person's switch behind an update (item 440; James's pick on the PM board, 2026-11-15T06:18:23.908Z, "B: give up
+// after a few seconds and say so in a sentence (Recommended)"). An update holds its plugin's lane through its barrier;
+// a switch behind it waits `PLUGIN_LIMITS.SWITCH_WAIT_MS`, then is refused (`PLUGIN_UPDATING`) and never applied late.
+// The harness's bound is 50 ms (`switchWaitMs`), so the rows wait for no real seconds.
+
+describe("a person's switch behind an update gives up after a few seconds and says so, never applied late", () => {
+  it("a disable behind an update is refused with PLUGIN_UPDATING, and the plugin stays as the update left it", async () => {
+    const d = await solo([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")], undefined, 50);
+    let finish: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const updating = d.reconciler.localAct(PA32_ID, "install", async () => {
+      await held; // the update's barrier, held by the row
+      return { record: d.registry.record, value: undefined };
+    });
+    let moved = false;
+    const disabling = d.reconciler.localAct(PA32_ID, "disable", async () => {
+      moved = true;
+      await d.registry.disable(PA32_ID);
+      return { record: d.registry.record, value: undefined };
+    });
+
+    const outcome = await Promise.race([
+      disabling.then(
+        () => "applied",
+        (error: unknown) => error,
+      ),
+      pause(1000).then(() => "still waiting"),
+    ]);
+    expect(outcome, "the switch is refused, by its kind").toMatchObject({
+      details: { pluginKind: "PLUGIN_UPDATING" },
+    }); // RED before the bound
+    finish();
+    await updating;
+    await settle(d);
+    expect(moved, "the refused switch's move never ran: never applied late").toBe(false);
+    expect(d.registry.record.enabled, "the plugin is on here, as the update left it").toBe(true);
+    expect((await entryOf(d))?.enabled, "and in the doc").toBe(true);
+    // the lane is free after the update: the next press is taken at once
+    await d.reconciler.localAct(PA32_ID, "disable", async () => {
+      await d.registry.disable(PA32_ID);
+      return { record: d.registry.record, value: undefined };
+    });
+    await settle(d);
+    expect(d.registry.record.enabled, "the next press is the last word").toBe(false);
+  });
+
+  it("a switch behind anything but an update keeps waiting past the bound, and is applied", async () => {
+    const d = await solo([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")], undefined, 50);
+    let finish: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    // another person's switch holds the lane past the bound (its service's stop, held by the row)
+    const first = d.reconciler.localAct(PA32_ID, "disable", async () => {
+      await d.registry.disable(PA32_ID);
+      await held;
+      return { record: d.registry.record, value: undefined };
+    });
+    const second = d.reconciler.localAct(PA32_ID, "enable", async () => {
+      await d.registry.enable(PA32_ID);
+      return { record: d.registry.record, value: "applied" };
+    });
+    await pause(200); // four bounds pass
+    finish();
+    await first;
+    expect(await second, "the second switch waited and was applied").toBe("applied");
+    await settle(d);
+    expect(d.registry.record.enabled).toBe(true);
+    expect((await entryOf(d))?.enabled).toBe(true);
   });
 });
