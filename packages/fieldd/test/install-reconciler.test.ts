@@ -1110,3 +1110,50 @@ describe("the grant race: a person's act is the last word here until their next 
     expect(entry?.revocationGenerations?.[CAP]).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// The generation a grant names (2026-11-15). The header's law: a grant records the revocation generation IT SAW.
+// The doc stamped the generation it held at the grant's COMMIT. So a peer's revocation that merged during the
+// act's gap was stamped as seen, and the grant stood over a revocation the person never saw.
+
+describe("the generation a grant names is the one its act saw", () => {
+  it("a peer's revocation merged in a grant's gap stands: the grant applies as REVOKED (the bias)", async () => {
+    const [a, b] = await sharedPair([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")]);
+    await decide(a, CAP, false); // the first revocation, carried to both
+    await reconnect(a, b, "A first");
+    expect((await entryOf(a))?.revocationGenerations?.[CAP]).toBe(1);
+    a.audit.length = 0;
+    b.audit.length = 0;
+
+    const rest = await actInGap(a, CAP, true); // A's person grants, having seen ONE revocation
+    await decide(b, CAP, true); // concurrently B's person grants and revokes again: a second revocation
+    await decide(b, CAP, false);
+    await merge(b, a); // B's second revocation reaches A inside the grant's gap
+    const { walk } = await walkNow(a);
+    await rest();
+    await walk;
+    await settle(a);
+    await reconnect(a, b, "A first");
+
+    const decision = (await entryOf(a))?.grants.find((g) => g.capability === CAP);
+    expect(decision, "A's grant names the generation it saw").toMatchObject({
+      decision: "granted",
+      revocationGeneration: 1,
+    });
+    for (const d of [a, b]) {
+      expect((await entryOf(d))?.revocationGenerations?.[CAP], d.name).toBe(2);
+      expect(isGranted(d, CAP), `${d.name} holds c`).toBe(false); // RED today: the grant stood
+    }
+    expect(
+      a.audit.filter((row) => row.origin === "settings-doc" && row.capability === CAP),
+      "A applied its own grant as revoked by the bias, once",
+    ).toMatchObject([{ action: "capability.revoke", reasonCode: "REVOCATION_BIAS" }]);
+  });
+
+  it("a grant that moved nothing still writes no decision, whatever generation it saw", async () => {
+    const d = await solo([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")]);
+    const before = (await entryOf(d))?.grants.find((g) => g.capability === CAP);
+    await decide(d, CAP, true); // granted already: the act moves nothing here
+    expect((await entryOf(d))?.grants.find((g) => g.capability === CAP)).toEqual(before);
+  });
+});
