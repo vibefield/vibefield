@@ -122,6 +122,11 @@ function productAt(mock: MockMgmtServer, port: number): boolean {
   );
 }
 
+/** Item 430 — how many times the floor's peer list was asked: each registry pass asks it once. */
+function peerLists(mock: MockMgmtServer): number {
+  return mock.meshCalls.filter((method) => method === "native.mesh.peers.list").length;
+}
+
 async function boot(dataDir: string): Promise<FielddDaemon> {
   const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
   cleanup.push(() => daemon.stop());
@@ -471,9 +476,10 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     port: number,
     mock: MockMgmtServer,
     node: string,
+    login = TEST_LOGIN,
   ): Promise<"admitted" | RpcErrorShape> {
     const ws = new WebSocket(`ws://127.0.0.1:${port}${productDoorPath(mock)}`, {
-      headers: { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": node },
+      headers: { "Tailscale-User-Login": login, "Tailscale-Node-Id": node },
     });
     cleanup.push(() => ws.close());
     await new Promise<void>((resolve, reject) => {
@@ -491,6 +497,8 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     } catch (e) {
       const refused = (e as { rpc?: RpcErrorShape }).rpc;
       if (refused === undefined) throw e;
+      // a refusal closes the door (item 430: its UNAVAILABLE too)
+      await until(() => rpc.closed, 15_000, "the door closing");
       return refused;
     }
   }
@@ -804,5 +812,201 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     expect(first, "the new node's first hello").toMatchObject({ data: removedWord });
     mock.releasePeersSubscribes();
     await starting;
+  }, 60_000);
+
+  // Item 430 (James's pick, 2026-11-14T23:06:40.956Z) — while a refusal stands, a node this desktop
+  // has not seen waits for the device list before any hello is admitted. Mid-uptime the registry
+  // lists a node no peer delta has announced; at boot the floor may be down, so the first pass ends
+  // empty. A guest, and a desktop with no refusal standing, never wait.
+  it("430 — mid-uptime, a refused phone registered again on a node no pass has seen hears the word at its first hello", async () => {
+    const { dataDir, mock } = await phoneWorld();
+    const before = new SettingsDocService({ dataDir });
+    await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
+    await before.dispose();
+    const daemon = await boot(dataDir);
+    await until(() => productAt(mock, daemon.controlPort), 15_000, "the door's product serve");
+    // the phone registered again: the registry lists its new node, and no peer delta says so
+    mock.meshPeers = [
+      ...mock.meshPeers,
+      registryPeer({
+        nodeId: "node-phone-2",
+        deviceId: "dev-phone",
+        name: NAME,
+        login: TEST_LOGIN,
+      }),
+    ];
+    const first = await firstHello(daemon.controlPort, mock, "node-phone-2");
+    expect(first, "the re-registered phone's first hello").toMatchObject({ data: removedWord });
+  }, 60_000);
+
+  it("430 — the floor down at boot, then up: an unseen node's first hello waits for the device list, then hears the word", async () => {
+    const { dataDir, mock } = await phoneWorld();
+    const before = new SettingsDocService({ dataDir });
+    await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
+    await before.dispose();
+    const health = (meshState: string) => ({
+      state: "up",
+      bootId: "fb-floor",
+      units: [{ unit: "mesh-gateway", state: meshState }],
+    });
+    mock.healthSnapshot = health("starting");
+    mock.meshUnavailable = true;
+    // the bound shortened through the daemon's seam (a variable: an older daemon's config ignores it)
+    const config = { dataDir, controlPort: 0, dataPort: 0, unseenNodePassMs: 500 };
+    const daemon = await bootstrap(config);
+    cleanup.push(() => daemon.stop());
+    mock.meshPeers = [
+      registryPeer({
+        nodeId: "node-phone-2",
+        deviceId: "dev-phone",
+        name: NAME,
+        login: TEST_LOGIN,
+      }),
+      registryPeer({
+        nodeId: "node-desk-b",
+        deviceId: "dev-desk-b",
+        name: "desk-b",
+        login: TEST_LOGIN,
+      }),
+    ];
+    mock.peersSubscribeGate = () => "hold";
+    mock.meshUnavailable = false;
+    mock.pushHealth(health("up"));
+    await until(() => productAt(mock, daemon.controlPort), 15_000, "the door's product serve");
+    const first = await firstHello(daemon.controlPort, mock, "node-phone-2");
+    expect(first, "the first hello while the device list is held").toMatchObject({
+      data: {
+        kind: "UNAVAILABLE",
+        retryable: true,
+        details: { service: "devices", state: "confirming" },
+      },
+    });
+    mock.releasePeersSubscribes();
+    await until(() => daemon.devices.isRefusedNode("node-phone-2"), 15_000, "the next pass");
+    expect(await firstHello(daemon.controlPort, mock, "node-phone-2")).toMatchObject({
+      data: removedWord,
+    });
+  }, 60_000);
+
+  it("430 — while a phone is removed, an honest new phone is admitted only after a pass has listed it", async () => {
+    const { dataDir, mock } = await phoneWorld();
+    const before = new SettingsDocService({ dataDir });
+    await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
+    await before.dispose();
+    const daemon = await boot(dataDir);
+    await until(() => productAt(mock, daemon.controlPort), 15_000, "the door's product serve");
+    mock.meshPeers = [
+      ...mock.meshPeers,
+      registryPeer({
+        nodeId: "node-new",
+        deviceId: "dev-new",
+        name: "pocket-new",
+        login: TEST_LOGIN,
+      }),
+    ];
+    const asked = peerLists(mock);
+    const first = await firstHello(daemon.controlPort, mock, "node-new");
+    expect(peerLists(mock), "a pass before the answer").toBeGreaterThan(asked);
+    expect(first).toBe("admitted");
+  }, 60_000);
+
+  it("430 — while a phone is removed, a node listed with no id is answered confirming, then admitted once a pass lists its id", async () => {
+    const { dataDir, mock } = await phoneWorld();
+    const before = new SettingsDocService({ dataDir });
+    await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
+    await before.dispose();
+    const daemon = await boot(dataDir);
+    await until(() => productAt(mock, daemon.controlPort), 15_000, "the door's product serve");
+    const listed = [...mock.meshPeers];
+    // a node of this account the registry lists with NO published id
+    mock.meshPeers = [
+      ...listed,
+      {
+        id: "node-noid",
+        name: "pocket-x",
+        online: true,
+        whois: { login: TEST_LOGIN, deviceName: "pocket-x.tailnet.ts.net" },
+      },
+    ];
+    const first = await firstHello(daemon.controlPort, mock, "node-noid");
+    expect(first, "the no-id node's first hello").toMatchObject({
+      data: {
+        kind: "UNAVAILABLE",
+        retryable: true,
+        details: { service: "devices", state: "confirming" },
+      },
+    });
+    mock.meshPeers = [
+      ...listed,
+      registryPeer({
+        nodeId: "node-noid",
+        deviceId: "dev-x",
+        name: "pocket-x",
+        login: TEST_LOGIN,
+      }),
+    ];
+    expect(await firstHello(daemon.controlPort, mock, "node-noid")).toBe("admitted");
+  }, 60_000);
+
+  it("430 — ten hellos from one unseen node while its first pass is held share one pass behind it", async () => {
+    const { dataDir, mock } = await phoneWorld();
+    const before = new SettingsDocService({ dataDir });
+    await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
+    await before.dispose();
+    const daemon = await boot(dataDir);
+    await until(() => productAt(mock, daemon.controlPort), 15_000, "the door's product serve");
+    mock.meshPeers = [
+      ...mock.meshPeers,
+      registryPeer({
+        nodeId: "node-new",
+        deviceId: "dev-new",
+        name: "pocket-new",
+        login: TEST_LOGIN,
+      }),
+    ];
+    const asked = peerLists(mock);
+    mock.peersListGate = () => "hold";
+    const hellos = [firstHello(daemon.controlPort, mock, "node-new")];
+    await until(() => mock.heldPeersListCount > 0, 15_000, "the first pass, held at the list");
+    for (let i = 0; i < 9; i += 1) hellos.push(firstHello(daemon.controlPort, mock, "node-new"));
+    // the nine reach the door while the first pass is held; any one later queues one pass more
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    mock.peersListGate = null;
+    mock.releasePeersLists();
+    expect(await Promise.all(hellos)).toEqual(Array(10).fill("admitted"));
+    const passes = peerLists(mock) - asked;
+    expect(passes, "the passes the ten hellos asked").toBeGreaterThanOrEqual(2);
+    expect(passes, "the passes the ten hellos asked").toBeLessThanOrEqual(3);
+  }, 60_000);
+
+  it("430 — with no phone removed, an unseen node is admitted with no pass asked", async () => {
+    const { dataDir, mock } = await phoneWorld();
+    const daemon = await boot(dataDir);
+    await until(() => productAt(mock, daemon.controlPort), 15_000, "the door's product serve");
+    mock.meshPeers = [
+      ...mock.meshPeers,
+      registryPeer({
+        nodeId: "node-new",
+        deviceId: "dev-new",
+        name: "pocket-new",
+        login: TEST_LOGIN,
+      }),
+    ];
+    const asked = peerLists(mock);
+    expect(await firstHello(daemon.controlPort, mock, "node-new")).toBe("admitted");
+    expect(peerLists(mock)).toBe(asked);
+  }, 60_000);
+
+  it("430 — while a phone is removed, a guest is answered as today, with no pass asked", async () => {
+    const { dataDir, mock } = await phoneWorld();
+    const before = new SettingsDocService({ dataDir });
+    await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
+    await before.dispose();
+    const daemon = await boot(dataDir);
+    await until(() => productAt(mock, daemon.controlPort), 15_000, "the door's product serve");
+    const asked = peerLists(mock);
+    const first = await firstHello(daemon.controlPort, mock, "node-guest", "guest@example.com");
+    expect(first).toBe("admitted");
+    expect(peerLists(mock)).toBe(asked);
   }, 60_000);
 });

@@ -194,6 +194,11 @@ export class MockMgmtServer {
    * `laneSubscribeGate`'s, for the same reason. */
   peersSubscribeGate: (() => "hold" | undefined) | null = null;
   private readonly heldPeersSubscribes: Array<() => void> = [];
+  /** Item 430 — decides each `native.mesh.peers.list` before it is answered: "hold" keeps the answer
+   * until `releasePeersLists()`, which answers with the list as it stands THEN. A held list holds the
+   * registry pass that asked it, so a row can count the passes asked behind it. */
+  peersListGate: (() => "hold" | undefined) | null = null;
+  private readonly heldPeersLists: Array<() => void> = [];
   /** DS-1 — the floor's EGRESS, answered ahead of every mesh gate (as the real
    * floor's `mgmt/mesh_egress.rs` is). `"unsupported"` — the default — refuses
    * every verb `egress-unsupported`; `"mesh-down"` refuses the acts that need a
@@ -957,9 +962,14 @@ export class MockMgmtServer {
         reply({ result: { subId, snapshot: { serves: [...this.serveSnapshot] } } });
         return;
       }
-      case "native.mesh.peers.list":
-        reply({ result: { peers: [...this.meshPeers] } });
+      case "native.mesh.peers.list": {
+        const answer = (): void => {
+          reply({ result: { peers: [...this.meshPeers] } });
+        };
+        if (this.peersListGate?.() === "hold") this.heldPeersLists.push(answer);
+        else answer();
         return;
+      }
       case "native.mesh.peers.subscribe": {
         // UA-P-0e — the peer registry's stream. Recorded in `issued` like every
         // other subscription so `pushPeersDelta` can target it; the snapshot is
@@ -1712,6 +1722,16 @@ export class MockMgmtServer {
   /** Item 423 — answers what `peersSubscribeGate` held. */
   releasePeersSubscribes(): void {
     for (const answer of this.heldPeersSubscribes.splice(0)) answer();
+  }
+
+  /** Item 430 — how many peer-list asks `peersListGate` holds now. */
+  get heldPeersListCount(): number {
+    return this.heldPeersLists.length;
+  }
+
+  /** Item 430 — answers what `peersListGate` held, each with the list as it stands now. */
+  releasePeersLists(): void {
+    for (const answer of this.heldPeersLists.splice(0)) answer();
   }
 
   async stop(): Promise<void> {
