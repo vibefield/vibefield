@@ -10695,6 +10695,11 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   - A power it can't have here says why: "Its kind of plugin can't have this power", "Not allowed for a plugin from
     its source" or "Not available on this desktop".
   - A switch that couldn't change says "Couldn't turn it off. Try again." or "Couldn't turn it on. Try again."
+  - *Added 2026-11-15 (item 440; James's pick on the PM board, 2026-11-15T06:18:23.908Z, "B: give up after a few
+    seconds and say so in a sentence (Recommended)"); the sentence is a draft, ‹draft›, for James's eye:* a plugin's
+    switch pressed while that plugin is updating waits a few seconds, then gives up and says "This plugin is
+    updating. Try again in a moment." in the switch's refusal place; the press is never applied late or silently. A
+    power's switch is not bounded by it.
   - *Kept, dated 2026-11-11 (VF-PM 18:36:34Z, ruling 10):* Settings → Plugins keeps its own words until MK-5 —
     "Enable ‹plugin›" and "Disable ‹plugin›" on its switch (`panels/PluginsSection.tsx`), `DENIAL_TEXT`'s reasons
     (`panels/PluginCapabilities.tsx`) and an error's own text. MK-4c2a changes nothing there.
