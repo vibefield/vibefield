@@ -53,6 +53,13 @@ export interface GrantAct {
   seen?: number;
 }
 
+/** What a person's enable, disable or update hands back from its own work (`localAct`): the record to publish (none:
+ * nothing is published) and the handler's answer. */
+export interface LocalMove<T> {
+  record: PluginRecord | undefined;
+  value: T;
+}
+
 /** What a person's grant act hands back from its own work (`grantAct`): the record to publish, whether this
  * device's grants moved, and what the caller answers. */
 export interface GrantMove<T> {
@@ -243,55 +250,8 @@ export class InstallSetReconciler {
     // dev-linked/sideload rows never take doc-driven state (§16.6)
     if (record.source === "dev-linked" || record.source === "sideload") return;
 
-    // enablement (desire only — effective stays per-device). MK-O3 (O3-C, 2026-11-12): a row held while community
-    // plugins are off reads off whatever the person wants, so its synced wish is held to the wish recorded here; else
-    // every reconcile would enable it again, audited, to no effect
-    const enabledHere = this.cfg.plugins.isHeld(entry.pluginId)
-      ? await this.cfg.plugins.wantsEnabled(entry.pluginId)
-      : record.enabled;
-    if (enabledHere !== entry.enabled) {
-      if (entry.enabled) {
-        record = await this.cfg.audit.requiredSystem(
-          {
-            action: "plugin.enable",
-            target: { kind: "plugin", id: entry.pluginId },
-            attrs: { origin: "settings-doc" },
-          },
-          () => this.cfg.plugins.enable(entry.pluginId),
-          (enabled) => ({
-            attrs: {
-              origin: "settings-doc",
-              enabled: enabled.enabled,
-              source: enabled.source,
-              manifestHash: enabled.manifestHash,
-            },
-          }),
-        );
-        this.cfg.restart(entry.pluginId);
-      } else {
-        record = await this.cfg.audit.requiredSystem(
-          {
-            action: "plugin.disable",
-            target: { kind: "plugin", id: entry.pluginId },
-            attrs: { origin: "settings-doc" },
-          },
-          async () => {
-            const disabled = await this.cfg.plugins.disable(entry.pluginId);
-            await this.cfg.teardown(entry.pluginId);
-            return disabled;
-          },
-          (disabled) => ({
-            attrs: {
-              origin: "settings-doc",
-              enabled: disabled.enabled,
-              source: disabled.source,
-              manifestHash: disabled.manifestHash,
-            },
-          }),
-        );
-      }
-      record = this.cfg.plugins.get(entry.pluginId) ?? record;
-    }
+    // enablement, in the plugin's lane (the disable race, item 440): read afresh there, never from this walk's start
+    record = await this.applyEnablement(entry.pluginId, record);
 
     // grant decisions, in the plugin's lane (the grant race): read afresh there, never from this walk's start
     const { moved, held } = await this.applyGrants(entry.pluginId);
@@ -435,6 +395,98 @@ export class InstallSetReconciler {
     return out.value;
   }
 
+  /** The enablement section of a walk, in the plugin's lane (the disable race, item 440). The doc's wish and the
+   * record are read INSIDE the lane: a person's enable or disable on this plugin is either wholly before it (its
+   * publication committed, so its wish is the doc's) or wholly after it (and it is the last word). Desire only:
+   * effective stays per-device. MK-O3 (O3-C, 2026-11-12): a row held while community plugins are off reads off
+   * whatever the person wants, so its synced wish is held to the wish recorded here; else every reconcile would
+   * enable it again, audited, to no effect. A disable's teardown runs INSIDE the lane: after it, a person's enable
+   * could land between this walk's registry move and its teardown, which would then stop a plugin the registry calls
+   * enabled. An enable's restart is fire-and-forget, as before. */
+  private async applyEnablement(pluginId: string, start: PluginRecord): Promise<PluginRecord> {
+    const release = await this.enter(pluginId);
+    try {
+      const entry = (await this.cfg.settingsDoc.installSet())[pluginId];
+      let record = this.cfg.plugins.get(pluginId);
+      if (entry === undefined || record === undefined) return record ?? start;
+      if (record.source === "dev-linked" || record.source === "sideload") return record;
+      const enabledHere = this.cfg.plugins.isHeld(pluginId)
+        ? await this.cfg.plugins.wantsEnabled(pluginId)
+        : record.enabled;
+      if (enabledHere === entry.enabled) return record;
+      if (entry.enabled) {
+        record = await this.cfg.audit.requiredSystem(
+          {
+            action: "plugin.enable",
+            target: { kind: "plugin", id: pluginId },
+            attrs: { origin: "settings-doc" },
+          },
+          () => this.cfg.plugins.enable(pluginId),
+          (enabled) => ({
+            attrs: {
+              origin: "settings-doc",
+              enabled: enabled.enabled,
+              source: enabled.source,
+              manifestHash: enabled.manifestHash,
+            },
+          }),
+        );
+        this.cfg.restart(pluginId);
+      } else {
+        record = await this.cfg.audit.requiredSystem(
+          {
+            action: "plugin.disable",
+            target: { kind: "plugin", id: pluginId },
+            attrs: { origin: "settings-doc" },
+          },
+          async () => {
+            const disabled = await this.cfg.plugins.disable(pluginId);
+            await this.cfg.teardown(pluginId);
+            return disabled;
+          },
+          (disabled) => ({
+            attrs: {
+              origin: "settings-doc",
+              enabled: disabled.enabled,
+              source: disabled.source,
+              manifestHash: disabled.manifestHash,
+            },
+          }),
+        );
+      }
+      return this.cfg.plugins.get(pluginId) ?? record;
+    } finally {
+      release();
+    }
+  }
+
+  /** A person's enable, disable or update on this desktop (item 440), in the plugin's lane from before its move
+   * until its publication settles, as `grantAct` holds a grant act. `move` is the handler's own work, and hands back
+   * the record to publish (none: nothing is published) and the handler's answer. The act answers once its move is
+   * done; its publication is fire-and-forget to the caller, and only the lane waits for it. So one desktop's
+   * publications for one plugin commit in its acts' order, and a walk's enablement section never reads the doc's
+   * older wish over the act. */
+  async localAct<T>(
+    pluginId: string,
+    action: Exclude<PublishAction, "grants">,
+    move: () => Promise<LocalMove<T>>,
+  ): Promise<T> {
+    const release = await this.enter(pluginId);
+    let out: LocalMove<T>;
+    try {
+      out = await move();
+    } catch (e) {
+      release();
+      throw e;
+    }
+    if (out.record === undefined) {
+      release();
+      return out.value;
+    }
+    void this.publish(out.record, action).finally(release);
+    return out.value;
+  }
+
   private revokedHere(pluginId: string, capability: string): boolean {
     const record = this.cfg.plugins.get(pluginId);
     return (record?.deniedCapabilities ?? []).some(
@@ -510,9 +562,12 @@ export class InstallSetReconciler {
               : {}),
           }
         : { source: "bundled" };
+    // item 440 (James's pick, 2026-11-15 01:22:08Z: an install follows the account's on/off): an install or an
+    // update writes its identity, and its enablement only where none stands (`ensure`), as a grant act's does. An
+    // update is not an enablement act, so it never carries a record's flip into the doc
     const change: InstallSetChange =
       action === "install"
-        ? { identity, enabled: record.enabled }
+        ? { identity, ensure: { identity, enabled: record.enabled } }
         : action === "grants"
           ? { ensure: { identity, enabled: record.enabled } }
           : { enabled: record.enabled, ensure: { identity, enabled: record.enabled } };

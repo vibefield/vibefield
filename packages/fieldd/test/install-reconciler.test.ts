@@ -1187,10 +1187,27 @@ function traceEnabled(d: Desktop): Trace {
 /** The person's disable up to the handler's gap: the registry moved, the handler's own audit row, NO
  * publication. The returned function is the rest of the handler: `after` read, then `publish`. */
 async function disableInGap(d: Desktop): Promise<() => Promise<void>> {
-  marks.get(d)?.();
-  await d.registry.disable(PA32_ID);
-  d.audit.push({ action: "plugin.disable", origin: "local" });
-  return () => d.reconciler.publish(d.registry.record, "disable");
+  let moved: () => void = () => undefined;
+  const inGap = new Promise<void>((resolve) => {
+    moved = resolve;
+  });
+  let stopped: () => void = () => undefined;
+  const stop = new Promise<void>((resolve) => {
+    stopped = resolve;
+  });
+  const done = d.reconciler.localAct(PA32_ID, "disable", async () => {
+    marks.get(d)?.();
+    await d.registry.disable(PA32_ID);
+    d.audit.push({ action: "plugin.disable", origin: "local" });
+    moved();
+    await stop; // the handler's stop of the service and its children, held by the row
+    return { record: d.registry.record, value: undefined };
+  });
+  await inGap;
+  return async () => {
+    stopped();
+    await done;
+  };
 }
 
 /** The invariant after the person's last enablement act: every state equals it, and no settings-doc act of the
@@ -1316,16 +1333,21 @@ describe("the uninstall race: a person's uninstall is the last word here", () =>
 /** The person's update of the present plugin, as the update doors end: `publish(record, "install")`. Its promise is
  * the publication's. The fix's patch redefines it as a lane act (as p2 does `actInGap`); the rows do not change. */
 function updateAct(d: Desktop): Promise<void> {
-  return d.reconciler.publish(d.registry.record, "install");
+  return d.reconciler.localAct(PA32_ID, "install", async () => ({
+    record: d.registry.record,
+    value: undefined,
+  }));
 }
 
 /** The person's whole disable: the registry, the handler's own audit row, the publication. Its promise is the act's
  * whole, publication included. The fix's patch redefines it as a lane act; the rows do not change. */
 async function disableAct(d: Desktop): Promise<void> {
-  marks.get(d)?.();
-  await d.registry.disable(PA32_ID);
-  d.audit.push({ action: "plugin.disable", origin: "local" });
-  await d.reconciler.publish(d.registry.record, "disable");
+  await d.reconciler.localAct(PA32_ID, "disable", async () => {
+    marks.get(d)?.();
+    await d.registry.disable(PA32_ID);
+    d.audit.push({ action: "plugin.disable", origin: "local" });
+    return { record: d.registry.record, value: undefined };
+  });
 }
 
 /** The ledger's index just past the person's last local disable row (the rows after it are what followed it). */

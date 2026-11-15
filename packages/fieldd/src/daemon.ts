@@ -6347,20 +6347,25 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           target: { kind: "plugin", id: parsed.data.id },
         },
         async () => {
-          const record = await plugins.enable(parsed.data.id);
-          void reconciler?.publish(record, "enable"); // §16.6
-          // §18.3 — an explicit re-enable clears quarantine and restarts fresh
-          void serviceHost?.restartFresh(parsed.data.id).catch((e) => {
-            logger
-              .child({ component: "plugin.service.host" })
-              .error(
-                "fieldd.plugin_service.enable_restart_failed",
-                "Enabled plugin service failed to restart",
-                e,
-                { pluginId: parsed.data.id },
-              );
-          });
-          return record;
+          const move = async () => {
+            const record = await plugins.enable(parsed.data.id);
+            // §18.3 — an explicit re-enable clears quarantine and restarts fresh
+            void serviceHost?.restartFresh(parsed.data.id).catch((e) => {
+              logger
+                .child({ component: "plugin.service.host" })
+                .error(
+                  "fieldd.plugin_service.enable_restart_failed",
+                  "Enabled plugin service failed to restart",
+                  e,
+                  { pluginId: parsed.data.id },
+                );
+            });
+            return { record, value: record };
+          };
+          // §16.6, item 440 — the act holds the plugin's lane until its publication settles
+          const lane = reconciler;
+          if (lane === null) return (await move()).value;
+          return await lane.localAct(parsed.data.id, "enable", move);
         },
         (record) => ({
           attrs: {
@@ -6382,19 +6387,25 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           target: { kind: "plugin", id: parsed.data.id },
         },
         async () => {
-          const record = await plugins.disable(parsed.data.id);
-          await serviceHost?.stop(parsed.data.id); // §16.5 — deactivates providers, data untouched
-          // §15.4 — revocation is LIVE: leases die at the mint table, live
-          // plugin-principal connections sever; data stays (§16.5). P6 — the
-          // plugin's supervised children die with it (§17.1).
-          const revoked = tokens.revokeByPlugin(parsed.data.id);
-          api.dropPluginConnections(parsed.data.id);
-          await processes.killPlugin(parsed.data.id);
-          endpoints.withdrawPlugin(parsed.data.id);
-          mcp.withdrawPlugin(parsed.data.id);
-          const after = plugins.get(parsed.data.id) ?? record;
-          void reconciler?.publish(after, "disable"); // §16.6
-          return { record: after, revoked };
+          const move = async () => {
+            const record = await plugins.disable(parsed.data.id);
+            await serviceHost?.stop(parsed.data.id); // §16.5 — deactivates providers, data untouched
+            // §15.4 — revocation is LIVE: leases die at the mint table, live
+            // plugin-principal connections sever; data stays (§16.5). P6 — the
+            // plugin's supervised children die with it (§17.1).
+            const revoked = tokens.revokeByPlugin(parsed.data.id);
+            api.dropPluginConnections(parsed.data.id);
+            await processes.killPlugin(parsed.data.id);
+            endpoints.withdrawPlugin(parsed.data.id);
+            mcp.withdrawPlugin(parsed.data.id);
+            const after = plugins.get(parsed.data.id) ?? record;
+            return { record: after, value: { record: after, revoked } };
+          };
+          // §16.6, item 440 — the act holds the plugin's lane from before its registry move until its
+          // publication settles: a walk raised in the handler's gap never enables the plugin again
+          const lane = reconciler;
+          if (lane === null) return (await move()).value;
+          return await lane.localAct(parsed.data.id, "disable", move);
         },
         ({ record, revoked }) => ({
           attrs: {
@@ -6887,7 +6898,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // have no runtime authority to coordinate, so one that is off (or held) commits plainly, as an install does, and
     // a failed commit throws its download away; every enabled replacement widens the pointer gap only inside the
     // exact participant barrier (moved here whole from plugins.install, as it was).
-    const commitUpdate = async (prepared: PreparedRegistryInstall) => {
+    const commitUpdateMove = async (prepared: PreparedRegistryInstall) => {
       const existing = plugins.get(prepared.id);
       if (existing === undefined || !existing.enabled) {
         try {
@@ -6899,8 +6910,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         const record = plugins.get(prepared.id);
         if (record?.enabled === true && record.service !== "none")
           void serviceHost?.restartFresh(prepared.id).catch(() => undefined);
-        if (record !== undefined) void reconciler?.publish(record, "install");
-        return { record: record ?? { id: prepared.id }, revoked: { count: 0, tokenIds: [] } };
+        return {
+          record,
+          value: { record: record ?? { id: prepared.id }, revoked: { count: 0, tokenIds: [] } },
+        };
       }
       let started: ReturnType<PluginUpdateManager["beginRegistryUpdate"]>;
       try {
@@ -6938,8 +6951,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       }
       const record = plugins.get(prepared.id);
-      if (record !== undefined) void reconciler?.publish(record, "install"); // §16.6
-      return { record: record ?? { id: prepared.id }, revoked };
+      return { record, value: { record: record ?? { id: prepared.id }, revoked } };
+    };
+    // §16.6, item 440 — an update is a lane act: its road (`existing.enabled`) is read inside the plugin's lane, and
+    // the lane is held until its publication settles, so it commits in this desktop's acts' order. The price: a
+    // walk of this plugin waits for the whole update, the barrier's restart included
+    const commitUpdate = async (prepared: PreparedRegistryInstall) => {
+      const lane = reconciler;
+      if (lane === null) return (await commitUpdateMove(prepared)).value;
+      return await lane.localAct(prepared.id, "install", () => commitUpdateMove(prepared));
     };
     // MK-UC (the review's fix, 2026-11-14): an update card's Update, which can come fifteen minutes after its
     // download. The candidate's row was read from this desktop's records at prepare, and the barrier mints the
@@ -7199,17 +7219,25 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               false,
             );
           if (card !== undefined) return await commitUpdateCard(prepared, card);
-          try {
-            await installer.commit(prepared);
-          } catch (error) {
-            await installer.discard(prepared).catch(() => false);
-            throw error;
-          }
-          const record = plugins.get(prepared.id);
-          if (record?.enabled === true && record.service !== "none")
-            void serviceHost?.restartFresh(prepared.id).catch(() => undefined);
-          if (record !== undefined) void reconciler?.publish(record, "install"); // §16.6
-          return { record: record ?? { id: prepared.id }, revoked: { count: 0, tokenIds: [] } };
+          const move = async () => {
+            try {
+              await installer.commit(prepared);
+            } catch (error) {
+              await installer.discard(prepared).catch(() => false);
+              throw error;
+            }
+            const record = plugins.get(prepared.id);
+            if (record?.enabled === true && record.service !== "none")
+              void serviceHost?.restartFresh(prepared.id).catch(() => undefined);
+            return {
+              record,
+              value: { record: record ?? { id: prepared.id }, revoked: { count: 0, tokenIds: [] } },
+            };
+          };
+          // §16.6, item 440 — a lane act, held until its publication settles
+          const lane = reconciler;
+          if (lane === null) return (await move()).value;
+          return await lane.localAct(prepared.id, "install", move);
         },
         ({ record, revoked }) => {
           const installed = record as {
