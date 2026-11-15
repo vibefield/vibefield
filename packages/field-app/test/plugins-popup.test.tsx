@@ -2231,6 +2231,20 @@ async function mountSwitches(
   return { port, sent };
 }
 
+/** The Installed list, with fieldd refusing every plugin switch with this error (item 440). */
+async function mountRefusing(error: unknown): Promise<string[]> {
+  const inner = pluginsFixturePort(NO_REGISTRY);
+  const { port, acts } = recording({
+    ...inner,
+    enable: () => Promise.reject(error),
+    disable: () => Promise.reject(error),
+  });
+  const snapshot = PLUGINS_FIXTURE_SWITCHES_SNAPSHOT;
+  act(() => root.render(<Window port={port} snapshot={snapshot} open />));
+  await settle();
+  return acts;
+}
+
 describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
   it("is one switch on the row and the page: a press sends one request, and neither moves until fieldd's next snapshot", async () => {
     const { port, sent } = await mountSwitches();
@@ -2294,6 +2308,43 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
     );
     expect(refusals).toEqual([words.SWITCH_WORDS.refused(false), words.SWITCH_WORDS.refused(true)]);
     expect(document.body.textContent).not.toContain(PLUGINS_FIXTURE_REFUSAL);
+  });
+
+  it("says a switch refused while its plugin is updating in its own sentence, on the row and the page (item 440)", async () => {
+    const said = "vibefield.simulator: updating; the switch was not applied";
+    const refusal = new FielddRpcError("PRECONDITION_FAILED", said, true, {
+      pluginKind: "PLUGIN_UPDATING",
+    });
+    const sent = await mountRefusing(refusal);
+    toInstalled();
+    act(() => rowSwitch("Simulators")?.click());
+    await settle();
+    expect(sent).toEqual(["disable vibefield.simulator"]);
+    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    expect(line?.textContent, "the Installed row says the plugin is updating").toBe(
+      words.SWITCH_WORDS.updating,
+    ); // RED before the view
+    expect(line?.getAttribute("data-tone")).toBe("attention");
+    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("true");
+    openRow("Simulators");
+    const page = document.body.querySelector(".vf-plugins-page-refused");
+    expect(page?.textContent, "and its page says it too").toBe(words.SWITCH_WORDS.updating);
+    expect(document.body.textContent).not.toContain(said);
+  });
+
+  it("says any other refusal of a switch as before, whatever its text says (item 440)", async () => {
+    const said = "vibefield.simulator: updating; the switch was not applied";
+    const sent = await mountRefusing(new FielddRpcError("PRECONDITION_FAILED", said, true));
+    toInstalled();
+    act(() => rowSwitch("Simulators")?.click());
+    await settle();
+    expect(sent).toEqual(["disable vibefield.simulator"]);
+    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    expect(line?.textContent).toBe(words.SWITCH_WORDS.refused(false));
+    openRow("Simulators");
+    const page = document.body.querySelector(".vf-plugins-page-refused");
+    expect(page?.textContent).toBe(words.SWITCH_WORDS.refused(false));
+    expect(document.body.textContent).not.toContain(said);
   });
 
   it("drops a refusal once fieldd's snapshot shows the switch the way it was being turned (VF-PM 19:05:12Z, 4)", async () => {
