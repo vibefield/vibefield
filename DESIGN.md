@@ -5311,6 +5311,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   `SOURCE_LABEL`):* this said a `rounded px-1` chip with no fill and the words "built-in", "dev",
   "registry · reviewed" and "sideload". The catalog's ControlsSection still shows a
   "registry · reviewed" replica, owed to the catalog's slice (it mounts the shipping view).
+  *Corrected 2026-11-15 (MK's records):* "nothing of it lands before the v0.9.0 tag" no longer holds. MK landed
+  on James's word, "i want entire MK work land ASAP" (in part; 2026-11-14 03:06:11Z, in MK's session
+  vibe-field-c7), which VF-PM read at 03:09Z as lifting MK-O7 (§8 "Plugins — the frame's second popup", its status
+  of this date).
 - **The updates flow** (P7; spec §5.3.1; *amended 2026-11-11, MK-D5 and MK-E7: split in two*): a
   fetch is a deliberate act, never a feed — no timer, no push feed, no polling — and the time it
   was checked is always said, never implied fresh. Two flows keep that law, each in its own words:
@@ -6903,6 +6907,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *Corrected 2026-11-11 (MK-4c's docs; VF-PM 13:56:27Z): "nothing of it is built" stopped being true at MK-4a,
   which built the popup; MK-4b built its doors in the Me menu and the palette, and MK-4c a plugin's page, read
   only. The rest below is not built.*
+  *Status 2026-11-15 (MK's records): landed but for MK-7, MK-1 in M303 and the rest in M308 (`a9d339bb9` →
+  `8df41b5b7`, then these records). James typed "i want entire MK work land ASAP" (in part; 2026-11-14
+  03:06:11Z, in MK's session vibe-field-c7), and VF-PM read it at 03:09Z as lifting MK-O7 (James's pick "Nothing
+  before the tag", his Rulings Docket, 2026-11-11 22:35:24Z), so "none of it lands before the v0.9.0 tag" below no
+  longer holds. MK-7 waits for ICE's door, and James still files I54 after the tag (his ruling of 06:48:31Z). The
+  words still marked as drafts land so, for his eye after the land (VF-PM 2026-11-14 04:33Z). Since MK-6, "No build
+  configures a registry today" below means no packaged build: its development seam (`FIELDD_PLUGIN_REGISTRY_URL`
+  and `_KEY`) can point a development fieldd at a plugin list, and a packaged fieldd refuses either at boot
+  (MK-6's EL7 custody note).*
   MK-1, MK-2 and MK-4…MK-6 build it (MK-4 the popup, MK-5 Settings' half, MK-6 its catalog plates and gates; there
   is no MK-3), MK-7 what waits on ICE's door, and none of it lands before the v0.9.0 tag unless James says so
   (MK-E13). No build configures a registry today (`fieldd/src/bin.ts` sets none, and `fieldd/src/plugin-install.ts`
@@ -7026,6 +7039,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       *Corrected 2026-11-14 (MK-O3D): O3-C built the stop, so "until then nothing stops them" no longer holds. With
       no switch drawn it held every plugin from the plugin list that the list does not name as VibeField's; from
       this drawing it follows the person's switch.*
+      *Corrected 2026-11-15 (MK's records): built at O3-C (`399915e35`), in fieldd. While no plugin list is
+      configured, which is every packaged build, no build has a community plugin for it to hold (item 279's S2).*
       *Drawn 2026-11-14 (MK-O3D, the slice that draws the switch; ‹draft› for James's eye, its words in §9
       "Community plugins"):*
       - **Where it stands until the shelf.** Discover's shelf is not built yet, so the tile stands at the body's
@@ -10210,6 +10225,10 @@ VibeField and open it again." (§8 "The status line").
   narrowed to what Plugins… can't hold yet (§8 "Settings → Plugins, until Plugins… holds every
   switch"), and this law holds again the day it leaves. Its runtime detail is the Diagnostics
   section now.
+  *Corrected 2026-11-15 (MK's records): the tag clause above no longer holds; MK landed on James's word
+  (§8 "Plugins — the frame's second popup", its status of this date). What of Settings → Plugins stands after MK-5
+  is MK-5's to say (VF-PM 2026-11-14 04:33Z: the rows of plugins from the plugin list and of sideloaded ones, with
+  their Reset, stay in Settings until the popup can hold them).*
   Where each piece of chrome stands is the frame's places below (five until HN-8; four and the
   hand since).
   *History (folded 2026-10-28, the housekeeping pass):* this bullet also carried the 2026-07-21

@@ -41,9 +41,9 @@
   (the profile meters and one search, since 11-06)**, **HN (Cards in Hand: the line, the hand, Artifacts in the head)**,
   **CS (Card Stock and the Card Button, since 11-14)**,
   QW1 (the Godview swarm's fix wave 1), PT-S (PORTALS' phone, resumed 10-29), **CO (the compose plane: sparks and the
-  tool plane, re-entered 10-28)**, **MK (the plugin market, ruled 11-11; MK-1 landed 11-14 on James's word; the stack
-  above it next)**, the release rails, the EL8 watch, the fixer, upstream. The first-beta blockers are §3
-  item 7. Everything valid but unscheduled is §4.
+  tool plane, re-entered 10-28)**, **MK (the plugin market, ruled 11-11 and 11-12; landed on James's word but for
+  MK-7: MK-1 in M303 on 11-14, the rest in M308 on 11-15)**, the release rails, the EL8 watch, the fixer, upstream.
+  The first-beta blockers are §3 item 7. Everything valid but unscheduled is §4.
 
 ## 2 Now — the active tracks
 
@@ -1173,10 +1173,10 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
   before any push, on James's word by name; item 322's two items for James's eye (LANDED "Item 322") and S2's one
   (LANDED "Item 279, S2"); item 330, on MK's side.
 
-**MK — the plugin market, "A Place for Plugins"** · vibe-field-06 (lane `lanes/mk`, branch `mk/mk-0`) · law DESIGN.md §8
-"Plugins — the frame's second popup" and §9 "The plugins' words", the page *A Place for Plugins*
+**MK — the plugin market, "A Place for Plugins"** · vibe-field-b0 (lane `lanes/mk`, `mk/stack-on-8af9b6c85`) · law
+DESIGN.md §8 "Plugins — the frame's second popup" and §9 "The plugins' words", the page *A Place for Plugins*
 (`Xy5CTh2MMuxNsb7icwjiQk`; its source `draft/plugin-market/round1/`), `specs/trust-and-distribution.md` (TD §9 TD-6,
-Browse) and the plan `lanes/mk/PLAN.md`
+Browse), the plan `lanes/mk/PLAN.md`, and MK-2's custody note with its addenda (`lanes/mk/mk2/`)
 - Ruled 11-11: MK-D1…MK-D13, every mark A, by James on the page ("Take the leans", 03:41:23Z), then typed "all ruled
   with lean, now start implement" (03:44Z; DECISIONS "MK-D1…MK-D13 (the plugin market)"). VF-PM's engineering rulings
   E1–E9 and E11–E13 (04:30:39Z; E12's split with ow-design 04:33:13Z) and E14 (06:12:50Z), among them: the popup
@@ -1207,9 +1207,14 @@ Browse) and the plan `lanes/mk/PLAN.md`
     every version from its source". It leans technical; "VibeField checks each one before it's listed" says it more
     plainly."
   - The two bare acts: "Lean: keep them as ruled."
-- Open, James's (VF-PM 07:23:04Z carries it to him): whether **Remove it and its data…** also deletes the plugin's
-  data on his other desktops. Until he says, it reaches this desktop alone, and MK-2 builds nothing that deletes
-  data on another desktop.
+- Ruled since (DECISIONS' MK row holds each call in its words): the open calls MK-O1…MK-O36, O2–O7 on James's Rulings
+  Docket (2026-11-11 22:33:48Z to 22:35:24Z; O4, "This desktop alone", 22:34:05Z, answers whether **Remove it and its
+  data…** reaches his other desktops; O6, "No Undo on plugin pages until it is per plugin", against the page's lean),
+  the rest on the page at their leans (O1, O14, O33 and O34 drawn with lean B); four PM-board picks of 11-12; the 94
+  asks of the first 11-14 workflow, at their leans with VF-PM's marks (04:33Z; `lanes/mk/ASKS-2026-11-14.md`); the 46
+  of the second, C1…C46, ruled by VF-PM at 06:56Z (`lanes/mk/ASKS-CARRIED-2026-11-14.md`); and James's click on the
+  board of 2026-11-14 08:19:36Z, "Yes, add them to the plugin's page" (MK-4c2c). One call stays his: whether an update
+  reaches his other desktops (C12; until he says, the update card says "It updates on this Mac.").
 - E13 said nothing of MK lands before the v0.9.0 tag unless James says so. He said so. On 2026-11-14 at 03:06:11Z he
   typed in MK's session (vibe-field-c7): "just go now, i want entire MK work land ASAP, fan out subagents in workflows
   to work in parallel". At 19:42:10Z he typed in VF-PM's session: "I'm currently away from my Mac, so anything needs me
@@ -1232,10 +1237,55 @@ Browse) and the plan `lanes/mk/PLAN.md`
     (qa-01's V-TRAIN1); 27 vitest projects with no failed file, 15,204 tests passed; cargo 38 of 38 ok;
     `verify.clean.log` `b30c41c93e5404a0`); the old mini's link was down (VF-PM 19:43:27Z), so mini-mkv1d's run waits.
     mini-mkv1c ran 17 of 17 GREEN at mk/mk-1's M37 `5196c7b3f`, on the old ground `cdb72d97d`.
-- Today, with MK-1: no build configures a registry (nothing sets fieldd's `registryUrl`, `daemon.ts:698`), so Discover
-  says "Nothing to discover yet" in every build until the registry rung (TD §9 TD-4); Settings → Plugins is still
-  `panels/PluginsSection.tsx` (MK-5 moves it); the packaged app bundles the comment pad alone (FL-2, M267). The Plugins
-  popup, the Me menu's Plugins… and the palette's two acts are built; the pegboard's pill is MK-4d's.
+- **The stack LANDED** (M308, `a9d339bb9`…`8df41b5b7`, 2026-11-15): 44 commits on `8af9b6c85`. 42 were drafted
+  as files above MK-1 and cut onto `1877f7737` from their drafted trees, each through the hook with its files held to
+  its drafted tree and its message byte for byte (`lanes/mk/mk-stack/cut-stack-r10.sh`; no original commits existed to
+  pick), in VF-PM's ORDER of 2026-11-14 06:56Z; two fixes of the update card's test went on them; and the 44 were
+  carried onto `8af9b6c85` by cherry-pick, each patch-id held (`lanes/mk/mk-stack/carry-stack-r11.sh`):
+  - the words, O33 B, O34 B and O31's five (`a9d339bb9`, `81a12446f`); O14 B and O20 A, What it adds counts the tools
+    and names each palette command (`9e76be2c4`, `037c8d6d4`);
+  - item 329, the download's cap and clock and the list's cap (`f5a07f0e5`, `555870bbc`); item 330, the provenance file
+    without the list's display copies, the namespace as its publisher, MK-E11's fieldd half (`41651ff7d`, `ba23d2f38`);
+  - UC-A and UC-B, an update that can do more asks first (`7931513f8`, `20d92237f`);
+  - O3-D's first parts: a held plugin says why, the community switch drawn and its statement once on each desktop, a
+    desktop's own mark, and a synced install parked while community plugins were off tried once more (`8eb22475c` …
+    `1ed1731b9`, 5 commits);
+  - Discover's shelf (MK-4e), Install on a plugin's page with the card where the act stood (O2-C) and Remove… asking in
+    place (MK-4f) (`0d3b0f9e5` … `befc94402`, 6 commits; `befc94402` carries two catalog files unchanged from its draft,
+    so it commits 12 paths, not 14);
+  - O3-D's last part: a desktop's first community install shows the statement before its card (James's MK-O1 B;
+    `f0350d9a3`, `83d341e79`);
+  - UC-C, Updates' rows, an update's card under its row, Update all and the window coming back fresh (`7502a019e`,
+    `3c622ea20`);
+  - MK-4d: More in Plugins… at the pegboard's foot, Show them on the pegboard, the desk receding under the popup over
+    Canvas, a removed plugin's object keeping its name on the bar, then the pegboard's names in the popup (`bc1cc0f6b` …
+    `f8f524176`, 7 commits);
+  - MK-4c2c: Back to default and Remove the saved secret… on a plugin's page (`f6d665d94`, `2a726b950`, `9ca7a09f6`);
+  - MK-5: Settings → Plugins keeps only what Plugins… can't hold yet, each plugin's runtime moves to Diagnostics, and
+    Installed says a plugin stopped after it kept crashing, or that the list no longer names it (`c0b23d057` …
+    `b911f4b74`, 4 commits);
+  - MK-6: smoke:market (row 37 of `docs/desk-gates.md`) over a signed list of the run's own, smoke:canvas the pegboard's
+    pill, a development plugin-list seam a packaged fieldd refuses at boot, and the narrow window's plate (`c47ae9252`,
+    `0a50f48fb`, `362c1a865`);
+  - the first fix (`d25e1fab3`): the update card's four booted rows waited on the registry's stored row,
+    whose `service` is never "active"; they read the snapshot's, as `plugin-install-card.test.ts` does. They had
+    never run before the stack's row, which they reddened; no product file moved.
+  - the second fix (`8df41b5b7`): a card's Update after a power turned off and on waits until the grant is
+    on and quiet, then holds the last decision and a generation moved at least twice. The install reconciler
+    replays this desktop's own earlier "off" (item 437, main's code); no product file moved.
+  - Proven on James's Mac: the stack's row (`row-stack.sh`, at `780e86887`: four typechecks, the walls and biome exit 0;
+    35 test files green but the update card's four booted rows); the first fix's row RED on one row, "expected 3 to be
+    2" (`row-ucfix.sh`, its log `9561fd5849aa1d7d`); the read row, whose grants ledger showed the reconciler's revoke
+    after the person's grant and the power off at the read, then on again (`row-ucdiag.sh`, `8081389384c5e006`); the
+    second fix's row GREEN, 5 of 5, "Tests 13 passed (13)" each (`row-ucfix2.sh`, `ec5f48610c180e74`); and `pnpm verify`
+    whole at the stack's top (exit 0, 2026-11-15 00:25:00Z to 00:48:11Z, its log `e7eda9ecd3dcd99f`), on James's
+    19:42:10Z word.
+- Today, with all of MK but MK-7: no packaged build configures a plugin list (nothing sets fieldd's `registryUrl`,
+  `daemon.ts:716`; MK-6's development seam, `FIELDD_PLUGIN_REGISTRY_URL` and `_KEY`, is refused by a packaged fieldd at
+  boot), so Discover says "Nothing to discover yet" in every packaged build until the registry rung (TD §9 TD-4); item
+  279's S2 keeps fieldd's installed-plugins folder unread; Settings → Plugins keeps the rows of plugins from the plugin
+  list and of sideloaded ones, with their switches, settings and Reset, until the popup can hold them (MK-5; VF-PM
+  2026-11-14 04:33Z); the packaged app bundles the comment pad alone (FL-2, M267).
 - The slices, in order:
   - **MK-0** the docs: DESIGN.md first, then DECISIONS' MK row, this block and UI_SYSTEM's catalog line.
   - **MK-0b** the later rulings' fold (J1 and calls 2–7): DESIGN.md §8 and §9; DECISIONS' PA, TD, insides and MK
@@ -1261,13 +1311,37 @@ Browse) and the plan `lanes/mk/PLAN.md`
   - **MK-7** after ICE's door (petition I54), an EL8: D8's token (ruled), and D9's per-object pegboard switches (A,
     the goal James kept, 06:48:31Z).
   - No MK-3: the registry's CI that writes `listing` is the registry rung's (TD §9 TD-4).
-- Next: the stack above MK-1, re-stacked onto main after this land (words, a7, 329/330, UC-A/B, O3-D a–e, acts,
-  UC-C, MK-4d, MK-4c2c, MK-5, MK-6 and the records; pre-passed on this Mac, never run on the mini), then its own V and
-  its land.
-- Owed: gate:landing for MK-1 at James's unlock (the plugin rows 20–22 and 29 of `docs/desk-gates.md` read MK's change);
-  the registry rung before Discover shows a listing; James's eye on the popup in both themes once MK-4 is built;
-  James's commit-draft of MK-0d and his filing of the ICE petition (I54, drafted, not filed; after the v0.9.0 tag, by
-  his ruling of 06:48:31Z), each on VF-PM's word.
+- Next: `pnpm gate:landing` at James's unlock, both desktops down: rows 20–22 and 29 of `docs/desk-gates.md` read MK's
+  change, and row 37, smoke:market, is MK-6's own (its CARRY and PICTURES rows parked, said on its run's line).
+- Owed after the land: James's eye on the popup in both themes, with one page listing every word that lands as a
+  draft (VF-PM 2026-11-14 04:33Z: the land carries those marks honestly, and no picks round comes first), the call
+  still his and the two leans held until he says (§5, MK's entry), and VF-PM's plain line for C40 and C41
+  (2026-11-14 06:56Z): "a community plugin you installed on one desktop installs on your others when community
+  plugins are on there, without the statement on each"; MK-7 after ICE's door (petition I54,
+  drafted, which James files after the v0.9.0 tag by his own hand, on VF-PM's draft-queue word; his ruling of
+  06:48:31Z stands), then its EL8; James's commit-draft of MK-0d (`lanes/mk/draft-0d/`, with additions for O2–O6
+  and O21–O36 still to write); MK-5b, Try again for a plugin whose runtime failed (VF-PM 04:33Z, at mk5's lean);
+  three rows of the inventory (`lanes/mk/mk-inventory/INVENTORY.md`, read against the stack on 2026-11-14) that no slice
+  built: a plugin from the plugin list or a Sideloaded one keeps its switches, settings and Reset in Settings → Plugins
+  until the popup can hold them (N18; MK); a read's incompatible and vanished entries reach `updatesCheck`'s caller
+  alone and are not logged (N24, DESIGN.md's *owed (MK)*; MK); pictures in the window, MK-E9's window half, behind
+  ob/ui's token side (N30; ob/ui, then MK); item 437, a grant turned off then on, replayed by the install reconciler
+  from this desktop's own earlier "off": the read row (`row-ucdiag.sh`) saw the power OFF with generation 3 when the
+  person's last ON returned, then ON at 4 within 2 s (RV's); the registry rung before
+  Discover shows a listing. Item 333 and S3 stay
+  OB's (its block, above). And the items VF-PM numbered at the packet (2026-11-14
+  06:56Z; each C-number is an ask of `lanes/mk/ASKS-CARRIED-2026-11-14.md`):
+  - item 431: MK's three plugin files (`install-records.json`, the catalog's `held.json` and the
+    community statement's mark) folded into LAYOUT in one gen event (C18);
+  - item 432: one contracts constant for the crash ladder's 3 ("Stopped after 3 crashes"), which
+    fieldd and the window both read (C35);
+  - items 433 and 434: smoke:market's two parked rows, CARRY (433) until Discover draws
+    the pegboard's categories, and PICTURES (434) until MK-E9's window half (behind ob/ui's custody fix); each
+    still runs by name and is said on the run's `SMOKE_MARKET_ROWS` line and in `docs/desk-gates.md` row 37 (C36);
+  - item 435: the single executable's `build-fieldd-sea --verify` carries the plugin-list seam's
+    boot refusal;
+  - item 436: the app preferences setter's refusal text, which lists no `plugins.community` (C21;
+    O3-D turned the switch's constant true and left the text).
 
 **CS — Card Stock and the Card Button (items 400–405, and 304)** · ow-design (lane `lanes/cs`, branch `cs/land-m303`;
 plan `lanes/cs-plan/PLAN.md`) · law DESIGN.md §5/§8/§13 (the pages *Card Stock* `Bw5JvitHdKzUmN528AkWzh` (2026-11-14
@@ -1594,7 +1668,7 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
 | Track / item | Parked state | Re-entry | Doc |
 |---|---|---|---|
 | DS / SP — sync planes | DS-7 LANDED (M66 `c0d68b94d`, 2026-10-31): another desktop's transcript by ticket — the owner mints for the window's daemon, which re-homes the index serve's set onto its own egress route (9424 now routable); History hands the room another desktop's sessions of a project here; **owed: the two-desktop run (James, steps in LANDED "DS-7")** · DS-9 (E3 and artifacts in the app, files) · SP-4 probe → SP-4 → SP-7 (OPENED 2026-11-06 on James's word; road 7a, a spark's transcript for Chat's thread: M-b, the kit's reader, LANDED 2026-11-06 (`432784612`, LANDED "SP-7a's M-b"), M-a, the home's carry and the owner's routed serve (9426), LANDED 2026-11-06 (`d6fe77980`, LANDED "SP-7a's M-a"), M-b2, the phone's routed serve and its `device`, LANDED 2026-11-06 (`3b8611ec4`, LANDED "SP-7a's M-b2"); road 7b, the phone's History from rosettad by grant through rosetta's Swift client (James 22:56Z, `sp7b-swift-rosetta-reader` (b); DECISIONS "SP-7b"): 7b-1, the phone's ticket by both roads, LANDED 2026-11-07 (`41331646e`, LANDED "SP-7b's 7b-1"); 7c, its terminal asks through its home, LANDED 2026-11-07 (`c8c580fcb`, LANDED "SP-7b's 7c"); 7b-2a, the ticket's `rest` leg (the index serve's http(s) origin) and the projection's golden pairs, LANDED 2026-11-08 (`c435f1e6e`, M223, LANDED "SP-7b's 7b-2a"); rosetta's `clients/swift` (RO-39) released in rosetta 0.1.5 (2026-11-08); the EL8 to 0.1.5 LANDED 2026-11-08 (`68b80fb95`, M230, LANDED "EL8 — Rosetta 0.1.5"; its Swift row PAID on vf-m2 by item 257's mint, M233 `b3a5930b2`, at main `f1670584e` + 257's three test files; the exact-tree witness stays the old mini's); item 259, the iOS record's own rosetta row and About's filter, LANDED 2026-11-08 (M236 `83cf67316`, LANDED "Item 259"); 7b-2b, the kit's reader and the projection in Swift, LANDED 2026-11-09 (`870edfa9e`, M253, LANDED "SP-7b's 7b-2b"), dark; then its injection and W1 on the old mini (James's disk); owed: item 247, a tool's strict `attachments`) → SP-5 → SP-8 (after AR-6) → SP-D4's view state, Follow off, LAST (ruled (a) at the lean, VF-PM 2026-10-31) · PeerLink and the asleep roster (a forward dials a desktop the roster calls asleep, ~15 s to `unreachable`; LANDED "DS-7", Found) · wave 2's residue (§6) · the two built trades ACCEPTED (Q29: whole-value streams lose the 250 ms leading edge; self-served keyed calls are not journaled), reopened only if a witness shows a lost update | an owner + the two-desktop run (Tailscale app QUIT) | `thinking-desktop-sync-plane.md`, `thinking-sync-planes.md`, `design-06-sync-planes.md` |
-| TD-4…TD-7 | the registry's listing gates, attestation/rebuild, the R2 posture (TD ladder §9) · *Note 2026-11-11 (MK):* TD §9 TD-6's Browse, switch and row labels are MK's popup, its design round ruled 11-11 (§2's MK block); MK builds the popup first, saying "No plugin registry yet" until the registry rung (TD §9 TD-4: the registry repository and the index v2 reader) lands. That rung is not LANDED's "TD-4" (2026-11-05, M139), LP-D16's code-hash slice (§3 item 7, phase 2's C; DECISIONS' collision warnings) | third-party plugins; the first listing Discover shows | `specs/trust-and-distribution.md` |
+| TD-4…TD-7 | the registry's listing gates, attestation/rebuild, the R2 posture (TD ladder §9) · *Note 2026-11-11 (MK):* TD §9 TD-6's Browse, switch and row labels are MK's popup, its design round ruled 11-11 (§2's MK block); MK builds the popup first, saying "No plugin registry yet" until the registry rung (TD §9 TD-4: the registry repository and the index v2 reader) lands. That rung is not LANDED's "TD-4" (2026-11-05, M139), LP-D16's code-hash slice (§3 item 7, phase 2's C; DECISIONS' collision warnings). *Corrected 2026-11-15 (MK's records): since MK-O5 (James's pick "Rewrite without 'registry'", his Rulings Docket, 2026-11-11 22:34:14Z; `43ea4ff5f`, `1fbd92318`), Discover says "Nothing to discover yet" until that rung lands, and no word in the popup says "registry".* | third-party plugins; the first listing Discover shows | `specs/trust-and-distribution.md` |
 | History finish (AR-8) | B-D4/B-D5 (the doors federate; no window asks for another desktop's past; the phone reads none) · PJ-8 acts across desktops (PlaceRef + the params idempotency key), unblocked by DS-7 (another desktop's sessions are in the room, their acts said "ran on ‹desktop›") · projects only another desktop holds, and its Home and Temporary, in the list (PJ's design; DESIGN.md §8's DS-7 amendment) · the Peek's "Everything" across desktops (K5) · R8/R9 and P2's runs (§6) | the History lead's slot | `build-hf.md`, `thinking-ar-history-room.md`, `thinking-project-places.md` |
 | PJ-5 · PJ L5 | Godview's project chip, "Open in History", synced ink, where line: unbuilt; re-judged against One Frame and MV before any build (Q16) · the project key unkeyed (`normalize.ts:172`, version 1) | the re-judgement · a mesh-shared secret | `thinking-project-places.md` |
 | FS | FS-3 the files consumer on the desk (a kind or panel; `pickFolder()` → `attach(root)` is built) · FS-4 over DS-7's road (one route per owner desktop, `OwnerRoutes`; the workspace serve needs its DS-L6 claim) · FS-5 the phone viewer · GitService replaces the interim git port (R2; M5) | a desk lane · mille's release | `thinking-files-service.md`, `draft/files-service/build-fs.md` |
@@ -1632,9 +1706,19 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
   2026-10-29 00:25Z, "Go with your leans"; its §6, the work kept) and leave the list.
 - DK's parked build rulings ((17)/(53), (48), (83), (92), (95), (97); DECISIONS DK addenda). (86) is answered by Q18
   and D22's "packaged built-ins" by WP8 (`5e7507d6c`); both leave the list.
-- MK's calls (§2's MK block) are ruled: J1 by James 2026-11-11 06:43:00Z ("Community too", past MK's lean), D9's
-  change, E10 and the four on the words at MK's leans (06:48:31Z); they leave the list. One stays: whether
-  **Remove it and its data…** also deletes the plugin's data on his other desktops (VF-PM 07:23:04Z).
+- MK's calls (§2's MK block) are ruled and leave the list: MK-D1…MK-D13; J1 ("Community too", James's pick in MK's
+  session vibe-field-06, 2026-11-11 06:43:00Z, past MK's lean); D9's change, E10 and the four on the words, at MK's
+  leans (typed in the same session, 06:48:31Z); the open calls MK-O1…MK-O36, O2–O7 on his Rulings Docket and the rest on
+  the page, among them the one this list kept, whether **Remove it and its data…** also deletes the plugin's data on his
+  other desktops (MK-O4, "This desktop alone", 2026-11-11 22:34:05Z; its rider `763b9aefa`); four PM-board picks of
+  11-12, among them his click on the read held for it ("Allowed, Read tool only", 2026-11-12 06:12:58.989Z; MK's read of
+  `gen-jsonschema.ts` followed; DECISIONS' MK row); and his click on the readings on a plugin's page, "Yes, add them to
+  the plugin's page" (2026-11-14 08:19:36Z; MK-4c2c). One stays his: whether an update reaches his other desktops
+  (`lanes/mk/ASKS-CARRIED-2026-11-14.md` C12; until he says, the update card says "It updates on this Mac."). Two leans
+  VF-PM ruled 2026-11-14 04:33Z hold until he says otherwise: the window says §9's one line, never his three install
+  refusal lines (his click on fieldd's three install refusals; his three stay fieldd's, never printed); and a plugin
+  that is invalid or incompatible says its own line, with no Try again, in words that go to him (MK-5b). After the land,
+  one page lists these and MK's words that land as drafts, for his eye (VF-PM 2026-11-14 04:33Z).
 
 **Witnesses (his hands, his devices)**
 - ST-D1's live half: how long each catalogued agent takes to be heard after a Stop, on his signed-in agents, before
@@ -1926,7 +2010,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
 | PLUG — publishing | PARKED: KIT/P8e | `thinking-p8-loadable-artifact.md`, `specs/trust-and-distribution.md` | publishing scope; TD registry + R2 process host |
-| MK — the plugin market | ACTIVE: ruled 11-11 (MK-D1…MK-D13 A, the leans; VF-PM's E1–E9, E11–E14; James's J1 06:43:00Z and calls 2–7 at MK's leans 06:48:31Z); MK-1 LANDED 11-14 (M303, 37 commits: the docs, the contracts, fieldd's community gate and its plugin list, the Plugins popup, its doors, a plugin's page and the fixes O2–O5), on James's word (03:06:11Z, 19:42:10Z) | DESIGN.md §8 "Plugins — the frame's second popup" and §9 "The plugins' words"; the page *A Place for Plugins* (`Xy5CTh2MMuxNsb7icwjiQk`; sources `draft/plugin-market/round1/`); `specs/trust-and-distribution.md`; `lanes/mk/PLAN.md` | the stack above MK-1 (MK-4c2c, MK-4d, MK-5, MK-6 and the rest), its V, its land; gate:landing at James's unlock; the data reach of Remove it and its data… (James) |
+| MK — the plugin market | LANDED but for MK-7, on James's word (11-14 03:06:11Z, 19:42:10Z): ruled 11-11 and 11-12 (MK-D1…MK-D13 A, the leans; VF-PM's E1–E9 and E11–E14; James's J1 06:43:00Z, calls 2–7 at MK's leans 06:48:31Z, MK-O1…MK-O36, four PM-board picks and his click of 11-14 08:19:36Z); MK-1 in M303 on 11-14 (37 commits and the E10 fix), the rest in M308 on 11-15 (44 commits, `a9d339bb9`…`8df41b5b7`) | DESIGN.md §8 "Plugins — the frame's second popup" and §9 "The plugins' words"; the page *A Place for Plugins* (`Xy5CTh2MMuxNsb7icwjiQk`; sources `draft/plugin-market/round1/`); `specs/trust-and-distribution.md`; `lanes/mk/PLAN.md`; `lanes/mk/mk2/` (custody) | `gate:landing` at James's unlock; James's eye with the drafts' page, the call still his and the two leans held until he says (§5); the items VF-PM numbers at the packet (§2's MK block); MK-7 after ICE's door (I54) |
 | IOS — companion | ACTIVE; IOS-8f landed 10-30 (`user.me`: the corner wears its home desktop's face and name); item 130 landed 10-31 (a sign-out clears History's cache, AP-D4); IOS-10a landed 11-01 (the phone's Settings, `a9a62c20a`); IOS-11 landed 11-02 (the phone's splash, James's PR #10, M104 `f2854bf2f`); WI-1 landed 11-02 (the way in, M108 `8cfe4a59d`; the WI row); item 161 landed 11-02 (a set that never comes up backs off and stops waiting at the dial); WI-3 landed 11-04 (the lock, M116 `ae2d44c00`; the WI row); IOS-12a landed 11-05 (the phone's Chat, its cross-plane changes: `sparks.use`, the spark and needs-you doors through the home, `compose.sparks.say`, the remote row's `spark`; M125 `4fcb471af`; §2's IOS-12 block); IOS-12b landed 11-05 (the phone's Chat, the tab and the list: the bar's third tab, each spark as the Mac reads it, its face, each desktop's last word or never heard; M127 `8255a10b3`); IOS-13a landed 11-06 (Settings for App Review: Privacy Policy and Support on About and the welcome, the bundled acknowledgements read with their texts, the non-affiliation line, the device named as its platform names it; M165 `7a7f22623`); IOS-12e landed 11-06 (the phone's Chat, the star in Metal: the engine's own live face, held to its rows and stills; Chat's list draws it; M186 `09378c9ec`); IOS-12c's M-c2 landed 11-06 (the phone's Chat, the thread: a spark's conversation drawn as the Mac's at touch pitch, read through the home and answered by your words, its draft held while its desktop is away; M191 `eda440d58`); IOS-12d's M-d landed 11-07 (the phone's Chat, what waits on you: Needs you heading Chat, the Mac's card at a thread's foot, an answer through the home; M209 `ef9457363`); IOS-12f's M-f1 landed 11-07 (the phone's Chat, New spark: the Mac's sheet at touch pitch, its sky the engine's hatch in Metal, the face flown to its row; M218 `27c75681f`); IOS-12f's M-f2 landed 11-09 (the phone's Chat, @ at touch pitch, a chip in the sentence, the handle in the card; M266 `d9fe8e6c2`); item 241's 241a landed 11-07 (a pill that is off draws §7's Off, the quiet look with its words in t4; M219 `fba72f50d`), and its 241b 11-08 (the Mac's kit pill draws §7's Off; M225 `493ad96b0`); item 257 landed 11-08 (the kit's tests build on vf-m2's Xcode 26.3 and pass under Xcode 27.3's test runner, all but item 167's; the EL8's row 6 paid there; M233 `b3a5930b2`); item 259 landed 11-08 (About lists the parts others made, and VibeField's own rosetta row rides the iOS record undrawn; M236 `83cf67316`); RB-1 landed 11-12 (the build for App Review without TestFlight's own rows: Notifications, dotted Not yet, in TestFlight and development builds only; two archives per release, the store taking the clean one; M288 `05bfd0944`); item 167 landed 11-14 (the terminal's keyboard row stands its window up without a scene, so FieldTerminalTests is whole in a package run: the red since 11-04 was the test's own; M299 `df6fc8ad7`) | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md`; the page *Chat in a Pocket* (M6kri6s5; sources `draft/ios-pocket/chat/`), DECISIONS PC | 12f is whole (M-f2 landed 11-09, M-f1 and 12d's M-d 11-07, and 12c's M-c1 and M-c2 and 12e 11-06); item 242 (the phone's faint words, sorted), items 248 and 251; the rebuild; TestFlight build 4 |
 | WI — the way in | ACTIVE; WI-4 and WI-1 (with WI-2) landed 11-02 (M108 `8cfe4a59d`, run 108): the two states, the way in on the splash's field; item 163 landed 11-02 (Settings' unreachable signed-out head and empty list retired); WI-3 landed 11-04 (the lock: Face ID over a curtain above everything, the way in's last step, Settings › Lock; M116 `ae2d44c00`, run 116); WI-1's owed witness landed 11-04 (M120 `576172d99`, run 120); the mark keeps its place (`WayInView.markFades` shut) until James's word on its fade; P1 and P1b landed 11-12 (M285 `a71a52777`, run 313: "Couldn’t connect.", the notes' ink, the fitted glass) | the page *The Way In* (5cvau5EQ, v5; sources `draft/ios-pocket/way-in/`); DESIGN.md §8 "The phone's way in", §9 "The way in" and "The lock"; DECISIONS WI | the lock's four hand rows (James; LANDED "WI-3 — the lock"); the Desktop slice (WI-W5 A, after WI-W5b; item 160); WI-W2e |
 | UA — users and accounts | COMPLETE except witnesses | `specs/users-and-accounts.md`, `thinking-ua-phone-account.md` | the phone's second-account witness |

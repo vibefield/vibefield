@@ -50352,3 +50352,147 @@ the carried red, then the carried green, each row through the door under `env -i
 - no kit build or Swift test (the kit's change is two fixture mirrors);
 - no Electron witness;
 - nothing pushed.
+
+## MK — the rest of the plugin market: the stack above MK-1, from the words to MK-6, and its records (M308)
+
+(2026-11-15; 44 commits on main `8af9b6c85`, `a9d339bb9`…`8df41b5b7`, 108 paths over it (107 standing, 1 deleted), then
+the records commit. 42 commits were drafted by the MK lane as files above MK-1 and never committed. They were re-stacked
+onto `1877f7737` by `lanes/mk/mk-stack/stack-r10.py` (`a948757d`; every drafted commit merged three ways by file; 2
+conflicts, both in the records, which are this entry's commit), sealed (`AM/SHA256SUMS-cut` `8cd43a92`), and cut by
+`lanes/mk/mk-stack/cut-stack-r10.sh` (`49055f73`) from their drafted trees, each through the hook: in place of a
+patch-id (no original commit existed to pick), each commit's files held to its drafted tree by blob and its message byte
+for byte; no mode other than 100644 (`mk/stack-on-1877f7737` = `780e86887`). Two fix commits of the update card's test
+went on them, each cut from its drafted file through the hook: `ff50594ae` by `lanes/mk/fix-uc/cut-ucfix.sh`
+(`e0980d9e`) and `b5bf32d20` by `lanes/mk/fix-uc2/cut-ucfix2.sh` (`9e67d9da`). Then the 44 were carried onto `8af9b6c85`
+(main after the two rewords of docs/LANDED.md that James picked, 2026-11-14 22:29:58Z and 23:06:07Z, landed by the
+fixer; no commit of the stack touches that file) by `lanes/mk/mk-stack/carry-stack-r11.sh` (`013fc25b`): each by
+cherry-pick through the hook, its patch-id held to its original's, its message byte for byte, its tree the original's
+but docs/LANDED.md, and each of the 42 held again to its drafted tree; the ref `mk/stack-on-8af9b6c85`. No message
+carries a `Claude-Session:` line, by James's click on the PM board (2026-11-14 08:18:25Z: "Drop the session link from
+now on; keep the rest (Recommended)"), or a board card id (VF-PM, 21:57:47Z). Lands on James's word: 03:06:11Z in MK's
+session (vibe-field-c7), "just go now, i want entire MK work land ASAP, fan out subagents in workflows to work in
+parallel", and 19:42:10Z in VF-PM's session, "I'm currently away from my Mac, so anything needs me to do on Mac I can
+not do right now, so just push forward on implementation progress, you can also run test on my Mac , and merge to main
+when things done and push to remote"; and VF-PM's GO.)
+
+**What is real.**
+- **The words** (`a9d339bb9`, `81a12446f`): a page of local settings says they stay on this desktop, and a power
+  VibeField can't describe is said (O33 B, O34 B, O31's five); **What it adds** (`9e76be2c4`, `037c8d6d4`) says how many
+  tools a plugin brings and names each command it puts in the palette (O14 B, O20 A).
+- **Item 329** (`f5a07f0e5`, `555870bbc`): a plugin's download has a cap and a clock, and the plugin list a cap; a stop
+  ends as a failed install does. **Item 330** (`41651ff7d`, `ba23d2f38`): the provenance file holds nothing the list may
+  change, and the namespace is its publisher (MK-E11's fieldd half).
+- **The update card, UC-A and UC-B** (`7931513f8`, `20d92237f`): an update that can do more than the version you have
+  asks first; prepare says what it asks for, and the one press refuses it.
+- **O3-D** (`8eb22475c` … `1ed1731b9`, `f0350d9a3`, `83d341e79`): the community switch drawn, Discover's tile asking
+  once on each desktop (James's MK-O1 B), each desktop's own mark that it showed the statement, a refused community
+  install audited as denied, a synced install parked while community plugins were off tried once more when they come on,
+  a held plugin saying why, and a desktop's first community install showing the statement before its card.
+- **Discover's shelf, Install and Remove… on a plugin's page** (`0d3b0f9e5` … `befc94402`): the plugin list's sets on a
+  shelf of tiles (MK-4e); Install downloads first, then the card stands where the act stood (O2-C); Remove… asks in
+  place, Cancel first, and Remove it and its data… asks again, for this desktop alone (MK-4f). `befc94402` carries two
+  catalog files, `design-system/PluginsPreview.tsx` and `sections/PluginsSection.tsx`, unchanged from its draft, so it
+  commits 12 paths, not the 14 its draft named.
+- **UC-C** (`7502a019e`, `3c622ea20`): Updates lists its rows, an update that can do more stops at its card under its
+  row, Update all, and the window coming back fresh.
+- **MK-4d** (`bc1cc0f6b` … `f8f524176`): More in Plugins… at the pegboard's foot; a set shown after an install lands on
+  its first object; Show them on the pegboard; over Canvas the desk recedes with the frame under the popup; a removed
+  plugin's object keeps its name on the bar; Installed and What it adds say where a set hangs, by the pegboard's names.
+- **MK-4c2c** (`f6d665d94`, `2a726b950`, `9ca7a09f6`), by James's click on the board (2026-11-14 08:19:36Z, "Yes, add
+  them to the plugin's page"): Back to default and Remove the saved secret… on a plugin's page.
+- **MK-5** (`c0b23d057` … `b911f4b74`): Settings → Plugins keeps only what Plugins… can't hold yet, each plugin's
+  runtime moves to Diagnostics, and Installed says a plugin stopped after it kept crashing, or that the list no longer
+  names it.
+- **MK-6** (`c47ae9252`, `0a50f48fb`, `362c1a865`): `pnpm smoke:market` (desk-gates row 37) gates the popup over a
+  signed list of the run's own; smoke:canvas gates the pegboard's pill; a development plugin-list seam
+  (`FIELDD_PLUGIN_REGISTRY_URL`, `_KEY`) that a packaged fieldd refuses at boot; the catalog's narrow-window plate.
+- **The first fix** (`d25e1fab3`): plugin-update-card.test.ts's four booted rows waited on the registry's
+  stored row (`PluginRegistryService.get`), whose `service` is the manifest's and never "active"; they now read the
+  snapshot's, as `plugin-install-card.test.ts` does. No product file moved.
+- **The second fix** (`8df41b5b7`): "a card's Update takes the plugin as it is then: turned on, or a power off
+  and on" asserted the generation moved by exactly 2 after `storage.self` was turned off and on. The install reconciler
+  replays this desktop's own earlier "off" (item 437, main's code), so the row now waits until the grant is on and quiet
+  for 500 ms, within 15 s, then holds that the last decision stands and the generation moved at least twice. No product
+  file moved.
+- **The records**: DESIGN.md's four dated notes (the tag clause, §8's status, O3-C's "To be built", the placement laws);
+  UI_SYSTEM's catalog bullet with the plates mounted since MK-4a; DECISIONS' MK row LANDED, its open calls' state;
+  ROADMAP's §1 line, §2's MK block, the TD-4…TD-7 note, the James's-calls entry and the track row.
+
+**What is stubbed or not yet there.**
+- No packaged build configures a plugin list (`daemon.ts:716`), so Discover says "Nothing to discover yet" until the
+  registry rung (TD §9 TD-4); MK-6's seam is development's alone. No MK-3: the CI that writes `listing` is that rung's.
+- Settings → Plugins keeps the rows of plugins from the plugin list and of sideloaded ones, with their switches,
+  settings and Reset, until the popup can hold them (VF-PM 2026-11-14 04:33Z). MK-5b (Try again for a runtime that
+  failed) is owed.
+- smoke:market's CARRY and PICTURES rows are parked (CARRY until Discover draws the pegboard's categories, PICTURES
+  until MK-E9's window half, behind ob/ui's custody fix); each runs by name and is said on its run's line.
+- MK-7 (D8's token, D9's per-object switches) waits for ICE's door (I54), which James files after the v0.9.0 tag.
+- Words marked ‹draft› in DESIGN.md land as drafts, for James's eye.
+
+**The tests each slice added** (A new, M changed; 35 test files over `8af9b6c85`, 13 new and 22 changed):
+- A fieldd `plugin-community-statement.test.ts`, `plugin-install-download.test.ts`, `plugin-update-card.test.ts` (13;
+  the first fix moves its four booted rows, the second its off-then-on row), `registry-seam.test.ts`,
+  `registry-seam-packaged.test.ts` (it spawns a node child: a packaged fieldd's refusal); M
+  `app-preferences.integration.test.ts`, `plugin-community-hold.test.ts`, `plugin-install-gate.test.ts`,
+  `plugin-install-slots.test.ts`, `plugin-registry-community-hold.test.ts`.
+- A field-app `plugins-community.test.tsx`, `plugins-install.test.ts`, `plugins-remove.test.ts`,
+  `plugins-shelf.test.ts`, `plugins-updates.test.ts`; M `canvas-stage-desk`, `design-system`, `desk-object-words`,
+  `panels`, `pegboard-model`, `pegboard`, `plugins-model`, `plugins-popup`, `plugins-runtime-section`,
+  `plugins-settings`, `ui-system-boundaries`, `updates-section`.
+- A electron-shell `smoke-market.test.ts`, `smoke-more.test.ts`; M `fieldd-debug-swarm.test.ts`, `smoke-window.test.ts`.
+- M contracts `fixtures.test.ts`, `plugin-market.test.ts` (three new fixtures: the community statement, the update's
+  prepare params and result).
+- A dev-runner `market-smoke-fixture.test.mjs` (it spawnSyncs the stager); M `gate-landing.test.mjs`.
+
+**The witness.**
+- The stack's row on James's Mac (`lanes/mk/mk-stack/row-stack.sh` `66caa004`, 22:32:50Z to 22:35:41Z, at
+  `780e86887`, in lanes/mk/vibe-field under the env -i harness, Electron's dist held): RED, said plainly. The four
+  typechecks (contracts, fieldd, field-app, electron-shell), `pnpm check:walls` and biome over the 107 paths exit 0;
+  contracts 2 files, 768 tests; field-app 17, 448; electron-shell 4, 41; dev-runner 2, "ℹ tests 21", "ℹ pass 21", "ℹ
+  fail 0"; fieldd 10, "Test Files 1 failed | 9 passed (10)", "Tests 4 failed | 68 passed (72)": plugin-update-card's
+  four booted rows, each "until: 0.1.0's service — not met within 15000 ms". These rows had never run before: MK-UC's
+  code commit left them for V's list. Electron downloads x0; the lane returned to `ec3c08306`; refs equal (`run.log`
+  `9dd32b59f3f8e8fa`).
+- The first fix's row (`lanes/mk/fix-uc/row-ucfix.sh` `a9899f44`, 22:57:41Z to 22:58:37Z, at `ff50594ae`): RED,
+  said plainly. The typecheck and biome exit 0; 0 of 5 runs green, each "Tests 1 failed | 12 passed (13)", the three
+  other booted rows green and one more assert reached: "AssertionError: expected 3 to be 2" at
+  `plugin-update-card.test.ts:583` (`run.log` `9561fd5849aa1d7d`).
+- The read row (`lanes/mk/fix-uc2/row-ucdiag.sh` `a06433da`, 23:39:12Z to 23:39:25Z, at `ff50594ae` with a
+  diagnostic patch in its working tree alone, reversed by its trap): the grants ledger showed the person's revoke
+  (generation 1), the person's grant, the install reconciler's settings-doc revoke (3), then the grant's outcome; the
+  row read generation 3 with `storage.self` OFF when the person's last ON returned, and 2 s later 4, ON, by a
+  settings-doc grant (`run.log` `8081389384c5e006`). Its first try at 23:35Z stopped before any move on the script's own
+  bash 3.2 fault, `$TITLE…` under `set -u` (`run.log` `75a9e5c50b7fda01`).
+- The second fix's row (`lanes/mk/fix-uc2/row-ucfix2.sh` `57585cf6`, 23:48:15Z to 23:49:13Z, at `b5bf32d20`):
+  GREEN. The typecheck and biome exit 0; 5 of 5 runs, each "(13 tests)", "Test Files 1 passed (1)", "Tests 13 passed
+  (13)"; Electron downloads x0; the lane returned to `ec3c08306` (`run.log` `ec5f48610c180e74`).
+- `pnpm verify` whole at the stack's top, `8df41b5b7`, on James's Mac (qa-01's V): exit 0, 2026-11-15 00:25:00Z to
+  00:48:11Z, its log `e7eda9ecd3dcd99f`. Its booted-daemon, listen, spawn and signal files ran here on James's 19:42:10Z
+  word (VF-PM's reading).
+- At the cut: every commit through the hook ("siblings:render: the committed rows (staged) are the lock's"); 42 commits,
+  0 merges, 108 raw lines over `1877f7737`, every new or changed path 100644 (`AM/cut/cut.log` `eb0cc5f8`). At the
+  carry: 44 commits, 0 merges, the top `8df41b5b7` over `8af9b6c85`, each patch-id held, each tree the original's but
+  docs/LANDED.md, every new or changed path 100644 ("CARRY DONE", 2026-11-15 00:22:42Z; `mk-stack/carry-r11/carry.log`
+  `925e6028`).
+
+**Owed.**
+- `pnpm gate:landing`, deferred, not waived, at James's unlock: rows 20 smoke:kind-faults, 21 smoke:plugin-restart, 22
+  smoke:plugin and 29 smoke:bundled read MK's change, and row 37 smoke:market is MK-6's own.
+- James's eye on the popup in both themes, with the page of the words that land as drafts; the call still his (whether
+  an update reaches his other desktops); the two leans VF-PM holds until he says.
+- Items 431–436 (ROADMAP §2's MK block): 431, LAYOUT's fold of MK's three plugin files (C18); 432, the crash ladder's
+  constant (C35); 433 and 434, smoke:market's CARRY and PICTURES rows (C36); 435, the single executable's verify probe;
+  436, the setter's refusal text (C21).
+- Three rows of the inventory no slice built (`lanes/mk/mk-inventory/INVENTORY.md`): a plugin from the plugin list or a
+  Sideloaded one keeps its controls in Settings → Plugins until the popup can hold them (N18); a read's incompatible and
+  vanished entries are not logged (N24); pictures in the window, behind ob/ui's token side (N30).
+- Item 437 (main's code, DS wave 2's DS-5b): a grant a person turns off then on, on one desktop, is replayed by the
+  install reconciler from that desktop's own earlier "off"; the read row saw the power OFF with generation 3 when the
+  last ON returned, then ON at 4 within 2 s. It fails closed in between, and each extra move recycles the plugin's
+  principals. The mirror, read from source by RV and shown by no run (`lanes/rv/i437/READ.md`): a grant turned on then
+  off is granted again by the walk, and the plugin restarted with the power, until the off's publication lands; there it
+  does not fail closed. RV holds red rows for both, and the item is RV's.
+- MK-7 after ICE's door; James's commit-draft of MK-0d.
+
+**Not done, and not claimed:** no run on the old mini at any of the 44; no gate:landing; no Windows or iOS build (no
+path of the stack's is theirs).

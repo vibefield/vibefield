@@ -241,14 +241,29 @@ The catalog currently mounts these shipping views directly:
   now, this Mac not connected (TS-4's ghost row), filtered (the field's tokens and the button's,
   one state: SE-D2), a typed name's offer, + Filter's menu open, and Everything under Work
   (UM-D28) — never a copy of the Peek's markup
-- *not mounted yet — owed with the popup (MK-4 builds it, MK-6 its plates):* the Plugins popup (MK-D2, ruled
-  2026-11-11; DESIGN.md §8 "Plugins — the frame's second popup"), held to the Peek's rule: the
-  shipping controller over a fixture port, its scrim and popup drawn in the plate that stands for
-  the window and the staged view receding by the product's own rule; a plate per state the ruled
-  page draws — Discover with no registry ("No plugin registry yet") and over a fixture listing, the
-  community tile asking with its statement, a plugin's page, the install card and its progress,
-  Installed, Updates and a narrow window — never a copy of its markup or CSS, and no catalog CSS
-  owning a rule of the popup's
+- the Plugins popup (MK-D2, ruled 2026-11-11; DESIGN.md §8 "Plugins — the frame's second popup";
+  mounted at MK-4a, `PluginsPreview`), held to the Peek's rule: the shipping controller
+  (`frame/plugins/Plugins.tsx`) over a fixture port and fixture snapshots (`plugins-fixtures.ts`),
+  its scrim and popup drawn in a plate the size of the default window, a plate per state — Discover
+  with no plugin list ("Nothing to discover yet"), reading, offline, a list it couldn't use, a
+  list held, and fieldd not answering; Installed; a plugin's page, read only, for a Built in plugin
+  and for a community one the list names; Updates carrying its count; a plugin's switches (one
+  taken back, one it can't have; a Development plugin turned off; fieldd not answering); its
+  settings (one of each kind; a Development plugin turned off; all on this desktop; one VibeField
+  couldn't load); Discover holding a list of one featured set, and its shelf (the featured set,
+  then VibeField's, one needing a newer VibeField); a set this desktop doesn't have, its page read
+  from the list; Install pressed, the install card, Installing, and an install that didn't happen,
+  with Try again (O2-C); Updates' rows (one asks first, one needs a newer VibeField) and the update
+  card under its row (UC-C); Discover's community tile off, turning community plugins on with its
+  statement, and a community plugin held while community plugins are off, with its page (O3-C,
+  O3-D); and a narrow window, the popup clamped to it and a plugin's page in one column (MK-6), as
+  `sections/PluginsSection.tsx` holds them — never a copy of its markup or
+  CSS, and no catalog CSS owning a rule of the popup's. Owed: a plate of the statement at a
+  desktop's first community install (O3-D e), and Remove…'s question (O2-C's follow-up).
+  *Corrected 2026-11-14 (MK's records): this said "not mounted yet — owed with the popup (MK-4
+  builds it, MK-6 its plates)" and named Discover's empty plate "No plugin registry yet". MK-4a
+  mounted it with its plates (DESIGN.md §8's own correction, MK-4a's Q7), and Discover's words are
+  "Nothing to discover yet" since MK-O5 (James's pick, 2026-11-11 22:34:14Z).*
 - the desk's selection bar (DK-11): `SelectionBarView` over fixture selections, a plate per state —
   one object with its kind's own act (drawn by the bar's one path renderer), two ("Make a card";
   *amended 2026-11-14, item 400: this said "Send 2 to…"*), taped ("Lift the tape"), a missing face
