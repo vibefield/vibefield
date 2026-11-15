@@ -194,6 +194,9 @@ export const SWITCH_WORDS = {
   /** A switch fieldd refused to move: never the error's own text. */
   refused: (turningOn: boolean) =>
     turningOn ? "Couldn't turn it on. Try again." : "Couldn't turn it off. Try again.",
+  /** A plugin's switch refused while that plugin is updating (item 440, `PLUGIN_UPDATING`; §9,
+   * James's pick B). The sentence is a draft, ‹draft›, for James's eye. */
+  updating: "This plugin is updating. Try again in a moment.",
 } as const;
 
 /** A plugin's settings (MK-4c2b; DESIGN.md §8 "Its settings", §9 MK-4c2b's block, as corrected for James's MK-O6

@@ -258,6 +258,8 @@ export interface Refusal {
   readonly id: string;
   readonly capability: string | null;
   readonly turningOn: boolean;
+  /** fieldd refused it because the plugin is updating (`PLUGIN_UPDATING`, item 440): said in its own words */
+  readonly updating?: boolean;
 }
 
 /** Whether a snapshot shows a refused switch the way it was being turned, so

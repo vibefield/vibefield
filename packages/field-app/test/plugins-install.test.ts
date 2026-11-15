@@ -17,6 +17,7 @@ import {
   installLive,
   installRefusal,
   pageAct,
+  refusedWhileUpdating,
 } from "../src/frame/plugins/plugins-install";
 import { pluginsPortOver } from "../src/frame/plugins/plugins-port";
 import { listedPage } from "../src/frame/plugins/plugins-shelf";
@@ -436,6 +437,28 @@ describe("a refusal, worded by its kind and never its text (§8 'A failure'; the
     });
     for (const error of [slot, late, offline, unknownKind, new Error("no"), "no", null]) {
       expect(installRefusal(error)).toBe("failed");
+    }
+  });
+});
+
+describe("a switch refused while its plugin is updating, read by its kind alone (item 440; §9)", () => {
+  // fieldd's words for a switch behind an update; the window reads the kind, never them
+  const said = "vibefield.desk-things: updating; the switch was not applied";
+
+  it("reads a switch refused with the kind PLUGIN_UPDATING as its plugin updating", () => {
+    const updating = new FielddRpcError("PRECONDITION_FAILED", said, true, {
+      pluginKind: "PLUGIN_UPDATING",
+    });
+    expect(refusedWhileUpdating(updating), "the kind says the plugin is updating").toBe(true);
+  });
+
+  it("reads no other refusal as updating, whatever its text says", () => {
+    const noKind = new FielddRpcError("PRECONDITION_FAILED", said, true);
+    const otherKind = new FielddRpcError("PRECONDITION_FAILED", said, true, {
+      pluginKind: "PLUGIN_INCOMPATIBLE",
+    });
+    for (const error of [noKind, otherKind, new Error(said), said, null, undefined]) {
+      expect(refusedWhileUpdating(error)).toBe(false);
     }
   });
 });

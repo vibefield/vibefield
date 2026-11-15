@@ -64,6 +64,19 @@ export function installRefusal(error: unknown): InstallRefusal {
   return kind.success && kind.data === "PLUGIN_INCOMPATIBLE" ? "incompatible" : "failed";
 }
 
+/** Whether fieldd refused a switch because its plugin is updating (`details.pluginKind`, item 440): by its kind,
+ * never its text, as `installRefusal` reads one. */
+export function refusedWhileUpdating(error: unknown): boolean {
+  const details =
+    typeof error === "object" && error !== null ? (error as { details?: unknown }).details : null;
+  const kind = PluginErrorKind.safeParse(
+    typeof details === "object" && details !== null
+      ? (details as { pluginKind?: unknown }).pluginKind
+      : undefined,
+  );
+  return kind.success && kind.data === "PLUGIN_UPDATING";
+}
+
 /** One install under way, for one plugin, the only one: a second Install drops the first. */
 export interface InstallFlow {
   readonly id: string;
