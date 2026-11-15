@@ -370,6 +370,8 @@ async function desktop(
     calls?: RemovalCalls;
     /** test-only: the installer's first step, awaited before it refuses as it always has (the grant race's row) */
     install?: (id: string) => Promise<void>;
+    /** test-only: the teardown's own work, awaited after its call is recorded (the lane re-entry guard's row) */
+    teardown?: (id: string) => Promise<void>;
   } = {},
 ): Promise<Desktop> {
   const dataDir = mkdtempSync(join(tmpdir(), `vf-pa32-${name}-`));
@@ -409,6 +411,7 @@ async function desktop(
     } as unknown as RegistryInstallService,
     teardown: async (id: string) => {
       calls?.teardown.push(id);
+      await opts.teardown?.(id);
     },
     retire: (id: string) => {
       calls?.retire.push(id);
@@ -1452,5 +1455,105 @@ describe("the disable race, as an update's publication meets it", () => {
     // an install publication of a present entry writes its identity only (James's pick, 2026-11-15T01:22:08.253Z)
     expect((await entryOf(d))?.enabled, "the doc keeps the person's disable").toBe(false); // RED today
     expect(d.registry.record.enabled, "a walk turns the flipped record off again").toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// The lane re-entry guard (items 440 and 441). A plugin's lane is first come, first served, and not re-entrant: a
+// lane act or a walk section asked for under its own context's hold on that plugin's lane would wait behind itself
+// forever. The guard refuses it at once with its words (`LaneReenteredError`), so a re-entry is an error, never a hang.
+
+describe("the lane re-entry guard: a lane asked for under its own hold is refused, never waited for", () => {
+  it("a walk's teardown that asks for the plugin's lane parks the entry with the guard's words", async () => {
+    const calls = removalCalls();
+    let asked: Promise<unknown> | undefined;
+    const d = await desktop("A", {
+      calls,
+      teardown: async (id) => {
+        // a callback run under the walk's hold on this plugin's lane asks for that lane again
+        asked = d.reconciler.localAct(id, "enable", async () => ({ record: undefined, value: 1 }));
+        await asked;
+      },
+    });
+    await d.settings.setInstallSetEntry(
+      { pluginId: PA32_ID, source: "bundled", enabled: false, grants: [] },
+      "seed",
+    );
+    // the doc says off and the record on: the walk disables the plugin and tears it down, under its hold
+    const walk = d.reconciler.reconcile();
+    const ended = await Promise.race([
+      walk.then(() => "ended"),
+      pause(1000).then(() => "still waiting"),
+    ]);
+
+    expect(ended, "the walk ends: a re-entry is refused, never queued behind itself").toBe("ended"); // RED: a hang
+    await expect(asked, "the guard refuses the re-entry").rejects.toThrow(/lane re-entered/);
+    expect(
+      calls.logs.some(
+        (log) =>
+          log.event === "fieldd.install_reconciler.entry_parked" &&
+          /lane re-entered/.test(String(log.attrs?.error)),
+      ),
+      "the walk's entry is parked with the guard's words",
+    ).toBe(true);
+    // the lane is free after it: a later act completes at once
+    const two = async () => ({ record: undefined, value: 2 });
+    const after = d.reconciler.localAct(PA32_ID, "enable", two);
+    expect(await Promise.race([after, pause(1000).then(() => -1)])).toBe(2);
+  });
+});
+
+describe("the lane's booted witness (row B; items 440 and 441): a real callback under the lane never re-enters", () => {
+  it("a walk's disable on a booted daemon tears the plugin down under its lane, and ends (path 1)", {
+    timeout: 60_000,
+  }, async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-rec-rowb-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+    writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+    await mock.start();
+    cleanup.push(() => mock.stop());
+    const registry = await setupRegistry();
+    const seed = new SettingsDocService({ dataDir });
+    await seed.setInstallSetEntry(
+      { pluginId: KV_ID, source: "registry", version: "0.1.0", enabled: true, grants: [] },
+      "another-desktop",
+    );
+    await seed.dispose();
+
+    let first: FielddDaemon | null = await bootstrap({
+      dataDir,
+      controlPort: 0,
+      registryUrl: registry.registryUrl,
+      registryPublicKey: registry.publicKey,
+    });
+    cleanup.push(async () => {
+      if (first !== null) await first.stop();
+    });
+    await until(() => first?.plugins.get(KV_ID)?.enabled === true, 20_000, "installed and on");
+    await first.stop();
+    first = null;
+
+    // another desktop turns it off, written into the doc this test owns while fieldd is down
+    const peer = new SettingsDocService({ dataDir });
+    await peer.setInstallSetEntry(
+      { pluginId: KV_ID, source: "registry", version: "0.1.0", enabled: false, grants: [] },
+      "another-desktop",
+    );
+    await peer.dispose();
+
+    // the boot's walk disables it here: its real teardown runs under the plugin's lane. A callback there that asked
+    // for that lane would hang the walk (before the guard) or park the entry with the guard's words (after it):
+    // either way the plugin would not end off, audited as succeeded, inside the bound
+    const second = await boot(dataDir, registry);
+    await until(() => second.plugins.get(KV_ID)?.enabled === false, 20_000, "off by the walk");
+    await untilAuditOutcome(dataDir, "plugin.disable", 20_000);
+    const disable = (await auditRecords(dataDir)).filter((r) => r.action === "plugin.disable");
+    expect(disable.map((r) => [r.phase, r.outcome ?? null])).toEqual([
+      ["attempt", null],
+      ["outcome", "succeeded"],
+    ]);
+    expect(disable[0]?.attrs).toMatchObject({ origin: "settings-doc" });
   });
 });
