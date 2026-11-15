@@ -51,6 +51,14 @@ export interface GrantAct {
   changed: boolean;
 }
 
+/** What a person's grant act hands back from its own work (`grantAct`): the record to publish, whether this
+ * device's grants moved, and what the caller answers. */
+export interface GrantMove<T> {
+  record: PluginRecord;
+  changed: boolean;
+  value: T;
+}
+
 const BIAS_REASON_CODES: Record<Exclude<StandingReason, "decision">, string> = {
   "revocation-bias": "REVOCATION_BIAS",
   "stamp-ahead": "REVOCATION_STAMP_AHEAD",
@@ -77,6 +85,17 @@ export class InstallSetReconciler {
   private queued = false;
   /** MK-2c (2026-11-11): per plugin id, the index `generatedAt` its community refusal was last said for */
   private readonly communityRefused = new Map<string, number>();
+  /** The grant race (2026-11-15): one lane per plugin. A person's grant act (`grantAct`) holds it from before its
+   * registry move until its publication settles; a walk's grant section (`applyGrants`) holds it while it reads the
+   * doc's decisions and the record and makes its powers. Neither interleaves with the other, so a walk never
+   * applies a decision older than a person's act over it. First come, first served: each entrant waits for the
+   * tail it found (`enter`). */
+  private readonly lanes = new Map<string, Promise<void>>();
+  /** Per plugin, the revocations a person made here whose publication PARKED: the doc never got them, and its
+   * standing grant is older than this device's act. While one stands, no walk GRANTS that capability here (it may
+   * always revoke); the walk retries the publication, and the first of the plugin's publications that commits
+   * carries it and clears it. A later act on the capability supersedes it. In memory: a restart forgets it. */
+  private readonly parkedRevokes = new Map<string, Set<string>>();
 
   constructor(private readonly cfg: InstallReconcilerConfig) {
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "plugin.install.reconciler" });
@@ -272,61 +291,157 @@ export class InstallSetReconciler {
       record = this.cfg.plugins.get(entry.pluginId) ?? record;
     }
 
-    // grant decisions — the STANDING decision (PA-32: a grant that missed a
-    // revocation stands as revoked), an idempotent diff; any movement
-    // recycles principals
-    let moved = false;
-    for (const g of entry.grants) {
-      const standing = standingDecision(entry, g);
-      const wantGranted = standing.granted;
-      const isGranted = record.grantedCapabilities.includes(g.capability);
-      const isDeniedRevoked = record.deniedCapabilities.some(
-        (d) => d.capability === g.capability && d.reason === "revoked",
-      );
-      const matches = wantGranted ? isGranted || !isDeniedRevoked : !isGranted && isDeniedRevoked;
-      if (matches) continue;
-      if (!record.requestedCapabilities.includes(g.capability)) continue; // never grant the unrequested
-      const biased = standing.reason !== "decision";
-      const stamps = {
-        revocationGeneration: entry.revocationGenerations?.[g.capability] ?? 0,
-        decisionGeneration: g.revocationGeneration ?? 0,
-      };
-      const { changed } = await this.cfg.audit.requiredSystem(
-        {
-          action: wantGranted ? "capability.grant" : "capability.revoke",
-          target: { kind: "capability", id: g.capability, parentId: entry.pluginId },
-          ...(standing.reason !== "decision"
-            ? { reasonCode: BIAS_REASON_CODES[standing.reason] }
-            : {}),
-          attrs: {
-            origin: "settings-doc",
-            pluginId: entry.pluginId,
-            granted: wantGranted,
-            decisionAt: g.at,
-            ...stamps,
-            ...(biased ? { reason: standing.reason } : {}),
-          },
-        },
-        () => this.cfg.plugins.setGrant(entry.pluginId, g.capability, wantGranted),
-        (result) => ({
-          attrs: {
-            origin: "settings-doc",
-            pluginId: entry.pluginId,
-            capability: g.capability,
-            granted: wantGranted,
-            changed: result.changed,
-            grantGeneration: result.record.grantGeneration,
-            ...stamps,
-            ...(biased ? { reason: standing.reason } : {}),
-          },
-        }),
-      );
-      moved = moved || changed;
-    }
+    // grant decisions, in the plugin's lane (the grant race): read afresh there, never from this walk's start
+    const { moved, held } = await this.applyGrants(entry.pluginId);
+    if (held) void this.publish(this.cfg.plugins.get(entry.pluginId) ?? record, "grants");
     if (moved) {
       await this.cfg.teardown(entry.pluginId);
       if (record.enabled) this.cfg.restart(entry.pluginId);
     }
+  }
+
+  /** The grant section of a walk, in the plugin's lane. The doc's decisions and the record are read INSIDE the
+   * lane: a person's act on this plugin is either wholly before (its publication committed, so its decision is the
+   * doc's) or wholly after (and it is the last word). The STANDING decision (PA-32: a grant that missed a
+   * revocation stands as revoked), an idempotent diff; `moved` tells the caller to recycle principals, `held` that
+   * a parked revocation withheld a grant (the caller retries its publication). At most one audited `setGrant` per
+   * requested decision of the entry, and one doc read: the lane's longest hold by a walk. */
+  private async applyGrants(pluginId: string): Promise<{ moved: boolean; held: boolean }> {
+    const release = await this.enter(pluginId);
+    try {
+      const entry = (await this.cfg.settingsDoc.installSet())[pluginId];
+      const record = this.cfg.plugins.get(pluginId);
+      if (entry === undefined || record === undefined) return { moved: false, held: false };
+      if (record.source === "dev-linked" || record.source === "sideload")
+        return { moved: false, held: false };
+      let moved = false;
+      let held = false;
+      for (const g of entry.grants) {
+        const standing = standingDecision(entry, g);
+        const wantGranted = standing.granted;
+        const isGranted = record.grantedCapabilities.includes(g.capability);
+        const isDeniedRevoked = record.deniedCapabilities.some(
+          (d) => d.capability === g.capability && d.reason === "revoked",
+        );
+        const matches = wantGranted ? isGranted || !isDeniedRevoked : !isGranted && isDeniedRevoked;
+        if (matches) continue;
+        if (!record.requestedCapabilities.includes(g.capability)) continue; // never grant the unrequested
+        // a revocation of this device's whose publication parked is newer than the doc's standing grant: held, the
+        // publication retried; a revoke is never held
+        if (wantGranted && this.parkedRevokes.get(pluginId)?.has(g.capability) === true) {
+          held = true;
+          this.log.info(
+            "fieldd.install_reconciler.grant_held",
+            "A synced grant is held: this device's revocation has not reached the document yet",
+            { pluginId, capability: g.capability },
+          );
+          continue;
+        }
+        const biased = standing.reason !== "decision";
+        const stamps = {
+          revocationGeneration: entry.revocationGenerations?.[g.capability] ?? 0,
+          decisionGeneration: g.revocationGeneration ?? 0,
+        };
+        const { changed } = await this.cfg.audit.requiredSystem(
+          {
+            action: wantGranted ? "capability.grant" : "capability.revoke",
+            target: { kind: "capability", id: g.capability, parentId: entry.pluginId },
+            ...(standing.reason !== "decision"
+              ? { reasonCode: BIAS_REASON_CODES[standing.reason] }
+              : {}),
+            attrs: {
+              origin: "settings-doc",
+              pluginId: entry.pluginId,
+              granted: wantGranted,
+              decisionAt: g.at,
+              ...stamps,
+              ...(biased ? { reason: standing.reason } : {}),
+            },
+          },
+          () => this.cfg.plugins.setGrant(entry.pluginId, g.capability, wantGranted),
+          (result) => ({
+            attrs: {
+              origin: "settings-doc",
+              pluginId: entry.pluginId,
+              capability: g.capability,
+              granted: wantGranted,
+              changed: result.changed,
+              grantGeneration: result.record.grantGeneration,
+              ...stamps,
+              ...(biased ? { reason: standing.reason } : {}),
+            },
+          }),
+        );
+        moved = moved || changed;
+      }
+      return { moved, held };
+    } finally {
+      release();
+    }
+  }
+
+  /** The grant race: wait for this plugin's lane, first come first served, and get its release. `prior` never
+   * rejects (a hold only resolves), so a failed holder cannot wedge the lane: every holder releases in a finally. */
+  private enter(pluginId: string): Promise<() => void> {
+    const prior = this.lanes.get(pluginId) ?? Promise.resolve();
+    let release: () => void = () => undefined;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tail = prior.then(() => hold);
+    this.lanes.set(pluginId, tail);
+    void tail.then(() => {
+      if (this.lanes.get(pluginId) === tail) this.lanes.delete(pluginId);
+    });
+    return prior.then(() => release);
+  }
+
+  /** A person's grant act on this desktop (`plugins.grants.set`), in the plugin's lane from before its registry
+   * move until its publication settles. `move` is the handler's own work: the registry, the principals' recycle,
+   * and the record to publish. The caller's promise settles when `move` does; the publication stays
+   * fire-and-forget to the caller (it catches), and only the lane waits for it. Once its move is done, the act
+   * supersedes a parked revocation of the same capability: its own decision is the registry's, and it is written. */
+  async grantAct<T>(
+    pluginId: string,
+    capability: string,
+    granted: boolean,
+    move: () => Promise<GrantMove<T>>,
+  ): Promise<T> {
+    const release = await this.enter(pluginId);
+    let out: GrantMove<T>;
+    try {
+      out = await move();
+    } catch (e) {
+      // the registry may have moved before the handler failed: a revocation that stands here and was never
+      // published is parked, as a failed publication's is
+      if (!granted && this.revokedHere(pluginId, capability)) this.park(pluginId, capability);
+      release();
+      throw e;
+    }
+    this.unpark(pluginId, capability);
+    const act: GrantAct = { capability, granted, changed: out.changed };
+    void this.publish(out.record, "grants", act).finally(release);
+    return out.value;
+  }
+
+  private revokedHere(pluginId: string, capability: string): boolean {
+    const record = this.cfg.plugins.get(pluginId);
+    return (record?.deniedCapabilities ?? []).some(
+      (d) => d.capability === capability && d.reason === "revoked",
+    );
+  }
+
+  private park(pluginId: string, capability: string): void {
+    const parked = this.parkedRevokes.get(pluginId) ?? new Set<string>();
+    parked.add(capability);
+    this.parkedRevokes.set(pluginId, parked);
+  }
+
+  private unpark(pluginId: string, capability: string): void {
+    const parked = this.parkedRevokes.get(pluginId);
+    if (parked === undefined) return;
+    parked.delete(capability);
+    if (parked.size === 0) this.parkedRevokes.delete(pluginId);
   }
 
   /** device → doc: publish what one LOCAL act decided — an install's identity
@@ -340,6 +455,8 @@ export class InstallSetReconciler {
       try {
         await this.publishInner(record, action, act);
       } catch (e) {
+        // a revocation that never reached the doc is held here until one does (`parkedRevokes`)
+        if (act !== undefined && !act.granted) this.park(record.id, act.capability);
         this.log.warn(
           "fieldd.install_reconciler.publish_parked",
           "An install-set publication failed; the next mutation republishes",
@@ -411,6 +528,9 @@ export class InstallSetReconciler {
         revoke.add(denied.capability);
       }
     }
+    // a revocation of this device's whose publication parked rides the plugin's next publication that commits
+    const carried = [...(this.parkedRevokes.get(record.id) ?? [])];
+    for (const capability of carried) revoke.add(capability);
     if (revoke.size > 0) change.revoke = [...revoke];
     if (grant.length > 0) change.grant = grant;
     const attrs = {
@@ -433,6 +553,7 @@ export class InstallSetReconciler {
         attrs: { ...attrs, revocationGenerations: written.revocationGenerations },
       }),
     );
+    for (const capability of carried) this.unpark(record.id, capability);
   }
 
   async unpublish(pluginId: string, by: string): Promise<void> {

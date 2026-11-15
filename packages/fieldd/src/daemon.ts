@@ -8093,51 +8093,57 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           attrs: { pluginId: id, granted },
         },
         async () => {
-          const previous = plugins.get(id);
-          const { record, changed } = await plugins.setGrant(id, capability, granted);
-          let revoked = { count: 0, tokenIds: [] as string[] };
-          if (changed) {
-            revoked = tokens.revokeByPlugin(id);
-            api.dropPluginConnections(id);
-            const priorServiceAuthority =
-              previous === undefined
-                ? undefined
-                : projectPluginAuthority("service", previous.grantedCapabilities).fingerprint;
-            const nextServiceAuthority = projectPluginAuthority(
-              "service",
-              record.grantedCapabilities,
-            ).fingerprint;
-            const serviceAuthorityChanged = priorServiceAuthority !== nextServiceAuthority;
-            const serviceReconcile = serviceHost?.start(id).catch((error) => {
-              logger
-                .child({ component: "plugin.service.host" })
-                .error(
-                  "fieldd.plugin_service.grant_reconcile_failed",
-                  "Plugin service could not converge after a grant change",
-                  error,
-                  { pluginId: id, grantGeneration: record.grantGeneration },
-                );
-            });
-            if (serviceAuthorityChanged) {
-              await processes.killPlugin(id);
-              endpoints.withdrawPlugin(id); // §15.4 — service-owned endpoints withdraw
-            }
-            mcp.refreshContributed();
-            await serviceReconcile;
-            logger
-              .child({ component: "plugin.grants" })
-              .info("fieldd.plugin_grants.changed", "Plugin grant changed; principals recycled", {
-                pluginId: id,
-                capability,
-                granted,
-                grantGeneration: record.grantGeneration,
+          // The grant race (2026-11-15): the act runs in the plugin's lane, from before its registry move until
+          // its publication settles, so no reconciler walk applies an older decision over it (`grantAct`)
+          const move = async () => {
+            const previous = plugins.get(id);
+            const { record, changed } = await plugins.setGrant(id, capability, granted);
+            let revoked = { count: 0, tokenIds: [] as string[] };
+            if (changed) {
+              revoked = tokens.revokeByPlugin(id);
+              api.dropPluginConnections(id);
+              const priorServiceAuthority =
+                previous === undefined
+                  ? undefined
+                  : projectPluginAuthority("service", previous.grantedCapabilities).fingerprint;
+              const nextServiceAuthority = projectPluginAuthority(
+                "service",
+                record.grantedCapabilities,
+              ).fingerprint;
+              const serviceAuthorityChanged = priorServiceAuthority !== nextServiceAuthority;
+              const serviceReconcile = serviceHost?.start(id).catch((error) => {
+                logger
+                  .child({ component: "plugin.service.host" })
+                  .error(
+                    "fieldd.plugin_service.grant_reconcile_failed",
+                    "Plugin service could not converge after a grant change",
+                    error,
+                    { pluginId: id, grantGeneration: record.grantGeneration },
+                  );
               });
-          }
-          const latest = plugins.get(id) ?? record;
+              if (serviceAuthorityChanged) {
+                await processes.killPlugin(id);
+                endpoints.withdrawPlugin(id); // §15.4 — service-owned endpoints withdraw
+              }
+              mcp.refreshContributed();
+              await serviceReconcile;
+              logger
+                .child({ component: "plugin.grants" })
+                .info("fieldd.plugin_grants.changed", "Plugin grant changed; principals recycled", {
+                  pluginId: id,
+                  capability,
+                  granted,
+                  grantGeneration: record.grantGeneration,
+                });
+            }
+            const latest = plugins.get(id) ?? record;
+            return { record: latest, changed, value: { record: latest, changed, revoked } };
+          };
+          const lane = reconciler;
+          if (lane === null) return (await move()).value; // before the reconciler exists: nothing publishes yet
           // §16.6 — decisions sync: THIS decision, never the record's whole
-          // grant state (DS-5b, PA-32)
-          void reconciler?.publish(latest, "grants", { capability, granted, changed });
-          return { record: latest, changed, revoked };
+          // grant state (DS-5b, PA-32); `grantAct` publishes it
+          return await lane.grantAct(id, capability, granted, move);
         },
         ({ record, changed, revoked }) => ({
           attrs: {

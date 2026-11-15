@@ -483,13 +483,15 @@ async function reconnect(a: Desktop, b: Desktop, order: "A first" | "B first"): 
 /** The user revokes or grants on this desktop, as `plugins.grants.set` does it:
  * the device-local decision, the handler's own audit row, then the publication. */
 async function decide(d: Desktop, capability: string, granted: boolean): Promise<void> {
-  const { record, changed } = await d.registry.setGrant(PA32_ID, capability, granted);
-  d.audit.push({
-    action: granted ? "capability.grant" : "capability.revoke",
-    capability,
-    origin: "local",
+  await d.reconciler.grantAct(PA32_ID, capability, granted, async () => {
+    const { record, changed } = await d.registry.setGrant(PA32_ID, capability, granted);
+    d.audit.push({
+      action: granted ? "capability.grant" : "capability.revoke",
+      capability,
+      origin: "local",
+    });
+    return { record, changed, value: undefined };
   });
-  await d.reconciler.publish(record, "grants", { capability, granted, changed });
   await settle(d);
 }
 
@@ -912,22 +914,39 @@ function traceGrants(d: Desktop, capability: string): Trace {
   return trace;
 }
 
-/** The person's act up to the handler's gap: the registry moved, the handler's own audit row, NO publication.
- * The returned function is the rest of the handler: `latest` read after the recycle (daemon.ts, `plugins.grants.set`),
- * then `publish`; its promise is the publication's. */
+/** The person's act up to the handler's gap, through the lane as the handler goes: the registry moved, the
+ * handler's own audit row, the recycle held by the row. The returned function is the rest of the handler: `latest`
+ * read after the recycle, then the publication `grantAct` starts; its promise is the handler's return. */
 async function actInGap(
   d: Desktop,
   capability: string,
   granted: boolean,
 ): Promise<() => Promise<void>> {
-  marks.get(d)?.();
-  const { changed } = await d.registry.setGrant(PA32_ID, capability, granted);
-  d.audit.push({
-    action: granted ? "capability.grant" : "capability.revoke",
-    capability,
-    origin: "local",
+  let moved: () => void = () => undefined;
+  const inGap = new Promise<void>((resolve) => {
+    moved = resolve;
   });
-  return () => d.reconciler.publish(d.registry.record, "grants", { capability, granted, changed });
+  let recycled: () => void = () => undefined;
+  const recycle = new Promise<void>((resolve) => {
+    recycled = resolve;
+  });
+  const done = d.reconciler.grantAct(PA32_ID, capability, granted, async () => {
+    marks.get(d)?.();
+    const { changed } = await d.registry.setGrant(PA32_ID, capability, granted);
+    d.audit.push({
+      action: granted ? "capability.grant" : "capability.revoke",
+      capability,
+      origin: "local",
+    });
+    moved();
+    await recycle; // the handler's recycle, held by the row
+    return { record: d.registry.record, changed, value: undefined };
+  });
+  await inGap;
+  return async () => {
+    recycled();
+    await done;
+  };
 }
 
 const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
