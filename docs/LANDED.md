@@ -50496,3 +50496,25 @@ when things done and push to remote"; and VF-PM's GO.)
 
 **Not done, and not claimed:** no run on the old mini at any of the 44; no gate:landing; no Windows or iOS build (no
 path of the stack's is theirs).
+
+## MK — the update card's rows wait for the settings doc to hold each act (M309)
+
+(2026-11-15; one commit on main `60a75602a`, `635eb8430`, `packages/fieldd/test/plugin-update-card.test.ts` alone,
+landed by the fixer at 01:37:41Z on VF-PM's GO. The push of 01:02:27Z had gone red on this file and sent nothing. The
+push of 02:16:32Z sent it with the plugin market: main and origin at `635eb8430`.)
+
+- What it is, test-only: each row of the file waits, at a person's on, off or grant after an install, an update or a
+  publication, until the settings doc's own entry for the plugin and the registry's row name the same version and the
+  same on or off for 500 ms (`agreed`); ten waits in all. The red it answers: the push's whole verify on James's Mac,
+  2026-11-15 01:02:27Z to 01:09:53Z, "expected [ '0.3.0', true ] to deeply equal [ '0.3.0', false ]", the test stage's
+  load 84.
+- What it does not fix: item 440, RV's. A publication that one act raised can be walked in a later act's gap, or commit
+  after it, and turn on a plugin the person turned off; a card's commit would then carry that flip into the doc (RV's
+  sighting, `lanes/rv/i437/SIGHTING-440.md`). RV holds the red rows.
+- Proven on James's Mac: `lanes/mk/fix-uc3/row-ucfix3.sh`, GREEN, 10 of 10 runs, each "Tests 13 passed (13)" (`run.log`
+  `e066b298385fbfd9`), with the Keychains folder's listing read by name every 5 s through it: 30 listings, none
+  different from the one before the run. The push's hook then ran the whole verify in 34 minutes and exited 0 at every
+  stage, so git sent. Its saved log (`push-20261115T014238Z.log`, `f450f13d4a20ed5d`) is cut mid-line inside fieldd's
+  test block, so fieldd's own summary line is on no record of that run. qa-01's row-i447 then ran fieldd's suite whole
+  at `9d9a51d82` (main `635eb8430` and the one-commit ssh test fix): "Test Files 284 passed | 5 skipped (289)", "Tests
+  4013 passed | 15 skipped (4028)" (`lanes/clean-run/i447/row-i447/run.log` `eed6ec12752fe07d`).

@@ -5604,7 +5604,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     way back are on its page (§8 "Its settings", "Its way back"), and its runtime is in Settings →
     Diagnostics. *Superseded 2026-11-14, at its source:* James's MK-O24 pick A (2026-11-12 06:11:09Z,
     the option "No Reset here: a default is set back in Settings → Plugins") kept such a plugin here,
-    for its **Reset** alone; his click on the PM board, 2026-11-14 08:19:36Z, card j-mk-readings, "Yes, add them to the plugin's page", moved its way back to its page (MK-4c2c).
+    for its **Reset** alone; his click on the PM board, 2026-11-14 08:19:36Z, "Yes, add them to the plugin's page",
+    moved its way back to its page (MK-4c2c).
   - **A plugin from the plugin list, or a Sideloaded one**, keeps its row whole, as it stood: its
     switch, **Settings +** with **Reset**, **Capabilities +** and fieldd's error in its own text, all
     after one line, "Plugins… can't turn these on or off yet, so they keep their switches here.",
@@ -7504,8 +7505,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         unchanged.
       - It shows none of Settings' insides: no mark for where a setting is kept or that it is the default, no
         setting's id, and no **Reset**. Going back to a default stays in Settings → Plugins (MK-4c2's C2).
-        *Corrected 2026-11-14, at its source (James's click on the PM board, 2026-11-14 08:19:36Z, card
-        j-mk-readings, "Yes, add them to the plugin's page"; MK-4c2c):* going back to a default is on the page, and
+        *Corrected 2026-11-14, at its source (James's click on the PM board, 2026-11-14 08:19:36Z,
+        "Yes, add them to the plugin's page"; MK-4c2c):* going back to a default is on the page, and
         so is removing a saved secret (**Its way back**, below). Its marks and its id stay out, and so does the word
         **Reset**.
         *Built 2026-11-14 (MK-5; VF-PM 04:33Z, the inventory's A2, over MK-5's ask 1):* a Built in or Development
@@ -7529,8 +7530,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - A setting is read as the page opens and again after its own change. Nothing re-reads on its own while the
         page is open: a change made in Settings, its Undo included, or on another desktop shows at the page's next
         opening.
-      - **Its way back** (*drawn 2026-11-14, MK-4c2c; James's click on the PM board, 2026-11-14 08:19:36Z, card
-        j-mk-readings, "Yes, add them to the plugin's page"; VF-PM 08:33:16Z*; ‹draft› for James's eye, its words
+      - **Its way back** (*drawn 2026-11-14, MK-4c2c; James's click on the PM board, 2026-11-14 08:19:36Z,
+        "Yes, add them to the plugin's page"; VF-PM 08:33:16Z*; ‹draft› for James's eye, its words
         in §9 "The plugins' words"): a setting that is kept carries an act under its words, in the page's quiet
         button (**Remove…**'s). It stands only while one is kept, so it marks neither where nor whether: a setting
         at its default carries none.
@@ -9770,7 +9771,7 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   - A failure is worded by its kind, never by fieldd's own text (§8, "A failure"): one this VibeField can't run says
     "Needs a newer VibeField" where its act stood, with no **Try again** (MK-4e's words, above); every other says the
     one line above, "VibeField didn't install ‹plugin›. Nothing changed.", with **Try again**. James picked three
-    plain lines for fieldd's install errors (his pick A on the PM board's j-mk-install-error-words, 2026-11-12
+    plain lines for fieldd's install errors (his pick A on the PM board, 2026-11-12
     05:38:39Z: "Couldn't install this plugin. Nothing was changed.", "This install took too long. Press Install
     again.", "This plugin is already installed."); they stay fieldd's words, which the window never prints.
 - **Updates** (MK-D5, MK-D11; MK-E6). The tab's head says "1 update · checked 14:02", or "Everything is up to date ·
@@ -9978,7 +9979,7 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   - A secret that is kept says "Saved" in its empty field; the page never shows what is kept.
   - A choice with nothing chosen yet says "Choose…" (Settings' word).
   - A setting the page can't draw says "This setting can't be changed here."
-  - *Added 2026-11-14 (MK-4c2c; James's click on the PM board, 2026-11-14 08:19:36Z, card j-mk-readings, "Yes,
+  - *Added 2026-11-14 (MK-4c2c; James's click on the PM board, 2026-11-14 08:19:36Z, "Yes,
     add them to the plugin's page"), MK's words, ‹draft›, for James's after-land list:* a kept setting's act says
     "Back to default"; a kept secret's says "Remove the saved secret…", whose question says "This deletes the
     saved secret. To use it again, you type it in again." over **Cancel** and **Remove** (Remove…'s own); a
