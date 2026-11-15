@@ -301,7 +301,8 @@ pub mod layout {
     pub const PLUGIN_RECORDS_FILE: &[&str] = &["fieldd", "plugins", "install-records.json"];
     pub const PLUGIN_CATALOG_DIR: &[&str] = &["plugins", "catalog"];
     pub const PLUGIN_CATALOG_HELD_FILE: &[&str] = &["plugins", "catalog", "held.json"];
-    pub const PLUGIN_COMMUNITY_STATEMENT_FILE: &[&str] = &["fieldd", "plugins", "community-statement.json"];
+    pub const PLUGIN_COMMUNITY_STATEMENT_FILE: &[&str] =
+        &["fieldd", "plugins", "community-statement.json"];
     pub const NATIVE_DIR: &[&str] = &["native"];
     pub const NATIVE_RUN_DIR: &[&str] = &["native", "run"];
     pub const PAIRING_FILE: &[&str] = &["native", "pairing"];
@@ -393,7 +394,10 @@ pub mod layout {
         ("PLUGIN_RECORDS_FILE", PLUGIN_RECORDS_FILE),
         ("PLUGIN_CATALOG_DIR", PLUGIN_CATALOG_DIR),
         ("PLUGIN_CATALOG_HELD_FILE", PLUGIN_CATALOG_HELD_FILE),
-        ("PLUGIN_COMMUNITY_STATEMENT_FILE", PLUGIN_COMMUNITY_STATEMENT_FILE),
+        (
+            "PLUGIN_COMMUNITY_STATEMENT_FILE",
+            PLUGIN_COMMUNITY_STATEMENT_FILE,
+        ),
         ("NATIVE_DIR", NATIVE_DIR),
         ("NATIVE_RUN_DIR", NATIVE_RUN_DIR),
         ("PAIRING_FILE", PAIRING_FILE),

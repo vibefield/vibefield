@@ -38,6 +38,27 @@ const OUT = join(HERE, "..", "..", "field-native", "src", "registries.rs");
 // Committed machine artifact for non-TS consumers (dev-runner .mjs) — UA-D10.
 const LAYOUT_JSON = join(HERE, "..", "gen", "layout.json");
 
+// rustfmt's own defaults, which `cargo fmt --check` holds this file to: a line is at most
+// `max_width` (100) columns, and a tuple's items, like a call's arguments, at most
+// `fn_call_width` (60) before it goes one item a line. A LAYOUT row whose name passes either is
+// emitted as rustfmt wraps it, so the file stays rustfmt-stable for any name. An array's own
+// break (`array_width`, 60) is not taught: no row's segments come near it.
+const RUSTFMT_MAX_WIDTH = 100;
+const RUSTFMT_FN_CALL_WIDTH = 60;
+
+function layoutConst(k: string, v: readonly string[]): string[] {
+  const value = `&[${v.map((s) => `"${s}"`).join(", ")}];`;
+  const line = `    pub const ${k}: &[&str] = ${value}`;
+  if (line.length <= RUSTFMT_MAX_WIDTH) return [line];
+  return [`    pub const ${k}: &[&str] =`, `        ${value}`];
+}
+
+function layoutEntry(k: string): string[] {
+  const items = `"${k}", ${k}`;
+  if (items.length <= RUSTFMT_FN_CALL_WIDTH) return [`        (${items}),`];
+  return ["        (", `            "${k}",`, `            ${k},`, "        ),"];
+}
+
 const lines: string[] = [
   "// GENERATED from @vibefield/contracts src/registries.ts — do not edit.",
   "// Regenerate: `pnpm gen` (root) or `pnpm --filter @vibefield/contracts gen:rust`.",
@@ -199,12 +220,10 @@ const lines: string[] = [
   "/// UA-D10 — the on-disk layout under a data root, as segments. One authority;",
   "/// consumers join, never respell. Pinned by fixtures/layout.vector.json.",
   "pub mod layout {",
-  ...Object.entries(LAYOUT).map(
-    ([k, v]) => `    pub const ${k}: &[&str] = &[${v.map((s) => `"${s}"`).join(", ")}];`,
-  ),
+  ...Object.entries(LAYOUT).flatMap(([k, v]) => layoutConst(k, v)),
   "    /// Every entry, for the cross-language fixture test.",
   "    pub const ALL: &[(&str, &[&str])] = &[",
-  ...Object.keys(LAYOUT).map((k) => `        ("${k}", ${k}),`),
+  ...Object.keys(LAYOUT).flatMap((k) => layoutEntry(k)),
   "    ];",
   "}",
   "",
