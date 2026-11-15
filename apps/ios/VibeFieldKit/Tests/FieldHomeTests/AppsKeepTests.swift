@@ -142,12 +142,12 @@ struct AppsKeepTests {
     // its fifth line
     let stopFailed = await feed.mark(app, kept: false)
     #expect(stopFailed == "Couldn't stop keeping Release notes.")
-    // past MADE_APP_LIMITS.INTENTS: the card's third line, the desk's (on the phone ‹draft›, DESIGN.md §9)
+    // past MADE_APP_LIMITS.INTENTS: the card's third line, the desk's (on the phone too, DESIGN.md §9)
     home.refusal = FieldProductError(
       kind: "RESOURCE_EXHAUSTED", message: "kept apps are full", details: .object(["limit": .int(4096)]))
     let full = await feed.mark(app, kept: true)
     #expect(full == "You're keeping as many apps as VibeField holds. Stop keeping one to keep Release notes.")
-    // a home from before 3h: the card's first line, the desk's (on the phone ‹draft›, DESIGN.md §9)
+    // a home from before 3h: the card's first line, the desk's (on the phone too, DESIGN.md §9)
     home.refusal = FieldProductError(
       kind: "UNAVAILABLE", message: "no intent to write",
       details: .object(["service": .string("apps"), "state": .string("intent-unbuilt")]))

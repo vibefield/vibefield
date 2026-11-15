@@ -27,17 +27,17 @@ enum AppsTileAct: Hashable {
 
 /// What a keep the home did not take says (MA-L10: words, never a code): DESIGN.md §9 "Keep's words", James's
 /// pick. Its fourth and fifth lines are the phone's. Its first and third are the desk's, said
-/// here too for the same two refusals: ‹draft›, a reading for James's list after the land, not his.
+/// here too for the same two refusals: James's word, 2026-11-15 10:11:20Z, "go with lean".
 enum AppsKeepWords {
   static func failed(_ error: (any Error)?, kept: Bool, title: String) -> String {
     let refusal = error as? FieldProductError
-    // a home from before 3h, which has no intent to write (MA-3e's `intent-unbuilt`): the card's first line, ‹draft›
+    // a home from before 3h, which has no intent to write (MA-3e's `intent-unbuilt`): the card's first line
     if refusal?.kind == "UNAVAILABLE", refusal?.details?["service"]?.stringValue == MadeAppRefusal.service {
       return "Keeping apps isn't ready yet."
     }
     // a stop that failed: the card's fifth line
     guard kept else { return "Couldn't stop keeping \(title)." }
-    // past MADE_APP_LIMITS.INTENTS, which no retry changes until one is stopped: the card's third line, ‹draft›
+    // past MADE_APP_LIMITS.INTENTS, which no retry changes until one is stopped: the card's third line
     if refusal?.kind == "RESOURCE_EXHAUSTED" {
       return "You're keeping as many apps as VibeField holds. Stop keeping one to keep \(title)."
     }

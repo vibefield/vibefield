@@ -9949,9 +9949,10 @@ him and are not invented here.
   as VibeField holds. Stop keeping one to keep ‹app›." On the phone: when a keep fails, "Couldn't keep ‹app›.";
   and when stopping a keep fails, "Couldn't stop keeping ‹app›." *Ruled 2026-11-14 on James's click on the PM
   board, "Use all five as written (Recommended)" (08:16:49.919Z); the card's ‹title› is ‹app›
-  here. "Couldn't hide ‹app›. Try again." went with Hide.* ‹draft, a reading of the lead's for James's list
-  after the land, not his: the phone also says the desktop's first and third, for the same two refusals, so a full
-  keep never reads as a bare "Couldn't keep ‹app›."›
+  here. "Couldn't hide ‹app›. Try again." went with Hide.* The phone also says the desktop's first and third, for
+  the same two refusals, so a full keep never reads as a bare "Couldn't keep ‹app›." *Ruled 2026-11-15 on James's
+  word, typed in VF-PM's session at 10:11:20Z, "go with lean", no longer ‹draft› (VF-PM's reading, said back to
+  him: this reading, and a folder's app offers Keep as the shelf's does).*
 - **About** says "Made by ‹agent›", its session and project, "on ‹desktop›" and its date, and opens the session in
   History. Before an app has a preview it says "No preview yet — it's drawn the first time the app opens".
   ‹for James: the line for a capture that failed›. Before MA-5, an app this phone cannot run yet says "This app
