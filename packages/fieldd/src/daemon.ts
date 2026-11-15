@@ -522,6 +522,9 @@ export interface FielddConfig {
   /** DS-5d test seam: the bound on the holders ledger's last write at stop
    * (`DOC_HOLDERS_STOP_MS` by default). */
   docHoldersStopMs?: number;
+  /** Item 430 test seam: the bound on an unseen node's pass at the door
+   * (`DEVICE_LIMITS.UNSEEN_NODE_PASS_MS` by default). */
+  unseenNodePassMs?: number;
   /** DS-4 seam: how a terminal ticket forwarded from another desktop becomes
    * doors a window here dials (`TerminalServiceOptions.remoteCellRewriter`).
    * Absent = production's `EgressCellRewriter` (DS-1b, 2026-10-01): one egress
@@ -2509,11 +2512,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // Item 406 (S3; Q-PM5, Q-PM6) — the account's refusals as the roster last read them: a
       // removed phone's node is answered the word at its hello, a headerless same-login hello is
       // refused while any stands, and a peer's forward for a removed phone is refused. Until the
-      // roster's first pass has read them (at the latest the `devices.sync()` right after the door
-      // listens, below), nothing is refused: a hello in that instant is a named gap.
+      // roster's first pass has read them, nothing was refused. *Corrected 2026-11-14 (item 430, the
+      // errata rule): since item 406's F3 they are read before the door listens, and since item 429
+      // the door's route stands only after that pass.* Item 430: while one stands, a node no pass of
+      // this daemon has seen waits for one (`confirmNode`); before the roster exists, it is unseen.
       isRefusedNode: (nodeId) => devicesRef?.isRefusedNode(nodeId) ?? false,
       refusalsStand: () => devicesRef?.hasRefusals() ?? false,
       isRefusedDevice: (deviceId) => devicesRef?.isRefused(deviceId) ?? false,
+      confirmNode: async (nodeId) => (await devicesRef?.confirmNode(nodeId)) ?? "unseen",
     });
     diagnosticsService.register(api);
     shellApi = api;
@@ -5729,6 +5735,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       fielddVersion: FIELDD_VERSION,
       contractsVersion: CONTRACTS_VERSION,
       ...(appVersion !== undefined ? { appVersion } : {}),
+      ...(config.unseenNodePassMs !== undefined
+        ? { unseenNodePassMs: config.unseenNodePassMs }
+        : {}),
       // NF-3: honest capability — true iff the pairing hello delivered the
       // floor's endpoints (D31; re-synced on the terminal-endpoints event).
       terminalHost: () => native.terminalEndpoints !== undefined,

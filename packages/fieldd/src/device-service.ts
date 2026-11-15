@@ -101,6 +101,8 @@ export interface DeviceServiceOptions {
   bootId: string;
   fielddVersion: string;
   contractsVersion: string;
+  /** Item 430 test seam: the bound on an unseen node's pass (`DEVICE_LIMITS.UNSEEN_NODE_PASS_MS`). */
+  unseenNodePassMs?: number;
   /** AU-3a (AU-D13 A; LC-20) — the VibeField app this daemon serves, read off
    * the build id its launcher handed it (`appVersionOfBuildId`): a packaged
    * shell's staged identity, which WP12 D10 holds equal to the shell's own.
@@ -306,6 +308,13 @@ export class DeviceService extends EventEmitter {
   private refusedPeers = new Set<string>();
   /** Item 406 (Q-PM2) — the account's known phones as the last pass read them */
   private knownPhones: ReadonlyMap<string, KnownPhone> = new Map();
+  /** Item 430 — every node a registry pass of THIS daemon listed under the account WITH an id that is
+   * not refused (VF-PM's F1, 2026-11-14 23:25:23Z: a node listed with no id is not seen; a desktop's
+   * slice is another device's claim and never counts) */
+  private seenNodes = new Set<string>();
+  /** Item 430 (F2) — the ONE queued confirm pass that has not started yet: every unseen hello that
+   * arrives before it starts shares it; it clears itself the moment it begins */
+  private confirmPass: Promise<void> | null = null;
   /** The review's folds (5) — every peer whose slice, past the registry's gate, said `docHost`
    * in this daemon's life: never a phone here again, even once its slice is away */
   private readonly desktopsSeen = new Set<string>();
@@ -631,6 +640,9 @@ export class DeviceService extends EventEmitter {
       const dnsName = canonicalTailnetDnsName(parsed.data.whois?.deviceName);
       if (dnsName !== undefined) this.dnsByUlid.set(deviceId, dnsName);
       if (!mine) continue;
+      // Item 430 (F1) — SEEN: this pass listed the node under the account with an id (published, or
+      // a known phone's record) that is neither refused nor under a refused node
+      this.seenNodes.add(parsed.data.id);
       // UA-P-4 — a device the registry now lists is no longer "unlisted": clear
       // its log latch so a LATER fall-out is reported instead of swallowed.
       this.unlistedLogged.delete(deviceId);
@@ -745,6 +757,48 @@ export class DeviceService extends EventEmitter {
    * removed phone. */
   hasRefusals(): boolean {
     return this.refused.deviceIds.size > 0;
+  }
+
+  /** Item 430 (James's pick, 2026-11-14T23:06:40.956Z; VF-PM 23:12:22Z) — the door's question for a
+   * node of this account while a refusal stands: "refused" (Remove's, or a pass carried it in), "seen"
+   * (a pass of this daemon listed it, or a known phone's record names it), else one pass is asked,
+   * chained as `sync()` is and bounded by `DEVICE_LIMITS.UNSEEN_NODE_PASS_MS`, and the node is judged
+   * again: still not listed, or the bound out, is "unseen". Never rejects and never hangs. */
+  async confirmNode(nodeId: string): Promise<"seen" | "refused" | "unseen"> {
+    if (this.refused.nodeIds.has(nodeId)) return "refused";
+    if (this.isSeenNode(nodeId)) return "seen";
+    const ms = this.opts.unseenNodePassMs ?? DEVICE_LIMITS.UNSEEN_NODE_PASS_MS;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const bound = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, ms);
+    });
+    await Promise.race([this.queuedConfirmPass(), bound]);
+    clearTimeout(timer);
+    if (this.refused.nodeIds.has(nodeId)) return "refused";
+    return this.isSeenNode(nodeId) ? "seen" : "unseen";
+  }
+
+  /** Item 430 (F2) — the shared confirm pass: one queued on the chain `sync()` uses, served to every
+   * hello that asks before it starts, and cleared as it starts, so a later ask queues one more. */
+  private queuedConfirmPass(): Promise<void> {
+    if (this.confirmPass !== null) return this.confirmPass;
+    let shared: Promise<void> | null = null;
+    const run = this.chain.then(() => {
+      if (this.confirmPass === shared) this.confirmPass = null;
+      return this.doSync();
+    });
+    this.chain = run.catch(() => {});
+    const pass: Promise<void> = run.catch(() => undefined);
+    shared = pass;
+    this.confirmPass = pass;
+    return pass;
+  }
+
+  private isSeenNode(nodeId: string): boolean {
+    if (this.seenNodes.has(nodeId)) return true;
+    for (const phone of this.knownPhones.values())
+      if (phone.tailscaleIds.includes(nodeId)) return true;
+    return false;
   }
 
   /** Item 406, S3's fold (VF-PM 06:18Z, (5a)) — read the account's refused and

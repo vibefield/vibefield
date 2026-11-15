@@ -183,6 +183,10 @@ export interface ProductApiOptions {
    * daemon's forward FOR it (`onBehalfOf.clientDeviceId`) is refused before it runs. Unset:
    * none is. */
   isRefusedDevice?: (deviceId: string) => boolean;
+  /** Item 430 — while a refusal stands, the node of a same-login hello on the secret path is asked
+   * after (`DeviceService.confirmNode`): "seen" goes on, "refused" hears the removed word, "unseen"
+   * hears UNAVAILABLE {devices, confirming}, retryable. Unset: no node waits. */
+  confirmNode?: (nodeId: string) => Promise<"seen" | "refused" | "unseen">;
 }
 
 /** Item 406 (S3) — why the tailnet door refuses a caller of this account outright: the two words
@@ -866,6 +870,38 @@ export class ProductApi extends EventEmitter {
         reply(this.err(id, "UNAUTHORIZED", DOOR_REFUSAL_MESSAGES[reason], false, { reason }));
         ws.close(1008, reason);
         return;
+      }
+      // Item 430 (James's pick, 2026-11-14T23:06:40.956Z; VF-PM 23:12:22Z) — WHILE A REFUSAL STANDS,
+      // A NODE THIS DESKTOP HAS NOT SEEN WAITS FOR THE DEVICE LIST, before any arm below can admit it
+      // (a credential's included: a phone registered again may still hold one). The door is keyed by
+      // node, and only a registry pass carries a refused phone's NEW node into the refusals, so the
+      // hello asks for one (`confirmNode`, bounded): refused → the removed word; seen → on as today;
+      // not listed, or the bound out → UNAVAILABLE {devices, confirming}, retryable, and the door
+      // closes: nothing unadmitted is kept open. Another login is a guest and never waits.
+      if (
+        state.tailnetLogin !== null &&
+        state.tailnetNodeId !== null &&
+        this.opts.confirmNode !== undefined &&
+        state.tailnetLogin === (this.opts.getLinkedLogin?.() ?? null) &&
+        this.opts.refusalsStand?.() === true
+      ) {
+        const verdict = await this.opts.confirmNode(state.tailnetNodeId);
+        if (verdict === "refused") {
+          const reason = DEVICE_REFUSALS.REASON_REMOVED;
+          reply(this.err(id, "UNAUTHORIZED", DOOR_REFUSAL_MESSAGES[reason], false, { reason }));
+          ws.close(1008, reason);
+          return;
+        }
+        if (verdict === "unseen") {
+          reply(
+            this.err(id, "UNAVAILABLE", "this device is being confirmed", true, {
+              service: "devices",
+              state: "confirming",
+            }),
+          );
+          ws.close(1013, "confirming");
+          return;
+        }
       }
       // DS-D15 — the connection's provenance, fixed at hello and carried on
       // every principal's context: read only to say who a call is for when

@@ -8918,7 +8918,10 @@ act is **Remove…**, and its accessible name is **Remove ‹name›…**, so se
 your field. Everything on your computers stays." (*a reading of Q-J1, pending James's word:* nothing is promised
 across computers, so no "on all your computers" and no "right away"; a computer that was off learns of the Remove at
 its next merge with one that knows) · "It stays on your Tailscale network until you remove it in Tailscale's admin
-console." with **Manage in Tailscale ↗** · **Cancel** · **Remove**; while it runs, "Removing…". After, said once
+console." with **Manage in Tailscale ↗** · ‹draft› "If ‹name› signs in to Tailscale again, remove it in Tailscale's
+admin console too." (*item 430: James picked on 2026-11-14 that the sheet says so; this line is a ‹draft›
+pending his word on it, and the shorter reading, "If ‹name› signs in again, remove it in Tailscale too.", is on his
+words page*) · **Cancel** · **Remove**; while it runs, "Removing…". After, said once
 where the row stood: "‹name› was removed." · **Manage in Tailscale ↗**. The confirm says nothing of keys, doors, credentials or Tailscale's insides,
 and nothing of the apps your agents made (*a reading of Q-J5, pending James's word:* the console's line covers the
 network side). No word here, on the phone or anywhere else says "from the moment you press Remove", "at once",

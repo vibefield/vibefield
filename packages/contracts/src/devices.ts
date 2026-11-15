@@ -25,6 +25,10 @@ export const DEVICE_LIMITS = {
   /** Item 406 — the node ids one refusal or one known phone carries. A phone takes a new node id only when it
    * registers again, so a handful is generous; the bound keeps every synced entry small. */
   NODE_IDS_PER_ENTRY: 16,
+  /** Item 430 (VF-PM 2026-11-14 23:12:22Z, (1)) — how long a hello from a node this desktop has not
+   * seen waits, while a refusal stands, for the registry pass it asks; past it the hello is answered
+   * UNAVAILABLE {devices, confirming}, retryable, and the door closes. */
+  UNSEEN_NODE_PASS_MS: 10_000,
 } as const;
 
 /** Honest per-device capability facts (D31: "capabilities honest per device"). */
