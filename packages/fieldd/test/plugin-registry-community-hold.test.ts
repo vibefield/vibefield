@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { InstallSetEntry, RegistryListedAs } from "@vibefield/contracts";
+import { type InstallSetEntry, LAYOUT, type RegistryListedAs } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import type { AuditService } from "../src/audit-service";
 import { InstallSetReconciler } from "../src/install-reconciler";
@@ -87,7 +87,7 @@ async function fixture(opts: { communityHold?: boolean } = {}) {
     ...(opts.communityHold === false ? {} : { communityHold: true as const }),
   });
   cleanup.push(() => registry.dispose());
-  const recordsPath = join(dataDir, "fieldd", "plugins", "install-records.json");
+  const recordsPath = join(dataDir, ...LAYOUT.PLUGIN_RECORDS_FILE);
   return { registry, recordsPath };
 }
 

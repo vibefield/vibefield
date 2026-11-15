@@ -47,6 +47,25 @@
     "plugins",
     "installed"
   ],
+  "PLUGIN_RECORDS_FILE": [
+    "fieldd",
+    "plugins",
+    "install-records.json"
+  ],
+  "PLUGIN_CATALOG_DIR": [
+    "plugins",
+    "catalog"
+  ],
+  "PLUGIN_CATALOG_HELD_FILE": [
+    "plugins",
+    "catalog",
+    "held.json"
+  ],
+  "PLUGIN_COMMUNITY_STATEMENT_FILE": [
+    "fieldd",
+    "plugins",
+    "community-statement.json"
+  ],
   "NATIVE_DIR": [
     "native"
   ],

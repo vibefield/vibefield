@@ -8,6 +8,7 @@ import {
   CONTRACTS_VERSION,
   computeEffectiveGrants,
   isWellFormedPluginId,
+  LAYOUT,
   PLUGIN_LIMITS,
   type PluginErrorSummary,
   type PluginManifestV1,
@@ -194,7 +195,7 @@ export class PluginRegistryService extends EventEmitter {
 
   constructor(private readonly cfg: PluginRegistryConfig) {
     super();
-    this.recordsPath = join(cfg.dataDir, "fieldd", "plugins", "install-records.json");
+    this.recordsPath = join(cfg.dataDir, ...LAYOUT.PLUGIN_RECORDS_FILE);
   }
 
   /** Full §9.2 re-scan. Emits ONE "changed" (coalesced) when the snapshot moved. */

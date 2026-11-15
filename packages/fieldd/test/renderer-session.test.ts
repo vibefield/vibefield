@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Scope } from "@vibefield/contracts";
-import { SOCKETS } from "@vibefield/contracts";
+import { LAYOUT, SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, TokenService } from "../src/index";
@@ -246,7 +246,7 @@ describe("plugins.openRendererSession (renderer principal lease, §11.2)", () =>
     // force the install-records file to exist, then confirm the lease left no trace
     await rpc.call("plugins.disable", { id: BETA });
     await daemon.stop();
-    const onDisk = readFileSync(join(dataDir, "fieldd", "plugins", "install-records.json"), "utf8");
+    const onDisk = readFileSync(join(dataDir, ...LAYOUT.PLUGIN_RECORDS_FILE), "utf8");
     expect(onDisk).not.toContain(res.token);
     expect(onDisk.toLowerCase()).not.toContain("token");
   });

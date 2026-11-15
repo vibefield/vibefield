@@ -11,7 +11,12 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { OBJECTS_NEED_DESK, PLUGIN_LIMITS, PluginRegistrySnapshot } from "@vibefield/contracts";
+import {
+  LAYOUT,
+  OBJECTS_NEED_DESK,
+  PLUGIN_LIMITS,
+  PluginRegistrySnapshot,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { RpcCallError } from "../src/native-link";
 import { type PluginRegistryConfig, PluginRegistryService } from "../src/plugin-registry";
@@ -399,7 +404,7 @@ describe("PluginRegistryService — persistence", () => {
     await first.disable("vibefield.fixture.alpha");
     first.dispose();
 
-    expect(existsSync(join(dataDir, "fieldd", "plugins", "install-records.json"))).toBe(true);
+    expect(existsSync(join(dataDir, ...LAYOUT.PLUGIN_RECORDS_FILE))).toBe(true);
 
     const second = new PluginRegistryService({ dataDir, roots });
     cleanup.push(() => second.dispose());

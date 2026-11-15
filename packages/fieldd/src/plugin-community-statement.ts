@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { LAYOUT } from "@vibefield/contracts";
 
 // THE COMMUNITY STATEMENT'S MARK (MK-O3D, 2026-11-14; James's MK-O1 pick B, "Once on each
 // desktop" as his plugins page names it, in its store at 2026-11-11T23:03:22.544Z; built on VF-PM's
@@ -18,9 +19,6 @@ import { dirname, join } from "node:path";
 // community install here. A file it can't read is no mark, so the statement is shown again and
 // never skipped by a guess. Custody: MK-2's note, its addendum of 2026-11-14 ("shown here").
 
-/** The mark's file, under the data root. */
-export const COMMUNITY_STATEMENT_FILE = ["fieldd", "plugins", "community-statement.json"] as const;
-
 interface CommunityStatementFile {
   version: 1;
   /** when this desktop first marked it, in epoch milliseconds */
@@ -35,7 +33,7 @@ export class CommunityStatementMark {
   private readonly now: () => number;
 
   constructor(dataDir: string, now: () => number = Date.now) {
-    this.path = join(dataDir, ...COMMUNITY_STATEMENT_FILE);
+    this.path = join(dataDir, ...LAYOUT.PLUGIN_COMMUNITY_STATEMENT_FILE);
     this.now = now;
   }
 

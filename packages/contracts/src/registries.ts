@@ -2245,6 +2245,14 @@ export const LAYOUT = {
   ARTIFACT_MADE_PREVIEWS_DIR: ["artifacts", "made-previews"],
   AUDIT_DIR: ["audit"],
   PLUGINS_INSTALLED_DIR: ["plugins", "installed"],
+  /** Item 431 — fieldd's plugin files under the data root, spelled here once: its install
+   * records (`plugin-registry.ts`), the folder of the plugin list it holds and the signed list in
+   * it (`plugin-catalog.ts`), and this desktop's mark that the community statement was shown here,
+   * device scope and never synced (`plugin-community-statement.ts`). */
+  PLUGIN_RECORDS_FILE: ["fieldd", "plugins", "install-records.json"],
+  PLUGIN_CATALOG_DIR: ["plugins", "catalog"],
+  PLUGIN_CATALOG_HELD_FILE: ["plugins", "catalog", "held.json"],
+  PLUGIN_COMMUNITY_STATEMENT_FILE: ["fieldd", "plugins", "community-statement.json"],
   NATIVE_DIR: ["native"],
   NATIVE_RUN_DIR: ["native", "run"],
   PAIRING_FILE: ["native", "pairing"],

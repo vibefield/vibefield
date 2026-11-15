@@ -266,7 +266,7 @@ describe("the community statement's mark (MK-O3D; James's MK-O1 pick B)", () => 
     });
     expect(await shell.call("plugins.community.statement.get", {})).toEqual({ shownHere: true });
     // a file of fieldd's own, and the preferences every desktop shares say nothing of it
-    expect(existsSync(join(dataDir, "fieldd", "plugins", "community-statement.json"))).toBe(true);
+    expect(existsSync(join(dataDir, ...LAYOUT.PLUGIN_COMMUNITY_STATEMENT_FILE))).toBe(true);
     expect(await shell.call("storage.appPreferences.get", {})).toEqual(defaults);
 
     // the switch's posture: a debug client and a plugin's token are refused, before any audit

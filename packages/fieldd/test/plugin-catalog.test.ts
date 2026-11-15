@@ -138,8 +138,8 @@ function make(opts: {
 }
 
 const urlOf = (dir: string) => pathToFileURL(join(dir, "index.json")).href;
-const heldDir = (dataDir: string) => join(dataDir, "plugins", "catalog");
-const heldPath = (dataDir: string) => join(heldDir(dataDir), "held.json");
+const heldDir = (dataDir: string) => join(dataDir, ...LAYOUT.PLUGIN_CATALOG_DIR);
+const heldPath = (dataDir: string) => join(dataDir, ...LAYOUT.PLUGIN_CATALOG_HELD_FILE);
 
 /** The held file as the test reads it: its raw bytes, its fields, and the index's bytes decoded. */
 function readHeldFile(dataDir: string) {
@@ -428,7 +428,7 @@ describe("the plugin list fieldd holds (MK-2b)", () => {
     const registry = tempDir("vf-registry-");
     const bytes = publish(registry, index(1000));
     await make({ dataDir, registryUrl: urlOf(registry), now: () => 5000 }).catalog.refresh();
-    expect(readdirSync(heldDir(dataDir))).toEqual(["held.json"]);
+    expect(readdirSync(heldDir(dataDir))).toEqual([LAYOUT.PLUGIN_CATALOG_HELD_FILE.at(-1)]);
     expect(statSync(heldPath(dataDir)).mode & 0o777).toBe(0o600);
     const held = readHeldFile(dataDir);
     expect(Object.keys(held.fields).sort()).toEqual(["checkedAt", "index", "signature"]);

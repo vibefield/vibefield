@@ -4,7 +4,7 @@ import { rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { RegistryIndex } from "@vibefield/contracts";
+import { LAYOUT, type RegistryIndex } from "@vibefield/contracts";
 import {
   buildFixtureRegistry,
   generateRegistryKeypair,
@@ -135,7 +135,7 @@ async function wired(reg: Registry, opts: Wiring = {}) {
   return { dataDir, plugins, installer, catalog, listingReads };
 }
 
-const heldPath = (dataDir: string) => join(dataDir, "plugins", "catalog", "held.json");
+const heldPath = (dataDir: string) => join(dataDir, ...LAYOUT.PLUGIN_CATALOG_HELD_FILE);
 
 /** The held file as the test reads it: its fields, and the index's bytes decoded. */
 function heldOf(dataDir: string) {
@@ -177,7 +177,7 @@ describe("an install holds the list it verified (MK-O3, O3-B)", () => {
 
     // the pictures stay inside the person's refresh: the hand-over fetched none, a refresh does
     expect(listingReads).toEqual([]);
-    expect(existsSync(join(dataDir, "plugins", "catalog", "pictures"))).toBe(false);
+    expect(existsSync(join(dataDir, ...LAYOUT.PLUGIN_CATALOG_DIR, "pictures"))).toBe(false);
     await catalog.refresh();
     expect(listingReads).toEqual(["pictures/icon.png"]);
   });

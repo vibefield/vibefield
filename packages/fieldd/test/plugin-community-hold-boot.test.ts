@@ -2,7 +2,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { type PluginRecord, type PluginRegistrySnapshot, SOCKETS } from "@vibefield/contracts";
+import {
+  LAYOUT,
+  type PluginRecord,
+  type PluginRegistrySnapshot,
+  SOCKETS,
+} from "@vibefield/contracts";
 import {
   buildFixtureRegistry,
   generateRegistryKeypair,
@@ -113,7 +118,7 @@ describe("the stop on a booted daemon (MK-O3, O3-C)", () => {
     index.generatedAt = built.index.generatedAt + 1;
     delete index.plugins[KV_ID]?.rung;
     const newer = Buffer.from(JSON.stringify(index), "utf8");
-    const heldFile = join(dataDir, "plugins", "catalog", "held.json");
+    const heldFile = join(dataDir, ...LAYOUT.PLUGIN_CATALOG_HELD_FILE);
     expect(existsSync(heldFile)).toBe(true);
     writeFileSync(
       heldFile,
@@ -124,7 +129,7 @@ describe("the stop on a booted daemon (MK-O3, O3-C)", () => {
       }),
     );
     expect(shape(await boot())).toEqual(HELD);
-    const recordsPath = join(dataDir, "fieldd", "plugins", "install-records.json");
+    const recordsPath = join(dataDir, ...LAYOUT.PLUGIN_RECORDS_FILE);
     const records = existsSync(recordsPath)
       ? (JSON.parse(readFileSync(recordsPath, "utf8")) as {
           plugins: Record<string, { enabled?: boolean }>;

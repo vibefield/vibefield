@@ -1,11 +1,9 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { LAYOUT } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  COMMUNITY_STATEMENT_FILE,
-  CommunityStatementMark,
-} from "../src/plugin-community-statement";
+import { CommunityStatementMark } from "../src/plugin-community-statement";
 import { SettingsDocService } from "../src/settings-doc";
 
 // MK-O3D — the community statement's mark (James's MK-O1 pick B: each desktop shows the statement
@@ -40,7 +38,7 @@ describe("the community statement's mark (MK-O3D; MK-O1 B)", () => {
     expect(files(dataDir)).toEqual([]);
     await mark.markShown();
     expect(await mark.shownHere()).toBe(true);
-    expect(files(dataDir)).toEqual([join(...COMMUNITY_STATEMENT_FILE)]);
+    expect(files(dataDir)).toEqual([join(...LAYOUT.PLUGIN_COMMUNITY_STATEMENT_FILE)]);
     // another reader over the same root, as a restarted fieldd, reads it too
     expect(await new CommunityStatementMark(dataDir).shownHere()).toBe(true);
   });
@@ -52,13 +50,15 @@ describe("the community statement's mark (MK-O3D; MK-O1 B)", () => {
     await mark.markShown();
     now = 2_000;
     await mark.markShown();
-    const kept = JSON.parse(readFileSync(join(dataDir, ...COMMUNITY_STATEMENT_FILE), "utf8"));
+    const kept = JSON.parse(
+      readFileSync(join(dataDir, ...LAYOUT.PLUGIN_COMMUNITY_STATEMENT_FILE), "utf8"),
+    );
     expect(kept).toEqual({ version: 1, shownAt: 1_000 });
   });
 
   it("reads a file it can't use as no mark, so the statement shows again", async () => {
     const dataDir = temp();
-    const path = join(dataDir, ...COMMUNITY_STATEMENT_FILE);
+    const path = join(dataDir, ...LAYOUT.PLUGIN_COMMUNITY_STATEMENT_FILE);
     mkdirSync(join(dataDir, "fieldd", "plugins"), { recursive: true });
     const mark = new CommunityStatementMark(dataDir);
     for (const body of [

@@ -35,6 +35,11 @@ describe("LAYOUT (golden vector)", () => {
     expect(LAYOUT.MGMT_SOCKET.slice(0, -1)).toEqual([...LAYOUT.NATIVE_RUN_DIR]);
     expect(LAYOUT.PRODUCT_JSON.slice(0, -1)).toEqual([...LAYOUT.FIELDD_RUN_DIR]);
     expect(LAYOUT.SHELL_TOKEN.slice(0, -1)).toEqual([...LAYOUT.FIELDD_RUN_DIR]);
+    // item 431: the held list sits in the catalog's folder, the statement's mark by the records
+    expect(LAYOUT.PLUGIN_CATALOG_HELD_FILE.slice(0, -1)).toEqual([...LAYOUT.PLUGIN_CATALOG_DIR]);
+    expect(LAYOUT.PLUGIN_COMMUNITY_STATEMENT_FILE.slice(0, -1)).toEqual(
+      LAYOUT.PLUGIN_RECORDS_FILE.slice(0, -1),
+    );
   });
 
   it("segments never smuggle separators", () => {

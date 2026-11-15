@@ -223,13 +223,13 @@ describe("the install gate (MK-2c)", () => {
         JSON.stringify({ schemaVersion: 1, generatedAt, plugins: {} }),
         "utf8",
       );
-      mkdirSync(join(dataDir, "plugins", "catalog"), { recursive: true });
+      mkdirSync(join(dataDir, ...LAYOUT.PLUGIN_CATALOG_DIR), { recursive: true });
       const held = {
         signature: signRegistryIndex(bytes, keys.secretKey),
         checkedAt: 1,
         index: bytes.toString("base64"),
       };
-      writeFileSync(join(dataDir, "plugins", "catalog", "held.json"), JSON.stringify(held));
+      writeFileSync(join(dataDir, ...LAYOUT.PLUGIN_CATALOG_HELD_FILE), JSON.stringify(held));
     };
     const passes = async () => {
       const candidate = await installer.prepare({ id: KV_ID });

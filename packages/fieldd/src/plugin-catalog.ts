@@ -3,6 +3,7 @@ import { lstat, mkdir, open, readdir, readFile, rename, rm, unlink } from "node:
 import { join } from "node:path";
 import {
   CONTRACTS_VERSION,
+  LAYOUT,
   type PluginsCatalog,
   type PluginsCatalogEntry,
   type PluginsCatalogState,
@@ -63,8 +64,6 @@ import { contractsRangeSatisfied, type PluginRegistryService } from "./plugin-re
 // it is under `<dataDir>`, which a process running as the same user can write; fieldd's hash holds a file at its
 // check, not after it (custody note, its fifth addendum).
 
-const CATALOG_DIR = ["plugins", "catalog"] as const;
-const HELD_FILE = "held.json";
 /** the catalog contract's own bound (`PluginsCatalog.plugins`) */
 const MAX_ENTRIES = 4096;
 /** MK-2e: the pictures' folder, under the catalog's (Q4: MK-4 decides its home when main reads it) */
@@ -124,6 +123,7 @@ type HeldRefusal = "held-unreadable" | "held-signature" | "held-schema";
 export class PluginCatalogService {
   private readonly log: Logger;
   private readonly dir: string;
+  private readonly heldPath: string;
   private readonly now: () => number;
   private lastRead: LastRead = null;
   private inflight: Promise<PluginsCatalog> | null = null;
@@ -138,7 +138,8 @@ export class PluginCatalogService {
 
   constructor(private readonly cfg: PluginCatalogConfig) {
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "plugin.catalog" });
-    this.dir = join(cfg.dataDir, ...CATALOG_DIR);
+    this.dir = join(cfg.dataDir, ...LAYOUT.PLUGIN_CATALOG_DIR);
+    this.heldPath = join(cfg.dataDir, ...LAYOUT.PLUGIN_CATALOG_HELD_FILE);
     this.now = cfg.now ?? Date.now;
   }
 
@@ -478,7 +479,7 @@ export class PluginCatalogService {
   private async readHeld(): Promise<HeldList | "refused" | null> {
     let raw: Buffer;
     try {
-      raw = await readFile(join(this.dir, HELD_FILE));
+      raw = await readFile(this.heldPath);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "ENOENT") return null;
@@ -525,8 +526,8 @@ export class PluginCatalogService {
   private async writeHeld(bytes: Buffer, signature: string, checkedAt: number): Promise<void> {
     await mkdir(this.dir, { recursive: true });
     const body = { signature, checkedAt, index: bytes.toString("base64") };
-    const target = join(this.dir, HELD_FILE);
-    const temp = join(this.dir, `${HELD_FILE}.tmp-${randomBytes(8).toString("hex")}`);
+    const target = this.heldPath;
+    const temp = `${this.heldPath}.tmp-${randomBytes(8).toString("hex")}`;
     try {
       const handle = await open(temp, "wx", 0o600);
       try {
