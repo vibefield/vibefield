@@ -390,29 +390,56 @@ function grantState(daemon: { plugins: PluginRegistryService }): string {
   return `${row?.grantGeneration ?? "none"}:${(row?.grantedCapabilities ?? []).join(",")}`;
 }
 
-/** Resolves once `holds()` is true and `read` has answered the same value for `quietMs` on end;
- * quiet while `holds()` is false does not end the wait. Rejects at `timeoutMs`. */
+/** Resolves once `holds` is true of what `read` answers and `read` has answered the same value for
+ * `quietMs` on end; quiet while `holds` is false does not end the wait. Rejects at `timeoutMs`. */
 async function settled(
-  read: () => string,
-  holds: () => boolean,
+  read: () => string | Promise<string>,
+  holds: (value: string) => boolean,
   quietMs: number,
   timeoutMs: number,
   what: string,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
-  let last = read();
+  let last = await read();
   let since = Date.now();
-  while (!holds() || Date.now() - since < quietMs) {
+  while (!holds(last) || Date.now() - since < quietMs) {
     if (Date.now() > deadline) {
       throw new Error(`settled: ${what} — not held and quiet within ${timeoutMs} ms`);
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
-    const now = read();
-    if (now !== last || !holds()) {
+    const now = await read();
+    if (now !== last || !holds(now)) {
       last = now;
       since = Date.now();
     }
   }
+}
+
+/** Waits until this desktop's last act on KV has reached the settings doc and the install
+ * reconciler has nothing to apply: the doc's own entry and the registry's row name `version` and
+ * `enabled` alike, unchanged for 500 ms. Item 440 (RV's, `lanes/rv/i437/SIGHTING-440.md`): each
+ * act publishes unawaited and nothing orders two publications, so an earlier act's publication
+ * can be walked in a later act's gap (A) or commit after it (B), and either turns a plugin the
+ * person turned off on again. The read is the doc's entry because its version names its writer:
+ * only an install's or an update's own publication writes it (an enable's or a disable's `ensure`
+ * writes an identity only where no entry stands, `settings-doc.ts` `updateInstallSet`). So the
+ * doc at `version` means that publication has committed, and the next act's is the later writer:
+ * that closes (B) for these rows. The 500 ms in agreement lets the walk its commit raised find
+ * nothing to apply, which closes (A) as far as a test can: the reconciler says nothing when it is
+ * idle, and a walk still in flight after that is the product's race, not the row's. */
+async function agreed(
+  daemon: Awaited<ReturnType<typeof bootstrap>>,
+  version: string,
+  enabled: boolean,
+  what: string,
+): Promise<void> {
+  const read = async () => {
+    const entry = (await daemon.settingsDoc.installSet())[KV_ID];
+    const record = daemon.plugins.get(KV_ID);
+    return JSON.stringify([entry?.version, entry?.enabled, record?.version, record?.enabled]);
+  };
+  const want = JSON.stringify([version, enabled, version, enabled]);
+  await settled(read, (value) => value === want, 500, 15_000, what);
 }
 
 const UPDATE_DOORS = ["plugin.update.prepare", "plugin.update.cancel", "plugin.update"];
@@ -433,6 +460,7 @@ describe("the update card's doors (MK-UC)", () => {
     // the version you have: 0.1.0, on, its service running
     await shell.call("plugins.install", { id: KV_ID, version: "0.1.0" });
     await until(active, 15_000, "0.1.0's service");
+    await agreed(daemon, "0.1.0", true, "0.1.0's publication, applied and quiet");
     const selected = readFileSync(pointer, "utf8");
     const slots = revisions(dataDir, KV_ID);
     expect(slots.length).toBe(1);
@@ -523,6 +551,7 @@ describe("the update card's doors (MK-UC)", () => {
     const active = () => serviceActive(daemon);
     await shell.call("plugins.install", { id: KV_ID, version: "0.1.0" });
     await until(active, 15_000, "0.1.0's service");
+    await agreed(daemon, "0.1.0", true, "0.1.0's publication, applied and quiet");
 
     // nothing new: its card would list no power, and the one press takes it through the barrier
     const quiet = (await shell.call("plugins.install.prepare", {
@@ -538,9 +567,12 @@ describe("the update card's doors (MK-UC)", () => {
     };
     expect(pressed.version).toBe("0.2.0");
     await until(active, 15_000, "0.2.0's service");
+    // item 440: the press's own publication (on) committed and walked before the person's off
+    await agreed(daemon, "0.2.0", true, "0.2.0's publication, applied and quiet");
 
     // turned off, an update's card commits plainly: it moves, it stays off, nothing is revoked
     await shell.call("plugins.disable", { id: KV_ID });
+    await agreed(daemon, "0.2.0", false, "the disable, published and quiet");
     const off = (await shell.call("plugins.install.prepare", {
       id: KV_ID,
       update: true,
@@ -550,6 +582,8 @@ describe("the update card's doors (MK-UC)", () => {
       candidate: off.candidate,
     })) as { version: string; enabled: boolean };
     expect([committed.version, committed.enabled]).toEqual(["0.3.0", false]);
+    // it stays off: the card's own publication carries no flip into the doc
+    await agreed(daemon, "0.3.0", false, "0.3.0, off, published and quiet");
     const outcomes = () => ledger(dataDir, ["plugin.update"]).filter((l) => l.phase === "outcome");
     await until(() => outcomes().length === 2, 4_000, "the two updates' outcomes");
     const versions = outcomes().map((l) => [l.outcome, (l.attrs as { version?: unknown }).version]);
@@ -574,10 +608,13 @@ describe("the update card's doors (MK-UC)", () => {
     const active = () => serviceActive(daemon);
     await shell.call("plugins.install", { id: KV_ID, version: "0.1.0" });
     await until(active, 15_000, "0.1.0's service");
+    // item 440: each person's act here waits until the act before it is published and walked
+    await agreed(daemon, "0.1.0", true, "0.1.0's publication, applied and quiet");
 
     // turned off, the one press is refused an update that asks for more as it is when on (the
     // review's nit 4: this road changed from the compatibility wrapper), and nothing moves
     await shell.call("plugins.disable", { id: KV_ID });
+    await agreed(daemon, "0.1.0", false, "the disable, published and quiet");
     const pressed = await shell.callErr("plugins.install", { id: KV_ID, version: "0.2.0" });
     expect(pressed.data).toMatchObject({
       kind: "PRECONDITION_FAILED",
@@ -593,6 +630,7 @@ describe("the update card's doors (MK-UC)", () => {
     })) as Prepared;
     expect(first.update).toEqual({ from: "0.1.0", asksFor: ["net.outbound"] });
     await shell.call("plugins.enable", { id: KV_ID });
+    await agreed(daemon, "0.1.0", true, "the enable, published and quiet");
     await until(active, 15_000, "0.1.0's service, on again");
     const taken = (await shell.call("plugins.install.commit", {
       candidate: first.candidate,
@@ -607,6 +645,7 @@ describe("the update card's doors (MK-UC)", () => {
       update: true,
     })) as Prepared;
     expect(second.update).toEqual({ from: "0.2.0", asksFor: [] });
+    await agreed(daemon, "0.2.0", true, "0.2.0's publication, applied and quiet");
     const generation = daemon.plugins.get(KV_ID)?.grantGeneration ?? 0;
     const storage = { id: KV_ID, capability: "storage.self" };
     await shell.call("plugins.grants.set", { ...storage, granted: false });
@@ -656,6 +695,7 @@ describe("the update card's doors (MK-UC)", () => {
     const active = () => serviceActive(daemon);
     await shell.call("plugins.install", { id: KV_ID, version: "0.1.0" });
     await until(active, 15_000, "0.1.0's service");
+    await agreed(daemon, "0.1.0", true, "0.1.0's publication, applied and quiet");
 
     // a card for 0.2.0 waits while the one press takes 0.1.5, which asks for nothing new
     const card = (await shell.call("plugins.install.prepare", {
