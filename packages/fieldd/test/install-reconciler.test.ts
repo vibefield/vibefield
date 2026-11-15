@@ -1157,3 +1157,101 @@ describe("the generation a grant names is the one its act saw", () => {
     expect((await entryOf(d))?.grants.find((g) => g.capability === CAP)).toEqual(before);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// The disable race (2026-11-15). The disable handler (`plugins.disable`) moves the registry, then stops the
+// service and kills the plugin's children, and only then publishes. A walk in that gap read the doc still enabled
+// against a disabled record and ENABLED the plugin again, restarting it with fresh principals, until the disable's
+// publication landed. Red until the lane takes the enablement section and the disable handler.
+
+/** Every enablement move from now on, in order, marked the person's or a walk's (`granted` holds enablement). */
+function traceEnabled(d: Desktop): Trace {
+  const trace: Trace = [];
+  let person = false;
+  marks.set(d, () => {
+    person = true;
+  });
+  for (const method of ["enable", "disable"] as const) {
+    const move = d.registry[method].bind(d.registry);
+    d.registry[method] = async (id: string) => {
+      const by = person ? "person" : "walk";
+      person = false;
+      const out = await move(id);
+      trace.push({ by, granted: out.enabled });
+      return out;
+    };
+  }
+  return trace;
+}
+
+/** The person's disable up to the handler's gap: the registry moved, the handler's own audit row, NO
+ * publication. The returned function is the rest of the handler: `after` read, then `publish`. */
+async function disableInGap(d: Desktop): Promise<() => Promise<void>> {
+  marks.get(d)?.();
+  await d.registry.disable(PA32_ID);
+  d.audit.push({ action: "plugin.disable", origin: "local" });
+  return () => d.reconciler.publish(d.registry.record, "disable");
+}
+
+/** The invariant after the person's last enablement act: every state equals it, and no settings-doc act of the
+ * opposite sense follows it. */
+function enabledHeldToLastAct(
+  d: Desktop,
+  trace: Trace,
+  enabled: boolean,
+  ledgerFrom: number,
+): void {
+  const last = trace.map((t) => t.by).lastIndexOf("person");
+  expect(last, "the person's last act is in the trace").toBeGreaterThanOrEqual(0);
+  expect(
+    trace.slice(last).map((t) => t.granted),
+    "every enablement state after the person's last act",
+  ).toEqual(trace.slice(last).map(() => enabled));
+  const opposite = enabled ? "plugin.disable" : "plugin.enable";
+  expect(
+    d.audit
+      .slice(ledgerFrom)
+      .filter((row) => row.origin === "settings-doc" && row.action === opposite),
+    `no settings-doc ${opposite} after the person's last act`,
+  ).toEqual([]);
+}
+
+describe("the disable race: a person's disable is the last word here until their next act", () => {
+  it("a disable made while this desktop's enable still publishes is never enabled again by a walk", async () => {
+    const d = await solo([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")]);
+    await d.reconciler.publish(await d.registry.disable(PA32_ID), "disable"); // off, published, settled
+    await settle(d);
+    const trace = traceEnabled(d);
+    marks.get(d)?.();
+    const enabled = await d.registry.enable(PA32_ID); // act 1, the enable: its publication runs, unawaited
+    const published1 = d.reconciler.publish(enabled, "enable");
+    const rest2 = await disableInGap(d); // act 2, the disable, in its gap
+    const ledgerFrom = d.audit.length;
+    await published1; // act 1's publication persisted and emitted; the walk it raised waited for act 1 alone
+    const { walk } = await walkNow(d);
+
+    expect(d.registry.record.enabled, "in the disable's gap, the plugin stays off").toBe(false); // RED today
+    await rest2();
+    await walk;
+    await settle(d);
+    expect(d.registry.record.enabled, "after the disable's publication").toBe(false);
+    enabledHeldToLastAct(d, trace, false, ledgerFrom);
+  });
+
+  it("a disable in its gap is never enabled again by the walk a peer's merge raises", async () => {
+    const [a, b] = await sharedPair([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")]);
+    const trace = traceEnabled(a);
+    const rest = await disableInGap(a);
+    const ledgerFrom = a.audit.length;
+    await b.settings.setAppValue("desktop.showTray", false, "pane");
+    await merge(b, a);
+    const { walk } = await walkNow(a);
+
+    expect(a.registry.record.enabled, "in the disable's gap, the plugin stays off").toBe(false); // RED today
+    await rest();
+    await walk;
+    await settle(a);
+    expect(a.registry.record.enabled, "after the disable's publication").toBe(false);
+    enabledHeldToLastAct(a, trace, false, ledgerFrom);
+  });
+});
