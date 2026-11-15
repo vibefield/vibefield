@@ -330,7 +330,7 @@ import {
   systemDocId,
 } from "./library-doc";
 import { LinkService, otherUserLinks } from "./link-service";
-import { madeAppKeptFull, MadeAppKeptIntents, madeAppKeptKey } from "./made-app-intents";
+import { MadeAppKeptIntents, madeAppKeptFull, madeAppKeptKey } from "./made-app-intents";
 import {
   type MadeAppExporter,
   MadeAppService,
