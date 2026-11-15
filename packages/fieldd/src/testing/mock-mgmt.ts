@@ -188,6 +188,12 @@ export class MockMgmtServer {
    * dispatched ahead of the first, and the second swallows the ask before `meshCalls` records it. */
   laneSubscribeGate: (() => "hold" | "refuse" | undefined) | null = null;
   private readonly heldLaneSubscribes: Array<() => void> = [];
+  /** Item 423 — decides each `native.mesh.peers.subscribe` before it is answered: "hold" keeps the answer until
+   * `releasePeersSubscribes()`. The peer stream is the roster's first pass's own ask (device-service's `doSync`, its
+   * one caller), so a hold stands that pass still between the door's listen and its end. The form is
+   * `laneSubscribeGate`'s, for the same reason. */
+  peersSubscribeGate: (() => "hold" | undefined) | null = null;
+  private readonly heldPeersSubscribes: Array<() => void> = [];
   /** DS-1 — the floor's EGRESS, answered ahead of every mesh gate (as the real
    * floor's `mgmt/mesh_egress.rs` is). `"unsupported"` — the default — refuses
    * every verb `egress-unsupported`; `"mesh-down"` refuses the acts that need a
@@ -959,9 +965,13 @@ export class MockMgmtServer {
         // other subscription so `pushPeersDelta` can target it; the snapshot is
         // the same list `peers.list` answers with, which is what the real
         // forwarder sends.
-        const subId = `s${this.nextSub++}`;
-        this.issued.push({ sock, subId, method: msg.method });
-        reply({ result: { subId, snapshot: { peers: [...this.meshPeers] } } });
+        const answer = (): void => {
+          const subId = `s${this.nextSub++}`;
+          this.issued.push({ sock, subId, method: msg.method });
+          reply({ result: { subId, snapshot: { peers: [...this.meshPeers] } } });
+        };
+        if (this.peersSubscribeGate?.() === "hold") this.heldPeersSubscribes.push(answer);
+        else answer();
         return;
       }
       case "native.mesh.lane.subscribe": {
@@ -1692,6 +1702,16 @@ export class MockMgmtServer {
   /** Item 206's boot half — answers what `laneSubscribeGate` held. */
   releaseLaneSubscribes(): void {
     for (const answer of this.heldLaneSubscribes.splice(0)) answer();
+  }
+
+  /** Item 423 — how many peer-stream asks `peersSubscribeGate` holds now. */
+  get heldPeersSubscribeCount(): number {
+    return this.heldPeersSubscribes.length;
+  }
+
+  /** Item 423 — answers what `peersSubscribeGate` held. */
+  releasePeersSubscribes(): void {
+    for (const answer of this.heldPeersSubscribes.splice(0)) answer();
   }
 
   async stop(): Promise<void> {

@@ -16,6 +16,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { type AddressInfo, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { verifyAuditSegment } from "@vibefield/audit";
@@ -100,6 +101,16 @@ async function world(state: FreewayState): Promise<{ dataDir: string; mock: Mock
   ]);
   mock.freewayState = state;
   return { dataDir, mock };
+}
+
+/** A loopback port free a moment ago. Item 423's daemon listens where the row can dial it before `bootstrap`
+ * resolves, and `daemon.controlPort` exists only after. */
+async function freePort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+  const { port } = server.address() as AddressInfo;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return port;
 }
 
 async function boot(dataDir: string): Promise<FielddDaemon> {
@@ -374,8 +385,10 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
   };
 
   /** The world, its phone named as a person names one (the audit must never say it). */
-  async function phoneWorld(): Promise<{ dataDir: string; mock: MockMgmtServer }> {
-    const made = await world(upState());
+  async function phoneWorld(
+    state: FreewayState = upState(),
+  ): Promise<{ dataDir: string; mock: MockMgmtServer }> {
+    const made = await world(state);
     made.mock.meshPeers = [
       registryPeer({ nodeId: "node-phone", deviceId: "dev-phone", name: NAME, login: TEST_LOGIN }),
       registryPeer({
@@ -420,7 +433,7 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
   /** `node` dialling the door again, with `credential` or none: what its hello is answered, once
    * the door has closed. */
   async function helloRefused(
-    daemon: FielddDaemon,
+    daemon: Pick<FielddDaemon, "controlPort">,
     mock: MockMgmtServer,
     node: string,
     credential?: string,
@@ -655,5 +668,53 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
       for (const named of [TEST_LOGIN, "node-phone", "dev-phone", NAME, "freeway:", "ts.net"])
         expect(line).not.toContain(named);
     }
+  }, 60_000);
+
+  // Item 423 — a refused phone's hello inside the roster's first pass. The route secret is minted per boot (daemon.ts,
+  // `servePathSecret`), so the serve a restarted fieldd's floor still holds cannot carry a hello into the new door. But
+  // the NEW product serve is placed by every serve declare, and no declare is ordered against the roster's first pass.
+  // A phone therefore reaches the new door between its listen and that pass's end. Here the pass is held at its peer
+  // stream, the freeway coming up makes a declare fire inside it, and the refused phone's hello on the new route must
+  // hear the word. The row holds that the refusals are read before the peer stream is held, by EITHER of two reads:
+  // the boot read before the listen, or the pass's own first read. It does not hold the boot read's place before the
+  // listen; device-service.test.ts's source-order row does.
+  it("423 — between the door's listen and the roster's first pass, a refused phone's hello on the new route hears the word", async () => {
+    const { dataDir, mock } = await phoneWorld(downState(1));
+    const before = new SettingsDocService({ dataDir });
+    await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
+    await before.dispose();
+    const port = await freePort();
+    mock.peersSubscribeGate = () => "hold";
+    let settled = false;
+    const starting = bootstrap({ dataDir, controlPort: port, dataPort: 0 }).finally(() => {
+      settled = true;
+    });
+    void starting.catch(() => undefined);
+    cleanup.push(async () => {
+      mock.releasePeersSubscribes();
+      await (await starting.catch(() => null))?.stop();
+    });
+    await until(() => mock.heldPeersSubscribeCount > 0, 15_000, "the roster's first pass held");
+    mock.pushDelta("native.freeway.state.subscribe", upState({ revision: 2 }));
+    await until(
+      () =>
+        mock.meshAddParams.some(
+          (spec) =>
+            spec["name"] === "product" &&
+            (spec["target"] as { port?: unknown } | undefined)?.port === port,
+        ),
+      15_000,
+      "the new door's product serve, placed inside the held pass",
+    );
+    expect(settled).toBe(false);
+    expect(await helloRefused({ controlPort: port }, mock, "node-phone")).toMatchObject({
+      data: removedWord,
+    });
+    // still held: the word came from a read of the settings document made before the peer stream was held, never
+    // from the roster
+    expect(mock.heldPeersSubscribeCount).toBeGreaterThan(0);
+    expect(settled).toBe(false);
+    mock.releasePeersSubscribes();
+    await starting;
   }, 60_000);
 });
