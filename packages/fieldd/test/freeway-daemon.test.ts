@@ -113,6 +113,15 @@ async function freePort(): Promise<number> {
   return port;
 }
 
+/** Item 429 — has a product serve to the door on `port` been declared to this floor? */
+function productAt(mock: MockMgmtServer, port: number): boolean {
+  return mock.meshAddParams.some(
+    (spec) =>
+      spec["name"] === "product" &&
+      (spec["target"] as { port?: unknown } | undefined)?.port === port,
+  );
+}
+
 async function boot(dataDir: string): Promise<FielddDaemon> {
   const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
   cleanup.push(() => daemon.stop());
@@ -457,6 +466,35 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     return refused;
   }
 
+  /** Item 429 — `node`'s first hello on the door at `port`: "admitted", or the refusal it heard. */
+  async function firstHello(
+    port: number,
+    mock: MockMgmtServer,
+    node: string,
+  ): Promise<"admitted" | RpcErrorShape> {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}${productDoorPath(mock)}`, {
+      headers: { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": node },
+    });
+    cleanup.push(() => ws.close());
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    const rpc = new WsRpc(ws);
+    try {
+      await rpc.call("system.hello", {
+        contractsVersion: CONTRACTS_VERSION,
+        minCompatible: CONTRACTS_VERSION,
+        clientKind: "ios",
+      });
+      return "admitted";
+    } catch (e) {
+      const refused = (e as { rpc?: RpcErrorShape }).rpc;
+      if (refused === undefined) throw e;
+      return refused;
+    }
+  }
+
   /** `to` reconnects to `from`: the doc-sync VERSION exchange against `to`'s own host, as
    * device-service.test.ts drives it. True when something crossed. */
   async function exchange(from: DocumentService, to: DocumentService): Promise<boolean> {
@@ -714,6 +752,70 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     // from the roster
     expect(mock.heldPeersSubscribeCount).toBeGreaterThan(0);
     expect(settled).toBe(false);
+    mock.releasePeersSubscribes();
+    await starting;
+  }, 60_000);
+
+  // Item 429 — the door's route is declared only once the roster's first pass has ended. The pass is what
+  // adds a refused phone's NEW node to the refusals (device-service.ts, `appends`): the door sees only the
+  // node, so before the pass a refused phone registered again under its refused id was admitted. Each row
+  // holds that pass at its peer stream and fires a declare inside it (the freeway coming up).
+  it("429 — inside the roster's first pass no product serve is placed, even when a declare fires", async () => {
+    const { dataDir, mock } = await phoneWorld(downState(1));
+    const port = await freePort();
+    mock.peersSubscribeGate = () => "hold";
+    const starting = bootstrap({ dataDir, controlPort: port, dataPort: 0 });
+    void starting.catch(() => undefined);
+    cleanup.push(async () => {
+      mock.releasePeersSubscribes();
+      await (await starting.catch(() => null))?.stop();
+    });
+    await until(() => mock.heldPeersSubscribeCount > 0, 15_000, "the roster's first pass held");
+    mock.pushDelta("native.freeway.state.subscribe", upState({ revision: 2 }));
+    await until(() => mock.meshServes.get("freeway") !== undefined, 15_000, "the declare");
+    expect(productAt(mock, port), "a product serve placed inside the held pass").toBe(false);
+    mock.releasePeersSubscribes();
+    await starting;
+    await until(() => productAt(mock, port), 15_000, "the door's product serve, after the pass");
+  }, 60_000);
+
+  it("429 — a refused phone registered again on a NEW node, under its refused id, is refused from its first hello", async () => {
+    const { dataDir, mock } = await phoneWorld(downState(1));
+    mock.meshPeers = [
+      registryPeer({
+        nodeId: "node-phone-2",
+        deviceId: "dev-phone",
+        name: NAME,
+        login: TEST_LOGIN,
+      }),
+      registryPeer({
+        nodeId: "node-desk-b",
+        deviceId: "dev-desk-b",
+        name: "desk-b",
+        login: TEST_LOGIN,
+      }),
+    ];
+    const before = new SettingsDocService({ dataDir });
+    await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
+    await before.dispose();
+    const port = await freePort();
+    mock.peersSubscribeGate = () => "hold";
+    const starting = bootstrap({ dataDir, controlPort: port, dataPort: 0 });
+    void starting.catch(() => undefined);
+    cleanup.push(async () => {
+      mock.releasePeersSubscribes();
+      await (await starting.catch(() => null))?.stop();
+    });
+    await until(() => mock.heldPeersSubscribeCount > 0, 15_000, "the roster's first pass held");
+    mock.pushDelta("native.freeway.state.subscribe", upState({ revision: 2 }));
+    await until(() => mock.meshServes.get("freeway") !== undefined, 15_000, "the declare");
+    // the door's FIRST answer: inside the pass if a route to it stands there, else after the pass
+    if (!productAt(mock, port)) {
+      mock.releasePeersSubscribes();
+      await until(() => productAt(mock, port), 15_000, "the door's product serve");
+    }
+    const first = await firstHello(port, mock, "node-phone-2");
+    expect(first, "the new node's first hello").toMatchObject({ data: removedWord });
     mock.releasePeersSubscribes();
     await starting;
   }, 60_000);
