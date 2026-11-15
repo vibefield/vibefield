@@ -165,7 +165,14 @@ function InstalledList({
   return (
     <ul ref={listRef} className="vf-plugins-list" aria-label={PLUGINS_TAB_WORDS.installed}>
       {rows.map((row, index) => {
-        const turning = refused.get(switchKey.one(row.id))?.turningOn;
+        const refusal = refused.get(switchKey.one(row.id));
+        const turning = refusal?.turningOn;
+        const refusedWords =
+          refusal === undefined
+            ? undefined
+            : refusal.updating === true
+              ? SWITCH_WORDS.updating
+              : SWITCH_WORDS.refused(refusal.turningOn);
         return (
           <li
             key={row.id}
@@ -199,7 +206,7 @@ function InstalledList({
                   </span>
                 ) : (
                   <span className="vf-plugins-line" data-tone="attention">
-                    {SWITCH_WORDS.refused(turning)}
+                    {refusedWords}
                   </span>
                 )}
               </span>
@@ -267,7 +274,14 @@ function PageView({
   onTurn: (id: string, on: boolean) => void;
   onTurnPower: (id: string, capability: string, on: boolean) => void;
 }): ReactElement {
-  const turning = refused.get(switchKey.one(page.id))?.turningOn;
+  const refusal = refused.get(switchKey.one(page.id));
+  const turning = refusal?.turningOn;
+  const refusedWords =
+    refusal === undefined
+      ? undefined
+      : refusal.updating === true
+        ? SWITCH_WORDS.updating
+        : SWITCH_WORDS.refused(refusal.turningOn);
   return (
     <div className="vf-plugins-page">
       <button
@@ -328,9 +342,7 @@ function PageView({
                 />
               )}
             </div>
-            {turning !== undefined && (
-              <p className="vf-plugins-page-refused">{SWITCH_WORDS.refused(turning)}</p>
-            )}
+            {turning !== undefined && <p className="vf-plugins-page-refused">{refusedWords}</p>}
             {/* O2-C: an Install takes no press either, so its page says why */}
             {away && (page.onOff !== null || page.powersLive || !page.installed) && (
               <p className="vf-plugins-page-note">{PLUGINS_AWAY}</p>

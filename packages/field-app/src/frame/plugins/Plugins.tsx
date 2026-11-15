@@ -45,6 +45,7 @@ import {
   installLive,
   installRefusal,
   pageAct,
+  refusedWhileUpdating,
 } from "./plugins-install";
 import {
   catalogFoot,
@@ -1073,7 +1074,13 @@ export function Plugins({
       ask()
         .then(
           () => undefined,
-          () => setRefused((was) => new Map(was).set(key, refusal)),
+          (error: unknown) =>
+            setRefused((was) =>
+              new Map(was).set(
+                key,
+                refusedWhileUpdating(error) ? { ...refusal, updating: true } : refusal,
+              ),
+            ),
         )
         .finally(() => {
           underRef.current.delete(key);
