@@ -1299,3 +1299,120 @@ describe("the uninstall race: a person's uninstall is the last word here", () =>
     expect([...(await d.settings.removedPlugins())]).toEqual([PA32_ID]);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// The disable race, as an update meets it (2026-11-15). An update of a present, enabled plugin publishes `install`,
+// whose change writes `enabled` from the record it was handed. Three rows, each holding that a person's disable is
+// the last word here and in the doc:
+// - the third: with the update's publication in flight, a person's disable in its gap and the walk it raises, the
+//   plugin stays off (p5's first row with the update's own action);
+// - the fourth: when one desktop's two publications would commit out of call order (a test-only seam holds the
+//   first write), the doc's last enablement is still the disable's, never the update's stale one;
+// - the fifth: the person's own update never carries a flipped record's enablement into the doc over their disable,
+//   so the plugin stays off everywhere. It holds the rule that an install publication of a PRESENT entry writes
+//   its identity only (enablement through `ensure`): James's pick on the board, 2026-11-15T01:22:08.253Z, "Fix before
+//   the 0.9 tag, and yes: an install follows the account's on/off (Recommended)".
+
+/** The person's update of the present plugin, as the update doors end: `publish(record, "install")`. Its promise is
+ * the publication's. The fix's patch redefines it as a lane act (as p2 does `actInGap`); the rows do not change. */
+function updateAct(d: Desktop): Promise<void> {
+  return d.reconciler.publish(d.registry.record, "install");
+}
+
+/** The person's whole disable: the registry, the handler's own audit row, the publication. Its promise is the act's
+ * whole, publication included. The fix's patch redefines it as a lane act; the rows do not change. */
+async function disableAct(d: Desktop): Promise<void> {
+  marks.get(d)?.();
+  await d.registry.disable(PA32_ID);
+  d.audit.push({ action: "plugin.disable", origin: "local" });
+  await d.reconciler.publish(d.registry.record, "disable");
+}
+
+/** The ledger's index just past the person's last local disable row (the rows after it are what followed it). */
+const pastLastDisable = (d: Desktop): number => {
+  const disables = d.audit.map((row) => row.origin === "local" && row.action === "plugin.disable");
+  return disables.lastIndexOf(true) + 1;
+};
+
+/** The doc's next install-set write waits until `release`; `held` resolves once that write has been reached. */
+function holdNextInstallSetWrite(d: Desktop): { held: Promise<void>; release: () => void } {
+  const write = d.settings.updateInstallSet.bind(d.settings);
+  let first = true;
+  let reached: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  d.settings.updateInstallSet = async (
+    ...args: Parameters<SettingsDocService["updateInstallSet"]>
+  ) => {
+    if (first) {
+      first = false;
+      reached();
+      await gate;
+    }
+    return write(...args);
+  };
+  return { held, release };
+}
+
+describe("the disable race, as an update's publication meets it", () => {
+  it("a disable made while an update's publication (plugin on) still publishes is never undone", async () => {
+    const d = await solo([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")]);
+    const trace = traceEnabled(d);
+    const published1 = updateAct(d); // the update's publication, unawaited
+    const rest2 = await disableInGap(d); // the person's disable, in its gap
+    const ledgerFrom = d.audit.length;
+    await published1; // the update's publication persisted and emitted; its walk waited for it alone
+    const { walk } = await walkNow(d);
+
+    expect(d.registry.record.enabled, "in the disable's gap, the plugin stays off").toBe(false); // RED today
+    await rest2();
+    await walk;
+    await settle(d);
+    expect(d.registry.record.enabled, "after the disable's publication").toBe(false);
+    enabledHeldToLastAct(d, trace, false, ledgerFrom);
+  });
+
+  it("one desktop's publications land in its acts' order: a disable after an update stands", async () => {
+    const d = await solo([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")]);
+    const trace = traceEnabled(d);
+    const gate = holdNextInstallSetWrite(d);
+    const updating = updateAct(d); // the update's publication: its write is held by the gate
+    await gate.held;
+    // The disable is STARTED, never awaited before the gate opens: the release must not wait on the act it gates.
+    // Today it writes at once (no lane), the gate sees its write, and the update's stale write then lands LAST: red.
+    // Under the fix the disable waits behind the update's lane hold (held until the update's publication settles,
+    // which waits on this gate): no write is seen, the 1 s bound opens the gate, the update commits, then the disable
+    // moves and publishes LAST: green. Time decides nothing green; the red side's proof is an in-memory write seen
+    // within the bound.
+    const disabling = disableAct(d);
+    for (let i = 0; i < 40 && (await entryOf(d))?.enabled !== false; i += 1) await pause(25);
+    gate.release();
+    await updating;
+    await disabling;
+    await settle(d);
+    const ledgerFrom = pastLastDisable(d);
+
+    expect((await entryOf(d))?.enabled, "the doc's enablement is the last act").toBe(false); // RED today
+    expect(d.registry.record.enabled, "the plugin is off here").toBe(false);
+    enabledHeldToLastAct(d, trace, false, ledgerFrom);
+  });
+
+  it("a person's update never carries a flipped record's enablement into the doc over their disable", async () => {
+    const d = await solo([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")]);
+    await d.reconciler.publish(await d.registry.disable(PA32_ID), "disable"); // off, published, settled
+    await settle(d);
+    // the record turned on again by a walk's flip, the doc still off: what the gap's race leaves
+    await d.registry.enable(PA32_ID);
+    await updateAct(d); // the person's update of the plugin
+    await settle(d);
+
+    // an install publication of a present entry writes its identity only (James's pick, 2026-11-15T01:22:08.253Z)
+    expect((await entryOf(d))?.enabled, "the doc keeps the person's disable").toBe(false); // RED today
+    expect(d.registry.record.enabled, "a walk turns the flipped record off again").toBe(false);
+  });
+});
