@@ -601,6 +601,22 @@ export const AppPreferenceSetParams = z
     "preference value does not match its key",
   );
 
+/** Item 436 — what the setter says when it refuses a key or its value: every key of
+ * `AppPreferenceKey` with the kind of value the check above holds it to, read from the same list,
+ * so a key is named in it the day it is added. The keys that are not switches say their kind. */
+const APP_PREFERENCE_VALUE_WORDS: Partial<Record<AppPreferenceKey, string>> = {
+  [APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE]: MeshSyncPosture.options.join("|"),
+  [APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL]: "epoch ms or null",
+};
+const APP_PREFERENCE_SWITCHES = AppPreferenceKey.options.filter(
+  (key) => APP_PREFERENCE_VALUE_WORDS[key] === undefined,
+);
+const APP_PREFERENCE_KINDS = [
+  `${APP_PREFERENCE_SWITCHES.join("|")} (boolean)`,
+  ...Object.entries(APP_PREFERENCE_VALUE_WORDS).map(([key, words]) => `${key} (${words})`),
+];
+export const APP_PREFERENCE_SET_EXPECTED = `expected { key: ${APP_PREFERENCE_KINDS.join(" | ")} }`;
+
 /** MK-O3D (2026-11-14; James's MK-O1 pick B, "Once on each desktop"; DESIGN.md §8 "The community tile"): whether
  * THIS desktop has shown the community statement, and the person went on past it here. Each desktop shows it once.
  * Device scope and never synced: fieldd keeps it in a file of its own beside its plugin records

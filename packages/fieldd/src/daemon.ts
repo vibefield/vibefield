@@ -46,6 +46,7 @@ import {
   AgentsUpdateStopParams,
   AgentsUsageParams,
   APP_PREFERENCE_KEYS,
+  APP_PREFERENCE_SET_EXPECTED,
   AppPreferenceSetParams,
   ARTIFACT_LIMITS,
   ArtifactMarkParams,
@@ -7488,11 +7489,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       requireDesktopCaller(ctx);
       const parsed = AppPreferenceSetParams.safeParse(params);
       if (!parsed.success) {
-        throw new RpcCallError(
-          "PRECONDITION_FAILED",
-          "expected { key: desktop.showTray|desktop.backgroundShell|desktop.screenshotHotkey|desktop.confirmQuit|desktop.keepRunningOnQuit|desktop.sounds|mesh.connectAsks (boolean) | mesh.syncPosture (automatic|opt-in) | desktop.soundsQuietUntil (epoch ms or null) }",
-          false,
-        );
+        throw new RpcCallError("PRECONDITION_FAILED", APP_PREFERENCE_SET_EXPECTED, false);
       }
       if (parsed.data.key === APP_PREFERENCE_KEYS.COMMUNITY_PLUGINS) {
         // MK-2a (D4, VF-PM 2026-11-11 08:48:07Z, 09:09:35Z): until the slice that draws the switch
