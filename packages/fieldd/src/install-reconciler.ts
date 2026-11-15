@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type InstallSetEntry,
   type PluginRecord,
@@ -51,6 +52,21 @@ export interface GrantAct {
   changed: boolean;
   /** the revocation generation the act SAW, read at its start in the plugin's lane; its grant records this one */
   seen?: number;
+}
+
+/** One async context's hold on one plugin's lane (the re-entry guard). `live` falls when the hold is released. */
+interface LaneHold {
+  readonly pluginId: string;
+  live: boolean;
+  readonly outer: LaneHold | undefined;
+}
+
+/** A plugin's lane asked for by the async context that already holds it: a programming error, said at once instead of
+ * a wait behind itself that never ends. */
+export class LaneReenteredError extends Error {
+  constructor(readonly pluginId: string) {
+    super(`lane re-entered: ${pluginId}`);
+  }
 }
 
 /** What a person's enable, disable or update hands back from its own work (`localAct`): the record to publish (none:
@@ -233,77 +249,108 @@ export class InstallSetReconciler {
    * a parked revocation withheld a grant (the caller retries its publication). At most one audited `setGrant` per
    * requested decision of the entry, and one doc read: the lane's longest hold by a walk. */
   private async applyGrants(pluginId: string): Promise<{ moved: boolean; held: boolean }> {
-    const release = await this.enter(pluginId);
+    const lane = await this.hold(pluginId);
     try {
-      const entry = (await this.cfg.settingsDoc.installSet())[pluginId];
-      const record = this.cfg.plugins.get(pluginId);
-      if (entry === undefined || record === undefined) return { moved: false, held: false };
-      if (record.source === "dev-linked" || record.source === "sideload")
-        return { moved: false, held: false };
-      let moved = false;
-      let held = false;
-      for (const g of entry.grants) {
-        const standing = standingDecision(entry, g);
-        const wantGranted = standing.granted;
-        const isGranted = record.grantedCapabilities.includes(g.capability);
-        const isDeniedRevoked = record.deniedCapabilities.some(
-          (d) => d.capability === g.capability && d.reason === "revoked",
-        );
-        const matches = wantGranted ? isGranted || !isDeniedRevoked : !isGranted && isDeniedRevoked;
-        if (matches) continue;
-        if (!record.requestedCapabilities.includes(g.capability)) continue; // never grant the unrequested
-        // a revocation of this device's whose publication parked is newer than the doc's standing grant: held, the
-        // publication retried; a revoke is never held
-        if (wantGranted && this.parkedRevokes.get(pluginId)?.has(g.capability) === true) {
-          held = true;
-          this.log.info(
-            "fieldd.install_reconciler.grant_held",
-            "A synced grant is held: this device's revocation has not reached the document yet",
-            { pluginId, capability: g.capability },
+      return await lane.run(async () => {
+        const entry = (await this.cfg.settingsDoc.installSet())[pluginId];
+        const record = this.cfg.plugins.get(pluginId);
+        if (entry === undefined || record === undefined) return { moved: false, held: false };
+        if (record.source === "dev-linked" || record.source === "sideload")
+          return { moved: false, held: false };
+        let moved = false;
+        let held = false;
+        for (const g of entry.grants) {
+          const standing = standingDecision(entry, g);
+          const wantGranted = standing.granted;
+          const isGranted = record.grantedCapabilities.includes(g.capability);
+          const isDeniedRevoked = record.deniedCapabilities.some(
+            (d) => d.capability === g.capability && d.reason === "revoked",
           );
-          continue;
+          const matches = wantGranted
+            ? isGranted || !isDeniedRevoked
+            : !isGranted && isDeniedRevoked;
+          if (matches) continue;
+          if (!record.requestedCapabilities.includes(g.capability)) continue; // never grant the unrequested
+          // a revocation of this device's whose publication parked is newer than the doc's standing grant: held, the
+          // publication retried; a revoke is never held
+          if (wantGranted && this.parkedRevokes.get(pluginId)?.has(g.capability) === true) {
+            held = true;
+            this.log.info(
+              "fieldd.install_reconciler.grant_held",
+              "A synced grant is held: this device's revocation has not reached the document yet",
+              { pluginId, capability: g.capability },
+            );
+            continue;
+          }
+          const biased = standing.reason !== "decision";
+          const stamps = {
+            revocationGeneration: entry.revocationGenerations?.[g.capability] ?? 0,
+            decisionGeneration: g.revocationGeneration ?? 0,
+          };
+          const { changed } = await this.cfg.audit.requiredSystem(
+            {
+              action: wantGranted ? "capability.grant" : "capability.revoke",
+              target: { kind: "capability", id: g.capability, parentId: entry.pluginId },
+              ...(standing.reason !== "decision"
+                ? { reasonCode: BIAS_REASON_CODES[standing.reason] }
+                : {}),
+              attrs: {
+                origin: "settings-doc",
+                pluginId: entry.pluginId,
+                granted: wantGranted,
+                decisionAt: g.at,
+                ...stamps,
+                ...(biased ? { reason: standing.reason } : {}),
+              },
+            },
+            () => this.cfg.plugins.setGrant(entry.pluginId, g.capability, wantGranted),
+            (result) => ({
+              attrs: {
+                origin: "settings-doc",
+                pluginId: entry.pluginId,
+                capability: g.capability,
+                granted: wantGranted,
+                changed: result.changed,
+                grantGeneration: result.record.grantGeneration,
+                ...stamps,
+                ...(biased ? { reason: standing.reason } : {}),
+              },
+            }),
+          );
+          moved = moved || changed;
         }
-        const biased = standing.reason !== "decision";
-        const stamps = {
-          revocationGeneration: entry.revocationGenerations?.[g.capability] ?? 0,
-          decisionGeneration: g.revocationGeneration ?? 0,
-        };
-        const { changed } = await this.cfg.audit.requiredSystem(
-          {
-            action: wantGranted ? "capability.grant" : "capability.revoke",
-            target: { kind: "capability", id: g.capability, parentId: entry.pluginId },
-            ...(standing.reason !== "decision"
-              ? { reasonCode: BIAS_REASON_CODES[standing.reason] }
-              : {}),
-            attrs: {
-              origin: "settings-doc",
-              pluginId: entry.pluginId,
-              granted: wantGranted,
-              decisionAt: g.at,
-              ...stamps,
-              ...(biased ? { reason: standing.reason } : {}),
-            },
-          },
-          () => this.cfg.plugins.setGrant(entry.pluginId, g.capability, wantGranted),
-          (result) => ({
-            attrs: {
-              origin: "settings-doc",
-              pluginId: entry.pluginId,
-              capability: g.capability,
-              granted: wantGranted,
-              changed: result.changed,
-              grantGeneration: result.record.grantGeneration,
-              ...stamps,
-              ...(biased ? { reason: standing.reason } : {}),
-            },
-          }),
-        );
-        moved = moved || changed;
-      }
-      return { moved, held };
+        return { moved, held };
+      });
     } finally {
-      release();
+      lane.release();
     }
+  }
+
+  /** The lanes the current async context holds, live from the grant until the release (the re-entry guard). */
+  private readonly holds = new AsyncLocalStorage<LaneHold>();
+
+  private holding(pluginId: string): boolean {
+    for (let h = this.holds.getStore(); h !== undefined; h = h.outer)
+      if (h.live && h.pluginId === pluginId) return true;
+    return false;
+  }
+
+  /** Wait for this plugin's lane and hold it. `run` runs work as its holder (the guard reads that), `release` ends
+   * the hold. A lane asked for by the context that holds it rejects at once (`LaneReenteredError`); a released hold
+   * never trips it, so a child a move started and did not await may take the lane after the act, as before. */
+  private async hold(
+    pluginId: string,
+  ): Promise<{ run: <T>(fn: () => Promise<T>) => Promise<T>; release: () => void }> {
+    if (this.holding(pluginId)) throw new LaneReenteredError(pluginId);
+    const release = await this.enter(pluginId);
+    const held: LaneHold = { pluginId, live: true, outer: this.holds.getStore() };
+    return {
+      run: (fn) => this.holds.run(held, fn),
+      release: () => {
+        held.live = false;
+        release();
+      },
+    };
   }
 
   /** The grant race: wait for this plugin's lane, first come first served, and get its release. `prior` never
@@ -333,19 +380,21 @@ export class InstallSetReconciler {
     granted: boolean,
     move: () => Promise<GrantMove<T>>,
   ): Promise<T> {
-    const release = await this.enter(pluginId);
+    const lane = await this.hold(pluginId);
+    const release = lane.release;
     // the generation this act SAW: read before its registry move, inside the lane, never at its commit. A failed
     // read has moved nothing of this act: it releases and rethrows, and parks nothing
     let seen: number;
     try {
-      seen = await this.cfg.settingsDoc.revocationGenerationOf(pluginId, capability);
+      const doc = this.cfg.settingsDoc;
+      seen = await lane.run(() => doc.revocationGenerationOf(pluginId, capability));
     } catch (e) {
       release();
       throw e;
     }
     let out: GrantMove<T>;
     try {
-      out = await move();
+      out = await lane.run(move);
     } catch (e) {
       // the registry may have moved before the handler failed: a revocation that stands here and was never
       // published is parked, as a failed publication's is
@@ -366,47 +415,49 @@ export class InstallSetReconciler {
    * download bounded by the installer's own limits, and only for a plugin this desktop does not hold, on which a
    * person here has no act. Answers the record, or undefined when nothing is to be installed. */
   private async applyPresence(pluginId: string): Promise<PluginRecord | undefined> {
-    const release = await this.enter(pluginId);
+    const lane = await this.hold(pluginId);
     try {
-      const entry = (await this.cfg.settingsDoc.installSet())[pluginId];
-      const here = this.cfg.plugins.get(pluginId);
-      if (here !== undefined) return here;
-      if (entry === undefined || entry.source !== "registry") return undefined;
-      return await this.cfg.audit.requiredSystem(
-        {
-          action: "plugin.install",
-          target: { kind: "plugin", id: pluginId },
-          attrs: {
-            origin: "settings-doc",
-            source: entry.source,
-            requestedVersion: entry.version ?? "latest",
-            artifactSha256: entry.artifactSha256 ?? "unknown",
+      return await lane.run(async () => {
+        const entry = (await this.cfg.settingsDoc.installSet())[pluginId];
+        const here = this.cfg.plugins.get(pluginId);
+        if (here !== undefined) return here;
+        if (entry === undefined || entry.source !== "registry") return undefined;
+        return await this.cfg.audit.requiredSystem(
+          {
+            action: "plugin.install",
+            target: { kind: "plugin", id: pluginId },
+            attrs: {
+              origin: "settings-doc",
+              source: entry.source,
+              requestedVersion: entry.version ?? "latest",
+              artifactSha256: entry.artifactSha256 ?? "unknown",
+            },
           },
-        },
-        async () => {
-          await this.cfg.installer.install({
-            id: pluginId,
-            ...(entry.version !== undefined ? { version: entry.version } : {}),
-          });
-          const installed = this.cfg.plugins.get(pluginId);
-          if (installed === undefined) {
-            throw new Error(`${pluginId}: install completed without a registry record`);
-          }
-          return installed;
-        },
-        (installed) => ({
-          attrs: {
-            origin: "settings-doc",
-            version: installed.version,
-            source: installed.source,
-            manifestHash: installed.manifestHash,
-            artifactSha256: installed.registry?.artifactSha256 ?? "unknown",
-            publisher: installed.registry?.publisher ?? "unknown",
+          async () => {
+            await this.cfg.installer.install({
+              id: pluginId,
+              ...(entry.version !== undefined ? { version: entry.version } : {}),
+            });
+            const installed = this.cfg.plugins.get(pluginId);
+            if (installed === undefined) {
+              throw new Error(`${pluginId}: install completed without a registry record`);
+            }
+            return installed;
           },
-        }),
-      );
+          (installed) => ({
+            attrs: {
+              origin: "settings-doc",
+              version: installed.version,
+              source: installed.source,
+              manifestHash: installed.manifestHash,
+              artifactSha256: installed.registry?.artifactSha256 ?? "unknown",
+              publisher: installed.registry?.publisher ?? "unknown",
+            },
+          }),
+        );
+      });
     } finally {
-      release();
+      lane.release();
     }
   }
 
@@ -414,15 +465,17 @@ export class InstallSetReconciler {
    * reads as removed is removed here, data kept. Read again inside the lane: a fresh install here of a plugin removed
    * elsewhere is either wholly before (its publication committed: the doc no longer reads it removed) or after. */
   private async applyRemoval(pluginId: string): Promise<void> {
-    const release = await this.enter(pluginId);
+    const lane = await this.hold(pluginId);
     try {
-      if (!(await this.cfg.settingsDoc.removedPlugins()).has(pluginId)) return;
-      const record = this.cfg.plugins.get(pluginId);
-      // bundled and dev-linked plugins are never removed by the doc; a sideload never enters it
-      if (record?.source !== "registry") return;
-      await this.removeHere(record);
+      return await lane.run(async () => {
+        if (!(await this.cfg.settingsDoc.removedPlugins()).has(pluginId)) return;
+        const record = this.cfg.plugins.get(pluginId);
+        // bundled and dev-linked plugins are never removed by the doc; a sideload never enters it
+        if (record?.source !== "registry") return;
+        await this.removeHere(record);
+      });
     } finally {
-      release();
+      lane.release();
     }
   }
 
@@ -435,59 +488,61 @@ export class InstallSetReconciler {
    * could land between this walk's registry move and its teardown, which would then stop a plugin the registry calls
    * enabled. An enable's restart is fire-and-forget, as before. */
   private async applyEnablement(pluginId: string, start: PluginRecord): Promise<PluginRecord> {
-    const release = await this.enter(pluginId);
+    const lane = await this.hold(pluginId);
     try {
-      const entry = (await this.cfg.settingsDoc.installSet())[pluginId];
-      let record = this.cfg.plugins.get(pluginId);
-      if (entry === undefined || record === undefined) return record ?? start;
-      if (record.source === "dev-linked" || record.source === "sideload") return record;
-      const enabledHere = this.cfg.plugins.isHeld(pluginId)
-        ? await this.cfg.plugins.wantsEnabled(pluginId)
-        : record.enabled;
-      if (enabledHere === entry.enabled) return record;
-      if (entry.enabled) {
-        record = await this.cfg.audit.requiredSystem(
-          {
-            action: "plugin.enable",
-            target: { kind: "plugin", id: pluginId },
-            attrs: { origin: "settings-doc" },
-          },
-          () => this.cfg.plugins.enable(pluginId),
-          (enabled) => ({
-            attrs: {
-              origin: "settings-doc",
-              enabled: enabled.enabled,
-              source: enabled.source,
-              manifestHash: enabled.manifestHash,
+      return await lane.run(async () => {
+        const entry = (await this.cfg.settingsDoc.installSet())[pluginId];
+        let record = this.cfg.plugins.get(pluginId);
+        if (entry === undefined || record === undefined) return record ?? start;
+        if (record.source === "dev-linked" || record.source === "sideload") return record;
+        const enabledHere = this.cfg.plugins.isHeld(pluginId)
+          ? await this.cfg.plugins.wantsEnabled(pluginId)
+          : record.enabled;
+        if (enabledHere === entry.enabled) return record;
+        if (entry.enabled) {
+          record = await this.cfg.audit.requiredSystem(
+            {
+              action: "plugin.enable",
+              target: { kind: "plugin", id: pluginId },
+              attrs: { origin: "settings-doc" },
             },
-          }),
-        );
-        this.cfg.restart(pluginId);
-      } else {
-        record = await this.cfg.audit.requiredSystem(
-          {
-            action: "plugin.disable",
-            target: { kind: "plugin", id: pluginId },
-            attrs: { origin: "settings-doc" },
-          },
-          async () => {
-            const disabled = await this.cfg.plugins.disable(pluginId);
-            await this.cfg.teardown(pluginId);
-            return disabled;
-          },
-          (disabled) => ({
-            attrs: {
-              origin: "settings-doc",
-              enabled: disabled.enabled,
-              source: disabled.source,
-              manifestHash: disabled.manifestHash,
+            () => this.cfg.plugins.enable(pluginId),
+            (enabled) => ({
+              attrs: {
+                origin: "settings-doc",
+                enabled: enabled.enabled,
+                source: enabled.source,
+                manifestHash: enabled.manifestHash,
+              },
+            }),
+          );
+          this.cfg.restart(pluginId);
+        } else {
+          record = await this.cfg.audit.requiredSystem(
+            {
+              action: "plugin.disable",
+              target: { kind: "plugin", id: pluginId },
+              attrs: { origin: "settings-doc" },
             },
-          }),
-        );
-      }
-      return this.cfg.plugins.get(pluginId) ?? record;
+            async () => {
+              const disabled = await this.cfg.plugins.disable(pluginId);
+              await this.cfg.teardown(pluginId);
+              return disabled;
+            },
+            (disabled) => ({
+              attrs: {
+                origin: "settings-doc",
+                enabled: disabled.enabled,
+                source: disabled.source,
+                manifestHash: disabled.manifestHash,
+              },
+            }),
+          );
+        }
+        return this.cfg.plugins.get(pluginId) ?? record;
+      });
     } finally {
-      release();
+      lane.release();
     }
   }
 
@@ -502,10 +557,11 @@ export class InstallSetReconciler {
     action: Exclude<PublishAction, "grants">,
     move: () => Promise<LocalMove<T>>,
   ): Promise<T> {
-    const release = await this.enter(pluginId);
+    const lane = await this.hold(pluginId);
+    const release = lane.release;
     let out: LocalMove<T>;
     try {
-      out = await move();
+      out = await lane.run(move);
     } catch (e) {
       release();
       throw e;
@@ -522,10 +578,11 @@ export class InstallSetReconciler {
    * teardown until its removal from the doc settles: a walk raised in the handler's gap never installs the plugin
    * again. `move` is the handler's own work (the teardown, the code removed); the act answers once it is done. */
   async uninstallAct<T>(pluginId: string, by: string, move: () => Promise<T>): Promise<T> {
-    const release = await this.enter(pluginId);
+    const lane = await this.hold(pluginId);
+    const release = lane.release;
     let value: T;
     try {
-      value = await move();
+      value = await lane.run(move);
     } catch (e) {
       release();
       throw e;
