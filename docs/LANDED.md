@@ -50845,3 +50845,69 @@ fourth is their docs commit: item 445's DESIGN.md lines and M309's entry. Whole 
 435 (`build-fieldd-sea --verify` does not prove the packaged fieldd's refusal of the plugin-list seam); 434 is OB's.
 Item 449 (the records' save makes their folder from a hand-spelled path, not from the row) rides RV's 442. No run on
 the old mini, no Windows or iOS build.
+
+## The phone's QA batch — items 346 to 419 and 427, the build James tested on his iPhone (M316)
+
+**What it rests on.** James's QA of the phone, 2026-11-12 to 2026-11-15, in his QA session: each fault he named was
+fixed as its own commits on one branch, built, and put on his iPhone on his typed word. He typed in that session on
+2026-11-12 at 10:10:35Z: "for qa fixes, no need to rush to land, let's iterate fast and accumulate fixes in commits,
+and submit in batches later". And on 2026-11-15: at 05:12:02Z "have you merge and push all the qa work", and at
+05:17:52Z "ok, i think it is enough for this batch, land it next". On the PM board at 2026-11-15T06:18:37.191Z he
+chose "Right: land it, the kit's tests are owed (what is happening)". So this lands with the kit's Swift tests owed,
+said below in plain words.
+
+**What** (147 commits and one more; on main `323c0c8cd`…`9e2026b5c`; 124 paths, 122 of them under `apps/ios`;
+red before green wherever a value could hold the decision):
+- **The home screen.** 346: the face is one gesture read whole, so a tap opens the Me menu again and the hold
+  stays. 348: one pull on every tab, read from the finger, the whole screen the card it moves; History's and
+  Chat's lists give the pull only at rest at their tops. 350: the roots' heads stand on the view circles' line.
+- **History's roots and ledger.** 352: the ledger follows the door's cursor to the listing's end. 353: it wears
+  the desktop's figures, treemap and row rules. 364: it is folded off the main actor. 390, 392, 416: the root says
+  Projects and how many in a bubble; a project's page wears the same head, on the back button's row, a long name
+  cut at its end. 393: a session's entry carries the desktop entry's figures on one line.
+- **The session document** (362a to 362g, 366, 368, 370, 380, 381, 384, 386 to 389, 391, 395, 396): it opens at its
+  end and follows; time cuts it into sittings; a recorded message's words are read as Chat reads a spark's (the
+  drawing moved to a FieldMarkdown target); between two replies what the agent did folds into one group; a long
+  message stands in the room's window and opens from its foot; a cut is marked whenever the words are less than
+  the whole; a tool line opens; a recorded picture is fetched, held, shown as a tile and opened in a viewer that
+  is the whole screen; a road change under an open document loses nothing shown; the foot's band, the slot's
+  button, `Latest`, the pill that says how far back it is, and the side button to the message before.
+- **417, 417b, 418.** A session's first reading is the hold: the mark at the centre, moving, drawn by the design
+  kit from the desktop's generated SVG. The rows above a session are read in by a pull down at its top, with a
+  mark that fills, arms and turns, never by themselves.
+- **419.** The shelf's folder opens as the Home Screen's does and its apps open as the system launches one: an
+  icon darkens under a finger, a long press lifts the icon alone, the screen zooms out of the icon tapped.
+- **The marks** (359, 360): every agent the catalog offers a phone draws its own mark again, nine in the asset
+  catalog and on the swarm's atlas. **358**: Settings › Terminal opens on a preview.
+- **410** (found by the mini's tests, not by James): a direct read's session ends when its last call is back,
+  never under one that is out; leaving a session while its older pages were read could end the app.
+- **SP-7b** (the injection): History reads a desktop's sessions directly.
+- **427** (the last commit): `BandsLayout.centre` is left unoptimized, because Swift 6.3.3's CopyPropagation pass
+  crashes on it in a Release build and stops every archive; the comment says when to drop the attribute.
+- `DESIGN.md` §8 and §13 carry each item's rule (42 of the commits), and `scripts/check-ios-fixtures.mjs` its row.
+
+**What was proven at the carried top, on this Mac**:
+- The carry itself: 148 commits onto main, each through the pre-commit hook, each message, author and author date
+  its source's; one carried commit differs from its source, in the one resolved `DESIGN.md` hunk. Under `apps/ios`
+  the carried top is the batch's tip, item 427's commit and main's own four changed paths, nothing else.
+- The Debug device build of the app and the whole kit: BUILD SUCCEEDED, 0 error lines, no package fetched. It
+  was not installed or launched.
+- The compiler's read of three test targets against that build (a typecheck: no row runs): FieldHistoryTests
+  29 files, FieldHomeTests 82 files, FieldDesignTests 20 files; 0 error lines in each.
+- The desktop's whole `pnpm verify` at the carried top, under an `env -i` harness with a stand-in HOME: exit 0,
+  its fifteen stages opened; 27 suites and no failed line, fieldd `Test Files 286 passed | 5 skipped (291)`,
+  `Tests 4045 passed | 15 skipped (4060)`; cargo's 38 results ok. `check:ios-fixtures` ran with the batch's
+  change to it: 456 fixture copies and 112 contract values identical to contracts.
+
+**Not run at the land** (owed; the old mini, the one host that runs the kit's rows, is closed):
+- Every kit row on the carried top: KB (the kit builds for testing), KH (FieldHistoryTests), KM, KS, KW, KT.
+- FieldDesignTests' nineteen rows for the moving mark (417b): never run anywhere; the kit runner has no row for
+  that target yet.
+- Item 412's rows (a call held out by hand while the read ends under it): on their own branch, never run, and not
+  in this land.
+- The last kit run that went: 2026-11-14 09:20Z to 09:26Z at `943936977`, three commits before the batch's tip:
+  KB green; KH 494 of 494; KM 743 of 743; KS 41 of 41; KW 46 of 46; KT 183 of 184, its one red row item 167's,
+  fixed on main since (M299). The tip adds 417b over that run.
+
+**What it does not cover.** The batch on hardware beyond what James tried on his own iPhone. The Release archive
+(build 5.1) cut from the batch's tip plus item 427 waits his own upload; nothing here uploads or installs.
