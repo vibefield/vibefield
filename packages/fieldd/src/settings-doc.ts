@@ -154,6 +154,10 @@ export interface InstallSetChange {
   ensure?: { identity: InstallIdentity; enabled: boolean };
   /** grant these now — each decision records the generation this doc holds */
   grant?: readonly string[];
+  /** per granted capability, the revocation generation the act SAW at its start (the header's law: a grant records
+   * the generation it saw). A grant without one records the generation this doc holds, as before; one that names
+   * more than the doc holds records the doc's (never ahead). */
+  grantSeen?: Readonly<Record<string, number>>;
   /** revoke these now — each adds one revocation (its generation grows) and
    * writes the revoked decision, in the same transaction */
   revoke?: readonly string[];
@@ -608,7 +612,9 @@ export class SettingsDocService extends EventEmitter {
     }
     for (const capability of change.grant ?? []) {
       if (revoke.has(capability)) continue; // one decision per capability per act
-      const generation = this.generationOf(pluginId, capability);
+      const holds = this.generationOf(pluginId, capability);
+      const seen = change.grantSeen?.[capability];
+      const generation = seen === undefined ? holds : Math.min(seen, holds);
       grants.set(grantKey(pluginId, capability), {
         decision: "granted",
         at,
@@ -708,6 +714,12 @@ export class SettingsDocService extends EventEmitter {
   /** How many removal keys this plugin has: the generation an identity written now is stamped with. */
   private removalGenerationOf(pluginId: string): number {
     return this.removalCounts().get(pluginId) ?? 0;
+  }
+
+  /** How many revocations of this capability the document holds: what a person's grant act SAW at its start. */
+  async revocationGenerationOf(pluginId: string, capability: string): Promise<number> {
+    await this.ready();
+    return this.generationOf(pluginId, capability);
   }
 
   /** How many revocations of this capability the document holds. */

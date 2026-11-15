@@ -49,6 +49,8 @@ export interface GrantAct {
   capability: string;
   granted: boolean;
   changed: boolean;
+  /** the revocation generation the act SAW, read at its start in the plugin's lane; its grant records this one */
+  seen?: number;
 }
 
 /** What a person's grant act hands back from its own work (`grantAct`): the record to publish, whether this
@@ -408,6 +410,15 @@ export class InstallSetReconciler {
     move: () => Promise<GrantMove<T>>,
   ): Promise<T> {
     const release = await this.enter(pluginId);
+    // the generation this act SAW: read before its registry move, inside the lane, never at its commit. A failed
+    // read has moved nothing of this act: it releases and rethrows, and parks nothing
+    let seen: number;
+    try {
+      seen = await this.cfg.settingsDoc.revocationGenerationOf(pluginId, capability);
+    } catch (e) {
+      release();
+      throw e;
+    }
     let out: GrantMove<T>;
     try {
       out = await move();
@@ -419,7 +430,7 @@ export class InstallSetReconciler {
       throw e;
     }
     this.unpark(pluginId, capability);
-    const act: GrantAct = { capability, granted, changed: out.changed };
+    const act: GrantAct = { capability, granted, changed: out.changed, seen };
     void this.publish(out.record, "grants", act).finally(release);
     return out.value;
   }
@@ -507,6 +518,7 @@ export class InstallSetReconciler {
           : { enabled: record.enabled, ensure: { identity, enabled: record.enabled } };
     const revoke = new Set<string>();
     const grant: string[] = [];
+    const grantSeen: Record<string, number> = {};
     if (act !== undefined) {
       // A revocation is always written — biased to security, and it must reach
       // a document whose standing grant this device has not applied away yet.
@@ -515,6 +527,8 @@ export class InstallSetReconciler {
       // it, and stamping that grant now would let it outlive the revocation.
       if (!act.granted) revoke.add(act.capability);
       else if (act.changed) grant.push(act.capability);
+      if (act.granted && act.changed && act.seen !== undefined)
+        grantSeen[act.capability] = act.seen;
     }
     // A revocation this device holds that the document has no decision for
     // (made before its entry was ever published) joins it, biased to security.
@@ -533,6 +547,7 @@ export class InstallSetReconciler {
     for (const capability of carried) revoke.add(capability);
     if (revoke.size > 0) change.revoke = [...revoke];
     if (grant.length > 0) change.grant = grant;
+    if (Object.keys(grantSeen).length > 0) change.grantSeen = grantSeen;
     const attrs = {
       by: action,
       source: identity.source,
