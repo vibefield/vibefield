@@ -20,7 +20,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   caselessAt,
@@ -487,6 +488,21 @@ describe("placeFacts on real repositories", { timeout: 30_000 }, () => {
       expect(read1.sshAliases).toEqual({ "vf-alias-gh": "github.com" });
       const asked = readFileSync(log, "utf8").trim().split("\n").sort();
       expect(asked).toEqual(["-G vf-alias-gh", "-G vf-plain-host.example"]);
+    },
+  );
+
+  // item 447: the rows above that name an ssh remote and bring no ssh of their own are answered by the suite's
+  // stand-in (test/fake-ssh-env.ts). The name is resolved here by hand and nothing is run, so a setup that did not
+  // reach this worker is red without the machine's ssh being started.
+  it.skipIf(process.platform === "win32")(
+    "the suite's own ssh is the stand-in on PATH, never the machine's",
+    () => {
+      const first = (process.env["PATH"] ?? "")
+        .split(delimiter)
+        .map((dir) => join(dir, "ssh"))
+        .find((candidate) => existsSync(candidate));
+      const here = dirname(fileURLToPath(import.meta.url));
+      expect(first).toBe(join(here, "fixtures", "fake-bin", "ssh"));
     },
   );
 

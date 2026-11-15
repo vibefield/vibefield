@@ -1,0 +1,13 @@
+#!/bin/sh
+# Item 447 test fixture: the ssh fieldd's tests find first on PATH (test/fake-ssh-env.ts puts this folder there).
+# The product asks `ssh -G <host>` about an ssh host a remote names (src/workspace/host/places.ts, C10). The
+# machine's own ssh answers that from the person's ssh configuration, which it finds through the account record
+# whatever HOME says: a unit test would read a developer's own file, and its answer would depend on it. This
+# stand-in answers as ssh does for a host with no alias, and reads nothing. A row that needs an alias puts an ssh
+# of its own before this one (workspace-places.test.ts). Anything else asked of it is refused aloud.
+if [ "$1" = "-G" ] && [ -n "$2" ]; then
+  echo "hostname $2"
+  exit 0
+fi
+echo "fieldd's tests do not run ssh (asked: $*)" >&2
+exit 64
