@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type InstallSetEntry,
+  PLUGIN_LIMITS,
   type PluginRecord,
   type StandingReason,
   standingDecision,
@@ -102,6 +103,8 @@ export interface InstallReconcilerConfig {
   /** MK-2d (R3): the daemon's retire step after an uninstall (the plugin's runtime diagnostics) */
   retire?: (pluginId: string) => void;
   logger?: Logger;
+  /** test-only: how long a person's switch waits behind an update (`PLUGIN_LIMITS.SWITCH_WAIT_MS` otherwise) */
+  switchWaitMs?: number;
 }
 
 export class InstallSetReconciler {
@@ -326,6 +329,10 @@ export class InstallSetReconciler {
     }
   }
 
+  /** The plugins an update holds the lane of now (`localAct` with "install"): a person's switch behind one is
+   * bounded (item 440, James's pick B). */
+  private readonly updating = new Set<string>();
+
   /** The lanes the current async context holds, live from the grant until the release (the re-entry guard). */
   private readonly holds = new AsyncLocalStorage<LaneHold>();
 
@@ -340,9 +347,10 @@ export class InstallSetReconciler {
    * never trips it, so a child a move started and did not await may take the lane after the act, as before. */
   private async hold(
     pluginId: string,
+    bounded = false,
   ): Promise<{ run: <T>(fn: () => Promise<T>) => Promise<T>; release: () => void }> {
     if (this.holding(pluginId)) throw new LaneReenteredError(pluginId);
-    const release = await this.enter(pluginId);
+    const release = bounded ? await this.enterBounded(pluginId) : await this.enter(pluginId);
     const held: LaneHold = { pluginId, live: true, outer: this.holds.getStore() };
     return {
       run: (fn) => this.holds.run(held, fn),
@@ -351,6 +359,33 @@ export class InstallSetReconciler {
         release();
       },
     };
+  }
+
+  /** A person's switch's wait for its plugin's lane (item 440, James's pick B): it waits as any act does, but when
+   * `switchWaitMs` passes while an update of that plugin holds the lane, it is refused with `PLUGIN_UPDATING` and
+   * never applied: its turn, when it comes, is given back at once. Behind anything else it keeps waiting. */
+  private async enterBounded(pluginId: string): Promise<() => void> {
+    const granted = this.enter(pluginId);
+    const waitMs = this.cfg.switchWaitMs ?? PLUGIN_LIMITS.SWITCH_WAIT_MS;
+    for (;;) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const lapsed = new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), waitMs);
+        timer.unref?.();
+      });
+      const got = await Promise.race([granted, lapsed]);
+      clearTimeout(timer);
+      if (got !== null) return got;
+      if (this.updating.has(pluginId)) {
+        void granted.then((release) => release());
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `${pluginId}: updating; the switch was not applied`,
+          true,
+          { pluginKind: "PLUGIN_UPDATING" },
+        );
+      }
+    }
   }
 
   /** The grant race: wait for this plugin's lane, first come first served, and get its release. `prior` never
@@ -557,8 +592,13 @@ export class InstallSetReconciler {
     action: Exclude<PublishAction, "grants">,
     move: () => Promise<LocalMove<T>>,
   ): Promise<T> {
-    const lane = await this.hold(pluginId);
-    const release = lane.release;
+    const lane = await this.hold(pluginId, action !== "install");
+    // an update holds its plugin's lane as `updating` until it releases (item 440: a switch behind it is bounded)
+    if (action === "install") this.updating.add(pluginId);
+    const release = () => {
+      if (action === "install") this.updating.delete(pluginId);
+      lane.release();
+    };
     let out: LocalMove<T>;
     try {
       out = await lane.run(move);

@@ -70,6 +70,11 @@ export const PLUGIN_LIMITS = {
   UPDATE_COMMIT_DEADLINE_MS: 10_000,
   UPDATE_RECOVERY_DEADLINE_MS: 30_000,
   UPDATE_BOUNDARY_DEATH_DEADLINE_MS: 5_000,
+  /** Item 440 (James's pick, 2026-11-15 06:18:23Z: B): how long a person's plugin switch waits for its plugin while
+   * an update of it is under way, before it is refused and said (`PLUGIN_UPDATING`), never applied late. 5 s is past
+   * every other wait a switch can meet (a walk's grant section, another person's switch: its service's stop and its
+   * children's kill), so only an update reaches it; an update itself holds up to its barrier's deadlines above. */
+  SWITCH_WAIT_MS: 5_000,
   KV_VALUE_MAX_BYTES: 64 * 1024,
   KV_TOTAL_MAX_BYTES: 10 * 1024 * 1024,
   FILE_QUOTA_BYTES: 100 * 1024 * 1024,

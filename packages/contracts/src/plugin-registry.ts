@@ -54,6 +54,8 @@ export const PluginErrorKind = z.enum([
   "PLUGIN_PROVIDER_GONE",
   "PLUGIN_ARTIFACT_MISMATCH",
   "PLUGIN_SOURCE_UNAVAILABLE",
+  /** Item 440: a person's plugin switch refused while that plugin is updating (`PLUGIN_LIMITS.SWITCH_WAIT_MS`) */
+  "PLUGIN_UPDATING",
 ]);
 export type PluginErrorKind = z.infer<typeof PluginErrorKind>;
 
