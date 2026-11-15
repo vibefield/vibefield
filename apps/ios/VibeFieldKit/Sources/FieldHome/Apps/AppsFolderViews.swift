@@ -156,6 +156,8 @@ struct AppsFolderLayer: View {
   let asked: AppsZoomAsk?
   let reduced: Bool
   let onOpen: (IndexAppRow) -> Void
+  /// Keep or Stop keeping, through the shelf's own keep (MA-3h, K4), as the shelf's tile does.
+  let onKeep: (IndexAppRow, Bool) -> Void
   let onAbout: (IndexAppRow) -> Void
 
   /// The page shown.
@@ -291,7 +293,7 @@ struct AppsFolderLayer: View {
           app: app, side: AppsShelfChrome.icon, away: away.contains(app.appKey),
           unopened: door.cues.unopened.contains(app.foldKey), zoom: zoom,
           source: AppsZoomSource.id(appKey: app.appKey, at: .folder(folder.key), asked: asked),
-          onOpen: { onOpen(app) }, onAbout: { onAbout(app) }
+          onOpen: { onOpen(app) }, onKeep: { onKeep(app, $0) }, onAbout: { onAbout(app) }
         )
         .frame(height: AppsFolderMotion.cellHeight, alignment: .top)
       }

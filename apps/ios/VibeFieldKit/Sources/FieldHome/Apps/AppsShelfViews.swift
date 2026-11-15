@@ -318,7 +318,8 @@ struct AppsShelfView: View {
     if let folder, bounds != .zero {
       AppsFolderLayer(
         folder: folder, stand: $stand, door: door, bounds: bounds, away: shelf.away, zoom: zoom, asked: asked,
-        reduced: reduceMotion, onOpen: { open($0, at: .folder(folder.key)) }, onAbout: onAbout
+        reduced: reduceMotion, onOpen: { open($0, at: .folder(folder.key)) },
+        onKeep: { keep($0, kept: $1) }, onAbout: onAbout
       )
       .id(folder.key)
     }
