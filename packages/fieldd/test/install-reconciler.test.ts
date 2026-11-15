@@ -1255,3 +1255,47 @@ describe("the disable race: a person's disable is the last word here until their
     enabledHeldToLastAct(a, trace, false, ledgerFrom);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// The uninstall race (2026-11-15). The uninstall handler (`plugins.uninstall`) tears the plugin down and removes
+// its code, and only then `unpublish`es; `unpublish` never enters `publishing`, so no walk waits for it. A walk
+// before its commit found the doc's registry entry with no record here and INSTALLED the plugin again (its
+// enablement followed, so it ran). Red until the lane takes the presence section and the uninstall handler.
+
+/** The person's uninstall up to its `unpublish`: the handler's teardown and the code removed (`forget`). The
+ * returned function is the rest of the handler, its `unpublish`; its promise is the removal's. */
+async function uninstallInGap(d: Desktop): Promise<() => Promise<void>> {
+  d.registry.forget();
+  return () => d.reconciler.unpublish(PA32_ID, "uninstall");
+}
+
+describe("the uninstall race: a person's uninstall is the last word here", () => {
+  it("a plugin the person just removed is never installed again by a walk before the removal commits", async () => {
+    const calls = removalCalls();
+    const installs: string[] = [];
+    const d = await desktop("A", {
+      source: "registry",
+      calls,
+      install: async (id) => {
+        installs.push(id);
+      },
+    });
+    await d.settings.setInstallSetEntry(
+      { pluginId: PA32_ID, source: "registry", version: "1.0.0", enabled: true, grants: [] },
+      "seed",
+    );
+    await settle(d);
+    expect(installs, "the seed is present here: nothing to install").toEqual([]);
+
+    const rest = await uninstallInGap(d); // the person's uninstall, up to its `unpublish`
+    const { walk } = await walkNow(d); // any `changed` stands here: a peer merge, this desktop's earlier act
+    expect(installs, "no walk installs what the person just removed").toEqual([]); // RED today
+    await rest();
+    await walk;
+    await settle(d);
+
+    expect(installs, "nor after the removal committed").toEqual([]);
+    expect(await entryOf(d)).toBeUndefined();
+    expect([...(await d.settings.removedPlugins())]).toEqual([PA32_ID]);
+  });
+});
