@@ -7303,11 +7303,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           },
         },
         async () => {
-          const revoked = await teardownPluginWithResult(parsed.data.id);
-          await installer.uninstall(parsed.data.id, parsed.data.removeData === true);
-          runtimeDiagnostics.retirePlugin(parsed.data.id);
-          void reconciler?.unpublish(parsed.data.id, "uninstall"); // §16.6 — everywhere
-          return revoked;
+          const move = async () => {
+            const revoked = await teardownPluginWithResult(parsed.data.id);
+            await installer.uninstall(parsed.data.id, parsed.data.removeData === true);
+            runtimeDiagnostics.retirePlugin(parsed.data.id);
+            return revoked;
+          };
+          // §16.6 — everywhere; item 441 — the act holds the plugin's lane until its removal settles
+          const lane = reconciler;
+          if (lane === null) return await move();
+          return await lane.uninstallAct(parsed.data.id, "uninstall", move);
         },
         (revoked) => ({
           attrs: {

@@ -1282,8 +1282,24 @@ describe("the disable race: a person's disable is the last word here until their
 /** The person's uninstall up to its `unpublish`: the handler's teardown and the code removed (`forget`). The
  * returned function is the rest of the handler, its `unpublish`; its promise is the removal's. */
 async function uninstallInGap(d: Desktop): Promise<() => Promise<void>> {
-  d.registry.forget();
-  return () => d.reconciler.unpublish(PA32_ID, "uninstall");
+  let removed: () => void = () => undefined;
+  const inGap = new Promise<void>((resolve) => {
+    removed = resolve;
+  });
+  let finished: () => void = () => undefined;
+  const finish = new Promise<void>((resolve) => {
+    finished = resolve;
+  });
+  const done = d.reconciler.uninstallAct(PA32_ID, "uninstall", async () => {
+    d.registry.forget();
+    removed();
+    await finish; // the rest of the handler's own work, held by the row
+  });
+  await inGap;
+  return async () => {
+    finished();
+    await done;
+  };
 }
 
 describe("the uninstall race: a person's uninstall is the last word here", () => {

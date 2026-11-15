@@ -165,11 +165,8 @@ export class InstallSetReconciler {
     // MK-2d (2026-11-11; E10's R3, VF-PM 10:34:14Z): the removal half. A registry plugin this desktop holds that the
     // doc reads as removed (removed on any desktop) is removed here as the uninstall door removes it, data kept.
     for (const pluginId of await this.cfg.settingsDoc.removedPlugins()) {
-      const record = this.cfg.plugins.get(pluginId);
-      // bundled and dev-linked plugins are never removed by the doc; a sideload never enters it
-      if (record?.source !== "registry") continue;
       try {
-        await this.removeHere(record);
+        await this.applyRemoval(pluginId);
       } catch (e) {
         this.log.warn(
           "fieldd.install_reconciler.entry_parked",
@@ -209,43 +206,10 @@ export class InstallSetReconciler {
   private async applyEntry(entry: InstallSetEntry): Promise<void> {
     let record = this.cfg.plugins.get(entry.pluginId);
 
-    // presence: registry entries install when absent; bundled presence is the
-    // app's own (enablement-only sync)
+    // presence, in the plugin's lane (the uninstall race, item 441): read afresh there, never from this walk's start
     if (record === undefined) {
-      if (entry.source !== "registry") return;
-      record = await this.cfg.audit.requiredSystem(
-        {
-          action: "plugin.install",
-          target: { kind: "plugin", id: entry.pluginId },
-          attrs: {
-            origin: "settings-doc",
-            source: entry.source,
-            requestedVersion: entry.version ?? "latest",
-            artifactSha256: entry.artifactSha256 ?? "unknown",
-          },
-        },
-        async () => {
-          await this.cfg.installer.install({
-            id: entry.pluginId,
-            ...(entry.version !== undefined ? { version: entry.version } : {}),
-          });
-          const installed = this.cfg.plugins.get(entry.pluginId);
-          if (installed === undefined) {
-            throw new Error(`${entry.pluginId}: install completed without a registry record`);
-          }
-          return installed;
-        },
-        (installed) => ({
-          attrs: {
-            origin: "settings-doc",
-            version: installed.version,
-            source: installed.source,
-            manifestHash: installed.manifestHash,
-            artifactSha256: installed.registry?.artifactSha256 ?? "unknown",
-            publisher: installed.registry?.publisher ?? "unknown",
-          },
-        }),
-      );
+      record = await this.applyPresence(entry.pluginId);
+      if (record === undefined) return;
     }
     // dev-linked/sideload rows never take doc-driven state (§16.6)
     if (record.source === "dev-linked" || record.source === "sideload") return;
@@ -395,6 +359,73 @@ export class InstallSetReconciler {
     return out.value;
   }
 
+  /** The presence section of a walk, in the plugin's lane (the uninstall race, item 441): a registry entry this desktop
+   * lacks is installed. The doc's entry and the record are read INSIDE the lane, so a person's uninstall here is
+   * either wholly before it (its removal committed: the doc holds no entry) or wholly after it. Bundled presence is
+   * the app's own (enablement-only sync). The install runs inside the lane: the lane's longest hold by a walk, a
+   * download bounded by the installer's own limits, and only for a plugin this desktop does not hold, on which a
+   * person here has no act. Answers the record, or undefined when nothing is to be installed. */
+  private async applyPresence(pluginId: string): Promise<PluginRecord | undefined> {
+    const release = await this.enter(pluginId);
+    try {
+      const entry = (await this.cfg.settingsDoc.installSet())[pluginId];
+      const here = this.cfg.plugins.get(pluginId);
+      if (here !== undefined) return here;
+      if (entry === undefined || entry.source !== "registry") return undefined;
+      return await this.cfg.audit.requiredSystem(
+        {
+          action: "plugin.install",
+          target: { kind: "plugin", id: pluginId },
+          attrs: {
+            origin: "settings-doc",
+            source: entry.source,
+            requestedVersion: entry.version ?? "latest",
+            artifactSha256: entry.artifactSha256 ?? "unknown",
+          },
+        },
+        async () => {
+          await this.cfg.installer.install({
+            id: pluginId,
+            ...(entry.version !== undefined ? { version: entry.version } : {}),
+          });
+          const installed = this.cfg.plugins.get(pluginId);
+          if (installed === undefined) {
+            throw new Error(`${pluginId}: install completed without a registry record`);
+          }
+          return installed;
+        },
+        (installed) => ({
+          attrs: {
+            origin: "settings-doc",
+            version: installed.version,
+            source: installed.source,
+            manifestHash: installed.manifestHash,
+            artifactSha256: installed.registry?.artifactSha256 ?? "unknown",
+            publisher: installed.registry?.publisher ?? "unknown",
+          },
+        }),
+      );
+    } finally {
+      release();
+    }
+  }
+
+  /** The removal half of a walk, in the plugin's lane (item 441): a registry plugin this desktop holds that the doc
+   * reads as removed is removed here, data kept. Read again inside the lane: a fresh install here of a plugin removed
+   * elsewhere is either wholly before (its publication committed: the doc no longer reads it removed) or after. */
+  private async applyRemoval(pluginId: string): Promise<void> {
+    const release = await this.enter(pluginId);
+    try {
+      if (!(await this.cfg.settingsDoc.removedPlugins()).has(pluginId)) return;
+      const record = this.cfg.plugins.get(pluginId);
+      // bundled and dev-linked plugins are never removed by the doc; a sideload never enters it
+      if (record?.source !== "registry") return;
+      await this.removeHere(record);
+    } finally {
+      release();
+    }
+  }
+
   /** The enablement section of a walk, in the plugin's lane (the disable race, item 440). The doc's wish and the
    * record are read INSIDE the lane: a person's enable or disable on this plugin is either wholly before it (its
    * publication committed, so its wish is the doc's) or wholly after it (and it is the last word). Desire only:
@@ -485,6 +516,22 @@ export class InstallSetReconciler {
     }
     void this.publish(out.record, action).finally(release);
     return out.value;
+  }
+
+  /** A person's uninstall on this desktop (`plugins.uninstall`, item 441), in the plugin's lane from before its
+   * teardown until its removal from the doc settles: a walk raised in the handler's gap never installs the plugin
+   * again. `move` is the handler's own work (the teardown, the code removed); the act answers once it is done. */
+  async uninstallAct<T>(pluginId: string, by: string, move: () => Promise<T>): Promise<T> {
+    const release = await this.enter(pluginId);
+    let value: T;
+    try {
+      value = await move();
+    } catch (e) {
+      release();
+      throw e;
+    }
+    void this.unpublish(pluginId, by).finally(release);
+    return value;
   }
 
   private revokedHere(pluginId: string, capability: string): boolean {
@@ -627,7 +674,9 @@ export class InstallSetReconciler {
   }
 
   async unpublish(pluginId: string, by: string): Promise<void> {
-    await this.cfg.audit
+    // item 441 — a removal is one of this device's local publications: a walk that starts while it is in flight
+    // waits for it (`publishing`), as it waits for an install's or a grant's
+    const run = this.cfg.audit
       .requiredSystem(
         {
           action: "plugin.install_set.remove",
@@ -644,6 +693,12 @@ export class InstallSetReconciler {
           { pluginId, error: e instanceof Error ? e.message : String(e) },
         );
       });
+    this.publishing.add(run);
+    try {
+      await run;
+    } finally {
+      this.publishing.delete(run);
+    }
   }
 }
 
