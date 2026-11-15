@@ -13,10 +13,14 @@
 //! 2. While the count reads 64, one TRIGGER connection per listener (door, mgmt, meshdata): its failed accept is the
 //!    run. The count is read again after; a ceiling not held on either side fails the row as proving nothing. What
 //!    became of each trigger (closed by the kernel, or still waiting) is printed as data, never asserted.
-//! 3. The doors close. Then ONE FRESH connection per listener, each timed for up to 30 s: the door's as a door the
-//!    floor opens that was not open before (its census wait included), mgmt's as any answer to a request before
-//!    hello (so the kept connection is never superseded), the bridge's as HELLO_OK. The verdict asks ≤ 5 s of each,
-//!    and that the door and mesh-bridge units read degraded during the run and up after.
+//! 3. The doors close. The row waits, at most 5 s and timed, until the floor's own count leaves room for one fresh
+//!    connection per listener: on macOS a connection whose accept fails for a descriptor is closed by the kernel, so
+//!    one dialed while the floor still held its doors could be taken by a second failed accept (item 453). Then ONE
+//!    FRESH connection per listener, each timed for up to 30 s from the release: the door's as a door the floor opens
+//!    that was not open before (its census wait included), mgmt's as any answer to a request before hello (so the
+//!    kept connection is never superseded), the bridge's as HELLO_OK. The verdict asks ≤ 5 s of each, and that the
+//!    door and mesh-bridge units read degraded during the run and up after. What became of the fresh door by the
+//!    window's end (closed by the kernel, or open) is printed as data, never asserted.
 //!
 //! A connect made after the ceiling (a trigger or a fresh connection) that fails is that leg's OUTCOME, never the
 //! row's end: a refused one means no listener is bound at the path, which is the bug's own symptom when a loop that
@@ -57,6 +61,9 @@ const SERVED_WITHIN: Duration = Duration::from_secs(5);
 
 /// How long each fresh connection is watched, so a slow serve is timed rather than only missed.
 const WATCHED_FOR: Duration = Duration::from_secs(30);
+
+/// How long the row waits, from the release, for the floor's own count to leave room for the fresh connections.
+const FREED_WITHIN: Duration = Duration::from_secs(5);
 
 /// How often the floor's descriptors are counted, and how often the kept connection looks again.
 const SAMPLE_EVERY: Duration = Duration::from_millis(100);
@@ -332,6 +339,22 @@ async fn fill(pid: u32, door_sock: &Path) -> (Vec<UnixStream>, usize, bool) {
     (doors, taken, reached)
 }
 
+/// From the release: when the floor's own count first leaves room for one fresh connection per listener, as the
+/// time since `released`, or `None` when it does not within `FREED_WITHIN`.
+async fn freed(pid: u32, released: Instant) -> Option<Duration> {
+    let room = SOFT_LIMIT - LISTENERS.len() as u64;
+    let deadline = released + FREED_WITHIN;
+    loop {
+        if open_fd_count_for(pid).is_some_and(|count| count <= room) {
+            return Some(released.elapsed());
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+        sleep(Duration::from_millis(5)).await;
+    }
+}
+
 fn shown(at: Option<Duration>) -> String {
     at.map_or_else(
         || format!("not within {} s", WATCHED_FOR.as_secs()),
@@ -396,12 +419,15 @@ async fn a_failed_accept_ends_no_listener_and_its_unit_reads_degraded_while_it_r
     let bridge_degraded = kept.unit_reads("mesh-bridge", "degraded").await;
     let before = kept.open_doors().await.unwrap_or_default();
 
-    // 3. the release, then one fresh connection per listener, each timed from the release
+    // 3. the release; then, bounded and timed, until the floor's own count leaves room for the fresh connections
+    // (item 453: the claim is about the next connection after the floor has descriptors again); then one fresh
+    // connection per listener, each timed from the release
     drop(doors);
     let released = Instant::now();
     let until = released + WATCHED_FOR;
+    let freed_at = freed(pid, released).await;
     // the fresh door is held open until the row ends: the floor opens it as a door, and the snapshot shows it
-    let fresh_door = dial(&door_sock).await;
+    let mut fresh_door = dial(&door_sock).await;
     let mut fresh_mgmt = dial(&mgmt_socket).await.map(Mgmt::over);
     let mut fresh_bridge = dial(&bridge_sock).await;
     let (bridge_at, mgmt_at, (door_at, door_up_at, bridge_up_at)) = tokio::join!(
@@ -419,6 +445,8 @@ async fn a_failed_accept_ends_no_listener_and_its_unit_reads_degraded_while_it_r
         },
         kept.after_release(&before, released, until),
     );
+    // what became of the fresh door by the window's end: closed (a failed accept took it), or still open
+    let fresh_door_fate = fate(&mut fresh_door).await;
     sampler.abort();
     let timeline = (samples.lock().unwrap().iter())
         .map(|(ms, count)| {
@@ -437,6 +465,7 @@ async fn a_failed_accept_ends_no_listener_and_its_unit_reads_degraded_while_it_r
 
     let within = |at: Option<Duration>| at.is_some_and(|at| at <= SERVED_WITHIN);
     let shows = reached && held_before && held_after;
+    let room = freed_at.is_some();
     let passed = within(door_at)
         && within(mgmt_at)
         && within(bridge_at)
@@ -444,21 +473,32 @@ async fn a_failed_accept_ends_no_listener_and_its_unit_reads_degraded_while_it_r
         && bridge_degraded
         && door_up_at.is_some()
         && bridge_up_at.is_some();
-    let kept_root = if shows && passed {
+    let kept_root = if shows && room && passed {
         drop(root);
         "removed".to_owned()
     } else {
         format!("KEPT at {}", root.keep().display())
     };
+    let freed_shown = freed_at.map_or_else(
+        || format!("not within {} s", FREED_WITHIN.as_secs()),
+        |at| format!("at {} ms", at.as_millis()),
+    );
     let readings = format!(
         "doors taken {taken}; the ceiling read at the fill {reached}, before the triggers {held_before}, after them \
-         {held_after}; the triggers: {fates}; released at {released_ms} ms; the floor's log: {logged}; the floor's \
+         {held_after}; the triggers: {fates}; released at {released_ms} ms; room for the fresh connections \
+         {freed_shown}; the fresh door at the window's end: {fresh_door_fate}; the floor's log: {logged}; the floor's \
          descriptors (ms since spawn:count, each change): {timeline}; the root {kept_root}"
     );
     assert!(
         shows,
         "the floor's {SOFT_LIMIT}-descriptor ceiling was not shown around the triggers, so no accept was shown to \
          fail: this row proves nothing. {readings}"
+    );
+    assert!(
+        room,
+        "the floor's count did not leave room for the fresh connections within {} s of the release, so no fresh \
+         connection met a floor with descriptors again: this row proves nothing. {readings}",
+        FREED_WITHIN.as_secs()
     );
     assert!(
         passed,
