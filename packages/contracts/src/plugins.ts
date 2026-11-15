@@ -20,6 +20,12 @@ import { SCOPES, type Scope } from "./registries";
 // A face on the desk is an OBJECT KIND: the manifest's durable half and ONE
 // export of the renderer module (spec §12.8).
 
+/** Item 432 — the crash ladder's count (§18.3): a plugin's service that crashes this many times
+ * within the ladder's window (ten minutes) is stopped until the person turns it on again. fieldd's
+ * service host takes its default from it (`service-host.ts`) and the window says it in its words
+ * (`plugins-words.ts`, "Stopped after 3 crashes"), so the two never name two numbers. */
+export const PLUGIN_SERVICE_QUARANTINE_AT = 3;
+
 // --- limits (spec §7.1/§10.4/§16.3: every string and collection is bounded) ---
 
 export const PLUGIN_LIMITS = {

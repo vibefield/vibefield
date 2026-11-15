@@ -4,7 +4,7 @@
 // its commit message for James's eye. Nothing here names a key, a signature, a hash, a rung, a worker, a process, a
 // restart, a repository's address, a power's id or a daemon (§9, VibeField's insides; James 2026-11-10 00:46Z).
 
-import type { GrantDenialReason } from "@vibefield/contracts";
+import { type GrantDenialReason, PLUGIN_SERVICE_QUARANTINE_AT } from "@vibefield/contracts";
 
 /** The popup's name to assistive tech (MK's, ‹draft›; the Peek's popup is named "Search"). */
 export const PLUGINS_NAME = "Plugins";
@@ -118,7 +118,7 @@ export const INSTALLED_LINE = {
   broken: (title: string) => `${title} isn't working right now`,
   /** MK-5 (N21): a plugin that is on whose service fieldd stopped after it kept crashing, in the attention ink, its
    * switch off; a press turns it on, which starts it again (the ruled page's row, §9) */
-  stopped: "Stopped after 3 crashes · turn it on to try again",
+  stopped: `Stopped after ${PLUGIN_SERVICE_QUARANTINE_AT} crashes · turn it on to try again`,
   /** MK-5 (N21): a plugin from the plugin list that the list held no longer names (James's ruled words in place of
    * "dropped from registry", 2026-11-11 06:48:31Z at MK's lean; §9) */
   unlisted: "No longer listed · it keeps working here, with no more updates",

@@ -5,6 +5,7 @@ import { Worker, type WorkerOptions } from "node:worker_threads";
 import {
   LOG_TRANSPORT_LIMITS,
   PLUGIN_LIMITS,
+  PLUGIN_SERVICE_QUARANTINE_AT,
   type PluginManifestV1,
   type PluginRecord,
   type PublicEntryState,
@@ -942,7 +943,7 @@ export class ServiceHost {
     e.controller.setDesired(null, { reason: { kind: "crash", detail: pluginId } });
     const now = Date.now();
     const windowMs = this.cfg.ladder?.windowMs ?? 600_000;
-    const quarantineAt = this.cfg.ladder?.quarantineAt ?? 3;
+    const quarantineAt = this.cfg.ladder?.quarantineAt ?? PLUGIN_SERVICE_QUARANTINE_AT;
     e.crashTimes = [...e.crashTimes.filter((t) => now - t < windowMs), now];
     if (e.crashTimes.length >= quarantineAt) {
       this.setState(pluginId, e, "quarantined");
