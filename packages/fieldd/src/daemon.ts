@@ -7398,8 +7398,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         if (snap.pluginId === caller.pluginId) emit(snap);
       };
       settings.on("changed", fn);
+      // Item 482 (2026-11-16) — the listener goes on before the snapshot's read, so a change
+      // between the two is never lost. A snapshot that throws (NOT_FOUND for a plugin the
+      // service does not know) takes it off again: the door installs nothing for a refused ask,
+      // so a listener left here stayed on the service for as long as the daemon ran.
+      const snapshot = await settings.snapshot(caller.pluginId).catch((error: unknown) => {
+        settings.off("changed", fn);
+        throw error;
+      });
       return {
-        snapshot: await settings.snapshot(caller.pluginId),
+        snapshot,
         dispose: () => settings.off("changed", fn),
       };
     });
@@ -7647,8 +7655,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         }
       };
       settingsDoc.on("changed", onChanged);
+      // Item 482 (2026-11-16) — as `storage.settings.subscribe`: on before the read, so no
+      // change between them is lost, and off again (with no refresh to emit) if the read throws.
+      const snapshot = await appPreferencesSnapshot().catch((error: unknown) => {
+        disposed = true;
+        settingsDoc.off("changed", onChanged);
+        throw error;
+      });
       return {
-        snapshot: await appPreferencesSnapshot(),
+        snapshot,
         dispose: () => {
           disposed = true;
           settingsDoc.off("changed", onChanged);
