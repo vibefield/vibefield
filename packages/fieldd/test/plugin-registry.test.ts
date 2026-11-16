@@ -506,3 +506,123 @@ describe("item 449 — the records' folder", () => {
     expect(registry).not.toMatch(/"fieldd",\s*"plugins"/);
   });
 });
+
+// Items 442 and 452 — a person's act here the account has not received yet. Its RESTRICTING parts (an off, a
+// revocation, a removal) are kept in the records file and outlive a restart; its ENABLING parts (an on, an install)
+// live in the registry's memory alone, never written to the file nor read from it (`persisted`): any process of this
+// uid can write the file, and a planted enabling mark would be held against the account's doc (plan r2).
+describe("items 442 and 452 — a person's unpublished act, as the records keep it", () => {
+  const ALPHA = "vibefield.fixture.alpha";
+  const BETA = "vibefield.fixture.beta";
+  const ROOTS: PluginRegistryConfig["roots"] = { bundled: [scenario("ok")], devLinked: [] };
+  const recordsFile = (dataDir: string): string => join(dataDir, ...LAYOUT.PLUGIN_RECORDS_FILE);
+  type RecordsOnDisk = { plugins: Record<string, { unpublished?: unknown }> };
+  /** What the records file itself holds of a plugin's mark, read as bytes on disk, never through the registry. */
+  const markOnDisk = (dataDir: string, id: string): unknown => {
+    const file = JSON.parse(readFileSync(recordsFile(dataDir), "utf8")) as RecordsOnDisk;
+    return file.plugins[id]?.unpublished;
+  };
+
+  it("a restricting mark outlives a new registry on the same disk, and the entry's own writes", async () => {
+    const dataDir = makeDataDir();
+    const first = new PluginRegistryService({ dataDir, roots: ROOTS });
+    await first.refresh();
+    await first.mark(ALPHA, { enabled: false, revoked: ["x.fixture.use"] });
+    await first.disable(ALPHA); // the move after its mark: the entry's own write keeps the mark
+    await first.enable(ALPHA);
+    first.dispose();
+
+    const second = newService(ROOTS, dataDir);
+    await second.refresh();
+    expect(await second.unpublished(ALPHA)).toEqual({ enabled: false, revoked: ["x.fixture.use"] });
+    await second.clearMark(ALPHA, { enabled: false, revoked: ["x.fixture.use"] });
+    expect(await second.unpublished(ALPHA)).toEqual({});
+    const third = newService(ROOTS, dataDir);
+    await third.refresh();
+    expect(await third.unpublished(ALPHA), "the clear reached the file").toEqual({});
+  });
+
+  it("presence is one thing: a removal after an install clears the install", async () => {
+    const dataDir = makeDataDir();
+    const svc = newService(ROOTS, dataDir);
+    await svc.refresh();
+    await svc.mark(ALPHA, { installed: true });
+    await svc.mark(ALPHA, { removed: true }); // the later act is the last word
+    expect(await svc.unpublished(ALPHA)).toEqual({ removed: true });
+    expect(markOnDisk(dataDir, ALPHA), "the removal is on disk").toEqual({ removed: true });
+  });
+
+  it("presence is one thing: an install after a removal clears the removal, on disk too", async () => {
+    const dataDir = makeDataDir();
+    const first = newService(ROOTS, dataDir);
+    await first.refresh();
+    await first.mark(ALPHA, { removed: true });
+    await first.mark(ALPHA, { installed: true }); // the later act is the last word
+    expect(await first.unpublished(ALPHA)).toEqual({ installed: true });
+    expect(markOnDisk(dataDir, ALPHA), "no removal left in the file").toBeUndefined();
+
+    const second = newService(ROOTS, dataDir);
+    await second.refresh();
+    expect(await second.unpublished(ALPHA), "nothing of either outlives the process").toEqual({});
+  });
+
+  it("a removal's mark is read for a plugin that has no row", async () => {
+    const dataDir = makeDataDir();
+    const first = newService({ bundled: [], devLinked: [] }, dataDir);
+    await first.refresh();
+    await first.mark("vibefield.fixture.gone", { removed: true });
+    const second = newService({ bundled: [], devLinked: [] }, dataDir);
+    await second.refresh();
+    expect(second.get("vibefield.fixture.gone")).toBeUndefined();
+    expect(await second.unpublished("vibefield.fixture.gone")).toEqual({ removed: true });
+  });
+
+  it("a records file from an older build, with no mark, reads as nothing marked", async () => {
+    const dataDir = makeDataDir();
+    mkdirSync(dirname(recordsFile(dataDir)), { recursive: true });
+    const older = { version: 1, plugins: { [ALPHA]: { enabled: false } } };
+    writeFileSync(recordsFile(dataDir), JSON.stringify(older));
+    const svc = newService(ROOTS, dataDir);
+    await svc.refresh();
+    expect(svc.get(ALPHA)?.enabled).toBe(false);
+    expect(await svc.unpublished(ALPHA)).toEqual({});
+  });
+
+  it("an enabling part lives in memory alone: never in the file, gone with the process", async () => {
+    const dataDir = makeDataDir();
+    const first = newService(ROOTS, dataDir);
+    await first.refresh();
+    await first.mark(ALPHA, { enabled: false });
+    await first.mark(ALPHA, { enabled: true, installed: true }); // a later act replaces the off
+    expect(await first.unpublished(ALPHA)).toEqual({ enabled: true, installed: true });
+    expect(markOnDisk(dataDir, ALPHA), "no part of it in the file").toBeUndefined();
+
+    const second = newService(ROOTS, dataDir);
+    await second.refresh();
+    expect(await second.unpublished(ALPHA), "a new process holds none of it").toEqual({});
+  });
+
+  it("a planted enabling mark in the records file reads as none; a planted restricting one as written", async () => {
+    const dataDir = makeDataDir();
+    const planted = {
+      version: 1,
+      plugins: {
+        [ALPHA]: { enabled: true, unpublished: { enabled: true, installed: true } },
+        [BETA]: {
+          enabled: false,
+          unpublished: { enabled: false, revoked: ["x.fixture.use", 7], removed: true },
+        },
+      },
+    };
+    mkdirSync(dirname(recordsFile(dataDir)), { recursive: true });
+    writeFileSync(recordsFile(dataDir), JSON.stringify(planted));
+    const svc = newService(ROOTS, dataDir);
+    await svc.refresh();
+
+    expect(await svc.unpublished(ALPHA), "no enabling part is read from the file").toEqual({});
+    const asWritten = { enabled: false, revoked: ["x.fixture.use"], removed: true };
+    expect(await svc.unpublished(BETA), "a wrong-typed part reads as absent").toEqual(asWritten);
+    await svc.mark(ALPHA, { revoked: ["x.fixture.use"] }); // a write drops what the file may not hold
+    expect(markOnDisk(dataDir, ALPHA)).toEqual({ revoked: ["x.fixture.use"] });
+  });
+});

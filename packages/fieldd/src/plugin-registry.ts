@@ -71,11 +71,74 @@ export type CommunityVerdict =
   | { readonly allowed: false; readonly listedAs: (id: string) => RegistryListedAs };
 export type CommunityGate = () => Promise<CommunityVerdict>;
 
+/** Items 442 and 452 (2026-11-15): a person's act on this desktop that the account has not received yet. Its
+ * publication failed, or fieldd stopped before it was sent. A walk holds it against the account's doc until a
+ * publication carries it. */
+export interface UnpublishedMark {
+  /** the person's on/off here: off is restricting, on is enabling */
+  enabled?: boolean;
+  /** the capabilities the person revoked here (restricting) */
+  revoked?: string[];
+  /** the person removed the plugin here (restricting) */
+  removed?: true;
+  /** the person installed or updated the plugin here (enabling) */
+  installed?: true;
+}
+
+/** Items 442 and 452 (plan r2; VF-PM 2026-11-15 12:38:10Z): the ONE seam that decides whether a part of a mark is
+ * written to the records file. A restricting part is (a disable, a revocation, a removal), so it outlives a restart.
+ * An enabling part (an enable, an install) is kept in this process's memory alone, never written to the file nor read
+ * from it: any process of this uid can write the file, and a planted enabling mark would be held against the
+ * account's doc and sent to it. */
+export function persisted(part: keyof UnpublishedMark, value: unknown): boolean {
+  if (part === "enabled") return value === false;
+  return part === "revoked" || part === "removed";
+}
+
+/** A mark split by `persisted`: what the records file may hold, and what lives in this process's memory alone. */
+function splitMark(mark: UnpublishedMark): { file: UnpublishedMark; memory: UnpublishedMark } {
+  const file: UnpublishedMark = {};
+  const memory: UnpublishedMark = {};
+  if (mark.enabled !== undefined) {
+    (persisted("enabled", mark.enabled) ? file : memory).enabled = mark.enabled;
+  }
+  if (mark.revoked !== undefined && mark.revoked.length > 0) {
+    (persisted("revoked", mark.revoked) ? file : memory).revoked = mark.revoked;
+  }
+  if (mark.removed === true) (persisted("removed", true) ? file : memory).removed = true;
+  if (mark.installed === true) (persisted("installed", true) ? file : memory).installed = true;
+  return { file, memory };
+}
+
+/** A records entry's mark, read tolerantly and through the same seam: a part of the wrong type, and every part the
+ * file may not hold (an enabling one), reads as absent. */
+function readMark(raw: unknown): UnpublishedMark {
+  if (raw === null || typeof raw !== "object") return {};
+  const { enabled, revoked, removed, installed } = raw as Record<string, unknown>;
+  const capabilities = Array.isArray(revoked)
+    ? [...new Set(revoked.filter((c): c is string => typeof c === "string"))]
+    : [];
+  return splitMark({
+    ...(typeof enabled === "boolean" ? { enabled } : {}),
+    ...(capabilities.length > 0 ? { revoked: capabilities } : {}),
+    ...(removed === true ? { removed: true as const } : {}),
+    ...(installed === true ? { installed: true as const } : {}),
+  }).file;
+}
+
+/** One plugin's entry in the records file. */
+interface InstallRecordEntry {
+  enabled: boolean;
+  grants?: Record<string, boolean>;
+  /** items 442 and 452: the restricting parts of this desktop's unpublished act, the only ones written (`persisted`) */
+  unpublished?: UnpublishedMark;
+}
+
 interface InstallRecordsFile {
   version: 1;
   /** P6 — `grants` is the §15.3 device-local decision store: absent/true =
    * granted, explicit false = revoked. Same atomic file as enable intent. */
-  plugins: Record<string, { enabled: boolean; grants?: Record<string, boolean> }>;
+  plugins: Record<string, InstallRecordEntry>;
 }
 
 export interface PluginRegistryHealth {
@@ -203,6 +266,8 @@ export class PluginRegistryService extends EventEmitter {
    * the row's `held`, is what decides: `setEnabled` keeps a held row held, and the daemon's hold reads it. */
   private communityGate: CommunityGate | null = null;
   private heldIds = new Set<string>();
+  /** Items 442 and 452: the ENABLING parts of the marks, in this process's memory alone (`persisted`). */
+  private readonly heldMarks = new Map<string, UnpublishedMark>();
 
   constructor(private readonly cfg: PluginRegistryConfig) {
     super();
@@ -390,6 +455,65 @@ export class PluginRegistryService extends EventEmitter {
   async wantsEnabled(id: string): Promise<boolean> {
     const records = await this.loadRecords();
     return records.plugins[id]?.enabled ?? true;
+  }
+
+  /** Items 442 and 452, DAEMON-INTERNAL: the mark standing for a plugin, the file's parts with this process's. It
+   * answers for an id with no row: an uninstall leaves the plugin's records entry in the file. */
+  async unpublished(id: string): Promise<UnpublishedMark> {
+    const records = await this.loadRecords();
+    return { ...readMark(records.plugins[id]?.unpublished), ...this.heldMarks.get(id) };
+  }
+
+  /** Items 442 and 452, DAEMON-INTERNAL: mark a person's act here, before its move. A part replaces the same part
+   * standing (a later act is the last word); `revoked` adds its capabilities. Presence is one thing, as on/off is one
+   * field: a removal clears an install standing and an install clears a removal, so a file's `removed` never outlives
+   * the memory's later `installed` across a restart (VF-PM 2026-11-15 12:54:30Z). */
+  async mark(id: string, part: UnpublishedMark): Promise<void> {
+    const now = await this.unpublished(id);
+    const revoked = [...new Set([...(now.revoked ?? []), ...(part.revoked ?? [])])];
+    const { removed: _removed, installed: _installed, ...rest } = now;
+    const presence: UnpublishedMark = {};
+    if (part.removed !== true && part.installed !== true) {
+      if (now.removed === true) presence.removed = true;
+      if (now.installed === true) presence.installed = true;
+    }
+    await this.setMark(id, {
+      ...rest,
+      ...presence,
+      ...part,
+      ...(revoked.length > 0 ? { revoked } : {}),
+    });
+  }
+
+  /** Items 442 and 452, DAEMON-INTERNAL: clear what a committed publication carried, or what no longer holds. An
+   * `enabled` part clears only the same wish; `revoked` clears the capabilities it names. */
+  async clearMark(id: string, part: UnpublishedMark): Promise<void> {
+    const now = await this.unpublished(id);
+    const revoked = (now.revoked ?? []).filter((c) => !(part.revoked ?? []).includes(c));
+    const enabled = now.enabled === part.enabled ? undefined : now.enabled;
+    await this.setMark(id, {
+      ...(enabled !== undefined ? { enabled } : {}),
+      ...(revoked.length > 0 ? { revoked } : {}),
+      ...(now.removed === true && part.removed !== true ? { removed: true as const } : {}),
+      ...(now.installed === true && part.installed !== true ? { installed: true as const } : {}),
+    });
+  }
+
+  /** A whole mark, its parts split by `persisted`: the enabling ones to memory, the restricting ones to the records
+   * file in one write when they moved. A write also drops any part the file held that it may not hold. */
+  private async setMark(id: string, mark: UnpublishedMark): Promise<void> {
+    const { file, memory } = splitMark(mark);
+    if (Object.keys(memory).length > 0) this.heldMarks.set(id, memory);
+    else this.heldMarks.delete(id);
+    const records = await this.loadRecords();
+    const entry = records.plugins[id];
+    const empty = Object.keys(file).length === 0;
+    if (entry === undefined && empty) return;
+    if (JSON.stringify(entry?.unpublished ?? {}) === JSON.stringify(file)) return;
+    const stood: InstallRecordEntry = entry ?? { enabled: true }; // an entry absent reads on (`wantsEnabled`)
+    const { unpublished: _stood, ...rest } = stood;
+    records.plugins[id] = empty ? rest : { ...rest, unpublished: file };
+    await this.saveRecords(records);
   }
 
   /** MK-O3 (O3-C): which registry ids this refresh holds. Without `communityHold`, none. With it, every one until a
