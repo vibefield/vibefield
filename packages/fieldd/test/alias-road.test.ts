@@ -5,12 +5,22 @@
 // a short harness TMPDIR sent none, so the suites' stand-ins were never tried there. This row's
 // root is over the line wherever it is made, so the road is taken on every host: a stand-in floor
 // binds at the law's endpoint, and fieldd's boot dials it there.
-import { lstatSync, mkdirSync, mkdtempSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readlinkSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { nativeRunDirFor, SOCKETS } from "@vibefield/contracts";
+import { basename, dirname, join } from "node:path";
+import { nativeRunDirFor, SOCKET_ALIAS_PARENT_ENV, SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import { ensureNativeSocketDir } from "../src/boot-env";
 import { bootstrap } from "../src/index";
+import { NativeLink } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { nativeEndpoint } from "./native-harness";
 
@@ -63,6 +73,52 @@ describe.skipIf(process.platform === "win32")(
       const daemon = await bootstrap({ dataDir: root, controlPort: 0, dataPort: 0 });
       cleanup.push(() => daemon.stop());
       expect(daemon.controlPort).toBeGreaterThan(0);
+      expect(found(alias, run)).toBe("a link to the root's run dir");
+      expect(found(dirname(alias), run)).toBe("a directory, mode 0700");
+    });
+
+    // Item 458: the native link keeps its own alias, so bootstrap() does. fieldd's product entry
+    // runs the keeper before its boot, but the link's first dial probed the alias before its own
+    // keeper ran: a caller whose link had gone while the floor ran waited out the whole deadline.
+    it("item 458: the first dial puts back an alias that went while the floor ran", async () => {
+      const root = mkdtempSync(join(tmpdir(), OVER_THE_LINE));
+      cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+      mkdirSync(join(root, "native", "run"), { recursive: true });
+      const pairingFile = join(root, "native", "pairing");
+      writeFileSync(pairingFile, "ab".repeat(32));
+      const run = nativeRunDirFor(root);
+      const endpoint = nativeEndpoint(root, SOCKETS.MGMT);
+      const alias = dirname(endpoint);
+      expect(alias).not.toBe(run);
+      const mock = new MockMgmtServer(endpoint);
+      await mock.start();
+      cleanup.push(() => mock.stop());
+      // The floor runs, bound in its run dir. Now its link goes, as a sweep of /tmp would take it.
+      // This row removes only the harness's own link, and only once it holds that the link is in
+      // this run's own /tmp/vfa- folder; anywhere else it refuses and removes nothing.
+      const parent = process.env[SOCKET_ALIAS_PARENT_ENV];
+      const own =
+        parent !== undefined &&
+        dirname(parent) === "/tmp" &&
+        basename(parent).startsWith("vfa-") &&
+        dirname(dirname(alias)) === parent;
+      if (!own) {
+        const at = parent ?? "unset";
+        throw new Error(`refused: ${alias} is not in this run's own /tmp/vfa- folder (${at})`);
+      }
+      expect(found(alias, run)).toBe("a link to the root's run dir");
+      unlinkSync(alias);
+      expect(found(alias, run)).toBe("ENOENT");
+      const link = new NativeLink({
+        socketPath: endpoint,
+        beforeDial: () => ensureNativeSocketDir(root, { warn: () => {} }),
+        pairingFile,
+        bootId: "item-458",
+        waitForDaemonMs: 1_500,
+      });
+      cleanup.push(() => link.close());
+      await link.connect();
+      expect(link.connected).toBe(true);
       expect(found(alias, run)).toBe("a link to the root's run dir");
       expect(found(dirname(alias), run)).toBe("a directory, mode 0700");
     });
