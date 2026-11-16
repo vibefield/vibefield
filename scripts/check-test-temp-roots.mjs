@@ -26,7 +26,12 @@
 //       as starting none;
 //   (c) a test-side file that calls a keeper itself names its parent (`parent` for users' keeper, the variable for
 //       boot-env's `ensureNativeSocketDir`);
-//   (d) run-alias-parent.mjs's literal is registries.ts's `SOCKET_ALIAS_PARENT_ENV`.
+//   (d) run-alias-parent.mjs's literal is registries.ts's `SOCKET_ALIAS_PARENT_ENV`;
+//   (e) (2026-11-16, the CI red) no test-side file (TS or JS) makes a socket endpoint's folder itself
+//       (`mkdirSync(dirname(<…endpoint>))`). For a root over the sun_path line that folder is the alias,
+//       `<parent>/vf-<uid>/<scope>`: a recursive mkdir made `vf-<uid>` 0755 and the scope a directory, and every
+//       later keeper of the run refused the folder. A stand-in's endpoint comes from a keeper first (fieldd's
+//       `standInEndpoint`, the harness's `nativeEndpoint`), and the test makes the run dir under its root.
 // What it cannot read: an environment a helper builds from scratch through a variable, or a product path reached on a
 // nested root through a config built by hand. fieldd's global setup counts the links a run leaves (the witness): that
 // is the measure, this the cheap net.
@@ -113,6 +118,7 @@ const SPAWNS = /\b(?:spawn|spawnSync|execFile|execFileSync|fork)\s*\(|\bCommand:
 const NAMES_SEAM =
   /\b(?:SOCKET_ALIAS_PARENT_ENV|FIELD_SOCKET_ALIAS_PARENT|runAliasParentEnv|RunAliasParent)\b/;
 const CALLS_KEEPER = /\b(ensureSocketDir|ensureSocketDirOutcome|ensureNativeSocketDir)\s*\(/;
+const MAKES_ENDPOINT_FOLDER = /\bmkdir(?:Sync)?\s*\(\s*dirname\(\s*[\w.]*[Ee]ndpoint\b/;
 const VITEST_CONFIGS = [
   "vitest.config.ts",
   "vitest.config.mts",
@@ -155,6 +161,9 @@ function findAliasParentMisses(root) {
       const named =
         keeper[1] === "ensureNativeSocketDir" ? NAMES_SEAM.test(code) : /\bparent\b/.test(code);
       if (!named) misses.push(`${file}  calls ${keeper[1]} and names no parent (c)`);
+    }
+    if (!rust && MAKES_ENDPOINT_FOLDER.test(code)) {
+      misses.push(`${file}  makes a socket endpoint's folder itself, not through a keeper (e)`);
     }
   }
   for (const pkg of [...reaching].sort()) {
@@ -329,6 +338,18 @@ const ALIAS_FIXTURES = [
   ],
   ["packages/a7/test/keep.test.ts", ["ensureSocketDir(root, { parent });"]],
   ["packages/a8/test/comment.test.ts", ["// FIELD_NATIVE_DATA_DIR, in a comment only"]],
+  [
+    "packages/b1/test/stand-in.test.ts",
+    ["if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });"],
+  ],
+  ["packages/b2/test/fake.test.ts", ["mkdirSync(dirname(controlEndpoint));"]],
+  [
+    "packages/b3/test/run-dir.test.ts",
+    [
+      'mkdirSync(join(dir, "native", "run"), { recursive: true });',
+      "// mkdirSync(dirname(endpoint)), in a comment only",
+    ],
+  ],
   ["packages/contracts/src/registries.ts", [`${ALIAS_LITERAL.slice(0, -1)} as const;`]],
   ["scripts/run-alias-parent.mjs", [ALIAS_LITERAL]],
 ];
@@ -338,6 +359,8 @@ const ALIAS_EXPECTED = [
   "packages/a2/tests/child.rs  starts a pair from an environment not this process's, naming no alias parent (b)",
   "packages/a3/test/keep.test.ts  calls ensureNativeSocketDir and names no parent (c)",
   "packages/a4  starts a floor or boots fieldd in its tests; its vitest config names no alias-parent-env (a)",
+  "packages/b1/test/stand-in.test.ts  makes a socket endpoint's folder itself, not through a keeper (e)",
+  "packages/b2/test/fake.test.ts  makes a socket endpoint's folder itself, not through a keeper (e)",
 ];
 
 function aliasSelfTest() {
@@ -397,7 +420,8 @@ if (alias.misses.length > 0) {
     `\ncheck-test-temp-roots: FAIL — ${missed} socket alias parent miss(es) (item 345). ` +
       "A test that boots a pair gives it the run's own parent: alias-parent-env.ts in the " +
       "package's vitest setupFiles, `...process.env` or `runAliasParentEnv()` in a spawn's " +
-      "environment.",
+      "environment. A stand-in's endpoint comes from a keeper first (`standInEndpoint`, the " +
+      "harness's `nativeEndpoint`), never a mkdir of its folder.",
   );
   process.exit(1);
 }
