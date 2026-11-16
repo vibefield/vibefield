@@ -1,4 +1,5 @@
 import { MESH_CONTROL_LIMITS, PRODUCT_API_LIMITS } from "@vibefield/contracts";
+import type { Logger } from "@vibefield/logging";
 import { describe, expect, it, vi } from "vitest";
 import type { WebSocket } from "ws";
 import { ProductApi } from "../src/product-api";
@@ -352,6 +353,131 @@ describe("ProductApi lifecycle", () => {
     expect(rig.state.subs.size).toBe(0);
     expect(rig.state.pendingSubs).toBe(0);
   });
+
+  it("logs a refused subscription once per burst: the method, the count and the limit, never the params", async () => {
+    // Item 467 (2026-11-16) — a budget hit used to leave no trace: the refusal
+    // went to the caller alone, so after the fact nobody could tell which feed
+    // was refused, or that the window had filled its connection. One line says
+    // so at the first refusal; the rest of a storm says nothing until the count
+    // has fallen under the limit and filled again.
+    const warn = vi.fn();
+    const logger = recordingLogger(warn);
+    const api = new ProductApi({ port: 0, tokens: { verify: () => null }, logger });
+    api.registerSubscription("system.health.subscribe", () => ({
+      snapshot: { ok: true },
+      dispose: () => undefined,
+    }));
+    const internals = api as unknown as {
+      subHandlers: Map<string, unknown>;
+      execute(
+        ws: unknown,
+        state: unknown,
+        id: number,
+        method: string,
+        params: unknown,
+        handler: undefined,
+        subHandler: unknown,
+        reply: (value: unknown) => void,
+      ): Promise<void>;
+    };
+    const ws = { readyState: 1, bufferedAmount: 0, send: vi.fn(), terminate: vi.fn() };
+    const state = {
+      ctx: {
+        principal: { kind: "local-token", tokenId: "tk_window", scopes: [] },
+        transport: "ws-loopback",
+        receivedAt: 0,
+      },
+      connectionId: "conn_budget",
+      subs: new Map<string, () => void>(),
+      pendingSubs: 0,
+      abortController: new AbortController(),
+    };
+    const PARAM_WORD = "a-subscriber-param-never-logged";
+    const subscribe = async (id: number): Promise<Record<string, unknown>> => {
+      let answer: Record<string, unknown> = {};
+      await internals.execute(
+        ws,
+        state,
+        id,
+        "system.health.subscribe",
+        { set: PARAM_WORD },
+        undefined,
+        internals.subHandlers.get("system.health.subscribe"),
+        (value) => {
+          answer = value as Record<string, unknown>;
+        },
+      );
+      return answer;
+    };
+
+    const limit = PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION;
+    for (let i = 0; i < limit; i += 1) await subscribe(i + 1);
+    expect(state.subs.size).toBe(limit);
+    expect(warn).not.toHaveBeenCalled();
+
+    // the first refusal: one line, and the caller's answer exactly as before
+    const refused = await subscribe(limit + 1);
+    expect(JSON.stringify(refused)).toBe(
+      '{"jsonrpc":"2.0","id":33,"error":{"code":-32010,"message":"this connection holds too many live subscriptions","data":{"kind":"RESOURCE_EXHAUSTED","retryable":false,"details":{"resource":"subscriptions","limit":32}}}}',
+    );
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toBe("fieldd.product_api.subscription_budget_refused");
+    expect(warn.mock.calls[0]?.[2]).toEqual({
+      method: "system.health.subscribe",
+      count: limit,
+      opening: 0,
+      limit,
+      connectionId: "conn_budget",
+      principal: "local-token",
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(PARAM_WORD);
+
+    // the same burst: refused again, said once
+    expect((await subscribe(limit + 2))["error"]).toBeDefined();
+    expect((await subscribe(limit + 3))["error"]).toBeDefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    // the count falls under the limit and fills again: the next refusal is a
+    // new burst, and is said again
+    const [firstId, dispose] = [...state.subs.entries()][0]!;
+    dispose();
+    state.subs.delete(firstId);
+    expect((await subscribe(limit + 4))["result"]).toBeDefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect((await subscribe(limit + 5))["error"]).toBeDefined();
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls[1]?.[2]).toMatchObject({
+      method: "system.health.subscribe",
+      count: limit,
+    });
+  });
+
+  it("counts a subscription still opening in the logged count, and its burst the same way", async () => {
+    // Items 467 and 470 (2026-11-16) — the budget reads installed + opening, so
+    // the line says that count, and how many of it are still opening; a burst
+    // ends only when a subscribe is admitted, whichever way the slot came free.
+    const warn = vi.fn();
+    const rig = budgetRig(recordingLogger(warn));
+    const first = rig.subscribe(401);
+    rig.subscribe(402);
+    expect(JSON.stringify(rig.answers.get(402))).toBe(refusalWire(402));
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[2]).toMatchObject({ count: LIMIT, opening: 1, limit: LIMIT });
+    rig.subscribe(403);
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    // the opening one fails and gives its slot back: still the same burst
+    rig.opening.shift()?.reject(new Error("the producer could not open"));
+    await expect(first).rejects.toThrow("the producer could not open");
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    // admitted again, then full: a new burst, said again
+    rig.control.mode = "answer";
+    await rig.subscribe(404);
+    rig.subscribe(405);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls[1]?.[2]).toMatchObject({ count: LIMIT, opening: 0 });
+  });
 });
 
 // ── item 470's rig ──
@@ -411,10 +537,29 @@ function connState(filled: number) {
   };
 }
 
+/** Item 467 — a logger whose warnings the row reads. */
+function recordingLogger(warn: Logger["warn"]): Logger {
+  const logger: Logger = {
+    child: () => logger,
+    trace: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn,
+    error: vi.fn(),
+    fatal: vi.fn(),
+    isLevelEnabled: () => true,
+  };
+  return logger;
+}
+
 /** The local install site at one free slot; its handler answers later, at
  * once, or throws, as `control.mode` says. */
-function budgetRig() {
-  const api = new ProductApi({ port: 0, tokens: { verify: () => null } });
+function budgetRig(logger?: Logger) {
+  const api = new ProductApi({
+    port: 0,
+    tokens: { verify: () => null },
+    ...(logger !== undefined ? { logger } : {}),
+  });
   const control = { mode: "later" as "later" | "throw" | "answer", entered: 0 };
   const opening: Array<Deferred<Install>> = [];
   api.registerSubscription(METHOD, () => {
