@@ -391,6 +391,76 @@ describe("the verbs", () => {
     });
   });
 
+  // Item 464 (2026-11-16): a launch or a resume the deck correlates with the pane it replaces
+  // (`beginReplacement`) also SAYS the shell the deck's birth names as `succeeds`, so other
+  // screens draw the new session on the shell's body. The deck names none for a shell another
+  // pane also shows (it lives on there): that birth sends its creationId alone. A port with no
+  // `beginReplacement` sends neither (the rows above ask for the exact params).
+  it("says the shell a launch or a resume takes the place of as `succeeds`, when the deck's birth names it (item 464)", async () => {
+    const begun: string[] = [];
+    const finished: string[] = [];
+    const { deps: bare, request } = deps({
+      "index.recent": RECENT,
+      "index.status": READY_STATUS,
+      "agent.spawn": SPAWNED,
+      "agent.resume": SPAWNED,
+    });
+    const launcher = launcherPortOver({
+      ...bare,
+      beginReplacement: (previous) => {
+        begun.push(previous);
+        return {
+          creationId: `birth-${begun.length}`,
+          // the deck's one-pane rule, as a stub: the mirrored shell is named by nothing
+          ...(previous === "mirrored-shell" ? {} : { succeeds: previous }),
+          finish: () => finished.push(previous),
+        };
+      },
+    });
+
+    await launcher.launch({
+      paneId: "pane-1",
+      sessionId: "shell-1",
+      providerId: "claude",
+      cwd: "/repo",
+    });
+    expect(request).toHaveBeenLastCalledWith("agent.spawn", {
+      creationId: "birth-1",
+      succeeds: "shell-1",
+      provider: "claude",
+      cwd: "/repo",
+    });
+
+    const { sessions } = await launcher.recent({ cwd: "/pane", scope: "here" });
+    const codex = sessions[1];
+    if (codex === undefined) throw new Error("fixture has rows");
+    await launcher.resume({ paneId: "p", sessionId: "shell-2", session: codex, cwd: "/pane" });
+    expect(request).toHaveBeenLastCalledWith("agent.resume", {
+      creationId: "birth-2",
+      succeeds: "shell-2",
+      provider: "codex",
+      nativeSessionId: "019247aa-5c3e-7d21-b8f0-3a6e2c1d9b47",
+      cwd: "/Users/kim/Projects/vibe-field-lanes/ql",
+      profileId: "codex:work-1c7e",
+      title: "Launcher gate",
+    });
+    // a birth that names no predecessor: its creationId alone
+    await launcher.launch({
+      paneId: "pane-2",
+      sessionId: "mirrored-shell",
+      providerId: "claude",
+      cwd: "/repo",
+    });
+    expect(request).toHaveBeenLastCalledWith("agent.spawn", {
+      creationId: "birth-3",
+      provider: "claude",
+      cwd: "/repo",
+    });
+    // one correlation per birth, each finished
+    expect(begun).toEqual(["shell-1", "shell-2", "mirrored-shell"]);
+    expect(finished).toEqual(["shell-1", "shell-2", "mirrored-shell"]);
+  });
+
   it("refuses a row it never listed rather than guessing its agent", async () => {
     const { deps: port, request } = deps({});
     const outcome = await launcherPortOver(port).resume({

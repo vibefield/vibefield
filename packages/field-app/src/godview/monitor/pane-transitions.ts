@@ -3,6 +3,10 @@
  * separate owner obligation and cannot undo that commit. */
 export interface PaneBirth {
   creationId: string;
+  /** Item 464 (2026-11-16) — the session the birth may name to fieldd as the one it takes the
+   * place of, for other screens' sake; absent when the caller must name none. Set by the deck,
+   * never read here: this window pairs its hand-offs by `creationId` alone. */
+  succeeds?: string;
   finish(): void;
 }
 

@@ -1271,11 +1271,13 @@ describe("the deck's pane frames", () => {
       ["mirror", "born-1"],
     ]);
     expect(workspace.activePaneId).toBe("pane-2");
+    // item 464: the shell's birth says the ended agent's PTY it takes the place of
     expect(requests.filter((call) => call.method === "terminal.create")).toEqual([
       {
         method: "terminal.create",
         params: {
           creationId: expect.any(String),
+          succeeds: "pty-1",
           cwd: "/project/vibe-field",
           workloadClass: "interactive",
         },
@@ -2073,7 +2075,10 @@ describe("the empty pane launcher (QL-1)", () => {
     });
     await settle();
     expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([
-      { method: "agent.spawn", params: { creationId: expect.any(String), provider: "claude" } },
+      {
+        method: "agent.spawn",
+        params: { creationId: expect.any(String), succeeds: "pty-1", provider: "claude" },
+      },
     ]);
   });
 
@@ -2144,6 +2149,33 @@ describe("the empty pane launcher (QL-1)", () => {
     ]);
   });
 
+  // Item 464 (2026-11-16): the launch names the shell it replaces (`succeeds`) only while ONE pane
+  // shows it. A mirrored shell lives on in the other pane, so the launch names none: other
+  // screens keep the live shell's body.
+  it("says no `succeeds` for a launch from a shell mirrored in another pane (item 464)", async () => {
+    runtimeBirths.add("pty-1");
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1") },
+      { id: "pane-2", session: stubSession("pty-1") },
+    ];
+    workspace.activePaneId = "pane-2";
+    const host = await mountDeck();
+    await act(async () => {
+      pressIn(paneOf(host, "pane-2"), "Digit1");
+    });
+    await settle();
+    expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([
+      {
+        method: "agent.spawn",
+        params: {
+          creationId: expect.any(String),
+          provider: "claude",
+          cwd: "/home/tester/vibe-field",
+        },
+      },
+    ]);
+  });
+
   it("launches on ⌥1 into THIS pane, in its folder, and the reaper closes the shell it replaced", async () => {
     runtimeBirths.add("pty-1");
     const host = await mountDeck();
@@ -2151,12 +2183,14 @@ describe("the empty pane launcher (QL-1)", () => {
       pressIn(paneOf(host, "pane-1"), "Digit1");
     });
     await settle();
-    // a launch sends no profile (QL-D3 as revised): fieldd resolves the default
+    // a launch sends no profile (QL-D3 as revised): fieldd resolves the default; it says the
+    // shell it takes the place of (item 464)
     expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([
       {
         method: "agent.spawn",
         params: {
           creationId: expect.any(String),
+          succeeds: "pty-1",
           provider: "claude",
           cwd: "/home/tester/vibe-field",
         },
@@ -2312,6 +2346,7 @@ describe("the empty pane launcher (QL-1)", () => {
         method: "agent.spawn",
         params: {
           creationId: expect.any(String),
+          succeeds: "born-1",
           provider: "claude",
           cwd: "/home/tester/vibe-field",
           profileSet: "work",
@@ -2409,6 +2444,9 @@ describe("births under an Agent Profile (SB-3)", () => {
       undefined,
       undefined,
     ]);
+    // Item 464: none of these takes another session's place. A new terminal in a focused pane
+    // whose session runs on (GV-D4: a pane is a viewport) and a ⌘D split say no `succeeds`.
+    for (const params of creates()) expect(params).not.toHaveProperty("succeeds");
   });
 
   it("keeps an unbound pane unbound after its agent exits, even one whose run was under a profile", async () => {
@@ -2425,7 +2463,12 @@ describe("births under an Agent Profile (SB-3)", () => {
     });
     await settle();
     expect(creates()).toEqual([
-      { creationId: expect.any(String), cwd: "/project/vibe-field", workloadClass: "interactive" },
+      {
+        creationId: expect.any(String),
+        succeeds: "pty-1",
+        cwd: "/project/vibe-field",
+        workloadClass: "interactive",
+      },
     ]);
     const paneMeta = workspaceProps["paneMeta"] as (session: unknown, paneId: string) => unknown;
     expect(paneMeta(stubSession("pty-1"), "pane-1")).not.toHaveProperty("profileSet");

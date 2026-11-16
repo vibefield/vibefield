@@ -476,6 +476,9 @@ export function launcherPortOver(deps: LauncherPortDeps): LauncherPort {
           // a local one never fails that way, so this is one request)
           answered = await requestResolvingOutcome(deps.client, "agent.spawn", {
             ...(birth === undefined ? {} : { creationId: birth.creationId }),
+            // item 464 (2026-11-16): the shell it takes the place of, when the deck's birth
+            // names one (`succeeds`, presentation only: other screens draw one body)
+            ...(birth?.succeeds === undefined ? {} : { succeeds: birth.succeeds }),
             provider: request.providerId,
             ...(request.cwd !== undefined ? { cwd: request.cwd } : {}),
             ...(profileSet !== undefined ? { profileSet } : {}),
@@ -510,6 +513,8 @@ export function launcherPortOver(deps: LauncherPortDeps): LauncherPort {
         try {
           answered = await requestResolvingOutcome(deps.client, "agent.resume", {
             ...(birth === undefined ? {} : { creationId: birth.creationId }),
+            // item 464: as the launch, the shell this resume takes the place of
+            ...(birth?.succeeds === undefined ? {} : { succeeds: birth.succeeds }),
             provider: known.provider,
             nativeSessionId: known.nativeSessionId,
             ...(cwd !== undefined ? { cwd } : {}),

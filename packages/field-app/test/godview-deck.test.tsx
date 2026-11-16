@@ -2118,6 +2118,11 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
     expect(outcome).toEqual({ state: "mounted", sessionId: born, profileSet: "work" });
     expect(store.log).toEqual([`create:${born}`]);
     expect(store.panes.map((pane) => pane.session.id)).toEqual([born]);
+    // item 464: its birth says the opening shell it takes the place of
+    const births = calls.filter(([method]) => method === "terminal.create");
+    expect(births.map(([, params]) => params)).toEqual([
+      expect.objectContaining({ profileSet: "work", succeeds: "opening-pty" }),
+    ]);
     await dispose();
   });
 
@@ -2146,10 +2151,18 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
     expect(outcome).toEqual({ state: "mounted", sessionId: born });
     expect(store.log).toEqual([`create:${born}`]);
     expect(store.panes.map((pane) => pane.session.id)).toEqual([born]);
+    // item 464: the birth says the opening shell whose place it takes…
     const births = calls.filter(([method]) => method === "terminal.create");
     expect(births.map(([, params]) => params)).toEqual([
-      { cwd: folder, workloadClass: "interactive" },
+      { succeeds: "opening-pty", cwd: folder, workloadClass: "interactive" },
     ]);
+    // …and that shell, never used, is released as unused: the lineage names a shell that goes
+    await settle();
+    const released = calls.filter(([method]) => method === "terminal.release");
+    expect(released.map(([, params]) => params)).toContainEqual({
+      sessionId: "opening-pty",
+      condition: "unused",
+    });
     await dispose();
   });
 
@@ -2176,6 +2189,10 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
     expect(born).not.toBe("user-pty");
     expect(store.log).toEqual([`create:${born}`]);
     expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([["pane-1", born]]);
+    // item 464: a pane is a viewport — last run's session runs on, so the birth succeeds nothing
+    const births = calls.filter(([method]) => method === "terminal.create");
+    expect(births).toHaveLength(1);
+    expect(births[0]?.[1]).not.toHaveProperty("succeeds");
     await dispose();
   });
 });
@@ -2295,6 +2312,8 @@ describe("⌘W on the last pane goes to the terminals' owner (N16 (a))", () => {
       expect(creates().slice(before)).toEqual([
         expect.objectContaining({ cwd: "/repo/api", workloadClass: "interactive" }),
       ]);
+      // item 464: ⌘W closes a pane; the shell that empties it continues no session's body
+      expect(creates().slice(before)[0]).not.toHaveProperty("succeeds");
       const fresh = store.panes[0]?.session.id as string;
       expect(store.panes.map((pane) => pane.id)).toEqual(["pane-1"]);
       expect(fresh).not.toBe("user-pty");
@@ -2375,7 +2394,10 @@ describe("⌘W on the last pane goes to the terminals' owner (N16 (a))", () => {
       expect(outcome).toMatchObject({ state: "mounted", placement: "replace" });
       const born = (outcome as { sessionId: string }).sessionId;
       expect(born).not.toBe(fresh);
-      expect(creates().slice(before)).toEqual([{ cwd: folder, workloadClass: "interactive" }]);
+      // item 464: the birth says the fresh shell whose place it takes (released below)
+      expect(creates().slice(before)).toEqual([
+        { succeeds: fresh, cwd: folder, workloadClass: "interactive" },
+      ]);
       expect(store.panes.map((pane) => pane.session.id)).toEqual([born]);
       await settle();
       expect(terminated()).toContain(fresh);

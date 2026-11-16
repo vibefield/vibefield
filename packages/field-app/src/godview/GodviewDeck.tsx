@@ -200,10 +200,15 @@ function deckFaultConsequence(plane: TerminalFaultPlane): string {
  * override: the Agent Profile it is born under (undefined: unbound, as the
  * door's plain create always was), the folder it is born in (HN-7; undefined:
  * the source pane's), and fieldd's words when it was refused — ghosttea
- * swallows the override's throw, so they come back this way. */
+ * swallows the override's throw, so they come back this way.
+ *
+ * Item 464 (2026-11-16) — `succeeds`: the waiting shell (L20's opening one, N16's fresh one)
+ * this birth is born in the place of, and which then goes as unused; undefined for every other
+ * birth. Said to fieldd for other screens' sake alone: this window pairs nothing by it. */
 interface PendingBirth {
   readonly profileSet: string | undefined;
   readonly cwd: string | undefined;
+  readonly succeeds: string | undefined;
   refusal?: string;
 }
 
@@ -407,8 +412,16 @@ export function GodviewDeck({
   const transitions = useMemo(() => new PaneTransitions(), []);
   useSyncExternalStore(transitions.subscribe, transitions.getSnapshot, transitions.getSnapshot);
   const terminalVisualIds = transitions.visualIds();
+  // Item 464 (2026-11-16): a launcher's birth names the shell it replaces (`succeeds`) only while
+  // that shell shows in ONE pane. A shell mirrored in another pane lives on there after the
+  // launch takes this one, and naming it would hide a live shell's body on other screens.
   const beginReplacement = useCallback(
-    (previous: string) => transitions.begin(previous),
+    (previous: string) => {
+      const birth = transitions.begin(previous);
+      const showing =
+        workspaceRef.current?.panes.filter((pane) => pane.session.id === previous).length ?? 0;
+      return showing === 1 ? { ...birth, succeeds: previous } : birth;
+    },
     [transitions],
   );
   const handoffBirths = useRef(new Map<string, { previous: string; finish(): void }>());
@@ -869,14 +882,20 @@ export function GodviewDeck({
   // defaults to keep-until-exit directly (`contracts/src/terminal.ts:113-115`),
   // so the same end state is reached by saying it once instead of by saying the
   // opposite and being corrected.
+  //
+  // `succeeds` (item 464, 2026-11-16) names the session this birth takes the place of in its
+  // pane, for OTHER screens (the phone's Swarm draws one body, not two). Presentation lineage
+  // only: this window still pairs its own hand-offs through `PaneTransitions`.
   const bornSession = useCallback(
     async (
       cwd: string | undefined,
       profileSet?: string,
       creationId?: string,
+      succeeds?: string,
     ): Promise<SessionSummary | null> => {
       const created = await createTerminalSession({
         ...(creationId === undefined ? {} : { creationId }),
+        ...(succeeds === undefined ? {} : { succeeds }),
         ...(cwd !== undefined ? { cwd } : {}),
         // TC-D6(c): the class is the scrollback cap AND the placement hint. A
         // pane a person types into is interactive by definition.
@@ -970,7 +989,11 @@ export function GodviewDeck({
    * and that is the honest outcome: a pane that could not be born should not be
    * drawn as though it were. */
   const createSplitSession = useCallback(
-    async (activeSession: DeckSession, creationId?: string): Promise<SessionSummary> => {
+    async (
+      activeSession: DeckSession,
+      creationId?: string,
+      succeeds?: string,
+    ): Promise<SessionSummary> => {
       // SB-3: the door's ask, taken (and cleared) before the first await, so a
       // ⌘D after it cannot inherit it. With none, the new shell is born under
       // its SOURCE PANE's set: the active pane for a ⌘D split, the pane the
@@ -993,7 +1016,9 @@ export function GodviewDeck({
         birth?.cwd ?? paneCwd({ cwd: activeSession.cwd }, readDeviceHost()) ?? shell?.home;
       let born: SessionSummary | null;
       try {
-        born = await bornSession(cwd, profileSet, creationId);
+        // item 464: the predecessor its caller names (the agent-exit shell's), else the door's
+        // (a shell born in a waiting shell's place); a ⌘D split names none
+        born = await bornSession(cwd, profileSet, creationId, succeeds ?? birth?.succeeds);
       } catch (cause) {
         // Ghosttea catches this throw and answers `undefined`; the door's
         // `failed` carries fieldd's own words from here instead (SB-3).
@@ -1006,7 +1031,8 @@ export function GodviewDeck({
     [bornSession, shell, runtime, paneSetOf],
   );
 
-  // The workspace supplies its split axis as a second argument; it is not a birth identity.
+  // The workspace supplies its split axis as a second argument; it is not a birth identity, and
+  // it names no predecessor (item 464): the door's, if any, rides `pendingBirth`.
   const createWorkspaceSession = useCallback(
     (session: DeckSession) => createSplitSession(session),
     [createSplitSession],
@@ -1299,8 +1325,20 @@ export function GodviewDeck({
         // viewport). ⌘D is the one way to more panes.
         const placement = opening === null ? deckPlacement(deckShape(context)) : null;
         if (placement !== null && placement.kind !== "replace") return { state: "no-pane" };
+        // Item 464 (2026-11-16): a birth in a WAITING shell's place (L20's opening shell, N16's
+        // fresh one; the plain ask returned above) says that shell as its predecessor, so other
+        // screens draw the two as one body: it leaves its only pane and is released as unused. A
+        // waiting shell another pane also shows stays on there, and is named by nothing. A birth
+        // in a pane whose session runs on (GV-D4: a pane is a viewport) succeeds nothing.
+        const waiting =
+          opening ?? (empty !== undefined && empty === context.activePaneId ? fresh : undefined);
+        const alone = context.panes.filter((pane) => pane.session.id === waiting).length === 1;
         // SB-3: the ask rides the pending-birth ref into the override (above).
-        const birth: PendingBirth = { profileSet: request?.profileSet, cwd: request?.cwd };
+        const birth: PendingBirth = {
+          profileSet: request?.profileSet,
+          cwd: request?.cwd,
+          succeeds: alone ? waiting : undefined,
+        };
         pendingBirth.current = birth;
         try {
           // Ghosttea owns the birth and its concurrent-birth fencing: its birth
@@ -1603,6 +1641,8 @@ export function GodviewDeck({
               cwd: paneAgents.agents.get(session.id)?.cwd ?? session.cwd,
             },
             birth.creationId,
+            // item 464: the shell continues the ended agent's body on other screens
+            session.id,
           );
           handoffBirths.current.set(born.id, { previous: session.id, finish: birth.finish });
           transitions.reserve(session.id, born.id);
