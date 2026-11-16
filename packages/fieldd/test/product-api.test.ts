@@ -125,6 +125,7 @@ describe("ProductApi lifecycle", () => {
       },
       subs: new Map(),
       pendingSubs: 0,
+      abortController: new AbortController(),
     };
 
     await internals.execute(
@@ -176,6 +177,7 @@ describe("ProductApi lifecycle", () => {
       },
       subs: new Map<string, () => void>(),
       pendingSubs: 0,
+      abortController: new AbortController(),
     };
     const subscribe = async (id: number): Promise<Record<string, unknown>> => {
       let answer: Record<string, unknown> = {};
@@ -329,13 +331,34 @@ describe("ProductApi lifecycle", () => {
     expect(state.subs.size).toBe(LIMIT);
     expect(state.pendingSubs).toBe(0);
   });
+
+  it("lets go at once a subscription whose connection closed while its handler was out", async () => {
+    // Item 474 (2026-11-16) — the close disposes and clears `subs` while the
+    // handler is out; the late install then landed on the cleared map, nothing
+    // ever disposed it, and its producer kept working for a dead socket.
+    const rig = budgetRig();
+    const asked = rig.subscribe(501);
+    // the socket's close, as its handler runs it: abort, dispose the live ones, clear
+    rig.state.abortController.abort();
+    for (const live of rig.state.subs.values()) live();
+    rig.state.subs.clear();
+
+    const dispose = vi.fn();
+    const start = vi.fn();
+    rig.opening.shift()?.resolve({ snapshot: { ok: true }, dispose, start });
+    await asked;
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(start).not.toHaveBeenCalled();
+    expect(rig.state.subs.size).toBe(0);
+    expect(rig.state.pendingSubs).toBe(0);
+  });
 });
 
 // ── item 470's rig ──
 
 const LIMIT = PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION;
 const METHOD = "system.health.subscribe";
-type Install = { snapshot: unknown; dispose: () => void };
+type Install = { snapshot: unknown; dispose: () => void; start?: () => void };
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -384,6 +407,7 @@ function connState(filled: number) {
     connectionId: "conn_budget_race",
     subs,
     pendingSubs: 0,
+    abortController: new AbortController(),
   };
 }
 

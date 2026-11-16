@@ -123,8 +123,14 @@ async function subscribe(
     ): Promise<void>;
     sendBounded(ws: unknown, value: unknown, track?: unknown): boolean;
   };
-  // the budget counts installed + still opening (item 470), so the state says both
-  const state = { ctx, subs: new Map<string, () => void>(), pendingSubs: 0 };
+  // the budget counts installed + still opening (item 470), so the state says both;
+  // an install reads its connection's close on the abort signal (item 474)
+  const state = {
+    ctx,
+    subs: new Map<string, () => void>(),
+    pendingSubs: 0,
+    abortController: new AbortController(),
+  };
   let subId = "";
   await internals.execute(s.ws, state, 1, METHOD, {}, undefined, handler, (answer, track) => {
     subId = (answer as { result: { subId: string } }).result.subId;
