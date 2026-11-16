@@ -1,8 +1,20 @@
-import { MESH_CONTROL_LIMITS, PRODUCT_API_LIMITS } from "@vibefield/contracts";
+import { EventEmitter } from "node:events";
+import {
+  AgentSubscribeParams,
+  MESH_CONTROL_LIMITS,
+  METHODS,
+  PRODUCT_API_LIMITS,
+} from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import { describe, expect, it, vi } from "vitest";
 import type { WebSocket } from "ws";
-import { ProductApi } from "../src/product-api";
+import { refuseBoardAsk } from "../src/agent-field";
+import {
+  type DeviceSubscriptionForwarder,
+  type DynamicRouterLike,
+  ProductApi,
+  type SubscriptionHandler,
+} from "../src/product-api";
 
 describe("ProductApi lifecycle", () => {
   it("rejects listen when close wins the startup race", async () => {
@@ -480,6 +492,162 @@ describe("ProductApi lifecycle", () => {
   });
 });
 
+describe("item 476 — the door admits a subscription by its key, not by a pool", () => {
+  // Item 476 (2026-11-16) — one pool of 32 per connection, shared by every feed
+  // a window opens, let one view starve another and filled with what a person
+  // installs (a plugin's update lane each), while it bounded one connection,
+  // not a caller (the bound per caller is item 480's). The door now admits by
+  // the ask's KEY (its method and declared identity params, the contract's admission table):
+  // a key holds at most its limit on one connection, and unrelated keys never
+  // compete. These rows read behaviour only (an answer's `result`, a refusal's
+  // `data`), so they read the same against the pool and against the keys.
+
+  it("admits 40 distinct real keys on one connection: unrelated feeds no longer compete", async () => {
+    // the pool refused the 33rd whatever it asked for
+    const rig = doorRig();
+    const asks = ONE_METHODS.map((method): readonly [string, unknown] => [method, {}]);
+    for (let n = 0; n < 30; n += 1) {
+      asks.push(["plugins.update.subscribe", { pluginId: `com.example.p${n}` }]);
+    }
+    expect(asks).toHaveLength(40);
+    for (const [n, [method, params]] of asks.entries()) {
+      const answer = await rig.ask(method, params);
+      expect(answer["result"], `ask ${n + 1}: ${method} ${JSON.stringify(params)}`).toBeDefined();
+    }
+    expect(rig.state.subs.size).toBe(40);
+  });
+
+  it("refuses one key's 9th holder with the key's limit, and leaves its 8 live ones and every other key alone", async () => {
+    const rig = doorRig();
+    const lane = { pluginId: "com.example.one" };
+    for (let n = 1; n <= 8; n += 1) {
+      const answer = await rig.ask("plugins.update.subscribe", lane);
+      expect(answer["result"], `holder ${n}`).toBeDefined();
+    }
+    const refused = await rig.ask("plugins.update.subscribe", lane);
+    expect(refusalOf(refused)).toEqual(roomRefusal(8));
+    // an admission decision, not a teardown: the 8 stand, and the handler never
+    // ran for the 9th
+    expect(rig.state.subs.size).toBe(8);
+    expect(rig.entered("plugins.update.subscribe")).toBe(8);
+    expect(rig.disposed).toEqual([]);
+    // another plugin's lane is a key of its own
+    const other = await rig.ask("plugins.update.subscribe", { pluginId: "com.example.two" });
+    expect(other["result"]).toBeDefined();
+    expect(rig.state.subs.size).toBe(9);
+  });
+
+  it("keys a real board by its identity alone: 1,000 asks varying junk, tuning and spelled defaults are one key, refused at the 9th by the door", async () => {
+    // The handler is the board's own gate (`refuseBoardAsk`, MF-1h): every
+    // variation is one it accepts, checked below, so a refusal here can only be
+    // the door's. Tuning is only ever SLOWER than the model board's floor (the
+    // fold's 16 ms tick), the heartbeat within its range at the local scope, and
+    // the scope is spelled (`local`) or left to its default.
+    const rig = doorRig();
+    let entered = 0;
+    rig.handle("agent.subscribe", (ctx, params) => {
+      const refusal = refuseBoardAsk(ctx.principal.kind, AgentSubscribeParams.parse(params));
+      if (refusal !== null) throw refusal;
+      entered += 1;
+      return { snapshot: {}, dispose: () => undefined };
+    });
+    const variations = Array.from({ length: 1_000 }, (_, n) => boardVariation(n));
+    expect(new Set(variations.map((variation) => JSON.stringify(variation))).size).toBe(1_000);
+    for (const variation of variations) {
+      expect(refuseBoardAsk("local-token", AgentSubscribeParams.parse(variation))).toBeNull();
+    }
+
+    for (const [n, variation] of variations.entries()) {
+      const answer = await rig.ask("agent.subscribe", variation);
+      if (n < 8) expect(answer["result"], `variation ${n}`).toBeDefined();
+      else expect(refusalOf(answer), `variation ${n}`).toEqual(roomRefusal(8));
+    }
+    expect(entered).toBe(8);
+    expect(rig.state.subs.size).toBe(8);
+  });
+
+  it("holds a bounded method to its bound: diagnostics.subscribe past 4, whatever each asks", async () => {
+    const rig = doorRig();
+    for (let n = 1; n <= 4; n += 1) {
+      const answer = await rig.ask("diagnostics.subscribe", { filter: { minLevel: "warn", n } });
+      expect(answer["result"], `subscription ${n}`).toBeDefined();
+    }
+    const refused = await rig.ask("diagnostics.subscribe", { filter: { minLevel: "warn", n: 5 } });
+    expect(refusalOf(refused)).toEqual(roomRefusal(4));
+    expect(rig.entered("diagnostics.subscribe")).toBe(4);
+  });
+
+  it("holds a bounded method to its bound: index.session.subscribe past 8 distinct sessions", async () => {
+    const rig = doorRig();
+    for (let n = 1; n <= 8; n += 1) {
+      const answer = await rig.ask("index.session.subscribe", { sessionId: `session-${n}` });
+      expect(answer["result"], `session ${n}`).toBeDefined();
+    }
+    const refused = await rig.ask("index.session.subscribe", { sessionId: "session-9" });
+    expect(refusalOf(refused)).toEqual(roomRefusal(8));
+    expect(rig.entered("index.session.subscribe")).toBe(8);
+  });
+
+  it("holds a plugin-provided method to its bound of 32 at the provider's site, beside 20 other keys", async () => {
+    // the third install site (P4's router); the pool refused its 13th here, the
+    // 20 other keys having taken their slots
+    let provided = 0;
+    const rig = doorRig({
+      router: {
+        kindOf: () => "subscription",
+        call: async () => undefined,
+        subscribe: async () => {
+          provided += 1;
+          return { snapshot: {}, dispose: () => undefined };
+        },
+      },
+    });
+    for (let n = 0; n < 20; n += 1) {
+      const answer = await rig.ask("plugins.update.subscribe", { pluginId: `com.example.h${n}` });
+      expect(answer["result"], `other key ${n + 1}`).toBeDefined();
+    }
+    for (let n = 1; n <= 32; n += 1) {
+      const answer = await rig.askDynamic("x.example.watch", { query: `q${n}` });
+      expect(answer["result"], `provided ${n} of 32`).toBeDefined();
+    }
+    const refused = await rig.askDynamic("x.example.watch", { query: "q33" });
+    expect(refusalOf(refused)).toEqual(roomRefusal(32));
+    expect(provided).toBe(32);
+    expect(rig.state.subs.size).toBe(52);
+  });
+
+  it("admits a development window's twins: direct sites asked twice at once, the model board five at once, and refuses its 9th", async () => {
+    // StrictMode's discarded first mount is real to the daemon for a moment: a
+    // direct subscriber holds its key twice until its own answer lets the twin
+    // go (item 476, the dev window). Profile sets: three direct sites, each
+    // twice. The model board: Godview and Peek's Live now twice, and one more
+    // while a gap re-opens it. An opening ask is a holder (item 470), so all
+    // eleven are asked before any answers.
+    const rig = doorRig();
+    rig.control.mode = "later";
+    const asked: Array<Promise<Answer>> = [];
+    for (let n = 0; n < 6; n += 1) asked.push(rig.ask("agents.profileSets.subscribe", {}));
+    for (let n = 0; n < 5; n += 1) asked.push(rig.ask("agent.subscribe", { projection: "model" }));
+    expect(rig.opening).toHaveLength(11);
+    for (const open of rig.opening.splice(0)) {
+      open.resolve({ snapshot: {}, dispose: () => undefined });
+    }
+    const answers = await Promise.all(asked);
+    for (const [n, answer] of answers.entries()) {
+      expect(answer["result"], `twin ${n + 1}`).toBeDefined();
+    }
+
+    rig.control.mode = "answer";
+    for (let n = 6; n <= 8; n += 1) {
+      const answer = await rig.ask("agent.subscribe", { projection: "model" });
+      expect(answer["result"], `model board ${n}`).toBeDefined();
+    }
+    const refused = await rig.ask("agent.subscribe", { projection: "model" });
+    expect(refusalOf(refused)).toEqual(roomRefusal(8));
+    expect(rig.state.subs.size).toBe(14);
+  });
+});
+
 // ── item 470's rig ──
 
 const LIMIT = PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION;
@@ -593,4 +761,253 @@ function budgetRig(logger?: Logger) {
     });
   const held = (): number => state.subs.size + state.pendingSubs;
   return { control, opening, state, answers, subscribe, held };
+}
+
+// ── item 476's rig ──
+
+/** One answer the door wrote back, as its client reads it. */
+type Answer = Record<string, unknown>;
+
+/** A refusal's `data`, as the wire carries it. */
+interface RefusalData {
+  kind: string;
+  retryable: boolean;
+  details?: unknown;
+}
+
+/** The refusal's `data` in an answer; undefined for an answer that is not one. */
+function refusalOf(answer: Answer | undefined): RefusalData | undefined {
+  return (answer?.["error"] as { data?: RefusalData } | undefined)?.data;
+}
+
+/** The door's refusal for room, as its `data` says it: the limit that refused, nothing more. */
+function roomRefusal(limit: number): RefusalData {
+  return {
+    kind: "RESOURCE_EXHAUSTED",
+    retryable: false,
+    details: { resource: "subscriptions", limit },
+  };
+}
+
+/** Ten of the contract's `one` rows: each method is one key, whatever it is asked. */
+const ONE_METHODS = [
+  "system.health.subscribe",
+  "artifact.subscribe",
+  "device.subscribe",
+  "plugins.subscribe",
+  "services.subscribe",
+  "user.link.subscribe",
+  "setup.subscribe",
+  "process.subscribe",
+  "index.status.subscribe",
+  "agents.operations.subscribe",
+] as const;
+
+/** Slower than the model board's floor (`AGENT_FIELD.FULL_TICK_MS`, 16 ms), or absent. */
+const BOARD_INTERVALS = [undefined, 32, 100, 250, 1_000, 60_000] as const;
+/** Within `heartbeatMs`'s range (250 ms to 60 s), asked at the local scope, or absent. */
+const BOARD_HEARTBEATS = [undefined, 250, 1_000, 30_000] as const;
+
+/** The `n`th spelling of ONE key, `agent.subscribe {projection: "model"}` at the local scope:
+ * the scope spelled or left to its default, tuning varied within what the board accepts, and
+ * passthrough junk varied freely. */
+function boardVariation(n: number): Record<string, unknown> {
+  const minIntervalMs = BOARD_INTERVALS[n % BOARD_INTERVALS.length];
+  const heartbeatMs = BOARD_HEARTBEATS[Math.floor(n / 2) % BOARD_HEARTBEATS.length];
+  return {
+    projection: "model",
+    ...(n % 2 === 0 ? {} : { scope: "local" }),
+    ...(minIntervalMs !== undefined ? { minIntervalMs } : {}),
+    ...(heartbeatMs !== undefined ? { heartbeatMs } : {}),
+    [`junk${n}`]: n,
+    note: "x".repeat(n % 13),
+    nested: { n, list: [n, String(n)] },
+  };
+}
+
+/** A window's context, as its hello leaves it. */
+const WINDOW = {
+  principal: { kind: "local-token", tokenId: "tk_window", scopes: [] },
+  transport: "ws-loopback",
+  receivedAt: 0,
+};
+
+/** Every scope a product method names: the rig's window may ask anything, so a row through
+ * the whole door reads the door's admission, never its scope check. */
+const EVERY_SCOPE = [...new Set(METHODS.flatMap((def) => (def.scope ? [def.scope] : [])))];
+
+/** A socket the door can hold: what the door writes is read back, and its close is the door's
+ * own close handler, run by the event. */
+class RigSocket extends EventEmitter {
+  readyState = 1;
+  bufferedAmount = 0;
+  readonly frames: Answer[] = [];
+  readonly send = vi.fn((data: string) => {
+    this.frames.push(JSON.parse(data) as Answer);
+  });
+  readonly close = vi.fn();
+  readonly terminate = vi.fn();
+}
+
+/** What these rows read of a connection's state, as the door built it at the upgrade. */
+interface RigState {
+  authed: boolean;
+  ctx: unknown;
+  scopes: string[];
+  subs: Map<string, () => void>;
+  pendingSubs: number;
+}
+
+interface DoorRigOptions {
+  logger?: Logger;
+  /** P4 — the provider site's router */
+  router?: DynamicRouterLike;
+  /** C6-5 — the federated proxy; arms routing, this desktop being `dev-self` */
+  subForwarder?: DeviceSubscriptionForwarder;
+}
+
+/** Item 476 — one connection the door accepted at its own upgrade (`onConnection`), a window's
+ * hello set on its state. Stub producers are registered under REAL method names, through
+ * `registerSubscription`, which refuses a name the contract's rows do not hold; each answers at
+ * once or later, as `control.mode` says. Asks go through the local install site (`execute`),
+ * the provider's (`executeDynamic`) or the whole door (`onMessage`: a routed ask, an
+ * unsubscribe); `close` is the socket's own close event. */
+function doorRig(options: DoorRigOptions = {}) {
+  const api = new ProductApi({
+    port: 0,
+    tokens: { verify: () => null },
+    ...(options.logger !== undefined ? { logger: options.logger } : {}),
+  });
+  if (options.router !== undefined) api.setDynamicRouter(options.router);
+  if (options.subForwarder !== undefined) {
+    api.setDeviceRouting(() => "dev-self", vi.fn(), options.subForwarder);
+  }
+  const internals = api as unknown as {
+    subHandlers: Map<string, SubscriptionHandler>;
+    liveConns: Set<{ ws: unknown; state: RigState }>;
+    onConnection(ws: unknown, req: unknown): void;
+    onMessage(ws: unknown, state: unknown, raw: string): Promise<void>;
+    execute(
+      ws: unknown,
+      state: unknown,
+      id: number,
+      method: string,
+      params: unknown,
+      handler: undefined,
+      subHandler: SubscriptionHandler | undefined,
+      reply: (value: unknown) => void,
+    ): Promise<void>;
+    executeDynamic(
+      ws: unknown,
+      state: unknown,
+      id: number,
+      method: string,
+      params: unknown,
+      reply: (value: unknown) => void,
+    ): Promise<void>;
+  };
+  const ws = new RigSocket();
+  internals.onConnection(ws, { headers: {}, url: "/" });
+  const conn = [...internals.liveConns].at(-1);
+  if (conn === undefined) throw new Error("the door took no connection");
+  const { state } = conn;
+  // the hello's outcome, as the door's own sets it: a window's grant
+  state.authed = true;
+  state.ctx = WINDOW;
+  state.scopes = [...EVERY_SCOPE];
+
+  const control = { mode: "answer" as "answer" | "later" };
+  const counts = new Map<string, number>();
+  const disposed: string[] = [];
+  const opening: Array<Deferred<Install>> = [];
+  let nextId = 1;
+
+  function producer(method: string): SubscriptionHandler {
+    return () => {
+      counts.set(method, (counts.get(method) ?? 0) + 1);
+      if (control.mode === "later") {
+        const open = deferred<Install>();
+        opening.push(open);
+        return open.promise;
+      }
+      return {
+        snapshot: { method },
+        dispose: () => {
+          disposed.push(method);
+        },
+      };
+    };
+  }
+
+  /** The door's reply to one ask at the local install site, with this handler. A handler's
+   * throw rejects, as `execute` throws it to `onMessage`'s mapping. */
+  async function askWith(
+    method: string,
+    params: unknown,
+    handler: SubscriptionHandler | undefined,
+  ): Promise<Answer> {
+    const id = nextId++;
+    let answer: Answer = {};
+    await internals.execute(ws, state, id, method, params, undefined, handler, (value) => {
+      answer = value as Answer;
+    });
+    return answer;
+  }
+
+  /** As `askWith`, with the method's registered producer (the rig's own, unless a row set one
+   * with `handle`). */
+  async function ask(method: string, params: unknown = {}): Promise<Answer> {
+    if (!internals.subHandlers.has(method)) api.registerSubscription(method, producer(method));
+    return askWith(method, params, internals.subHandlers.get(method));
+  }
+
+  /** The door's reply to one ask at the provider's site (`x.` methods). */
+  async function askDynamic(method: string, params: unknown): Promise<Answer> {
+    const id = nextId++;
+    let answer: Answer = {};
+    await internals.executeDynamic(ws, state, id, method, params, (value) => {
+      answer = value as Answer;
+    });
+    return answer;
+  }
+
+  /** One frame through the whole door (`onMessage`), and the answer it wrote for it. */
+  async function call(method: string, params: unknown): Promise<Answer> {
+    const id = nextId++;
+    await internals.onMessage(ws, state, JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+    const answer = ws.frames.find((frame) => frame["id"] === id);
+    if (answer === undefined) throw new Error(`the door did not answer ${method} (${id})`);
+    return answer;
+  }
+
+  /** A row's own producer for a real method, in place of the rig's. */
+  function handle(method: string, handler: SubscriptionHandler): void {
+    api.registerSubscription(method, handler);
+  }
+
+  /** How often the rig's producer for this method was entered. */
+  function entered(method: string): number {
+    return counts.get(method) ?? 0;
+  }
+
+  /** The socket closes: the door's own close handler runs. */
+  function close(): void {
+    ws.emit("close");
+  }
+
+  return {
+    api,
+    ws,
+    state,
+    control,
+    opening,
+    disposed,
+    ask,
+    askWith,
+    askDynamic,
+    call,
+    handle,
+    entered,
+    close,
+  };
 }
