@@ -28,16 +28,14 @@ import {
   LAYOUT,
   type PluginRegistrySnapshot,
   PluginsListResult,
-  pipeEndpointFor,
   RELEASE_IDENTITY_FILE,
-  SOCKETS,
   StagedReleaseIdentity,
   TRUST_ROOT_FILE,
 } from "@vibefield/contracts";
 import { FielddClient } from "@vibefield/fieldd-client";
 import { generateRegistryKeypair } from "@vibefield/plugin-build";
 import { afterEach, describe, expect, it } from "vitest";
-import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { MockMgmtServer, standInEndpoint } from "../src/testing/mock-mgmt";
 import { runAliasParentEnv } from "./native-harness";
 
 const RESOURCES = process.env["FIELDD_TEST_PLUGINS_PACKAGE"];
@@ -109,11 +107,9 @@ async function packagedRegistry(plugins: {
   const agents = join(root, "agents");
   const logs = join(root, "logs");
   for (const dir of [home, agents, logs]) mkdirSync(dir, { recursive: true });
-  const mock = new MockMgmtServer(
-    process.platform === "win32"
-      ? pipeEndpointFor(root, SOCKETS.MGMT)
-      : join(root, ...LAYOUT.MGMT_SOCKET),
-  );
+  // WIN-D1: pipe name on win32; on unix what fieldd dials, the alias's keeper run first
+  // (item 345: a root over the sun_path line binds through the alias)
+  const mock = new MockMgmtServer(standInEndpoint(root));
   await mock.start();
   cleanup.push(() => mock.stop());
   const child: ChildProcess = spawn(join(bin, exe("fieldd")), [], {

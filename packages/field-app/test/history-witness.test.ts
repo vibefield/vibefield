@@ -57,12 +57,9 @@ import {
   IndexOpenTicket,
   IndexSessionsResult,
   IndexStatus,
-  LAYOUT,
-  pipeEndpointFor,
-  SOCKETS,
 } from "@vibefield/contracts";
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
-import { MockMgmtServer } from "@vibefield/fieldd/testing";
+import { MockMgmtServer, standInEndpoint } from "@vibefield/fieldd/testing";
 import { FielddClient, type WsLike } from "@vibefield/fieldd-client";
 import {
   type AssetRef,
@@ -245,11 +242,9 @@ async function realDesktop(
   const home = join(dataDir, "home");
   mkdirSync(home, { recursive: true });
   seed(home, dataDir);
-  const mock = new MockMgmtServer(
-    process.platform === "win32"
-      ? pipeEndpointFor(dataDir, SOCKETS.MGMT)
-      : join(dataDir, ...LAYOUT.MGMT_SOCKET),
-  );
+  // WIN-D1: pipe name on win32; on unix what fieldd dials, the alias's keeper run first
+  // (item 345: a root over the sun_path line binds through the alias)
+  const mock = new MockMgmtServer(standInEndpoint(dataDir));
   await mock.start();
   cleanup.push(() => mock.stop());
   const daemon = await bootstrap({

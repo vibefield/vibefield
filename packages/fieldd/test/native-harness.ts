@@ -14,8 +14,8 @@ import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
 import { SOCKET_ALIAS_PARENT_ENV, SOCKETS } from "@vibefield/contracts";
 import { cargoBinaries } from "../../../scripts/cargo-target.mjs";
-import { nativeEndpoint as lawEndpoint } from "../src/boot-env";
 import type { NativeLink } from "../src/native-link";
+import { standInEndpoint } from "../src/testing/mock-mgmt";
 
 /** The cargo artifact for `-p field-native`: where the suites' build under
  * `nativeBuildEnv` lands, ASKED of cargo (`scripts/cargo-target.mjs`, tooling
@@ -74,13 +74,18 @@ export function shortTmpRoot(prefix: string, platform: NodeJS.Platform = process
  * socket alias parent from the environment), so a root over the sun_path line
  * dials the alias the floor bound through. *Corrected 2026-11-12 (the seam
  * slice):* this was the LAYOUT path joined under the root, which on such a
- * root names a path no floor can bind. */
+ * root names a path no floor can bind. *Corrected 2026-11-16 (the CI red):* it
+ * now runs the alias's keeper first (`standInEndpoint`), as both planes do
+ * before a bind or a dial. A stand-in that bound here found no alias on a root
+ * over the line, and the sites that made its folder with a recursive mkdir left
+ * it 0755, which every later keeper of the run refused. A real floor finds the
+ * link the keeper made and keeps it. */
 export function nativeEndpoint(
   dataDir: string,
   socketFile: string,
   platform: NodeJS.Platform = process.platform,
 ): string {
-  return lawEndpoint(dataDir, socketFile, platform);
+  return standInEndpoint(dataDir, socketFile, platform);
 }
 
 /** Item 345, the seam slice: the run's own socket alias parent (alias-parent-env.ts) as an environment entry, for a

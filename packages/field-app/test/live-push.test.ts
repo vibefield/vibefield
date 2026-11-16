@@ -36,9 +36,9 @@ import {
   NOTE_PROPS,
   NOTE_TYPE,
 } from "@vibecook/ice/desk/objects";
-import { DOC_SYNC_RECORD, LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
+import { DOC_SYNC_RECORD } from "@vibefield/contracts";
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
-import { MockMgmtServer } from "@vibefield/fieldd/testing";
+import { MockMgmtServer, standInEndpoint } from "@vibefield/fieldd/testing";
 import { FielddClient } from "@vibefield/fieldd-client";
 import { COMMENT_PAD_TYPE, createPadTyping, type PadCell } from "@vibefield/plugin-comment-pad";
 import { LoroDoc } from "loro-crdt";
@@ -80,11 +80,9 @@ async function stack(): Promise<FielddDaemon> {
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   mkdirSync(join(dir, "native", "run"), { recursive: true });
   writeFileSync(join(dir, "native", "pairing"), "ab".repeat(32));
-  const mock = new MockMgmtServer(
-    process.platform === "win32"
-      ? pipeEndpointFor(dir, SOCKETS.MGMT)
-      : join(dir, ...LAYOUT.MGMT_SOCKET),
-  );
+  // WIN-D1: pipe name on win32; on unix what fieldd dials, the alias's keeper run first
+  // (item 345: a root over the sun_path line binds through the alias)
+  const mock = new MockMgmtServer(standInEndpoint(dir));
   await mock.start();
   cleanup.push(() => mock.stop());
   const daemon = await bootstrap({ dataDir: dir, controlPort: 0, dataPort: 0 });

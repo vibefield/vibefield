@@ -22,9 +22,9 @@ import {
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
+import { LAYOUT } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { MockMgmtServer, standInEndpoint } from "../src/testing/mock-mgmt";
 import { runAliasParentEnv } from "./native-harness";
 
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -107,11 +107,9 @@ describe("item 78 — two users' fieldds under one platform log root both log, e
       const userRoot = join(base, "vf", ...LAYOUT.USERS_DIR, String(fuid));
       mkdirSync(join(userRoot, "native", "run"), { recursive: true });
       writeFileSync(join(userRoot, "native", "pairing"), "ab".repeat(32));
-      const mock = new MockMgmtServer(
-        process.platform === "win32"
-          ? pipeEndpointFor(userRoot, SOCKETS.MGMT)
-          : join(userRoot, ...LAYOUT.MGMT_SOCKET),
-      );
+      // WIN-D1: pipe name on win32; on unix what fieldd dials, the alias's keeper run
+      // first (item 345: a root over the sun_path line binds through the alias)
+      const mock = new MockMgmtServer(standInEndpoint(userRoot));
       await mock.start();
       cleanup.push(() => mock.stop());
       const child = spawn(process.execPath, [join(base, "bin.cjs")], {

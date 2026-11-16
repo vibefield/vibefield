@@ -262,7 +262,7 @@ async function startFakeFloor(
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   const controlEndpoint = nativeEndpoint(dir, SOCKETS.TERMINAL_CONTROL);
   if (!isPipeEndpoint(controlEndpoint)) {
-    mkdirSync(dirname(controlEndpoint), { recursive: true });
+    mkdirSync(join(dir, "native", "run"), { recursive: true });
   }
   const createdSessionId = "fake-session-1";
   const live = new Set<Socket>();

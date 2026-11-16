@@ -7,7 +7,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import {
   ErrorData,
   isPipeEndpoint,
@@ -38,12 +38,14 @@ afterEach(async () => {
 });
 
 /** Where the mock binds under a fresh temp root, by the WIN-D1 law: a
- * `native/run/mgmt.sock` path on unix — created here, since no field-native ran
- * to create it — and a root-scoped pipe name on win32, which has no directory
- * to make and would fail `listen()` if handed a filesystem path at all. */
+ * `native/run/mgmt.sock` path on unix — its run dir created here, since no
+ * field-native ran to create it, and reached through the alias the harness's
+ * keeper made for a root over the sun_path line — and a root-scoped pipe name
+ * on win32, which has no directory to make and would fail `listen()` if handed
+ * a filesystem path at all. */
 function mockEndpoint(dir: string): string {
   const endpoint = nativeEndpoint(dir, SOCKETS.MGMT);
-  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
+  if (!isPipeEndpoint(endpoint)) mkdirSync(join(dir, "native", "run"), { recursive: true });
   return endpoint;
 }
 

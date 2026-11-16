@@ -6,7 +6,7 @@
 // =0.7.24 pin".*
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import {
   DRIVE_LIMITS,
   DRIVE_SERVICE,
@@ -109,7 +109,7 @@ async function floor(transfer: "unsupported" | MockFileTransfer = mockFileTransf
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(join(dir, "pairing"), "ab".repeat(32));
   const endpoint = nativeEndpoint(dir, SOCKETS.MGMT);
-  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
+  if (!isPipeEndpoint(endpoint)) mkdirSync(join(dir, "native", "run"), { recursive: true });
   const mock = new MockMgmtServer(endpoint);
   mock.fileTransfer = transfer;
   await mock.start();

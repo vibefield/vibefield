@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import {
   isPipeEndpoint,
   pipeEndpointFor,
@@ -51,12 +51,15 @@ const listenOn = async (endpoint: string): Promise<Server> => {
 
 /** An address a listener can actually take under a fresh root, resolved by the
  * SAME function the probe dials — so these tests bind what production would.
- * On unix that is a `native/run/` path whose directory is ours to make (no
- * field-native ran here); on win32 it is a pipe name with nothing to create,
- * and `listen()` would refuse a filesystem path outright. */
+ * On unix the alias's keeper runs first, as field-native's does before its bind,
+ * and the run dir is ours to make (no field-native ran here): a root over the
+ * sun_path line binds through the alias, whose folder only a keeper makes. On
+ * win32 it is a pipe name with nothing to create, and `listen()` would refuse a
+ * filesystem path outright. */
 const bindableEndpoint = (root: string): string => {
+  ensureNativeSocketDir(root, { warn: () => {} });
   const endpoint = nativeMgmtEndpoint(root);
-  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
+  if (!isPipeEndpoint(endpoint)) mkdirSync(join(root, "native", "run"), { recursive: true });
   return endpoint;
 };
 

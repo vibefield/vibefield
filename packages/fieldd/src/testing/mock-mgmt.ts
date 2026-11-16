@@ -13,9 +13,30 @@ import {
   NativeFileTransferPullParams,
   NativeFileTransferRootsParams,
   RPC_ERROR_CODES,
+  SOCKETS,
   STORES,
 } from "@vibefield/contracts";
+import { ensureNativeSocketDir, nativeEndpoint } from "../boot-env";
 import { computeAckMac } from "../pairing";
+
+/** Item 345's stand-in half: the endpoint a floor binds under `dataRoot`, after the
+ * socket alias's keeper ran, as field-native runs it before each bind (and fieldd
+ * before each dial). A root over the sun_path line binds through
+ * `<parent>/vf-<uid>/<scope>`: a link into its run dir that only a keeper makes, in
+ * a 0700 folder that only a keeper may make. A stand-in that listened there first
+ * found no link, and a test that made the folder with a recursive mkdir left it
+ * 0755, which every later keeper of that run refused (the CI red of 2026-11-15).
+ * A root that fits touches nothing, and win32's pipes have nothing to keep. The
+ * run dir stays the caller's to make, as the floor's is: the link may point at a
+ * run dir not made yet. The parent is this process's (`SOCKET_ALIAS_PARENT_ENV`). */
+export function standInEndpoint(
+  dataRoot: string,
+  socketFile: string = SOCKETS.MGMT,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  ensureNativeSocketDir(dataRoot, { warn: () => {} }, platform);
+  return nativeEndpoint(dataRoot, socketFile, platform);
+}
 
 /** DS-1 — a scripted egress floor for `MockMgmtServer.egress`. */
 export interface MockEgress {

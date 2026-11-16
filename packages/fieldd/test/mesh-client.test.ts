@@ -2,7 +2,7 @@
 // against the scripted mock (no cargo, no tailnet).
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { ARTIFACT_SERVE_PREFIX, isPipeEndpoint, PORTS, SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { MeshClient, meshNodeUp, type ServeSpec, type ServeState } from "../src/mesh-client";
@@ -34,7 +34,7 @@ async function setup(): Promise<{ mock: MockMgmtServer; link: NativeLink; mesh: 
   // root-scoped pipe name on win32. Resolving twice is how a bind and a dial
   // drift apart.
   const endpoint = nativeEndpoint(dir, SOCKETS.MGMT);
-  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
+  if (!isPipeEndpoint(endpoint)) mkdirSync(join(dir, "native", "run"), { recursive: true });
   const mock = new MockMgmtServer(endpoint);
   await mock.start();
   cleanup.push(() => mock.stop());

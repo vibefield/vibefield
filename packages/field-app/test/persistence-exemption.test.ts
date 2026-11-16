@@ -12,9 +12,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ENGINE_SCHEMA_VERSION } from "@vibecook/ice";
-import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
-import { MockMgmtServer } from "@vibefield/fieldd/testing";
+import { MockMgmtServer, standInEndpoint } from "@vibefield/fieldd/testing";
 import { FielddClient } from "@vibefield/fieldd-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DocManager } from "../src/doc-manager";
@@ -47,12 +46,9 @@ async function stack(dataDir?: string): Promise<{ dataDir: string; daemon: Field
     cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
     mkdirSync(join(dir, "native", "run"), { recursive: true });
     writeFileSync(join(dir, "native", "pairing"), "ab".repeat(32));
-    // WIN-D1: pipe name on win32, joined LAYOUT path on unix (what fieldd dials)
-    const mock = new MockMgmtServer(
-      process.platform === "win32"
-        ? pipeEndpointFor(dir, SOCKETS.MGMT)
-        : join(dir, ...LAYOUT.MGMT_SOCKET),
-    );
+    // WIN-D1: pipe name on win32; on unix what fieldd dials, the alias's keeper run
+    // first (item 345: a root over the sun_path line binds through the alias)
+    const mock = new MockMgmtServer(standInEndpoint(dir));
     await mock.start();
     cleanup.push(() => mock.stop());
   }

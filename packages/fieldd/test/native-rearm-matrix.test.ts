@@ -14,7 +14,7 @@
 // floor's own record of what it was asked (`storeSubscribeAsks`) and the daemon's log.
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { isPipeEndpoint, SOCKETS, STORES } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { bootstrap, type FielddDaemon } from "../src/index";
@@ -296,7 +296,7 @@ async function bareLink(
   const pairingFile = join(root, "pairing");
   writeFileSync(pairingFile, "ab".repeat(32));
   const endpoint = nativeEndpoint(root, SOCKETS.MGMT);
-  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
+  if (!isPipeEndpoint(endpoint)) mkdirSync(join(root, "native", "run"), { recursive: true });
   const floor = new MockMgmtServer(endpoint);
   await floor.start();
   const native = new NativeLink({ socketPath: endpoint, pairingFile, bootId: "nr-boot", ...opts });

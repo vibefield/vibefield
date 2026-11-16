@@ -5,7 +5,7 @@
 // the table reset, and the two ordering races the revision exists for.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import {
   isPipeEndpoint,
   type MeshEgressRouteAddParams,
@@ -56,7 +56,7 @@ async function floor(): Promise<{ mock: MockMgmtServer; link: NativeLink; mesh: 
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(join(dir, "pairing"), "ab".repeat(32));
   const endpoint = nativeEndpoint(dir, SOCKETS.MGMT);
-  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
+  if (!isPipeEndpoint(endpoint)) mkdirSync(join(dir, "native", "run"), { recursive: true });
   const mock = new MockMgmtServer(endpoint);
   await mock.start();
   cleanup.push(() => mock.stop());

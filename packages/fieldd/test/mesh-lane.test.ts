@@ -122,7 +122,7 @@ async function fakeBridge(opts: { late?: boolean } = {}): Promise<{
   // `net.Server.listen` cannot take a filesystem path at all. An ad-hoc temp
   // root is fine: it only contributes the scope hash that keeps the name unique.
   const endpoint = nativeEndpoint(dir, SOCKETS.MESHDATA);
-  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
+  if (!isPipeEndpoint(endpoint)) mkdirSync(join(dir, "native", "run"), { recursive: true });
   const pairingFile = join(dir, "pairing");
   const secretHex = "ab".repeat(32);
   writeFileSync(pairingFile, secretHex);
@@ -207,7 +207,7 @@ async function squatterBridge(mode: "silent" | "forged"): Promise<{
 }> {
   const dir = tmp("squat");
   const endpoint = nativeEndpoint(dir, SOCKETS.MESHDATA);
-  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
+  if (!isPipeEndpoint(endpoint)) mkdirSync(join(dir, "native", "run"), { recursive: true });
   const pairingFile = join(dir, "pairing");
   writeFileSync(pairingFile, "ab".repeat(32));
   const reader = new MeshDataFrameReader();
