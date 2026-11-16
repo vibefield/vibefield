@@ -301,6 +301,11 @@ interface ConnState {
   connectionId: string;
   /** live subscriptions on this connection: subId → dispose */
   subs: Map<string, () => void>;
+  /** Item 470 (2026-11-16) — subscriptions admitted by the budget and still
+   * opening (their handler is out): each holds a slot from the check until its
+   * install takes the slot as a `subs` entry, or its handler fails and gives it
+   * back. The budget counts `subs.size + pendingSubs`. */
+  pendingSubs: number;
   abortController: AbortController;
   shellTransport: ShellProviderTransport;
   /** SP-1 — this connection's keepalive (`system.tick`), armed by its first
@@ -574,7 +579,16 @@ export class ProductApi extends EventEmitter {
             params: { subId, payload },
           });
       };
-      const { snapshot, dispose } = await router.subscribe(ctx, method, params, emit);
+      // Item 470 — the check reserved this slot; it is held while the provider
+      // opens, and handed to the install below in the same turn (never counted
+      // twice), or given back if the provider throws
+      let opened: { snapshot: unknown; dispose: () => void };
+      try {
+        opened = await router.subscribe(ctx, method, params, emit);
+      } finally {
+        state.pendingSubs -= 1;
+      }
+      const { snapshot, dispose } = opened;
       state.subs.set(subId, () => {
         active = false;
         dispose();
@@ -759,6 +773,7 @@ export class ProductApi extends EventEmitter {
       peerClaimDemoted: false,
       connectionId: `conn_${randomBytes(9).toString("base64url")}`,
       subs: new Map(),
+      pendingSubs: 0,
       abortController: new AbortController(),
       shellTransport,
       tick: null,
@@ -1415,14 +1430,17 @@ export class ProductApi extends EventEmitter {
             };
             // DS-2 — a federated subscription carries no `onBehalfOf`: its
             // upstream is SHARED by every local reader (ref-counted per
-            // {device, method, params}, PF6), so it is this daemon's own read
-            const { snapshot, dispose, start } = await subForwarder(
-              device,
-              method,
-              callParams,
-              callCtx,
-              emit,
-            );
+            // {device, method, params}, PF6), so it is this daemon's own read.
+            // Item 470 — the slot the check reserved is held while the peer
+            // opens it, then handed to the install in the same turn, or given
+            // back if the forward fails
+            let opened: Awaited<ReturnType<DeviceSubscriptionForwarder>>;
+            try {
+              opened = await subForwarder(device, method, callParams, callCtx, emit);
+            } finally {
+              state.pendingSubs -= 1;
+            }
+            const { snapshot, dispose, start } = opened;
             state.subs.set(subId, () => {
               active = false;
               dispose();
@@ -1529,7 +1547,16 @@ export class ProductApi extends EventEmitter {
           hold !== null && kind === "snapshot" ? ownSnapshots(hold) : undefined,
         );
       };
-      const { snapshot, dispose, start, resync } = await subHandler(ctx, params, emit);
+      // Item 470 — the check reserved this slot; it is held while the handler
+      // opens, and handed to the install below in the same turn (nothing awaits
+      // between), or given back if the handler throws
+      let opened: SubscriptionInstall;
+      try {
+        opened = await subHandler(ctx, params, emit);
+      } finally {
+        state.pendingSubs -= 1;
+      }
+      const { snapshot, dispose, start, resync } = opened;
       // the phone alone (the `tailnet` principal, as `tailnet-rows.ts` bounds
       // it): a peer daemon on the same door keeps the shed and its heartbeats
       if (resync !== undefined && ctx.principal.kind === "tailnet") {
@@ -1690,9 +1717,18 @@ export class ProductApi extends EventEmitter {
    * unbounded map let one socket buy the daemon's tick budget. Checked BEFORE
    * the subscribe runs at all three install sites — the local handler, the
    * federated proxy and a plugin provider's own method — so the refusal costs
-   * nothing and disturbs nothing already live. */
+   * nothing and disturbs nothing already live.
+   *
+   * Item 470 (2026-11-16) — admission RESERVES the slot. The check ran before
+   * the handler's await and the install after it, so subscribes asked together
+   * at 31 each passed and a connection held more than the bound. A null answer
+   * now holds one slot in `pendingSubs` (counted with `subs`), which each install
+   * site hands to its `subs` entry or gives back if its handler throws. */
   private subscriptionBudgetRefusal(state: ConnState, id: unknown): unknown | null {
-    if (state.subs.size < PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION) return null;
+    if (state.subs.size + state.pendingSubs < PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION) {
+      state.pendingSubs += 1;
+      return null;
+    }
     return this.err(
       id,
       "RESOURCE_EXHAUSTED",
