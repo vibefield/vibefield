@@ -51529,3 +51529,187 @@ workers, a harness TMPDIR of 21 bytes.
 - macOS only.
 
 **Not done, and not claimed:** the budget unchanged; no wire shape moved; nothing pushed.
+
+## Item 451 — the lane's booted witness, the rest of row B: a live merge and a person's acts end (M326)
+
+(2026-11-16; one commit, 1 file, test-only. Cut by RV on train 4's top `f4e93e3c7` as `dd5d1b8eb` on branch
+`rv/i451-on-f4e93e3c7`. Main moves once, on James's word and VF-PM's GO.
+On main it is 72ea48d12; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What it proves.**
+- Row B's booted witness was path 1 alone (M317). This row adds the paths it left, on ONE booted fieldd: a peer's
+  settings merged into the running daemon, and a person's acts sent through the doors. Their real callbacks never
+  re-enter a plugin's lane and always end. The interleavings themselves stay the unit desk's rows; path 5 (a walk's
+  removal) is E10's booted row.
+- **Path 2, a walk's enable.** The person turns kv off; a peer turns it on, merged live. The walk that merge raises
+  turns it on with its real restart, and the service comes back.
+- **Path 3, a person's disable while a walk's grant section may hold the lane.** A peer revokes `background` (a
+  power kv asks for, so the walk's real `setGrant` runs) in the same tick as the person's `plugins.disable`. Both
+  answer; kv is off here and in the doc; `background` is revoked here and in the doc at generation 1. NOT held:
+  which of the two took the lane first. A booted daemon has no seam to pause a walk.
+- **Path 4, a person's grant act behind a person's disable.** `plugins.disable` and `plugins.grants.set`
+  (storage.self, off), the second sent without awaiting the first. Both answer; kv is off; storage.self is revoked
+  here and in the doc at generation 1. NOT held: a bound on the grant act. Only a switch behind an update is bounded;
+  a grant act waits for the lane and completes.
+- **Path 6a, a person's switch behind a real update.** The update to 0.2.0 and the off sent at once; either end is
+  accepted and the row prints which: the off applied (off at 0.2.0), or refused by `PLUGIN_UPDATING` (on at 0.2.0).
+- At the end the test stops the daemon and awaits it. Its log holds no `lane re-entered` line (the product's own
+  error text), and a missing log fails the test. The ledger is read whole: every named move audited succeeded, and no
+  walk ever turned the plugin off.
+
+**The proof.**
+- RV's row (`row-i451.sh`, `c8968549fe22a1c2`), on this Mac through the door, at train 4's top, under the env -i
+  harness, a 48-byte TMPDIR and three vitest workers, 2026-11-16 11:39:54Z → 11:49:55Z: **GREEN** (run.log
+  `c0130352f6903836`).
+  - The file five times in a row: 36 of 36 each; item 451's test passed five of five; no run printed
+    `lane re-entered` or a cleanup error.
+  - Path 6a: the off was APPLIED in all five runs.
+  - fieldd's whole suite once: 4069 passed, 15 skipped, in 293 files. fieldd's typecheck exit 0; biome over the file
+    exit 0.
+  - The product's socket folder's links into a temp root 0 before and 0 after; the lane returned with its refs equal.
+- The train's V:
+  V-TRAIN6, `pnpm verify` whole at the train's top (five commits over main `0476144a5`: items 451, 458 and 475), on this
+  Mac beside a running QA desktop: exit 0 in 2222 s, under a 48-byte TMPDIR with vitest capped at three workers; fifteen
+  stages opened; fieldd 288 files passed and 5 skipped (4076 tests), field-app 356 files (5094 tests), cargo's 38
+  results ok, none failed. The commits on main are those five, unchanged. The landing-only gates were not run.
+
+**Not covered.**
+- **The `PLUGIN_UPDATING` refusal was NOT seen on a booted daemon.** In all five runs the update ended inside the
+  5 s bound, so the off was applied. No fixture registry can hold an update past 5 s, so the refusal stays proven by
+  the unit desk's row at its 50 ms bound.
+- Path 3's order and a bound on path 4's grant act, as above.
+- The row runs on macOS; nothing here is proven on Windows or Linux. Nothing was looked at in a window.
+- `pnpm gate:landing`: deferred, not waived; owed at James's unlock.
+
+**Not done, and not claimed:** no product change; nothing pushed.
+
+## Item 458 — the native link runs the alias's keeper before each probe (M327)
+
+(2026-11-16; two commits, 2 files +68 −4. Cut by c2 on train 4's top `f4e93e3c7` as `48c1ea5e5` and `cf07b59d5`
+on branch `i458/link-keeper-on-f4e93e3c7`. Main moves once, on James's word and VF-PM's GO. On main they are
+`c03b62856` and `994929b49`; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- `NativeLink.connect()` dialed only once its endpoint existed, and the socket alias's keeper ran only inside the dial.
+- On a root over the sun_path line the endpoint is the alias `<parent>/vf-<uid>/<scope>`. A link that had gone while
+  field-native ran was never put back by the connect, which waited out its whole deadline: "field-native did not come
+  up before the readiness deadline". The floor's own re-check puts the link back within 60 s.
+- Its weight is small. fieldd's product entry (`bin.ts`) runs the keeper before its boot, so in the product only a
+  link removed in the narrow gap between that keeper and the connect's first probe could meet it, and nobody has seen
+  it. It bit in full for every other caller of `bootstrap()`, the test harness included: `bootstrap()` did not keep
+  its own alias. Found by reading, in the CI red's diagnosis.
+
+**What moved.**
+- `connect()` runs `beforeDial` (boot-env's `ensureNativeSocketDir`) at the top of each turn, before its probe. The
+  option's doc says so.
+- The keeper is the same as at a dial: the parent by stat (following /tmp's own link; owner and sticky bit), the
+  `vf-<uid>` folder by lstat (owner and 0700 as found, never chmodded), the alias by lstat, and a link pointing
+  elsewhere replaced inside our own folder.
+- A refusal now ends the connect at once with the keeper's own words, still fatal to the boot. What a person reads does
+  not change: "VibeField couldn't start.", with the words in the log.
+- The cost on the alias road, on a standing link: a stat, three lstats and a readlink per 100 ms turn, for at most
+  the deadline. A root that fits touches nothing.
+- The test: a second `it` in `alias-road.test.ts`. It removes only the harness's own link, by unlink in its own code,
+  after a refusing hold that the link is in the run's own `/tmp/vfa-` folder.
+
+**The proof.** `rows-458.sh` (`a13e8794ccdd6c6e`), on this Mac through the door, at train 4's top `f4e93e3c7` with the
+patches in the working tree, 2026-11-16 11:51:37Z → 11:55:22Z, under TMPDIRs of the runner's 48 bytes and of 27, three
+vitest workers: **GREEN** (run.log `963a0cf2ebb8d744`).
+- The red, the test alone: alias-road red under both by item 458's `it` alone, "Tests 1 failed | 1 passed (2)", with
+  "field-native did not come up before the readiness deadline".
+- With the line: biome and fieldd's typecheck clean. alias-road five times under each, every run "Tests 2 passed
+  (2)"; native-link's own suite (46 tests) and field-app's live-push (3 tests) green under both: 14 runs of 14.
+- The product folder's links into /tmp were 0 before and after every run. The patches were reversed after, and the
+  lane returned with its refs equal (2493 = 2493).
+- The commits' trees are those working trees', the two paths at the proven blobs.
+- The train's V: V-TRAIN6, `pnpm verify` whole at the train's top (five commits over main `0476144a5`: items 451, 458
+  and 475), on this Mac beside a running QA desktop: exit 0 in 2222 s, under a 48-byte TMPDIR with vitest capped at
+  three workers; fifteen stages opened; fieldd 288 files passed and 5 skipped (4076 tests), field-app 356 files (5094
+  tests), cargo's 38 results ok, none failed. The commits on main are those five, unchanged. The landing-only gates were
+  not run.
+
+**Not covered.**
+- fieldd's whole suite did not run with the line in this row (alias-road, native-link's suite and field-app's
+  live-push did); the train's V is its first.
+- The gap's length in the product, from the entry's keeper to the connect's first probe, was not measured.
+- macOS only. Windows' pipes have no alias; Linux was not run.
+
+**Not done, and not claimed:** no Electron or phone witness; nothing pushed.
+
+## Item 475 — a hidden window mints no ticket; the ask waits for the show (M328)
+
+(2026-11-16; two commits, 3 paths +449 −0. Cut by c2 on train 4's top `f4e93e3c7` as `ffbee9184` and `508361cbf`
+on branch `i475/hidden-park-on-f4e93e3c7`. Main moves once, on James's word and VF-PM's GO. On main they are `c862bd97a`
+and `b4262dcdd`; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- A hidden window's page timers are throttled: a one-second grid, then one wake a minute. The terminal's control-leg
+  heartbeat is a page timer in ghosttea-react's runtime (0.15.0, `routed-control.js`), so it could not keep the
+  cell's 15 s deadline.
+- The cell closed the leg (4004). The runtime recovered at once, and the window's routed host asked fieldd for a
+  fresh ticket each time: a mint, a dial and an audited grant, about once a minute while the window stayed hidden.
+- Found by qa-02 on the QA stage: 522 mints of one standing shell in a day, 1,056 of the stage's 1,162 audit lines,
+  lives of 59.1 s. Every mounted pane on that cell did the same.
+- Its weight: nothing a person sees. The pane is hidden, and on show it is current within one re-dial. What it cost:
+  the audit's signal, a mint and a dial a minute per mounted pane, and a wake a minute for a hidden app.
+
+**What moved.**
+- The routed host's `openTicket` parks while `isHidden()` (`visibility.ts`, the renderer's one visibility seam) and
+  mints once on the show. A primed ticket, already in hand, is used at once.
+- The parked ask sits beside DS-4e's and is withdrawn the same way, by `withdrawAsks`: a detach or an end of its
+  activation, a removal, a terminate, a dispose. One `visibilitychange` listener is held only while an ask waits.
+- A covered production window reads hidden too (the DK-11 measurement in `window-policy.ts`). The park waits on the
+  same state that starts the throttling.
+- The loop becomes ONE close: the leg dies once, the ask waits, and nothing more happens until the show. On show the
+  pane shows ghosttea's stale treatment for one mint, dial and attach, then the cell's current screen; the PTY ran
+  throughout.
+- The mint's audit stays as loud as D6 makes it. This fixes the loop, not the ledger.
+
+**The one visible change: the geometry seat.**
+- When the desktop's leg dies, the cell frees the seat and tells the session's other activations (item 42).
+- A phone viewing that session may then hold the seat, and the PTY takes the phone's size. On show the desktop's
+  plain claim is refused until a take, by item 42's road.
+- Today the same could happen only inside each minute's 0.9 s gap. No take-on-show in this slice.
+
+**Untouched.**
+- No view, pane or session is released. Item 294's rule (an empty shell dies when it loses its pane) and the deck's
+  unused-shell release are as they were. No birth, so no `succeeds` (item 464).
+- Neither daemon has a rule that ends, releases or re-sizes a session for having no control leg (read: fieldd's
+  terminal service and releases, field-native's leg close, `tick` and orphan bound).
+
+**The proof.** `rows-475.sh` (`e5b54e19ec2e865c`), on this Mac through the door, at train 4's top `f4e93e3c7` with the
+patches in the working tree, 2026-11-16 16:08:37Z → 16:12:17Z, under the runner's 48-byte TMPDIR, three vitest
+workers: **GREEN** (run.log `6d4f8e3cf80f6d3e`).
+- The red, the test alone: terminal-routed-host red by item 475's `it` alone, "Tests 1 failed | 32 passed (33)", with
+  `expected "spy" to not be called at all`.
+- With the line: biome, field-app's typecheck and the import walls clean. 13 runs of 13 green:
+  - terminal-routed-host three times (39 tests each);
+  - terminal-hidden-park five times (4 tests each);
+  - visibility, persistence-exemption, terminal-pool-routing and godview-deck once each;
+  - field-app's whole suite once: 355 files, 5,088 tests.
+- terminal-hidden-park is the first test of ours to drive ghosttea's REAL runtime: over this host, with a stand-in
+  worker, canvas and socket, under fake timers. It shows:
+  - a 4004 while hidden is no mint for an hour, and one on the show;
+  - the parked ask trips no attach deadline;
+  - no renewAttach while parked;
+  - the runtime's own detach withdraws the ask.
+- The product folder's links into /tmp were 0 before and after every run. The patches were reversed after, and the
+  lane returned with its refs equal (2495 = 2495).
+- The commits' trees are those working trees', the three paths at the proven blobs.
+- The train's V: V-TRAIN6, `pnpm verify` whole at the train's top (five commits over main `0476144a5`: items 451, 458
+  and 475), on this Mac beside a running QA desktop: exit 0 in 2222 s, under a 48-byte TMPDIR with vitest capped at
+  three workers; fifteen stages opened; fieldd 288 files passed and 5 skipped (4076 tests), field-app 356 files (5094
+  tests), cargo's 38 results ok, none failed. The commits on main are those five, unchanged. The landing-only gates were
+  not run.
+
+**Not covered.**
+- No real hidden window was run. A probe in `smoke:terminal-door`'s form would hide one for seven minutes and count
+  mints in its own audit; it waits for a person's eyes.
+- Hours parked are shown under fake timers only.
+- ghosttea's engine (`Session::detach_view`) is unread. A session with no view for hours is read from the stage's
+  files (525 detaches survived), not from its source.
+- App Nap on a page Chromium still calls visible is unread.
+- macOS only.
+
+**Not done, and not claimed:** no Electron or phone witness; nothing pushed. The upstream change (the control
+heartbeat off a page timer) is an issue text drafted for James, sent nowhere.
