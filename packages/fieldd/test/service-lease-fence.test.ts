@@ -105,4 +105,83 @@ describe("ServiceHost lease mint fence", () => {
     expect(workerConstructions).toBe(0);
     expect(host.state(pluginId)).toBe("inactive");
   });
+
+  it("a stop in activation ends after the worker-exit lease release (item 485)", async () => {
+    // A stop that lands while the service is still activating (its worker built, no `activated`
+    // yet): the abort terminates the worker, and the worker's exit begins the lease's release. No
+    // candidate exists to join that release, so the stop must, or stopAll finds it in flight and
+    // throws. The gate holds the release open on purpose; on a slow machine the audit write does.
+    const record = {
+      id: pluginId,
+      version: "0.1.0",
+      enabled: true,
+      manifestHash: `sha256:${"a".repeat(64)}`,
+      grantGeneration: 1,
+      grantedCapabilities: ["services.provide", "background"],
+    };
+    const plugins = {
+      get(id: string) {
+        return id === pluginId ? record : undefined;
+      },
+      list() {
+        return [record];
+      },
+      rootPath(id: string) {
+        return id === pluginId ? fixtureRoot : undefined;
+      },
+      setServiceEntryState() {},
+    };
+    const built = deferred<void>();
+    const gate = deferred<void>();
+    const revoked: string[] = [];
+    const host = new ServiceHost({
+      registry: {
+        register() {
+          throw new Error("a worker that never activated must not register");
+        },
+        beginDrainPlugin() {},
+        withdrawPlugin() {},
+      } as never,
+      plugins: plugins as unknown as PluginRegistryService,
+      tokens: {} as TokenService,
+      controlPort: () => 1,
+      mintServiceLease: async () => ({
+        tokenId: "lease-live",
+        token: "secret",
+        scopes: ["services.provide", "background"],
+        label: "live",
+        pluginId,
+      }),
+      revokeServiceLease: async (_id, tokenId, reason) => {
+        revoked.push(`${tokenId} by ${reason}`);
+        await gate.promise;
+      },
+      workerFactory: (_path: string, _options: WorkerOptions): Worker => {
+        built.resolve();
+        return new NeverStartedWorker() as unknown as Worker;
+      },
+      deadlines: { activateMs: 1_000, deactivateMs: 50 },
+    });
+    const end = (error: unknown): string =>
+      error instanceof AggregateError
+        ? `rejected: ${error.errors.map(String).join("; ")}`
+        : `rejected: ${String(error)}`;
+
+    const started = host.start(pluginId).then(() => "resolved", end);
+    await built.promise;
+    const stopped = host.stopAll().then(() => "resolved", end);
+    const early = await Promise.race([
+      stopped,
+      new Promise<string>((done) => setTimeout(() => done("pending"), 50)),
+    ]);
+    gate.resolve();
+    await started;
+
+    expect(early, early).toBe("pending");
+    expect(await stopped).toBe("resolved");
+    expect(revoked).toEqual(["lease-live by worker-exit"]);
+    // stopAll drops an entry that stopped clean, so "none" is itself the witness that no
+    // residue stood.
+    expect(host.state(pluginId)).toBe("none");
+  });
 });
