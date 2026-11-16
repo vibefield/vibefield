@@ -1005,6 +1005,9 @@ export class ServiceHost {
     this.beginDrain(pluginId);
     const task = (async () => {
       await e.controller.settle({ deadlineMs: this.controllerSettleDeadline() });
+      // A stop during activation: the worker's exit began the lease's release, and no candidate
+      // exists to join it. The stop joins it, so it never ends with the lease still in flight.
+      while (e.leaseRelease !== null) await e.leaseRelease;
       if (e.controller.desired === null) {
         for (const provider of e.providerCandidates.values()) provider.dispose();
         e.providerCandidates.clear();
