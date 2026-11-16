@@ -7,7 +7,7 @@
 // enable/disable intent with NOT_FOUND, records persistence across a
 // reconstruct, reload of a newly appearing dir, the real shipped-plugins
 // canary, and the sanitized-snapshot law (no path ever leaks).
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -493,5 +493,15 @@ describe("item 279 — the installed folder", () => {
     const snapshot = svc.snapshot();
     expect(snapshot.plugins.map((p) => p.id)).toEqual([]);
     expect(snapshot.problems).toEqual([]);
+  });
+});
+
+// Item 449 — the records' save makes the records file's folder from its LAYOUT row (431), so the folder and the file
+// can never name two places. Read as text, the form item 432's row holds its half in (`plugin-crash-ladder-words`).
+describe("item 449 — the records' folder", () => {
+  it("is the records file's own folder, never a path spelled again in the registry", () => {
+    const registry = readFileSync(join(HERE, "..", "src", "plugin-registry.ts"), "utf8");
+    expect(registry).toContain("mkdir(dirname(this.recordsPath), { recursive: true })");
+    expect(registry).not.toMatch(/"fieldd",\s*"plugins"/);
   });
 });
