@@ -47,6 +47,7 @@ export * from "./setup";
 export * from "./shell";
 export * from "./shell-lease";
 export * from "./spark-transcript";
+export * from "./subscription-admission";
 export * from "./terminal";
 export * from "./terminal-pipeline";
 export * from "./terminal-pipeline-machines";
