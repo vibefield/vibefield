@@ -1726,6 +1726,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.bundledTrust !== undefined ? { bundledTrust: config.bundledTrust } : {}),
       // MK-O3 (O3-C, 2026-11-12): every plugin from the plugin list is held until the community gate is set below
       communityHold: true,
+      // item 457: the records file's writer says a torn copy kept aside and a fall-back to its last good copy
+      logger: logger.child({ component: "plugin.registry" }),
     });
     await plugins.refresh();
     // P8b (ESP §8.4): the module authority reads the registry and mints opaque

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { basename, join } from "node:path";
 import {
   BUNDLED_PLUGIN_INDEX_FILE,
   type BundledPluginEntry,
@@ -22,9 +22,11 @@ import {
   SIGNATURE_SUFFIX,
   validatePluginManifest,
 } from "@vibefield/contracts";
+import type { Logger } from "@vibefield/logging";
 import { canonicalJson, verifyBundledIndex, verifyTrustRoot } from "@vibefield/plugin-build";
 import { RpcCallError } from "./native-link";
 import { resolveInstalledArtifact } from "./plugin-artifact-store";
+import { SystemDocFile } from "./system-doc-file";
 
 // PluginRegistryService (plugin spec §9, slice P2): discovery → validation →
 // install records → sanitized snapshot. NO plugin module is ever imported here
@@ -57,6 +59,9 @@ export interface PluginRegistryConfig {
    * and every registry row is held until a gate is set, or when it fails. Unset (a registry a test builds alone),
    * nothing is held. Bundled and development rows are never held. */
   communityHold?: true;
+  /** Item 457: what the records file's writer says, chiefly a torn copy kept aside and a fall-back to the last good
+   * one (`SystemDocFile`). Unset (a registry a test builds alone), it says nothing. */
+  logger?: Logger;
 }
 
 /** MK-O3 (O3-C): the community gate's answer for one refresh. Allowed, nothing is held; else each registry id the held
@@ -187,6 +192,12 @@ export class PluginRegistryService extends EventEmitter {
   private problems: PluginRegistryProblem[] = [];
   private records: InstallRecordsFile | null = null;
   private readonly recordsPath: string;
+  /** Item 457: the records file's ONE writer, the system documents' (`system-doc-file.ts`, DS-5c): one write at a
+   * time, each taking the records as they stand when it runs; a per-process tmp, fsync'd, the last good copy kept;
+   * a copy it cannot read is kept aside and the last good one read, never first boot. */
+  private readonly recordsFile: SystemDocFile;
+  /** The records' one load, shared by every first reader (`loadRecords`). */
+  private recordsLoad: Promise<InstallRecordsFile> | null = null;
   private lastSnapshotJson = "";
   /** MK-O3 (O3-C): the community gate (`setCommunityGate`), and the registry ids the last refresh held. The set, never
    * the row's `held`, is what decides: `setEnabled` keeps a held row held, and the daemon's hold reads it. */
@@ -196,6 +207,11 @@ export class PluginRegistryService extends EventEmitter {
   constructor(private readonly cfg: PluginRegistryConfig) {
     super();
     this.recordsPath = join(cfg.dataDir, ...LAYOUT.PLUGIN_RECORDS_FILE);
+    this.recordsFile = new SystemDocFile({
+      path: this.recordsPath,
+      snapshot: () => RECORDS_TEXT.encode(`${JSON.stringify(this.records, null, 2)}\n`),
+      ...(cfg.logger !== undefined ? { logger: cfg.logger } : {}),
+    });
   }
 
   /** Full §9.2 re-scan. Emits ONE "changed" (coalesced) when the snapshot moved. */
@@ -1027,27 +1043,49 @@ export class PluginRegistryService extends EventEmitter {
     this.emit("changed", this.snapshot());
   }
 
-  private async loadRecords(): Promise<InstallRecordsFile> {
-    if (this.records !== null) return this.records;
-    try {
-      const parsed = JSON.parse(await readFile(this.recordsPath, "utf8")) as InstallRecordsFile;
-      if (parsed !== null && typeof parsed === "object" && parsed.version === 1) {
-        this.records = { version: 1, plugins: { ...parsed.plugins } };
+  /** Item 457: the records, loaded ONCE through their writer and shared by every first reader (two first loads at once
+   * could each install their own copy, and a change made on the first would be lost). The newest copy the writer can
+   * read wins: a torn one, or another version's, is kept aside and the last good copy read. Nothing readable, or no
+   * file yet, is first boot: every known plugin defaults enabled. */
+  private loadRecords(): Promise<InstallRecordsFile> {
+    if (this.records !== null) return Promise.resolve(this.records);
+    if (this.recordsLoad !== null) return this.recordsLoad;
+    const load = this.recordsFile
+      .load((bytes) => {
+        this.records = parseRecords(bytes);
+      })
+      .then(() => {
+        this.records ??= { version: 1, plugins: {} };
         return this.records;
-      }
-    } catch {
-      // first boot (or unreadable records): every known plugin defaults enabled
-    }
-    this.records = { version: 1, plugins: {} };
-    return this.records;
+      });
+    this.recordsLoad = load;
+    load.catch(() => {
+      if (this.recordsLoad === load) this.recordsLoad = null; // a failed load is asked again, never kept
+    });
+    return load;
   }
 
-  private async saveRecords(records: InstallRecordsFile): Promise<void> {
+  /** Item 457: the records written through their one writer. The promise settles when the write that carries this
+   * change has landed (fsync'd); a write this call joined rejects every caller that joined it. */
+  private saveRecords(records: InstallRecordsFile): Promise<void> {
     this.records = records;
-    // item 449: the records file's own folder, from its LAYOUT row (431), never a path spelled again here
-    await mkdir(dirname(this.recordsPath), { recursive: true });
-    const tmp = `${this.recordsPath}.tmp`;
-    await writeFile(tmp, `${JSON.stringify(records, null, 2)}\n`, "utf8");
-    await rename(tmp, this.recordsPath);
+    return this.recordsFile.persist();
   }
+}
+
+const RECORDS_TEXT = new TextEncoder();
+
+/** Item 457: a records file's bytes as this version's records, or a THROW, which the writer's load reads as a copy it
+ * cannot take: kept aside, and the last good copy tried. */
+function parseRecords(bytes: Uint8Array): InstallRecordsFile {
+  const parsed: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  if (parsed === null || typeof parsed !== "object") {
+    throw new Error("install records: not an object");
+  }
+  const { version, plugins } = parsed as { version?: unknown; plugins?: unknown };
+  if (version !== 1) throw new Error(`install records: version ${String(version)}, not 1`);
+  if (plugins === null || typeof plugins !== "object" || Array.isArray(plugins)) {
+    throw new Error("install records: no plugins map");
+  }
+  return { version: 1, plugins: { ...(plugins as InstallRecordsFile["plugins"]) } };
 }

@@ -498,10 +498,11 @@ describe("item 279 — the installed folder", () => {
 
 // Item 449 — the records' save makes the records file's folder from its LAYOUT row (431), so the folder and the file
 // can never name two places. Read as text, the form item 432's row holds its half in (`plugin-crash-ladder-words`).
+// Since item 457 the records' writer (`SystemDocFile`) makes the folder from the path it is given, the records path.
 describe("item 449 — the records' folder", () => {
   it("is the records file's own folder, never a path spelled again in the registry", () => {
     const registry = readFileSync(join(HERE, "..", "src", "plugin-registry.ts"), "utf8");
-    expect(registry).toContain("mkdir(dirname(this.recordsPath), { recursive: true })");
+    expect(registry).toMatch(/new SystemDocFile\(\{\s*path: this\.recordsPath,/);
     expect(registry).not.toMatch(/"fieldd",\s*"plugins"/);
   });
 });
