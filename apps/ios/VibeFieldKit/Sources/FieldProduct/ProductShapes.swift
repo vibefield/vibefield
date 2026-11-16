@@ -290,6 +290,11 @@ public struct AgentTerminalJoin: Sendable, Equatable, Decodable {
   public let workloadClass: String?
   /// AR-4 — the floor session this run REPLACED at a resume-when-idle.
   public let replaced: String?
+  /// Item 464 (2026-11-16) — the floor session whose Swarm BODY this row's
+  /// session continues (a launch's shell, an ended agent's session): lineage
+  /// for drawing alone, never acted on, and never `replaced`. On the remote cut
+  /// alone, said for seconds; absent from a daemon before item 464.
+  public let succeeds: String?
   public let unknownFields: [String]
 
   /// An unheard-of `hosted` reads as `none`: no terminal this phone knows how
@@ -303,6 +308,7 @@ public struct AgentTerminalJoin: Sendable, Equatable, Decodable {
     cellBootId = object.string("cellBootId")
     workloadClass = object.string("workloadClass")
     replaced = object.string("replaced")
+    succeeds = object.string("succeeds")
     unknownFields = object.unknownFields
   }
 

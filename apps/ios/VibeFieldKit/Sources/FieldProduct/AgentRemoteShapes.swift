@@ -478,6 +478,9 @@ public struct MonitorAgentRow: Sendable, Equatable {
   public let attachable: Bool
   /// M41 — whether a pane on ANOTHER desktop may type into this run. Absent from an older peer; `isWritable` fills it.
   public let writable: Bool?
+  /// Item 464 (2026-11-16) — a live interactive terminal was typed into. Read for one thing: a typed-into shell whose
+  /// session a newborn succeeds is kept by its owner, so the Swarm draws it on a body of its own (`retained:`).
+  public let inputUsed: Bool?
   public let unknownFields: [String]
 
   /// The reader's fill, the window adapter's rule: an older peer's row says nothing, and it meant `attachable`.
@@ -512,6 +515,7 @@ public struct MonitorAgentRow: Sendable, Equatable {
     profileSet = try object.typedString("profileSet")
     attachable = try object.flag("attachable")
     writable = try object.typedBool("writable")
+    inputUsed = try object.typedBool("inputUsed")
     unknownFields = object.unknownFields
   }
 }
@@ -528,6 +532,7 @@ extension AgentTerminalJoin {
     cellBootId = try object.typedString("cellBootId")
     workloadClass = try object.typedString("workloadClass")
     replaced = try object.typedString("replaced")
+    succeeds = try object.typedString("succeeds")
     unknownFields = object.unknownFields
   }
 }

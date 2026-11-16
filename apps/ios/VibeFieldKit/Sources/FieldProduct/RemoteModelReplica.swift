@@ -126,9 +126,14 @@ public struct RemotePublication: Sendable, Equatable {
 public struct RemoteVisibility: Sendable, Equatable {
   /// The floor session each of the HOME's rows stands for, by model id (`BoardJoins.sessionByRow`).
   public let sessionByRow: [String: String]
+  /// Item 464 (2026-11-16) — the floor session each of the HOME's rows says its session SUCCEEDS (its pane join's
+  /// `succeeds`), by model id: kept only for a row with a session here, naming another one. The window's rows read it
+  /// (`RemoteWindowRows.rows`); `shows` does not, so a moved claim re-reads every row and publishes nothing.
+  public let succeedsByRow: [String: String]
 
-  public init(sessionByRow: [String: String] = [:]) {
+  public init(sessionByRow: [String: String] = [:], succeedsByRow: [String: String] = [:]) {
     self.sessionByRow = sessionByRow
+    self.succeedsByRow = succeedsByRow
   }
 
   public func shows(_ row: RemoteModelRow) -> Bool {
