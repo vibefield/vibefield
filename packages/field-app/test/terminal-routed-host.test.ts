@@ -1347,3 +1347,47 @@ describe("createRoutedTerminalHost — when another desktop's ticket does not co
     await expect(later).rejects.toThrow("withdrawn");
   });
 });
+
+describe("createRoutedTerminalHost — a hidden window mints nothing (item 475)", () => {
+  /** The page's own `document.hidden`, which `visibility.ts` reads exactly as production does. */
+  const setHidden = (hidden: boolean): void => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+  };
+  const show = (): void => {
+    setHidden(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+  };
+  const answering = (opened: TerminalOpenTicket) =>
+    vi.fn(async (method: string) => {
+      if (method === "terminal.openTicket") return opened;
+      if (method === "terminal.terminate") return { terminated: true };
+      throw new Error(`unexpected ${method}`);
+    });
+  /** A turn of the loop: every ask already made has had its chance to reach fieldd. */
+  const turn = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("item 475: a hidden window asks fieldd for no ticket; the ask waits for the show and mints once", async () => {
+    const opened = ticket();
+    const requests = answering(opened);
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+    setHidden(true);
+    try {
+      let settled = false;
+      const asked = binding.host.openTicket("sess-1", { reason: "retry" }).finally(() => {
+        settled = true;
+      });
+      await turn();
+      expect(requests).not.toHaveBeenCalled();
+      expect(settled).toBe(false);
+
+      show();
+      await expect(asked).resolves.toEqual(opened);
+      expect(requests.mock.calls.map(([method]) => method)).toEqual(["terminal.openTicket"]);
+    } finally {
+      setHidden(false);
+      binding.dispose();
+    }
+  });
+});
