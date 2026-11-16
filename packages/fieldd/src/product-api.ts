@@ -306,6 +306,10 @@ interface ConnState {
    * install takes the slot as a `subs` entry, or its handler fails and gives it
    * back. The budget counts `subs.size + pendingSubs`. */
   pendingSubs: number;
+  /** Item 467 (2026-11-16) — this connection's budget refusal is logged: set at
+   * the first refusal of a burst, cleared when a subscribe is admitted again, so
+   * a storm of refusals says one line and a later burst says its own. */
+  budgetRefusalLogged: boolean;
   /** Aborted by the socket's close, and only there, in the same turn that
    * disposes and clears `subs`: an install that resumes after an await reads it
    * to know the connection is gone (item 474). */
@@ -567,7 +571,7 @@ export class ProductApi extends EventEmitter {
       return;
     }
     if (kind === "subscription") {
-      const refusal = this.subscriptionBudgetRefusal(state, id);
+      const refusal = this.subscriptionBudgetRefusal(state, id, method);
       if (refusal !== null) {
         reply(refusal);
         return;
@@ -785,6 +789,7 @@ export class ProductApi extends EventEmitter {
       connectionId: `conn_${randomBytes(9).toString("base64url")}`,
       subs: new Map(),
       pendingSubs: 0,
+      budgetRefusalLogged: false,
       abortController: new AbortController(),
       shellTransport,
       tick: null,
@@ -1423,7 +1428,7 @@ export class ProductApi extends EventEmitter {
               );
               return;
             }
-            const federatedRefusal = this.subscriptionBudgetRefusal(state, id);
+            const federatedRefusal = this.subscriptionBudgetRefusal(state, id, method);
             if (federatedRefusal !== null) {
               reply(federatedRefusal);
               return;
@@ -1539,7 +1544,7 @@ export class ProductApi extends EventEmitter {
     if (!ctx) return; // unreachable past the authed gate; keeps the type honest
     const receiptKey = call.receiptKey;
     if (subHandler) {
-      const refusal = this.subscriptionBudgetRefusal(state, id);
+      const refusal = this.subscriptionBudgetRefusal(state, id, method);
       if (refusal !== null) {
         reply(refusal);
         return;
@@ -1751,11 +1756,37 @@ export class ProductApi extends EventEmitter {
    * the handler's await and the install after it, so subscribes asked together
    * at 31 each passed and a connection held more than the bound. A null answer
    * now holds one slot in `pendingSubs` (counted with `subs`), which each install
-   * site hands to its `subs` entry or gives back if its handler throws. */
-  private subscriptionBudgetRefusal(state: ConnState, id: unknown): unknown | null {
-    if (state.subs.size + state.pendingSubs < PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION) {
+   * site hands to its `subs` entry or gives back if its handler throws.
+   *
+   * Item 467 (2026-11-16) — the refusal is logged, once per burst: a budget hit
+   * used to leave no trace in the daemon's log, so a window that had filled its
+   * connection could not be told after the fact. The line names the method
+   * asked, the count the budget read (installed and still opening, `opening`
+   * saying how many of it are opening), the limit and the connection, never the
+   * params (a feed's params can name what the person reads). The flag lives on
+   * the connection and dies with it; while no refusal happens it costs one read. */
+  private subscriptionBudgetRefusal(state: ConnState, id: unknown, method: string): unknown | null {
+    const held = state.subs.size + state.pendingSubs;
+    if (held < PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION) {
       state.pendingSubs += 1;
+      // under the limit again: the next refusal begins a new burst
+      if (state.budgetRefusalLogged) state.budgetRefusalLogged = false;
       return null;
+    }
+    if (!state.budgetRefusalLogged) {
+      state.budgetRefusalLogged = true;
+      this.logger.warn(
+        "fieldd.product_api.subscription_budget_refused",
+        "A connection asked for a live subscription past its budget; refused until it releases one",
+        {
+          method,
+          count: held,
+          opening: state.pendingSubs,
+          limit: PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION,
+          connectionId: state.connectionId,
+          principal: state.ctx?.principal.kind ?? "unauthenticated",
+        },
+      );
     }
     return this.err(
       id,
