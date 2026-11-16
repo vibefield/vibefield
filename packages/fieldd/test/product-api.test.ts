@@ -124,6 +124,7 @@ describe("ProductApi lifecycle", () => {
         receivedAt: 0,
       },
       subs: new Map(),
+      pendingSubs: 0,
     };
 
     await internals.execute(
@@ -174,6 +175,7 @@ describe("ProductApi lifecycle", () => {
         receivedAt: 0,
       },
       subs: new Map<string, () => void>(),
+      pendingSubs: 0,
     };
     const subscribe = async (id: number): Promise<Record<string, unknown>> => {
       let answer: Record<string, unknown> = {};
@@ -219,4 +221,207 @@ describe("ProductApi lifecycle", () => {
     expect((await subscribe(limit + 2))["result"]).toBeDefined();
     expect(state.subs.size).toBe(limit);
   });
+
+  it("reserves the slot at the check: subscribes asked together at the last free slot admit one", async () => {
+    // Item 470 (2026-11-16) — the check ran before the handler's await and the
+    // install after it, so every subscribe asked while the last slot's handler
+    // was out passed the same check, and the connection held more than EL7's
+    // bound. Here four are asked before any handler answers.
+    const rig = budgetRig();
+    const asked = [101, 102, 103, 104].map((id) => rig.subscribe(id));
+    expect(rig.control.entered).toBe(1);
+    expect(rig.held()).toBe(LIMIT);
+    for (const id of [102, 103, 104]) {
+      expect(JSON.stringify(rig.answers.get(id))).toBe(refusalWire(id));
+    }
+    expect(rig.answers.has(101)).toBe(false);
+
+    // the open answers late: at no await point does the connection hold more
+    for (const open of rig.opening.splice(0)) {
+      open.resolve({ snapshot: { ok: true }, dispose: () => undefined });
+      await tick();
+      expect(rig.held()).toBeLessThanOrEqual(LIMIT);
+    }
+    await Promise.all(asked);
+    expect(rig.state.subs.size).toBe(LIMIT);
+    expect(rig.state.pendingSubs).toBe(0);
+    expect(rig.answers.get(101)?.["result"]).toBeDefined();
+  });
+
+  it("gives a reserved slot back when the handler throws, late or at once", async () => {
+    // Item 470 (2026-11-16) — a reservation that never becomes a subscription
+    // must not keep its slot: the next subscribe is admitted.
+    const rig = budgetRig();
+    const late = rig.subscribe(201);
+    // asked while 201's handler is out: refused, as at a full connection
+    rig.subscribe(202);
+    expect(JSON.stringify(rig.answers.get(202))).toBe(refusalWire(202));
+    rig.opening.shift()?.reject(new Error("the producer could not open"));
+    await expect(late).rejects.toThrow("the producer could not open");
+    expect(rig.state.pendingSubs).toBe(0);
+    expect(rig.state.subs.size).toBe(LIMIT - 1);
+
+    // a handler that throws before it answers gives its slot back the same way
+    rig.control.mode = "throw";
+    await expect(rig.subscribe(203)).rejects.toThrow("the producer refused at once");
+    expect(rig.state.pendingSubs).toBe(0);
+
+    // and the slot is usable again
+    rig.control.mode = "answer";
+    await rig.subscribe(204);
+    expect(rig.answers.get(204)?.["result"]).toBeDefined();
+    expect(rig.state.subs.size).toBe(LIMIT);
+    expect(rig.state.pendingSubs).toBe(0);
+  });
+
+  it("reserves a plugin provider's subscription the same way, and gives it back when the provider throws", async () => {
+    // Item 470 (2026-11-16) — the third install site: a dynamic method's
+    // provider (P4), opened through the router.
+    const api = new ProductApi({ port: 0, tokens: { verify: () => null } });
+    const opening: Array<Deferred<Install>> = [];
+    let entered = 0;
+    api.setDynamicRouter({
+      kindOf: () => "subscription",
+      call: async () => undefined,
+      subscribe: () => {
+        entered += 1;
+        const open = deferred<Install>();
+        opening.push(open);
+        return open.promise;
+      },
+    });
+    const internals = api as unknown as {
+      executeDynamic(
+        ws: unknown,
+        state: unknown,
+        id: number,
+        method: string,
+        params: unknown,
+        reply: (value: unknown) => void,
+      ): Promise<void>;
+    };
+    const ws = { readyState: 1, bufferedAmount: 0, send: vi.fn(), terminate: vi.fn() };
+    const state = connState(LIMIT - 1);
+    const answers = new Map<number, Record<string, unknown>>();
+    const ask = (id: number): Promise<void> =>
+      internals.executeDynamic(ws, state, id, "x.example.watch", {}, (value) => {
+        answers.set(id, value as Record<string, unknown>);
+      });
+
+    const first = ask(301);
+    ask(302);
+    ask(303);
+    expect(entered).toBe(1);
+    expect(JSON.stringify(answers.get(302))).toBe(refusalWire(302));
+    expect(JSON.stringify(answers.get(303))).toBe(refusalWire(303));
+    expect(state.subs.size + state.pendingSubs).toBe(LIMIT);
+
+    opening.shift()?.reject(new Error("the provider could not open"));
+    await expect(first).rejects.toThrow("the provider could not open");
+    expect(state.pendingSubs).toBe(0);
+    expect(state.subs.size).toBe(LIMIT - 1);
+
+    const next = ask(304);
+    expect(entered).toBe(2);
+    opening.shift()?.resolve({ snapshot: {}, dispose: () => undefined });
+    await next;
+    expect(answers.get(304)?.["result"]).toBeDefined();
+    expect(state.subs.size).toBe(LIMIT);
+    expect(state.pendingSubs).toBe(0);
+  });
 });
+
+// ── item 470's rig ──
+
+const LIMIT = PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION;
+const METHOD = "system.health.subscribe";
+type Install = { snapshot: unknown; dispose: () => void };
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve: (value: T) => void = () => undefined;
+  let reject: (error: unknown) => void = () => undefined;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+
+const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** fieldd's refusal of one subscription too many, as the wire carries it today. */
+const refusalWire = (id: number): string =>
+  JSON.stringify({
+    jsonrpc: "2.0",
+    id,
+    error: {
+      code: -32010,
+      message: "this connection holds too many live subscriptions",
+      data: {
+        kind: "RESOURCE_EXHAUSTED",
+        retryable: false,
+        details: { resource: "subscriptions", limit: LIMIT },
+      },
+    },
+  });
+
+/** A connection's state holding `filled` live subscriptions and none opening. */
+function connState(filled: number) {
+  const subs = new Map<string, () => void>();
+  for (let i = 0; i < filled; i += 1) subs.set(`held-${i}`, () => undefined);
+  return {
+    ctx: {
+      principal: { kind: "local-token", tokenId: "tk_window", scopes: [] },
+      transport: "ws-loopback",
+      receivedAt: 0,
+    },
+    connectionId: "conn_budget_race",
+    subs,
+    pendingSubs: 0,
+  };
+}
+
+/** The local install site at one free slot; its handler answers later, at
+ * once, or throws, as `control.mode` says. */
+function budgetRig() {
+  const api = new ProductApi({ port: 0, tokens: { verify: () => null } });
+  const control = { mode: "later" as "later" | "throw" | "answer", entered: 0 };
+  const opening: Array<Deferred<Install>> = [];
+  api.registerSubscription(METHOD, () => {
+    control.entered += 1;
+    if (control.mode === "throw") throw new Error("the producer refused at once");
+    if (control.mode === "answer") return { snapshot: { ok: true }, dispose: () => undefined };
+    const open = deferred<Install>();
+    opening.push(open);
+    return open.promise;
+  });
+  const internals = api as unknown as {
+    subHandlers: Map<string, unknown>;
+    execute(
+      ws: unknown,
+      state: unknown,
+      id: number,
+      method: string,
+      params: unknown,
+      handler: undefined,
+      subHandler: unknown,
+      reply: (value: unknown) => void,
+    ): Promise<void>;
+  };
+  const ws = { readyState: 1, bufferedAmount: 0, send: vi.fn(), terminate: vi.fn() };
+  const state = connState(LIMIT - 1);
+  const answers = new Map<number, Record<string, unknown>>();
+  const handler = internals.subHandlers.get(METHOD);
+  const subscribe = (id: number): Promise<void> =>
+    internals.execute(ws, state, id, METHOD, {}, undefined, handler, (value) => {
+      answers.set(id, value as Record<string, unknown>);
+    });
+  const held = (): number => state.subs.size + state.pendingSubs;
+  return { control, opening, state, answers, subscribe, held };
+}
