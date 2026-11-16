@@ -19,10 +19,12 @@ import {
   PRODUCT_NOTIFICATIONS,
   type RendererParticipantIdentity,
   RPC_ERROR_CODES,
+  resolveSubscriptionAdmission,
   type Scope,
   type ShellClientProviderMethod,
   type ShellWebContentsCaptureArtifactPreviewParams,
   type ShellWebContentsCaptureArtifactPreviewResult,
+  type SubscriptionCaller,
   TAILNET_GUEST_SCOPES,
   TAILNET_SCOPES,
 } from "@vibefield/contracts";
@@ -299,17 +301,35 @@ interface ConnState {
   /** DS-D15 — an opaque id for this connection, minted at upgrade: the window
    * a forwarded call names when the grant carries no renderer participant. */
   connectionId: string;
-  /** live subscriptions on this connection: subId → dispose */
+  /** live subscriptions on this connection: subId → dispose. Every removal goes
+   * through `removeSub`, so `subKeys` and `heldByKey` move with it. */
   subs: Map<string, () => void>;
-  /** Item 470 (2026-11-16) — subscriptions admitted by the budget and still
-   * opening (their handler is out): each holds a slot from the check until its
-   * install takes the slot as a `subs` entry, or its handler fails and gives it
-   * back. The budget counts `subs.size + pendingSubs`. */
+  /** Item 476 (2026-11-16) — each live subscription's admission key
+   * (`resolveSubscriptionAdmission`): subId → key, beside `subs`, so a removal
+   * gives back the count of the key it was admitted under. */
+  subKeys: Map<string, string>;
+  /** Item 470 (2026-11-16) — subscriptions admitted and still opening (their
+   * handler is out): each holds a slot from the check until its install takes
+   * the slot as a `subs` entry, or its handler fails and gives it back.
+   * *Item 476 (2026-11-16):* the slot is its key's, counted in `heldByKey`; this
+   * stays the total of them, so `sum(heldByKey) = subs.size + pendingSubs`. */
   pendingSubs: number;
-  /** Item 467 (2026-11-16) — this connection's budget refusal is logged: set at
-   * the first refusal of a burst, cleared when a subscribe is admitted again, so
-   * a storm of refusals says one line and a later burst says its own. */
-  budgetRefusalLogged: boolean;
+  /** Item 476 (2026-11-16) — per admission key, how many this connection holds:
+   * installed plus still opening. A key is deleted when its count falls to
+   * zero, so asks refused by their handler (a thing that does not exist) leave
+   * no entry behind. */
+  heldByKey: Map<string, number>;
+  /** Item 467 (2026-11-16) — a refusal is logged once per burst: a storm of
+   * refusals says one line and a later burst says its own. *Item 476
+   * (2026-11-16):* per KEY, not per connection: under keys other feeds are
+   * admitted all the time, so a flag any admission cleared would let one key
+   * refused in a loop log at every ask. A key enters at a logged refusal and
+   * leaves when it is admitted again or its count falls to zero. */
+  refusedLogged: Set<string>;
+  /** Item 476 (2026-11-16) — the methods this connection asked that the
+   * admission table has no row for, each logged once (the census test says
+   * there are none; the door never refuses for a missing row). */
+  undeclaredLogged: Set<string>;
   /** Aborted by the socket's close, and only there, in the same turn that
    * disposes and clears `subs`: an install that resumes after an await reads it
    * to know the connection is gone (item 474). */
@@ -321,6 +341,67 @@ interface ConnState {
   /** Item 406 (S3) — the upgrade's mark (`classifyDoor`): this caller's hello is answered this
    * word and the door closes, before any credential is read. null: none. */
   refused: DoorRefusal | null;
+}
+
+/** Item 476 (2026-11-16) — the admission's answer: the key whose slot it
+ * reserved, or the refusal to reply. */
+type AdmissionVerdict =
+  | { readonly admitted: true; readonly key: string }
+  | { readonly admitted: false; readonly refusal: unknown };
+
+/** Item 476 (2026-11-16) — who asks, as the admission table keys it: a plugin
+ * principal's own id (an absent `pluginId` on `storage.settings` means that
+ * plugin) and, at the federated site alone, the routed desktop. Nothing else of
+ * the caller reaches a key. */
+function subscriptionCaller(ctx: CallerContext, device?: string): SubscriptionCaller {
+  const pluginId = ctx.principal.kind === "plugin" ? ctx.principal.id : undefined;
+  return {
+    ...(pluginId !== undefined ? { pluginId } : {}),
+    ...(device !== undefined ? { device } : {}),
+  };
+}
+
+/** Item 476 (2026-11-16) — the ONE give-back of a key's count: a reservation's
+ * `finally` at each install site, and every removal of a live subscription
+ * (`removeSub`: an unsubscribe, a `start` that threw, the close). A key is
+ * deleted at zero, and leaves `refusedLogged` with it, so a key nobody holds
+ * leaves no entry and its next refusal is a new burst. Never below zero: a
+ * give-back for a key already gone is a no-op. */
+function releaseKey(state: ConnState, key: string): void {
+  const held = (state.heldByKey.get(key) ?? 0) - 1;
+  if (held > 0) {
+    state.heldByKey.set(key, held);
+    return;
+  }
+  state.heldByKey.delete(key);
+  state.refusedLogged.delete(key);
+}
+
+/** Item 476 (2026-11-16) — a reservation becomes a live subscription: its
+ * `subs` entry, its key beside it, and its key's count taken again (the
+ * reservation's `finally` gave the slot back in the same turn, nothing awaiting
+ * between). */
+function installSub(state: ConnState, subId: string, key: string, dispose: () => void): void {
+  state.subs.set(subId, dispose);
+  state.subKeys.set(subId, key);
+  state.heldByKey.set(key, (state.heldByKey.get(key) ?? 0) + 1);
+}
+
+/** Item 476 (2026-11-16) — a live subscription removed whole: out of `subs` and
+ * `subKeys`, its key's count given back, then disposed. The ledger moves before
+ * the dispose runs, so a dispose that throws cannot leave a count behind. Every
+ * removal goes through here. Answers whether there was one. */
+function removeSub(state: ConnState, subId: string): boolean {
+  const dispose = state.subs.get(subId);
+  if (dispose === undefined) return false;
+  state.subs.delete(subId);
+  const key = state.subKeys.get(subId);
+  if (key !== undefined) {
+    state.subKeys.delete(subId);
+    releaseKey(state, key);
+  }
+  dispose();
+  return true;
 }
 
 export class ProductApi extends EventEmitter {
@@ -571,11 +652,20 @@ export class ProductApi extends EventEmitter {
       return;
     }
     if (kind === "subscription") {
-      const refusal = this.subscriptionBudgetRefusal(state, id, method);
-      if (refusal !== null) {
-        reply(refusal);
+      // Item 476 — a plugin-provided method is admitted by the table's plugin
+      // entry: the method is its key, bounded on this connection
+      const admission = this.subscriptionAdmissionRefusal(
+        state,
+        id,
+        method,
+        params,
+        subscriptionCaller(ctx),
+      );
+      if (!admission.admitted) {
+        reply(admission.refusal);
         return;
       }
+      const { key } = admission;
       const subId = `ps-${this.nextSubId++}`;
       let active = true;
       const emit = (payload: unknown) => {
@@ -594,17 +684,19 @@ export class ProductApi extends EventEmitter {
         opened = await router.subscribe(ctx, method, params, emit);
       } finally {
         state.pendingSubs -= 1;
+        releaseKey(state, key);
       }
       const { snapshot, dispose } = opened;
       // Item 474 — the connection closed while the provider was out: its close
       // has already disposed and cleared `subs`, so nothing would ever dispose
-      // this one. It is let go now, and nothing is installed
+      // this one. It is let go now, and nothing is installed (item 476: the
+      // `finally` above gave its key's count back; it never takes one)
       if (state.abortController.signal.aborted) {
         active = false;
         dispose();
         return;
       }
-      state.subs.set(subId, () => {
+      installSub(state, subId, key, () => {
         active = false;
         dispose();
       });
@@ -788,8 +880,11 @@ export class ProductApi extends EventEmitter {
       peerClaimDemoted: false,
       connectionId: `conn_${randomBytes(9).toString("base64url")}`,
       subs: new Map(),
+      subKeys: new Map(),
       pendingSubs: 0,
-      budgetRefusalLogged: false,
+      heldByKey: new Map(),
+      refusedLogged: new Set(),
+      undeclaredLogged: new Set(),
       abortController: new AbortController(),
       shellTransport,
       tick: null,
@@ -805,8 +900,7 @@ export class ProductApi extends EventEmitter {
       this.disarmTick(state);
       state.abortController.abort();
       this.shellProvider.withdraw(state.shellTransport);
-      for (const dispose of state.subs.values()) dispose();
-      state.subs.clear();
+      this.closeSubscriptions(state);
       this.holds.delete(ws);
       this.opts.onConnectionClosed?.(state.connectionId);
     });
@@ -1308,12 +1402,9 @@ export class ProductApi extends EventEmitter {
     // built-in: dropping a subscription needs the connection's own sub table
     if (method === "system.unsubscribe") {
       const subId = (callParams as { subId?: unknown } | undefined)?.subId;
-      const dispose = typeof subId === "string" ? state.subs.get(subId) : undefined;
-      if (dispose) {
-        dispose();
-        state.subs.delete(subId as string);
-      }
-      reply({ jsonrpc: "2.0", id, result: { removed: dispose !== undefined } });
+      // Item 476 — removed whole: disposed, and its key's count given back
+      const removed = typeof subId === "string" && removeSub(state, subId);
+      reply({ jsonrpc: "2.0", id, result: { removed } });
       return;
     }
 
@@ -1428,11 +1519,20 @@ export class ProductApi extends EventEmitter {
               );
               return;
             }
-            const federatedRefusal = this.subscriptionBudgetRefusal(state, id, method);
-            if (federatedRefusal !== null) {
-              reply(federatedRefusal);
+            // Item 476 — the routed desktop is part of the key: one feed read
+            // from two desktops is two keys
+            const federated = this.subscriptionAdmissionRefusal(
+              state,
+              id,
+              method,
+              callParams,
+              subscriptionCaller(callCtx, device),
+            );
+            if (!federated.admitted) {
+              reply(federated.refusal);
               return;
             }
+            const { key } = federated;
             const subId = `ps-${this.nextSubId++}`;
             const base = method.replace(/\.subscribe$/, "");
             let active = true;
@@ -1455,17 +1555,19 @@ export class ProductApi extends EventEmitter {
               opened = await subForwarder(device, method, callParams, callCtx, emit);
             } finally {
               state.pendingSubs -= 1;
+              releaseKey(state, key);
             }
             const { snapshot, dispose, start } = opened;
             // Item 474 — the connection closed while the peer was opening it:
             // its close has already disposed and cleared `subs`, so this one is
             // let go now (the upstream's reference with it), and nothing starts
+            // (item 476: the `finally` above gave its key's count back)
             if (state.abortController.signal.aborted) {
               active = false;
               dispose();
               return;
             }
-            state.subs.set(subId, () => {
+            installSub(state, subId, key, () => {
               active = false;
               dispose();
             });
@@ -1475,8 +1577,7 @@ export class ProductApi extends EventEmitter {
             try {
               start?.();
             } catch {
-              state.subs.get(subId)?.();
-              state.subs.delete(subId);
+              removeSub(state, subId);
               ws.terminate();
             }
             return;
@@ -1544,11 +1645,20 @@ export class ProductApi extends EventEmitter {
     if (!ctx) return; // unreachable past the authed gate; keeps the type honest
     const receiptKey = call.receiptKey;
     if (subHandler) {
-      const refusal = this.subscriptionBudgetRefusal(state, id, method);
-      if (refusal !== null) {
-        reply(refusal);
+      // Item 476 — `device` naming this desktop was stripped before this
+      // site, so `{}` and `{device: self}` are one key here
+      const admission = this.subscriptionAdmissionRefusal(
+        state,
+        id,
+        method,
+        params,
+        subscriptionCaller(ctx),
+      );
+      if (!admission.admitted) {
+        reply(admission.refusal);
         return;
       }
+      const { key } = admission;
       const subId = `ps-${this.nextSubId++}`;
       const base = method.replace(/\.subscribe$/, "");
       let active = true;
@@ -1579,12 +1689,14 @@ export class ProductApi extends EventEmitter {
         opened = await subHandler(ctx, params, emit);
       } finally {
         state.pendingSubs -= 1;
+        releaseKey(state, key);
       }
       const { snapshot, dispose, start, resync } = opened;
       // Item 474 — the connection closed while the handler was out: its close
       // has already disposed and cleared `subs` (and dropped its holds), so
       // nothing would ever dispose this one. It is let go now: no hold, no
-      // install, no `start`
+      // install, no `start` (item 476: the `finally` above gave its key's
+      // count back; it never takes one)
       if (state.abortController.signal.aborted) {
         active = false;
         dispose();
@@ -1601,7 +1713,7 @@ export class ProductApi extends EventEmitter {
         }
         held.set(subId, hold);
       }
-      state.subs.set(subId, () => {
+      installSub(state, subId, key, () => {
         active = false;
         this.holds.get(ws)?.delete(subId);
         dispose();
@@ -1614,8 +1726,7 @@ export class ProductApi extends EventEmitter {
       try {
         start?.();
       } catch {
-        state.subs.get(subId)?.();
-        state.subs.delete(subId);
+        removeSub(state, subId);
         ws.terminate();
       }
       return;
@@ -1745,61 +1856,112 @@ export class ProductApi extends EventEmitter {
     }
   }
 
-  /** EL7 — a connection's subscription budget. A subscription is recurring WORK
-   * (the field projection lists and encodes per subscriber per flush), so an
-   * unbounded map let one socket buy the daemon's tick budget. Checked BEFORE
+  /** EL7 — a connection's subscription admission. A subscription is recurring
+   * WORK (the field projection lists and encodes per subscriber per flush), so
+   * an unbounded map let one socket buy the daemon's tick budget. Checked BEFORE
    * the subscribe runs at all three install sites — the local handler, the
    * federated proxy and a plugin provider's own method — so the refusal costs
    * nothing and disturbs nothing already live.
    *
    * Item 470 (2026-11-16) — admission RESERVES the slot. The check ran before
    * the handler's await and the install after it, so subscribes asked together
-   * at 31 each passed and a connection held more than the bound. A null answer
+   * at 31 each passed and a connection held more than the bound. An admission
    * now holds one slot in `pendingSubs` (counted with `subs`), which each install
    * site hands to its `subs` entry or gives back if its handler throws.
    *
    * Item 467 (2026-11-16) — the refusal is logged, once per burst: a budget hit
    * used to leave no trace in the daemon's log, so a window that had filled its
    * connection could not be told after the fact. The line names the method
-   * asked, the count the budget read (installed and still opening, `opening`
-   * saying how many of it are opening), the limit and the connection, never the
-   * params (a feed's params can name what the person reads). The flag lives on
-   * the connection and dies with it; while no refusal happens it costs one read. */
-  private subscriptionBudgetRefusal(state: ConnState, id: unknown, method: string): unknown | null {
-    const held = state.subs.size + state.pendingSubs;
-    if (held < PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION) {
-      state.pendingSubs += 1;
-      // under the limit again: the next refusal begins a new burst
-      if (state.budgetRefusalLogged) state.budgetRefusalLogged = false;
-      return null;
+   * asked, the count the check read (installed and still opening, `opening`
+   * saying how many on the connection are opening), the limit and the
+   * connection, never the params (a feed's params can name what the person
+   * reads). The flag lives on the connection and dies with it; while no refusal
+   * happens it costs one read.
+   *
+   * Item 476 (2026-11-16) — admission BY KEY; the pool of 32 is retired. One
+   * pool shared by every feature of a window let opening one view starve
+   * another, filled with what a person installs (a plugin's update lane each),
+   * and bounded one connection, not a caller (the bound per caller is item
+   * 480's). The contract's admission table
+   * (`resolveSubscriptionAdmission`) names each ask's KEY — its method and its
+   * declared identity params, defaults filled, tuning and passthrough dropped,
+   * a plugin principal's own id and a routed desktop added — and that key's
+   * LIMIT: the holders one connection may keep of it, or a `bounded` method's
+   * bound, whose key is the method. An ask is refused when its key already
+   * holds its limit, installed plus opening; unrelated feeds no longer compete,
+   * and the costly doors are held tighter per key than the pool held them. The
+   * reservation, the install and every removal count per key (`heldByKey`,
+   * given back through `releaseKey` alone), and the burst flag is per key. The
+   * refusal keeps its shape and words: `details` is `{resource, limit}` with the
+   * limit that refused, and the log line keeps its event name, adds the key's
+   * class and `declared: false` when the table had no row, and never carries
+   * the key, which holds identity params. A method with no row (the census test
+   * says none) is admitted as one key at the default holders, and said once. */
+  private subscriptionAdmissionRefusal(
+    state: ConnState,
+    id: unknown,
+    method: string,
+    params: unknown,
+    caller: SubscriptionCaller,
+  ): AdmissionVerdict {
+    const admission = resolveSubscriptionAdmission(method, params, caller);
+    const principal = state.ctx?.principal.kind ?? "unauthenticated";
+    if (!admission.declared && !state.undeclaredLogged.has(method)) {
+      state.undeclaredLogged.add(method);
+      this.logger.warn(
+        "fieldd.product_api.subscription_admission_undeclared",
+        "A subscription method has no admission row; admitted as one key at the default holders",
+        { method, limit: admission.limit, connectionId: state.connectionId, principal },
+      );
     }
-    if (!state.budgetRefusalLogged) {
-      state.budgetRefusalLogged = true;
+    const held = state.heldByKey.get(admission.key) ?? 0;
+    if (held < admission.limit) {
+      state.heldByKey.set(admission.key, held + 1);
+      state.pendingSubs += 1;
+      // admitted again: this key's next refusal begins a new burst
+      state.refusedLogged.delete(admission.key);
+      return { admitted: true, key: admission.key };
+    }
+    if (!state.refusedLogged.has(admission.key)) {
+      state.refusedLogged.add(admission.key);
       this.logger.warn(
         "fieldd.product_api.subscription_budget_refused",
-        "A connection asked for a live subscription past its budget; refused until it releases one",
+        "A live subscription past its key's limit was refused until the connection releases one",
         {
           method,
+          class: admission.class,
           count: held,
           opening: state.pendingSubs,
-          limit: PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION,
+          limit: admission.limit,
           connectionId: state.connectionId,
-          principal: state.ctx?.principal.kind ?? "unauthenticated",
+          principal,
+          ...(admission.declared ? {} : { declared: false }),
         },
       );
     }
-    return this.err(
-      id,
-      "RESOURCE_EXHAUSTED",
-      "this connection holds too many live subscriptions",
-      // not retryable as-is: retrying the same call with the same map full
-      // fails identically. The caller unsubscribes, or dials a second socket.
-      false,
-      {
-        resource: "subscriptions",
-        limit: PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION,
-      },
-    );
+    return {
+      admitted: false,
+      refusal: this.err(
+        id,
+        "RESOURCE_EXHAUSTED",
+        "this connection holds too many live subscriptions",
+        // not retryable as-is: retrying the same call with the same key full
+        // fails identically. The caller lets one of that key go first.
+        false,
+        { resource: "subscriptions", limit: admission.limit },
+      ),
+    };
+  }
+
+  /** The close's half for subscriptions: every live one removed whole
+   * (`removeSub`), and the refusal flags dropped with the connection. Item 476
+   * (2026-11-16) — a subscription still opening keeps its key's count until its
+   * own `finally` gives it back, in the turn its handler answers (item 474 then
+   * lets it go), so `sum(heldByKey) = subs.size + pendingSubs` holds across the
+   * close and the ledger ends EMPTY. */
+  private closeSubscriptions(state: ConnState): void {
+    for (const subId of [...state.subs.keys()]) removeSub(state, subId);
+    state.refusedLogged.clear();
   }
 
   private err(

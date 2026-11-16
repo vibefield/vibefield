@@ -56,6 +56,10 @@ import {
   USER_ME,
 } from "../src/registries";
 import {
+  resolveSubscriptionAdmission,
+  SUBSCRIPTION_ADMISSION,
+} from "../src/subscription-admission";
+import {
   TerminalOpenTicketParams,
   TerminalSessionsParams,
   TerminalTakeGeometryParams,
@@ -139,17 +143,28 @@ describe("method registry lint (design-01 §9.2 + D36)", () => {
     ]);
   });
 
-  it("pins the product API's per-connection subscription budget", () => {
-    // A number the DOOR enforces (product-api.ts refuses past it with
-    // RESOURCE_EXHAUSTED), so it moves here deliberately or not at all: raising
-    // it raises what one socket can make this daemon do on every tick, and
-    // lowering it can refuse a window that legitimately watches several streams.
-    expect(PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION).toBe(32);
-    expect(Number.isSafeInteger(PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION)).toBe(true);
-    expect(PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION).toBeGreaterThan(
-      // the desktop's own busiest window: health, the fold, usage, the deck's
-      // routes, docs and artifacts, with room to spare
-      8,
+  it("pins the product API's subscription holders per key, the admission table's default", () => {
+    // Item 476 (2026-11-16) — this row pinned the per-connection budget of 32
+    // (`SUBSCRIPTIONS_PER_CONNECTION`), retired with its errata at its source.
+    // A number the DOOR enforces (product-api.ts refuses an ask past its key's
+    // holders with RESOURCE_EXHAUSTED), so it moves here deliberately or not at
+    // all: raising it raises what one key can make this daemon do on every
+    // tick, and lowering it can refuse a client that opens one feed from
+    // several places. Each row's own holders and bounds are pinned beside the
+    // table (`subscription-admission.test.ts`).
+    expect(PRODUCT_API_LIMITS.SUBSCRIPTION_HOLDERS_PER_KEY).toBe(8);
+    expect(Number.isSafeInteger(PRODUCT_API_LIMITS.SUBSCRIPTION_HOLDERS_PER_KEY)).toBe(true);
+    expect(PRODUCT_API_LIMITS.SUBSCRIPTION_HOLDERS_PER_KEY).toBeGreaterThan(
+      // the most holders of one key any client read from source holds:
+      // user.link.subscribe, 6, in a window older than item 467 (item 476)
+      6,
+    );
+    expect("SUBSCRIPTIONS_PER_CONNECTION" in PRODUCT_API_LIMITS).toBe(false);
+    // the table the door reads stands, and a row that declares no holders of
+    // its own is admitted up to this number
+    expect(Object.keys(SUBSCRIPTION_ADMISSION).length).toBeGreaterThan(0);
+    expect(resolveSubscriptionAdmission("system.health.subscribe", {}, {}).limit).toBe(
+      PRODUCT_API_LIMITS.SUBSCRIPTION_HOLDERS_PER_KEY,
     );
   });
 

@@ -123,12 +123,18 @@ async function subscribe(
     ): Promise<void>;
     sendBounded(ws: unknown, value: unknown, track?: unknown): boolean;
   };
-  // the budget counts installed + still opening (item 470), so the state says both;
-  // an install reads its connection's close on the abort signal (item 474)
+  // the admission counts installed + still opening (item 470), per key (item 476), so the
+  // state says both and the key's ledger; an install reads its connection's close on the abort
+  // signal (item 474)
   const state = {
     ctx,
+    connectionId: "conn_backpressure",
     subs: new Map<string, () => void>(),
+    subKeys: new Map<string, string>(),
     pendingSubs: 0,
+    heldByKey: new Map<string, number>(),
+    refusedLogged: new Set<string>(),
+    undeclaredLogged: new Set<string>(),
     abortController: new AbortController(),
   };
   let subId = "";

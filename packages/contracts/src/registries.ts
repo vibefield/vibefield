@@ -225,8 +225,20 @@ export const PRODUCT_API_LIMITS = {
    * shell's launcher or a Chat thread took it past this bound. With item 467's
    * shared feeds the same page holds 20, and 24 at the count's worst case
    * (History opened +2, a Chat thread +1, a launcher's empty shell +1), against
-   * the budget of 32. Counted, not measured. The bound itself is unchanged.* */
-  SUBSCRIPTIONS_PER_CONNECTION: 32,
+   * the budget of 32. Counted, not measured. The bound itself is unchanged.*
+   * *Errata (2026-11-16, item 476): the pool these sentences describe is retired,
+   * and `SUBSCRIPTIONS_PER_CONNECTION` (32) with it. It bounded no adversary: a
+   * token may hold any number of sockets, as the refusal's own comment said
+   * ("The caller unsubscribes, or dials a second socket"). It cost a person:
+   * every feature of one window drew on the same 32, so opening History could
+   * starve Settings.
+   * The door now admits a subscription by its KEY, against that key's holders
+   * (`SUBSCRIPTION_HOLDERS_PER_KEY` below, or the row's own in
+   * `subscription-admission.ts`) or, where the key space is open, against the
+   * method's bound. What stands of the sentences above: a refused caller gets
+   * RESOURCE_EXHAUSTED, `{resource: "subscriptions", limit}` naming the limit
+   * that refused, and keeps everything it already had. EL7 across sockets is
+   * item 480.* */
   /** Item 476 (2026-11-16) — the holders ONE subscription key may have on ONE
    * connection, by default. The door admits a subscription while its connection
    * holds fewer than its key's holders: a key is the method plus the identity

@@ -4,11 +4,13 @@ import {
   MESH_CONTROL_LIMITS,
   METHODS,
   PRODUCT_API_LIMITS,
+  resolveSubscriptionAdmission,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import { describe, expect, it, vi } from "vitest";
 import type { WebSocket } from "ws";
 import { refuseBoardAsk } from "../src/agent-field";
+import { RpcCallError } from "../src/native-link";
 import {
   type DeviceSubscriptionForwarder,
   type DynamicRouterLike,
@@ -130,16 +132,7 @@ describe("ProductApi lifecycle", () => {
       ): Promise<void>;
     };
     const ws = { readyState: 1, bufferedAmount: 0, send: vi.fn(), terminate: vi.fn() };
-    const state = {
-      ctx: {
-        principal: { kind: "local-token", tokenId: "tk_window", scopes: [] },
-        transport: "ws-loopback",
-        receivedAt: 0,
-      },
-      subs: new Map(),
-      pendingSubs: 0,
-      abortController: new AbortController(),
-    };
+    const state = connState(0);
 
     await internals.execute(
       ws,
@@ -154,14 +147,17 @@ describe("ProductApi lifecycle", () => {
 
     expect(order).toEqual(["reply", "start"]);
     expect(state.subs.size).toBe(1);
+    expectLedger(state);
   });
 
-  it("refuses the subscription past the per-connection budget, and keeps the live ones", async () => {
+  it("refuses one key's subscription past its holders, and keeps the live ones", async () => {
     // EL7 — a subscription is recurring WORK, not a read: the field projection
     // lists and encodes per subscriber per flush, so one socket holding an
     // unbounded map buys the daemon's tick budget. The refusal lands BEFORE the
     // handler runs (`subscribed` stays at its pre-call count) and touches
-    // nothing already installed.
+    // nothing already installed. Item 476 (2026-11-16) — the bound is the KEY's
+    // holders (a `one` method's key, at the default 8), no longer a pool of 32
+    // every feed shared.
     const api = new ProductApi({ port: 0, tokens: { verify: () => null } });
     let subscribed = 0;
     api.registerSubscription("system.health.subscribe", () => {
@@ -182,16 +178,7 @@ describe("ProductApi lifecycle", () => {
       ): Promise<void>;
     };
     const ws = { readyState: 1, bufferedAmount: 0, send: vi.fn(), terminate: vi.fn() };
-    const state = {
-      ctx: {
-        principal: { kind: "local-token", tokenId: "tk_window", scopes: [] },
-        transport: "ws-loopback",
-        receivedAt: 0,
-      },
-      subs: new Map<string, () => void>(),
-      pendingSubs: 0,
-      abortController: new AbortController(),
-    };
+    const state = connState(0);
     const subscribe = async (id: number): Promise<Record<string, unknown>> => {
       let answer: Record<string, unknown> = {};
       await internals.execute(
@@ -209,7 +196,7 @@ describe("ProductApi lifecycle", () => {
       return answer;
     };
 
-    const limit = PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION;
+    const limit = HOLDERS;
     for (let i = 0; i < limit; i += 1) {
       const answer = await subscribe(i + 1);
       expect(answer["result"], `subscription ${i + 1} of ${limit}`).toBeDefined();
@@ -228,13 +215,17 @@ describe("ProductApi lifecycle", () => {
     // live was disposed, and the handler was never entered for the refused one
     expect(state.subs.size).toBe(limit);
     expect(subscribed).toBe(limit);
+    expectLedger(state);
 
-    // and a slot freed by an unsubscribe is usable again
-    const [firstId, dispose] = [...state.subs.entries()][0]!;
-    dispose();
-    state.subs.delete(firstId);
+    // and a slot freed by an unsubscribe is usable again (the door's own
+    // `system.unsubscribe`, which gives the key's count back)
+    const [firstId] = [...state.subs.keys()];
+    await unsubscribe(api, ws, state, firstId!);
+    expect(state.subs.size).toBe(limit - 1);
+    expectLedger(state);
     expect((await subscribe(limit + 2))["result"]).toBeDefined();
     expect(state.subs.size).toBe(limit);
+    expectLedger(state);
   });
 
   it("reserves the slot at the check: subscribes asked together at the last free slot admit one", async () => {
@@ -251,16 +242,22 @@ describe("ProductApi lifecycle", () => {
     }
     expect(rig.answers.has(101)).toBe(false);
 
+    expectLedger(rig.state);
+
     // the open answers late: at no await point does the connection hold more
     for (const open of rig.opening.splice(0)) {
       open.resolve({ snapshot: { ok: true }, dispose: () => undefined });
       await tick();
       expect(rig.held()).toBeLessThanOrEqual(LIMIT);
+      expectLedger(rig.state);
     }
     await Promise.all(asked);
     expect(rig.state.subs.size).toBe(LIMIT);
     expect(rig.state.pendingSubs).toBe(0);
     expect(rig.answers.get(101)?.["result"]).toBeDefined();
+    expectLedger(rig.state);
+    rig.close();
+    expectLedgerEmpty(rig.state);
   });
 
   it("gives a reserved slot back when the handler throws, late or at once", async () => {
@@ -275,11 +272,13 @@ describe("ProductApi lifecycle", () => {
     await expect(late).rejects.toThrow("the producer could not open");
     expect(rig.state.pendingSubs).toBe(0);
     expect(rig.state.subs.size).toBe(LIMIT - 1);
+    expectLedger(rig.state);
 
     // a handler that throws before it answers gives its slot back the same way
     rig.control.mode = "throw";
     await expect(rig.subscribe(203)).rejects.toThrow("the producer refused at once");
     expect(rig.state.pendingSubs).toBe(0);
+    expectLedger(rig.state);
 
     // and the slot is usable again
     rig.control.mode = "answer";
@@ -287,11 +286,15 @@ describe("ProductApi lifecycle", () => {
     expect(rig.answers.get(204)?.["result"]).toBeDefined();
     expect(rig.state.subs.size).toBe(LIMIT);
     expect(rig.state.pendingSubs).toBe(0);
+    expectLedger(rig.state);
+    rig.close();
+    expectLedgerEmpty(rig.state);
   });
 
   it("reserves a plugin provider's subscription the same way, and gives it back when the provider throws", async () => {
     // Item 470 (2026-11-16) — the third install site: a dynamic method's
-    // provider (P4), opened through the router.
+    // provider (P4), opened through the router. Item 476 (2026-11-16) — the
+    // method is its key, bounded at 32 on the connection: its last free slot.
     const api = new ProductApi({ port: 0, tokens: { verify: () => null } });
     const opening: Array<Deferred<Install>> = [];
     let entered = 0;
@@ -316,10 +319,10 @@ describe("ProductApi lifecycle", () => {
       ): Promise<void>;
     };
     const ws = { readyState: 1, bufferedAmount: 0, send: vi.fn(), terminate: vi.fn() };
-    const state = connState(LIMIT - 1);
+    const state = connState(PROVIDED_BOUND - 1, PROVIDED);
     const answers = new Map<number, Record<string, unknown>>();
     const ask = (id: number): Promise<void> =>
-      internals.executeDynamic(ws, state, id, "x.example.watch", {}, (value) => {
+      internals.executeDynamic(ws, state, id, PROVIDED, {}, (value) => {
         answers.set(id, value as Record<string, unknown>);
       });
 
@@ -327,22 +330,27 @@ describe("ProductApi lifecycle", () => {
     ask(302);
     ask(303);
     expect(entered).toBe(1);
-    expect(JSON.stringify(answers.get(302))).toBe(refusalWire(302));
-    expect(JSON.stringify(answers.get(303))).toBe(refusalWire(303));
-    expect(state.subs.size + state.pendingSubs).toBe(LIMIT);
+    expect(JSON.stringify(answers.get(302))).toBe(refusalWire(302, PROVIDED_BOUND));
+    expect(JSON.stringify(answers.get(303))).toBe(refusalWire(303, PROVIDED_BOUND));
+    expect(state.subs.size + state.pendingSubs).toBe(PROVIDED_BOUND);
+    expectLedger(state);
 
     opening.shift()?.reject(new Error("the provider could not open"));
     await expect(first).rejects.toThrow("the provider could not open");
     expect(state.pendingSubs).toBe(0);
-    expect(state.subs.size).toBe(LIMIT - 1);
+    expect(state.subs.size).toBe(PROVIDED_BOUND - 1);
+    expectLedger(state);
 
     const next = ask(304);
     expect(entered).toBe(2);
     opening.shift()?.resolve({ snapshot: {}, dispose: () => undefined });
     await next;
     expect(answers.get(304)?.["result"]).toBeDefined();
-    expect(state.subs.size).toBe(LIMIT);
+    expect(state.subs.size).toBe(PROVIDED_BOUND);
     expect(state.pendingSubs).toBe(0);
+    expectLedger(state);
+    closeSubscriptions(api, state);
+    expectLedgerEmpty(state);
   });
 
   it("lets go at once a subscription whose connection closed while its handler was out", async () => {
@@ -351,10 +359,11 @@ describe("ProductApi lifecycle", () => {
     // ever disposed it, and its producer kept working for a dead socket.
     const rig = budgetRig();
     const asked = rig.subscribe(501);
-    // the socket's close, as its handler runs it: abort, dispose the live ones, clear
-    rig.state.abortController.abort();
-    for (const live of rig.state.subs.values()) live();
-    rig.state.subs.clear();
+    // the socket's close, as its handler runs it: abort, then every live one
+    // removed whole (item 476: the opening one keeps its key's count until its
+    // own `finally` gives it back)
+    rig.close();
+    expectLedger(rig.state);
 
     const dispose = vi.fn();
     const start = vi.fn();
@@ -364,6 +373,7 @@ describe("ProductApi lifecycle", () => {
     expect(start).not.toHaveBeenCalled();
     expect(rig.state.subs.size).toBe(0);
     expect(rig.state.pendingSubs).toBe(0);
+    expectLedgerEmpty(rig.state);
   });
 
   it("logs a refused subscription once per burst: the method, the count and the limit, never the params", async () => {
@@ -371,7 +381,8 @@ describe("ProductApi lifecycle", () => {
     // went to the caller alone, so after the fact nobody could tell which feed
     // was refused, or that the window had filled its connection. One line says
     // so at the first refusal; the rest of a storm says nothing until the count
-    // has fallen under the limit and filled again.
+    // has fallen under the limit and filled again. Item 476 (2026-11-16) — the
+    // count and the limit are the key's, and the line names the key's class.
     const warn = vi.fn();
     const logger = recordingLogger(warn);
     const api = new ProductApi({ port: 0, tokens: { verify: () => null }, logger });
@@ -393,17 +404,7 @@ describe("ProductApi lifecycle", () => {
       ): Promise<void>;
     };
     const ws = { readyState: 1, bufferedAmount: 0, send: vi.fn(), terminate: vi.fn() };
-    const state = {
-      ctx: {
-        principal: { kind: "local-token", tokenId: "tk_window", scopes: [] },
-        transport: "ws-loopback",
-        receivedAt: 0,
-      },
-      connectionId: "conn_budget",
-      subs: new Map<string, () => void>(),
-      pendingSubs: 0,
-      abortController: new AbortController(),
-    };
+    const state = { ...connState(0), connectionId: "conn_budget" };
     const PARAM_WORD = "a-subscriber-param-never-logged";
     const subscribe = async (id: number): Promise<Record<string, unknown>> => {
       let answer: Record<string, unknown> = {};
@@ -422,20 +423,22 @@ describe("ProductApi lifecycle", () => {
       return answer;
     };
 
-    const limit = PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION;
+    const limit = HOLDERS;
     for (let i = 0; i < limit; i += 1) await subscribe(i + 1);
     expect(state.subs.size).toBe(limit);
     expect(warn).not.toHaveBeenCalled();
 
-    // the first refusal: one line, and the caller's answer exactly as before
+    // the first refusal: one line, and the caller's answer exactly as before,
+    // the limit the key's
     const refused = await subscribe(limit + 1);
     expect(JSON.stringify(refused)).toBe(
-      '{"jsonrpc":"2.0","id":33,"error":{"code":-32010,"message":"this connection holds too many live subscriptions","data":{"kind":"RESOURCE_EXHAUSTED","retryable":false,"details":{"resource":"subscriptions","limit":32}}}}',
+      '{"jsonrpc":"2.0","id":9,"error":{"code":-32010,"message":"this connection holds too many live subscriptions","data":{"kind":"RESOURCE_EXHAUSTED","retryable":false,"details":{"resource":"subscriptions","limit":8}}}}',
     );
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0]?.[0]).toBe("fieldd.product_api.subscription_budget_refused");
     expect(warn.mock.calls[0]?.[2]).toEqual({
       method: "system.health.subscribe",
+      class: "one",
       count: limit,
       opening: 0,
       limit,
@@ -443,6 +446,7 @@ describe("ProductApi lifecycle", () => {
       principal: "local-token",
     });
     expect(JSON.stringify(warn.mock.calls)).not.toContain(PARAM_WORD);
+    expectLedger(state);
 
     // the same burst: refused again, said once
     expect((await subscribe(limit + 2))["error"]).toBeDefined();
@@ -451,9 +455,8 @@ describe("ProductApi lifecycle", () => {
 
     // the count falls under the limit and fills again: the next refusal is a
     // new burst, and is said again
-    const [firstId, dispose] = [...state.subs.entries()][0]!;
-    dispose();
-    state.subs.delete(firstId);
+    const [firstId] = [...state.subs.keys()];
+    await unsubscribe(api, ws, state, firstId!);
     expect((await subscribe(limit + 4))["result"]).toBeDefined();
     expect(warn).toHaveBeenCalledTimes(1);
     expect((await subscribe(limit + 5))["error"]).toBeDefined();
@@ -462,6 +465,9 @@ describe("ProductApi lifecycle", () => {
       method: "system.health.subscribe",
       count: limit,
     });
+    expectLedger(state);
+    closeSubscriptions(api, state);
+    expectLedgerEmpty(state);
   });
 
   it("counts a subscription still opening in the logged count, and its burst the same way", async () => {
@@ -489,6 +495,9 @@ describe("ProductApi lifecycle", () => {
     rig.subscribe(405);
     expect(warn).toHaveBeenCalledTimes(2);
     expect(warn.mock.calls[1]?.[2]).toMatchObject({ count: LIMIT, opening: 0 });
+    expectLedger(rig.state);
+    rig.close();
+    expectLedgerEmpty(rig.state);
   });
 });
 
@@ -515,6 +524,10 @@ describe("item 476 — the door admits a subscription by its key, not by a pool"
       expect(answer["result"], `ask ${n + 1}: ${method} ${JSON.stringify(params)}`).toBeDefined();
     }
     expect(rig.state.subs.size).toBe(40);
+    expectLedger(rig.state);
+    expect(rig.state.heldByKey.size).toBe(40);
+    rig.close();
+    expectLedgerEmpty(rig.state);
   });
 
   it("refuses one key's 9th holder with the key's limit, and leaves its 8 live ones and every other key alone", async () => {
@@ -535,6 +548,9 @@ describe("item 476 — the door admits a subscription by its key, not by a pool"
     const other = await rig.ask("plugins.update.subscribe", { pluginId: "com.example.two" });
     expect(other["result"]).toBeDefined();
     expect(rig.state.subs.size).toBe(9);
+    expectLedger(rig.state);
+    rig.close();
+    expectLedgerEmpty(rig.state);
   });
 
   it("keys a real board by its identity alone: 1,000 asks varying junk, tuning and spelled defaults are one key, refused at the 9th by the door", async () => {
@@ -564,6 +580,11 @@ describe("item 476 — the door admits a subscription by its key, not by a pool"
     }
     expect(entered).toBe(8);
     expect(rig.state.subs.size).toBe(8);
+    // one key on the ledger, held by the 8
+    expectLedger(rig.state);
+    expect([...rig.state.heldByKey.values()]).toEqual([8]);
+    rig.close();
+    expectLedgerEmpty(rig.state);
   });
 
   it("holds a bounded method to its bound: diagnostics.subscribe past 4, whatever each asks", async () => {
@@ -575,6 +596,9 @@ describe("item 476 — the door admits a subscription by its key, not by a pool"
     const refused = await rig.ask("diagnostics.subscribe", { filter: { minLevel: "warn", n: 5 } });
     expect(refusalOf(refused)).toEqual(roomRefusal(4));
     expect(rig.entered("diagnostics.subscribe")).toBe(4);
+    expectLedger(rig.state);
+    rig.close();
+    expectLedgerEmpty(rig.state);
   });
 
   it("holds a bounded method to its bound: index.session.subscribe past 8 distinct sessions", async () => {
@@ -586,6 +610,9 @@ describe("item 476 — the door admits a subscription by its key, not by a pool"
     const refused = await rig.ask("index.session.subscribe", { sessionId: "session-9" });
     expect(refusalOf(refused)).toEqual(roomRefusal(8));
     expect(rig.entered("index.session.subscribe")).toBe(8);
+    expectLedger(rig.state);
+    rig.close();
+    expectLedgerEmpty(rig.state);
   });
 
   it("holds a plugin-provided method to its bound of 32 at the provider's site, beside 20 other keys", async () => {
@@ -614,6 +641,9 @@ describe("item 476 — the door admits a subscription by its key, not by a pool"
     expect(refusalOf(refused)).toEqual(roomRefusal(32));
     expect(provided).toBe(32);
     expect(rig.state.subs.size).toBe(52);
+    expectLedger(rig.state);
+    rig.close();
+    expectLedgerEmpty(rig.state);
   });
 
   it("admits a development window's twins: direct sites asked twice at once, the model board five at once, and refuses its 9th", async () => {
@@ -629,6 +659,7 @@ describe("item 476 — the door admits a subscription by its key, not by a pool"
     for (let n = 0; n < 6; n += 1) asked.push(rig.ask("agents.profileSets.subscribe", {}));
     for (let n = 0; n < 5; n += 1) asked.push(rig.ask("agent.subscribe", { projection: "model" }));
     expect(rig.opening).toHaveLength(11);
+    expectLedger(rig.state);
     for (const open of rig.opening.splice(0)) {
       open.resolve({ snapshot: {}, dispose: () => undefined });
     }
@@ -645,13 +676,220 @@ describe("item 476 — the door admits a subscription by its key, not by a pool"
     const refused = await rig.ask("agent.subscribe", { projection: "model" });
     expect(refusalOf(refused)).toEqual(roomRefusal(8));
     expect(rig.state.subs.size).toBe(14);
+    expectLedger(rig.state);
+    rig.close();
+    expectLedgerEmpty(rig.state);
+  });
+});
+
+describe("item 476 — the ledger: every slot given back, nothing held for what does not exist", () => {
+  // Item 476 (2026-11-16) — guards, green before the keys and after in what
+  // they answer, pinned here to the door's per-key ledger: each key's count
+  // (`heldByKey`, installed plus opening) must agree with `subs` and
+  // `pendingSubs` at every step, fall at every removal, and leave no entry
+  // behind for an ask its handler refused, or the room a key holds would leak.
+
+  it("holds nothing for 1,000 plugin lanes asked for plugins that do not exist: every one NOT_FOUND, the ledger EMPTY", async () => {
+    const rig = doorRig();
+    rig.handle("plugins.update.subscribe", (_ctx, params) => {
+      const pluginId = String((params as { pluginId?: unknown }).pluginId);
+      throw new RpcCallError("NOT_FOUND", `no such plugin: ${pluginId}`, false);
+    });
+    for (let n = 0; n < 1_000; n += 1) {
+      const answer = await rig.call("plugins.update.subscribe", {
+        pluginId: `com.example.absent${n}`,
+      });
+      expect(refusalOf(answer)?.kind, `ask ${n}`).toBe("NOT_FOUND");
+    }
+    expectLedgerEmpty(rig.state);
+  });
+
+  it("holds nothing for 1,000 routed asks to desktops that are not there: every one UNAVAILABLE, the ledger EMPTY", async () => {
+    const rig = doorRig({
+      subForwarder: async (device) => {
+        throw new RpcCallError("UNAVAILABLE", "no product endpoint for that desktop", true, {
+          service: "peer-link",
+          device,
+          state: "unknown",
+        });
+      },
+    });
+    rig.handle("device.subscribe", () => ({ snapshot: [], dispose: () => undefined }));
+    for (let n = 0; n < 1_000; n += 1) {
+      const answer = await rig.call("device.subscribe", { device: `dev-unknown-${n}` });
+      expect(refusalOf(answer)?.kind, `ask ${n}`).toBe("UNAVAILABLE");
+    }
+    expectLedgerEmpty(rig.state);
+  });
+
+  it("reserves at a key's last holder slot: asks together there admit exactly one (item 470, per key)", async () => {
+    const rig = doorRig();
+    for (let n = 1; n <= 7; n += 1) await rig.ask("system.health.subscribe");
+    rig.control.mode = "later";
+    const [first, ...rest] = Array.from({ length: 4 }, () => rig.ask("system.health.subscribe"));
+    expect(rig.entered("system.health.subscribe")).toBe(8);
+    expect(rig.opening).toHaveLength(1);
+    expectLedger(rig.state);
+    for (const answer of await Promise.all(rest)) {
+      expect(refusalOf(answer)).toEqual(roomRefusal(8));
+    }
+    // another key is untouched by this one's being full
+    rig.control.mode = "answer";
+    expect((await rig.ask("services.subscribe"))["result"]).toBeDefined();
+    expectLedger(rig.state);
+
+    rig.opening.shift()?.resolve({ snapshot: {}, dispose: () => undefined });
+    expect((await first!)["result"]).toBeDefined();
+    expect(rig.state.subs.size).toBe(9);
+    expect(rig.state.pendingSubs).toBe(0);
+    expectLedger(rig.state);
+    rig.close();
+    expectLedgerEmpty(rig.state);
+  });
+
+  it("holds nothing for a connection closed while its asks were opening (item 474, per key)", async () => {
+    const rig = doorRig();
+    await rig.ask("system.health.subscribe");
+    await rig.ask("services.subscribe");
+    rig.control.mode = "later";
+    const late = [rig.ask("system.health.subscribe"), rig.ask("agents.usage.subscribe")];
+    expectLedger(rig.state);
+
+    // the socket's own close: the live ones go whole, the opening ones keep
+    // their keys' counts until their own `finally`
+    rig.close();
+    expect(rig.disposed).toEqual(["system.health.subscribe", "services.subscribe"]);
+    expect(rig.state.subs.size).toBe(0);
+    expect(rig.state.pendingSubs).toBe(2);
+    expectLedger(rig.state);
+
+    const dispose = vi.fn();
+    const start = vi.fn();
+    for (const open of rig.opening.splice(0)) open.resolve({ snapshot: {}, dispose, start });
+    await Promise.all(late);
+    expect(dispose).toHaveBeenCalledTimes(2);
+    expect(start).not.toHaveBeenCalled();
+    expectLedgerEmpty(rig.state);
+  });
+
+  it("keeps a held key's count when its thing goes: a new ask is NOT_FOUND, and the close gives the count back", async () => {
+    // Item 476 — fieldd disposes nothing a connection holds when its thing
+    // goes; a held subscription stays its key's holder until it is let go or
+    // the connection closes, and a NEW ask is refused as it always was.
+    const rig = doorRig();
+    const things = new Set(["com.example.kept"]);
+    rig.handle("plugins.update.subscribe", (_ctx, params) => {
+      const pluginId = String((params as { pluginId?: unknown }).pluginId);
+      if (!things.has(pluginId)) {
+        throw new RpcCallError("NOT_FOUND", `no such plugin: ${pluginId}`, false);
+      }
+      return { snapshot: {}, dispose: () => undefined };
+    });
+    const lane = { pluginId: "com.example.kept" };
+    const { key } = resolveSubscriptionAdmission("plugins.update.subscribe", lane, {});
+    expect((await rig.call("plugins.update.subscribe", lane))["result"]).toBeDefined();
+    expect((await rig.call("plugins.update.subscribe", lane))["result"]).toBeDefined();
+    expect(rig.state.heldByKey.get(key)).toBe(2);
+
+    things.delete("com.example.kept");
+    expect(refusalOf(await rig.call("plugins.update.subscribe", lane))?.kind).toBe("NOT_FOUND");
+    expect(rig.state.heldByKey.get(key)).toBe(2);
+    expect(rig.state.subs.size).toBe(2);
+    expectLedger(rig.state);
+    rig.close();
+    expectLedgerEmpty(rig.state);
+  });
+
+  it("logs one key's refusals once per burst while other keys are admitted around them", async () => {
+    // Item 467's flag was per connection and any admission cleared it; under
+    // keys other feeds are admitted all the time, so one key refused in a loop
+    // would have said a line at every ask. The flag is the key's: it ends when
+    // that key is admitted again or falls to zero.
+    const warn = vi.fn();
+    const rig = doorRig({ logger: recordingLogger(warn) });
+    for (let n = 0; n < 8; n += 1) await rig.ask("system.health.subscribe");
+    for (let n = 0; n < 5; n += 1) {
+      expect(refusalOf(await rig.ask("system.health.subscribe"))).toEqual(roomRefusal(8));
+      const other = await rig.ask("plugins.update.subscribe", { pluginId: `com.example.p${n}` });
+      expect(other["result"]).toBeDefined();
+    }
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[2]).toMatchObject({
+      method: "system.health.subscribe",
+      class: "one",
+      count: 8,
+      limit: 8,
+    });
+    // never the key, which can hold what a person reads
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("com.example");
+    expectLedger(rig.state);
+
+    // the key falls to zero (each let go through the door), and fills again:
+    // a new burst, said again
+    const { key } = resolveSubscriptionAdmission("system.health.subscribe", {}, {});
+    for (const [subId, held] of [...rig.state.subKeys.entries()]) {
+      if (held !== key) continue;
+      const answer = await rig.call("system.unsubscribe", { subId });
+      expect(answer["result"]).toEqual({ removed: true });
+    }
+    expect(rig.state.heldByKey.has(key)).toBe(false);
+    expect(rig.state.refusedLogged.has(key)).toBe(false);
+    for (let n = 0; n < 8; n += 1) await rig.ask("system.health.subscribe");
+    expect(refusalOf(await rig.ask("system.health.subscribe"))).toEqual(roomRefusal(8));
+    expect(warn).toHaveBeenCalledTimes(2);
+    expectLedger(rig.state);
+    rig.close();
+    expectLedgerEmpty(rig.state);
+  });
+
+  it("admits a method the table has no row for at the default holders, and says so once", async () => {
+    // The census test holds every product subscription row to a declared
+    // admission, so only a name no row carries reaches the fallback: one key,
+    // the default holders, a line at its first ask. The door never refuses for
+    // the missing row itself.
+    const warn = vi.fn();
+    const rig = doorRig({ logger: recordingLogger(warn) });
+    const handler: SubscriptionHandler = () => ({ snapshot: {}, dispose: () => undefined });
+    for (let n = 1; n <= 8; n += 1) {
+      const answer = await rig.askWith(UNLISTED, { n }, handler);
+      expect(answer["result"], `ask ${n}`).toBeDefined();
+    }
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toBe("fieldd.product_api.subscription_admission_undeclared");
+    expect(warn.mock.calls[0]?.[2]).toMatchObject({ method: UNLISTED, limit: 8 });
+
+    const refused = await rig.askWith(UNLISTED, { n: 9 }, handler);
+    expect(refusalOf(refused)).toEqual(roomRefusal(8));
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls[1]?.[0]).toBe("fieldd.product_api.subscription_budget_refused");
+    expect(warn.mock.calls[1]?.[2]).toMatchObject({
+      method: UNLISTED,
+      class: "one",
+      limit: 8,
+      declared: false,
+    });
+    expectLedger(rig.state);
+    rig.close();
+    expectLedgerEmpty(rig.state);
   });
 });
 
 // ── item 470's rig ──
 
-const LIMIT = PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION;
+/** Item 476 (2026-11-16) — a key's holders on one connection, by default: the
+ * bound item 470's rows meet at the key of `METHOD` (a `one` row), where they
+ * met the pool of 32 before. */
+const HOLDERS = PRODUCT_API_LIMITS.SUBSCRIPTION_HOLDERS_PER_KEY;
+const LIMIT = HOLDERS;
 const METHOD = "system.health.subscribe";
+/** Item 476 — a plugin-provided method, and its bound on one connection (the
+ * contract's plugin entry: the method is its key). */
+const PROVIDED = "x.example.watch";
+const PROVIDED_BOUND = 32;
+/** Item 476 — a subscription name no admission row carries (never a product
+ * method: `registerSubscription` would refuse it; the rows hand its handler to
+ * the install site directly). */
+const UNLISTED = "test.unlisted.subscribe";
 type Install = { snapshot: unknown; dispose: () => void; start?: () => void };
 
 interface Deferred<T> {
@@ -672,8 +910,9 @@ function deferred<T>(): Deferred<T> {
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-/** fieldd's refusal of one subscription too many, as the wire carries it today. */
-const refusalWire = (id: number): string =>
+/** fieldd's refusal of one subscription too many, as the wire carries it today
+ * (item 476: the limit is the one that refused, a key's holders by default). */
+const refusalWire = (id: number, limit: number = LIMIT): string =>
   JSON.stringify({
     jsonrpc: "2.0",
     id,
@@ -683,26 +922,84 @@ const refusalWire = (id: number): string =>
       data: {
         kind: "RESOURCE_EXHAUSTED",
         retryable: false,
-        details: { resource: "subscriptions", limit: LIMIT },
+        details: { resource: "subscriptions", limit },
       },
     },
   });
 
-/** A connection's state holding `filled` live subscriptions and none opening. */
-function connState(filled: number) {
+/** A connection's state holding `filled` live subscriptions of one key (`method`
+ * asked with `{}`, keyed as the contract keys it) and none opening, with the
+ * door's ledger for them (item 476), authenticated as a window so a row may
+ * also drive the whole door (`onMessage`). */
+function connState(filled: number, method: string = METHOD): LedgerState {
+  const { key } = resolveSubscriptionAdmission(method, {}, {});
   const subs = new Map<string, () => void>();
-  for (let i = 0; i < filled; i += 1) subs.set(`held-${i}`, () => undefined);
+  const subKeys = new Map<string, string>();
+  const heldByKey = new Map<string, number>();
+  for (let i = 0; i < filled; i += 1) {
+    subs.set(`held-${i}`, () => undefined);
+    subKeys.set(`held-${i}`, key);
+  }
+  if (filled > 0) heldByKey.set(key, filled);
   return {
-    ctx: {
-      principal: { kind: "local-token", tokenId: "tk_window", scopes: [] },
-      transport: "ws-loopback",
-      receivedAt: 0,
-    },
+    authed: true,
+    ctx: WINDOW,
+    scopes: [],
     connectionId: "conn_budget_race",
     subs,
+    subKeys,
     pendingSubs: 0,
+    heldByKey,
+    refusedLogged: new Set<string>(),
+    undeclaredLogged: new Set<string>(),
     abortController: new AbortController(),
   };
+}
+
+/** The door's private entry points a row with a hand-built state drives. */
+interface DoorInternals {
+  onMessage(ws: unknown, state: unknown, raw: string): Promise<void>;
+  closeSubscriptions(state: unknown): void;
+}
+
+/** Item 476 — the door's own close, for a state a row built by hand: the
+ * socket's close aborts first, then lets every live subscription go. */
+function closeSubscriptions(api: ProductApi, state: LedgerState): void {
+  state.abortController.abort();
+  (api as unknown as DoorInternals).closeSubscriptions(state);
+}
+
+/** Item 476 — one live subscription let go through the door's own
+ * `system.unsubscribe`, as a client lets it go (its key's count given back). */
+async function unsubscribe(
+  api: ProductApi,
+  ws: unknown,
+  state: RigState,
+  subId: string,
+): Promise<void> {
+  const frame = { jsonrpc: "2.0", id: 9_999, method: "system.unsubscribe", params: { subId } };
+  await (api as unknown as DoorInternals).onMessage(ws, state, JSON.stringify(frame));
+}
+
+/** Item 476 — the ledger agrees with itself: every key's count is a live
+ * subscription or one still opening, and every live one has its key. */
+function expectLedger(state: RigState): void {
+  let counted = 0;
+  for (const count of state.heldByKey.values()) {
+    expect(count).toBeGreaterThan(0);
+    counted += count;
+  }
+  expect(counted).toBe(state.subs.size + state.pendingSubs);
+  expect(state.subKeys.size).toBe(state.subs.size);
+}
+
+/** Item 476 — nothing held: no subscription, none opening, no key, no flag. */
+function expectLedgerEmpty(state: RigState): void {
+  expect(state.subs.size).toBe(0);
+  expect(state.pendingSubs).toBe(0);
+  expect(state.subKeys.size).toBe(0);
+  expect(state.heldByKey.size).toBe(0);
+  expect(state.refusedLogged.size).toBe(0);
 }
 
 /** Item 467 — a logger whose warnings the row reads. */
@@ -720,8 +1017,8 @@ function recordingLogger(warn: Logger["warn"]): Logger {
   return logger;
 }
 
-/** The local install site at one free slot; its handler answers later, at
- * once, or throws, as `control.mode` says. */
+/** The local install site at one free slot of `METHOD`'s key; its handler
+ * answers later, at once, or throws, as `control.mode` says. */
 function budgetRig(logger?: Logger) {
   const api = new ProductApi({
     port: 0,
@@ -760,7 +1057,9 @@ function budgetRig(logger?: Logger) {
       answers.set(id, value as Record<string, unknown>);
     });
   const held = (): number => state.subs.size + state.pendingSubs;
-  return { control, opening, state, answers, subscribe, held };
+  /** the socket closes (item 476: through the door's own close) */
+  const close = (): void => closeSubscriptions(api, state);
+  return { control, opening, state, answers, subscribe, held, close };
 }
 
 // ── item 476's rig ──
@@ -849,13 +1148,24 @@ class RigSocket extends EventEmitter {
   readonly terminate = vi.fn();
 }
 
-/** What these rows read of a connection's state, as the door built it at the upgrade. */
+/** What these rows read of a connection's state, as the door built it at the upgrade, the
+ * door's per-key ledger with it (item 476). */
 interface RigState {
   authed: boolean;
   ctx: unknown;
   scopes: string[];
   subs: Map<string, () => void>;
+  subKeys: Map<string, string>;
   pendingSubs: number;
+  heldByKey: Map<string, number>;
+  refusedLogged: Set<string>;
+}
+
+/** A state a row builds by hand (`connState`): the rest of what the install sites read. */
+interface LedgerState extends RigState {
+  connectionId: string;
+  undeclaredLogged: Set<string>;
+  abortController: AbortController;
 }
 
 interface DoorRigOptions {
