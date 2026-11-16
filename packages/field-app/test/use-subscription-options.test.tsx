@@ -96,7 +96,7 @@ describe("useSubscription — the options bag (DS-6b)", () => {
     expect(calls).toHaveLength(1); // the owner decides what follows, not the hook
   });
 
-  it("with no options the call is what it always was — three arguments, the client's own replay rules", async () => {
+  it("with no options the hook hands the client no params supplier and no onReplayFailed — the client's own replay rules stand; the one choice is the shared feed's own onEnded", async () => {
     const calls: Call[] = [];
     function Probe(): null {
       useSubscription("thing.subscribe", { table: "x" });
@@ -104,6 +104,17 @@ describe("useSubscription — the options bag (DS-6b)", () => {
     }
     await render(fakeClient(calls), Probe);
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.[3]).toBe(3);
+    // Item 467 (2026-11-16): the arity moved from 3 to 4. A hook with no options
+    // holds a feed shared by every hook on the same method and params, and that
+    // feed hears its subscription END (a replay refused for good) through
+    // `onEnded`, so no holder keeps showing a subscription that is gone. Nothing
+    // of the owner's rides with it: an ownerless retryable refusal is still
+    // re-asked by the client alone.
+    expect(calls[0]?.[3]).toBe(4);
+    const opts = calls[0]?.[2];
+    expect(opts?.params).toBeUndefined();
+    expect(opts?.onReplayFailed).toBeUndefined();
+    expect(typeof opts?.onEnded).toBe("function");
+    expect(Object.keys(opts ?? {})).toEqual(["onEnded"]);
   });
 });

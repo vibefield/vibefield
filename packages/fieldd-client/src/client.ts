@@ -304,6 +304,13 @@ export interface SubscribeOptions {
    * moves. With no owner, a RETRYABLE refusal is re-asked by the client alone,
    * on the reconnect backoff, and any other refusal ends the subscription. */
   onReplayFailed?: (error: FielddRpcError) => void;
+  /** Item 467 (2026-11-16) — the subscription ENDED for good on this client: a
+   * replay the daemon refused, which no owner took up and the client will not
+   * ask again. Heard beside `onReplayFailed` (after it), never instead of it,
+   * and never for a retryable refusal the client re-asks alone. A subscriber
+   * whose holders outlive one subscription (a shared feed) needs it: without
+   * it the subscription is gone and its holders go on showing the last data. */
+  onEnded?: (error: FielddRpcError) => void;
 }
 
 type SubEventKind = "snapshot" | "delta";
@@ -328,6 +335,8 @@ interface SubEntry {
   replayParams?: () => unknown;
   /** SubscribeOptions.onReplayFailed */
   onReplayFailed?: (error: FielddRpcError) => void;
+  /** SubscribeOptions.onEnded */
+  onEnded?: (error: FielddRpcError) => void;
   /** a retryable replay refusal nobody owns: the client's own re-ask of this
    * one subscription, and how many came before it (the backoff) */
   replayRetry?: ReturnType<typeof setTimeout> | undefined;
@@ -363,6 +372,9 @@ export class FielddClient {
   private nextSubKey = 1;
   /** Item 469 — counts the sockets dialed; a sent entry records it (`sentOn`) */
   private socketEpoch = 0;
+  /** Item 467 — subscriptions given up after they were sent (see `onSubscriptionReleased`) */
+  private releasedCount = 0;
+  private releaseListeners = new Set<() => void>();
   private attempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private statusListeners = new Set<() => void>();
@@ -457,6 +469,26 @@ export class FielddClient {
   onStatusChange(fn: () => void): () => void {
     this.statusListeners.add(fn);
     return () => this.statusListeners.delete(fn);
+  }
+
+  /** Item 467 (2026-11-16) — how many subscriptions this client has given up
+   * after sending them: each was a slot of the daemon's per-connection budget
+   * (`PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION`). Read before a subscribe
+   * and again at its refusal, it says whether room was made while it was out. */
+  get subscriptionsReleased(): number {
+    return this.releasedCount;
+  }
+
+  /** Item 467 (2026-11-16) — hears each subscription this client gives up after
+   * sending it, once its `system.unsubscribe` has left (so a subscribe asked
+   * from here reaches the daemon behind it). A subscribe refused for want of
+   * room (RESOURCE_EXHAUSTED, `resource: "subscriptions"`) waits for this to
+   * ask once more, never on a timer. */
+  onSubscriptionReleased(fn: () => void): () => void {
+    this.releaseListeners.add(fn);
+    return () => {
+      this.releaseListeners.delete(fn);
+    };
   }
 
   /** Server-originated control notifications that are not subscriptions.
@@ -572,6 +604,7 @@ export class FielddClient {
       onEvent,
       ...(opts?.params !== undefined ? { replayParams: opts.params } : {}),
       ...(opts?.onReplayFailed !== undefined ? { onReplayFailed: opts.onReplayFailed } : {}),
+      ...(opts?.onEnded !== undefined ? { onEnded: opts.onEnded } : {}),
     };
     this.subs.set(key, entry);
     try {
@@ -605,6 +638,7 @@ export class FielddClient {
     this.subs.clear();
     this.subRoutes.clear();
     this.notificationListeners.clear();
+    this.releaseListeners.clear();
     this.setStatus("closed");
     this.flushReadyWaiters(new FielddRpcError("UNAVAILABLE", "client closed"));
   }
@@ -848,14 +882,25 @@ export class FielddClient {
       } catch {
         // the owner's recovery is its own — the other subscriptions still replay
       }
+      // item 467 — over for good on this client: told, so no holder keeps
+      // showing a subscription that is gone
+      try {
+        sub.onEnded?.(error);
+      } catch {
+        // the same: one subscriber's failure stops no other replay
+      }
       return;
     }
     if (this.subs.get(key) !== sub) {
       // unsubscribed while the replay was in flight: release what it stood up
       if (typeof res.subId === "string") {
         this.subRoutes.delete(res.subId);
-        if (this.ws === ws && this.status === "ready")
+        if (this.ws === ws && this.status === "ready") {
           void this.sendRequest("system.unsubscribe", { subId: res.subId }).catch(() => {});
+          // item 467 — the slot this replay took is the one freed now (the
+          // owner's unsubscribe told of a slot that was not yet taken)
+          this.tellReleased();
+        }
       }
       return;
     }
@@ -908,6 +953,21 @@ export class FielddClient {
       this.subRoutes.delete(entry.subId);
       if (this.status === "ready")
         void this.sendRequest("system.unsubscribe", { subId: entry.subId }).catch(() => {});
+    }
+    // item 467 — a sent subscription is a slot of the daemon's budget (or will
+    // be, at the next replay): giving it up is room, told after the frame left
+    if (entry?.sentOnce === true) this.tellReleased();
+  }
+
+  /** Item 467 — one subscription given up: counted, and every listener told. */
+  private tellReleased(): void {
+    this.releasedCount += 1;
+    for (const listener of [...this.releaseListeners]) {
+      try {
+        listener();
+      } catch {
+        // one listener's failure is its own; the others still hear
+      }
     }
   }
 

@@ -9,6 +9,9 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { FielddClient, FielddClientStatus, FielddRpcError, SubscribeOptions } from "./client";
+import { attachSubscription, type SubscriptionState } from "./feeds";
+
+export type { SubscriptionState } from "./feeds";
 
 // React bindings (design-03 A6): thin, hook-first. No JSX in this file so the
 // core package needs no JSX toolchain — the desktop renderer brings its own.
@@ -33,12 +36,6 @@ export function useFielddStatus(): FielddClientStatus {
   );
 }
 
-export interface SubscriptionState<T> {
-  status: "loading" | "live" | "error";
-  data: T | null;
-  error: Error | null;
-}
-
 /** DS-6b (2026-10-01) — S3's per-subscription choices, passed through to
  * `FielddClient.subscribe` (`SubscribeOptions`). Read when the client asks, so
  * a caller's inline arrows may change identity every render without
@@ -56,7 +53,14 @@ export interface UseSubscriptionOptions {
   onReplayFailed?: (error: FielddRpcError) => void;
 }
 
-/** Subscribe for the lifetime of the component; every event replaces `data`. */
+/** Subscribe for the lifetime of the component; every event replaces `data`.
+ *
+ * Item 467 (2026-11-16): with no options, every hook on this client asking the
+ * same method with the same params (keyed by `feedKey`: key order does not
+ * matter) holds ONE shared wire subscription: a later hook sees the current
+ * value at once, and the last one to unmount unsubscribes. A shared feed the
+ * daemon refused for want of room asks once more when this client next gives
+ * a subscription up. With options it stays the owner's own subscription. */
 export function useSubscription<T = unknown>(
   method: string,
   params?: unknown,
@@ -77,44 +81,29 @@ export function useSubscription<T = unknown>(
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: params is deliberately keyed by its JSON (paramsKey) so object-identity churn never resubscribes; the options are read through optsRef
   useEffect(() => {
-    let cancelled = false;
-    let unsub: (() => void) | null = null;
     setState({ status: "loading", data: null, error: null });
-    const choices: SubscribeOptions = {
-      ...(supplies ? { params: () => (optsRef.current?.params ?? (() => params))() } : {}),
-      ...(ownsRefusal
+    // no options: the shared feed, asked with no fourth argument (the call is
+    // exactly what it was); options: the owner's own, read through optsRef
+    const choices: SubscribeOptions | undefined =
+      supplies || ownsRefusal
         ? {
-            onReplayFailed: (error: FielddRpcError) => {
-              if (cancelled) return;
-              setState((prior) => ({ status: "error", data: prior.data, error }));
-              optsRef.current?.onReplayFailed?.(error);
-            },
+            ...(supplies ? { params: () => (optsRef.current?.params ?? (() => params))() } : {}),
+            ...(ownsRefusal
+              ? {
+                  onReplayFailed: (error: FielddRpcError) =>
+                    optsRef.current?.onReplayFailed?.(error),
+                }
+              : {}),
           }
-        : {}),
-    };
-    const onEvent = (payload: unknown): void => {
-      if (!cancelled) setState({ status: "live", data: payload as T, error: null });
-    };
-    // no options, no fourth argument: the call is exactly what it was
-    (supplies || ownsRefusal
-      ? client.subscribe(method, params, onEvent, choices)
-      : client.subscribe(method, params, onEvent)
-    )
-      .then((res) => {
-        if (cancelled) {
-          res.unsubscribe();
-          return;
-        }
-        unsub = res.unsubscribe;
-        setState({ status: "live", data: res.snapshot as T, error: null });
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setState({ status: "error", data: null, error: e as Error });
-      });
-    return () => {
-      cancelled = true;
-      unsub?.();
-    };
+        : undefined;
+    // the release, run as this effect's cleanup; a holder hears nothing after it
+    return attachSubscription(
+      client,
+      method,
+      params,
+      (next) => setState(next as SubscriptionState<T>),
+      choices,
+    );
     // params participates via paramsKey (stable identity for object literals)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, method, paramsKey, supplies, ownsRefusal]);
