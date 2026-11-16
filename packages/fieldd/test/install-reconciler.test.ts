@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -28,6 +29,7 @@ import {
 } from "@vibefield/plugin-build";
 import { LoroDoc } from "loro-crdt";
 import { afterEach, describe, expect, it } from "vitest";
+import WebSocket from "ws";
 import type { AuditService } from "../src/audit-service";
 import { DocumentService } from "../src/doc-service";
 import { bootstrap, type FielddDaemon, verifyAuditSegment } from "../src/index";
@@ -39,7 +41,7 @@ import { SettingsDocService } from "../src/settings-doc";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { type CapturedLog, captureLogger } from "./drive-fakes";
 import { nativeEndpoint } from "./native-harness";
-import { until } from "./ws-rpc";
+import { helloAs, until, WsRpc } from "./ws-rpc";
 
 // PLUG-P7 — §16.6 convergence: the DESIRED set in the settings doc drives
 // this device. The suite seeds a desired entry into the doc BEFORE boot
@@ -1645,5 +1647,256 @@ describe("a person's switch behind an update gives up after a few seconds and sa
     await settle(d);
     expect(d.registry.record.enabled).toBe(true);
     expect((await entryOf(d))?.enabled).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Item 451, the rest of row B (2026-11-16): the booted witness for the paths path 1 left. The interleavings are the
+// unit desk's above; this row holds that the REAL callbacks on those paths, on one booted daemon with a live merge
+// from a peer and a person's acts through the doors, never re-enter a lane and always end. Path 5 (a walk's removal)
+// is E10's booted row. A red here by a re-entry is a finding, not a step.
+
+/** Item 451: fieldd booted on the row's own data dir and list (the stand-in native plane, no child), its log
+ * captured under `logs/`, the shell's connection to its doors, and a peer desktop holding the same settings
+ * document, exchanged with the RUNNING daemon one way at a time, as the doc-sync lane's VERSION exchange does. */
+async function bootedDesk(registry: { registryUrl: string; publicKey: string }) {
+  const dataDir = mkdtempSync(join(tmpdir(), "vf-rec-451-"));
+  cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+  mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+  writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+  const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+  await mock.start();
+  cleanup.push(() => mock.stop());
+  const logRoot = join(dataDir, "logs");
+  const daemon = await bootstrap({
+    dataDir,
+    logRoot,
+    controlPort: 0,
+    registryUrl: registry.registryUrl,
+    registryPublicKey: registry.publicKey,
+  });
+  let running = true;
+  cleanup.push(async () => {
+    if (running) await daemon.stop();
+  });
+  const socket = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+  cleanup.push(() => socket.close());
+  await new Promise<void>((resolve, reject) => {
+    socket.once("open", resolve);
+    socket.once("error", reject);
+  });
+  const shell = new WsRpc(socket);
+  await helloAs(shell, daemon.shellToken, "shell-main");
+
+  // the peer: the daemon's own settings document id (an unlinked desktop's account), hosted by a second service
+  const settingsId = systemDocId("settings", systemAccount(null, undefined));
+  expect(daemon.docs.systemDocIds(), "the daemon hosts it").toContain(settingsId);
+  const peerDir = mkdtempSync(join(tmpdir(), "vf-rec-451-peer-"));
+  cleanup.push(() => rmSync(peerDir, { recursive: true, force: true }));
+  const peer = new SettingsDocService({ dataDir: peerDir });
+  await peer.ready();
+  cleanup.push(() => peer.dispose());
+  const peerDocs = new DocumentService({ dataDir: peerDir });
+  cleanup.push(() => peerDocs.dispose());
+  peerDocs.registerSystemDoc(settingsId, "Settings", peer.hostDoc(), peer.hostOwner());
+  /** One way of the exchange: `to` merges what it lacks of `from`, and its listeners hear it (a walk, on fieldd). */
+  const exchange = async (from: DocumentService, to: DocumentService, what: string) => {
+    const theirs = await to.hostVersion(settingsId);
+    if (theirs === null) throw new Error(`${what}: the settings document is not hosted`);
+    const answer = await from.hostAnswer(settingsId, theirs);
+    if (answer === null) throw new Error(`${what}: no answer for the settings document`);
+    if (answer.update === null) return;
+    const outcome = await to.applyRemoteRecord(settingsId, {
+      kind: DOC_SYNC_RECORD.UPDATE,
+      meta: answer.meta,
+      payload: answer.update,
+    });
+    expect(outcome.applied, what).toBe(true);
+  };
+  return {
+    dataDir,
+    logRoot,
+    daemon,
+    shell,
+    peer,
+    toPeer: () => exchange(daemon.docs, peerDocs, "the daemon → the peer"),
+    toDaemon: () => exchange(peerDocs, daemon.docs, "the peer → the daemon"),
+    /** The row stops the daemon itself and waits for it, before it reads the log and the ledger. */
+    stop: async () => {
+      socket.close();
+      await daemon.stop();
+      running = false;
+    },
+  };
+}
+
+describe("the lane's booted witness, the rest of row B (item 451): a live merge and a person's acts end", () => {
+  it("a walk's enable, a disable in a walk's grant section, a grant behind a disable, a switch behind an update", {
+    timeout: 120_000,
+  }, async () => {
+    // the list: kv 0.1.0 and a 0.2.0 asking for nothing new (path 6a's update), VibeField's own rung, signed here
+    const releases = mkdtempSync(join(tmpdir(), "vf-rec-451-rel-"));
+    cleanup.push(() => rmSync(releases, { recursive: true, force: true }));
+    const next = join(releases, "kv-0.2.0");
+    cpSync(KV_DIR, next, { recursive: true, filter: (src) => !src.includes("node_modules") });
+    const manifestPath = join(next, "vibefield.plugin.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { version: string };
+    writeFileSync(manifestPath, `${JSON.stringify({ ...manifest, version: "0.2.0" }, null, 2)}\n`);
+    const packed = async (rootDir: string) => ({
+      manifestDir: rootDir,
+      artifactBytes: (await packVfplugin({ rootDir })).bytes,
+      rung: "R1" as const,
+    });
+    const registryDir = join(releases, "registry");
+    mkdirSync(registryDir);
+    const keys = generateRegistryKeypair();
+    buildFixtureRegistry({
+      dir: registryDir,
+      secretKey: keys.secretKey,
+      plugins: [await packed(next), await packed(KV_DIR)],
+    });
+    const desk = await bootedDesk({
+      registryUrl: pathToFileURL(join(registryDir, "index.json")).href,
+      publicKey: keys.publicKey,
+    });
+    const { daemon, shell, peer } = desk;
+
+    // every wait is bounded as the booted rows above are: a hang, never a busy host, is what the bound catches
+    const BOUND = 20_000;
+    const record = () => daemon.plugins.get(KV_ID);
+    const entry = async () => (await daemon.settingsDoc.installSet())[KV_ID];
+    const denied = () => record()?.deniedCapabilities ?? [];
+    const revokedHere = (capability: string) =>
+      denied().some((d) => d.capability === capability && d.reason === "revoked");
+    const decisionInDoc = async (capability: string) =>
+      (await entry())?.grants.find((g) => g.capability === capability);
+    const active = () =>
+      daemon.plugins.snapshot().plugins.find((p) => p.id === KV_ID)?.service === "active";
+    /** The doc's entry and the record here agree on the version and the enablement, or the wait fails. */
+    const agreed = async (version: string, enabled: boolean, what: string) => {
+      const want = JSON.stringify([version, enabled, version, enabled]);
+      const deadline = Date.now() + BOUND;
+      for (;;) {
+        const e = await entry();
+        const seen = JSON.stringify([e?.version, e?.enabled, record()?.version, record()?.enabled]);
+        if (seen === want) return;
+        if (Date.now() > deadline) throw new Error(`${what}: ${seen}, not ${want}, in ${BOUND} ms`);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    };
+    /** `work` answers inside the bound, or the row fails naming it. */
+    const within = <T>(work: Promise<T>, what: string): Promise<T> =>
+      Promise.race([
+        work,
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`${what}: no answer in ${BOUND} ms`)), BOUND).unref();
+        }),
+      ]);
+
+    // the start: kv 0.1.0 installed through the door, its service up, every power it asks for granted
+    await shell.call("plugins.install", { id: KV_ID, version: "0.1.0" });
+    await until(active, BOUND, "0.1.0's service");
+    await agreed("0.1.0", true, "the install, published");
+    const granted = record()?.grantedCapabilities ?? [];
+    const both = granted.includes("storage.self") && granted.includes("background");
+    expect(both, "its powers, granted").toBe(true);
+
+    // PATH 2, a walk's ENABLE: a person turns it off here; another desktop turns it on, merged LIVE into the
+    // running daemon; the walk that merge raises enables it with its real restart (fire-and-forget)
+    await shell.call("plugins.disable", { id: KV_ID });
+    await agreed("0.1.0", false, "path 2: the person's off, published");
+    await desk.toPeer();
+    await peer.updateInstallSet(KV_ID, { enabled: true }, "another-desktop");
+    await desk.toDaemon();
+    await agreed("0.1.0", true, "path 2: on by the walk the live merge raised");
+    await until(active, BOUND, "path 2: the service, back by the walk's restart");
+
+    // PATH 3, a person's disable while a walk's grant section may hold the lane: another desktop revokes
+    // `background`, a power kv asks for (the walk's grant section moves it here: its real setGrant), and in the same
+    // tick the person turns kv off through the door.
+    // NOT held: which of the two took the lane first. A booted daemon has no seam to pause a walk, so the row
+    // holds only that either order ends right; the order itself is the unit desk's (the grant race, above).
+    await desk.toPeer();
+    await peer.updateInstallSet(KV_ID, { revoke: ["background"] }, "another-desktop");
+    await within(
+      Promise.all([desk.toDaemon(), shell.call("plugins.disable", { id: KV_ID })]),
+      "path 3: the merge and the person's off",
+    );
+    await agreed("0.1.0", false, "path 3: the person's off is the last word");
+    await until(() => revokedHere("background"), BOUND, "path 3: revoked here, by the walk");
+    expect(await decisionInDoc("background"), "path 3: and in the doc").toMatchObject({
+      decision: "revoked",
+      revocationGeneration: 1,
+    });
+
+    // PATH 4, a person's grant act behind a person's disable: on again, then off and a power revoked, the second
+    // sent without awaiting the first.
+    // NOT held: a bound on the grant act. Under James's pick B only a switch behind an UPDATE is bounded (5 s, then
+    // refused); a grant act takes the lane with no bound (`hold`), so it waits for the disable and completes.
+    await shell.call("plugins.enable", { id: KV_ID });
+    await agreed("0.1.0", true, "path 4: on again");
+    await within(
+      Promise.all([
+        shell.call("plugins.disable", { id: KV_ID }),
+        shell.call("plugins.grants.set", { id: KV_ID, capability: "storage.self", granted: false }),
+      ]),
+      "path 4: the off and the revoke",
+    );
+    await agreed("0.1.0", false, "path 4: off");
+    await until(() => revokedHere("storage.self"), BOUND, "path 4: storage.self revoked here");
+    expect(await decisionInDoc("storage.self"), "path 4: and in the doc").toMatchObject({
+      decision: "revoked",
+      revocationGeneration: 1,
+    });
+
+    // PATH 6a, a person's switch behind a real update: on again, the update to 0.2.0 pressed and at once the off.
+    // Either way ends right: the off applied (before the update or after its barrier: off at 0.2.0), or, when the
+    // update holds the lane past the 5 s bound, refused by its kind (PLUGIN_UPDATING: on at 0.2.0, as the update left
+    // it). The row says which. NOT seen here by design (6b): a refusal made every time. No fixture registry can hold
+    // an update past 5 s, so the refusal is the unit desk's row at its 50 ms bound.
+    await shell.call("plugins.enable", { id: KV_ID });
+    await agreed("0.1.0", true, "path 6a: on again");
+    const [update, press] = await within(
+      Promise.all([
+        shell.attempt("plugins.install", { id: KV_ID, version: "0.2.0" }),
+        shell.attempt("plugins.disable", { id: KV_ID }),
+      ]),
+      "path 6a: the update and the off",
+    );
+    expect(update.ok, `path 6a: the update is taken: ${JSON.stringify(update)}`).toBe(true);
+    const refused = !press.ok && JSON.stringify(press.error).includes("PLUGIN_UPDATING");
+    const answered = press.ok || refused;
+    expect(answered, `path 6a: the off, applied or refused: ${JSON.stringify(press)}`).toBe(true);
+    const said = refused ? "REFUSED (PLUGIN_UPDATING)" : "APPLIED";
+    console.log(`item 451, path 6a: the off was ${said}`);
+    await agreed("0.2.0", refused, "path 6a: as the press and the update left it");
+
+    // the end: the row stops the daemon and waits for it, then reads its log and its ledger whole
+    await desk.stop();
+    const logFile = join(desk.logRoot, "system", "fieldd.ndjson");
+    expect(existsSync(logFile), "the daemon's log was captured").toBe(true);
+    const lines = readFileSync(logFile, "utf8").trim().split("\n");
+    expect(lines.length, "the log holds the boot and the paths").toBeGreaterThan(10);
+    expect(
+      lines.filter((line) => line.includes("lane re-entered")),
+      "no lane was ever re-entered",
+    ).toEqual([]);
+    const rows = (await auditRecords(desk.dataDir)).filter((r) => r.phase === "outcome");
+    const named = (action: string, by: "walk" | "door") =>
+      rows
+        .filter((r) => r.action === action)
+        .filter((r) => (r.attrs?.origin === "settings-doc" ? "walk" : "door") === by)
+        .map((r) => r.outcome);
+    expect(named("plugin.install", "door"), "the install").toEqual(["succeeded"]);
+    expect(named("plugin.enable", "walk"), "path 2: the walk's enable").toEqual(["succeeded"]);
+    expect(named("capability.revoke", "walk"), "path 3: the walk's revoke").toEqual(["succeeded"]);
+    expect(named("capability.revoke", "door"), "path 4: the revoke").toEqual(["succeeded"]);
+    expect(named("plugin.enable", "door"), "paths 4, 6a").toEqual(["succeeded", "succeeded"]);
+    expect(named("plugin.update", "door"), "path 6a: the update").toEqual(["succeeded"]);
+    // the person's offs, paths 2, 3, 4 and 6a (6a's audited failed when refused), in any segment order
+    const offs = named("plugin.disable", "door").sort();
+    const wanted = ["succeeded", "succeeded", "succeeded", refused ? "failed" : "succeeded"].sort();
+    expect(offs, "the person's offs").toEqual(wanted);
+    expect(named("plugin.disable", "walk"), "no walk turned it off").toEqual([]);
   });
 });
