@@ -306,6 +306,9 @@ interface ConnState {
    * install takes the slot as a `subs` entry, or its handler fails and gives it
    * back. The budget counts `subs.size + pendingSubs`. */
   pendingSubs: number;
+  /** Aborted by the socket's close, and only there, in the same turn that
+   * disposes and clears `subs`: an install that resumes after an await reads it
+   * to know the connection is gone (item 474). */
   abortController: AbortController;
   shellTransport: ShellProviderTransport;
   /** SP-1 — this connection's keepalive (`system.tick`), armed by its first
@@ -589,6 +592,14 @@ export class ProductApi extends EventEmitter {
         state.pendingSubs -= 1;
       }
       const { snapshot, dispose } = opened;
+      // Item 474 — the connection closed while the provider was out: its close
+      // has already disposed and cleared `subs`, so nothing would ever dispose
+      // this one. It is let go now, and nothing is installed
+      if (state.abortController.signal.aborted) {
+        active = false;
+        dispose();
+        return;
+      }
       state.subs.set(subId, () => {
         active = false;
         dispose();
@@ -1441,6 +1452,14 @@ export class ProductApi extends EventEmitter {
               state.pendingSubs -= 1;
             }
             const { snapshot, dispose, start } = opened;
+            // Item 474 — the connection closed while the peer was opening it:
+            // its close has already disposed and cleared `subs`, so this one is
+            // let go now (the upstream's reference with it), and nothing starts
+            if (state.abortController.signal.aborted) {
+              active = false;
+              dispose();
+              return;
+            }
             state.subs.set(subId, () => {
               active = false;
               dispose();
@@ -1557,6 +1576,15 @@ export class ProductApi extends EventEmitter {
         state.pendingSubs -= 1;
       }
       const { snapshot, dispose, start, resync } = opened;
+      // Item 474 — the connection closed while the handler was out: its close
+      // has already disposed and cleared `subs` (and dropped its holds), so
+      // nothing would ever dispose this one. It is let go now: no hold, no
+      // install, no `start`
+      if (state.abortController.signal.aborted) {
+        active = false;
+        dispose();
+        return;
+      }
       // the phone alone (the `tailnet` principal, as `tailnet-rows.ts` bounds
       // it): a peer daemon on the same door keeps the shed and its heartbeats
       if (resync !== undefined && ctx.principal.kind === "tailnet") {
