@@ -53,7 +53,11 @@ export const AGENT_ACCOUNT_USAGE_STATES = [
  * semantics; `unknown` says only what is true — the daemon reported a state
  * this build has no word for — and `message` still carries the provider's own
  * sentence for a person to read. (Degraded is surfaced honestly, never
- * relabelled as something more definite.) */
+ * relabelled as something more definite.)
+ * *Corrected 2026-11-16 (item 488): `message` is for the log, never a person
+ * to read. It is the agent adapter's own sentence, an agent's insides
+ * (DESIGN.md §9; AR-L1, VibeField knows no vendor's words): a face says
+ * VibeField's own sentence for the state, and the adapter's goes to the log.* */
 export const AgentAccountUsageState = z.enum(AGENT_ACCOUNT_USAGE_STATES).catch("unknown");
 export type AgentAccountUsageState = (typeof AGENT_ACCOUNT_USAGE_STATES)[number];
 
@@ -138,7 +142,8 @@ export const AgentAccountUsageEntry = z
     metrics: z.array(AgentAccountUsageMetric),
     credits: AgentAccountUsageCredits.optional(),
     /** the provider's own sentence for a non-available state, or for the
-     * refresh that failed over a stale row */
+     * refresh that failed over a stale row. *Corrected 2026-11-16 (item 488):
+     * a sentence for the log alone, never drawn: see `AgentAccountUsageState`.* */
     message: z.string().optional(),
     retryable: z.boolean().optional(),
     /** earliest provider-authorized retry, when one was given */

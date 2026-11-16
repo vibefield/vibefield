@@ -213,7 +213,12 @@ function toEntry(row: AgentAccountUsageEntry): AccountUsageEntry {
     status:
       row.state === "unauthenticated" || row.state === "unsupported" ? row.state : "unavailable",
     provider: row.provider,
-    message: row.message ?? (unknown ? "no reading yet" : row.state),
+    // Item 488 (2026-11-16) — VibeField's own words, never the adapter's
+    // (`row.message`): the views read no failure's message today
+    // (puppeteer-views 0.4.0, `usage/account-usage.js`), and Core's type
+    // requires one, so it is ours, and an adapter's sentence cannot reach a
+    // face through a later view. A hardening: nothing drawn moves.
+    message: unknown ? "no reading yet" : row.state,
     retryable: row.retryable ?? unknown,
     ...(row.state === "rate-limited" ? { code: "rate-limited" as const } : {}),
     ...(row.retryAt !== undefined ? { retryAt: row.retryAt } : {}),

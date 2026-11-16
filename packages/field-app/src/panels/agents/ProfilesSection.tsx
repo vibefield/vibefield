@@ -1,5 +1,6 @@
 import {
   AgentAccountUsageBatch,
+  type AgentAccountUsageEntry,
   type AgentInstall,
   type AgentProfileSet,
   type AgentProviderSummary,
@@ -16,6 +17,7 @@ import {
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { refusalSentence } from "../../account/use-account";
+import { getRendererLogger } from "../../logging";
 import type { SettingsSubpage } from "../SettingsDialog";
 import type { AgentsNotice } from "./AgentsView";
 import {
@@ -71,6 +73,36 @@ import { signInEndNotice, useProfileSignIn } from "./use-profile-sign-in";
 // lens itself (ExtensionsSection.tsx). AR-S4e: a row of an agent's own list
 // opens its page — a plugin's below the list, a server's or skill's (whose
 // way back is then that list).
+
+/** Item 488 (2026-11-16) — the most of an agent's own words a log line keeps:
+ * a usage reading's `message` is the agent adapter's sentence, read by no
+ * person, and its length is the adapter's to choose. */
+const ADAPTER_WORDS_LOGGED = 500;
+
+/** Item 488 — a failed usage reading, logged: the agent's own words go here
+ * and never to a face (DESIGN.md §9, "VibeField's insides are never a
+ * person's to read"; AR-L1, VibeField knows no vendor's words). A refresh the
+ * person pressed logs at warn; a silent one (a route's opening, each return to
+ * the window) says the same at debug, for a state nobody acted on. */
+function logUsageRefreshFailure(entry: AgentAccountUsageEntry, pressed: boolean): void {
+  const words = entry.message;
+  const reason =
+    words === undefined || words.length <= ADAPTER_WORDS_LOGGED
+      ? words
+      : `${words.slice(0, ADAPTER_WORDS_LOGGED)}…`;
+  const log = getRendererLogger().child({ component: "settings.profiles" });
+  log[pressed ? "warn" : "debug"](
+    "renderer.profiles.usage_refresh_failed",
+    "A usage refresh came back without a reading",
+    {
+      provider: entry.provider,
+      state: entry.state,
+      ...(entry.profileId !== undefined ? { profileId: entry.profileId } : {}),
+      ...(entry.retryAt !== undefined ? { retryAt: entry.retryAt } : {}),
+      ...(reason !== undefined ? { reason } : {}),
+    },
+  );
+}
 
 export type ProfilesRoute =
   | { kind: "profile"; set: string }
@@ -417,6 +449,16 @@ export function ProfilesSection({
       if (!mounted.current) return;
       setRefreshedUsage(batch);
       setNow(pinnedNow ?? new Date());
+      const entries = batch.entries.filter(
+        (entry) => entry.profileId !== undefined && profileIds.includes(entry.profileId),
+      );
+      const failures = entries.filter(
+        (entry) => entry.state !== "available" && entry.state !== "unsupported",
+      );
+      // Item 488 — where the batch arrives, each failed reading goes to the
+      // log with the agent's own words (warn when pressed, debug when silent);
+      // the notice below says VibeField's own
+      for (const entry of failures) logUsageRefreshFailure(entry, feedback);
       if (!feedback || currentRoute.current !== routeKey) return;
       if (identitiesResult.status === "rejected") {
         setNotice({
@@ -425,26 +467,22 @@ export function ProfilesSection({
         });
         return;
       }
-      const entries = batch.entries.filter(
-        (entry) => entry.profileId !== undefined && profileIds.includes(entry.profileId),
-      );
-      const failures = entries.filter(
-        (entry) => entry.state !== "available" && entry.state !== "unsupported",
-      );
+      // Item 488 (2026-11-16) — one sentence, VibeField's, however many rows
+      // failed, and the latest retry time any of them was given. It used to
+      // print each row as the adapter's label and its own sentence ("Claude:
+      // Claude Code OAuth credentials were not found"): an agent's insides on
+      // a face.
+      let latest = Number.NaN;
+      for (const entry of failures) {
+        const at = entry.retryAt === undefined ? Number.NaN : Date.parse(entry.retryAt);
+        if (Number.isFinite(at) && (Number.isNaN(latest) || at > latest)) latest = at;
+      }
+      const retry = Number.isFinite(latest)
+        ? ` Retry after ${new Date(latest).toLocaleTimeString()}.`
+        : "";
       setNotice(
         failures.length > 0
-          ? {
-              tone: "error",
-              text: failures
-                .map((entry) => {
-                  const retryAt = entry.retryAt === undefined ? NaN : Date.parse(entry.retryAt);
-                  const retry = Number.isFinite(retryAt)
-                    ? ` Retry after ${new Date(retryAt).toLocaleTimeString()}.`
-                    : "";
-                  return `${entry.label}: ${entry.message ?? "Usage couldn't be refreshed."}${retry}`;
-                })
-                .join(" "),
-            }
+          ? { tone: "error", text: `Usage couldn't be refreshed.${retry}` }
           : {
               tone: "neutral",
               text: entries.some((entry) => entry.state === "available")
