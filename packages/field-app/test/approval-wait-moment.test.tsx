@@ -303,3 +303,20 @@ describe("the row (the shipping face the catalog mounts)", () => {
     ).toEqual(["Connect your devices", "Not now"]);
   });
 });
+
+describe("the preferences feed's key", () => {
+  it("asks storage.appPreferences.subscribe with {}, as every other reader of the feed does", async () => {
+    // Item 467 (2026-11-16) — a shared feed is keyed by its method and its
+    // params exactly, so no params and `{}` are two subscriptions on the wire
+    // for one feed. Every reader spells it `{}`.
+    const { client } = fieldd({});
+    const show = await strip(client);
+    await show([agent()]);
+    const asked = vi
+      .mocked(client.subscribe)
+      .mock.calls.filter(([method]) => method === "storage.appPreferences.subscribe")
+      .map(([, params]) => params);
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked).toEqual(asked.map(() => ({})));
+  });
+});
