@@ -847,6 +847,10 @@ export interface FielddDaemon {
    * phones here (`refusals`, `knownPhones`). MA-3h — the kept apps' home too: tests seed its kept
    * map. */
   settingsDoc: SettingsDocService;
+  /** Item 482 (2026-11-16) — the plugin settings service (P5, `storage.settings.*`): tests read
+   * how many listeners its `changed` event holds, so a refused subscription that left one behind
+   * is seen. A read seam; nothing outside the daemon drives it through here. */
+  readonly pluginSettings: PluginSettingsService;
   peers: PeerLink;
   /** DS-1 — the egress ROUTES port (E2): a loopback address that reaches a
    * door on a peer through this desktop's node, ref-counted per {peer, port}.
@@ -9883,6 +9887,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docs,
       devices,
       settingsDoc,
+      pluginSettings: settings,
       peers,
       egressRoutes,
       federatedSubs,
