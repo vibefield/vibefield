@@ -15,7 +15,9 @@
 //!    became of each trigger (closed by the kernel, or still waiting) is printed as data, never asserted.
 //! 3. The doors close. The row waits, at most 5 s and timed, until the floor's own count leaves room for one fresh
 //!    connection per listener: on macOS a connection whose accept fails for a descriptor is closed by the kernel, so
-//!    one dialed while the floor still held its doors could be taken by a second failed accept (item 453). Then ONE
+//!    one dialed while the floor still held its doors could be taken by a second failed accept (item 453). Then, with
+//!    nothing dialed, the row asks the door and mesh-bridge units to read up again, for at most 3 s from the room: a
+//!    run whose failed accepts left nothing queued ends without a connection to learn it from (item 454). Then ONE
 //!    FRESH connection per listener, each timed for up to 30 s from the release: the door's as a door the floor opens
 //!    that was not open before (its census wait included), mgmt's as any answer to a request before hello (so the
 //!    kept connection is never superseded), the bridge's as HELLO_OK. The verdict asks ≤ 5 s of each, and that the
@@ -64,6 +66,9 @@ const WATCHED_FOR: Duration = Duration::from_secs(30);
 
 /// How long the row waits, from the release, for the floor's own count to leave room for the fresh connections.
 const FREED_WITHIN: Duration = Duration::from_secs(5);
+
+/// How long the row asks the door and mesh-bridge units to read up again, from the room, with nothing dialed.
+const UP_UNASKED_WITHIN: Duration = Duration::from_secs(3);
 
 /// How often the floor's descriptors are counted, and how often the kept connection looks again.
 const SAMPLE_EVERY: Duration = Duration::from_millis(100);
@@ -185,6 +190,27 @@ impl Mgmt {
             sleep(SAMPLE_EVERY).await;
         }
         (door, door_up, bridge_up)
+    }
+
+    /// Until `until`: when the door and mesh-bridge units first read up, each as the time since `released`. The row
+    /// dials nothing meanwhile, so neither unit has a new connection to learn it from (item 454).
+    async fn up_unasked(
+        &mut self,
+        released: Instant,
+        until: Instant,
+    ) -> (Option<Duration>, Option<Duration>) {
+        let (mut door_up, mut bridge_up) = (None, None);
+        while Instant::now() < until && (door_up.is_none() || bridge_up.is_none()) {
+            if door_up.is_none() && self.unit_state("door").await.as_deref() == Some("up") {
+                door_up = Some(released.elapsed());
+            }
+            if bridge_up.is_none() && self.unit_state("mesh-bridge").await.as_deref() == Some("up")
+            {
+                bridge_up = Some(released.elapsed());
+            }
+            sleep(SAMPLE_EVERY).await;
+        }
+        (door_up, bridge_up)
     }
 }
 
@@ -362,6 +388,14 @@ fn shown(at: Option<Duration>) -> String {
     )
 }
 
+/// When a unit read up with nothing dialed, for the verdict line.
+fn unasked_shown(at: Option<Duration>) -> String {
+    at.map_or_else(
+        || "not up".to_owned(),
+        |at| format!("up {} ms after the release", at.as_millis()),
+    )
+}
+
 /// A fresh connection's outcome for the verdict line: its failed connect, or when it was served.
 fn fresh<T>(dialed: &Result<T, String>, at: Option<Duration>) -> String {
     match dialed {
@@ -426,6 +460,9 @@ async fn a_failed_accept_ends_no_listener_and_its_unit_reads_degraded_while_it_r
     let released = Instant::now();
     let until = released + WATCHED_FOR;
     let freed_at = freed(pid, released).await;
+    // item 454: with nothing dialed, the units read up again once the floor has descriptors to give a connection
+    let unasked_until = Instant::now() + UP_UNASKED_WITHIN;
+    let (door_unasked, bridge_unasked) = kept.up_unasked(released, unasked_until).await;
     // the fresh door is held open until the row ends: the floor opens it as a door, and the snapshot shows it
     let mut fresh_door = dial(&door_sock).await;
     let mut fresh_mgmt = dial(&mgmt_socket).await.map(Mgmt::over);
@@ -466,6 +503,7 @@ async fn a_failed_accept_ends_no_listener_and_its_unit_reads_degraded_while_it_r
     let within = |at: Option<Duration>| at.is_some_and(|at| at <= SERVED_WITHIN);
     let shows = reached && held_before && held_after;
     let room = freed_at.is_some();
+    let unasked = door_unasked.is_some() && bridge_unasked.is_some();
     let passed = within(door_at)
         && within(mgmt_at)
         && within(bridge_at)
@@ -473,7 +511,7 @@ async fn a_failed_accept_ends_no_listener_and_its_unit_reads_degraded_while_it_r
         && bridge_degraded
         && door_up_at.is_some()
         && bridge_up_at.is_some();
-    let kept_root = if shows && room && passed {
+    let kept_root = if shows && room && unasked && passed {
         drop(root);
         "removed".to_owned()
     } else {
@@ -499,6 +537,14 @@ async fn a_failed_accept_ends_no_listener_and_its_unit_reads_degraded_while_it_r
         "the floor's count did not leave room for the fresh connections within {} s of the release, so no fresh \
          connection met a floor with descriptors again: this row proves nothing. {readings}",
         FREED_WITHIN.as_secs()
+    );
+    assert!(
+        unasked,
+        "a unit did not read up again with nothing dialed, asked for {} s from the room (item 454): door {}, \
+         mesh-bridge {}. {readings}",
+        UP_UNASKED_WITHIN.as_secs(),
+        unasked_shown(door_unasked),
+        unasked_shown(bridge_unasked)
     );
     assert!(
         passed,

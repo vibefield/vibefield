@@ -19,6 +19,9 @@
 
 use anyhow::Result;
 pub use ghosttea::ipc::{remove_stale_endpoint, Listener, Stream};
+use std::future::Future;
+use std::pin::Pin;
+use std::task::Poll;
 use std::time::{Duration, Instant};
 
 #[cfg(unix)]
@@ -36,7 +39,8 @@ pub fn bind(endpoint: &str) -> Result<Listener> {
     Listener::bind(endpoint)
 }
 
-/// The first breath after a failed accept (item 198). Each failure in the same run doubles it.
+/// The first breath after a failed accept (item 198). Each failure in the same run doubles it, and so does each look
+/// that finds no descriptor free (item 454).
 pub const ACCEPT_BREATH_FIRST: Duration = Duration::from_millis(50);
 
 /// The longest breath a run of failed accepts grows to: a listener that cannot accept for a while still tries once
@@ -44,7 +48,7 @@ pub const ACCEPT_BREATH_FIRST: Duration = Duration::from_millis(50);
 pub const ACCEPT_BREATH_MOST: Duration = Duration::from_secs(1);
 
 /// A run of failed accepts, as the listener's unit hears of it: the run began with this error, or it ended because
-/// an accept succeeded.
+/// an accept succeeded or the listener waits again with a descriptor free (item 454).
 #[derive(Debug)]
 pub enum AcceptRun<'a> {
     Failing(&'a anyhow::Error),
@@ -55,19 +59,60 @@ pub enum AcceptRun<'a> {
 /// never ends it. The door, the management listener and the MeshData bridge each ended on their first, so one
 /// transient EMFILE stopped that listener for the floor's life while its unit still read Up.
 ///
-/// A failure is retried after [`accept_breath`], which grows while the run lasts and starts over at the next
-/// success. A run is logged twice: one warn when it begins, and one info when an accept succeeds again, with the
-/// count and the span. `on_run` hears the same two moments, so a unit can read Degraded for exactly as long as its
-/// listener retries.
+/// A failure is retried after [`accept_breath`], which grows while the run lasts and starts over when it ends.
+///
+/// Item 454: a run ends in one of two ways. An accept succeeds, or the listener waits again with no error while this
+/// process has a descriptor to give a connection ([`room_to_accept`]). Before item 454 only a success ended it, so a
+/// unit whose failed accepts left nothing queued read Degraded until its next connection, which on a quiet floor
+/// could be never. While a run is open, each attempt's accept future is polled once without waiting. When it waits
+/// and no descriptor is free (on macOS a listener at its ceiling with nothing queued waits, it does not fail), it is
+/// looked at again after a breath, unless a connection comes first. The future is never cancelled.
+///
+/// A run is logged twice: one warn when it begins, and one info when it ends, with the count, the span and whether
+/// it ended waiting. `on_run` hears the same two moments, so a unit can read Degraded for exactly as long as its
+/// listener cannot accept.
 pub async fn accept(
     listener: &mut Listener,
     component: &'static str,
     mut on_run: impl FnMut(AcceptRun<'_>),
 ) -> Stream {
     let mut failures: u32 = 0;
+    let mut looks: u32 = 0;
     let mut began: Option<Instant> = None;
     loop {
-        match listener.accept().await {
+        let mut next = std::pin::pin!(listener.accept());
+        let result = loop {
+            let Some(run_began) = began else {
+                break next.as_mut().await;
+            };
+            if let Poll::Ready(result) = poll_once(next.as_mut()).await {
+                break result;
+            }
+            // the listener took no error and waits: the run ends here when a connection would get a descriptor
+            if room_to_accept() {
+                tracing::info!(
+                    event = "field_native.local_ipc.accept_recovered",
+                    component,
+                    failures,
+                    span_ms = run_began.elapsed().as_millis() as u64,
+                    waiting = true,
+                    "The listener waits for its next connection with a descriptor free, after a run of failed accepts"
+                );
+                on_run(AcceptRun::Recovered);
+                failures = 0;
+                looks = 0;
+                began = None;
+                continue;
+            }
+            // no descriptor is free yet: look again after a breath, unless a connection comes first
+            looks = looks.saturating_add(1);
+            tokio::select! {
+                biased;
+                result = next.as_mut() => break result,
+                () = tokio::time::sleep(accept_breath(failures.saturating_add(looks))) => {}
+            }
+        };
+        match result {
             Ok(stream) => {
                 if let Some(began) = began {
                     tracing::info!(
@@ -75,6 +120,7 @@ pub async fn accept(
                         component,
                         failures,
                         span_ms = began.elapsed().as_millis() as u64,
+                        waiting = false,
                         "The listener accepts again after a run of failed accepts"
                     );
                     on_run(AcceptRun::Recovered);
@@ -93,9 +139,25 @@ pub async fn accept(
                     );
                     on_run(AcceptRun::Failing(&error));
                 }
-                tokio::time::sleep(accept_breath(failures)).await;
+                tokio::time::sleep(accept_breath(failures.saturating_add(looks))).await;
             }
         }
+    }
+}
+
+/// One poll of `future` without waiting: `Pending` when it has nothing yet, with the task's waker registered.
+async fn poll_once<F: Future>(mut future: Pin<&mut F>) -> Poll<F::Output> {
+    std::future::poll_fn(|cx| Poll::Ready(future.as_mut().poll(cx))).await
+}
+
+/// Item 454: whether a connection accepted now would get a descriptor, which is so while this process holds fewer
+/// than its soft limit. The count reads `None` at the limit itself (reading `/dev/fd` costs a descriptor), and that
+/// is no room. Where there is no per-process limit to read (Windows bounds handles by pool), a listener that waits
+/// with no error is taken at its word.
+fn room_to_accept() -> bool {
+    match crate::resource_pressure::soft_fd_limit() {
+        Some(limit) => crate::resource_pressure::open_fd_count().is_some_and(|open| open < limit),
+        None => true,
     }
 }
 
