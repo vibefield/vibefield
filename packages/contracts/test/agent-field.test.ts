@@ -772,6 +772,18 @@ describe("PG-2 — the remote cut: the model's row for every other screen, cut b
     expect(JSON.stringify(bare)).not.toMatch(/"\/Users\/|"\/home\/|"[A-Za-z]:\\\\/);
   });
 
+  it("item 464 — the pane join may say which session's body the row continues: `succeeds`, beside `inputUsed`", () => {
+    const successor = AgentRemoteRow.parse(golden("agent-remote-row.succeeds.json"));
+    expect(successor.terminal).toMatchObject({ runtimeSessionId: "pty-s11", succeeds: "pty-s9" });
+    // lineage, never the AR-4 join a window acts on
+    expect(successor.terminal?.replaced).toBeUndefined();
+    // what a reader pairs it with: was a row typed into (`inputUsed`: a typed-into predecessor is kept)
+    expect(successor.monitorRow.inputUsed).toBe(false);
+    // optional both ways: the rows before it say nothing and read as they did
+    expect(agent.terminal?.succeeds).toBeUndefined();
+    expect(bare.terminal?.succeeds).toBeUndefined();
+  });
+
   it("refuses a row with no model row, and a kind it does not know, rather than coercing them", () => {
     const { monitorRow: _none, ...keyOnly } = golden("agent-remote-row.valid.json") as Record<
       string,

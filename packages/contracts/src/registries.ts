@@ -491,7 +491,15 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
  * than the oldest removal still kept is answered a `snapshot`, never a delta that would miss a removal. 1,024
  * removals is far past what one desktop's board drops inside a linger (a busy board's runs end by the handful a
  * minute); its cost is a run id and a revision each. MESH_RESUME_DEVICES_MAX bounds the cursors one subscribe may
- * name (a person's desktops are a handful; a same-uid reader cannot make the hub weigh an unbounded map, EL7). */
+ * name (a person's desktops are a handful; a same-uid reader cannot make the hub weigh an unbounded map, EL7).
+ *
+ * Item 464 (2026-11-16) — SUCCEEDS_LAPSE_MS is how long fieldd goes on saying a row `succeeds` another
+ * (`AgentSessionTerminal.succeeds`) while the session it names still has a row. A hand-off's predecessor is released
+ * within seconds of the successor's birth (about 4 s, measured on a desktop under test, 2026-11-16), and the
+ * release path has no timeout of its own to borrow (it retries until its owner takes it). While the lineage is
+ * said, other screens draw the successor on the predecessor's body and the predecessor's row not at all, so a
+ * caller that named a session and never released it would keep a live terminal's bubble off a phone (EL7). 30 s
+ * is several times an honest hand-off under load; past it both rows are bodies of their own again. */
 export const AGENT_FIELD = {
   MIN_INTERVAL_MS: 250,
   STORE_MIN_INTERVAL_MS: 250,
@@ -509,6 +517,7 @@ export const AGENT_FIELD = {
   MESH_LINGERING_HUBS_MAX: 4,
   MESH_RESUME_TOMBSTONES: 1_024,
   MESH_RESUME_DEVICES_MAX: 64,
+  SUCCEEDS_LAPSE_MS: 30_000,
 } as const;
 
 /** Item 87 (2026-10-29) — a managed run's exit, as fieldd closes it. puppeteer's `handleProcessExit`

@@ -255,6 +255,18 @@ export type TerminalRuntimeSessionsResult = z.infer<typeof TerminalRuntimeSessio
 export const TerminalCreateParams = z
   .object({
     creationId: z.string().min(1).max(128).optional(),
+    /** Item 464 (2026-11-16) — the floor session this birth takes the place of
+     * on screen (`AgentSessionTerminal.succeeds` on the remote cut: the new
+     * session's row continues that one's Swarm body). A CLAIM, and a claim can
+     * hide another session's bubble, so fieldd KEEPS it only when the caller's
+     * grant holds `terminal.attach` (a caller that could already attach to and
+     * type into the session it names), the session is one THIS desktop's
+     * floor still lists (an ended agent's PTY among them: the shell its pane
+     * returns to succeeds exactly that), and no other session already
+     * succeeds it. Otherwise the field is dropped and logged and the birth
+     * goes on as without it: never an error. Kept, it is said for at most
+     * `AGENT_FIELD.SUCCEEDS_LAPSE_MS`. */
+    succeeds: z.string().min(1).max(128).optional(),
     cwd: z.string().optional(),
     /** absolute shell path; default = the user's login shell */
     shell: z.string().optional(),

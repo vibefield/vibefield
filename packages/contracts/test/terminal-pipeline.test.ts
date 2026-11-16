@@ -323,6 +323,17 @@ describe("SB-2 — the profile a shell was born under (AR-7g)", () => {
     }
   });
 
+  it("item 464 — terminal.create may name the session the new shell takes the place of on screen", () => {
+    const born = TerminalCreateParams.parse(fixture("terminal-create-params.succeeds.json"));
+    expect(born.succeeds).toBe("pty-s9");
+    expect(TerminalCreateParams.parse(fixture("terminal-create-params.valid.json")).succeeds).toBe(
+      undefined,
+    );
+    for (const succeeds of ["", "x".repeat(129)]) {
+      expect(TerminalCreateParams.safeParse({ succeeds }).success, succeeds).toBe(false);
+    }
+  });
+
   it("the create's answer and the roster say which set a bound shell was born under — and still never where it lives", () => {
     const created = TerminalCreateOpenResult.parse(fixture("tp-create-open.bound.json"));
     expect(created.profileSet).toBe("work");

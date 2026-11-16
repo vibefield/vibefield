@@ -333,6 +333,8 @@ const remoteFixtures = [
   "agent-remote-row.terminal.json",
   // IOS-12a — a spark's own run on the remote cut (`spark`, `origin`), which Chat on the phone reads
   "agent-remote-row.spark.json",
+  // Item 464 — a bare terminal whose pane join says the session it `succeeds`, which the phone's Swarm reads
+  "agent-remote-row.succeeds.json",
   "agent-remote-mesh-open.valid.json",
   "agent-remote-mesh-frames.valid.json",
   "monitor-agent-row.valid.json",

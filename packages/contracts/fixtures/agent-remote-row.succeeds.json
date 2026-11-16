@@ -1,0 +1,36 @@
+{
+  "runtimeRunId": "pty-s11",
+  "revision": 4,
+  "kind": "terminal",
+  "device": "dev-01HQ9S7UD1",
+  "terminal": {
+    "hosted": "local",
+    "runtimeSessionId": "pty-s11",
+    "workloadClass": "interactive",
+    "succeeds": "pty-s9"
+  },
+  "monitorRow": {
+    "inputUsed": false,
+    "id": "pty-s11",
+    "kind": "terminal",
+    "createdAt": 1790802660000,
+    "status": "idle",
+    "statusSince": 1790802660000,
+    "stale": false,
+    "alive": true,
+    "observed": true,
+    "detail": "vibe-field",
+    "project": {
+      "name": "vibe-field"
+    },
+    "unread": false,
+    "device": {
+      "id": "dev-01HQ9S7UD1",
+      "name": "Studio",
+      "os": "mac"
+    },
+    "profileSet": "native",
+    "attachable": true,
+    "writable": true
+  }
+}

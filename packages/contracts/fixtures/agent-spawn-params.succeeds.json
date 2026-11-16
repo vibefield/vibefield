@@ -1,0 +1,6 @@
+{
+  "creationId": "0d2a7b9c-41f3-4c58-8e6d-7a1b3c5d9e02",
+  "succeeds": "pty-s4",
+  "provider": "claude",
+  "cwd": "/Users/james/dev/scratch"
+}

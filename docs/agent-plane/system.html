@@ -1548,7 +1548,10 @@
                   arriving before the RPC response already identifies the successor. Only that birth
                   shares the predecessor's <code>visualId</code>; unrelated and concurrent births stay
                   visible. A committed handoff cannot be undone by cleanup failure. If another client
-                  used the predecessor, the owner retains it and its used-shell row becomes a distinct body.</p>
+                  used the predecessor, the owner retains it and its used-shell row becomes a distinct body.
+                  <em>Added 2026-11-16 (item 464):</em> that pairing is this window's alone. For every other
+                  screen the birth also names its predecessor (<code>succeeds</code>), which the owner says on
+                  the remote cut's pane join for a bounded time: <code>api.html</code>, the remote cut.</p>
                 <p><code>UnusedPaneSessions</code> retains delivery responsibility until acknowledgement.
                   The renderer persists conditional intents in an outbox; fieldd acknowledges only after
                   persisting its queue under the user root, including the owning cell. Fieldd retries

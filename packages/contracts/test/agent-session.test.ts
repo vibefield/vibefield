@@ -271,6 +271,27 @@ describe("SessionSummary v2 and the doors", () => {
     expect(AgentSpawnParams.safeParse({}).success).toBe(false);
   });
 
+  it("item 464 — a birth may name the session it takes the place of on screen: `succeeds`, bounded as `creationId` is", () => {
+    const spawn = AgentSpawnParams.parse(fixture("agent-spawn-params.succeeds.json"));
+    expect(spawn).toMatchObject({ succeeds: "pty-s4", creationId: expect.any(String) });
+    const resume = AgentResumeParams.parse(fixture("agent-resume-params.succeeds.json"));
+    expect(resume).toMatchObject({ succeeds: "pty-s4", runtimeRunId: "run-01J8Z3K9" });
+    const native = AgentResumeNativeParams.parse({
+      provider: "codex",
+      nativeSessionId: "n-1",
+      succeeds: "pty-s4",
+    });
+    expect(native.succeeds).toBe("pty-s4");
+    // optional, and never an empty or an unbounded id
+    expect(AgentSpawnParams.parse({ provider: "claude" }).succeeds).toBeUndefined();
+    for (const bad of ["", "x".repeat(129), 7, null]) {
+      expect(
+        AgentSpawnParams.safeParse({ provider: "claude", succeeds: bad }).success,
+        JSON.stringify(bad),
+      ).toBe(false);
+    }
+  });
+
   it("PJ-6 — a spawn at a model carries the agent's own ids opaque: any id, any control, nothing read for meaning", () => {
     const params = AgentSpawnParams.parse(fixture("agent-spawn-params.model-selection.json"));
     expect(params.modelSelection).toEqual({

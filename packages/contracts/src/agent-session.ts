@@ -128,6 +128,27 @@ export const AgentSessionTerminal = z
      * old PTY the deck may still be showing, which the new one should take
      * the place of. */
     replaced: z.string().optional(),
+    /** Item 464 (2026-11-16) — the floor session whose BODY this one continues
+     * on every OTHER screen: the session a birth named `succeeds` (a launcher
+     * hand-off, the shell an ended agent's pane returns to, a shell born in a
+     * waiting shell's place). PRESENTATION LINEAGE ONLY: a reader gives this
+     * row the Swarm body the named session's row wore and draws that row no
+     * more while both stand; nothing mounts, attaches, releases or ends
+     * because of it. That is how it differs from `replaced`, which the home's
+     * window ACTS on (AR-4: it moves a pane to the new PTY).
+     *
+     * On the remote cut alone. This desktop's own windows pair a hand-off
+     * themselves and know its rollback, which this does not carry: a placement
+     * that failed reads here as a lineage that lapses. fieldd says it only
+     * while the newborn stands and the session it names still has a ROW on
+     * this cut (the row a reader would otherwise draw: that row leaving and
+     * this field unsaid are one frame), for at most one successor per session,
+     * and for at most `AGENT_FIELD.SUCCEEDS_LAPSE_MS` after the birth (EL7):
+     * the fact can move a bubble and hide a row for seconds, never hold one
+     * hidden.
+     * Absent from a daemon before item 464, and a reader that does not know it
+     * draws two bodies, as it did. */
+    succeeds: z.string().optional(),
   })
   .passthrough();
 export type AgentSessionTerminal = z.infer<typeof AgentSessionTerminal>;
@@ -686,6 +707,9 @@ export type AgentModelsResult = z.infer<typeof AgentModelsResult>;
 export const AgentSpawnParams = z
   .object({
     creationId: z.string().min(1).max(128).optional(),
+    /** Item 464 — the floor session this birth takes the place of on screen:
+     * `TerminalCreateParams.succeeds`, kept or dropped by the same rule. */
+    succeeds: z.string().min(1).max(128).optional(),
     provider: AgentProviderId,
     cwd: z.string().optional(),
     place: PlaceRef.optional(),
@@ -729,6 +753,9 @@ export type AgentSpawnResult = z.infer<typeof AgentSpawnResult>;
 export const AgentResumeRunParams = z
   .object({
     creationId: z.string().min(1).max(128).optional(),
+    /** Item 464 — the floor session this birth takes the place of on screen:
+     * `TerminalCreateParams.succeeds`, kept or dropped by the same rule. */
+    succeeds: z.string().min(1).max(128).optional(),
     runtimeRunId: z.string().min(1),
     cwd: z.string().optional(),
   })
@@ -755,6 +782,9 @@ export type AgentResumeRunParams = z.infer<typeof AgentResumeRunParams>;
 export const AgentResumeNativeParams = z
   .object({
     creationId: z.string().min(1).max(128).optional(),
+    /** Item 464 — the floor session this birth takes the place of on screen:
+     * `TerminalCreateParams.succeeds`, kept or dropped by the same rule. */
+    succeeds: z.string().min(1).max(128).optional(),
     provider: AgentProviderId,
     nativeSessionId: z.string().min(1).max(256),
     cwd: z.string().optional(),
