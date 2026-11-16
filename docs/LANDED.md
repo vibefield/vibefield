@@ -51429,3 +51429,103 @@ Every other id here is a side commit's.)
 - `pnpm gate:landing`: deferred, not waived; owed at James's unlock.
 
 **Not done, and not claimed:** no contracts change and no generator input touched; nothing pushed.
+
+## Items 467, 469, 470 and 474 — the window's hooks share one subscription per feed, and the budget holds (M325)
+
+(2026-11-16; thirteen commits, 16 files +1877 −68: seven of product source, nine of tests. Drafted by two
+subagents, each diff read whole by qa-02, on main `a6317979b`; the record is branch
+`qa/467-shared-feeds-on-a6317979b` (`3a2bf7020`, fourteen commits, the last a test helper's mend that the
+landing cut folds into the eighth). Main moves once, on James's word and VF-PM's GO. On main they are `b79a472e1`
+… `92f129f2c`; every other id here is a side commit's.)
+
+**What was wrong.**
+- James, typed in qa-02 (2026-11-16T07:06:27.696Z, with a screenshot of a profile's page in Settings, Agents): "i did
+  add many new agent profiles and logged in new claude accounts, now help me check what is this warning? [Image #1]
+  what is going on?" The page's red line read "Could not read what the agents hold — this connection holds too many
+  live subscriptions."
+- James, typed in qa-02 (2026-11-16T07:56:28.139Z): "install new phone build, and spawn agents to fix 467".
+- Item 467, the cause. The window talks to fieldd over one connection, and fieldd allows a connection 32 live
+  subscriptions (EL7's budget: a same-uid client cannot make fieldd hold an unbounded set). `useSubscription` opened
+  one wire subscription per mounted hook and shared nothing, so the same feeds were open many times over. Counted
+  from source, a profile's page with Godview open and three plugins staged held 29; History once visited plus an
+  empty shell's launcher or a Chat thread took it to 32, and the next subscribe was refused. On that page the list of
+  what the agents hold opens last, so it was the one refused. The refusal is not retryable and the hook never asked
+  again. The number of profiles is not in the count: nothing subscribes per profile, account or sign-in.
+- Item 470, found reading the budget. fieldd checked the budget before a subscribe's handler ran and counted only
+  the subscriptions already installed, so subscribes asked together at the last free slot were all admitted.
+- Item 474, found beside it. A subscription whose connection closed while its handler was still opening was
+  installed into the closed connection's state, and nothing disposed it.
+- Item 469, found reading the client. After a reconnect, a subscribe that had been waiting for the connection could
+  be sent by its own wake and again by the replay walk; the second answer replaced the first's id, and the first
+  stayed live on fieldd until the next disconnect.
+- fieldd logged nothing at a budget refusal, so a hit left no trace.
+
+**What moved.**
+- 470 (`b79a472e1` red, `5b27f57e8`): the budget check admits while installed plus still-opening is under 32 and
+  reserves the slot there; each of the three install sites gives the reservation back when its handler
+  settles, by any exit.
+- 474 (`6a7409d84` red, `9c017964e`): after its handler settles, each of the three install sites reads the
+  connection's abort signal; on a closed connection it disposes what it opened and installs nothing.
+- 469 (`91601134c` red, `67fabcb2d`): the client counts its sockets; a subscribe is stamped with the socket it was
+  sent on, and the replay walk skips one already sent on the socket it is replaying.
+- 467, the client (`302ffbfef` red, `08bd4606a`): fieldd-client's new `feeds.ts`. Hooks naming the same method and the
+  same params (keys in any order) hold ONE wire subscription: a later holder is handed the feed's current
+  state at once, an earlier release sends nothing, and the last release sends one unsubscribe. A feed
+  refused for want of room tells every holder the daemon's error and asks once more each time the client
+  releases a subscription it had sent; no timer asks. A feed whose replay is refused for good tells every
+  holder and is dropped, so a later holder asks afresh. A hook that passes its own options keeps a
+  subscription of its own, as before.
+- 467, one spelling (`4c856981d` red, `8ed171f91`): two readers of the preferences feed asked with no params where every
+  other reader asks with `{}`; they now ask with `{}`, so the feed is one.
+- 467, the log line (`fc4561a5c` red, `00a62ffe6`): `fieldd.product_api.subscription_budget_refused` at warn, once
+  per burst on a connection: the method, the count of installed plus opening, the limit, the connection's id
+  and the principal's kind. Never the params.
+- 467, the erratum (`92f129f2c`): the comment at the budget in contracts' registries said the busiest window holds "a
+  handful". The sentence stays and a dated correction stands beside it. A comment only.
+- The budget of 32 does not move. By the same count from source, the profile's page that held 29 holds 20, and 24 at
+  the count's worst case.
+
+**The proof.** On this Mac through the door, in a lane at main `a6317979b` with the commits' patches in the working
+tree one after another, each tree held to its commit byte for byte, beside a running QA desktop; three vitest
+workers, a harness TMPDIR of 21 bytes.
+- The stack's row, `row-467.sh` (`e384eb0f08521ce2`), 2026-11-16 09:20:30Z → 09:29:39Z, run.log `707d2530f956b88c`.
+  **It read RED, by biome alone**: two findings on two lines of one new test file's helper (an optional chain under a
+  member read, and its formatting), at the eighth commit and at the top. Everything else was as wanted:
+  - The six test-only commits each failed by their own asserts, with every other test of their files passing: 470
+    three rows (the handler entered four times where once is wanted; a subscribe past the slot not refused; a
+    provider entered three times), 474 one (dispose never called), 469 one (the waiting subscribe sent twice on the
+    new socket), the hook three (two, three and two calls where one or none is wanted), the spelling two, the log
+    line two (no line logged).
+  - The seven with sources green: fieldd's two touched files 19, 20 and 22 tests; fieldd-client's suite whole 48 and
+    then 69 tests in 10 files, the 21 shared-feed rows among them; field-app's suite whole, 5,081 tests in 355 files;
+    the spelling's two files 57.
+  - Every package typecheck 0 at every commit; `pnpm typecheck` whole 0; the import walls 0; `pnpm gen` moved nothing;
+    plugin-cli's suite 115 of 115.
+- The mend's row, `row-467-biome.sh` (`5a70dcf3b797665a`), 09:35:05Z → 09:35:32Z, run.log `3cd74b3d5ef2fe41`: GREEN.
+  With the helper rewritten as a plain function: biome exit 0 on that file at the eighth commit's tree, and exit 0
+  over the stack's 16 paths at the top; fieldd-client's typecheck 0; its suite whole 69 of 69.
+- Both rows reversed their patches and returned the lane; refs equal before and after; no cargo download.
+- The landing cut holds, at each of the 16 paths, the record branch's own blob (held by the cut itself, path by
+  path), and its diff from its base is the record branch's diff from main byte for byte.
+- The train's V: V-TRAIN5, `pnpm verify` whole at the stack's top as cut on train 4's top (24 commits over main
+  `a6317979b`), on this Mac beside a running QA desktop: exit 0 in 2277 s, under a 48-byte TMPDIR with
+  vitest capped at three workers; fifteen stages opened; fieldd 288 files passed and 5 skipped (4074 tests),
+  field-app 355 files (5083 tests), cargo's 38 results ok, none failed. The commits on main are those
+  thirteen carried over train 4's records commit: their tree differs from the verified one by
+  `docs/LANDED.md` alone. The landing-only gates were not run.
+
+**Not covered.**
+- No window was looked at: no Electron and no phone. That the red line is gone on a profile's page is the count's
+  claim, not a sight.
+- Every count here (29, 20, 24) is counted from source, not measured on a running window.
+- The page's sentence is unchanged. When the budget is hit, which this makes rarer and not impossible, a person still
+  reads fieldd's own words there. Its wording waits for James.
+- Of the three install sites, rows drive the local one (470, 474) and the plugin provider's (470). The federated
+  site's reservation, and the plugin provider's and the federated site's close-while-opening, were read, not run.
+- 469 is reasoned from the code and proven against a fake daemon; it was never seen on a live reconnect.
+- Godview's direct subscribers and the live apps' still open subscriptions of their own, outside the shared feeds
+  (item 473). Other places still show a person a raw error message (items 471 and 472). All three are open.
+- fieldd's whole suite did not run in these rows (its two touched files did); the train's V above is its first.
+- macOS only.
+
+**Not done, and not claimed:** the budget unchanged; no wire shape moved; nothing pushed.
