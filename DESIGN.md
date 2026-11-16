@@ -3549,9 +3549,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the limit card stand 6 right of what he ruled on in round 4, and the 16 stands (2026-11-09, James, the picks page
     "The Column's Open Calls", c1: "16 from the pill"): the drawing's 10 does not come back (`CardStand`'s
     `RIGHT_OF_PILL`, `.vf-profiles-stand`, `.vf-profiles-moment`).)*
+    - **Where the chrome stands** (*added 2026-11-16; James, in chat: "do not overlay the scanline pattern and the
+      vagette on top of this, it should be same level as all other chrome uis"*). The column, the claims strip and
+      the cards are chrome, as the head's circles are, and wear neither the scanlines nor the vignette: the frame's
+      glass carries neither. The column's slot and the claims strip stand in **the chrome layer**
+      (`.vf-monitor-chrome-layer`), a root-level sibling after the stage, laid out in the stage's own box, so each
+      of their measures, and the swarm's of them, is the stage's. It stands at the CRT layers' **30**, after them in
+      the root, so over them, and under the head (31). A deck raised over the stage still covers the chrome: the
+      layer ends at the deck's top edge. Under a maximized deck it fades with the stage, 260ms, and then takes no
+      pointer; under the curtain it is hidden, with the cards, since the question covers the stage it stands for.
     - **Where the cards stand.** The popover and the add's card stand in **the cards layer** (`.vf-monitor-cards`),
-      a root-level sibling after the stage at **z 13**: over the deck (10), its veil (11) and its readout (12), under
-      the curtain (20), the CRT layers (30) and the head. Its box is the room a card may have: from the pill's top
+      a root-level sibling after the stage at **z 30**, after the chrome layer: over the deck (10), its veil (11),
+      its readout (12), the CRT layers and the pill, and under the head (31); hidden under the curtain (20).
+      *(Corrected 2026-11-16, "Where the chrome stands": this said z 13, under the curtain, the CRT layers and the
+      head, so the scanlines and the vignette crossed every card.)* Its box is the room a card may have: from the pill's top
       (64, the head's reserve plus 8) to the panes' foot, the window's width. It takes no pointer; a card does. A
       card taller than the room is held at the room's height and scrolls. While a card stands the deck composites
       at 0.999, as it does for the tuning panel, so a promoted WebGPU canvas keeps below it. In the catalog, which
@@ -3592,8 +3603,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **The body:** the circle at **212** in a 212 column, its arcs answering the pointer (§8 "The Bands circle"),
       with **the bands key** under it: each of its three words led by its band drawn small (16 × 11), at 10.5/500 in
       the tertiary ink. Beside it, 14 away, one row per plan in the circle's order: the agent's mark (16), the
-      plan's title (as Agent Profiles names it), the right words at the row's end (a reset led by `reset` 9; in the
-      attention ink when hot), and Settings' C1 line for its tightest window at 196 × 12.
+      plan's title (as Agent Profiles names it), and **Settings' C1 lines, one for every window the plan reads**,
+      at the row's width × 12, each saying at its end what Settings' line says: its forecast while it runs ahead,
+      else its reset, and the reading's age for a window read before its reset or a kept reading (which forecasts
+      nothing). A plan with no lines yet (a first read, one that needs you) says its right words at the row's end
+      (a reset led by `reset` 9; in the attention ink when hot). The key's bands each stand in their own 16 × 11
+      box, before their words. *(Corrected 2026-11-16; James, in chat: the popover's meters "should show all the
+      meters of this agent, not just showing one". This drew the tightest window's line alone, at 196 × 12, its
+      words at the row's end. The same day: the key's three bands had left their words, drawn in no box of their
+      own, and stood stacked at the card's top-left corner, the "weird" icon he pointed at.)*
     - A plan that needs you says so ("not signed in", "couldn't read") with its act. **Sign in** opens Settings →
       Agent Profiles on that profile's page; **Retry** reads that profile's usage again (`agents.usage` with
       `refresh: true` and its `profileIds`). Both wear the ready fill, 8%, and 14% under the pointer (*added

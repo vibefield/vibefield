@@ -179,6 +179,20 @@ export function monitorRunFacts(
 
 const NO_DRAWN: ReadonlySet<string> = new Set();
 
+/** The chrome layer laid out in the stage's own box (DESIGN.md §8 "Where the chrome stands"): both stand in the
+ * Godview root, so the stage's offsets are the layer's, in layout pixels (a cover's scale moves both alike). */
+export function mirrorStageBox(stage: HTMLElement, layer: HTMLElement): void {
+  const box = {
+    top: `${stage.offsetTop}px`,
+    left: `${stage.offsetLeft}px`,
+    width: `${stage.offsetWidth}px`,
+    height: `${stage.offsetHeight}px`,
+  };
+  for (const [side, value] of Object.entries(box)) {
+    if (layer.style.getPropertyValue(side) !== value) layer.style.setProperty(side, value);
+  }
+}
+
 /** What the marker states of the runs before `drawn` is joined: a key, so the
  * stage renders again for a marker fact and never for a token count. */
 function markerRunsKey(runs: readonly ChromeRun[]): string {
@@ -976,6 +990,19 @@ export function GodviewMonitor({
   const deckMaximized = useGodviewDeckMaximized();
   // UM-R1 — the cards layer, the stage's sibling, handed to the column as an element
   const [cardLayer, setCardLayer] = useState<HTMLDivElement | null>(null);
+  // the chrome layer stands in the stage's box, measured before it paints and whenever the stage resizes
+  const chromeLayerRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    const layer = chromeLayerRef.current;
+    if (!stage || !layer) return;
+    const mirror = (): void => mirrorStageBox(stage, layer);
+    mirror();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(mirror);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <>
@@ -1042,6 +1069,18 @@ export function GodviewMonitor({
             </div>
           </ChromeBoundary>
         ) : null}
+      </section>
+      {/* The chrome layer (DESIGN.md §8 "Where the chrome stands"; James, 2026-11-16): the column and the claims
+          strip are chrome, so they stand over the CRT layers as the head does and wear neither the scanlines nor
+          the vignette. Inside the stage no z-index could lift them past those layers (its head mask is a stacking
+          context), so they stand in this sibling, laid out in the stage's own box (`mirrorStageBox`) so every
+          measure they take, and the swarm takes of them, is the stage's. */}
+      <div
+        ref={chromeLayerRef}
+        className="vf-monitor-chrome-layer"
+        data-stage-allocation={fullStage ? "full" : undefined}
+        inert={still}
+      >
         {/* The chrome slot: the profiles column at the stage's top left (UM-D21,
             DESIGN.md §8 "Godview's profiles column"), VibeField's own since UM-3;
             the swarm steers around it. */}
@@ -1120,9 +1159,10 @@ export function GodviewMonitor({
             </MonitorAccountFactsContext.Provider>
           )}
         </div>
-      </section>
+      </div>
       {/* The column's cards (UM-R1, DESIGN.md §8 "Where the cards stand"): the stage's sibling, over the terminals
-          as nothing inside the stage can be. Its own `inert`: a stage-wide attribute no longer reaches a card. */}
+          and the CRT layers as nothing inside the stage can be. Its own `inert`: a stage-wide attribute no longer
+          reaches a card. */}
       <div ref={setCardLayer} className="vf-monitor-cards" inert={still} />
     </>
   );

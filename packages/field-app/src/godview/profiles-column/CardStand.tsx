@@ -11,8 +11,9 @@ import {
 import { createPortal } from "react-dom";
 
 // UM-R1 (DESIGN.md §8 "Where the cards stand") — A CARD'S STAND: the popover or the add's card, handed to the cards
-// layer the stage holds beside itself (`.vf-monitor-cards`, z 13), because inside the stage no z-index can raise a card
-// over the terminals (godview.css `.vf-monitor-chrome`). It stands 16 right of the pill with its top 6 above its item's,
+// layer the stage holds beside itself (`.vf-monitor-cards`, z 30 after the CRT layers since 2026-11-16), because inside
+// the stage no z-index can raise a card over the terminals (godview.css `.vf-monitor-chrome`), nor over the scanlines and
+// the vignette, which chrome never wears. It stands 16 right of the pill with its top 6 above its item's,
 // held between the layer's top and foot, and with no layer (the catalog, which has no terminals) it stands in place.
 // React's enter and leave walk the fiber through a portal, so its item's hover and keys need no change to reach it.
 

@@ -2,17 +2,19 @@ import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { AgentIcon, ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
 import type { ReactElement } from "react";
 import { type UsageResetForm, UsageTimeline } from "../../panels/agents/ProfilesView";
+import type { UsageLine } from "../../panels/agents/profiles-model";
 import { bandsGeometry, bandsLabel } from "../../usage/bands";
-import type { MeterWindow, PlanMeter, ProfileMeters } from "../../usage/meters";
+import type { PlanMeter, ProfileMeters } from "../../usage/meters";
 import { resetForm } from "../../usage/rules";
 import { BandsCircle, BandsKey } from "./BandsCircle";
 import type { ColumnCircle } from "./ProfilesColumnView";
 
 // UM-3 (DESIGN.md §8 "Godview's profiles column", the popover; §9 "The meters' words") — ONE PROFILE'S METERS, OPENED
 // beside its circle: the circle at 212 with its arcs answering the pointer and the bands key under it, and one row per
-// plan in the circle's order (UM-D15), each its agent's mark, the plan as Agent Profiles names it, the right words
-// (the forecast while it runs ahead, UM-D4, else the reset) and Settings' own C1 line for its tightest window
-// (UM-D13) — the shipping `UsageTimeline`, never a copy (UM-D3: one meter everywhere). Controller-free: what it opens,
+// plan in the circle's order (UM-D15), each its agent's mark, the plan as Agent Profiles names it, and Settings' own C1
+// lines for every window it reads, each saying its forecast while it runs ahead (UM-D4), else its reset (2026-11-16,
+// James; it drew the tightest window's line alone, UM-D13, and said its words at the row's head) — the shipping
+// `UsageTimeline`, never a copy (UM-D3: one meter everywhere). Controller-free: what it opens,
 // reads again or closes is handed back. A plan's row and its arc filter the field (UM-D14; UM-5a).
 
 /** The popover's open size (§8: "the circle at 212 in a 212 column"). */
@@ -110,10 +112,32 @@ function NeedAct({
   );
 }
 
-/** How the C1 line says its window's reset, as Settings' line says it (the leaf's `resetForm`; UM-D3). */
-function formOf(window: MeterWindow): Readonly<Record<string, UsageResetForm>> | undefined {
-  const form = resetForm(window);
-  return form === undefined ? undefined : { [window.line.id]: form };
+/** Every window of a plan's reading as Settings' C1 lines (UM-D3: one meter everywhere; James, 2026-11-16: "show all
+ * the meters of this agent, not just showing one"), each with its own words at its end: its forecast while it runs
+ * ahead (UM-D4), else its reset, said as Settings says it (the leaf's `resetForm`). A reading kept after a failed
+ * refresh says its age on every line and forecasts nothing, and a window read before its reset says the age in its
+ * reset's place, as the row's right words said them for the tightest (`meters.ts` `rightOf`). */
+export function windowLines(entry: Extract<PlanMeter, { kind: "reading" }>): {
+  lines: UsageLine[];
+  forecasts: Readonly<Record<string, string>>;
+  resetForms: Readonly<Record<string, UsageResetForm>>;
+  ages: Readonly<Record<string, string>>;
+} {
+  const forecasts: Record<string, string> = {};
+  const resetForms: Record<string, UsageResetForm> = {};
+  const ages: Record<string, string> = {};
+  const age = entry.right.kind === "kept" || entry.right.kind === "passed" ? entry.right.words : "";
+  for (const window of entry.windows) {
+    const id = window.line.id;
+    const aged = entry.right.kind === "kept" || window.passed;
+    if (aged && age !== "") ages[id] = age;
+    if (window.forecast !== undefined && entry.right.kind !== "kept") {
+      forecasts[id] = window.forecast.short;
+    }
+    const form = resetForm(window);
+    if (form !== undefined) resetForms[id] = form;
+  }
+  return { lines: entry.windows.map((window) => window.line), forecasts, resetForms, ages };
 }
 
 /** What a plan with no meter says (§9 "What needs you"): "‹agent› shows no meter" is an agent that reports no
@@ -123,7 +147,7 @@ function noneWords(entry: Extract<PlanMeter, { kind: "no-meter" }>): string {
   return entry.why === "unreported" ? `${entry.agent} shows no meter` : entry.title;
 }
 
-/** One plan on the circle: its mark, its title, its right words, and its tightest window's C1 line. */
+/** One plan on the circle: its mark, its title, and every window's C1 line, or its right words while it has none. */
 function PlanRow({
   entry,
   setId,
@@ -175,18 +199,17 @@ function PlanRow({
       </span>
       <span className="vf-profiles-pop-row-head">
         <b className="vf-profiles-pop-row-title">{entry.title}</b>
-        <span className="vf-profiles-pop-row-right" {...(right.hot ? { "data-hot": "" } : {})}>
-          {right.icon ? <FieldGlyph name="reset" size={9} /> : null}
-          {right.words}
-        </span>
+        {/* a reading's lines each say their own words, so its head says none; a plan with no lines says its own */}
+        {entry.kind === "reading" ? null : (
+          <span className="vf-profiles-pop-row-right" {...(right.hot ? { "data-hot": "" } : {})}>
+            {right.icon ? <FieldGlyph name="reset" size={9} /> : null}
+            {right.words}
+          </span>
+        )}
       </span>
       {entry.kind === "reading" ? (
         <span className="vf-profiles-pop-row-meter">
-          <UsageTimeline
-            lines={[entry.tightest.line]}
-            resetForms={formOf(entry.tightest)}
-            label={entry.title}
-          />
+          <UsageTimeline {...windowLines(entry)} label={entry.title} />
         </span>
       ) : entry.kind === "first-read" ? (
         <span

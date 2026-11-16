@@ -1639,7 +1639,7 @@ describe("UI system ownership boundaries", () => {
     // UM-R-F's review (F3): with the terminals away the swarm's field wall stands at the panes' foot, so the room ends
     // there too, not at the rest line
     expect(godview).toMatch(
-      /^\.vf-godview\[data-godview-deck-edge\]\[data-godview-deck="away"\]\s+\.vf-godview-monitor-stage\[data-stage-allocation="full"\]\s*> \.vf-monitor-chrome \{\s*max-height: calc\(100% - var\(--vf-godview-panes-foot\) - var\(--vf-godview-head-reserve\) - 8px\);/mu,
+      /^\.vf-godview\[data-godview-deck-edge\]\[data-godview-deck="away"\]\s+\.vf-monitor-chrome-layer\[data-stage-allocation="full"\]\s*> \.vf-monitor-chrome \{\s*max-height: calc\(100% - var\(--vf-godview-panes-foot\) - var\(--vf-godview-head-reserve\) - 8px\);/mu,
     );
     expect(godview).toMatch(
       /^\.vf-godview\[data-godview-deck="away"\] \.vf-godview-field-wall \{\s*top: calc\(100% - var\(--vf-godview-panes-foot\)\);/mu,
@@ -1657,7 +1657,7 @@ describe("UI system ownership boundaries", () => {
       '\n.vf-cover\n  .vf-godview[data-godview-deck-edge][data-godview-deck="away"]',
     );
     const swarmAway = godview.indexOf(
-      '\n.vf-godview[data-godview-deck-edge][data-godview-deck="away"] .vf-godview-monitor-stage',
+      '\n.vf-godview[data-godview-deck-edge][data-godview-deck="away"] .vf-monitor-chrome-layer',
     );
     expect(coverAway).toBeGreaterThan(-1);
     expect(swarmAway).toBeGreaterThan(coverAway);
@@ -1672,6 +1672,50 @@ describe("UI system ownership boundaries", () => {
       /<div ref=\{chromeRef\} className="vf-monitor-chrome">\s*<ChromeBoundary name="Profiles" retryKey=\{profilesRetryKey\}>\s*<ProfilesColumn\s/u,
     );
     expect(monitor).not.toContain("UsageColumn");
+  });
+
+  it("stands the stage's chrome over the CRT layers, as the head does (DESIGN.md §8 'Where the chrome stands')", () => {
+    // James, 2026-11-16: "do not overlay the scanline pattern and the vagette on top of this, it should be same level
+    // as all other chrome uis". The CRT layers are 30 and come first in the root; the chrome layer and the cards
+    // layer stand at that 30 after them, so over them, and under the head's 31.
+    const godview = source("godview/godview.css");
+    const columnCss = source("godview/profiles-column/profiles-column.css");
+    expect(godview).toMatch(
+      /^\.vf-godview-scanlines,\n\.vf-godview-vignette \{[^}]*z-index: 30;/mu,
+    );
+    const layer = godview.match(/^\.vf-monitor-chrome-layer \{([^}]*)\}/m)?.[1] ?? "";
+    expect(layer).toContain("z-index: 30;");
+    expect(layer).toContain("pointer-events: none;");
+    expect(layer).toContain("overflow: hidden;");
+    expect(columnCss).toMatch(/\n\.vf-monitor-cards \{[^}]*z-index: 30;/u);
+    expect(source("godview/godview-head.css")).toMatch(/\.vf-stories-slot \{[^}]*z-index: 31;/u);
+    // the scanlines and the vignette come first in the root, the chrome layer after the stage, then the cards
+    const stage = source("godview/GodviewStage.tsx");
+    expect(stage.indexOf('className="vf-godview-vignette"')).toBeLessThan(
+      stage.indexOf("{monitor}"),
+    );
+    const monitor = source("godview/GodviewMonitor.tsx");
+    const sectionEnd = monitor.indexOf("</section>");
+    const chromeLayer = monitor.indexOf('className="vf-monitor-chrome-layer"');
+    const chromeSlot = monitor.indexOf('className="vf-monitor-chrome"');
+    const claims = monitor.indexOf('className="vf-monitor-claims"');
+    const cards = monitor.indexOf('className="vf-monitor-cards"');
+    expect(sectionEnd).toBeGreaterThan(-1);
+    expect(chromeLayer).toBeGreaterThan(sectionEnd);
+    expect(chromeSlot).toBeGreaterThan(chromeLayer);
+    expect(claims).toBeGreaterThan(chromeSlot);
+    expect(cards).toBeGreaterThan(claims);
+    // a raised deck still covers the chrome: the layer ends at the deck's top edge
+    expect(godview).toMatch(
+      /^\.vf-godview\[data-godview-deck-edge\]:not\(\[data-godview-deck="away"\]\) \.vf-monitor-chrome-layer \{\s*clip-path: inset\(\s*0 0 max\(0px, calc\(100% - var\(--vf-godview-deck-rest\) - var\(--vf-godview-deck-shift, 0px\)\)\) 0\s*\);/mu,
+    );
+    // under a maximized deck it fades with the stage and then takes no pointer; under the curtain it is hidden
+    expect(godview).toMatch(
+      /^\.vf-godview\[data-godview-deck="maximized"\] \.vf-monitor-chrome-layer \{[^}]*opacity: 0;[^}]*visibility: hidden;/mu,
+    );
+    expect(godview).toMatch(
+      /^\.vf-godview\[data-godview-curtain\] \.vf-monitor-chrome-layer,\n\.vf-godview\[data-godview-curtain\] \.vf-monitor-cards \{\s*visibility: hidden;/mu,
+    );
   });
 
   it("keeps the pane frame's own styling in the views package, never in a host's (GT-6)", () => {

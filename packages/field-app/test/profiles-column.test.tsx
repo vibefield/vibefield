@@ -458,7 +458,7 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(page.querySelector(".vf-profiles-key")).not.toBeNull();
   });
 
-  it("lists one row per plan on the circle in its order: the title, the right words and Settings' C1 line", () => {
+  it("lists one row per plan on the circle in its order: the title and Settings' C1 line for EVERY window", () => {
     const circle = thisMac();
     const page = mount(<ProfilePopoverView {...popover(circle)} />);
     const shown = circle.meters.entries.filter((entry) => entry.kind !== "no-meter");
@@ -467,22 +467,47 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(rows.map((row) => row.querySelector(".vf-profiles-pop-row-title")?.textContent)).toEqual(
       shown.map((entry) => entry.title),
     );
-    const reading = shown.find((entry) => entry.kind === "reading");
-    const row = rows.find((each) => each.dataset.plan === reading?.key);
-    expect(row?.querySelector(".vf-profiles-pop-row-right")?.textContent).toBe(
-      reading?.kind === "reading" ? reading.right.words : "",
-    );
-    // the shipping C1 line (UsageTimeline), its tightest window alone
-    expect(row?.querySelectorAll('.vf-profiles-usage [role="listitem"]')).toHaveLength(1);
+    // 2026-11-16 (James: "show all the meters of this agent, not just showing one"): every reading's row draws a
+    // line per window, in the reading's order, and its lines say their own words, so its head says none
+    const readings = shown.filter((entry) => entry.kind === "reading");
+    expect(readings.some((entry) => entry.windows.length > 1)).toBe(true);
+    for (const reading of readings) {
+      const row = rows.find((each) => each.dataset.plan === reading.key);
+      const items = [...(row?.querySelectorAll('.vf-profiles-usage [role="listitem"]') ?? [])];
+      expect(items).toHaveLength(reading.windows.length);
+      expect(
+        items.map((item) => item.querySelector(".vf-profiles-usage-label")?.textContent),
+      ).toEqual(reading.windows.map((window) => window.line.label));
+      expect(row?.querySelector(".vf-profiles-pop-row-right")).toBeNull();
+    }
   });
 
-  it("draws Settings' C1 line in a row at 196 × 12 (§8), Settings' own 14 track taken down to 12", () => {
-    // the review: the width was capped at 196 and the track kept Settings' 14; the line measures its track's height
-    // (UsageLineView), so its now line follows
-    expect(CSS).toMatch(/\n\.vf-profiles-pop-row-meter \{[^}]*max-width: 196px;/u);
+  it("draws Settings' C1 lines in a row at its width × 12 (§8), each with its words at its end", () => {
+    // the line measures its track's height (UsageLineView), so its now line follows; 2026-11-16: the 196 cap went
+    // with the one line, and each line says its own reset in a third column
+    expect(CSS).not.toMatch(/\n\.vf-profiles-pop-row-meter \{[^}]*max-width/u);
     expect(CSS).toContain(
       "\n.vf-profiles-pop-row-meter .vf-profiles-usage-track {\n  height: 12px;\n}",
     );
+    expect(CSS).toMatch(
+      /\n\.vf-profiles-pop-row-meter \.vf-profiles-usage \{[^}]*grid-template-columns: 22px minmax\(0, 1fr\) auto;/u,
+    );
+    expect(CSS).not.toMatch(
+      /\.vf-profiles-pop-row-meter \.vf-profiles-usage-reset \{[^}]*display: none/u,
+    );
+  });
+
+  it("holds each band of the key in its own 16 × 11 box, so the bands stand before their words (2026-11-16)", () => {
+    // `.vf-bands-drawing` is absolute at inset 0: in an unpositioned span the three bands left their words and
+    // stacked at the card's top-left corner, the "weird" icon James pointed at
+    const rule = /\n\.vf-profiles-key-band \{[^}]*\}/u.exec(CSS)?.[0] ?? "";
+    expect(rule).toContain("position: relative;");
+    expect(rule).toContain("width: 16px;");
+    expect(rule).toContain("height: 11px;");
+    const page = mount(<ProfilePopoverView {...popover(thisMac())} />);
+    const bands = [...page.querySelectorAll(".vf-profiles-key > .vf-profiles-key-band")];
+    expect(bands).toHaveLength(3);
+    for (const band of bands) expect(band.querySelector("svg.vf-bands-drawing")).not.toBeNull();
   });
 
   /** The reading rows of a circle, with the bare and the union key of each. */
@@ -780,35 +805,37 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
   it.each([
     ["three days off, by its day and clock", 3 * 24 * 60],
     ["ten minutes past, now", -10],
-  ])(
-    "says its tightest window's reset as Settings' line does: %s (§9 ‹for James›)",
-    (_, minutes) => {
-      const at = new Date(NOW.getTime() + minutes * 60_000);
-      // every window of the plan Work's first namer reads, its reset moved
-      const rows = withNamer(FIXTURE_WORK, (row) => ({
-        ...row,
-        metrics: row.metrics.map((metric) => ({ ...metric, resetsAt: at.toISOString() })),
-      }));
-      const meters = metersOf(FIXTURE_WORK, rows);
-      const entry = meters.entries.find(
-        (each) => each.kind === "reading" && each.plan?.id === FIXTURE_WORK.plans?.[0]?.id,
-      );
-      expect(entry?.kind).toBe("reading");
-      if (entry?.kind !== "reading") return;
-      const line = entry.tightest.line;
-      expect(line.reset).toBe(resetWords(at, NOW));
-      const page = mount(<ProfilePopoverView {...popover({ set: FIXTURE_WORK, meters })} />);
-      expect(
-        page
-          .querySelector(`.vf-profiles-pop-row[data-plan="${entry.key}"] [role="listitem"]`)
-          ?.getAttribute("aria-label"),
-      ).toBe(
-        `${line.group !== undefined ? `${line.group.label}, ` : ""}${line.label}: ${Math.round(
+  ])("says each window's reset as Settings' line does: %s (§9 ‹for James›)", (_, minutes) => {
+    const at = new Date(NOW.getTime() + minutes * 60_000);
+    // every window of the plan Work's first namer reads, its reset moved
+    const rows = withNamer(FIXTURE_WORK, (row) => ({
+      ...row,
+      metrics: row.metrics.map((metric) => ({ ...metric, resetsAt: at.toISOString() })),
+    }));
+    const meters = metersOf(FIXTURE_WORK, rows);
+    const entry = meters.entries.find(
+      (each) => each.kind === "reading" && each.plan?.id === FIXTURE_WORK.plans?.[0]?.id,
+    );
+    expect(entry?.kind).toBe("reading");
+    if (entry?.kind !== "reading") return;
+    expect(entry.tightest.line.reset).toBe(resetWords(at, NOW));
+    const page = mount(<ProfilePopoverView {...popover({ set: FIXTURE_WORK, meters })} />);
+    const said = [
+      ...page.querySelectorAll(`.vf-profiles-pop-row[data-plan="${entry.key}"] [role="listitem"]`),
+    ].map((item) => item.getAttribute("aria-label"));
+    // every window's line, in the reading's order; one whose reset has come says the reading's age in its reset's
+    // place, as Settings' line does (§8 "A window read before its reset"), now that no head says it above
+    expect(said).toEqual(
+      entry.windows.map(({ line, passed }) => {
+        const age = passed && entry.right.words !== "" ? entry.right.words : undefined;
+        const words =
+          age !== undefined ? `, ${age}` : line.reset === undefined ? "" : `, resets ${line.reset}`;
+        return `${line.group !== undefined ? `${line.group.label}, ` : ""}${line.label}: ${Math.round(
           line.usedPercent,
-        )}% used, resets ${line.reset}${line.hot ? ", ahead of pace" : ""}`,
-      );
-    },
-  );
+        )}% used${words}${line.hot ? ", ahead of pace" : ""}`;
+      }),
+    );
+  });
 
   it("while the usage cannot be read, says the profile's one line, never a line per agent (§9)", () => {
     // the review: each agent said "‹agent›: usage unavailable", words §9 does not rule; the profile's are ruled
@@ -1112,10 +1139,12 @@ describe("the cards layer (UM-R1): a card stands above the terminals, in the col
     expect(onChoosePlan).toHaveBeenCalledTimes(1);
   });
 
-  it("names the layer: z 13, no pointer of its own, the stand takes the pointer, and both themes point its tokens", () => {
+  it("names the layer: z 30, no pointer of its own, the stand takes the pointer, and both themes point its tokens", () => {
     const layerRule = /\n\.vf-monitor-cards \{[^}]*\}/u.exec(CSS)?.[0] ?? "";
     expect(layerRule).toContain("position: absolute;");
-    expect(layerRule).toContain("z-index: 13;");
+    // 2026-11-16 (DESIGN.md §8 "Where the chrome stands"): the CRT layers' 30, after them in the root, so a card
+    // wears neither the scanlines nor the vignette; under the head's 31
+    expect(layerRule).toContain("z-index: 30;");
     expect(layerRule).toContain("pointer-events: none;");
     expect(layerRule).toMatch(
       /inset: calc\(var\(--vf-godview-head-reserve\) \+ 8px\) 0 var\(--vf-godview-panes-foot\) 0;/u,

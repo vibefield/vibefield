@@ -520,7 +520,58 @@
    shrinks into it, its circles scrolling inside while the add stays at its
    foot. The room runs to the field's foot: with no deck edge the stage is the
    deck's rest tall, so the foot is the field's gap above the stage's own. A
-   raised deck covers the pill and never resizes it. */
+   raised deck covers the pill and never resizes it.
+   *Moved 2026-11-16 (DESIGN.md §8 "Where the chrome stands"; James: "do not
+   overlay the scanline pattern and the vagette on top of this, it should be
+   same level as all other chrome uis"):* the slot and the strip left the
+   stage for the chrome layer below, over the CRT layers (30), so the stage's
+   own stacking context no longer holds them; the layer stands in the stage's
+   box, so every `100%` here is still the stage's. */
+
+/* ── THE CHROME LAYER — the stage's chrome over its CRT layers ─────────────
+   A root-level sibling after the stage at z 30, the CRT layers' own: they come
+   first in the root, so it paints over them, and under the head (31). The
+   column and the claims strip are the frame's chrome as the head's circles
+   are, and wear neither the scanlines nor the vignette. `GodviewMonitor` lays it out in the
+   stage's own box (`mirrorStageBox`) and copies the stage's allocation, and
+   it clips what overflows, as the stage does. It takes no pointer; its chrome
+   does. A deck raised over the stage covers the chrome as it covers the stage:
+   the layer ends at the deck's top edge (both stand at the root's top). Under
+   a maximized deck it fades with the stage and then takes no pointer, and
+   under the curtain it is hidden, as the cards are. */
+.vf-monitor-chrome-layer {
+  position: absolute;
+  z-index: 30;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    opacity 260ms ease,
+    visibility 0s linear;
+}
+
+.vf-godview[data-godview-deck-edge]:not([data-godview-deck="away"]) .vf-monitor-chrome-layer {
+  clip-path: inset(
+    0 0 max(0px, calc(100% - var(--vf-godview-deck-rest) - var(--vf-godview-deck-shift, 0px))) 0
+  );
+}
+
+.vf-godview[data-godview-deck="maximized"] .vf-monitor-chrome-layer {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 260ms ease,
+    visibility 0s linear 260ms;
+}
+
+.vf-godview[data-godview-curtain] .vf-monitor-chrome-layer,
+.vf-godview[data-godview-curtain] .vf-monitor-cards {
+  visibility: hidden;
+}
+
 .vf-monitor-chrome {
   position: absolute;
   z-index: 8;
@@ -531,6 +582,7 @@
   width: 52px;
   max-height: calc(100% - var(--vf-godview-head-reserve) - 8px - var(--vf-godview-deck-field-gap));
   color: var(--text-main);
+  pointer-events: auto;
 }
 
 /* …on a stage whose deck edge moves, in flow, the stage already ends at the
@@ -562,14 +614,14 @@
    `--vf-godview-deck-shift`, so a raise moves it and never the pill.
    *Corrected the same day (UM-R-F's review, F3):* this said "as the field
    wall's top does", which is true only at rest. */
-.vf-godview[data-godview-deck-edge] .vf-godview-monitor-stage[data-stage-allocation="full"]
+.vf-godview[data-godview-deck-edge] .vf-monitor-chrome-layer[data-stage-allocation="full"]
   > .vf-monitor-chrome {
   max-height: calc(var(--vf-godview-field-foot) - var(--vf-godview-head-reserve) - 8px);
 }
 
 /* …and with the terminals away the swarm's field runs to the panes' foot (the
    wall's own away rule, below), so the room does too (UM-R-F's review, F3) */
-.vf-godview[data-godview-deck-edge][data-godview-deck="away"] .vf-godview-monitor-stage[data-stage-allocation="full"]
+.vf-godview[data-godview-deck-edge][data-godview-deck="away"] .vf-monitor-chrome-layer[data-stage-allocation="full"]
   > .vf-monitor-chrome {
   max-height: calc(100% - var(--vf-godview-panes-foot) - var(--vf-godview-head-reserve) - 8px);
 }
@@ -836,8 +888,10 @@
    One card over the monitor, its top edge a tab: rounded top corners, the
    hairline as a ring (the ring's sides and foot fall outside the stage and are
    clipped by it, so only the top edge and its curves draw), and §5's Sheet
-   shadow cast up onto the stage beneath. Above the monitor's chrome (7) and
-   its popups (9), under the CRT layers (30) and the head (31).
+   shadow cast up onto the stage beneath. Above the monitor and its popups
+   (9), under the CRT layers (30), the head (31) and the stage's chrome, which
+   stands over the CRT layers in its own layer since 2026-11-16 (30, clipped
+   at this sheet's top edge, so a raised sheet still covers it).
 
    The ground is the FRAME (GV-D7, James 2026-10-02: "make the inner pane part
    feel like wrapped"): the terminal's ground — `--vf-godview-terminal-bg`,

@@ -188,12 +188,14 @@
 }
 
 /* ── the cards beside the column: a menu's solid in Godview's mode, 16 right of the pill (UM-R1, §8 "Where the cards
-   stand"). They stand in the cards layer the stage keeps beside itself, over the deck (10), its veil (11) and its
-   readout (12), under the curtain (20), the CRT layers (30) and the head; the layer's box is exactly the room a card
-   may have, from the pill's top to the panes' foot. ── */
+   stand"). They stand in the cards layer the stage keeps beside itself, over the deck (10), its veil (11), its
+   readout (12) and the CRT layers (30, 2026-11-16, James: chrome wears neither the scanlines nor the vignette): at
+   their 30, after them and after the chrome layer in the root, so over the pill too, and under the head (31); hidden
+   under the curtain (20) with the column (godview.css). The layer's box is exactly the room a card may have, from the
+   pill's top to the panes' foot. ── */
 .vf-monitor-cards {
   position: absolute;
-  z-index: 13;
+  z-index: 30;
   inset: calc(var(--vf-godview-head-reserve) + 8px) 0 var(--vf-godview-panes-foot) 0;
   pointer-events: none;
 }
@@ -490,8 +492,14 @@
   color: var(--vf-text-tertiary);
 }
 
+/* its band's box, 16 × 11, holds the drawing: `.vf-bands-drawing` fills the nearest positioned box, and without this
+   one the three bands left their words and stacked at the card's top-left corner (James, 2026-11-16: "this icon here
+   is weird") */
 .vf-profiles-key-band {
+  position: relative;
   display: inline-grid;
+  width: 16px;
+  height: 11px;
   margin-left: 5px;
 }
 
@@ -505,7 +513,8 @@
   align-content: start;
 }
 
-/* one row per plan: its mark (16), its title, the right words at its end, and Settings' C1 line at 196 × 12 */
+/* one row per plan: its mark (16), its title, the right words at its end, and Settings' C1 lines, every window the plan
+   reads, at the row's width × 12 (2026-11-16, James: "show all the meters of this agent, not just showing one") */
 .vf-profiles-pop-row {
   position: relative;
   display: grid;
@@ -593,17 +602,13 @@
 
 .vf-profiles-pop-row-meter {
   grid-column: 2 / 4;
-  max-width: 196px;
 }
 
-/* Settings' own C1 line (the shipping `UsageTimeline`), its label in 22 and its reset said at the row's end */
+/* Settings' own C1 lines (the shipping `UsageTimeline`), one per window: its label in 22, its track, and its own
+   reset, forecast or age at its end, as Settings says them */
 .vf-profiles-pop-row-meter .vf-profiles-usage {
-  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   margin-top: 0;
-}
-
-.vf-profiles-pop-row-meter .vf-profiles-usage-reset {
-  display: none;
 }
 
 /* 12 tall in the row, where Settings' track is 14: the line measures its track, so its now line follows */

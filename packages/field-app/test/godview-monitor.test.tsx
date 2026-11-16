@@ -82,7 +82,7 @@ import {
   storedGodviewFilters,
   storeGodviewFilters,
 } from "../src/godview/filter-state";
-import { GodviewMonitor } from "../src/godview/GodviewMonitor";
+import { GodviewMonitor, mirrorStageBox } from "../src/godview/GodviewMonitor";
 import { useMonitorAccountFacts } from "../src/godview/monitor/account-facts";
 import { usagePortOver } from "../src/godview/monitor/doors";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
@@ -2093,12 +2093,40 @@ describe("the monitor stage", () => {
     );
     const layer = host.querySelector(".vf-monitor-cards");
     expect(layer).not.toBeNull();
-    // the root's sibling, after the stage
-    expect(layer?.previousElementSibling?.classList.contains("vf-godview-monitor-stage")).toBe(
-      true,
-    );
+    // the root's sibling, after the stage and the chrome layer (2026-11-16, "Where the chrome stands")
+    const chromeLayer = layer?.previousElementSibling;
+    expect(chromeLayer?.classList.contains("vf-monitor-chrome-layer")).toBe(true);
+    expect(
+      chromeLayer?.previousElementSibling?.classList.contains("vf-godview-monitor-stage"),
+    ).toBe(true);
     expect(layer?.querySelector('[data-profile="work"] .vf-profiles-pop')).not.toBeNull();
     expect(host.querySelector(".vf-godview-monitor-stage .vf-profiles-pop")).toBeNull();
+  });
+
+  it("stands the column and the claims strip in the chrome layer, outside the stage, over the CRT layers (DESIGN.md §8 'Where the chrome stands')", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    const stage = host.querySelector<HTMLElement>(".vf-godview-monitor-stage");
+    const layer = host.querySelector<HTMLElement>(".vf-monitor-chrome-layer");
+    expect(layer?.previousElementSibling).toBe(stage);
+    expect(layer?.querySelector(".vf-monitor-chrome .vf-profiles-column")).not.toBeNull();
+    expect(layer?.querySelector(".vf-monitor-claims")).not.toBeNull();
+    expect(stage?.querySelector(".vf-monitor-chrome, .vf-monitor-claims")).toBeNull();
+  });
+
+  it("lays the chrome layer out in the stage's own box, in layout pixels (mirrorStageBox)", () => {
+    const stage = document.createElement("section");
+    const layer = document.createElement("div");
+    const box = { offsetTop: 0, offsetLeft: 0, offsetWidth: 1280, offsetHeight: 512 };
+    for (const [key, value] of Object.entries(box)) {
+      Object.defineProperty(stage, key, { configurable: true, get: () => value });
+    }
+    mirrorStageBox(stage, layer);
+    expect([layer.style.top, layer.style.left, layer.style.width, layer.style.height]).toEqual([
+      "0px",
+      "0px",
+      "1280px",
+      "512px",
+    ]);
   });
 
   it("closes an open card when the terminals maximize: no card floats over full-window terminals (UM-R1)", async () => {
