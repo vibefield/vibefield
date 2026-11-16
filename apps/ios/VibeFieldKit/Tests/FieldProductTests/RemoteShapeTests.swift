@@ -144,9 +144,9 @@ enum Remote {
 
 @Suite struct RemoteGoldenTests {
   static let goldens = [
-    "agent-remote-row.valid", "agent-remote-row.terminal", "agent-remote-row.spark", "agent-remote-mesh-open.valid",
-    "agent-remote-mesh-frames.valid", "agent-remote-mesh-open.witness", "agent-remote-mesh-frames.witness",
-    "agent-remote-mesh-open.resync",
+    "agent-remote-row.valid", "agent-remote-row.terminal", "agent-remote-row.spark", "agent-remote-row.succeeds",
+    "agent-remote-mesh-open.valid", "agent-remote-mesh-frames.valid", "agent-remote-mesh-open.witness",
+    "agent-remote-mesh-frames.witness", "agent-remote-mesh-open.resync",
   ]
 
   /// T1r (PG-3e) — 3b's routed report is in this bundle, beside the encoder that is held to it: the shown row's
@@ -374,6 +374,38 @@ enum Remote {
     #expect(Remote.unknowns(row) == [:])
   }
 
+  /// Item 464 (2026-11-16) — the pane join's `succeeds` reads in both readings (the remote cut's strict one, the field
+  /// cut's tolerant one) and the model's row reads `inputUsed`, each named known; a row without either reads as before.
+  @Test func theJoinReadsSucceedsAndTheModelsRowReadsInputUsed() throws {
+    let turn = try Remote.turnRow()
+    let plain = try AgentRemoteRow(json: turn)
+    #expect(plain.terminal?.succeeds == nil)
+    #expect(plain.monitorRow.inputUsed == nil)
+    #expect(Remote.unknowns(plain) == [:])
+
+    var json = edited(turn, [.key("terminal"), .key("succeeds")], .string("pty-h0"))
+    json = edited(json, [.key("monitorRow"), .key("inputUsed")], .bool(true))
+    let row = try AgentRemoteRow(json: json)
+    #expect(row.terminal?.succeeds == "pty-h0")
+    #expect(row.monitorRow.inputUsed == true)
+    #expect(Remote.unknowns(row) == [:])
+    let untyped = try AgentRemoteRow(json: edited(turn, [.key("monitorRow"), .key("inputUsed")], .bool(false)))
+    #expect(untyped.monitorRow.inputUsed == false)
+
+    // the field cut's tolerant reading
+    let join = try AgentTerminalJoin(
+      json: .object([
+        "hosted": .string("local"), "runtimeSessionId": .string("pty-h9"), "succeeds": .string("pty-h0"),
+      ]))
+    #expect(join.succeeds == "pty-h0")
+    #expect(join.unknownFields.isEmpty)
+    let bare = try AgentTerminalJoin(json: .object(["hosted": .string("local")]))
+    #expect(bare.succeeds == nil)
+    // the model row's golden carries neither
+    let model = try MonitorAgentRow(json: try Fixture.json("monitor-agent-row.valid"))
+    #expect(model.inputUsed == nil)
+  }
+
   /// A length bound counts UTF-16 code units, as zod's `.max` does: 128 emoji are 256 units and read; 129 are 258
   /// and refuse, though they are 129 characters.
   @Test func aLengthBoundCountsUTF16Units() throws {
@@ -433,6 +465,11 @@ enum Remote {
     RowEdit(name: "spark null", path: [.key("spark")], value: .null),
     RowEdit(name: "origin names no one", path: [.key("origin")], value: .object(["spark": .string("sp-vela01")])),
     RowEdit(name: "origin.call 0", path: [.key("origin")], value: .object(["by": .string("flow"), "call": .int(0)])),
+    // item 464 — the join's `succeeds` is a string and the model row's `inputUsed` a boolean, `null` neither
+    RowEdit(name: "terminal.succeeds 5", path: [.key("terminal"), .key("succeeds")], value: .int(5)),
+    RowEdit(name: "terminal.succeeds null", path: [.key("terminal"), .key("succeeds")], value: .null),
+    .monitor("inputUsed \"yes\"", [.key("inputUsed")], .string("yes")),
+    .monitor("inputUsed null", [.key("inputUsed")], .null),
   ]
 
   /// T8 — each edit refuses the row, named by its key; its unedited baseline reads first.
