@@ -77,7 +77,8 @@ export class RpcCallError extends Error {
 export interface NativeLinkOptions {
   socketPath: string;
   /** Item 345 — run before EVERY dial: the socket alias's keeper (boot-env's `ensureNativeSocketDir`). A refusal
-   * throws, and the dial fails with it; a root that fits makes it a no-op. */
+   * throws, and the dial fails with it; a root that fits makes it a no-op. Item 458: `connect()` runs it before each
+   * turn's probe too, so a link that went is put back before the probe looks for it. */
   beforeDial?: () => void;
   pairingFile: string;
   /** fieldd's per-process boot id (stable across reconnects within one boot) */
@@ -473,6 +474,13 @@ export class NativeLink extends EventEmitter {
     let lastTransportFailure: unknown;
     while (Date.now() <= deadline) {
       this.assertOpen();
+      // Item 458: the alias's keeper BEFORE the probe, as before every dial. On a root over the
+      // line the probe looks at the alias, so a link that went while the floor ran is put back
+      // here and found, not missed until the floor's own re-check. A refusal ends the connect
+      // with its own words. The cost on the alias road, on a standing link: a stat of the parent,
+      // lstats of the folder and the alias, and a readlink, per 100 ms turn for at most the
+      // deadline; a root that fits touches nothing.
+      this.opts.beforeDial?.();
       // WIN-D1: the pairing file is a real file on every platform, but the
       // endpoint is a filesystem node only on unix — a named pipe never
       // appears on disk, so there the dial attempt itself is the probe.
