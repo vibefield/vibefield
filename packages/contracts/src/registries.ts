@@ -227,6 +227,17 @@ export const PRODUCT_API_LIMITS = {
    * (History opened +2, a Chat thread +1, a launcher's empty shell +1), against
    * the budget of 32. Counted, not measured. The bound itself is unchanged.* */
   SUBSCRIPTIONS_PER_CONNECTION: 32,
+  /** Item 476 (2026-11-16) — the holders ONE subscription key may have on ONE
+   * connection, by default. The door admits a subscription while its connection
+   * holds fewer than its key's holders: a key is the method plus the identity
+   * params its row declares in `subscription-admission.ts`
+   * (`SUBSCRIPTION_ADMISSION`), where a row may declare its own holders, or, for
+   * an open key space, a bound on the method. Unrelated feeds no longer share a
+   * pool. 8 is chosen above the largest count of one key's holders by any client
+   * read from source (6, `user.link.subscribe` in a window older than item 467;
+   * docs/DECISIONS.md, item 476). Counted, not measured: stage 3 (item 480) keeps the ledger per
+   * principal and sets it again from a measurement. */
+  SUBSCRIPTION_HOLDERS_PER_KEY: 8,
   /** SP-1 (SP-L4; design-06 §2.2) — the door's per-subscriber trailing-edge
    * floor for a WHOLE-VALUE stream (`subscription.shape: "stream"` in
    * `methods.ts`: the roster, the artifact catalog, the service registry, the
