@@ -474,7 +474,14 @@ export class FielddClient {
   /** Item 467 (2026-11-16) — how many subscriptions this client has given up
    * after sending them: each was a slot of the daemon's per-connection budget
    * (`PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION`). Read before a subscribe
-   * and again at its refusal, it says whether room was made while it was out. */
+   * and again at its refusal, it says whether room was made while it was out.
+   * *Corrected 2026-11-16 (item 476): since item 476 fieldd admits a subscription
+   * by its key, not from a pool of 32, and that constant is retired (the door's
+   * function is `subscriptionAdmissionRefusal`). Each one given up was a holder
+   * of its key, so a release makes room for that key alone: an ask once more
+   * after another key's release is refused again and parks again, as a second
+   * refusal always did. The park-and-ask-again still answers such a refusal, so
+   * no behaviour moves.* */
   get subscriptionsReleased(): number {
     return this.releasedCount;
   }

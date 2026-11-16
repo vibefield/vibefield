@@ -10,6 +10,13 @@ import type { FielddClient, FielddRpcError, SubscribeOptions, Subscription } fro
 // its holders: the first opens it, a later one is handed the current value at
 // once, the last one's leaving gives it back. `FielddClient.subscribe` keeps
 // its own contract (one call, one wire subscription) for every other caller.
+// *Corrected 2026-11-16 (item 476): since item 476 fieldd admits a subscription
+// by its key (the method and the identity params its row declares in
+// contracts' `SUBSCRIPTION_ADMISSION`), not from a pool of 32, and
+// `PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION` is retired. A refusal for
+// room is now a key held past its holders, or a `bounded` method past its
+// bound. The park-and-ask-again below still answers such a refusal, so no
+// behaviour here moves.*
 //
 // React-free on purpose: the hook in react.ts is a line over `attachSubscription`,
 // so every rule here is read by a test without a DOM.
@@ -45,7 +52,13 @@ function sortedKeys(_key: string, value: unknown): unknown {
 
 /** The daemon refused a subscribe for want of ROOM: the connection holds its
  * budget (product-api's `subscriptionBudgetRefusal`). Read by shape, since a
- * refusal may come from a stand-in client as much as from this one. */
+ * refusal may come from a stand-in client as much as from this one.
+ * *Corrected 2026-11-16 (item 476): there is no budget since item 476. The
+ * door's function is `subscriptionAdmissionRefusal`, and room runs out when the
+ * connection holds a key at its holders, or a `bounded` method at its bound.
+ * The refusal's shape is the same (`RESOURCE_EXHAUSTED`, with
+ * `resource: "subscriptions"` and `limit` the bound that refused), so this
+ * reads it as before and no behaviour moves.* */
 function refusedForRoom(error: unknown): boolean {
   if (error === null || typeof error !== "object") return false;
   const { kind, details } = error as { kind?: unknown; details?: unknown };

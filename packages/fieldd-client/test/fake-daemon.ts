@@ -4,6 +4,13 @@
 // INSTALLED (by subId), and refuses a subscribe the way fieldd does: for want
 // of room when the socket already holds `limit` (product-api's
 // `subscriptionBudgetRefusal`), or as `refuse` decides.
+// *Corrected 2026-11-16 (item 476): since item 476 fieldd admits a subscription
+// by its key, not from a pool of 32; `PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION`
+// is retired and the door's function is `subscriptionAdmissionRefusal`, which
+// refuses a key past its holders or a `bounded` method past its bound. This fake
+// still counts one `limit` per socket: its refusal has fieldd's shape and words,
+// which is all the client reads, and the client's park-and-ask-again still
+// answers it, so no behaviour moves.*
 import type { WsCtor, WsLike } from "../src/client";
 
 export interface Frame {
