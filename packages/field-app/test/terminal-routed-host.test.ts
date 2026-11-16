@@ -1390,4 +1390,119 @@ describe("createRoutedTerminalHost — a hidden window mints nothing (item 475)"
       binding.dispose();
     }
   });
+
+  it("a primed ticket is used at once, hidden or not: it is in hand, and nothing is minted", async () => {
+    const primed = ticket();
+    const requests = answering(ticket());
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+    binding.primeTicket("sess-1", primed);
+    setHidden(true);
+    try {
+      await expect(binding.host.openTicket("sess-1", { reason: "mount" })).resolves.toEqual(primed);
+      expect(requests).not.toHaveBeenCalled();
+    } finally {
+      setHidden(false);
+      binding.dispose();
+    }
+  });
+
+  it("a visible window mints at once, as before", async () => {
+    const opened = ticket();
+    const requests = answering(opened);
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+    setHidden(false);
+    try {
+      await expect(binding.host.openTicket("sess-1", { reason: "mount" })).resolves.toEqual(opened);
+      expect(requests).toHaveBeenCalledTimes(1);
+    } finally {
+      binding.dispose();
+    }
+  });
+
+  // A detach reaches this host as the same signal as an end: ghosttea's reducer ends the
+  // activation on `detach` (routed-activation.js, `reduceRoutedActivation`), and the runtime
+  // says it as `routed-activation-state`. The runtime's own detach is driven for real in
+  // terminal-hidden-park.test.ts.
+  const withdrawnWhen = async (how: "end" | "terminate" | "dispose"): Promise<void> => {
+    const requests = answering(ticket());
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+    const runtime = new EventTarget();
+    binding.bind(runtime as GhostteaTerminalRuntime);
+    setHidden(true);
+    try {
+      const asked = binding.host.openTicket("sess-1", { reason: "retry" });
+      await turn();
+      if (how === "end") {
+        runtime.dispatchEvent(
+          new CustomEvent("routed-activation-state", {
+            detail: {
+              sessionId: "sess-1",
+              previous: { activationId: "act-1", phase: "recovering" },
+              current: { activationId: "act-1", phase: "ended" },
+            },
+          }),
+        );
+      } else if (how === "terminate") {
+        await binding.host.terminate?.("sess-1", "user");
+      } else {
+        binding.dispose();
+      }
+      await expect(asked).rejects.toThrow("withdrawn");
+
+      show();
+      await turn();
+      expect(requests.mock.calls.map(([method]) => method)).not.toContain("terminal.openTicket");
+    } finally {
+      setHidden(false);
+      binding.dispose();
+    }
+  };
+
+  it("a parked ask is withdrawn with no request when its activation ends (a detach or an end)", async () => {
+    await withdrawnWhen("end");
+  });
+
+  it("a parked ask is withdrawn with no request when its session is terminated", async () => {
+    await withdrawnWhen("terminate");
+  });
+
+  it("a parked ask is withdrawn with no request when the host is disposed", async () => {
+    await withdrawnWhen("dispose");
+  });
+
+  it("two asks parked by one hidden spell each mint once on the show, and none is left waiting", async () => {
+    const requests = answering(ticket());
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+    setHidden(true);
+    try {
+      const first = binding.host.openTicket("sess-1", { reason: "retry" });
+      const second = binding.host.openTicket("sess-1", { reason: "retry" });
+      await turn();
+      expect(requests).not.toHaveBeenCalled();
+      show();
+      await Promise.all([first, second]);
+      expect(requests).toHaveBeenCalledTimes(2);
+
+      // hidden again later: a new spell parks a new ask; the old show is spent
+      setHidden(true);
+      document.dispatchEvent(new Event("visibilitychange"));
+      const third = binding.host.openTicket("sess-1", { reason: "retry" });
+      await turn();
+      expect(requests).toHaveBeenCalledTimes(2);
+      show();
+      await third;
+      expect(requests).toHaveBeenCalledTimes(3);
+    } finally {
+      setHidden(false);
+      binding.dispose();
+    }
+  });
 });

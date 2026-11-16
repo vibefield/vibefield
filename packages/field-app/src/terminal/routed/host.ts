@@ -25,6 +25,7 @@ import {
 import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { requestResolvingOutcome } from "../../forwarded-call";
 import { getRendererLogger } from "../../logging";
+import { isHidden, onVisibilityChange } from "../../visibility";
 import { createRoutedInputEncoder, type RoutedInputRefusal } from "./encode-input";
 import { type RemoteRefusal, remoteRefusalOf } from "./remote-refusal";
 import type { SessionSeatAnnouncement } from "./session-seat";
@@ -319,11 +320,41 @@ export function createRoutedTerminalHost(
       waits.add({ sessionId, wake: resolve, withdraw: reject });
       flipWaits.set(device, waits);
     });
+  /** Item 475 — asks parked while this window is hidden (a `FlipWait`'s shape: wake or withdraw),
+   * and the one listener that wakes them on the show, held only while one waits. */
+  const showWaits = new Set<FlipWait>();
+  let stopWaitingForShow: (() => void) | null = null;
+  const settleShowWaits = (): void => {
+    if (showWaits.size > 0) return;
+    stopWaitingForShow?.();
+    stopWaitingForShow = null;
+  };
+  const untilShown = (sessionId: string): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      if (disposed) {
+        reject(new Error(`the ask for ${sessionId} was withdrawn: the host is disposed`));
+        return;
+      }
+      showWaits.add({ sessionId, wake: resolve, withdraw: reject });
+      stopWaitingForShow ??= onVisibilityChange((hidden) => {
+        if (hidden) return;
+        const woken = [...showWaits];
+        showWaits.clear();
+        settleShowWaits();
+        for (const wait of woken) wait.wake();
+      });
+    });
   /** Withdraw the parked asks for one session (every one, without an id): the
    * session left, its activation ended, or the host is going. Each rejects —
    * the runtime has nothing left to dial it for — and its honest state clears. */
   const withdrawAsks = (sessionId?: string): void => {
     if (sessionId !== undefined) askEpochs.set(sessionId, askEpoch(sessionId) + 1);
+    for (const wait of [...showWaits]) {
+      if (sessionId !== undefined && wait.sessionId !== sessionId) continue;
+      showWaits.delete(wait);
+      wait.withdraw(new Error(`the ask for ${wait.sessionId} was withdrawn while hidden`));
+    }
+    settleShowWaits();
     for (const [device, waits] of [...flipWaits]) {
       for (const wait of [...waits]) {
         if (sessionId !== undefined && wait.sessionId !== sessionId) continue;
@@ -621,6 +652,15 @@ export function createRoutedTerminalHost(
         options.onTicket?.(sessionId, primed);
         return asRoutedTicket(primed);
       }
+      // Item 475 — a hidden window mints nothing. A hidden page's timers are throttled, so the
+      // control leg's heartbeat (a page timer in ghosttea's runtime) cannot keep the cell's 15 s
+      // deadline: the cell closes the leg (4004) and the runtime asks again here. Minted at once,
+      // that was a ticket, a dial and an audited grant every minute the window stayed hidden.
+      // Parked, the leg dies once and the ask waits for the show (`visibility.ts`, PF6: hidden
+      // work pauses at its source; refocus recovers from daemon truth). A covered window reads
+      // hidden too (window-policy.ts, `mainWindowPreferences`). A detach, an end, a terminate or
+      // a dispose withdraws the ask (`withdrawAsks`); a primed ticket is used at once, above.
+      while (isHidden()) await untilShown(sessionId);
       // DS-D15 — one logical mint: an outcome-unknown (a ticket forwarded to
       // its owner, its answer lost) is asked once more with its key, and a
       // receipt in place of the ticket is asked ANEW — a second ticket is
