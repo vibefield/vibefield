@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import {
   BUNDLED_PLUGIN_INDEX_FILE,
   type BundledPluginEntry,
@@ -1044,7 +1044,8 @@ export class PluginRegistryService extends EventEmitter {
 
   private async saveRecords(records: InstallRecordsFile): Promise<void> {
     this.records = records;
-    await mkdir(join(this.cfg.dataDir, "fieldd", "plugins"), { recursive: true });
+    // item 449: the records file's own folder, from its LAYOUT row (431), never a path spelled again here
+    await mkdir(dirname(this.recordsPath), { recursive: true });
     const tmp = `${this.recordsPath}.tmp`;
     await writeFile(tmp, `${JSON.stringify(records, null, 2)}\n`, "utf8");
     await rename(tmp, this.recordsPath);
