@@ -1303,12 +1303,21 @@
                 </p>
               </div>
               <div class="card">
-                <h3>Bounded per connection</h3>
+                <h3>Admitted by what it asks for</h3>
                 <p>
-                  32 subscriptions per connection. A subscription is work the daemon does every tick for
-                  as long as the socket lives, so one <code>agent.observe</code> holder in a loop could
-                  otherwise buy the whole tick budget. Past the bound the caller gets
-                  <code>RESOURCE_EXHAUSTED</code> and keeps everything it already had.
+                  A subscription is admitted by its key: the method and the params that say what it
+                  watches, with defaults filled in (a cadence or a field the method does not read is not
+                  part of it). Every product subscription declares its key and its bound in
+                  <code>SUBSCRIPTION_ADMISSION</code>. One connection holds a key at most as many times
+                  as its row allows (<code>PRODUCT_API_LIMITS.SUBSCRIPTION_HOLDERS_PER_KEY</code>, 8,
+                  unless the row says otherwise; the 16 ms full board 4). A method whose params are open,
+                  such as <code>diagnostics.subscribe</code>, is bounded instead by its own count of live
+                  subscriptions. There is no total: unrelated feeds never compete, and a feed that grows
+                  with what a person has (plugins, profile sets, sparks) has room for each one. Past a
+                  bound the caller gets <code>RESOURCE_EXHAUSTED</code> and keeps everything it already
+                  had. <em>Since item 476 (2026-11-16):</em> this replaced one pool of 32 subscriptions
+                  per connection, which cost a person who installs plugins; a bound per caller is item
+                  480's.
                 </p>
               </div>
               <div class="card">
@@ -3162,13 +3171,14 @@
                 <tbody>
                   <tr><td><p>The method registry: surface, scope, idempotency, locality — and the reasoning per row</p></td><td><span class="route">packages/contracts/src/methods.ts</span></td></tr>
                   <tr><td><p>Scopes, tailnet presets, stores, <code>LAYOUT</code>, mesh and per-connection limits</p></td><td><span class="route">packages/contracts/src/registries.ts</span></td></tr>
+                  <tr><td><p>Each product subscription's admission: its identity params, class and holders (<code>SUBSCRIPTION_ADMISSION</code>)</p></td><td><span class="route">packages/contracts/src/subscription-admission.ts</span></td></tr>
                   <tr><td><p>The error taxonomy and the <code>UNAVAILABLE</code> detail shape</p></td><td><span class="route">packages/contracts/src/errors.ts</span></td></tr>
                   <tr><td><p>The monitor mirror, session summary, terminal join; the schema generation</p></td><td><span class="route">packages/contracts/src/agent-session.ts</span></td></tr>
                   <tr><td><p>The field row, the subscription params, the snapshot/delta and slice shapes</p></td><td><span class="route">packages/contracts/src/agent-field.ts</span></td></tr>
                   <tr><td><p>The enrollment record and the <code>index.*</code> wire shapes</p></td><td><span class="route">packages/contracts/src/agent-index.ts</span></td></tr>
                   <tr><td><p>The account-usage projection shapes</p></td><td><span class="route">packages/contracts/src/agent-usage.ts</span></td></tr>
                   <tr><td><p>The ticket: route, endpoints, transport and attach grants</p></td><td><span class="route">packages/contracts/src/terminal-pipeline.ts</span></td></tr>
-                  <tr><td><p>Scope check, locality enforcement, the device routing rule, subscription budget</p></td><td><span class="route">packages/fieldd/src/product-api.ts</span></td></tr>
+                  <tr><td><p>Scope check, locality enforcement, the device routing rule, subscription admission by key</p></td><td><span class="route">packages/fieldd/src/product-api.ts</span></td></tr>
                   <tr><td><p>All 26 agent-plane registrations and their audit wrappers</p></td><td><span class="route">packages/fieldd/src/daemon.ts</span> (lines ~1207–1559)</td></tr>
                   <tr><td><p>The services behind them</p></td><td><span class="route">packages/fieldd/src/agent-runtime.ts · agent-index.ts · agent-usage.ts · agent-field.ts</span></td></tr>
                   <tr><td><p>The ticket mint and the agent spawn path</p></td><td><span class="route">packages/fieldd/src/terminal-service.ts</span></td></tr>
