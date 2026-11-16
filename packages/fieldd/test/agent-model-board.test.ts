@@ -121,6 +121,53 @@ describe("the model board — this desktop's windows' cut", () => {
     board.dispose();
     monitor.service.dispose();
   });
+
+  it("item 464 — `succeeds` never rides this desktop's own cut: its windows pair a hand-off themselves, so the rows of sessions fieldd says succeed others carry their joins as before, while the remote cut of the same sessions says it", async () => {
+    const monitor = await testMonitor({
+      summaries: [working],
+      terminals: [
+        floorTerminal(),
+        floorTerminal({ sessionId: "pty-next", cwd: "/Users/me/next" }),
+        floorTerminal({ sessionId: "pty-old", cwd: "/Users/me/old" }),
+        floorTerminal({ sessionId: "run-working-pty", cwd: "/repo" }),
+      ],
+    });
+    monitor.terminals.succeed("run-working-pty", "pty-bare");
+    monitor.terminals.succeed("pty-next", "pty-old");
+    monitor.rows();
+    const model = createModelSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
+      emit: () => undefined,
+      epoch: "boot.464",
+    });
+    const remote = createRemoteSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
+      emit: () => undefined,
+      epoch: "boot.464",
+    });
+    const window = AgentModelSnapshot.parse(model.snapshot);
+    expect(window.rows.map((row) => row.runtimeRunId).sort()).toEqual([
+      "pty-bare",
+      "pty-next",
+      "pty-old",
+      "run-working",
+    ]);
+    for (const row of window.rows) {
+      const join = (row as { terminal?: Record<string, unknown> }).terminal;
+      expect(join, row.runtimeRunId).toBeDefined();
+      expect(join, row.runtimeRunId).not.toHaveProperty("succeeds");
+    }
+    const said = AgentRemoteSnapshot.parse(remote.snapshot)
+      .rows.filter((row) => row.terminal?.succeeds !== undefined)
+      .map((row) => row.runtimeRunId)
+      .sort();
+    expect(said).toEqual(["pty-next", "run-working"]);
+    model.dispose();
+    remote.dispose();
+    monitor.service.dispose();
+  });
 });
 
 describe("the two cuts of the model's row (M16, M21)", () => {

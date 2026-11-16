@@ -832,21 +832,41 @@ export function projectDeskRow(
 const ProjectedRemoteRowSchema = AgentRemoteRow.omit({ revision: true });
 export type ProjectedRemoteRow = (typeof ProjectedRemoteRowSchema)["_output"];
 
+/** Item 464 — a run's join with `succeeds` written, when it names a local PTY
+ * (the session the lineage is of); any other join as it is. */
+function joinSucceeding(
+  terminal: AgentSessionTerminal,
+  succeeds: string | undefined,
+): AgentSessionTerminal {
+  if (
+    succeeds === undefined ||
+    terminal.hosted !== "local" ||
+    terminal.runtimeSessionId === undefined
+  )
+    return terminal;
+  return { ...terminal, succeeds };
+}
+
 /** A run's row on the remote cut: its model row as a peer reads it, its pane
  * join, its conversation id and the person's Stop. A run the backend has not
  * assembled has no model row and so no remote row: the caller leaves it out.
  * IOS-12a — and whose session the run is and who started it, as the field row
  * carries them (SP-1b): static for the run's life, the origin rebuilt from its
- * named fields, so Chat on the phone reads a spark's status as the Mac does. */
+ * named fields, so Chat on the phone reads a spark's status as the Mac does.
+ * Item 464 — and `succeeds`, the floor session its PTY continues on other
+ * screens, when the board's reader says one (`TerminalService.succeedsOf`):
+ * written on a LOCAL join that names its PTY, and on no other. */
 export function projectRemoteRow(
   summary: AgentSessionSummary,
   monitorRow: MonitorAgentRow,
   chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
+  succeeds?: string | undefined,
 ): ProjectedRemoteRow {
+  const terminal = summary.terminal;
   return {
     runtimeRunId: summary.runtimeRunId,
     device: summary.device,
-    ...(summary.terminal !== undefined ? { terminal: summary.terminal } : {}),
+    ...(terminal !== undefined ? { terminal: joinSucceeding(terminal, succeeds) } : {}),
     nativeSessionId: summary.sessionId,
     ...(summary.stop !== undefined ? { stop: stopOf(summary.stop) } : {}),
     ...(summary.spark !== undefined ? { spark: summary.spark } : {}),
@@ -857,13 +877,21 @@ export function projectRemoteRow(
 
 /** A bare terminal's row on the remote cut (L8 as amended by PG-D5): the
  * `model` board's terminal row (`projectModelTerminalRow`) with the model's row
- * cut for a peer, so its directory travels as its folder's name. */
+ * cut for a peer, so its directory travels as its folder's name. Item 464 —
+ * its join says `succeeds` when the board's reader says one; the window's own
+ * row (`projectModelTerminalRow`) never does. */
 export function projectRemoteTerminalRow(
   row: MonitorAgentRow,
   join: Pick<AgentSessionTerminal, "cellBootId" | "workloadClass"> = {},
   chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
+  succeeds?: string | undefined,
 ): ProjectedRemoteRow {
-  return { ...projectModelTerminalRow(row, join), monitorRow: peerMonitorRow(row, chars) };
+  const local = projectModelTerminalRow(row, join);
+  return {
+    ...local,
+    ...(succeeds !== undefined ? { terminal: { ...local.terminal, succeeds } } : {}),
+    monitorRow: peerMonitorRow(row, chars),
+  };
 }
 
 /** Upserts and removals between two projected boards, by (runtimeRunId,

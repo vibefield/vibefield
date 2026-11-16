@@ -14,6 +14,7 @@ import {
   type SessionExitedEvent,
 } from "@vibecook/ghosttea-client";
 import {
+  AGENT_FIELD,
   type AgentSessionPlacement,
   CELL_SUPERVISION,
   type CellEndpointSet,
@@ -359,7 +360,33 @@ export interface TerminalServiceOptions {
    * `NATIVE_SUPERVISION.TICK_STALE_MS` (the daemon passes the supervision's own
    * when a test shortens it), `performance.now()` and `Date.now()`. */
   inventoryTimings?: Partial<TerminalInventoryTimings>;
+  /** Item 464 test seam: the clock a lineage's lapse (`AGENT_FIELD.SUCCEEDS_LAPSE_MS`) is counted and armed on.
+   * Production: `performance.now()` and an unref'd `setTimeout`. */
+  successionClock?: TerminalSuccessionClock;
 }
+
+/** Item 464 — a monotonic clock and a one-shot timer whose answer cancels it (the monitor backend's clock shape). */
+export interface TerminalSuccessionClock {
+  now(): number;
+  schedule(delayMs: number, task: () => void): () => void;
+}
+
+/** Item 464 — why a birth's `succeeds` was not kept (`fieldd.terminal.succeeds_dropped`): the grant holds no
+ * `terminal.attach`; the session it names is one this desktop's floor does not list (never, or no longer);
+ * another live session already succeeds it. */
+export type SuccessionDropped = "scope" | "unknown-session" | "taken";
+
+/** Item 464 — one kept lineage: the session a birth continues, when the birth was recorded (the succession clock's
+ * reading), and its lapse timer's cancel. */
+interface Lineage {
+  predecessor: string;
+  bornAt: number;
+  cancel: () => void;
+}
+
+/** Item 464 — the first 8 characters of a session id: enough for a log line to be matched against the floor's,
+ * no more of an id a claim named than that. */
+const shortId = (sessionId: string): string => sessionId.slice(0, 8);
 
 export type { TerminalProfileBinding };
 
@@ -616,6 +643,35 @@ export class TerminalService {
   private readonly releases: TerminalReleases;
   private readonly creation = new AsyncLocalStorage<string>();
   private readonly bornCreationIds = new Map<string, string>();
+  /**
+   * Item 464 (2026-11-16) — `succeeds`, the floor session whose BODY a born session continues on every other
+   * screen (`AgentSessionTerminal.succeeds`, said on the remote cut alone). Presentation lineage only: nothing here
+   * mounts, attaches, releases or ends a session.
+   *
+   * `succession` carries a claim the door KEPT (`admitSuccession`) to the one place a session is born, as `creation`
+   * carries a creation id, so the three doors (`terminal.create`, `agent.spawn`, `agent.resume`) record it alike.
+   * `lineage` is born session → the kept claim, in birth order.
+   *
+   * MEMORY ONLY, and nothing survives a fieldd restart, on purpose: a lineage matters for the seconds a hand-off takes
+   * (the predecessor is released about 4 s after the birth), and a reader that arrives later, a restarted fieldd's
+   * included, never drew the first body, so there is nothing for it to continue. A session the floor still lists
+   * after a restart comes back with no lineage: the same as a reader arriving late.
+   *
+   * THE BOUNDS (EL7). A kept `succeeds` moves a bubble and takes the named session's row off other screens' Swarm
+   * while both stand. The door keeps it only for a grant that holds `terminal.attach`, so the caller could already
+   * attach to and type into the session it names; at most one live successor per session, and never past
+   * `AGENT_FIELD.SUCCEEDS_LAPSE_MS`, so a claim can hide a row for seconds, never hold one hidden. The entry goes
+   * the moment the successor no longer stands (`sweepLineage`) or the lapse passes (its timer). WHO says it is
+   * the remote board, and only while the predecessor still has a row there (`agent-model-board.ts`): this
+   * service knows the inventory, the board knows the rows a screen draws, and the two can disagree for a frame
+   * (an ended agent's row comes from the fold, not from the floor's list). At most `TERMINAL_SESSION_CAP`
+   * entries, the oldest dropped. Each change tells `successionListeners`, which is how a clear or a lapse
+   * reaches the remote board when nothing else moved.
+   */
+  private readonly succession = new AsyncLocalStorage<{ predecessor: string; spent: boolean }>();
+  private readonly lineage = new Map<string, Lineage>();
+  private readonly successionListeners = new Set<() => void>();
+  private readonly successionClock: TerminalSuccessionClock;
 
   // ---- IL-D4: how old the inventory is (`draft/thinking-inventory-latency.md` §4) ----
   private readonly timings: TerminalInventoryTimings;
@@ -678,6 +734,14 @@ export class TerminalService {
       now: () => performance.now(),
       wallNow: () => Date.now(),
       ...opts.inventoryTimings,
+    };
+    this.successionClock = opts.successionClock ?? {
+      now: () => performance.now(),
+      schedule: (delayMs, task) => {
+        const timer = setTimeout(task, delayMs);
+        timer.unref?.();
+        return () => clearTimeout(timer);
+      },
     };
     // The link has usually paired BEFORE this service exists (the daemon builds
     // it after `native.connect()`), so the cells in hand at construction are the
@@ -803,6 +867,8 @@ export class TerminalService {
           this.deliveredAtUnix = this.timings.wallNow();
           this.judgeAge(false);
           this.notifyInventory();
+          // item 464 — a lineage whose successor this reading lists ended, or not at all, goes
+          this.sweepLineage();
         } else {
           this.logger.debug(
             "fieldd.terminal.observed_unparsed",
@@ -1405,6 +1471,53 @@ export class TerminalService {
     return creationId === undefined ? action() : this.creation.run(creationId, action);
   }
 
+  /** Item 464 — the door's half of `succeeds` (one rule for `terminal.create`, `agent.spawn` and `agent.resume`):
+   * the claim KEPT, or undefined. Kept only when all three hold: `scopes` (the caller's grant for this call,
+   * `grantedScopesOf`) holds `terminal.attach`; this desktop's floor still lists the session named, a husk
+   * included (`namedListed`); no other live session already succeeds it. Otherwise it is dropped with one line,
+   * and the caller's birth goes on exactly as without it: a claim is never an error (tolerant reader). The line
+   * names no more of the session than its first 8 characters. */
+  admitSuccession(claim: string | undefined, scopes: readonly string[]): string | undefined {
+    if (claim === undefined) return undefined;
+    const why = scopes.includes("terminal.attach") ? this.lineageRefusal(claim) : "scope";
+    if (why === undefined) return claim;
+    this.dropLineage(why, claim);
+    return undefined;
+  }
+
+  /** Item 464 — run `action` with a kept claim (`admitSuccession`'s answer) carried to the birth it makes, as
+   * `withCreation` carries a creation id. Undefined runs it as it is.
+   *
+   * The claim DIES WITH ITS CALL: the holder is spent when `action` settles, whether it bore a session, bore none,
+   * or threw. An async context outlives its call (a callback, timer or socket created inside it carries it into
+   * every later turn of its own), so without this a call that births nothing would leave a claim a later birth,
+   * one no caller asked to take anyone's place, could record. */
+  async withSuccession<T>(predecessor: string | undefined, action: () => Promise<T>): Promise<T> {
+    if (predecessor === undefined) return await action();
+    const holder = { predecessor, spent: false };
+    try {
+      return await this.succession.run(holder, action);
+    } finally {
+      holder.spent = true;
+    }
+  }
+
+  /** Item 464 — the floor session `sessionId`'s birth claimed to continue, while the claim holds: `sessionId`
+   * stands and the lapse has not passed. Whether a screen is TOLD is the remote board's: it says the claim only
+   * while the predecessor's row is among the rows it projects. A pure read: the entry itself goes at the sweep or
+   * the lapse timer, which tell the readers. */
+  succeedsOf(sessionId: string): string | undefined {
+    const entry = this.lineage.get(sessionId);
+    return entry === undefined ? undefined : this.liveLineage(sessionId, entry);
+  }
+
+  /** Item 464 — told after every change of what `succeedsOf` answers: a record, a clear, a lapse. Returns the
+   * unsubscribe. */
+  onSuccession(listener: () => void): () => void {
+    this.successionListeners.add(listener);
+    return () => this.successionListeners.delete(listener);
+  }
+
   async release(params: TerminalReleaseParams): Promise<{ accepted: true }> {
     this.refuseWhileStopping();
     const cell = await this.sessionCellForOp(params.sessionId, "release");
@@ -1766,6 +1879,8 @@ export class TerminalService {
     this.birthsInFlight += 1;
     try {
       const creationId = options.creationId ?? this.creation.getStore();
+      // item 464 — the claim the door kept, read with the creation id, recorded once the floor answers
+      const carried = this.succession.getStore();
       const summary = await client.createSession({
         ...options,
         ...(creationId === undefined ? {} : { creationId }),
@@ -1777,6 +1892,15 @@ export class TerminalService {
       // waiting for observed inventory here would recreate GT-1's race.
       const session = TerminalRuntimeSession.parse(summary);
       if (session.creationId != null) this.bornCreationIds.set(session.id, session.creationId);
+      // item 464 — recorded at the one place a session is born, whichever door asked, by the FIRST birth the
+      // claim's call makes, and only while that call is still running (`withSuccession` spends the holder when
+      // it settles; `spent` is read after the floor answered, so a birth that outlives its call records nothing).
+      // An async context outlives its call (a socket first dialled inside it carries it into every later event of
+      // its own), and a birth that inherits it after the call is no hand-off the caller asked for
+      if (carried !== undefined && !carried.spent) {
+        carried.spent = true;
+        this.recordLineage(session.id, carried.predecessor);
+      }
       for (const listener of [...this.birthListeners]) {
         try {
           listener({ sessionId: session.id, pid: session.pid });
@@ -2218,11 +2342,139 @@ export class TerminalService {
     this.releases.dispose();
     this.opts.supervision?.off("transition", this.onSupervision);
     this.armAgeTimer(undefined, 0);
+    // item 464 — memory only: the lapse timers go with the service
+    for (const entry of this.lineage.values()) entry.cancel();
+    this.lineage.clear();
+    this.successionListeners.clear();
     this.connecting.clear();
     for (const key of [...this.clients.keys()]) this.dropClient(key);
   }
 
   // ---- internals ----
+
+  /** Item 464 — may a claim NAME `sessionId` (the predecessor): this fieldd still lists it, `exited` or not, or
+   * born it here and has not seen it listed yet (GT-1: a birth outruns the inventory, and a hand-off names its
+   * predecessor in that window as often as not). A session listed nowhere (never, or gone from the inventory) is
+   * `unknown-session`.
+   *
+   * A HUSK IS ADMITTED, and a heard exit alone ends nothing here: the shell an ended agent's pane returns to
+   * succeeds exactly that agent's PTY, which by then is a husk the floor lists `exited` (MF-1g's
+   * keep-until-explicit-close), and a released launch shell is named until its row actually leaves. EL7: a husk
+   * cannot be typed into, and the scope, the one successor and the lapse bound a claim on it as on any other. */
+  private namedListed(sessionId: string): boolean {
+    return (
+      this.bornUnseen.has(sessionId) ||
+      this.terminals.some((terminal) => terminal.sessionId === sessionId)
+    );
+  }
+
+  /** Item 464 — does the SUCCESSOR (the born session) still stand: born here and not listed yet, or listed live;
+   * a session whose `session-exited` fieldd heard, or that the floor lists `exited`, does not. Its lineage ends
+   * with it: a body nobody runs continues nothing. */
+  private successorStands(sessionId: string): boolean {
+    if (this.heardExits.has(sessionId)) return false;
+    if (this.bornUnseen.has(sessionId)) return true;
+    const row = this.terminals.find((terminal) => terminal.sessionId === sessionId);
+    return row !== undefined && row.exited !== true;
+  }
+
+  /** Item 464 — why a claim on `predecessor` cannot be kept now, past the scope; undefined when it can. */
+  private lineageRefusal(predecessor: string): SuccessionDropped | undefined {
+    if (!this.namedListed(predecessor)) return "unknown-session";
+    for (const [born, entry] of this.lineage) {
+      if (entry.predecessor === predecessor && this.liveLineage(born, entry) !== undefined)
+        return "taken";
+    }
+    return undefined;
+  }
+
+  /** Item 464 — the recorded claim of `born`, while it holds: the successor stands and the lapse has not passed.
+   * The predecessor is NOT asked here: whether the claim is SAID is the remote board's question, asked of the rows
+   * it is about to project (a row of the predecessor's own still stands there), so that the predecessor's row
+   * leaving and the successor's join unclaimed land in one frame (`agent-model-board.ts`). */
+  private liveLineage(born: string, entry: Lineage): string | undefined {
+    if (this.successionClock.now() - entry.bornAt >= AGENT_FIELD.SUCCEEDS_LAPSE_MS)
+      return undefined;
+    return this.successorStands(born) ? entry.predecessor : undefined;
+  }
+
+  /** Item 464 — the birth's record of a kept claim. Checked again here, the belt behind the door: two births
+   * admitted on one session before either was born would otherwise both succeed it, and the session named may
+   * have left the inventory while this birth was in flight. */
+  private recordLineage(born: string, predecessor: string): void {
+    const why = this.lineageRefusal(predecessor);
+    if (why !== undefined) {
+      this.dropLineage(why, predecessor);
+      return;
+    }
+    // the bound: never more entries than the floor's own session cap, the oldest dropped first
+    for (const oldest of this.lineage.keys()) {
+      if (this.lineage.size < TERMINAL_SESSION_CAP) break;
+      this.forgetLineage(oldest);
+    }
+    const cancel = this.successionClock.schedule(AGENT_FIELD.SUCCEEDS_LAPSE_MS, () =>
+      this.lapseLineage(born),
+    );
+    this.lineage.set(born, { predecessor, bornAt: this.successionClock.now(), cancel });
+    this.notifySuccession();
+  }
+
+  private dropLineage(why: SuccessionDropped, predecessor: string): void {
+    this.logger.info(
+      "fieldd.terminal.succeeds_dropped",
+      "A birth's claim on the session it takes the place of was dropped; the birth goes on",
+      { why, session: shortId(predecessor) },
+    );
+  }
+
+  /** Item 464 — every lineage whose SUCCESSOR no longer stands goes: at each inventory and at each exit fieldd
+   * hears. The readers are told once if any went. The predecessor leaving clears nothing here: its row leaving the
+   * remote board is what stops the claim being said, in that row's own frame. */
+  private sweepLineage(): void {
+    let cleared = false;
+    for (const born of [...this.lineage.keys()]) {
+      if (this.successorStands(born)) continue;
+      this.forgetLineage(born);
+      cleared = true;
+    }
+    if (cleared) this.notifySuccession();
+  }
+
+  /** Item 464 — the lapse timer: a lineage still held `SUCCEEDS_LAPSE_MS` after its birth goes, once, with one
+   * line. One whose successor left first was swept (its timer cancelled); finding one here whose successor no
+   * longer stands is a clear, not a lapse, and is not logged as one. */
+  private lapseLineage(born: string): void {
+    const entry = this.lineage.get(born);
+    if (entry === undefined) return;
+    this.lineage.delete(born);
+    if (this.successorStands(born))
+      this.logger.info(
+        "fieldd.terminal.succeeds_lapsed",
+        "A session's lineage was held for its whole lapse; it is said no more",
+        { session: shortId(born), succeeds: shortId(entry.predecessor) },
+      );
+    this.notifySuccession();
+  }
+
+  /** Item 464 — one entry gone, its timer with it. The caller tells the readers. */
+  private forgetLineage(born: string): void {
+    this.lineage.get(born)?.cancel();
+    this.lineage.delete(born);
+  }
+
+  /** Every lineage reader hears that `succeedsOf` may answer otherwise now; one that throws is logged and the rest
+   * still hear it. Never throws: the birth that records a lineage must not read a reader's fault as its own. */
+  private notifySuccession(): void {
+    for (const listener of [...this.successionListeners]) {
+      try {
+        listener();
+      } catch (error) {
+        this.logger.warn("fieldd.terminal.succession_listener_failed", "A lineage listener threw", {
+          error: errorMessage(error),
+        });
+      }
+    }
+  }
 
   /** Every inventory listener hears the rows, in order; one that throws is
    * logged and the rest still hear them. */
@@ -2803,6 +3055,8 @@ export class TerminalService {
       // SB-2 — a bound birth that ended before any inventory listed it waits
       // no longer: the next inventory without it ends its record
       this.bindings.exited(sessionId);
+      // item 464 — an ended successor continues nothing (an ended predecessor stays nameable while listed)
+      this.sweepLineage();
       for (const listener of [...this.exitListeners]) {
         try {
           listener(event);

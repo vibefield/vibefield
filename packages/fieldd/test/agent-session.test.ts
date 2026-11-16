@@ -3807,6 +3807,110 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
   }, 200_000);
 });
 
+/** Item 464 — the `agent.session.spawn` attempt whose outcome names the run's PTY: the pair of one act, read by the
+ * session it bore (every spawn's attempt targets `pending`). */
+async function spawnAttempt(dataDir: string, sessionId: string): Promise<AuditEntry> {
+  return await poll(
+    async () => {
+      const entries = auditEntries(dataDir);
+      const outcome = entries.find(
+        (entry) =>
+          entry.action === "agent.session.spawn" &&
+          entry.phase === "outcome" &&
+          entry.attrs?.["sessionId"] === sessionId,
+      );
+      return outcome === undefined
+        ? undefined
+        : entries.find(
+            (entry) => entry.phase === "attempt" && entry.operationId === outcome.operationId,
+          );
+    },
+    10_000,
+    `the spawn that bore ${sessionId}, in the ledger`,
+  );
+}
+
+// Item 464 (2026-11-16) — `succeeds` through the agent doors: a launch names the floor session whose body its run
+// continues on other screens. The door keeps the claim only for a grant that holds `terminal.attach` (one that could
+// already attach to and type into that session), and only for one live successor; anything else is dropped and the
+// birth goes on exactly as without it. The ledger's attempt names the session only when the claim was kept. The
+// terminal.create door's rows, and the rule's every arm, are terminal-service.test.ts's.
+describe("item 464 — `succeeds` through agent.spawn (the real floor)", () => {
+  it("kept for a window holding terminal.attach; dropped for a grant holding agent.spawn alone, and for a second claim on the same session; every birth goes on, and only the kept one is ledgered", async () => {
+    const { daemon, dataDir, envOut } = await setup({ floor: "real" });
+    const deck = await window(daemon, DECK, "s464-deck");
+    const spawner = await window(daemon, ["agent.spawn", "agent.observe"], "s464-spawner");
+    const spawn = async (win: WsRpc, succeeds?: string): Promise<AgentSpawnResult> =>
+      (await born(win, "agent.spawn", {
+        provider: "scripted",
+        cwd: envOut,
+        ...(succeeds !== undefined ? { succeeds } : {}),
+      })) as AgentSpawnResult;
+    const first = await spawn(deck);
+    const named = first.terminal.sessionId;
+    const narrow = await spawn(spawner, named);
+    const kept = await spawn(deck, named);
+    const second = await spawn(deck, named);
+    for (const result of [narrow, kept, second])
+      expect(result.session.terminal).toMatchObject({
+        hosted: "local",
+        runtimeSessionId: result.terminal.sessionId,
+      });
+    expect(daemon.terminals.succeedsOf(narrow.terminal.sessionId)).toBeUndefined();
+    expect(daemon.terminals.succeedsOf(kept.terminal.sessionId)).toBe(named);
+    expect(daemon.terminals.succeedsOf(second.terminal.sessionId)).toBeUndefined();
+    expect((await spawnAttempt(dataDir, narrow.terminal.sessionId)).attrs).not.toHaveProperty(
+      "succeeds",
+    );
+    expect((await spawnAttempt(dataDir, kept.terminal.sessionId)).attrs?.["succeeds"]).toBe(named);
+    expect((await spawnAttempt(dataDir, second.terminal.sessionId)).attrs).not.toHaveProperty(
+      "succeeds",
+    );
+    // the fold's own row never carries it: the lineage is the remote cut's alone
+    expect(kept.session.terminal).not.toHaveProperty("succeeds");
+  }, 90_000);
+
+  it("agent.resume {runtimeRunId} naming a live session, for a window holding terminal.attach: the resumed run's PTY succeeds it, and the ledger's attempt names it", async () => {
+    const { daemon, dataDir, envOut } = await setup({ floor: "real" });
+    const deck = await window(daemon, DECK, "s464-resume");
+    const named = (await born(deck, "agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    const ended = (await born(deck, "agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    const runId = ended.session.runtimeRunId;
+    // the run to resume ends: its row leaves the fold and its record is stamped (the spawn row's way)
+    await deck.call("terminal.terminate", { sessionId: ended.terminal.sessionId });
+    await poll(
+      async () => {
+        const { sessions } = (await deck.call("agent.list", {})) as AgentListResult;
+        return sessions.some((row) => row.runtimeRunId === runId) ? undefined : true;
+      },
+      15_000,
+      "the ended run's row leaving the fold",
+    );
+    await poll(
+      async () => (readRecord(dataDir, runId).exited !== undefined ? true : undefined),
+      5_000,
+      "the ended run's record stamped exited",
+    );
+    const resumed = (await born(deck, "agent.resume", {
+      runtimeRunId: runId,
+      succeeds: named.terminal.sessionId,
+    })) as AgentSpawnResult;
+    expect(daemon.terminals.succeedsOf(resumed.terminal.sessionId)).toBe(named.terminal.sessionId);
+    const act = await auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.resume" && entry.target.id === runId,
+    );
+    expect(act.attempt.attrs?.["succeeds"]).toBe(named.terminal.sessionId);
+    expect(act.outcome.attrs?.["sessionId"]).toBe(resumed.terminal.sessionId);
+  }, 90_000);
+});
+
 describe("item 72 — a run joins the inventory it was born into", () => {
   it("a run registered after the last inventory that lists its pane is joined to its cell at registration", async () => {
     let daemon: FielddDaemon | undefined;

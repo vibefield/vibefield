@@ -85,6 +85,11 @@ export interface AgentMonitorTerminals {
   /** SB-2 — the Agent Profile the shell was born under, from the bindings record */
   profileSetOf(sessionId: string): string | undefined;
   creationIdOf?(sessionId: string): string | undefined;
+  /** item 464 — the floor session a session's birth continues on other screens, while fieldd says it
+   * (TerminalService.succeedsOf); absent: none is ever said */
+  succeedsOf?(sessionId: string): string | undefined;
+  /** item 464 — told when what `succeedsOf` answers may have moved; returns the unsubscribe */
+  onSuccession?(listener: () => void): () => void;
 }
 
 /** This device, read per facts: DeviceService swaps its fallback id for the mesh
@@ -134,6 +139,13 @@ export interface AgentMonitorService {
   terminalJoin(
     sessionId: string,
   ): Pick<AgentSessionTerminal, "cellBootId" | "workloadClass"> | undefined;
+  /** Item 464 — the floor session `sessionId` continues on every OTHER screen, while fieldd says it: the remote
+   * cut's `terminal.succeeds`. Not a fact of the model (the backend never reads it), so it rides beside it, as the
+   * terminal join does. */
+  succeedsOf(sessionId: string): string | undefined;
+  /** Item 464 — told when what `succeedsOf` answers may have moved (a lineage recorded, cleared or lapsed), which
+   * no model change need accompany: the remote board re-applies on it. Returns the unsubscribe. */
+  onSuccession(listener: () => void): () => void;
   /**
    * Every model change, with whether it is URGENT (L12): a row's status,
    * liveness, wait or pending moved, or a row arrived or left. Everything else
@@ -577,6 +589,8 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
         ...(cell?.workloadClass !== undefined ? { workloadClass: cell.workloadClass } : {}),
       };
     },
+    succeedsOf: (sessionId) => opts.terminals.succeedsOf?.(sessionId),
+    onSuccession: (listener) => opts.terminals.onSuccession?.(listener) ?? (() => undefined),
     subscribe(listener) {
       // the rows as the listener last saw them, so urgency is judged against
       // what this subscriber holds and not against another's

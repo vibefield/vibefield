@@ -64,13 +64,21 @@ type ModelItem =
 
 type ProjectedModelRow = ProjectedDeskRow | ProjectedTerminalRow;
 
+/** What both boards read of the backend. */
+type ModelReads = "rowForRun" | "terminalRows" | "subscribe" | "terminalJoin";
+
+/** Item 464 — what the remote cut alone reads beside the model: a session's lineage and its news
+ * (the model board never reads them). Optional, so a source without them (a bench's counted
+ * monitor) says no lineage. */
+type LineageReads = Partial<Pick<AgentMonitorService, "succeedsOf" | "onSuccession">>;
+
 /** The sources the board reads: the fold's rows, the backend's. */
 export interface ModelBoardSources {
   fold: {
     list(): AgentListResult;
     subscribe(emit: (rows: AgentListResult) => void): () => void;
   };
-  monitor: Pick<AgentMonitorService, "rowForRun" | "terminalRows" | "subscribe" | "terminalJoin">;
+  monitor: Pick<AgentMonitorService, ModelReads> & LineageReads;
 }
 
 function itemsOf(sources: ModelBoardSources): ModelItem[] {
@@ -192,20 +200,62 @@ export function createModelSubscription(opts: ModelSubscriptionOptions): ModelSu
 //     `AGENT_FIELD.REMOTE_URGENT_MS`;
 //   · a lost frame is repaired by a mid-stream snapshot (`resets`), which every
 //     reader of the rows protocol takes.
+//   · item 464 (2026-11-16) — it says `terminal.succeeds` (the floor session a
+//     row's PTY continues, `TerminalService.succeedsOf`) on a bare terminal's
+//     row and on an agent's whose join is a local PTY, while the session named
+//     still has a row on this board (`remoteItemsOf`), and re-applies when a
+//     claim is recorded, cleared or lapses (`onSuccession`), however still the
+//     model is. The local cut never does: this desktop's windows pair a hand-off
+//     themselves (`PaneTransitions`) and know its rollback, which it does not carry.
 
 /** An item the remote cut has a row for: a bare terminal, or a run the backend
  * has assembled. */
-type RemoteItem =
+type RemoteRowItem =
   | { kind: "agent"; summary: AgentSessionSummary; row: MonitorAgentRow }
   | Extract<ModelItem, { kind: "terminal" }>;
 
+/** Item 464 — with the session its PTY continues, while fieldd says one. */
+type RemoteItem = RemoteRowItem & { succeeds?: string | undefined };
+
+/** The floor session an item's row stands for: a bare terminal's model id (its
+ * session, as its join names it), or an agent's local PTY. */
+function sessionOf(item: RemoteItem): string | undefined {
+  if (item.kind === "terminal") return item.row.id;
+  const terminal = item.summary.terminal;
+  return terminal?.hosted === "local" ? terminal.runtimeSessionId : undefined;
+}
+
+/**
+ * The remote cut's items, each with the lineage it says.
+ *
+ * Item 464 — a recorded claim (`succeedsOf`: the successor stands, inside the lapse) is SAID only while the
+ * session it names still has a row among THESE items: a bare terminal's row (its model id is its session), or a
+ * run's (its model id, or the local PTY its join names). The test is made on the very items this frame projects,
+ * so the predecessor's row leaving and the successor's join unclaimed land in ONE delta by construction. A reader
+ * that saw the claim stop while the predecessor's row still stood would draw two bodies, the fault this item
+ * fixes; and the floor's list cannot answer it, because an ended agent's row comes from the fold and the
+ * backend, not from the inventory, and may outlive its PTY's listing. A claim whose named session has no row
+ * (it left, or never had one) is not said.
+ */
 function remoteItemsOf(sources: ModelBoardSources): RemoteItem[] {
-  return itemsOf(sources).filter((item): item is RemoteItem => item.row !== undefined);
+  const items = itemsOf(sources).filter((item): item is RemoteItem => item.row !== undefined);
+  const drawn = new Set<string>();
+  for (const item of items) {
+    drawn.add(item.row.id);
+    const session = sessionOf(item);
+    if (session !== undefined) drawn.add(session);
+  }
+  return items.map((item) => {
+    const session = sessionOf(item);
+    const claimed = session === undefined ? undefined : sources.monitor.succeedsOf?.(session);
+    return claimed === undefined || !drawn.has(claimed) ? item : { ...item, succeeds: claimed };
+  });
 }
 
 function projectRemoteItem(item: RemoteItem, chars: number): ProjectedRemoteRow {
-  if (item.kind === "terminal") return projectRemoteTerminalRow(item.row, item.join, chars);
-  return projectRemoteRow(item.summary, item.row, chars);
+  if (item.kind === "terminal")
+    return projectRemoteTerminalRow(item.row, item.join, chars, item.succeeds);
+  return projectRemoteRow(item.summary, item.row, chars, item.succeeds);
 }
 
 /** The remote cut's rows as a keyed table (one per reader, as the local's). */
@@ -286,9 +336,13 @@ export function createRemoteSubscription(opts: RemoteSubscriptionOptions): Remot
     subscribe: (onChange) => {
       const offFold = opts.fold.subscribe(() => onChange());
       const offModel = opts.monitor.subscribe((_change, urgent) => onChange(urgent));
+      // item 464 — a lineage recorded, cleared or lapsed moves which body a
+      // screen draws a row on, as a row arriving or leaving does: urgent
+      const offLineage = opts.monitor.onSuccession?.(() => onChange(true));
       return () => {
         offFold();
         offModel();
+        offLineage?.();
       };
     },
     emit: (frame, kind) => opts.emit(frame as AgentRemoteDelta | AgentRemoteSnapshot, kind),

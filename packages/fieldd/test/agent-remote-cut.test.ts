@@ -238,6 +238,195 @@ describe("PG-2 — the remote cut, as its owner cuts it", () => {
   });
 });
 
+// Item 464 (2026-11-16) — `succeeds` rides the REMOTE cut: an agent's row whose join is a local PTY, and a bare
+// terminal's row, name the floor session they continue on every other screen while fieldd holds the claim
+// (`succeedsOf`: the successor stands, for `AGENT_FIELD.SUCCEEDS_LAPSE_MS` at most) AND the session named still has
+// a row on this board. A phone reads "the successor said again without it while the predecessor's row stands" as a
+// lapse and draws two bodies, so the predecessor's row leaving and the claim unsaid must be ONE frame: the board
+// decides it on the items it projects. A claim fieldd stops holding (cleared or lapsed) reaches the board by itself
+// (`onSuccession`).
+
+/** Item 464 — what the row `id` of `rows` says it succeeds. */
+function claimOf(rows: readonly AgentRemoteRow[], id: string): string | undefined {
+  return rows.find((row) => row.runtimeRunId === id)?.terminal?.succeeds;
+}
+
+/** Item 464 — the first of `deltas` that upserts the row `id` saying no claim; -1 when none does. */
+function firstUnclaimed(deltas: readonly AgentRemoteDelta[], id: string): number {
+  return deltas.findIndex((delta) => {
+    const row = delta.upserts.find((upsert) => upsert.runtimeRunId === id);
+    return row !== undefined && row.terminal?.succeeds === undefined;
+  });
+}
+
+describe("item 464 — `succeeds` on the remote cut", () => {
+  it("an agent's row and a bare terminal's row carry `terminal.succeeds` while fieldd holds it and the session named has a row; a claim on a session with no row, and a row nothing is claimed for, carry none", async () => {
+    const monitor = await testMonitor({
+      summaries: [working],
+      terminals: [
+        floorTerminal(),
+        floorTerminal({ sessionId: "pty-next", cwd: "/Users/me/next" }),
+        floorTerminal({ sessionId: "pty-old", cwd: "/Users/me/old" }),
+        floorTerminal({ sessionId: "pty-other", cwd: "/Users/me/other" }),
+        floorTerminal({ sessionId: "run-working-pty", cwd: "/repo" }),
+      ],
+    });
+    monitor.terminals.succeed("run-working-pty", "pty-bare");
+    monitor.terminals.succeed("pty-next", "pty-old");
+    monitor.terminals.succeed("pty-other", "pty-gone");
+    monitor.rows();
+    const board = createRemoteSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
+      emit: () => undefined,
+      epoch: "boot.464",
+    });
+    const snapshot = AgentRemoteSnapshot.parse(board.snapshot);
+    const byId = new Map(snapshot.rows.map((row) => [row.runtimeRunId, row]));
+    expect([...byId.keys()].sort()).toEqual([
+      "pty-bare",
+      "pty-next",
+      "pty-old",
+      "pty-other",
+      "run-working",
+    ]);
+    // the agent's join is its local PTY's: the lineage is that session's
+    expect(byId.get("run-working")?.terminal).toEqual({
+      hosted: "local",
+      runtimeSessionId: "run-working-pty",
+      workloadClass: "agent",
+      succeeds: "pty-bare",
+    });
+    // a bare terminal's join, the window's terminal row cut for a peer
+    expect(AgentDeskTerminalRow.parse(byId.get("pty-next")).terminal).toEqual({
+      hosted: "local",
+      runtimeSessionId: "pty-next",
+      cellBootId: "cell-1",
+      workloadClass: "interactive",
+      succeeds: "pty-old",
+    });
+    // a claim on a session no row stands for is not said: there is no body to continue
+    expect(byId.get("pty-other")?.terminal).not.toHaveProperty("succeeds");
+    // a session nothing is claimed for: the join as it always was
+    expect(byId.get("pty-bare")?.terminal).not.toHaveProperty("succeeds");
+    board.dispose();
+    monitor.service.dispose();
+  });
+
+  it("a bare predecessor's row leaving and the successor's join unclaimed are ONE frame (a shell born in a waiting shell's place; a launch shell released)", async () => {
+    vi.useFakeTimers();
+    const monitor = await testMonitor({
+      terminals: [floorTerminal(), floorTerminal({ sessionId: "pty-next", cwd: "/Users/me/next" })],
+    });
+    // fieldd still holds the claim when the predecessor leaves: its row is what stops it being said
+    monitor.terminals.succeed("pty-next", "pty-bare");
+    monitor.rows();
+    const frames: Array<{ frame: unknown; kind: string }> = [];
+    const board = createRemoteSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
+      emit: (frame, kind) => frames.push({ frame, kind }),
+      epoch: "boot.464c",
+    });
+    expect(claimOf(AgentRemoteSnapshot.parse(board.snapshot).rows, "pty-next")).toBe("pty-bare");
+    vi.advanceTimersByTime(AGENT_FIELD.REMOTE_MIN_INTERVAL_MS);
+    const heard = frames.length;
+    // the predecessor is released: the floor stops listing it, and the backend's next tick drops its row
+    monitor.terminals.observe([floorTerminal({ sessionId: "pty-next", cwd: "/Users/me/next" })]);
+    monitor.scheduler.flush();
+    vi.advanceTimersByTime(AGENT_FIELD.REMOTE_MIN_INTERVAL_MS);
+    const deltas = frames.slice(heard).map(({ frame }) => AgentRemoteDelta.parse(frame));
+    const gone = deltas.findIndex((delta) => delta.removed.includes("pty-bare"));
+    expect(gone).toBeGreaterThanOrEqual(0);
+    expect(firstUnclaimed(deltas, "pty-next")).toBe(gone);
+    board.dispose();
+    monitor.service.dispose();
+  });
+
+  it("the shell an ended agent's pane returns to says it succeeds the agent's PTY, a listed husk, while the agent's row stands: the PTY leaving the floor's list first changes nothing, and the agent's row leaving and the claim unsaid are ONE frame", async () => {
+    vi.useFakeTimers();
+    const live = summary({ runtimeRunId: "run-ended", status: "idle" });
+    const pane = floorTerminal({ sessionId: "run-ended-pty", cwd: "/repo" });
+    const fresh = floorTerminal({ sessionId: "pty-fresh", cwd: "/repo" });
+    const monitor = await testMonitor({ summaries: [live], terminals: [pane, fresh] });
+    monitor.rows();
+    // the agent quits: MF-1g keeps its pane and the floor lists it exited (item 97), the fold keeps the
+    // exited row (MF-1f), and the deck's fresh shell names the husk it takes the place of
+    monitor.terminals.observe([{ ...pane, exited: true }, fresh]);
+    monitor.fold.publish([summary({ runtimeRunId: "run-ended", status: "idle", exited: true })]);
+    monitor.terminals.succeed("pty-fresh", "run-ended-pty");
+    monitor.rows();
+    const frames: Array<{ frame: unknown; kind: string }> = [];
+    const board = createRemoteSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
+      emit: (frame, kind) => frames.push({ frame, kind }),
+      epoch: "boot.464d",
+    });
+    const open = AgentRemoteSnapshot.parse(board.snapshot);
+    expect(open.rows.map((row) => row.runtimeRunId).sort()).toEqual(["pty-fresh", "run-ended"]);
+    expect(claimOf(open.rows, "pty-fresh")).toBe("run-ended-pty");
+    vi.advanceTimersByTime(AGENT_FIELD.REMOTE_MIN_INTERVAL_MS);
+    const listed = frames.length;
+    // the deck releases the husk: the floor lists it no more, and the agent's row still stands
+    monitor.terminals.observe([fresh]);
+    monitor.scheduler.flush();
+    vi.advanceTimersByTime(AGENT_FIELD.REMOTE_MIN_INTERVAL_MS);
+    const meanwhile = frames.slice(listed).map(({ frame }) => AgentRemoteDelta.parse(frame));
+    expect(meanwhile.flatMap((delta) => delta.removed)).not.toContain("run-ended");
+    expect(firstUnclaimed(meanwhile, "pty-fresh")).toBe(-1);
+    const held = frames.length;
+    // puppeteer removes the run: its row leaves, and the claim is unsaid in that same frame
+    monitor.runtime.remove("run-ended", stateOf(live).runtimeEpoch);
+    monitor.scheduler.flush();
+    vi.advanceTimersByTime(AGENT_FIELD.REMOTE_MIN_INTERVAL_MS);
+    const deltas = frames.slice(held).map(({ frame }) => AgentRemoteDelta.parse(frame));
+    const gone = deltas.findIndex((delta) => delta.removed.includes("run-ended"));
+    expect(gone).toBeGreaterThanOrEqual(0);
+    expect(firstUnclaimed(deltas, "pty-fresh")).toBe(gone);
+    board.dispose();
+    monitor.service.dispose();
+  });
+
+  it("a lineage fieldd stops saying (cleared or lapsed) reaches the board by itself: one frame, the row's join without it, nothing else moved", async () => {
+    vi.useFakeTimers();
+    const monitor = await testMonitor({
+      terminals: [floorTerminal(), floorTerminal({ sessionId: "pty-next", cwd: "/Users/me/next" })],
+    });
+    monitor.terminals.succeed("pty-next", "pty-bare");
+    monitor.rows();
+    const frames: Array<{ frame: unknown; kind: string }> = [];
+    const board = createRemoteSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
+      emit: (frame, kind) => frames.push({ frame, kind }),
+      epoch: "boot.464b",
+    });
+    const open = AgentRemoteSnapshot.parse(board.snapshot);
+    const said = open.rows.find((row) => row.runtimeRunId === "pty-next");
+    if (said?.terminal === undefined) throw new Error("the bare terminal's row carries its join");
+    expect(said.terminal.succeeds).toBe("pty-bare");
+    vi.advanceTimersByTime(AGENT_FIELD.REMOTE_MIN_INTERVAL_MS);
+    const heard = frames.length;
+    monitor.terminals.succeed("pty-next", undefined);
+    // the model did not move: no tick of the backend is owed, and none is what carries this
+    expect(monitor.scheduler.pending()).toBe(0);
+    vi.advanceTimersByTime(AGENT_FIELD.REMOTE_MIN_INTERVAL_MS);
+    const after = frames.slice(heard);
+    expect(after).toHaveLength(1);
+    expect(after[0]?.kind).toBe("delta");
+    const delta = AgentRemoteDelta.parse(after[0]?.frame);
+    expect(delta.removed).toEqual([]);
+    expect(delta.upserts.map((row) => row.runtimeRunId)).toEqual(["pty-next"]);
+    const moved = delta.upserts[0];
+    const { succeeds: _said, ...join } = said.terminal;
+    expect(moved?.terminal).toEqual(join);
+    expect(moved?.monitorRow).toEqual(said.monitorRow);
+    board.dispose();
+    monitor.service.dispose();
+  });
+});
+
 describe("PG-2 — the remote board's floors and its urgent edge (PG-D8 (a))", () => {
   const flip = (monitor: Awaited<ReturnType<typeof testMonitor>>, bump: number, status: string) => {
     const base = stateOf(working);

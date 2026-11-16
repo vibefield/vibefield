@@ -7,6 +7,7 @@
 // transport-death honesty law (a dead control socket is UNAVAILABLE, never the
 // benign already-gone race). The live create/terminate/attach path needs a
 // real PTY authority and lives in terminal-seam.test.ts.
+import { AsyncResource } from "node:async_hooks";
 import { execFileSync } from "node:child_process";
 import { createHash, createHmac } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -14,6 +15,7 @@ import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  AGENT_FIELD,
   CONTRACTS_VERSION,
   type DeviceInfo,
   ENV_PREFIXES,
@@ -29,6 +31,7 @@ import {
   SOCKETS,
   TERMINAL_CONFIG_MAX_BYTES,
   TERMINAL_SCROLLBACK_CLASS_BYTES,
+  TERMINAL_SESSION_CAP,
   TerminalBindingsFile,
   TerminalConfigConflict,
   TerminalConfigDocument,
@@ -41,7 +44,6 @@ import {
   TerminalConfigWriteResult,
   TerminalCreateOpenResult,
   type TerminalCreateParams,
-  type TerminalCreateResult,
   type TerminalEndpoints,
   type TerminalInfo,
   TerminalOpenTicketResult,
@@ -63,6 +65,7 @@ import {
   type TerminalProfileBinding,
   TerminalService,
   type TerminalServiceOptions,
+  type TerminalSuccessionClock,
 } from "../src/terminal-service";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productDoorPath } from "./link-fixture";
@@ -219,9 +222,13 @@ const fakeRevision = (prefix: string, contents: string): string =>
  * `concurrentWrite` lands another writer's text just before the first
  * replace is answered — the race an early revision check cannot close.
  * `listed` (WG-E6) is what list-sessions answers; by default the one session
- * this floor creates. */
+ * this floor creates.
+ * `ids` (item 464) are the sessions successive create-sessions answer, in
+ * order, for a row that tells one birth from the next; past them, and by
+ * default, every birth is `createdSessionId`. */
 async function startFakeFloor(
   opts: {
+    ids?: readonly string[];
     dieOnTerminate?: boolean;
     noOverlay?: boolean;
     stall?: readonly string[];
@@ -284,6 +291,7 @@ async function startFakeFloor(
   const commands: string[] = [];
   /** the sessions THIS floor created — what its terminate recognizes */
   const born = new Set<string>();
+  let births = 0;
   let lastCreateOptions: Record<string, unknown> | undefined;
   let connections = 0;
   const stall = new Set(opts.stall ?? []);
@@ -328,8 +336,10 @@ async function startFakeFloor(
           if (opts.createError !== undefined)
             reply({ type: "error", message: opts.createError, ...opts.createErrorMeta });
           else {
-            born.add(createdSessionId);
-            reply({ type: "session-created", session: fakeSession(createdSessionId) });
+            const id = opts.ids?.[births] ?? createdSessionId;
+            births += 1;
+            born.add(id);
+            reply({ type: "session-created", session: fakeSession(id) });
           }
         } else if (
           (msg.type === "get-automation-state" || msg.type === "automation-input") &&
@@ -3621,14 +3631,16 @@ function programs(): { zsh: string; bash: string; cat: string; agent: string } {
 /** A daemon over the mock mgmt server whose one keyed cell is the fake floor
  * (the GT-5b row's composition), with the AR-7d and SB-2 seams as given. The
  * window it answers holds `terminal.attach` alone; `rpcWith` opens another
- * holding exactly the scopes it is given. */
+ * holding exactly the scopes it is given. `floorOptions` reach the fake floor
+ * (item 464: the ids its births answer). */
 async function daemonOverFakeFloor(
   terminalShellIntegration?: (shell: string) => Record<string, string> | undefined,
   terminalProfileBinding?: (profileSet: string) => Promise<TerminalProfileBinding>,
+  floorOptions?: Parameters<typeof startFakeFloor>[0],
 ) {
   const dataDir = makeDataDir();
   const mock = await startMock(dataDir);
-  const floor = await startFakeFloor();
+  const floor = await startFakeFloor(floorOptions);
   mock.terminalRoutes = keyedRoutes(1, [
     {
       cellInstanceId: 1,
@@ -4270,6 +4282,289 @@ describe("SB-2 — fieldd's record of a bound shell: the answer, the roster, a r
     ).toEqual([[bound.sessionId, "work"]]);
     for (const secret of [...Object.keys(BINDING), ...Object.values(BINDING)])
       expect(text).not.toContain(secret);
+  });
+});
+
+// Item 464 (2026-11-16) — `succeeds`: a birth may name the floor session whose body it continues on every other
+// screen. fieldd keeps the claim only for a caller whose grant holds `terminal.attach`, for a session it still lists
+// (exited or not: an ended agent's husk; or born here and not listed yet), and for one live successor at a time
+// (`admitSuccession`); anything else is dropped with one line and the birth goes on. A kept claim is HELD while the
+// successor stands and for `AGENT_FIELD.SUCCEEDS_LAPSE_MS` at most (`succeedsOf`), and every reader is told when it
+// starts and stops being held (`onSuccession`); whether it is SAID is the remote board's, by the named session's
+// row (agent-remote-cut.test.ts). Presentation lineage only: nothing here mounts, releases or ends a session.
+
+const LIVE_SHELL = { sessionId: "shell-live", pid: 41 };
+
+/** A succession clock moved by hand: `advance` runs every timer that falls due, in order, at its own time. */
+function handClock(): { clock: TerminalSuccessionClock; advance: (ms: number) => void } {
+  let now = 0;
+  const timers: Array<{ at: number; task: () => void; cancelled: boolean }> = [];
+  return {
+    clock: {
+      now: () => now,
+      schedule: (delayMs, task) => {
+        const timer = { at: now + delayMs, task, cancelled: false };
+        timers.push(timer);
+        return () => {
+          timer.cancelled = true;
+        };
+      },
+    },
+    advance: (ms) => {
+      const target = now + ms;
+      for (;;) {
+        const due = timers
+          .filter((timer) => !timer.cancelled && timer.at <= target)
+          .sort((left, right) => left.at - right.at)[0];
+        if (due === undefined) break;
+        timers.splice(timers.indexOf(due), 1);
+        now = due.at;
+        due.task();
+      }
+      now = target;
+    },
+  };
+}
+
+/** A service over the fake floor whose inventory lists `rows` (`publish` moves it), its lapse on a clock moved by
+ * hand, every line it logs captured and every lineage change counted. `birth` creates under a claim, as the doors
+ * do (`withSuccession`). */
+async function lineageService(
+  rows: Array<Record<string, unknown>> = [LIVE_SHELL],
+  ids: readonly string[] = ["born-a", "born-b", "born-c"],
+) {
+  const floor = await startFakeFloor({ ids });
+  const logs: CapturedLog[] = [];
+  const clock = handClock();
+  const { service, publish } = inventoriedService(floor, rows, {
+    logger: captureLogger(logs),
+    successionClock: clock.clock,
+  });
+  await service.ensureStarted();
+  let told = 0;
+  service.onSuccession(() => {
+    told += 1;
+  });
+  const { cat } = programs();
+  const create = () => service.create({ shell: cat });
+  const birth = (claim: string | undefined) => service.withSuccession(claim, create);
+  const lines = (event: string) =>
+    logs.filter((log) => log.event === event).map((log) => log.attrs);
+  return { floor, service, publish, clock, create, birth, lines, told: () => told };
+}
+
+describe("item 464 — a birth's `succeeds`: kept at the door, held while the successor stands, for the lapse at most (the fake floor)", () => {
+  it("kept: a grant holding terminal.attach names a session the floor lists live; the session born under the claim succeeds it, the readers are told, and nothing is logged", async () => {
+    const { service, birth, lines, told } = await lineageService();
+    const kept = service.admitSuccession("shell-live", ["terminal.attach"]);
+    expect(kept).toBe("shell-live");
+    const born = await birth(kept);
+    expect(born.sessionId).toBe("born-a");
+    expect(service.succeedsOf("born-a")).toBe("shell-live");
+    // the fact is the successor's: the session it names succeeds nothing
+    expect(service.succeedsOf("shell-live")).toBeUndefined();
+    expect(told()).toBe(1);
+    // a birth that names nothing records nothing
+    const plain = await birth(undefined);
+    expect(plain.sessionId).toBe("born-b");
+    expect(service.succeedsOf("born-b")).toBeUndefined();
+    expect(told()).toBe(1);
+    expect(lines("fieldd.terminal.succeeds_dropped")).toEqual([]);
+    expect(lines("fieldd.terminal.succeeds_lapsed")).toEqual([]);
+  });
+
+  it("kept: a session born here and not listed yet may be named (GT-1: create outruns the inventory)", async () => {
+    const { service, birth, lines } = await lineageService();
+    await birth(undefined);
+    expect(service.admitSuccession("born-a", ["terminal.attach"])).toBe("born-a");
+    await birth("born-a");
+    expect(service.succeedsOf("born-b")).toBe("born-a");
+    expect(lines("fieldd.terminal.succeeds_dropped")).toEqual([]);
+  });
+
+  it("kept: an ended agent's PTY, a husk the floor still lists exited, is succeeded by the fresh shell its pane returns to; the floor's word of its exit ends nothing, and it is taken while that shell stands", async () => {
+    const { floor, service, birth, lines } = await lineageService([
+      LIVE_SHELL,
+      { sessionId: "agent-ended", pid: 43, exited: true },
+    ]);
+    const kept = service.admitSuccession("agent-ended", ["terminal.attach"]);
+    expect(kept).toBe("agent-ended");
+    const fresh = await birth(kept);
+    expect(service.succeedsOf(fresh.sessionId)).toBe("agent-ended");
+    const exited = new Promise<void>((resolve) => {
+      service.onSessionExited(() => resolve());
+    });
+    floor.exit("agent-ended");
+    await exited;
+    expect(service.succeedsOf(fresh.sessionId)).toBe("agent-ended");
+    expect(service.admitSuccession("agent-ended", ["terminal.attach"])).toBeUndefined();
+    expect(lines("fieldd.terminal.succeeds_dropped")).toEqual([
+      { why: "taken", session: "agent-en" },
+    ]);
+  });
+
+  it("a kept claim dies with its call: a call that births nothing (it returns, or it throws) leaves a claim no later birth from a continuation of its context can record — that session succeeds nothing, and the readers are not told", async () => {
+    const { service, create, told } = await lineageService();
+    // a continuation captured inside each call (a callback the call leaves behind), run after it settled
+    const captured: { returned?: () => Promise<{ sessionId: string }> } = {};
+    const thrown: { birth?: () => Promise<{ sessionId: string }> } = {};
+    const kept = service.admitSuccession("shell-live", ["terminal.attach"]);
+    expect(kept).toBe("shell-live");
+    await service.withSuccession(kept, async () => {
+      captured.returned = AsyncResource.bind(create);
+    });
+    const refused = await service
+      .withSuccession(kept, async () => {
+        thrown.birth = AsyncResource.bind(create);
+        throw new Error("refused before the floor was asked");
+      })
+      .catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(Error);
+    if (captured.returned === undefined || thrown.birth === undefined)
+      throw new Error("both calls left a continuation behind");
+    const late = await captured.returned();
+    const later = await thrown.birth();
+    expect([late.sessionId, later.sessionId]).toEqual(["born-a", "born-b"]);
+    expect(service.succeedsOf("born-a")).toBeUndefined();
+    expect(service.succeedsOf("born-b")).toBeUndefined();
+    expect(told()).toBe(0);
+    // the claim was never spent on anything: the session it named may still be succeeded
+    expect(service.admitSuccession("shell-live", ["terminal.attach"])).toBe("shell-live");
+  });
+
+  it("dropped `scope`: a grant without terminal.attach (agent.spawn alone; a guest's, none) — the claim goes, the birth does not, and one line says why with the named session's first 8 characters", async () => {
+    const { service, birth, lines, told } = await lineageService();
+    expect(service.admitSuccession("shell-live", ["agent.spawn", "agent.observe"])).toBeUndefined();
+    expect(service.admitSuccession("shell-live", [])).toBeUndefined();
+    const born = await birth(undefined);
+    expect(born.sessionId).toBe("born-a");
+    expect(service.succeedsOf("born-a")).toBeUndefined();
+    expect(told()).toBe(0);
+    expect(lines("fieldd.terminal.succeeds_dropped")).toEqual([
+      { why: "scope", session: "shell-li" },
+      { why: "scope", session: "shell-li" },
+    ]);
+  });
+
+  it("dropped `unknown-session`: an id the floor never listed, and a session that has left its list", async () => {
+    const { service, publish, lines } = await lineageService([
+      LIVE_SHELL,
+      { sessionId: "shell-gone", pid: 43 },
+    ]);
+    publish([LIVE_SHELL]);
+    expect(service.admitSuccession("nobody-listed-this", ["terminal.attach"])).toBeUndefined();
+    expect(service.admitSuccession("shell-gone", ["terminal.attach"])).toBeUndefined();
+    expect(lines("fieldd.terminal.succeeds_dropped")).toEqual([
+      { why: "unknown-session", session: "nobody-l" },
+      { why: "unknown-session", session: "shell-go" },
+    ]);
+  });
+
+  it("dropped `taken`: one live successor per session — a second claim is dropped at the door, and at the birth when two were admitted before either was born; once the successor leaves, the session may be succeeded again", async () => {
+    const { service, publish, birth, lines } = await lineageService();
+    const first = service.admitSuccession("shell-live", ["terminal.attach"]);
+    const second = service.admitSuccession("shell-live", ["terminal.attach"]);
+    expect([first, second]).toEqual(["shell-live", "shell-live"]);
+    await birth(first);
+    // the belt at the birth: nothing was born when both were admitted
+    const late = await birth(second);
+    expect(late.sessionId).toBe("born-b");
+    expect(service.succeedsOf("born-a")).toBe("shell-live");
+    expect(service.succeedsOf("born-b")).toBeUndefined();
+    expect(service.admitSuccession("shell-live", ["terminal.attach"])).toBeUndefined();
+    expect(lines("fieldd.terminal.succeeds_dropped")).toEqual([
+      { why: "taken", session: "shell-li" },
+      { why: "taken", session: "shell-li" },
+    ]);
+    // the successor leaves the floor's list (listed once, then not): its lineage goes with it
+    publish([LIVE_SHELL, { sessionId: "born-a", pid: 42 }, { sessionId: "born-b", pid: 44 }]);
+    publish([LIVE_SHELL, { sessionId: "born-b", pid: 44 }]);
+    expect(service.succeedsOf("born-a")).toBeUndefined();
+    expect(service.admitSuccession("shell-live", ["terminal.attach"])).toBe("shell-live");
+  });
+
+  it("held while the successor stands: the session named leaving the floor's list clears nothing here (its row leaving the remote board is what stops the claim being said, in that row's own frame); the successor ending clears it, the readers are told, and nothing is said lapsed after", async () => {
+    const { floor, service, publish, clock, birth, lines, told } = await lineageService();
+    await birth(service.admitSuccession("shell-live", ["terminal.attach"]));
+    publish([LIVE_SHELL, { sessionId: "born-a", pid: 42 }]);
+    expect(told()).toBe(1);
+    publish([{ sessionId: "born-a", pid: 42 }]);
+    expect(service.succeedsOf("born-a")).toBe("shell-live");
+    expect(told()).toBe(1);
+    const exited = new Promise<void>((resolve) => {
+      service.onSessionExited(() => resolve());
+    });
+    floor.exit("born-a");
+    await exited;
+    expect(service.succeedsOf("born-a")).toBeUndefined();
+    expect(told()).toBe(2);
+    clock.advance(AGENT_FIELD.SUCCEEDS_LAPSE_MS);
+    expect(told()).toBe(2);
+    expect(lines("fieldd.terminal.succeeds_lapsed")).toEqual([]);
+  });
+
+  it("lapsed: the successor still stands SUCCEEDS_LAPSE_MS after the birth — the claim goes with no other change, the readers are told, and one line says so", async () => {
+    const { service, clock, birth, lines, told } = await lineageService();
+    let inventories = 0;
+    service.onInventory(() => {
+      inventories += 1;
+    });
+    await birth(service.admitSuccession("shell-live", ["terminal.attach"]));
+    clock.advance(AGENT_FIELD.SUCCEEDS_LAPSE_MS - 1);
+    expect(service.succeedsOf("born-a")).toBe("shell-live");
+    expect(told()).toBe(1);
+    clock.advance(1);
+    expect(service.succeedsOf("born-a")).toBeUndefined();
+    expect(told()).toBe(2);
+    // nothing else moved: the floor's list was never heard again
+    expect(inventories).toBe(0);
+    expect(lines("fieldd.terminal.succeeds_lapsed")).toEqual([
+      { session: "born-a", succeeds: "shell-li" },
+    ]);
+    clock.advance(AGENT_FIELD.SUCCEEDS_LAPSE_MS);
+    expect(lines("fieldd.terminal.succeeds_lapsed")).toHaveLength(1);
+    // a lapse holds nothing: the session may be succeeded again
+    expect(service.admitSuccession("shell-live", ["terminal.attach"])).toBe("shell-live");
+  });
+
+  it("bounded: a chain of TERMINAL_SESSION_CAP + 1 lineages keeps the newest and drops the oldest", async () => {
+    const ids = Array.from({ length: TERMINAL_SESSION_CAP + 1 }, (_, index) => `born-${index}`);
+    const { service, birth } = await lineageService([LIVE_SHELL], ids);
+    let previous = "shell-live";
+    for (const id of ids) {
+      expect((await birth(previous)).sessionId).toBe(id);
+      previous = id;
+    }
+    expect(service.succeedsOf("born-0")).toBeUndefined();
+    expect(service.succeedsOf("born-1")).toBe("born-0");
+    expect(service.succeedsOf(`born-${TERMINAL_SESSION_CAP}`)).toBe(
+      `born-${TERMINAL_SESSION_CAP - 1}`,
+    );
+  });
+
+  it("through the daemon's terminal.create: a window's claim on a session the floor lists is kept and ledgered on the attempt; one on a session nobody listed is dropped, the birth going on and the ledger silent", async () => {
+    // terminal.create's own door scope is terminal.attach, so the `scope` arm is the agent doors'
+    // (agent-session.test.ts)
+    const { cat } = programs();
+    const { mock, daemon, rpc, createRecords } = await daemonOverFakeFloor(undefined, undefined, {
+      ids: ["born-a", "born-b"],
+    });
+    mock.pushObserved(observed([LIVE_SHELL]));
+    await poll(async () => {
+      const { terminals } = (await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] };
+      return terminals.some((row) => row.sessionId === "shell-live") ? true : undefined;
+    });
+    const dropped = TerminalCreateOpenResult.parse(
+      await rpc.call("terminal.create", { shell: cat, succeeds: "nobody-listed-this" }),
+    );
+    const kept = TerminalCreateOpenResult.parse(
+      await rpc.call("terminal.create", { shell: cat, succeeds: "shell-live" }),
+    );
+    expect([dropped.sessionId, kept.sessionId]).toEqual(["born-a", "born-b"]);
+    expect(daemon.terminals.succeedsOf("born-a")).toBeUndefined();
+    expect(daemon.terminals.succeedsOf("born-b")).toBe("shell-live");
+    const attempts = (await createRecords()).filter((record) => record.phase === "attempt");
+    expect(attempts.map((record) => record.attrs?.["succeeds"])).toEqual([undefined, "shell-live"]);
   });
 });
 

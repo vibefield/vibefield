@@ -207,12 +207,17 @@ export interface ScriptedTerminals extends AgentMonitorTerminals {
   /** the floor's next inventory; `undefined` = not observed yet */
   observe(rows: readonly TerminalInfo[] | undefined): void;
   bind(sessionId: string, profileSet: string): void;
+  /** item 464 — what fieldd says `sessionId` succeeds now (`undefined`: it says nothing of it), every lineage
+   * reader told, as TerminalService tells them on a record, a clear and a lapse */
+  succeed(sessionId: string, predecessor: string | undefined): void;
 }
 
 export function scriptedTerminals(initial?: readonly TerminalInfo[]): ScriptedTerminals {
   let current: readonly TerminalInfo[] | undefined = initial;
   const bindings = new Map<string, string>();
   const listeners = new Set<(rows: readonly TerminalInfo[]) => void>();
+  const lineage = new Map<string, string>();
+  const lineageListeners = new Set<() => void>();
   return {
     list: () => current,
     onInventory(listener) {
@@ -220,12 +225,22 @@ export function scriptedTerminals(initial?: readonly TerminalInfo[]): ScriptedTe
       return () => listeners.delete(listener);
     },
     profileSetOf: (sessionId) => bindings.get(sessionId),
+    succeedsOf: (sessionId) => lineage.get(sessionId),
+    onSuccession(listener) {
+      lineageListeners.add(listener);
+      return () => lineageListeners.delete(listener);
+    },
     observe(rows) {
       current = rows;
       if (rows !== undefined) for (const listener of [...listeners]) listener(rows);
     },
     bind(sessionId, profileSet) {
       bindings.set(sessionId, profileSet);
+    },
+    succeed(sessionId, predecessor) {
+      if (predecessor === undefined) lineage.delete(sessionId);
+      else lineage.set(sessionId, predecessor);
+      for (const listener of [...lineageListeners]) listener();
     },
   };
 }

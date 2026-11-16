@@ -310,6 +310,7 @@ import {
   FreewayServeDriver,
   freewayDeclaration,
 } from "./freeway";
+import { grantedScopesOf } from "./granted-scopes";
 import { clipActivity, createActivityReader, monitorHistoryPort } from "./index-activity";
 import { IndexApps } from "./index-apps";
 import { type AppProjectJoin, AppsMesh } from "./index-apps-mesh";
@@ -4852,6 +4853,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // resume are audited like a terminal birth (attempt-before-effect; the
     // run id and the terminal id ride the outcome); the login pane like a
     // persona mutation. The reads are the fold, unaudited like terminal.list.
+    //
+    // Item 464 (2026-11-16) — the ONE rule for a birth's `succeeds`, at the
+    // three doors that birth (`agent.spawn`, `agent.resume`, `terminal.create`):
+    // the claim kept, or undefined (dropped with one line; the birth goes on as
+    // without it, never an error). The grant is the CALL's, as the product door
+    // resolved it for its own scope check (`grantedScopesOf`: a tailnet
+    // principal's preset is no field of the principal). Kept, the birth carries
+    // it (`withSuccession`) and its ledger attempt names it.
+    const keptSuccession = (ctx: CallerContext, claim: string | undefined): string | undefined =>
+      terminals.admitSuccession(claim, grantedScopesOf(ctx.principal));
     api.register("agent.providers", async () => await agents.providers());
     // AC-3 — the catalog (thinking-ar-agent-catalog.md §5.1): the visible rows
     // for the caller's surface; `declined` rows never leave fieldd.
@@ -4884,6 +4895,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // PJ-6 — the ledger says a launch asked for a model and that it was
       // applied, never which: the ids are the agent's own words (AR-L1)
       const selected = parsed.data.modelSelection !== undefined;
+      const succeeds = keptSuccession(ctx, parsed.data.succeeds);
       return await audit.required(
         ctx,
         {
@@ -4900,11 +4912,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(parsed.data.profileSet !== undefined ? { profileSet: parsed.data.profileSet } : {}),
             ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
             ...(selected ? { modelSelection: true } : {}),
+            ...(succeeds !== undefined ? { succeeds } : {}),
           },
         },
         () =>
           terminals.withCreation(parsed.data.creationId, () =>
-            agents.spawn(parsed.data, ctx.principal, ctx.onBehalfOf),
+            terminals.withSuccession(succeeds, () =>
+              agents.spawn(parsed.data, ctx.principal, ctx.onBehalfOf),
+            ),
           ),
         (result) => ({
           outcome: "succeeded",
@@ -4940,16 +4955,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(resume.profileId !== undefined ? { profileId: resume.profileId } : {}),
             ...(resume.profileSet !== undefined ? { profileSet: resume.profileSet } : {}),
           };
+      const succeeds = keptSuccession(ctx, resume.succeeds);
       return await audit.required(
         ctx,
         {
           action: "agent.session.resume",
           target,
-          attrs: { ...attrs, ...(resume.cwd !== undefined ? { cwd: resume.cwd } : {}) },
+          attrs: {
+            ...attrs,
+            ...(resume.cwd !== undefined ? { cwd: resume.cwd } : {}),
+            ...(succeeds !== undefined ? { succeeds } : {}),
+          },
         },
         () =>
           terminals.withCreation(parsed.data.creationId, () =>
-            agents.resume(resume, ctx.principal, ctx.onBehalfOf),
+            terminals.withSuccession(succeeds, () =>
+              agents.resume(resume, ctx.principal, ctx.onBehalfOf),
+            ),
           ),
         (result) => ({
           outcome: "succeeded",
@@ -5799,6 +5821,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         list: () => (terminals.observation() !== undefined ? terminals.list() : undefined),
         onInventory: (listener) => terminals.onInventory(listener),
         profileSetOf: (sessionId) => terminals.profileSetOf(sessionId),
+        // item 464 — the lineage the remote cut says, and its news
+        succeedsOf: (sessionId) => terminals.succeedsOf(sessionId),
+        onSuccession: (listener) => terminals.onSuccession(listener),
       },
       devices: {
         current: () => {
@@ -6111,6 +6136,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // now names it, `terminal.list` shows it and `openTicket` can mint for it
       // later — killing a live PTY because a credential grant hiccuped destroys
       // the user's work to tidy our bookkeeping.
+      //
+      // Item 464 — the door's own scope is terminal.attach, so a claim here
+      // can be dropped only as `unknown-session` or `taken` (keptSuccession).
+      const succeeds = keptSuccession(ctx, parsed.data.succeeds);
       const created = await audit.required(
         ctx,
         {
@@ -6131,6 +6160,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               : {}),
             // SB-2 — the Agent Profile asked for: the set's id, never a variable
             ...(parsed.data.profileSet !== undefined ? { profileSet: parsed.data.profileSet } : {}),
+            ...(succeeds !== undefined ? { succeeds } : {}),
           },
         },
         async () => {
@@ -6152,7 +6182,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
                 { required: "agent.spawn" },
               );
           }
-          return await terminals.create(parsed.data);
+          return await terminals.withSuccession(succeeds, () => terminals.create(parsed.data));
         },
         // no `ticketMinted` here any more: nothing has been minted yet, and an
         // attr claiming otherwise was true only because the nesting made it so.
