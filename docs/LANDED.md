@@ -49419,6 +49419,9 @@ the installed lock the carried one.
 - packaged-history's two rows (`FIELDD_TEST_HISTORY_PACKAGE`, a packaged app): unproven until the next packaged build's
   `package:verify:history` (`verify-history-package.mjs`, run by `run-macos-release.mjs` after signing). The land does
   not wait for it.
+- The first start's COST on a real root: NOT MEASURED at the land. *Added 2026-11-16 (item 463):* the witness read
+  fixtures alone, and no run read an index's size before or after 0.1.7. The first measurement is the QA stage's root
+  on 2026-11-16 (Found, below). A person's own root is not measured.
 
 **Found:**
 - pnpm 11.13.1's run-time deps check (`assertWantedLockfileUpToDate`) starts when any manifest's mtime is at or after
@@ -49433,6 +49436,32 @@ the installed lock the carried one.
 - Item 407 (records only): History's failed state offers "Restart the index" for a newer rosettad's ledger, which the
   button cannot fix. Item 408 (records only): an existing root's old sessions show no sent files until a
   `rosettad rebuild`, and nothing in VibeField runs or offers one; whether a later slice does is James's call.
+- *Added 2026-11-16 (item 463):* the first start of 0.1.7 over a root that 0.1.6 had indexed CAPTURES CODEX HISTORY
+  0.1.6 NEVER READ, and keeps it.
+  - On the QA stage (main `a6317979b`, desktop up 06:04:11Z), the root's `index` went 168 MiB → 6,351 MiB by
+    06:09:18Z. The codex raw ledger went 84 → 3,973 MiB and stopped by about 06:10Z (3,872 MiB at 06:20Z); the
+    database 8 → 465 MiB. The assets went 72 → 1,973 MiB and settled when image renditions finished (06:22:37Z). The
+    index SETTLED at 6,418 MiB, flat at 06:35Z: 38× what 0.1.6 had left. The ingestion state read "succeeded", with no
+    error line.
+  - The stage enables Codex alone and sets no home of its own, so it read the person's real Codex history: the stage's
+    figure is that history's cost under 0.1.7.
+  - Read in rosetta's source at `1bc7f45ef8ce`: #54 makes the Codex adapter read `.jsonl.zst` rollouts and
+    `archived_sessions/` rollouts, which 0.1.6 did not (`adapters/codex/src/adapter.rs:66-79`).
+  - It stores them DECODED, and each thread's selected view carries its ancestors' ranges again
+    (`docs/ARCHITECTURE.md:4291-4322`). That doc names the upgrade case: one selected view per existing cursor.
+  - No projection version moves, so this is new capture, not a rebuild.
+  - Nothing bounds it on disk:
+    - the ledger is kept forever, with "no segment GC yet" (`:3745`);
+    - a warm start never prunes images (`:2196-2201`);
+    - videos are never collected (`:3746`).
+  - Upstream's to bound, on James's release. Nothing in VibeField says this cost to a person before the step, and what
+    VibeField does about it is not decided.
+  - The new segments were written compressed: the background recompression found no plain segment. By rosetta's
+    own codex ratio, a reading, the ledger holds on the order of 15–20 GB of decoded history.
+  - NOT DETERMINED:
+    - how much is fork copies against first-time history (that needs the segments read, which is not done);
+    - the size a person's own root, with its other kinds, reaches.
+  - The stage's figures are qa-02's measurement, by name and size only.
 
 **Not done, and not claimed:** no V at the carried tip itself (grounds above); packaged-history not run at 0.1.7; the
 kit's Swift plane not moved; nothing pushed.
@@ -51088,3 +51117,315 @@ stop, stopped; the dry green; the carry's tree the dry's.
 **Not done, and not claimed:** AppsKeepTests' four rows are owed with the kit's other rows (no `swift test` on this
 Mac); nothing was looked at on a phone; the open app's ··· Keep and Versions on the phone (MA-5, after SP-4).
 Nothing pushed by this lane.
+
+## The CI red of 2026-11-15 — item 345's stand-ins run the alias's keeper before they bind (M320)
+
+(2026-11-16; three commits, 21 files +189 −90, tests and harness only. Cut by c2 on main `a6317979b` as `27f6f84c7`,
+`dd191c94c` and `777efe884` on branch `i345/ci-on-a6317979b`. Main moves once, on James's word and VF-PM's GO.
+On main they are `27f6f84c7`, `dd191c94c` and `777efe884`; every other id here is a side commit's, where it was cut or
+where a row ran.)
+
+**What was red.**
+- GitHub's verify on main was red at the four pushes from `635eb8430` (2026-11-15 02:16Z) to `a6317979b` (12:24Z).
+  It was not read after any of them. The last green was `8fffb13c7` (2026-11-11). `635eb8430` was the first push that
+  carried item 345 to CI.
+- At `a6317979b`: fieldd 37 files of 291 failed, with 671 lines of "listen EACCES: permission denied
+  /tmp/vfa-…/vf-<uid>/…/mgmt.sock". field-app's live-push failed 3 of 3 tests with "field-native did not come up before
+  the readiness deadline". The three earlier runs had the same shape.
+- A test-harness fault, not a product one. The runner's long TMPDIR exposed it; this Mac's short harness TMPDIR hid it:
+  - Item 345's law: a root keeps its run dir while `<root>/native/run/termframe.4294967295.sock` fits 103 bytes, that
+    is while the root is at most 66 bytes. A longer root takes the alias `<parent>/vf-<uid>/<scope>`.
+  - The runner's `tmpdir()` is 48 bytes, so every test root with a prefix of 12 characters or more took the alias. The
+    harness TMPDIR every whole verify here ran under was 24 bytes, so no root took it, and no stand-in was tried there.
+  - Ten stand-ins made their endpoint's folder with a recursive mkdir. On the alias road that made `vf-<uid>` 0755, and
+    every later keeper of the run refused it ("has mode 0755, not 0700"). That happened three times in each red run.
+  - The mocks bound at the alias's path before any keeper had made the link. That bind is ENOENT, which Node reports
+    as "listen EACCES". Others bound at the real run dir while fieldd's connect probed the alias before its keeper ran:
+    that is live-push's "did not come up".
+- The product's order is right: field-native runs its keeper before each bind, and fieldd before each dial.
+
+**What moved.**
+- `27f6f84c7`: fieldd's `test/alias-road.test.ts`, a root past the line under any `tmpdir()`. A mock floor stands at
+  the law's endpoint, fieldd boots against it, and the row asserts the link and its 0700 folder. On a red it says what
+  it found before the listen.
+- `dd191c94c`: fieldd's `standInEndpoint` (in `@vibefield/fieldd/testing`) runs the keeper, then derives the endpoint.
+  The harness's `nativeEndpoint` goes through it, which covers the fieldd files that derive endpoints there. The ten
+  mkdirs make the run dir instead. The eight mocks bound at the real path take `standInEndpoint` (field-app 4,
+  fieldd-client 1, fieldd 3). boot-env's own stand-in runs the keeper first.
+- `777efe884`: check-test-temp-roots' rule (e) names a test-side file that makes a socket endpoint's folder itself.
+  Three self-test fixtures. On main it names the ten sites; on this tree, none.
+
+**The proof.** `rows-cired.sh` (`bb5447b0132ad730`), on this Mac through the door, in a lane at main `a6317979b` with
+the patches in the working tree, beside a running QA desktop. TMPDIRs: one of the runner's 48 bytes and one of 27.
+- R1 (2026-11-16 06:45:43Z → 06:49:54Z, run.log `c4819e0db0cab173`), the gate row alone on main. **The red reproduced:**
+  - The gate row was red under both TMPDIRs: "listen EACCES: permission denied /tmp/vfa-…/vf-<uid>/…/mgmt.sock; before
+    the listen the alias was ENOENT, its folder ENOENT".
+  - Under 48 bytes: agent-inventory-age 19 of 19 red (EACCES), live-push 3 of 3 red ("did not come up"); both green
+    under 27 bytes.
+  - native-link then pair-log-root under 48 bytes: "…/vf-<uid> has mode 0755, not 0700 (open to others)".
+  - A first try of R1 (06:38Z) stopped before any test: CI=1 in the harness made pnpm refuse the lane's install. CI=1
+    now reaches vitest alone.
+- R3 (07:05:14Z → 07:12:36Z, run.log `bc3ce4606ddead1e`), all three commits:
+  - biome over the 21 files: clean (main's own infos alone). The typechecks of fieldd, field-app and fieldd-client:
+    clean.
+  - The wall's self-test: PASS 9, FAIL 0. The check over the tree: clean, 1240 test files read.
+  - Seven of seven runs green: the gate row, agent-inventory-age (19) and live-push (3) under both TMPDIRs, and
+    native-link then pair-log-root under 48 bytes (47 tests) with no "has mode 0755".
+- R3W (07:26:02Z → 08:06:27Z, run.log `377a8b799471dece`): the three suites whole under both, **six of six green**:
+  - fieldd: 287 files passed and 5 skipped, 4,056 tests passed and 15 skipped (1,123 s under 48 bytes, 1,110 s
+    under 27).
+  - field-app: 354 files, 5,077 tests. fieldd-client: 8 files, 47 tests.
+  - The known flake (item 466) did not show.
+- Around every run: the product folder's links into /tmp were 0 before and 0 after, and no run's alias parent was left.
+  Each stage reversed its patches and returned the lane.
+- The three commits' trees are those working trees', 21 of 21 paths at the proven blobs.
+- The train's V: V-TRAIN4, `pnpm verify` whole at the train's top on this Mac, beside a running QA desktop:
+  exit 0 in 2225 s, under a 48-byte TMPDIR (the length of the runner's on GitHub) with vitest capped at three
+  workers; fifteen stages opened; fieldd 288 files passed and 5 skipped (4068 tests), field-app 354 files
+  (5077 tests), cargo's 38 results ok, none failed; `alias-road.test.ts` among them. The landing-only gates
+  were not run.
+
+**Not covered.**
+- Nothing ran on GitHub. The runner's verify is read at the push.
+- Item 458, the open product edge: `NativeLink.connect` probes the endpoint before its keeper runs. A floor whose
+  alias link went is missed until field-native's 60 s re-check, after connect's 10 s deadline. It is not in this fix.
+- Every whole verify here before this train ran under a 24-byte TMPDIR; the train's V above and the push's hook are
+  the first under the runner's 48. Paths that depend on the length were tried before that only by R1 to R3W.
+- macOS only. Windows' pipes have no alias, and Linux was not run.
+
+**Not done, and not claimed:** no product change; no Electron or phone witness; nothing pushed.
+
+## MA — the phone's Keep words are James's: §9 and K4's comments lose ‹draft› (M321)
+
+(2026-11-16; 1 commit on main `a6317979bdb1`, `33c22c54e`, 3 paths. Drafted on K4's tip as a patch and re-read against
+main's three blobs after M319: `AppsKeep.swift` and `AppsKeepTests.swift` stood as drafted, and DESIGN.md had moved
+only by item 440's five lines, about 750 lines below the hunk. Cut in ma-6's own worktree by
+`lanes/ma-6/run-455/cut-455.sh`: `git apply --check` first, then one commit through the pre-commit hook
+("siblings:render: the committed rows (staged) are the lock's (15 npm, 0 cargo + 6 released on the registry, 3
+swift)"), each blob the one a trial outside the repository made, its diff the patch byte for byte, its message the
+draft's; one create-only ref, `ma/i455-on-a6317979b`. Lands on James's word, 2026-11-14 19:42:10Z in VF-PM's
+session, "I'm currently away from my Mac, so anything needs me to do on Mac I can not do right now, so just push
+forward on implementation progress, you can also run test on my Mac , and merge to main when things done and push to
+remote", and VF-PM's GO.)
+
+**Why.** M319 landed K4 with its reading of Keep's words marked ‹draft› on the phone. James answered, typed in VF-PM's
+session at 2026-11-15 10:11:20Z, "go with lean". VF-PM's reading, said back to him (VF-PM's words, not James's): the
+phone also says the desktop's first and third lines for the same two refusals, and a folder's app offers Keep as the
+shelf's does, as built.
+
+**What moved.**
+- **DESIGN.md §9 "Keep's words"**: the ‹draft› reading becomes ruled text, with his word and its time. The phone also
+  says the desktop's first and third lines for the same two refusals, so a full keep never reads as a bare "Couldn't
+  keep ‹app›."
+- **`AppsKeep.swift`**: `AppsKeepWords`' doc names his word in place of the ‹draft› note, and the two lines' comments
+  drop ‹draft›. **`AppsKeepTests.swift`**: the two rows' comments say "on the phone too".
+- Comments and the doc alone: no word a person reads moves, and no code moves.
+
+**The witness**:
+Compile witness (qa-01, on the Mac, 2026-11-16 05:55:41Z to 05:57:34Z, slot-455.sh 2d19cb55, at 25ebec044aa1):
+the Debug device build of the phone app, BUILD SUCCEEDED, 0 error lines. FieldHome recompiled; nothing was
+relinked or signed, and the app's binary is byte for byte the landed tree's (sha16 81529626d0a3b606), as a
+comments-only source change should leave it. Typechecks against that build: FieldHistoryTests (29 files),
+FieldHomeTests (83 files, AppsKeepTests.swift among them) and FieldDesignTests (20 files), 0 error lines each.
+No test row ran (the kit's rows are owed, as M316 records). Nothing installed, nothing launched, no package
+fetched.
+
+**Not done, and not claimed:** AppsKeepTests' four rows are still owed with the kit's other rows (no `swift test` on
+this Mac); nothing was looked at on a phone. Nothing pushed by this lane.
+
+## Item 454 — a listener reads up again when it waits with a descriptor free (M322)
+
+(2026-11-16; one commit, 2 files +118 −10. Cut by c2 on main `a6317979b` as `6792af46a` on branch
+`i454/listener-up-on-a6317979b`. Main moves once, on James's word and VF-PM's GO. On main it is `a0b196d44`; every
+other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- A unit whose accepts failed (the door, the MeshData bridge) read Degraded until an accept succeeded.
+- When the failed accepts left nothing queued, that could be never on a quiet floor. Settings → System status then
+  showed `door` and `native` degraded long after the floor had descriptors again.
+- Item 453's red row met exactly this on the door.
+
+**What moved (`local_ipc::accept` alone; no new API, no caller changed).**
+- While a run of failed accepts is open, each attempt's accept future is polled once without waiting. Ready ends or
+  continues the run as before.
+- Pending means the listener took no error and waits. The run then ends if this process holds fewer descriptors than
+  its soft limit (`room_to_accept`: the floor's own `/dev/fd` count against `getrlimit`). It logs `accept_recovered`
+  with `waiting = true`, and the unit reads Up.
+- Without room, it looks again after a breath, unless a connection comes first. The future is never cancelled.
+- Why the room check: on macOS a listener at its ceiling with nothing queued WAITS (the queue is read before the
+  descriptor is allocated), so Pending alone would read Up while every connection would still fail.
+- A later failed accept starts a new run: Degraded again, `accept_failing` again.
+- Where no per-process limit can be read (Windows), Pending alone ends the run.
+- The test (`listener_accept_pressure`): after the room, with nothing dialed, the door and mesh-bridge units must read
+  up within 3 s. Then the fresh connections, timed from the release as before.
+
+**The proof.** `rows-454.sh` (`f5f7cb6688779f3f`), on this Mac through the door, at main `a6317979b` with the two
+files in the working tree, 2026-11-16 06:11:04Z → 06:27:48Z, beside a running QA desktop, offline: **GREEN** (run.log
+`f40aa1059a7dd24f`).
+- The red, on main's product with the new test alone: `cargo test -p field-native --test listener_accept_pressure`
+  FAILED (0 passed, 1 failed) with item 454's words: "a unit did not read up again with nothing dialed, asked for 3 s
+  from the room (item 454): door not up, mesh-bridge not up".
+- With the change: `cargo fmt --check` clean, and `cargo clippy -p field-native --all-targets -- -D warnings` clean.
+- The listener row twenty times: twenty of twenty "test result: ok. 1 passed; 0 failed", the test 2.60 to 2.83 s each.
+  Run 1 built (99 s); runs 2 to 20 took 2 to 4 s each.
+- The door's tests and the other listeners' (`--test door --test door_bridge --test mesh_bridge --test mgmt_server`)
+  green, and `--lib local_ipc` green.
+- The two files were reversed after, and the lane returned with its refs equal (2484 = 2484).
+- The commit's tree is that working tree's, the two paths at blobs `eb5c66a7a949` and `c900220b71a2`.
+- The train's V: V-TRAIN4, `pnpm verify` whole at the train's top on this Mac, beside a running QA desktop: exit 0 in
+  2225 s; cargo's 38 results ok, none failed, `listener_accept_pressure` among them; rustfmt and clippy
+  inside it. The landing-only gates were not run.
+
+**Not proven.**
+- Windows: no Windows row ran, and the named-pipe listener's first poll is not read at the pinned versions (tokio
+  1.53.3, mio 1.2.2, ghosttea 0.15.0).
+- Linux: no Linux row ran. There the trigger stays queued, so main is green too; the red is macOS's.
+- With exactly one descriptor free, the room check's own open of `/dev/fd` can take it for that instant. An accept on
+  another listener could then fail and start a new run (Degraded again, logged again). That is possible, and not
+  proven.
+- That tokio's readiness stays set after a failed accept, so the first poll makes the accept call, is from memory and
+  not read at tokio 1.53.3. Its registration's `async_io`/`poll_io` and the unix listener's `accept` would prove it.
+  The claims above do not rest on it: the rows prove them on macOS.
+- How long `room_to_accept` takes per call was not measured.
+
+**Not done, and not claimed:** no Electron or phone witness of the status rows; nothing pushed.
+
+## Item 466 — plugin-settings.test reads the settings doc as its writer leaves it, never the raw path (M323)
+
+(2026-11-16; one commit, 1 file, test-only. Cut by RV on main `a6317979b` as `b2b2942ab`, the first of six on branch
+`rv/i452-466-on-a6317979b`. Main moves once, on James's word and VF-PM's GO.
+On main it is `85ce068de`; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was red.**
+- One whole fieldd suite on 2026-11-16 (the second run of RV's row for items 449, 457, 442 and 452; it ended
+  06:59:27Z, load 22.93) failed one test, `plugin-settings.test.ts` "disable keeps settings/KV on disk; re-enable
+  restores read access": "AssertionError: expected false to be true" at its line 607,
+  `expect(existsSync(settingsDocPath(dataDir))).toBe(true)`, read right after `plugins.disable`. The same test passed
+  in that row's first run, at a tree that differs only in one line of another test file.
+- Why, by the source (read on main, no run needed):
+  - Since M317 a plugin act answers once its move is done, and its publication is fire-and-forget to the caller
+    (install-reconciler.ts `localAct`). So the settings doc's write can still be running when the RPC answers.
+  - The doc's writer, `SystemDocFile`, renames the previous file to `.last-good` and THEN renames the new one in
+    (system-doc-file.ts). Between the two renames no `doc.loro` stands, and each rename carries its own fsync, so
+    load widens the window.
+- Found: since M317 plugin-settings.test read the raw doc path after a fire-and-forget publication; red once in a
+  whole suite under load (2026-11-16). It is main's own latent race, with or without the five that follow it.
+- The same suite was green in the CI fix's row, two whole runs (VF-PM's read), and in the third run of RV's row.
+
+**What moved (the test file alone).**
+- One helper, `settingsDocStands`, reads the doc as standing while its file OR its `.last-good` does, which is what
+  the loader reads. The test's three raw reads of the doc's path use it.
+- One of the two stands at every instant after the first write: the first rename replaces `.last-good` atomically,
+  the second lands the file. It is not a sleep and not a retry, and no public seam awaits an act's publication.
+- Said plainly: a disable that deleted `doc.loro` while a last good copy stood would now pass this assert. That is
+  the loader's own reading (it would load the last good copy), and the test's read-back after the re-enable still
+  checks the values through the API.
+- No red row: the race cannot be forced without a seam in the writer.
+- The file holds one NUL byte (the fake secret store's key separator), so git reads it as binary. The commit took
+  the whole file, its blob held, never a text hunk.
+
+**The proof.**
+- The third run of RV's row (`row-i452.sh`, `15646167ee0c6564`), on this Mac through the door, beside a running QA
+  desktop, 2026-11-16 07:16:16Z → 07:23:01Z: **GREEN** (run.log `5b492d82d06c197b`). At this commit's tree, its first
+  step: `plugin-settings.test.ts` 19 of 19; fieldd's typecheck exit 0; biome over the file exit 0, "Checked 1 file".
+- At the top of the six (this commit and the five after it): fieldd's whole suite 4067 of 4082 passed, 15 pending,
+  in 292 files, at load about 22.
+
+**Not covered.**
+- The race itself stands in the product: a caller that reads the doc's path right after a plugin act can meet the
+  window. No product code is known to do so; nothing here changes the writer or `localAct`.
+
+**Not done, and not claimed:** no product change; nothing pushed.
+
+## Items 449, 457, 442 and 452 — the records file has one writer, and keeps a person's unpublished act (M324)
+
+(2026-11-16; five commits, `43fcbd105` to `3a2cf0dbb`, after item 466's `b2b2942ab` on branch
+`rv/i452-466-on-a6317979b`, cut by RV on main `a6317979b` by `cut-i452.sh` (`0c83762bbadadf9d`), each through the
+hook, each file taken whole from the trees the row proved, each commit's tree held to the row's expected tree and its
+message byte for byte. No message carries a `Claude-Session:` line or a board card id. Main moves once, on James's
+word and VF-PM's GO.
+On main they are `3bd560918`, `38161918c`, `923cf22fb`, `5d1ac1b51` and `f4e93e3c7`.
+Every other id here is a side commit's.)
+
+**What is real.**
+- **Item 449, the records' folder** (`3bd560918` red, `38161918c`). The records' save made `join(dataDir, "fieldd",
+  "plugins")` beside a records path read from `LAYOUT.PLUGIN_RECORDS_FILE` (431), two names for one folder by hand
+  alone. The save now makes the records file's own folder. Since item 457's commit the writer makes it, from the path
+  it is given.
+- **Item 457, the records file's writes** (`923cf22fb` red, `5d1ac1b51`).
+  - Every plugin's enable, disable and grant writes the ONE records file, and two plugins' acts can run together. Main
+    wrote one fixed `install-records.json.tmp` and renamed it, with nothing ordering the writes: a second write made
+    while the first stood between its write and its rename renamed the shared tmp first, and the first act failed
+    (ENOENT) after the file already held its change.
+  - A records file the registry could not read read as FIRST BOOT: every decision gone, each revoked power granted
+    again and each disabled plugin on again at the next start.
+  - The registry's records now go through `SystemDocFile`, the writer the settings doc and the library already use,
+    unchanged. Writes run one at a time, each with the records as they stand when it runs; a joined write's failure
+    rejects every caller that joined it. A write is a tmp at mode 0600, an fsync, the previous file renamed to
+    `.last-good`, the tmp renamed in, a directory fsync. One shared load: strict UTF-8, JSON, version 1, a plugins
+    map, or the copy is kept aside as `.torn-<ms>` and the last good copy is read. Only nothing readable is first
+    boot. The registry takes a logger, and the daemon passes one, so a kept-aside copy and a fall-back are logged.
+- **Items 442 and 452, a person's unpublished act** (`f4e93e3c7`). The registry holds one mark per plugin for this
+  desktop's acts the account has not received yet (`UnpublishedMark`: `enabled`, `revoked`, `removed`, `installed`),
+  with `unpublished(id)`, `mark` and `clearMark`.
+  - One seam, `persisted(part, value)`, decides where a part lives: the RESTRICTING parts (`enabled: false`,
+    `revoked`, `removed`) are written to the records file in its own write, so they outlive a restart; the ENABLING
+    parts (`enabled: true`, `installed`) live in the process's memory alone, never written and never read from the
+    file. A write also drops any part the file held that it may not hold.
+  - Presence is one thing: in `mark` itself a removal clears an install standing and an install clears a removal.
+  - A file from an older build reads as nothing marked; a part of the wrong type reads as absent.
+- **What a planted mark can do, said plainly:** a RESTRICTING mark (off, revoked, removed) IS read from the file, and
+  once the reconciler uses the marks it would be sent to the account. So a same-uid write to install-records.json
+  can switch a plugin off, take a power away or remove a plugin's code (its data kept) on every desktop. It only
+  restricts: nothing planted in the file can turn anything on, here or elsewhere. This is new with these commits. The
+  settings doc's own file can already do all three, and more. No plugin token can carry `plugins.manage`, which all
+  five plugin doors need.
+- **Said plainly, from the writer:** a fall-back to the last good copy LOSES the newest write, which can be a
+  revocation (a power taken away in it is granted again at that start), still far better than first boot. The first
+  start on an existing records file needs no migration. An older build's own `install-records.json.tmp` is left
+  where it lies. Two new siblings can stand beside the records file: `.last-good`, and `.torn-*` only when a copy
+  could not be read. Mode 0600 changes nothing against a process of the same uid. A downgrade reads the same JSON
+  and writes over it with its fixed tmp. A newer version's files are both kept aside and this build starts as first
+  boot: nothing destroyed, nothing restored by itself. One writer per data folder: two registries on one data folder
+  in one process would share `<file>.<pid>.tmp`; production makes one.
+- **The rows, red then green**: 449's text row in `plugin-registry.test.ts`; 457's four rows in the new
+  `plugin-registry-records-writes.test.ts` (two plugins' writes made together; a torn file beside a last good copy;
+  no file beside a last good copy; another version's file), the rename of the first armed write parked so the
+  interleaving is forced, its bound 250 ms and spent whole by every green run; the mark's seven green-only rows in
+  `plugin-registry.test.ts`. Every commit typechecks.
+
+**What is stubbed.**
+- Nothing writes or reads a mark yet outside the rows. The reconciler's use of the marks (written before the move,
+  held by a walk, carried by a publication, dropped when no longer true) is a later commit; `parkedRevokes` stays
+  until then. So the person-facing gap of items 442 and 452 is NOT closed by these commits.
+
+**The proof.**
+- The third run of RV's row (`row-i452.sh`, `15646167ee0c6564`), on this Mac through the door, beside a running QA
+  desktop, under the env -i harness with the ssh stand-in first on PATH, 2026-11-16 07:16:16Z → 07:23:01Z: **GREEN**
+  (run.log `5b492d82d06c197b`). Each commit at its own tree, its tree held to the expected one in a throwaway
+  repository of the row's own:
+  - 449's red: `plugin-registry.test.ts` 15 of 16, the one red by its own words; then 16 of 16.
+  - 457's red: all 4 rows of `plugin-registry-records-writes.test.ts` red, each by its own assert; then 20 of 20 in
+    that file and `plugin-registry.test.ts`.
+  - The mark: 27 of 27 in the same two files.
+  - At every tree fieldd's typecheck exit 0, and biome over the files the commit touches exit 0.
+  - At the top of the six: fieldd's whole suite 4067 of 4082 passed, 15 pending, in 292 files, at load about 22;
+    field-app's typecheck exit 0; the diff over packages/contracts, packages/field-native and docs/plugin-authoring
+    empty.
+- The row's first run (2026-11-16 06:28Z → 06:35Z) was RED at biome alone: one drafted line in 457's test file with
+  its trailing comment ran past the formatter's width. The line was split in two. The second run (06:52Z → 06:59Z)
+  was RED at one whole-suite test, `plugin-settings.test.ts`, which is item 466's, landed first in this train. Both
+  stay recorded so.
+
+**Not covered (open).**
+- **The reconciler's use of the marks**, and so items 442 and 452 for a person: a later commit, with its own row.
+- **Commits 3 and 4 of the stack** (452's and 442's red rows R1 to R7 and R9, through the reconciler) are NOT in this
+  train. They are red by their own words at the stage's top, and land with that later commit.
+- **Item 451, the rest of row B**, waits for its own row. **Item 450** stays untouched. **Item 456** is parked with
+  the custody items; this design leaves it open.
+- Not on a booted daemon: no row kills fieldd between a mark and its move, or fails a real disk write; the restart
+  rows are unit rows. Nothing proves the mark and a walk joined on a real boot.
+- Nothing was looked at in a window: no UI moves here.
+- `pnpm gate:landing`: deferred, not waived; owed at James's unlock.
+
+**Not done, and not claimed:** no contracts change and no generator input touched; nothing pushed.
