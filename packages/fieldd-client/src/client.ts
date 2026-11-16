@@ -317,6 +317,13 @@ interface SubEntry {
    * only such entries are replayed on reconnect (unsent ones are still owned
    * by their pending subscribe() call). */
   sentOnce?: boolean;
+  /** Item 469 (2026-11-16) — the socket (`FielddClient.socketEpoch`) this
+   * entry's subscribe or replay was last sent on. A subscribe waiting for
+   * `ready` sends on the new socket while that socket's replay pass is still
+   * walking; the pass skips an entry already sent on its own socket, so the
+   * daemon installs it once, not twice (the second install's `subId` replaced
+   * the first, which no unsubscribe could reach until the next disconnect). */
+  sentOn?: number;
   /** SubscribeOptions.params — read when a replay is sent */
   replayParams?: () => unknown;
   /** SubscribeOptions.onReplayFailed */
@@ -354,6 +361,8 @@ export class FielddClient {
   private subs = new Map<number, SubEntry>();
   private subRoutes = new Map<string, number>(); // subId -> local sub key
   private nextSubKey = 1;
+  /** Item 469 — counts the sockets dialed; a sent entry records it (`sentOn`) */
+  private socketEpoch = 0;
   private attempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private statusListeners = new Set<() => void>();
@@ -609,6 +618,7 @@ export class FielddClient {
       return;
     }
     this.setStatus(reconnecting ? "reconnecting" : "connecting");
+    this.socketEpoch += 1;
     const ws = new WS(this.opts.url);
     this.ws = ws;
     ws.addEventListener("open", () => {
@@ -808,10 +818,14 @@ export class FielddClient {
    * still replay and `ready` stands. A socket lost mid-replay stops the pass:
    * the next hello replays whatever is still standing. Never throws. */
   private async replaySubscriptions(ws: WsLike): Promise<void> {
+    // the socket this pass replays onto (the check below keeps it current)
+    const epoch = this.socketEpoch;
     for (const [key, sub] of [...this.subs]) {
       if (this.ws !== ws) return;
-      // unsent: still owned by its pending subscribe() call; gone: unsubscribed meanwhile
-      if (!sub.sentOnce || this.subs.get(key) !== sub) continue;
+      // unsent: still owned by its pending subscribe() call; gone: unsubscribed
+      // meanwhile; sent on THIS socket: a subscribe that waited for this hello
+      // and sent while the pass awaited an earlier replay (item 469)
+      if (!sub.sentOnce || sub.sentOn === epoch || this.subs.get(key) !== sub) continue;
       await this.replayOne(ws, key, sub);
     }
   }
@@ -937,7 +951,10 @@ export class FielddClient {
     if (!ws) return Promise.reject(new FielddRpcError("UNAVAILABLE", "not connected", true));
     if (subKey !== undefined) {
       const sub = this.subs.get(subKey);
-      if (sub) sub.sentOnce = true;
+      if (sub) {
+        sub.sentOnce = true;
+        sub.sentOn = this.socketEpoch;
+      }
     }
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
