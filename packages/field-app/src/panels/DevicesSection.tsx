@@ -1040,7 +1040,10 @@ export function DevicesSection({
   const client = useFielddClient();
   const door = useLinkDoor();
   const roster = useSubscription<DeviceInfo[]>("device.subscribe");
-  const preferences = useSubscription<AppPreferences>("storage.appPreferences.subscribe");
+  // Item 467 (2026-11-16) — `{}`, as every reader of this feed spells it: a
+  // shared feed is keyed by method and params exactly, so a missing params
+  // would open a second subscription on the wire for the same feed
+  const preferences = useSubscription<AppPreferences>("storage.appPreferences.subscribe", {});
   // an older daemon says nothing of the switch: its silence is on, as the contract reads it
   const connectAsks =
     preferences.status === "live" ? (preferences.data?.connectAsks ?? true) : null;
