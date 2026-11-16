@@ -217,7 +217,15 @@ export const PRODUCT_API_LIMITS = {
   /** Generous for every real client — the desktop's busiest window holds a
    * handful — and small enough that a runaway is refused in the same second it
    * starts. A caller past it gets RESOURCE_EXHAUSTED and keeps everything it
-   * already had: the refusal never disturbs live subscriptions. */
+   * already had: the refusal never disturbs live subscriptions.
+   * *Errata (2026-11-16, item 467): "holds a handful" was never counted. Counted
+   * from source on 2026-11-16, a window on a Settings → Agents profile page with
+   * Godview open and three renderer plugins staged held 29 live subscriptions,
+   * about eleven of them one feed opened again; a visited History and an empty
+   * shell's launcher or a Chat thread took it past this bound. With item 467's
+   * shared feeds the same page holds 20, and 24 at the count's worst case
+   * (History opened +2, a Chat thread +1, a launcher's empty shell +1), against
+   * the budget of 32. Counted, not measured. The bound itself is unchanged.* */
   SUBSCRIPTIONS_PER_CONNECTION: 32,
   /** SP-1 (SP-L4; design-06 §2.2) — the door's per-subscriber trailing-edge
    * floor for a WHOLE-VALUE stream (`subscription.shape: "stream"` in
