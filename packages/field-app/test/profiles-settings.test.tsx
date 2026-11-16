@@ -26,6 +26,7 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
 import { type ProfilesRoute, ProfilesSection } from "../src/panels/agents/ProfilesSection";
 import { UsageTimeline } from "../src/panels/agents/ProfilesView";
 import {
@@ -1007,33 +1008,102 @@ describe("a profile's page", () => {
     expect(button("Refresh usage").disabled).toBe(false);
   });
 
-  it("shows a provider's refusal and retry time alongside retained meters", async () => {
-    const f = fake(
-      doors({
-        "agents.usage": () => ({
-          generatedAt: new Date(Date.parse(READ) + 60_000).toISOString(),
-          entries: [
-            {
-              ...USAGE[0]!,
-              state: "rate-limited",
-              stale: true,
-              message: "Please wait before checking again",
-              retryAt: new Date(Date.parse(READ) + 120_000).toISOString(),
-            },
-          ],
+  it("says VibeField's own sentence and the latest retry time, never the agent's words, and logs those (item 488)", async () => {
+    // Item 488 (2026-11-16) — a refused reading's `message` is the agent
+    // adapter's sentence. The notice used to print each row as the adapter's
+    // label and that sentence; it says VibeField's one sentence now, and the
+    // adapter's words go to the log, bounded.
+    const before = getRendererLogger();
+    const heard: Array<{ level: string; event: string; attrs: Record<string, unknown> }> = [];
+    const quiet = (): void => undefined;
+    const logger: RendererLogger = {
+      child: () => logger,
+      trace: quiet,
+      debug: (event, _message, attrs) => {
+        heard.push({ level: "debug", event, attrs: { ...attrs } });
+      },
+      info: quiet,
+      warn: (event, _message, attrs) => {
+        heard.push({ level: "warn", event, attrs: { ...attrs } });
+      },
+      error: quiet,
+      fatal: quiet,
+      isLevelEnabled: () => true,
+    };
+    const failed = (level: string) =>
+      heard.filter(
+        (line) => line.level === level && line.event === "renderer.profiles.usage_refresh_failed",
+      );
+    setRendererLogger(logger);
+    try {
+      const codex = persona({
+        profileId: "p-codex",
+        provider: "codex",
+        identity: signedIn("kim@work.example", "Pro"),
+      });
+      const sooner = new Date(Date.parse(READ) + 120_000).toISOString();
+      const later = new Date(Date.parse(READ) + 600_000).toISOString();
+      const long = `The agent's own words. ${"x".repeat(2_000)}`;
+      const f = fake(
+        doors({
+          "agents.usage": () => ({
+            generatedAt: new Date(Date.parse(READ) + 60_000).toISOString(),
+            entries: [
+              {
+                ...USAGE[0]!,
+                state: "rate-limited",
+                stale: true,
+                message: "Please wait before checking again",
+                retryAt: sooner,
+              },
+              {
+                provider: "codex",
+                label: "Codex",
+                profileId: "p-codex",
+                state: "unauthenticated",
+                metrics: [],
+                message: long,
+                retryAt: later,
+                fetchedAt: READ,
+              },
+            ],
+          }),
         }),
-      }),
-    );
-    await mountSection(f.client, {
-      feed: feed([NATIVE, WORK]),
-      route: { kind: "profile", set: "work" },
-    });
-    await click(button("Refresh usage"));
-    expect(container?.querySelector('[role="alert"]')?.textContent).toContain(
-      "Please wait before checking again",
-    );
-    expect(text()).toContain("Retry after");
-    expect(text()).toContain("91%");
+      );
+      await mountSection(f.client, {
+        feed: feed([NATIVE, set({ id: "work", personas: [WORK_CLAUDE, codex] })]),
+        route: { kind: "profile", set: "work" },
+      });
+      await click(button("Refresh usage"));
+      const alert = container?.querySelector('[role="alert"]')?.textContent ?? "";
+      expect(alert).toContain(
+        `Usage couldn't be refreshed. Retry after ${new Date(later).toLocaleTimeString()}.`,
+      );
+      expect(alert).not.toContain(new Date(sooner).toLocaleTimeString());
+      // no agent's words, and no agent's label before a colon, anywhere on the page
+      expect(text()).not.toContain("Please wait before checking again");
+      expect(text()).not.toContain("The agent's own words");
+      expect(alert).not.toContain("Claude Code:");
+      expect(alert).not.toContain("Codex:");
+      // the retained reading still shows
+      expect(text()).toContain("91%");
+      // the route's opening refreshed SILENTLY: its failures are heard at debug, once each,
+      // and only the pressed refresh speaks at warn
+      expect(failed("debug").map((line) => line.attrs.provider)).toEqual(["claude", "codex"]);
+      // the log has each failed reading of the pressed refresh, the agent's words bounded
+      const lines = failed("warn");
+      expect(lines.map((line) => line.attrs.provider)).toEqual(["claude", "codex"]);
+      expect(lines[0]?.attrs).toMatchObject({
+        state: "rate-limited",
+        profileId: "p-claude",
+        reason: "Please wait before checking again",
+      });
+      expect(lines[1]?.attrs).toMatchObject({ state: "unauthenticated", profileId: "p-codex" });
+      expect(String(lines[1]?.attrs.reason)).toHaveLength(501);
+      expect(String(lines[1]?.attrs.reason).endsWith("…")).toBe(true);
+    } finally {
+      setRendererLogger(before);
+    }
   });
 
   it("does not carry a late refresh notice to another profile", async () => {

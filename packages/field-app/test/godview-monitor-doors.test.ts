@@ -401,7 +401,9 @@ describe("the usage port over fieldd's account-usage door", () => {
       retryable: true,
       retryAt: "2026-09-13T12:30:00.000Z",
     });
-    expect(failure?.message).toContain("rate limited");
+    // Item 488 (2026-11-16) — the views get VibeField's word for the state,
+    // never the adapter's sentence ("Claude account usage is rate limited; …")
+    expect(failure?.message).toBe("rate-limited");
   });
 
   it("keeps a state that IS a failure status as itself", () => {
@@ -444,9 +446,11 @@ describe("the usage port over fieldd's account-usage door", () => {
     }).entries[0];
     expect(stale?.result.status).toBe("available");
     expect(stale?.stale).toBe(true);
+    // Item 488 (2026-11-16) — the refresh that failed is said in VibeField's
+    // word for its state; the adapter's "the provider timed out" stays in fieldd
     expect(stale?.refreshFailure).toMatchObject({
       status: "unavailable",
-      message: "the provider timed out",
+      message: "unavailable",
       retryable: true,
     });
     // …and the retained numbers keep their OWN age, not the batch's.
