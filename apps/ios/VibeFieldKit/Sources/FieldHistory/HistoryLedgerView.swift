@@ -48,16 +48,26 @@ public struct HistoryLedgerView: View {
     FieldHistoryModel.rootHead(projects: projects.corpus.projects.count, cut: projects.cut)
   }
 
+  /// Item 516 (James, 2026-11-17 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon"; P1, P4) —
+  /// what the ledger's place holds while it shows no project: History's first read, in the Setup Assistant's words,
+  /// or no desktop answering with nothing kept, the mark at rest (`HistoryOpening.ledger`).
+  private var held: HistoryOpening.Words? {
+    HistoryOpening.ledger(
+      hasProjects: !projects.corpus.projects.isEmpty, standing: projects.standing, answered: projects.answered,
+      index: projects.index, desktop: projects.sourceName)
+  }
+
   public var body: some View {
     NavigationStack(path: $router.path) {
       ScrollView {
-        if projects.corpus.projects.isEmpty, projects.isReplaying, history.readers.isEmpty {
-          noDesktop
-        } else {
+        // Item 516 — while the place holds, the page under the hold is its paper alone, and says nothing twice
+        if held == nil {
           ledger
             .padding(.bottom, 40)
         }
       }
+      // Item 516 — the ledger's waits hold between the head and the foot (HistoryOpening.swift)
+      .historyHold(held, place: .root)
       .foldsBar(router)
       .readsTopPull()
       // Item 350 (James, 2026-11-12): the root's title stands in the band Field's Stories row stands in, on the
@@ -113,7 +123,7 @@ public struct HistoryLedgerView: View {
       if let project = projects.corpus.project(id) {
         HistoryProjectView(
           project: project, sessions: projects.corpus.sessions(of: id), corpus: projects.corpus,
-          standing: projects.standing,
+          standing: projects.standing, sessionsRead: projects.sessionsRead(id),
           index: FieldHistoryModel.indexSentence(projects.index, desktop: projects.sourceName),
           indexPlatform: projects.sourcePlatform, router: router, onNeed: onNeed)
       } else {
@@ -166,10 +176,13 @@ public struct HistoryLedgerView: View {
         .transition(.opacity)
       }
       if corpus.projects.isEmpty {
-        // fix7 — never "no project" while the door's index is not ready
-        let empty = FieldHistoryModel.emptyLedger(
+        // fix7 — never "no project" while the door's index is not ready; item 516 — and no note where the
+        // place holds
+        if let empty = FieldHistoryModel.emptyLedger(
           standing: standing, index: projects.index, desktop: projects.sourceName, device: DeviceWord.current)
-        QuietNote(title: empty.title, text: empty.text)
+        {
+          QuietNote(title: empty.title, text: empty.text)
+        }
       } else {
         GroupHead(live.label, count: live.count)
         VStack(spacing: 6) {
@@ -422,20 +435,8 @@ public struct HistoryLedgerView: View {
       } ?? "\(project.name), \(project.figure) \(project.unit.isEmpty ? "sessions" : project.unit + " tokens"), last \(project.last)")
   }
 
-  // MARK: - Honest-missing: no desktop's door answers and nothing is cached
-
-  private var noDesktop: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      Text("no desktop has been read")
-        .font(ChromeType.sans(13))
-        .foregroundStyle(ChromePalette.inkTertiary)
-        .padding(.horizontal, HistoryParts.sidePadding)
-        .padding(.top, 2)
-      let note = FieldHistoryModel.noDesktopRead(device: DeviceWord.current)
-      QuietNote(title: note.title, text: note.text)
-    }
-    .padding(.bottom, 40)
-  }
+  // RETIRED 2026-11-17 (item 516, P4): `noDesktop`, "no desktop has been read" over the note History comes from
+  // your desktops, where no desktop answered and nothing was kept. That place holds now, its mark at rest (`held`).
 }
 
 // RETIRED 2026-11-06 (SE-2): `DesktopHead`, a desktop's head over search's page's hits when more than one desktop

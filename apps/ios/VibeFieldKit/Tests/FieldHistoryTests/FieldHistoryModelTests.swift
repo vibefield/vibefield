@@ -61,13 +61,13 @@ struct FieldHistoryModelTests {
     for device in [DeviceWord.iPad, .unknown] {
       let words = [
         FieldHistoryModel.headNote(corpus, standing: incompatible, device: device) ?? "",
-        FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: device).text,
-        FieldHistoryModel.emptyLedger(standing: .connected, index: stopped, desktop: "studio", device: device).text,
+        FieldHistoryModel.emptyLedger(standing: incompatible, index: nil, desktop: "studio", device: device)?.text
+          ?? "",
+        FieldHistoryModel.emptyLedger(standing: .connected, index: stopped, desktop: "studio", device: device)?.text
+          ?? "",
         FieldHistoryModel.projectNotRead(device: device).title, FieldHistoryModel.projectNotRead(device: device).text,
         FieldHistoryModel.sessionNotRead(device: device).text,
-        FieldHistoryModel.noDesktopRead(device: device).title, FieldHistoryModel.noDesktopRead(device: device).text,
-        FieldHistoryModel.projectSessionsNote(awake: true, desktop: "studio").text,
-        FieldHistoryModel.projectSessionsNote(awake: false, desktop: "studio").text,
+        FieldHistoryModel.projectSessionsNote(desktop: "studio").text,
       ]
       for word in words {
         #expect(!word.localizedCaseInsensitiveContains("phone"), "\(device): \(word)")
@@ -80,11 +80,12 @@ struct FieldHistoryModelTests {
     #expect(
       FieldHistoryModel.headNote(corpus, standing: incompatible, device: .iPad)
         == "studio needs the same VibeField as this iPad")
+    // item 516 — a desktop that speaks another VibeField keeps the note; one that does not answer holds instead
     #expect(
-      FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: .iPad).text
+      FieldHistoryModel.emptyLedger(standing: incompatible, index: nil, desktop: "studio", device: .iPad)?.text
         == "Nothing of your history is on this iPad yet; your projects arrive when one of your desktops answers.")
     #expect(
-      FieldHistoryModel.emptyLedger(standing: .connected, index: stopped, desktop: "studio", device: .unknown).text
+      FieldHistoryModel.emptyLedger(standing: .connected, index: stopped, desktop: "studio", device: .unknown)?.text
         == "Nothing new arrives on this device until it runs again. Try again from History on studio.")
     let project = FieldHistoryModel.projectNotRead(device: .iPad)
     #expect(project.title == "This project has not been read here")
@@ -92,20 +93,14 @@ struct FieldHistoryModelTests {
     let session = FieldHistoryModel.sessionNotRead(device: .iPad)
     #expect(session.title == "This session has no document here")
     #expect(session.text == "Its desktop does not answer, and this iPad has not read its turns before.")
-    let none = FieldHistoryModel.noDesktopRead(device: .iPad)
-    #expect(none.title == "History comes from your desktops")
-    #expect(
-      none.text
-        == "None of them is answering right now, and this iPad has read none before. Your projects and sessions "
-        + "arrive from the first one that answers.")
+    // item 516 — `noDesktopRead` is retired: with no desktop answering and nothing kept, the ledger's place holds
+    // (HistoryHoldsTests)
   }
 
-  @Test("item 505: a project's empty session list names its desktop, awake or asleep, and never how it is reached")
+  @Test("item 505: a project's empty session list names its desktop, and never how it is reached")
   func projectSessionsWait() {
-    let awake = FieldHistoryModel.projectSessionsNote(awake: true, desktop: "studio")
-    #expect(awake.title == "Reading the sessions…")
-    #expect(awake.text == "They arrive as studio answers.")
-    let asleep = FieldHistoryModel.projectSessionsNote(awake: false, desktop: "studio")
+    // item 516 — only while its desktop does not answer: while it answers, the list holds (HistoryHoldsTests)
+    let asleep = FieldHistoryModel.projectSessionsNote(desktop: "studio")
     #expect(asleep.title == "No sessions read for this project")
     #expect(asleep.text == "They arrive once studio answers.")
   }
@@ -128,16 +123,18 @@ struct FieldHistoryModelTests {
 
   @Test("item 505: an empty ledger says how History stands in its own words, and fieldd's words stay off the screen")
   func emptyLedgerWords() {
+    // item 516 — History opening, updating or reading, and no desktop answering, say no note: the place holds
+    let waits: [FieldHistoryModel.IndexStanding] = [
+      .starting(detail: "waking the index"), .rebuilding(detail: "schema 7 to 8"),
+      .indexing(percent: 61, done: "8,400", total: "13,700"),
+    ]
+    for index in waits {
+      let note = FieldHistoryModel.emptyLedger(standing: .connected, index: index, desktop: "studio", device: .iPad)
+      #expect(note?.title == nil, "\(String(describing: index))")
+    }
+    let asleep = FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: .iPad)
+    #expect(asleep?.title == nil)
     let says: [(FieldHistoryModel.IndexStanding?, String, String)] = [
-      (.starting(detail: "waking the index"), "History on studio is opening", "Its projects arrive when it is open."),
-      (
-        .rebuilding(detail: "schema 7 to 8"), "History on studio is updating",
-        "Its projects arrive when the update ends."
-      ),
-      (
-        .indexing(percent: 61, done: "8,400", total: "13,700"), "studio is reading its history",
-        "8,400 of 13,700 sessions read; its projects arrive as it reads."
-      ),
       (
         .failed(reason: "rosettad stopped"), "History on studio has stopped",
         "Nothing new arrives on this iPad until it runs again. Try again from History on studio."
@@ -156,8 +153,8 @@ struct FieldHistoryModelTests {
     ]
     for (index, title, text) in says {
       let note = FieldHistoryModel.emptyLedger(standing: .connected, index: index, desktop: "studio", device: .iPad)
-      #expect(note.title == title, "\(String(describing: index))")
-      #expect(note.text == text, "\(String(describing: index))")
+      #expect(note?.title == title, "\(String(describing: index))")
+      #expect(note?.text == text, "\(String(describing: index))")
     }
   }
 

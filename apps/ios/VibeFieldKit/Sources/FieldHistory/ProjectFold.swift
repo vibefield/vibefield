@@ -138,22 +138,27 @@ extension FieldHistoryModel {
   ///
   /// Item 505 (DESIGN.md §9, IS-282-3 and IS-282-7) — History speaks as History: it opens, updates, reads or has
   /// stopped, and its index is History. fieldd's detail and reason are insides and are not said here.
+  ///
+  /// Item 516 — nil where the ledger's place HOLDS instead (`HistoryOpening.ledger`): no desktop answering, and
+  /// History opening, updating or reading on its desktop. Their notes stood here until then ("History on studio is
+  /// opening" over "Its projects arrive when it is open.", and the like); the hold says them now.
   public static func emptyLedger(
     standing: DesktopStanding, index: IndexStanding?, desktop: String, device: DeviceWord
-  ) -> (title: String, text: String) {
-    if !standing.isAwake {
+  ) -> (title: String, text: String)? {
+    switch standing {
+    case .asleep:
+      return nil
+    case .incompatible:
       return (
         "Your projects have not been read yet",
         "Nothing of your history is on \(device.this) yet; your projects arrive when one of your desktops answers."
       )
+    case .connected, .indexing:
+      break
     }
     switch index {
-    case .starting?:
-      return ("History on \(desktop) is opening", "Its projects arrive when it is open.")
-    case .rebuilding?:
-      return ("History on \(desktop) is updating", "Its projects arrive when the update ends.")
-    case .indexing(_, let done, let total)?:
-      return ("\(desktop) is reading its history", "\(done) of \(total) sessions read; its projects arrive as it reads.")
+    case .starting?, .rebuilding?, .indexing?:
+      return nil
     case .failed?:
       return (
         "History on \(desktop) has stopped",
@@ -186,22 +191,16 @@ extension FieldHistoryModel {
     )
   }
 
-  /// Item 505 — a project's session list while none has arrived: reading while its desktop answers, else waiting
-  /// for it to. Its desktop is named as the person named it.
-  public static func projectSessionsNote(awake: Bool, desktop: String) -> (title: String, text: String) {
-    awake
-      ? ("Reading the sessions…", "They arrive as \(desktop) answers.")
-      : ("No sessions read for this project", "They arrive once \(desktop) answers.")
+  /// Item 505 — a project's session list while none has arrived and its desktop does not answer: waiting for it to.
+  /// Its desktop is named as the person named it. Item 516 — while its desktop answers the list holds instead
+  /// (`HistoryOpening.sessions`); the note "Reading the sessions…" over "They arrive as studio answers." is retired.
+  public static func projectSessionsNote(desktop: String) -> (title: String, text: String) {
+    ("No sessions read for this project", "They arrive once \(desktop) answers.")
   }
 
-  /// No desktop answers and nothing is cached.
-  public static func noDesktopRead(device: DeviceWord) -> (title: String, text: String) {
-    (
-      "History comes from your desktops",
-      "None of them is answering right now, and \(device.this) has read none before. Your projects and sessions "
-        + "arrive from the first one that answers."
-    )
-  }
+  // RETIRED 2026-11-17 (item 516, P4): `noDesktopRead`, the note "History comes from your desktops" where no desktop
+  // answered and nothing was cached. That place holds now, its mark at rest: "No desktop is answering", "History
+  // opens when one wakes." (`HistoryOpening.ledger`).
 
   // RETIRED 2026-11-13 (item 390): `ledgerScope`, the scope line over the ledger before the desktops' marks (`12
   // projects · 1,405 sessions across 9 agents on`). James removed the line; the root's head says how many projects

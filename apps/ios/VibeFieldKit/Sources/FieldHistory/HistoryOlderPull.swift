@@ -49,11 +49,10 @@ struct HistoryOlderPull: Equatable, Sendable {
   static let type: CGFloat = 13
   static let gap: CGFloat = 7
   static let padding: CGFloat = 14
-  /// Item 516 (P2) — the living mark's width while a batch is read, in the ring's place (red: a stub).
-  static let markWidth: CGFloat = 0
-  /// While a batch is read the ring is an arc this much of a circle, and turns once in this many seconds.
-  static let arc: CGFloat = 0.7
-  static let turn: Double = 0.9
+  /// Item 516 (P2) — while a batch is read the living mark stands in the ring's place, this wide: 17.8 tall, the
+  /// ring's own height, so the pill grows in its width alone. Until that item the ring was an arc of seven tenths
+  /// there that turned once in 0.9 s.
+  static let markWidth: CGFloat = 40
   /// The mark's own changes (armed and back, the turn to reading, its leaving), in seconds on the plain ease.
   static let fade: Double = 0.2
   /// How long an ask may stand with no read begun before it is said to have brought nothing. The reader says a read
@@ -87,7 +86,7 @@ struct HistoryOlderPull: Equatable, Sendable {
     case pulling
     /// `Release for earlier messages`, the ring closed and its arrow up.
     case armed
-    /// `Reading earlier messages…`, the ring an arc that turns.
+    /// `Reading earlier messages…`, the living mark in the ring's place (item 516).
     case reading
   }
 
@@ -101,7 +100,8 @@ struct HistoryOlderPull: Equatable, Sendable {
 
     static let nothing = Mark(face: .nothing, presence: 0, fill: 0)
     static let armed = Mark(face: .armed, presence: 1, fill: 1)
-    static let reading = Mark(face: .reading, presence: 1, fill: HistoryOlderPull.arc)
+    /// Item 516 — the ring the release closed gives its place to the living mark.
+    static let reading = Mark(face: .reading, presence: 1, fill: 1)
   }
 
   /// What the rule under the document's head says of the rows above.
@@ -271,7 +271,7 @@ struct HistoryOlderPull: Equatable, Sendable {
 
   // MARK: What it answers
 
-  /// A read is owed or running: the line says `Reading earlier…` and the mark turns.
+  /// A read is owed or running: the line says `Reading earlier…` and the living mark moves (item 516).
   var reads: Bool { phase == .released || phase == .reading }
 
   /// The mark as the pull stands.
@@ -301,10 +301,8 @@ struct HistoryOlderPull: Equatable, Sendable {
   /// The mark is in the primary ink once letting go will read, and while it reads; before that, the secondary.
   static func strong(_ face: Face) -> Bool { face == .armed || face == .reading }
 
-  /// How far round the turning arc stands at a time in seconds, in degrees: once round in `turn`.
-  static func angle(at seconds: Double) -> Double {
-    (seconds / turn).truncatingRemainder(dividingBy: 1) * 360
-  }
+  // RETIRED 2026-11-17 (item 516, P2): `angle(at:)`, how far round the turning arc stood, with `arc` and `turn`.
+  // While a batch is read the living mark stands in the ring's place, and moves by its own clock.
 
   /// The mark's words; none when there is no mark.
   static func words(_ face: Face) -> String? {

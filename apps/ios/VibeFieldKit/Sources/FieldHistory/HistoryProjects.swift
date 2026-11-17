@@ -49,11 +49,15 @@ public final class HistoryProjects {
   public private(set) var cut = false
   /// Item 353 — the projects whose figures the door refused at the last ask (the panel's "failed · retrying").
   public private(set) var figuresFailed: Set<String> = []
-  /// Item 516 — the door has answered the ledger's listing once (red: a stub, never set).
+  /// Item 516 — the door has answered the ledger's listing once: the fold that carries what it listed is drawn, or
+  /// the listing was refused. Until then an empty ledger is History's first read, and its place holds
+  /// (`HistoryOpening.ledger`). A desktop whose projects are not grouped yet still answers and still waits, so its
+  /// refusal leaves this unset.
   public private(set) var answered = false
-
-  /// Item 516 — a project's sessions have been answered once (red: a stub that says never).
-  public func sessionsRead(_ key: String) -> Bool { false }
+  /// Item 516 — the projects whose sessions have been answered: a page of them landed, or their read (or the
+  /// project's own) was refused. Until then a project's empty list is its first read, and holds
+  /// (`HistoryOpening.sessions`); after, an empty list is no wait.
+  public private(set) var sessionsAnswered: Set<String> = []
   public var isReplaying: Bool { door == nil || !standing.isAwake }
   /// The desktop whose door answers, by name: the roster's, else the answer's.
   public var sourceName: String {
@@ -115,6 +119,13 @@ public final class HistoryProjects {
   /// Item 364 — whether the listing last read went on past its bound. `cut` says so once the fold that carries those
   /// rows is drawn, so the line under the ledger never leads the rows it speaks of.
   @ObservationIgnored private var cutRead = false
+  /// Item 516 — a listing's rows are held: the next fold carries them, and once it is drawn the ledger is answered.
+  @ObservationIgnored private var listed = false
+  /// Item 516 — the ledger was given whole (the mock's): every project's sessions are answered.
+  @ObservationIgnored private var given = false
+  /// Item 516 — the projects a page of whose sessions is held: the next fold carries it, and once it is drawn their
+  /// sessions are answered.
+  @ObservationIgnored private var sessionsHeld: Set<String> = []
   @ObservationIgnored private var keepTask: Task<Void, Never>?
   @ObservationIgnored private let keepEvery: Duration
 
@@ -144,8 +155,13 @@ public final class HistoryProjects {
     let projects = HistoryProjects(source: corpus.deviceId, door: nil)
     projects.corpus = corpus
     projects.standing = standing
+    projects.answered = true
+    projects.given = true
     return projects
   }
+
+  /// Item 516 — a project's sessions have been answered once: a page of them landed, or their read was refused.
+  public func sessionsRead(_ key: String) -> Bool { given || sessionsAnswered.contains(key) }
 
   // MARK: Lifecycle
 
@@ -371,6 +387,9 @@ public final class HistoryProjects {
         queueFigures()
       } catch {
         refused(error)
+        // Item 516 — a refused listing is an answer, and the hold leaves for what the ledger says then; but a
+        // desktop still grouping its projects answers and waits, and its place holds on
+        if !(error is CancellationError), !Self.grouping(error) { answered = true }
       }
     }
   }
@@ -392,6 +411,7 @@ public final class HistoryProjects {
     let listed = Set(rows.map(\.key))
     order = rows.map(\.key) + (whole ? [] : order.filter { !listed.contains($0) })
     summaries = kept
+    self.listed = true
     rebuild()
   }
 
@@ -411,6 +431,8 @@ public final class HistoryProjects {
         if figures[answer.project.key] == nil { readFigures(answer.project.key) }
       } catch {
         refused(error)
+        // Item 516 — its sessions will not be asked: its list is answered, and holds no longer
+        if !(error is CancellationError) { sessionsAnswered.insert(key) }
       }
     }
   }
@@ -435,6 +457,8 @@ public final class HistoryProjects {
         } else {
           sessionsByKey[page.key] = page.rows + (sessionsByKey[page.key] ?? []).filter { !seen.contains(Self.sessionKey($0)) }
         }
+        // Item 516 — answered once the fold that carries this page is drawn
+        sessionsHeld.insert(page.key)
         rebuild()
         var cursor = walk ? page.cursor : nil
         var pages = 1
@@ -451,6 +475,8 @@ public final class HistoryProjects {
         if walk || page.cursor == nil { sessionsWalkedAt[page.key] = now() }
       } catch {
         refused(error)
+        // Item 516 — a refused read is an answer: the list holds no longer
+        if !(error is CancellationError) { sessionsAnswered.insert(key) }
       }
     }
   }
@@ -655,6 +681,8 @@ public final class HistoryProjects {
     if let read = figuresRead.removeValue(forKey: from), figuresRead[to] == nil { figuresRead[to] = read }
     if let walked = sessionsWalkedAt.removeValue(forKey: from), sessionsWalkedAt[to] == nil { sessionsWalkedAt[to] = walked }
     if figuresFailed.remove(from) != nil { figuresFailed.insert(to) }
+    if sessionsAnswered.remove(from) != nil { sessionsAnswered.insert(to) }
+    if sessionsHeld.remove(from) != nil { sessionsHeld.insert(to) }
     if var all = agentCounts, let counts = all.removeValue(forKey: from) {
       if all[to] == nil { all[to] = counts }
       agentCounts = all
@@ -714,6 +742,8 @@ public final class HistoryProjects {
         foldedAt = .now
         let inputs = ledgerInputs
         let cutNow = cutRead
+        let listedNow = listed
+        let heldNow = sessionsHeld
         let changed = await Task.detached(priority: .userInitiated) { HistoryProjects.changed(inputs) }.value
         folding = false
         guard !Task.isCancelled else { break }
@@ -723,6 +753,10 @@ public final class HistoryProjects {
           keepSoon()
         }
         if cut != cutNow { cut = cutNow }
+        // Item 516 — the ledger is answered in the turn the fold that carries the listing is drawn, so its hold
+        // never leaves over an empty page
+        if listedNow, !answered { answered = true }
+        if !heldNow.isSubset(of: sessionsAnswered) { sessionsAnswered.formUnion(heldNow) }
       }
       self?.foldTask = nil
     }
@@ -796,6 +830,13 @@ public final class HistoryProjects {
   }
 
   // MARK: Refusals
+
+  /// Item 516 — the door answers that its projects are not grouped yet (`UNAVAILABLE`, service `projects`): it is
+  /// awake and still working, which `refused` keeps as it is.
+  nonisolated static func grouping(_ error: any Error) -> Bool {
+    guard let refusal = error as? FieldProductError else { return false }
+    return refusal.kind == "UNAVAILABLE" && refusal.unavailable?.service == "projects"
+  }
 
   /// SP-6's rule: a door that cannot answer leaves what was read standing and
   /// dims it; a wrong ask leaves the standing; another contracts version names

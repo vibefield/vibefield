@@ -23,6 +23,9 @@ struct HistoryProjectView: View {
   let sessions: [HistorySession]
   let corpus: HistoryCorpus
   let standing: FieldHistoryModel.DesktopStanding
+  /// Item 516 — the project's sessions have been answered (`HistoryProjects.sessionsRead`): an empty list is no
+  /// longer a wait.
+  var sessionsRead = false
   /// fix7 — the ledger's index while it is not ready, in its sentence (nil:
   /// ready), led by its desktop's mark under the head
   var index: String? = nil
@@ -312,10 +315,19 @@ struct HistoryProjectView: View {
     }
   }
 
+  /// Item 516 (James, 2026-11-17 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon"; P3) —
+  /// while none of the project's sessions has arrived and its desktop answers, the list holds in a box at its top
+  /// (`HistoryOpening.sessions`); the head, the figures and the desktops above it stand at once. Once its sessions
+  /// are answered, an empty list stands empty under its head: no mark moves where no work does (HG-L1). Asleep, the
+  /// list's note says what it waits for.
+  private var listHeld: HistoryOpening.Words? {
+    HistoryOpening.sessions(listed: !sessions.isEmpty || sessionsRead, awake: awake, desktop: corpus.desktop)
+  }
+
   private var sessionList: some View {
     LazyVStack(alignment: .leading, spacing: 0) {
-      if sessions.isEmpty {
-        let note = FieldHistoryModel.projectSessionsNote(awake: awake, desktop: corpus.desktop)
+      if sessions.isEmpty, !awake {
+        let note = FieldHistoryModel.projectSessionsNote(desktop: corpus.desktop)
         QuietNote(title: note.title, text: note.text)
       }
       ForEach(sessions) { session in
@@ -323,6 +335,9 @@ struct HistoryProjectView: View {
         sessionRow(session)
       }
     }
+    // the list is the page's width, and while it holds, as tall as the hold's box
+    .frame(maxWidth: .infinity, minHeight: listHeld == nil ? 0 : HistoryOpening.listBox, alignment: .topLeading)
+    .historyHold(listHeld, place: .box(HistoryOpening.listBox))
     .padding(.top, 6)
   }
 

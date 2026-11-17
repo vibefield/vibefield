@@ -99,14 +99,20 @@ final class HistoryOlderSight {
 /// Item 418 — the mark over a session document's top: a glass pill, 36 pt high and 8 pt under the navigation
 /// bar's foot, that comes in over the gap a pull opens. Its ring fills with the pull and its words say what the
 /// finger is to do (`Pull down for earlier messages`); at the arm the ring is closed, its arrow turns up, a light
-/// haptic ticks and it says `Release for earlier messages`; let go there it stays, its ring an arc that turns,
-/// and says `Reading earlier messages…` until the read ends, when it fades. It follows the finger with no
-/// animation of its own, and eases only between its faces. It takes no touch and is not read out: the line under
-/// the document's head says the same to VoiceOver, and takes its press.
+/// haptic ticks and it says `Release for earlier messages`; let go there it stays and says `Reading earlier
+/// messages…` until the read ends, when it fades. It follows the finger with no animation of its own, and eases
+/// only between its faces. It takes no touch and is not read out: the line under the document's head says the same
+/// to VoiceOver, and takes its press.
+///
+/// Item 516 (P2; James, 2026-11-17 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon") — while
+/// the batch is read the living mark stands in the ring's place, 40 wide and the ring's own height, moving while the
+/// read does; the ring and the mark cross over the pill's own ease. The ring that measured the finger is no wait,
+/// so it keeps the pull and the release. Until that item the ring stayed, an arc that turned.
 struct HistoryOlderMark: View {
   let sight: HistoryOlderSight
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.colorScheme) private var scheme
 
   var body: some View {
     let mark = sight.mark
@@ -114,7 +120,13 @@ struct HistoryOlderMark: View {
     ZStack {
       if let words = HistoryOlderPull.words(mark.face) {
         HStack(spacing: HistoryOlderPull.gap) {
-          HistoryOlderRing(mark: mark, strong: strong, still: reduceMotion)
+          if mark.face == .reading {
+            LivingMark(ground: LivingMark.Ground(scheme), width: HistoryOlderPull.markWidth)
+              .transition(.opacity)
+          } else {
+            HistoryOlderRing(mark: mark, strong: strong)
+              .transition(.opacity)
+          }
           Text(words)
             .font(ChromeType.sans(HistoryOlderPull.type, .medium))
             .foregroundStyle(strong ? ChromePalette.ink : ChromePalette.inkSecondary)
@@ -140,34 +152,26 @@ struct HistoryOlderMark: View {
 
 /// Item 418 — the ring in the mark: a faint track, and over it the ink that fills clockwise from twelve o'clock
 /// with the pull. Inside it an arrow points down while the finger has further to go and up once letting go will
-/// read. While a batch is read the arrow is gone and the ink is an arc that turns; it stands still under Reduce
-/// Motion.
+/// read. Item 516 — while a batch is read the living mark stands in its place (`HistoryOlderMark`); until that item
+/// the arrow went and the ink was an arc that turned.
 private struct HistoryOlderRing: View {
   let mark: HistoryOlderPull.Mark
-  /// The primary ink: letting go will read, or the batch is being read.
+  /// The primary ink: letting go will read.
   let strong: Bool
-  /// Reduce Motion: the arc does not turn.
-  let still: Bool
 
   var body: some View {
-    let reading = mark.face == .reading
-    let turns = reading && !still
     let ink = strong ? ChromePalette.ink : ChromePalette.inkSecondary
     ZStack {
       Circle().strokeBorder(ChromePalette.ruleStrong, lineWidth: HistoryOlderPull.stroke)
-      TimelineView(.animation(paused: !turns)) { context in
-        let round = turns ? HistoryOlderPull.angle(at: context.date.timeIntervalSinceReferenceDate) : 0
-        Circle()
-          .inset(by: HistoryOlderPull.stroke / 2)
-          .trim(from: 0, to: mark.fill)
-          .stroke(ink, style: StrokeStyle(lineWidth: HistoryOlderPull.stroke, lineCap: .round))
-          .rotationEffect(.degrees(round - 90))
-      }
+      Circle()
+        .inset(by: HistoryOlderPull.stroke / 2)
+        .trim(from: 0, to: mark.fill)
+        .stroke(ink, style: StrokeStyle(lineWidth: HistoryOlderPull.stroke, lineCap: .round))
+        .rotationEffect(.degrees(-90))
       Image(systemName: "arrow.down")
         .font(.system(size: HistoryOlderPull.arrow, weight: .semibold))
         .foregroundStyle(ink)
         .rotationEffect(.degrees(mark.face == .armed ? 180 : 0))
-        .opacity(reading ? 0 : 1)
     }
     .frame(width: HistoryOlderPull.ring, height: HistoryOlderPull.ring)
   }

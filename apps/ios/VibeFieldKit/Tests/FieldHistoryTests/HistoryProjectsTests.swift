@@ -363,8 +363,9 @@ struct HistoryProjectsTests {
     #expect(projects.index == .failed(reason: reason))
     #expect(projects.standing == .connected, "the door answers; its index does not")
     #expect(projects.sourceName == "studio")
-    let empty = FieldHistoryModel.emptyLedger(
-      standing: projects.standing, index: projects.index, desktop: projects.sourceName, device: .iPhone)
+    let empty = try #require(
+      FieldHistoryModel.emptyLedger(
+        standing: projects.standing, index: projects.index, desktop: projects.sourceName, device: .iPhone))
     #expect(empty.title == "History on studio has stopped")
     // item 505 — fieldd's reason is an inside: it stays off the screen
     #expect(!empty.text.contains("Restart intensity"))
@@ -394,10 +395,14 @@ struct HistoryProjectsTests {
     projects.start()
     await settle("the index") { projects.index != nil }
     #expect(projects.index == .starting(detail: nil))
+    // item 516 — said by the hold now, not by a note: "Finding your history…" over "on studio"
     let early = FieldHistoryModel.emptyLedger(
       standing: .connected, index: projects.index, desktop: "studio", device: .iPhone)
-    #expect(early.title == "History on studio is opening")
-    #expect(early.text == "Its projects arrive when it is open.")
+    #expect(early?.title == nil)
+    let held = HistoryOpening.ledger(
+      hasProjects: false, standing: projects.standing, answered: projects.answered, index: projects.index,
+      desktop: "studio")
+    #expect(held == HistoryOpening.Words(line: "Finding your history…", sub: "on studio"))
     projects.close()
 
     let rebuilding = ProjectsDoor()
@@ -411,11 +416,14 @@ struct HistoryProjectsTests {
       return
     }
     #expect(detail?.contains("schema 24 where this rosettad reads 27") == true)
+    // item 516 — said by the hold now; item 505 — fieldd's detail is an inside: the reader holds it, the screen
+    // does not say it
     let empty = FieldHistoryModel.emptyLedger(
       standing: .connected, index: upgrading.index, desktop: "studio", device: .iPhone)
-    #expect(empty.title == "History on studio is updating")
-    // item 505 — fieldd's detail is an inside: the reader holds it, the screen does not say it
-    #expect(empty.text == "Its projects arrive when the update ends.")
+    #expect(empty?.title == nil)
+    let updating = HistoryOpening.ledger(
+      hasProjects: false, standing: .connected, answered: true, index: upgrading.index, desktop: "studio")
+    #expect(updating == HistoryOpening.Words(line: "Updating your history…", sub: "on studio"))
     #expect(FieldHistoryModel.indexSentence(upgrading.index, desktop: "studio") == "History on studio is updating")
     upgrading.close()
   }
@@ -433,7 +441,7 @@ struct HistoryProjectsTests {
     #expect(FieldHistoryModel.indexSentence(projects.index, desktop: "studio") == nil)
     let empty = FieldHistoryModel.emptyLedger(
       standing: projects.standing, index: projects.index, desktop: "studio", device: .iPhone)
-    #expect(empty.title == "No projects yet")
+    #expect(empty?.title == "No projects yet")
     projects.close()
     // an older desktop's door offers no index.status: the listing is believed
     let older = ProjectsDoor()
@@ -444,12 +452,12 @@ struct HistoryProjectsTests {
     #expect(believed.index == nil)
     #expect(
       FieldHistoryModel.emptyLedger(
-        standing: believed.standing, index: believed.index, desktop: "studio", device: .iPhone).title
+        standing: believed.standing, index: believed.index, desktop: "studio", device: .iPhone)?.title
         == "No projects yet")
-    // and a door that does not answer: not read yet, never "no project"
+    // and a door that does not answer: never "no project"; item 516 — its place holds, at rest, with no note
     #expect(
-      FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: .iPhone).title
-        == "Your projects have not been read yet")
+      FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: .iPhone)?.title
+        == nil)
     believed.close()
   }
 
