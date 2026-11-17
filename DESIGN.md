@@ -8956,7 +8956,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     account** (13) and **The way in** (10), each named as its page or the corner says it (§9).
   - **Labs**, two rows, each opening its lab: **Swarm lab**, the swarm's design lab (IOS-6c); **Input card states**,
     the input card over a made-up session, in the states that otherwise take a long press, a held key or the
-    microphone. Nothing typed there is sent. The lab's states are named in §9 when RB-2c reads them.
+    microphone. Nothing typed there is sent. The lab's states are named in §9 when RB-2c reads them. *Amended
+    2026-11-17 (item 367; asked for 2026-11-12): the lab's states are named in §9 "Developer", after Labs.*
   - A choice takes effect the next time VibeField opens (D1), never at once: a made-up field stands in for your
     desktops' answers from the first frame, and swapping it under a running field would rebuild the field. The Demo
     group's foot says so.
@@ -10512,6 +10513,9 @@ say what a row does, never how it is built.
   **How it works, 2 of 4** · **How it works, 3 of 4** · **How it works, 4 of 4** · **Found your desktop** · **Sent by
   a desktop’s code** · **The lock offered (Face ID)** · **The lock offered (passcode only)**.
 - **Labs**: **Swarm lab** · **Input card states**.
+- The states in **Input card states**: **A key’s fan, open** · **Control, armed** · **Control, locked** ·
+  **Meta, armed** · **Listening** · **The keypad, Navigate** · **The keypad, Shortcuts** · **The keypad, Fn** ·
+  **A paste to read first** · **Reply chips** · **Typing into terminal**.
 - The tag beside the corner is **Demo**, dotted; it is spoken "Demo. What you see is made up."
 - The foot: "For testing. TestFlight and development builds show this page; the build in the App Store does not."
 
