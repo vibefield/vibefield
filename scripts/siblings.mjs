@@ -1105,8 +1105,9 @@ export function alignOverlay(root, lock = readLock(root), overlay = readOverlay(
     for (const name of names) {
       // The hoist, else the root's own install of the name: the overlay's pnpmfile made each linked package's
       // dependency a root dependency (HOST_DEPS), and pnpm never hoists a `link:` row — rosetta's room depends on
-      // mille, which this tree installs from `../mille-pin` (FS-1b), so the hoist held no mille and `use rosetta`
-      // failed (2026-11-03, the rosetta 0.1.3 integration). The root's link is still the one copy.
+      // mille, which this tree installed from `../mille-pin` (FS-1b) until mille 0.3.6, so the hoist held no
+      // mille and `use rosetta` failed (2026-11-03, the rosetta 0.1.3 integration). The root's own install is
+      // the one copy.
       let source;
       for (const from of [hoist, join(root, "node_modules")]) {
         try {

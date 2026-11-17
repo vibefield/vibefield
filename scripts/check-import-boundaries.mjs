@@ -515,7 +515,7 @@ const RULES = [
     // else; fieldd's and field-app's tests may dial the worker with the same
     // two clients; no other package imports any mille package (the
     // per-platform binaries are loaded by an explicit path, never imported).
-    // There is no `/browser` entry to admit: mille at the pin exports none and
+    // There is no `/browser` entry to admit: mille at 0.3.6 exports none (2026-11-17, its EL8) and
     // nothing imports one (2026-10-07: this comment named `/port` alone, and
     // CLAUDE.md and the agent-plane pages named a "browser client" — each
     // corrected at its source).

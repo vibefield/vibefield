@@ -57,8 +57,8 @@ overrides:
   '@vibefield/puppeteer-monitor': 0.4.2
   '@vibefield/puppeteer-view-sdk': 0.4.2
   '@vibefield/puppeteer-views': 0.4.2
-  '@vibecook/mille': link:../mille-pin/packages/mille
-  '@vibecook/mille-ui': link:../mille-pin/packages/mille-ui
+  '@vibecook/mille': 0.3.6
+  '@vibecook/mille-ui': 0.3.6
 
 importers:
 
@@ -394,11 +394,11 @@ importers:
         specifier: 0.17.0
         version: 0.17.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibecook/mille':
-        specifier: link:../../../mille-pin/packages/mille
-        version: link:../../../mille-pin/packages/mille
+        specifier: 0.3.6
+        version: 0.3.6(react@19.2.7)
       '@vibecook/mille-ui':
-        specifier: link:../../../mille-pin/packages/mille-ui
-        version: link:../../../mille-pin/packages/mille-ui
+        specifier: 0.3.6
+        version: 0.3.6(@radix-ui/react-context-menu@2.4.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@radix-ui/react-dialog@1.3.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@radix-ui/react-tooltip@1.4.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@tanstack/react-virtual@3.14.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@vibecook/mille@0.3.6(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -509,8 +509,8 @@ importers:
         specifier: 0.15.0
         version: 0.15.0
       '@vibecook/mille':
-        specifier: link:../../../mille-pin/packages/mille
-        version: link:../../../mille-pin/packages/mille
+        specifier: 0.3.6
+        version: 0.3.6(react@19.2.7)
       '@vibefield/audit':
         specifier: workspace:*
         version: link:../audit
@@ -2351,6 +2351,86 @@ packages:
       react:
         optional: true
       react-dom:
+        optional: true
+
+  '@vibecook/mille-darwin-arm64@0.3.6':
+    resolution: {integrity: sha512-/lvObSsdSStGVmcATa9Erx2coxLz3tSNjG6rT/FMBPPbXiA4wZ3tG/p2fyjFqsrKeE0B6yovFpxNLCiTh0lzGg==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@vibecook/mille-darwin-x64@0.3.6':
+    resolution: {integrity: sha512-tXzFvT8bqu1gIXugzheP9Zwxqts0n6ec9nehG7N6yGgYwSK0gSD4qccz68Ppa3JvOZFayhSOi953E2JsFKZTLQ==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@vibecook/mille-linux-arm64-gnu@0.3.6':
+    resolution: {integrity: sha512-od5l9lo883dYnZKP4hs2+qxoEIpsYmItDQ2oxlj9lAZzunuWIQzHLjJ8TNQuX/TjkMs94Y2x9YwLZHKwTpXiJA==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@vibecook/mille-linux-arm64-musl@0.3.6':
+    resolution: {integrity: sha512-kWK2z3OpznlH60e4RbCmdms7AktZDdtLAHe8Uaw+G62KXM90Gey4FFoZlTA2Px6eKOxsZRGuiJDKBVq2VaE5Zw==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@vibecook/mille-linux-x64-gnu@0.3.6':
+    resolution: {integrity: sha512-LFraRKp9I8EKkBgnMTmMRC2etZV5QzIxBxmXlt7rp2uK6iHSui5tnrhXykBEKHTNxFVrWrh9iRli7OqQWdN5aQ==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@vibecook/mille-linux-x64-musl@0.3.6':
+    resolution: {integrity: sha512-DLuNaqpx+ldwZnP7tAnxru9PHspZAYkOvZmDOs9ODJIGSEY2KFvpPb9QB8oHTb7h3F02ZCUFJ/5NzV9DSlJihA==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@vibecook/mille-ui@0.3.6':
+    resolution: {integrity: sha512-kdowMocb5/gcRs1M4rnCTZ3FTgpCZATiuG1vNpL9rK9vM6jjZ70+qKvK+75NxzjwC6VPe1J+FmS6M9eq0t7sJQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@radix-ui/react-context-menu': ^2.0.0
+      '@radix-ui/react-dialog': ^1.0.0
+      '@radix-ui/react-tooltip': ^1.0.0
+      '@tanstack/react-virtual': ^3.0.0
+      '@vibecook/mille': 0.3.6
+      react: '>=19.0.0'
+      react-dom: '>=19.0.0'
+    peerDependenciesMeta:
+      '@radix-ui/react-context-menu':
+        optional: true
+      '@radix-ui/react-dialog':
+        optional: true
+      '@radix-ui/react-tooltip':
+        optional: true
+
+  '@vibecook/mille-win32-arm64-msvc@0.3.6':
+    resolution: {integrity: sha512-AMbuAj8taubp/xyEkoFGo/8pBJlVKOyrqrNgH1kBTRQBtRWRl1gEms01tJpEW2z0LFb/UhuO5PLND9Q32Jq/8g==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@vibecook/mille-win32-x64-msvc@0.3.6':
+    resolution: {integrity: sha512-o4AGsVN9YZFh+S8u20OViw7knCT54dn0eJ8v4AwutbeyQjT95EMBPWrLRal1JKn+FzBQ1JDYzj1bshRk9+vIpw==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [win32]
+
+  '@vibecook/mille@0.3.6':
+    resolution: {integrity: sha512-tZqfsF/CNhM8DZnh0TGhjU5Q7cxMZhlx9jTThg8PcfapOM8RRy3pZ4et/eqe1l3TTcMhGvG1wlE4q/jYMfUd/g==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      react: '>=18'
+    peerDependenciesMeta:
+      react:
         optional: true
 
   '@vibecook/strata-ecs@0.13.0':
@@ -5291,6 +5371,53 @@ snapshots:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
+  '@vibecook/mille-darwin-arm64@0.3.6':
+    optional: true
+
+  '@vibecook/mille-darwin-x64@0.3.6':
+    optional: true
+
+  '@vibecook/mille-linux-arm64-gnu@0.3.6':
+    optional: true
+
+  '@vibecook/mille-linux-arm64-musl@0.3.6':
+    optional: true
+
+  '@vibecook/mille-linux-x64-gnu@0.3.6':
+    optional: true
+
+  '@vibecook/mille-linux-x64-musl@0.3.6':
+    optional: true
+
+  '@vibecook/mille-ui@0.3.6(@radix-ui/react-context-menu@2.4.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@radix-ui/react-dialog@1.3.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@radix-ui/react-tooltip@1.4.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@tanstack/react-virtual@3.14.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@vibecook/mille@0.3.6(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+    dependencies:
+      '@tanstack/react-virtual': 3.14.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@vibecook/mille': 0.3.6(react@19.2.7)
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+    optionalDependencies:
+      '@radix-ui/react-context-menu': 2.4.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@radix-ui/react-dialog': 1.3.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@radix-ui/react-tooltip': 1.4.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+
+  '@vibecook/mille-win32-arm64-msvc@0.3.6':
+    optional: true
+
+  '@vibecook/mille-win32-x64-msvc@0.3.6':
+    optional: true
+
+  '@vibecook/mille@0.3.6(react@19.2.7)':
+    optionalDependencies:
+      '@vibecook/mille-darwin-arm64': 0.3.6
+      '@vibecook/mille-darwin-x64': 0.3.6
+      '@vibecook/mille-linux-arm64-gnu': 0.3.6
+      '@vibecook/mille-linux-arm64-musl': 0.3.6
+      '@vibecook/mille-linux-x64-gnu': 0.3.6
+      '@vibecook/mille-linux-x64-musl': 0.3.6
+      '@vibecook/mille-win32-arm64-msvc': 0.3.6
+      '@vibecook/mille-win32-x64-msvc': 0.3.6
+      react: 19.2.7
+
   '@vibecook/strata-ecs@0.13.0(loro-crdt@1.13.8)(react@19.2.7)':
     optionalDependencies:
       loro-crdt: 1.13.8
@@ -5454,8 +5581,8 @@ snapshots:
       '@radix-ui/react-dialog': 1.3.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@radix-ui/react-tooltip': 1.4.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tanstack/react-virtual': 3.14.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@vibecook/mille': link:../mille-pin/packages/mille
-      '@vibecook/mille-ui': link:../mille-pin/packages/mille-ui
+      '@vibecook/mille': 0.3.6(react@19.2.7)
+      '@vibecook/mille-ui': 0.3.6(@radix-ui/react-context-menu@2.4.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@radix-ui/react-dialog@1.3.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@radix-ui/react-tooltip@1.4.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@tanstack/react-virtual@3.14.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@vibecook/mille@0.3.6(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibefield/rosetta-protocol': 0.1.7
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)

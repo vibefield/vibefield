@@ -41,9 +41,11 @@ landing, design-00's desk amendment of 2026-10-08.)*
 ## Getting started
 
 Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust per `rust-toolchain.toml` (rustup reads it; `rustup toolchain install`) · `cargo install cargo-typify` ·
-two SIBLING CHECKOUTS beside this one: `../rosetta-pin` (rosettad is built from it; dedicated to its pin
-since 2026-10-03) and `../mille-pin` (FS-1b, the files service window) — `node scripts/siblings.mjs fetch
-NAME` creates each at its pin.
+one SIBLING CHECKOUT beside this one: `../rosetta-pin` (rosettad is built from it; dedicated to its pin
+since 2026-10-03) — `node scripts/siblings.mjs fetch rosetta` creates it at its pin.
+*(Corrected 2026-11-17, the EL8 to mille 0.3.6: this said TWO, with `../mille-pin` (FS-1b, the files
+service window) second. mille's packages are exact registry pins since, so no build reads that checkout;
+it stays in `siblings.lock.json` as the dev overlay's coordinate: `pnpm siblings use mille`.)*
 *(Corrected 2026-10-26, puppeteer 0.2.3: this said THREE, with `../puppeteer` first (AR-0; its packages were
 `link:` rows). Its packages are exact `@vibefield/puppeteer-*` registry pins since, so no build reads that
 checkout; it stays in `siblings.lock.json` as the dev overlay's coordinate: `pnpm siblings use puppeteer`.)*
@@ -61,8 +63,8 @@ the pinned ghosttea declares, which can trail the crate until a ghosttea declare
 the numbers. *(Corrected 2026-10-28, the housekeeping pass: this paragraph told the RFC 025 petition
 window's history, from 2026-09-16 through the truffle split of 2026-10-27, in eight dated
 parentheticals with their version numbers; LANDED and git hold that history.)* The repo still
-does not build standalone: rosetta (rosettad) and mille are checkouts until their releases are
-recorded (RD-5); puppeteer's was recorded on 2026-10-26. Every revision is pinned in
+does not build standalone: rosetta (rosettad) is a checkout until its release is recorded (RD-5);
+puppeteer's was recorded on 2026-10-26 and mille's on 2026-11-17 (0.3.6). Every revision is pinned in
 `siblings.lock.json`:
 `pnpm siblings` prints the state, `pnpm preflight` fails on drift, `pnpm siblings:pin` is the
 deliberate upgrade — it records the new SHAs, builds rosettad at them, proves the agent catalog

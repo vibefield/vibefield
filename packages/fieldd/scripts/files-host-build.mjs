@@ -84,7 +84,7 @@ export function filesHostBuildOptions({
 
 /** The installed per-platform addon (pnpm puts it beside mille's own folder)
  * — the JS twin of launch.ts `installedMilleNative`, kept in step by
- * test/files-host-launch.test.ts. */
+ * test/workspace-units.test.ts (item 337, 2026-11-17: this named a test file that never existed). */
 export function installedMilleNativeFile(fielddRoot = FIELDD_ROOT) {
   const triple = milleTriple(process.platform, process.arch, isMusl());
   if (triple === null) return null;

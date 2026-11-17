@@ -34,8 +34,8 @@ import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { milleAliases } from "./mille-aliases.mjs";
-import { linkedPackages, readLock, siblingDir } from "./siblings.mjs";
+import { milleCopies } from "./mille-aliases.mjs";
+import { linkedPackages } from "./siblings.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TRACKED = ["loro-crdt", "@vibecook/ice", "@vibecook/strata-ecs", "react", "react-dom"];
@@ -190,46 +190,12 @@ for (const name of TYPE_PEERS) {
   }
 }
 
-// FS-1b: the room brings a link to its own mille checkout. Both renderer
-// resolvers must alias every exported entry to the locked checkout, and our
-// direct consumers must resolve that same checkout. A version string alone
-// cannot distinguish two unreleased builds.
-const milleEntry = readLock(ROOT)?.siblings?.mille;
-if (milleEntry) {
-  const aliases = milleAliases(ROOT);
-  for (const [consumer, name] of [
-    ["packages/fieldd", "@vibecook/mille"],
-    ["packages/field-app", "@vibecook/mille"],
-    ["packages/field-app", "@vibecook/mille-ui"],
-  ]) {
-    const expected = aliases.find((alias) => alias.find === name)?.replacement;
-    let actual;
-    try {
-      actual = realpathSync(join(ROOT, consumer, "node_modules", name));
-    } catch {}
-    const folder = milleEntry.packages[name];
-    if (!expected || !actual || actual !== realpathSync(join(siblingDir(ROOT, milleEntry), folder)))
-      problems.push(`${consumer} resolves ${name} outside the locked mille checkout`);
-  }
-  for (const config of [
-    "packages/electron-shell/vite.config.ts",
-    "packages/field-app/vitest.config.ts",
-  ]) {
-    const source = readFileSync(join(ROOT, config), "utf8");
-    if (
-      !source.includes('from "../../scripts/mille-aliases.mjs"') ||
-      !/alias:\s*\[\s*\.\.\.milleAliases\(/.test(source)
-    )
-      problems.push(`${config} must install the locked mille aliases before other aliases`);
-  }
-  for (const alias of aliases) {
-    if (!existsSync(alias.replacement))
-      problems.push(
-        `${alias.find} has no built export at ${alias.replacement}; build the pinned mille sibling`,
-      );
-  }
-  report.push(`mille@${milleEntry.sha.slice(0, 8)} (daemon, renderer and room pinned together)`);
-}
+// FS-1b, and RD-5 since the EL8 to mille 0.3.6: mille's consumers (fieldd, field-app and the room) load the
+// locked checkout while one is linked, and the release from the registry otherwise
+// (scripts/mille-aliases.mjs `milleCopies`).
+const mille = milleCopies(ROOT);
+problems.push(...mille.problems);
+if (mille.report !== null) report.push(mille.report);
 
 if (problems.length > 0) {
   process.stderr.write(`\n✗ EL8 single-copy law violated:\n\n  ${problems.join("\n\n  ")}\n\n`);

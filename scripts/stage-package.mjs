@@ -709,9 +709,11 @@ const stage = ({ files, manifest }) => {
     copyFileSync(f.abs, dest);
     chmodSync(dest, f.mode);
   }
-  // LP-6b (item 170): mille's .node carries its build's own path as its install name (LC_ID_DYLIB:
+  // LP-6b (item 170): mille's .node carried its build's own path as its install name (LC_ID_DYLIB:
   // `/Users/runner/work/vibefield/mille-pin/target/…/release/deps/libmille_binding.dylib` on CI, the SSD's target here),
-  // which no rustflag reaches. Rewritten to `@rpath/<file>` (fieldd's worker dlopens the explicit path, so the name is
+  // which no rustflag reaches. Since mille 0.3.6 (its EL8, 2026-11-17) npm's addon names
+  // `@rpath/libmille_binding.dylib` (mille #46), as a checkout at the pin builds it; the rewrite stays, one
+  // name whatever the source. Rewritten to `@rpath/<file>` (fieldd's worker dlopens the explicit path, so the name is
   // never read) and re-signed ad hoc, because the rewrite changes signed bytes and arm64 refuses to load an invalid
   // signature on the unsigned path (scripts/build-paths.mjs `setInstallName`). The stage runs before electron-builder in
   // every release path (package:stage, then run-electron-builder.mjs: run-macos-release.mjs and release.yml's unsigned

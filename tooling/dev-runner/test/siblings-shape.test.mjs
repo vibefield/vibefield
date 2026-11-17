@@ -402,8 +402,9 @@ test("align links a linked package's dependencies and peers from the store, and 
 });
 
 test("align takes a dependency the hoist does not hold from the root's own install — a `link:` row, one copy — and names one neither holds", (t) => {
-  // 2026-11-03: rosetta's room depends on mille, which this tree installs as `link:` rows into `../mille-pin`;
-  // pnpm never hoists a link:, so the hoist held no mille and `use rosetta` failed in its postinstall
+  // 2026-11-03: rosetta's room depends on mille, which this tree installed as `link:` rows into `../mille-pin`
+  // until mille 0.3.6; pnpm never hoists a link:, so the hoist held no mille and `use rosetta` failed in its
+  // postinstall
   const { dir, root } = fixture(t);
   quiet(() => useSiblings(root, ["history", "--no-install"]));
   const store = join(root, "node_modules", ".pnpm");

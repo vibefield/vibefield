@@ -257,6 +257,20 @@ const PIN_EXPECTATIONS = [
     label: 'let rosettaRelease: Version? = "0.1.6"',
     overlay: "rosetta",
   },
+  // RD-5's exit for mille's npm plane (the EL8 to 0.3.6, 2026-11-17): the two rows are exact, published
+  // from the tag v0.3.6 (85c35e7d), the revision the lock pins. Anchored to the line's end like rosetta's.
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibecook\/mille":\s*0\.3\.6\s*$/m,
+    label: '"@vibecook/mille": 0.3.6',
+    package: "@vibecook/mille",
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibecook\/mille-ui":\s*0\.3\.6\s*$/m,
+    label: '"@vibecook/mille-ui": 0.3.6',
+    package: "@vibecook/mille-ui",
+  },
   // RD-5's exit for puppeteer's npm plane (2026-10-26, 0.2.3): the seven rows are exact `@vibefield/puppeteer-*`,
   // 0.3.2 since 2026-10-29 (CP-1d's per-run briefing prerequisite), published from the tag v0.3.2 (95a70aa7), the
   // revision the lock pinned. 0.3.3 since 2026-11-02 (GV lifecycle, v0.3.3 = 52d09c8e). 0.4.0 since 2026-11-09

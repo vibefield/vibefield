@@ -377,19 +377,27 @@ overrides:
   "@vibefield/puppeteer-views": 0.4.2
   # FS-1a (2026-10-05, FS-D10 RULED (a) with its exit at once — 0.3.4 is on npm):
   # mille, the file explorer engine behind the files service, entered as an
-  # EXACT registry pin (EL8; ice's shape — packages ask for "*"). Since FS-1b
-  # (2026-10-05) the two rows below are NOT that pin: they are the `link:`
-  # sibling window into the dedicated `../mille-pin` checkout, pinned by
-  # revision in siblings.lock.json, for the unreleased WebSocket channel
-  # (M4/M6/M7); it closes — back to an exact version — at mille's next release.
-  # fieldd's files worker is the ONLY importer of the engine (wall R24:
-  # `@vibecook/mille` under packages/fieldd/src/workspace/host alone; field-app
-  # may take `/port`, `/remote` and mille-ui). (Corrected 2026-10-07: this
-  # comment still called the rows an exact registry pin.)
+  # EXACT registry pin (EL8; ice's shape — packages ask for "*"). FS-1b
+  # (2026-10-05) made the two rows a `link:` sibling window into the dedicated
+  # `../mille-pin` checkout, pinned by revision in siblings.lock.json, for the
+  # unreleased WebSocket channel (M4/M6/M7). The window CLOSED at the EL8 to
+  # 0.3.6 (2026-11-17; RD-5's exit for mille's npm plane): published from the tag
+  # v0.3.6 (85c35e7d, the commit npm's provenance names for all eleven packages),
+  # it carries what the pin had, the drive (`./drive`), the release build's path
+  # remap and its crates' notices in each platform package (mille #46). The lock
+  # entry STAYS as the dev overlay's coordinate (`pnpm siblings use mille` links
+  # the checkout back, and the renderer's aliases into it,
+  # scripts/mille-aliases.mjs, stand only then). fieldd's files worker is the
+  # ONLY importer of the engine (wall R24: `@vibecook/mille` under
+  # packages/fieldd/src/workspace/host alone; field-app may take `/port`,
+  # `/remote` and mille-ui). A bump is ONE EL8 commit: these rows (`node
+  # scripts/siblings.mjs render --prod` writes them from the lock's
+  # `release.npm`), preflight's PIN_EXPECTATIONS, the lock's sha, and
+  # minimumReleaseAgeExclude for a version published this week. (Corrected
+  # 2026-10-07: this comment still called the FS-1b rows an exact registry pin.)
+  "@vibecook/mille": 0.3.6
+  "@vibecook/mille-ui": 0.3.6
   # ---- SIBLING MODE (AR-0, 2026-09-12) --------------------------------------
-  # FS-1b: M4/M6/M7 at the lock's mille SHA; close at its first registry release.
-  "@vibecook/mille": link:../mille-pin/packages/mille
-  "@vibecook/mille-ui": link:../mille-pin/packages/mille-ui
   # chopsticks and spaghetti retired on 2026-09-04 (James): the agent runtime is
   # puppeteer, agent history is rosetta. Neither is published, so they enter as
   # `link:` rows to SIBLING CHECKOUTS beside this repo, pinned by revision in
@@ -426,6 +434,9 @@ overrides:
   # rosetta's two packages LEFT this block at RD-5a (2026-10-14): they are exact
   # registry pins above the fence now. rosettad is still built from the pinned
   # checkout (`../rosetta-pin`, siblings.lock.json's `cargo` key) until RD-D7.
+  # mille's two rows LEFT this block at the EL8 to 0.3.6 (2026-11-17): exact registry
+  # pins above the fence; `pnpm siblings use mille` links the checkout back. No
+  # row is left in this block.
 # Shared dependency versions, declared ONCE — packages reference "catalog:".
 catalog:
   "@tailwindcss/vite": ^4.0.0
@@ -442,6 +453,19 @@ catalog:
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
   - '@vibecook/ice@0.17.0'
+  # EL8 2026-11-17: reviewed mille 0.3.6 (tag v0.3.6 = 85c35e7d, published 2026-11-12), inside the window.
+  # RD-5's exit for its npm plane, so there is no older row to drop (the rows were link:). The eight platform
+  # packages are mille's optionalDependencies, each in the lock whatever this host installs.
+  - '@vibecook/mille@0.3.6'
+  - '@vibecook/mille-ui@0.3.6'
+  - '@vibecook/mille-darwin-arm64@0.3.6'
+  - '@vibecook/mille-darwin-x64@0.3.6'
+  - '@vibecook/mille-linux-arm64-gnu@0.3.6'
+  - '@vibecook/mille-linux-arm64-musl@0.3.6'
+  - '@vibecook/mille-linux-x64-gnu@0.3.6'
+  - '@vibecook/mille-linux-x64-musl@0.3.6'
+  - '@vibecook/mille-win32-arm64-msvc@0.3.6'
+  - '@vibecook/mille-win32-x64-msvc@0.3.6'
   # EL8 2026-11-12: reviewed Ghosttea 0.15.0 (libghostty-vt 1.0), published inside the release-age window.
   # The prior 0.14.0 rows were retained through the install that regenerated the lock, then removed.
   - '@vibecook/ghosttea-client@0.15.0'
