@@ -16,7 +16,7 @@ import { NAMESPACES, PRODUCT_API_LIMITS } from "./registries";
 // Its own table beside METHODS, never a member of a row: `registry.test.ts` pins every
 // tailnet-reachable row's `subscription` member whole. Nothing generated reads it. Contracts'
 // `subscription-admission.test.ts` holds it to METHODS both ways, reads every variant's values
-// from its params schema, and re-derives the figures (34 closed keys, 300 holders on one
+// from its params schema, and re-derives the figures (35 closed keys, 308 holders on one
 // connection, 20 boards at 16 ms). Every holder count is counted from source, not measured;
 // stage 3 (item 480) keeps the same ledger per principal across sockets.
 
@@ -65,6 +65,12 @@ export const SUBSCRIPTION_ADMISSION: Readonly<Record<string, SubscriptionAdmissi
     identity: {},
     reason:
       "This daemon's health is one value for every caller, so one key at the default holders.",
+  },
+  "system.custody.marks.subscribe": {
+    class: "one",
+    identity: {},
+    reason:
+      "This daemon's custody marks are one whole view, read by its own shell alone, so one key at the default holders.",
   },
   "doc.sync.subscribe": {
     class: "one",
