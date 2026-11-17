@@ -5,6 +5,7 @@ import {
   type PluginRecord,
   PluginRegistrySnapshot,
 } from "@vibefield/contracts";
+import { refusedForRoom } from "@vibefield/fieldd-client";
 import type { ObjectBinding, RendererPluginModule } from "@vibefield/plugin-sdk";
 import { getRendererLogger, type RendererLogger } from "../logging";
 import { objectBindingsFrom } from "./build-widget";
@@ -15,6 +16,11 @@ import type { ActivatedRenderer } from "./renderer-harness";
 import { asRendererModule, importRendererModule } from "./renderer-module-loader";
 import { RendererUpdateChannel } from "./renderer-update-channel";
 import { RendererRuntimeDiagnosticsReporter } from "./runtime-diagnostics-reporter";
+import {
+  clearUnstartedPlugin,
+  getUnstartedPlugins,
+  nameUnstartedPlugin,
+} from "./unstarted-plugins";
 
 export { ensureStyleLink } from "./plugin-style";
 export { createRendererModuleLoader } from "./renderer-module-loader";
@@ -144,6 +150,12 @@ export async function prepareRendererPlugins(
       : new RendererRuntimeDiagnosticsReporter({ request: deps.request, logger: log });
   const runtime = new RendererWindowController(deps.windowId, runtimeDiagnostics);
 
+  // Item 476: a lane that cannot open, whatever the error, leaves its plugin UNSTAGED and names
+  // it in the window's own set (unstarted-plugins.ts), so its rows say it isn't working. Never
+  // staged as a failed activation: that would define its types in this realm, where only a
+  // replaced renderer could bring it back. Every name is written before this returns, so the
+  // first registry snapshot is planned with it and makes no move for the plugin
+  // (window-kinds.ts; item 490).
   const channels = new Map<string, RendererUpdateChannel>();
   if (deps.subscribe !== undefined && deps.pluginClientBackend !== undefined) {
     await Promise.all(
@@ -159,12 +171,8 @@ export async function prepareRendererPlugins(
           channels.set(module.pluginId, channel);
           runtime.addUpdateChannel(channel);
         } catch (error) {
-          log.error(
-            "renderer.plugins.update_subscribe_failed",
-            "A plugin could not establish its update lane and was skipped",
-            error,
-            { pluginId: module.pluginId },
-          );
+          sayLaneFailed(log, module.pluginId, error);
+          nameUnstartedPlugin(module.pluginId, { reason: "lane", room: refusedForRoom(error) });
         }
       }),
     );
@@ -217,6 +225,9 @@ export async function prepareRendererPlugins(
  * update lane opened, its module imported and activated on the window's runtime — so the next document
  * generation's registry compiles its kinds (window-kinds.ts). A plugin fieldd has not approved, or
  * whose module will not load, is simply not staged: its objects keep the missing face.
+ * Item 476: one whose update lane cannot open is not staged either, and is named in the window's
+ * own set (unstarted-plugins.ts) as the boot names it. The retry of a lane refused for room comes
+ * through here too (window-kinds.ts), so a plugin this stages live leaves that set.
  */
 export async function stageAdditionalPlugins(
   pluginIds: readonly string[],
@@ -259,19 +270,51 @@ export async function stageAdditionalPlugins(
         });
         runtime.addUpdateChannel(channel);
       } catch (error) {
-        log.error(
-          "renderer.plugins.update_subscribe_failed",
-          "A plugin could not establish its update lane and was skipped",
-          error,
-          { pluginId },
-        );
+        sayLaneFailed(log, pluginId, error);
+        // Item 476: a lane that opened and then could not join the runtime (a closing window
+        // has closed it) is closed by its own close(), never left held for a plugin that is
+        // not staged.
+        await channel?.close().catch(() => undefined);
+        nameUnstartedPlugin(pluginId, { reason: "lane", room: refusedForRoom(error) });
         continue;
       }
     }
     const staged = await stageOne(module, approved.records, deps, log, runtime, channel);
-    if (staged !== null) out.push(staged);
+    if (staged !== null) {
+      out.push(staged);
+    } else if (channel !== undefined && getUnstartedPlugins().get(pluginId)?.reason === "lane") {
+      // Item 476: its lane opened this time and it still was not staged (stageOne closed the
+      // lane). Asked again on the timer it would open and close a lane at every step, which
+      // fieldd counts as a renderer come and gone, so it is named as a lane no asking cures.
+      nameUnstartedPlugin(pluginId, { reason: "lane", room: false });
+    }
   }
   return out;
+}
+
+/**
+ * Item 476: say that a plugin's update lane would not open, BEFORE the plugin is named for it. At
+ * error, but for one case: a refusal for room of a plugin the window's set already names for a
+ * lane refused for room. The window's retry asks such a plugin again every 30 s for as long as a
+ * holder stays, so a refusal that repeats is said once at error and at debug after. A lane that
+ * opens, or a failure of another kind, ends the run: the next refusal for room is at error again.
+ */
+function sayLaneFailed(log: RendererLogger, pluginId: string, error: unknown): void {
+  const named = getUnstartedPlugins().get(pluginId);
+  if (refusedForRoom(error) && named?.reason === "lane" && named.room) {
+    log.debug(
+      "renderer.plugins.update_subscribe_failed",
+      "A plugin's update lane was refused for room again and the plugin stays skipped",
+      { pluginId },
+    );
+    return;
+  }
+  log.error(
+    "renderer.plugins.update_subscribe_failed",
+    "A plugin could not establish its update lane and was skipped",
+    error,
+    { pluginId },
+  );
 }
 
 interface ApprovedSet {
@@ -345,6 +388,7 @@ async function stageOne(
       { pluginId: module.pluginId },
     );
     await updateChannel?.close().catch(() => undefined);
+    nameUnstartedPlugin(module.pluginId, { reason: "import" });
     return {
       record,
       module,
@@ -360,6 +404,8 @@ async function stageOne(
       { pluginId: module.pluginId },
     );
     await updateChannel?.close().catch(() => undefined);
+    // what was imported is no renderer module: the import's failure, as the set reads it
+    nameUnstartedPlugin(module.pluginId, { reason: "import" });
     return {
       record,
       module,
@@ -379,14 +425,24 @@ async function stageOne(
   });
   runtime.add(controller);
   try {
+    const settled = await controller.reconcile(record);
     const activation =
-      (await controller.reconcile(record)) ??
+      settled ??
       ({
         state: "failed",
         behaviors: new Map(),
         error: "renderer target is unavailable",
       } as const);
     updateChannel?.attach(runtime);
+    // Item 476: staged and live, it leaves the window's set (the retry's success ends here). On,
+    // with a target here, and not live, it is named. With no target in this window (it is off, it
+    // has no renderer face, or its record has moved past this module, which is the planner's to
+    // answer) nothing of this window failed, and it is not named.
+    if (record.enabled && settled !== null && settled.state !== "active") {
+      nameUnstartedPlugin(record.id, { reason: "activation" });
+    } else {
+      clearUnstartedPlugin(record.id);
+    }
     return { record, module, activation, controller, objectBindings };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -397,6 +453,7 @@ async function stageOne(
       { pluginId: module.pluginId },
     );
     updateChannel?.attach(runtime);
+    nameUnstartedPlugin(record.id, { reason: "activation" });
     return {
       record,
       module,

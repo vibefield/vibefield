@@ -12,6 +12,7 @@ import {
   uiFieldClass,
 } from "@vibefield/design-kit";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
+import { refusedForRoom } from "@vibefield/fieldd-client";
 import {
   type FormEvent,
   type ReactElement,
@@ -86,7 +87,10 @@ function friendlyError(error: unknown, action: string): string {
   if (kind === "UNAUTHORIZED" || kind === "FORBIDDEN_SCOPE")
     return `VibeField does not have permission to ${action}.`;
   if (kind === "CONFLICT") return "That operation is already in progress. Try again shortly.";
-  if (kind === "RESOURCE_EXHAUSTED") return "The app limit has been reached.";
+  // The limit is the apps' own. A feed fieldd refused for room wears the same
+  // kind and is no app limit (item 476): it falls through to the act's own line.
+  if (kind === "RESOURCE_EXHAUSTED" && !refusedForRoom(error))
+    return "The app limit has been reached.";
   if (kind === "NOT_FOUND") {
     return action === LOAD_LIVE_APPS
       ? "Live apps are unavailable in this build."

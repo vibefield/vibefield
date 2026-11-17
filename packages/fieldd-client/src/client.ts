@@ -42,6 +42,10 @@ import {
 //   outcome-unknown"). Before this, no client sent a key: a UI retry after a
 //   cut applied twice.
 
+// Item 476 — the cadence a refusal for room is asked again on and the reading
+// of such a refusal, at the root so a window's own re-asks keep the feed's.
+export { REASK_BACKOFF, type ReaskBackoff, reaskDelayMs, refusedForRoom } from "./reask";
+
 export class FielddRpcError extends Error {
   // plain fields, no TS parameter properties: plugin workers import this file
   // under Node's strip-only type erasure, which cannot rewrite ctor sugar (P5)
@@ -490,7 +494,11 @@ export class FielddClient {
    * sending it, once its `system.unsubscribe` has left (so a subscribe asked
    * from here reaches the daemon behind it). A subscribe refused for want of
    * room (RESOURCE_EXHAUSTED, `resource: "subscriptions"`) waits for this to
-   * ask once more, never on a timer. */
+   * ask once more, never on a timer.
+   * *Corrected 2026-11-17 (item 476, stage 2): "never on a timer" stood until a
+   * shared feed gained a timer of its own (feeds.ts, reask.ts). Refused for
+   * room, it now asks again at a release, as above, AND by itself while a
+   * holder stays (`REASK_BACKOFF`). This listener is unchanged.* */
   onSubscriptionReleased(fn: () => void): () => void {
     this.releaseListeners.add(fn);
     return () => {

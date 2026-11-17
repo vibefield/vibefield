@@ -231,10 +231,14 @@ function useExtensionLens(set: string): ExtensionLens {
           cancelling,
         };
 
+  // The feed's own refusal says the head alone, never fieldd's words after it
+  // (item 476): why fieldd refused a feed is an internal, and a feed refused
+  // for room asks again by itself, so the line stands only while the page
+  // truly cannot read. An act's refusal (`refusal`) keeps its sentence.
   const error =
     refusal ??
     (feed.status === "error"
-      ? refusalSentence("Could not read what the agents hold", feed.error)
+      ? "Could not read what the agents hold."
       : parsed?.success === false
         ? "fieldd answered with a list this version cannot read."
         : null);

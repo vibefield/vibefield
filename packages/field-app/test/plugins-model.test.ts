@@ -362,6 +362,54 @@ describe("Installed's honest rows (MK-5, N21; §9 'Installed, off and Remove…'
     });
     expect(row(off, CATALOG_FIXTURES.ready, "acme.kanban")?.line).toBe(words.INSTALLED_LINE.off);
   });
+
+  it("says a plugin that cannot start in this window isn't working, whatever the reason, until it leaves the window's set (item 476)", () => {
+    // the window's own set, handed in, with each reason it holds: a lane that would not open
+    // (for room or not), an import, an activation
+    const reasons = [
+      { reason: "lane", room: true },
+      { reason: "lane", room: false },
+      { reason: "import" },
+      { reason: "activation" },
+    ];
+    type Unstarted = ReadonlyMap<string, object>;
+    const rowOf = (snapshot: PluginRegistrySnapshot, id: string, unstarted: Unstarted) =>
+      installedRows(snapshot, null, "", null, unstarted).find((entry) => entry.id === id);
+    const fixture = PLUGINS_FIXTURE_SNAPSHOT;
+    for (const why of reasons) {
+      const unstarted: Unstarted = new Map([
+        ["vibefield.simulator", why],
+        ["example.kv-service", why],
+        ["example.desk-clock", why],
+      ]);
+      // a set, and a plugin with no object: the line fieldd's own faults read, never the reason
+      const simulators = rowOf(fixture, "vibefield.simulator", unstarted);
+      expect(simulators?.line).toBe(words.INSTALLED_LINE.broken("Simulators"));
+      expect(simulators?.line).toBe("Simulators isn't working right now");
+      // its switch stands: turning it off and on is a person's own way to try again
+      expect(simulators?.onOff).toBe(true);
+      const store = rowOf(fixture, "example.kv-service", unstarted);
+      expect(store?.line).toBe(words.INSTALLED_LINE.broken("Key-value store"));
+      // turned off, it says it is off, as before
+      const clock = rowOf(fixture, "example.desk-clock", unstarted);
+      expect(clock?.line).toBe(words.INSTALLED_LINE.off);
+      // a plugin fieldd stopped after it kept crashing keeps its stopped line and its attention
+      // ink: that it also cannot start here is likely the same fault seen twice, and the plainer
+      // line does not take the stopped one's place
+      const quarantined = rowOf(stopped, "vibefield.simulator", unstarted);
+      expect([quarantined?.line, quarantined?.attention]).toEqual([
+        words.INSTALLED_LINE.stopped,
+        true,
+      ]);
+    }
+    // out of the set, each says its ordinary line again
+    const none: Unstarted = new Map();
+    const running = rowOf(fixture, "vibefield.simulator", none);
+    expect(running?.line).toBe("3 objects · 1.2.0 · comes with VibeField");
+    expect(rowOf(fixture, "example.kv-service", none)?.line).toBe("No objects · a service");
+    const crashed = rowOf(stopped, "vibefield.simulator", none);
+    expect(crashed?.line).toBe(words.INSTALLED_LINE.stopped);
+  });
 });
 
 /** A record of a fixture snapshot, by id. */

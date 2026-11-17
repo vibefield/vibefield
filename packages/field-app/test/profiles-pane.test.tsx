@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WizardShellView } from "../src/boot/onboarding/wizard-ui";
 import { type FieldHost, setHost } from "../src/host";
 import { emptyProfilesContext } from "../src/panels/agents/profiles-model";
-import { ProfilesWizardPane } from "../src/setup/ProfilesWizardPane";
+import { PROFILES_PANE_WAIT_MS, ProfilesWizardPane } from "../src/setup/ProfilesWizardPane";
 import { profilesPaneModel, profilesPaneShows } from "../src/setup/profiles-pane";
 
 // AO-5 (track AO; AO-D6, AO-D7; DESIGN.md §8 "The Setup Assistant's agent
@@ -654,5 +654,129 @@ describe("the Profiles pane on the wizard's glass", () => {
     const settings = px(signIn, /\n\.vf-profiles-signin-body \{\s*height: (\d+)px;/u);
     expect(settings + chrome + 2 * add).toBeGreaterThan(clear);
     expect(read("../../../DESIGN.md")).toContain("| `--vf-glass-signin-height` | `170px` |");
+  });
+});
+
+// Item 476 — a profiles feed fieldd refused for room is a fault the feed heals
+// by itself, so the pane does not take that refusal for "nothing to explain"
+// at once: it stays reading for PROFILES_PANE_WAIT_MS, shows as it would have
+// if the feed arrives in that time, and moves on as before if it has not.
+describe("the Profiles pane, its feed refused for room (item 476)", () => {
+  /** fieldd's refusal of a subscribe for want of room, as the window's client hands it on. */
+  const noRoom = (): Error =>
+    Object.assign(new Error("this connection holds too many live subscriptions"), {
+      kind: "RESOURCE_EXHAUSTED",
+      details: { resource: "subscriptions", limit: 8 },
+    });
+
+  /** A daemon whose profiles feed is refused with `refusal()` until `door.open`; every other call
+   * is `daemon`'s. `release()` is the client giving a subscription up, which a feed refused for
+   * room hears and asks again at once. */
+  function refusing(refusal: () => Error): {
+    client: FielddClient;
+    door: { open: boolean };
+    release: () => void;
+  } {
+    const answering = daemon(feedOf([THIS_MAC]), [install("claude"), install("codex")]);
+    const door = { open: false };
+    const hearers = new Set<() => void>();
+    const client = {
+      ...answering,
+      subscribe: vi.fn(async (method: string, params: unknown, frame: (p: unknown) => void) => {
+        if (method === "agents.profileSets.subscribe" && !door.open) throw refusal();
+        return answering.subscribe(method, params, frame);
+      }),
+      onSubscriptionReleased: (hearer: () => void) => {
+        hearers.add(hearer);
+        return () => {
+          hearers.delete(hearer);
+        };
+      },
+    } as unknown as FielddClient;
+    return {
+      client,
+      door,
+      release: () => {
+        for (const hearer of [...hearers]) hearer();
+      },
+    };
+  }
+
+  /** Fake time moves on, and what it woke settles. */
+  async function pass(ms: number): Promise<void> {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+    });
+    await flush();
+  }
+
+  /** Let the mounted pane go, so a row can stand another. */
+  async function unmount(): Promise<void> {
+    await act(async () => root?.unmount());
+    root = null;
+    container?.remove();
+    container = null;
+  }
+
+  it("stays reading through a refusal for room, and moves on by itself only once 17 s have passed since it; any other refusal moves on at once", async () => {
+    const { client } = refusing(noRoom);
+    const onDone = vi.fn();
+    await mount(client, onDone);
+    // refused, and not taken for an answer: the pane is still reading, in its own words
+    expect(onDone).not.toHaveBeenCalled();
+    expect(container?.querySelector(".vf-profiles-pane")).toBeNull();
+    expect(text()).toContain("Reading who is signed in…");
+    expect(text()).not.toMatch(/connection|subscriptions/iu);
+    await pass(16_999);
+    expect(onDone).not.toHaveBeenCalled();
+    expect(text()).toContain("Reading who is signed in…");
+    // the wait is over: it moves on as a pane with nothing to explain does, recording nothing
+    await pass(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledWith("skipped");
+    expect(client.request).not.toHaveBeenCalledWith("setup.answer", expect.anything());
+    // the wait is the feed's own first four waits (1 s, 2, 4 and the 8 s step), summed, and two
+    // seconds more: its fourth ask leaves at 15 s, and those two are for that ask's answer
+    expect(PROFILES_PANE_WAIT_MS).toBe(17_000);
+    // any other refusal is an answer at once, a limit that names no subscriptions among them
+    await unmount();
+    const other = refusing(() =>
+      Object.assign(new Error("a limit of another kind"), { kind: "RESOURCE_EXHAUSTED" }),
+    );
+    const onOther = vi.fn();
+    await mount(other.client, onOther);
+    expect(onOther).toHaveBeenCalledTimes(1);
+    expect(onOther).toHaveBeenCalledWith("skipped");
+  });
+
+  it("shows as it would have when the feed arrives during the wait, and never moves on by itself", async () => {
+    const { client, door, release } = refusing(noRoom);
+    const onDone = vi.fn();
+    await mount(client, onDone);
+    expect(onDone).not.toHaveBeenCalled();
+    await pass(5_000);
+    expect(onDone).not.toHaveBeenCalled();
+    expect(container?.querySelector(".vf-profiles-pane")).toBeNull();
+    // room is made at 5 s: the feed asks again and is admitted
+    await act(async () => {
+      door.open = true;
+      release();
+    });
+    await flush();
+    expect(container?.querySelector(".vf-profiles-pane")).not.toBeNull();
+    expect(text()).toContain("Signed in as me@home.example");
+    expect(onDone).not.toHaveBeenCalled();
+    // the wait's own time comes and goes, and the pane stands
+    await pass(30_000);
+    expect(onDone).not.toHaveBeenCalled();
+    expect(text()).toContain("Signed in as me@home.example");
+    // it is the pane it would have been: Continue records the step
+    await click("Continue");
+    expect(client.request).toHaveBeenCalledWith("setup.answer", {
+      step: "profiles",
+      state: "answered",
+    });
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledWith("answered");
   });
 });

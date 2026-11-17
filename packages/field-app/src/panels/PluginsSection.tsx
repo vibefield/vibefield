@@ -5,6 +5,7 @@ import { type ReactElement, useState } from "react";
 import { controlsHere, stoppedAfterCrashes } from "../frame/plugins/plugins-model";
 import { INSTALLED_LINE, READING_YOURS, SWITCH_WORDS } from "../frame/plugins/plugins-words";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
+import { useUnstartedPlugins } from "../plugin-host/unstarted-plugins";
 import { PluginCapabilities } from "./PluginCapabilities";
 import { PluginSettingsForm } from "./PluginSettingsForm";
 import { buttonCls, labelCls, SettingsPill, SettingsSection, SettingsSwitch } from "./settings-ui";
@@ -26,7 +27,10 @@ import { buttonCls, labelCls, SettingsPill, SettingsSection, SettingsSwitch } fr
 // It never says fieldd's own text (VF-PM 2026-11-14 06:56Z, C22): a refusal on a kept row is one
 // plain line chosen by its kind, in §9's words — a switch's or a power's by the way it was being
 // turned, a setting's by whether it was read or kept — and a plugin with a last error says
-// "‹plugin› isn't working right now", its details in Diagnostics' Plugins section. No row offers
+// "‹plugin› isn't working right now", its details in Diagnostics' Plugins section. So does a
+// plugin that is on and cannot start in THIS window (item 476: its update lane would not open, its
+// module would not import or its activation failed; `plugin-host/unstarted-plugins.ts`), which
+// fieldd's record cannot say, until it starts here or is turned off. No row offers
 // Uninstall: fieldd uninstalls a plugin from the plugin list alone (`plugin-install.ts`), whose
 // Remove… stands on its page in Plugins…, and never a Sideloaded one.
 
@@ -84,11 +88,14 @@ const TROUBLE = "mt-2 text-[12px] text-amber-600 dark:text-amber-400";
 function PluginRow({
   plugin,
   plugins,
+  unstarted,
   settingsRevision,
   onSettingsChanged,
 }: {
   plugin: PluginRecord;
   plugins: readonly PluginRecord[];
+  /** item 476: it is in the window's own set of plugins that cannot start here */
+  unstarted: boolean;
   settingsRevision: number;
   onSettingsChanged?: ((undoable: boolean) => void) | undefined;
 }): ReactElement {
@@ -178,11 +185,13 @@ function PluginRow({
       )}
 
       {/* C22: a refused switch by the way it was being turned (§9 MK-4c2a's words); a last
-          error, whatever its kind, as §9's "isn't working" line, its text in Diagnostics alone */}
+          error, whatever its kind, as §9's "isn't working" line, its text in Diagnostics alone.
+          Item 476: the same line while it is on and cannot start in this window, whatever the
+          reason; turned off, it says nothing of that */}
       {refused !== null ? (
         <p className={TROUBLE}>{SWITCH_WORDS.refused(refused)}</p>
       ) : (
-        plugin.lastError !== undefined && (
+        (plugin.lastError !== undefined || (unstarted && plugin.enabled)) && (
           <p className={TROUBLE}>{INSTALLED_LINE.broken(plugin.title)}</p>
         )
       )}
@@ -207,6 +216,8 @@ export function PluginsSection({
   onSettingsChanged?: ((undoable: boolean) => void) | undefined;
 }): ReactElement {
   const snapshot = usePluginRegistrySnapshot();
+  // item 476: the plugins that cannot start in this window, which fieldd's snapshot cannot say
+  const unstarted = useUnstartedPlugins();
   const plugins = snapshot?.plugins ?? [];
   // a plugin from the plugin list or a Sideloaded one, whole, until Plugins… carries its switches;
   // a Built in or Development plugin is not here (MK-4c2c: its page has its way back)
@@ -223,6 +234,7 @@ export function PluginsSection({
               key={plugin.id}
               plugin={plugin}
               plugins={plugins}
+              unstarted={unstarted.has(plugin.id)}
               settingsRevision={settingsRevision}
               onSettingsChanged={onSettingsChanged}
             />

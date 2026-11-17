@@ -7,15 +7,34 @@
  * defined → staged, then the board reopens on a new engine (GENERATION); a kind this renderer defined
  * otherwise — an UPDATE's new artifact, a type a ghost stub defined faceless → the renderer is replaced
  * (RENDERER), never an update refused. A plugin mid-update moves when its episode settles.
+ *
+ * Item 476, item 490 — A FAILED LANE IS THE RETRY'S, NOT THE PLANNER'S: a plugin whose update lane failed is
+ * named in the window's own set (plugin-host/unstarted-plugins.ts) and the planner makes no move for it, so
+ * no renderer is replaced at each snapshot; a lane refused for ROOM is asked again on one timer (1 s, 2, 4,
+ * 8, 16, then every 30 s), staged the generation's way when it opens, and never where a ghost stub already
+ * defined its type. Those rows run on fake timers, and each names its own plugin and types: a realm's
+ * definitions cannot be taken back, and the set is emptied after every row.
  */
 import type { PluginRecord, PluginRegistrySnapshot } from "@vibefield/contracts";
-import { describe, expect, it, vi } from "vitest";
-import { buildFacelessType } from "../src/plugin-host/build-widget";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildRegistry } from "../src/field-engine";
+import type { RendererLogger } from "../src/logging";
+import { buildFacelessType, typeDefinition } from "../src/plugin-host/build-widget";
 import type {
   PreparedRendererPlugins,
   PreparedStagedPlugin,
 } from "../src/plugin-host/staged-loader";
+import {
+  getUnstartedPlugins,
+  nameUnstartedPlugin,
+  resetUnstartedPlugins,
+} from "../src/plugin-host/unstarted-plugins";
 import { planKinds, type StagedIdentity, WindowKinds } from "../src/plugin-host/window-kinds";
+
+afterEach(() => {
+  // the window's set is the realm's (a module-level store): a row leaves none of it to the next
+  resetUnstartedPlugins();
+});
 
 function record(
   id: string,
@@ -71,7 +90,12 @@ const stagedOf = (r: PluginRecord): StagedIdentity => ({
 const plan = (
   snap: PluginRegistrySnapshot,
   staged: readonly PluginRecord[],
-  opts: { off?: readonly string[]; bundled?: readonly PluginRecord[]; updating?: string[] } = {},
+  opts: {
+    off?: readonly string[];
+    bundled?: readonly PluginRecord[];
+    updating?: string[];
+    laneFailed?: readonly string[];
+  } = {},
 ) =>
   planKinds({
     snapshot: snap,
@@ -83,6 +107,7 @@ const plan = (
     ),
     off: new Set(opts.off ?? []),
     updating: (id) => (opts.updating ?? []).includes(id),
+    laneFailed: new Set(opts.laneFailed ?? []),
   });
 
 describe("planKinds — what a registry snapshot asks of a window (I25)", () => {
@@ -136,6 +161,43 @@ describe("planKinds — what a registry snapshot asks of a window (I25)", () => 
     expect(move.kind === "renderer" ? move.why : []).toEqual([
       "vendor.ghosted enabled: vendor.ghosted.dial already defined in this renderer",
     ]);
+  });
+
+  it("ITEM 490: …but one whose update lane FAILED moves nothing — no renderer is replaced for it, snapshot after snapshot", async () => {
+    buildFacelessType({
+      type: "vendor.lane-ghosted.dial",
+      schemaVersion: 1,
+      size: { w: 1, h: 1 },
+      props: {},
+      groups: {},
+    });
+    const ghosted = record("vendor.lane-ghosted", { types: ["vendor.lane-ghosted.dial"] });
+    // in the window's set of failed lanes the planner stands back (before item 490: `renderer`, and
+    // the new renderer's first snapshot answered `renderer` again if its lane failed too)
+    const failed = { laneFailed: [ghosted.id] };
+    expect(plan(snapshot(clock, ghosted), [clock], failed)).toEqual({ kind: "none" });
+    // not in the set, it is the renderer's still (the row above)
+    expect(plan(snapshot(clock, ghosted), [clock]).kind).toBe("renderer");
+    // and one this realm never defined is not staged at each snapshot either: it is the retry's
+    const fresh = record("vendor.lane-fresh", { types: ["vendor.lane-fresh.dial"] });
+    const freshFailed = { laneFailed: [fresh.id] };
+    expect(plan(snapshot(clock, fresh), [clock], freshFailed)).toEqual({ kind: "none" });
+    // over a real window, its lane failed for a reason other than room: three snapshots in a row
+    // replace no renderer and stage nothing
+    nameUnstartedPlugin(ghosted.id, { reason: "lane", room: false });
+    const stage = vi.fn();
+    const replaceRenderer = vi.fn();
+    const none: PreparedRendererPlugins = { generation: 1, staged: [], bundled: [] };
+    const kinds = new WindowKinds(none, {
+      stage,
+      remountGeneration: vi.fn(),
+      replaceRenderer,
+    });
+    for (let n = 0; n < 3; n += 1) {
+      expect(await kinds.observe(snapshot(ghosted))).toEqual({ kind: "none" });
+    }
+    expect(replaceRenderer).not.toHaveBeenCalled();
+    expect(stage).not.toHaveBeenCalled();
   });
 
   it("a staged plugin UPDATED (its artifact moved) → the renderer is replaced — never refused (RENDERER)", () => {
@@ -290,5 +352,372 @@ describe("WindowKinds — the window's kinds over its life", () => {
     updating = false;
     await kinds.again();
     expect(replaceRenderer).toHaveBeenCalledTimes(1);
+  });
+
+  /** A lane fieldd refused for want of room, as the staged loader names it in the window's set. */
+  const roomRefused = { reason: "lane", room: true } as const;
+
+  it("ITEM 476, CASE 1: a lane refused for room is asked again at 1 s and at 2 s and no sooner; once it opens the plugin is staged, its kinds compile, and the board reopens ONCE", async () => {
+    vi.useFakeTimers();
+    try {
+      const late = record("vendor.window-late", { types: ["vendor.window-late.dial"] });
+      nameUnstartedPlugin(late.id, roomRefused);
+      const opened = prepared([late]).staged;
+      // the lane refuses for room twice more, then opens (the stage dep is the staged loader's path)
+      const asked: string[] = [];
+      const stage = vi.fn(async (ids: readonly string[]) => {
+        asked.push(ids.join(","));
+        return { staged: asked.length < 3 ? [] : opened, runtime: undefined };
+      });
+      const remounts: string[] = [];
+      const remountGeneration = vi.fn(async (reason: string) => {
+        remounts.push(reason);
+        return true;
+      });
+      const replaceRenderer = vi.fn();
+      const kinds = new WindowKinds(prepared([clock]), {
+        stage,
+        remountGeneration,
+        replaceRenderer,
+      });
+      // the snapshot stages nothing: the plugin is the retry's (before item 476 the planner staged
+      // it here, at whichever snapshot came next, and never on a clock)
+      await kinds.observe(snapshot(clock, late));
+      expect(asked).toEqual([]);
+      kinds.listen();
+      await vi.advanceTimersByTimeAsync(999);
+      expect(asked).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(asked).toEqual(["vendor.window-late"]);
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(asked).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(asked).toHaveLength(2);
+      // refused twice: nothing staged, nothing reopened, and it is still named
+      expect(remounts).toEqual([]);
+      expect(getUnstartedPlugins().get(late.id)).toEqual(roomRefused);
+      expect(typeDefinition("vendor.window-late.dial")).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(3_999);
+      expect(asked).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(asked).toHaveLength(3);
+      // the third ask opened it: staged, out of the set, the board reopened once, no timer left
+      expect(kinds.current().staged.map((s) => s.record.id)).toEqual([
+        "vendor.window-clock",
+        "vendor.window-late",
+      ]);
+      expect(remounts).toEqual(["plugin-enabled"]);
+      expect(getUnstartedPlugins().has(late.id)).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+      // the registry the next generation builds from `current()` compiles its kinds (faceless here:
+      // this row's staged plugin carries no module to bind a kind from)
+      const registry = buildRegistry(kinds.current());
+      expect(typeDefinition("vendor.window-late.dial")).toBeDefined();
+      expect(registry.allWidgets().has("vendor.window-late.dial")).toBe(true);
+      // nothing asks after, and no renderer was replaced on the way
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(asked).toHaveLength(3);
+      expect(replaceRenderer).not.toHaveBeenCalled();
+      kinds.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ITEM 476: one firing asks the window's room-refused plugins together; one with no object kinds joins with NO remount, and the one still refused is asked again", async () => {
+    vi.useFakeTimers();
+    try {
+      const full = record("vendor.window-full", { types: ["vendor.window-full.dial"] });
+      const plain = record("vendor.window-plain", { types: [] });
+      nameUnstartedPlugin(full.id, roomRefused);
+      nameUnstartedPlugin(plain.id, roomRefused);
+      const opened = prepared([plain]).staged;
+      // the first firing is refused whole; at the second the plain plugin's lane opens, alone
+      const asked: string[] = [];
+      const stage = vi.fn(async (ids: readonly string[]) => {
+        asked.push(ids.join(","));
+        return { staged: asked.length === 2 ? opened : [], runtime: undefined };
+      });
+      const remountGeneration = vi.fn();
+      const kinds = new WindowKinds(prepared([clock]), {
+        stage,
+        remountGeneration,
+        replaceRenderer: vi.fn(),
+      });
+      await kinds.observe(snapshot(clock, full, plain));
+      expect(asked).toEqual([]);
+      kinds.listen();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(asked).toEqual(["vendor.window-full,vendor.window-plain"]);
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(asked).toHaveLength(2);
+      expect(kinds.current().staged.map((s) => s.record.id)).toEqual([
+        "vendor.window-clock",
+        "vendor.window-plain",
+      ]);
+      // nothing on the desk moves for a plugin with no kinds: no board reopens
+      expect(remountGeneration).not.toHaveBeenCalled();
+      expect([...getUnstartedPlugins().keys()]).toEqual(["vendor.window-full"]);
+      // a lane opened, so the backoff starts over for the one still refused: 1 s again
+      await vi.advanceTimersByTimeAsync(999);
+      expect(asked).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(asked[2]).toBe("vendor.window-full");
+      expect(vi.getTimerCount()).toBe(1);
+      kinds.dispose();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ITEM 476, CASE 2: a room-refused plugin whose type a ghost stub defined here is never asked, and no renderer is replaced for it", async () => {
+    vi.useFakeTimers();
+    try {
+      buildFacelessType({
+        type: "vendor.window-stubbed.dial",
+        schemaVersion: 1,
+        size: { w: 1, h: 1 },
+        props: {},
+        groups: {},
+      });
+      const stubbed = record("vendor.window-stubbed", { types: ["vendor.window-stubbed.dial"] });
+      nameUnstartedPlugin(stubbed.id, roomRefused);
+      const stage = vi.fn(async () => ({ staged: [], runtime: undefined }));
+      const replaceRenderer = vi.fn();
+      const kinds = new WindowKinds(prepared([clock]), {
+        stage,
+        remountGeneration: vi.fn(),
+        replaceRenderer,
+      });
+      await kinds.observe(snapshot(clock, stubbed));
+      expect(replaceRenderer).not.toHaveBeenCalled();
+      kinds.listen();
+      // it cannot be staged in this realm whatever its lane says: no timer is armed for it
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(stage).not.toHaveBeenCalled();
+      expect(replaceRenderer).not.toHaveBeenCalled();
+      // it keeps its place in the set (its rows say it isn't working) until the window's next start
+      expect(getUnstartedPlugins().get(stubbed.id)).toEqual(roomRefused);
+      kinds.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ITEM 476: a lane that failed for any reason but room is never asked again on the timer", async () => {
+    vi.useFakeTimers();
+    try {
+      const away = record("vendor.window-away", { types: ["vendor.window-away.dial"] });
+      nameUnstartedPlugin(away.id, { reason: "lane", room: false });
+      const stage = vi.fn(async () => ({ staged: [], runtime: undefined }));
+      const kinds = new WindowKinds(prepared([clock]), {
+        stage,
+        remountGeneration: vi.fn(),
+        replaceRenderer: vi.fn(),
+      });
+      await kinds.observe(snapshot(clock, away));
+      expect(stage).not.toHaveBeenCalled();
+      kinds.listen();
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(stage).not.toHaveBeenCalled();
+      kinds.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ITEM 476: a lane that never opens is asked every 30 s for as long as the window's kinds stand, on ONE timer; dispose() ends it", async () => {
+    vi.useFakeTimers();
+    try {
+      const never = record("vendor.window-never", { types: ["vendor.window-never.dial"] });
+      nameUnstartedPlugin(never.id, roomRefused);
+      const stage = vi.fn(async () => ({ staged: [], runtime: undefined }));
+      const replaceRenderer = vi.fn();
+      const kinds = new WindowKinds(prepared([clock]), {
+        stage,
+        remountGeneration: vi.fn(),
+        replaceRenderer,
+      });
+      await kinds.observe(snapshot(clock, never));
+      expect(stage).not.toHaveBeenCalled();
+      // React's double effect: started, stopped and started again leaves one timer
+      kinds.listen();
+      kinds.dispose();
+      kinds.listen();
+      expect(vi.getTimerCount()).toBe(1);
+      // 1 s, 2, 4, 8, 16, then 30 s for good: asked at 1, 3, 7, 15, 31, 61 and 91 s
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(stage).toHaveBeenCalledTimes(7);
+      expect(vi.getTimerCount()).toBe(1);
+      // and at 121 s and 151 s: the ceiling holds
+      await vi.advanceTimersByTimeAsync(999);
+      expect(stage).toHaveBeenCalledTimes(7);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(stage).toHaveBeenCalledTimes(8);
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(stage).toHaveBeenCalledTimes(8);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(stage).toHaveBeenCalledTimes(9);
+      expect(vi.getTimerCount()).toBe(1);
+      expect(replaceRenderer).not.toHaveBeenCalled();
+      kinds.dispose();
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(stage).toHaveBeenCalledTimes(9);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ITEM 476: the retry says it is asking at info at the first step of a run of refusals and at debug at each later step; a lane that opened starts the run over", async () => {
+    vi.useFakeTimers();
+    try {
+      const loud = record("vendor.window-loud", { types: ["vendor.window-loud.dial"] });
+      const mute = record("vendor.window-mute", { types: [] });
+      nameUnstartedPlugin(loud.id, roomRefused);
+      nameUnstartedPlugin(mute.id, roomRefused);
+      const opened = prepared([mute]).staged;
+      // refused whole three times; at the fourth firing the plugin with no kinds opens, alone
+      let firings = 0;
+      const stage = vi.fn(async () => {
+        firings += 1;
+        return { staged: firings === 4 ? opened : [], runtime: undefined };
+      });
+      // the level of each "asked again" line, in the order said
+      const said: string[] = [];
+      const say = (level: string) => (event: string) => {
+        if (event === "renderer.plugins.kinds_lane_retry") said.push(level);
+      };
+      const logger: RendererLogger = {
+        child: () => logger,
+        trace: say("trace"),
+        debug: say("debug"),
+        info: say("info"),
+        warn: say("warn"),
+        error: say("error"),
+        fatal: say("fatal"),
+        isLevelEnabled: () => true,
+      };
+      const kinds = new WindowKinds(prepared([clock]), {
+        stage,
+        remountGeneration: vi.fn(),
+        replaceRenderer: vi.fn(),
+        logger,
+      });
+      await kinds.observe(snapshot(clock, loud, mute));
+      kinds.listen();
+      // asked at 1 s (the run's first step), 3 s, 7 s and 15 s: once at info, then at debug
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(stage).toHaveBeenCalledTimes(4);
+      expect(said).toEqual(["info", "debug", "debug", "debug"]);
+      // the fourth opened a lane, so the one still refused starts a run: at info at 16 s, and at
+      // debug at 18 s
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(said).toEqual(["info", "debug", "debug", "debug", "info"]);
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(said).toEqual(["info", "debug", "debug", "debug", "info", "debug"]);
+      expect(stage).toHaveBeenCalledTimes(6);
+      kinds.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ITEM 476: a plugin turned off, or gone from the snapshot, leaves the window's set and the retry; turned on again it is the planner's", async () => {
+    vi.useFakeTimers();
+    try {
+      const left = record("vendor.window-left", { types: ["vendor.window-left.dial"] });
+      const gone = record("vendor.window-gone", { types: ["vendor.window-gone.dial"] });
+      nameUnstartedPlugin(left.id, roomRefused);
+      nameUnstartedPlugin(gone.id, { reason: "lane", room: false });
+      const asked: string[] = [];
+      const stage = vi.fn(async (ids: readonly string[]) => {
+        asked.push(ids.join(","));
+        return { staged: [], runtime: undefined };
+      });
+      const kinds = new WindowKinds(prepared([clock]), {
+        stage,
+        remountGeneration: vi.fn(),
+        replaceRenderer: vi.fn(),
+      });
+      await kinds.observe(snapshot(clock, left, gone));
+      expect(asked).toEqual([]);
+      kinds.listen();
+      expect(vi.getTimerCount()).toBe(1);
+      // one turned off, the other uninstalled: both leave the set, and the timer with them
+      const off = record("vendor.window-left", {
+        enabled: false,
+        types: ["vendor.window-left.dial"],
+      });
+      await kinds.observe(snapshot(clock, off));
+      expect(getUnstartedPlugins().size).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(asked).toEqual([]);
+      // turned on again it is in no set: the planner's ordinary move (new to this realm: staged)
+      await kinds.observe(snapshot(clock, left));
+      expect(asked).toEqual(["vendor.window-left"]);
+      kinds.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ITEM 476: for a staged plugin that is on, the set says what its controller holds at each snapshot; a module that would not import stays named through off and on", async () => {
+    // a staged plugin whose activation the runtime moves after the loader staged it
+    const held: { activation: { state: string } | null } = { activation: { state: "active" } };
+    const moody = record("vendor.window-moody", { types: [] });
+    const unloaded = record("vendor.window-unloaded", { types: [] });
+    const base = prepared([moody, unloaded]);
+    const staged = base.staged.map((s) =>
+      s.record.id === moody.id
+        ? ({
+            ...s,
+            controller: {
+              get activation() {
+                return held.activation;
+              },
+            },
+          } as unknown as PreparedStagedPlugin)
+        : s,
+    );
+    // the loader named the one whose module would not import (it has no controller)
+    nameUnstartedPlugin(unloaded.id, { reason: "import" });
+    const kinds = new WindowKinds(
+      { ...base, staged },
+      { stage: vi.fn(), remountGeneration: vi.fn(), replaceRenderer: vi.fn() },
+    );
+    await kinds.observe(snapshot(moody, unloaded));
+    expect(getUnstartedPlugins().has(moody.id)).toBe(false);
+    // the runtime's own activation of it fails (turned on again, an update's episode): no loader
+    // saw it, and before item 476 nothing said it
+    held.activation = { state: "failed" };
+    await kinds.observe(snapshot(moody, unloaded));
+    expect(getUnstartedPlugins().get(moody.id)).toEqual({ reason: "activation" });
+    // nothing settled yet says nothing new; live again, it is named no more
+    held.activation = null;
+    await kinds.observe(snapshot(moody, unloaded));
+    expect(getUnstartedPlugins().get(moody.id)).toEqual({ reason: "activation" });
+    held.activation = { state: "active" };
+    await kinds.observe(snapshot(moody, unloaded));
+    expect(getUnstartedPlugins().has(moody.id)).toBe(false);
+    // turned off, a failed activation leaves the set; the module that would not import stays
+    // named through off and on, for it is still that
+    held.activation = { state: "failed" };
+    await kinds.observe(snapshot(moody, unloaded));
+    const off = (r: PluginRecord): PluginRecord => ({ ...r, enabled: false, state: "disabled" });
+    await kinds.observe(snapshot(off(moody), off(unloaded)));
+    expect(getUnstartedPlugins().has(moody.id)).toBe(false);
+    expect(getUnstartedPlugins().get(unloaded.id)).toEqual({ reason: "import" });
+    held.activation = { state: "active" };
+    await kinds.observe(snapshot(moody, unloaded));
+    expect(getUnstartedPlugins().has(moody.id)).toBe(false);
+    expect(getUnstartedPlugins().get(unloaded.id)).toEqual({ reason: "import" });
+    // gone from the snapshot, it leaves
+    await kinds.observe(snapshot(moody));
+    expect(getUnstartedPlugins().size).toBe(0);
   });
 });

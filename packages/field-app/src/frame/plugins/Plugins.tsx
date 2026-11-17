@@ -18,6 +18,7 @@ import {
 import { createPortal } from "react-dom";
 import { showOnBoard, useBoardNames } from "../../field/desk/pegboard/board-door";
 import { usePluginRegistrySnapshot } from "../../plugin-host/plugin-registry-store";
+import { useUnstartedPlugins } from "../../plugin-host/unstarted-plugins";
 import { useGodviewFindDoor } from "../find-door";
 import { type FrameSurface, foldSurface } from "../frame-surface";
 import { CommunityTileView, useCommunitySwitch } from "./CommunityTile";
@@ -61,6 +62,7 @@ import {
   shelfState,
   switchable,
   switchKey,
+  type UnstartedHere,
   walkHot,
 } from "./plugins-model";
 import { type PluginsPort, pluginsPortOver } from "./plugins-port";
@@ -180,6 +182,10 @@ import { RemoveView } from "./RemoveQuestion";
 // while the tile stands or community plugins are on, and its ask marks it. The
 // tile mounts at Discover's end, and a held list's foot says "· community off"
 // while it is off.
+// Item 476: Installed's row for a plugin that is on and cannot start in THIS
+// window says it isn't working. The registry snapshot cannot say that of one
+// window, so the frame hands in the window's own set of them (`unstarted`,
+// `plugin-host/unstarted-plugins.ts`) beside the snapshot; a plate passes none.
 
 function boxOf(container: HTMLElement | null | undefined): { width: number; height: number } {
   if (container !== null && container !== undefined) {
@@ -195,6 +201,8 @@ export interface PluginsProps {
   port: PluginsPort;
   /** The plugins this desktop has (`plugins.subscribe`); null: none held yet. */
   snapshot: PluginRegistrySnapshot | null;
+  /** Item 476: the plugins that cannot start in this window, by id; none passed: none. */
+  unstarted?: UnstartedHere;
   /** Whether Esc is heard on the window. A catalog plate binds none. */
   bindKeys?: boolean;
   /** Where the scrim and the popup are drawn: the document's body in the
@@ -254,6 +262,7 @@ export function Plugins({
   onSurfaceChange,
   port,
   snapshot,
+  unstarted,
   bindKeys = true,
   container,
   takeFocus = true,
@@ -843,9 +852,10 @@ export function Plugins({
   const names = useBoardNames();
   // Q6: the field's words filter Installed's rows and (MK-4e) Discover's shelf;
   // Updates' search waits for its rows, and the words are kept across the switch.
+  // Item 476: a row of a plugin in the window's own set says it isn't working.
   const installed = useMemo(
-    () => (snapshot === null ? null : installedRows(snapshot, catalog, query, names)),
-    [snapshot, catalog, query, names],
+    () => (snapshot === null ? null : installedRows(snapshot, catalog, query, names, unstarted)),
+    [snapshot, catalog, query, names, unstarted],
   );
   // MK-4e: Discover's shelf, over a held list with a set to show or typed words to answer; its columns fit the
   // popup's width, and its tiles in the order the keys walk them
@@ -1402,7 +1412,9 @@ const takeCount = (catalog: PluginsCatalog): void => takePluginUpdates(catalog.u
  * (`useFielddStatus()`). MK-O3D: the community switch as this window's app
  * preferences say it (`storage.appPreferences.subscribe`, read as Settings'
  * sections read it), sent through the one setter fieldd audits, and this
- * desktop's statement mark over fieldd's two doors for it (MK-O1 B). */
+ * desktop's statement mark over fieldd's two doors for it (MK-O1 B). Item 476:
+ * and the window's own set of plugins that cannot start in it, read from its
+ * store as the snapshot is. */
 export function FramePlugins({
   view,
   surface,
@@ -1419,6 +1431,7 @@ export function FramePlugins({
   const fieldd = useFielddClient();
   const port = useMemo(() => pluginsPortOver(fieldd), [fieldd]);
   const snapshot = usePluginRegistrySnapshot();
+  const unstarted = useUnstartedPlugins();
   const godview = useGodviewFindDoor();
   const updates = usePluginUpdates();
   const away = useFielddStatus() !== "ready";
@@ -1453,6 +1466,7 @@ export function FramePlugins({
       onSurfaceChange={onSurfaceChange}
       port={port}
       snapshot={snapshot}
+      unstarted={unstarted}
       initialTab={carried === null ? openOn : (carried.page?.from ?? "updates")}
       initialPage={carried?.page?.id ?? null}
       resume={carried}

@@ -11,6 +11,11 @@
 // still counts one `limit` per socket: its refusal has fieldd's shape and words,
 // which is all the client reads, and the client's park-and-ask-again still
 // answers it, so no behaviour moves.*
+// *Corrected 2026-11-17 (item 476, stage 2): "park-and-ask-again" is no longer
+// at a release alone. A shared feed this fake refuses for room now also asks
+// again on a timer of its own while a holder stays (1 s first; `REASK_BACKOFF`),
+// so a test that leaves one refused and held sees that ask unless its clock is
+// a fake one or its holder lets go.*
 import type { WsCtor, WsLike } from "../src/client";
 
 export interface Frame {

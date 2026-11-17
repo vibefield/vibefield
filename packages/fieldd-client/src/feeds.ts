@@ -1,4 +1,5 @@
 import type { FielddClient, FielddRpcError, SubscribeOptions, Subscription } from "./client";
+import { reaskDelayMs, refusedForRoom } from "./reask";
 
 // Item 467 (2026-11-16) — one wire subscription per feed. A window talks to
 // fieldd over ONE client, and fieldd gives a connection 32 live subscriptions
@@ -17,6 +18,11 @@ import type { FielddClient, FielddRpcError, SubscribeOptions, Subscription } fro
 // room is now a key held past its holders, or a `bounded` method past its
 // bound. The park-and-ask-again below still answers such a refusal, so no
 // behaviour here moves.*
+// *Item 476, second stage (2026-11-16): one behaviour here does move. A feed
+// refused for room no longer waits for a release alone: while it has a holder
+// it also asks again by itself on `REASK_BACKOFF` (reask.ts: 1 s, 2, 4, 8, 16,
+// then every 30 s), so a refusal no release on this client would ever answer
+// heals without a remount.*
 //
 // React-free on purpose: the hook in react.ts is a line over `attachSubscription`,
 // so every rule here is read by a test without a DOM.
@@ -48,24 +54,6 @@ function sortedKeys(_key: string, value: unknown): unknown {
     sorted[name] = (value as Record<string, unknown>)[name];
   }
   return sorted;
-}
-
-/** The daemon refused a subscribe for want of ROOM: the connection holds its
- * budget (product-api's `subscriptionBudgetRefusal`). Read by shape, since a
- * refusal may come from a stand-in client as much as from this one.
- * *Corrected 2026-11-16 (item 476): there is no budget since item 476. The
- * door's function is `subscriptionAdmissionRefusal`, and room runs out when the
- * connection holds a key at its holders, or a `bounded` method at its bound.
- * The refusal's shape is the same (`RESOURCE_EXHAUSTED`, with
- * `resource: "subscriptions"` and `limit` the bound that refused), so this
- * reads it as before and no behaviour moves.* */
-function refusedForRoom(error: unknown): boolean {
-  if (error === null || typeof error !== "object") return false;
-  const { kind, details } = error as { kind?: unknown; details?: unknown };
-  if (kind !== "RESOURCE_EXHAUSTED" || details === null || typeof details !== "object") {
-    return false;
-  }
-  return (details as { resource?: unknown }).resource === "subscriptions";
 }
 
 /** The client's count of given-up subscriptions, or undefined when the client
@@ -100,6 +88,10 @@ class SharedFeed {
   private closed = false;
   /** while refused for room: the client's release listener, to ask once more */
   private parked: (() => void) | null = null;
+  /** while refused for room: the ONE timer of the backoff's next ask (item 476) */
+  private reask: ReturnType<typeof setTimeout> | null = null;
+  /** the refusals for room since the feed was last granted: the backoff's step */
+  private step = 0;
 
   constructor(client: FielddClient, method: string, params: unknown, forget: () => void) {
     this.client = client;
@@ -110,8 +102,8 @@ class SharedFeed {
 
   join(hears: Hears): void {
     this.holders.add(hears);
-    // live, or refused for room (the answer stands until room is made): the
-    // newcomer sees it at once
+    // live, or refused for room (the answer stands until room is made or the
+    // backoff's next ask is answered, item 476): the newcomer sees it at once
     if (this.state.status === "live" || this.parked !== null) {
       try {
         hears(this.state);
@@ -140,6 +132,9 @@ class SharedFeed {
   }
 
   ask(): void {
+    // an ask is going out, so the wait it ends is over: neither the release
+    // listener nor the timer may send a second one beside it (item 476)
+    this.unpark();
     const before = releasesOf(this.client);
     this.asking = true;
     this.client
@@ -154,6 +149,8 @@ class SharedFeed {
             sub.unsubscribe();
             return;
           }
+          // granted: the next refusal for room starts the backoff at its first step
+          this.step = 0;
           this.wire = sub;
           this.tell(live(sub.snapshot));
         },
@@ -177,7 +174,9 @@ class SharedFeed {
   /** The client ended the feed's subscription at a replay: every holder hears
    * it with the last data beside it (never shown as live again), the wire
    * handle goes, and the feed's rules for a refusal stand — for room it waits
-   * for a release; otherwise the next holder to join asks afresh. */
+   * for a release or the backoff's next step, as a refused ask does (item 476:
+   * it was live, so the step is the first); otherwise the next holder to join
+   * asks afresh. */
   private ended(error: FielddRpcError): void {
     // only a subscription this feed stands on: an ended one is gone from the
     // client, so no earlier ask's can be heard after a new one
@@ -187,22 +186,48 @@ class SharedFeed {
     if (refusedForRoom(error)) this.park();
   }
 
-  /** Refused for room: ask ONCE more at the next release on this client —
-   * no timer, and a second refusal waits for the release after that. A client
-   * with no release seam (a stand-in) parks nothing: its holders keep the
-   * refusal, and the next holder to join asks again. */
+  /** Refused for room: ask again at the next release on this client, at once,
+   * or at the backoff's next step (`reaskDelayMs`), whichever comes first. ONE
+   * listener and ONE timer at most, and whichever of the two asks clears the
+   * other (`ask` unparks first), so a release and the timer never both ask for
+   * one wait. A second refusal parks again one step on, and waits for the release
+   * or the step after that; a grant puts the step back to the first. A client
+   * with no release seam (a stand-in) has no listener, so the next holder to
+   * join still asks again at once; it has the timer all the same, which does
+   * not depend on the seam.
+   * *Corrected 2026-11-16 (item 476, second stage): this said "ask ONCE more at
+   * the next release on this client — no timer", and that a stand-in "parks
+   * nothing: its holders keep the refusal". With no timer, a refusal that no
+   * release on this client answered stood until a remount.* */
   private park(): void {
-    if (this.parked !== null || this.closed || !hasReleaseSeam(this.client)) return;
-    this.parked = this.client.onSubscriptionReleased(() => {
-      this.unpark();
-      if (!this.closed) this.ask();
-    });
+    // an ask already out (a holder that joined from inside its own hearing of
+    // this refusal) answers for itself: nothing waits to ask beside it
+    if (this.closed || this.asking) return;
+    if (this.parked === null && hasReleaseSeam(this.client)) {
+      this.parked = this.client.onSubscriptionReleased(() => {
+        this.unpark();
+        if (!this.closed) this.ask();
+      });
+    }
+    if (this.reask !== null) return;
+    const wait = reaskDelayMs(this.step);
+    this.step += 1;
+    // the global's own timer, read at the call: a test's fake clock drives it
+    this.reask = setTimeout(() => {
+      this.reask = null;
+      if (!this.closed && !this.asking) this.ask();
+    }, wait);
   }
 
+  /** The wait is over (an ask is going out, or the last holder left): the
+   * release listener and the backoff's timer both go. */
   private unpark(): void {
     const parked = this.parked;
     this.parked = null;
     parked?.();
+    if (this.reask === null) return;
+    clearTimeout(this.reask);
+    this.reask = null;
   }
 
   private tell(state: SubscriptionState<unknown>): void {

@@ -368,9 +368,22 @@ function placesOf(record: PluginRecord, names: BoardNames | null): string[] {
   return [...new Set(names.values())].filter((name) => hung.includes(name));
 }
 
+/** The plugins that cannot start in THIS WINDOW (item 476), by id: one whose update lane would not
+ * open, whose module would not import or whose activation failed. fieldd's record cannot say it of
+ * one window, so the window keeps the set (`plugin-host/unstarted-plugins.ts`) and hands it in; why
+ * a plugin is in it is never shown. */
+export interface UnstartedHere {
+  has(id: string): boolean;
+}
+
+const NONE_UNSTARTED: UnstartedHere = new Set<string>();
+
 /** Installed's line for a plugin (§9 "Installed, off and Remove…"); a set says where it hangs once
- * the board names a place of it (MK-4d's names), and the set alone otherwise, as MK-4a's line. */
-function rowLine(record: PluginRecord, names: BoardNames | null): string {
+ * the board names a place of it (MK-4d's names), and the set alone otherwise, as MK-4a's line.
+ * Item 476: a plugin that is on and cannot start in this window (`cannotStart`) says it isn't
+ * working, in the words a plugin fieldd calls invalid says; one that is off says it is off, as
+ * before. */
+function rowLine(record: PluginRecord, names: BoardNames | null, cannotStart: boolean): string {
   const objects = record.contributions.objects.length;
   const builtIn = record.source === "bundled";
   if (record.state === "invalid" || record.state === "incompatible") {
@@ -379,6 +392,7 @@ function rowLine(record: PluginRecord, names: BoardNames | null): string {
   const held = heldLine(record);
   if (held !== null) return held;
   if (!record.enabled) return objects > 0 ? INSTALLED_LINE.off : INSTALLED_LINE.offNoObject;
+  if (cannotStart) return INSTALLED_LINE.broken(record.title);
   if (objects === 0) {
     if (builtIn) return INSTALLED_LINE.builtInNoObject;
     return INSTALLED_LINE.noObject(hasWords(runsService(record), bringsTools(record)));
@@ -397,14 +411,19 @@ function rowLine(record: PluginRecord, names: BoardNames | null): string {
  * kept crashing, in the attention ink, or, for a plugin from the plugin list,
  * that the list held names it no more. Null for any other; a plugin that is off
  * or isn't working says that first (`lineOf`), and with no list held nothing is
- * said of a listing. */
+ * said of a listing. Item 476: one that cannot start in this window
+ * (`cannotStart`) says it isn't working before a listing's line, and AFTER the
+ * stopped line: a plugin fieldd stopped that also cannot start here is likely
+ * one fault seen twice, and the stopped line keeps its place and its ink. */
 function honestLine(
   record: PluginRecord,
   listed: ReadonlyMap<string, Listed>,
   listHeld: boolean,
+  cannotStart: boolean,
 ): { readonly line: string; readonly attention?: true } | null {
   if (!record.enabled || record.state !== "enabled") return null;
   if (stoppedAfterCrashes(record)) return { line: INSTALLED_LINE.stopped, attention: true };
+  if (cannotStart) return null;
   if (record.source === "registry" && listHeld && !listed.has(record.id)) {
     return { line: INSTALLED_LINE.unlisted };
   }
@@ -431,14 +450,19 @@ export function installedMatches(record: PluginRecord, query: string): boolean {
 
 /** Installed's rows: every plugin this desktop has that holds the typed
  * words, Built in first, then by title (§8 "Installed"). MK-4d's names: each
- * row's line says where its set hangs by the board's `names`. */
+ * row's line says where its set hangs by the board's `names`. Item 476: a
+ * plugin in `unstarted`, the window's own set, says it isn't working before a
+ * listing's line; one fieldd stopped after it kept crashing keeps that line
+ * (`honestLine`). */
 export function installedRows(
   snapshot: PluginRegistrySnapshot,
   catalog: PluginsCatalog | null,
   query = "",
   names: BoardNames | null = null,
+  unstarted: UnstartedHere = NONE_UNSTARTED,
 ): InstalledRow[] {
-  const lineOf = (record: PluginRecord): string => rowLine(record, names);
+  const cannotStart = (record: PluginRecord): boolean => unstarted.has(record.id);
+  const lineOf = (record: PluginRecord): string => rowLine(record, names, cannotStart(record));
   const listed = listedFrom(catalog);
   const listHeld = catalog !== null && held(catalog);
   return snapshot.plugins
@@ -451,7 +475,7 @@ export function installedRows(
       id: record.id,
       title: record.title,
       ...sourceOf(record, listed),
-      ...(honestLine(record, listed, listHeld) ?? { line: lineOf(record) }),
+      ...(honestLine(record, listed, listHeld, cannotStart(record)) ?? { line: lineOf(record) }),
       onOff: switchable(record) ? shownOn(record) : null,
     }));
 }

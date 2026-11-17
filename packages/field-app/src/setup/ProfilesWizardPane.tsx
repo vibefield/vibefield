@@ -8,6 +8,7 @@ import {
   AgentsProfileSetsSetResult,
   AgentsProfilesCreateResult,
 } from "@vibefield/contracts";
+import { reaskDelayMs, refusedForRoom } from "@vibefield/fieldd-client";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { suggestProfileGlyph } from "@vibefield/puppeteer-views";
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
@@ -45,10 +46,21 @@ import { profilesPaneModel, profilesPaneShows } from "./profiles-pane";
 // next start.
 //
 // Continue records the step answered; a Mac with nothing to explain (no agent
-// in This Mac's folders, or no profiles feed) moves on by itself (AO-L2).
+// in This Mac's folders, or no profiles feed) moves on by itself (AO-L2). A
+// profiles feed fieldd refused for room is waited for first (item 476;
+// `PROFILES_PANE_WAIT_MS`).
 
 /** How the pane ended. */
 export type ProfilesPaneEnd = "answered" | "skipped";
+
+/** How long the pane waits for a profiles feed fieldd refused for room before
+ * it moves on (item 476). The feed asks again by itself, so the pane waits
+ * through that cadence's first four waits, up to and through the 8 s step
+ * (1 s + 2 + 4 + 8: the fourth ask leaves at 15 s), and then two seconds more
+ * for that ask's answer: 17 s in all. The four waits are summed from the
+ * cadence itself, so the two cannot drift. */
+export const PROFILES_PANE_WAIT_MS =
+  reaskDelayMs(0) + reaskDelayMs(1) + reaskDelayMs(2) + reaskDelayMs(3) + 2_000;
 
 /** The profile Add a profile… made, until it is kept or deleted. */
 interface Pending {
@@ -133,10 +145,33 @@ export function ProfilesWizardPane({
   const labelOf = (provider: string): string =>
     inventory?.providers.find((summary) => summary.id === provider)?.label ?? provider;
 
+  // Item 476 — a profiles feed fieldd refused for room is a fault the feed
+  // heals by itself (it asks again on its own cadence), so that refusal is not
+  // taken for an answer at once: the pane stays reading for
+  // PROFILES_PANE_WAIT_MS from the first such refusal. If the feed arrives in
+  // that time the pane shows as it would have; if not, it moves on as below.
+  // One timer, counted from the FIRST refusal (the feed's later asks, refused
+  // again, never start it over), cleared when the feed arrives and on unmount.
+  const feedRefused = feedState.status === "error" && feed === null;
+  const feedRefusedForRoom = feedRefused && refusedForRoom(feedState.error);
+  const [roomRefusalSeen, setRoomRefusalSeen] = useState(false);
+  const [waitedOut, setWaitedOut] = useState(false);
+  useEffect(() => {
+    if (feedRefusedForRoom) setRoomRefusalSeen(true);
+  }, [feedRefusedForRoom]);
+  const waitingForRoom = roomRefusalSeen && feed === null && !waitedOut;
+  useEffect(() => {
+    if (!waitingForRoom) return;
+    const timer = setTimeout(() => setWaitedOut(true), PROFILES_PANE_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [waitingForRoom]);
+
   // AO-L2 — nothing to explain: the pane moves on by itself, recording nothing.
-  // A feed that never answered says so; one that drops later keeps its last frame.
+  // A feed that never answered says so, at once unless it was refused for room
+  // (item 476, above: then only once the wait is over); one that drops later
+  // keeps its last frame.
   const nothingToExplain =
-    (feedState.status === "error" && feed === null) ||
+    (feedRefused && (!feedRefusedForRoom || waitedOut)) ||
     inventoryFailed ||
     (model !== null && !profilesPaneShows(model));
   useEffect(() => {

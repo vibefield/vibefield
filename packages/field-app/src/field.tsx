@@ -114,7 +114,9 @@ export function FieldView({
   // THE RUNTIME WITH KINDS (DK-9, plugin-host/window-kinds.ts): the window's plugin set over its life —
   // a plugin turned off or on remounts the desk without or with its kinds; one enabled that this
   // renderer never defined is staged and the board reopens on a new engine; a kind it defined otherwise
-  // (an update) saves the board and replaces the renderer, which reopens it.
+  // (an update) saves the board and replaces the renderer, which reopens it. Item 476: a plugin whose
+  // update lane was refused for room is asked again by the kinds' own retry, which runs only while the
+  // effect below holds it (`listen` to `dispose`): nothing starts in this memo, which React may run twice.
   const kinds = useMemo(() => {
     if (plugins === undefined) return undefined;
     const log = getRendererLogger().child({ component: "plugin.kinds" });
@@ -170,9 +172,12 @@ export function FieldView({
     const offRegistry = subscribePluginRegistry(reconcile);
     // an update's episode settled (its commit, an old recovery): the kinds re-read the last snapshot
     const offSettled = kinds.current().runtime?.onSettled(() => void kinds.again());
+    // item 476: the retry of a lane refused for room hears the window's set from here, and no longer
+    kinds.listen();
     return () => {
       offRegistry();
       offSettled?.();
+      kinds.dispose();
     };
   }, [kinds]);
 

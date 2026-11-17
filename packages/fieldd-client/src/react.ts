@@ -60,7 +60,11 @@ export interface UseSubscriptionOptions {
  * matter) holds ONE shared wire subscription: a later hook sees the current
  * value at once, and the last one to unmount unsubscribes. A shared feed the
  * daemon refused for want of room asks once more when this client next gives
- * a subscription up. With options it stays the owner's own subscription. */
+ * a subscription up. With options it stays the owner's own subscription.
+ * *Corrected 2026-11-17 (item 476, stage 2): a shared feed refused for room
+ * also asks again by itself while a hook holds it, 1 s after the refusal, then
+ * 2, 4, 8, 16, then every 30 s (`REASK_BACKOFF`), so its `error` state ends
+ * without anything else being given up.* */
 export function useSubscription<T = unknown>(
   method: string,
   params?: unknown,
