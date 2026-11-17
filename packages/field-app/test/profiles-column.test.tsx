@@ -15,8 +15,13 @@ import {
   FIXTURE_WORK,
 } from "../src/design-system/profiles-fixtures";
 import { monitorHoldsKeys } from "../src/godview/monitor/launcher-keys";
+import { headingInto } from "../src/godview/profiles-column/aim";
 import { BandsCircle, BandsKey } from "../src/godview/profiles-column/BandsCircle";
-import { ProfilePopoverView, readWords } from "../src/godview/profiles-column/ProfilePopoverView";
+import {
+  ProfilePopoverView,
+  readWords,
+  veiledAccount,
+} from "../src/godview/profiles-column/ProfilePopoverView";
 import {
   ProfilesColumn,
   type ProfilesColumnProps,
@@ -179,6 +184,47 @@ describe("the Bands circle (UM-D16): the model's geometry drawn, never re-derive
       geometry.plans.flatMap((plan) => plan.notches).length,
     );
     expect(page.querySelectorAll("path[data-hit]")).toHaveLength(geometry.plans.length);
+  });
+
+  it("names the window its figure reads in the popover's middle, where the agent's mark stood (2026-11-16)", () => {
+    // James: the icon in the middle "is too redundant … this 99% is the 7d meter, so display 7D there"
+    const meters = metersOf(FIXTURE_NATIVE);
+    const plain = bandsGeometry(212, meters.entries, { hit: true });
+    const named = bandsGeometry(212, meters.entries, { hit: true, centreWindow: true });
+    // every other circle's middle is as it was: the deciding plan's mark
+    expect(plain.centre.items.some((item) => item.kind === "mark")).toBe(true);
+    expect(named.centre.items.some((item) => item.kind === "mark")).toBe(false);
+    const textsOf = (geometry: typeof plain) =>
+      geometry.centre.items.flatMap((item) => (item.kind === "text" ? [item] : []));
+    const words = textsOf(named);
+    const figure = textsOf(plain).find((item) => item.role === "figure")?.text;
+    expect(words[0]?.role).toBe("sub");
+    expect(words[1]).toMatchObject({ role: "figure", text: figure });
+    // the label is the C1 label of the window that figure reads: the deciding plan's tightest
+    const deciding = meters.entries.find(
+      (entry) =>
+        entry.kind === "reading" &&
+        String(Math.round(entry.tightest.line.usedPercent)) === figure &&
+        entry.tightest.line.label === words[0]?.text,
+    );
+    expect(deciding).toBeDefined();
+    // the window is said once: no "of 7 days" line under the figure
+    expect(words.some((item) => item.text.startsWith("of "))).toBe(false);
+    // and the popover asks for it
+    const popover = readFileSync(
+      join(HERE, "..", "src", "godview", "profiles-column", "ProfilePopoverView.tsx"),
+      "utf8",
+    );
+    expect(popover).toContain("centreWindow: true");
+  });
+
+  it("stands each row's mark level with its title at the row's top (2026-11-16)", () => {
+    const rule = /\n\.vf-profiles-pop-row-mark \{[^}]*\}/u.exec(CSS)?.[0] ?? "";
+    expect(rule).toContain("align-self: start;");
+    expect(rule).toContain("height: 16px;");
+    expect(CSS).toMatch(
+      /\n\.vf-profiles-pop-row\[data-kind="needs-you"\] > \.vf-profiles-pop-row-head \{\s*grid-column: 2;/u,
+    );
   });
 
   it("is its control's picture when unlabelled: nothing in it is said", () => {
@@ -479,6 +525,42 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
         items.map((item) => item.querySelector(".vf-profiles-usage-label")?.textContent),
       ).toEqual(reading.windows.map((window) => window.line.label));
       expect(row?.querySelector(".vf-profiles-pop-row-right")).toBeNull();
+    }
+  });
+
+  it("says each plan's sign-in beside its title, veiled: never the address whole (2026-11-16)", () => {
+    // made-up addresses only (example.com forms): one letter kept each side, three dots whatever the length
+    expect(veiledAccount("kim@work.example · Northlight")).toBe("k•••@w•••.example");
+    expect(veiledAccount("pat.doe@example.com")).toBe("p•••@e•••.com");
+    expect(veiledAccount("averyverylongname@sub.example.org")).toBe("a•••@s•••.org");
+    // a short local part says no more than a long one
+    expect(veiledAccount("a@example.com")).toBe("a•••@e•••.com");
+    // no "@": a handle, its first letter alone
+    expect(veiledAccount("kimdev")).toBe("k•••");
+    // odd input: no dot in the domain, an empty domain, an "@" first, spaces around, nothing
+    expect(veiledAccount("x@localhost")).toBe("x•••@l•••");
+    expect(veiledAccount("kim@")).toBe("k•••@");
+    expect(veiledAccount("@example.com")).toBe("@•••");
+    expect(veiledAccount("  pat@example.com  ")).toBe("p•••@e•••.com");
+    expect(veiledAccount(undefined)).toBeUndefined();
+    expect(veiledAccount("")).toBeUndefined();
+    expect(veiledAccount(" · Northlight")).toBeUndefined();
+    const circle = thisMac();
+    const page = mount(<ProfilePopoverView {...popover(circle)} />);
+    const named = circle.meters.entries.filter(
+      (entry) => entry.kind !== "no-meter" && entry.plan?.account !== undefined,
+    );
+    expect(named.length).toBeGreaterThan(0);
+    for (const entry of named) {
+      const said = page.querySelector(
+        `.vf-profiles-pop-row[data-plan="${entry.key}"] .vf-profiles-pop-row-account`,
+      );
+      expect(said?.textContent).toBe(veiledAccount(entry.plan?.account));
+      // nothing of the row holds the address whole: no attribute, title, tooltip or test id
+      const who = entry.plan?.account?.split(" · ")[0] ?? "";
+      expect(who.length).toBeGreaterThan(1);
+      const row = page.querySelector(`.vf-profiles-pop-row[data-plan="${entry.key}"]`);
+      expect(row?.outerHTML).not.toContain(who);
     }
   });
 
@@ -1191,6 +1273,23 @@ describe("the reach (UM-R2): the pointer can cross to its card", () => {
       vi.advanceTimersByTime(ms);
     });
   };
+  /** 2026-11-16 (§8 "The reach", `aim.ts`): the pointer travels right into the shown card, and on the way crosses onto
+   * `node`. The shown card stands at x 100, from y 40 to 440 (jsdom lays nothing out, so its box is given). */
+  const heading = (layer: HTMLElement, node: Element | null | undefined): void => {
+    const cards = layer.querySelectorAll<HTMLElement>(".vf-profiles-pop, .vf-profiles-addcard");
+    for (const card of cards) {
+      card.getBoundingClientRect = () =>
+        ({ left: 100, top: 40, right: 666, bottom: 440, width: 566, height: 400 }) as DOMRect;
+    }
+    act(() => {
+      for (const x of [40, 46, 52]) {
+        const y = 100 + (x - 40) / 3;
+        window.dispatchEvent(new PointerEvent("pointermove", { clientX: x, clientY: y }));
+      }
+      const over = new PointerEvent("pointerover", { bubbles: true, clientX: 58, clientY: 106 });
+      node?.dispatchEvent(over);
+    });
+  };
   const setup = (): {
     target: HTMLElement;
     item: (id: string) => HTMLElement | null;
@@ -1226,20 +1325,34 @@ describe("the reach (UM-R2): the pointer can cross to its card", () => {
     expect(stand("work")).not.toBeNull();
   });
 
-  it("a move to another circle waits out the dwell, and reaching the card cancels it", () => {
+  it("a move to another circle takes the card at once when it is not on its way into the card (2026-11-16)", () => {
+    // James: "make it more instant". A pass up or down the pill swaps the card on every circle it reaches
     const { item, stand } = setup();
     over(item("native"));
     out(item("native"));
     over(item("work"));
+    expect(stand("work")).not.toBeNull();
+    expect(stand("native")).toBeNull();
+    out(item("work"));
+    over(item("native"));
+    expect(stand("native")).not.toBeNull();
+    expect(stand("work")).toBeNull();
+  });
+
+  it("a circle brushed on the way into the card waits out the dwell, and reaching the card cancels it", () => {
+    const { item, stand, target } = setup();
+    over(item("native"));
+    out(item("native"));
+    heading(target, item("work"));
     wait(119);
     expect(stand("native")).not.toBeNull();
     expect(stand("work")).toBeNull();
     wait(1);
     expect(stand("work")).not.toBeNull();
     expect(stand("native")).toBeNull();
-    // back toward This Mac, then onto the shown card first
+    // toward Work's card, brushing This Mac, then onto the shown card first
     out(item("work"));
-    over(item("native"));
+    heading(target, item("native"));
     wait(100);
     over(stand("work"));
     wait(1000);
@@ -1298,10 +1411,10 @@ describe("the reach (UM-R2): the pointer can cross to its card", () => {
     expect(target.querySelector(".vf-profiles-pop")).toBeNull();
   });
 
-  it("a pinned card counts as showing: another circle waits the dwell before it peeks (§8 'The reach')", () => {
-    const { item, stand } = setup();
+  it("a pinned card counts as showing: a circle brushed on the way into it waits the dwell before it peeks (§8 'The reach')", () => {
+    const { item, stand, target } = setup();
     act(() => item("work")?.querySelector<HTMLButtonElement>(".vf-profiles-circle")?.click());
-    over(item("native"));
+    heading(target, item("native"));
     wait(119);
     expect(stand("work")).not.toBeNull();
     expect(stand("native")).toBeNull();
@@ -1309,7 +1422,7 @@ describe("the reach (UM-R2): the pointer can cross to its card", () => {
     expect(stand("native")).not.toBeNull();
   });
 
-  it("the add's card counts as showing and can be reached: its stand holds the pointer, and a circle waits the dwell", () => {
+  it("the add's card counts as showing and can be reached: its stand holds the pointer, and a circle on the way into it waits the dwell", () => {
     const target = cardLayer();
     const page = mount(
       <ProfilesColumn {...controller({ cardLayer: target, openNewProfile: vi.fn() })} />,
@@ -1326,13 +1439,30 @@ describe("the reach (UM-R2): the pointer can cross to its card", () => {
     wait(1000);
     expect(add()).not.toBeNull();
     out(add());
-    over(page.querySelector('.vf-profiles-item[data-profile="work"]'));
+    heading(target, page.querySelector('.vf-profiles-item[data-profile="work"]'));
     wait(119);
     expect(add()).not.toBeNull();
     expect(work()).toBeNull();
     wait(1);
     expect(work()).not.toBeNull();
     expect(add()).toBeNull();
+  });
+
+  it("knows a trip into the card from a pass along the pill (aim.ts)", () => {
+    const card = { left: 100, top: 40, bottom: 440 };
+    // right and a little down, toward the card's near edge: on its way in
+    expect(headingInto({ x: 40, y: 100 }, { x: 58, y: 106 }, card)).toBe(true);
+    // at a corner, within the slack: from (40, 40) through (60, 37) the line meets the card's edge (x 100) at y 31,
+    // inside the slack, between its corner (28, the top held out 12) and the card's top (40)
+    expect(headingInto({ x: 40, y: 40 }, { x: 60, y: 37 }, card)).toBe(true);
+    // straight down the pill, or down with a drift right steeper than 2: a pass, never a trip
+    expect(headingInto({ x: 40, y: 100 }, { x: 40, y: 150 }, card)).toBe(false);
+    expect(headingInto({ x: 40, y: 100 }, { x: 44, y: 130 }, card)).toBe(false);
+    // left, away from the card, or past its edge already
+    expect(headingInto({ x: 58, y: 100 }, { x: 40, y: 100 }, card)).toBe(false);
+    expect(headingInto({ x: 120, y: 100 }, { x: 130, y: 100 }, card)).toBe(false);
+    // right, but aimed past the card's foot
+    expect(headingInto({ x: 40, y: 400 }, { x: 60, y: 440 }, card)).toBe(false);
   });
 
   it("with no add to open, pointing at it shows nothing: the next circle opens at once", () => {
@@ -1804,17 +1934,16 @@ describe("focus is pointing (UM-R-F, c4): the keyboard on a circle shows its car
     expect(monitorHoldsKeys()).toBe(false);
   });
 
-  it("the pointer peeks over a focus-shown card after the dwell, letting go brings it back, and a peek that takes the card holding the keyboard hands it to that card's circle", () => {
+  it("the pointer peeks over a focus-shown card at once, letting go brings it back, and a peek that takes the card holding the keyboard hands it to that card's circle", () => {
+    // DESIGN.md §8 "The reach": entering another circle while a card shows takes the card at once (unless the
+    // pointer is on its way into the shown card), and "Focus is pointing": the pointer peeks over a focus-shown card
+    // as over a pinned card (2026-11-16: this row pinned the old 120ms dwell)
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {
       const { target, page } = setup();
       focus(circleOf(page, "work"));
       focus(standOf(target, "work")?.querySelector<HTMLButtonElement>(".vf-profiles-pop-close"));
       over(itemOf(page, "native"));
-      wait(119);
-      expect(standOf(target, "work")).not.toBeNull();
-      expect(standOf(target, "native")).toBeNull();
-      wait(1);
       expect(standOf(target, "native")).not.toBeNull();
       expect(standOf(target, "work")).toBeNull();
       expect(document.activeElement).toBe(circleOf(page, "work"));

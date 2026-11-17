@@ -148,6 +148,11 @@ export interface BandsOptions {
    * its entries, whose profiles are the managed ones that hold each plan: while the usage cannot be read it names no
    * profile ("Usage unavailable"). */
   every?: boolean;
+  /** the middle names the window its figure reads, by its C1 line's label ("7D"), where the agent's mark stood: the
+   * popover's circle, whose arcs and rows already show each agent's mark (2026-11-16, James: the icon "is too
+   * redundant … make it to show this current highlighted meter … display 7D there"). A plan with no reading keeps its
+   * mark. Absent, the middle is as it always was (the golden's circles and the phone's). */
+  centreWindow?: boolean;
 }
 
 /** The inner band's reach: a window of five hours or less. */
@@ -580,6 +585,19 @@ function centreOf(
     const size = Math.min(r * 0.98, 15);
     return [text("figure", String(used), c, c + size * 0.36, size, "display", 800, figurePaint)];
   }
+  const windowLabel =
+    options.centreWindow === true && plan.kind === "reading" ? plan.tightest.line.label : undefined;
+  if (windowLabel !== undefined && used !== undefined && (level === 2 || r < 46)) {
+    // the window's label over the figure, in the mark's place
+    const label = Math.min(r * 0.36, 13);
+    const size = Math.min(r * 0.62, 26);
+    const top = c - (label * 0.8 + 5 + size * 0.72) / 2;
+    const figure = top + label * 0.8 + 5 + size * 0.72;
+    return [
+      text("sub", windowLabel, c, top + label * 0.8, label, "sans", 700, ink(70)),
+      text("figure", String(used), c, figure, size, "display", 800, figurePaint, true),
+    ];
+  }
   if (level === 2 || r < 46) {
     const mark = Math.min(r * 0.6, 19);
     const size = Math.min(r * 0.62, 26);
@@ -612,6 +630,34 @@ function centreOf(
   const mark = clamp(r * 0.3, 13, 21);
   const size = clamp(r * 0.48, 20, 38);
   const small = clamp(r * 0.17, 9.5, 11.5);
+  if (windowLabel !== undefined && used !== undefined) {
+    // full size: the window's label over the figure, and the say line under it; the label is the window, so no
+    // "of 7 days" line says it again
+    const label = clamp(r * 0.24, 11, 15);
+    const say = bandsSay(plan);
+    const sayHeight = say.words !== "" ? 7 + small : 0;
+    const top = c - (label * 0.8 + 6 + size * 0.72 + sayHeight) / 2;
+    const figure = top + label * 0.8 + 6 + size * 0.72;
+    const items: BandsCentreItem[] = [
+      text("sub", windowLabel, c, top + label * 0.8, label, "sans", 700, ink(70)),
+      text("figure", String(used), c, figure, size, "display", 800, figurePaint, true),
+    ];
+    if (say.words !== "") {
+      items.push(
+        text(
+          "say",
+          say.words,
+          c,
+          figure + 7 + small * 0.8,
+          small,
+          "sans",
+          say.hot ? 650 : 500,
+          say.hot ? ATTENTION : ink(62),
+        ),
+      );
+    }
+    return items;
+  }
   const top = c - (mark + 6 + size * 0.72 + 7 + small + 4 + small) / 2;
   const items: BandsCentreItem[] = [
     { kind: "mark", ...markOf(plan, c, top + mark / 2, mark, false, { badge: true }) },

@@ -140,6 +140,28 @@ export function windowLines(entry: Extract<PlanMeter, { kind: "reading" }>): {
   return { lines: entry.windows.map((window) => window.line), forecasts, resetForms, ages };
 }
 
+/** A part of an address, veiled: its first character and three dots, whatever its length (the length is not said). */
+function veil(part: string): string {
+  const first = Array.from(part)[0];
+  return first === undefined ? "" : `${first}•••`;
+}
+
+/** The sign-in a plan reads, as the popover shows it beside the plan's title (DESIGN.md §8 "The body"; 2026-11-16):
+ * an email veiled to its first letters and its domain's last part ("kim@work.example" → "k•••@w•••.example"), a handle
+ * to its first letter ("k•••"). Of `accountWords`' "‹who› · ‹organization›" the who alone: the organization goes, so
+ * nothing of the address is said whole. Undefined when no account is named. */
+export function veiledAccount(words: string | undefined): string | undefined {
+  const who = words?.split(" · ")[0]?.trim();
+  if (who === undefined || who === "") return undefined;
+  const at = who.lastIndexOf("@");
+  if (at <= 0) return veil(who);
+  const domain = who.slice(at + 1);
+  const dot = domain.lastIndexOf(".");
+  const host = dot > 0 ? domain.slice(0, dot) : domain;
+  const tail = dot > 0 ? domain.slice(dot) : "";
+  return `${veil(who.slice(0, at))}@${veil(host)}${tail}`;
+}
+
 /** What a plan with no meter says (§9 "What needs you"): "‹agent› shows no meter" is an agent that reports no
  * usage; a plan no agent named, or whose reading holds no window, says its title alone, as the phone does (UM-D3;
  * ‹for James›), since "shows no meter" would be false of an agent that meters. */
@@ -170,6 +192,7 @@ function PlanRow({
   onToggle: () => void;
 }): ReactElement {
   const right = entry.right;
+  const account = veiledAccount(entry.plan?.account);
   const choosable = entry.kind !== "needs-you";
   return (
     // pointing at a row lights its arc, as pointing at the arc does; a click chooses it (UM-D14), through a button
@@ -199,6 +222,12 @@ function PlanRow({
       </span>
       <span className="vf-profiles-pop-row-head">
         <b className="vf-profiles-pop-row-title">{entry.title}</b>
+        {account !== undefined ? (
+          // the sign-in, veiled: whose account it is at a glance, never the address itself on a shared screen
+          <span className="vf-profiles-pop-row-account" title={account}>
+            {account}
+          </span>
+        ) : null}
         {/* a reading's lines each say their own words, so its head says none; a plan with no lines says its own */}
         {entry.kind === "reading" ? null : (
           <span className="vf-profiles-pop-row-right" {...(right.hot ? { "data-hot": "" } : {})}>
@@ -259,8 +288,10 @@ export function ProfilePopoverView({
   const isPressed = (key: string): boolean => chosenPlanFamily?.includes(unionKey(key)) === true;
   const toggle = (key: string): void => onChoosePlan(isPressed(key) ? null : unionKey(key));
   const acts: RowActs = { canOpen, canRetry, onOpenProfile, onRetry };
+  // the middle names the window its figure reads ("7D"), not the agent its arc and its row already show (2026-11-16)
   const geometry = bandsGeometry(POPOVER_CIRCLE, meters.entries, {
     hit: true,
+    centreWindow: true,
     ...(focus !== null ? { focus } : {}),
   });
   const rows = meters.entries.filter(

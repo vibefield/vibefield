@@ -3569,8 +3569,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       has no terminals, a card stands in place beside its circle at the same 16 (*added 2026-11-09, UM-R*).
     - **The reach.** A pointer can cross to its card. A bridge 22 wide joins the circle's edge to the card, so a
       level crossing never leaves the hover. Leaving arms a **320ms** grace, and entering the card or the circle
-      again in it cancels it; entering another circle or the add while a card shows waits a **120ms** dwell, and
-      reaching the shown card first cancels that. The first open, with nothing showing, is at once. A pinned card
+      again in it cancels it. Entering another circle or the add while a card shows takes the card **at once**,
+      unless the pointer is **on its way into the shown card**: its newest point lies inside the triangle its point
+      three moves back makes with the card's near edge, held out 12 past each corner, moving right at least 2 and no
+      steeper than 2 (`aim.ts`). Only then does it wait a **120ms** dwell, so a circle brushed on that trip swaps
+      nothing, and reaching the shown card first cancels it. A pass up or down the pill swaps the card on every
+      circle it reaches. *(Corrected 2026-11-16; James, in chat: the card "feels bit laggy, as they do not instantly
+      show whenever i move to a profile, they seems only change after i landed at one profile for a bit", then "make
+      it more instant". Every other target waited the dwell, and each circle crossed began it again.)* The first
+      open, with nothing showing, is at once. A pinned card
       can still be peeked over this way, as it has been since UM-3, and letting go brings the pinned card back
       (2026-11-09, James, the picks page *The Column's Open Calls*, c2: "Keep the peek") (*added 2026-11-09, UM-R;
       the two numbers are the edge drawer's, retired HN-8, "opened after 120ms and closed after a 320ms grace" §8
@@ -3602,8 +3609,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       (*added 2026-11-09, UM-R's review: the build's values, written down here first*).
     - **The body:** the circle at **212** in a 212 column, its arcs answering the pointer (§8 "The Bands circle"),
       with **the bands key** under it: each of its three words led by its band drawn small (16 × 11), at 10.5/500 in
-      the tertiary ink. Beside it, 14 away, one row per plan in the circle's order: the agent's mark (16), the
-      plan's title (as Agent Profiles names it), and **Settings' C1 lines, one for every window the plan reads**,
+      the tertiary ink. **Its middle names the window its figure reads**, by that window's C1 label ("7D", "5H") at
+      700 in the ink at 70%, where the agent's mark stood, over the figure; at full size the say line follows and no
+      "of 7 days" line repeats the window. A plan with no reading keeps its mark. *(Corrected 2026-11-16; James, in
+      chat: the agent icon in the middle "is too redundant … make it to show this current highlighted meter, for
+      example this 99% is the 7d meter, so display 7D there". The popover's circle alone (`centreWindow`); every other
+      circle's middle is unchanged.)* Beside it, 14 away, one row per plan in the circle's order: the agent's mark
+      (16), **level with the plan's title at the row's top** however many lines follow (*the same day: "vertical
+      align the agent icon to its name at the top"*; a plan that needs you keeps its title beside its mark, its act in
+      the third column), the plan's title (as Agent Profiles names it), **its sign-in beside the title, veiled**
+      (an email to its first letter, three dots, `@`, its domain's first letter, three dots and the domain's last
+      part, "k•••@w•••.example"; a handle to its first letter and three dots; the organization left out; at 11/500 in
+      the tertiary ink, giving way first when the head is tight; never the address whole, its tooltip included —
+      *added 2026-11-16; James, in chat: "show the sign-in email by the agent name in redacted form"*), and
+      **Settings' C1 lines, one for every window the plan reads**,
       at the row's width × 12, each saying at its end what Settings' line says: its forecast while it runs ahead,
       else its reset, and the reading's age for a window read before its reset or a kept reading (which forecasts
       nothing). A plan with no lines yet (a first read, one that needs you) says its right words at the row's end

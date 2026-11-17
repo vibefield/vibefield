@@ -17,9 +17,20 @@ import {
 import { hasCircle, planMeters } from "../../usage/meters";
 import { setMonitorHoldsKeys } from "../monitor/launcher-keys";
 import type { MonitorUsagePort } from "../monitor/remote-door";
+import { AIM_HISTORY, type AimPoint, headingInto } from "./aim";
 import { readWords } from "./ProfilePopoverView";
 import { ADD_TARGET, type ColumnCircle, ProfilesColumnView } from "./ProfilesColumnView";
 import { useColumnPointer } from "./useColumnPointer";
+
+/** The stand of what the column shows (a profile's popover or the add's card), in the cards layer or in place. */
+function standOf(root: ParentNode | null | undefined, target: string): HTMLElement | null {
+  for (const stand of root?.querySelectorAll<HTMLElement>(".vf-profiles-stand") ?? []) {
+    if (target === ADD_TARGET ? stand.dataset.card === "add" : stand.dataset.profile === target) {
+      return stand;
+    }
+  }
+  return null;
+}
 
 // UM-3 (DESIGN.md §8 "Godview's profiles column") — THE COLUMN'S CONTROLLER, the stage's own chrome. It reads what
 // the stage already holds — the profile filter's sets (`agents.profileSets.subscribe`), the usage rows through the
@@ -193,12 +204,45 @@ function ProfilesColumnController({
   const addOpen = pointed === ADD_TARGET || (pointed === null && keyboardTarget === ADD_TARGET);
   // §8 "The reach": the pointer's own hold, its grace and its dwell; the card shows as it always did from `pointed`
   const showing = addOpen && openNewProfile !== undefined ? ADD_TARGET : open;
-  const { point, clear } = useColumnPointer(showing, setPointed);
+  const columnRef = useRef<HTMLDivElement>(null);
+  // §8 "The reach" (2026-11-16): the pointer's last few points while a card shows, read as it crosses into a target
+  // (`pointerover` comes before the target's enter), so the column knows whether it is on its way into the card
+  const trail = useRef<AimPoint[]>([]);
+  useEffect(() => {
+    trail.current = [];
+    if (showing === null) return;
+    const note = (event: PointerEvent): void => {
+      const points = trail.current;
+      points.push({ x: event.clientX, y: event.clientY });
+      if (points.length > AIM_HISTORY) points.shift();
+    };
+    window.addEventListener("pointermove", note, { capture: true, passive: true });
+    window.addEventListener("pointerover", note, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("pointermove", note, { capture: true });
+      window.removeEventListener("pointerover", note, { capture: true });
+    };
+  }, [showing]);
+  const headingTo = useCallback(
+    (shownTarget: string): boolean => {
+      const points = trail.current;
+      const from = points[0];
+      const to = points[points.length - 1];
+      if (from === undefined || to === undefined || from === to) return false;
+      const stand = standOf(cardLayer ?? columnRef.current, shownTarget);
+      const card = stand?.firstElementChild ?? stand;
+      if (!card) return false;
+      const rect = card.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) return false;
+      return headingInto(from, to, rect);
+    },
+    [cardLayer],
+  );
+  const { point, clear } = useColumnPointer(showing, setPointed, headingTo);
   // §8 "Pinned": CLOSING IS ONE ACT, wherever it comes from — the keyboard home if the card holds it, then the pin,
   // the keyboard's card and the pointer's hold. No new enter fires while the pointer sits still, and no new focus
   // while the keyboard does, so the card stays closed until one of them leaves and returns. The circle's own focus,
   // as the keyboard goes home, sets its target before the null that follows it here, so it does not reopen the card.
-  const columnRef = useRef<HTMLDivElement>(null);
   const closeCard = useCallback((): void => {
     handFocusHome(columnRef.current);
     setPinned(null);

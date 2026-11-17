@@ -559,10 +559,14 @@
   pointer-events: none;
 }
 
+/* the mark stands level with the plan's title at the row's top, however many lines follow (2026-11-16, James:
+   "vertical align the agent icon to its name at the top"); its 16 box centres on the title's 12.5 × 1.25 line */
 .vf-profiles-pop-row-mark {
   grid-row: span 2;
+  align-self: start;
   display: grid;
   place-items: center;
+  height: 16px;
   font-size: 16px;
   color: color-mix(in srgb, var(--vf-foreground) 84%, transparent);
 }
@@ -575,13 +579,34 @@
   min-width: 0;
 }
 
+/* a plan that needs you: its act takes the third column, so its head keeps the second and stays on the first line
+   beside its mark (spanning both, it was pushed under the act) */
+.vf-profiles-pop-row[data-kind="needs-you"] > .vf-profiles-pop-row-head {
+  grid-column: 2;
+}
+
 .vf-profiles-pop-row-title {
+  flex: none;
+  max-width: 60%;
   overflow: hidden;
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* the sign-in, veiled (`veiledAccount`), after the title in the tertiary ink: it gives way first when the head is tight
+   (2026-11-16, James: "show the sign-in email by the agent name in redacted form") */
+.vf-profiles-pop-row-account {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vf-text-tertiary);
 }
 
 .vf-profiles-pop-row-right {
