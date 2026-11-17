@@ -348,6 +348,31 @@ extension SpendParityTests {
       timeZone: try SpendGolden.zone(), measure: SpendDOM.averageGlyph)
   }
 
+  /// H19 — the chart's caption (item 291 · 3b, puppeteer 0.4.1's `colcapWords`): the long words where they fit the
+  /// plot, the short where they would overrun it, measured in caps with the caption's tracking added. Under the
+  /// view's own fallback (6.4 a UTF-16 unit) the long words take 28 × 6.4 + 28 × 0.07 × 10 = 198.8: past the
+  /// phone's plot at 402, inside a 1180 stage's. The measure is handed the long words in caps.
+  @Test func theCaptionSaysTheShortWordsWhereTheLongOverrun() throws {
+    let phone = try Self.openInput()
+    var asked: [String] = []
+    let recording = SpendModel.Input(
+      agents: phone.agents, nowMs: phone.nowMs, width: 402, height: phone.height, timeZone: phone.timeZone,
+      measure: { text, style in
+        asked.append(text)
+        return SpendDOM.averageGlyph(text, style)
+      })
+    let narrow = SpendModel.frame(recording, SpendModel.State())
+    let plot = narrow.g.x1 - narrow.g.x0
+    #expect(plot < 198.8, "the phone's plot is \(plot)")
+    #expect(narrow.colcap.text == "Last 10 minutes", "at 402 the caption is \(narrow.colcap.text)")
+    #expect(asked.contains("SPENT IN THE LAST 10 MINUTES"), "the long words are measured in caps")
+    let wide = SpendModel.Input(
+      agents: phone.agents, nowMs: phone.nowMs, width: 1180, height: phone.height, timeZone: phone.timeZone,
+      measure: SpendDOM.averageGlyph)
+    let roomy = SpendModel.frame(wide, SpendModel.State())
+    #expect(roomy.colcap.text == "Spent in the last 10 minutes", "at 1180 the caption is \(roomy.colcap.text)")
+  }
+
   private static func witnessAgent(_ id: String) throws -> SpendAgent {
     let found = try SpendWitness.open().first { $0.id == id }
     return try #require(found, "the witness's \(id)")

@@ -12,7 +12,8 @@ import UIKit
 // this file out): its inks against the swarm's resolved theme and the stage's skin (K2), and the view itself on the
 // phone's stage over the witness (K3). An extension of the one suite, so `-only-testing` by its name takes both. R1
 // and R2 read the narrow hero and assert nothing: R1 prints its caption, R2 stills it at a set moment when
-// `VF_STILL_DIR` is set (item 285).
+// `VF_STILL_DIR` is set (item 285). R3 asserts that at that moment the words stand apart in the phone's own
+// fonts (item 291, puppeteer 0.4.1's #81).
 //
 // No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 
@@ -150,5 +151,60 @@ extension SpendParityTests {
           + " burn=\(points(burn))pt line=\(points(line))pt room=\(points(room))pt burnEnds=x\(points(ends))"
           + " listColumn=x\(points(g.lx0)) headWords=x\(points(g.lx0 + 10)) file=\(file)")
     }
+  }
+
+  /// R3 — AT A SET MOMENT THE WORDS STAND APART (item 291: puppeteer 0.4.1's #81).
+  /// The phone's stage (402 × 781), the witness's open at R2's moment (now frozen at 1790803300000, the moment held
+  /// at 1790803000000), measured in the phone's own fonts: `SpendView.measure` for the hero's two faces, and the
+  /// caption's and the head's faces as `words` and `head` draw them (caps, tracked). The burn ends 10 pt short of
+  /// the list's column, where its head's words begin; the head says only "Total by <clock>", which fits inside its
+  /// padding; the chart's caption fits the plot; the Now pill stands 4 pt under the caption's 10 pt line; "$0"'s
+  /// 14 pt line ends above now's chip. One `PG-CAP ` line says what the caption and the head measured. Red where
+  /// the phone draws 0.4.0's forms, green with the port.
+  @Test @MainActor func theSpendViewAtASetMomentKeepsItsWordsApart() throws {
+    let steps = try HomeFixture.witnessSteps()
+    let rows = try #require(steps.first { $0.at == "open" }?.rows)
+    let frozen = try #require(GodviewViewChoice.frozenNow(["-vf-godview-now=1790803300000"]))
+    var seed = SpendModel.State()
+    seed.held = 1_790_803_000_000
+    let input = GodviewStageInput(
+      isActive: true, rows: rows, fieldIsLive: true, unreadIds: Set(rows.filter { $0.unread }.map { $0.id }),
+      activeId: nil, colour: { _ in nil }, now: { frozen }, bandHeight: 93, topInset: 108,
+      skin: GodviewSkin(scheme: .light), isStill: true, onOpen: { _ in })
+    let frame = SpendModel.frame(SpendView.modelInput(input, size: CGSize(width: 402, height: 781)), seed)
+    let g = frame.g
+    let hero = frame.hero
+    // words as a caps face draws them: 600 weight (semibold), in caps, tracked by `em` of the size
+    func drawn(_ text: String, size: Double, em: Double) -> Double {
+      guard !text.isEmpty else { return 0 }
+      let attributes: [NSAttributedString.Key: Any] = [
+        .font: UIFont.systemFont(ofSize: size, weight: .semibold), .kern: em * size,
+      ]
+      return Double((text.uppercased() as NSString).size(withAttributes: attributes).width)
+    }
+    let figure = SpendView.measure(hero.big, .heroFigure)
+    let burn = SpendView.measure(hero.rate, .heroRate)
+    let burnEnds = g.x0 + figure + SpendWords.NarrowHero.gapPx + burn
+    #expect(burnEnds <= g.lx0 - 10, "the burn (\(hero.rate)) ends at x\(burnEnds), past x\(g.lx0 - 10)")
+    // every agent of the witness's open was born before the moment (its rows' createdAt, 39 to 2,550 minutes
+    // before), so the head says only what it must: no first label, and "Total by <clock>" whole (#81 · 2)
+    #expect(frame.head.a.isEmpty, "the head's first label at the moment: \(frame.head.a)")
+    let size = frame.head.slim ? 9.5 : 10.5
+    let second = drawn(frame.head.b, size: size, em: 0.06)
+    let headRoom = frame.head.width - 20
+    // the spacer keeps its 8 before the second label, an empty first label or not
+    #expect(8 + second <= headRoom, "the head's second label (\(frame.head.b)) takes 8 + \(second) of \(headRoom)")
+    let caption = drawn(frame.colcap.text, size: 10, em: 0.07)
+    let plot = g.x1 - g.x0
+    #expect(caption <= plot, "the caption (\(frame.colcap.text)) takes \(caption) of the plot's \(plot)")
+    let now = try #require(frame.now, "a held moment shows the Now pill")
+    #expect(now.top >= frame.colcap.top + 10 + 4, "the Now pill at y\(now.top), the caption at y\(frame.colcap.top)")
+    let zero = try #require(frame.yTicks.first { $0.text == "$0" }, "the money axis starts at $0")
+    let chip = try #require(frame.chips.first, "now's chip")
+    #expect(zero.top + 14 <= chip.top, "$0's line at y\(zero.top) runs into now's chip at y\(chip.top)")
+    func points(_ value: Double) -> String { String(format: "%.1f", value) }
+    print(
+      "PG-CAP stage=402x781 at=moment text=\(frame.colcap.text) drawn=\(points(caption))pt plot=\(points(plot))pt"
+        + " headB=\(points(second))pt headRoom=\(points(headRoom))pt")
   }
 }
