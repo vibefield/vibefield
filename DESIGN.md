@@ -7771,19 +7771,27 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   said "No project in your desktops' index yet" over a FAILED index): the reader asks `index.status`
   beside each `project.list`, and while the index is not ready one more sentence stands under the head
   (*until item 390, 2026-11-13, this said "the scope line gains one more sentence"; the scope line is gone,
-  above*), led by that desktop's mark like an asleep one — `studio's index is starting` · `studio
-  is rebuilding its index` · `studio is indexing · 61%` · `studio's index has stopped` · `studio runs
-  no history index` — the project screen carries the same line under its head, and an EMPTY ledger
-  says it as its note, with fieldd's own words after it: **"studio's index has stopped"** — "‹fieldd's
-  reason›. History on this phone reads nothing from it until it runs again; its restart is in History
-  on studio." (the restart is the desktop's act — P2, the phone reads) · **"studio is rebuilding its
-  index"** — "studio's VibeField reads history in a newer form, so it is rebuilding its index from
-  what it recorded; its projects arrive when that ends." · **"studio's index is starting"** — "Its
-  projects arrive when it is ready." · **"studio is reading its history"** — "8,400 of 13,700
-  sessions read; its projects arrive as it reads." "No project in your desktops' index yet" is said
-  only over an index that is READY (or a desktop whose door offers no `index.status`). The phone
-  offers no restart; desktop History's failed state carries **Restart the index**. While it is not ready the
-  ledger is read again every few seconds (nothing pings when it becomes ready).
+  above*), led by that desktop's mark like an asleep one, in History's own words (§9, IS-282-3) —
+  `History on studio is opening` · `History on studio is updating` · `studio is reading its history · 61%` ·
+  `History on studio has stopped` · `studio keeps no history` · `History on studio is stopped` — the
+  project screen carries the same line under its head, and an EMPTY ledger says it as its note:
+  **"History on studio has stopped"** — "Nothing new arrives on this iPhone until it runs again. Try again from
+  History on studio." (the restart is the desktop's act — P2, the phone reads) · **"History on studio is
+  updating"** — "Its projects arrive when the update ends." · **"History on studio is opening"** — "Its projects
+  arrive when it is open." · **"studio is reading its history"** — "8,400 of 13,700 sessions read; its projects
+  arrive as it reads." · **"studio keeps no history"** — "History is off on studio." · **"History on studio is
+  stopped"** — "Its projects arrive when it runs again." **"No projects yet"** — "Your desktops have recorded
+  none. Choose whose history they keep on a desktop (Settings → Agents)." is said only over an index that is READY
+  (or a desktop whose door offers no `index.status`). fieldd's own detail and reason are never said on the phone.
+  The phone offers no restart; desktop History's failed state carries **Restart the index**. While it is not ready
+  the ledger is read again every few seconds (nothing pings when it becomes ready).
+  *Amended 2026-11-17 (item 505; James's picks: "3. Use suggested", typed in VF-PM's session at 04:13:39Z, and "Use
+  the suggested lines, all of them (Recommended)", on the board at 06:39:02Z):* until then these sentences named the
+  index (`studio's index is starting` · `studio is rebuilding its index` · `studio is indexing · 61%` · `studio's
+  index has stopped` · `studio runs no history index` · "No project in your desktops' index yet"), and an empty
+  note put fieldd's own words after its sentence. The phone's other notes that named a door, the ledger or the
+  contracts versions moved with them (`FieldHistoryModel`'s `emptyLedger`, `noDesktopRead`, `projectNotRead`,
+  `headNote`, and a project's empty session list).
   **The ledger is the door's whole listing** (item 352, 2026-11-12; James, 11:38:00Z: "the history items on the phone
   does not match the items on the desktop, desktop have more items"): a desktop answers a phone a hundred projects a
   page with a cursor to the next, and the phone follows the pages to the listing's end, so it lists what the desktop
