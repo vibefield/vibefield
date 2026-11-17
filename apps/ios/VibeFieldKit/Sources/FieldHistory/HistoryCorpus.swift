@@ -660,6 +660,8 @@ extension HistoryCorpus {
   /// sentences every design page drew (`draft/ios-pocket/*/hp.js`), so a
   /// screenshot of the phone can be read against the page it was ruled on.
   /// Real-shaped, invented, and plainly a mock: it answers only `-vf-mock`.
+  /// Its folders are nobody's (`~/code/…`, item 367): the pages drew a real
+  /// Mac's, and this ships in every build.
   public static let mock = HistoryCorpus(
     desktop: "studio",
     sessionCount: 1405,
@@ -667,7 +669,7 @@ extension HistoryCorpus {
     readAt: "11:42",
     projects: [
       HistoryProject(
-        id: "vf", name: "vibe-field", seq: 0, path: "~/project100/vibe-field", figure: "1.24", unit: "B", spend: 1240,
+        id: "vf", name: "vibe-field", seq: 0, path: "~/code/vibe-field", figure: "1.24", unit: "B", spend: 1240,
         last: "now", recencyMinutes: 0,
         agents: [.init("claude", 62), .init("codex", 21), .init("cursor", 9)], moreAgents: 2,
         spark: [2, 3, 2, 4, 3, 5, 4, 6, 5, 7, 8, 6, 9, 10, 12],
@@ -681,7 +683,7 @@ extension HistoryCorpus {
         spark: [9, 8, 6, 7, 5, 4, 4, 3, 3, 2, 2, 1, 0, 1, 1], devices: ["dev-1"],
         lifetime: .mock(thirtyDays: 386, tokens: 1158000000, messages: 3120)),
       HistoryProject(
-        id: "mille", name: "mille", seq: 2, path: "~/project100/mille", figure: "214", unit: "M", spend: 214, last: "now",
+        id: "mille", name: "mille", seq: 2, path: "~/code/mille", figure: "214", unit: "M", spend: 214, last: "now",
         recencyMinutes: 1, agents: [.init("codex", 58), .init("claude", 42)],
         spark: [0, 0, 1, 0, 2, 3, 5, 6, 4, 3, 2, 0, 1, 2, 3],
         stats: .init(
@@ -689,18 +691,18 @@ extension HistoryCorpus {
           facts: "6d streak · 14d best · peak 11 PM · mostly o5"), devices: ["dev-1"],
         lifetime: .mock(thirtyDays: 214, tokens: 611000000, messages: 2904)),
       HistoryProject(
-        id: "chop", name: "chopsticks", seq: 3, path: "~/p008/chopsticks", figure: "92.4", unit: "M", spend: 92.4,
+        id: "chop", name: "chopsticks", seq: 3, path: "~/code/chopsticks", figure: "92.4", unit: "M", spend: 92.4,
         last: "40m", recencyMinutes: 40, agents: [.init("cursor", 55), .init("claude", 45)],
         spark: [3, 4, 5, 4, 6, 5, 6, 7, 5, 6, 7, 6, 5, 6, 7], devices: ["dev-1"],
         lifetime: .mock(thirtyDays: 92.4, tokens: 277200000, messages: 1044)),
       HistoryProject(
-        id: "rosetta", name: "rosetta", seq: 6, path: "~/project100/rosetta", figure: "71.8", unit: "M", spend: 71.8,
+        id: "rosetta", name: "rosetta", seq: 6, path: "~/code/rosetta", figure: "71.8", unit: "M", spend: 71.8,
         last: "yesterday", recencyMinutes: 1440,
         agents: [.init("claude", 60), .init("codex", 30), .init("opencode", 10)],
         spark: [0, 1, 2, 4, 3, 5, 6, 4, 5, 3, 4, 6, 5, 3, 2], devices: ["dev-1"],
         lifetime: .mock(thirtyDays: 71.8, tokens: 215400000, messages: 870)),
       HistoryProject(
-        id: "truffle", name: "truffle", seq: 4, path: "~/p008/truffle · folder not found", missing: true, figure: "31.0",
+        id: "truffle", name: "truffle", seq: 4, path: "~/code/truffle · folder not found", missing: true, figure: "31.0",
         unit: "M", spend: 31, last: "12d", recencyMinutes: 17280, agents: [.init("claude", 100)],
         spark: [4, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], devices: ["dev-1"],
         lifetime: .mock(thirtyDays: 31, tokens: 93000000, messages: 402)),

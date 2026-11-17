@@ -2856,7 +2856,7 @@ public struct HomeScreen: View {
               text: """
                 #!/bin/sh
                 set -eu
-                cd ~/Projects/project100/vibe-field
+                cd ~/code/vibe-field
                 pnpm install --frozen-lockfile
                 pnpm verify
                 """)
@@ -2897,7 +2897,7 @@ public struct HomeScreen: View {
             let suite = UserDefaults(suiteName: DemoArguments.suite)
             suite?.removePersistentDomain(forName: DemoArguments.suite)
             let store = ClipboardHistory(defaults: suite ?? .standard)
-            store.record("cd ~/Projects/project100/vibe-field && pnpm verify")
+            store.record("cd ~/code/vibe-field && pnpm verify")
             store.record(
               "error: could not read Username for 'https://github.com'\nfatal: could not "
                 + "read from remote")
@@ -4521,14 +4521,14 @@ public struct HomeScreen: View {
       let host = RemoteHost(deviceID: "demo-device-01", deviceName: "studio")
       let sessions = [
         RemoteSessionInfo(
-          sessionID: "1", title: "vibe-field", cwdLabel: "~/Projects/project100/vibe-field",
+          sessionID: "1", title: "vibe-field", cwdLabel: "~/code/vibe-field",
           running: true, attachable: true, readWrite: true, createdAtMs: 0,
           activityKind: "foreground-job"),
         RemoteSessionInfo(
-          sessionID: "2", title: "truffle", cwdLabel: "~/Projects/project100/p008/truffle",
+          sessionID: "2", title: "truffle", cwdLabel: "~/code/truffle",
           running: true, attachable: true, readWrite: false, createdAtMs: 0, activityKind: nil),
         RemoteSessionInfo(
-          sessionID: "3", title: "ghosttea", cwdLabel: "~/Projects/project100/electron-ghostty",
+          sessionID: "3", title: "ghosttea", cwdLabel: "~/code/electron-ghostty",
           running: true, attachable: false, readWrite: false, createdAtMs: 0, activityKind: nil),
       ]
       return (sessions.map { RemoteSessionRow(host: host, session: $0) }, 1)

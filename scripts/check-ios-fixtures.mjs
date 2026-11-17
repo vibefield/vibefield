@@ -424,6 +424,13 @@ const requiredMirrors = [
   ["project", projectFixtures, ["Tests/FieldProductTests"]],
   ["project", historyFixtures, ["Tests/FieldHistoryTests", "Sources/FieldHistory"]],
   ["index", indexFixtures, ["Tests/FieldHistoryTests"]],
+  // item 367 — the project index: the History door answers `index.projects` from it (`HistoryFixtureDoor`) and both
+  // suites read it. Held to its golden, so a copy that drifts is red here, not equal by hand alone
+  [
+    "index",
+    ["index-projects.mesh.json"],
+    ["Tests/FieldHistoryTests", "Tests/FieldProductTests", "Sources/FieldHistory"],
+  ],
   // SE-2 — search's answers: both readers' suites, and the DEBUG fixture door's answer (`HistoryFixtureDoor`)
   ["search", searchFixtures, ["Tests/FieldHistoryTests", "Tests/FieldProductTests"]],
   ["search", searchFixtures.slice(0, 1), ["Sources/FieldHistory"]],
