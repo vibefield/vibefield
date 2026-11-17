@@ -171,6 +171,31 @@ pub mod native_door {
     pub const LINE_MAX_BYTES: u64 = 8388608;
 }
 
+/// OB custody — how a spawner hands the floor its pairing secret, and what the floor keeps
+/// for fieldd: the flag's env names and its one value, the hand-off line's bounds, the shell
+/// pairing's contexts and window, the marks' bound and name pattern, and the started-for
+/// table's bound. `CUSTODY`'s scalar rows; its HKDF labels are the shell's alone and stay
+/// TS-only. One authority with fieldd; see registries.ts.
+pub mod custody {
+    pub const ENV: &str = "FIELDD_CUSTODY";
+    pub const NATIVE_ENV: &str = "FIELD_NATIVE_CUSTODY";
+    pub const STDIN: &str = "stdin";
+    pub const HANDOFF_MAX_BYTES: u64 = 16384;
+    pub const HANDOFF_WAIT_MS: u64 = 10000;
+    pub const CHILD_CHECK_BUDGET_MS: u64 = 8000;
+    pub const SHELL_CONTEXT: &str = "vf-shell";
+    pub const SHELL_ACK_CONTEXT: &str = "vf-shell-ack";
+    pub const WINDOW_SECS: u64 = 300;
+    pub const NONCE_HEX: u64 = 32;
+    pub const NONCES_KEPT: u64 = 1024;
+    pub const MARKS_MAX: u64 = 64;
+    pub const MARK_NAME: &str = "^[a-z][a-z0-9.:-]{0,63}$";
+    pub const MARK_OBJECT_GRANTS: &str = "objects.grants";
+    pub const STARTED_FOR_MAX: u64 = 1024;
+    pub const OLD_PAIR_WALK_BUDGET_MS: u64 = 20000;
+    pub const ROOT_REREAD_MIN_MS: u64 = 2000;
+}
+
 /// TPv3 (terminal-pipeline-v3 §5.1/§8; §20 item 5) — the pipeline's numbers:
 /// protocol version, door hygiene, grant validity, the cell's receive caps and
 /// the announced ProtocolLimits. PROVISIONAL until the numeric checkpoint; one
@@ -327,6 +352,7 @@ pub mod layout {
     pub const NEEDS_KEY_FILE: &[&str] = &["fieldd", "needs.key"];
     pub const OBJECTS_DIR: &[&str] = &["fieldd", "objects"];
     pub const OBJECTS_KEY_FILE: &[&str] = &["fieldd", "objects.key"];
+    pub const OBJECTS_GRANTS_FILE: &[&str] = &["fieldd", "objects.grants.json"];
     pub const SPARK_FILES_DIR: &[&str] = &["fieldd", "spark-files"];
     pub const SPARK_FILES_KEY_FILE: &[&str] = &["fieldd", "spark-files.key"];
     pub const FLOWS_LIBRARY_DIR: &[&str] = &["flows"];
@@ -371,6 +397,7 @@ pub mod layout {
     pub const MACHINE_AGENTS_DIR: &[&str] = &["machine", "agents"];
     pub const MACHINE_DISTRIBUTION_FILE: &[&str] = &["machine", "agents", "distribution.json"];
     pub const MACHINE_UPDATES_DIR: &[&str] = &["machine", "agents", "updates"];
+    pub const CUSTODY_KEY: &[&str] = &["shell", "custody.key"];
     pub const WORKSPACE_DIR: &[&str] = &["workspace"];
     pub const WORKSPACE_ROOTS_FILE: &[&str] = &["workspace", "roots.json"];
     pub const PROJECTS_DIR: &[&str] = &["projects"];
@@ -424,6 +451,7 @@ pub mod layout {
         ("NEEDS_KEY_FILE", NEEDS_KEY_FILE),
         ("OBJECTS_DIR", OBJECTS_DIR),
         ("OBJECTS_KEY_FILE", OBJECTS_KEY_FILE),
+        ("OBJECTS_GRANTS_FILE", OBJECTS_GRANTS_FILE),
         ("SPARK_FILES_DIR", SPARK_FILES_DIR),
         ("SPARK_FILES_KEY_FILE", SPARK_FILES_KEY_FILE),
         ("FLOWS_LIBRARY_DIR", FLOWS_LIBRARY_DIR),
@@ -468,6 +496,7 @@ pub mod layout {
         ("MACHINE_AGENTS_DIR", MACHINE_AGENTS_DIR),
         ("MACHINE_DISTRIBUTION_FILE", MACHINE_DISTRIBUTION_FILE),
         ("MACHINE_UPDATES_DIR", MACHINE_UPDATES_DIR),
+        ("CUSTODY_KEY", CUSTODY_KEY),
         ("WORKSPACE_DIR", WORKSPACE_DIR),
         ("WORKSPACE_ROOTS_FILE", WORKSPACE_ROOTS_FILE),
         ("PROJECTS_DIR", PROJECTS_DIR),

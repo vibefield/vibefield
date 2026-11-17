@@ -1653,6 +1653,54 @@
       ],
       "additionalProperties": true
     },
+    "TerminalStartedForId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "TerminalStartedForProcess": {
+      "type": "object",
+      "properties": {
+        "pid": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "startedAtMs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "pid",
+        "startedAtMs"
+      ],
+      "additionalProperties": true
+    },
+    "TerminalStartedForEntry": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "$ref": "#/definitions/TerminalStartedForId"
+        },
+        "run": {
+          "$ref": "#/definitions/TerminalStartedForId"
+        },
+        "spark": {
+          "$ref": "#/definitions/TerminalStartedForId"
+        },
+        "process": {
+          "$ref": "#/definitions/TerminalStartedForProcess"
+        },
+        "root": {
+          "$ref": "#/definitions/TerminalStartedForId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "run"
+      ],
+      "additionalProperties": true
+    },
     "LogAttributesV1": {
       "type": "object",
       "additionalProperties": {
@@ -2280,6 +2328,20 @@
         "pid": {
           "type": "integer",
           "minimum": 1
+        },
+        "marks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "startedFor": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TerminalStartedForEntry"
+          },
+          "maxItems": 1024
         }
       },
       "required": [
@@ -3043,6 +3105,100 @@
           "additionalProperties": true
         }
       ]
+    },
+    "CustodySecret": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "NativeBootstrap": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1
+        },
+        "pairing": {
+          "$ref": "#/definitions/CustodySecret"
+        }
+      },
+      "required": [
+        "v",
+        "pairing"
+      ],
+      "additionalProperties": true
+    },
+    "NativeMarksSetParams": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.:-]{0,63}$"
+        },
+        "value": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "additionalProperties": true
+    },
+    "NativeMarksSetResult": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "additionalProperties": true
+    },
+    "TerminalStartedFor": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "$ref": "#/definitions/TerminalStartedForId"
+        },
+        "spark": {
+          "$ref": "#/definitions/TerminalStartedForId"
+        },
+        "process": {
+          "$ref": "#/definitions/TerminalStartedForProcess"
+        },
+        "root": {
+          "$ref": "#/definitions/TerminalStartedForId"
+        }
+      },
+      "required": [
+        "run"
+      ],
+      "additionalProperties": true
+    },
+    "NativeTerminalStartedForSetParams": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "$ref": "#/definitions/TerminalStartedForId"
+        },
+        "startedFor": {
+          "$ref": "#/definitions/TerminalStartedFor"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": true
+    },
+    "NativeTerminalStartedForSetResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
     },
     "Hello": {
       "type": "object",

@@ -160,6 +160,10 @@
     "fieldd",
     "objects.key"
   ],
+  "OBJECTS_GRANTS_FILE": [
+    "fieldd",
+    "objects.grants.json"
+  ],
   "SPARK_FILES_DIR": [
     "fieldd",
     "spark-files"
@@ -335,6 +339,10 @@
     "machine",
     "agents",
     "updates"
+  ],
+  "CUSTODY_KEY": [
+    "shell",
+    "custody.key"
   ],
   "WORKSPACE_DIR": [
     "workspace"

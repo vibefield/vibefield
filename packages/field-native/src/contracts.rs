@@ -393,6 +393,76 @@ impl ::std::convert::TryFrom<::std::string::String> for ClientKind {
         value.parse()
     }
 }
+#[doc = "`CustodySecret`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^[0-9a-f]{64}$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct CustodySecret(::std::string::String);
+impl ::std::ops::Deref for CustodySecret {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<CustodySecret> for ::std::string::String {
+    fn from(value: CustodySecret) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for CustodySecret {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| ::regress::Regex::new("^[0-9a-f]{64}$").unwrap());
+        if PATTERN.find(value).is_none() {
+            return Err("doesn't match pattern \"^[0-9a-f]{64}$\"".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for CustodySecret {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for CustodySecret {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for CustodySecret {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for CustodySecret {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 #[doc = "`DesiredState`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -3499,6 +3569,13 @@ impl Hello {
 #[doc = "    \"lastManager\": {"]
 #[doc = "      \"$ref\": \"#/definitions/NativeLastManager\""]
 #[doc = "    },"]
+#[doc = "    \"marks\": {"]
+#[doc = "      \"type\": \"object\","]
+#[doc = "      \"additionalProperties\": {"]
+#[doc = "        \"type\": \"integer\","]
+#[doc = "        \"minimum\": 0.0"]
+#[doc = "      }"]
+#[doc = "    },"]
 #[doc = "    \"nativeBuild\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
@@ -3511,6 +3588,13 @@ impl Hello {
 #[doc = "    },"]
 #[doc = "    \"serverMac\": {"]
 #[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"startedFor\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/TerminalStartedForEntry\""]
+#[doc = "      },"]
+#[doc = "      \"maxItems\": 1024"]
 #[doc = "    },"]
 #[doc = "    \"terminal\": {"]
 #[doc = "      \"$ref\": \"#/definitions/TerminalEndpoints\""]
@@ -3557,6 +3641,11 @@ pub struct HelloAck {
     )]
     pub last_manager: ::std::option::Option<NativeLastManager>,
     #[serde(
+        default,
+        skip_serializing_if = ":: std :: collections :: HashMap::is_empty"
+    )]
+    pub marks: ::std::collections::HashMap<::std::string::String, u64>,
+    #[serde(
         rename = "nativeBuild",
         default,
         skip_serializing_if = "::std::option::Option::is_none"
@@ -3572,6 +3661,12 @@ pub struct HelloAck {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub server_mac: ::std::option::Option<::std::string::String>,
+    #[serde(
+        rename = "startedFor",
+        default,
+        skip_serializing_if = "::std::vec::Vec::is_empty"
+    )]
+    pub started_for: ::std::vec::Vec<TerminalStartedForEntry>,
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub terminal: ::std::option::Option<TerminalEndpoints>,
     #[serde(
@@ -7921,6 +8016,41 @@ impl MeshStopResult {
         Default::default()
     }
 }
+#[doc = "`NativeBootstrap`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"pairing\","]
+#[doc = "    \"v\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"pairing\": {"]
+#[doc = "      \"$ref\": \"#/definitions/CustodySecret\""]
+#[doc = "    },"]
+#[doc = "    \"v\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"maximum\": 1.0,"]
+#[doc = "      \"minimum\": 1.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeBootstrap {
+    pub pairing: CustodySecret,
+    pub v: ::std::num::NonZeroU64,
+}
+impl NativeBootstrap {
+    pub fn builder() -> builder::NativeBootstrap {
+        Default::default()
+    }
+}
 #[doc = "`NativeDetachParams`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -9800,6 +9930,142 @@ impl NativeLastManager {
         Default::default()
     }
 }
+#[doc = "`NativeMarksSetParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"name\","]
+#[doc = "    \"value\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"name\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"pattern\": \"^[a-z][a-z0-9.:-]{0,63}$\""]
+#[doc = "    },"]
+#[doc = "    \"value\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeMarksSetParams {
+    pub name: NativeMarksSetParamsName,
+    pub value: u64,
+}
+impl NativeMarksSetParams {
+    pub fn builder() -> builder::NativeMarksSetParams {
+        Default::default()
+    }
+}
+#[doc = "`NativeMarksSetParamsName`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^[a-z][a-z0-9.:-]{0,63}$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct NativeMarksSetParamsName(::std::string::String);
+impl ::std::ops::Deref for NativeMarksSetParamsName {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<NativeMarksSetParamsName> for ::std::string::String {
+    fn from(value: NativeMarksSetParamsName) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for NativeMarksSetParamsName {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| {
+                ::regress::Regex::new("^[a-z][a-z0-9.:-]{0,63}$").unwrap()
+            });
+        if PATTERN.find(value).is_none() {
+            return Err("doesn't match pattern \"^[a-z][a-z0-9.:-]{0,63}$\"".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeMarksSetParamsName {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeMarksSetParamsName {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeMarksSetParamsName {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for NativeMarksSetParamsName {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`NativeMarksSetResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"value\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"value\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeMarksSetResult {
+    pub value: u64,
+}
+impl NativeMarksSetResult {
+    pub fn builder() -> builder::NativeMarksSetResult {
+        Default::default()
+    }
+}
 #[doc = "`NativePrepareRestartParams`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -10075,6 +10341,80 @@ pub struct NativeShutdownResult {
 impl NativeShutdownResult {
     pub fn builder() -> builder::NativeShutdownResult {
         Default::default()
+    }
+}
+#[doc = "`NativeTerminalStartedForSetParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"sessionId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"sessionId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalStartedForId\""]
+#[doc = "    },"]
+#[doc = "    \"startedFor\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalStartedFor\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeTerminalStartedForSetParams {
+    #[serde(rename = "sessionId")]
+    pub session_id: TerminalStartedForId,
+    #[serde(
+        rename = "startedFor",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub started_for: ::std::option::Option<TerminalStartedFor>,
+}
+impl NativeTerminalStartedForSetParams {
+    pub fn builder() -> builder::NativeTerminalStartedForSetParams {
+        Default::default()
+    }
+}
+#[doc = "`NativeTerminalStartedForSetResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct NativeTerminalStartedForSetResult(
+    pub ::serde_json::Map<::std::string::String, ::serde_json::Value>,
+);
+impl ::std::ops::Deref for NativeTerminalStartedForSetResult {
+    type Target = ::serde_json::Map<::std::string::String, ::serde_json::Value>;
+    fn deref(&self) -> &::serde_json::Map<::std::string::String, ::serde_json::Value> {
+        &self.0
+    }
+}
+impl ::std::convert::From<NativeTerminalStartedForSetResult>
+    for ::serde_json::Map<::std::string::String, ::serde_json::Value>
+{
+    fn from(value: NativeTerminalStartedForSetResult) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::From<::serde_json::Map<::std::string::String, ::serde_json::Value>>
+    for NativeTerminalStartedForSetResult
+{
+    fn from(value: ::serde_json::Map<::std::string::String, ::serde_json::Value>) -> Self {
+        Self(value)
     }
 }
 #[doc = "`NativeTickParams`"]
@@ -12855,6 +13195,206 @@ impl TerminalRoutesStreamPayload {
         Default::default()
     }
 }
+#[doc = "`TerminalStartedFor`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"run\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"process\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalStartedForProcess\""]
+#[doc = "    },"]
+#[doc = "    \"root\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalStartedForId\""]
+#[doc = "    },"]
+#[doc = "    \"run\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalStartedForId\""]
+#[doc = "    },"]
+#[doc = "    \"spark\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalStartedForId\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct TerminalStartedFor {
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub process: ::std::option::Option<TerminalStartedForProcess>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub root: ::std::option::Option<TerminalStartedForId>,
+    pub run: TerminalStartedForId,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub spark: ::std::option::Option<TerminalStartedForId>,
+}
+impl TerminalStartedFor {
+    pub fn builder() -> builder::TerminalStartedFor {
+        Default::default()
+    }
+}
+#[doc = "`TerminalStartedForEntry`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"run\","]
+#[doc = "    \"sessionId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"process\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalStartedForProcess\""]
+#[doc = "    },"]
+#[doc = "    \"root\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalStartedForId\""]
+#[doc = "    },"]
+#[doc = "    \"run\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalStartedForId\""]
+#[doc = "    },"]
+#[doc = "    \"sessionId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalStartedForId\""]
+#[doc = "    },"]
+#[doc = "    \"spark\": {"]
+#[doc = "      \"$ref\": \"#/definitions/TerminalStartedForId\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct TerminalStartedForEntry {
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub process: ::std::option::Option<TerminalStartedForProcess>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub root: ::std::option::Option<TerminalStartedForId>,
+    pub run: TerminalStartedForId,
+    #[serde(rename = "sessionId")]
+    pub session_id: TerminalStartedForId,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub spark: ::std::option::Option<TerminalStartedForId>,
+}
+impl TerminalStartedForEntry {
+    pub fn builder() -> builder::TerminalStartedForEntry {
+        Default::default()
+    }
+}
+#[doc = "`TerminalStartedForId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 128,"]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct TerminalStartedForId(::std::string::String);
+impl ::std::ops::Deref for TerminalStartedForId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<TerminalStartedForId> for ::std::string::String {
+    fn from(value: TerminalStartedForId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for TerminalStartedForId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 128usize {
+            return Err("longer than 128 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for TerminalStartedForId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for TerminalStartedForId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for TerminalStartedForId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for TerminalStartedForId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`TerminalStartedForProcess`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"pid\","]
+#[doc = "    \"startedAtMs\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"pid\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 2.0"]
+#[doc = "    },"]
+#[doc = "    \"startedAtMs\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct TerminalStartedForProcess {
+    pub pid: i64,
+    #[serde(rename = "startedAtMs")]
+    pub started_at_ms: u64,
+}
+impl TerminalStartedForProcess {
+    pub fn builder() -> builder::TerminalStartedForProcess {
+        Default::default()
+    }
+}
 #[doc = "`TerminalWorkloadClass`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -14978,6 +15518,10 @@ pub mod builder {
             ::std::option::Option<super::NativeLastManager>,
             ::std::string::String,
         >,
+        marks: ::std::result::Result<
+            ::std::collections::HashMap<::std::string::String, u64>,
+            ::std::string::String,
+        >,
         native_build: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
@@ -14989,6 +15533,10 @@ pub mod builder {
         server_kind: ::std::result::Result<super::ServerKind, ::std::string::String>,
         server_mac: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        started_for: ::std::result::Result<
+            ::std::vec::Vec<super::TerminalStartedForEntry>,
             ::std::string::String,
         >,
         terminal: ::std::result::Result<
@@ -15013,10 +15561,12 @@ pub mod builder {
                 granted_scopes: Err("no value supplied for granted_scopes".to_string()),
                 last_exit: Ok(Default::default()),
                 last_manager: Ok(Default::default()),
+                marks: Ok(Default::default()),
                 native_build: Ok(Default::default()),
                 pid: Ok(Default::default()),
                 server_kind: Err("no value supplied for server_kind".to_string()),
                 server_mac: Ok(Default::default()),
+                started_for: Ok(Default::default()),
                 terminal: Ok(Default::default()),
                 terminal_mesh: Ok(Default::default()),
                 terminal_routes: Ok(Default::default()),
@@ -15075,6 +15625,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for last_manager: {e}"));
             self
         }
+        pub fn marks<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::collections::HashMap<::std::string::String, u64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.marks = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for marks: {e}"));
+            self
+        }
         pub fn native_build<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
@@ -15113,6 +15673,16 @@ pub mod builder {
             self.server_mac = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for server_mac: {e}"));
+            self
+        }
+        pub fn started_for<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::TerminalStartedForEntry>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.started_for = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for started_for: {e}"));
             self
         }
         pub fn terminal<T>(mut self, value: T) -> Self
@@ -15165,10 +15735,12 @@ pub mod builder {
                 granted_scopes: value.granted_scopes?,
                 last_exit: value.last_exit?,
                 last_manager: value.last_manager?,
+                marks: value.marks?,
                 native_build: value.native_build?,
                 pid: value.pid?,
                 server_kind: value.server_kind?,
                 server_mac: value.server_mac?,
+                started_for: value.started_for?,
                 terminal: value.terminal?,
                 terminal_mesh: value.terminal_mesh?,
                 terminal_routes: value.terminal_routes?,
@@ -15184,10 +15756,12 @@ pub mod builder {
                 granted_scopes: Ok(value.granted_scopes),
                 last_exit: Ok(value.last_exit),
                 last_manager: Ok(value.last_manager),
+                marks: Ok(value.marks),
                 native_build: Ok(value.native_build),
                 pid: Ok(value.pid),
                 server_kind: Ok(value.server_kind),
                 server_mac: Ok(value.server_mac),
+                started_for: Ok(value.started_for),
                 terminal: Ok(value.terminal),
                 terminal_mesh: Ok(value.terminal_mesh),
                 terminal_routes: Ok(value.terminal_routes),
@@ -17922,6 +18496,60 @@ pub mod builder {
         }
     }
     #[derive(Clone, Debug)]
+    pub struct NativeBootstrap {
+        pairing: ::std::result::Result<super::CustodySecret, ::std::string::String>,
+        v: ::std::result::Result<::std::num::NonZeroU64, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeBootstrap {
+        fn default() -> Self {
+            Self {
+                pairing: Err("no value supplied for pairing".to_string()),
+                v: Err("no value supplied for v".to_string()),
+            }
+        }
+    }
+    impl NativeBootstrap {
+        pub fn pairing<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::CustodySecret>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.pairing = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for pairing: {e}"));
+            self
+        }
+        pub fn v<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::num::NonZeroU64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.v = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for v: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeBootstrap> for super::NativeBootstrap {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeBootstrap,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                pairing: value.pairing?,
+                v: value.v?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeBootstrap> for NativeBootstrap {
+        fn from(value: super::NativeBootstrap) -> Self {
+            Self {
+                pairing: Ok(value.pairing),
+                v: Ok(value.v),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
     pub struct NativeDetachResult {
         noted: ::std::result::Result<bool, ::std::string::String>,
     }
@@ -19330,6 +19958,100 @@ pub mod builder {
         }
     }
     #[derive(Clone, Debug)]
+    pub struct NativeMarksSetParams {
+        name: ::std::result::Result<super::NativeMarksSetParamsName, ::std::string::String>,
+        value: ::std::result::Result<u64, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeMarksSetParams {
+        fn default() -> Self {
+            Self {
+                name: Err("no value supplied for name".to_string()),
+                value: Err("no value supplied for value".to_string()),
+            }
+        }
+    }
+    impl NativeMarksSetParams {
+        pub fn name<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeMarksSetParamsName>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.name = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for name: {e}"));
+            self
+        }
+        pub fn value<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.value = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for value: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeMarksSetParams> for super::NativeMarksSetParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeMarksSetParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                name: value.name?,
+                value: value.value?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeMarksSetParams> for NativeMarksSetParams {
+        fn from(value: super::NativeMarksSetParams) -> Self {
+            Self {
+                name: Ok(value.name),
+                value: Ok(value.value),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeMarksSetResult {
+        value: ::std::result::Result<u64, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeMarksSetResult {
+        fn default() -> Self {
+            Self {
+                value: Err("no value supplied for value".to_string()),
+            }
+        }
+    }
+    impl NativeMarksSetResult {
+        pub fn value<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.value = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for value: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeMarksSetResult> for super::NativeMarksSetResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeMarksSetResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                value: value.value?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeMarksSetResult> for NativeMarksSetResult {
+        fn from(value: super::NativeMarksSetResult) -> Self {
+            Self {
+                value: Ok(value.value),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
     pub struct NativePrepareRestartParams {
         reason: ::std::result::Result<super::NativeRestartReason, ::std::string::String>,
         to_version: ::std::result::Result<
@@ -19505,6 +20227,67 @@ pub mod builder {
         fn from(value: super::NativeShutdownResult) -> Self {
             Self {
                 stopping: Ok(value.stopping),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeTerminalStartedForSetParams {
+        session_id: ::std::result::Result<super::TerminalStartedForId, ::std::string::String>,
+        started_for: ::std::result::Result<
+            ::std::option::Option<super::TerminalStartedFor>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for NativeTerminalStartedForSetParams {
+        fn default() -> Self {
+            Self {
+                session_id: Err("no value supplied for session_id".to_string()),
+                started_for: Ok(Default::default()),
+            }
+        }
+    }
+    impl NativeTerminalStartedForSetParams {
+        pub fn session_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::TerminalStartedForId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.session_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for session_id: {e}"));
+            self
+        }
+        pub fn started_for<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalStartedFor>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.started_for = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for started_for: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeTerminalStartedForSetParams>
+        for super::NativeTerminalStartedForSetParams
+    {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeTerminalStartedForSetParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                session_id: value.session_id?,
+                started_for: value.started_for?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeTerminalStartedForSetParams>
+        for NativeTerminalStartedForSetParams
+    {
+        fn from(value: super::NativeTerminalStartedForSetParams) -> Self {
+            Self {
+                session_id: Ok(value.session_id),
+                started_for: Ok(value.started_for),
             }
         }
     }
@@ -21734,6 +22517,256 @@ pub mod builder {
                 cells: Ok(value.cells),
                 revision: Ok(value.revision),
                 terminal_mesh: Ok(value.terminal_mesh),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct TerminalStartedFor {
+        process: ::std::result::Result<
+            ::std::option::Option<super::TerminalStartedForProcess>,
+            ::std::string::String,
+        >,
+        root: ::std::result::Result<
+            ::std::option::Option<super::TerminalStartedForId>,
+            ::std::string::String,
+        >,
+        run: ::std::result::Result<super::TerminalStartedForId, ::std::string::String>,
+        spark: ::std::result::Result<
+            ::std::option::Option<super::TerminalStartedForId>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for TerminalStartedFor {
+        fn default() -> Self {
+            Self {
+                process: Ok(Default::default()),
+                root: Ok(Default::default()),
+                run: Err("no value supplied for run".to_string()),
+                spark: Ok(Default::default()),
+            }
+        }
+    }
+    impl TerminalStartedFor {
+        pub fn process<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalStartedForProcess>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.process = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for process: {e}"));
+            self
+        }
+        pub fn root<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalStartedForId>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.root = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for root: {e}"));
+            self
+        }
+        pub fn run<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::TerminalStartedForId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.run = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for run: {e}"));
+            self
+        }
+        pub fn spark<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalStartedForId>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.spark = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for spark: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<TerminalStartedFor> for super::TerminalStartedFor {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: TerminalStartedFor,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                process: value.process?,
+                root: value.root?,
+                run: value.run?,
+                spark: value.spark?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::TerminalStartedFor> for TerminalStartedFor {
+        fn from(value: super::TerminalStartedFor) -> Self {
+            Self {
+                process: Ok(value.process),
+                root: Ok(value.root),
+                run: Ok(value.run),
+                spark: Ok(value.spark),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct TerminalStartedForEntry {
+        process: ::std::result::Result<
+            ::std::option::Option<super::TerminalStartedForProcess>,
+            ::std::string::String,
+        >,
+        root: ::std::result::Result<
+            ::std::option::Option<super::TerminalStartedForId>,
+            ::std::string::String,
+        >,
+        run: ::std::result::Result<super::TerminalStartedForId, ::std::string::String>,
+        session_id: ::std::result::Result<super::TerminalStartedForId, ::std::string::String>,
+        spark: ::std::result::Result<
+            ::std::option::Option<super::TerminalStartedForId>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for TerminalStartedForEntry {
+        fn default() -> Self {
+            Self {
+                process: Ok(Default::default()),
+                root: Ok(Default::default()),
+                run: Err("no value supplied for run".to_string()),
+                session_id: Err("no value supplied for session_id".to_string()),
+                spark: Ok(Default::default()),
+            }
+        }
+    }
+    impl TerminalStartedForEntry {
+        pub fn process<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalStartedForProcess>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.process = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for process: {e}"));
+            self
+        }
+        pub fn root<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalStartedForId>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.root = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for root: {e}"));
+            self
+        }
+        pub fn run<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::TerminalStartedForId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.run = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for run: {e}"));
+            self
+        }
+        pub fn session_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::TerminalStartedForId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.session_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for session_id: {e}"));
+            self
+        }
+        pub fn spark<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::TerminalStartedForId>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.spark = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for spark: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<TerminalStartedForEntry> for super::TerminalStartedForEntry {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: TerminalStartedForEntry,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                process: value.process?,
+                root: value.root?,
+                run: value.run?,
+                session_id: value.session_id?,
+                spark: value.spark?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::TerminalStartedForEntry> for TerminalStartedForEntry {
+        fn from(value: super::TerminalStartedForEntry) -> Self {
+            Self {
+                process: Ok(value.process),
+                root: Ok(value.root),
+                run: Ok(value.run),
+                session_id: Ok(value.session_id),
+                spark: Ok(value.spark),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct TerminalStartedForProcess {
+        pid: ::std::result::Result<i64, ::std::string::String>,
+        started_at_ms: ::std::result::Result<u64, ::std::string::String>,
+    }
+    impl ::std::default::Default for TerminalStartedForProcess {
+        fn default() -> Self {
+            Self {
+                pid: Err("no value supplied for pid".to_string()),
+                started_at_ms: Err("no value supplied for started_at_ms".to_string()),
+            }
+        }
+    }
+    impl TerminalStartedForProcess {
+        pub fn pid<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<i64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.pid = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for pid: {e}"));
+            self
+        }
+        pub fn started_at_ms<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.started_at_ms = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for started_at_ms: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<TerminalStartedForProcess> for super::TerminalStartedForProcess {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: TerminalStartedForProcess,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                pid: value.pid?,
+                started_at_ms: value.started_at_ms?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::TerminalStartedForProcess> for TerminalStartedForProcess {
+        fn from(value: super::TerminalStartedForProcess) -> Self {
+            Self {
+                pid: Ok(value.pid),
+                started_at_ms: Ok(value.started_at_ms),
             }
         }
     }
