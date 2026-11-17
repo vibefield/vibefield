@@ -755,7 +755,7 @@ export async function coverRows(d: CoverRowsDriver): Promise<string[]> {
       if (ground.backdrop !== "none")
         problems.push(row(`the view's ground wears a backdrop filter (${ground.backdrop})`));
     }
-    // N3 (a): under History's cover a stuck day head frosts (the room's own blur), the transcript's top fade is tint
+    // N3 (a): under History's cover a stuck day head frosts (the room's own blur), the transcript's top fade is paint
     if (name === "history") {
       const fades = facts.fades;
       if (fades === null) problems.push(row("the room's frame is not there to read its fades"));
@@ -769,7 +769,7 @@ export async function coverRows(d: CoverRowsDriver): Promise<string[]> {
         if (fades.topFade.backdrop !== "none")
           problems.push(
             row(
-              `the transcript's top fade (${fades.topFade.read}) frosts (${fades.topFade.backdrop}) — it is the cover's tint`,
+              `the transcript's top fade (${fades.topFade.read}) frosts (${fades.topFade.backdrop}) — it is paint, never a frost`,
             ),
           );
       }

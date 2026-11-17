@@ -31,7 +31,8 @@ import "@vibefield/rosetta-room/styles/room.css";
 import "./history-room-view.css";
 // PJ-4: VibeField's own content inside the room's host slots
 import "./history-host.css";
-// DK-15: on the desk the room's fades are the cover's tint, never frost — in the room's own chunk, after its sheet
+// DK-15: on the desk the transcript's top fade is paint in the glass's own colour, never frost (the day heads
+// keep the room's own frost, N3 (a)) — in the room's own chunk, after its sheet
 import "./history-room-glass.css";
 
 // THE HISTORY VIEW (AR-8c; DESIGN.md §8 "History", §10; One Frame §9 "History,
@@ -40,8 +41,9 @@ import "./history-room-glass.css";
 // catalog mounts THIS composition over the package's fixture ports and the
 // product mounts it over fieldd's (`HistoryView.tsx`). What it owns is the
 // room's place in the frame: the glass (the room paints no ground of its own
-// on a host surface, and its paper fades are the cover's tint, never frost —
-// `history-room-glass.css`, DK-15), the
+// on a host surface; its transcript's top fade is paint in the glass's own
+// colour, never frost, and its sticky day heads keep the room's own frost —
+// `history-room-glass.css`, DK-15, N3 (a)), the
 // edges (its columns end at the reserve and run to the window's sides, and its
 // top band is the head's — the 8 px it kept clear at each side for the notches'
 // slivers left with the edges at HN-8), where its dialogs land (a
