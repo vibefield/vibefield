@@ -5534,6 +5534,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   on James's word, "i want entire MK work land ASAP" (in part; 2026-11-14 03:06:11Z, in MK's session
   vibe-field-c7), which VF-PM read at 03:09Z as lifting MK-O7 (§8 "Plugins — the frame's second popup", its status
   of this date).
+  *Gone 2026-11-17 (N18):* Settings → Plugins lists no row now, so `SOURCE_LABEL` and its "Registry · ‹publisher›"
+  left with the rows; the pill stands in Plugins… alone.
 - **The updates flow** (P7; spec §5.3.1; *amended 2026-11-11, MK-D5 and MK-E7: split in two*): a
   fetch is a deliberate act, never a feed — no timer, no push feed, no polling — and the time it
   was checked is always said, never implied fresh. Two flows keep that law, each in its own words:
@@ -5768,6 +5770,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   synced change undone", "Change restored", "Nothing left to undo", "Nothing left to redo",
   "Settings history limit reached". No optimistic echo — an applied undo re-gets every row from the
   daemon.
+  *Changed 2026-11-17 (N18), at its source:* Settings shows no plugin's settings, so an applied undo re-gets none; a
+  plugin's page in Plugins… reads its settings again at its next opening (§8 "Its settings", S1), and an undo made
+  while it stands open is not shown on it until then (ruled at its lean; James, vibe-field-b0, 2026-11-17T18:23:17Z:
+  "go with leans, land ice soon").
   *To be built by track MK. Until then* the form stands on Settings → Plugins
   (`PluginSettingsForm.tsx`), with "Synced user settings can be undone from the window toolbar." at
   its foot.
@@ -5775,6 +5781,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   plugin from the plugin list or a Sideloaded one alone, its foot with it, until Plugins… carries
   their settings. A Built in or Development plugin's form is on its page, its way back with it (MK-4c2c),
   and Settings → Plugins no longer lists it (§8 "Settings → Plugins, until Plugins… holds every switch").
+  *Since 2026-11-17 (N18):* Plugins… carries them, a plugin from the plugin list's and a Sideloaded one's too, so
+  the form stands on Settings → Plugins for no plugin, and no page says its foot.
   *Corrected 2026-10-28 (the housekeeping pass), to the shipped form (`panels/SettingsDialog.tsx`,
   `SettingsPanel.tsx`, `PluginSettingsForm.tsx`):* this said compact "undo · redo" text buttons at
   the head of each plugin's settings form, with a right-aligned coverage caption ("covers
@@ -5789,6 +5797,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   synced history it says "Synced settings can be undone in Settings." ‹draft› (MK-4c2b, for James's MK-O6 pick),
   and with none, "These settings stay on this desktop." (James's MK-O33 pick B, 2026-11-12 06:12:16Z); §9 "The
   plugins' words" holds both. The device sentence stays Settings → Plugins' own until MK-5.
+  *Since 2026-11-17 (N18):* no page says the device sentence, for Settings → Plugins shows no form.
 - **Settings → Diagnostics' Plugins section** (MK-D10; item 282-6's plugin half, by MK-E12; *added
   2026-11-11*): each plugin's runtime, one block per plugin under its title, drawn as
   `SystemSection` draws its rows (§10's template): its controllers (the service's and each
@@ -5826,6 +5835,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Plugins… yet." Its one section, **Installed plugins**, says over all of it "Your plugins are in
     Plugins… in the Me menu. A setting goes back to its default here.", and, before the window holds
     its plugins, "Reading your plugins…" (IS-282-2's, as Installed says it).
+    *Superseded 2026-11-17 (N18), at its source:* its line is "Where your plugins and their settings are.", its
+    section says two sentences, and it never says "Reading your plugins…" (the Built note below).
   - **A Built in or Development plugin** is not here: its switch, its powers, its settings and their
     way back are on its page (§8 "Its settings", "Its way back"), and its runtime is in Settings →
     Diagnostics. *Superseded 2026-11-14, at its source:* James's MK-O24 pick A (2026-11-12 06:11:09Z,
@@ -5853,6 +5864,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     *Built 2026-11-17 (MK-5b):* the **Try again** named above stands on Plugins…' Installed row of a Built in or
     Development plugin that isn't working (§8 "Plugins — the frame's second popup", Installed, MK-5b's drawing),
     and turns it off and on. A row here, a plugin from the plugin list's or a Sideloaded one's, still offers none.
+    *Superseded 2026-11-17 (N18), at its source:* these rows left; Plugins… carries their controls (the Built note
+    below). A last error is no longer said here: Diagnostics' Plugins section (above) alone says it, as it has a
+    Built in plugin's since MK-5, for Plugins… reads no last error (`plugins-model.ts`, `rowLine`, `honestLine`).
+    Settled (VF-PM 2026-11-17 17:55:44Z): Plugins… does not say "‹plugin› isn't working right now" for one.
+    *Changed 2026-11-17 (N18; VF-PM 2026-11-17 19:45:16Z, Try again follows the switch), at its source:* the Try
+    again MK-5b built stands on Plugins…' row of any plugin that isn't working whose switches stand there, every
+    plugin's but a held one's, not a Built in or Development one's alone (§8 "Plugins — the frame's second popup",
+    Installed, MK-5b's drawing).
   - **What left:** a Built in or Development plugin's switch, its **Capabilities +** and its settings'
     controls (its page has them, MK-4c2a, MK-4c2b); **Runtime +** (above); the "updates ▸" disclosure
     (§8 "The updates flow"); **More +** (§8 "The destructive uninstall affordance"); the folders that
@@ -5861,6 +5880,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - Every build today shows its line and its section's sentence alone: no plugin VibeField ships or
     develops declares a setting (`plugins/*`, `examples/plugins/*`), and no build lists or sideloads a
     plugin.
+    *Changed 2026-11-17 (N18), at its source:* every build shows its line and its section's two sentences, whatever
+    plugins it has, for the page lists none (the Built note below).
+  - *Built 2026-11-17 (N18; the MK inventory's A2, ruled at its lean; James, vibe-field-b0, 2026-11-17T18:23:17Z:
+    "go with leans, land ice soon"), ‹draft› for James's eye:*
+    Plugins… holds every switch, so this page holds none. `controlsHere` widened to every source, and the rows of
+    a plugin from the plugin list and of a Sideloaded one left with their switch, **Settings +** with **Reset**
+    (their way back is on the page, MK-4c2c), **Capabilities +** and their words. A plugin held while community
+    plugins are off has no controls anywhere until community plugins are on: a switch would not move it
+    (fieldd's `setEnabled`). One the person turned off while community plugins are off is not held, so it keeps
+    its switch (§8 "Installed", N18's ‹draft›). The page lists no plugin and reads none, so it never says "Reading
+    your plugins…".
+    Its line says "Where your plugins and their settings are.", and its section, **Installed plugins**, says in
+    one paragraph "Your plugins are in Plugins… in the Me menu." then "Each plugin's switches and settings are
+    on its page there." Ruled at their leans (above): Settings keeps no **Reset**, for MK-4c2c's **Back to
+    default** stands on the page; and the page itself stays in Settings as this pointer for now, its leaving
+    (MK-D10, its row in the Workspace group) a cut of its own.
 - **Fact labels — scope and timing** (GT-7, Settings → Terminal; 2026-09-24): a page whose
   settings have DIFFERENT owners says, on each section head, whose a setting is and when it
   lands — as facts, in a hairline chip (no fill, no hue; 10px uppercase, tertiary ramp; *amended
@@ -7510,6 +7545,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     carries the switch. A Built in or Development plugin's left Settings → Plugins for this row at MK-4c2a; a plugin
     from the plugin list's, or a Sideloaded one's, stays there until `controlsHere` widens to it (§8 "Settings →
     Plugins, until Plugins… holds every switch").
+    *Built 2026-11-17 (N18; the MK inventory's A2, ruled at its lean; James, vibe-field-b0, 2026-11-17T18:23:17Z:
+    "go with leans, land ice soon"):* `controlsHere` widened, so this row carries the switch whatever its source:
+    a plugin from the plugin list's and a Sideloaded one's left Settings → Plugins for it. The one row with none
+    is a plugin held while community plugins are off (below).
     *Drawn and built 2026-11-11 (MK-4c), ‹draft› for James's eye:* each row is a press that opens its page. The
     hot row wears the ready fill, as a Peek row's does: the first row as the tab shows, ↑ ↓ moving it and keeping
     it in sight (scrolled to the nearest edge, as the Peek's), and ↵ or a press opening its page; the row under
@@ -7520,6 +7559,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     with its own stop of Tab in the rows' order, while ↑ ↓ ↵ and the pointer keep the press's. A row of any other
     source — a plugin from the plugin list, whatever the list says of it, or a Sideloaded one — has no switch, for
     a record's source and id are what its folder can say (item 321). Settings → Plugins keeps its switch until MK-5.
+    *Changed 2026-11-17 (N18):* the row's source no longer decides. fieldd decides the stop (O3-C): it keeps a
+    held row held whatever its switch asks (`plugin-registry.ts`, `setEnabled`), and reads no installed plugin
+    while no plugin list is configured (item 279's S2). So a plugin from the plugin list, whatever the list says
+    of it, and a Sideloaded one carry the switch as a Built in one does, and Settings → Plugins keeps none.
     *Drawn 2026-11-11 (MK-4c2a's rider; VF-PM 19:05:12Z), ‹draft›:* when fieldd refuses a row's switch, the row's
     line gives way to §9's words, "Couldn't turn it off. Try again." or "Couldn't turn it on. Try again.", in the
     attention ink (§2.5, where a refusal is said in it), until the switch is pressed again or fieldd's next snapshot
@@ -7530,6 +7573,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     fieldd says which are held (the row's `held`, said only for one the person wants on; one they turned off is
     off for their own reason and its line says off); the window decides nothing by it, for on or off is fieldd's
     `enabled`. The tab's foot counts it among the off.
+    *Corrected 2026-11-17 (N18):* "a plugin from the plugin list has none here" no longer holds. A held
+    row has no switch: fieldd keeps it held whatever a switch sends (`setEnabled`), so one here would not
+    move; its line says why it is off, and Discover's community tile is where it comes back.
+    *Drawn 2026-11-17 (N18; ruled at its lean; James, vibe-field-b0, 2026-11-17T18:23:17Z: "go with leans, land
+    ice soon"), ‹draft›:* a community plugin the person turned off while community plugins are off is not held
+    (fieldd says `held` only of one they want on), so its row and its page keep its switch, as any plugin's that
+    is off. Turning it on records that they want it on; fieldd then holds it (`setEnabled`), and its row says its
+    held line, with no switch, until community plugins are on. The window reads no community switch to decide it.
     *Drawn 2026-11-17 (MK-5b; VF-PM 2026-11-14 04:33Z, MK-5's ask 2 at its lean), ‹draft› for James's eye, its
     words in §9 "Installed, off and Remove…":*
     - **A plugin that isn't working** is one that is on and that fieldd runs (its record `enabled`), not stopped
@@ -7541,7 +7592,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       its renderer's own record says so too: either is enough), which is not read here. One that cannot
       start in this window (item 476) isn't working too. Its row says "‹plugin› isn't working right now" in
       the line's own ink, its details in Settings → Diagnostics.
-    - **Try again** stands on such a row of a Built in or Development plugin (its switches stand here), 12 after
+    - **Try again** stands on such a row of a plugin whose switches stand here, 12 after
       its text and 12 before its switch: the foot's act's look (32 tall, padded 0 14, corners 16, 12.5/600 on the
       ready fill, 14% under the pointer) with no ↵ printed, for ↵ opens the hot row's page, as before. It is a
       control of its own beside the press, with its own stop of Tab in the rows' order, as the switch is. A press
@@ -7551,11 +7602,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       is pressed, as an Install's press keeps it there. While fieldd isn't answering, neither takes a press.
       Refused, the row's line says the switch's refusal for the request fieldd refused, "Couldn't turn it off.
       Try again." or "Couldn't turn it on. Try again.", or, refused while the plugin updates, the switch's own
-      updating line (item 440), in the attention ink, and goes as a switch's does. A Built in plugin's choices
-      ride the install-set to your other desktops, as its switch's do (its page says so), a Development
-      one's never: Try again turns a Built in plugin off and on there too, and an on refused leaves it off
-      there as here. A plugin from the plugin list, or a Sideloaded one, says the line with no Try again: its
-      switch is Settings → Plugins' (§8 "Settings → Plugins, until Plugins… holds every switch").
+      updating line (item 440), in the attention ink, and goes as a switch's does. Try again does what the
+      switch does: where the install-set carries a plugin's choices to your other desktops, a Built in one's and
+      a plugin from the plugin list's (its page says so), it turns the plugin off and on there too, and an on
+      refused leaves it off there as here; a Development or a Sideloaded one's never ride.
+      *Changed 2026-11-17 (N18; VF-PM 2026-11-17 19:45:16Z, Try again follows the switch), at its source:* this
+      said Try again stood on a Built in or Development plugin's row alone, and that a plugin from the plugin
+      list, or a Sideloaded one, said the line with no Try again, its switch Settings → Plugins'. N18 gives every
+      plugin but a held one its switch on its row (above), and Try again stands wherever the switch does: one
+      rule, not two.
     - **The read** stands while the popup does: opening it asks, and folding it lets the read go. Until it
       answers, or when it fails, the client ends it, or the window can't read what fieldd sent, no runtime is
       read as failed and the rows say what the registry says: never a guess, and never a read that ended
@@ -7836,6 +7891,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - **What it can do**: each power it holds, in §9's plain words, the Mac's note under one on a Mac. A power
         it asked for and does not hold comes back with its switch (MK-4c2); until then Settings → Plugins shows
         it.
+        *Corrected 2026-11-17 (N18):* every page but a held one's has its switches (Its switches, below), and
+        Settings → Plugins shows no power.
       - **Made by**: a Built in plugin's §9 sentence; for a plugin in the plugin list held, that list's word for
         its maker (VibeField, or its publisher's name), never what the installed folder says of itself (item
         321); a Development or Sideloaded plugin has none. Who reviewed it is not said: the plugin list does not
@@ -7848,12 +7905,19 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         and "Nothing beyond…" only when it asked for none. *This corrects "each power it holds" above for a
         plugin that is off and has no switches here: its page said "Nothing beyond drawing its own objects"
         whatever it asked for.*
+        *Corrected 2026-11-17 (N18):* no page says "Its switches aren't here yet." now. A held plugin's page
+        says its row's line alone, which says why it is off; it has no switch and no **Settings**, and lists
+        each power it would hold once on, as above.
       - Esc on a page goes back to its tab before it folds the popup (Keys, below); a tab pressed on a page
         leaves the page for that tab; words typed on a page go back to its tab's list, filtered. The foot keeps
         its tab's sentence and offers no act.
     - **Its switches** (*drawn 2026-11-11, MK-4c2a; VF-PM 18:36:34Z*; ‹draft› for James's eye, its words in §9
       "The plugins' words"): a Built in or Development plugin's page carries them, and any other page carries
       none and says, 12 under where its act stands, at 12/400 in tertiary ink, that they aren't here yet.
+      *Built 2026-11-17 (N18; the MK inventory's A2, ruled at its lean; James, vibe-field-b0, 2026-11-17T18:23:17Z:
+      "go with leans, land ice soon"), ‹draft›:* every installed plugin's page carries them, a plugin from the
+      plugin list's and a Sideloaded one's too. A page held while community plugins are off carries none, and says
+      its row's line (above). No page says they aren't here yet.
       - **The one switch** stands 12 after **Installed**, centred on its 32: the same switch as its row's. A press
         on either moves neither until fieldd's next snapshot says the plugin is on or off, and then both move.
       - **What it can do** lists each power it asked for: one it holds with its switch on, one taken back with
@@ -7872,6 +7936,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - A Built in plugin's page says, 12 under its act at 12/400 in tertiary ink, that its switches reach your
         other desktops: the install-set carries a Built in plugin's choices, and never a Development one's, so a
         Development plugin's page does not say it.
+        *Changed 2026-11-17 (N18), ‹draft›:* a plugin from the plugin list's page says it too, for the install-set
+        carries its on and off and its powers as it carries a Built in one's (`install-reconciler.ts`,
+        `publishInner`, `applyEntry`). A Sideloaded one never enters it, as a Development one never does, so
+        neither page says it.
     - **Its settings** (*drawn 2026-11-11, MK-4c2b; VF-PM 19:40:52Z*; ‹draft› for James's eye, its words in §9 "The
       plugins' words"; *corrected the same day, James's MK-O6 pick, 22:34:31Z: "No Undo on plugin pages until it is
       per plugin". The Undo and Redo first drawn here, on Settings' one history, left whole*): a Built in or
@@ -7895,6 +7963,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         *Built 2026-11-14 (MK-5; VF-PM 04:33Z, the inventory's A2, over MK-5's ask 1):* a Built in or Development
         plugin's settings leave Settings → Plugins whole, their way back with them (MK-4c2c's correction, above).
         Any other plugin's settings stay there whole, not until MK-5 (above) but until its page carries them.
+        *Built 2026-11-17 (N18):* every installed plugin's page carries its settings and their way back, whatever
+        its source, but a held one's (Its switches, above), and Settings → Plugins carries none.
       - **The foot**, 12 under the last row at 12/400 in tertiary ink: when a setting is kept in the synced history,
         that Settings can undo it; otherwise §8 "The settings undo affordance"'s device sentence (its words in §9).
         *Corrected 2026-11-14 (James's MK-O33 pick B, 2026-11-12 06:12:16Z):* with none, the foot says that its
@@ -7925,6 +7995,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
           trails, in the danger ink (§2.5). **Cancel** asks nothing of fieldd.
         - Both are the one request Settings' **Reset** sends (`storage.settings.reset`). Under way, Refused,
           While it is off and Away are the setting's own (above).
+          *Changed 2026-11-17 (N18):* Settings → Plugins has no **Reset** now; these acts alone send it.
         - The page learns only whether a secret is kept, before the act and after it; no value of it reaches the
           window.
   - **After install: Show them on the pegboard** (MK-D8 ruled A, B ships; MK-E2). As it ships, the act folds the popup
@@ -11254,6 +11325,7 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   ‹draft›, and "‹plugin› isn't working right now" stands on one whose runtime failed or that cannot start here.
   Settings → Plugins still says it for a plugin with a last error, whatever its kind (§8 "Settings → Plugins,
   until Plugins… holds every switch").
+  *Changed 2026-11-17 (N18), at its source:* on Installed alone; Settings → Plugins lists no plugin now.
   *Built 2026-11-17 (MK-5b; VF-PM 2026-11-14 04:33Z, MK-5's asks 2 and 3 at their leans), ‹draft› for James's eye:*
   "‹plugin› isn't working right now" stands on a plugin that is on and whose runtime failed, or that cannot start in
   this window (§8 "Plugins — the frame's second popup", Installed, MK-5b's drawing), with **Try again** on a Built in
@@ -11265,6 +11337,10 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   "Plugins aren't available right now." stands on Discover and Updates with **Try again** when neither door
   answers, and on Installed with no act when, besides, the window holds none of its plugins. "‹plugin› can't run
   on this VibeField" ‹draft› is MK-5b's one new sentence.
+  *Changed 2026-11-17 (N18; VF-PM 2026-11-17 19:45:16Z, Try again follows the switch), at its source:* **Try again**
+  stands on such a row of any plugin whose switch stands on Installed, every plugin's but a held one's, not a Built
+  in or Development one's alone; where the install-set carries its choices (a Built in plugin's and a plugin from
+  the plugin list's), it turns it off and on on your other desktops too, as its switch does. No new sentence.
   *Added 2026-11-12 (James's MK-O4 pick, 2026-11-11 22:34:05Z: "This desktop alone"), ‹draft› for his eye:* under
   **Remove ‹plugin› and its data?**, "This deletes its settings and data on ‹this desktop›. It can't be undone.
   ‹Your other desktops› remove ‹plugin› too, and keep their copy of its data." ‹this desktop› and ‹your other
@@ -11349,7 +11425,10 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   - A plugin's one switch is named to assistive tech by the plugin, "‹plugin›", and a power's switch by the power's
     plain words; each says on or off as a switch does, so its name never changes with its state.
   - A page of a plugin from the plugin list, or a Sideloaded one, says "Its switches aren't here yet."
+    *Retired 2026-11-17 (N18):* no page says it now: such a page carries its switches, and a held plugin's page
+    says its row's line alone (§8 "Its switches").
   - A Built in plugin's page says "Turning it off, or a power off, does the same on your other desktops."
+    *Added 2026-11-17 (N18), ‹draft›:* a plugin from the plugin list's page says it too (§8 "Its switches").
   - An off plugin's page says, under What it can do, "Turn it on to change what it can do."
   - A power it can't have here says why: "Its kind of plugin can't have this power", "Not allowed for a plugin from
     its source" or "Not available on this desktop".
@@ -11369,6 +11448,10 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     couldn't change, a power's too, says "Couldn't turn it off. Try again." or "Couldn't turn it on. Try
     again." (above), and a plugin with a last error "‹plugin› isn't working right now" (§9 "Installed, off and
     Remove…"). Settings → Plugins never prints fieldd's text.
+    *Gone 2026-11-17 (N18):* the rows left Settings → Plugins, and these words with them: "Enable ‹plugin›",
+    "Disable ‹plugin›", `DENIAL_TEXT`'s reasons and the kept rows' lines; a plugin's page says its own (above).
+    No screen says `DENIAL_TEXT` now, and nothing imports `panels/PluginCapabilities.tsx`, its one home: it is
+    dead code, deleted in N18's green commit (VF-PM 2026-11-17 17:55:44Z).
   *Added 2026-11-11 (MK-4c2b; VF-PM 19:40:52Z), MK's words, ‹draft›, for James's eye; corrected the same day
   (James's MK-O6 pick, 22:34:31Z): the page's Undo and Redo left, with "Couldn't undo that. Try again.", "Couldn't
   redo that. Try again." and the page's use of §8's five outcomes, which stay Settings' own:*
@@ -11395,6 +11478,7 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     *Changed 2026-11-14 (James's MK-O33 pick B, 2026-11-12 06:12:16Z), his words:* the second said §8's device
     sentence, "Device and secret settings stay on this device and are not part of settings history.", which stays
     Settings → Plugins' own until MK-5.
+    *Since 2026-11-17 (N18), no page says it: Settings → Plugins shows no form.*
   - *Kept, dated 2026-11-11 (VF-PM 19:40:52Z):* Settings → Plugins keeps its own form and words until MK-5: its
     "user", "device", "secret" and "default" marks, **Reset**, "Unsupported schema", "•••• set", "This plugin
     has no settings.", "Synced user settings can be undone from the window toolbar." and an error's own text
@@ -11405,6 +11489,9 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     *Corrected the same day (VF-PM 06:56Z, C22), ‹draft›:* but not an error's own text: there a setting fieldd
     couldn't read says "Couldn't load this setting.", and one it couldn't keep or set back to its default (its
     **Reset**), "Couldn't save that. Try again." (above). Settings → Plugins never prints fieldd's text.
+    *Gone 2026-11-17 (N18):* the form left with the rows, and these words with it; a plugin's page says its own
+    settings, and their way back, in the words above. No screen reaches `panels/PluginSettingsForm.tsx` now: it is
+    dead code, deleted in N18's green commit with the C3 test that mounted it (VF-PM 2026-11-17 17:55:44Z).
 - **Sources** (MK-D13; MK-E11). **Built in** (a bundled plugin, decided first) · **VibeField** (a listed plugin
   VibeField publishes) · the publisher's name otherwise, with **Community** beside it on a community row ·
   **Development** and **Sideloaded**, as today. Never "Registry", "Registry · ‹publisher›" or "Built by the registry";
@@ -11415,6 +11502,8 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   *Since 2026-11-14 (MK-5):* the page's line says "Plugin settings back to their defaults, and switches not in
   Plugins… yet." ‹draft›. The badge's "Registry · ‹publisher›" stays on its rows of a plugin from the plugin list
   until they leave, unreached while no build lists a plugin.
+  *Changed 2026-11-17 (N18), ‹draft›:* the rows left, and "Registry · ‹publisher›" with them; the page's line says
+  "Where your plugins and their settings are."
 - **The powers' plain words** (MK-D7; MK-E12). A power is said as what it lets the plugin do, in one sentence, the
   same on the install card and on the plugin's page, and never by its id. The core powers a plugin may hold are
   `PLUGIN_CAPABILITY_ELIGIBILITY`'s (contracts `plugins.ts`), twenty-seven. The page drew sixteen; four are changed
@@ -11461,6 +11550,8 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     disclosure. The Capabilities pane and `DENIAL_TEXT` stay on Settings → Plugins' rows of a plugin from the plugin
     list or a Sideloaded one until those rows leave, unreached while no build lists or sideloads a plugin; a Built
     in or Development plugin's powers are said only on its page.
+    *Gone 2026-11-17 (N18):* those rows left, and the pane with them: a plugin's powers are said on its page
+    alone.
 - **Settings and Diagnostics** (MK-D10; MK-E5, MK-E12). A plugin's settings are said on its page, under **Settings**,
   as Settings says its own; the page carries Settings' Undo and Redo, so the form's foot no longer sends you to the
   window toolbar ("Synced user settings can be undone from the window toolbar.", `panels/PluginSettingsForm.tsx`) and
@@ -11486,6 +11577,11 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     keep their switches here."; a kept row whose service fieldd stopped after it kept crashing says "stopped"
     beside its switch, as the row's other states are said. Before the window holds its plugins the page says
     "Reading your plugins…" (IS-282-2's, as Installed says it).
+    *Changed 2026-11-17 (N18), MK's words ‹draft›:* its line says "Where your plugins and their settings are.",
+    and its section, in one paragraph, "Your plugins are in Plugins… in the Me menu." then "Each plugin's
+    switches and settings are on its page there."; the rest above left with the rows: "A setting goes back to its
+    default here.", "Plugins… can't turn these on or off yet, so they keep their switches here.", "stopped" and,
+    on this page, "Reading your plugins…". No kept row stands, so the rest of this list holds for none.
   - What left Settings → Plugins, word by word: "Plugin registry unavailable while the daemon connects.", "No
     plugins are installed." (Diagnostics' now), a folder's name with fieldd's sentence for it, the "updates ▸"
     disclosure's words ("check for updates", "check again", "checking…", "checked ‹time›", "everything current",
@@ -11498,6 +11594,9 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     text: each error's own text left too, a refusal said by its kind in the words the two *Kept* notes'
     corrections above name, and a last error as "‹plugin› isn't working right now". fieldd's own sentences
     about a plugin are read in Settings → Diagnostics' Plugins section alone, with its other insides.
+    *Changed 2026-11-17 (N18):* no kept row stands, so this page says "‹plugin› isn't working right now" of none.
+    Plugins… reads no last error, so one is said in Diagnostics' Plugins section alone, as a Built in plugin's has
+    been since MK-5 (§8 "Settings → Plugins, until Plugins… holds every switch"; settled, VF-PM 2026-11-17 17:55:44Z).
   - Settings → Diagnostics' Plugins section says, under its line, "Reading each plugin's runtime…" while its read
     is out, "Plugin runtime unavailable" when it fails, "No plugins are installed." (Settings → Plugins' own,
     moved) when fieldd has none, and "‹n› more plugins omitted by the bounded diagnostics budget." past fieldd's
