@@ -5772,7 +5772,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   daemon.
   *Changed 2026-11-17 (N18), at its source:* Settings shows no plugin's settings, so an applied undo re-gets none; a
   plugin's page in Plugins… reads its settings again at its next opening (§8 "Its settings", S1), and an undo made
-  while it stands open is not shown on it until then (ruled at its lean; James, vibe-field-b0, 2026-11-17T18:23:17Z:
+  while it stands open is not shown on it until then (ruled at its lean; James, 2026-11-17T18:23:17Z:
   "go with leans, land ice soon").
   *To be built by track MK. Until then* the form stands on Settings → Plugins
   (`PluginSettingsForm.tsx`), with "Synced user settings can be undone from the window toolbar." at
@@ -5882,7 +5882,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     plugin.
     *Changed 2026-11-17 (N18), at its source:* every build shows its line and its section's two sentences, whatever
     plugins it has, for the page lists none (the Built note below).
-  - *Built 2026-11-17 (N18; the MK inventory's A2, ruled at its lean; James, vibe-field-b0, 2026-11-17T18:23:17Z:
+  - *Built 2026-11-17 (N18; the MK inventory's A2, ruled at its lean; James, 2026-11-17T18:23:17Z:
     "go with leans, land ice soon"), ‹draft› for James's eye:*
     Plugins… holds every switch, so this page holds none. `controlsHere` widened to every source, and the rows of
     a plugin from the plugin list and of a Sideloaded one left with their switch, **Settings +** with **Reset**
@@ -7309,7 +7309,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the hot tile as it opens. What a set says and shows is the index's `listing`, which the registry's CI writes
     from the manifest it rebuilt (MK-D12; additive, as index v2 is passthrough).
     *Built 2026-11-17 (item 433), narrowing "those the listed objects hang under" at its source, ruled at its lean
-    (James, vibe-field-b0, 2026-11-17T18:23:17Z: "go with leans, land ice soon"):* the row offers only the categories
+    (James, 2026-11-17T18:23:17Z: "go with leans, land ice soon"):* the row offers only the categories
     the board here names, for the list says a category by its id alone and the row never shows an id. A listed set
     whose objects hang only under a category the board doesn't name stands under All alone, and a desk offers no
     category its board does not hang yet (no row at all on a board that names none a listed set hangs under). The list
@@ -7545,7 +7545,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     carries the switch. A Built in or Development plugin's left Settings → Plugins for this row at MK-4c2a; a plugin
     from the plugin list's, or a Sideloaded one's, stays there until `controlsHere` widens to it (§8 "Settings →
     Plugins, until Plugins… holds every switch").
-    *Built 2026-11-17 (N18; the MK inventory's A2, ruled at its lean; James, vibe-field-b0, 2026-11-17T18:23:17Z:
+    *Built 2026-11-17 (N18; the MK inventory's A2, ruled at its lean; James, 2026-11-17T18:23:17Z:
     "go with leans, land ice soon"):* `controlsHere` widened, so this row carries the switch whatever its source:
     a plugin from the plugin list's and a Sideloaded one's left Settings → Plugins for it. The one row with none
     is a plugin held while community plugins are off (below).
@@ -7576,7 +7576,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     *Corrected 2026-11-17 (N18):* "a plugin from the plugin list has none here" no longer holds. A held
     row has no switch: fieldd keeps it held whatever a switch sends (`setEnabled`), so one here would not
     move; its line says why it is off, and Discover's community tile is where it comes back.
-    *Drawn 2026-11-17 (N18; ruled at its lean; James, vibe-field-b0, 2026-11-17T18:23:17Z: "go with leans, land
+    *Drawn 2026-11-17 (N18; ruled at its lean; James, 2026-11-17T18:23:17Z: "go with leans, land
     ice soon"), ‹draft›:* a community plugin the person turned off while community plugins are off is not held
     (fieldd says `held` only of one they want on), so its row and its page keep its switch, as any plugin's that
     is off. Turning it on records that they want it on; fieldd then holds it (`setEnabled`), and its row says its
@@ -7914,7 +7914,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **Its switches** (*drawn 2026-11-11, MK-4c2a; VF-PM 18:36:34Z*; ‹draft› for James's eye, its words in §9
       "The plugins' words"): a Built in or Development plugin's page carries them, and any other page carries
       none and says, 12 under where its act stands, at 12/400 in tertiary ink, that they aren't here yet.
-      *Built 2026-11-17 (N18; the MK inventory's A2, ruled at its lean; James, vibe-field-b0, 2026-11-17T18:23:17Z:
+      *Built 2026-11-17 (N18; the MK inventory's A2, ruled at its lean; James, 2026-11-17T18:23:17Z:
       "go with leans, land ice soon"), ‹draft›:* every installed plugin's page carries them, a plugin from the
       plugin list's and a Sideloaded one's too. A page held while community plugins are off carries none, and says
       its row's line (above). No page says they aren't here yet.
