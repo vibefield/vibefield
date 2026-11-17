@@ -115,7 +115,6 @@ import { SparkStore } from "../src/tool-plane/sparks";
 import { RootsRegistry } from "../src/workspace/roots";
 import { born } from "./agent-birth";
 import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
-import { installFakeClaude } from "./fake-claude";
 import {
   bootAt,
   HANDED,
@@ -124,6 +123,7 @@ import {
   pairingCredential,
   SEALED_FLOOR_ENV,
 } from "./custody-harness";
+import { installFakeClaude } from "./fake-claude";
 import {
   type FloorScene,
   killDaemonTree,

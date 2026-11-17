@@ -138,7 +138,10 @@ function oursInsideBudget(verify: ChildVerifier, pid: number): Promise<boolean> 
     };
     // asked inside a promise's own turn, so a verifier that throws before it answers is a rejection like any other
     const asked = new Promise<boolean>((answer) => answer(verify(pid)));
-    void asked.then((ours) => settle(ours === true), () => settle(false));
+    void asked.then(
+      (ours) => settle(ours === true),
+      () => settle(false),
+    );
   });
 }
 

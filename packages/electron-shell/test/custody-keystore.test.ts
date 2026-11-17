@@ -93,10 +93,12 @@ function writeJson(path: string, value: unknown): void {
  * `ask` is how it was asked: nothing for an incidental ask, PERSON for a person's. */
 async function startsNoPair(custody: ShellCustody, ask?: GatedAsk): Promise<unknown> {
   const start = vi.fn(async () => "a pair");
-  const refusal = await custody.gate(start)(ask).then(
-    () => undefined,
-    (error: unknown) => error,
-  );
+  const refusal = await custody
+    .gate(start)(ask)
+    .then(
+      () => undefined,
+      (error: unknown) => error,
+    );
   expect(refusal).toBeInstanceOf(Error);
   expect(start).not.toHaveBeenCalled();
   return refusal;

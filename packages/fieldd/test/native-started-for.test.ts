@@ -319,7 +319,10 @@ describe("telling the floor what a terminal was started for", () => {
     });
     // the wire itself, past the link's five words: the floor's refusal as it stands
     const asked = link.request(SET, { sessionId: "term-1", startedFor: atPid(1) });
-    const refusal = await asked.then(() => undefined, (error: unknown) => error);
+    const refusal = await asked.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
     expect(refusal).toBeInstanceOf(RpcCallError);
     expect(refusal).toMatchObject({ kind: "PRECONDITION_FAILED" });
     expect((refusal as RpcCallError).details).toBeUndefined();
