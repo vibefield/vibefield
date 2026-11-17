@@ -95,9 +95,10 @@ export class DriveService implements DriveTransportPort {
   }
 
   /** Claim the drive's lanes, arm the pulls' stream and roots, hear and publish the holders slice. Only the lane
-   * table's subscribe can throw (doc-sync's start does the same), and then nothing after it runs: the next node-up
-   * or `connected` arms all three. The pulls and the holders log what they could not do and never throw (pulls.ts
-   * `start`, holders.ts `start`). */
+   * table's subscribe can throw (doc-sync's start does the same), and then nothing after it runs: the lane table's
+   * stream asks again at its own next moment (NR S3, lane-relay.ts), and the next node-up arms the other two (the
+   * pulls' `nodeUp`, the holders' first ask). The pulls and the holders log what they could not do and never throw
+   * (pulls.ts `start`, holders.ts `start`). */
   async start(): Promise<void> {
     await this.#relay.start();
     await this.#pulls.start();
@@ -105,21 +106,21 @@ export class DriveService implements DriveTransportPort {
   }
 
   /** The node came up (MeshClient's "node-up"). The holders follow the pulls' subscribe and roots, each a request
-   * NativeLink ends by its deadline (NATIVE_SUPERVISION.REQUEST_DEADLINE_MS). The lane table is asked beside them,
-   * neither behind nor ahead (`connected`'s reason), once its own subscribes in flight have ended, and only while no
-   * lane-table stream stands (a `start` refused, or not yet run) or a reconnect's re-subscribe was refused: it is not
-   * the node's (lane-relay.ts `nodeUp`). None of the three throws. */
+   * NativeLink ends by its deadline (NATIVE_SUPERVISION.REQUEST_DEADLINE_MS): their slice is written after the roots,
+   * and their stream renews here, never at its own wake (holders.ts, NR S3). The lane table hears its own moments
+   * (lane-relay.ts, NR S3). Neither part throws. */
   async nodeUp(): Promise<void> {
-    const pullsThenHolders = this.#pulls.nodeUp().then(() => this.#holders.nodeUp());
-    await Promise.all([this.#relay.nodeUp(), pullsThenHolders]);
+    await this.#pulls.nodeUp();
+    await this.#holders.nodeUp();
   }
 
-  /** The mgmt link reconnected (NativeLink's "connected"): each part asks the floor again for what it hears. The
-   * three share nothing, so none waits behind another: a lane table or a slice held up by the pulls' subscribe is a
-   * lane unclaimed or a list stale for no reason. Each part's own wait is its requests, every one ended by NativeLink's
-   * deadline (NATIVE_SUPERVISION.REQUEST_DEADLINE_MS), and none of the three throws. */
+  /** The mgmt link reconnected (NativeLink's "connected"): the pulls ask the floor again for their stream, and the
+   * holders publish again. The two share nothing, so neither waits behind the other: a slice held up by the pulls'
+   * subscribe is a list stale for no reason. The lane table and the holders' store are the link's to replay, and a
+   * refused replay is asked again by its own stream (NR S3). Each part's own wait is its requests, every one ended by
+   * NativeLink's deadline (NATIVE_SUPERVISION.REQUEST_DEADLINE_MS), and neither throws. */
   async connected(): Promise<void> {
-    await Promise.all([this.#relay.connected(), this.#pulls.connected(), this.#holders.nodeUp()]);
+    await Promise.all([this.#pulls.connected(), this.#holders.connected()]);
   }
 
   /** The mgmt link went down (NativeLink's "reconnecting"): nothing carries a pull's end now, so the held bound runs

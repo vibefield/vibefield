@@ -6,6 +6,7 @@ import {
   StoreSnapshot,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { MeshStream } from "../mesh-stream";
 import type { NativeSubscribeOptions } from "../native-link";
 
 // DR-3b (W3, VF-RELAY) — `field.drive.v1`, this desktop's holders slice (contracts drive.ts `DriveHoldersSlice`):
@@ -27,11 +28,17 @@ import type { NativeSubscribeOptions } from "../native-link";
 //
 // Nothing is published or withdrawn while the node is not linked (`linked`): a capture has no account to scope a
 // slice to, and the floor refuses `store.set` in one (MESH_CAPTURING, the belt; this is the suspenders).
+//
+// NR S3 — the store is heard through ONE MeshStream (mesh-stream.ts), whose wake is the link's "connected" ALONE: the
+// holders follow the pulls at a node-up (DriveService.nodeUp), so node-up reaches them through their owner, never the
+// stream's own wake. A stream waiting on the node gate that heard node-up itself would ask at the moment and again at
+// the owner's renewal, two asks and two forwarders on every fresh pair start, and an answer published from the stream
+// would run ahead of the pulls' roots. So hearing and publishing are apart: the stream's answers and events only
+// refresh what is heard, and the owner's moments publish.
 
-/** The mesh store, narrowed to the two calls the slice makes: MeshClient's `setSlice` and `subscribeStoreManaged`, as
- * `HoldersMesh` narrows them for the docs slice (library-doc.ts). NR S3's seam, taken by its next commit: the
- * subscribe's replay option and the two halves of MeshStream's wake the slice will hear (the node read, and the link's
- * "connected" alone, `MeshClient.onConnected`). */
+/** The mesh store, narrowed to what the slice uses: MeshClient's `setSlice` and `subscribeStoreManaged`, as
+ * `HoldersMesh` narrows them for the docs slice (library-doc.ts), and the two halves of MeshStream's wake this slice
+ * takes (NR S3): the node read, and the link's "connected" alone (`MeshClient.onConnected`). */
 export interface DriveHoldersMesh {
   setSlice(storeId: string, data: unknown): Promise<unknown>;
   subscribeStoreManaged(
@@ -73,8 +80,10 @@ export class DriveHolders {
   /** deviceId → that desktop's slice, as the store last said it */
   readonly #slices = new Map<string, DriveHoldersSlice>();
   #timer: ReturnType<typeof setTimeout> | null = null;
-  #dispose: (() => void) | null = null;
-  #subscribing: Promise<void> | null = null;
+  /** STORES.DRIVE, heard (the header's NR S3) */
+  readonly #stream: MeshStream;
+  /** the stream's first ask was made (`start`, or a node-up before it) */
+  #hearing = false;
   /** a slice of this desktop's may be in the store: the next close withdraws it. Marked as a publish leaves, because
    * a close during its flight must withdraw it, and one read as refused may have run at the floor all the same; a
    * close after a publish that never ran writes one null slice, which every reader holds as nothing (`#adopt`). */
@@ -84,33 +93,61 @@ export class DriveHolders {
   constructor(opts: DriveHoldersOptions) {
     this.#opts = opts;
     this.#log = (opts.logger ?? createNoopLogger()).child({ component: "drive.holders" });
+    const mesh = opts.mesh;
+    this.#stream = new MeshStream({
+      label: STORES.DRIVE,
+      subscribe: (onEvent, subscribeOpts) =>
+        mesh.subscribeStoreManaged(STORES.DRIVE, onEvent, subscribeOpts),
+      wake: { nodeReadsUp: () => mesh.nodeReadsUp(), onRearm: (fn) => mesh.onConnected(fn) },
+      onEvent: (payload, kind) => this.#onStoreEvent(payload, kind),
+      onSnapshot: (snapshot) => this.#onStoreEvent(snapshot, "snapshot"),
+      onStopped: (error) =>
+        this.#log.info("fieldd.drive.holders_unheard", "The drive's holders store was not heard", {
+          error: String(error),
+        }),
+      ...(opts.logger !== undefined ? { logger: opts.logger } : {}),
+    });
   }
 
-  /** Hear the store, then publish. Never throws: a store the node cannot serve yet (no node up) is heard again at
-   * `nodeUp`, a publish that fails goes again on the next change, and a slice outside its contract is logged and not
-   * written (`publish`). */
+  /** Hear the store, then publish. Never throws: a store the node cannot serve yet (no node up) is heard again at the
+   * next reconnect or `nodeUp`, a publish that fails goes again on the next change, and a slice outside its contract
+   * is logged and not written (`publish`). */
   async start(): Promise<void> {
-    await this.#subscribe();
+    await this.#hear();
     await this.publish();
   }
 
-  /** The node came up, or the link came back: hear the store anew, and publish again (a node built anew holds no
-   * slice of this desktop's). A stream that stands proves nothing here. A node built anew leaves it on the old store,
-   * whose forwarder keeps that store (field-native `mgmt/mesh.rs`, `spawn_store_forwarder`). A floor that restarted
-   * has no node, so NativeLink's replay meets the node gate and its entry stays with no route, which this side is not
-   * told (native-link.ts `replaySubscriptions`). So ONE subscribe is made, as `DrivePulls.connected` does, once a
-   * subscribe in flight has ended: it may have left before this node. The stream that stood is let go (its `dispose`,
-   * which tells the floor nothing) only once that one is answered (`#doSubscribe`), so a subscribe refused here leaves
-   * the store heard as it was, the live store when the node was not built anew, and the next node-up or reconnect
-   * asks again. The cost: a stream let go keeps its forwarder writing to the connection until it closes, every change
-   * of the drive store it opened (the old store, when the node was built anew), and fieldd drops those lines; so does
-   * a subscribe the floor ran that read TIMEOUT here, the replay included, because no route is made for an answer read
-   * late. `native.mesh.store.subscribe` adds a forwarder per call it runs, so beyond the one fieldd routes, one stays
-   * per other subscribe the floor ran on this connection. */
+  /** The node came up (through DriveService, after the pulls): hear the store anew, and publish again (a node built
+   * anew holds no slice of this desktop's). A stream that stands proves nothing here: a node built anew over a live
+   * link refuses nothing and leaves it on the old store, whose forwarder keeps that store (field-native
+   * `mgmt/mesh.rs`, `spawn_store_forwarder`). So the stream renews (`MeshStream.renew`): one ask once any ask in
+   * flight has ended, the stream that stood let go only once it is answered, and kept, still hearing, if it is
+   * refused. A stream never asked makes its first ask here. The cost that stays: a stream let go keeps its forwarder
+   * writing to the connection until it closes (`native.mesh.store.subscribe` adds a forwarder per call it runs), and
+   * fieldd drops those lines. */
   async nodeUp(): Promise<void> {
-    await this.#subscribing;
-    await this.#subscribe(true);
+    if (this.#hearing) await this.#stream.renew();
+    else await this.#hear();
     await this.publish();
+  }
+
+  /** The mgmt link reconnected (NativeLink's "connected"): publish again. The link's replay hears the store anew, and
+   * a refused one is told to the stream, which asks again by what refused it (mesh-stream.ts). A stream never asked
+   * (DriveService's `start` stopped at the lane table) makes its first ask here. */
+  async connected(): Promise<void> {
+    await this.#hear();
+    await this.publish();
+  }
+
+  /** The stream's first ask, made once. A refusal is logged; the stream re-arms on its own (mesh-stream.ts). */
+  async #hear(): Promise<void> {
+    if (this.#stopped || this.#hearing) return;
+    this.#hearing = true;
+    await this.#stream.start().catch((error: unknown) => {
+      this.#log.info("fieldd.drive.holders_unheard", "The drive's holders store was not heard", {
+        error: String(error),
+      });
+    });
   }
 
   /** Publish soon: changes arrive in bursts. */
@@ -171,8 +208,7 @@ export class DriveHolders {
     this.#stopped = true;
     if (this.#timer !== null) clearTimeout(this.#timer);
     this.#timer = null;
-    this.#dispose?.();
-    this.#dispose = null;
+    this.#stream.stop();
     this.#slices.clear();
   }
 
@@ -189,41 +225,6 @@ export class DriveHolders {
         error: String(error),
       });
     }
-  }
-
-  /** One subscribe at a time, shared by a caller while it is in flight. While a stream stands, only a renewal makes
-   * one (`nodeUp`), so a flight is always a subscribe made. */
-  #subscribe(renew = false): Promise<void> {
-    if (this.#stopped || (this.#dispose !== null && !renew)) return Promise.resolve();
-    if (this.#subscribing === null) {
-      this.#subscribing = this.#doSubscribe().finally(() => {
-        this.#subscribing = null;
-      });
-    }
-    return this.#subscribing;
-  }
-
-  /** Answered, the new stream replaces the one that stood, which is let go only then; refused, that one stays and
-   * still hears. Stopped during the flight, the answer is let go, as `stop` let the one that stood go. */
-  async #doSubscribe(): Promise<void> {
-    let subscribed: { snapshot: unknown; dispose: () => void };
-    try {
-      subscribed = await this.#opts.mesh.subscribeStoreManaged(STORES.DRIVE, (payload, kind) =>
-        this.#onStoreEvent(payload, kind),
-      );
-    } catch (error) {
-      this.#log.info("fieldd.drive.holders_unheard", "The drive's holders store was not heard", {
-        error: String(error),
-      });
-      return;
-    }
-    if (this.#stopped) {
-      subscribed.dispose();
-      return;
-    }
-    this.#dispose?.();
-    this.#dispose = subscribed.dispose;
-    this.#onStoreEvent(subscribed.snapshot, "snapshot");
   }
 
   /** A snapshot REPLACES what was heard; a delta merges one desktop's slice (`peerUpdated`, `localChanged`) or drops
