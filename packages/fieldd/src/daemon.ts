@@ -72,6 +72,7 @@ import {
   type ComposeSparksSayResult,
   createAgentCatalogReaders,
   DEVICE_LIMITS,
+  DEVICE_RESTART,
   DeviceGetParams,
   DeviceRenameParams,
   type DiagnosticsLastExitResult,
@@ -2742,6 +2743,25 @@ export async function bootstrap(
           false,
         );
     };
+    // DS — the restart announcement's one writer (`DeviceService.announceRestart`), bounded by
+    // `DEVICE_RESTART.PUBLISH_BOUND_MS`; the stop goes on either way, and the outcome is logged. Never retracted in this
+    // process: from an update's stop on every branch exits, and the next boot's slice carries none.
+    const announceRestart = async (restart: RestartScheduled): Promise<void> => {
+      const announced = (await devicesRef?.announceRestart(restart)) ?? false;
+      if (announced) {
+        logger.info(
+          "fieldd.lifecycle.restart_announced",
+          "The restart is announced on this device's slice before the stop",
+          { planes: restart.planes.length },
+        );
+      } else {
+        logger.warn(
+          "fieldd.lifecycle.restart_unannounced",
+          "The restart announcement did not reach the mesh in time; other devices may read this desktop asleep",
+          { boundMs: DEVICE_RESTART.PUBLISH_BOUND_MS },
+        );
+      }
+    };
     const stopNativeConsented = async (
       asked: NonNullable<SystemShutdownParams["native"]>,
       reason: NativeRestartReason,
@@ -2800,12 +2820,14 @@ export async function bootstrap(
       }
       nativeStopping = reason;
       // a RESTART is announced (the phone and the peers read `restarting`); a quit or a logout is no restart
+      let scheduled: RestartScheduled | null = null;
       if (reason === "update") {
-        restartScheduled = {
+        scheduled = {
           reason,
           planes: ["shell", "fieldd", "field-native"],
           at: Date.now(),
         };
+        restartScheduled = scheduled;
       }
       logger.info(
         "fieldd.lifecycle.native_stop_consented",
@@ -2813,6 +2835,10 @@ export async function bootstrap(
         { reason, sessions: census.live.length },
       );
       emitHealth();
+      // DS — the SAME announcement on this device's own slice (`DeviceSlice.restart`), so a peer and the phone read
+      // `restarting` once the node drops, not `asleep`. Before the floor is asked to stop: the floor carries the node,
+      // and once it goes nothing here can publish. Bounded, so a wedged mesh never holds the consented stop.
+      if (scheduled !== null) await announceRestart(scheduled);
       return await supervisor.stopFloor({
         reason,
         ...(asked.toVersion !== undefined ? { toVersion: asked.toVersion } : {}),
@@ -2990,6 +3016,10 @@ export async function bootstrap(
         shellLease.stoppedBy(reason, parsed.data.native.sessions.length);
       } else if (parsed.data.native === undefined && parsed.data.reason === "update") {
         shellLease.leftForUpdate();
+        // DS — the update's stop that leaves the floor (B3): fieldd and the shell restart, the floor and its node
+        // live on. Announced before the answer, since the shell stops fieldd the moment it hears it. The supervisor's
+        // replacement of a stale build names no reason and announces nothing.
+        await announceRestart({ reason: "update", planes: ["shell", "fieldd"], at: Date.now() });
       } else {
         shellLease.seal();
       }

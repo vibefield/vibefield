@@ -7,6 +7,7 @@ import {
   type CallerContext,
   CONTRACTS_VERSION,
   DEVICE_LIMITS,
+  DEVICE_RESTART,
   type DeviceInfo,
   DeviceNameFile,
   DeviceSlice,
@@ -16,6 +17,8 @@ import {
   PeerInfo,
   type PhoneFact,
   type ProductEndpoint,
+  type RestartScheduled,
+  restartHolds,
   STORES,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
@@ -198,13 +201,24 @@ export function isAnotherContractsMajor(published: string | undefined): boolean 
  * restarts); a node the tailnet does not list online is `asleep`; a node it
  * does list whose door last went unanswered is `restarting` (field-native
  * outlives fieldd — the node's `online` is not the daemon's); everything else
- * is `awake`, including a peer never dialled: no answer yet is not silence. */
+ * is `awake`, including a peer never dialled: no answer yet is not silence.
+ *
+ * DS — `restartAnnounced`: the peer's own slice says an update's restart
+ * stands (`restartHolds`). That reads `restarting` EVEN with the node offline,
+ * because the stop takes the node down too, and the tailnet's offline is then
+ * a restart's, not a sleep's. It holds for the announcement's TTL and nothing
+ * longer; it never outranks `incompatible`. Nor does it outrank a door that
+ * ANSWERS on a node the tailnet lists (the old daemon draining before the
+ * stop, or the new boot before its clean slice reaches us): that is the daemon
+ * speaking, newer than any announcement, and the mesh board hears it `live`
+ * (S6), so it reads `awake`. */
 export function deviceState(
   self: boolean,
   online: boolean,
   door: "answers" | "silent" | "incompatible" | undefined,
   link: "connected" | "dialing" | "incompatible" | undefined,
   contractsVersion?: string | undefined,
+  restartAnnounced = false,
 ): DeviceState {
   if (self) return "awake";
   if (
@@ -213,6 +227,7 @@ export function deviceState(
     isAnotherContractsMajor(contractsVersion)
   )
     return "incompatible";
+  if (restartAnnounced && (!online || door !== "answers")) return "restarting";
   if (!online) return "asleep";
   if (door === "silent") return "restarting";
   return "awake";
@@ -318,6 +333,17 @@ export class DeviceService extends EventEmitter {
   /** The review's folds (5) — every peer whose slice, past the registry's gate, said `docHost`
    * in this daemon's life: never a phone here again, even once its slice is away */
   private readonly desktopsSeen = new Set<string>();
+  /** DS — this device's own announced restart, once an update's stop has
+   * begun (`announceRestart`). Never cleared in this process: from there every
+   * branch exits, and the next boot's DeviceService starts with none, which is
+   * the clear on the wire. */
+  private restart: RestartScheduled | null = null;
+  /** DS — a peer's announcement lapses on the clock, and nothing else would
+   * wake the roster then: one timer, for the earliest lapse. */
+  private restartLapse: ReturnType<typeof setTimeout> | null = null;
+  /** DS — devices whose slice carried an announcement this build could not
+   * read, logged once each; cleared when one reads cleanly again. */
+  private readonly unreadableRestartLogged = new Set<string>();
   private disposed = false;
 
   constructor(private readonly opts: DeviceServiceOptions) {
@@ -410,12 +436,50 @@ export class DeviceService extends EventEmitter {
     return this.roster().find((d) => d.deviceId === deviceId);
   }
 
+  /** DS — the restart announcement (WP12 L2b's owed phone/peer half). An
+   * update's stop calls this before fieldd, or the floor that carries the node,
+   * is asked to go: `restart` lands on THIS device's own slice, so a peer and
+   * the phone read `restarting` once the daemon or the node drops, not
+   * `asleep`.
+   *
+   * Serialized behind any sync in flight (the chain law), and BOUNDED: an
+   * update the person consented to is never held by a wedged mesh, so the
+   * answer is only whether the write landed in time. A write that lands is
+   * handed to the floor's store; its broadcast leaves while the floor drains,
+   * and the floor stops its mesh unit last. */
+  async announceRestart(
+    restart: RestartScheduled,
+    boundMs: number = DEVICE_RESTART.PUBLISH_BOUND_MS,
+  ): Promise<boolean> {
+    this.restart = restart;
+    if (!MESH_BUS_CARRIES_CONTENT || this.disposed) return false;
+    const write = this.chain.then(() => this.publish());
+    this.chain = write.catch(() => {});
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), boundMs);
+    });
+    try {
+      return await Promise.race([
+        write.then(
+          () => true,
+          () => false,
+        ),
+        late,
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  }
+
   dispose(): void {
     this.disposed = true;
     this.storeOff?.();
     this.storeOff = null;
     this.peersOff?.();
     this.peersOff = null;
+    if (this.restartLapse !== null) clearTimeout(this.restartLapse);
+    this.restartLapse = null;
     this.removeAllListeners();
   }
 
@@ -567,6 +631,8 @@ export class DeviceService extends EventEmitter {
       productEndpoint: this.opts.productEndpoint(),
       bootId: this.opts.bootId,
       publishedAt: this.now(),
+      // DS — only between an update's stop and this process's end
+      ...(this.restart !== null ? { restart: this.restart } : {}),
     };
   }
 
@@ -883,10 +949,31 @@ export class DeviceService extends EventEmitter {
       return;
     const parsed = DeviceSlice.safeParse(data);
     if (!parsed.success || parsed.data.deviceId !== deviceId) return;
+    this.noteRestartReading(deviceId, data, parsed.data);
     // Tolerant readers may accept future fields. The retained roster is a
     // narrow writer: in particular, transport-derived DNS/node/link facts can
     // never survive here as peer-authored extension fields.
     this.slices.set(deviceId, narrowDeviceSlice(parsed.data));
+  }
+
+  /** DS — the tolerant reader's other half for `restart`: the schema catches
+   * an announcement this build cannot read to absent (a reason or a plane
+   * added later), so the slice survives; this says it happened, once per
+   * device, rather than letting the device quietly read `asleep`. */
+  private noteRestartReading(deviceId: string, raw: unknown, parsed: DeviceSlice): void {
+    const carried =
+      raw !== null && typeof raw === "object" && (raw as { restart?: unknown }).restart != null;
+    if (!carried || parsed.restart !== undefined) {
+      this.unreadableRestartLogged.delete(deviceId);
+      return;
+    }
+    if (this.unreadableRestartLogged.has(deviceId)) return;
+    this.unreadableRestartLogged.add(deviceId);
+    this.logger.warn(
+      "fieldd.devices.restart_unreadable",
+      "A device slice announced a restart this build cannot read; the slice is kept and the device reads by the ordinary rules",
+      { deviceId },
+    );
   }
 
   /** UA-P-4 — log a dropped slice ONCE per device, not once per roster rebuild.
@@ -926,6 +1013,7 @@ export class DeviceService extends EventEmitter {
   private roster(): DeviceInfo[] {
     const out: DeviceInfo[] = [];
     const seen = new Set<string>();
+    const now = this.now();
     for (const [deviceId, slice] of this.slices) {
       const self = deviceId === this.deviceId;
       if (!self && !this.selfPeers.has(deviceId)) {
@@ -978,6 +1066,8 @@ export class DeviceService extends EventEmitter {
           : {}),
         bootId: slice.bootId,
         publishedAt: slice.publishedAt,
+        // DS — the device's own claim, carried as published; `state` judges it
+        ...(slice.restart !== undefined ? { restart: slice.restart } : {}),
         self,
         online: self ? true : (live?.online ?? false),
         state: deviceState(
@@ -988,6 +1078,9 @@ export class DeviceService extends EventEmitter {
           // DS-L9 (S6) — the major the peer's slice PUBLISHES: another one
           // reads `incompatible` before anything is asked of it
           self ? undefined : slice.contractsVersion,
+          // DS — its announced restart, while it stands: `restarting` even
+          // with the node offline (an update's stop takes the node down too)
+          !self && restartHolds(slice.restart, now),
         ),
         lastSeenAt: Math.max(slice.publishedAt, live?.lastSeen ?? 0),
         ...(tailscaleId !== undefined ? { tailscaleId } : {}),
@@ -1093,6 +1186,7 @@ export class DeviceService extends EventEmitter {
   }
 
   private emitRoster(): void {
+    this.armRestartLapse();
     const roster = this.roster();
     // publishedAt/lastSeenAt churn on every self-slice rebuild — signature the
     // stable facts so subscribers only wake on real roster changes.
@@ -1124,11 +1218,42 @@ export class DeviceService extends EventEmitter {
         // item 406 — a phone remembered moves nothing else in it either, and Remove is
         // offered on this fact alone
         d.phone ?? null,
+        // DS — an announcement appearing or clearing is news even while the
+        // state it moves holds still (a self row, an incompatible peer)
+        d.restart?.at ?? null,
       ]),
     );
     if (sig === this.lastRosterSig) return;
     this.lastRosterSig = sig;
     this.emit("changed", roster);
+  }
+
+  /** DS — the one timer behind a peer's announcement: when the earliest one
+   * lapses the roster is projected again, so `device.subscribe` hears
+   * `restarting` become `asleep` (or `awake`) when it does. Re-armed on every
+   * projection; nothing held, nothing armed. */
+  private armRestartLapse(): void {
+    if (this.restartLapse !== null) clearTimeout(this.restartLapse);
+    this.restartLapse = null;
+    if (this.disposed) return;
+    const now = this.now();
+    let next = Number.POSITIVE_INFINITY;
+    for (const [deviceId, slice] of this.slices) {
+      const restart = slice.restart;
+      if (deviceId === this.deviceId || restart === undefined || !restartHolds(restart, now))
+        continue;
+      next = Math.min(next, restart.at + DEVICE_RESTART.ANNOUNCE_TTL_MS);
+    }
+    if (!Number.isFinite(next)) return;
+    const timer = setTimeout(
+      () => {
+        this.restartLapse = null;
+        this.emitRoster();
+      },
+      Math.max(0, next - now),
+    );
+    timer.unref?.();
+    this.restartLapse = timer;
   }
 }
 
@@ -1206,6 +1331,16 @@ function narrowDeviceSlice(slice: DeviceSlice): DeviceSlice {
       : {}),
     bootId: slice.bootId,
     publishedAt: slice.publishedAt,
+    // DS — narrowed like every other field: the three it promises, no extras
+    ...(slice.restart !== undefined
+      ? {
+          restart: {
+            reason: slice.restart.reason,
+            planes: [...slice.restart.planes],
+            at: slice.restart.at,
+          },
+        }
+      : {}),
   };
 }
 

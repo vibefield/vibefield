@@ -64,6 +64,29 @@ describe("the roster's state (deviceState)", () => {
     // self is self, whatever it says
     expect(deviceState(true, true, undefined, undefined, next)).toBe("awake");
   });
+
+  // DS — the restart announcement: the peer's own slice says an update's restart stands
+  it("an announced restart reads restarting with the node offline, yields to a door that answers, and never outranks incompatible or self", () => {
+    const next = `${Number(CONTRACTS_VERSION.split(".")[0]) + 1}.0.0`;
+    // the node went down with the floor: restarting, not asleep
+    expect(deviceState(false, false, undefined, undefined, undefined, true)).toBe("restarting");
+    expect(deviceState(false, false, "silent", undefined, undefined, true)).toBe("restarting");
+    // a half-open link's word on an unlisted node is no daemon speaking
+    expect(deviceState(false, false, "answers", "connected", undefined, true)).toBe("restarting");
+    // the node listed, its door unheard or silent: the announcement holds
+    expect(deviceState(false, true, undefined, undefined, undefined, true)).toBe("restarting");
+    expect(deviceState(false, true, "silent", undefined, undefined, true)).toBe("restarting");
+    // a door that ANSWERS on a listed node is the daemon speaking, newer than any announcement
+    expect(deviceState(false, true, "answers", "connected", undefined, true)).toBe("awake");
+    // incompatible is not asked, whatever the peer says; self is self
+    expect(deviceState(false, false, "incompatible", undefined, undefined, true)).toBe(
+      "incompatible",
+    );
+    expect(deviceState(false, false, undefined, undefined, next, true)).toBe("incompatible");
+    expect(deviceState(true, true, undefined, undefined, undefined, true)).toBe("awake");
+    // no announcement: the ordinary rules
+    expect(deviceState(false, false, undefined, undefined, undefined, false)).toBe("asleep");
+  });
 });
 
 describe("PeerLink.clearSilent (S6)", () => {

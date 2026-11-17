@@ -17,6 +17,7 @@ import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   CONTRACTS_VERSION,
+  DEVICE_RESTART,
   type DeviceInfo,
   type DeviceListResult,
   DeviceNameFile,
@@ -28,7 +29,7 @@ import {
   SOCKETS,
   TAILNET_SCOPES,
 } from "@vibefield/contracts";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { DeviceService } from "../src/device-service";
 import { bootstrap, DocumentService } from "../src/index";
@@ -1526,6 +1527,58 @@ describe("406 — the door's refusals are read before the door listens", () => {
 // object as its local `restartScheduled` on its own slice BEFORE the stop, and every roster holds it `restarting` for
 // the reader's TTL. Nothing a person reads names it: a desktop held so is drawn as it was just before.
 describe("DS — the restart announcement", () => {
+  it("the roster's own timer moves an announced peer to asleep when the hold lapses, and leaves nothing armed", async () => {
+    // a DeviceService over a fake mesh on a FAKE clock: no daemon racing a real window
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    cleanup.push(() => {
+      vi.useRealTimers();
+    });
+    let now = 1_792_065_409_912;
+    const restart = { reason: "update", planes: ["shell", "fieldd", "field-native"], at: now };
+    const mesh = Object.assign(new EventEmitter(), {
+      getSlice: async () => ({ deviceId: "dev-self" }),
+      subscribePeers: async () => ({ snapshot: undefined, dispose: () => undefined }),
+      peers: async () => [
+        tailnetPeer({ id: "node-up", deviceId: "dev-up", login: ACCOUNT, online: false }),
+      ],
+      subscribeStoreManaged: async () => ({
+        snapshot: { slices: { "dev-up": { data: { ...desktopSlice("dev-up"), restart } } } },
+        dispose: () => undefined,
+      }),
+      setSlice: async () => undefined,
+    }) as unknown as MeshClient;
+    const devices = new DeviceService({
+      dataDir: makeDataDir(),
+      mesh,
+      bootId: "boot-1",
+      fielddVersion: "0.0.0",
+      contractsVersion: CONTRACTS_VERSION,
+      productEndpoint: () => ({ serve: "product" }),
+      linkedLogin: () => ACCOUNT,
+      now: () => now,
+    });
+    cleanup.push(() => devices.dispose());
+    const heard: DeviceInfo[][] = [];
+    devices.on("changed", (roster: DeviceInfo[]) => heard.push(roster));
+    await devices.sync();
+    const up = () => devices.list().find((d) => d.deviceId === "dev-up");
+    expect(up()).toMatchObject({ online: false, state: "restarting" });
+
+    const before = heard.length;
+    now += DEVICE_RESTART.ANNOUNCE_TTL_MS - 1;
+    vi.advanceTimersByTime(DEVICE_RESTART.ANNOUNCE_TTL_MS - 1);
+    expect(heard.length, "nothing moved inside the hold").toBe(before);
+    expect(up()?.state).toBe("restarting");
+
+    now += 1;
+    vi.advanceTimersByTime(1);
+    expect(heard.length, "the lapse projected the roster once").toBe(before + 1);
+    expect(heard.at(-1)?.find((d) => d.deviceId === "dev-up")).toMatchObject({ state: "asleep" });
+    // the claim stays on the row; the verdict moved
+    expect(up()?.restart).toEqual(restart);
+    expect(vi.getTimerCount(), "no timer stays armed").toBe(0);
+  });
+
   it("an offline peer that announced an update's restart reads restarting; a lapsed, far-ahead or unreadable one reads asleep", async () => {
     const dataDir = makeDataDir();
     const mock = await startMock(dataDir);
