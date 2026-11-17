@@ -45,6 +45,12 @@ let container: HTMLDivElement | null = null;
 // are design-system-shell.test.tsx's, over the shipping page with its other sections stubbed. On CI the whole render
 // had been most of every row's time: the launcher's row, one read, reached 107.8 s, where its preview alone has
 // never taken 2.2 s (lanes/item213/plan-2/plan.md §1).
+// *Item 499, 2026-11-17:* the theme row is split in two. On CI it timed out in three of eight runs (168.9–205.8 s
+// at 635eb8430, 2b78151b9 and 8bb55de91; 20.7–87.6 s when green): one body held the worker past the limit with the
+// page's whole dark re-render and every component-state check behind it. The theme row keeps the toggle and the
+// facts that need the page dark; "exposes representative component-state controls" takes the rest, on the light
+// page, in their old order. Each still renders the whole page in its beforeEach; the dark re-render stays whole in
+// the first.
 const PAGE_BUDGET_MS = 120_000;
 
 beforeEach(() => {
@@ -861,7 +867,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(container?.querySelectorAll(".vf-pane-launcher-cap-under")).toHaveLength(4);
   });
 
-  it("exposes theme and representative component-state controls", async () => {
+  it("exposes theme: the page follows its toggle dark, and the stages and plates with it", async () => {
     const themeToggle = container?.querySelector<HTMLButtonElement>(".vf-ds-theme-toggle");
     expect(themeToggle?.getAttribute("aria-label")).toBe("Switch to dark mode");
     await act(async () => themeToggle?.click());
@@ -877,7 +883,24 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
         '[data-onboarding-preview] button[aria-label="Switch to light mode"]',
       ),
     ).toHaveLength(13);
+    // GV-D1: the head in the other theme too — the page is dark, so the frame's
+    // tokens the head is drawn in are the night's (`.dark .vf-stories`), and
+    // every stage that follows the page is Godview's dark.
+    const darkStages = [
+      ...(container?.querySelectorAll(".vf-ds-godview-frame > .vf-godview.theme-dark") ?? []),
+    ];
+    expect(darkStages.length).toBeGreaterThanOrEqual(5);
+    for (const stage of darkStages) {
+      expect(stage.closest(".dark")).toBe(document.documentElement);
+      expect(stage.querySelectorAll(".vf-stories .vf-story").length).toBe(5);
+    }
+    // UM-3: the profiles column's plates follow the page into Godview's dark, every one
+    const darkPlates = [...(container?.querySelectorAll("[data-profiles-plate]") ?? [])];
+    expect(darkPlates).toHaveLength(12);
+    for (const plate of darkPlates) expect(plate.classList.contains("theme-dark")).toBe(true);
+  });
 
+  it("exposes representative component-state controls", async () => {
     // One Frame FR-3: the playground's head runs on its real controller — its
     // chevron grows the pill into the fields explorer through the one owner.
     const place = container?.querySelector<HTMLElement>(".vf-ds-field-stage [data-head-place]");
@@ -894,21 +917,6 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(artifacts?.querySelector(".vf-head-hub")?.children).toHaveLength(0);
 
     expect(container?.querySelector(".vf-godview .vf-monitor-list")).not.toBeNull();
-    // GV-D1: the head in the other theme too — the page is dark, so the frame's
-    // tokens the head is drawn in are the night's (`.dark .vf-stories`), and
-    // every stage that follows the page is Godview's dark.
-    const darkStages = [
-      ...(container?.querySelectorAll(".vf-ds-godview-frame > .vf-godview.theme-dark") ?? []),
-    ];
-    expect(darkStages.length).toBeGreaterThanOrEqual(5);
-    for (const stage of darkStages) {
-      expect(stage.closest(".dark")).toBe(document.documentElement);
-      expect(stage.querySelectorAll(".vf-stories .vf-story").length).toBe(5);
-    }
-    // UM-3: the profiles column's plates follow the page into Godview's dark, every one
-    const darkPlates = [...(container?.querySelectorAll("[data-profiles-plate]") ?? [])];
-    expect(darkPlates).toHaveLength(12);
-    for (const plate of darkPlates) expect(plate.classList.contains("theme-dark")).toBe(true);
     // System control is the palette's act in a development build of the product
     // (none in production, LP-6); the stage specimen stages the catalog's own
     // button for the shipping panel.
