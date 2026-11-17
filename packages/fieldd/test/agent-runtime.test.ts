@@ -2092,9 +2092,10 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     expect(catalog.find((r) => r.id === "grok")?.offers.spark).toBe(true);
   });
 
-  // OB-3d — a run's own helper, named to the host before anything starts a server, is a process the door can name: the
-  // pin's codex declares `run-helper` (one private app-server per run), so a claim of spark for it passes the gate.
-  it("agent.providers says spark for a claim whose pin runs its MCP servers in a run helper the door names (OB-3d)", async () => {
+  // OB-3d, as corrected: a run's own helper holds a plain run's door (`forRun`, `doorCanName`) and no more; a spark's
+  // process is a pane's (`terminal`). The pin's codex declares `run-helper`, so a claim of spark for it is refused at the
+  // gate (`spark-door-identity-unsupported`), and the device answers false rather than the table's word.
+  it("agent.providers does not say spark for a claim whose pin runs its MCP servers in a run helper (OB-3d)", async () => {
     const { daemon } = await setup({
       catalog: catalogWith("codex", {
         offers: { ...(catalogEntry("codex")?.offers ?? NONE), spark: true },
@@ -2103,7 +2104,7 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     await ready(daemon);
     const win = await window(daemon, ["agent.spawn"], "c1s");
     const { providers } = (await win.call("agent.providers", {})) as AgentProvidersResult;
-    expect(providers.find((p) => p.id === "codex")?.offers?.spark).toBe(true);
+    expect(providers.find((p) => p.id === "codex")?.offers?.spark).toBe(false);
   });
 
   it("agent.catalog answers the visible rows for the surface; the phone never sees the protocol row; a declined row never leaves fieldd; it reads on agent.observe", async () => {
