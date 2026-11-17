@@ -3149,14 +3149,18 @@ describe("the find door (P2): Live now's rows made only while the Peek listens, 
 // every outcome said, a refusal in fieldd's own words.
 
 let probed: MonitorViewInput | null = null;
+/** Every input the probe was handed, in order: what a view saw FIRST, not only what it holds. */
+let probeSeen: MonitorViewInput[] = [];
 let probeCommands: MonitorViewCommands | undefined;
 const probeView = createRecordingView("probe", {
   onMount: (_root, input, commands) => {
     probed = input;
+    probeSeen.push(input);
     probeCommands = commands;
   },
   onUpdate: (input) => {
     probed = input;
+    probeSeen.push(input);
   },
 });
 const PROBE_VIEW: MonitorViewEntry = {
@@ -3172,6 +3176,7 @@ async function mountProbe(
   panes: MonitorPaneFacts = PANES,
 ): Promise<HTMLElement> {
   probed = null;
+  probeSeen = [];
   probeCommands = undefined;
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -3321,6 +3326,50 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
       await creating;
     });
     expect(row("born-1")?.spawnHint).toEqual({ x: 321.25, y: 123.75 });
+  });
+
+  it("stamps the release point on the row the FIRST time a view is handed it, when the board's row beats this window's render", async () => {
+    // Item 382 (asked for 2026-11-13, the desktop's empty swarm): a hold drew two bubbles and
+    // one went away. From an empty Godview the terminal asked for is the deck's opening shell
+    // (L20): the create waits for the whole deck, and the shell's row reaches the board first.
+    // A view is handed a new row in the frame the replica publishes it (M7), which is before
+    // this window renders the claim; unstamped there, the swarm places a second body beside the
+    // birth it drew at the release point, and the birth is given up four seconds later.
+    const door = tabDoor();
+    let answer!: (outcome: unknown) => void;
+    door.createTerminal.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const panes: MonitorPaneFacts = {
+      sessionIds: ["old-shell"],
+      activeSessionId: "old-shell",
+      sessions: [pane("old-shell")],
+    };
+    await mountProbe(door, panes);
+    let creating: Promise<MonitorCreateAnswer> | undefined;
+    await act(async () => {
+      creating = probeCommands?.create({ x: 321.25, y: 123.75 });
+    });
+    // the board alone moves: no render of this window stands between the row and the view's frame
+    const before = probeSeen.length;
+    syncBoard({ ...panes, floor: [{ sessionId: "born-1", workloadClass: "interactive" }] });
+    await settle();
+    const firstSight = probeSeen
+      .slice(before)
+      .map((input) => input.model.byId.get("born-1"))
+      .find((born) => born !== undefined);
+    expect(firstSight, "the new shell's row reached the view").toBeDefined();
+    expect(firstSight?.spawnHint).toEqual({ x: 321.25, y: 123.75 });
+    // and no row it had takes the point
+    expect(probed?.model.byId.get("old-shell")?.spawnHint).toBeUndefined();
+    await act(async () => {
+      answer({ state: "mounted", sessionId: "born-1" });
+      await creating;
+    });
+    expect(probed?.model.byId.get("born-1")?.spawnHint).toEqual({ x: 321.25, y: 123.75 });
   });
 
   it("takes a first appearance through the roster too, and the door's answer corrects a claim that was another's", async () => {
