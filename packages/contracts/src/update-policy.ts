@@ -514,7 +514,9 @@ export type UpdatePlane = z.infer<typeof UpdatePlane>;
 
 /** WP12 L2b (§9 R3, the PM's correction 12:22Z) — a planned restart, announced on `system.health` before the stop
  * (`FielddHealth.restartScheduled`; null when none is scheduled). The LOCAL carrier only: `system.health.subscribe` is
- * local to its device (D36). The phone/peer half is `DeviceSlice.restart`, owed to the DS track. */
+ * local to its device (D36). The phone/peer half is `DeviceSlice.restart` (devices.ts): THIS shape, the same object,
+ * written on the device's own slice before the floor is asked to stop and copied to `DeviceInfo.restart` at intake. A
+ * reader holds the device `restarting` for `DEVICE_RESTART.ANNOUNCE_TTL_MS` (`restartHolds`). */
 export const RestartScheduled = z
   .object({
     reason: NativeRestartReason,

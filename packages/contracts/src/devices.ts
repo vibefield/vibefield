@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { MESH_CONTROL_LIMITS } from "./registries";
+import { DEVICE_RESTART, MESH_CONTROL_LIMITS } from "./registries";
+import { RestartScheduled } from "./update-policy";
 
 // DeviceService wire shapes (design-04 §3.1, D31 — the C4 P1-lite subset).
 // The roster fuses self-slices in the `field.devices.v1` SyncedStore with
@@ -97,6 +98,36 @@ export type ProductEndpoint = z.infer<typeof ProductEndpoint>;
 export const DeviceNameSource = z.enum(["user", "hostname"]);
 export type DeviceNameSource = z.infer<typeof DeviceNameSource>;
 
+/** DS — the restart announcement (WP12 L2b's owed phone/peer half). A desktop
+ * whose update stops the floor takes its node down with it, so a reader with
+ * only the tailnet's `online` reads it `asleep`. The desktop says so FIRST, on
+ * its own slice: `restart` is fieldd's `RestartScheduled` (update-policy.ts,
+ * the local carrier on `system.health`), the same object, written before the
+ * floor is asked to stop. A reader holds the device `restarting` while
+ * `restartHolds` says the announcement stands; the next boot's slice carries
+ * none, which is the clear. No reader turns it into a word a person reads: a
+ * desktop held `restarting` is drawn as it was just before.
+ *
+ * TOLERANT: an announcement this build cannot read (a reason or a plane added
+ * after it, no `at`) reads as none and never costs the slice. Writers type
+ * against the strict `RestartScheduled`. The catch drops the WHOLE
+ * announcement, so a reason or plane added later would make every older reader
+ * read that desktop `asleep` again: no new `NativeRestartReason` or
+ * `UpdatePlane` value is written here until that is decided. */
+const DeviceRestartField = RestartScheduled.optional().catch(undefined);
+
+/** Does a device's announced restart still stand at `now` (the reader's epoch
+ * millis)? From its `at` for `DEVICE_RESTART.ANNOUNCE_TTL_MS`; an `at` up to
+ * `MAX_CLOCK_SKEW_MS` ahead of this clock counts, one further ahead does not.
+ * The TTL is the READER's number, so no device stretches one announcement past
+ * it. It bounds an ANNOUNCEMENT, not a device: a fresh `at` is a new one, and
+ * the roster lets a door that answers outrank it (fieldd's `deviceState`). */
+export function restartHolds(restart: RestartScheduled | undefined, now: number): boolean {
+  if (restart === undefined) return false;
+  if (restart.at > now + DEVICE_RESTART.MAX_CLOCK_SKEW_MS) return false;
+  return now < restart.at + DEVICE_RESTART.ANNOUNCE_TTL_MS;
+}
+
 /** One device's self-published slice in `field.devices.v1` (published on boot
  * and on change; the slice key IS the writer's mesh deviceId — D30). */
 export const DeviceSlice = z
@@ -119,6 +150,10 @@ export const DeviceSlice = z
     productEndpoint: ProductEndpoint.optional(),
     bootId: z.string().min(1).max(DEVICE_LIMITS.BOOT_ID_CHARS),
     publishedAt: z.number().int(),
+    /** DS — present only between an update's consented stop and this
+     * device's next boot (`DeviceRestartField`, above). OPTIONAL: a peer
+     * older than it carries none. */
+    restart: DeviceRestartField,
   })
   .passthrough();
 export type DeviceSlice = z.infer<typeof DeviceSlice>;
@@ -130,7 +165,14 @@ export type DeviceSlice = z.infer<typeof DeviceSlice>;
  *  - `restarting`: its NODE is on the tailnet and its DAEMON is silent — the
  *    last forward to its door went unanswered at the transport. field-native
  *    outlives fieldd, and the tailnet's `online` flag is the node's.
- *  - `asleep`: the tailnet says it is not online.
+ *    DS — OR its own slice announced an update's restart that still stands
+ *    (`DeviceSlice.restart`, `restartHolds`), node offline or not: the stop
+ *    takes the node down too, so the tailnet's offline is a restart's, not a
+ *    sleep's. A door that ANSWERS on a node the tailnet lists outranks it
+ *    (`awake`: the daemon is speaking). A code value only: no reader draws it
+ *    as a word.
+ *  - `asleep`: the tailnet says it is not online, and no announced restart
+ *    stands.
  *  - `incompatible`: its door refused our contracts major (the link's pin);
  *    it is not asked until this daemon restarts. */
 export const DeviceState = z.enum(["awake", "restarting", "asleep", "incompatible"]);
@@ -216,6 +258,10 @@ export const DeviceInfo = z
     productEndpoint: ProductEndpoint.optional(),
     bootId: z.string().min(1).max(DEVICE_LIMITS.BOOT_ID_CHARS).optional(),
     publishedAt: z.number().int().optional(),
+    /** DS — the slice's announced restart, copied at intake: the device's
+     * claim, with `state` the roster's verdict on it. Absent on a row with no
+     * slice; tolerant the same way. */
+    restart: DeviceRestartField,
     self: z.boolean(),
     online: z.boolean(),
     lastSeenAt: z.number().int(),

@@ -13,10 +13,12 @@ import {
   DeviceUnidentifiedDetails,
   KnownPhone,
   RefusedDevice,
+  restartHolds,
 } from "../src/devices";
 import { ErrorData, RPC_ERROR_CODES } from "../src/errors";
-import { PORTS } from "../src/registries";
+import { DEVICE_RESTART, PORTS } from "../src/registries";
 import { appVersionOfBuildId, commitOfBuildId } from "../src/release-identity";
+import { RestartScheduled } from "../src/update-policy";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 const golden = (name: string): Record<string, unknown> =>
@@ -353,5 +355,42 @@ describe("DS — the restart announcement on the slice and the row", () => {
       expect(parsedRow.data?.restart, JSON.stringify(restart)).toBeUndefined();
       expect(parsedRow.data?.state).toBe("restarting");
     }
+  });
+});
+
+// DS — the field is fieldd's own RestartScheduled, and `restartHolds` is the one reading of it.
+describe("DS — the announcement is RestartScheduled, held for the reader's TTL", () => {
+  it("is fieldd's own RestartScheduled, the same object, on both shapes", () => {
+    // pinned BY IDENTITY: a parse alone would carry a raw key through the passthrough
+    expect(DeviceSlice.shape.restart.removeCatch().unwrap()).toBe(RestartScheduled);
+    expect(DeviceInfo.shape.restart.removeCatch().unwrap()).toBe(RestartScheduled);
+    // the local carrier's golden IS a slice's announcement
+    const scheduled = RestartScheduled.parse(golden("restart-scheduled.valid.json"));
+    const announced = DeviceSlice.parse({
+      ...golden("device-slice.valid.json"),
+      restart: scheduled,
+    });
+    expect(announced.restart).toEqual(scheduled);
+  });
+
+  it("restartHolds: from `at` for the reader's TTL, and never for a far-future `at`", () => {
+    const restart = RestartScheduled.parse(golden("restart-scheduled.valid.json"));
+    const ttl = DEVICE_RESTART.ANNOUNCE_TTL_MS;
+    const skew = DEVICE_RESTART.MAX_CLOCK_SKEW_MS;
+    expect(restartHolds(undefined, restart.at)).toBe(false);
+    expect(restartHolds(restart, restart.at)).toBe(true);
+    expect(restartHolds(restart, restart.at + ttl - 1)).toBe(true);
+    // the TTL is the end: after it, the ordinary rules
+    expect(restartHolds(restart, restart.at + ttl)).toBe(false);
+    // a publisher's clock a little ahead of ours is still read…
+    expect(restartHolds(restart, restart.at - skew)).toBe(true);
+    // …and one further ahead cannot pin the device
+    expect(restartHolds(restart, restart.at - skew - 1)).toBe(false);
+  });
+
+  it("bounds the publish inside the TTL, and the TTL is minutes, not forever", () => {
+    expect(DEVICE_RESTART.PUBLISH_BOUND_MS).toBeLessThan(DEVICE_RESTART.ANNOUNCE_TTL_MS);
+    expect(DEVICE_RESTART.ANNOUNCE_TTL_MS).toBeLessThanOrEqual(10 * 60_000);
+    expect(DEVICE_RESTART.MAX_CLOCK_SKEW_MS).toBeLessThan(DEVICE_RESTART.ANNOUNCE_TTL_MS);
   });
 });

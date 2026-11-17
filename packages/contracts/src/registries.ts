@@ -2071,6 +2071,26 @@ export const PHONE_BUDGET = {
   WEB_VIEWS: 1,
 } as const;
 
+/** DS — the restart announcement (WP12 L2b's owed phone/peer half). A desktop whose update stops the floor takes its
+ * NODE down too, so the tailnet says offline, which alone reads `asleep`. Before the stop the desktop writes
+ * `DeviceSlice.restart {reason, planes, at}`, and a reader holds that device `restarting` (`restartHolds` in
+ * devices.ts). Nothing a person reads says so: a desktop held this way is drawn as it was just before.
+ *  - ANNOUNCE_TTL_MS: how long, from `at`, an announcement holds. The READER's number, never the publisher's, so no
+ *    device stretches ONE announcement past it (a fresh `at` is a new announcement, and a door that answers outranks
+ *    any: `deviceState`). Five minutes covers the slowest planned path that relaunches: the daemons' stop, the
+ *    update's staging and the install quit, then the relaunch, the floor, the node and fieldd's first publish. An
+ *    update that never relaunches reads `restarting` for at most this long, then `asleep`.
+ *  - MAX_CLOCK_SKEW_MS: an `at` up to this far ahead of the reader's clock is still read; one further ahead is not,
+ *    so a device with a wild clock cannot pin itself `restarting`.
+ *  - PUBLISH_BOUND_MS: how long fieldd waits for the announcement's write before the stop goes on anyway. A wedged
+ *    mesh never holds an update the person consented to.
+ * TS-only: field-native carries the slice as opaque JSON and reads none of it. */
+export const DEVICE_RESTART = {
+  ANNOUNCE_TTL_MS: 300_000,
+  MAX_CLOCK_SKEW_MS: 5_000,
+  PUBLISH_BOUND_MS: 2_000,
+} as const;
+
 /** The freeway's numbers (FW-D1…D7; `draft/thinking-freeway.md` v0.3 §3, §5, §6). The link adds
  * no message bound of its own: a stream's message bound is its plane's (`terminal-leg` = TPv3's,
  * `product` = the door's).
