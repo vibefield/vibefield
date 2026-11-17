@@ -47,6 +47,24 @@ export interface WindowRowFacts {
   readonly sessionByRow: ReadonlyMap<string, string>;
   /** the deck's visual ids, by floor session (a launcher hand-off's transfer) */
   readonly visualIds: ReadonlyMap<string, string> | undefined;
+  /**
+   * SB-3 — where a terminal asked for by a hold was let go, by floor session,
+   * asked when the rows are BUILT (`useMonitorAgents`' `hintFor`: the door's
+   * answer, else a create in flight claiming its first new terminal row).
+   *
+   * The replica joins the same point (`setLocal({ spawnHints })`), but only
+   * after this window's next render, and a view is handed a new row in the
+   * frame the replica publishes it (M7: one frame scheduler for both). A row
+   * that beats that render, as the deck's opening shell does while its create
+   * still waits for the deck (L20), reached the swarm unstamped: the physics
+   * reads the point only when it creates the body, so a second body stood
+   * beside the birth drawn at the release point until the birth was given up
+   * (item 382, asked for 2026-11-13). Stamped here, the row carries it the
+   * first time any view reads it. Absent: nothing creates from this window.
+   */
+  readonly spawnHintFor?:
+    | ((sessionId: string) => { readonly x: number; readonly y: number } | undefined)
+    | undefined;
 }
 
 export interface WindowRows {
@@ -57,6 +75,7 @@ export interface WindowRows {
 interface Patched {
   readonly stale: boolean;
   readonly visualId: string;
+  readonly spawnHint: AgentView["spawnHint"];
   readonly row: AgentView;
 }
 
@@ -114,16 +133,23 @@ export function createWindowRows(): WindowRows {
         if (bodies.has(visualId)) continue;
         bodies.add(visualId);
         const stale = row.device.self ? row.stale : facts.standing.get(row.device.id) !== "live";
+        // SB-3: the release point on the first read (`spawnHintFor`), the replica's once it joined it
+        const spawnHint =
+          row.spawnHint ??
+          (row.device.self && row.kind === "terminal"
+            ? facts.spawnHintFor?.(session ?? row.id)
+            : undefined);
         if (
           row.stale === stale &&
           (row.device.self || row.profileSet === undefined) &&
-          (row.visualId ?? row.id) === visualId
+          (row.visualId ?? row.id) === visualId &&
+          row.spawnHint === spawnHint
         ) {
           rows.push(row);
           continue;
         }
         const held = patched.get(row);
-        if (held?.stale === stale && held.visualId === visualId) {
+        if (held?.stale === stale && held.visualId === visualId && held.spawnHint === spawnHint) {
           rows.push(held.row);
           continue;
         }
@@ -133,8 +159,9 @@ export function createWindowRows(): WindowRows {
           stale,
           ...(row.device.self && profileSet !== undefined ? { profileSet } : {}),
           ...(visualId !== row.id ? { visualId } : {}),
+          ...(spawnHint !== undefined ? { spawnHint } : {}),
         });
-        patched.set(row, { stale, visualId, row: made });
+        patched.set(row, { stale, visualId, spawnHint, row: made });
         rows.push(made);
       }
       // the seam carried forward only the rows it drew

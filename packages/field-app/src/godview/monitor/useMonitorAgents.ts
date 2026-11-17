@@ -381,6 +381,41 @@ export function useMonitorAgents({
   const joinsRef = useRef(joins);
   joinsRef.current = joins;
 
+  // ── SB-3: where each born terminal was asked for ─────────────────────────
+  /** By the FLOOR SESSION the door's answer named; a claim (`hintFor`) stands
+   * in until the answer. The ref is what `hintFor` reads, set with the answer
+   * and before any render; the state is its copy, for this window's renders. */
+  const [spawnHints, setSpawnHints] = useState<ReadonlyMap<string, { x: number; y: number }>>(
+    () => new Map(),
+  );
+  const answeredHints = useRef(spawnHints);
+  // A new terminal's spawn hint, from its row's FIRST appearance. The views'
+  // physics reads a row's `spawnHint` only when it CREATES the body, and the
+  // new shell's row can reach the stage before the door answers — a hint
+  // stamped only on the answer came too late. So while a create is in flight,
+  // the first NEW terminal row seen after it started (one no row stood for then)
+  // takes its position; the door's answer stamps the session it names, which
+  // corrects a claim that was another's.
+  //
+  // Item 382 (2026-11-13): "seen" is by whoever reads the row first, and that
+  // is a VIEW when the board's row beats this window's render (the replica
+  // publishes to the view slot in one frame, M7). So `hintFor` reads refs
+  // alone and is handed to the window's rows (`spawnHintFor`), which stamp the
+  // row as they build it; this window's render then finds the same claim.
+  const pendingSpawns = useRef<PendingSpawn[]>([]);
+  const [spawnsVersion, setSpawnsVersion] = useState(0);
+  const hintFor = useCallback((sessionId: string): { x: number; y: number } | undefined => {
+    const answered = answeredHints.current.get(sessionId);
+    if (answered !== undefined) return answered;
+    const spawns = pendingSpawns.current;
+    const claim = spawns.find((spawn) => spawn.claimed === sessionId);
+    if (claim !== undefined) return claim.position;
+    const open = spawns.find((spawn) => spawn.claimed === undefined);
+    if (open === undefined || open.known.has(sessionId)) return undefined;
+    open.claimed = sessionId;
+    return open.position;
+  }, []);
+
   // ── the rows as the views read them ──────────────────────────────────────
   const windowRows = useMemo(createWindowRows, []);
   const standingKey = feedFacts.devices.map((entry) => `${entry.device}:${entry.state}`).join("\n");
@@ -399,9 +434,10 @@ export function useMonitorAgents({
       sessionByRow: joins.sessionByRow,
       visualIds: panes.terminalVisualIds,
       transitions: panes.transitions,
+      spawnHintFor: hintFor,
     }),
     // keyed by the facts, never by the arrays the deck and the feed republish
-    [standingKey, orderKey, joins, visualKey, panes.transitions],
+    [standingKey, orderKey, joins, visualKey, panes.transitions, hintFor],
   );
   /** Every row, in the stage's order, patched for this window (no device filter). */
   const agents = windowRows.rowsFor(model, rowFacts);
@@ -473,41 +509,18 @@ export function useMonitorAgents({
   /** Which row the user last pointed at — a preview highlight for a row no
    * pane is showing yet. Cleared when the row lands in a pane. */
   const [selectedId, setSelectedId] = useState<string>();
-  /** SB-3 — where each born terminal was asked for, by the FLOOR SESSION the
-   * door's answer named; a claim (`hintFor`) stands in until the answer. */
-  const [spawnHints, setSpawnHints] = useState<ReadonlyMap<string, { x: number; y: number }>>(
-    () => new Map(),
-  );
   /** DS-4 — a peer row's local replica, by ROW id, from the attach that put it there. */
   const [links, setLinks] = useState<ReadonlyMap<string, string>>(() => new Map());
   const [acknowledgement, setAcknowledgement] = useState<MonitorAcknowledgement | null>(null);
 
-  // SB-3 — a new terminal's spawn hint, from its row's FIRST appearance. The
-  // views' physics reads a row's `spawnHint` only when it CREATES the body, and
-  // the new shell's row can reach the stage before the door answers — a hint
-  // stamped only on the answer came too late. So while a create is in flight,
-  // the first NEW terminal row seen after it started (one no row stood for then)
-  // takes its position; the door's answer stamps the session it names, which
-  // corrects a claim that was another's.
-  const pendingSpawns = useRef<PendingSpawn[]>([]);
-  const [spawnsVersion, setSpawnsVersion] = useState(0);
+  // SB-3 — the replica's join of the spawn hints (`hintFor`, above): the rows a
+  // create in flight may NOT claim are the terminals that stood when it started.
   const knownTerminals = useRef<ReadonlySet<string>>(new Set());
   knownTerminals.current = new Set([
     ...panes.sessionIds,
     ...(panes.floor ?? []).map((row) => row.sessionId),
     ...joins.terminalRows.map((id) => joins.sessionByRow.get(id) ?? id),
   ]);
-  const hintFor = (sessionId: string): { x: number; y: number } | undefined => {
-    const answered = spawnHints.get(sessionId);
-    if (answered !== undefined) return answered;
-    const spawns = pendingSpawns.current;
-    const claim = spawns.find((spawn) => spawn.claimed === sessionId);
-    if (claim !== undefined) return claim.position;
-    const open = spawns.find((spawn) => spawn.claimed === undefined);
-    if (open === undefined || open.known.has(sessionId)) return undefined;
-    open.claimed = sessionId;
-    return open.position;
-  };
   const terminalSessionsKey = joins.terminalRows
     .map((id) => joins.sessionByRow.get(id) ?? id)
     .join("\n");
@@ -520,7 +533,7 @@ export function useMonitorAgents({
     }
     return result;
     // the claims' own clock rides along: `hintFor` reads the claims it versions
-  }, [spawnHints, terminalSessionsKey, spawnsVersion]);
+  }, [spawnHints, terminalSessionsKey, spawnsVersion, hintFor]);
 
   // The deck replaces a completed agent with a shell. Keep its attached body
   // while the native outcome is pending, then through the clean-exit handoff;
@@ -835,8 +848,12 @@ export function useMonitorAgents({
         throw refuse(`terminal could not be opened${under} — ${outcome.reason}`);
       }
       // the door's answer names the session: its row keeps the position from
-      // here on, whichever row claimed it first
-      if (position) setSpawnHints((current) => new Map(current).set(outcome.sessionId, position));
+      // here on, whichever row claimed it first. The ref first: a row read
+      // before this window renders the answer finds it there (item 382).
+      if (position) {
+        answeredHints.current = new Map(answeredHints.current).set(outcome.sessionId, position);
+        setSpawnHints(answeredHints.current);
+      }
       // GV-D4 (re-ruled 2026-10-18): it opened in the pane the person was in
       if (profileSet !== undefined && outcome.profileSet === undefined) {
         // asked with a profile, answered without one: a daemon older than the
