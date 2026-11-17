@@ -92,8 +92,9 @@ interface Wiring {
   hold?: (signed: Signed) => Promise<boolean>;
 }
 
-/** An installer and a catalog, wired as daemon.ts wires them: the floor and the hand-over. The
- * catalog's picture reads are counted. */
+/** An installer and a catalog, wired as daemon.ts wires them: the floor, the hand-over, and the
+ * installer's updates memory, which the catalog reads with (N24's second half). The catalog's
+ * picture reads are counted. */
 async function wired(reg: Registry, opts: Wiring = {}) {
   const dataDir = temp("vf-holds-data-");
   const installedRoot = join(dataDir, "plugins", "installed");
@@ -126,6 +127,7 @@ async function wired(reg: Registry, opts: Wiring = {}) {
         listingReads.push(path);
         return installer.fetchListingFile(indexRef, path, read);
       },
+      updatesRead: installer.updatesRead,
     },
     plugins,
     logger,

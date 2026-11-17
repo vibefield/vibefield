@@ -16,11 +16,11 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "./native-link";
 import {
   type ListingFileRead,
-  logUpdatesRead,
   REGISTRY_FETCH_TIMEOUT_MS,
   type RegistryInstallService,
   readFileCapped,
   semverNewer,
+  UpdatesReadLog,
 } from "./plugin-install";
 import { contractsRangeSatisfied, type PluginRegistryService } from "./plugin-registry";
 
@@ -91,10 +91,13 @@ interface Picture {
 
 export interface PluginCatalogConfig {
   dataDir: string;
+  /** N24's second half (2026-11-17): an installer with an `updatesRead` (the real one) lends it to the catalog's read,
+   * so that read and the installer's `updatesCheck` share what their updates lines said. An installer without one
+   * (an object a test writes) leaves the catalog its own. */
   installer: Pick<
     RegistryInstallService,
     "registryConfigured" | "fetchSignedIndex" | "verifyIndex" | "parseIndex" | "fetchListingFile"
-  >;
+  > & { readonly updatesRead?: UpdatesReadLog };
   plugins: Pick<PluginRegistryService, "list">;
   logger?: Logger;
   now?: () => number;
@@ -135,12 +138,16 @@ export class PluginCatalogService {
   private readonly saidPictures = new Set<string>();
   /** MK-O3 (O3-B): the floor and the write, one at a time, for the person's read and an install's hand-over alike */
   private writes: Promise<void> = Promise.resolve();
+  /** N24's second half (2026-11-17): a plugin's updates line is said once while it stands (`UpdatesReadLog`), in the
+   * installer's memory where it has one */
+  private readonly updatesRead: UpdatesReadLog;
 
   constructor(private readonly cfg: PluginCatalogConfig) {
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "plugin.catalog" });
     this.dir = join(cfg.dataDir, ...LAYOUT.PLUGIN_CATALOG_DIR);
     this.heldPath = join(cfg.dataDir, ...LAYOUT.PLUGIN_CATALOG_HELD_FILE);
     this.now = cfg.now ?? Date.now;
+    this.updatesRead = cfg.installer.updatesRead ?? new UpdatesReadLog();
   }
 
   /** Answers at once, from the list fieldd holds. Never starts a read. */
@@ -242,8 +249,9 @@ export class PluginCatalogService {
       return this.answerFrom(outcome.kept, this.lastRead);
     }
     this.lastRead = "ready";
-    // MK-UC (2026-11-14): what this read can't update for a plugin you have goes to the log, as `updatesCheck`'s does
-    logUpdatesRead(this.log, this.cfg.plugins.list(), index);
+    // MK-UC (2026-11-14): what this read can't update for a plugin you have goes to the log, as `updatesCheck`'s does;
+    // N24's second half (2026-11-17): once while it stands, since this read runs at each open of the popup
+    this.updatesRead.say(this.log, this.cfg.plugins.list(), index);
     // MK-2e: the pictures this list pins, inside the person's read; `get` says reading until the phase ends
     await this.picturesPhase(index, signed.indexRef);
     return this.answerFrom({ index, checkedAt: outcome.checkedAt }, "ready");

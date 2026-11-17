@@ -232,41 +232,64 @@ export function semverNewer(candidate: string, installed: string): boolean {
   return false;
 }
 
-/** MK-UC (2026-11-14; DESIGN.md §8 "The updates flow", owed (MK) until now): what a read of the plugin list says of
- * a plugin you have that it can't update goes to the log, one line each — a newer release that needs a newer
- * VibeField, with the floors that are VibeField's insides, and a plugin the list no longer names. Both reads call it:
- * `updatesCheck`, and the popup's (`PluginCatalogService.refresh`). Nothing here reaches a window. */
-export function logUpdatesRead(
-  log: Logger,
-  installed: ReadonlyArray<{
-    readonly id: string;
-    readonly version: string;
-    readonly source: string;
-  }>,
-  index: RegistryIndex,
-): void {
-  for (const record of installed) {
-    if (record.source !== "registry") continue;
-    const entry = index.plugins[record.id];
-    if (entry === undefined) {
-      log.info("fieldd.plugin_updates.unlisted", "A plugin you have is no longer listed", {
-        pluginId: record.id,
-        installedVersion: record.version,
-      });
-      continue;
+/** MK-UC (2026-11-14; DESIGN.md "The updates flow"): what a read of the plugin list says of a plugin you have that it
+ * can't update goes to the log, one line each — a newer release that needs a newer VibeField, with the floors that
+ * are VibeField's insides, and a plugin the list no longer names. Both reads say them: `updatesCheck`, and the
+ * popup's (`PluginCatalogService.refresh`). Nothing here reaches a window.
+ *
+ * N24's second half (2026-11-17): a plugin's line is said once while it stands, not on every read. The popup reads
+ * the list on each open, so a plugin that stays behind was said again at every open. A line that changes (another
+ * release, other floors, the version you have) is said again; one that clears (listed again, an update this VibeField
+ * takes, the plugin gone from this desktop) is forgotten, so its return is said. What was said is kept in memory
+ * alone, as the catalog's held refusal is (`plugin-catalog.ts`), so a restart says each standing line once more. The
+ * installer keeps one (`RegistryInstallService.updatesRead`), and the catalog given that installer reads with it, so
+ * neither read says again what the other said. */
+export class UpdatesReadLog {
+  /** each plugin's line as last said, by id: only plugins whose line stands */
+  private said = new Map<string, string>();
+
+  /** One read's lines, each said only where it is new. */
+  say(
+    log: Logger,
+    installed: ReadonlyArray<{
+      readonly id: string;
+      readonly version: string;
+      readonly source: string;
+    }>,
+    index: RegistryIndex,
+  ): void {
+    const standing = new Map<string, string>();
+    for (const record of installed) {
+      if (record.source !== "registry") continue;
+      const entry = index.plugins[record.id];
+      if (entry === undefined) {
+        const line = JSON.stringify(["unlisted", record.version]);
+        standing.set(record.id, line);
+        if (this.said.get(record.id) !== line)
+          log.info("fieldd.plugin_updates.unlisted", "A plugin you have is no longer listed", {
+            pluginId: record.id,
+            installedVersion: record.version,
+          });
+        continue;
+      }
+      const { version, minApp, minContracts } = entry.latest;
+      if (
+        !semverNewer(version, record.version) ||
+        contractsRangeSatisfied(CONTRACTS_VERSION, minContracts)
+      )
+        continue;
+      const line = JSON.stringify(["incompatible", record.version, version, minApp, minContracts]);
+      standing.set(record.id, line);
+      if (this.said.get(record.id) !== line)
+        log.info("fieldd.plugin_updates.incompatible", "An update needs a newer VibeField", {
+          pluginId: record.id,
+          installedVersion: record.version,
+          version,
+          minApp,
+          minContracts,
+        });
     }
-    if (
-      semverNewer(entry.latest.version, record.version) &&
-      !contractsRangeSatisfied(CONTRACTS_VERSION, entry.latest.minContracts)
-    ) {
-      log.info("fieldd.plugin_updates.incompatible", "An update needs a newer VibeField", {
-        pluginId: record.id,
-        installedVersion: record.version,
-        version: entry.latest.version,
-        minApp: entry.latest.minApp,
-        minContracts: entry.latest.minContracts,
-      });
-    }
+    this.said = standing;
   }
 }
 
@@ -277,6 +300,9 @@ export class RegistryInstallService {
   /** MK-2b (2026-11-11, L1): a list's dropped carriers are said once per its `generatedAt`, not on every
    * read of it */
   private readonly droppedLogged = new Set<number>();
+  /** N24's second half (2026-11-17): a plugin's updates line is said once while it stands (`UpdatesReadLog`). The
+   * catalog given this installer reads with this one too (`plugin-catalog.ts`), so the two reads share it. */
+  readonly updatesRead = new UpdatesReadLog();
 
   constructor(private readonly cfg: RegistryInstallConfig) {
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "plugin.install" });
@@ -758,8 +784,9 @@ export class RegistryInstallService {
   /** §5.3.1 — user-initiated batch check; never a background feed. */
   async updatesCheck(): Promise<PluginsUpdatesCheckResult> {
     const { index } = await this.fetchIndex();
-    // MK-UC: what it can't update goes to the log too, never only to its caller
-    logUpdatesRead(this.log, this.cfg.plugins.list(), index);
+    // MK-UC: what it can't update goes to the log too, never only to its caller; N24's second half: once while
+    // it stands, and not again for a line the popup's read said
+    this.updatesRead.say(this.log, this.cfg.plugins.list(), index);
     const updates: PluginUpdateInfo[] = [];
     const missing: string[] = [];
     for (const record of this.cfg.plugins.list()) {

@@ -5547,6 +5547,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     floors, and a plugin the list no longer names as `fieldd.plugin_updates.unlisted`. Both
     reads say them: `updatesCheck`, which Settings → Plugins' old updates row asks, and the popup's
     own read once it lands (`plugins.catalog.refresh`). Neither line reaches a window.
+    *Built 2026-11-17 (MK, N24's second half):* both reads, `updatesCheck` and the popup's own
+    (`plugins.catalog.refresh`), log a read's incompatible and vanished entries and share one
+    memory, the installer's: a plugin's line is said once while it stands, and again when it changes
+    (another release, other floors, the version you have) or comes back after it cleared. That
+    memory is kept in fieldd's process alone, so a standing line is said once more after fieldd
+    starts again. The rule "once while a line stands", ruled by VF-PM 2026-11-17 17:55:44Z, amends
+    "each read logs them" in MK-UC's rider above.
     *To be built by track MK. Until then* Settings → Plugins keeps its section-top "updates ▸"
     disclosure (`panels/PluginUpdates.tsx`), which never checks on its own: opening it reveals a
     "check for updates" action, and nothing fetches on mount, on expand or on a timer. A compatible
