@@ -22,7 +22,11 @@ import {
   setDeckAppearance,
   subscribeDeckAppearance,
 } from "../src/godview/deck-appearance";
-import { godviewTerminalEffects } from "../src/godview/deck-theme";
+import {
+  findDeckColorTheme,
+  godviewTerminalEffects,
+  godviewTerminalTheme,
+} from "../src/godview/deck-theme";
 
 beforeEach(() => resetDeckAppearanceForTest());
 afterEach(() => resetDeckAppearanceForTest());
@@ -320,5 +324,30 @@ describe("Godview's ground is the covers' tint, not a setting", () => {
     expect(rule).toMatch(/--vf-godview-stage-opacity: 72%;/);
     expect(rule).not.toMatch(/backdrop-filter/);
     expect(css).not.toMatch(/--vf-godview-stage-blur/);
+  });
+});
+
+/**
+ * The nets under a pane's text (TL-1; DESIGN.md §8 "What a pane's text is held to"). The deck hands
+ * its surfaces a theme of its own, and ghosttea reads a theme's nets off the theme: a theme that
+ * leaves them out draws with both OFF, whatever the floor's configuration says.
+ */
+describe("the nets under a pane's text", () => {
+  it("hands every pane a 3:1 contrast floor and light adaptation on auto, by day and by night, on the deck's own pair and on a catalog theme", () => {
+    const catalog = {
+      ...DEFAULT_DECK_APPEARANCE,
+      lightThemeName: "iTerm2 Solarized Light",
+      darkThemeName: "iTerm2 Solarized Dark",
+    };
+    // the catalog names resolve: otherwise both rows below would read the deck's own pair twice
+    expect(findDeckColorTheme(catalog.lightThemeName)).toBeDefined();
+    expect(findDeckColorTheme(catalog.darkThemeName)).toBeDefined();
+    for (const appearance of [DEFAULT_DECK_APPEARANCE, catalog]) {
+      for (const mode of ["light", "dark"] as const) {
+        const theme = godviewTerminalTheme(appearance, mode);
+        expect(theme.minimumContrast, `${appearance.lightThemeName} ${mode}`).toBe(3);
+        expect(theme.lightAdaptation, `${appearance.lightThemeName} ${mode}`).toBe("auto");
+      }
+    }
   });
 });
