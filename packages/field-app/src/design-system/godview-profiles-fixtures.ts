@@ -343,6 +343,68 @@ export const SPAWN_BLOOM_SETS: readonly AgentProfileSet[] = [
   },
 ];
 
+/** PU-R — the spawn bloom's usage, so each bud wears its profile's circle (DESIGN.md §8 "Hold, reach, let go"): This
+ * Mac's own sign-in reads 72% of its 5 hours at half time, ahead of pace (orange), and 30% of its week; Work's first
+ * agent reads 42% of 5 hours and 61% of 7 days, and its second needs a sign-in (O5, the needs-you specimen: its
+ * dashed thread beside the reading); Demo holds no sign-in, so its bud is plain and says "No meters". Each time is
+ * `now`'s, so no reading is old. Read through the port's one feed, as the stage reads it. */
+export function spawnBloomUsage(now: Date): MonitorUsagePort {
+  const at = (minutes: number): string => new Date(now.getTime() + minutes * 60_000).toISOString();
+  const window = (
+    id: string,
+    label: string,
+    usedPercent: number,
+    minutes: number,
+    left: number,
+  ) => ({
+    id,
+    label,
+    kind: "window",
+    usedPercent,
+    durationMinutes: minutes,
+    resetsAt: at(left),
+  });
+  const rows: AgentAccountUsageEntry[] = [
+    {
+      provider: FIRST_AGENT.id,
+      label: FIRST_AGENT.label,
+      state: "available",
+      metrics: [
+        window("five-hour", "5H", 72, 300, 150),
+        window("seven-day", "7D", 30, 10_080, 5_760),
+      ],
+      fetchedAt: at(-1),
+    },
+    {
+      provider: FIRST_AGENT.id,
+      label: FIRST_AGENT.label,
+      profileId: `work-${FIRST_AGENT.id}`,
+      state: "available",
+      metrics: [
+        window("five-hour", "5H", 42, 300, 120),
+        window("seven-day", "7D", 61, 10_080, 2_880),
+      ],
+      fetchedAt: at(-1),
+    },
+    {
+      provider: SECOND_AGENT.id,
+      label: SECOND_AGENT.label,
+      profileId: `work-${SECOND_AGENT.id}`,
+      state: "unauthenticated",
+      metrics: [],
+      fetchedAt: at(-1),
+    },
+  ];
+  return {
+    ...NO_USAGE,
+    subscribeRows: (listener) => {
+      listener(rows);
+      return () => undefined;
+    },
+    refresh: async () => undefined,
+  };
+}
+
 /** One terminal the catalog's create answered, and the profile it was born under. */
 export interface CatalogBirth {
   sessionId: string;
@@ -366,7 +428,8 @@ function birthSession(birth: CatalogBirth, index: number): SessionSummary {
  * facts, and listing the shell on the board's floor under its profile (SB-3),
  * which is where the new body's row comes from. */
 export function spawnBloomDoor(onBorn: (birth: CatalogBirth) => void): MonitorDoor {
-  const rows = fixtureRows(SPAWN_ROWS, new Date().toISOString());
+  const now = new Date();
+  const rows = fixtureRows(SPAWN_ROWS, now.toISOString());
   const board = catalogModelBoard({ device: THIS_MAC, rows, profiles: SPAWN_BLOOM_SETS });
   let births = 0;
   return {
@@ -386,7 +449,7 @@ export function spawnBloomDoor(onBorn: (birth: CatalogBirth) => void): MonitorDo
     },
     mountLocal: async () => ({ state: "no-pane" }),
     transcripts: NO_HISTORY,
-    usage: NO_USAGE,
+    usage: spawnBloomUsage(now),
     profiles: {
       subscribe: (listener) => {
         listener(SPAWN_BLOOM_SETS);

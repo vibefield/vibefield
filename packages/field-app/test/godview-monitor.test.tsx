@@ -4011,6 +4011,164 @@ describe("the spawn bloom, driven (SB-3)", () => {
   });
 });
 
+// ---- PU-R — a spawn bloom bud wears its profile's circle ----------------------
+//
+// DESIGN.md §8 "Hold, reach, let go": the stage reads the usage rows once, through the port's one subscription, and
+// each profile's bud wears that profile's Bands circle, handed as strokes on the spawn menu (`useSpawnFuel`). The
+// circle itself is held literal by `godview-spawn-menu.test.ts`; these rows hold the wiring and the open bloom.
+
+/** A usage port that hands its rows at once, as fieldd's feed does. */
+const rowsUsage = (rows: readonly AgentAccountUsageEntry[]): MonitorUsagePort => ({
+  ...emptyUsage(),
+  subscribeRows: (listener) => {
+    listener(rows);
+    return () => undefined;
+  },
+});
+
+/** A usage port that hands its rows at once, and hands new ones when told. */
+function liveUsage(
+  rows: readonly AgentAccountUsageEntry[],
+): MonitorUsagePort & { push(next: readonly AgentAccountUsageEntry[]): void } {
+  let listener: ((next: readonly AgentAccountUsageEntry[]) => void) | null = null;
+  return {
+    ...emptyUsage(),
+    subscribeRows: (next) => {
+      listener = next;
+      next(rows);
+      return () => {
+        listener = null;
+      };
+    },
+    push: (next) => listener?.(next),
+  };
+}
+
+const fuelClock = (minutes: number): string =>
+  new Date(Date.now() + minutes * 60_000).toISOString();
+/** Work's Claude sign-in, read a minute ago: `used` of its five hours, half of them gone. */
+const workReading = (used: number): AgentAccountUsageEntry => ({
+  provider: "claude",
+  label: "Claude",
+  profileId: "w-claude",
+  state: "available",
+  metrics: [
+    {
+      id: "5H",
+      label: "5H",
+      kind: "window",
+      usedPercent: used,
+      durationMinutes: 300,
+      resetsAt: fuelClock(150),
+    },
+  ],
+  fetchedAt: fuelClock(-1),
+});
+
+describe("PU-R — a spawn bloom bud wears its profile's circle", () => {
+  it("M1: the usage rows reach a profile's bud as its fuel, a word and its circle at 48 and 42", async () => {
+    await mountProbe(Object.assign(tabDoor(), { usage: rowsUsage([workReading(42)]) }));
+    const profiles = probed?.capabilities.spawn?.devices[0]?.profiles;
+    expect(profiles?.[1]?.id).toBe("work");
+    expect(profiles?.[1]?.fuel?.word).toBe("Claude Code: 42% of 5 hours");
+    expect(profiles?.[1]?.fuel?.drawn?.map((drawing) => drawing.size)).toEqual([48, 42]);
+    // This Mac and Empty hold no sign-in: no meters, and a plain bud
+    expect(profiles?.[0]?.fuel).toEqual({ word: "No meters" });
+  });
+
+  it("M2: usage the feed says cannot be read draws each plan as the retry's thread", async () => {
+    const usage: MonitorUsagePort = {
+      ...rowsUsage([workReading(42)]),
+      subscribeState: (listener) => {
+        listener({ state: "unavailable", reason: "usage refused" });
+        return () => undefined;
+      },
+    };
+    await mountProbe(Object.assign(tabDoor(), { usage }));
+    const fuel = probed?.capabilities.spawn?.devices[0]?.profiles?.[1]?.fuel;
+    expect(fuel?.word).toBe("usage unavailable");
+    expect(fuel?.drawn?.[0]?.arcs).toEqual([
+      expect.objectContaining({ tone: "ink", percent: 38, cap: "round" }),
+    ]);
+  });
+
+  it("M3 (guard): the same rows again keep the same menu object", async () => {
+    const usage = liveUsage([workReading(42)]);
+    await mountProbe(Object.assign(tabDoor(), { usage }));
+    const menu = probed?.capabilities.spawn;
+    await act(async () => usage.push([workReading(42)]));
+    await settle();
+    expect(probed?.capabilities.spawn).toBe(menu);
+  });
+
+  it("M4: Work's bud draws the strokes it was handed, and says its reading", async () => {
+    const door = Object.assign(bloomDoor(), { usage: rowsUsage([workReading(42)]) });
+    const { host, field } = await mountBloom(door);
+    await holdOpen(host, field);
+    const work = budOf(host, "profile", "work");
+    const drawn = work?.querySelector("svg.vf-bloom-fuel.is-drawn");
+    expect(drawn).not.toBeNull();
+    const arcs = [...(drawn?.querySelectorAll("path.vf-bloom-fuel-arc") ?? [])];
+    expect(arcs.length).toBeGreaterThan(0);
+    for (const arc of arcs) expect(["ink", "hot"]).toContain(arc.getAttribute("data-tone"));
+    expect(drawn?.querySelector("line.vf-bloom-fuel-notch")).not.toBeNull();
+    expect(work?.getAttribute("aria-label")).toContain("42% of 5 hours");
+  });
+
+  it("M5 (guard): rows that throw after a good read give plain buds, never the old circle", async () => {
+    const usage = liveUsage([workReading(42)]);
+    await mountProbe(Object.assign(tabDoor(), { usage }));
+    expect(probed?.capabilities.spawn?.devices[0]?.profiles?.[1]?.fuel).toBeDefined();
+    const failure = new Error("usage fixture lost its entries");
+    const throwing = new Proxy([] as AgentAccountUsageEntry[], {
+      get() {
+        throw failure;
+      },
+    });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await act(async () => usage.push(throwing));
+    await settle();
+    const profiles = probed?.capabilities.spawn?.devices[0]?.profiles;
+    expect(profiles?.map((profile) => profile.id)).toEqual(["native", "work", "empty"]);
+    for (const profile of profiles ?? []) expect(profile).not.toHaveProperty("fuel");
+  });
+
+  it("M6: a bloom held open when only the fuel moves keeps its buds and its hold; the next open draws the new circle", async () => {
+    const usage = liveUsage([workReading(42)]);
+    const door = Object.assign(bloomDoor(), { usage });
+    const { host, field } = await mountBloom(door);
+    await holdOpen(host, field);
+    const work = budOf(host, "profile", "work");
+    const drawn = work?.querySelector("svg.vf-bloom-fuel.is-drawn");
+    expect(drawn).not.toBeNull();
+    const strokes = drawn?.innerHTML;
+    // a new reading: the path a minute's moved notch takes too (a new map key, new capabilities)
+    await act(async () => {
+      usage.push([workReading(64)]);
+      await wait(40);
+    });
+    expect(budOf(host, "profile", "work")).toBe(work);
+    expect(bloomOf(host)?.getAttribute("data-bloom-state")).toBe("open");
+    expect(bloomOf(host)?.getAttribute("data-bloom-mode")).toBe("hold");
+    expect(work?.querySelector("svg.vf-bloom-fuel.is-drawn")?.innerHTML).toBe(strokes);
+    // let go on open ground (nothing opens), then hold again: the new reading
+    const away = { x: HOLD_AT.x, y: HOLD_AT.y + 260 };
+    await act(async () => {
+      pointer(field, "pointermove", { x: HOLD_AT.x, y: HOLD_AT.y + 130 });
+      pointer(field, "pointermove", away);
+      await wait(40);
+      pointer(field, "pointerup", away);
+      await wait(700);
+    });
+    expect(door.createTerminal).not.toHaveBeenCalled();
+    await holdOpen(host, field);
+    const again = budOf(host, "profile", "work")?.querySelector("svg.vf-bloom-fuel.is-drawn");
+    expect(again).not.toBeNull();
+    expect(again?.innerHTML).not.toBe(strokes);
+    expect(budOf(host, "profile", "work")?.getAttribute("aria-label")).toContain("64% of 5 hours");
+  });
+});
+
 // ---- MV-W4 — the motion a view may make ------------------------------------
 //
 // A ported view's loop stops while the viewer asks for reduced motion, or
@@ -4432,13 +4590,6 @@ describe("a chrome read cannot take down the monitor", () => {
         return Reflect.get(target, key, receiver);
       },
     });
-  const rowsUsage = (rows: readonly AgentAccountUsageEntry[]): MonitorUsagePort => ({
-    ...emptyUsage(),
-    subscribeRows: (listener) => {
-      listener(rows);
-      return () => undefined;
-    },
-  });
   /** a profile whose sign-in the column reads, so its meters read the rows */
   const READS = tabSet("work", "Work", [tabPersona("w-claude", "claude")], { glyph: "briefcase" });
   const withProfile = (door: FakeDoor): FakeDoor => ({

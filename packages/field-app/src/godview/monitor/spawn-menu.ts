@@ -1,4 +1,5 @@
 import { type AgentProfileSet, catalogEntry } from "@vibefield/contracts";
+import type { MonitorSpawnFuel } from "@vibefield/puppeteer-view-sdk";
 import type {
   MonitorSpawnMenu,
   MonitorSpawnProfile,
@@ -44,13 +45,16 @@ export function signedInLabels(set: AgentProfileSet): string[] {
  * first answers (letting go on it then opens an unbound terminal, today's
  * hold), then `ready` with its Agent Profiles in the tabs' order — the tab's
  * fields (`ProfileTab`, its orange dot included) plus who is signed in. One
- * profile is no choice: the views create at once, under it.
+ * profile is no choice: the views create at once, under it. PU-R, RED: the
+ * fuel map is taken and not yet worn.
  */
 export function spawnMenuOf(
   sets: readonly AgentProfileSet[] | null,
   tabs: readonly ProfileTab[],
   /** this desktop, in its platform's word (`thisDeviceWord`) */
   here: string = thisDeviceWord(undefined),
+  /** each profile's fuel by its set's id (`spawnFuelMap`). RED: not worn. */
+  _fuel?: ReadonlyMap<string, MonitorSpawnFuel>,
 ): MonitorSpawnMenu {
   if (sets === null) {
     return { devices: [{ id: HERE_DEVICE_ID, label: here, self: true, state: "reading" }] };

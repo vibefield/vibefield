@@ -1,6 +1,6 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import type { AgentProfileSet } from "@vibefield/contracts";
-import type { MonitorCapabilities } from "@vibefield/puppeteer-view-sdk";
+import type { MonitorCapabilities, MonitorSpawnFuel } from "@vibefield/puppeteer-view-sdk";
 import type { MonitorReplicaLike, ViewSlotCommands } from "@vibefield/puppeteer-view-sdk/host";
 import type {
   AgentView,
@@ -119,6 +119,9 @@ export interface UseMonitorAgentsOptions {
   /** Whether the door has a profiles feed at all: a host with none offers no
    * menu, and a hold creates at once, as before (SB-3). */
   hasProfiles?: boolean;
+  /** PU-R — each profile's fuel by its set's id (`useSpawnFuel`), worn by its spawn bloom bud; absent, every bud is
+   * plain. */
+  spawnFuel?: ReadonlyMap<string, MonitorSpawnFuel> | undefined;
   /** AR-S5 — the chosen profile tab's set id; every other row of this desktop
    * recedes (it keeps its place). Undefined: All. */
   chosenProfile?: string | undefined;
@@ -330,6 +333,7 @@ export function useMonitorAgents({
   profiles = NO_PROFILES,
   profilesRead = false,
   hasProfiles = false,
+  spawnFuel,
   chosenProfile,
   chosenPlanRuns,
   device = null,
@@ -486,10 +490,17 @@ export function useMonitorAgents({
     [placed, chosenProfile, chosenPlanRuns],
   );
 
-  // AR-S5 — the tabs and the spawn menu (SB-3), from the profiles feed and the rows
+  // AR-S5 — the tabs and the spawn menu (SB-3), from the profiles feed and the rows; PU-R: each bud's fuel. A fuel
+  // that moves (a minute's notch) is a new key, so new capabilities reach the view, never a remount, and an open
+  // bloom keeps the menu it opened with.
   const tabs = useMemo(() => profileTabs(profiles, agents), [profiles, agents]);
   const nextSpawnMenu = hasProfiles
-    ? spawnMenuOf(profilesRead ? profiles : null, tabs, thisDeviceWord(peekHost()?.platform))
+    ? spawnMenuOf(
+        profilesRead ? profiles : null,
+        tabs,
+        thisDeviceWord(peekHost()?.platform),
+        spawnFuel,
+      )
     : undefined;
   const spawnMenuKey = nextSpawnMenu === undefined ? "" : JSON.stringify(nextSpawnMenu);
   const spawnMenuRef = useRef<{ key: string; menu: MonitorSpawnMenu | undefined }>({

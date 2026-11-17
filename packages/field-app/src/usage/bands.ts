@@ -200,6 +200,23 @@ export function windowOf(window: MeterWindow): string {
   return `of ${window.lengthWords}${part !== undefined ? ` · ${part}` : ""}`;
 }
 
+/** A reading that says its age instead of a forecast or a reset: one kept after a refresh failed, or one with a
+ * window read before its reset (§9 "A reading"). */
+const aged = (entry: ReadingMeter): boolean =>
+  entry.right.kind === "kept" || entry.right.kind === "passed";
+
+/** A reading's age in words ("as of 5m ago") when it says one (`aged`), else "": the spawn bloom's words add it after
+ * the reading's head (PU-R, §9 "The spawn bloom's words"). */
+export function agedWords(entry: PlanMeter): string {
+  return entry.kind === "reading" && aged(entry) ? entry.right.words : "";
+}
+
+/** A reading's head alone, "Claude Max: 64% of 5 hours": its tightest window's figure and length, with no forecast,
+ * reset or age (the spawn bloom says the age after it; `bandsPlanWords` says the rest). */
+export function bandsReadingWords(entry: ReadingMeter): string {
+  return `${entry.title}: ${Math.round(entry.tightest.line.usedPercent)}% ${windowOf(entry.tightest)}`;
+}
+
 /** What the middle says under a plan at full size, and the end of its words: its forecast, its reset, the age of a
  * kept reading or of one with a window read before its reset, or what it needs. A reset is said only as a length
  * ("resets in 2h", §9 "The meters' words"): one a day or more off is Settings' day and clock, the reader's own zone
@@ -222,9 +239,7 @@ export function bandsSay(entry: PlanMeter): { words: string; hot: boolean } {
       return { words: "", hot: false };
     case "reading": {
       const window = entry.tightest;
-      if (entry.right.kind === "kept" || entry.right.kind === "passed") {
-        return { words: entry.right.words, hot: false };
-      }
+      if (aged(entry)) return { words: entry.right.words, hot: false };
       if (window.forecast !== undefined) return { words: window.forecast.short, hot: true };
       const reset = window.line.reset;
       if (reset === undefined || resetForm(window) !== "length") {
@@ -248,9 +263,7 @@ export function bandsPlanWords(entry: PlanMeter): string {
       return entry.title;
     case "reading": {
       const say = bandsSay(entry).words;
-      return `${entry.title}: ${Math.round(entry.tightest.line.usedPercent)}% ${windowOf(entry.tightest)}${
-        say !== "" ? `, ${say}` : ""
-      }`;
+      return `${bandsReadingWords(entry)}${say !== "" ? `, ${say}` : ""}`;
     }
   }
 }
@@ -292,9 +305,14 @@ const at = (c: number, r: number, angle: number): { x: number; y: number } => ({
   y: c + r * Math.sin(angle * DEG),
 });
 
+/** A number at two places, as every drawn number is printed (the paths here, the spawn bloom's handed strokes). */
+export function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 /** An arc as an SVG path, clockwise; a sweep past a half turn is two halves. */
 export function arcPath(c: number, arc: Pick<BandsArc, "r" | "from" | "to">): string {
-  const fixed = (value: number) => (Math.round(value * 100) / 100).toString();
+  const fixed = (value: number) => round2(value).toString();
   const { r, from, to } = arc;
   const start = at(c, r, from);
   const end = at(c, r, to);
@@ -459,8 +477,9 @@ const waiting = (entry: PlanMeter): boolean =>
   entry.kind === "first-read" || (entry.kind === "needs-you" && entry.need === "signing-in");
 
 /** The plan that decides the middle: the most pressed reading (its tightest by `outranks`, so a plan whose tightest was
- * read before its reset gives way to one still running), else the first read, else what needs you. */
-function decidingPlan(onCircle: readonly PlanMeter[]): PlanMeter | undefined {
+ * read before its reset gives way to one still running), else the first read, else what needs you. The spawn bloom's
+ * words name it too (`usage/spawn-fuel.ts`). */
+export function decidingPlan(onCircle: readonly PlanMeter[]): PlanMeter | undefined {
   let best: ReadingMeter | undefined;
   for (const entry of onCircle) {
     if (entry.kind !== "reading") continue;

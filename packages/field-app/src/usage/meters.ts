@@ -108,7 +108,8 @@ export interface MeterProfile {
   label: string;
 }
 
-interface MeterBase {
+/** What every meter carries whatever its kind. */
+export interface MeterBase {
   /** stable within the view: `plan:<id>`, or `agent:<profileId>` for an agent on no plan; in the union, the first
    * profile holding it, a slash, then that (`work/plan:anthropic`) */
   key: string;
@@ -267,6 +268,17 @@ const NEED_WORDS: Readonly<Record<MeterNeed, string>> = {
   retry: "couldn't read",
 };
 
+/** A plan that needs you, with the words at its right (§9): the one way such a meter is made, by the read below and
+ * by the spawn bloom, which draws a plan whose usage cannot be read as a retry (`usage/spawn-fuel.ts`). */
+export function needsYou(base: MeterBase, need: MeterNeed): NeedsYouMeter {
+  return {
+    ...base,
+    kind: "needs-you",
+    need,
+    right: { kind: "need", words: NEED_WORDS[need], hot: false, icon: false },
+  };
+}
+
 function profileOf(set: AgentProfileSet): MeterProfile {
   return {
     setId: set.id,
@@ -323,12 +335,7 @@ function readOf(
   }
   const usage = usageOf(rows, persona);
   const state = signInState(persona, usage);
-  const needs = (need: MeterNeed): NeedsYouMeter => ({
-    ...base,
-    kind: "needs-you",
-    need,
-    right: { kind: "need", words: NEED_WORDS[need], hot: false, icon: false },
-  });
+  const needs = (need: MeterNeed): NeedsYouMeter => needsYou(base, need);
   if (state === "expired") return needs("sign-in");
   if (
     usage !== undefined &&

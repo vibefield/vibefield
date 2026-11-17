@@ -66,6 +66,7 @@ import {
 } from "./monitor/useMonitorAgents";
 import { OsMark } from "./os-marks";
 import { ProfilesColumn } from "./profiles-column/ProfilesColumn";
+import { useSpawnFuel } from "./profiles-column/useSpawnFuel";
 
 const ACKNOWLEDGEMENT_MS = 2_600;
 
@@ -470,6 +471,44 @@ export function GodviewMonitor({
   /** P2 — whether the Peek listens for Live now's rows (the find door's
    * `subscribeRows`): the find join is made only while it does. */
   const [findWanted, setFindWanted] = useState(false);
+  const usagePort = door?.usage;
+  const [usageState, setUsageState] = useState<MonitorFeedState>({ state: "no-door" });
+  const [usageAttempt, setUsageAttempt] = useState(0);
+  // A failed profiles column is tried again only for a fact that can fix it: a
+  // new port (a new door) or the viewer's Retry. Never the model's rows (keyed
+  // on them, a persistent failure remounted on every publish, M176), and never
+  // the host update that follows the failure itself (the circle count it
+  // observes changes with it). A new key inside the boundary's window waits for
+  // its end (the backoff).
+  const profilesRetryKey = useMemo(() => ({ usagePort, usageAttempt }), [usagePort, usageAttempt]);
+  useEffect(() => {
+    setUsageState({ state: usagePort === undefined ? "no-door" : "loading" });
+    return usagePort?.subscribeState?.(setUsageState);
+  }, [usagePort]);
+  // AO-6b3, UM-3 — fieldd's usage rows through the port's ONE subscription,
+  // which this reader holds while the stage stands (UM-3a: the port opens it
+  // for its first reader): the profiles column, the spawn bloom's buds and the
+  // moment speak from them. The viewer's Retry is this reader leaving and coming
+  // back, which opens a refused subscription again; the rows it held stay until
+  // new ones answer.
+  const [usageRows, setUsageRows] = useState<readonly AgentAccountUsageEntry[] | null>(null);
+  useEffect(() => {
+    setUsageRows(null);
+  }, [usagePort]);
+  useEffect(() => profilesRetryKey.usagePort?.subscribeRows?.(setUsageRows), [profilesRetryKey]);
+  // a port with no rows feed never answers: its circles say the usage cannot be read, never a first read that never
+  // ends (the review; meters.ts NoMeterReason). The column and the buds read this one boolean.
+  const usageUnavailable =
+    usageState.state === "unavailable" || usagePort?.subscribeRows === undefined;
+  /** the column's sets: none until the feed has answered, or with no profiles door */
+  const columnSets = profilesPort !== undefined && profileSetsRead ? profileSets : null;
+  // PU-R — each spawn bloom bud wears its profile's circle (DESIGN.md §8 "Hold, reach, let go")
+  const spawnFuel = useSpawnFuel({
+    sets: columnSets,
+    rows: usageRows,
+    usageUnavailable,
+    port: usagePort,
+  });
   // MV-3b — THE WINDOW on the replica (`useMonitorAgents`): the backend's rows
   // through this window's one door, joined with the deck's panes, the chosen
   // profile and the chosen desktop; list and rain as SDK views on the window's
@@ -498,36 +537,13 @@ export function GodviewMonitor({
     profiles: profileSets,
     profilesRead: profileSetsRead,
     hasProfiles: profilesPort !== undefined,
+    spawnFuel,
     chosenProfile: chosenId,
     chosenPlanRuns: plan?.runs,
     device: deviceChoice,
     find: findWanted,
   });
   const chromeRef = useRef<HTMLDivElement>(null);
-  const usagePort = door?.usage;
-  const [usageState, setUsageState] = useState<MonitorFeedState>({ state: "no-door" });
-  const [usageAttempt, setUsageAttempt] = useState(0);
-  // A failed profiles column is tried again only for a fact that can fix it: a
-  // new port (a new door) or the viewer's Retry. Never the model's rows (keyed
-  // on them, a persistent failure remounted on every publish, M176), and never
-  // the host update that follows the failure itself (the circle count it
-  // observes changes with it). A new key inside the boundary's window waits for
-  // its end (the backoff).
-  const profilesRetryKey = useMemo(() => ({ usagePort, usageAttempt }), [usagePort, usageAttempt]);
-  useEffect(() => {
-    setUsageState({ state: usagePort === undefined ? "no-door" : "loading" });
-    return usagePort?.subscribeState?.(setUsageState);
-  }, [usagePort]);
-  // AO-6b3, UM-3 — fieldd's usage rows through the port's ONE subscription,
-  // which this reader holds while the stage stands (UM-3a: the port opens it
-  // for its first reader): the profiles column and the moment speak from them.
-  // The viewer's Retry is this reader leaving and coming back, which opens a
-  // refused subscription again; the rows it held stay until new ones answer.
-  const [usageRows, setUsageRows] = useState<readonly AgentAccountUsageEntry[] | null>(null);
-  useEffect(() => {
-    setUsageRows(null);
-  }, [usagePort]);
-  useEffect(() => profilesRetryKey.usagePort?.subscribeRows?.(setUsageRows), [profilesRetryKey]);
   const accountFacts = useMemo<MonitorAccountFacts>(
     () => ({ sets: profileSetsRead ? profileSets : null, usage: usageRows }),
     [profileSets, profileSetsRead, usageRows],
@@ -1087,13 +1103,9 @@ export function GodviewMonitor({
         <div ref={chromeRef} className="vf-monitor-chrome">
           <ChromeBoundary name="Profiles" retryKey={profilesRetryKey}>
             <ProfilesColumn
-              sets={profilesPort !== undefined && profileSetsRead ? profileSets : null}
+              sets={columnSets}
               rows={usageRows}
-              // a port with no rows feed never answers: its circles say the usage cannot be read, never a first
-              // read that never ends (the review; meters.ts NoMeterReason)
-              usageUnavailable={
-                usageState.state === "unavailable" || usagePort?.subscribeRows === undefined
-              }
+              usageUnavailable={usageUnavailable}
               port={usagePort}
               chosen={chosenId ?? null}
               onChoose={chooseProfile}

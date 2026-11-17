@@ -1,16 +1,20 @@
 // @vitest-environment happy-dom
 
+import type { AgentAccountUsageEntry } from "@vibefield/contracts";
 import { stateStages } from "@vibefield/puppeteer-views";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { DesignSystemPage } from "../src/design-system/DesignSystemPage";
+import { SPAWN_BLOOM_SETS, spawnBloomUsage } from "../src/design-system/godview-profiles-fixtures";
 import { OnboardingPreview } from "../src/design-system/OnboardingPreview";
 import { PaneLauncherPreview } from "../src/design-system/PaneLauncherPreview";
 import { SpawnBloomPreview } from "../src/design-system/SpawnBloomPreview";
 import { SwarmBodiesPreview } from "../src/design-system/SwarmBodiesPreview";
 import { StatusSection } from "../src/design-system/sections/StatusSection";
 import { CHAT_REACH, HAND_REACH } from "../src/frame/cards/cards-model";
+import { columnCircles } from "../src/godview/profiles-column/ProfilesColumn";
+import { spawnFuelMap } from "../src/usage/spawn-fuel";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -1273,5 +1277,46 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     const fill = face.querySelector<HTMLElement>(".vf-ds-progress-track > span");
     expect(fill?.style.width).toBe("62%");
     expect(face.textContent).toBe("");
+  });
+});
+
+// PU-R — the spawn bloom's specimen wears its profiles' circles: the catalog's usage rows, read as the stage reads
+// them (`columnCircles`), give each profile's bud its fuel (`spawnFuelMap`). Pure: no page is rendered.
+describe("the spawn bloom's fuel in the catalog (PU-R)", () => {
+  const NOW = new Date("2026-11-17T12:00:00.000Z");
+  const catalogFuel = () => {
+    let rows: readonly AgentAccountUsageEntry[] = [];
+    spawnBloomUsage(NOW).subscribeRows?.((next) => {
+      rows = next;
+    })?.();
+    return spawnFuelMap(
+      columnCircles(SPAWN_BLOOM_SETS, rows, NOW, { usageUnavailable: false }),
+      [48, 42],
+    );
+  };
+
+  it("D1: This Mac and Work wear their circles at 48 and 42, This Mac's five hours in the orange; Demo is plain", () => {
+    const fuel = catalogFuel();
+    expect([...fuel.keys()]).toEqual(["native", "work", "demo"]);
+    expect(fuel.get("native")?.drawn?.map((drawing) => drawing.size)).toEqual([48, 42]);
+    expect(fuel.get("work")?.drawn?.map((drawing) => drawing.size)).toEqual([48, 42]);
+    expect(
+      fuel.get("native")?.drawn?.[0]?.arcs?.some((arc) => arc.tone === "hot" && arc.percent === 88),
+    ).toBe(true);
+    expect(fuel.get("demo")).toEqual({ word: "No meters" });
+  });
+
+  it("D2 (O5): Work's second agent needs a sign-in: its thread beside the reading, at 46%, and the words name the reading", () => {
+    const work = catalogFuel().get("work");
+    expect(work?.drawn?.[0]?.arcs?.filter((arc) => arc.dash !== undefined)).toEqual([
+      expect.objectContaining({
+        r: 19.48,
+        width: 1.78,
+        dash: [0.01, 4.64],
+        tone: "ink",
+        percent: 46,
+      }),
+    ]);
+    expect(work?.word).toMatch(/: 61% of 7 days$/);
   });
 });
