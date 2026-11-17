@@ -36,6 +36,7 @@ import { systemAccount, systemDocId } from "../src/library-doc";
 import type { MeshClient } from "../src/mesh-client";
 import { SettingsDocService } from "../src/settings-doc";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { CLAUDE, fixtureRoutes, freshFloor, ZSH } from "./inventory-age-fixture";
 import { productPathSecret } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { desktopSlice } from "./peer-roster";
@@ -1517,5 +1518,144 @@ describe("406 — the door's refusals are read before the door listens", () => {
     expect(source.indexOf("api.listen(", listen + "await api.listen(".length)).toBe(-1);
     expect(source.indexOf("api.listen(")).toBe(listen + "await ".length);
     expect(load).toBeLessThan(listen);
+  });
+});
+
+// DS — the restart announcement (WP12 L2b's owed phone/peer half). An update that stops the floor takes the desktop's
+// node down with it, so a reader with only the tailnet's `online` reads it `asleep`. The desktop writes the SAME
+// object as its local `restartScheduled` on its own slice BEFORE the stop, and every roster holds it `restarting` for
+// the reader's TTL. Nothing a person reads names it: a desktop held so is drawn as it was just before.
+describe("DS — the restart announcement", () => {
+  it("an offline peer that announced an update's restart reads restarting; a lapsed, far-ahead or unreadable one reads asleep", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    const ids = ["dev-up", "dev-old", "dev-ahead", "dev-bad", "dev-plain"];
+    mock.meshPeers = ids.map((id) =>
+      tailnetPeer({ id: `node-${id}`, deviceId: id, login: ACCOUNT, name: id, online: false }),
+    );
+    const now = Date.now();
+    const planes = ["shell", "fieldd", "field-native"];
+    const announced = { reason: "update", planes, at: now };
+    mock.storeSlices.set("dev-up", { ...desktopSlice("dev-up"), restart: announced });
+    // ten minutes ago: past any reader's hold
+    mock.storeSlices.set("dev-old", {
+      ...desktopSlice("dev-old"),
+      restart: { reason: "update", planes, at: now - 600_000 },
+    });
+    // ten minutes ahead of this clock: no device pins itself
+    mock.storeSlices.set("dev-ahead", {
+      ...desktopSlice("dev-ahead"),
+      restart: { reason: "update", planes, at: now + 600_000 },
+    });
+    mock.storeSlices.set("dev-bad", {
+      ...desktopSlice("dev-bad"),
+      restart: { reason: "update", planes: [], at: now },
+    });
+    mock.storeSlices.set("dev-plain", desktopSlice("dev-plain"));
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    const roster = await pollDevices(
+      rpc,
+      (d) => ids.every((id) => d.find((x) => x.deviceId === id)?.bootId !== undefined),
+      8000,
+    );
+    const row = (id: string) => roster.find((d) => d.deviceId === id) as DeviceInfo;
+
+    expect(row("dev-up")).toMatchObject({ online: false, state: "restarting" });
+    expect(row("dev-up").restart).toEqual(announced);
+    for (const id of ["dev-old", "dev-ahead", "dev-plain"])
+      expect(row(id), id).toMatchObject({ online: false, state: "asleep" });
+    // the unreadable announcement went alone: the device is still described
+    expect(row("dev-bad")).toMatchObject({ online: false, state: "asleep" });
+    expect(row("dev-bad").restart).toBeUndefined();
+    expect(row("dev-bad").capabilities?.docHost).toBe(true);
+  });
+
+  it("an update's stop that leaves the floor announces shell and fieldd on this device's slice before it answers; a quit announces nothing", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    daemon.onShutdownRequest(() => undefined);
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    await until(() => mock.storeWrites.length > 0, 8000);
+    const restartOf = (write: unknown) => (write as { restart?: unknown }).restart;
+    expect(
+      mock.storeWrites.some((w) => restartOf(w) !== undefined),
+      "none before the stop",
+    ).toBe(false);
+
+    await rpc.call("system.shutdown", { reason: "update" });
+    // written before the answer: the shell stops fieldd the moment it hears it
+    const last = mock.storeWrites.at(-1) as Record<string, unknown>;
+    expect(last["deviceId"]).toBe("dev-self");
+    expect(restartOf(last)).toMatchObject({ reason: "update", planes: ["shell", "fieldd"] });
+    expect(typeof (restartOf(last) as { at?: unknown }).at).toBe("number");
+
+    const quitDir = makeDataDir();
+    const quitMock = await startMock(quitDir);
+    linkTo(quitDir);
+    const quitting = await bootstrap({ dataDir: quitDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => quitting.stop());
+    quitting.onShutdownRequest(() => undefined);
+    const quitRpc = await openRpc(quitting.controlPort);
+    await helloAs(quitRpc, quitting.shellToken, "shell-main");
+    await until(() => quitMock.storeWrites.length > 0, 8000);
+    await quitRpc.call("system.shutdown", { reason: "quit" });
+    await sleep(150);
+    expect(
+      quitMock.storeWrites.some((w) => restartOf(w) !== undefined),
+      "a quit is no restart",
+    ).toBe(false);
+  });
+
+  it("an update's consented floor stop writes the announcement, equal to the local one, BEFORE the floor is asked to prepare", async () => {
+    const dataDir = makeDataDir();
+    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+    writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+    mock.observedState = freshFloor();
+    mock.terminalRoutes = fixtureRoutes();
+    await mock.start();
+    cleanup.push(() => mock.stop());
+    linkTo(dataDir);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    daemon.onShutdownRequest(() => undefined);
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    await until(() => mock.storeWrites.length > 0, 8000);
+    await until(() => daemon.terminals.staleCells().length === 0, 5000);
+    // the device writes the floor holds at the instant it is asked to prepare: read synchronously, as it logs it
+    let writesAtPrepare: number | undefined;
+    const log = mock.requestLog.push.bind(mock.requestLog);
+    mock.requestLog.push = (...entries) => {
+      if (entries.some((e) => e.method === "native.lifecycle.prepareRestart"))
+        writesAtPrepare ??= mock.storeWrites.length;
+      return log(...entries);
+    };
+
+    // only the order is read here: the mock floor's answer to the stop itself is not this row's
+    await rpc
+      .call("system.shutdown", { native: { stop: true, sessions: [CLAUDE, ZSH] } })
+      .catch(() => undefined);
+    const scheduled = daemon.health().restartScheduled;
+    expect(scheduled).toMatchObject({
+      reason: "update",
+      planes: ["shell", "fieldd", "field-native"],
+    });
+    expect(writesAtPrepare, "the floor was asked to prepare").toBeDefined();
+    const announcing = mock.storeWrites.findIndex(
+      (w) => (w as { restart?: unknown }).restart !== undefined,
+    );
+    expect(announcing, "the slice carried the announcement").toBeGreaterThan(-1);
+    expect((mock.storeWrites[announcing] as { restart?: unknown }).restart).toEqual(scheduled);
+    // the write landed before the floor, which carries the node, was asked to go
+    expect(announcing).toBeLessThan(writesAtPrepare ?? 0);
   });
 });
