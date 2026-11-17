@@ -51459,6 +51459,9 @@ landing cut folds into the eighth). Main moves once, on James's word and VF-PM's
   be sent by its own wake and again by the replay walk; the second answer replaced the first's id, and the first
   stayed live on fieldd until the next disconnect.
 - fieldd logged nothing at a budget refusal, so a hit left no trace.
+- *Corrected 2026-11-16 (item 476):* the budget's reason given above was not its effect: the pool bounded one
+  connection, not a caller (the bound per caller is item 480's). "The budget of 32 does not move" held until item
+  476 (M330), which retired the pool: fieldd admits a subscription by what it asks for, each key to its own holders.
 
 **What moved.**
 - 470 (`b79a472e1` red, `5b27f57e8`): the budget check admits while installed plus still-opening is under 32 and
@@ -51713,3 +51716,273 @@ workers: **GREEN** (run.log `6d4f8e3cf80f6d3e`).
 
 **Not done, and not claimed:** no Electron or phone witness; nothing pushed. The upstream change (the control
 heartbeat off a page timer) is an issue text drafted for James, sent nowhere.
+
+## Item 464 — a birth names the session it succeeds, and the phone's Swarm keeps the body (M329)
+
+(2026-11-17; five commits, 38 files. Planned and read whole by qa-02, drafted by subagents, on main `a6317979b`; the
+record is branch `qa/464-phone-swarm-on-a6317979b` (`fecc2c13d`, six commits). Main moves once, on James's word and
+VF-PM's GO. On main they are `782a44531` … `e2f2ce7ed`; every other id here is a side commit's.)
+
+**What was wrong.**
+- James, typed in qa-02 (2026-11-16T06:32:59.540Z): "i think the phone's swarm view still have the stale bubble
+  issue we had before on desktop:
+  - on very first spawn, there appears 2 empty bubbles and one disappear after appear
+  - when i start claude agent in the empty shell, the claude bubble appears as a new bubble on phone, and the
+    previous empty bubble disappears after a while
+  - when i ended the claude agent session, a new empty bubble suddenly appear on phone, and the claude bubble
+    disappear after a while
+
+  look into these and fix"
+- The cause. The desktop does not turn a shell into an agent, or an ended agent into a shell: each time it births a
+  NEW floor session and releases the old one a few seconds later. That the two are one bubble was known only inside
+  the one desktop window that made the swap (`PaneTransitions`, in memory). The row the phone is sent named the new
+  session and nothing about the one it took the place of, so the phone drew a second body, and the first left when
+  its session was released.
+
+**What moved.**
+- Contracts (`782a44531`): `succeeds` on the four births (`TerminalCreateParams`, `AgentSpawnParams`, the two resume
+  params), optional, a claim and never an error; `AgentSessionTerminal.succeeds` on the REMOTE cut alone, presentation
+  lineage only; `AGENT_FIELD.SUCCEEDS_LAPSE_MS` = 30 s. Four fixtures, one mirrored into the kit.
+- fieldd (`a8ef19844`): one rule for the three births. The claim is KEPT only when the call's grant holds
+  `terminal.attach`, the named session is one this fieldd still lists (or born here and not listed yet), and no other
+  live session already succeeds it; otherwise it is dropped with one log line and the birth goes on. It is held in
+  memory by the terminal service, one successor per session, until the successor ends or 30 s pass. The remote board
+  says it only while the named session still has a row, so the predecessor's row leaving and the claim unsaid are
+  one frame. This desktop's own cut never carries it.
+- Desktop (`244690531`): the window only sends `succeeds`, at the four births that take another session's place in its
+  pane, and only while exactly one pane shows the shell it names.
+- Phone (`dab222d20` the rows, `e2f2ce7ed`): the kit reads `succeeds` and `inputUsed`; the successor wears the body the
+  named session's row wore, and that row is not drawn while it is succeeded (unless it was typed into); the
+  lineage outlives a frame (`RemoteLineage`).
+- EL7, VF-PM's condition: the fact can move a bubble and take a row off other screens' Swarm for seconds. It is
+  bounded three ways: only a caller that could already attach to the session may claim it; one successor per
+  session; the claim lapses after 30 s. It cannot hold a row hidden.
+
+**The proof.**
+- The stack's first row, `row-464.sh` (`557524542a210aa7`), on main `a6317979b`, 2026-11-16 08:12Z → 08:19:48Z,
+  GREEN as it judged: contracts' suite 2055 of 2055 with the item's three rows (08:12:35Z); fieldd's eighteen rows
+  RED at the tests alone (08:16:38Z: five by their own asserts, thirteen by a seam that did not exist yet), then
+  GREEN with the sources (08:19:05Z, four files, 243 tests, none failed); field-app's three files 194 of 194
+  (08:19:36Z); the fixture mirrors and the import walls clean. Where the row proves `succeeds` and the condition:
+  terminal-service.test.ts (kept, dropped for `scope`, `unknown-session` and `taken`, the lapse on a clock moved by
+  hand, the cap) and agent-remote-cut.test.ts (what a phone hears; one frame).
+  It judged biome by its exit and so missed one warning (the unused import above, main's own). A row now judges
+  biome by "no Found line".
+- The whole typecheck at the carried top before James's desktop moved: `tc-464t7.sh` (`327f4e651c53617c`),
+  20:35:54Z → 20:37:23Z, 28 projects, 0 errors, run.log `bca33afe18459df2`.
+- The row at the new base, `row-464t7.sh` (`2ae0e29615c2040f`), the carried top plus the one line out (the landing
+  cut's tree), in a lane beside the running QA desktop, three vitest workers, a 48-byte TMPDIR, 20:46:23Z →
+  20:56:00Z, run.log `77e1f16206fd573d`: GREEN. `pnpm typecheck` whole 0; biome over the stack's 24 TS paths exit 0
+  with no Found line; contracts' suite whole 2055 of 2055 (20:48:03Z), the item's three rows passed; `pnpm gen`
+  fresh (it moved nothing); `cargo fmt --all --check` 0; plugin-cli's suite 115 of 115; the fixture mirrors and the
+  import walls 0; fieldd's suite WHOLE, 293 files, 4109 tests: 4094 passed, 0 failed, 15 skipped (20:55:48Z), the
+  item's eighteen rows passed; field-app's three touched files 194 of 194 (20:55:55Z). No cargo download; the lane
+  returned; refs equal before and after. Said: the load reached 25 during fieldd's suite; its setup rebuilt
+  field-native in the shared target; the red-then-green order was proven on the first base and not run again.
+- The phone: qa-01's device build of the record's top and the kit's five test-target typechecks, 0 errors
+  (2026-11-16). The item's kit files are byte for byte the same on the new base; two other kit files had moved there
+  (`AppsKeep.swift` and its test), so qa-01 ran both again at the carried top `759fc82b50b4`, 21:06:20Z →
+  21:08:48Z, exit 0: the Debug device build succeeded and its whole product is byte for byte the first top's build
+  (binary `ce12e53d52e2cf15`, 0 entries differing; nothing linked or signed), which is the build on James's phone
+  since 19:08:57Z; the five test targets typecheck (FieldHistoryTests 29 files, FieldHomeTests 83, FieldDesignTests
+  20, FieldProductTests 38, FieldSwarmTests 6; each swiftc rc 0, 0 error lines). A typecheck proves the files
+  compile, not that a row passes.
+- James looked, on his phone with that build and on the QA desktop. Typed in qa-02 (2026-11-16T19:55:47.314Z):
+  "good, the bubble fix works".
+- The train's V: V-TRAIN7, `pnpm verify` whole at the train's top (seventeen commits over main `2b78151b9`: items 464,
+  476, 488 and 485), on this Mac beside a running QA desktop: exit 0 in 2404 s, under a 48-byte TMPDIR with vitest
+  capped at three workers; fifteen stages opened; fieldd 289 files passed and 5 skipped (4111 tests), field-app 356
+  files (5096 tests), cargo's 38 results ok, none failed. The commits on main are those seventeen, unchanged. The
+  landing-only gates were not run.
+
+**Not covered.**
+- The phone kit's Swift tests did not run on this Mac (they cannot run on this host): the new rows of
+  RemoteWindowRowsTests and RemoteShapeTests typecheck and were never executed.
+- A PEER desktop's hand-off (item 465): a peer's rows join nothing on the phone, so their claims are not read.
+- The pane frame's Resume and the two history resume paths send no `succeeds` (item 468): another screen still draws
+  two bodies there.
+- If the predecessor's row outlives 30 s (a failed run kept until someone sees it), the two bubbles come back at 30
+  s: the bound doing its work.
+- The home window's rollback of a hand-off is not on the wire; fieldd's lapse stands in for it.
+- A card's colour dot hashes the session, so it changes colour across a hand-off while the body stays.
+- macOS and one iPhone only.
+
+**Not done, and not claimed:** nothing pushed; no phone build of main was made (the build on James's phone is the
+record's top on its first base).
+
+## Items 476 (stage 1) and 482 — the door admits a subscription by what it asks for (M330)
+
+(2026-11-17; eight commits, 15 paths +2,164 −166. Cut by c2 on item 464's cut `d02bd3978` as `fb736ba92`, `f0d1960d4`,
+`7709de43d`, `23d65e21b`, `f685d26c4`, `033ea81ec`, `5b453700a` and `7ab12fd5a` on branch
+`i476/admission-by-key-on-d02bd3978`. Main moves once, on James's word and VF-PM's GO. On main they are
+`be8f33b88`…`0f9a7d97c`; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- fieldd held every connection to ONE pool of 32 live subscriptions, whatever they watched. A window's views, its
+  plugins' settings and its boards drew on the same 32: one view could starve another, and the pool filled with what a
+  person installs. It bounded one connection, not a caller (the bound per caller is item 480's).
+- James, typed in qa-02 (2026-11-16T18:43:58.885Z), in part: "eliminate such limits from the roots".
+- Item 482, found while reading the door: storage.settings and storage.appPreferences added their change listener
+  before awaiting their snapshot; a snapshot that threw refused the ask and left the listener on its emitter for the
+  daemon's life.
+
+**What moved.**
+- contracts: `subscription-admission.ts`, the admission table. Each of METHODS' 31 product subscription rows declares
+  its class (one 19, variants 5, things 5, bounded 2), what makes its key, and its holders, each with its reason.
+  `SUBSCRIPTION_HOLDERS_PER_KEY` = 8; agent.subscribe by projection (full 4, model 8, field 16, remote 16);
+  storage.settings 32; diagnostics bound 4, index.session 8, a plugin-provided `x.` method 32.
+- fieldd's door (`product-api.ts`), at its three install sites (the local handler, the federated proxy, a plugin
+  provider's method): an ask is refused only when this connection already holds that key at its limit, installed plus
+  opening. No total. The refusal keeps its kind, details and words; its log line keeps its event name, once per key per
+  burst. A method with no row is admitted at the default and said once.
+- The ledger per key: one give-back for every reservation and removal; the close drains it to EMPTY (item 474's order).
+- `PRODUCT_API_LIMITS.SUBSCRIPTIONS_PER_CONNECTION` (32) RETIRED, its dated erratum at its source; fieldd-client's
+  comments that named the pool corrected at theirs. The agent-plane page's Subscriptions panel and a DECISIONS row move
+  first.
+- 482: a snapshot that throws takes its listener off again, then rethrows; the listener stays added before the await,
+  so no change between read and listen is lost.
+- M325's "the budget of 32 does not move" gets its dated correction at its source, in this records commit.
+
+**Untouched.**
+- No client code moves: the refusal's shape and words are the same, and fieldd-client's park-and-ask-again answers it.
+- What a person sees of a refusal (stage 2) and each feed held once (stage 4, item 473) are owed.
+
+**The proof.** `rows-476.sh` (`eee706c7284a5764` as launched), on this Mac through the door, at item 464's cut
+`d02bd3978` with the eight patches in the working tree, 2026-11-16 22:04:50Z → 22:33:42Z, under the runner's 48-byte
+TMPDIR (and the 27-byte one where named), three vitest workers: **GREEN**, 24 of 24 (run.log `4407260dad128755`).
+- The reds, each by count and by name, none foreign: 482's leak file "Tests 2 failed (2)"; contracts' admission test
+  "Tests 19 failed (19)"; product-api.test.ts "Tests 7 failed | 12 passed (19)".
+- The greens:
+  - the leak file under 48 and 27 bytes, and five more times with the door's change (2 each);
+  - the admission test 19, registry 65; product-api.test.ts five times (26 each); tailnet-backpressure 10;
+  - contracts whole 70 files, 2,074 tests; fieldd-client whole 10 files, 69 tests;
+  - biome and the typechecks clean at every commit; the walls clean; pnpm gen moves no generated path; cargo fmt
+    clean; plugin-cli 115;
+  - fieldd WHOLE 289 files (5 skipped), 4,110 tests (15 skipped); field-app WHOLE 356 files, 5,096 tests; plugin-sdk
+    87; plugin-runtime 55.
+- The C2 red took 207 s under a load another lane added (about 22:02Z to 22:08Z); its count is unaffected.
+- The product folder's links into /tmp were 0 before and after every run. The patches were reversed after, and the lane
+  returned. The refs differed by one ref another session wrote during the row (said, not judged).
+- So 464 + 476 is proven together. The commits' trees are those working trees', the 15 paths at the proven blobs.
+- The train's V: V-TRAIN7, `pnpm verify` whole at the train's top (seventeen commits over main `2b78151b9`: items 464,
+  476, 488 and 485), on this Mac beside a running QA desktop: exit 0 in 2404 s, under a 48-byte TMPDIR with vitest
+  capped at three workers; fifteen stages opened; fieldd 289 files passed and 5 skipped (4111 tests), field-app 356
+  files (5096 tests), cargo's 38 results ok, none failed. The commits on main are those seventeen, unchanged. The
+  landing-only gates were not run.
+
+**Not covered.**
+- No window was looked at. A development window's twins are proven at the door, not under a running React.
+- Every holder count is counted from source, not measured.
+- The bound per caller is unchanged (item 480, stage 3).
+- macOS only.
+
+**Not done, and not claimed:** no Electron or phone witness; nothing pushed.
+
+## Item 488 — the refresh notice says VibeField's sentence; the agent's words go to the log (M331)
+
+(2026-11-17; two commits, 5 paths +171 −49. Cut by c2 on item 476's cut `7ab12fd5a` as `e5b4aa209`, `6da980e17` on
+branch `i488/usage-words-to-the-log-on-i476`. Main moves once, on James's word and VF-PM's GO. On main they are
+`8f82b8b2c` and `3343d22f2`; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- After a person pressed Refresh usage in Settings, every reading that came back without numbers printed in the error
+  notice as the agent's label and the agent adapter's own sentence, for example "Claude: Claude Code OAuth credentials
+  were not found". That is an agent's insides on a face (DESIGN.md §9; AR-L1).
+- The views' usage batch (Godview's monitor doors) handed the same sentence on as a failure's message. puppeteer-views
+  0.4.0 draws none of it, but nothing kept it out.
+- Two comments in contracts' `agent-usage.ts` called that sentence the provider's words "for a person to read".
+
+**What moved.**
+- `ProfilesSection.tsx`: the notice says "Usage couldn't be refreshed." once, however many readings failed, with
+  "Retry after …" when a time was given (the latest of them). No label, no agent's words, no new sentence.
+- Where the batch arrives, each failed reading is logged (`renderer.profiles.usage_refresh_failed`: provider, state,
+  profile, retry time, and the agent's sentence as `reason`, cut at 500 characters). At warn when the person pressed
+  Refresh usage; at debug for a silent refresh (a route's opening, each return to the window), which the renderer log
+  does not keep by default (its level is info). That is the intent.
+- `godview/monitor/doors.ts`: the views' failure carries VibeField's own word for the state ("no reading yet", or the
+  state). A hardening: Core's type requires a message, and no view draws one, so nothing drawn moves.
+- contracts `agent-usage.ts`: two dated corrections at their source; the old sentences stand.
+
+**Untouched.**
+- Six other places still print an agent's own words after VibeField's sentence (item 489, owed): the launch refusal,
+  the model browser, the extensions view, and New spark's model menu, which prints them alone.
+- refusalSentence's four call sites stay item 476's stage 2.
+
+**The proof.** `rows-488.sh` (`cc0b6677faaaedf2` as launched), on this Mac through the door, at item 464's cut
+`d02bd3978` with item 476's eight patches laid under and 488's two in the working tree, 2026-11-16 23:11:27Z →
+23:15:28Z, under the runner's 48-byte TMPDIR, three vitest workers: **GREEN**, 7 of 7 (run.log `99cbd67d12740c13`).
+- The red, by count and by name, none foreign: profiles-settings "Tests 1 failed | 56 passed (57)" (item 488's row);
+  godview-monitor-doors "Tests 2 failed | 38 passed (40)" (the quota refusal's and the retained reading's rows).
+- The greens: biome, field-app's and contracts' typechecks and the walls clean; profiles-settings three times (57
+  each); godview-monitor-doors 40; contracts whole 70 files, 2,074 tests; pnpm gen moves no generated path; cargo fmt
+  clean; plugin-cli 115; field-app WHOLE 356 files, 5,096 tests, with 464, 476 and 488 in the tree.
+- The row's refresh rows hold both levels: the pressed refresh's two failures at warn with the agent's words (one cut
+  to 500 characters and an ellipsis), the route's silent opening refresh's two at debug and none at warn.
+- The product folder's links into /tmp were 0 before and after every run. The patches were reversed after, and the lane
+  returned with its refs equal (2504 = 2504).
+- The commits' trees are those working trees', the five paths at the proven blobs.
+- The train's V: V-TRAIN7, `pnpm verify` whole at the train's top (seventeen commits over main `2b78151b9`: items 464,
+  476, 488 and 485), on this Mac beside a running QA desktop: exit 0 in 2404 s, under a 48-byte TMPDIR with vitest
+  capped at three workers; fifteen stages opened; fieldd 289 files passed and 5 skipped (4111 tests), field-app 356
+  files (5096 tests), cargo's 38 results ok, none failed. The commits on main are those seventeen, unchanged. The
+  landing-only gates were not run.
+
+**Not covered.**
+- No window was looked at: the notice and the log line are proven in a rendered test, not in Electron.
+- The renderer log's level is read from source (info by default), not from a running app's log file.
+- macOS only.
+
+**Not done, and not claimed:** no Electron or phone witness; item 489's six sites; nothing pushed.
+
+## Item 485 — a stop during activation ends only after the lease's release (M332)
+
+(2026-11-17; two commits, 2 files, red then green. Cut by RV on main `2b78151b9` on branch `rv/i485-on-2b78151b9`.
+Main moves once, on James's word and VF-PM's GO. On main they are `656894e35` and `d7aec645a`;
+every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What it fixes.**
+- GitHub's verify of push 138 (`0476144a5`) failed once: in `plugin-community-hold-boot.test.ts`, fieldd's stop threw
+  "one or more plugin services did not stop cleanly", its inner error "vibefield.example.kv: service shutdown retained
+  lease-release". 1 failed of 4089 on the runner, whose suite took 1983 s (456 s on this Mac, where it is green).
+- The cause: the test boots fieldd and stops it at once, and boot does not wait for plugin services. The stop landed
+  while the example service was still activating. Its abort ended the worker, and the worker's exit began the
+  lease's release, which nobody joined. The stop ended with the release still running, and the host's residue check
+  refused to call it clean. On a slow machine the release's durable record outlasts the stop.
+- The fix: `ServiceHost.stop` joins any release still running after it settles. A person's disable during
+  activation now also answers only after the lease is gone. The test stays as it is.
+
+**The proof.**
+- The red commit adds a unit row to `service-lease-fence.test.ts`. A worker that never activates; the lease's
+  release held on a gate the test owns; start, then stop all. Held: the stop has not ended while the gate is shut,
+  ends once it opens, one lease released by the worker's exit, and the plugin's entry dropped (which the host does
+  only for a plugin that stopped clean). At the red commit the stop throws "retained lease-release" while the gate
+  is shut, on any machine.
+- RV's row (`row-i485r2.sh`, `afa6e8e3ac049dea`), on this Mac through the door, at main `2b78151b9`, under the env -i
+  harness, a 48-byte TMPDIR and three vitest workers, 2026-11-16 22:56:15Z → 23:07:23Z: **GREEN** (run.log
+  `46867e4ede1f1e58`).
+  - At the red commit's tree, the lease-fence file once: RED as wanted. The old test passed; item 485's failed, its
+    message naming "service shutdown retained lease-release" while the gate was shut.
+  - At the fix's tree, the lease-fence file five times in a row: 2 of 2 each; item 485's test passed five of five.
+  - `plugin-community-hold-boot.test.ts`, the test GitHub's verify failed, five times in a row: five of five, and
+    "retained lease-release" in none.
+  - fieldd's whole suite once: 4077 passed, 15 skipped, in 293 files. fieldd's typecheck exit 0; biome over the two
+    files exit 0.
+  - The product's socket folder's links into a temp root 0 before and 0 after; the lane returned with its refs equal.
+- A first row (`row-i485.sh`, 21:52Z → 22:00:46Z) was RED by the test's own last line, which expected the plugin's
+  state "inactive" after a stop of every plugin; that stop drops a plugin that stopped clean, so its state reads
+  "none". The fix held there too (the gate, the join, the one lease by the worker's exit). The two test lines were
+  corrected and the second row ran from a new stage.
+- The train's V:
+  V-TRAIN7, `pnpm verify` whole at the train's top (seventeen commits over main `2b78151b9`: items 464, 476, 488 and
+  485), on this Mac beside a running QA desktop: exit 0 in 2404 s, under a 48-byte TMPDIR with vitest capped at three
+  workers; fifteen stages opened; fieldd 289 files passed and 5 skipped (4111 tests), field-app 356 files (5096 tests),
+  cargo's 38 results ok, none failed. The commits on main are those seventeen, unchanged. The landing-only gates were
+  not run.
+
+**Not covered.**
+- Item 486, a failed service stop skipped the rest of the daemon's teardown. It is its own item.
+- The booted test cannot be made to land in the window on this Mac; the unit row holds it there.
+- The row runs on macOS; nothing here is proven on Windows or Linux. Nothing was looked at in a window.
+- `pnpm gate:landing`: deferred, not waived; owed at James's unlock.
+
+**Not done, and not claimed:** nothing pushed.
