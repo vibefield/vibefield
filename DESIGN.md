@@ -5324,6 +5324,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   file to the SVG yet.** Rows hold its own numbers (the stamp, the box, thirteen keys of one structure, the
   periods, the timing functions, the lights), so a regenerated SVG is followed by hand until
   `pnpm check:ios-fixtures` gains a row for it. The splash's Metal mark stays the splash's alone.
+  *Amended 2026-11-17 (item 516; James, 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon",
+  on the page "The Mark in a Pocket"):* **the generator writes the Swift file**, beside the SVG and from the same
+  numbers, rounded as the SVG rounds them (a path on one line when its line fits 120 columns, else broken before
+  an `s` or an `L` within 100), and its `--check` holds the two together, so a regenerated SVG reaches the phone
+  the same way and nothing follows it by hand; `living-mark.test.tsx` runs that check and holds the stamp. The gate
+  owed above is the generator's own, not `check:ios-fixtures`. On the phone the mark stands in History's waits that
+  fill a place (§8 "The phone's History waits in the hold"): a hold at 99 (a session's first reading, History's
+  first read, a project's list of sessions, and no desktop answering, at rest) and the pull's pill at 40 while
+  earlier messages are read.
 - **The phone's splash** (2026-11-01; `apps/ios/VibeFieldKit/Sources/FieldSplash`): the phone's first face
   is the field too, in its own design — vibefield-splash's **iPhone splash** (`splash/look-iphone.json`, tuned
   apart in the studio's iPhone window). By night (the window's Appearance, Settings › Appearance; Auto follows
@@ -7975,6 +7984,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   note put fieldd's own words after its sentence. The phone's other notes that named a door, the ledger or the
   contracts versions moved with them (`FieldHistoryModel`'s `emptyLedger`, `noDesktopRead`, `projectNotRead`,
   `headNote`, and a project's empty session list).
+  *Amended 2026-11-17 (item 516; James, 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon"):*
+  an EMPTY ledger no longer says three of these as its note. While History on the desktop opens, updates or reads,
+  and while no desktop answers, the ledger's place HOLDS instead ("The phone's History waits in the hold", below),
+  so "History on studio is opening" over "Its projects arrive when it is open.", "History on studio is updating"
+  over "Its projects arrive when the update ends.", "studio is reading its history" over "8,400 of 13,700 sessions
+  read; its projects arrive as it reads." and "Your projects have not been read yet" for a desktop asleep are no
+  longer drawn (`emptyLedger` answers nil there). The line under the head and the project screen's line keep all
+  six sentences; the empty notes for a History that has stopped, keeps none or is stopped, for a desktop that
+  speaks another VibeField, and "No projects yet" stand as written. A project's empty session list keeps its note
+  only while its desktop does not answer: "Reading the sessions…" over "They arrive as studio answers." is retired.
   **The ledger is the door's whole listing** (item 352, 2026-11-12; James, 11:38:00Z: "the history items on the phone
   does not match the items on the desktop, desktop have more items"): a desktop answers a phone a hundred projects a
   page with a cursor to the next, and the phone follows the pages to the listing's end, so it lists what the desktop
@@ -8029,6 +8048,44 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     to and to which project.
   - **What stays the phone's:** the path never shows (PJ-L9: a path stays on its desktop), and the desktop row's
     `···` (pin, hide) is not offered: the phone reads (P2).
+- **The phone's History waits in the hold** (item 516, 2026-11-17. James, 18:40:49Z, session vibe-field-d5, on the
+  page "The Mark in a Pocket", round 2: "all go with lean, work and land soon", which picked its four leans and its
+  words). History's own waits on the phone take the hold a session's first reading stands in (below, "Its first
+  reading is the hold"; §6 "History's holds"; HG-W1 on the desktop), so the phone waits in one hand with the Mac: the
+  living mark at the centre of the place that waits, at its own 99 × 44, on the page's paper; **one line 26 pt under
+  its box**, 14 regular in `inkSecondary`; and, where there is one, **what stands under the line, 4 pt under it**,
+  12.5 regular and tabular in `inkTertiary`: the desktop the words come from, or a count. It is late by 120ms,
+  stands at least 800ms once shown, and leaves over 280ms, as that hold does. It is **carried**: while the wait goes
+  on in other words the mark stays where it is and only the line changes, the old one going over 140ms and the next
+  coming over 240ms after it; what stands under the line only changes, as a count does. A place the phone has kept
+  (the cache's ledger, a project's sessions read before) opens at once and never holds: the hold stands only where
+  there is nothing to show. The mark is decoration: VoiceOver reads the line and what stands under it.
+  - **History's first read** (P1). While the ledger shows no project and its desktop answers, its place holds,
+    between the root's head and its foot: **"Opening History…"** until the desktop has answered the listing
+    once (a desktop still grouping its projects answers that it is not ready, and is still waited for);
+    **"Finding your history…"** over **"on studio"** while the desktop's History opens; **"Updating your
+    history…"** over **"on studio"** while it updates; **"Discovering conversations…"** over **"214 of
+    1,033 sessions on studio"** while it reads its history. The lines are the desktop's own (the room's
+    "Opening History…", the Setup Assistant's `history-line.ts`), so the first run, the Mac and the phone say
+    one thing. *A reading: the rebuild's line is new; the desktop says no line of its own there.* A desktop
+    whose History failed, stopped or keeps none, one that speaks another VibeField, and a ledger the desktop
+    answered empty hold nothing: their notes say what is there and what to do (item 505's words).
+  - **A project's list of sessions** (P3). While none of its sessions has arrived and its desktop answers, the
+    list holds in a box 280 pt tall at its top, **"Reading the conversations…"** over **"from studio"**; the
+    project's head, its figures and its desktops above it stand at once. Once its sessions are answered (a page
+    of them is drawn, or their read is refused) the list holds no longer: an empty list then stands empty under
+    its head, and no mark moves where no work does (HG-L1). *A reading, named to James: nothing new is said
+    there.* While its desktop does not answer the list keeps its note ("No sessions read for this project"):
+    that is no wait.
+  - **No desktop answering, and nothing kept** (P4). The ledger's place holds with **the mark at rest**, its pose
+    under Reduce Motion: **"No desktop is answering"** over **"History opens when one wakes."** A mark that moved
+    there would say work moves where none does (HG-L1, §6). When a desktop answers the hold is carried into its
+    first read, and the mark moves. It overturns the note that stood there ("no desktop has been read" over "History
+    comes from your desktops", item 505's words).
+  - **Earlier messages** (P2) wear the mark in the pull's pill while they are read (below, "The rows above are read
+    in when you pull down at the top", Let go).
+  - Waits inside what a page already shows keep their words: the figures ("Reading the figures…"), Search's foot,
+    Resume. On a page the mark stands once at most.
 - **The phone's session document reads as the desktop's transcript does** (item 362, 2026-11-12; James, 18:40:35Z,
   of a session opened in the phone's History: "it has huge mismatch against desktop version … it does not load
   message progressively like desktop … there is no chat message time grouping like desktop … it somehow scroll start
@@ -8072,7 +8129,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       no desktop named. The 800ms floor is §6's for History's holds; the room's own code keeps it for the view's
       hold and lets a conversation's go the moment its rows are read. The hold stands over the document for its
       floor and its leave, so a session read in 300ms is seen after about a second. The project's page keeps its
-      own note while its sessions are read ("Reading the sessions…").
+      own note while its sessions are read ("Reading the sessions…"). *Amended 2026-11-17 (item 516, P3):* it
+      holds too, in a box at the top of its list (above, "The phone's History waits in the hold").
   - **It opens at its end and keeps its end in view** (362a). The newest row stands above the bar when the document
     opens, and stays there as rows arrive, until you read up the page: a drag stops the following at once, and
     coming to rest within 24 pt of the end resumes it (Chat's figure). Up the page nothing moves under you: a row
@@ -8168,6 +8226,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       ring opens to an arc of seven tenths that turns once in 0.9 s (it stands still under Reduce Motion) and
       the words become "Reading earlier messages…". The batch is asked for once the page has come to rest, so
       the rows it brings meet a page at rest. A pull while a batch is owed or being read is ignored, not queued.
+      *Amended 2026-11-17 (item 516, P2; James, 18:40:49Z, session vibe-field-d5: "all go with lean, work and land
+      soon"):* **the living mark stands in the ring's place** while the batch is read, 40 pt wide and so 17.8 tall,
+      the ring's own height, in the pill's ink (black by day, white by night) with its three lights; the pill grows
+      in its width alone. Ring and mark cross over the pill's own 200 ms plain `ease`, and the mark moves while the
+      read does (it rests under Reduce Motion, by its own rule). The ring keeps the pull and the release: it
+      measures the finger, a real amount, and that is no wait. The arc of seven tenths that turned is retired.
     - **One pull reads one batch**, the batch 362b defined: pages are read on until what they brought holds six
       messages (a prompt, or a reply with words or an attachment), in at most five asks of forty rows. It is the
       room's rule, so a stretch of tool rows alone never lands with no message in it. One read at a time.
