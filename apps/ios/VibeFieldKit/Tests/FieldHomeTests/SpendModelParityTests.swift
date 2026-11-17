@@ -291,7 +291,8 @@ extension SpendParityTests {
   /// included, never name a key, hover or a pane, for the phone has none. Four NAMED deviations from the window, each
   /// pinned against the golden in P7: the view's label drops its key sentence, each row's label "Open in your
   /// pane.", the Now pill's title "(End)", and the empty view's hint says "a terminal", not "a terminal pane", word
-  /// for word as the list's (a draft word: James's eye, VF-PM 2026-11-04). The ↘ legend stays (Q3).
+  /// for word as the list's (a draft word: James's eye, VF-PM 2026-11-04). A fifth (item 291, DESIGN.md "On the phone
+  /// the Now pill prints no `↘`"): the pill prints no legend under its mark, for its legend names the End key.
   @Test func thePhonesWordsNameNoKeyNorPane() throws {
     let phoneLabel =
       "Spend: what each agent spent in the last ten minutes, a line each from $0, and each run's total in the list."
@@ -301,7 +302,8 @@ extension SpendParityTests {
     #expect(SpendModel.Dropped.rowLabel == " Open in your pane.")
     #expect(SpendModel.Dropped.nowTitle == " (End)")
     #expect(SpendModel.nowTitle == "Back to now" && SpendModel.nowLabel == "Back to now")
-    #expect(SpendModel.nowLegend == "↘")
+    let legend: String? = SpendModel.nowLegend
+    #expect(legend == nil, "the Now pill prints no legend: it would name the End key")
     #expect(SpendModel.emptyHint == "Launch an agent from a terminal.")
     #expect(SpendModel.Dropped.emptyHint == "Launch an agent from a terminal pane.")
     let banned = ["pane", "Pane", "Up and down", "Return opens", "End lets go", "(End)", "hover", "Hover"]
