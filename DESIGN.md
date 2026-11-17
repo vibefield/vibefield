@@ -6326,6 +6326,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     beside the number and the burn. The phone's model carries that caption; the phone's view does not
     draw it at narrow until James rules on the words its own fonts leave there (the mint prints them,
     `PG-HERO-WORDS`), so the narrow phone hero stays the number and the burn. ‹for James›
+  - **On the phone the Now pill prints no `↘`** (added 2026-11-17, James; item 291): the phone has
+    no End key, so the legend under the pill's mark would name a key it lacks. The pill keeps its
+    mark and its word; the window keeps its legend. It joins the phone's named deviations
+    (`SpendModel.Dropped`), each a word the window says and the phone does not.
 - **History is rosetta's room, on the cover's glass** (AR-8c, built 2026-10-03; One Frame §9
   "History, joined"; FC-D6, FC-D15, FC-D16; AR-D36…AR-D43): History is rosetta's own room — the
   projects, the sessions, the panels and charts, the transcript and its folds — mounted from the
