@@ -119,13 +119,14 @@ enum SpendPaint {
     if let ghostX = scene.ghostX, abs(ghostX - cross.x) > 3 {
       let gx = JSNumber.round(ghostX) + 0.5
       context.stroke(
-        segment(gx, scene.y0 - 4, gx, scene.y1), with: .color(inks.ink.withAlpha(0.22).spendColor),
+        segment(gx, SpendScene.lineTop(scene, x: gx), gx, scene.y1),
+        with: .color(inks.ink.withAlpha(0.22).spendColor),
         style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
     }
     let x = JSNumber.round(cross.x) + 0.5
     context.stroke(
-      segment(x, scene.y0 - 4, x, scene.y1), with: .color(inks.ink.withAlpha(cross.held ? 0.5 : 0.32).spendColor),
-      lineWidth: 1)
+      segment(x, SpendScene.lineTop(scene, x: x), x, scene.y1),
+      with: .color(inks.ink.withAlpha(cross.held ? 0.5 : 0.32).spendColor), lineWidth: 1)
     for dot in cross.dots {
       let alpha = scene.hot != nil && dot.id != scene.hot ? 0.4 : 1
       context.fill(circle(x, dot.y, 5.5), with: .color(inks.ground.withAlpha(alpha).spendColor))
@@ -139,7 +140,7 @@ enum SpendPaint {
   ) {
     let x = JSNumber.round(start.x) + 0.5
     context.stroke(
-      segment(x, scene.y0 - 4, x, start.y), with: .color(start.colour.withAlpha(0.7).spendColor),
+      segment(x, SpendScene.lineTop(scene, x: x), x, start.y), with: .color(start.colour.withAlpha(0.7).spendColor),
       style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
     let ring = circle(x, start.y, 4)
     context.fill(ring, with: .color(inks.ground.spendColor))

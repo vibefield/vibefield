@@ -64,6 +64,14 @@ enum SpendScene {
     let colour: SwarmColor
   }
 
+  /// The chart's caption as drawn over the plot (item 518): from its left to the end of its drawn width, and the
+  /// foot of its 10 pt line.
+  struct Caption: Equatable, Sendable {
+    let x0: Double
+    let x1: Double
+    let foot: Double
+  }
+
   /// The scene (`SpendScene`): what one paint draws.
   struct Scene: Equatable, Sendable {
     let width: Double
@@ -84,6 +92,13 @@ enum SpendScene {
     let cross: Cross?
     let ghostX: Double?
     let start: Start?
+    let caption: Caption
+  }
+
+  /// Where a line standing at `x` begins: the moment's, the ghost's and a start's (`paintCross`, `paintStart`: 4
+  /// above the plot's top).
+  static func lineTop(_ scene: Scene, x: Double) -> Double {
+    scene.y0 - 4
   }
 
   /// `colours` (:147): each line's inks from its project's colour (`base`, nil where it has not resolved) and its
@@ -142,7 +157,11 @@ enum SpendScene {
       width: g.width, height: g.height, x0: g.x0, x1: g.x1, y0: g.y0, y1: g.y1, weight: weight, wash: wash,
       grid: SpendScale.moneyTicks(max: frame.yMax, step: frame.target.step).map(yOf), nowX: xOf(span.tb),
       lines: lines, hot: hot, fadeX: frame.tCross.map(xOf), heads: heads, waves: frame.tCross == nil, cross: cross,
-      ghostX: ghostX, start: start)
+      ghostX: ghostX, start: start,
+      caption: Caption(
+        x0: frame.colcap.left,
+        x1: frame.colcap.left + SpendModel.colcapWidth(frame.colcap.text, measure: input.measure),
+        foot: frame.colcap.top + SpendWords.Colcap.sizePx))
   }
 
   /// `sceneMoves` (`spend-paint.js` :43): whether any head moves on its own — the loop repaints only then.

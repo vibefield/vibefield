@@ -108,6 +108,32 @@ extension SpendParityTests {
     #expect(ghosted.scene.cross?.held == true)
   }
 
+  /// S7 — the caption keeps its words (item 518): a moment held under the chart's caption begins its line 4 below
+  /// the caption's 10 pt line, where the Now pill stands; a line clear of the caption's drawn width begins 4 above
+  /// the plot's top, as before. The caption is the frame's, its width measured as `colcapWords` measures.
+  @Test func aMomentsLineBeginsBelowTheCaption() throws {
+    let atNow = try Self.sceneAt()
+    let words = SpendModel.colcapWidth(atNow.frame.colcap.text, measure: atNow.input.measure)
+    // a moment under the caption's middle
+    let mid = atNow.frame.colcap.left + words / 2
+    let span = atNow.frame.span
+    let g0 = atNow.frame.g
+    let t = span.ta + (mid - g0.x0) / (g0.x1 - g0.x0) * (span.tb - span.ta)
+    let (_, _, frame, scene) = try Self.sceneAt { _, state in state.held = t }
+    let g = frame.g
+    let caption = SpendScene.Caption(
+      x0: frame.colcap.left, x1: frame.colcap.left + words, foot: frame.colcap.top + SpendWords.Colcap.sizePx)
+    #expect(scene.caption == caption, "the caption as drawn")
+    let cross = try #require(scene.cross)
+    #expect(cross.x >= caption.x0 && cross.x <= caption.x1, "the moment (x\(cross.x)) stands under the caption")
+    let top = SpendScene.lineTop(scene, x: cross.x)
+    #expect(top == caption.foot + 4, "the moment's line begins at \(top); the caption's line ends at \(caption.foot)")
+    let pill = try #require(frame.now)
+    #expect(abs(top - pill.top) < 1e-9, "where the Now pill stands (\(pill.top))")
+    let clear = SpendScene.lineTop(scene, x: caption.x1 + 20)
+    #expect(clear == g.y0 - 4, "clear of the caption, 4 above the plot's top")
+  }
+
   /// S3 — pointed: the line lit is the row lit (`hot`), the tag sits at its head; a line pointed at before its birth
   /// draws its start where the tag says it starts (the tag 8 pt right of it, 30 pt up).
   @Test func aPointedLineAndItsStart() throws {

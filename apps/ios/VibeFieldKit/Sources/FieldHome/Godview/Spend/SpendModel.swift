@@ -112,10 +112,14 @@ enum SpendModel {
   /// the length in UTF-16 units, as JavaScript's.
   static func colcapWords(_ g: Geometry, measure: (String, TextStyle) -> Double) -> String {
     let long = SpendWords.Colcap.long
-    let width =
-      measure(long.uppercased(), .colcap)
-      + Double(long.utf16.count) * SpendWords.Colcap.trackingEm * SpendWords.Colcap.sizePx
-    return width > g.x1 - g.x0 ? SpendWords.Colcap.short : long
+    return colcapWidth(long, measure: measure) > g.x1 - g.x0 ? SpendWords.Colcap.short : long
+  }
+
+  /// The caption's drawn width: its words in its face, in caps, with its tracking added, as `colcapWords` measures
+  /// the long words (item 518: the scene keeps the moment's lines off the width it draws).
+  static func colcapWidth(_ words: String, measure: (String, TextStyle) -> Double) -> Double {
+    measure(words.uppercased(), .colcap)
+      + Double(words.utf16.count) * SpendWords.Colcap.trackingEm * SpendWords.Colcap.sizePx
   }
 
   /// A moment's x on the plot (`xOf`).
