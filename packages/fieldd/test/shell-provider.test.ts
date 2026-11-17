@@ -130,6 +130,44 @@ describe("ShellProviderBroker", () => {
     expect(broker.provides("shell.webcontents.captureArtifactPreview")).toBe(false);
   });
 
+  it("item 517: holds fieldd's captures to one at a time, as Electron's provider does", async () => {
+    const broker = new ShellProviderBroker();
+    const lane = transport();
+    broker.register(shellContext(), lane, { methods: METHODS });
+    const calls = () => lane.notifications.filter((n) => n.method === "shell.provider.call");
+    const settle = async () => {
+      for (let turn = 0; turn < 20; turn += 1) await Promise.resolve();
+    };
+    // a live artifact's capture and a made app's, asked by their two services at once
+    const first = broker.callInternal("shell.webcontents.captureArtifactPreview", {
+      artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      url: "https://host.tail1234.ts.net:12000/",
+    });
+    const second = broker.callInternal("shell.webcontents.captureArtifactPreview", {
+      artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+      url: "https://host.tail1234.ts.net:12001/",
+    });
+    await settle();
+    expect(calls()).toHaveLength(1);
+    expect(
+      broker.resolve(shellContext(), lane, {
+        callId: notificationCallId(lane, 0),
+        outcome: { result: { captured: true } },
+      }),
+    ).toEqual({ accepted: true });
+    await expect(first).resolves.toEqual({ captured: true });
+    await settle();
+    expect(calls()).toHaveLength(2);
+    expect(calls()[1]).toMatchObject({
+      params: { params: { artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAW" } },
+    });
+    broker.resolve(shellContext(), lane, {
+      callId: notificationCallId(lane, 1),
+      outcome: { result: { captured: true } },
+    });
+    await expect(second).resolves.toEqual({ captured: true });
+  });
+
   it("rejects provider loss and ignores its late answer", async () => {
     const broker = new ShellProviderBroker();
     const lane = transport();
