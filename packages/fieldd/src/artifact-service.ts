@@ -577,8 +577,17 @@ export class ArtifactService {
         });
       }, true);
     } finally {
-      // The Electron operation, including its atomic file replace, has
-      // settled. Unpublish cleanup may now remove the preview directory.
+      // The broker has answered. After a result or a refusal, Electron's
+      // operation, its atomic file replace included, has settled. After a
+      // timeout the broker answered on its own timer and sent Electron a
+      // cancel, so Electron may still be working. Unpublish cleanup may remove
+      // the preview directory now even so: Electron writes a temporary file in
+      // that directory and renames it over the picture last, so removing the
+      // directory takes the write with it, and an absent intent is kept until
+      // its directory is gone. The one leftover this allows is an empty
+      // directory, when Electron begins a capture only after the broker gave up
+      // on it. (Corrected 2026-11-17, item 517: this said Electron's operation
+      // had always settled here.)
       this.#activePreviewArtifactId = null;
       await this.#enqueue(async () => {
         if (!this.#disposed && this.#entries.get(artifactId)?.desired === "absent") {
