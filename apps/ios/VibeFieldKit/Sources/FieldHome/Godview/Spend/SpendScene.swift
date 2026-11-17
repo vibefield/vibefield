@@ -95,10 +95,16 @@ enum SpendScene {
     let caption: Caption
   }
 
+  /// How far a line keeps clear of the caption: beside its words, and below its line (where the Now pill stands).
+  static let captionClear = 4.0
+
   /// Where a line standing at `x` begins: the moment's, the ghost's and a start's (`paintCross`, `paintStart`: 4
-  /// above the plot's top).
+  /// above the plot's top). Within the caption's drawn width, 4 either side, it begins 4 below the caption's line,
+  /// so it never crosses the words (item 518; the window's `paintCross` owes the same, DESIGN.md's spend view).
   static func lineTop(_ scene: Scene, x: Double) -> Double {
-    scene.y0 - 4
+    let caption = scene.caption
+    let under = x >= caption.x0 - captionClear && x <= caption.x1 + captionClear
+    return under ? caption.foot + captionClear : scene.y0 - 4
   }
 
   /// `colours` (:147): each line's inks from its project's colour (`base`, nil where it has not resolved) and its
