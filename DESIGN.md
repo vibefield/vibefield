@@ -10674,6 +10674,10 @@ stopped mid-step, and the steps after the cut are asked again. The fieldd that w
 keeping its tail in the run's own record, so a restart sees it too, is CP-4a2b's (bth's review P3, ruled 11:46Z).*
 *Corrected 2026-11-05 (CP-4a2b; 13a's D18): a journal cut short, or a run record gone, is now seen: the run's own
 record names its head and its last line, written before either, so a fieldd started again reads either as lost.*
+*Amended 2026-11-17 (OB custody, C4): who may work each desk object is kept in one signed file of its own, the
+grants file, read by these four ways, and it has one more way not to be read: a grants file older than the last one
+VibeField remembers handing out is set aside as the second way says, nothing in it is granted, and it is said in
+fieldd's log. A person reads nothing new.*
 
 **The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
 screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s
