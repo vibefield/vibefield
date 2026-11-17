@@ -204,6 +204,36 @@ import Testing
     #expect(device.isSelf == nil)
   }
 
+  /// DS — the restart announcement (`DeviceSlice.restart`, the desktops' `RestartScheduled`): a desktop whose update
+  /// stops its floor takes its node down too, and says so first on its own slice. The phone READS it, as the
+  /// desktops' roster does; it is never a field this reader leaves unknown. The golden is the contracts' own bytes,
+  /// held byte for byte by `scripts/check-ios-fixtures.mjs`.
+  @Test func aDesktopsAnnouncedRestartIsReadNotLeftUnknown() throws {
+    let slice = try DeviceInfo(json: try Fixture.json("device-slice.restarting"))
+    #expect(!slice.unknownFields.contains("restart"))
+    let row = try DeviceInfo(json: try Fixture.json("device-info.restarting"))
+    #expect(row.online == false)
+    #expect(!row.unknownFields.contains("restart"))
+  }
+
+  /// DS — an announcement this build cannot read costs the announcement, never the device: the row still reads,
+  /// and the field is named among the unknown ones (the contracts `.catch` it to absent on the desktops).
+  @Test func anAnnouncementThisBuildCannotReadCostsOnlyItself() throws {
+    var fields = try #require(try Fixture.json("device-slice.restarting").objectValue)
+    for bad: JSONValue in [
+      .object(["reason": .string("nap"), "planes": .array([.string("fieldd")]), "at": .int(1)]),
+      .object(["reason": .string("update"), "planes": .array([]), "at": .int(1)]),
+      .object(["reason": .string("update"), "planes": .array([.string("fieldd")])]),
+      .string("soon"),
+    ] {
+      fields["restart"] = bad
+      let device = try DeviceInfo(json: .object(fields))
+      #expect(device.deviceId == "nodeid-3c7d5e1f9a")
+      #expect(device.productEndpoint?.serve == "product")
+      #expect(device.unknownFields.contains("restart"))
+    }
+  }
+
   @Test func oneUnreadableRowCostsItsOwnRowAndNotTheRoster() throws {
     let good = try Fixture.json("device-info.valid")
     let result = try DeviceListResult(

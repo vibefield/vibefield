@@ -460,6 +460,12 @@ const requiredMirrors = [
     ],
     ["Tests/FieldDesignTests"],
   ],
+  // DS — the restart announcement: a desktop's slice and its roster row, read by the kit's own `DeviceInfo`
+  [
+    "device",
+    ["device-slice.restarting.json", "device-info.restarting.json"],
+    ["Tests/FieldProductTests"],
+  ],
   // IOS-8f — `user.me`'s answers, read by the kit's own `UserMeResult`
   ["user-me", ["user-me.valid.json", "user-me.dealt.json"], ["Tests/FieldProductTests"]],
   // PG-3c — the remote cut's readers' goldens; PG-3d — the fold's parity golden beside them, which
