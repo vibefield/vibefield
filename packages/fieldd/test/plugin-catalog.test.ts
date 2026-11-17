@@ -94,6 +94,7 @@ function publish(dir: string, body: Record<string, unknown>, keys = KEYS): Buffe
 
 interface Made {
   catalog: PluginCatalogService;
+  installer: RegistryInstallService;
   logs: CapturedLog[];
 }
 
@@ -134,7 +135,7 @@ function make(opts: {
     ...(opts.rename !== undefined ? { rename: opts.rename } : {}),
     ...(opts.pictures !== undefined ? { pictures: opts.pictures } : {}),
   });
-  return { catalog, logs };
+  return { catalog, installer, logs };
 }
 
 const urlOf = (dir: string) => pathToFileURL(join(dir, "index.json")).href;
@@ -481,6 +482,150 @@ describe("the plugin list fieldd holds (MK-2b)", () => {
     expect([after.state, after.featured]).toEqual(["ready", []]);
     expect(await catalog.listedAsFor("vibefield.simulator")).toBe("vibefield");
     expect(refusedEvents(logs).length).toBe(0);
+  });
+});
+
+// N24 (DESIGN.md "The updates flow"): what a read of the list can't update for a plugin you have goes to the log
+// (MK-UC, 2026-11-14), and, N24's second half (2026-11-17), a plugin's line is said once while it stands, since the
+// popup reads the list at each open. Every list here is the test's own, as above. The plugins you have are the fake
+// registry's rows, which a row may change in place: make()'s `list` reads them at each read.
+describe("what a read can't update, said in the log once while it stands (N24)", () => {
+  /** The plugins you have, made fresh for each row: acme.burndown, behind a release that needs a newer VibeField;
+   * acme.gone, which a list may leave out; and the simulator, whose update this VibeField takes. */
+  function behind() {
+    const burndown = { id: "acme.burndown", version: "0.6.0", source: "registry" };
+    const gone = { id: "acme.gone", version: "1.0.0", source: "registry" };
+    const simulator = { id: "vibefield.simulator", version: "1.0.0", source: "registry" };
+    return { burndown, gone, have: [burndown, gone, simulator] };
+  }
+
+  /** The test's list: the burndown's newest release, which needs a newer VibeField (its contracts `floor`), and
+   * acme.gone listed or not. */
+  function listWith(
+    generatedAt: number,
+    burndown: string,
+    gone: "listed" | "unlisted",
+    floor = "9.0.0",
+  ) {
+    const body = index(generatedAt);
+    const plugins = body.plugins as Record<string, Record<string, unknown>>;
+    plugins["acme.burndown"]!.latest = release(burndown, floor);
+    if (gone === "listed") {
+      plugins["acme.gone"] = {
+        id: "acme.gone",
+        repo: "https://example.com/gone",
+        latest: release("1.0.0"),
+        history: [],
+      };
+    }
+    return body;
+  }
+
+  const said = (logs: CapturedLog[]) =>
+    logs.filter((l) => l.event.startsWith("fieldd.plugin_updates."));
+  /** acme.burndown's line: the release it can't take, the version you have, and the contracts floor. */
+  function incompatible(version: string, have = "0.6.0", floor = "9.0.0"): CapturedLog {
+    return {
+      event: "fieldd.plugin_updates.incompatible",
+      attrs: {
+        pluginId: "acme.burndown",
+        installedVersion: have,
+        version,
+        minApp: "0.9.0",
+        minContracts: floor,
+      },
+    };
+  }
+  const unlisted: CapturedLog = {
+    event: "fieldd.plugin_updates.unlisted",
+    attrs: { pluginId: "acme.gone", installedVersion: "1.0.0" },
+  };
+
+  it("says a plugin's line once while it stands, and again when it changes or comes back", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const registry = tempDir("vf-registry-");
+    const { burndown, gone, have } = behind();
+    publish(registry, listWith(1000, "0.7.0", "unlisted"));
+    const { catalog, logs } = make({ dataDir, registryUrl: urlOf(registry), installed: have });
+    // one open of the popup: one read of the list, which ends ready
+    const open = async () => expect((await catalog.refresh()).state).toBe("ready");
+    // the updates lines said since the last ask
+    let seen = 0;
+    const fresh = () => {
+      const lines = said(logs).slice(seen);
+      seen += lines.length;
+      return lines;
+    };
+
+    // two opens, two reads: one line for each plugin the list can't update
+    await open();
+    await open();
+    expect(fresh()).toEqual([incompatible("0.7.0"), unlisted]);
+    // a line that changes is said again: another release, other floors, the version you have
+    publish(registry, listWith(2000, "0.8.0", "unlisted"));
+    await open();
+    expect(fresh()).toEqual([incompatible("0.8.0")]);
+    publish(registry, listWith(3000, "0.8.0", "unlisted", "9.1.0"));
+    await open();
+    expect(fresh()).toEqual([incompatible("0.8.0", "0.6.0", "9.1.0")]);
+    burndown.version = "0.6.1";
+    await open();
+    expect(fresh()).toEqual([incompatible("0.8.0", "0.6.1", "9.1.0")]);
+    // caught up, acme.burndown's line clears and nothing is said; behind again, it is said again
+    burndown.version = "0.8.0";
+    await open();
+    expect(fresh()).toEqual([]);
+    burndown.version = "0.6.1";
+    await open();
+    expect(fresh()).toEqual([incompatible("0.8.0", "0.6.1", "9.1.0")]);
+    // listed again, acme.gone's line clears; left out again, it is said again
+    publish(registry, listWith(4000, "0.8.0", "listed", "9.1.0"));
+    await open();
+    expect(fresh()).toEqual([]);
+    publish(registry, listWith(5000, "0.8.0", "unlisted", "9.1.0"));
+    await open();
+    expect(fresh()).toEqual([unlisted]);
+    // gone from this desktop, its line clears; back again, it is said again
+    have.splice(have.indexOf(gone), 1);
+    await open();
+    expect(fresh()).toEqual([]);
+    have.push(gone);
+    await open();
+    expect(fresh()).toEqual([unlisted]);
+  });
+
+  it("one read's lines are not said again by the other: the popup's read, then updatesCheck", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const registry = tempDir("vf-registry-");
+    publish(registry, listWith(1000, "0.7.0", "unlisted"));
+    const { catalog, installer, logs } = make({
+      dataDir,
+      registryUrl: urlOf(registry),
+      installed: behind().have,
+    });
+    expect((await catalog.refresh()).state).toBe("ready");
+    const check = await installer.updatesCheck();
+    // its caller still has all of it
+    expect(check.missing).toEqual(["acme.gone"]);
+    expect(check.updates.map((update) => [update.id, update.compatible])).toEqual([
+      ["acme.burndown", false],
+      ["vibefield.simulator", true],
+    ]);
+    expect(said(logs)).toEqual([incompatible("0.7.0"), unlisted]);
+  });
+
+  it("one read's lines are not said again by the other: updatesCheck, then the popup's read", async () => {
+    const dataDir = tempDir("vf-catalog-");
+    const registry = tempDir("vf-registry-");
+    publish(registry, listWith(1000, "0.7.0", "unlisted"));
+    const { catalog, installer, logs } = make({
+      dataDir,
+      registryUrl: urlOf(registry),
+      installed: behind().have,
+    });
+    expect((await installer.updatesCheck()).missing).toEqual(["acme.gone"]);
+    expect((await catalog.refresh()).state).toBe("ready");
+    expect(said(logs)).toEqual([incompatible("0.7.0"), unlisted]);
   });
 });
 
