@@ -3404,7 +3404,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **the light**, white at a percent, the six steps of a hot fill's lit head;
     - **the attention ink** (§2.7; Godview's `--vf-godview-‹mode›-ink-attention` on the stage) for a figure, a
       mark's percent or a word that runs hot.
-    The hot dot is `--vf-orange` itself.
+    The hot dot is `--vf-orange` itself. On the desktop spawn bloom's buds (48, 42) the bloom paints the two tones
+    it is handed, the ink and the hot fill: the ink as its own `--mv-swarm-bloom-fuel-ink` (which inverts with the
+    reached bud) and the hot fill as `--mv-swarm-orange`, puppeteer-views' read of `--vf-orange`, each at the handed
+    percent; the light and the attention ink are never handed at that size.
   - **A plan that needs you** (a sign-in, or a reading that failed) is a dashed thread across both bands: dots of
     the ink at 46% (38% for a retry), never a fill. A sign-in already under way draws the same thread at 46% and
     asks nothing: its mark wears no badge, and the middle says "…" for it, as for a first read (added 2026-11-06,
@@ -3424,8 +3427,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       and 1.6 apart; from 150, `clamp(S × 0.046, 8, 11)` and 2.6 apart.
     - From 72 each arc wears its agent's mark outside it, at its middle: 10.5, or 16 from 150, where the mark of a
       plan that needs you wears a badge.
-    - The sizes in use are 26 (the phone's menu rows), 36 (the page's profile rows), 40 (the column), 54 (the
-      phone's buds), 206 (the held face's open circle), 212 (the column's popover) and 214 (the phone's page).
+    - The sizes in use are 26 (the phone's menu rows), 36 (the page's profile rows), 40 (the column), 42 and 48 (the
+      desktop spawn bloom's buds, §8 "Hold, reach, let go"), 54 (the phone's buds), 206 (the held face's open
+      circle), 212 (the column's popover) and 214 (the phone's page).
     - Around the held face it is a ring with a hole: 96 across, the hole 34 and the band 8, drawn at the 38-to-71
       level with nothing in its middle (§8 "The phone's corner").
   - **The middle.** Below 72, a circle that stands for one profile holds the profile's glyph (puppeteer's
@@ -3447,7 +3451,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **The hot dot.** A circle that stands for a profile at a small size (36, 40, 54) wears a dot while any of its
     plans runs hot: at −45° (the top right), its centre `S/2 − 3` from the middle, its radius `max(3.6, S × 0.085)`,
     in `--vf-orange`, ringed 1.6 in the ground it stands on. A dashed circle wears none. The open sizes say it in
-    words instead. The drawing's `#FF9F0A` is `--vf-orange`, never a literal.
+    words instead. The drawing's `#FF9F0A` is `--vf-orange`, never a literal. The desktop spawn bloom's buds (48,
+    42) wear none: their top right holds the blocked dot, and the orange fill says it (2026-11-11, James, the picks
+    page, f3: "none").
   - **Hot, and the forecast** (UM-D3, UM-D4). A window is hot by Settings' own rule, `isHot`:
     - at 100% or more;
     - with no pace to judge (no known length or reset), at 80% or more;
@@ -6203,8 +6209,24 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   type (there is no desktop mark; the laptop already means This Mac); the one pointed at inverts to ink
   and lifts to 1.16× (`--vf-ease-lift`, 180ms), the nearest leans in by up to 6%, an open desktop is
   ringed (2px) and its siblings step back (scale .9, the bud at .62, its label at .58); a desktop that
-  cannot take a terminal keeps its place, faint and dashed, with its reason. **Labels** (the name in 9.5px
-  mono 700 at 78% ink over a 7.5px 800 state line, haloed in the ground, 8px off the rim) do not sit on
+  cannot take a terminal keeps its place, faint and dashed, with its reason. A profile's bud wears its **fuel**, the
+  profile's **Bands circle** at the bud's own size (§8 "The Bands circle"; UM-D7, 2026-11-09, James, the picks page:
+  b1 "bands", b2 "dash", b3 "age"). VibeField draws it with the column's own geometry (`usage/bands.ts`,
+  `bandsGeometry`, with nothing in its middle) at 48 and 42 and hands the bloom the drawn arcs and notches
+  (puppeteer-views' `MonitorSpawnFuel.drawn`), which it paints as handed; VibeField hands none of the bloom's older
+  one-arc fields. Both sizes are the 38-to-71 level: two bands inside the rim, a plan's reading as its fill, a notch
+  for the time gone, orange when hot, at half when kept or read before its reset. A plan that needs you is the dashed
+  thread across both bands, its ink at 46%, 38% for a retry; while the profile's usage cannot be read, each plan is
+  the retry's thread at 38% (2026-11-11, James, f2: "38"). A thread that rings the whole bud starts its dashes at the
+  top, as the column's does (2026-11-11, James, m2: "top"). A first read and a profile with no meters keep the plain
+  bud: nothing in the bloom breathes. While a plan's row filters the stage (§8 "Godview's profiles column", **A
+  plan's row**), a bud still wears every plan its profile holds, the same circle the profiles column draws, since a
+  terminal is born under a profile, not a plan (ruled 2026-11-17, James, in part: "every plan that profile holds,
+  the same circle the profiles column draws"). The bud keeps puppeteer's glyph, 20 at 48 and 18 at 42 (2026-11-11,
+  James, f4: "20"), and its middle stays that glyph. It wears no hot dot: its top right is the blocked dot, and the
+  orange fill says it (2026-11-11, James, f3: "none"). It inverts with the reached bud. *(Written 2026-11-17, ahead
+  of PU-R's build: until it lands, the bud is plain, as the EL8 to puppeteer 0.4.0 left it.)* **Labels** (the name in
+  9.5px mono 700 at 78% ink over a 7.5px 800 state line, haloed in the ground, 8px off the rim) do not sit on
   anything: one that would touch another bud at its hot size, another label, the hub, a spoke or the
   field's edge moves round its own bud 15° at a time to the nearest clear place, then keeps only the name;
   an open desktop's label boxed in by its profiles gives way. (Only a hold pressed against the field's
@@ -10344,6 +10366,13 @@ here.
   all** and "1 read · 2 need you" under **Show Work** (§8 "The phone's corner", the words follow the reach). *(Corrected
   the same day: this said the phone's rows carry no run's profile until UM-5; they have since SE-2.)*
 - **The Me menu's row** is **Agent Profiles**, its word the tightest percent ("42%") or "reading…".
+- **The spawn bloom's words** (2026-11-09, James, the picks page, b3: "age"). After who is signed in, a profile bud's
+  line names its deciding plan, "‹plan›: 64% of 5 hours", in the line's own capitals, with no forecast and no reset.
+  A reading kept after a failed refresh, or a window read before its reset, says its age as "A reading" does:
+  "Claude Max: 64% of 5 hours, as of 5m ago". With no reading it says the column's words: "‹plan›: not signed in",
+  "‹plan›: couldn't read", "‹plan›: signing in" or "‹plan›: reading"; "usage unavailable" while the usage cannot be
+  read; "No meters" for a profile with none. The line is one tone; the bands carry the orange. When one plan reads
+  and another needs you, the words name the reading and the circle draws both.
 - **The page** is **Agent Profiles**: "Read a minute ago, from ‹home›" or "Reading usage…"; **Profiles**, with **All
   profiles** ("3 profiles · 5 plans") and each profile's line ("default · the agents' own sign-ins · 2 plans");
   **Plans**, **Every plan** or **Plans in ‹profile›**; and its foot, "Manage profiles in Settings → Agent Profiles.
