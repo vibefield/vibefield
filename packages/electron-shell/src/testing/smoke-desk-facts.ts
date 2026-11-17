@@ -104,9 +104,7 @@ export function judgeSelectionTook(type: string, want: number, got: number | nul
 /** The count a row's press asks the anchor for: 1, or one more than before under ⇧ (a row never shift-presses an
  * object already selected). */
 export function selectionWant(before: number | null, modifiers: readonly "shift"[]): number {
-  void before;
-  void modifiers;
-  return 1; // RED: a stub; ⇧ is not yet counted
+  return modifiers.includes("shift") ? (before ?? 0) + 1 : 1;
 }
 
 /** After a row's press: the anchor's count read until it is `want` or `timeoutMs` has passed, then judged. A green
@@ -119,11 +117,11 @@ export async function waitSelectionTook(
   timeoutMs = 5_000,
   now: () => number = Date.now,
 ): Promise<string | null> {
-  void type;
-  void want;
-  void count;
-  void pause;
-  void timeoutMs;
-  void now;
-  return null; // RED: a stub; no count is read
+  const deadline = now() + timeoutMs;
+  let got = await count();
+  while (got !== want && now() < deadline) {
+    await pause(60);
+    got = await count();
+  }
+  return judgeSelectionTook(type, want, got);
 }

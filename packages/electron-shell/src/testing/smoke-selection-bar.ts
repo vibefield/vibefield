@@ -24,6 +24,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BrowserWindow } from "electron";
+import {
+  DESK_FACTS,
+  deskFactsWords,
+  selectionWant,
+  UNDER,
+  waitSelectionTook,
+} from "./smoke-desk-facts";
 
 /** The example plugin's clock: its plugin id and its type are one (DK-6 input (b)). */
 export const BAR_CLOCK = "vibefield.example.desk-clock";
@@ -257,6 +264,8 @@ export async function selectionBarRows(d: BarRowsDriver): Promise<string[]> {
     );
   };
   const bar = (): Promise<BarSeen> => js<BarSeen>(READ_BAR);
+  const countNow = (): Promise<number | null> =>
+    js<number | null>("globalThis.__vfDesk.anchor()?.count ?? null");
   const point = async (type: string): Promise<{ x: number; y: number }> => {
     const p = await js<{ x: number; y: number } | null>(POINT_IN(type));
     if (p === null) throw new Error(`${type} was not picked where the desk receives a press`);
@@ -298,7 +307,9 @@ export async function selectionBarRows(d: BarRowsDriver): Promise<string[]> {
    * let go with Escape, the note still selected, and the bar comes back.
    */
   const select = async (type: string, modifiers: "shift"[] = []): Promise<void> => {
-    await press(await point(type), "left", modifiers);
+    const before = await countNow();
+    const at = await point(type);
+    await press(at, "left", modifiers);
     await sleep(300);
     if (await js<boolean>(`document.activeElement?.hasAttribute("data-desk-editor") === true`)) {
       await key("Escape");
@@ -308,6 +319,21 @@ export async function selectionBarRows(d: BarRowsDriver): Promise<string[]> {
         `document.activeElement?.hasAttribute("data-desk-editor") !== true`,
       );
     }
+    // Item 327, as HN-3's select: the press took the selection the row's bar asks next (1, or one more under ⇧), or
+    // the red says the press and not the bar's 10 s wait after it. A green run passes the first read.
+    const problem = await waitSelectionTook(
+      type,
+      selectionWant(before, modifiers),
+      countNow,
+      sleep,
+    );
+    if (problem === null) return;
+    const under = await js<{ desk: boolean; cards: boolean }>(UNDER(at));
+    const facts = deskFactsWords(await js<Readonly<Record<string, unknown>> | null>(DESK_FACTS));
+    throw new Error(
+      `${problem} (at ${at.x},${at.y}: in the desk ${under.desk}, in the cards ${under.cards}) ` +
+        `(desk ${facts})`,
+    );
   };
   /** A cell of the bar pressed where it stands. */
   const pressCell = async (act: string): Promise<void> => {

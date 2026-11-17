@@ -36,7 +36,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BrowserWindow } from "electron";
-import { DESK_FACTS, deskFactsWords, judgeSelectionTook, UNDER } from "./smoke-desk-facts";
+import {
+  DESK_FACTS,
+  deskFactsWords,
+  selectionWant,
+  UNDER,
+  waitSelectionTook,
+} from "./smoke-desk-facts";
 import { type BarCounters, judgeCounters, POINT_IN } from "./smoke-selection-bar";
 
 /** The canon's numbers for Copy's still (§8: the anchor's box less the brackets' outset). */
@@ -380,21 +386,19 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
   const countNow = (): Promise<number | null> =>
     js<number | null>("globalThis.__vfDesk.anchor()?.count ?? null");
   const select = async (type: string, modifiers: "shift"[] = []): Promise<void> => {
-    const before = (await countNow()) ?? 0;
+    const before = await countNow();
     const at = await point(type);
     await press(at, modifiers);
     await sleep(300);
     await letWritingGo();
     // Item 327: the press took the selection the row's bar asks next (1, or one more under ⇧), or the red says the
     // press and not the bar. A green run passes the first read.
-    const want = modifiers.includes("shift") ? before + 1 : 1;
-    const deadline = Date.now() + 5_000;
-    let got = await countNow();
-    while (got !== want && Date.now() < deadline) {
-      await sleep(60);
-      got = await countNow();
-    }
-    const problem = judgeSelectionTook(type, want, got);
+    const problem = await waitSelectionTook(
+      type,
+      selectionWant(before, modifiers),
+      countNow,
+      sleep,
+    );
     if (problem === null) return;
     const under = await js<{ desk: boolean; cards: boolean }>(UNDER(at));
     throw new Error(
