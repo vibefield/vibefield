@@ -13,6 +13,7 @@ import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -80,6 +81,16 @@ async function ready(launchSpec = launch): Promise<FilesHostSupervisor> {
   return supervisor;
 }
 
+/** The installed `@vibecook/mille`'s version, read from fieldd's own
+ * node_modules where `installedMilleNative` finds the package. check:deps holds
+ * the install to the pin, so a pin move (an EL8) leaves this row as it is. */
+function installedMilleVersion(): string {
+  const path = join(import.meta.dirname, "../node_modules/@vibecook/mille/package.json");
+  const manifest = JSON.parse(readFileSync(path, "utf8")) as { version?: unknown };
+  if (typeof manifest.version !== "string") throw new Error(`no version in ${path}`);
+  return manifest.version;
+}
+
 async function refusal(promise: Promise<unknown>): Promise<Error> {
   try {
     await promise;
@@ -95,7 +106,10 @@ describe("the files worker (fieldd's supervisor over the real bundle)", () => {
     const health = supervisor.health();
     expect(health).toMatchObject({ phase: "ready", generation: 1, detail: null });
     expect(health.pid).toBeGreaterThan(0);
-    expect(health.mille).toEqual({ packageVersion: "0.3.4", nativeVersion: "0.3.4" });
+    // the bundle stamps the package's version from the same install; the addon
+    // reports its own, so a stale `.node` cannot pose as the installed engine
+    const installed = installedMilleVersion();
+    expect(health.mille).toEqual({ packageVersion: installed, nativeVersion: installed });
     // the pipe answers the ops it names and no others: git reaches a root only
     // over an attached session's own git leg (the `git` op was retired, R6)
     expect(
