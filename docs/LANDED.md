@@ -33765,6 +33765,16 @@ fixtures), field-native's `registries.rs`, fieldd's package.json and 11 fieldd s
     which stops its daemons through the census) and any `pnpm dev` is stopped; the guard's three names are a sample,
     not the set. Xcode's Organizer by hand, which reads no key file, is the other way. A key decoded while an agent
     ran is treated as exposed and revoked.
+- *Corrected 2026-11-17 (items 359 and 360, written late):* "two vendor marks" (the heading) and "DESIGN.md §13 says
+  the phone keeps two vendor marks" (above) stopped holding on 2026-11-12, when James overturned the ruling. He
+  typed in his QA session at 17:50:31Z: "overturn this ruling, bring back those icons now, i see many other apps on
+  app store do the same thing and they are fine". Items 359 and 360 built it, and it landed with the phone's QA
+  batch (M316): every agent the catalog offers a phone draws its own mark again, nine in the asset catalog
+  (`c42b95748`, `c6c7abb64`, `ecc1420f4`; Pi's `83104a2eb`) and on the swarm's atlas (`c8492e6d5`, `3f2bf7c23`,
+  `b6edf1ab9`; `a0631d226` made two of its test lines compile). The atlas still blanks the tiles it does not draw,
+  so a mark the app does not draw stays out of the bundle. On the PM board at 2026-11-12T21:38:11.866Z he chose:
+  "Say nothing in the review notes; keep the About line as it is". The About lines still name Anthropic and OpenAI
+  alone. What the App Review notes' own paragraph on the marks says next is still his to answer.
 
 **Validation.**
 - This Mac, from inside the lane on T″ `8cf6e3067` (07:42:53Z and 07:44:05–07:44:37Z) and again on the landed tip
@@ -51986,3 +51996,554 @@ every other id here is a side commit's, where it was cut or where a row ran.)
 - `pnpm gate:landing`: deferred, not waived; owed at James's unlock.
 
 **Not done, and not claimed:** nothing pushed.
+
+## Items 476 (stage 2) and 490 — a refused feed asks again by itself; a plugin that cannot start says so (M333)
+
+(2026-11-17; three commits, 24 paths +1,871 −80. Planned and read whole by qa-02, drafted by three subagents,
+cut on main `8bb55de91` as `f0c8038ce`, `ef6425ee8` and `3bd01d6a3` on branch
+`i476s2/the-refused-say-so-on-8bb55de91`. Main moves once, on James's word and VF-PM's GO. On main they are
+`2d5bf5913`, `00a00e4f7` and `cf662df73`; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- Stage 1 (M330) made fieldd's door refuse a subscription only by what it asks for. What a person saw of a
+  refusal was left as it was. A shared feed refused for room asked again only when another subscription of
+  the same window was released: with nothing released it stayed on its could-not-load line.
+- Two views said fieldd's own reason: Agents → Extensions printed it after its line, and Live apps called any
+  refusal for room "The app limit has been reached.". The setup wizard's profiles step skipped itself at the
+  first refusal.
+- A plugin whose update lane fieldd would not open was skipped by the staged loader and named nowhere: it read
+  as an ordinary installed plugin while its objects drew as missing. The same was true of a module that would
+  not import and an activation that failed.
+- Item 490, found while reading the planner: for such a plugin, where a board's stub had already defined its
+  type in the window, the planner answered each registry snapshot with a renderer replace, and the new
+  renderer's first snapshot could answer the same: a reload with no bound. Read from source; not seen in a
+  running window.
+- James, typed in qa-02 (2026-11-16T18:43:58.885Z), in part: "eliminate such limits from the roots". For the
+  words a person reads, typed in qa-02 (2026-11-16T22:04:27.439Z): "yes on the wording" (asked: no new
+  sentence; a plugin that cannot start says its name, then: "isn't working right now"; a page that cannot load says
+  its own could-not-load line and keeps trying by itself).
+
+**What moved.**
+- DESIGN.md §9 (`2d5bf5913`), first: one dated line under "The plugins' words".
+- fieldd-client (`cf662df73`): a shared feed refused for room asks again on a timer of its own as well as at a
+  release: 1 s, 2, 4, 8, 16, then every 30 s while a holder stays (`reask.ts`: `REASK_BACKOFF`,
+  `reaskDelayMs`, `refusedForRoom`). One timer a feed; a release asks at once and starts the wait over; a
+  grant resets the step; the last holder leaving clears it; a refusal of another kind arms nothing.
+- The views (`cf662df73`): Extensions says "Could not read what the agents hold." alone; Live apps says a refusal
+  for room in the load's own line; the wizard's profiles step waits 17 s through refusals for room, shows as
+  it would have if the feed arrives, and only then skips.
+- The plugins (`00a00e4f7` the set, `cf662df73` its writers and readers): a window-local set of the plugins that
+  cannot start here (`plugin-host/unstarted-plugins.ts`). The staged loader names a plugin whose lane will not
+  open and leaves it UNSTAGED, and names one whose module will not import or whose activation failed. The
+  planner makes NO move for a lane-failed plugin (item 490's fix). Installed and Settings → Plugins read
+  the plugin's name, then "isn't working right now", while it is on and named; off, the rows say off. A plugin
+  fieldd stopped after it kept crashing keeps its stopped line and its attention ink.
+- The retry (`cf662df73`): one timer for the window asks a lane again, on the same backoff, only when fieldd
+  refused it for room AND no type of the plugin is defined in the realm; when it opens the plugin is staged
+  and the board reopens once (none for a plugin with no kinds). A plugin whose type a stub already defined is
+  never asked: it waits for the window's next start, or for off and on. No lane is opened only to learn there
+  is room; a lane that opens for a plugin still not staged is not asked again. The retry never replaces a
+  renderer.
+- The log: a refusal that repeats is said once at its level and at debug after (the loader's failure line; the
+  retry's asking line).
+- Three comments that said a refused feed waits for a release alone get a dated correction at their source.
+
+**The proof.** `row-476s2.sh` (`c1d8d111ad052a95`), on this Mac through the door, in a lane beside the running
+QA desktop, on main `8bb55de91` with the four patches in the working tree, 2026-11-17 01:43:03Z → 01:47:44Z,
+under a 48-byte TMPDIR, three vitest workers: **GREEN** (run.log `59e7d1c5d959abab`).
+- The second commit's tree: fieldd-client's and field-app's typechecks clean; biome clean over its six TS
+  paths; its 16 new rows red by name and no other test failed (fieldd-client 8 of 29; field-app 8 of 59).
+- The full red set, in a working tree and not a commit (the third commit's three test files over the old
+  sources): all 28 new rows red by name (8 and 20), no other test failed, no file failed to load.
+- The third commit's tree: `pnpm typecheck` whole clean (85 s); biome clean over the 23 TS paths, exit 0 and no
+  Found line; fieldd-client WHOLE 10 files, 77 tests; field-app WHOLE 357 files, 5,116 tests; the 28 rows
+  passed; `pnpm check:walls` clean.
+- No cargo compile or download; the product folder's links into /tmp 0 before and after; the four patches
+  reversed and the lane returned; refs equal before and after.
+- The commits' trees are those working trees': the top's 24 paths held to the proven files, blob by blob.
+- The train's V: V-TRAIN8, `pnpm verify` whole at the train's top on this Mac through the door, under the harness,
+  2026-11-17 04:35:16Z → 05:29:54Z: **GREEN**, exit 0 in 3265 s. Every stage opened; vitest and node:test failures 0;
+  cargo's 38 results ok, none failed; fieldd 290 test files passed and 5 skipped (4115 tests passed, 15 skipped);
+  field-app 358 of 358 files, 5132 of 5132 tests; gen:check opened, cargo fmt clean, plugin-cli 9 of 9 files (verify.log
+  `61651e73ff609821`).
+
+**Not covered.**
+- No window was looked at. That the desk redraws once when a refused plugin with object kinds comes back, and
+  item 490 itself, are read from source.
+- How one plugin's update lane comes to be refused for room in a running window is not known. This makes the
+  refusal harmless and visible; it does not find its cause.
+- Live apps' catalog and the monitor's device and profile-set doors still subscribe outside the shared feed:
+  they show their line and do not retry until item 473. The places item 473 names where a refusal is swallowed
+  and nothing is said stay silent and unhealed.
+- A plugin's own page in the Plugins popup does not say the line yet (item 494, parked behind this).
+- The bound per caller is unchanged (item 480, stage 3).
+- A stand-in daemon in another package's tests that refuses a shared feed for room now meets a real 1 s timer
+  while a holder stays; the row proves these two packages, the train's V the rest.
+- macOS only; no phone path moves.
+
+**Closed by it:** item 476's stage 2, and item 490 inside it. **Left:** items 473, 480 and 494.
+
+**Not done, and not claimed:** no Electron or phone witness; the landing-only gates (`pnpm gate:landing`) were
+not run and are owed at the landing; nothing pushed.
+
+## Item 489 — four places say VibeField's sentence alone; the agent's words go to the log (M334)
+
+(2026-11-17; two commits, 10 paths +449 −44. Cut by c2 on item 476 stage 2's cut `3bd01d6a3` as `f0059556b`,
+`f322632ad` on branch `i489/agent-words-to-the-log-on-i476s2`. Main moves once, on James's word and VF-PM's GO. On main
+they are `523f32576` and `adff256d4`; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- Item 488 (M331) found six places that print an agent adapter's own sentence on a face. Four of them printed it
+  after VibeField's sentence (the agent's label is Claude's here; "…" is the adapter's words):
+  - New agent's "Another model…" page, under a picker that stands: "As of 3 min ago · the last read failed: …".
+  - Settings › Extensions, an agent's catalogs: "Claude's catalogs couldn't be read: …".
+  - Settings › Extensions, a cell's tooltip: "Claude could not be read: …".
+  - Settings › Extensions, one agent's page: "Claude's plugins, servers and skills couldn't be read: …".
+- Those words are fixed sentences in the adapters, never raw output, but they name files, paths, commands and profile
+  ids: an agent's insides on a face (DESIGN.md §9; AR-L1).
+
+**What moved.**
+- The four sentences end at VibeField's words: "the last read failed", "Claude's catalogs couldn't be read.",
+  "Claude could not be read", "Claude's plugins, servers and skills couldn't be read." No new sentence.
+- `agent-words-log.ts` (new): one place logs a failed read with the adapter's words as `reason` (cut at 500
+  characters), its status, and its code and retryable where given. Warn when a person's act asked for that read;
+  debug when the read came by itself (the renderer log keeps info and up by default).
+- Where each answer arrives:
+  - New agent's models (`renderer.history.models_read_failed`): warn when a person opened the page and no picker
+    stands; debug for a re-read failing behind an old picker, and for the recipe row's read.
+  - Extensions' agents (`renderer.extensions.read_failed`): once per agent, state and words while the failure stands,
+    at debug; at warn after the person's Read again.
+  - Extensions' catalogs (`renderer.extensions.catalog_read_failed`): warn after the page's Refresh; debug for the
+    page's opening read and the read after a finished act.
+
+**Untouched.**
+- The other two sites print the agent's words ALONE, with no sentence of VibeField's: the launch picker's dimmed row on
+  "Another model…" (`history/launch.ts`), whose words DESIGN.md ratifies today, and New spark's model menu
+  (`chat/new-spark.ts`). Their new sentences, the DESIGN.md lines and the phone's two twins are James's to choose; they
+  are not here.
+- Other adapter-worded fields drawn on a face (a release's or a profile's failure, the browse notice's unavailable
+  message) are item 493's sweep, read only.
+
+**The proof.** `rows-489.sh` (`755958bde6e63adc` as launched, try b), on this Mac through the door, at item 476 stage
+2's cut `3bd01d6a3` with 489's two patches in the working tree, 2026-11-17 02:29:53Z → 02:33:37Z, under the runner's
+48-byte TMPDIR, three vitest workers: **GREEN**, 11 of 11 (run.log `8949b837023a9514`).
+- The red, by count and by name, none foreign: extensions-settings "Tests 5 failed"; browse-settings "Tests 2 failed |
+  19 passed (21)"; history-host "Tests 1 failed | 44 passed (45)"; launch-acts-words "Tests 2 failed (2)".
+- The greens: biome over the ten paths (no "Found" line), field-app's typecheck and the walls clean;
+  extensions-settings three times (56 each), browse-settings three times (21 each), launch-acts-words three times (2
+  each), history-host 45; field-app WHOLE 358 files, 5,121 tests, with stage 2 in the tree.
+- The log rows hold both levels: a pressed read at warn with the adapter's words, a read that came by itself at debug,
+  and none of the words on the page.
+- Try a (02:10Z) was red at C2's biome alone (formatting); mended with biome's printed lines, not re-run as a.
+- The product folder's links into /tmp were 0 at every run. The patches were reversed after, and the lane returned
+  with its refs equal (2507 = 2507).
+- The commits' trees are those working trees', the ten paths at the proven blobs.
+- The train's V: V-TRAIN8, `pnpm verify` whole at the train's top on this Mac through the door, under the harness,
+  2026-11-17 04:35:16Z → 05:29:54Z: **GREEN**, exit 0 in 3265 s. Every stage opened; vitest and node:test failures 0;
+  cargo's 38 results ok, none failed; fieldd 290 test files passed and 5 skipped (4115 tests passed, 15 skipped);
+  field-app 358 of 358 files, 5132 of 5132 tests; gen:check opened, cargo fmt clean, plugin-cli 9 of 9 files (verify.log
+  `61651e73ff609821`).
+
+**Not covered.**
+- No window was looked at, on the desktop or the phone.
+- The log lines are heard by a recording logger in the tests, never read back from a renderer log on disk.
+- macOS only.
+
+**Not done, and not claimed:** sites 1 and 3 (their sentences are James's to choose); item 493; the landing-only
+gates (`pnpm gate:landing`) were not run and are owed at the landing; nothing pushed.
+
+## Item 486 — fieldd's stop carries on past a failed step, and says so (M335)
+
+(2026-11-17; two commits, 8 files, red then green. Cut by RV on main after train 7, on `rv/i486-on-8bb55de91`.
+Main moves once, on James's word and VF-PM's GO. On main they are `9613ff06b` and `fd49bb253`;
+every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What it fixes.**
+- Found while reading item 485's red on GitHub: a failed service stop skipped the rest of the daemon's teardown, and
+  the process still exited 0, so nothing that started it learned of it.
+- Each step of fieldd's stop now runs in its own try, in design-02's order, unchanged. A failed step is logged by its
+  name (`fieldd.lifecycle.stop_step_failed`, from a closed list, never an error's words) and the next step runs; the
+  stop rejects at its end with the first failure, naming the rest. The host's residue check still reports; it no
+  longer cuts the teardown short.
+- The process exits 1 after a stop that failed. Both run files go on every stop, failed or not, unless a newer fieldd
+  holds them.
+- A stop a shell asked for (a quit, a logout, an update) marks the record it kept as incomplete, naming the first
+  failed step (`ShellLastExit.incomplete`, TS-only). A stop no shell asked for leaves that record as it was. No face
+  draws the record raw: Diagnostics' "Last exit" reads its known fields by name.
+
+**The proof.**
+- The red commit adds a booted row, `daemon-stop-carries-on.test.ts`, with FielddConfig's `stopFaultAt` seam (a code
+  seam, no environment variable) at the plugin services' step: the faulted stop rejects; the run files are gone; the
+  port refuses; the step is logged by its name; a second stop answers the same; a shell-asked stop's record is marked;
+  a stop no shell asked for leaves the record; bin's exit is 1 after a failed stop. At the red commit three of its four
+  tests fail; the fourth (a clean stop, a stop no shell asked for) passes, as it does today.
+- RV's row (`row-i486.sh`, `fcfc40d372af75d0`), on this Mac through the door, at main `8bb55de91`, under the env -i
+  harness, a 48-byte TMPDIR and three vitest workers, 2026-11-17 02:17:29Z → 02:28:27Z: **GREEN** (run.log
+  `ff89b48e8c21b8dc`).
+  - At the red commit's tree, the new file once: RED as wanted. The booted row failed at the token file still
+    standing, before any log read; the shell-asked row on the record with no mark; bin's exit on 0 after the failed
+    stop; the fourth passed. No socket was left. fieldd's typecheck exit 0; biome over the red's four files exit 0.
+  - At the fix's tree: fieldd's and contracts' typechecks exit 0; biome over the seven files exit 0; `pnpm gen` fresh;
+    `cargo fmt --check` exit 0; plugin-cli's suite 115 passed; contracts' suite 2075 passed, the new fixture parsed.
+  - The new file five times in a row, 4 of 4 each; `plugin-community-hold-boot.test.ts` five of five, no step failed.
+  - fieldd's whole suite once: 4115 passed, 15 skipped, in 295 files.
+  - The product's socket folder's links into a temp root 0 before and 0 after; the lane returned with its refs equal.
+- A first row (01:51:42Z → 02:01:14Z) was RED by the test's own fixture and format, not the fix: the fixture gave the
+  daemon no log root, so fieldd wrote no log and two log reads found nothing; and biome found four format errors. The
+  fix held there too (the run files gone, the port refused, the record marked, bin's exit 1). The fixture's log root
+  and biome's four printed fixes went into a new stage, and the second row ran from it.
+- The train's V:
+  V-TRAIN8, `pnpm verify` whole at the train's top on this Mac through the door, under the harness, 2026-11-17 04:35:16Z
+  → 05:29:54Z: **GREEN**, exit 0 in 3265 s. Every stage opened; vitest and node:test failures 0; cargo's 38 results ok,
+  none failed; fieldd 290 test files passed and 5 skipped (4115 tests passed, 15 skipped); field-app 358 of 358 files,
+  5132 of 5132 tests; gen:check opened, cargo fmt clean, plugin-cli 9 of 9 files (verify.log `61651e73ff609821`).
+
+**Not covered.**
+- The words a person reads for the mark: item 492, James's to see first.
+- Nothing acts on the exit code today: fieldd-supervisor, the one parent that sees it, logs it and branches on it
+  nowhere, so a failed stop at a Quit is a log line, never a respawn or a crash notice. Reading it is for its owners.
+- Item 487, the quit reads the door's early answer as complete; fieldd's own teardown result is read by nobody. It is
+  the shell's, parked for an owner and James.
+- design-02's Shutdown paragraph and ESR §7.3 take their dated notes through the draft queue, not these commits.
+- The row runs on macOS; nothing here is proven on Windows or Linux. Nothing was looked at in a window.
+- `pnpm gate:landing`: deferred, not waived; owed at James's unlock.
+
+**Not done, and not claimed:** nothing pushed.
+
+## Item 291 (slice A) — the phone's Now pill prints no ↘ (M336)
+
+(2026-11-17; three commits, 4 paths +25 −11. Cut by fd on main `8bb55de910e9` as `0ee7b0341`, `6cd8ffaf5` and
+`543965924` on branch `pg/291a-legend`. Main moves once, on James's word and VF-PM's GO. On main they are
+`654526a53`…`e0920030d`; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- The phone's spend view printed `↘` under its Now pill's mark. On the window that is the End key's legend (M181); a
+  phone has no End key, so it named a key the person cannot press.
+- James, typed in vibe-field-52 (2026-11-17T01:28:06Z): "go with your leans, i want best user experience", answering
+  the lean to drop it on the phone as a named deviation.
+
+**What moved.**
+- DESIGN.md, Godview's spend view: one dated bullet, the phone's Now pill prints no `↘`; the window keeps its legend.
+- `SpendModel.nowLegend` is `String?` and nil on the phone; `SpendModel.Dropped.nowLegend` holds the window's `↘`,
+  the fifth named deviation beside the view's label, the row label, the Now title and the empty hint.
+- `SpendView`'s pill draws a legend only where the model names one, so the phone's pill shows its mark alone, centred
+  where the mark over its legend stood; the pill's size (a fixed 34) and every pinned top and right are unchanged.
+- P7 compares the golden's Now legend against `Dropped.nowLegend`, as it does the Now title; H10 holds the phone's
+  legend to nil and pins `Dropped.nowLegend`.
+
+**Untouched.**
+- No golden moves: `phone-spend.golden.json` still records the window's legend, which P7 now compares it to.
+- Item 291's other four marks (the burn's "then", the head at a moment, the Now pill under the caption with the
+  caption's short words, $0 above now's chip) are slice B, owed at the EL8 to the first puppeteer release that carries
+  puppeteer #81: P7's golden is recorded from the pinned 0.4.0, which predates it.
+
+**The proof.** qa-01's device-build row, on this Mac through the door, 2026-11-17 02:06:05Z → 02:08:50Z, on main
+`8bb55de910e9` with `A-all.diff` (`150ff3b376402c6b`) alone applied to its working tree: **GREEN**.
+- The Debug device build: exit 0, 0 error lines, BUILD SUCCEEDED (binary `cf8b100b9bacf230`, kept as a build NOT
+  landed); no package fetched.
+- The five kit test targets typecheck, each `swiftc` rc 0 with 0 error lines: FieldHistoryTests 29 files,
+  FieldHomeTests 83 (SpendModelParityTests among them), FieldDesignTests 20, FieldProductTests 38, FieldSwarmTests 6.
+- The commits' top tree is main plus that same diff, so the build's tree is the commits' (with the bullet's date mark
+  filled, which no build reads).
+- The train's V: V-TRAIN8, `pnpm verify` whole at the train's top on this Mac through the door, under the harness,
+  2026-11-17 04:35:16Z → 05:29:54Z: **GREEN**, exit 0 in 3265 s. Every stage opened; vitest and node:test failures 0;
+  cargo's 38 results ok, none failed; fieldd 290 test files passed and 5 skipped (4115 tests passed, 15 skipped);
+  field-app 358 of 358 files, 5132 of 5132 tests; gen:check opened, cargo fmt clean, plugin-cli 9 of 9 files (verify.log
+  `61651e73ff609821`).
+
+**Not covered.**
+- No kit test ran: H10 and P7's legend rows are declared and OWED (`swift test` does not run on this Mac).
+- Nothing was drawn or looked at on a phone or a simulator; nothing was installed.
+- Slice B, at the puppeteer EL8.
+
+**Not done, and not claimed:** no phone witness; nothing pushed.
+
+## UM — the meters are chrome; the reach is instant; the window in the middle, the sign-in veiled (M337)
+
+(2026-11-17; four commits, 25 paths +1,318 −220. The desktop half was made on the old main `2b78151b9`, shown live
+on the QA desktop as working-tree diffs, and carried onto main `8bb55de91`; the phone half was made on the carried
+top. On branch `um/chrome-over-crt-on-8bb55de91` they are `cba89f9a7`, `c9ec5ba68`, `91b96d618` and
+`91e7cb260`. Main moves once, on James's word and VF-PM's GO. On main they are `699aea8b1`, `851a3f1a7`, `e792f6d63` and
+`bf103254e`; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- Godview's CRT layers (the scanlines and the vignette, z 30) stood over the profiles column and its cards (z 13):
+  the meters read as part of the picture, not as the app's chrome.
+- The popover's bands key drew its three small bands unpositioned inside an absolute drawing, so they left their
+  words and stacked at the card's top-left corner as one stray mark.
+- A plan's row drew its tightest window's line alone; the plan's other windows were not shown.
+- A card waited a 120ms dwell before taking a new circle, and each circle crossed began the wait again: moving along
+  the column, the card lagged behind the pointer.
+- The popover's middle repeated the agent's mark that its arcs and rows already show, and did not say which
+  window its figure read. The phone's circles were the same.
+- A plan row named no sign-in, so two plans of one product on two accounts could not be told apart.
+- On the phone's held face, with seven profiles the first arc's labels stood on the second arc's buds, and long
+  names stood on each other.
+- The two desktop commits' comments named a person.
+
+**What moved.**
+- DESIGN.md §8 first, in the commits that change it: "Where the chrome stands" (new), "Where the cards stand",
+  "The reach", "The body", the page's Plans, "With several" and "The labels" (new), corrected at their source with
+  dated lines.
+- The chrome layer (`699aea8b1`): the column's slot and the claims strip leave the stage for `.vf-monitor-chrome-layer`,
+  a root sibling after the stage at z 30, after the CRT layers in the root and so over them, under the head's 31.
+  `mirrorStageBox` lays it out in the stage's own box, so every `100%` max-height and the swarm's obstacles are
+  unchanged. A raised deck still covers it (clipped at the deck's rest plus its shift); under a maximized deck it
+  fades with the stage and then takes no pointer; under the curtain it is hidden with the cards. The cards' layer
+  moves from z 13 to 30, after the chrome layer.
+- The key and the rows (`699aea8b1`): each key band has its own 16 x 11 positioned box; every window of a plan draws
+  Settings' C1 line with its own forecast, reset or age (`windowLines`), and the 196 cap goes.
+- The reach (`851a3f1a7`): entering another circle or the add while a card shows takes the card at once, unless the
+  pointer is on its way into the shown card (`aim.ts`: the newest point inside the triangle the point three moves
+  back makes with the card's near edge, held out 12 past each corner, moving right at least 2 and no steeper than
+  2). Only that trip waits the 120ms dwell. The grace (320ms) is unchanged.
+- The middle (`851a3f1a7` desktop, `e792f6d63` phone): an opt-in `centreWindow` shows a reading's deciding window by
+  its C1 label ("7D") over the figure where the mark stood; at full size the say line follows and no "of 7 days"
+  line repeats it. The desktop popover and the phone's page (214) and held (206) circles pass it; every other circle is
+  unchanged. The kit mirrors the desktop line for line.
+- The rows (`851a3f1a7` desktop, `e792f6d63` phone): the agent's mark stands level with the plan's title. Each row says
+  the plan's sign-in after its title, veiled (`veiledAccount`, the kit's `MeterModel.veiledAccount` case for case:
+  "k•••@w•••.example"; a handle to its first letter; the organization left out), never whole, giving way first.
+  VoiceOver hears "…" for the dots.
+- The bud labels (`e792f6d63`): the second arc moves from 224 to 276. `FaceHold.labelBoxes` places each label outside
+  along its spoke, inside, then either side, each just clear of its bud at its reached size and slid back on
+  screen, taking the first place that touches no bud, the face or another label; the second arc's labels first.
+  A label's name stops at 14 characters and its state at 17, each cut to one less and "…": a profile's name runs to
+  64 and a window's word is the adapter's own. The whole name stands in the huge words while its bud is reached.
+- The golden (`e792f6d63`): RE-BLESSED by its generator, the cases above recording `centreWindow`, one case added;
+  its kit mirror copied from it.
+- The comments (`bf103254e`): the 18 comment lines the desktop commits added that named a person say the day the
+  change was asked for instead; the quotes stay where they are the reason. No code byte moves.
+
+**The proof.**
+- The desktop half before its commit: `row-reach-v5.sh` (`d7b0f550d2251ecf`), on this Mac through the door, in the
+  lane on the old main, 2026-11-17 03:11:24Z → 03:11:57Z, under a 48-byte TMPDIR and an empty HOME, three vitest
+  workers: **GREEN** (run.log `4b1798c20f7f1fcb`). field-app's typecheck clean; biome clean over the change's seven
+  code files; vitest on profiles-column, usage-bands and ui-system-boundaries, 202 of 202;
+  `pnpm check:ios-fixtures` clean; addresses in the example forms. Its first run was red on an import order and
+  two test rows, fixed before the commit.
+- The phone half before its commit: `row-phone-v2.sh` (`a88bf2c807761d60`), on the carried top with the change in
+  the working tree, 03:40:11Z → 03:40:46Z: **GREEN** (run.log `140e4ae4f3d7a1a7`). The generator "unchanged" at
+  the re-blessed golden; the mirror equal; check:ios-fixtures clean; vitest 202 of 202 (usage-bands against the new
+  golden byte for byte); biome clean; field-app's typecheck clean; addresses in the example forms; the whole change
+  `591ec811fb8b5c0d`, which the commit holds. Its first run was red on one biome quote, fixed before the commit.
+- The bud labels' placement, by a port of it (not the kit's tests): 37,632 uniform cases (names 1 to 64, states 7
+  to 17 and 30, seven screens 375 to 440 wide, two to eight profiles) and 40,000 mixed ones, 0 labels on a bud,
+  the face, another label or off the screen.
+- The first commit's own run of 2026-11-16 was made outside the run rules and is not counted; the row below,
+  commit by commit, is its proof.
+- Commit by commit: `row-carried-v1.sh` (`d8bb3740a57d4c44`), on this Mac through the door, by a detached checkout of
+  each commit in turn, 2026-11-17 04:29:02Z → 04:32:46Z: **GREEN** (run.log `19dc51df1a112776`). At each of the four:
+  field-app's and electron-shell's typechecks clean, and biome clean over that commit's own code. At the second and the
+  fourth: vitest on godview-monitor, profiles-column, usage-bands and ui-system-boundaries, 330 of 330. The lane was
+  returned and no ref was written.
+- The phone: the train's device row on its assembled top, on this Mac through the door, 2026-11-17 04:20:57Z →
+  04:24:40Z: **GREEN**. The Debug device build ended exit 0 with 0 error lines, and the kit's eight test targets
+  typechecked clean (FieldHistoryTests, FieldHomeTests, FieldDesignTests, FieldProductTests, FieldSwarmTests,
+  FieldMeshTests, FieldSettingsTests, FieldWorkspaceTests). A typecheck: no test row ran; nothing was installed.
+- The train's V: V-TRAIN8, `pnpm verify` whole at the train's top on this Mac through the door, under the harness,
+  2026-11-17 04:35:16Z → 05:29:54Z: **GREEN**, exit 0 in 3265 s. Every stage opened; vitest and node:test failures 0;
+  cargo's 38 results ok, none failed; fieldd 290 test files passed and 5 skipped (4115 tests passed, 15 skipped);
+  field-app 358 of 358 files, 5132 of 5132 tests; gen:check opened, cargo fmt clean, plugin-cli 9 of 9 files (verify.log
+  `61651e73ff609821`).
+
+**Not covered.**
+- No window was looked at by the rows; the desktop change was looked at live on the QA desktop as working-tree
+  diffs. The phone's fault was seen in the build already on James's phone; the phone change itself has been built
+  and shown on no phone.
+- The kit's Swift test rows (labelBoxes, the cut, veiledAccount, the plan row's sign-in, the 27-circle parity)
+  were not run: no `swift test` on this Mac.
+- The bands key's words are fixed ("5 hours", "7 days"); for a plan with no short window they describe a band the
+  circle leaves empty (item 495, not started).
+
+**Closed by it:** the meters' 2026-11-16 and 17 revisions, desktop and phone. **Left:** the tier badge and the key
+by bands drawn (item 495).
+
+**Not done, and not claimed:** no Electron witness; the landing-only gates (`pnpm gate:landing`) were not run and
+are owed at the landing; nothing pushed.
+
+## Item 499 — the design catalog's theme row splits from its component-state checks (M338)
+
+(2026-11-17; one commit, 1 path +24 −16. Cut by c2 on main `8bb55de91` as `cb3207cc0` on branch
+`i499/theme-row-split-on-8bb55de91`. Main moves once, on James's word and VF-PM's GO. On main it is `2c94c512c`;
+every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- GitHub's `verify` timed out on one row of field-app's `test/design-system.test.tsx`, "exposes theme and representative
+  component-state controls" (120 s), in three of eight runs from 2026-11-11: 204.5 s at `635eb8430`, 205.8 s at
+  `2b78151b9`, 168.9 s at `8bb55de91` (the pushed head of push 140), and 20.7–87.6 s when green, on one runner image.
+- A row's time includes its beforeEach's whole-page render (about 45 s there, by the inventory row's). The body, the
+  page's dark re-render with every component-state check behind it, passed its 120 s and held the worker's loop past
+  its timer.
+- Not item 475: the catalog makes no routed terminal host, and happy-dom reads the page as shown, so the hidden-window
+  park never engages under these tests. The same row timed out at `635eb8430`, before 475 existed.
+
+**What moved.**
+- The row is two. "exposes theme: the page follows its toggle dark, and the stages and plates with it" keeps the toggle
+  and the 11 checks that need the page dark. "exposes representative component-state controls" takes the other 40, on
+  the light page, in their old order.
+- No check is dropped or added (358 in the file before and after); no timeout moves; no product source moves.
+- The file's budget history gains a dated paragraph saying what was split and why.
+
+**Still open (the root).**
+- What makes the body slow on the runner is not shown. A SUSPECT, NOT SHOWN TO BE THE CAUSE: the catalog's "spend"
+  specimen re-publishes every second on a real interval (`design-system/godview-spend-fixtures.ts`, `SPEND_TICK_MS`),
+  and its renders in the row grow with the row's time (5 at 20.7 s, 22 at 168.9 s). That is far under one a second, so
+  the counts show a held loop and do not show one that feeds itself.
+- Each row still renders the whole page in its beforeEach, and the theme row still re-renders it whole, dark. The split
+  shortens each body; it does not shorten the render, and the file as a whole renders the page once more.
+- A settling measurement is ruled (the page rows with `setInterval` faked, beside the same copy unfaked, under the
+  efficiency cores) and not yet run. No mend of the test's timers or of the catalog's clock is drafted before its
+  numbers are read.
+
+**The proof.** `rows-499.sh` (`3dbe5f65e92e43ee` as launched), on this Mac through the door, at main `8bb55de91` with
+the one file placed in the working tree, 2026-11-17 02:52:17Z → 03:00:05Z, three vitest workers: **GREEN** (run.log
+`7f7f93421fba420e`).
+- Measured under `taskpolicy -c background` (the efficiency cores alone), each file with console timings in a copy
+  never committed: the old row took 65.6 s, inside its 120 s, so this Mac does not reproduce the runner's timeout:
+  measured, not proven. The two new rows took 40.4 s and 31.1 s; their bodies sum to 14.0 s (5.9 s and 8.1 s) against
+  the old body's 29.7 s. The beforeEach's render took 20–34 s in every row, new and old.
+- biome over the file (no "Found" line) and field-app's typecheck: clean.
+- The new file plain three times: 8 passed each, its rows 3.7–5.8 s.
+- The product folder's links into /tmp were 0 at every run. The base's own copy was placed back after, and the lane
+  returned with its refs equal (2510 = 2510).
+- The commit's tree is that working tree's, the one path at the proven blob.
+- The train's V: V-TRAIN8, `pnpm verify` whole at the train's top on this Mac through the door, under the harness,
+  2026-11-17 04:35:16Z → 05:29:54Z: **GREEN**, exit 0 in 3265 s. Every stage opened; vitest and node:test failures 0;
+  cargo's 38 results ok, none failed; fieldd 290 test files passed and 5 skipped (4115 tests passed, 15 skipped);
+  field-app 358 of 358 files, 5132 of 5132 tests; gen:check opened, cargo fmt clean, plugin-cli 9 of 9 files (verify.log
+  `61651e73ff609821`).
+
+**Not covered.**
+- GitHub's runner: the timeout this mends was not reproduced here. The train's push is the first run of it there.
+- The whole field-app suite was not run in the row (one test file changed); the train's V runs it.
+- macOS only.
+
+**Not done, and not claimed:** the root (above); the settling measurement, owed; the landing-only gates
+(`pnpm gate:landing`) were not run and are owed at the landing; nothing pushed.
+
+## Item 504 — the phone's gate: no desktop answering, or no network, and the splash stands; with ios/rb2 (M339)
+
+(2026-11-17; 26 commits, 64 paths. ios/rb2's eleven and the gate's fifteen, carried by c2 onto main `8bb55de91` as
+`2740efa4e` (the eleventh) and `3c24ab1dc` (the top) on branches `ios/rb2-on-8bb55de91` and
+`wi/gate-on-rb2-on-8bb55de91`. Main moves once, on James's word and VF-PM's GO. On main they are `4c7caa6cd` and
+`44ac97747`; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- James ruled on 2026-11-13 that the phone is a companion to VibeField on a computer: with no desktop answering, or
+  with no network on the phone, it should give no function (WI-L2 amended). He picked the gate's words and acts on
+  The Way In on 2026-11-14 (WI-G1…G10, W2e, W4b, W5b); then, typed in the way-in session at
+  2026-11-14T03:48:55.798Z: "ruled, now start implement and land them".
+- The gate was built that day on ios/rb2, which was to land first. Neither landed: the order stopped after the QA
+  batch (2026-11-15), and a phone build from main showed tabs with no desktop behind them (James, 2026-11-17).
+
+**What moved.**
+- ios/rb2's eleven, as written by the IOS lane: the phone's Developer page (RB-2a…RB-2d: DESIGN.md first; a demo read
+  once a launch; the way in reaching nothing real while a demo stands; testflight.sh carrying the TestFlight-only
+  pages); item 367's made-up names in the demo and the goldens; 351's and 383's comments; 374's dSYM notice.
+- The gate (WI-L2 as amended): **signed in** means a VibeField desktop is answering now. With none answering, or no
+  network, the splash stands: **Looking for your computer…**, then after 10s **Can’t reach your computer.** · "Open
+  VibeField on studio, and keep it awake and connected." (the account's one desktop by its name, here "studio"; "on
+  your computer" when it has several) · **Try again** · *Use another account*; with no network **You’re offline.** ·
+  "Connect this phone to the internet to reach your computer."
+- Its picks (2026-11-14): your face where the mark stands (G9 B); the desktop's name in bold (G1 A); Use another
+  account asks the corner's Sign out question first (G3 A); a desktop that drops and answers within 5s keeps the tabs
+  (G4 A); a desktop that answers and refuses this phone keeps the tabs, which say why (G7 A); what the tabs had open
+  closes under the gate (G8 A); no page of its own for cellular data off (G10 B).
+- "Couldn’t connect." carries **Try again** on the corner's notice and on Tailscale's card (W2e A). Try again dials as
+  the mesh's own Try again does, so a start that failed starts again.
+
+**Untouched.**
+- The phone's own "This phone was removed." screen (item 406's words in §9): the iOS lane's later slice.
+- Item 367's E2…E5: their own slice, after this one (VF-PM, 2026-11-17).
+
+**The proof.**
+- The carry: `T504-carry.sh`, 26 steps, each commit through the repo's hook; its top tree held to a scratch trial's
+  (`ecb98296c615`) before either ref was written; every carried path main did not move at its old blob.
+- The Swift: `mini-wigate1a` on the mini, 2026-11-14 08:22:13Z, GREEN on the gate's first base (ios/rb2 over
+  `cdb72d97d`): the fifteen's first compile, 15 targets green, the gate's rows inside them; FieldTerminalTests red as
+  known then (item 167, fixed by M299). That run is not of this tree: main has moved 429 commits under it since.
+- The gate's red commits were red by reading; no red was run.
+- The train's V: V-TRAIN8, `pnpm verify` whole at the train's top on this Mac through the door, under the harness,
+  2026-11-17 04:35:16Z → 05:29:54Z: **GREEN**, exit 0 in 3265 s. Every stage opened; vitest and node:test failures 0;
+  cargo's 38 results ok, none failed; fieldd 290 test files passed and 5 skipped (4115 tests passed, 15 skipped);
+  field-app 358 of 358 files, 5132 of 5132 tests; gen:check opened, cargo fmt clean, plugin-cli 9 of 9 files (verify.log
+  `61651e73ff609821`; it compiles no Swift).
+
+**Not covered.**
+- This tree's Swift is not tested here: `swift test` does not run on this Mac. Its build:
+  on this Mac through the door, 2026-11-17 04:20:57Z → 04:24:40Z: **GREEN**. The Debug device build ended exit 0 with 0
+  error lines, and the kit's eight test targets typechecked clean (FieldHistoryTests, FieldHomeTests, FieldDesignTests,
+  FieldProductTests, FieldSwarmTests, FieldMeshTests, FieldSettingsTests, FieldWorkspaceTests). A typecheck: no test row
+  ran; nothing was installed (the train's device build: qa-01 builds its top once, before the V).
+  Still owed: the kit's rows, in the one kit run on the landed top.
+- No phone has shown the gate yet.
+
+**Not done, and not claimed:** this tree's kit rows; the phone's "This phone was removed." screen;
+367's E2…E5; the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing; nothing pushed.
+
+## Item 230 — a turn that couldn't finish says so in Chat, on the Mac and the phone (M340)
+
+(2026-11-17; three commits, 10 paths +114 −16, carried onto `8bb55de91` from `e94b907e0`, `e6bd0e90c` and
+`103074ef7` on branch `i230/line-on-8bb55de91`. Main moves once, on James's word and VF-PM's GO. On main they are
+`6db4bca29`, `504972562` and `269691d4c`; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- When a spark's turn failed (a usage limit, a server error, any failure), Chat showed your bubble's "Delivered" and
+  then nothing, on the Mac and on the phone. The record already marks the edge: the turn line's `failed`
+  (contracts' `spark-transcript.ts`), which fieldd writes. Chat drew nothing for it.
+
+**What moved.**
+- DESIGN.md first (`6db4bca29`): §8 "Chat's thread" gains a fourth honest line. Where a turn of Vela's ended before it
+  finished, for any failure alike, it says "Vela couldn't finish — what happened is in Vela's terminal", where the
+  turn ended. §9 "Chat's words" adds the line to the honest lines, with a dated amendment.
+- The red (`504972562`): one test in `transcript-items.test.ts`, red at its own `toEqual`, and nowhere else.
+- The Mac (`269691d4c`): in `transcript-items.ts` the honest row's `which` gains `failed`, and
+  `FLOW_WORDS.failed(name)` holds the line. A turn whose edge is `failed` draws the row after its tools, keyed
+  by the run and the line's seq (`failed:run-…:11` in the golden).
+- The phone (`269691d4c`): `ChatFlow.swift`'s `ChatHonest` gains `failed`, with `ChatFlowWords.failed` and the same
+  fold; `ChatFlowGoldenTests` holds the new word.
+- The goldens: `chat-flow.honest` and `chat-flow.words` were written once by the Mac's generator and mirrored byte for
+  byte into the kit.
+- One line for every failure. The failure's own word is each vendor's (Claude's StopFailure kind, ACP's thrown
+  message, a status or an error kind elsewhere). Drawing or mapping it would put an agent's insides on a face (AR-L1;
+  DESIGN.md §9), so the line names no reason.
+- Measured first: puppeteer #83 (`28a66aaf`, 2026-11-12) captured a failed Claude turn whose model had written words.
+  Its StopFailure's `last_assistant_message` is Claude's own error text, not the model's words. So no words ride the
+  failed edge, and none are drawn.
+
+**Untouched.**
+- No contract and no fieldd file: the `failed` edge was already written.
+- Why a turn failed. It is queued after this: a vendor-neutral reason from the agent runtime, then its pin bump, a
+  field on the turn line, and its words to James first.
+- The model's words before a failure still miss Chat: the failure's hook carries none.
+
+**The proof.**
+- On the side commits' base `9bbe345ad`, 2026-11-12, on this Mac through the door, two workers. The pre-pass on the
+  base was green (field-app 49 files, sound, the simulator: 1,134 tests; field-app's typecheck 0 errors;
+  check:ios-fixtures identical). The doc commit's 30 DESIGN.md readers were green (688 tests). The red was RED AS
+  WANTED (1 failed, 18 passed, at its own `toEqual`; biome clean). The green: field-app 49 files 1,093 tests, sound's
+  design-md 23, the simulator 19, field-app's typecheck 0 errors, check:ios-fixtures identical, biome clean on the
+  three TS files.
+- On the mini, run230, 2026-11-12, at `103074ef7`: fieldd's six DESIGN.md readers 200 in 6 files and smoke-first-run
+  55, GREEN, each at its count.
+- The carry onto `8bb55de91`: three picks with no stop, each patch-id its pick's. DESIGN.md merged by itself (main's
+  moves there are not near its lines). The top's tree was held to a scratch trial's (`afea069de70a`).
+- On this tree: the train's V: V-TRAIN8, `pnpm verify` whole at the
+  train's top on this Mac through the door, under the harness, 2026-11-17 04:35:16Z → 05:29:54Z: **GREEN**, exit 0 in
+  3265 s. Every stage opened; vitest and node:test failures 0; cargo's 38 results ok, none failed; fieldd 290 test files
+  passed and 5 skipped (4115 tests passed, 15 skipped); field-app 358 of 358 files, 5132 of 5132 tests; gen:check
+  opened, cargo fmt clean, plugin-cli 9 of 9 files (verify.log `61651e73ff609821`).
+- The Swift's build on this tree: on this Mac through the door, 2026-11-17 04:20:57Z → 04:24:40Z: **GREEN**. The Debug
+  device build ended exit 0 with 0 error lines, and the kit's eight test targets typechecked clean (FieldHistoryTests,
+  FieldHomeTests, FieldDesignTests, FieldProductTests, FieldSwarmTests, FieldMeshTests, FieldSettingsTests,
+  FieldWorkspaceTests). A typecheck: no test row ran; nothing was installed (the train's device build).
+
+**Not covered.**
+- The kit's tests did not run on any tree: the mini's K was held on 2026-11-12. They ride the one kit run on the
+  landed top.
+- No failed turn was driven in a live app, and no window was looked at, on the desktop or the phone.
+- macOS only.
+
+**Not done, and not claimed:** the reason (queued); the kit's tests; its DECISIONS row is owed, in the next records
+commit; the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing; nothing pushed.
