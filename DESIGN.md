@@ -8544,11 +8544,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   **A desktop goes to sleep**, off) and §9's foot. **Developer** stays undrawn: its page is a later slice, its
   design first *(drawn since 2026-11-12, RB-2, below)*. Both are drawn in TestFlight and development builds only. The
   build submitted for App Review draws neither: Notifications until push ships, Developer never.
-  *Amended 2026-11-12 (RB-2; James on the board card j-rb2-developer-page, 17:56:21.512Z, "All four leans; build it":
-  D1–D4; the account states on the correction card j-rb2-d3-count, 21:44:43.337Z, "All 23, in two groups"; how a demo
-  ends on the card j-rb2-d5-demo-ends, 21:44:36.025Z, "A: a state lasts one open, then your own account returns"; the
-  acts under a demo ruled by VF-PM 18:06:27Z):* **This phone** gains **Developer**, after **Notifications**: §13's
-  `code`. It is drawn in TestFlight and development builds only. The build submitted for App Review never draws it
+  *Amended 2026-11-12 (RB-2, ruled that day: the four leans, D1–D4; all 23 account states, in two groups; a state
+  lasts one open, then your own account returns, D5 A; and the acts under a demo):* **This phone** gains
+  **Developer**, after **Notifications**: §13's `code`. It is drawn in TestFlight and development builds only.
+  The build submitted for App Review never draws it
   and carries none of its code: its archive is counted for the page's markers, as RB-1's are. The page has two groups
   and §9's foot (D4).
   - **Demo**, two rows. **Demo field**, a switch, off: a made-up field in place of yours (two desktops, studio and
@@ -8564,7 +8563,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - While Demo field or an account state stands, a dotted **Demo** tag stands beside the account corner (D2), so a
     made-up fleet never passes for your own agents.
   - A state stands for one open: the next time VibeField opens after it, your own account is back and the picker says
-    **Your own** (D5 A, j-rb2-d5-demo-ends). One open is a launch, never a return from the background, and the choice
+    **Your own** (D5 A). One open is a launch, never a return from the background, and the choice
     is let go as it is read, so an open that fails cannot keep the phone in the state. Demo field keeps the tabs and
     Settings, so it stays on until it is switched off.
   - A demo never signs you in or out, never turns your lock on, and never opens the camera or Safari: under a demo
@@ -10069,10 +10068,9 @@ of "The phone's legal words".
   session finishes** and **A desktop goes to sleep**.
 - The foot: "**Not built yet.** When it is, a desktop tells this iPhone only that something happened, never what
   your agents said. Until then, the orange count on the Field tab is how this iPhone tells you."
-**Developer** (track IOS, RB-2; James on the board card j-rb2-developer-page, 2026-11-12 17:56:21.512Z, D1–D4, the
-correction card j-rb2-d3-count, 21:44:43.337Z, and the card j-rb2-d5-demo-ends, 21:44:36.025Z, A; where it stands is
-§8 "The phone's Settings"). It is drawn in TestFlight and development builds only. Its words say what a row does,
-never how it is built.
+**Developer** (track IOS, RB-2, ruled 2026-11-12: D1–D4, the 23 account states in two groups, and how a demo ends,
+A; where it stands is §8 "The phone's Settings"). It is drawn in TestFlight and development builds only. Its words
+say what a row does, never how it is built.
 - The row is **Developer**.
 - **Demo**: **Demo field**, with "A made-up field: studio and mini, their agents and History to read. No desktop
   needed." under it; **Account**, which reads **Your own** or the state that stands, with "A state stands for one
@@ -10089,9 +10087,9 @@ never how it is built.
 - The tag beside the corner is **Demo**, dotted; it is spoken "Demo. What you see is made up."
 - The foot: "For testing. TestFlight and development builds show this page; the build in the App Store does not."
 
-**The made-up names** (item 367; James on the board card j-367-real-strings-in-builds, 2026-11-13 00:58:16Z, "Replace
-them all with made-up names before build 6 goes to App Review"). What a demo or a bundled fixture shows on the phone
-names no one. A fixture that ships names someone only from this table, and a new kind adds its row here first. Test
+**The made-up names** (item 367, ruled 2026-11-13: every real string gives way to a made-up name before build 6 goes
+to App Review). What a demo or a bundled fixture shows on the phone names no one.
+A fixture that ships names someone only from this table, and a new kind adds its row here first. Test
 data that never ships keeps its older names until it next moves, and then it takes these. `HistoryCorpus.mock` and
 HomeScreen's two demo paths take theirs in item 367's last commit.
 

@@ -6,11 +6,10 @@
   import Foundation
   import SwiftUI
 
-  /// Demo, then Labs, then §9's foot (James on the board card j-rb2-developer-page, 2026-11-12 17:56:21.512Z, D1–D4;
-  /// the correction card j-rb2-d3-count, 21:44:43.337Z; the card j-rb2-d5-demo-ends, 21:44:36.025Z, A). A choice is
-  /// kept in this phone's defaults and takes effect the next time VibeField opens (D1): the page writes the choice and
-  /// nothing else, so nothing here reaches the field that stands. A demo never holds this page, its switch or its
-  /// picker, so a demo can always be switched off.
+  /// Demo, then Labs, then §9's foot (asked for 2026-11-12: D1–D4, the 23 account states, and how a demo ends, A).
+  /// A choice is kept in this phone's defaults and takes effect the next time VibeField opens (D1): the page writes
+  /// the choice and nothing else, so nothing here reaches the field that stands. A demo never holds this page, its
+  /// switch or its picker, so a demo can always be switched off.
   struct DeveloperPage: View {
     let actions: SettingsActions
     /// This phone's own defaults, beside Appearance (`DeveloperChoices`).

@@ -2,9 +2,8 @@ import Testing
 
 @testable import FieldSettings
 
-/// RB-2 — the Developer page says DESIGN.md §9 "Developer"'s words (James on the board card j-rb2-developer-page,
-/// 2026-11-12 17:56:21.512Z, D1–D4; the states counted on the correction card j-rb2-d3-count, 21:44:43.337Z; how a
-/// demo ends on the card j-rb2-d5-demo-ends, 21:44:36.025Z, A): the picker's 23 states in a person's words, in two
+/// RB-2 — the Developer page says DESIGN.md §9 "Developer"'s words (asked for 2026-11-12: D1–D4, the 23
+/// states, and how a demo ends, A): the picker's 23 states in a person's words, in two
 /// groups, and every other word on the page.
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).

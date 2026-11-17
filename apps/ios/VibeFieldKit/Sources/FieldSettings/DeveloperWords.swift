@@ -1,8 +1,6 @@
 #if DEBUG || VF_TESTFLIGHT
-  /// RB-2 — the Developer page's words, held to DESIGN.md §9 "Developer" (James on the board card
-  /// j-rb2-developer-page, 2026-11-12 17:56:21.512Z, D1–D4; the states counted on the correction card
-  /// j-rb2-d3-count, 21:44:43.337Z; how a demo ends on the card j-rb2-d5-demo-ends, 21:44:36.025Z, A). They say what
-  /// a row does, never how it is built.
+  /// RB-2 — the Developer page's words, held to DESIGN.md §9 "Developer" (asked for 2026-11-12: D1–D4,
+  /// the 23 states, and how a demo ends, A). They say what a row does, never how it is built.
   public enum DeveloperWords {
     /// One state the Account picker offers: `AccountFixtures`' name for it, and its name on screen.
     public struct AccountState: Equatable, Sendable {

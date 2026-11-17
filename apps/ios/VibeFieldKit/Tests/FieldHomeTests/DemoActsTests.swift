@@ -6,15 +6,14 @@ import Testing
 
 @testable import FieldHome
 
-/// RB-2 — the way in's acts under a demo (DESIGN.md §8 "The phone's Settings", amended 2026-11-12; VF-PM's ruling,
-/// 2026-11-12 18:06:27Z): every act that would reach this phone's real account, its lock, the code reader or Safari is
-/// held while a demo stands, and made when none does; the page moves and the curtain's Unlock are made either way; and
-/// whether a demo stands is the home's own `LaunchFixtures` value. Each held row asserts the outcome first, so a
-/// dispatcher that does nothing at all is red. RB-2c0 — a link that opens VibeField while a state is stored lands in
-/// that open: the state stands for it and the link is held (James on the card j-rb2-d5-demo-ends, 2026-11-12
-/// 21:44:36.025Z, A: "a state lasts one open"; VF-PM 21:59:10Z). WI-G3 A (James on the page The Way In, 2026-11-14
-/// 03:47:00Z) — Use another account asks the corner's question first: the asking reaches nothing, and the question's
-/// Sign out is the act that reaches the account, so it is the one a demo holds.
+/// RB-2 — the way in's acts under a demo (DESIGN.md §8 "The phone's Settings", amended 2026-11-12): every act that
+/// would reach this phone's real account, its lock, the code reader or Safari is held while a demo stands, and made
+/// when none does; the page moves and the curtain's Unlock are made either way; and whether a demo stands is the
+/// home's own `LaunchFixtures` value. Each held row asserts the outcome first, so a dispatcher that does nothing at
+/// all is red. RB-2c0 — a link that opens VibeField while a state is stored lands in that open: the state stands for
+/// it and the link is held (asked for 2026-11-12, A: a state lasts one open). WI-G3 A (asked for 2026-11-14) — Use
+/// another account asks the corner's question first: the asking reaches nothing, and the question's Sign out is the
+/// act that reaches the account, so it is the one a demo holds.
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("under a demo the way in's acts reach nothing real; with none they do")
@@ -109,8 +108,8 @@ struct DemoActsTests {
   }
 
   /// WI-G3 A (2026-11-14) — the two links that sign this phone out are one act, and it asks first: on Can’t reach your
-  /// computer., and on Sign in to Tailscale again. by the cost James picked with it ("Sign in to Tailscale again has
-  /// the same link and signs out at one tap; it should ask too, in the same slice."). Only the question's Sign out
+  /// computer., and on Sign in to Tailscale again., which has the same link and
+  /// signs out at one tap, so it asks too (asked for in the same slice). Only the question's Sign out
   /// signs out.
   @Test("Use another account asks first on Can’t reach your computer. and on Sign in to Tailscale again.")
   func bothLinksAsk() {
