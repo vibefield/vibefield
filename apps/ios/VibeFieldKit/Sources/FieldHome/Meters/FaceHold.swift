@@ -18,11 +18,12 @@ enum FaceHold {
   /// The spawn bloom's hold (`FieldMotion.longPressDuration`, 520 ms), and the slop before it opens.
   static let hold = FieldMotion.longPressDuration
   static let slop: CGFloat = 10
-  /// The first four buds' spokes, 160 from the face's centre; a fifth to an eighth stand at 224, half a step (11°) on
-  /// (the lead's placement, ‹for James›). Past eight ‹for James›: the bloom holds eight, the page lists every one.
+  /// The first four buds' spokes, 160 from the face's centre; a fifth to an eighth stand at 276, half a step (11°) on
+  /// (the lead's placement, ‹for James›), far enough out that a first-arc label stands between two second-arc buds.
+  /// Past eight ‹for James›: the bloom holds eight, the page lists every one.
   static let angles: [Double] = [-92, -70, -48, -26]
   static let radius: Double = 160
-  static let outerRadius: Double = 224
+  static let outerRadius: Double = 276
   static let outerTurn: Double = 11
   static let most = 8
   /// A bud: its disc and its circle at 54.
@@ -170,12 +171,94 @@ enum FaceHold {
     return fromFace < hubLeft ? .hub : .open
   }
 
-  /// How far out along its spoke a bud's label stands: `r + 33 + half × |cos a| + 12 × |sin a|` (38 for the reached
-  /// bud), where half is `max(letters × 5.7, 40) / 2`.
-  static func labelRadius(_ spot: Spot, letters: Int, reached: Bool) -> Double {
-    let half = max(Double(letters) * 5.7, 40) / 2
-    let a = spot.angle * Double.pi / 180
-    return spot.r + (reached ? 38 : 33) + half * abs(cos(a)) + 12 * abs(sin(a))
+  /// A label's two lines: the name in mono 9.5 (5.7 a letter), the state in mono 7.5 (4.5 a letter), 22 tall.
+  static let labelHeight: Double = 22
+  /// A label keeps clear of every bud at its reached size (1.16) and 2 more, of the face's ring (96 across) and 2
+  /// more, of the other labels by 4, and of the screen's edge by 6.
+  static let budClear: Double = bud / 2 * 1.16 + 2
+  static let faceClear: Double = 50
+  static let labelGap: Double = 4
+  static let edge: Double = 6
+  /// A label's lines stop at these lengths, cut to one less and "…": the name at 14 (79.8 wide), the state at 17
+  /// (76.5, never wider than the name's most). A profile's name may run to 64 (the contract's `label`, max 64) and a
+  /// window's word is the adapter's own, unbounded; past these lengths the labels stood on each other. The whole name
+  /// stands in the huge words while its bud is reached. ‹for James›: the lead's placement, the longest a check by
+  /// port found clear at two to eight profiles on 375 to 440 wide screens.
+  static let nameMost = 14
+  static let stateMost = 17
+
+  /// A line cut to `most` characters, its last one "…" when it was longer.
+  static func clipped(_ text: String, _ most: Int) -> String {
+    text.count <= most ? text : String(text.prefix(most - 1)) + "…"
+  }
+
+  /// A bud's label as drawn: its name and state, each cut to its most.
+  static func budWords(name: String, state: String, hot: Bool) -> BudLabel {
+    BudLabel(name: clipped(name, nameMost), state: clipped(state, stateMost), hot: hot)
+  }
+
+  /// A label's size: the wider of its two lines.
+  static func labelSize(_ label: BudLabel) -> CGSize {
+    CGSize(width: max(Double(label.name.count) * 5.7, Double(label.state.count) * 4.5), height: labelHeight)
+  }
+
+  /// Where each bud's label stands (DESIGN.md §8 "With several", "The labels"): never over a bud, the face, another
+  /// label, or off the screen (`room`). A label tries four places about its own bud, in order: outside along its
+  /// spoke, inside along it, then either side across it, each just clear of its bud and slid back on screen; it
+  /// takes the first that touches nothing, else the one that touches least. The second arc's labels are placed
+  /// first, since the open ground beyond it is theirs. The places do not move with the reach.
+  static func labelBoxes(_ spots: [Spot], sizes: [CGSize], face: CGPoint, room: CGRect) -> [CGRect] {
+    let inside = room.insetBy(dx: edge, dy: edge)
+    let order = spots.indices.sorted { spots[$0].r != spots[$1].r ? spots[$0].r > spots[$1].r : $0 < $1 }
+    var boxes = [CGRect?](repeating: nil, count: spots.count)
+    for index in order where index < sizes.count {
+      let spot = spots[index]
+      let w = Double(sizes[index].width)
+      let h = Double(sizes[index].height)
+      let a = spot.angle * Double.pi / 180
+      let candidates = [a, a + Double.pi, a + Double.pi / 2, a - Double.pi / 2].map { turn -> CGRect in
+        let ux = cos(turn)
+        let uy = sin(turn)
+        let out = budClear + w / 2 * abs(ux) + h / 2 * abs(uy)
+        let box = CGRect(x: spot.x + out * ux - w / 2, y: spot.y + out * uy - h / 2, width: w, height: h)
+        return slid(box, into: inside)
+      }
+      let placed = boxes.compactMap { $0 }
+      let touches = candidates.map { touching($0, spots: spots, face: face, placed: placed) }
+      let best = touches.indices.min { touches[$0] < touches[$1] } ?? 0
+      boxes[index] = candidates[best]
+    }
+    return boxes.map { $0 ?? .zero }
+  }
+
+  /// A box slid the least way back inside `room` (centred when it is the wider).
+  private static func slid(_ box: CGRect, into room: CGRect) -> CGRect {
+    func along(_ low: Double, _ length: Double, _ roomLow: Double, _ roomLength: Double) -> Double {
+      guard length < roomLength else { return roomLow + (roomLength - length) / 2 }
+      return min(max(low, roomLow), roomLow + roomLength - length)
+    }
+    let x = along(Double(box.minX), Double(box.width), Double(room.minX), Double(room.width))
+    let y = along(Double(box.minY), Double(box.height), Double(room.minY), Double(room.height))
+    return CGRect(x: x, y: y, width: Double(box.width), height: Double(box.height))
+  }
+
+  /// How many things a label's box would stand on: buds, the face, and labels already placed. Its own bud stands
+  /// exactly `budClear` off, so the test allows a hair.
+  private static func touching(_ box: CGRect, spots: [Spot], face: CGPoint, placed: [CGRect]) -> Int {
+    let hair = 0.01
+    let buds = spots.filter { distance(CGPoint(x: $0.x, y: $0.y), box) < budClear - hair }.count
+    let onFace = distance(face, box) < faceClear - hair ? 1 : 0
+    let labels = placed.filter { $0.insetBy(dx: -labelGap, dy: -labelGap).intersects(box) }.count
+    return buds + onFace + labels
+  }
+
+  /// From a point to the nearest point of a box (0 inside it).
+  static func distance(_ point: CGPoint, _ box: CGRect) -> Double {
+    let px = Double(point.x)
+    let py = Double(point.y)
+    let dx = max(Double(box.minX) - px, 0, px - Double(box.maxX))
+    let dy = max(Double(box.minY) - py, 0, py - Double(box.maxY))
+    return (dx * dx + dy * dy).squareRoot()
   }
 
   /// The words over the held face (§9 "The meters' words"): with one profile "Usage" over its reads; with several,
@@ -230,17 +313,18 @@ enum FaceHold {
   }
 
   /// A bud's label: the profile's name over its tightest percent and window (a model's own week by its group's word,
-  /// "95% · OPUS"), READING while a first read is out, or NO METER; in the attention ink when it runs hot.
+  /// "95% · OPUS"), READING while a first read is out, or NO METER; in the attention ink when it runs hot. Each line
+  /// is cut to its most (`budWords`).
   static func budLabel(_ set: AgentProfileSet, reading: MetersReading, now: Date) -> BudLabel {
     let meters = reading.meters(of: set.id, now: now)
     if let tightest = meters.tightest, let read = tightest.reading {
       let line = read.tightest.line
-      return BudLabel(
+      return budWords(
         name: set.label, state: "\(wholeWords(line.usedPercent))% · \(line.group?.word ?? line.label)".uppercased(),
         hot: tightest.hot)
     }
     let firstRead = reading.firstRead || meters.entries.contains { $0.kind == .firstRead }
-    return BudLabel(name: set.label, state: firstRead ? "READING" : "NO METER", hot: false)
+    return budWords(name: set.label, state: firstRead ? "READING" : "NO METER", hot: false)
   }
 
   /// The face said to VoiceOver.

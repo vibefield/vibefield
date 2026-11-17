@@ -427,4 +427,21 @@ struct AgentProfilesPageTests {
     #expect(geometry.plan(at: spot.x, spot.y) == plan.key)
     #expect(geometry.plan(at: 107, 107) == nil)
   }
+
+  /// The page's plan rows say each named plan's sign-in veiled, and never the address whole.
+  @Test("a plan's row says its sign-in veiled beside its title, never whole")
+  func planRowSignIn() throws {
+    let reading = try Self.reading()
+    let words = Self.words(reading)
+    let named = reading.meters(of: nil, now: Self.now).entries.filter { $0.plan?.account != nil }
+    #expect(!named.isEmpty)
+    for entry in named {
+      let row = try #require(words.plans.first { $0.key == entry.key })
+      #expect(row.account == MeterModel.veiledAccount(entry.plan?.account))
+      let who = entry.plan?.account?.components(separatedBy: " · ").first ?? ""
+      #expect(who.count > 1)
+      let said = [row.title, row.account ?? ""].joined(separator: " ")
+      #expect(!said.contains(who))
+    }
+  }
 }

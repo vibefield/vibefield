@@ -72,6 +72,23 @@ struct MeterModelTests {
     #expect(reversed?.line.id == "seven-day")
   }
 
+  /// DESIGN.md §8 "The body" — the desktop's veil, case for case (test/profiles-column.test.tsx), made-up forms only.
+  @Test("a sign-in veiled: an email to its first letters and its domain's last part, a handle to its first letter")
+  func veiledAccount() {
+    #expect(MeterModel.veiledAccount("kim@work.example · Northlight") == "k•••@w•••.example")
+    #expect(MeterModel.veiledAccount("pat.doe@example.com") == "p•••@e•••.com")
+    #expect(MeterModel.veiledAccount("averyverylongname@sub.example.org") == "a•••@s•••.org")
+    #expect(MeterModel.veiledAccount("a@example.com") == "a•••@e•••.com")
+    #expect(MeterModel.veiledAccount("kimdev") == "k•••")
+    #expect(MeterModel.veiledAccount("x@localhost") == "x•••@l•••")
+    #expect(MeterModel.veiledAccount("kim@") == "k•••@")
+    #expect(MeterModel.veiledAccount("@example.com") == "@•••")
+    #expect(MeterModel.veiledAccount("  pat@example.com  ") == "p•••@e•••.com")
+    #expect(MeterModel.veiledAccount(nil) == nil)
+    #expect(MeterModel.veiledAccount("") == nil)
+    #expect(MeterModel.veiledAccount(" · Northlight") == nil)
+  }
+
   @Test("a plan by its product's name, as Settings' card says it")
   func planTitles() {
     let anthropic = AgentSignInService(id: "anthropic", label: "Anthropic")

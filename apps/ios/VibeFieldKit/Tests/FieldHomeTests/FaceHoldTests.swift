@@ -20,13 +20,13 @@ struct FaceHoldTests {
   static let face = CGPoint(x: 40, y: 800)
   static let now = MetersFixtureDoor.now
 
-  @Test("the first four buds stand at −92°, −70°, −48° and −26°, 160 out; five to eight at 224, half a step on")
+  @Test("the first four buds stand at −92°, −70°, −48° and −26°, 160 out; five to eight at 276, half a step on")
   func spots() throws {
     let spots = FaceHold.spots(10, face: Self.face)
     let angles = spots.map(\.angle)
     #expect(angles == [-92, -70, -48, -26, -81, -59, -37, -15])
     let radii = spots.map(\.r)
-    #expect(radii == [160, 160, 160, 160, 224, 224, 224, 224])
+    #expect(radii == [160, 160, 160, 160, 276, 276, 276, 276])
     let first = try #require(spots.first)
     let a = -92 * Double.pi / 180
     #expect(abs(first.x - (40 + 160 * cos(a))) < 1e-9)
@@ -175,16 +175,73 @@ struct FaceHoldTests {
     #expect(!label.hot)
   }
 
-  @Test("a bud's label stands outside it along its spoke: 160 + 33 + half × |cos a| + 12 × |sin a|, 38 reached")
-  func labelRadius() throws {
-    let spot = try #require(FaceHold.spots(1, face: Self.face).first)
+  @Test("a bud's label stands outside it along its spoke, just clear of its bud at its reached size, when free")
+  func labelOutside() throws {
+    let face = CGPoint(x: 200, y: 900)
+    let spot = try #require(FaceHold.spots(2, face: face).first)
+    let label = FaceHold.BudLabel(name: "WORK", state: "42% · 5H", hot: false)
+    let size = FaceHold.labelSize(label)
+    #expect(abs(size.width - 36) < 1e-9)
+    let boxes = FaceHold.labelBoxes(
+      [spot], sizes: [size], face: face, room: CGRect(x: 0, y: 0, width: 800, height: 1000))
+    let box = try #require(boxes.first)
     let a = -92 * Double.pi / 180
-    let expected = 160 + 33 + 20 * abs(cos(a)) + 12 * abs(sin(a))
-    #expect(abs(FaceHold.labelRadius(spot, letters: 4, reached: false) - expected) < 1e-9)
-    #expect(abs(FaceHold.labelRadius(spot, letters: 4, reached: true) - (expected + 5)) < 1e-9)
-    let long = FaceHold.labelRadius(spot, letters: 12, reached: false)
-    let expectedLong = 160 + 33 + 34.2 * abs(cos(a)) + 12 * abs(sin(a))
-    #expect(abs(long - expectedLong) < 1e-9)
+    let out = FaceHold.budClear + 18 * abs(cos(a)) + 11 * abs(sin(a))
+    #expect(abs(box.midX - (spot.x + out * cos(a))) < 1e-9)
+    #expect(abs(box.midY - (spot.y + out * sin(a))) < 1e-9)
+  }
+
+  @Test("a bud's name stops at 14 and its state at 17, each cut to one less and an ellipsis; shorter lines stand whole")
+  func labelsAreCut() {
+    let long = FaceHold.budWords(name: "ABCDEFGHIJKLMNOPQRST", state: "104% · ABCDEFGHIJKLMNOPQR", hot: true)
+    #expect(long.name == "ABCDEFGHIJKLM…")
+    #expect(long.name.count == FaceHold.nameMost)
+    #expect(long.state == "104% · ABCDEFGHI…")
+    #expect(long.state.count == FaceHold.stateMost)
+    #expect(long.hot)
+    let whole = FaceHold.budWords(name: "ABCDEFGHIJKLMN", state: "100% · FABLE", hot: false)
+    #expect(whole.name == "ABCDEFGHIJKLMN")
+    #expect(whole.state == "100% · FABLE")
+    // the widest a label can be: the name's most, never the state's
+    let size = FaceHold.labelSize(long)
+    #expect(abs(size.width - 14 * 5.7) < 1e-9)
+  }
+
+  /// The overlap seen on the phone (2026-11-17): seven profiles, the first arc's labels standing on the second
+  /// arc's buds. Every count from two to eight; names from 2 to 64 letters (the contract's most) and states up to an
+  /// adapter's long word, each cut as drawn; on screens 375 to 440 wide with the face in its corner: no label on a
+  /// bud at its reached size, on the face's ring, on another label, or off the screen.
+  @Test("labels never stand on a bud, the face, another label or off the screen, two to eight profiles")
+  func labelsNeverStack() throws {
+    let names = [2, 8, 12, 14, 16, 20, 64].map { String(repeating: "W", count: $0) }
+    let states = ["100% · FABLE", "104% · ABCDEFGHIJKLMNOPQRSTUVW", "NO METER"]
+    let screens = [(375.0, 667.0), (393.0, 852.0), (430.0, 932.0), (440.0, 956.0)]
+    for (width, height) in screens {
+      let room = CGRect(x: 0, y: 0, width: width, height: height)
+      let face = CGPoint(x: 47, y: height - 57)
+      for name in names {
+        for state in states {
+          let label = FaceHold.budWords(name: name, state: state, hot: false)
+          for count in 2...8 {
+            let spots = FaceHold.spots(count, face: face)
+            let sizes = Array(repeating: FaceHold.labelSize(label), count: count)
+            let boxes = FaceHold.labelBoxes(spots, sizes: sizes, face: face, room: room)
+            #expect(boxes.count == count)
+            let at = "\(count) profiles, a \(name.count)-letter name, a \(state.count)-letter state, \(width) wide"
+            for (index, box) in boxes.enumerated() {
+              let onScreen = room.insetBy(dx: FaceHold.edge - 1e-6, dy: FaceHold.edge - 1e-6).contains(box)
+              #expect(onScreen, "label \(index) off the screen: \(at)")
+              let nearestBud = spots.map { FaceHold.distance(CGPoint(x: $0.x, y: $0.y), box) }.min() ?? 0
+              #expect(nearestBud >= FaceHold.bud / 2 * 1.16, "label \(index) on a bud: \(at)")
+              let fromFace = FaceHold.distance(face, box)
+              #expect(fromFace >= 48, "label \(index) on the face: \(at)")
+              let others = boxes.enumerated().filter { $0.offset != index && $0.element.intersects(box) }.count
+              #expect(others == 0, "label \(index) on another label: \(at)")
+            }
+          }
+        }
+      }
+    }
   }
 
   @Test("a bud says a model's own week by its group's word, \"104% · FABLE\", never the raw \"FABLE ONLY\"")

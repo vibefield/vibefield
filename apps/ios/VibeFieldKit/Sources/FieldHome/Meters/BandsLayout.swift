@@ -191,10 +191,15 @@ struct BandsOptions: Equatable, Sendable {
   var around: (hole: Double, band: Double)? = nil
   /// the circle stands for every profile at once (`everyPlan`)
   var every = false
+  /// the middle names the window its figure reads, by its C1 line's label ("7D"), where the agent's mark stood: a
+  /// circle whose arcs and rows already show each agent's mark (DESIGN.md §8 "The body"; the desktop's
+  /// `centreWindow`, 2026-11-16, the phone's 2026-11-17). A plan with no reading keeps its mark.
+  var centreWindow = false
 
   static func == (a: BandsOptions, b: BandsOptions) -> Bool {
     a.centre == b.centre && a.hotDot == b.hotDot && a.focus == b.focus && a.hit == b.hit && a.crowd == b.crowd
       && a.around?.hole == b.around?.hole && a.around?.band == b.around?.band && a.every == b.every
+      && a.centreWindow == b.centreWindow
   }
 }
 
@@ -210,7 +215,7 @@ extension BandsOptions {
   /// profiles the crowded agents wear their profile's glyph whatever the lens, as the drawing's `crowdFn` marks them
   /// ("every profile opened: …", "one profile chosen, a need pointed at: …").
   static func page(every: Bool, several: Bool, focus: String?) -> BandsOptions {
-    BandsOptions(focus: focus, hit: true, crowd: several, every: every)
+    BandsOptions(focus: focus, hit: true, crowd: several, every: every, centreWindow: true)
   }
   /// A profile's row on the page at 36: its glyph in the middle and the hot dot ("several plans on a profile's row").
   static let profileRow = BandsOptions(centre: .glyph, hotDot: true)
@@ -221,7 +226,7 @@ extension BandsOptions {
   static let bud = BandsOptions(centre: .glyph, hotDot: true)
   /// The held face's open circle at 206: a reached profile's ("several plans held"), or every plan's on the hub with
   /// the crowded agents marked (no case of its own: the page's every-profile options, without the touch).
-  static func held(every: Bool) -> BandsOptions { BandsOptions(crowd: every, every: every) }
+  static func held(every: Bool) -> BandsOptions { BandsOptions(crowd: every, every: every, centreWindow: true) }
   /// The ring the held face wears, 96 across about its 62 glass: the hole 34, the band 8 ("every profile around the
   /// face").
   static func faceRing(every: Bool) -> BandsOptions { BandsOptions(around: (34, 8), every: every) }
@@ -506,6 +511,18 @@ enum BandsLayout {
       let size = min(r * 0.98, 15)
       return [text(.figure, used, c, c + size * 0.36, size, .display, 800, figurePaint)]
     }
+    let windowLabel = options.centreWindow ? plan.reading.map { $0.tightest.line.label } : nil
+    if let windowLabel, let used, level == 2 || r < 46 {
+      // the window's label over the figure, in the mark's place
+      let label = min(r * 0.36, 13)
+      let size = min(r * 0.62, 26)
+      let top = c - (label * 0.8 + 5 + size * 0.72) / 2
+      let figure = top + label * 0.8 + 5 + size * 0.72
+      return [
+        text(.sub, windowLabel, c, top + label * 0.8, label, .sans, 700, .ink(70)),
+        text(.figure, used, c, figure, size, .display, 800, figurePaint, percent: true),
+      ]
+    }
     if level == 2 || r < 46 {
       let markSize = min(r * 0.6, 19)
       let size = min(r * 0.62, 26)
@@ -524,6 +541,26 @@ enum BandsLayout {
     let markSize = clamp(r * 0.3, 13, 21)
     let size = clamp(r * 0.48, 20, 38)
     let small = clamp(r * 0.17, 9.5, 11.5)
+    if let windowLabel, let used {
+      // full size: the window's label over the figure, and the say line under it; the label is the window, so no
+      // "of 7 days" line says it again
+      let label = clamp(r * 0.24, 11, 15)
+      let said = say(plan)
+      let sayHeight = said.words.isEmpty ? 0 : 7 + small
+      let top = c - (label * 0.8 + 6 + size * 0.72 + sayHeight) / 2
+      let figure = top + label * 0.8 + 6 + size * 0.72
+      var items: [BandsCentreItem] = [
+        text(.sub, windowLabel, c, top + label * 0.8, label, .sans, 700, .ink(70)),
+        text(.figure, used, c, figure, size, .display, 800, figurePaint, percent: true),
+      ]
+      if !said.words.isEmpty {
+        items.append(
+          text(
+            .say, said.words, c, figure + 7 + small * 0.8, small, .sans, said.hot ? 650 : 500,
+            said.hot ? .attention : .ink(62)))
+      }
+      return items
+    }
     let top = c - (markSize + 6 + size * 0.72 + 7 + small + 4 + small) / 2
     var items: [BandsCentreItem] = [.mark(mark(plan, c, top + markSize / 2, markSize, dim: false, badge: true))]
     let figure = top + markSize + 6 + size * 0.72

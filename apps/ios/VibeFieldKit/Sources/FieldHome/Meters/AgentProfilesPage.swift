@@ -61,6 +61,8 @@ struct AgentProfilesWords: Equatable {
     let key: String
     let provider: String
     let title: String
+    /// the plan's sign-in, veiled (`MeterModel.veiledAccount`); nil when no account is named
+    let account: String?
     /// UM-D12 — a crowded agent's plan wears its profile's glyph (every plan in view)
     let glyph: MeterProfile?
     let body: Body
@@ -120,6 +122,7 @@ struct AgentProfilesWords: Equatable {
       let runs = entry.kind == .noMeter ? nil : live.map { Self.runs($0, keys: Set(family), profile: chosen?.id) }
       return PlanRow(
         key: entry.key, provider: entry.provider, title: entry.title,
+        account: MeterModel.veiledAccount(entry.plan?.account),
         glyph: crowded.contains(entry.provider) ? entry.profiles.first : nil,
         body: Self.body(entry, home: home, now: now),
         sessions: runs.map { $0.isEmpty ? "no sessions" : PhoneSearch.sessWords($0) },
@@ -467,6 +470,15 @@ private struct AgentPlanRowView: View {
                 .font(ChromeListType.row)
                 .foregroundStyle(ChromePalette.ink)
                 .lineLimit(1)
+                .layoutPriority(1)
+              if let account = row.account {
+                Text(account)
+                  .font(ChromeListType.detail)
+                  .foregroundStyle(ChromePalette.inkTertiary)
+                  .lineLimit(1)
+                  .truncationMode(.tail)
+                  .accessibilityLabel(account.replacingOccurrences(of: "•••", with: "…"))
+              }
             }
             .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
             detail

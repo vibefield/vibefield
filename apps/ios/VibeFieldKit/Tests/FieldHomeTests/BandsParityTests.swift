@@ -59,6 +59,7 @@ struct BandsParityTests {
     options.hit = raw?["hit"]?.boolValue ?? false
     options.crowd = raw?["crowd"]?.boolValue ?? false
     options.every = raw?["every"]?.boolValue ?? false
+    options.centreWindow = raw?["centreWindow"]?.boolValue ?? false
     if let around = raw?["around"], let hole = around["hole"]?.doubleValue, let band = around["band"]?.doubleValue {
       options.around = (hole, band)
     }
@@ -89,7 +90,7 @@ struct BandsParityTests {
     let golden = try Self.golden()
     let nows = try #require(golden["nows"])
     let circles = try #require(golden["circles"]?.arrayValue)
-    #expect(circles.count == 26)
+    #expect(circles.count == 27)
     for circle in circles {
       let meters = try Self.meters(circle, nows: nows)
       let size = try #require(circle["size"]?.doubleValue)

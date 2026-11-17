@@ -9,7 +9,8 @@ import SwiftUI
 // over the mono line (11/700 capitals, tracked 0.08 em, the tertiary ink); the circle at 206 on a disc of the ground
 // (the one profile's; the reached profile's, or every plan's on the hub; none on open ground); the face drawn again in
 // its 62 glass where the corner stands, held, wearing the Bands ring (96, the hole 34, the band 8); and with several
-// profiles, the buds (54, ringed by the ink at 14%) at `FaceHold.spots`, each labelled along its spoke. A reached bud
+// profiles, the buds (54, ringed by the ink at 14%) at `FaceHold.spots`, each labelled where `FaceHold.labelBoxes`
+// finds it room (outside along its spoke when nothing stands there; never over a bud or another label). A reached bud
 // grows to 1.16 with a drop shadow and its neighbours shrink to 0.94 on §6's lift (180 ms). The haptics are the spawn
 // bloom's (`BloomHost`: a soft impact as it opens, a selection tick at each new reach). Reduced motion: the buds stand
 // at their size behind a 90 ms fade, with no pop and no reach growth; the veil and the words fade. What it shows is
@@ -70,8 +71,15 @@ struct FaceHoldOverlay: View {
       .padding(.top, Self.wordsTop)
       heldFace(several: several, mark: mark)
       if several {
-        ForEach(Array(FaceHold.spots(profiles.count, face: held.face).enumerated()), id: \.offset) { index, spot in
-          bud(profiles[index], spot: spot, mark: mark)
+        GeometryReader { proxy in
+          let spots = FaceHold.spots(profiles.count, face: held.face)
+          let labels = spots.indices.map { FaceHold.budLabel(profiles[$0], reading: reading, now: now) }
+          let room = CGRect(origin: .zero, size: proxy.size)
+          let boxes = FaceHold.labelBoxes(
+            spots, sizes: labels.map(FaceHold.labelSize), face: held.face, room: room)
+          ForEach(Array(spots.enumerated()), id: \.offset) { index, spot in
+            bud(profiles[index], spot: spot, label: labels[index], box: boxes[index], mark: mark)
+          }
         }
       }
     }
@@ -167,16 +175,18 @@ struct FaceHoldOverlay: View {
 
   // MARK: - The buds
 
-  private func bud(_ set: AgentProfileSet, spot: FaceHold.Spot, mark: @escaping (String) -> String) -> some View {
+  /// A bud at its spot, and its label in the box `FaceHold.labelBoxes` gave it (clear of every bud, the face and
+  /// the other labels; it does not move with the reach).
+  private func bud(
+    _ set: AgentProfileSet, spot: FaceHold.Spot, label: FaceHold.BudLabel, box: CGRect,
+    mark: @escaping (String) -> String
+  ) -> some View {
     let reached: String? = {
       if case .bud(let id) = held.reach { return id }
       return nil
     }()
     let on = reached == set.id
     let scale: CGFloat = reduceMotion ? 1 : on ? 1.16 : reached != nil ? 0.94 : 1
-    let label = FaceHold.budLabel(set, reading: reading, now: now)
-    let out = FaceHold.labelRadius(spot, letters: set.label.count, reached: on)
-    let a = spot.angle * Double.pi / 180
     let shadow = on ? ChromeShadow.menu : ChromeShadow.card
     return ZStack(alignment: .topLeading) {
       BandsDial(
@@ -204,7 +214,7 @@ struct FaceHoldOverlay: View {
           .foregroundStyle(label.hot ? ChromePalette.attention : ChromePalette.inkTertiary)
       }
       .fixedSize()
-      .position(x: Double(held.face.x) + out * cos(a), y: Double(held.face.y) + out * sin(a))
+      .position(x: box.midX, y: box.midY)
     }
     .accessibilityHidden(true)
   }

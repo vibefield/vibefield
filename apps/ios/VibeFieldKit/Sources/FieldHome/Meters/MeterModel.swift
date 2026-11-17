@@ -478,6 +478,26 @@ enum MeterModel {
     return echoes ? who : "\(who) · \(organization)"
   }
 
+  /// The sign-in a plan reads, as a plan's row says it beside its title (DESIGN.md §8 "The body" and the page's
+  /// Plans; the desktop's `veiledAccount`, ProfilePopoverView.tsx, case for case): an email veiled to its first
+  /// letters and its domain's last part ("kim@work.example" → "k•••@w•••.example"), a handle to its first letter
+  /// ("k•••"). Of `accountWords`' "‹who› · ‹organization›" the who alone: the organization goes, so nothing of the
+  /// address is said whole. Nil when no account is named.
+  static func veiledAccount(_ words: String?) -> String? {
+    guard let words else { return nil }
+    let who = (words.components(separatedBy: " · ").first ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !who.isEmpty else { return nil }
+    guard let at = who.lastIndex(of: "@"), at != who.startIndex else { return veil(who) }
+    let domain = who[who.index(after: at)...]
+    let dot = domain.lastIndex(of: ".").flatMap { $0 == domain.startIndex ? nil : $0 }
+    let host = dot.map { domain[..<$0] } ?? domain
+    let tail = dot.map { String(domain[$0...]) } ?? ""
+    return "\(veil(String(who[..<at])))@\(veil(String(host)))\(tail)"
+  }
+
+  /// A part of an address, veiled: its first character and three dots, whatever its length (the length is not said).
+  private static func veil(_ part: String) -> String { part.first.map { "\($0)•••" } ?? "" }
+
   /// A standby allowance stays out of sight until it is in play.
   private static func inPlay(_ metric: AgentAccountUsageMetric, _ all: [AgentAccountUsageMetric]) -> Bool {
     guard let group = metric.group, group.standby == true else { return true }

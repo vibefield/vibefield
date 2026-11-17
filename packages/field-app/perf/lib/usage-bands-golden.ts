@@ -63,7 +63,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...VALID,
     of: "native",
     size: 212,
-    options: { hit: true },
+    options: { hit: true, centreWindow: true },
   },
   {
     name: "one plan at the column's size",
@@ -86,7 +86,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...VALID,
     of: "work",
     size: 212,
-    options: {},
+    options: { centreWindow: true },
   },
   {
     name: "a sign-in under way at the column's size",
@@ -101,7 +101,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...METERS,
     of: "native",
     size: 212,
-    options: { hit: true },
+    options: { hit: true, centreWindow: true },
   },
   {
     name: "several plans opened: the full middle, the forecast said",
@@ -113,12 +113,21 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     options: { hit: true },
   },
   {
+    name: "several plans opened, the window in the middle: its label over the figure, the say line under it",
+    where:
+      'the full-size middle with the window named (DESIGN.md §8 "The body"), no view\'s yet: the one size past a hole of 46',
+    ...METERS,
+    of: "native",
+    size: 232,
+    options: { hit: true, centreWindow: true },
+  },
+  {
     name: "several plans, one pointed at: the others dim and the middle speaks for it",
     where: "the desktop's popover",
     ...METERS,
     of: "native",
     size: 212,
-    options: { hit: true, focus: "plan:openai" },
+    options: { hit: true, focus: "plan:openai", centreWindow: true },
   },
   {
     name: "several plans at the column's size, hot",
@@ -147,7 +156,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...METERS,
     of: "native",
     size: 206,
-    options: {},
+    options: { centreWindow: true },
   },
   {
     name: "several plans read after the five hours reset: those windows unlit at half, each plan's age said",
@@ -157,7 +166,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     of: "native",
     at: USAGE_BANDS_AFTER_RESET,
     size: 214,
-    options: { hit: true },
+    options: { hit: true, centreWindow: true },
   },
   {
     name: "several plans read after the five hours reset, on a profile's row: no hot dot",
@@ -173,7 +182,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...METERS,
     of: "work",
     size: 212,
-    options: { hit: true },
+    options: { hit: true, centreWindow: true },
   },
   {
     name: "needs you at the column's size",
@@ -188,7 +197,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...METERS,
     of: "work",
     size: 214,
-    options: { hit: true, crowd: true, focus: "plan:openai" },
+    options: { hit: true, crowd: true, focus: "plan:openai", centreWindow: true },
   },
   {
     name: "a first read and a sign-in under way",
@@ -196,7 +205,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...METERS,
     of: "side",
     size: 212,
-    options: {},
+    options: { centreWindow: true },
   },
   {
     name: "a first read at the column's size",
@@ -235,7 +244,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...METERS,
     of: "every",
     size: 214,
-    options: { hit: true, crowd: true, every: true },
+    options: { hit: true, crowd: true, every: true, centreWindow: true },
   },
   {
     name: "usage unavailable: the dashed ring, the profile's glyph kept",
@@ -252,7 +261,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     of: "native",
     usage: "unavailable",
     size: 212,
-    options: {},
+    options: { centreWindow: true },
   },
   {
     name: "usage unavailable, every profile: a shared plan once, named by no profile",

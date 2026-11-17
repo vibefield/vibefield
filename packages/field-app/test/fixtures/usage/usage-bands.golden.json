@@ -531,7 +531,7 @@
       "sets": "agents-profile-sets.valid.json",
       "batch": "agent-usage.valid.json",
       "of": "native",
-      "options": {"hit":true},
+      "options": {"hit":true,"centreWindow":true},
       "size": 212,
       "level": 3,
       "centre": {
@@ -539,8 +539,8 @@
         "y": 106,
         "r": 44.6,
         "items": [
-          {"kind":"mark","provider":"claude","x":106,"y":95.14,"size":19,"paint":{"tone":"attention"},"opacity":1},
-          {"kind":"text","role":"figure","text":"103","x":106,"y":126.36,"size":26,"font":"display","weight":800,"paint":{"tone":"attention"},"percent":true}
+          {"kind":"text","role":"sub","text":"7D","x":106,"y":99.34,"size":13,"font":"sans","weight":700,"paint":{"tone":"ink","percent":70}},
+          {"kind":"text","role":"figure","text":"103","x":106,"y":123.06,"size":26,"font":"display","weight":800,"paint":{"tone":"attention"},"percent":true}
         ]
       },
       "plans": [
@@ -653,7 +653,7 @@
       "sets": "agents-profile-sets.valid.json",
       "batch": "agent-usage.valid.json",
       "of": "work",
-      "options": {},
+      "options": {"centreWindow":true},
       "size": 212,
       "level": 3,
       "centre": {
@@ -719,7 +719,7 @@
       "sets": "agents-profile-sets.meters.json",
       "batch": "agent-usage.budget.json",
       "of": "native",
-      "options": {"hit":true},
+      "options": {"hit":true,"centreWindow":true},
       "size": 212,
       "level": 3,
       "centre": {
@@ -727,8 +727,8 @@
         "y": 106,
         "r": 44.6,
         "items": [
-          {"kind":"mark","provider":"claude","x":106,"y":95.14,"size":19,"paint":{"tone":"attention"},"opacity":1},
-          {"kind":"text","role":"figure","text":"64","x":106,"y":126.36,"size":26,"font":"display","weight":800,"paint":{"tone":"attention"},"percent":true}
+          {"kind":"text","role":"sub","text":"5H","x":106,"y":99.34,"size":13,"font":"sans","weight":700,"paint":{"tone":"ink","percent":70}},
+          {"kind":"text","role":"figure","text":"64","x":106,"y":123.06,"size":26,"font":"display","weight":800,"paint":{"tone":"attention"},"percent":true}
         ]
       },
       "plans": [
@@ -928,12 +928,119 @@
       "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; OpenAI: 30% of 5 hours, as of 32m ago; xAI: 46% of credits"
     },
     {
+      "name": "several plans opened, the window in the middle: its label over the figure, the say line under it",
+      "where": "the full-size middle with the window named (DESIGN.md §8 \"The body\"), no view's yet: the one size past a hole of 46",
+      "sets": "agents-profile-sets.meters.json",
+      "batch": "agent-usage.budget.json",
+      "of": "native",
+      "options": {"hit":true,"centreWindow":true},
+      "size": 232,
+      "level": 3,
+      "centre": {
+        "x": 116,
+        "y": 116,
+        "r": 52.76,
+        "items": [
+          {"kind":"text","role":"sub","text":"5H","x":116,"y":100.7,"size":12.66,"font":"sans","weight":700,"paint":{"tone":"ink","percent":70}},
+          {"kind":"text","role":"figure","text":"64","x":116,"y":124.93,"size":25.32,"font":"display","weight":800,"paint":{"tone":"attention"},"percent":true},
+          {"kind":"text","role":"say","text":"out in ~1h 30m","x":116,"y":139.53,"size":9.5,"font":"sans","weight":650,"paint":{"tone":"attention"}}
+        ]
+      },
+      "plans": [
+        {
+          "key": "plan:anthropic",
+          "from": -86.73,
+          "span": 113.47,
+          "dim": false,
+          "arcs": [
+            {"band":"outer","part":"track","r":78.36,"from":-86.73,"to":26.73,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":8},"opacity":1},
+            {"band":"outer","part":"fill","r":78.36,"from":-86.73,"to":-33.4,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":28},"opacity":1},
+            {"band":"outer","part":"head","r":78.36,"from":-42.18,"to":-40.62,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":9},"opacity":1},
+            {"band":"outer","part":"head","r":78.36,"from":-40.72,"to":-39.15,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":19},"opacity":1},
+            {"band":"outer","part":"head","r":78.36,"from":-39.25,"to":-37.69,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":29},"opacity":1},
+            {"band":"outer","part":"head","r":78.36,"from":-37.79,"to":-36.23,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":39},"opacity":1},
+            {"band":"outer","part":"head","r":78.36,"from":-36.33,"to":-34.77,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":49},"opacity":1},
+            {"band":"outer","part":"head","r":78.36,"from":-34.87,"to":-33.4,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":58},"opacity":1},
+            {"band":"inner","part":"track","r":65.09,"from":-86.73,"to":26.73,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":8},"opacity":1},
+            {"band":"inner","part":"fill","r":65.09,"from":-86.73,"to":-14.11,"width":10.67,"cap":"butt","paint":{"tone":"hot","percent":88},"opacity":1},
+            {"band":"inner","part":"head","r":65.09,"from":-24.68,"to":-22.82,"width":10.67,"cap":"butt","paint":{"tone":"light","percent":6},"opacity":1},
+            {"band":"inner","part":"head","r":65.09,"from":-22.92,"to":-21.06,"width":10.67,"cap":"butt","paint":{"tone":"light","percent":12},"opacity":1},
+            {"band":"inner","part":"head","r":65.09,"from":-21.16,"to":-19.3,"width":10.67,"cap":"butt","paint":{"tone":"light","percent":19},"opacity":1},
+            {"band":"inner","part":"head","r":65.09,"from":-19.4,"to":-17.54,"width":10.67,"cap":"butt","paint":{"tone":"light","percent":26},"opacity":1},
+            {"band":"inner","part":"head","r":65.09,"from":-17.64,"to":-15.78,"width":10.67,"cap":"butt","paint":{"tone":"light","percent":33},"opacity":1},
+            {"band":"inner","part":"head","r":65.09,"from":-15.88,"to":-14.11,"width":10.67,"cap":"butt","paint":{"tone":"light","percent":40},"opacity":1},
+            {"band":"hairline","part":"track","r":88.7,"from":-85.76,"to":25.76,"width":3,"cap":"round","paint":{"tone":"ink","percent":12},"opacity":1},
+            {"band":"hairline","part":"fill","r":88.7,"from":-85.76,"to":-72.38,"width":3,"cap":"round","paint":{"tone":"ink","percent":64},"opacity":1}
+          ],
+          "notches": [
+            {"x1":182.36,"y1":138.37,"x2":198.16,"y2":143.69,"width":2,"paint":{"tone":"ink","percent":84},"opacity":1},
+            {"x1":165.15,"y1":87.62,"x2":179.59,"y2":79.29,"width":2,"paint":{"tone":"ink","percent":84},"opacity":1}
+          ],
+          "words": "Anthropic: 64% of 5 hours, out in ~1h 30m",
+          "mark": {"provider":"claude","x":204.94,"y":64.65,"size":16,"paint":{"tone":"attention"},"opacity":1},
+          "hit": {"r":86.9,"width":62.28,"from":-86.73,"to":26.73}
+        },
+        {
+          "key": "plan:openai",
+          "from": 33.27,
+          "span": 113.47,
+          "dim": false,
+          "arcs": [
+            {"band":"outer","part":"track","r":78.36,"from":33.27,"to":146.73,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":8},"opacity":1},
+            {"band":"outer","part":"fill","r":78.36,"from":33.27,"to":58.23,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":28},"opacity":0.5},
+            {"band":"outer","part":"head","r":78.36,"from":49.46,"to":51.02,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":9},"opacity":0.5},
+            {"band":"outer","part":"head","r":78.36,"from":50.92,"to":52.48,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":19},"opacity":0.5},
+            {"band":"outer","part":"head","r":78.36,"from":52.38,"to":53.94,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":29},"opacity":0.5},
+            {"band":"outer","part":"head","r":78.36,"from":53.84,"to":55.41,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":39},"opacity":0.5},
+            {"band":"outer","part":"head","r":78.36,"from":55.31,"to":56.87,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":49},"opacity":0.5},
+            {"band":"outer","part":"head","r":78.36,"from":56.77,"to":58.23,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":58},"opacity":0.5},
+            {"band":"inner","part":"track","r":65.09,"from":33.27,"to":146.73,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":8},"opacity":1},
+            {"band":"inner","part":"fill","r":65.09,"from":33.27,"to":67.31,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":28},"opacity":0.5},
+            {"band":"inner","part":"head","r":65.09,"from":56.74,"to":58.6,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":9},"opacity":0.5},
+            {"band":"inner","part":"head","r":65.09,"from":58.5,"to":60.37,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":19},"opacity":0.5},
+            {"band":"inner","part":"head","r":65.09,"from":60.27,"to":62.13,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":29},"opacity":0.5},
+            {"band":"inner","part":"head","r":65.09,"from":62.03,"to":63.89,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":39},"opacity":0.5},
+            {"band":"inner","part":"head","r":65.09,"from":63.79,"to":65.65,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":49},"opacity":0.5},
+            {"band":"inner","part":"head","r":65.09,"from":65.55,"to":67.31,"width":10.67,"cap":"butt","paint":{"tone":"ink","percent":58},"opacity":0.5}
+          ],
+          "notches": [
+            {"x1":61.33,"y1":159.76,"x2":48.31,"y2":170.17,"width":2,"paint":{"tone":"ink","percent":84},"opacity":1},
+            {"x1":94.1,"y1":168.36,"x2":87.67,"y2":183.74,"width":2,"paint":{"tone":"ink","percent":84},"opacity":1}
+          ],
+          "words": "OpenAI: 30% of 5 hours, as of 32m ago",
+          "mark": {"provider":"codex","x":116,"y":218.7,"size":16,"paint":{"tone":"ink","percent":84},"opacity":1},
+          "hit": {"r":86.9,"width":62.28,"from":33.27,"to":146.73}
+        },
+        {
+          "key": "plan:xai",
+          "from": 153.27,
+          "span": 113.47,
+          "dim": false,
+          "arcs": [
+            {"band":"both","part":"track","r":71.73,"from":153.27,"to":266.73,"width":23.94,"cap":"butt","paint":{"tone":"ink","percent":8},"opacity":1},
+            {"band":"both","part":"fill","r":71.73,"from":153.27,"to":205.46,"width":23.94,"cap":"butt","paint":{"tone":"ink","percent":28},"opacity":1},
+            {"band":"both","part":"head","r":71.73,"from":195.88,"to":197.57,"width":23.94,"cap":"butt","paint":{"tone":"ink","percent":9},"opacity":1},
+            {"band":"both","part":"head","r":71.73,"from":197.47,"to":199.17,"width":23.94,"cap":"butt","paint":{"tone":"ink","percent":19},"opacity":1},
+            {"band":"both","part":"head","r":71.73,"from":199.07,"to":200.77,"width":23.94,"cap":"butt","paint":{"tone":"ink","percent":29},"opacity":1},
+            {"band":"both","part":"head","r":71.73,"from":200.67,"to":202.37,"width":23.94,"cap":"butt","paint":{"tone":"ink","percent":39},"opacity":1},
+            {"band":"both","part":"head","r":71.73,"from":202.27,"to":203.96,"width":23.94,"cap":"butt","paint":{"tone":"ink","percent":49},"opacity":1},
+            {"band":"both","part":"head","r":71.73,"from":203.86,"to":205.46,"width":23.94,"cap":"butt","paint":{"tone":"ink","percent":58},"opacity":1}
+          ],
+          "notches": [],
+          "words": "xAI: 46% of credits",
+          "mark": {"provider":"grok","x":27.06,"y":64.65,"size":16,"paint":{"tone":"ink","percent":84},"opacity":1},
+          "hit": {"r":86.9,"width":62.28,"from":153.27,"to":266.73}
+        }
+      ],
+      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; OpenAI: 30% of 5 hours, as of 32m ago; xAI: 46% of credits"
+    },
+    {
       "name": "several plans, one pointed at: the others dim and the middle speaks for it",
       "where": "the desktop's popover",
       "sets": "agents-profile-sets.meters.json",
       "batch": "agent-usage.budget.json",
       "of": "native",
-      "options": {"hit":true,"focus":"plan:openai"},
+      "options": {"hit":true,"focus":"plan:openai","centreWindow":true},
       "size": 212,
       "level": 3,
       "centre": {
@@ -941,8 +1048,8 @@
         "y": 106,
         "r": 44.6,
         "items": [
-          {"kind":"mark","provider":"codex","x":106,"y":95.14,"size":19,"paint":{"tone":"ink","percent":84},"opacity":1},
-          {"kind":"text","role":"figure","text":"30","x":106,"y":126.36,"size":26,"font":"display","weight":800,"paint":{"tone":"ink","percent":90},"percent":true}
+          {"kind":"text","role":"sub","text":"5H","x":106,"y":99.34,"size":13,"font":"sans","weight":700,"paint":{"tone":"ink","percent":70}},
+          {"kind":"text","role":"figure","text":"30","x":106,"y":123.06,"size":26,"font":"display","weight":800,"paint":{"tone":"ink","percent":90},"percent":true}
         ]
       },
       "plans": [
@@ -1237,7 +1344,7 @@
       "sets": "agents-profile-sets.meters.json",
       "batch": "agent-usage.budget.json",
       "of": "native",
-      "options": {},
+      "options": {"centreWindow":true},
       "size": 206,
       "level": 3,
       "centre": {
@@ -1245,8 +1352,8 @@
         "y": 103,
         "r": 42.15,
         "items": [
-          {"kind":"mark","provider":"claude","x":103,"y":92.14,"size":19,"paint":{"tone":"attention"},"opacity":1},
-          {"kind":"text","role":"figure","text":"64","x":103,"y":123.36,"size":26,"font":"display","weight":800,"paint":{"tone":"attention"},"percent":true}
+          {"kind":"text","role":"sub","text":"5H","x":103,"y":96.34,"size":13,"font":"sans","weight":700,"paint":{"tone":"ink","percent":70}},
+          {"kind":"text","role":"figure","text":"64","x":103,"y":120.06,"size":26,"font":"display","weight":800,"paint":{"tone":"attention"},"percent":true}
         ]
       },
       "plans": [
@@ -1341,7 +1448,7 @@
       "batch": "agent-usage.budget.json",
       "of": "native",
       "at": "2026-09-16T15:00:00.000Z",
-      "options": {"hit":true},
+      "options": {"hit":true,"centreWindow":true},
       "size": 214,
       "level": 3,
       "centre": {
@@ -1349,8 +1456,8 @@
         "y": 107,
         "r": 45.41,
         "items": [
-          {"kind":"mark","provider":"claude","x":107,"y":96.14,"size":19,"paint":{"tone":"ink","percent":84},"opacity":1},
-          {"kind":"text","role":"figure","text":"47","x":107,"y":127.36,"size":26,"font":"display","weight":800,"paint":{"tone":"ink","percent":90},"percent":true}
+          {"kind":"text","role":"sub","text":"7D","x":107,"y":100.34,"size":13,"font":"sans","weight":700,"paint":{"tone":"ink","percent":70}},
+          {"kind":"text","role":"figure","text":"47","x":107,"y":124.06,"size":26,"font":"display","weight":800,"paint":{"tone":"ink","percent":90},"percent":true}
         ]
       },
       "plans": [
@@ -1509,7 +1616,7 @@
       "sets": "agents-profile-sets.meters.json",
       "batch": "agent-usage.budget.json",
       "of": "work",
-      "options": {"hit":true},
+      "options": {"hit":true,"centreWindow":true},
       "size": 212,
       "level": 3,
       "centre": {
@@ -1517,8 +1624,8 @@
         "y": 106,
         "r": 44.6,
         "items": [
-          {"kind":"mark","provider":"claude","x":106,"y":95.14,"size":19,"paint":{"tone":"attention"},"opacity":1},
-          {"kind":"text","role":"figure","text":"64","x":106,"y":126.36,"size":26,"font":"display","weight":800,"paint":{"tone":"attention"},"percent":true}
+          {"kind":"text","role":"sub","text":"5H","x":106,"y":99.34,"size":13,"font":"sans","weight":700,"paint":{"tone":"ink","percent":70}},
+          {"kind":"text","role":"figure","text":"64","x":106,"y":123.06,"size":26,"font":"display","weight":800,"paint":{"tone":"attention"},"percent":true}
         ]
       },
       "plans": [
@@ -1649,7 +1756,7 @@
       "sets": "agents-profile-sets.meters.json",
       "batch": "agent-usage.budget.json",
       "of": "work",
-      "options": {"hit":true,"crowd":true,"focus":"plan:openai"},
+      "options": {"hit":true,"crowd":true,"focus":"plan:openai","centreWindow":true},
       "size": 214,
       "level": 3,
       "centre": {
@@ -1728,7 +1835,7 @@
       "sets": "agents-profile-sets.meters.json",
       "batch": "agent-usage.budget.json",
       "of": "side",
-      "options": {},
+      "options": {"centreWindow":true},
       "size": 212,
       "level": 3,
       "centre": {
@@ -2117,7 +2224,7 @@
       "sets": "agents-profile-sets.meters.json",
       "batch": "agent-usage.budget.json",
       "of": "every",
-      "options": {"hit":true,"crowd":true,"every":true},
+      "options": {"hit":true,"crowd":true,"every":true,"centreWindow":true},
       "size": 214,
       "level": 3,
       "centre": {
@@ -2125,8 +2232,8 @@
         "y": 107,
         "r": 45.41,
         "items": [
-          {"kind":"mark","provider":"claude","x":107,"y":96.14,"size":19,"paint":{"tone":"attention"},"opacity":1},
-          {"kind":"text","role":"figure","text":"64","x":107,"y":127.36,"size":26,"font":"display","weight":800,"paint":{"tone":"attention"},"percent":true}
+          {"kind":"text","role":"sub","text":"5H","x":107,"y":100.34,"size":13,"font":"sans","weight":700,"paint":{"tone":"ink","percent":70}},
+          {"kind":"text","role":"figure","text":"64","x":107,"y":124.06,"size":26,"font":"display","weight":800,"paint":{"tone":"attention"},"percent":true}
         ]
       },
       "plans": [
@@ -2339,7 +2446,7 @@
       "batch": "agent-usage.budget.json",
       "of": "native",
       "usage": "unavailable",
-      "options": {},
+      "options": {"centreWindow":true},
       "size": 212,
       "level": 3,
       "centre": {"x":106,"y":106,"r":44.6,"items":[]},

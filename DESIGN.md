@@ -3613,8 +3613,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       700 in the ink at 70%, where the agent's mark stood, over the figure; at full size the say line follows and no
       "of 7 days" line repeats the window. A plan with no reading keeps its mark. *(Corrected 2026-11-16; James, in
       chat: the agent icon in the middle "is too redundant … make it to show this current highlighted meter, for
-      example this 99% is the 7d meter, so display 7D there". The popover's circle alone (`centreWindow`); every other
-      circle's middle is unchanged.)* Beside it, 14 away, one row per plan in the circle's order: the agent's mark
+      example this 99% is the 7d meter, so display 7D there". The popover's circle (`centreWindow`), and since
+      2026-11-17 the phone's two that list their plans beside or under them: the Agent Profiles page's at 214 and the
+      held face's at 206; every other circle's middle is unchanged.)* Beside it, 14 away, one row per plan in the
+      circle's order: the agent's mark
       (16), **level with the plan's title at the row's top** however many lines follow (*the same day: "vertical
       align the agent icon to its name at the top"*; a plan that needs you keeps its title beside its mark, its act in
       the third column), the plan's title (as Agent Profiles names it), **its sign-in beside the title, veiled**
@@ -8528,17 +8530,30 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **With several**, the profiles bloom from the face.
     - The buds are 54: a disc ringed by the ink at 14%, with a shadow, holding the profile's Bands circle at 54 with
       its glyph and the hot dot. The first four stand at −92°, −70°, −48° and −26°, 160 from the face's centre. A
-      fifth to an eighth stand on a second arc at 224, offset half a step (11°) ‹for James: four angles were drawn,
+      fifth to an eighth stand on a second arc at 276, offset half a step (11°) ‹for James: four angles were drawn,
       and this is the lead's placement for five to eight›. Past eight ‹for James›.
-    - Each bud is labelled outside itself along its spoke, at `160 + 33 + half × |cos a| + 12 × |sin a|` (38 for
-      the reached bud), where half is `max(letters × 5.7, 40) / 2`: its name in mono 9.5/700 capitals, and its state
-      under it ("42% · 5H", "READING", "NO METER"), in the attention ink when it runs hot.
+    - **The labels:** each bud carries its name in mono 9.5/700 capitals, and its state under it ("42% · 5H",
+      "READING", "NO METER"), in the attention ink when it runs hot. The name stops at **14** characters and the state
+      at **17**, each cut to one less and "…" when longer: a profile's name may run to 64 and a window's word is the
+      adapter's own, and past these lengths labels stood on each other. The whole name stands in the huge words while
+      its bud is reached. ‹for James: the lead's placement, the longest a check by port found clear at two to eight
+      profiles on screens 375 to 440 wide›. So cut, a label never stands on a bud, the face, another label, or off
+      the screen. It tries four places about its own bud, in order: outside along its spoke, inside
+      along it, then either side across it. Each place is just clear of its bud at its reached size (31.3, and 2
+      more), and slid back inside the screen's 6 edge. It takes the first place that touches nothing (the face's ring
+      and 2 more, a bud, another label by 4), else the one that touches least. The second arc's labels are placed
+      first, since the open ground beyond it is theirs. Labels stay where they are while the reach moves.
+      *(Corrected 2026-11-17: this said the second arc stood at 224 and each label stood along its spoke at
+      `160 + 33 + half × |cos a| + 12 × |sin a|` (38 for the reached bud). With seven profiles the first arc's labels
+      stood on the second arc's buds and covered each other's words, as seen on a phone. The second arc moved out so
+      a first-arc label fits between two of its buds, and the places above replaced the one formula.)*
     - **The reach:** within 30 of the face is the hub; else the nearest bud within 58 is that bud; else within 52
       is the hub; anywhere else is nothing. A reached bud grows to 1.16 with a drop shadow and its neighbours
       shrink to 0.94, in 180ms on the lift curve.
     - **The words follow the reach:** **Show all** over "8 sessions · every profile" on the hub, **Show Work** over
       Work's sessions on a bud, and **Cancel** over "let go here to leave the field as it is" on open ground, the
-      verb at 40%. The reached profile's circle stands at 206 under them, or every plan's on the hub.
+      verb at 40%. The reached profile's circle stands at 206 under them, or every plan's on the hub; its middle names
+      the window its figure reads, as the popover's does (§8 "The body", added 2026-11-17).
       *Built 2026-11-09, UM-5b:* while the field is live the line says sessions, as ruled; while it is not (no run to
       count) it keeps the plans' reads, the one honest fallback, "5 read · 2 need you · every profile" on the hub and
       "1 read · 2 need you" on Work's bud (§9 "The phone's hold"). *(Corrected 2026-11-09, UM-5b: this said wave 1's
@@ -8564,8 +8579,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Settings"): paper, the large title **Agent Profiles**, close only (iOS 26's `role: .close`), corners 40 as
     Settings' sheet has. It rises as Settings' sheet does, the system's, which keeps the system's own Reduce Motion
     (the drawing's 420ms rise is not taken). From the top:
-    - **the circle** at 214 (a tap on a plan focuses it), the bands key under it, and where the reading comes from:
-      "Read a minute ago, from studio", or "Reading usage…";
+    - **the circle** at 214 (a tap on a plan focuses it), its middle naming the window its figure reads as the
+      popover's does (§8 "The body": "7D" where the agent's mark stood; a plan with no reading keeps its mark; added
+      2026-11-17), the bands key under it, and where the reading comes from: "Read a minute ago, from studio", or
+      "Reading usage…";
     - **Profiles**, an inset group on the fill under History's group head. Its rows are 60 tall: a Bands circle at
       36, the profile's name at 17, its line at 13 in the tertiary ink ("default · the agents' own sign-ins · 2
       plans"), and its word at 15 (the tightest percent; the attention ink at 600 when hot). With several profiles
@@ -8573,7 +8590,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       §13, and "3 profiles · 5 plans"), its rows are the lens with a check on the one shown, and the page follows the
       lens. With one profile its rows take no tap (UM-D12);
     - **Plans**, or **Every plan** with several profiles, or **Plans in Work** while the lens is on. Per plan: its
-      agent's mark (18), its title, the age of a kept reading ("as of 5m ago") or of one taken before a window's
+      agent's mark (18), its title, **its sign-in beside the title, veiled** as the popover's is (§8 "The body":
+      "k•••@w•••.example", a handle to its first letter, the organization left out, never the address whole; at 13
+      in the tertiary ink, giving way first when the line is tight; VoiceOver says it with "…" for the dots; added
+      2026-11-17), the age of a kept reading ("as of 5m ago") or of one taken before a window's
       reset that has since come (§8 "The Bands circle"; added 2026-11-06, ‹for James›), every window as Settings'
       C1 line, and "Runs out in ~35m at this pace" while it would (UM-D4). While the field is live a plan's row adds
       its sessions line ("3 sessions · 1 working · 1 waiting for you", or "no sessions"); a plan with sessions draws
