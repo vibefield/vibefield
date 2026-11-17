@@ -58,9 +58,18 @@ struct AgentProfilesWords: Equatable {
       case none(String)
     }
 
+    /// DESIGN.md §8 "A plan's tier" — what follows a plan's title: its tier's label as given, or, its tier not read
+    /// beside a sibling's, the empty capsule (`AgentProfilesWords.tierOf`).
+    enum Tier: Equatable {
+      case label(String)
+      case unread
+    }
+
     let key: String
     let provider: String
     let title: String
+    /// after the title; nil, nothing is drawn
+    let tier: Tier?
     /// the plan's sign-in, veiled (`MeterModel.veiledAccount`); nil when no account is named
     let account: String?
     /// UM-D12 — a crowded agent's plan wears its profile's glyph (every plan in view)
@@ -72,6 +81,14 @@ struct AgentProfilesWords: Equatable {
     /// nil, no act: nothing to show, or a plan that needs you
     let show: Show?
     var id: String { key }
+
+    /// The plan's name aloud: its title and its tier's label joined by a space ("ChatGPT Pro 200"), so the badge is
+    /// heard as part of the name and never as an element of its own. A tier not read says nothing: the title alone.
+    /// The Bands circle's arc words say the same name (`PlanMeter.spokenTitle`).
+    var spoken: String {
+      guard case .label(let label) = tier else { return title }
+      return PlanMeter.spoken(title, label: label)
+    }
   }
 
   /// "Read a minute ago, from studio", "Reading usage…", "studio doesn't share usage yet", "Usage unavailable"
@@ -121,7 +138,7 @@ struct AgentProfilesWords: Equatable {
       let family = PlanSessions.family(reading.profiles, key: key)
       let runs = entry.kind == .noMeter ? nil : live.map { Self.runs($0, keys: Set(family), profile: chosen?.id) }
       return PlanRow(
-        key: entry.key, provider: entry.provider, title: entry.title,
+        key: entry.key, provider: entry.provider, title: entry.title, tier: Self.tierOf(entry, in: shown.entries),
         account: MeterModel.veiledAccount(entry.plan?.account),
         glyph: crowded.contains(entry.provider) ? entry.profiles.first : nil,
         body: Self.body(entry, home: home, now: now),
@@ -216,6 +233,30 @@ struct AgentProfilesWords: Equatable {
       case .unnamed, .noWindows: return .none(entry.title)
       }
     }
+  }
+
+  /// DESIGN.md §8 "A plan's tier" — a plan's tier badge among the plans in view: its label as its sign-in read it; the
+  /// empty capsule when it carries no tier record while another plan of its family carries a label, so a missing badge
+  /// never reads as the lowest tier; else nothing. A family is the same sign-in service and the same title, compared
+  /// value to value between two plans, never with a literal. A record with no label (the agent says the plan has no
+  /// tier) draws nothing, beside a tiered sibling too. The tier names the plan, not its reading: a plan with no meter
+  /// still draws its title, so it keeps its badge and counts as a sibling. An agent on no plan has no tier.
+  static func tierOf(_ entry: PlanMeter, in entries: [PlanMeter]) -> PlanRow.Tier? {
+    guard let plan = entry.plan else { return nil }
+    if let tier = plan.tier { return tier.label.map(PlanRow.Tier.label) }
+    let sibling = entries.contains { other in
+      other.key != entry.key && other.plan?.service.id == plan.service.id && other.title == entry.title
+        && other.plan?.tier?.label != nil
+    }
+    return sibling ? .unread : nil
+  }
+
+  /// A tier's label as its badge draws it: whole up to the contract's cap, else cut to the cap with an ellipsis inside
+  /// the capsule (the row's spoken name keeps it whole). The phone caps by count, not by the desktop's 8ch width
+  /// (DESIGN.md §8 "The phone's corner"); the wire refuses a longer label, so the cut is a guard.
+  static func badgeWords(_ label: String) -> String {
+    let cap = AgentPlanTier.labelMax
+    return label.count <= cap ? label : "\(label.prefix(cap - 1))…"
   }
 
   /// UM-D12 — the agents with more than one plan in view.
@@ -477,6 +518,13 @@ private struct AgentPlanRowView: View {
                 .foregroundStyle(ChromePalette.ink)
                 .lineLimit(1)
                 .layoutPriority(1)
+                .accessibilityLabel(row.spoken)
+              // the badge is part of the plan's name: after the title, before whose it is; it never gives way, so the
+              // sign-in truncates first and the title next
+              if let tier = row.tier {
+                PlanTierBadge(tier: tier)
+                  .layoutPriority(2)
+              }
               if let account = row.account {
                 Text(account)
                   .font(ChromeListType.detail)
@@ -522,7 +570,7 @@ private struct AgentPlanRowView: View {
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .accessibilityLabel("\(word) \(row.title)")
+    .accessibilityLabel("\(word) \(row.spoken)")
     .accessibilityAddTraits(showing ? .isSelected : [])
   }
 
@@ -547,6 +595,45 @@ private struct AgentPlanRowView: View {
       Text(said)
         .font(ChromeListType.detail)
         .foregroundStyle(ChromePalette.inkTertiary)
+    }
+  }
+}
+
+/// DESIGN.md §8 "A plan's tier" and "The phone's corner" — a plan's tier after its title, the popover's **default** tag
+/// in the phone's chrome: 10/600 in the secondary ink with tabular figures (so 100x and 500x stand the same width),
+/// padded 3 6 around its one line, a capsule ringed by the strong hairline. It never gives way (`fixedSize`); a label
+/// past the cap is cut inside it (`AgentProfilesWords.badgeWords`). Its tier not read beside a sibling's: the same
+/// capsule's height and ring, empty and dashed with the Bands' empty ring's dash (2 3), twice as wide as it is tall.
+/// VoiceOver never meets it alone: the title says the label (`PlanRow.spoken`), and the empty capsule says nothing.
+private struct PlanTierBadge: View {
+  static let size: CGFloat = 10
+  static let inset: CGFloat = 3
+  static let side: CGFloat = 6
+  /// one line at the type's size inside its padding: the desktop tag's box at `line-height: 1`
+  static let height: CGFloat = size + 2 * inset
+  static let ring: CGFloat = 1
+  static let dash: [CGFloat] = [2, 3]
+
+  let tier: AgentProfilesWords.PlanRow.Tier
+
+  var body: some View {
+    switch tier {
+    case .label(let label):
+      Text(AgentProfilesWords.badgeWords(label))
+        .font(.system(size: Self.size, weight: .semibold))
+        .monospacedDigit()
+        .foregroundStyle(ChromePalette.inkSecondary)
+        .lineLimit(1)
+        .padding(.horizontal, Self.side)
+        .frame(height: Self.height)
+        .overlay { Capsule().strokeBorder(ChromePalette.ruleStrong, lineWidth: Self.ring) }
+        .fixedSize()
+        .accessibilityHidden(true)
+    case .unread:
+      Capsule()
+        .strokeBorder(ChromePalette.ruleStrong, style: StrokeStyle(lineWidth: Self.ring, dash: Self.dash))
+        .frame(width: 2 * Self.height, height: Self.height)
+        .accessibilityHidden(true)
     }
   }
 }

@@ -384,6 +384,16 @@ struct PlanMeter: Equatable, Sendable {
     let id: String
     let service: AgentSignInService
     let account: String?
+    /// the plan's tier as the sign-in that named it reported it, beside the title it shares a record with: set only
+    /// once an agent named the account, as the title is (`PlanTitles.settings`' `named`); nil, not read
+    let tier: AgentPlanTier?
+
+    init(id: String, service: AgentSignInService, account: String?, tier: AgentPlanTier? = nil) {
+      self.id = id
+      self.service = service
+      self.account = account
+      self.tier = tier
+    }
   }
 
   /// `plan:<id>` or `agent:<profileId>`; in the union, the first profile holding it, a slash, then that
@@ -431,6 +441,16 @@ struct PlanMeter: Equatable, Sendable {
 
   /// a first read, or a sign-in under way: nothing to read yet, nothing to ask
   var waiting: Bool { kind == .firstRead || need == .signingIn }
+
+  /// DESIGN.md §8 "A plan's tier" — the plan's name aloud: its title and its tier's label joined by a space
+  /// ("ChatGPT Pro 200"); with no label read, the title alone. The page's row (`PlanRow.spoken`) and the Bands
+  /// circle's arc words (`BandsLayout.planWords`) say this one name, as the desktop's `spokenPlanTitle` does.
+  var spokenTitle: String { Self.spoken(title, label: plan?.tier?.label) }
+
+  static func spoken(_ title: String, label: String?) -> String {
+    guard let label else { return title }
+    return "\(title) \(label)"
+  }
 }
 
 /// One profile's meters, or every profile's.
@@ -693,7 +713,9 @@ enum MeterModel {
     let base = Base(
       key: "plan:\(plan.id)", provider: provider, agent: options.catalog.name(provider),
       title: options.title(plan, account != nil), profileId: namer?.profileId,
-      plan: PlanMeter.Plan(id: plan.id, service: plan.service, account: account), profiles: [profileOf(set)])
+      plan: PlanMeter.Plan(
+        id: plan.id, service: plan.service, account: account, tier: account != nil ? plan.account?.planTier : nil),
+      profiles: [profileOf(set)])
     guard account != nil, let namer else { return base.meter(.noMeter(.unnamed)) }
     return readOf(base, namer, rows, now: now, options)
   }

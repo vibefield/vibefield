@@ -476,4 +476,115 @@ struct AgentProfilesPageTests {
       #expect(!said.contains(who))
     }
   }
+
+  /// DESIGN.md §8 "A plan's tier" — the page's Plans over made-up profiles (`TierFixture`), under a lens or none.
+  static func tieredSets(
+    _ sets: [AgentProfileSet], usage: MetersReading.Usage = .waiting, lens profile: String? = nil
+  ) throws -> AgentProfilesWords {
+    var reading = MetersReading()
+    reading.connected = true
+    reading.home = "dev-1"
+    reading.sets = sets
+    reading.catalog = try AgentCatalogResult(json: try HomeFixture.json("agent-catalog.valid")).catalog
+    reading.usage = usage
+    return Self.words(reading, lens: profile)
+  }
+
+  /// One made-up profile's Plans, before any reading (or with the home's usage door down).
+  static func tiered(
+    _ plans: [TierFixture.Plan], usage: MetersReading.Usage = .waiting
+  ) throws -> AgentProfilesWords {
+    try Self.tieredSets([try TierFixture.set(plans)], usage: usage)
+  }
+
+  /// A plan's row by its plan's id: `plan:‹id›` under a lens, `‹profile›/plan:‹id›` in every plan.
+  static func tierRow(_ words: AgentProfilesWords, _ id: String) -> AgentProfilesWords.PlanRow? {
+    words.plans.first { $0.key == "plan:\(id)" || $0.key.hasSuffix("/plan:\(id)") }
+  }
+
+  static func isLine(_ row: AgentProfilesWords.PlanRow) -> Bool {
+    if case .none = row.body { return true }
+    return false
+  }
+
+  @Test("a plan's badge is its label as given; its unread sibling's the empty capsule; a plan with no tier draws none")
+  func tierBesideItsFamily() throws {
+    let words = try Self.tiered([
+      .init(id: "a", tier: TierFixture.label("20x")), .init(id: "b", tier: TierFixture.noTier), .init(id: "c"),
+      .init(id: "x", service: "openai", serviceLabel: "OpenAI", provider: "codex", plan: "pro"),
+    ])
+    let tiered = try #require(Self.tierRow(words, "a"))
+    #expect(tiered.title == "Claude Max")
+    #expect(tiered.tier == .label("20x"))
+    let none = try #require(Self.tierRow(words, "b"))
+    #expect(none.tier == nil, "the agent says it has no tier: nothing, beside a tiered sibling too")
+    let unread = try #require(Self.tierRow(words, "c"))
+    #expect(unread.tier == .unread)
+    let other = try #require(Self.tierRow(words, "x"))
+    #expect(other.tier == nil, "another service's plan is no family of a tiered one")
+  }
+
+  @Test("with no labelled plan of its family in view, a plan whose tier was not read draws nothing")
+  func tierAlone() throws {
+    let alone = try Self.tiered([.init(id: "c")])
+    let only = try #require(Self.tierRow(alone, "c"))
+    #expect(only.tier == nil)
+    // a sibling that says it has no tier is no reason for the capsule
+    let besideNone = try Self.tiered([.init(id: "b", tier: TierFixture.noTier), .init(id: "c")])
+    let quiet = try #require(Self.tierRow(besideNone, "c"))
+    #expect(quiet.tier == nil)
+    // another title of the same service is another family
+    let besidePro = try Self.tiered([.init(id: "a", plan: "pro", tier: TierFixture.label("20x")), .init(id: "c")])
+    let otherTitle = try #require(Self.tierRow(besidePro, "c"))
+    #expect(otherTitle.tier == nil)
+  }
+
+  @Test("the tier names the plan, not its reading: a plan with no meter keeps its badge and is a sibling")
+  func tierWithNoMeter() throws {
+    // an agent that reports no usage: its plan is a line, still titled, and its label still stands
+    let unreported = try Self.tiered([
+      .init(id: "h", provider: "hermes", tier: TierFixture.label("20x")), .init(id: "c"),
+    ])
+    let line = try #require(Self.tierRow(unreported, "h"))
+    #expect(Self.isLine(line))
+    #expect(line.tier == .label("20x"))
+    let beside = try #require(Self.tierRow(unreported, "c"))
+    #expect(beside.tier == .unread)
+    // the home's usage door down: every plan is a line, and each keeps what its sign-in read
+    let down = try Self.tiered([.init(id: "a", tier: TierFixture.label("20x")), .init(id: "c")], usage: .unavailable)
+    let labelled = try #require(Self.tierRow(down, "a"))
+    #expect(Self.isLine(labelled))
+    #expect(labelled.tier == .label("20x"))
+    #expect(labelled.spoken == "Claude Max 20x")
+    let unread = try #require(Self.tierRow(down, "c"))
+    #expect(unread.tier == .unread)
+  }
+
+  @Test("a family is read among the plans in view: every plan's, or the lens's profile's alone")
+  func tierUnderALens() throws {
+    let work = try TierFixture.set([.init(id: "a", tier: TierFixture.label("20x"))])
+    let side = try TierFixture.set([.init(id: "c")], id: "side", label: "Side", isDefault: false)
+    let every = try Self.tieredSets([work, side])
+    let everyRow = try #require(Self.tierRow(every, "c"))
+    #expect(everyRow.tier == .unread)
+    let onSide = try Self.tieredSets([work, side], lens: "side")
+    #expect(onSide.plansHead == "Plans in Side")
+    let sideRow = try #require(Self.tierRow(onSide, "c"))
+    #expect(sideRow.tier == nil, "under the lens its labelled sibling is out of view")
+    let onWork = try Self.tieredSets([work, side], lens: "work")
+    let workRow = try #require(Self.tierRow(onWork, "a"))
+    #expect(workRow.tier == .label("20x"))
+  }
+
+  @Test("a plan is spoken with its tier's label after its title, a space between; the badge cuts past the cap")
+  func tierSpoken() throws {
+    let words = try Self.tiered([.init(id: "a", tier: TierFixture.label("20x")), .init(id: "c")])
+    let tiered = try #require(Self.tierRow(words, "a"))
+    #expect(tiered.spoken == "Claude Max 20x")
+    let unread = try #require(Self.tierRow(words, "c"))
+    #expect(unread.spoken == "Claude Max", "a tier not read says nothing aloud")
+    #expect(AgentProfilesWords.badgeWords("20x") == "20x")
+    #expect(AgentProfilesWords.badgeWords("12345678") == "12345678")
+    #expect(AgentProfilesWords.badgeWords("123456789") == "1234567…")
+  }
 }

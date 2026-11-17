@@ -299,17 +299,20 @@ enum BandsLayout {
   }
 
   /// A plan in words: "Claude Max: 64% of 5 hours, out in ~35m"; "Kimi Code: not signed in"; "Codex: signing in".
+  /// A plan whose tier was read is named with it, as its row says it ("ChatGPT Pro 200: …"; DESIGN.md §8 "A plan's
+  /// tier", the desktop's `bandsPlanWords`).
   static func planWords(_ entry: PlanMeter) -> String {
+    let title = entry.spokenTitle
     switch entry.state {
     case .needsYou(let need):
-      return need == .signingIn ? "\(entry.title): signing in" : "\(entry.title): \(entry.right?.words ?? "")"
+      return need == .signingIn ? "\(title): signing in" : "\(title): \(entry.right?.words ?? "")"
     case .firstRead:
-      return "\(entry.title): reading"
+      return "\(title): reading"
     case .noMeter:
-      return entry.title
+      return title
     case .reading(let reading):
       let said = say(entry).words
-      return "\(entry.title): \(wholeWords(reading.tightest.line.usedPercent))% \(windowOf(reading.tightest))"
+      return "\(title): \(wholeWords(reading.tightest.line.usedPercent))% \(windowOf(reading.tightest))"
         + (said.isEmpty ? "" : ", \(said)")
     }
   }

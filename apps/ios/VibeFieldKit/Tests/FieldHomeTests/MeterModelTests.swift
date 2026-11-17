@@ -217,6 +217,179 @@ struct MeterModelTests {
     let managedRow = MeterModel.usageOf(unkeyed, managed)
     #expect(managedRow == nil)
   }
+
+  static let tierNow = Date(timeIntervalSince1970: 1_000_000)
+
+  static func tierOptions() throws -> MetersOptions {
+    let catalog = try AgentCatalogResult(json: try HomeFixture.json("agent-catalog.valid")).catalog
+    return MetersOptions(catalog: MeterCatalog(rows: catalog))
+  }
+
+  /// DESIGN.md §8 "A plan's tier" — the tier and the title come from one record, behind one gate: a plan whose account
+  /// no agent named is titled by its product alone and carries no tier, whatever its account says; a named account
+  /// keeps both, its namer missing from the profile too (the desktop's `planTierOf` has the same gate).
+  @Test("a plan's tier rides on its meter only once an agent named its account, as its title does")
+  func planTierOnlyWhenNamed() throws {
+    let set = try TierFixture.set([
+      .init(id: "a", tier: TierFixture.label("20x")), .init(id: "b", tier: TierFixture.noTier), .init(id: "c"),
+      .init(id: "d", tier: TierFixture.label("20x"), named: false),
+      .init(id: "e", tier: TierFixture.label("20x"), namer: false),
+    ])
+    let meters = MeterModel.planMeters(set, rows: [], now: Self.tierNow, options: try Self.tierOptions())
+    func entry(_ id: String) -> PlanMeter? { meters.entries.first { $0.key == "plan:\(id)" } }
+    let labelled = entry("a")?.plan?.tier
+    #expect(labelled == AgentPlanTier(label: "20x"))
+    let none = entry("b")?.plan?.tier
+    #expect(none == AgentPlanTier(label: nil))
+    let unread = try #require(entry("c")?.plan)
+    #expect(unread.tier == nil)
+    let unnamed = try #require(entry("d"))
+    #expect(unnamed.title == "Claude")
+    #expect(unnamed.why == .unnamed)
+    #expect(unnamed.plan?.tier == nil)
+    let named = try #require(entry("a"))
+    #expect(named.title == "Claude Max", "the title carries none of the tier")
+    // its account named by a sign-in this profile does not hold: no meter, yet the plan keeps its name and its tier
+    let orphan = try #require(entry("e"))
+    #expect(orphan.why == .unnamed)
+    #expect(orphan.title == "Claude Max")
+    let orphanTier = orphan.plan?.tier
+    #expect(orphanTier == AgentPlanTier(label: "20x"))
+  }
+
+  /// DESIGN.md §8 "A plan's tier" — every plan at once: one account in two profiles is one entry, which keeps the shown
+  /// profile's entry whole, its tier with it, as the desktop's union (`everyPlan`) does; the other profile's read is
+  /// not borrowed into it.
+  @Test("in every plan a shared account is one entry, carrying the tier of the profile whose entry it shows")
+  func planTierInTheUnion() throws {
+    let options = try Self.tierOptions()
+    let work = try TierFixture.set([.init(id: "a", email: "kim@example.com", alsoIn: ["side"])])
+    let side = try TierFixture.set(
+      [.init(id: "a", tier: TierFixture.label("20x"), email: "kim@example.com", alsoIn: ["work"])],
+      id: "side", label: "Side", isDefault: false)
+    let union = MeterModel.everyPlan([work, side], rows: [], now: Self.tierNow, options: options)
+    let shared = union.entries.filter { $0.plan?.id == "a" }
+    #expect(shared.count == 1)
+    let kept = try #require(shared.first)
+    #expect(kept.key == "work/plan:a")
+    #expect(kept.profiles.count == 2)
+    #expect(kept.plan?.tier == nil, "the entry shown is the first profile's, whose sign-in read no tier")
+    let swapped = MeterModel.everyPlan([side, work], rows: [], now: Self.tierNow, options: options)
+    let other = swapped.entries.first { $0.plan?.id == "a" }
+    let otherTier = other?.plan?.tier
+    #expect(otherTier == AgentPlanTier(label: "20x"))
+  }
+
+  /// A five hours' reading at 42% for one made-up sign-in (`TierFixture`'s `‹profile›.‹plan›`), read at `tierNow`
+  /// with two hours to its reset.
+  static func tierUsage(_ profileId: String) throws -> AgentAccountUsageEntry {
+    try AgentAccountUsageEntry(
+      json: .object([
+        "provider": .string("claude"), "label": .string("Claude"), "profileId": .string(profileId),
+        "state": .string("available"), "fetchedAt": .string("1970-01-12T13:46:40.000Z"),
+        "metrics": .array([
+          .object([
+            "id": .string("five-hour"), "label": .string("5H"), "kind": .string("window"), "usedPercent": .double(42),
+            "durationMinutes": .int(300), "resetsAt": .string("1970-01-12T15:46:40.000Z"),
+          ])
+        ]),
+      ]))
+  }
+
+  /// DESIGN.md §8 "A plan's tier" and §9 "The meters' words" — the circle's arc words name a plan as its row does
+  /// (`PlanMeter.spokenTitle`): the title and the tier's label joined by a space, in every state the plan is in; a
+  /// tier not read, or a record with no label, leaves the title alone (the desktop's `bandsPlanWords`).
+  @Test("the circle's arc words say a plan's tier after its title, as its row does, in every state")
+  func planTierInTheArcWords() throws {
+    let set = try TierFixture.set([
+      .init(id: "a", tier: TierFixture.label("20x")), .init(id: "b", tier: TierFixture.noTier), .init(id: "c"),
+    ])
+    let options = try Self.tierOptions()
+    func entry(_ meters: ProfileMeters, _ id: String) -> PlanMeter? { meters.entries.first { $0.key == "plan:\(id)" } }
+    // before any reading: a first read
+    let waiting = MeterModel.planMeters(set, rows: [], now: Self.tierNow, options: options)
+    let first = try #require(entry(waiting, "a"))
+    #expect(first.kind == .firstRead)
+    #expect(first.spokenTitle == "Claude Max 20x")
+    #expect(BandsLayout.planWords(first) == "Claude Max 20x: reading")
+    #expect(BandsLayout.circleWords([first], every: false) == "Usage: Claude Max 20x: reading")
+    let none = try #require(entry(waiting, "b"))
+    #expect(BandsLayout.planWords(none) == "Claude Max: reading", "the agent says it has no tier: the title alone")
+    let unread = try #require(entry(waiting, "c"))
+    #expect(BandsLayout.planWords(unread) == "Claude Max: reading", "a tier not read says nothing aloud")
+    // a reading: the same words as the untiered plan's, the label after the title
+    let rows = try [Self.tierUsage("work.a"), Self.tierUsage("work.c")]
+    let read = MeterModel.planMeters(set, rows: rows, now: Self.tierNow, options: options)
+    let tieredRead = try #require(entry(read, "a"))
+    #expect(tieredRead.kind == .reading)
+    let tieredWords = BandsLayout.planWords(tieredRead)
+    let plainRead = try #require(entry(read, "c"))
+    let plainWords = BandsLayout.planWords(plainRead)
+    #expect(plainWords.hasPrefix("Claude Max: 42% of "))
+    let tail = String(plainWords.dropFirst("Claude Max".count))
+    #expect(tieredWords == "Claude Max 20x" + tail)
+    // the home's usage door down: a plan with no meter is said by its name alone, tier and all
+    var down = options
+    down.usageReadable = false
+    let unavailable = MeterModel.planMeters(set, rows: [], now: Self.tierNow, options: down)
+    let line = try #require(entry(unavailable, "a"))
+    #expect(line.kind == .noMeter)
+    #expect(BandsLayout.planWords(line) == "Claude Max 20x")
+  }
+}
+
+/// Made-up profiles for the tier rows: one signed-in sign-in per plan, each naming its own plan (example.com
+/// addresses), each plan's account carrying its row's `planTier` (no key when nil); its account named by nobody when
+/// not `named`, and its namer a sign-in the profile does not hold when not `namer`.
+enum TierFixture {
+  struct Plan {
+    let id: String
+    var service = "anthropic"
+    var serviceLabel = "Anthropic"
+    var provider = "claude"
+    var plan = "max"
+    var tier: JSONValue?
+    var named = true
+    var namer = true
+    /// the account's address; nil, `‹id›@example.com`
+    var email: String?
+    /// the other profiles with the same account
+    var alsoIn: [String] = []
+  }
+
+  static func label(_ text: String) -> JSONValue { .object(["label": .string(text)]) }
+
+  /// the agent says this plan has no tier
+  static let noTier = JSONValue.object([:])
+
+  static func set(
+    _ plans: [Plan], id: String = "work", label: String = "Work", isDefault: Bool = true
+  ) throws -> AgentProfileSet {
+    let personas: [JSONValue] = plans.map { plan in
+      .object([
+        "profileId": .string("\(id).\(plan.id)"), "provider": .string(plan.provider), "kind": .string("managed"),
+        "label": .string(plan.id),
+        "identity": .object([
+          "loggedIn": .bool(true), "email": .string(plan.email ?? "\(plan.id)@example.com"),
+        ]),
+      ])
+    }
+    let rows: [JSONValue] = plans.map { plan in
+      var account: [String: JSONValue] = ["plan": .string(plan.plan)]
+      if plan.named { account["email"] = .string(plan.email ?? "\(plan.id)@example.com") }
+      if let tier = plan.tier { account["planTier"] = tier }
+      return .object([
+        "id": .string(plan.id), "service": .object(["id": .string(plan.service), "label": .string(plan.serviceLabel)]),
+        "account": .object(account), "namedBy": .string(plan.namer ? "\(id).\(plan.id)" : "\(id).gone"),
+        "holders": .array([.string("\(id).\(plan.id)")]), "alsoIn": .array(plan.alsoIn.map(JSONValue.string)),
+      ])
+    }
+    return try AgentProfileSet(
+      json: .object([
+        "id": .string(id), "kind": .string("managed"), "label": .string(label), "default": .bool(isDefault),
+        "personas": .array(personas), "plans": .array(rows),
+      ]))
+  }
 }
 
 extension AgentAccountUsageEntry {

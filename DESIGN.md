@@ -8841,10 +8841,23 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       §13, and "3 profiles · 5 plans"), its rows are the lens with a check on the one shown, and the page follows the
       lens. With one profile its rows take no tap (UM-D12);
     - **Plans**, or **Every plan** with several profiles, or **Plans in Work** while the lens is on. Per plan: its
-      agent's mark (18), its title, **its sign-in beside the title, veiled** as the popover's is (§8 "The body":
-      "k•••@w•••.example", a handle to its first letter, the organization left out, never the address whole; at 13
-      in the tertiary ink, giving way first when the line is tight; VoiceOver says it with "…" for the dots; added
-      2026-11-17), the age of a kept reading ("as of 5m ago") or of one taken before a window's
+      agent's mark (18), its title, **its tier as a badge right after the title** when its sign-in read one (item
+      495, added 2026-11-17: §8 "A plan's tier" in the phone's chrome: 10/600 in the secondary ink with tabular
+      figures, padded 3 6 around its one line, so 16 tall, a capsule ringed by the strong hairline, 1; it never
+      gives way, so the sign-in gives way first and the title next. The phone caps it by count: the contract holds
+      a label to 8 characters, so it stands whole, and 8 wide letters draw wider than the desktop's 8ch ‹for James:
+      a width cap on the phone›. A plan whose tier was not read while another plan of its family in the Plans has
+      a label, the same sign-in service and title, wears the capsule empty and dashed, 2 3, twice as wide as it is
+      tall. The tier names the plan, not its reading, so a plan with no meter (its usage unavailable or unreported)
+      keeps it and counts as a sibling. A plan whose agent reports no usage counts in its family on both platforms:
+      here its row says its title and wears its badge, while the desktop's popover line for it names the agent, so
+      it draws none there. VoiceOver hears the badge as part of the name, "Claude Max 20x", in Show's label too, and
+      the empty capsule not at all. Each plan's arc words, and so the circle's words, say the same name, "Usage:
+      Claude Max 20x: 42% of 5 hours, …", as the desktop's do), **its sign-in beside the title,
+      veiled** as the popover's is
+      (§8 "The body": "k•••@w•••.example", a handle to its first letter, the organization left out, never the
+      address whole; at 13 in the tertiary ink, giving way first when the line is tight; VoiceOver says it with "…"
+      for the dots; added 2026-11-17), the age of a kept reading ("as of 5m ago") or of one taken before a window's
       reset that has since come (§8 "The Bands circle"; added 2026-11-06, ‹for James›), every window as Settings'
       C1 line (*each passed line saying its own read's age; added 2026-11-10, item 274, UM-274-D2*), and "Runs out in
       ~35m at this pace" while it would (UM-D4). While the field is live a plan's row adds

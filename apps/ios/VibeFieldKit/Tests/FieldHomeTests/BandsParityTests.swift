@@ -269,6 +269,12 @@ struct BandsParityTests {
         "service": .object(["id": .string(plan.service.id), "label": .string(plan.service.label)]),
       ]
       if let account = plan.account { planFields["account"] = .string(account) }
+      // the plan's tier record as the desktop's meter carries it, only when there is one: `{}` or `{ label }`
+      if let tier = plan.tier {
+        var record: [String: JSONValue] = [:]
+        if let label = tier.label { record["label"] = .string(label) }
+        planFields["tier"] = .object(record)
+      }
       fields["plan"] = .object(planFields)
     }
     if let profileId = entry.profileId { fields["profileId"] = .string(profileId) }
