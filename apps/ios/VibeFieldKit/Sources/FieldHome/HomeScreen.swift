@@ -285,6 +285,10 @@ public struct HomeScreen: View {
     @State private var swarmLabFocus: LabFocus?
     /// RB-2 — the Developer page asked for the swarm lab: it opens once Settings has left (`afterSettings`).
     @State private var swarmLabAfterSettings = false
+    /// RB-2e — Input card states (`InputCardStatesLab`): whether it stands, and whether the Developer page asked for
+    /// it, which opens it once Settings has left, as the swarm lab's ask does (`afterSettings`).
+    @State private var inputCardLabOpen = false
+    @State private var inputCardLabAfterSettings = false
   #endif
   // --- IOS-5a: the input card ---------------------------------------------
   /// The card above the keyboard: the draft, the latch, the mode. It is state
@@ -431,6 +435,10 @@ public struct HomeScreen: View {
     // The lab covers the stage (IOS-6c); presented here rather than on the
     // body's chain, which is already at the type-checker's limit.
     .fullScreenCover(isPresented: swarmLabBinding) { SwarmLabView(focus: swarmLabFocusValue) }
+    #if DEBUG || VF_TESTFLIGHT
+      // RB-2e — Input card states covers the stage as the swarm lab does, in the builds that carry the lab
+      .fullScreenCover(isPresented: $inputCardLabOpen) { InputCardStatesLab() }
+    #endif
     .onAppear {
       #if DEBUG
         // fix8 — a main thread that stops answering for 2 s is said on the
@@ -3664,6 +3672,11 @@ public struct HomeScreen: View {
         swarmLabAfterSettings = true
         closeSettings()
       }
+      // RB-2e — Input card states, the same way: Settings leaves, then the lab opens.
+      labs.openInputCardStates = {
+        inputCardLabAfterSettings = true
+        closeSettings()
+      }
       return labs
     #else
       return actions
@@ -3681,6 +3694,10 @@ public struct HomeScreen: View {
         swarmLabAfterSettings = false
         swarmLabFocus = nil
         swarmLabOpen = true
+      }
+      if inputCardLabAfterSettings {
+        inputCardLabAfterSettings = false
+        inputCardLabOpen = true
       }
     #endif
   }

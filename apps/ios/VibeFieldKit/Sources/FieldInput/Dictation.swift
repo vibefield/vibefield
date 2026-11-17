@@ -120,6 +120,9 @@ public final class DictationSession {
     #if DEBUG
       if Self.demoListening { state = .listening }
     #endif
+    #if DEBUG || VF_TESTFLIGHT
+      if Self.labListening { state = .listening }
+    #endif
   }
 
   // MARK: - Acts
@@ -134,6 +137,14 @@ public final class DictationSession {
     guard !state.isListening else { return }
     #if DEBUG
       if Self.demoListening {
+        announce(.listening)
+        return
+      }
+    #endif
+    #if DEBUG || VF_TESTFLIGHT
+      // The lab's look, tapped again after a stop: listening once more, with
+      // no recognizer, no grant asked and no microphone opened.
+      if Self.labListening {
         announce(.listening)
         return
       }
