@@ -427,6 +427,72 @@ describe("AgentProfileService — what each profile runs on (AR-S2c)", () => {
     expect(feed.sets[0]?.personas[0]).not.toHaveProperty("holds");
     expect(feed.routes).toEqual({});
   });
+
+  it("hands each sign-in's tier through as the agent read it; one the feed cannot carry is not read", async () => {
+    const root = userRoot();
+    const cases: Array<[string, unknown]> = [
+      ["tiered", { label: "20x" }],
+      ["untiered", {}],
+      ["unread", undefined],
+      ["unreadable", { label: "max_20x" }],
+    ];
+    const personas = cases.map(
+      ([set, planTier]) =>
+        ({
+          ...account(root, set, `${set}-claude`),
+          identity: {
+            loggedIn: true,
+            email: `${set}@example.com`,
+            plan: "max",
+            ...(planTier !== undefined ? { planTier } : {}),
+            ...read,
+          },
+        }) as AgentProfile,
+    );
+    const state = {
+      sets: personas.map((persona, index) => ({
+        ...managedSet(root, cases[index]![0]),
+        profiles: [persona],
+      })),
+      profiles: personas,
+    };
+    const runtime = stubRuntime(state, {
+      profileProviders: () => [
+        {
+          id: "claude",
+          label: "Claude Code",
+          support: {
+            supported: true,
+            identity: "native-status",
+            sharedSurfaces: [],
+            service: ANTHROPIC,
+          },
+        },
+      ],
+    });
+    const { profiles } = service(root, runtime);
+    const feed = AgentsProfileSetsListResult.parse(await profiles.sets());
+    const persona = (set: string) => feed.sets.find((each) => each.id === set)?.personas[0];
+    // the projection carries the agent's identity whole: each case as it was read
+    expect(persona("tiered")?.identity?.planTier).toEqual({ label: "20x" });
+    expect(persona("untiered")?.identity?.planTier).toEqual({});
+    expect(persona("unread")?.identity).not.toHaveProperty("planTier");
+    // a raw token is no label: read as not read, never as none, and the sign-in stays whole
+    expect(persona("unreadable")?.identity?.planTier).toBeUndefined();
+    expect(persona("unreadable")?.identity).toMatchObject({ loggedIn: true, plan: "max" });
+    // never made from the plan word, which all four carry as they came
+    const words = cases.map(([set]) => persona(set)?.identity?.plan);
+    expect(words).toEqual(["max", "max", "max", "max"]);
+    // puppeteer 0.4.2's plans and holdings copy named fields alone, so no tier reaches them at this
+    // pin. The EL8 to the release that sends one turns these red: they become the carry, the plan's
+    // account and the holding each with the identity's tier
+    for (const [set] of cases) {
+      const plan = feed.sets.find((each) => each.id === set)?.plans?.[0];
+      expect(plan?.account).toMatchObject({ plan: "max" });
+      expect(plan?.account).not.toHaveProperty("planTier");
+      expect(persona(set)?.holds?.[0]).not.toHaveProperty("planTier");
+    }
+  });
 });
 
 describe("AO-5a — a profile Add a profile… made is kept at its first sign-in (AO-D14)", () => {

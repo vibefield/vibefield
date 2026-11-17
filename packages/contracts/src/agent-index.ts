@@ -2624,6 +2624,30 @@ export const AgentSignInService = z
   .passthrough();
 export type AgentSignInService = z.infer<typeof AgentSignInService>;
 
+/** The longest tier label the profiles feed carries (puppeteer's `PLAN_TIER_LABEL_MAX`, in the release that sends the
+ * tier): a short word for a badge, never a sentence. How wide a face draws it is DESIGN.md's. The kit's
+ * `AgentPlanTier.labelMax` is pinned to it (check-ios-fixtures); fieldd's agent-monitor-pin test holds the pinned
+ * puppeteer, which names none yet, and turns red at the release that does. */
+export const PLAN_TIER_LABEL_MAX = 8;
+/** A tier label's characters: one word of letters, digits, `.`, `+` and `-`. No space and no underscore, so a vendor's
+ * raw token never passes for a label. */
+export const PLAN_TIER_LABEL = /^[A-Za-z0-9.+-]+$/;
+
+/** puppeteer `PlanTier`, mirrored: a plan's tier, carried as `planTier` beside the plan word wherever `plan` is. Its
+ * `label` is the short form a person reads ("20x", "200"), made by the agent's adapter from the agent's own token.
+ * VibeField draws it exactly as given: it never parses, cases or compares it, and never derives it from the plan word
+ * (AR-L1). The record tells three cases apart:
+ *  - absent: the tier was not read (an older agent, a sign-in recorded before the field, an adapter that reads none);
+ *  - `{}`: the agent says this plan has no tier;
+ *  - `{ label }`: the tier.
+ * Every place carries it as `AgentPlanTier.optional().catch(undefined)`: a tier this build cannot read (a label past
+ * the cap or outside the pattern, a value that is not a record) reads as not read, never as `{}`, and never costs its
+ * plan, its sign-in or the feed. The drop is not logged, as `IndexCatalogApp`'s optional facts are not. */
+export const AgentPlanTier = z
+  .object({ label: z.string().max(PLAN_TIER_LABEL_MAX).regex(PLAN_TIER_LABEL).optional() })
+  .passthrough();
+export type AgentPlanTier = z.infer<typeof AgentPlanTier>;
+
 /** puppeteer `ProfileSignIn`, mirrored: one sign-in a folder holds, for an
  * agent whose folder holds several (Pi, OpenCode, Hermes). Who and which plan
  * appear only when the agent itself reported them; never a token.
@@ -2639,6 +2663,8 @@ export const AgentSignIn = z
     account: z.string().optional(),
     organization: z.string().optional(),
     plan: z.string().optional(),
+    /** the tier beside `plan` (`AgentPlanTier`), a mirror: faces read the plan's account's */
+    planTier: AgentPlanTier.optional().catch(undefined),
     borrowedFrom: z.string().optional(),
   })
   .passthrough();
@@ -2661,7 +2687,9 @@ export type AgentHolding = z.infer<typeof AgentHolding>;
  * `account` is whose it is when an agent in the profile named it; `namedBy`
  * the persona that named it (the plan's usage is that persona's reading);
  * `holders` the personas with a sign-in on it; `alsoIn` the other profiles
- * with the same account (or on the same borrowed sign-in). */
+ * with the same account (or on the same borrowed sign-in). The account's
+ * `planTier` is the tier every face reads: it rides beside the plan word,
+ * which carries none of it, as the namer's identity read it. */
 export const AgentPlan = z
   .object({
     id: z.string().min(1).max(80),
@@ -2672,6 +2700,7 @@ export const AgentPlan = z
         account: z.string().optional(),
         organization: z.string().optional(),
         plan: z.string().optional(),
+        planTier: AgentPlanTier.optional().catch(undefined),
       })
       .passthrough()
       .optional(),
@@ -2710,6 +2739,8 @@ export const AgentPersona = z
         account: z.string().optional(),
         organization: z.string().optional(),
         plan: z.string().optional(),
+        /** the tier beside `plan` (`AgentPlanTier`), a mirror: faces read the plan's account's */
+        planTier: AgentPlanTier.optional().catch(undefined),
         borrowedFrom: z.string().optional(),
         /** every sign-in, for an agent whose folder holds several; the fields
          * above then repeat the one in use */

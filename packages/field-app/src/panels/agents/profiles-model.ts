@@ -5,6 +5,7 @@ import type {
   AgentInstall,
   AgentPersona,
   AgentPlan,
+  AgentPlanTier,
   AgentProfileSet,
   AgentProviderSummary,
   AgentSignInRoute,
@@ -114,6 +115,9 @@ export interface PlanCard {
   service: AgentSignInService;
   /** "Claude Max"; the product alone when no agent named the account */
   title: string;
+  /** the plan's tier beside the title, as the feed carries it (`planTierOf`):
+   * `{ label }` the badge, `{}` none, absent not read (or no account named) */
+  tier?: AgentPlanTier | undefined;
   /** whose: "kim@work.example · Northlight", or "Account not named" */
   account: string;
   named: boolean;
@@ -311,6 +315,15 @@ export function accountWords(account: AgentPlan["account"]): string | undefined 
   return organization === undefined || echoes ? who : `${who} · ${organization}`;
 }
 
+/** A plan's tier as a face is handed it: the account's own record, unchanged
+ * (`AgentPlanTier`: a label is the badge, `{}` says the plan has none,
+ * undefined is not read). Only once an agent named the account, the gate that
+ * lets the title say the plan word, so a name and its tier come from one
+ * reading. Never made from the plan word, never compared with one. */
+export function planTierOf(plan: AgentPlan, named: boolean): AgentPlanTier | undefined {
+  return named ? plan.account?.planTier : undefined;
+}
+
 /** The cards: every plan the profile runs on whose agents are on its page. */
 function planCards(
   set: AgentProfileSet,
@@ -386,10 +399,12 @@ function planCards(
         note = `${listWords(labels)} ${labels.length === 1 ? "runs" : "run"} as ${plan.borrowedFrom}'s account${same}.`;
       }
     }
+    const tier = planTierOf(plan, account !== undefined);
     cards.push({
       id: plan.id,
       service: plan.service,
       title: planTitle(plan.service, account === undefined ? undefined : plan.account?.plan),
+      ...(tier !== undefined ? { tier } : {}),
       account: account ?? "Account not named",
       named: account !== undefined,
       metrics,

@@ -4,6 +4,7 @@ import {
   type AgentAccountUsageMetric,
   type AgentPersona,
   type AgentPlan,
+  type AgentPlanTier,
   type AgentProfileSet,
   type AgentSignInService,
   catalogEntry,
@@ -12,6 +13,7 @@ import {
 import { planTitle } from "@vibefield/puppeteer-views";
 import {
   accountWords,
+  planTierOf,
   signInState,
   type UsageLine,
   usageLines,
@@ -121,8 +123,9 @@ export interface MeterBase {
   title: string;
   /** the sign-in whose reading it is */
   profileId?: string;
-  /** the plan, when it is one */
-  plan?: { id: string; service: AgentSignInService; account?: string };
+  /** the plan, when it is one; `tier` is its tier beside the title, the record the feed carries (`planTierOf`: a label
+   * is the badge, `{}` none, absent not read or no account named), set only when there is one */
+  plan?: { id: string; service: AgentSignInService; account?: string; tier?: AgentPlanTier };
   /** the profiles it is in: its own, for one profile's meters; in the union (UM-D12), the managed profiles that hold
    * it, else This Mac (the drawing's `subGlyphs`) — what a crowded agent wears under its mark */
   profiles: MeterProfile[];
@@ -387,6 +390,7 @@ function planEntry(
 ): PlanMeter {
   const namer = set.personas.find((persona) => persona.profileId === plan.namedBy);
   const account = accountWords(plan.account);
+  const tier = planTierOf(plan, account !== undefined);
   const provider = (namer ?? holder).provider;
   const base: MeterBase = {
     key: `plan:${plan.id}`,
@@ -397,6 +401,8 @@ function planEntry(
       id: plan.id,
       service: plan.service,
       ...(account !== undefined ? { account } : {}),
+      // only when there is one: a plan with no tier stays the object the bands golden holds
+      ...(tier !== undefined ? { tier } : {}),
     },
     ...(namer !== undefined ? { profileId: namer.profileId } : {}),
     profiles: [profileOf(set)],

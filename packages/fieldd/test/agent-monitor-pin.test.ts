@@ -5,6 +5,7 @@ import {
   AGENT_MONITOR_SCHEMA_VERSION,
   AgentMonitorMirror,
   NATIVE_PROFILE_SET_ID,
+  PLAN_TIER_LABEL_MAX,
 } from "@vibefield/contracts";
 import {
   AGENT_MONITOR_SCHEMA_VERSION as UPSTREAM_MONITOR_SCHEMA_VERSION,
@@ -45,5 +46,18 @@ describe("This Mac's profile id against the pinned puppeteer", () => {
   it("the contract's id IS the runtime's and the monitor backend's", () => {
     expect(NATIVE_PROFILE_SET_ID).toBe(UPSTREAM_NATIVE_PROFILE_SET_ID);
     expect(NATIVE_PROFILE_SET_ID).toBe(MONITOR_NATIVE_PROFILE_SET);
+  });
+});
+
+// A plan's tier label: its cap is puppeteer's, mirrored in contracts (and from there in the kit, which
+// check-ios-fixtures pins to it). The pinned puppeteer names no cap yet, so this holds the contract's own and that
+// absence. The EL8 to the release that sends a tier turns it red: then it becomes the equality with that release's
+// `PLAN_TIER_LABEL_MAX`, and its label pattern is read beside it.
+describe("a plan's tier label against the pinned puppeteer", () => {
+  it("the pinned puppeteer names no tier cap yet, so the contract's stands alone", async () => {
+    const upstream = Object.keys(await import("@vibefield/puppeteer-core"));
+    expect(upstream).not.toContain("PLAN_TIER_LABEL_MAX");
+    expect(upstream).not.toContain("PlanTierSchema");
+    expect(PLAN_TIER_LABEL_MAX).toBe(8);
   });
 });

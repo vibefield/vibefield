@@ -300,12 +300,55 @@ public struct AgentSignInService: Sendable, Equatable {
   public let label: String
 }
 
-/// Whose a plan is, when an agent in the profile named it.
+/// Whose a plan is, when an agent in the profile named it, and its tier beside the plan word.
 public struct AgentPlanAccount: Sendable, Equatable {
   public let email: String?
   public let account: String?
   public let organization: String?
   public let plan: String?
+  /// nil: the tier was not read (or could not be)
+  public let planTier: AgentPlanTier?
+}
+
+/// A plan's tier (`AgentPlanTier`), carried beside the plan word: the short label a face draws exactly as given
+/// ("20x", "200"), made by the agent's adapter. The phone never parses, cases or compares it, and never derives it from
+/// the plan word (AR-L1). Three cases, as the desktop's contract has them: no tier at all (nil where it is carried) is
+/// not read; a tier with no label is the agent saying this plan has none; a label is the badge.
+public struct AgentPlanTier: Sendable, Equatable {
+  /// The longest label the contract carries (`PLAN_TIER_LABEL_MAX`; check-ios-fixtures pins the two together).
+  public static let labelMax = 8
+  public let label: String?
+
+  /// `AgentPlanTier()` is the agent saying the plan has none.
+  public init(label: String? = nil) {
+    self.label = label
+  }
+
+  /// The tier the wire carries, read as the desktop's contract reads it (`.optional().catch(undefined)`): a value that
+  /// is not an object, or a label that is not one to `labelMax` letters, digits, `.`, `+` or `-`, is not read (nil),
+  /// never "none", and never costs the plan. Neither the drop nor a newer field inside it is logged, as no key of
+  /// `AgentPlan.account` is.
+  public static func read(_ json: JSONValue) -> AgentPlanTier? {
+    guard let fields = json.objectValue else { return nil }
+    guard let raw = fields["label"] else { return AgentPlanTier(label: nil) }
+    guard let label = raw.stringValue, isLabel(label) else { return nil }
+    return AgentPlanTier(label: label)
+  }
+
+  private static let lower: ClosedRange<Unicode.Scalar> = "a"..."z"
+  private static let upper: ClosedRange<Unicode.Scalar> = "A"..."Z"
+  private static let digits: ClosedRange<Unicode.Scalar> = "0"..."9"
+  private static let marks: Set<Unicode.Scalar> = [".", "+", "-"]
+
+  /// The contract's `PLAN_TIER_LABEL` within its cap. LaunchShapeTests holds it to the tier golden both sides read and
+  /// to the contracts' test's own cases.
+  static func isLabel(_ text: String) -> Bool {
+    let scalars = text.unicodeScalars
+    guard (1...labelMax).contains(scalars.count) else { return false }
+    return scalars.allSatisfy { scalar in
+      lower.contains(scalar) || upper.contains(scalar) || digits.contains(scalar) || marks.contains(scalar)
+    }
+  }
 }
 
 /// One plan an Agent Profile runs on (`AgentPlan`): its company, whose it is, the sign-in that named it (whose reading
@@ -329,7 +372,8 @@ public struct AgentPlan: Sendable, Equatable {
       var whose = try WireObject(shape: "AgentPlan.account", value: raw)
       return AgentPlanAccount(
         email: whose.string("email"), account: whose.string("account"),
-        organization: whose.string("organization"), plan: whose.string("plan"))
+        organization: whose.string("organization"), plan: whose.string("plan"),
+        planTier: whose.value("planTier").flatMap(AgentPlanTier.read))
     }
     namedBy = object.string("namedBy")
     borrowedFrom = object.string("borrowedFrom")

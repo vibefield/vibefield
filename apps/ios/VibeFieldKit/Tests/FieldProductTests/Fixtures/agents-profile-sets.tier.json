@@ -1,0 +1,481 @@
+{
+  "//": "A plan's tier beside its plan word (`planTier`): its three cases, and the forms a reader must survive. This Mac: Claude's account with a label, and Codex's with no tier read, as a Codex sign-in reads until its tool's tier is read. Side: a second Claude Max account, the same family, its tier not read. Home: a made-up Claude Pro account whose tool says it has no tier (`{}`). Lab: tiers no reader can carry (a raw token, nine characters, a space, a null label, a bare string), each read as not read while its plan, sign-in and holding stay whole.",
+  "sets": [
+    {
+      "id": "native",
+      "kind": "native",
+      "label": "This Mac",
+      "default": true,
+      "createdAt": "1970-01-01T00:00:00.000Z",
+      "personas": [
+        {
+          "profileId": "claude:native-default",
+          "provider": "claude",
+          "label": "Default",
+          "kind": "native-default",
+          "createdAt": "1970-01-01T00:00:00.000Z",
+          "set": "native",
+          "folder": "~/.claude",
+          "identity": {
+            "loggedIn": true,
+            "email": "kim@example.com",
+            "plan": "max",
+            "planTier": {
+              "label": "20x"
+            },
+            "verifiedAt": "2026-11-17T01:00:00.000Z",
+            "source": {
+              "kind": "native-status",
+              "stability": "documented"
+            }
+          },
+          "holds": [
+            {
+              "service": {
+                "id": "anthropic",
+                "label": "Anthropic"
+              },
+              "email": "kim@example.com",
+              "plan": "max",
+              "planTier": {
+                "label": "20x"
+              },
+              "key": false,
+              "planId": "anthropic",
+              "runsOn": true
+            }
+          ]
+        },
+        {
+          "profileId": "codex:native-default",
+          "provider": "codex",
+          "label": "Default",
+          "kind": "native-default",
+          "createdAt": "1970-01-01T00:00:00.000Z",
+          "set": "native",
+          "folder": "~/.codex",
+          "identity": {
+            "loggedIn": true,
+            "email": "kim@example.com",
+            "plan": "pro",
+            "verifiedAt": "2026-11-17T01:00:00.000Z"
+          },
+          "holds": [
+            {
+              "service": {
+                "id": "openai",
+                "label": "OpenAI"
+              },
+              "email": "kim@example.com",
+              "plan": "pro",
+              "key": false,
+              "planId": "openai",
+              "runsOn": true
+            }
+          ]
+        }
+      ],
+      "plans": [
+        {
+          "id": "anthropic",
+          "service": {
+            "id": "anthropic",
+            "label": "Anthropic"
+          },
+          "account": {
+            "email": "kim@example.com",
+            "plan": "max",
+            "planTier": {
+              "label": "20x"
+            }
+          },
+          "namedBy": "claude:native-default",
+          "holders": ["claude:native-default"],
+          "alsoIn": []
+        },
+        {
+          "id": "openai",
+          "service": {
+            "id": "openai",
+            "label": "OpenAI"
+          },
+          "account": {
+            "email": "kim@example.com",
+            "plan": "pro"
+          },
+          "namedBy": "codex:native-default",
+          "holders": ["codex:native-default"],
+          "alsoIn": []
+        }
+      ]
+    },
+    {
+      "id": "side",
+      "kind": "managed",
+      "label": "Side",
+      "glyph": "briefcase",
+      "default": false,
+      "createdAt": "2026-11-17T00:00:00.000Z",
+      "folder": "~/Library/Application Support/VibeField/users/1/agents/profiles/side",
+      "personas": [
+        {
+          "profileId": "7d10e58c-2b4f-4a61-9e3d-5c8a1f0b6e24",
+          "provider": "claude",
+          "label": "Side",
+          "kind": "managed",
+          "createdAt": "2026-11-17T00:01:00.000Z",
+          "set": "side",
+          "folder": "~/Library/Application Support/VibeField/users/1/agents/profiles/side/claude-7d10e58c",
+          "identity": {
+            "loggedIn": true,
+            "email": "lee@example.com",
+            "plan": "max",
+            "verifiedAt": "2026-11-17T00:02:00.000Z"
+          },
+          "holds": [
+            {
+              "service": {
+                "id": "anthropic",
+                "label": "Anthropic"
+              },
+              "email": "lee@example.com",
+              "plan": "max",
+              "key": false,
+              "planId": "anthropic",
+              "runsOn": true
+            }
+          ]
+        }
+      ],
+      "plans": [
+        {
+          "id": "anthropic",
+          "service": {
+            "id": "anthropic",
+            "label": "Anthropic"
+          },
+          "account": {
+            "email": "lee@example.com",
+            "plan": "max"
+          },
+          "namedBy": "7d10e58c-2b4f-4a61-9e3d-5c8a1f0b6e24",
+          "holders": ["7d10e58c-2b4f-4a61-9e3d-5c8a1f0b6e24"],
+          "alsoIn": []
+        }
+      ]
+    },
+    {
+      "id": "home",
+      "kind": "managed",
+      "label": "Home",
+      "glyph": "briefcase",
+      "default": false,
+      "createdAt": "2026-11-17T00:00:00.000Z",
+      "folder": "~/Library/Application Support/VibeField/users/1/agents/profiles/home",
+      "personas": [
+        {
+          "profileId": "c4e81a2f-5b3d-4f90-8e6a-2d7c9b1f0a35",
+          "provider": "claude",
+          "label": "Home",
+          "kind": "managed",
+          "createdAt": "2026-11-17T00:05:00.000Z",
+          "set": "home",
+          "folder": "~/Library/Application Support/VibeField/users/1/agents/profiles/home/claude-c4e81a2f",
+          "identity": {
+            "loggedIn": true,
+            "email": "ray@example.com",
+            "plan": "pro",
+            "planTier": {},
+            "verifiedAt": "2026-11-17T00:06:00.000Z"
+          },
+          "holds": [
+            {
+              "service": {
+                "id": "anthropic",
+                "label": "Anthropic"
+              },
+              "email": "ray@example.com",
+              "plan": "pro",
+              "planTier": {},
+              "key": false,
+              "planId": "anthropic",
+              "runsOn": true
+            }
+          ]
+        }
+      ],
+      "plans": [
+        {
+          "id": "anthropic",
+          "service": {
+            "id": "anthropic",
+            "label": "Anthropic"
+          },
+          "account": {
+            "email": "ray@example.com",
+            "plan": "pro",
+            "planTier": {}
+          },
+          "namedBy": "c4e81a2f-5b3d-4f90-8e6a-2d7c9b1f0a35",
+          "holders": ["c4e81a2f-5b3d-4f90-8e6a-2d7c9b1f0a35"],
+          "alsoIn": []
+        }
+      ]
+    },
+    {
+      "id": "lab",
+      "kind": "managed",
+      "label": "Lab",
+      "glyph": "briefcase",
+      "default": false,
+      "createdAt": "2026-11-17T00:00:00.000Z",
+      "folder": "~/Library/Application Support/VibeField/users/1/agents/profiles/lab",
+      "personas": [
+        {
+          "profileId": "3a6f9c2e-1d7b-4e85-a0c4-8b2e5f1d7a93",
+          "provider": "claude",
+          "label": "Lab",
+          "kind": "managed",
+          "createdAt": "2026-11-17T00:03:00.000Z",
+          "set": "lab",
+          "folder": "~/Library/Application Support/VibeField/users/1/agents/profiles/lab/claude-3a6f9c2e",
+          "identity": {
+            "loggedIn": true,
+            "email": "ann@example.com",
+            "plan": "max",
+            "planTier": {
+              "label": "max_20x"
+            },
+            "verifiedAt": "2026-11-17T00:04:00.000Z"
+          }
+        },
+        {
+          "profileId": "9e2b7d41-6a0c-4f3e-b815-d4a6c0e2f7b9",
+          "provider": "hermes",
+          "label": "Lab",
+          "kind": "managed",
+          "createdAt": "2026-11-17T00:07:00.000Z",
+          "set": "lab",
+          "folder": "~/Library/Application Support/VibeField/users/1/agents/profiles/lab/hermes-9e2b7d41",
+          "identity": {
+            "loggedIn": true,
+            "method": "oauth",
+            "email": "bo@example.com",
+            "plan": "max",
+            "planTier": {
+              "label": "123456789"
+            },
+            "signIns": [
+              {
+                "service": {
+                  "id": "anthropic",
+                  "label": "Anthropic"
+                },
+                "method": "oauth",
+                "subscription": true,
+                "inUse": true,
+                "email": "bo@example.com",
+                "plan": "max",
+                "planTier": {
+                  "label": "123456789"
+                }
+              },
+              {
+                "service": {
+                  "id": "anthropic",
+                  "label": "Anthropic"
+                },
+                "method": "oauth",
+                "subscription": true,
+                "email": "cy@example.com",
+                "plan": "max",
+                "planTier": {
+                  "label": "20 x"
+                }
+              },
+              {
+                "service": {
+                  "id": "anthropic",
+                  "label": "Anthropic"
+                },
+                "method": "oauth",
+                "subscription": true,
+                "email": "di@example.com",
+                "plan": "max",
+                "planTier": {
+                  "label": null
+                }
+              },
+              {
+                "service": {
+                  "id": "anthropic",
+                  "label": "Anthropic"
+                },
+                "method": "oauth",
+                "subscription": true,
+                "email": "ed@example.com",
+                "plan": "max",
+                "planTier": "20x"
+              }
+            ],
+            "verifiedAt": "2026-11-17T00:08:00.000Z"
+          },
+          "holds": [
+            {
+              "service": {
+                "id": "anthropic",
+                "label": "Anthropic"
+              },
+              "method": "oauth",
+              "subscription": true,
+              "inUse": true,
+              "email": "bo@example.com",
+              "plan": "max",
+              "planTier": {
+                "label": "123456789"
+              },
+              "key": false,
+              "planId": "anthropic-2",
+              "runsOn": true
+            },
+            {
+              "service": {
+                "id": "anthropic",
+                "label": "Anthropic"
+              },
+              "method": "oauth",
+              "subscription": true,
+              "email": "cy@example.com",
+              "plan": "max",
+              "planTier": {
+                "label": "20 x"
+              },
+              "key": false,
+              "planId": "anthropic-3",
+              "runsOn": false
+            },
+            {
+              "service": {
+                "id": "anthropic",
+                "label": "Anthropic"
+              },
+              "method": "oauth",
+              "subscription": true,
+              "email": "di@example.com",
+              "plan": "max",
+              "planTier": {
+                "label": null
+              },
+              "key": false,
+              "planId": "anthropic-4",
+              "runsOn": false
+            },
+            {
+              "service": {
+                "id": "anthropic",
+                "label": "Anthropic"
+              },
+              "method": "oauth",
+              "subscription": true,
+              "email": "ed@example.com",
+              "plan": "max",
+              "planTier": "20x",
+              "key": false,
+              "planId": "anthropic-5",
+              "runsOn": false
+            }
+          ]
+        }
+      ],
+      "plans": [
+        {
+          "id": "anthropic",
+          "service": {
+            "id": "anthropic",
+            "label": "Anthropic"
+          },
+          "account": {
+            "email": "ann@example.com",
+            "plan": "max",
+            "planTier": {
+              "label": "max_20x"
+            }
+          },
+          "namedBy": "3a6f9c2e-1d7b-4e85-a0c4-8b2e5f1d7a93",
+          "holders": ["3a6f9c2e-1d7b-4e85-a0c4-8b2e5f1d7a93"],
+          "alsoIn": []
+        },
+        {
+          "id": "anthropic-2",
+          "service": {
+            "id": "anthropic",
+            "label": "Anthropic"
+          },
+          "account": {
+            "email": "bo@example.com",
+            "plan": "max",
+            "planTier": {
+              "label": "123456789"
+            }
+          },
+          "namedBy": "9e2b7d41-6a0c-4f3e-b815-d4a6c0e2f7b9",
+          "holders": ["9e2b7d41-6a0c-4f3e-b815-d4a6c0e2f7b9"],
+          "alsoIn": []
+        },
+        {
+          "id": "anthropic-3",
+          "service": {
+            "id": "anthropic",
+            "label": "Anthropic"
+          },
+          "account": {
+            "email": "cy@example.com",
+            "plan": "max",
+            "planTier": {
+              "label": "20 x"
+            }
+          },
+          "namedBy": "9e2b7d41-6a0c-4f3e-b815-d4a6c0e2f7b9",
+          "holders": ["9e2b7d41-6a0c-4f3e-b815-d4a6c0e2f7b9"],
+          "alsoIn": []
+        },
+        {
+          "id": "anthropic-4",
+          "service": {
+            "id": "anthropic",
+            "label": "Anthropic"
+          },
+          "account": {
+            "email": "di@example.com",
+            "plan": "max",
+            "planTier": {
+              "label": null
+            }
+          },
+          "namedBy": "9e2b7d41-6a0c-4f3e-b815-d4a6c0e2f7b9",
+          "holders": ["9e2b7d41-6a0c-4f3e-b815-d4a6c0e2f7b9"],
+          "alsoIn": []
+        },
+        {
+          "id": "anthropic-5",
+          "service": {
+            "id": "anthropic",
+            "label": "Anthropic"
+          },
+          "account": {
+            "email": "ed@example.com",
+            "plan": "max",
+            "planTier": "20x"
+          },
+          "namedBy": "9e2b7d41-6a0c-4f3e-b815-d4a6c0e2f7b9",
+          "holders": ["9e2b7d41-6a0c-4f3e-b815-d4a6c0e2f7b9"],
+          "alsoIn": []
+        }
+      ]
+    }
+  ],
+  "signIn": ["claude", "codex", "hermes"],
+  "identity": ["claude", "codex", "hermes"],
+  "signOut": ["claude", "codex"],
+  "reading": false
+}

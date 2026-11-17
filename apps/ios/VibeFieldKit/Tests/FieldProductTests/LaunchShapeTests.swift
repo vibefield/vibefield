@@ -138,6 +138,55 @@ import Testing
     #expect(set.personas.first?.holds == nil)
   }
 
+  // A plan's tier beside its plan word, read from the golden the contracts' agent-index test reads (check-ios-fixtures
+  // holds the copies byte for byte): a label as given, none, not read, and five forms no reader can carry (a raw token,
+  // nine characters, a space, a null label, a bare string), each read as not read at no cost to its plan.
+  @Test func aPlansTierIsALabelNoneOrNotReadAndAnUnreadableOneCostsNothing() throws {
+    let answer = try AgentProfileSetsResult(json: try Fixture.json("agents-profile-sets.tier"))
+    let setIds = answer.sets.map(\.id)
+    #expect(setIds == ["native", "side", "home", "lab"])
+    #expect(answer.droppedRows.isEmpty)
+    let ids = answer.sets.flatMap { set in (set.plans ?? []).map(\.id) }
+    #expect(ids == [
+      "anthropic", "openai", "anthropic", "anthropic",
+      "anthropic", "anthropic-2", "anthropic-3", "anthropic-4", "anthropic-5",
+    ])
+    let tiers = answer.sets.flatMap { set in (set.plans ?? []).map { $0.account?.planTier } }
+    let expected: [AgentPlanTier?] = [
+      AgentPlanTier(label: "20x"), nil, nil, AgentPlanTier(label: nil), nil, nil, nil, nil, nil,
+    ]
+    #expect(tiers == expected)
+    // every account and plan word as it came: no tier is made from the word, and none is folded into it
+    let emails = answer.sets.flatMap { set in (set.plans ?? []).map { $0.account?.email } }
+    #expect(emails == [
+      "kim@example.com", "kim@example.com", "lee@example.com", "ray@example.com", "ann@example.com",
+      "bo@example.com", "cy@example.com", "di@example.com", "ed@example.com",
+    ])
+    let words = answer.sets.flatMap { set in (set.plans ?? []).map { $0.account?.plan } }
+    #expect(words == ["max", "pro", "max", "pro", "max", "max", "max", "max", "max"])
+  }
+
+  // The contracts' own cases (agent-index.test.ts): one word of at most eight letters, digits, '.', '+' and '-'.
+  @Test func aTierLabelIsOneWordOfAtMostEightAsTheContractHoldsIt() {
+    #expect(AgentPlanTier.labelMax == 8)
+    for label in ["20x", "200", "12345678", "1.5x", "Pro+", "x-2", "ULTRA"] {
+      #expect(AgentPlanTier.read(.object(["label": .string(label)])) == AgentPlanTier(label: label))
+    }
+    let unreadable: [JSONValue] = [
+      .object(["label": .string("")]), .object(["label": .string("123456789")]),
+      .object(["label": .string("20 x")]), .object(["label": .string(" 20x")]),
+      .object(["label": .string("max_20x")]), .object(["label": .string("20×")]),
+      .object(["label": .int(20)]), .object(["label": .null]),
+      .string("20x"), .int(20), .array([]), .null,
+    ]
+    for value in unreadable {
+      #expect(AgentPlanTier.read(value) == nil)
+    }
+    #expect(AgentPlanTier.read(.object([:])) == AgentPlanTier(label: nil))
+    let newer = JSONValue.object(["label": .string("20x"), "later": .bool(true)])
+    #expect(AgentPlanTier.read(newer) == AgentPlanTier(label: "20x"))
+  }
+
   @Test func aSpawnCarriesTheProfileAndTheSelectionOpaqueAndRoundTrips() throws {
     let golden = try Fixture.json("agent-spawn-params.model-selection")
     let selection = try AgentModelSelection(json: try #require(golden["modelSelection"]))

@@ -1113,3 +1113,60 @@ describe("UM-D12 — every profile's meters at once", () => {
     expect(alone.entries[0]?.profiles.map((each) => each.kind)).toEqual(["native"]);
   });
 });
+
+describe("a plan's tier rides beside its title, the record the feed carries", () => {
+  const TIER = { label: "20x" };
+  const set = profile(
+    [own("claude"), own("codex"), own("grok")],
+    [
+      plan("anthropic", "claude:native-default", ["claude:native-default"], {
+        account: { email: "kim@example.com", plan: "max", planTier: TIER },
+      }),
+      // its tier was not read: the plan word alone, as every plan before the field
+      plan("openai", "codex:native-default", ["codex:native-default"], {
+        account: { email: "kim@example.com", plan: "pro" },
+      }),
+      // made up: the agent says this plan has no tier
+      plan("xai", "grok:native-default", ["grok:native-default"], {
+        account: { email: "kim@example.com", plan: "max", planTier: {} },
+      }),
+      // no agent names the account: no plan word in the title, and no tier beside it
+      plan("kimi", undefined, ["claude:native-default"], {
+        account: { plan: "max", planTier: { label: "5x" } },
+      }),
+    ],
+  );
+
+  it("hands each meter its plan's tier unchanged: a label, none, or not read", () => {
+    const meters = planMeters(set, [], NOW);
+    expect(entryOf(meters, "plan:anthropic").plan?.tier).toBe(TIER);
+    expect(entryOf(meters, "plan:xai").plan?.tier).toEqual({});
+    // not read is no key at all, so a plan with no tier is the object it always was
+    const unread = entryOf(meters, "plan:openai").plan;
+    expect(unread).not.toHaveProperty("tier");
+    expect(unread).toStrictEqual({
+      id: "openai",
+      service: { id: "openai", label: "openai" },
+      account: "kim@example.com",
+    });
+  });
+
+  it("only once an agent named the account, never from the plan word, never into the title", () => {
+    const meters = planMeters(set, [], NOW);
+    expect(entryOf(meters, "plan:kimi").plan).not.toHaveProperty("tier");
+    const anthropic = only(set.plans?.[0], "the tiered plan");
+    expect(entryOf(meters, "plan:anthropic").title).toBe(settingsPlanTitle(anthropic, true));
+    expect(entryOf(meters, "plan:anthropic").title).not.toContain(TIER.label);
+    // a title of the caller's own leaves the tier as it is
+    const titled = planMeters(set, [], NOW, { title: (each) => each.service.label });
+    expect(entryOf(titled, "plan:anthropic").plan?.tier).toBe(TIER);
+  });
+
+  it("keeps the tier in every profile's meters at once", () => {
+    const union = everyPlan([set], [], NOW);
+    const shown = union.entries.find((entry) => entry.plan?.id === "anthropic");
+    expect(shown?.plan?.tier).toEqual(TIER);
+    const unread = union.entries.find((entry) => entry.plan?.id === "openai");
+    expect(unread?.plan).not.toHaveProperty("tier");
+  });
+});

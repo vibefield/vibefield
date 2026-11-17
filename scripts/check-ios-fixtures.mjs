@@ -518,6 +518,9 @@ const requiredMirrors = [
   ["spark-transcript", transcriptFixtures, ["Tests/FieldProductTests"]],
   // UM-4 — the home's usage batch and its profile sets, read by the kit's readers
   ["usage", usageFixtures, ["Tests/FieldProductTests"]],
+  // a plan's tier beside its plan word (`AgentPlanTier`): a label, none, not read, and five forms no reader can carry,
+  // which the kit's `AgentPlanTier.read` is held to (LaunchShapeTests) as the contracts' test holds the zod reader
+  ["usage", ["agents-profile-sets.tier.json"], ["Tests/FieldProductTests"]],
   // and what the meters' demo door answers under `-vf-mock` (MetersFixtureDoor, DEBUG): the batch with a budget, the
   // empty one (a first read), the kept meters (item 274, `-vf-mock-usage=kept-meters`), and the profile sets with plans
   [
@@ -1720,6 +1723,22 @@ const SPARK_ENTRIES_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldProduct/SparkEnt
     })),
   );
 }
+
+// A plan's tier label cap. The kit reads a longer label as not read, as the contract does, so a cap moved on one side
+// only would draw on one plane a badge the other drops. The characters are held by the tier golden both read.
+pins.push({
+  name: "PLAN_TIER_LABEL_MAX",
+  origin: {
+    file: "packages/contracts/src/agent-index.ts",
+    pattern: /^export const PLAN_TIER_LABEL_MAX = ([0-9_]+);$/m,
+    label: "PLAN_TIER_LABEL_MAX",
+  },
+  copy: {
+    file: "apps/ios/VibeFieldKit/Sources/FieldProduct/LaunchShapes.swift",
+    pattern: /^ {2}public static let labelMax = ([0-9_]+)$/m,
+    label: "AgentPlanTier.labelMax",
+  },
+});
 
 const pinProblems = [];
 const notices = [];

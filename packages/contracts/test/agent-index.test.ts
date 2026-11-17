@@ -1,7 +1,16 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  AgentHolding,
   AgentKind,
+  AgentPersona,
+  AgentPlan,
+  AgentPlanTier,
   AgentProfileSet,
+  AgentSignIn,
+  AgentsProfileSetsListResult,
   AgentsProfilesVerifyResult,
   AgentsReleasesParams,
   AgentsReleasesResult,
@@ -23,6 +32,8 @@ import {
   IndexSessionsResponse,
   IndexStatus,
   NATIVE_PROFILE_SET_ID,
+  PLAN_TIER_LABEL,
+  PLAN_TIER_LABEL_MAX,
   personaSetsOf,
   profileSetOfRun,
 } from "../src/agent-index";
@@ -911,5 +922,182 @@ describe("TU-1 (Q3) — the one rule that places a run in an Agent Profile", () 
       ["b", "work"],
     ]);
     expect(personaSetsOf([]).size).toBe(0);
+  });
+});
+
+describe("a plan's tier rides beside its plan word, a record of three cases", () => {
+  const ANTHROPIC = { id: "anthropic", label: "Anthropic" };
+  const plan = (account: Record<string, unknown>) =>
+    AgentPlan.parse({
+      id: "anthropic",
+      service: ANTHROPIC,
+      account: { email: "kim@example.com", plan: "max", ...account },
+      holders: [],
+      alsoIn: [],
+    });
+  /** what a reader can never carry: past the cap, outside the pattern, or not a record */
+  const UNREADABLE: unknown[] = [
+    { label: "" },
+    { label: "123456789" },
+    { label: "20 x" },
+    { label: " 20x" },
+    { label: "max_20x" },
+    { label: "20×" },
+    { label: 20 },
+    { label: null },
+    "20x",
+    20,
+    [],
+    null,
+  ];
+
+  it("keeps a label as given, keeps none, and leaves a tier that was not read absent", () => {
+    expect(plan({ planTier: { label: "20x" } }).account?.planTier).toEqual({ label: "20x" });
+    expect(plan({ planTier: { label: "200" } }).account?.planTier).toEqual({ label: "200" });
+    expect(plan({ planTier: {} }).account?.planTier).toEqual({});
+    expect(plan({}).account).not.toHaveProperty("planTier");
+    // the plan word is carried as it came: no tier is ever made from it
+    expect(plan({}).account?.plan).toBe("max");
+    expect(plan({ planTier: { label: "20x" } }).account?.plan).toBe("max");
+  });
+
+  it("holds a label to one word of at most eight, letters, digits, '.', '+' and '-'", () => {
+    expect(PLAN_TIER_LABEL_MAX).toBe(8);
+    for (const label of ["20x", "200", "12345678", "1.5x", "Pro+", "x-2", "ULTRA"]) {
+      expect(AgentPlanTier.safeParse({ label }).success, label).toBe(true);
+      expect(PLAN_TIER_LABEL.test(label), label).toBe(true);
+    }
+    for (const label of ["", "123456789", "20 x", "max_20x", "20×"]) {
+      expect(AgentPlanTier.safeParse({ label }).success, label).toBe(false);
+    }
+    // a newer field inside the record rides through (the tolerant reader)
+    expect(plan({ planTier: { label: "20x", later: true } }).account?.planTier).toEqual({
+      label: "20x",
+      later: true,
+    });
+  });
+
+  it("reads a tier it cannot carry as not read, never as none, and keeps the plan", () => {
+    for (const planTier of UNREADABLE) {
+      const read = plan({ planTier });
+      expect(read.account?.planTier, JSON.stringify(planTier)).toBeUndefined();
+      expect(read.account?.plan, JSON.stringify(planTier)).toBe("max");
+      expect(read.account?.email).toBe("kim@example.com");
+    }
+  });
+
+  it("is mirrored on a sign-in, a holding and an identity, each as tolerant as the plan's", () => {
+    const signIn = { service: ANTHROPIC, method: "oauth", plan: "max" };
+    expect(AgentSignIn.parse({ ...signIn, planTier: { label: "20x" } }).planTier).toEqual({
+      label: "20x",
+    });
+    expect(AgentSignIn.parse({ ...signIn, planTier: "max_20x" }).planTier).toBeUndefined();
+    const holding = { service: ANTHROPIC, key: false, runsOn: true, plan: "max" };
+    expect(AgentHolding.parse({ ...holding, planTier: {} }).planTier).toEqual({});
+    const unreadable = AgentHolding.parse({ ...holding, planTier: { label: "max 20x" } });
+    expect(unreadable.planTier).toBeUndefined();
+    expect(unreadable.plan).toBe("max");
+    const persona = (planTier: unknown) =>
+      AgentPersona.parse({
+        profileId: "claude:native-default",
+        provider: "claude",
+        label: "Default",
+        kind: "native-default",
+        createdAt: "1970-01-01T00:00:00.000Z",
+        identity: {
+          loggedIn: true,
+          plan: "max",
+          planTier,
+          verifiedAt: "2026-11-17T01:00:00.000Z",
+        },
+      });
+    expect(persona({ label: "20x" }).identity?.planTier).toEqual({ label: "20x" });
+    expect(persona([]).identity).toMatchObject({ loggedIn: true, plan: "max" });
+    expect(persona([]).identity?.planTier).toBeUndefined();
+  });
+
+  it("the feed's golden: a label, none, not read and unreadable, every set and plan kept", () => {
+    const fixtures = join(dirname(fileURLToPath(import.meta.url)), "../fixtures");
+    const raw = JSON.parse(readFileSync(join(fixtures, "agents-profile-sets.tier.json"), "utf8"));
+    const feed = AgentsProfileSetsListResult.parse(raw);
+    expect(feed.sets.map((set) => [set.id, set.personas.length, set.plans?.length])).toEqual([
+      ["native", 2, 2],
+      ["side", 1, 1],
+      ["home", 1, 1],
+      ["lab", 2, 5],
+    ]);
+    const tiers = feed.sets.flatMap((set) =>
+      (set.plans ?? []).map((each) => [set.id, each.id, each.account?.planTier]),
+    );
+    expect(tiers).toEqual([
+      ["native", "anthropic", { label: "20x" }],
+      ["native", "openai", undefined],
+      // the same family as This Mac's, its tier not read
+      ["side", "anthropic", undefined],
+      ["home", "anthropic", {}],
+      // what no reader can carry is not read, never none
+      ["lab", "anthropic", undefined],
+      ["lab", "anthropic-2", undefined],
+      ["lab", "anthropic-3", undefined],
+      ["lab", "anthropic-4", undefined],
+      ["lab", "anthropic-5", undefined],
+    ]);
+    // a tier not read is no key at all
+    for (const [index, id] of [
+      [0, "openai"],
+      [1, "anthropic"],
+    ] as const) {
+      const account = feed.sets[index]?.plans?.find((each) => each.id === id)?.account;
+      expect(account, id).not.toHaveProperty("planTier");
+    }
+    // the kit reads the same golden (check-ios-fixtures holds the copies byte for byte), so its
+    // reader meets these very forms: a raw token, nine characters, a space, a null label, a string
+    type RawSet = { id: string; plans: Array<{ account: { planTier?: unknown } }> };
+    const lab = (raw.sets as RawSet[]).find((set) => set.id === "lab");
+    expect(lab?.plans.map((each) => each.account.planTier)).toEqual([
+      { label: "max_20x" },
+      { label: "123456789" },
+      { label: "20 x" },
+      { label: null },
+      "20x",
+    ]);
+    const mac = feed.sets[0]?.personas[0];
+    expect(mac?.identity?.planTier).toEqual({ label: "20x" });
+    expect(mac?.holds?.[0]?.planTier).toEqual({ label: "20x" });
+    expect(feed.sets[0]?.personas[1]?.identity).not.toHaveProperty("planTier");
+    const home = feed.sets[2]?.personas[0];
+    expect(home?.identity?.planTier).toEqual({});
+    expect(home?.holds?.[0]?.planTier).toEqual({});
+    // the mirrors are as tolerant: each unreadable tier gone, its sign-in and holding whole
+    const [claude, hermes] = feed.sets[3]?.personas ?? [];
+    expect(claude?.identity?.planTier).toBeUndefined();
+    expect(hermes?.identity?.planTier).toBeUndefined();
+    expect(hermes?.identity?.signIns?.map((each) => [each.email, each.planTier])).toEqual([
+      ["bo@example.com", undefined],
+      ["cy@example.com", undefined],
+      ["di@example.com", undefined],
+      ["ed@example.com", undefined],
+    ]);
+    expect(hermes?.holds?.map((each) => [each.planId, each.planTier])).toEqual([
+      ["anthropic-2", undefined],
+      ["anthropic-3", undefined],
+      ["anthropic-4", undefined],
+      ["anthropic-5", undefined],
+    ]);
+    // every plan word and account as it came
+    const words = feed.sets.flatMap((set) =>
+      (set.plans ?? []).map((each) => [each.account?.email, each.account?.plan]),
+    );
+    expect(words).toEqual([
+      ["kim@example.com", "max"],
+      ["kim@example.com", "pro"],
+      ["lee@example.com", "max"],
+      ["ray@example.com", "pro"],
+      ["ann@example.com", "max"],
+      ["bo@example.com", "max"],
+      ["cy@example.com", "max"],
+      ["di@example.com", "max"],
+      ["ed@example.com", "max"],
+    ]);
   });
 });

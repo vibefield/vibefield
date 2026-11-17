@@ -2060,6 +2060,36 @@ describe("the plans a profile runs on (pass 19)", () => {
     });
   });
 
+  it("hands each card its plan's tier as the feed carries it, once an agent named the account", () => {
+    const tier = { label: "20x" };
+    const [anthropic, openai, kimi, github] = PLANNED.plans!;
+    const tiered = {
+      ...PLANNED,
+      plans: [
+        { ...anthropic!, account: { ...anthropic!.account, planTier: tier } },
+        // its tier not read: the card it always was
+        openai!,
+        // no agent names Kimi's account: no tier on its card, as no plan word in its title
+        { ...kimi!, account: { plan: "max", planTier: { label: "5x" } } },
+        // made up: the agent says this plan has no tier
+        { ...github!, account: { ...github!.account, planTier: {} } },
+      ],
+    };
+    const page = profilePage(tiered, context);
+    expect(page.plans.map((card) => [card.title, card.tier])).toEqual([
+      ["Claude Max", { label: "20x" }],
+      ["ChatGPT Pro", undefined],
+      ["Kimi", undefined],
+      ["Copilot", {}],
+    ]);
+    // the record itself, unchanged; the title keeps the plan word alone
+    expect(page.plans[0]!.tier).toBe(tier);
+    expect(page.plans[1]).not.toHaveProperty("tier");
+    expect(page.plans[2]).not.toHaveProperty("tier");
+    // a feed with no tier: the cards are what they were
+    expect(profilePage(PLANNED, context).plans.every((card) => !("tier" in card))).toBe(true);
+  });
+
   it("gives each agent the cards in small: the one it runs on first, a key dashed, a lapse said on its own", () => {
     const page = profilePage(PLANNED, context);
     const row = (provider: string) =>
