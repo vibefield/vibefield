@@ -6550,6 +6550,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     chart's caption says "Last 10 minutes" wherever its long words, measured in its own face,
     would overrun the plot. The phone says the same words in the same places, measured in its own
     fonts.
+  - **The moment's lines keep off the caption** (added 2026-11-17; item 518). The moment's, the
+    ghost's and a start's lines begin 4 px below the caption's line where they fall within its
+    drawn width, 4 px either side: the line the Now pill stands on. Elsewhere they begin 4 px above
+    the plot's top. The caption has no ground, so a line drawn from the plot's top crossed its
+    words. The phone carries the rule from item 518. The window's half is owed by puppeteer-views,
+    whose `paintCross` and `paintStart` draw from the plot's top at 0.4.2 (a petition, 2026-11-17).
 - **History is rosetta's room, on the cover's glass** (AR-8c, built 2026-10-03; One Frame §9
   "History, joined"; FC-D6, FC-D15, FC-D16; AR-D36…AR-D43): History is rosetta's own room — the
   projects, the sessions, the panels and charts, the transcript and its folds — mounted from the
