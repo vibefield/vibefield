@@ -16,7 +16,7 @@ import { NAMESPACES, PRODUCT_API_LIMITS } from "./registries";
 // Its own table beside METHODS, never a member of a row: `registry.test.ts` pins every
 // tailnet-reachable row's `subscription` member whole. Nothing generated reads it. Contracts'
 // `subscription-admission.test.ts` holds it to METHODS both ways, reads every variant's values
-// from its params schema, and re-derives the figures (33 closed keys, 292 holders on one
+// from its params schema, and re-derives the figures (34 closed keys, 300 holders on one
 // connection, 20 boards at 16 ms). Every holder count is counted from source, not measured;
 // stage 3 (item 480) keeps the same ledger per principal across sockets.
 
@@ -169,6 +169,12 @@ export const SUBSCRIPTION_ADMISSION: Readonly<Record<string, SubscriptionAdmissi
     reason:
       "The flows are one whole list, so one key at the default holders; the row has no handler yet (item 479), so the door answers NOT_FOUND and nothing is held.",
   },
+  "objects.presence.subscribe": {
+    class: "one",
+    identity: {},
+    reason:
+      "Who is at work on the desk's objects is one whole list (its handler reads no param), so one key at the default holders.",
+  },
 
   // ── variants: a closed enum, its values the params schema's ──
   "agent.subscribe": {
@@ -248,6 +254,13 @@ export const SUBSCRIPTION_ADMISSION: Readonly<Record<string, SubscriptionAdmissi
     bound: 8,
     reason:
       "Every transcript exists and each session opens its own rosetta socket, so 8 live per connection (a phone's reader holds 1).",
+  },
+  "objects.intents.subscribe": {
+    class: "bounded",
+    identity: {},
+    bound: 4,
+    reason:
+      "Its identity is a board's open id, and the handler opens a board's feed without asking whether the board exists, so the method is bounded: a window follows the one desk mounted now, so it holds 1 (2 for a moment at a board switch, and twice that under React's StrictMode in a development window), so 4 live per connection.",
   },
 };
 

@@ -26,8 +26,8 @@ import { WorkspaceSubscribeParams } from "../src/workspace";
 // Item 476 (2026-11-16) — the product door admits a subscription by its KEY, and every product
 // subscription row declares its key, class and holders in `subscription-admission.ts`
 // (docs/DECISIONS.md, item 476). These rows hold the table to METHODS both ways, each class to its shape,
-// the key to one canonical form, and re-derive the plan's figures from the table: 33 closed
-// keys, 292 holders at most on one connection, 20 boards at the 16 ms tick. The value set of
+// the key to one canonical form, and re-derive the plan's figures from the table: 34 closed
+// keys, 300 holders at most on one connection, 20 boards at the 16 ms tick. The value set of
 // every `variants` field is READ from its params schema (the enums' options, the workspace
 // literal), never restated here or in the table. Two facts the contracts cannot see are written
 // by hand below, each with its source.
@@ -68,9 +68,9 @@ const REFUSED_ASKS: readonly RefusedAsk[] = [
 ];
 
 /** HAND-MADE FACT 2: `flows.subscribe` has a catalog row and no handler in fieldd (item 479;
- * the door answers NOT_FOUND, so 18 `one` keys can be held). Its row is declared and
+ * the door answers NOT_FOUND, so 19 `one` keys can be held). Its row is declared and
  * counted in the census; its key is no key a connection can hold, so the figures leave it out.
- * When item 479 lands a handler, this set loses it and the closed keys become 34. */
+ * When item 479 lands a handler, this set loses it and the closed keys become 35. */
 const HANDLERLESS: ReadonlySet<string> = new Set(["flows.subscribe"]);
 
 const resolve = resolveSubscriptionAdmission;
@@ -189,7 +189,7 @@ const defaultHolders = (): number => resolve("no.such.subscribe", {}, {}).limit;
 
 describe("item 476 — every product subscription row declares its admission (the census)", () => {
   it("declares exactly the product subscription rows of METHODS, both ways", () => {
-    expect(PRODUCT_SUBSCRIPTIONS).toHaveLength(31);
+    expect(PRODUCT_SUBSCRIPTIONS).toHaveLength(33);
     // a product `.subscribe` row is a subscription row, and the other way round
     const named = METHODS.filter(
       (m) => m.surface === "product" && m.method.endsWith(".subscribe"),
@@ -198,10 +198,12 @@ describe("item 476 — every product subscription row declares its admission (th
     expect(Object.keys(SUBSCRIPTION_ADMISSION).sort()).toEqual([...PRODUCT_SUBSCRIPTIONS].sort());
   });
 
-  it("classes the 31 rows: 19 one, 5 variants, 5 things, 2 bounded", () => {
+  it("classes the 33 rows: 20 one, 5 variants, 5 things, 3 bounded", () => {
     const byClass = (cls: SubscriptionAdmission["class"]): string[] =>
       PRODUCT_SUBSCRIPTIONS.filter((method) => rowOf(method).class === cls).sort();
-    expect(byClass("bounded")).toEqual(["diagnostics.subscribe", "index.session.subscribe"]);
+    expect(byClass("bounded")).toEqual(
+      ["diagnostics.subscribe", "index.session.subscribe", "objects.intents.subscribe"].sort(),
+    );
     expect(byClass("things")).toEqual(
       [
         "plugins.update.subscribe",
@@ -220,7 +222,7 @@ describe("item 476 — every product subscription row declares its admission (th
         "workspace.subscribe",
       ].sort(),
     );
-    expect(byClass("one")).toHaveLength(19);
+    expect(byClass("one")).toHaveLength(20);
     // the schemas this file reads are the variants' and the things' rows, no more, no fewer
     expect(Object.keys(PARAMS).sort()).toEqual(
       [...byClass("variants"), ...byClass("things")].sort(),
@@ -447,6 +449,10 @@ describe("item 476 — what each ask is counted against", () => {
       limit: 8,
       declared: true,
     });
+    // a board's id is open: every board's feed is counted against the method's one bound
+    const board = resolve("objects.intents.subscribe", { docId: "a" }, {});
+    expect(board).toMatchObject({ class: "bounded", limit: 4, declared: true });
+    expect(resolve("objects.intents.subscribe", { docId: "b" }, {}).key).toBe(board.key);
     expect(PLUGIN_PROVIDED_SUBSCRIPTION.identity).toEqual({});
     const provided = resolve("x.clock.ticks.subscribe", { a: 1 }, {});
     expect(provided).toMatchObject({ class: "bounded", limit: 32, declared: true });
@@ -468,28 +474,28 @@ describe("item 476 — what each ask is counted against", () => {
 });
 
 describe("item 476 — the figures, re-derived from the table (docs/DECISIONS.md)", () => {
-  it("33 closed keys: 18 one, 14 variants, 1 things (plugins.runtime naming no plugin)", () => {
+  it("34 closed keys: 19 one, 14 variants, 1 things (plugins.runtime naming no plugin)", () => {
     const keys = closedKeys();
     const count = (cls: string): number => keys.filter((k) => k.class === cls).length;
-    expect(count("one")).toBe(18);
+    expect(count("one")).toBe(19);
     expect(count("variants")).toBe(14);
     expect(count("things")).toBe(1);
     expect(count("bounded")).toBe(0);
-    expect(keys).toHaveLength(33);
+    expect(keys).toHaveLength(34);
     // the board's 7: four projections by two scopes, less full with mesh (hand-made fact 1)
     expect(keys.filter((k) => k.method === "agent.subscribe")).toHaveLength(7);
   });
 
-  it("292 holders at most on one connection: 26 × 8 + (4 + 8 + 8) + 4 × 16", () => {
+  it("300 holders at most on one connection: 27 × 8 + (4 + 8 + 8) + 4 × 16", () => {
     const keys = closedKeys();
     const board = keys.filter((k) => k.method === "agent.subscribe").map((k) => k.limit);
     const rest = keys.filter((k) => k.method !== "agent.subscribe").map((k) => k.limit);
-    expect(rest).toHaveLength(26);
+    expect(rest).toHaveLength(27);
     expect(new Set(rest)).toEqual(new Set([8]));
     expect([...board].sort((a, b) => a - b)).toEqual([4, 8, 8, 16, 16, 16, 16]);
-    expect(sum(rest)).toBe(26 * 8);
+    expect(sum(rest)).toBe(27 * 8);
     expect(sum(board)).toBe(4 + 8 + 8 + 4 * 16);
-    expect(sum(keys.map((k) => k.limit))).toBe(292);
+    expect(sum(keys.map((k) => k.limit))).toBe(300);
   });
 
   it("20 boards at the 16 ms tick on one connection: full 4 + model 8 × 2 scopes", () => {
