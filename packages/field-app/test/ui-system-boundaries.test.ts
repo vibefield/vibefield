@@ -1777,6 +1777,30 @@ describe("UI system ownership boundaries", () => {
     );
   });
 
+  it("ends the CRT layers at the deck's top edge, so the terminals wear neither (DESIGN.md §8 'The deck wears neither the scanlines nor the vignette')", () => {
+    // TL-2, 2026-11-17. The scanlines and the vignette are the monitor's: where the sheet stands they take the
+    // chrome layer's own clip, whole while the terminals are away and under the curtain, which wears them.
+    const godview = source("godview/godview.css");
+    const crt = String.raw`:is\(\.vf-godview-scanlines, \.vf-godview-vignette\)`;
+    expect(godview).toMatch(
+      new RegExp(
+        String.raw`^\.vf-godview\[data-godview-deck-edge\]:not\(\[data-godview-deck="away"\], \[data-godview-curtain\]\)\s+${crt} \{\s*clip-path: inset\(\s*0 0 max\(0px, calc\(100% - var\(--vf-godview-deck-rest\) - var\(--vf-godview-deck-shift, 0px\)\)\) 0\s*\);`,
+        "mu",
+      ),
+    );
+    // under a maximized deck they go with the stage, 260ms, and are then not drawn
+    expect(godview).toMatch(
+      new RegExp(
+        String.raw`^\.vf-godview\[data-godview-deck="maximized"\]:not\(\[data-godview-curtain\]\)\s+${crt} \{[^}]*opacity: 0;[^}]*visibility: hidden;[^}]*opacity 260ms ease`,
+        "mu",
+      ),
+    );
+    // and they are still the root's, at 30: nothing moved them under the sheet's 10
+    expect(godview).toMatch(
+      /^\.vf-godview-scanlines,\n\.vf-godview-vignette \{[^}]*z-index: 30;/mu,
+    );
+  });
+
   it("keeps the pane frame's own styling in the views package, never in a host's (GT-6)", () => {
     // The frame — the badge, the readout, the verbs, the meter — is the
     // record's drawing and ships in `@vibefield/puppeteer-views`. A `.vf-pane-*`
