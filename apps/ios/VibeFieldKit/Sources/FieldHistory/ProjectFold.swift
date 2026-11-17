@@ -122,54 +122,50 @@ extension FieldHistoryModel {
   public static func indexSentence(_ index: IndexStanding?, desktop: String) -> String? {
     switch index {
     case nil, .ready?: nil
-    case .starting?: "\(desktop)'s index is starting"
-    case .rebuilding?: "\(desktop) is rebuilding its index"
-    case .indexing(let percent, _, _)?: "\(desktop) is indexing · \(percent)%"
-    case .failed?: "\(desktop)'s index has stopped"
-    case .unconfigured?: "\(desktop) runs no history index"
-    case .stopped?: "\(desktop)'s index is stopped"
+    case .starting?: "History on \(desktop) is opening"
+    case .rebuilding?: "History on \(desktop) is updating"
+    case .indexing(let percent, _, _)?: "\(desktop) is reading its history · \(percent)%"
+    case .failed?: "History on \(desktop) has stopped"
+    case .unconfigured?: "\(desktop) keeps no history"
+    case .stopped?: "History on \(desktop) is stopped"
     }
   }
 
-  /// What an EMPTY ledger says, in this order: nothing read and no door
-  /// answering; the index not ready, in its own words (never "no project"
-  /// while it is not); then the index's honest emptiness. The device is named
+  /// What an EMPTY ledger says, in this order: nothing read and no desktop
+  /// answering; History not ready, in its own words (never "no project"
+  /// while it is not); then its honest emptiness. The device is named
   /// as its platform names it (`DeviceWord`; L4's word pass).
+  ///
+  /// Item 505 (DESIGN.md §9, IS-282-3 and IS-282-7) — History speaks as History: it opens, updates, reads or has
+  /// stopped, and its index is History. fieldd's detail and reason are insides and are not said here.
   public static func emptyLedger(
     standing: DesktopStanding, index: IndexStanding?, desktop: String, device: DeviceWord
   ) -> (title: String, text: String) {
     if !standing.isAwake {
       return (
         "Your projects have not been read yet",
-        "Nothing of your history is on \(device.this); the ledger arrives when a desktop's door answers."
+        "Nothing of your history is on \(device.this) yet; your projects arrive when one of your desktops answers."
       )
     }
     switch index {
-    case .starting(let detail)?:
-      return (
-        "\(desktop)'s index is starting",
-        detail.map { "Its projects arrive when it is ready. \(sentence($0))" }
-          ?? "Its projects arrive when it is ready.")
-    case .rebuilding(let detail)?:
-      return (
-        "\(desktop) is rebuilding its index",
-        "\(desktop)'s VibeField reads history in a newer form, so it is rebuilding its index from what it recorded; its projects arrive when that ends."
-          + (detail.map { " \(sentence($0))" } ?? ""))
+    case .starting?:
+      return ("History on \(desktop) is opening", "Its projects arrive when it is open.")
+    case .rebuilding?:
+      return ("History on \(desktop) is updating", "Its projects arrive when the update ends.")
     case .indexing(_, let done, let total)?:
       return ("\(desktop) is reading its history", "\(done) of \(total) sessions read; its projects arrive as it reads.")
-    case .failed(let reason)?:
+    case .failed?:
       return (
-        "\(desktop)'s index has stopped",
-        "\(sentence(reason)) History on \(device.this) reads nothing from it until it runs again; its restart is in "
-          + "History on \(desktop).")
-    case .unconfigured(let reason)?:
-      return ("\(desktop) runs no history index", reason.map(sentence) ?? "Its desktop was started without one.")
+        "History on \(desktop) has stopped",
+        "Nothing new arrives on \(device.this) until it runs again. Try again from History on \(desktop).")
+    case .unconfigured?:
+      return ("\(desktop) keeps no history", "History is off on \(desktop).")
     case .stopped?:
-      return ("\(desktop)'s index is stopped", "Its projects arrive when it runs again.")
+      return ("History on \(desktop) is stopped", "Its projects arrive when it runs again.")
     case nil, .ready?:
       return (
-        "No project in your desktops' index yet",
-        "The index lists no project. Choose whose history it reads on a desktop (Settings → Agents)."
+        "No projects yet",
+        "Your desktops have recorded none. Choose whose history they keep on a desktop (Settings → Agents)."
       )
     }
   }
@@ -179,7 +175,7 @@ extension FieldHistoryModel {
 
   /// A project the ledger does not hold.
   public static func projectNotRead(device: DeviceWord) -> (title: String, text: String) {
-    ("This project is not in the ledger", "Nothing was read for it on \(device.this).")
+    ("This project has not been read here", "Nothing was read for it on \(device.this).")
   }
 
   /// A session whose desktop does not answer and whose document was never read here.
@@ -194,25 +190,17 @@ extension FieldHistoryModel {
   /// for it to. Its desktop is named as the person named it.
   public static func projectSessionsNote(awake: Bool, desktop: String) -> (title: String, text: String) {
     awake
-      ? ("Reading the sessions…", "The listing arrives over the desktop's door.")
+      ? ("Reading the sessions…", "They arrive as \(desktop) answers.")
       : ("No sessions read for this project", "They arrive once \(desktop) answers.")
   }
 
   /// No desktop answers and nothing is cached.
   public static func noDesktopRead(device: DeviceWord) -> (title: String, text: String) {
     (
-      "History reads your desktops' index over their doors",
-      "No desktop of this account answers right now, and \(device.this) has read none before. The ledger, a project "
-        + "and a session's document arrive from the first desktop whose door answers."
+      "History comes from your desktops",
+      "None of them is answering right now, and \(device.this) has read none before. Your projects and sessions "
+        + "arrive from the first one that answers."
     )
-  }
-
-  /// fieldd's words as a sentence: the first letter up, a full stop at the end.
-  static func sentence(_ words: String) -> String {
-    let trimmed = words.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard let first = trimmed.first else { return trimmed }
-    let capitalized = first.uppercased() + trimmed.dropFirst()
-    return capitalized.hasSuffix(".") ? capitalized : capitalized + "."
   }
 
   // RETIRED 2026-11-13 (item 390): `ledgerScope`, the scope line over the ledger before the desktops' marks (`12

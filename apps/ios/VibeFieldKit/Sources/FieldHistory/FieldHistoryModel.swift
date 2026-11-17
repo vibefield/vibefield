@@ -81,9 +81,10 @@ public enum FieldHistoryModel {
     case .asleep:
       return "\(corpus.desktop) is asleep · read \(corpus.readAt)"
     case .indexing(let percent, _, _):
-      return "\(corpus.desktop) is indexing · \(percent)%"
-    case .incompatible(let theirs, let ours):
-      return "\(corpus.desktop) speaks contracts \(theirs) · \(device.this) \(ours)"
+      return "\(corpus.desktop) is reading its history · \(percent)%"
+    case .incompatible:
+      // item 505 — the two contracts versions are insides; what a person can do is the same VibeField on both
+      return "\(corpus.desktop) needs the same VibeField as \(device.this)"
     }
   }
 
