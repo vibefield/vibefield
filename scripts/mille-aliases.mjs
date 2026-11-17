@@ -72,7 +72,7 @@ const ONE_COPY = {
 
 /** check:deps' mille law (scripts/check-single-copy.mjs). LINKED: every direct consumer resolves the locked
  * checkout, and both renderer resolvers install its aliases first, because a version string alone cannot tell two
- * unreleased builds apart. RELEASED and unlinked (RD-5, VF-PM's ruling of 2026-11-13 01:27Z): every consumer —
+ * unreleased builds apart. RELEASED and unlinked (RD-5, 2026-11-13): every consumer —
  * fieldd's and field-app's `@vibecook/mille`, field-app's mille-ui and the room's own two — resolves the lock's
  * `release.npm`; `@vibecook/mille` is ONE real directory for all three; and field-app's mille-ui and the room's are
  * ONE real directory, so the renderer bundles one. The copies are counted in the report.

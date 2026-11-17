@@ -1,7 +1,7 @@
 // RD-5's exit for mille's npm plane (the EL8 to 0.3.6): the renderer's aliases into the locked checkout stand only
 // while a checkout is linked, and check:deps (scripts/check-single-copy.mjs) reads the installed packages instead:
 // fieldd's and field-app's `@vibecook/mille`, field-app's mille-ui and the room's own two, each at the release, with
-// one directory per package (VF-PM, 2026-11-13 01:27Z: one engine, and one mille-ui in the renderer's bundle).
+// one directory per package (RD-5, 2026-11-13: one engine, and one mille-ui in the renderer's bundle).
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
