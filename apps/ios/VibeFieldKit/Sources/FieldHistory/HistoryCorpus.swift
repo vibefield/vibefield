@@ -460,7 +460,7 @@ public struct HistoryDocument: Identifiable, Equatable, Sendable, Codable {
   }
 }
 
-/// Item 396 (VF-PM's ruling, 2026-11-13 23:47Z, so the phone matches the desktop's room) — what a turn's prompt is,
+/// Item 396 (asked for 2026-11-13, so the phone matches the desktop's room) — what a turn's prompt is,
 /// where it is not a person's own message. The button at the document's side goes to a person's own message alone
 /// (`HistoryRow.before`); the fold says which prompts are not one (`FieldHistoryModel.promptKind`), by the room's
 /// rule. A prompt of either kind is drawn as it was.

@@ -2,8 +2,8 @@ import FieldDesign
 import FieldMarkdown
 import SwiftUI
 
-// Item 362f (James, 2026-11-12 18:40:35Z, of the phone's History session view against the desktop's: "i think all
-// message type and views are different from desktop, needs thorough audit") — A MESSAGE, WHOLE, ON A SHEET OF ITS
+// Item 362f (asked for 2026-11-12, of the phone's History session view against the desktop's: a thorough audit
+// of every message type and view that differs) — A MESSAGE, WHOLE, ON A SHEET OF ITS
 // OWN. The document draws a long prompt or reply to the room's bound (`HistoryWords.excerpt`) with `View full
 // message` under it; this is where that goes: who said it and when, and all the words the document holds, at the
 // document's measure. The room opens its file viewer for the same press (`MessagePreview.tsx`).

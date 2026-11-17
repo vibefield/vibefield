@@ -72,11 +72,11 @@ public struct TerminalSurface: UIViewRepresentable {
   /// A tap on the terminal, for the host to answer. The view never takes the
   /// keyboard on a tap of its own (`configure` turns ghosttea's tap focus
   /// off): the card owns the keyboard, and a second owner was the bare system
-  /// keyboard James found under the designed one (2026-10-17).
+  /// keyboard found under the designed one (2026-10-17).
   let onTap: () -> Void
   /// A touch of the terminal — any gesture's first finger down — for the host
-  /// to answer: the device the person touched last has the size (James,
-  /// 2026-10-17, "any touch takes").
+  /// to answer: the device the person touched last has the size (asked for
+  /// 2026-10-17).
   let onTouch: () -> Void
 
   public init(
@@ -170,7 +170,7 @@ public struct TerminalSurface: UIViewRepresentable {
       latest?.onTap()
     }
 
-    /// Every touch of the terminal, at its first finger down (James,
+    /// Every touch of the terminal, at its first finger down (asked for
     /// 2026-10-17: the last-touched device has the size). It recognizes beside
     /// the view's own gestures and claims and delays no touch.
     @objc func handleTouch() {
@@ -221,7 +221,7 @@ public struct TerminalSurface: UIViewRepresentable {
     /// main thread), synchronously: a block given to the main queue runs on a
     /// later turn, after the layout pass the keyboard's frame triggers has
     /// already measured the grid — the first build sent 45×10 that way on
-    /// James's phone (2026-10-17 05:22Z).
+    /// a phone (2026-10-17 05:22Z).
     func observeKeyboard() {
       guard keyboardObservers.isEmpty else { return }
       let center = NotificationCenter.default

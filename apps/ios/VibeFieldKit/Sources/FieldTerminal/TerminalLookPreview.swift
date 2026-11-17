@@ -3,7 +3,7 @@ import Foundation
 import GhostteaAppearance
 import SwiftUI
 
-// Item 358 (James, 2026-11-12 17:50:31Z, of the phone's Settings › Terminal: "it is missing the preview window") —
+// Item 358 (asked for 2026-11-12, of the phone's Settings › Terminal: it had no preview) —
 // the page's PREVIEW, as the desktop's Look tab opens on one (`GodviewMiniature`, DESIGN.md §8 "The terminal preview
 // is Godview in miniature"): the phone's live card in miniature.
 //

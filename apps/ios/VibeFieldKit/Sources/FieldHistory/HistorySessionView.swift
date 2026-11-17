@@ -30,8 +30,8 @@ import SwiftUI
 /// row (`HistoryPicture`). Since the item's third slice the view is handed the pictures a direct read holds
 /// (`pictures`, the paragraph on item 362g above) and draws one as a tile; through the door it is the placeholder.
 ///
-/// *Corrected 2026-11-14 (item 418; James, 08:13:38Z, session qa-01: "it seems still trying to load everything …
-/// you pull down for load more"):* SP-6's `"Earlier" at the top asks the page door for the older page` was a press
+/// *Corrected 2026-11-14 (item 418, asked for that day: a pull down at the top loads more, and nothing loads all at
+/// once):* SP-6's `"Earlier" at the top asks the page door for the older page` was a press
 /// alone, and item 362b then had the page ask by itself within a screen of its top. Neither stands as written. The
 /// document opens on its latest batch and reads nothing above it by itself; a pull down at its top reads the batch
 /// above in (`HistoryOlderPull`; its mark and the line under the head are in HistoryOlderPullView.swift), and the

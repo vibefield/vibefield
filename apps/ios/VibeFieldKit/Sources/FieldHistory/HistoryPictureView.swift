@@ -2,8 +2,8 @@ import FieldDesign
 import SwiftUI
 import UIKit
 
-// Item 362g (James's board pick, 2026-11-12 20:43Z: "images through a rosetta release"; VF-PM's rulings,
-// 2026-11-13 00:24Z) — A RECORDED PICTURE, DRAWN. Where the document drew a placeholder for everything attached
+// Item 362g (asked for 2026-11-12: pictures through a rosetta release; its parts settled 2026-11-13) — A RECORDED
+// PICTURE, DRAWN. Where the document drew a placeholder for everything attached
 // (`image shot.png on studio`), a picture the session's reader holds is drawn: a square tile in the row, and,
 // when the tile is pressed, the row's pictures in a viewer that is the whole screen, where a pinch zooms one and
 // a swipe goes to the next (item 384, at the foot of this file; before it, one picture on a sheet). A reader
@@ -245,9 +245,8 @@ struct HistoryGalleryOpen: Identifiable {
   let tile: UIImage
 }
 
-/// Item 384 (James, 2026-11-13 23:05:55Z: "a proper image preview ui that has image in full size that are pannable
-/// and zoomable, and has row of thumbnails of all other images in the same row that can click and navigate, and i
-/// can also swipe left right to navigate images"; 23:06:26Z: "and it should not be a card ui") — a row's pictures
+/// Item 384 (asked for 2026-11-13: a proper viewer, each picture at full size, panned and zoomed, a rail of the
+/// row's other pictures to press, a swipe left or right to the next, and no card) — a row's pictures
 /// on the whole screen. At its head the name of the picture shown and `Done`; under that the pictures, a page
 /// each, a swipe left or right going from one to the next; and at its foot, when the row holds more than one,
 /// the room's rail (`Images in this row`, `2 / 5`, a thumbnail of each, the one shown ringed), where a press goes

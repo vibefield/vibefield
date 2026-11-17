@@ -5,8 +5,8 @@ import Testing
 
 @testable import FieldHome
 
-/// Item 42 (James, 2026-10-19 17:42Z: "studio is driving · touch to take it
-/// back"; the look ruled 21:38Z, Phone A) — a live card another client is
+/// Item 42 (asked for 2026-10-19; its words "studio is driving · touch to take it
+/// back", its look Phone A) — a live card another client is
 /// driving (DESIGN.md §8): what its readout says and when it stands, where its
 /// words enter, the held veil's figures,
 /// and when a card on the screen takes the empty seat a holder let go of.
@@ -52,9 +52,9 @@ struct SeatReadoutTests {
     let lower = FieldHomeModel.seatReadout(
       SeatFixtures.seat(.another(SeatFixtures.studio)), lineHeight: 19)
     #expect(lower?.name == "studio")
-    let phone = SeatFixtures.holder("phone-2", name: "James's iPhone", kind: "phone", os: "ios")
+    let phone = SeatFixtures.holder("phone-2", name: "Spare iPhone", kind: "phone", os: "ios")
     let named = FieldHomeModel.seatReadout(SeatFixtures.seat(.another(phone)), lineHeight: 19)
-    #expect(named?.name == "James's iPhone")
+    #expect(named?.name == "Spare iPhone")
   }
 
   @Test("no face is Another device — never an id")

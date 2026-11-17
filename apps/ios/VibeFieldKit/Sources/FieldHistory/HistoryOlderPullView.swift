@@ -1,9 +1,8 @@
 import FieldDesign
 import SwiftUI
 
-// Item 418 (James, 2026-11-14 08:13:38Z, session qa-01: "…there should be a clear pull down action like real world
-// chat apps, you pull down for load more, there will be visual indicator when you pull down, there will be loading
-// indicator when you release, all these motions should designs intuitively and nicely with clear feedbacks") — THE
+// Item 418 (asked for 2026-11-14: a clear pull down to load more, as chat apps have, with a mark while it is
+// pulled, a loading mark once it is let go, and motion that reads clearly) — THE
 // PULL, DRAWN: the mark over the gap the pull opens, and the rule under the document's head. The rule that decides
 // both, and every number, is `HistoryOlderPull` (HistoryOlderPull.swift); nothing here decides anything. DESIGN.md
 // §8 "The phone's session document", "The rows above are read in when you pull down at the top".

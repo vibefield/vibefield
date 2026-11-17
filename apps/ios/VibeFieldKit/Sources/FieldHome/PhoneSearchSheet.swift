@@ -143,7 +143,7 @@ struct SearchSheetContent: Equatable {
   var chips: [[PhoneSearch.Chip]]
   var offer: PhoneSearch.Offer?
   var rows: Rows
-  /// The empty list's words while no row stands; nil says nothing (Everything before a word: §9's words are James's).
+  /// The empty list's words while no row stands; nil says nothing (Everything before a word: §9's words).
   var empty: PhoneSearch.Empty?
   var foot: String
   /// The profiles a home row's pill names: the lens's while it offers them, none with one profile (UM-D12).

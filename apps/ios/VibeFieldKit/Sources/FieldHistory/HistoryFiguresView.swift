@@ -1,7 +1,7 @@
 import FieldDesign
 import SwiftUI
 
-// Item 353 (James, 2026-11-12 11:38:00Z) — the ledger's figures, drawn: the four chips and the treemap the desktop's
+// Item 353 (asked for 2026-11-12) — the ledger's figures, drawn: the four chips and the treemap the desktop's
 // History heads its projects with (rosetta's room, `PortfolioSummaryPanel`), and the toggle that shows and hides
 // them at the top right of the title's band. The values are `HistoryStats.swift`'s; nothing here counts.
 

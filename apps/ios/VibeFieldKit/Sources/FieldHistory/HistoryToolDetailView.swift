@@ -1,8 +1,8 @@
 import FieldDesign
 import SwiftUI
 
-// Item 362f (James, 2026-11-12 18:40:35Z, of the phone's History session view against the desktop's: "i think all
-// message type and views are different from desktop, needs thorough audit") — WHAT A TOOL LINE OPENS TO, DRAWN.
+// Item 362f (asked for 2026-11-12, of the phone's History session view against the desktop's: a thorough audit
+// of every message type and view that differs) — WHAT A TOOL LINE OPENS TO, DRAWN.
 //
 // The room's own blocks at the room's own figures (styles/transcript.css: 11.5 px mono for a diff and a list of
 // paths; a diff's three cells, number · sign · text; an added line on green at 11 %, a line taken out on red at

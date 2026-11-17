@@ -43,7 +43,7 @@ public struct HistoryLedgerView: View {
 
   private var projects: HistoryProjects { history.projects }
 
-  /// Item 390 (James, 2026-11-13) — what the root's head says: "Projects" and how many the ledger lists.
+  /// Item 390 (asked for 2026-11-13) — what the root's head says: "Projects" and how many the ledger lists.
   private var head: FieldHistoryModel.Head {
     FieldHistoryModel.rootHead(projects: projects.corpus.projects.count, cut: projects.cut)
   }
@@ -70,11 +70,11 @@ public struct HistoryLedgerView: View {
       .historyHold(held, place: .root)
       .foldsBar(router)
       .readsTopPull()
-      // Item 350 (James, 2026-11-12): the root's title stands in the band Field's Stories row stands in, on the
+      // Item 350 (asked for 2026-11-12): the root's title stands in the band Field's Stories row stands in, on the
       // page's paper, and the ledger scrolls under it. The system's bar is hidden here; its name stays for a pushed
       // screen's back button.
       .underRootHead {
-        // Item 390 (James, 2026-11-13) — the head says Projects and, in the bubble beside it, how many the ledger
+        // Item 390 (asked for 2026-11-13) — the head says Projects and, in the bubble beside it, how many the ledger
         // lists, and nothing else. Item 353 — the figures toggle at the head's right, where Chat stands its ✦ (its
         // disc's edge on the lists' margin)
         RootHeadRow(head.title, count: head.count, spoken: head.spoken) {

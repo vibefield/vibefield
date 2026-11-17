@@ -125,7 +125,7 @@ public struct HomeScreen: View {
   /// IOS-8d — Sign out asks first: it is the one act in the menu that is
   /// destructive, and the sentence says what goes and what stays.
   @State private var signOutPending = false
-  /// WI-G3 A (James on the page The Way In, 2026-11-14 03:47:00Z) — the way in's Use another account asks the same
+  /// WI-G3 A (asked for 2026-11-14 on The Way In's page) — the way in's Use another account asks the same
   /// question, from the way in's own view: the corner's is on the tabs, which are not mounted under the way in.
   @State private var wayInSignOutPending = false
   // --- IOS-9a/9e: the two tabs, search, and the account in one bar ---------
@@ -139,7 +139,7 @@ public struct HomeScreen: View {
   @State private var meters = MetersFeed()
   /// MA-6c — the apps your agents made, through the home (the same door as the meters), for the strip and the group.
   @State private var apps = AppsFeed()
-  /// The word for the home when the roster names none. Ruled 2026-11-12 (James, 03:38:38Z, PM board): kept. Item 273.
+  /// The word for the home when the roster names none: kept, as asked for 2026-11-12 (item 273).
   private static let appsHere = "Your desktop"
   /// MA-6d — the door to the apps: the account's ledger, the drop, the pull and the first peek.
   @State private var appsDoor = AppsDoorModel(store: HomeScreen.appsCuesStore)
@@ -975,7 +975,7 @@ public struct HomeScreen: View {
         // Use another account (Tailscale asking again, or no desktop answering): the corner's question first (WI-G3 A)
         askSignOut: { wayInSignOutPending = true },
         // the question's Sign out: the corner's own (`confirmSignOut`: the account a desktop's code named is set
-        // aside, then the full sign-out), since the link asks the corner's question (VF-PM, 2026-11-14 04:49Z)
+        // aside, then the full sign-out), since the link asks the corner's question (asked for 2026-11-14)
         signOut: { confirmSignOut() },
         switchAccount: { switchAccount() },
         // the desktop's code is set aside: the welcome, or the account kept
@@ -1185,7 +1185,7 @@ public struct HomeScreen: View {
       sparks: chat.reading.sparks, rows: (link?.rows ?? []).map(\.board), items: chat.reading.items)
   }
 
-  /// IOS-12f (VF-PM 2026-11-07 13:37:20Z, ruled (a)) — the person's live sessions on the home, for New spark's reach:
+  /// IOS-12f (asked for 2026-11-07) — the person's live sessions on the home, for New spark's reach:
   /// nil until a live home answers for the board.
   private var chatSessions: [RunProfileFacts]? {
     guard let link, link.fieldIsLive else { return nil }
@@ -1560,7 +1560,7 @@ public struct HomeScreen: View {
       projects: apps.reading.projects, here: Self.appsHere)
   }
 
-  /// The app's honest screen, before MA-5 (VF-PM's Q1): it zooms out of the icon it was opened from.
+  /// The app's honest screen, before MA-5: it zooms out of the icon it was opened from.
   @ViewBuilder private var appsZoomScreen: some View {
     if let app = appsZoomApp {
       let sources = apps.reading.sources
@@ -1574,7 +1574,7 @@ public struct HomeScreen: View {
     }
   }
 
-  /// The previews come over the tailnet, through the one session that routes (VF-PM's Q5); a real fetch is owed on a
+  /// The previews come over the tailnet, through the one session that routes; a real fetch is owed on a
   /// device (P6).
   private func armAppsPreviews() async {
     guard let make = await mesh.urlSessionProvider, let session = try? await make(.ephemeral) else {
@@ -1590,7 +1590,7 @@ public struct HomeScreen: View {
     appsPreviewsArmed = true
   }
 
-  /// `-vf-apps-open` — the stills' door to the shelf, under `-vf-mock` alone (VF-PM's Q4).
+  /// `-vf-apps-open` — the stills' door to the shelf, under `-vf-mock` alone.
   private func openShelfForStills() {
     #if DEBUG || VF_TESTFLIGHT
       if mock != nil, ProcessInfo.processInfo.arguments.contains(AppsFixtureDoor.openArgument) {
@@ -1830,9 +1830,9 @@ public struct HomeScreen: View {
     }
   }
 
-  /// Search closes: the profile and a plan chosen outlive it (the lead's ruling 21, the plan's part ‹for James›) — the
-  /// desktop's token, the kind and the project clear. Its ask goes with the sheet (the sheet's task is cancelled), so
-  /// nothing is out. *(Corrected 2026-11-09, UM-5b's review: this said only the profile outlives it.)*
+  /// Search closes: the profile and a plan chosen outlive it — the desktop's token, the kind and the project clear.
+  /// Its ask goes with the sheet (the sheet's task is cancelled), so nothing is out. *(Corrected 2026-11-09, UM-5b's
+  /// review: this said only the profile outlives it.)*
   private func closeSearch() {
     searchFocused = false
     searchOpen = false
@@ -2248,9 +2248,9 @@ public struct HomeScreen: View {
   /// The session's act in the stepper's slot: a button of the act's glyph and its word, as wide as they are, and
   /// after the word only what the act has to say (`FieldHistoryModel.slotWords`).
   ///
-  /// Item 388 (James, 2026-11-13 23:18:12Z: "this is too busy [Image #14] just make it a resume button, no need
-  /// for the device stuff") — it was a capsule as wide as the screen that also said where the session runs (the
-  /// desktop's mark, its name, the folder), and with the bar folded its word broke onto two lines.
+  /// Item 388 (asked for 2026-11-13: less on the slot, a resume button and not where the session runs) — it was a
+  /// capsule as wide as the screen that also said where the session runs (the desktop's mark, its name, the
+  /// folder), and with the bar folded its word broke onto two lines.
   @ViewBuilder
   private func sessionSlot(_ session: HistorySession) -> some View {
     if let act = historyActs.act(for: session) {
@@ -3609,8 +3609,8 @@ public struct HomeScreen: View {
         // only where this device may type (K-D2): a view-only terminal's tap
         // raises nothing.
         onTap: { if inputCardFace == .shown { inputCard.tapTerminal() } },
-        // Any touch of the terminal takes the size (DS-D5, James 2026-10-17:
-        // "any touch takes"): the device the person touched last has it.
+        // Any touch of the terminal takes the size (DS-D5, asked for
+        // 2026-10-17): the device the person touched last has it.
         onTouch: { attachment.engage() }
       )
     }
@@ -4026,7 +4026,7 @@ public struct HomeScreen: View {
     mesh.signIn()
   }
 
-  /// RB-2 (VF-PM 21:59:10Z, Q1) — the corner's and Settings' Sign in and Sign out under a demo the page chose: held,
+  /// RB-2 — the corner's and Settings' Sign in and Sign out under a demo the page chose: held,
   /// for a demo never signs you in or out. A scripted run's mock keeps its own (`LaunchFixtures.holds`).
   private var accountActsHeld: Bool {
     #if DEBUG || VF_TESTFLIGHT
@@ -4036,7 +4036,7 @@ public struct HomeScreen: View {
     #endif
   }
 
-  /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z; DESIGN.md §9 "The way in", ruled that day) — Try
+  /// WI-W2e A (asked for 2026-11-14 on The Way In's page; DESIGN.md §9 "The way in") — Try
   /// again, under "Couldn’t connect." on the corner's notice and on Tailscale's card in Settings › Account: the network
   /// starts again now, from the start that failed, as it keeps itself up (`MeshModel.tryAgain`). It signs no one in or
   /// out and forgets nothing. Not the way in's Try again (`tryAgain()`), which also looks again for a desktop. Under
@@ -4220,8 +4220,8 @@ public struct HomeScreen: View {
     // --- end IOS-5d
     selection = SessionSelection(id: bubble.id)
     reportCard()
-    // FW-D2 (James, 2026-10-17: "the terminal should already connect and show
-    // the terminal content, no more attach button") — opening the card IS the
+    // FW-D2 (asked for 2026-10-17: the terminal connects and shows its
+    // content by itself, with no attach button) — opening the card IS the
     // attach. A kept session comes back painted from its lane; any other mints
     // and dials now. The card's own face is the guard (`beginAttachment`), so
     // a run with no terminal to offer opens on its reason, as before.
@@ -4324,7 +4324,7 @@ public struct HomeScreen: View {
 
   /// F1 — the desktop's terminals on ONE link to it, opt-in (`-vf-freeway`, DEBUG): legs as
   /// streams, tickets and renewals from its host's keyring, instead of a ticket over the product
-  /// door and two fresh sockets per cell. Opt-in until James's device round witnesses it (F1's
+  /// door and two fresh sockets per cell. Opt-in until a device round witnesses it (F1's
   /// exit); without the flag nothing here runs and the lanes are today's. No connection budget:
   /// a leg on the link is a stream, not a socket.
   private func freewayLanes(

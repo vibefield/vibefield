@@ -5,7 +5,7 @@ import SwiftUI
 // Item 419 — a project's folder, open over the shelf (DESIGN.md §8 "The phone's Apps", "A folder, open"): the Home
 // Screen's folder at the shelf's measure. The square on its way, what rides it and what stands behind it are the
 // rules of AppsMotion.swift; the views here read them and decide nothing. How it looks and feels on a device is
-// owed to James: none of this has been seen on one.
+// owed: none of this has been seen on one.
 
 extension AppsFolderMotion {
   /// The folder's one spring.

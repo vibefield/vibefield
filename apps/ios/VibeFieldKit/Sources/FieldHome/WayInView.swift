@@ -3,9 +3,10 @@ import FieldSettings
 import SwiftUI
 import UIKit
 
-/// WI-W4 B (James, 2026-11-11; DESIGN.md §8 "The phone's way in", WI-L4 amended) — the acts' glass's own measures:
-/// 18 above its first slot and 18 under the last thing it holds; the pill 50; a second 50 under 10; a third at least
-/// 22 under 14; the welcome's foot, a 12 pt line, under 10. Outside the view, so the glass's height is pure anywhere.
+/// WI-W4 B (asked for 2026-11-11; DESIGN.md §8 "The phone's way in", WI-L4 amended) — the acts' glass's own
+/// measures: 18 above its first slot and 18 under the last thing it holds; the pill 50; a second 50 under 10; a
+/// third at least 22 under 14; the welcome's foot, a 12 pt line, under 10. Outside the view, so the glass's height
+/// is pure anywhere.
 private enum GlassMeasure {
   static let pad: CGFloat = 18
   /// `ChromePillStyle.wideHeight`; WayInScreenTests' `glassFits` holds the two equal.
@@ -47,8 +48,8 @@ struct WayInView: View {
     static let faceSize: CGFloat = 96
   }
 
-  /// WI-W2c B (James, 2026-11-11; DESIGN.md §8): the note under the words wears the line's own ink, so it holds where
-  /// the field's rays cross it, and size alone tells it from the line.
+  /// WI-W2c B (asked for 2026-11-11; DESIGN.md §8): the note under the words wears the line's own ink, so it holds
+  /// where the field's rays cross it, and size alone tells it from the line.
   nonisolated static let noteInk = ChromePalette.inkSecondary
 
   /// What shows in the mark's place.
@@ -235,7 +236,7 @@ struct WayInView: View {
     return glass
   }
 
-  /// WI-W4 B (James, 2026-11-11; WI-L4 amended): the glass fits what it holds, its height for one line in each slot.
+  /// WI-W4 B (asked for 2026-11-11; WI-L4 amended): the glass fits what it holds, one line's height in each slot.
   /// One act is 86, two 146 (the curtain's act and its note), three 182, the welcome with its foot 206; a glass that
   /// holds nothing has no height, since a hold steps it away. Pure, and nonisolated, so a test holds it.
   nonisolated static func glassHeight(_ glass: Glass) -> CGFloat {

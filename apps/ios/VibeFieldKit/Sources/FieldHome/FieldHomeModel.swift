@@ -134,8 +134,8 @@ enum FieldHomeModel {
   /// the DEBUG `-vf-auto-attach` still reached an attachment. The run's own
   /// face (`agentTerminalFace`) says whether its terminal can be opened.
   ///
-  /// FW-D2 (James, 2026-10-17: "no more attach button for me to manually
-  /// click to connect"): opening the card IS the attach, so no slot draws
+  /// FW-D2 (asked for 2026-10-17: no attach button to press to connect):
+  /// opening the card IS the attach, so no slot draws
   /// ATTACH. A run whose face offers its terminal is `.live` from the card's
   /// first frame — attached, or attaching, or saying in the attach's own
   /// words why it could not.
@@ -156,7 +156,7 @@ enum FieldHomeModel {
 
   // MARK: - The live card is its terminal (item 41)
 
-  /// Item 41 (James, 2026-10-19; T1, ruled 21:38Z) — the live card wears
+  /// Item 41 (asked for 2026-10-19; T1) — the live card wears
   /// Godview's pane frame (DESIGN.md §8, "The phone's live card is its
   /// terminal"): a band across its top, and a line and a glow that follow the
   /// sheet's corners. The header's controls take 44pt; its fading backdrop
@@ -208,8 +208,8 @@ enum FieldHomeModel {
 
   // MARK: - A live card another client is driving (item 42)
 
-  /// Item 42 (James, 2026-10-19 17:42Z: "studio is driving · touch to take it
-  /// back"; the look ruled 21:38Z, Phone A) — the READOUT a live card stands in
+  /// Item 42 (asked for 2026-10-19; its words "studio is driving · touch to take it
+  /// back", its look Phone A) — the READOUT a live card stands in
   /// center while another client holds its session's geometry seat: a
   /// window, a peer's window, another phone (DESIGN.md §8, "A live card another
   /// client is driving"). It is the desktop's held-edge figure at the phone's
@@ -409,8 +409,8 @@ enum FieldHomeModel {
 
   // MARK: - Writes
 
-  // RETIRED 2026-10-28 (James, typed 04:22Z: "all the peer session should be writable, which is the default and
-  // universal setting, so no need to mark things like writable or read only"): the card's pre-attach sentence,
+  // RETIRED 2026-10-28 (asked for that day: every peer session is writable, the default everywhere, so nothing
+  // marks a session writable or read only): the card's pre-attach sentence,
   // `writeInvitation` ("you can type here" / "view only — this session is shared read-only" from the listing's
   // `readWrite`), was such a mark. The card says nothing about typing before a tap. The live attachment still names
   // a desktop that grants `read` without `input` in its own words (`TerminalAttachment`, "view only — this desktop
@@ -458,9 +458,9 @@ enum FieldHomeModel {
     /// Sign in, as a row in the menu: the one act the connection still asks
     /// of the person, and only while the tailnet asks for it. There is no
     /// connect and no disconnect — the phone stays on the mesh by itself while
-    /// it is signed in (James, 2026-10-18).
+    /// it is signed in (asked for 2026-10-18).
     var offersSignIn: Bool
-    /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z) — Try again, as a row in the menu: the next step
+    /// WI-W2e A (asked for 2026-11-14 on The Way In's page) — Try again, as a row in the menu: the next step
     /// under the notice "Couldn’t connect.", in Sign in's place. The two never stand together: Sign in while the
     /// tailnet asks, Try again after a start that failed, which nothing retries by itself (`MeshModel.dropped`).
     var offersTryAgain: Bool
@@ -752,7 +752,7 @@ enum FieldHomeModel {
   static let foundBeatHold: Duration = .milliseconds(1200)
 
   /// WI-L2 — the way in's page, or nil for signed in: an account whose node is not asking, with a VibeField
-  /// desktop answering now and a network on the phone (amended 2026-11-13, James: the phone is a companion to
+  /// desktop answering now and a network on the phone (amended as asked for 2026-11-13: the phone is a companion to
   /// VibeField on a computer, and offers nothing without one).
   ///
   /// *Errata (2026-11-13):* this said "with a VibeField desktop known (listed now, or remembered from an

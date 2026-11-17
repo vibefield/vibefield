@@ -60,7 +60,7 @@ struct HistoryProjectView: View {
       }
       .foldsBar(router)
       .background(ChromePalette.paper.ignoresSafeArea())
-      // Item 416 (James, 2026-11-14) — the head stands in the bar, on the back button's row: the bar's own inline
+      // Item 416 (asked for 2026-11-14) — the head stands in the bar, on the back button's row: the bar's inline
       // title is not drawn, and in its place, from the left after the back button, stand the cap, the name and its
       // bubble. The row is as wide as the bar leaves it, so a name too long for it is cut and the bubble keeps its
       // place. Until this item the bar's centre was left empty (item 392) and the head stood under the bar. The
@@ -96,7 +96,7 @@ struct HistoryProjectView: View {
     }
   }
 
-  /// Item 392 (James, 2026-11-13) — the head is the root's over again: after the project's cap, its name and how
+  /// Item 392 (asked for 2026-11-13) — the head is the root's again: after the project's cap, its name and how
   /// many sessions the page lists, in the root's type and the root's bubble (`HeadTitle`), and nothing else. Under
   /// the name stood `N places on` and the desktops' marks (PJ-7; the mock's corpus, which names no desktop, showed
   /// its path there): the places are still under DESKTOPS.
@@ -483,11 +483,10 @@ struct HistoryProjectView: View {
   }
 }
 
-/// Item 416 (James, 2026-11-14 08:13:38Z, session qa-01, of a project's page on his phone: "in project page, the
-/// project title and count bubble should be at the same row as the back button so it is aligned with the history
-/// projects line. and if the project title too long it should be omitted properly") — where a project's page stands
-/// its head, and how the name gives way there. The rule is pure; the page draws what it answers. DESIGN.md §8 "The
-/// roots' heads", A project's head stands on the back button's row.
+/// Item 416 (asked for 2026-11-14, of a project's page on a phone: its title and count bubble on the back button's
+/// row, in line with History's projects line, and a title too long for it cut properly) — where a project's page
+/// stands its head, and how the name gives way there. The rule is pure; the page draws what it answers. DESIGN.md
+/// §8 "The roots' heads", A project's head stands on the back button's row.
 ///
 /// Both lines and both ways of giving are kept, so the page can be told otherwise in one word: until this item the
 /// head stood on `page` and its name was `squeezed(to: 28 / 34)` (item 392).
