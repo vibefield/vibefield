@@ -78,7 +78,7 @@ export interface MarketRow {
   readonly parked?: string;
 }
 
-// C36's (VF-PM, 2026-11-14 06:56Z): a row that waits on a part no slice of MK's order builds.
+// C36's (2026-11-14): a row that waits on a part no slice of MK's order builds.
 // Desk-gates row 37 says it, with the item and the owner it was given. CARRY was the other, until
 // item 433 drew Discover's categories (2026-11-17): it runs by default now, after RISE, while the
 // clock INSTALL took hangs its category on the board.

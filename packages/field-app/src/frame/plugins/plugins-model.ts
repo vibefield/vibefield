@@ -246,8 +246,8 @@ function paletteCommands(record: PluginRecord): PluginRecord["contributions"]["c
  * decides the stop (O3-C), keeping a held plugin held whatever its switch asks (`plugin-registry.ts`, `setEnabled`),
  * and reads no installed plugin while no plugin list is configured (item 279's S2). A held plugin's switch would not
  * move, so it has none, and its line says why. MK-4c2a gave the switches to a Built in or Development plugin alone
- * (VF-PM 2026-11-11 18:36:34Z, 2), before fieldd held any; Settings → Plugins kept the others' until this widened
- * (MK-5; VF-PM 2026-11-14 04:33Z) and keeps none now. The row, the page, every power's switch and the settings ask
+ * (2026-11-11), before fieldd held any; Settings → Plugins kept the others' until this widened
+ * (MK-5, 2026-11-14) and keeps none now. The row, the page, every power's switch and the settings ask
  * this one function. */
 export function controlsHere(record: PluginRecord): boolean {
   return heldLine(record) === null;

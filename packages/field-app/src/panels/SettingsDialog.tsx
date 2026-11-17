@@ -105,7 +105,7 @@ const PAGES: readonly PageMeta[] = [
   {
     id: "plugins",
     label: "Plugins",
-    // MK-5 (VF-PM 2026-11-14 04:33Z): narrowed until Plugins… holds every switch; N18: it holds
+    // MK-5 (2026-11-14): narrowed until Plugins… holds every switch; N18 (2026-11-17): it holds
     // them all, so the page says where they are (DESIGN.md §8)
     description: "Where your plugins and their settings are.",
     icon: "plugin",

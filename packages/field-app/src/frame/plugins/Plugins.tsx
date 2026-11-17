@@ -196,15 +196,15 @@ import { RemoveView } from "./RemoveQuestion";
 // fieldd says failed, which the frame reads while the popup stands
 // (`plugins.runtime.subscribe`, `runtimeFailures`) and hands in (`failed`).
 // A row whose switch stands here then offers Try again (N18, 2026-11-17: Try
-// again follows the switch, not a Built in or Development one's alone, VF-PM
-// 19:45:16Z), which turns it off and on over its switch's two requests and its
-// switch's key, so neither takes a press until both are answered; it stands
-// meanwhile, and the keyboard stays in the field. A refusal is the switch's,
-// said by the request fieldd refused. A read the client ended reads as none
-// failed. And where neither door answered, Discover and Updates offer Try again
-// in the foot, ↵ printed on it, which reads the list again as an opening does,
-// once per press (MK-D5: the person's act); Installed says the same sentence
-// with no act while it holds no plugins.
+// again follows the switch, not a Built in or Development one's alone), which
+// turns it off and on over its switch's two requests and its switch's key, so
+// neither takes a press until both are answered; it stands meanwhile, and the
+// keyboard stays in the field. A refusal is the switch's, said by the request
+// fieldd refused. A read the client ended reads as none failed. And where
+// neither door answered, Discover and Updates offer Try again in the foot, ↵
+// printed on it, which reads the list again as an opening does, once per press
+// (MK-D5: the person's act); Installed says the same sentence with no act while
+// it holds no plugins.
 // Item 433: Discover draws the pegboard's categories (`shelfCategories`), by
 // the board's names this controller already reads (`useBoardNames`), and a
 // category chosen keeps the sets that hang there. Each opening starts on the

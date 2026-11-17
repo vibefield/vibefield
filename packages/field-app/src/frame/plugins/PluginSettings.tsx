@@ -22,8 +22,8 @@ import { REMOVE_WORDS, SETTINGS_WORDS } from "./plugins-words";
 // A PLUGIN'S SETTINGS ON ITS PAGE (MK-4c2b; DESIGN.md §8 "Its settings", as corrected for James's
 // MK-O6 pick): every plugin's settings but a held one's (N18), each a row with its own control,
 // over the port's three requests — `storage.settings.get`, `.set` and `.reset`, the ones Settings
-// → Plugins sent, with the same parameters. MK-4c2c (James's click, 2026-11-14 08:19:36Z,
-// "Yes, add them to the plugin's page"): a kept setting has Back to default, one press; a kept
+// → Plugins sent, with the same parameters. MK-4c2c (asked for 2026-11-14: the way back on
+// the plugin's page): a kept setting has Back to default, one press; a kept
 // secret has Remove the saved secret…, which asks first, in place, in RemoveQuestion.tsx's pattern
 // (MK-4f; §8 "The destructive uninstall affordance"): its consequence line, Cancel leading and
 // holding the keyboard, Remove trailing in the danger ink, so one press is never irreversible. The

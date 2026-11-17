@@ -2965,7 +2965,7 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
     // the act's look with no ↵ printed: ↵ opens the hot row's page
     expect(again?.textContent).toBe(words.INSTALL_WORDS.tryAgain);
     expect(again?.hasAttribute("aria-keyshortcuts")).toBe(false);
-    // a Sideloaded plugin's row offers it too, N18 (2026-11-17; VF-PM 19:45:16Z): Try again follows the switch;
+    // a Sideloaded plugin's row offers it too, N18 (2026-11-17): Try again follows the switch;
     // each plugin working or off has none
     expect(againOf("Key-value store")?.textContent).toBe(words.INSTALL_WORDS.tryAgain);
     expect(againOf("Comment pad")).toBeNull();

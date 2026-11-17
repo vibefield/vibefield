@@ -24,7 +24,7 @@ import * as words from "../src/frame/plugins/plugins-words";
 // → Plugins' form sent until N18, with the same parameters; no undo or redo (C2); N18: a plugin
 // from the list's and a Sideloaded one's too, and no section and no request on a page held while
 // community plugins are off (U2); the off, under way, refused, unread and away states. MK-4c2c
-// (James's click, 2026-11-14 08:19:36Z, "Yes, add them to the plugin's page"): a kept setting's
+// (asked for 2026-11-14: the way back on the plugin's page): a kept setting's
 // Back to default and a kept secret's removal, which asks first, over the request Settings' Reset
 // sent; the page learns only whether a secret is kept. No real fieldd, no network, no child.
 

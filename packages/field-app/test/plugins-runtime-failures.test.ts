@@ -106,7 +106,7 @@ describe("Installed's rows of plugins that aren't working, and Try again (MK-5b)
       onOff: true,
       retry: true,
     });
-    // a Sideloaded plugin says it too, its switch here and so Try again: N18 (2026-11-17; VF-PM 19:45:16Z), Try
+    // a Sideloaded plugin says it too, its switch here and so Try again: N18 (2026-11-17), Try
     // again follows the switch
     const store = rowOf(rows, "example.kv-service");
     expect([store?.line, store?.onOff, store?.retry]).toEqual([
@@ -144,7 +144,7 @@ describe("Installed's rows of plugins that aren't working, and Try again (MK-5b)
     ]);
   });
 
-  // N18 (2026-11-17; VF-PM 19:45:16Z): a plugin from the plugin list's switch stands on its row, and Try again
+  // N18 (2026-11-17): a plugin from the plugin list's switch stands on its row, and Try again
   // follows the switch, so its choices ride the install-set as its switch's do
   it("offers Try again on a plugin from the plugin list too, whose switch stands here", () => {
     const none = new Set<string>();

@@ -24,10 +24,10 @@ import { nameUnstartedPlugin, resetUnstartedPlugins } from "../src/plugin-host/u
 // from Settings → Plugins' Runtime disclosure, one block per plugin under its title, as rows,
 // with no disclosure; an issue in its ink; a plugin's last error and a folder that is not a
 // plugin said here; never a blank. And Settings → Plugins (§8 "Settings → Plugins, until
-// Plugins… holds every switch"): VF-PM's ruling of 2026-11-14 04:33Z kept a plugin from the plugin
+// Plugins… holds every switch"): the MK inventory's A2 (2026-11-14) kept a plugin from the plugin
 // list or a Sideloaded one there whole until the Plugins popup carried its controls; N18 widened
 // the popup to them, so the page lists no plugin from any source, reads nothing and sends nothing,
-// and says where your plugins and their settings are; and, by VF-PM's ruling of 06:56Z (C22), it
+// and says where your plugins and their settings are; and, by C22 (2026-11-14), it
 // never says fieldd's own text. No real fieldd, no network, no child.
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -415,7 +415,7 @@ const everySource = (): PluginRecord[] => [
 describe("Settings → Plugins, now that Plugins… holds every switch (MK-5, N18; DESIGN.md §8)", () => {
   it("lists no plugin, from any source, and says where your plugins and their settings are", async () => {
     const asked = await mountSettings(everySource(), { rate: 45 });
-    // MK's words, ‹draft›, for James's eye (DESIGN.md §9 "Settings and Diagnostics")
+    // MK's words, ‹draft›, owed to the eye (DESIGN.md §9 "Settings and Diagnostics")
     expect(SETTINGS_PLUGINS_WORDS.line).toBe("Your plugins are in Plugins… in the Me menu.");
     const page = "Each plugin's switches and settings are on its page there.";
     expect(said(`${SETTINGS_PLUGINS_WORDS.line} ${page}`)).toBeDefined();

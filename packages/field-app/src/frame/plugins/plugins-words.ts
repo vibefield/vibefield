@@ -83,7 +83,7 @@ export function updatesWords(count: number): string | null {
 /** The window's fieldd did not answer either door: IS-282-2's ruled words (§9 "Installed, off and Remove…"). Installed
  * says it with no act while it holds none of its plugins, for the window keeps its last plugins and heals on its own;
  * Try again (`INSTALL_WORDS.tryAgain`) stands on Discover's and Updates' away state alone, where it reads the list
- * again (MK-5b; VF-PM 2026-11-14 04:33Z, MK-5's ask 3 at its lean). */
+ * again (MK-5b, asked for 2026-11-14). */
 export const PLUGINS_AWAY = "Plugins aren't available right now.";
 
 /** Installed before the window holds its plugins (IS-282-2's ruled words). */
@@ -118,13 +118,13 @@ export const INSTALLED_LINE = {
   offNoObject: "Off · its service is stopped",
   /** a plugin that is on whose runtime failed, or that cannot start in this window (item 476); its row offers Try
    * again (`INSTALL_WORDS.tryAgain`) where its switch stands, which turns it off and on (MK-5b; N18, 2026-11-17:
-   * Try again follows the switch, not a Built in or Development one's alone, VF-PM 19:45:16Z). The line
+   * Try again follows the switch, not a Built in or Development one's alone). The line
    * and its Try again are §9's ruled words (IS-282-6), not ‹draft›; a refusal of Try again says the switch's
    * words (`SWITCH_WORDS.refused`, ruled; `SWITCH_WORDS.updating`, ‹draft›) */
   broken: (title: string) => `${title} isn't working right now`,
   /** MK-5b: an invalid or incompatible plugin, which turning off and on can't mend: a line of its own, with no Try
-   * again (VF-PM 2026-11-14 04:33Z, MK-5's ask 2 at its lean, "its words for James"). MK's, ‹draft›, for James's
-   * eye: MK-5b's one new sentence. */
+   * again (MK-5b, asked for 2026-11-14). MK's words, ‹draft›, owed to the eye: MK-5b's one new
+   * sentence. */
   cantRun: (title: string) => `${title} can't run on this VibeField`,
   /** MK-5 (N21): a plugin that is on whose service fieldd stopped after it kept crashing, in the attention ink, its
    * switch off; a press turns it on, which starts it again (the ruled page's row, §9) */
@@ -182,8 +182,8 @@ export const PAGE_WORDS = {
   builtIn: "Comes with VibeField. It can be turned off, not removed.",
 } as const;
 
-/** A plugin's switches (MK-4c2a; DESIGN.md §8 "Its switches", §9 MK-4c2a's block): MK's words (VF-PM 2026-11-11
- * 18:36:34Z, 18:39:16Z, 18:43:08Z), each James's since his picks at A, as built, on 2026-11-12: `elsewhere`
+/** A plugin's switches (MK-4c2a; DESIGN.md §8 "Its switches", §9 MK-4c2a's block): MK's words (2026-11-11),
+ * each picked at A on 2026-11-12, as built: `elsewhere`
  * (MK-O21), `off` (MK-O27), `cant` (MK-O23) and `refused` (MK-O26). A switch is named by what it turns —
  * the plugin's title, or a power's plain words — and never by its state, which it says as a switch does. N18: Plugins…
  * carries every plugin's switches but a held one's, so MK-O22's "Its switches aren't here yet." is said nowhere and

@@ -65,7 +65,7 @@ import {
 // N18: a plugin from the list's page carries its switches now (`controlsHere`),
 // so "page-listed" draws Kanban's page with its one switch, its powers' and the
 // line that they reach your other desktops; "community-held-page" is the one
-// installed page that reads only. N18 (2026-11-17; VF-PM 19:45:16Z): Try again
+// installed page that reads only. N18 (2026-11-17): Try again
 // follows the switch, so the Sideloaded Key-value store's row offers it too.
 
 export type PluginsPlateState =
