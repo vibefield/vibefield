@@ -18,7 +18,7 @@ struct KitFaintWordsTests {
 
   /// Each file that held `inkFaint` at the base: its t3 and t4 inks on code lines (comment lines aside), in their
   /// order. Its own t3s stand where they stood. Each former `inkFaint` reads its class, by the census
-  /// `lanes/ios/settings/i242r/CENSUS-242r.3c24ab1dc.tsv`: t3 42, t4 19.
+  /// taken for item 242 on 2026-11-17: t3 42, t4 19.
   static let inks: [String: String] = [
     "FieldDesign/ChromeList.swift": "t3 t3 t3 t3 t3",
     "FieldHistory/HistoryFiguresView.swift": "t3 t3 t3 t3 t3 t3 t3",
