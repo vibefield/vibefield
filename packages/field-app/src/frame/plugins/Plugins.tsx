@@ -1240,20 +1240,24 @@ export function Plugins({
     (id: string) => {
       if (installed?.find((row) => row.id === id)?.retry !== true) return;
       let turningOn = false;
-      run(switchKey.one(id), () => ({ id, capability: null, turningOn }), async () => {
-        setRetrying((was) => new Set(was).add(id));
-        try {
-          await port.disable(id);
-          turningOn = true;
-          await port.enable(id);
-        } finally {
-          setRetrying((was) => {
-            const next = new Set(was);
-            next.delete(id);
-            return next;
-          });
-        }
-      });
+      run(
+        switchKey.one(id),
+        () => ({ id, capability: null, turningOn }),
+        async () => {
+          setRetrying((was) => new Set(was).add(id));
+          try {
+            await port.disable(id);
+            turningOn = true;
+            await port.enable(id);
+          } finally {
+            setRetrying((was) => {
+              const next = new Set(was);
+              next.delete(id);
+              return next;
+            });
+          }
+        },
+      );
       if (takeFocus) inputRef.current?.focus({ preventScroll: true });
     },
     [installed, run, port, takeFocus],
