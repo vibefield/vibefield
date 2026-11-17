@@ -1,6 +1,7 @@
 import { EmptyState, UiPill, UiSwitch } from "@vibefield/design-kit";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import type { KeyboardEvent, ReactElement, ReactNode, RefObject } from "react";
+import { ActButton } from "./InstallCard";
 import { PluginsShelf } from "./PluginsShelf";
 import type {
   FootSentence,
@@ -14,6 +15,7 @@ import type {
 import { PLUGINS_TABS, switchKey } from "./plugins-model";
 import type { Shelf } from "./plugins-shelf";
 import {
+  INSTALL_WORDS,
   NO_REGISTRY,
   noMatchWords,
   PAGE_WORDS,
@@ -57,7 +59,11 @@ import "./plugins.css";
 // Install. MK-4f: Remove… and its question stand at the second column's foot,
 // the controller's too. MK-UC's UC-C: over a held list Updates is its head, its
 // rows and its note (`PluginsUpdates.tsx`), the controller's, and its foot
-// offers Check again, with no ↵ (↵ is the rows').
+// offers Check again, with no ↵ (↵ is the rows'). MK-5b: an Installed row that
+// offers Try again (`retry`) carries it beside its press, before its switch, a
+// stop of Tab of its own with no ↵ printed; and where neither door answered,
+// Discover's and Updates' foot offers Try again with ↵ printed, while Installed
+// says the same sentence with no act until it holds its plugins.
 
 export interface PluginsViewProps {
   open: boolean;
@@ -105,6 +111,10 @@ export interface PluginsViewProps {
   refused: ReadonlyMap<string, Refusal>;
   onTurn: (id: string, on: boolean) => void;
   onTurnPower: (id: string, capability: string, on: boolean) => void;
+  /** MK-5b: a row's Try again, which turns its plugin off and on; none: no row draws one */
+  onRetry?: ((id: string) => void) | undefined;
+  /** MK-5b: the foot's Try again where neither door answered, on Discover and Updates; null: none */
+  onTryAgain?: (() => void) | null;
   inputRef: RefObject<HTMLInputElement | null>;
   listRef: RefObject<HTMLUListElement | null>;
   onQuery: (query: string) => void;
@@ -152,6 +162,7 @@ function InstalledList({
   refused,
   onOpen,
   onTurn,
+  onRetry,
 }: {
   rows: readonly InstalledRow[];
   hot: number;
@@ -161,6 +172,7 @@ function InstalledList({
   refused: ReadonlyMap<string, Refusal>;
   onOpen: (id: string) => void;
   onTurn: (id: string, on: boolean) => void;
+  onRetry: ((id: string) => void) | undefined;
 }): ReactElement {
   return (
     <ul ref={listRef} className="vf-plugins-list" aria-label={PLUGINS_TAB_WORDS.installed}>
@@ -215,6 +227,16 @@ function InstalledList({
                 <FieldGlyph name="chevron" size={12} className="vf-plugins-chevron" />
               )}
             </button>
+            {/* MK-5b: Try again, 12 after the text and 12 before the switch, a control of its own;
+                no ↵ printed, for ↵ opens the hot row's page. It and the switch share one key */}
+            {row.retry === true && onRetry !== undefined && (
+              <ActButton
+                words={INSTALL_WORDS.tryAgain}
+                live={!away && !under.has(switchKey.one(row.id))}
+                onPress={() => onRetry(row.id)}
+                printed={false}
+              />
+            )}
             {row.onOff !== null && (
               <>
                 <UiSwitch
@@ -421,7 +443,7 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
   const { pageAct = null, onInstallHot = null, pageRemove = null } = props;
   const { updatesList = null, onCheckAgain = null, checking = false } = props;
   const { onQuery, onTab, onClose, onShowInstalled, onOpenPage, onBack, onKeyDown } = props;
-  const { onTurn, onTurnPower } = props;
+  const { onTurn, onTurnPower, onRetry, onTryAgain = null } = props;
   const body =
     page !== null ? (
       <PageView
@@ -439,7 +461,8 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
       />
     ) : tab === "installed" ? (
       installed === null ? (
-        <State title={READING_YOURS} />
+        // MK-5b: neither door answered and no plugin is held: the away sentence, with no act
+        <State title={shelf.kind === "away" ? PLUGINS_AWAY : READING_YOURS} />
       ) : installed.length === 0 && query.trim() !== "" ? (
         <State title={noMatchWords(query)} />
       ) : (
@@ -452,6 +475,7 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
           refused={refused}
           onOpen={onOpenPage}
           onTurn={onTurn}
+          onRetry={onRetry}
         />
       )
     ) : tab === "discover" && discover !== null ? (
@@ -570,6 +594,10 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
                 {SHELF_WORDS.install}
                 <kbd className="vf-plugins-act-key">↵</kbd>
               </button>
+            )}
+            {/* MK-5b: where neither door answered, the read again; ↵ presses it */}
+            {onTryAgain !== null && (
+              <ActButton words={INSTALL_WORDS.tryAgain} live={!away} onPress={onTryAgain} />
             )}
             {/* MK-UC's UC-C: Updates' foot reads the list again; ↵ is its rows' */}
             {onCheckAgain !== null && (

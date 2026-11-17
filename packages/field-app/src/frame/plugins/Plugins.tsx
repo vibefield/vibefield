@@ -1,8 +1,9 @@
-import type {
-  FrameView,
-  PluginRecord,
-  PluginRegistrySnapshot,
-  PluginsCatalog,
+import {
+  type FrameView,
+  type PluginRecord,
+  type PluginRegistrySnapshot,
+  PluginRuntimeDiagnosticsSnapshot,
+  type PluginsCatalog,
 } from "@vibefield/contracts";
 import { useFielddClient, useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
 import {
@@ -50,6 +51,7 @@ import {
 } from "./plugins-install";
 import {
   catalogFoot,
+  type FailedHere,
   installedFoot,
   installedRows,
   type PluginsRead,
@@ -59,6 +61,7 @@ import {
   powerSwitchOf,
   type Refusal,
   refusalStale,
+  runtimeFailures,
   shelfState,
   switchable,
   switchKey,
@@ -186,6 +189,18 @@ import { RemoveView } from "./RemoveQuestion";
 // window says it isn't working. The registry snapshot cannot say that of one
 // window, so the frame hands in the window's own set of them (`unstarted`,
 // `plugin-host/unstarted-plugins.ts`) beside the snapshot; a plate passes none.
+// MK-5b (§8 "Installed", MK-5b's drawing): so does a plugin whose runtime
+// fieldd says failed, which the frame reads while the popup stands
+// (`plugins.runtime.subscribe`, `runtimeFailures`) and hands in (`failed`).
+// A Built in or Development plugin's row then offers Try again, which turns it
+// off and on over its switch's two requests and its switch's key, so neither
+// takes a press until both are answered; it stands meanwhile, and the keyboard
+// stays in the field. A refusal is the switch's, said by the request fieldd
+// refused. A read the client ended reads as none failed. And where neither
+// door answered, Discover and Updates offer Try again in the foot, ↵ printed
+// on it, which reads the list again as an opening does, once per press (MK-D5:
+// the person's act); Installed says the same sentence with no act while it
+// holds no plugins.
 
 function boxOf(container: HTMLElement | null | undefined): { width: number; height: number } {
   if (container !== null && container !== undefined) {
@@ -203,6 +218,8 @@ export interface PluginsProps {
   snapshot: PluginRegistrySnapshot | null;
   /** Item 476: the plugins that cannot start in this window, by id; none passed: none. */
   unstarted?: UnstartedHere;
+  /** MK-5b: the plugins whose runtime fieldd says failed, by id; none passed: none. */
+  failed?: FailedHere | undefined;
   /** Whether Esc is heard on the window. A catalog plate binds none. */
   bindKeys?: boolean;
   /** Where the scrim and the popup are drawn: the document's body in the
@@ -263,6 +280,7 @@ export function Plugins({
   port,
   snapshot,
   unstarted,
+  failed,
   bindKeys = true,
   container,
   takeFocus = true,
@@ -297,6 +315,9 @@ export function Plugins({
   const underRef = useRef(new Set<string>());
   const [under, setUnder] = useState<ReadonlySet<string>>(() => new Set());
   const [refused, setRefused] = useState<ReadonlyMap<string, Refusal>>(() => new Map());
+  // MK-5b: the plugins whose row's Try again is under way, by id, so it stands, taking no press, while
+  // the plugin is off between its two requests
+  const [retrying, setRetrying] = useState<ReadonlySet<string>>(() => new Set());
   // O2-C: the one install under way, kept in a ref too, so an answer that lands late knows whether its install
   // is still the one the window holds
   const flowNow = useRef<InstallFlow | null>(null);
@@ -381,53 +402,64 @@ export function Plugins({
     }
   }
 
-  // THE READ ON OPEN (MK-D5): one `catalog` for the list held, shown at once,
-  // and one `refresh` per opening — never on a re-render, never on a timer.
-  // A refresh that answers is the newer list, so a late `catalog` never
-  // replaces it; neither door answering is said, never a blank.
+  // THE READ (MK-D5): one `catalog` for the list held, shown at once, and one
+  // `refresh`. A refresh that answers is the newer list, so a late `catalog`
+  // never replaces it; neither door answering is said, never a blank. An
+  // answer is taken while `current` says the read is still the popup's.
+  // MK-5b: an opening reads it, and so does Try again where neither door
+  // answered (`readAgain`, below).
+  const readList = useCallback(
+    (current: () => boolean) => {
+      let fresh = false;
+      let heldAnswered = false;
+      let refreshFailed = false;
+      setReading(true);
+      port.catalog().then(
+        (catalog) => {
+          heldAnswered = true;
+          if (current() && !fresh) {
+            setRead({ kind: "answered", catalog });
+            heard.current?.(catalog);
+          }
+        },
+        () => {
+          heldAnswered = true;
+          if (current() && refreshFailed) {
+            setRead((was) => (was.kind === "asking" ? { kind: "away" } : was));
+          }
+        },
+      );
+      port.refresh().then(
+        (catalog) => {
+          fresh = true;
+          if (!current()) return;
+          setRead({ kind: "answered", catalog });
+          setReading(false);
+          heard.current?.(catalog);
+        },
+        () => {
+          refreshFailed = true;
+          if (!current()) return;
+          setReading(false);
+          if (heldAnswered) setRead((was) => (was.kind === "asking" ? { kind: "away" } : was));
+        },
+      );
+    },
+    [port],
+  );
+
+  // THE READ ON OPEN (MK-D5): the read above once per opening — never on a
+  // re-render, never on a timer.
   useEffect(() => {
     if (!open) return;
     let current = true;
-    let fresh = false;
-    let heldAnswered = false;
-    let refreshFailed = false;
     // a Check again from an earlier opening is not this one's
     checkTurn.current += 1;
-    setReading(true);
-    port.catalog().then(
-      (catalog) => {
-        heldAnswered = true;
-        if (current && !fresh) {
-          setRead({ kind: "answered", catalog });
-          heard.current?.(catalog);
-        }
-      },
-      () => {
-        heldAnswered = true;
-        if (current && refreshFailed) {
-          setRead((was) => (was.kind === "asking" ? { kind: "away" } : was));
-        }
-      },
-    );
-    port.refresh().then(
-      (catalog) => {
-        fresh = true;
-        if (!current) return;
-        setRead({ kind: "answered", catalog });
-        setReading(false);
-        heard.current?.(catalog);
-      },
-      () => {
-        refreshFailed = true;
-        if (!current) return;
-        setReading(false);
-        if (heldAnswered) setRead((was) => (was.kind === "asking" ? { kind: "away" } : was));
-      },
-    );
+    readList(() => current);
     return () => {
       current = false;
     };
-  }, [open, port]);
+  }, [open, readList]);
 
   // A page goes back to the tab it opened from, the keyboard to the field.
   const back = useCallback(() => {
@@ -852,11 +884,16 @@ export function Plugins({
   const names = useBoardNames();
   // Q6: the field's words filter Installed's rows and (MK-4e) Discover's shelf;
   // Updates' search waits for its rows, and the words are kept across the switch.
-  // Item 476: a row of a plugin in the window's own set says it isn't working.
-  const installed = useMemo(
-    () => (snapshot === null ? null : installedRows(snapshot, catalog, query, names, unstarted)),
-    [snapshot, catalog, query, names, unstarted],
-  );
+  // Item 476: a row of a plugin in the window's own set says it isn't working. MK-5b: so does one
+  // whose runtime fieldd says failed, and a Built in or Development one's offers Try again, which
+  // stands while its press is under way, the plugin off between its two requests included.
+  const installed = useMemo(() => {
+    if (snapshot === null) return null;
+    const rows = installedRows(snapshot, catalog, query, names, unstarted, failed);
+    return retrying.size === 0
+      ? rows
+      : rows.map((row) => (retrying.has(row.id) ? { ...row, retry: true as const } : row));
+  }, [snapshot, catalog, query, names, unstarted, failed, retrying]);
   // MK-4e: Discover's shelf, over a held list with a set to show or typed words to answer; its columns fit the
   // popup's width, and its tiles in the order the keys walk them
   const discover = useMemo(() => {
@@ -1066,12 +1103,29 @@ export function Plugins({
       },
     );
   }, [reading, away, port]);
+  // MK-5b: Try again where neither door answered (§8 "Its states, in the body"): the read again, as an opening
+  // reads it, once per press, the person's act (MK-D5); none while a read runs or fieldd isn't answering. A later
+  // read, a Check again or a new opening leaves its answers untaken, and so does the popup folding. The body then
+  // says the read and the act leaves the foot, so the keyboard goes to the field, as Show installed and Install
+  // send it.
+  const readAgain = useCallback(() => {
+    if (reading || away) return;
+    checkTurn.current += 1;
+    const turn = checkTurn.current;
+    setRead({ kind: "asking" });
+    readList(() => openNow.current && checkTurn.current === turn);
+    if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+  }, [reading, away, readList, takeFocus]);
+  // offered on Discover and Updates alone, in the foot; Installed says the same sentence with no act
+  const tryAgain = page === null && tab !== "installed" && shelf.kind === "away" ? readAgain : null;
 
   // A switch's one request (§8 "Its switches"): none while fieldd isn't
   // answering or while its last is out; a refusal is kept to say it, and the
-  // switch itself moves only on fieldd's next snapshot (the P5 law).
+  // switch itself moves only on fieldd's next snapshot (the P5 law). MK-5b: a
+  // refusal read as it lands, for Try again's two requests, said by the one
+  // fieldd refused.
   const run = useCallback(
-    (key: string, refusal: Refusal, ask: () => Promise<void>) => {
+    (key: string, refusal: Refusal | (() => Refusal), ask: () => Promise<void>) => {
       if (away || underRef.current.has(key)) return;
       underRef.current.add(key);
       setUnder(new Set(underRef.current));
@@ -1084,13 +1138,15 @@ export function Plugins({
       ask()
         .then(
           () => undefined,
-          (error: unknown) =>
+          (error: unknown) => {
+            const said = typeof refusal === "function" ? refusal() : refusal;
             setRefused((was) =>
               new Map(was).set(
                 key,
-                refusedWhileUpdating(error) ? { ...refusal, updating: true } : refusal,
+                refusedWhileUpdating(error) ? { ...said, updating: true } : said,
               ),
-            ),
+            );
+          },
         )
         .finally(() => {
           underRef.current.delete(key);
@@ -1124,6 +1180,32 @@ export function Plugins({
       );
     },
     [recordOf, run, port],
+  );
+  // MK-5b (§8 "Installed", MK-5b's drawing): Try again on a row that offers it (`retry`) turns its plugin off and
+  // on — the switch's two requests, in turn, under the switch's own key, so neither takes a press until both are
+  // answered, and it stands meanwhile (`retrying`). A refusal is the switch's, said by the request fieldd refused:
+  // off, or on. The keyboard stays in the field, as an Install's: the press takes no second press while it runs.
+  const onRetry = useCallback(
+    (id: string) => {
+      if (installed?.find((row) => row.id === id)?.retry !== true) return;
+      let turningOn = false;
+      run(switchKey.one(id), () => ({ id, capability: null, turningOn }), async () => {
+        setRetrying((was) => new Set(was).add(id));
+        try {
+          await port.disable(id);
+          turningOn = true;
+          await port.enable(id);
+        } finally {
+          setRetrying((was) => {
+            const next = new Set(was);
+            next.delete(id);
+            return next;
+          });
+        }
+      });
+      if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+    },
+    [installed, run, port, takeFocus],
   );
   // a refusal goes once fieldd's snapshot shows its switch the way it was being
   // turned (§8 "Installed", MK-4c2a's rider)
@@ -1200,6 +1282,12 @@ export function Plugins({
         return;
       }
       const key = event.key;
+      // MK-5b: where neither door answered, ↵ presses Try again, on Discover and on Updates
+      if (tryAgain !== null && key === "Enter" && !(event.target instanceof HTMLButtonElement)) {
+        event.preventDefault();
+        if (!away) tryAgain();
+        return;
+      }
       if (tab === "updates") {
         const list = updateList ?? [];
         if (key === "ArrowDown" || key === "ArrowUp") {
@@ -1277,6 +1365,8 @@ export function Plugins({
       rowActs,
       confirmUpdate,
       startUpdate,
+      tryAgain,
+      away,
     ],
   );
 
@@ -1379,6 +1469,8 @@ export function Plugins({
       refused={refused}
       onTurn={onTurn}
       onTurnPower={onTurnPower}
+      onRetry={onRetry}
+      onTryAgain={tryAgain}
       inputRef={inputRef}
       listRef={listRef}
       onQuery={onQuery}
@@ -1395,6 +1487,36 @@ export function Plugins({
 
 /** The Me row's count takes every answer the popup takes. */
 const takeCount = (catalog: PluginsCatalog): void => takePluginUpdates(catalog.updates);
+
+/** MK-5b: no plugin's runtime read as failed. */
+const NO_FAILURES: ReadonlySet<string> = new Set<string>();
+
+/** Two reads of failed runtimes that name the same plugins. */
+function sameIds(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  return a.size === b.size && [...a].every((id) => b.has(id));
+}
+
+/** MK-5b: the plugins whose runtime fieldd says failed (`runtimeFailures`), read over the feed
+ * Settings → Diagnostics' Plugins section reads (`plugins.runtime.subscribe`; one wire
+ * subscription between them, item 467) and handed up. The frame mounts it while the popup stands,
+ * so folding lets the read go. A read not answered yet, refused, or one this window can't parse
+ * reads as none failed: the rows then say what the registry says, never a guess. So does a read
+ * the client ended, whose last data it keeps beside the error, never as live again
+ * (`useSubscription`): only a live read is read. */
+function RuntimeRead({ onRead }: { onRead: (failed: ReadonlySet<string>) => void }): null {
+  const runtime = useSubscription<unknown>("plugins.runtime.subscribe", {});
+  useEffect(() => {
+    if (runtime.status !== "live") {
+      onRead(NO_FAILURES);
+      return;
+    }
+    const parsed = PluginRuntimeDiagnosticsSnapshot.safeParse(runtime.data);
+    onRead(parsed.success ? runtimeFailures(parsed.data) : NO_FAILURES);
+  }, [runtime.status, runtime.data, onRead]);
+  // the popup folded: nothing is read as failed
+  useEffect(() => () => onRead(NO_FAILURES), [onRead]);
+  return null;
+}
 
 /** The popup as the frame holds it (ChromeLayer): over this window's fieldd
  * client and the registry snapshot FieldView feeds, holding Godview's keys
@@ -1414,7 +1536,8 @@ const takeCount = (catalog: PluginsCatalog): void => takePluginUpdates(catalog.u
  * sections read it), sent through the one setter fieldd audits, and this
  * desktop's statement mark over fieldd's two doors for it (MK-O1 B). Item 476:
  * and the window's own set of plugins that cannot start in it, read from its
- * store as the snapshot is. */
+ * store as the snapshot is. MK-5b: and, while the popup stands, the plugins
+ * whose runtime fieldd says failed (`RuntimeRead`). */
 export function FramePlugins({
   view,
   surface,
@@ -1451,6 +1574,13 @@ export function FramePlugins({
   // opening is a door's.
   const [carried, setCarried] = useState<PluginsCarry | null>(() => takeCarry());
   const carriedOpened = useRef(false);
+  // MK-5b: the plugins whose runtime fieldd says failed, read while the popup stands; a read that
+  // names the same plugins changes nothing
+  const [failed, setFailed] = useState<ReadonlySet<string>>(NO_FAILURES);
+  const takeFailed = useCallback(
+    (next: ReadonlySet<string>) => setFailed((was) => (sameIds(was, next) ? was : next)),
+    [],
+  );
   useEffect(() => {
     if (carried === null) return;
     if (surface === "plugins") {
@@ -1461,23 +1591,27 @@ export function FramePlugins({
     else onSurfaceChange("plugins");
   }, [carried, surface, onSurfaceChange]);
   return (
-    <Plugins
-      surface={surface}
-      onSurfaceChange={onSurfaceChange}
-      port={port}
-      snapshot={snapshot}
-      unstarted={unstarted}
-      initialTab={carried === null ? openOn : (carried.page?.from ?? "updates")}
-      initialPage={carried?.page?.id ?? null}
-      resume={carried}
-      holdKeys={view === "godview" ? godview?.holdKeys : undefined}
-      onCatalog={takeCount}
-      updates={updates}
-      onMac={onMac}
-      away={away}
-      community={community}
-      onCommunity={onCommunity}
-      statement={statement}
-    />
+    <>
+      {surface === "plugins" && <RuntimeRead onRead={takeFailed} />}
+      <Plugins
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        port={port}
+        snapshot={snapshot}
+        unstarted={unstarted}
+        failed={failed}
+        initialTab={carried === null ? openOn : (carried.page?.from ?? "updates")}
+        initialPage={carried?.page?.id ?? null}
+        resume={carried}
+        holdKeys={view === "godview" ? godview?.holdKeys : undefined}
+        onCatalog={takeCount}
+        updates={updates}
+        onMac={onMac}
+        away={away}
+        community={community}
+        onCommunity={onCommunity}
+        statement={statement}
+      />
+    </>
   );
 }

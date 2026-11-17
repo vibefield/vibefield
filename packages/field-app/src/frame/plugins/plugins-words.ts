@@ -81,8 +81,9 @@ export function updatesWords(count: number): string | null {
 }
 
 /** The window's fieldd did not answer either door: IS-282-2's ruled words (§9 "Installed, off and Remove…"). Installed
- * says it with no act, for the window keeps its last plugins and heals on its own; Try again stands on Discover's and
- * Updates' away state alone, and is MK-5b's (VF-PM 2026-11-14 04:33Z, MK-5's ask 3 at its lean). */
+ * says it with no act while it holds none of its plugins, for the window keeps its last plugins and heals on its own;
+ * Try again (`INSTALL_WORDS.tryAgain`) stands on Discover's and Updates' away state alone, where it reads the list
+ * again (MK-5b; VF-PM 2026-11-14 04:33Z, MK-5's ask 3 at its lean). */
 export const PLUGINS_AWAY = "Plugins aren't available right now.";
 
 /** Installed before the window holds its plugins (IS-282-2's ruled words). */
@@ -115,7 +116,15 @@ export const INSTALLED_LINE = {
   builtInNoObject: "Comes with VibeField · no object on the desk",
   off: "Off · its objects on your desks draw as missing until it's on",
   offNoObject: "Off · its service is stopped",
+  /** a plugin that is on whose runtime failed, or that cannot start in this window (item 476); a Built in or
+   * Development one's row offers Try again (`INSTALL_WORDS.tryAgain`), which turns it off and on (MK-5b). The line
+   * and its Try again are §9's ruled words (IS-282-6), not ‹draft›; a refusal of Try again says the switch's
+   * words (`SWITCH_WORDS.refused`, ruled; `SWITCH_WORDS.updating`, ‹draft›) */
   broken: (title: string) => `${title} isn't working right now`,
+  /** MK-5b: an invalid or incompatible plugin, which turning off and on can't mend: a line of its own, with no Try
+   * again (VF-PM 2026-11-14 04:33Z, MK-5's ask 2 at its lean, "its words for James"). MK's, ‹draft›, for James's
+   * eye: MK-5b's one new sentence. */
+  cantRun: (title: string) => `${title} can't run on this VibeField`,
   /** MK-5 (N21): a plugin that is on whose service fieldd stopped after it kept crashing, in the attention ink, its
    * switch off; a press turns it on, which starts it again (the ruled page's row, §9) */
   stopped: `Stopped after ${PLUGIN_SERVICE_QUARANTINE_AT} crashes · turn it on to try again`,

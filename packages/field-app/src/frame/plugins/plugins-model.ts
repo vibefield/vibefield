@@ -4,6 +4,8 @@ import {
   type PluginPowerWords,
   type PluginRecord,
   type PluginRegistrySnapshot,
+  type PluginRuntimeDiagnosticsSnapshot,
+  type PluginRuntimeDoctorIssueCode,
   type PluginSource,
   type PluginsCatalog,
   pluginOwnPowerLine,
@@ -36,6 +38,8 @@ import {
 // and where each switch stands, and (MK-4c2b) a plugin's settings on its page.
 // MK-4d's names: where a set hangs, on its row and its page, by the pegboard's
 // own names, which the controller reads from the board's door and hands in.
+// MK-5b: which plugins' runtime fieldd says failed, read from its runtime read,
+// and which rows offer Try again.
 // Pure: the controller and the tests read the same functions.
 
 /** The popup as drawn (MK-D2): 960 × 640. */
@@ -159,6 +163,8 @@ export interface InstalledRow {
   readonly attention?: true;
   /** its one switch: on or off; null when it has none here (MK-4c2a) */
   readonly onOff: boolean | null;
+  /** MK-5b: Try again stands on its row, which turns it off and on (`retryable`) */
+  readonly retry?: true;
 }
 
 /** What the signed list says of a plugin: whether VibeField publishes it, its
@@ -378,21 +384,84 @@ export interface UnstartedHere {
 
 const NONE_UNSTARTED: UnstartedHere = new Set<string>();
 
+/** MK-5b: the plugins whose runtime fieldd says failed, by id (`runtimeFailures`), which the frame
+ * reads while the popup stands and hands in beside the window's own set; why is never shown. */
+export interface FailedHere {
+  has(id: string): boolean;
+}
+
+const NONE_FAILED: FailedHere = new Set<string>();
+
+/** MK-5b (§8 "Installed", MK-5b's drawing): the Doctor's codes that say a plugin's runtime failed —
+ * a controller that failed, a behavior generation that failed, a breaker suspended. A warning, or
+ * an error of any other code (a scope not quiet, a target not current, an update), is Settings →
+ * Diagnostics' alone. */
+const FAILED_CODES: ReadonlySet<string> = new Set<PluginRuntimeDoctorIssueCode>([
+  "controller-failed",
+  "behavior-generation-failed",
+  "behavior-suspended",
+]);
+
+/** MK-5b: the plugins whose runtime fieldd says failed, by id, read from its runtime read
+ * (`plugins.runtime.subscribe`) by the Doctor's codes, never its words: its service failed, or, in
+ * a window still connected, its renderer or its behaviors did. fieldd keeps a disconnected
+ * window's last report as evidence (`plugin-runtime-diagnostics.ts`, `retirePlugin`'s note); a
+ * failure there is not read. A window has left when either of fieldd's two words says so: the
+ * Doctor's `renderer-disconnected` issue, or the renderer's own `connected`. fieldd cuts a plugin's
+ * issues at their limit after each window's mark (`doctorIssues`), and its renderers at the
+ * controllers' budget, so either may lack what the other says. Whether a plugin is on is the
+ * registry's to say (`installedRows`). */
+export function runtimeFailures(runtime: PluginRuntimeDiagnosticsSnapshot): ReadonlySet<string> {
+  const failed = new Set<string>();
+  for (const plugin of runtime.plugins) {
+    const left = new Set([
+      ...plugin.issues
+        .filter((issue) => issue.code === "renderer-disconnected")
+        .map((issue) => issue.participantId),
+      ...plugin.renderers
+        .filter((renderer) => !renderer.connected)
+        .map((renderer) => renderer.participantId),
+    ]);
+    const fails = plugin.issues.some(
+      (issue) =>
+        FAILED_CODES.has(issue.code) &&
+        (issue.participantId === undefined || !left.has(issue.participantId)),
+    );
+    if (fails) failed.add(plugin.pluginId);
+  }
+  return failed;
+}
+
+/** MK-5b: whether a plugin's row offers Try again (§8 "Installed", MK-5b's drawing): it isn't
+ * working — its runtime failed, or it cannot start in this window (item 476) — while it is on and
+ * fieldd runs it, it was not stopped after it kept crashing (that row's own line says to turn it
+ * on), and its switches stand here (`controlsHere`). A press turns it off and on. */
+function retryable(record: PluginRecord, notWorking: boolean): boolean {
+  return (
+    notWorking &&
+    controlsHere(record) &&
+    record.enabled &&
+    record.state === "enabled" &&
+    !stoppedAfterCrashes(record)
+  );
+}
+
 /** Installed's line for a plugin (§9 "Installed, off and Remove…"); a set says where it hangs once
  * the board names a place of it (MK-4d's names), and the set alone otherwise, as MK-4a's line.
- * Item 476: a plugin that is on and cannot start in this window (`cannotStart`) says it isn't
- * working, in the words a plugin fieldd calls invalid says; one that is off says it is off, as
- * before. */
-function rowLine(record: PluginRecord, names: BoardNames | null, cannotStart: boolean): string {
+ * Item 476: a plugin that is on and cannot start in this window says it isn't working; one that
+ * is off says it is off, as before. MK-5b: so does one whose runtime failed (`notWorking` holds
+ * both), and an invalid or incompatible plugin, which turning off and on can't mend, says a line
+ * of its own. */
+function rowLine(record: PluginRecord, names: BoardNames | null, notWorking: boolean): string {
   const objects = record.contributions.objects.length;
   const builtIn = record.source === "bundled";
   if (record.state === "invalid" || record.state === "incompatible") {
-    return INSTALLED_LINE.broken(record.title);
+    return INSTALLED_LINE.cantRun(record.title);
   }
   const held = heldLine(record);
   if (held !== null) return held;
   if (!record.enabled) return objects > 0 ? INSTALLED_LINE.off : INSTALLED_LINE.offNoObject;
-  if (cannotStart) return INSTALLED_LINE.broken(record.title);
+  if (notWorking) return INSTALLED_LINE.broken(record.title);
   if (objects === 0) {
     if (builtIn) return INSTALLED_LINE.builtInNoObject;
     return INSTALLED_LINE.noObject(hasWords(runsService(record), bringsTools(record)));
@@ -411,19 +480,20 @@ function rowLine(record: PluginRecord, names: BoardNames | null, cannotStart: bo
  * kept crashing, in the attention ink, or, for a plugin from the plugin list,
  * that the list held names it no more. Null for any other; a plugin that is off
  * or isn't working says that first (`lineOf`), and with no list held nothing is
- * said of a listing. Item 476: one that cannot start in this window
- * (`cannotStart`) says it isn't working before a listing's line, and AFTER the
- * stopped line: a plugin fieldd stopped that also cannot start here is likely
- * one fault seen twice, and the stopped line keeps its place and its ink. */
+ * said of a listing. Item 476: one that cannot start in this window says it
+ * isn't working before a listing's line, and AFTER the stopped line: a plugin
+ * fieldd stopped that also cannot start here is likely one fault seen twice,
+ * and the stopped line keeps its place and its ink. MK-5b: so does one whose
+ * runtime failed (`notWorking` holds both). */
 function honestLine(
   record: PluginRecord,
   listed: ReadonlyMap<string, Listed>,
   listHeld: boolean,
-  cannotStart: boolean,
+  notWorking: boolean,
 ): { readonly line: string; readonly attention?: true } | null {
   if (!record.enabled || record.state !== "enabled") return null;
   if (stoppedAfterCrashes(record)) return { line: INSTALLED_LINE.stopped, attention: true };
-  if (cannotStart) return null;
+  if (notWorking) return null;
   if (record.source === "registry" && listHeld && !listed.has(record.id)) {
     return { line: INSTALLED_LINE.unlisted };
   }
@@ -453,16 +523,19 @@ export function installedMatches(record: PluginRecord, query: string): boolean {
  * row's line says where its set hangs by the board's `names`. Item 476: a
  * plugin in `unstarted`, the window's own set, says it isn't working before a
  * listing's line; one fieldd stopped after it kept crashing keeps that line
- * (`honestLine`). */
+ * (`honestLine`). MK-5b: so does a plugin in `failed`, whose runtime fieldd
+ * says failed, and a row of either offers Try again when `retryable`. */
 export function installedRows(
   snapshot: PluginRegistrySnapshot,
   catalog: PluginsCatalog | null,
   query = "",
   names: BoardNames | null = null,
   unstarted: UnstartedHere = NONE_UNSTARTED,
+  failed: FailedHere = NONE_FAILED,
 ): InstalledRow[] {
-  const cannotStart = (record: PluginRecord): boolean => unstarted.has(record.id);
-  const lineOf = (record: PluginRecord): string => rowLine(record, names, cannotStart(record));
+  const notWorking = (record: PluginRecord): boolean =>
+    unstarted.has(record.id) || failed.has(record.id);
+  const lineOf = (record: PluginRecord): string => rowLine(record, names, notWorking(record));
   const listed = listedFrom(catalog);
   const listHeld = catalog !== null && held(catalog);
   return snapshot.plugins
@@ -475,8 +548,9 @@ export function installedRows(
       id: record.id,
       title: record.title,
       ...sourceOf(record, listed),
-      ...(honestLine(record, listed, listHeld, cannotStart(record)) ?? { line: lineOf(record) }),
+      ...(honestLine(record, listed, listHeld, notWorking(record)) ?? { line: lineOf(record) }),
       onOff: switchable(record) ? shownOn(record) : null,
+      ...(retryable(record, notWorking(record)) ? { retry: true as const } : {}),
     }));
 }
 

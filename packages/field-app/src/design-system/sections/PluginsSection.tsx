@@ -11,7 +11,8 @@ import { PluginsPlate } from "../PluginsPreview";
 // download, the install card, Installing… and a failure. MK-UC's UC-C: Updates'
 // rows over a list held, under its count, and a row's update card. MK-O3D:
 // Discover's community tile and its ask, and a community plugin held while
-// community plugins are off.
+// community plugins are off. MK-5b: Installed with plugins that aren't working
+// and Try again, and the away state's Try again.
 
 export function PluginsSection(): ReactElement {
   return (
@@ -31,6 +32,13 @@ export function PluginsSection(): ReactElement {
         bleed
       >
         <PluginsPlate state="installed" />
+      </Specimen>
+      <Specimen
+        title="Installed — plugins that aren't working, with Try again, and one that can't run"
+        source="frame/plugins/PluginsView.tsx · frame/plugins/plugins-model.ts"
+        bleed
+      >
+        <PluginsPlate state="not-working" />
       </Specimen>
       <Specimen
         title="Reading the plugin list, with none held"

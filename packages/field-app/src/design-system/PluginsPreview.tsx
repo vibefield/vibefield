@@ -1,7 +1,7 @@
 import { type ReactElement, useCallback, useState } from "react";
 import type { FrameSurface } from "../frame/frame-surface";
 import { Plugins } from "../frame/plugins/Plugins";
-import type { PluginsTab } from "../frame/plugins/plugins-model";
+import { type PluginsTab, runtimeFailures } from "../frame/plugins/plugins-model";
 import {
   CATALOG_FIXTURES,
   CATALOG_LISTED,
@@ -10,8 +10,10 @@ import {
   communityFixtureDoor,
   PLUGINS_FIXTURE_HELD_SNAPSHOT,
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
+  PLUGINS_FIXTURE_NOT_WORKING_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_OUTDATED_SNAPSHOT,
+  PLUGINS_FIXTURE_RUNTIME,
   PLUGINS_FIXTURE_SETTINGS,
   PLUGINS_FIXTURE_SETTINGS_SNAPSHOT,
   PLUGINS_FIXTURE_SETTINGS_UNREAD,
@@ -55,11 +57,17 @@ import {
 // plate presses installs anything. MK-UC's UC-C draws Updates' count plate over
 // a list held: its head, a row that asks first, one taken in one press, one that
 // needs a newer VibeField, and its note; and adds a row's Update pressed as the
-// plate opens, its update card naming the one new power.
+// plate opens, its update card naming the one new power. MK-5b adds Installed
+// with plugins that aren't working, read by the product's own `runtimeFailures`
+// from a fixture runtime read, Try again on the Built in one alone, and one
+// this VibeField can't run; its Try again goes to the fixture port, which
+// answers and moves nothing. The away plate now carries Discover's Try again.
 
 export type PluginsPlateState =
   | "no-registry"
   | "installed"
+  // MK-5b: Installed with plugins whose runtime failed, and one this VibeField can't run
+  | "not-working"
   | "reading"
   | "offline"
   | "refused"
@@ -97,6 +105,10 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
     refresh: CATALOG_FIXTURES.unconfigured,
   },
   installed: { catalog: CATALOG_FIXTURES.unconfigured, refresh: CATALOG_FIXTURES.unconfigured },
+  "not-working": {
+    catalog: CATALOG_FIXTURES.unconfigured,
+    refresh: CATALOG_FIXTURES.unconfigured,
+  },
   reading: { catalog: CATALOG_FIXTURES.unread, refresh: "pending" },
   offline: { catalog: CATALOG_FIXTURES.unreachable, refresh: CATALOG_FIXTURES.unreachable },
   refused: { catalog: CATALOG_FIXTURES.refused, refresh: CATALOG_FIXTURES.refused },
@@ -176,8 +188,12 @@ const PLATE_PAGES: Readonly<Partial<Record<PluginsPlateState, string>>> = {
   "shelf-failed": "vibefield.desk-things",
 };
 
+/** MK-5b: the plugins whose runtime the not-working plate's fieldd says failed, read as the frame reads them. */
+const PLATE_FAILED = runtimeFailures(PLUGINS_FIXTURE_RUNTIME);
+
 /** The plugins a plate's desktop has. */
 function plateSnapshot(state: PluginsPlateState) {
+  if (state === "not-working") return PLUGINS_FIXTURE_NOT_WORKING_SNAPSHOT;
   if (UPDATES_PLATES.includes(state)) return PLUGINS_FIXTURE_OUTDATED_SNAPSHOT;
   if (state === "page-listed") return PLUGINS_FIXTURE_LISTED_SNAPSHOT;
   if (state.startsWith("community-held")) return PLUGINS_FIXTURE_HELD_SNAPSHOT;
@@ -190,6 +206,7 @@ function plateTab(state: PluginsPlateState): PluginsTab {
   if (UPDATES_PLATES.includes(state)) return "updates";
   // MK-4e: the shelf's plates stand on Discover, and a page opens from there
   if (state.startsWith("shelf")) return "discover";
+  if (state === "not-working") return "installed";
   return state === "installed" || state === "community-held" || state in PLATE_PAGES
     ? "installed"
     : "discover";
@@ -222,6 +239,7 @@ export function PluginsPlate({ state }: { state: PluginsPlateState }): ReactElem
         onSurfaceChange={setSurface}
         port={port}
         snapshot={plateSnapshot(state)}
+        failed={state === "not-working" ? PLATE_FAILED : undefined}
         bindKeys={false}
         container={plate}
         takeFocus={false}
