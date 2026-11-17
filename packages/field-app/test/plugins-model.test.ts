@@ -308,13 +308,21 @@ describe("Installed's honest rows (MK-5, N21; §9 'Installed, off and Remove…'
     expect([listed?.line, listed?.onOff]).toEqual([words.INSTALLED_LINE.stopped, null]);
   });
 
-  it("says first that a plugin is off, or isn't working, never that it stopped", () => {
+  it("says first that a plugin is off, or can't run, never that it stopped", () => {
     const off = changed(stopped, "vibefield.simulator", { enabled: false, state: "disabled" });
     expect(row(off, null, "vibefield.simulator")?.line).toBe(words.INSTALLED_LINE.off);
-    const broken = changed(stopped, "vibefield.simulator", { state: "invalid" });
-    expect(row(broken, null, "vibefield.simulator")?.line).toBe(
-      words.INSTALLED_LINE.broken("Simulators"),
-    );
+    // MK-5b: an invalid or incompatible plugin says a line of its own, never that it isn't working right now,
+    // for turning it off and on fails the same way; it has no switch, and so no Try again
+    const invalid = changed(stopped, "vibefield.simulator", { state: "invalid" });
+    const incompatible = changed(stopped, "vibefield.simulator", {
+      state: "incompatible",
+      compatible: false,
+    });
+    for (const snapshot of [invalid, incompatible]) {
+      const simulators = row(snapshot, null, "vibefield.simulator");
+      expect(simulators?.line).toBe("Simulators can't run on this VibeField");
+      expect(simulators?.onOff).toBeNull();
+    }
   });
 
   it("takes a press on a stopped plugin's switch as turning it on, its refusal kept until it runs", () => {

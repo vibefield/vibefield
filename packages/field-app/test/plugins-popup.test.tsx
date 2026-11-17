@@ -26,6 +26,8 @@ import {
   PLUGINS_FIXTURE_OUTDATED_SNAPSHOT,
   PLUGINS_FIXTURE_READ_AT,
   PLUGINS_FIXTURE_REFUSAL,
+  PLUGINS_FIXTURE_RUNTIME,
+  PLUGINS_FIXTURE_RUNTIME_ERROR,
   PLUGINS_FIXTURE_SNAPSHOT,
   PLUGINS_FIXTURE_SWITCHES_SNAPSHOT,
   PLUGINS_FIXTURE_UPDATE_DOWNLOADS,
@@ -47,6 +49,7 @@ import {
   getPluginRegistrySnapshot,
   setPluginRegistrySnapshot,
 } from "../src/plugin-host/plugin-registry-store";
+import { nameUnstartedPlugin, resetUnstartedPlugins } from "../src/plugin-host/unstarted-plugins";
 
 // MK-4a — the Plugins popup in a window (DESIGN.md §8 "Plugins — the frame's second popup"): the shipping
 // controller over a fixture port, drawn on the document's body. Each opening reads the list once and never on a
@@ -64,6 +67,8 @@ import {
 // MK-UC's UC-C adds Updates' rows, the update card, Update all and Check again, and the note the window comes back
 // fresh by (MK-E6), each held by the port's recorded calls and the window's own session, which each test leaves
 // empty.
+// MK-5b adds a plugin whose runtime failed and its Try again, over a fixture fieldd that streams each plugin's
+// runtime, and Try again where VibeField's plugins don't answer.
 // No real fieldd, no network, no child.
 
 let host: HTMLDivElement;
@@ -2523,7 +2528,8 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
     expect(switches().length).toBe(4);
   });
 
-  // last in the file: it sets the window's registry store, which no earlier test reads
+  // it sets the window's registry store, which no earlier test reads, and sets it back; MK-5b's rows below do the
+  // same in their own hooks
   it("in the frame, takes no press while this window's fieldd client isn't ready", async () => {
     const before = getPluginRegistrySnapshot();
     setPluginRegistrySnapshot(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT);
@@ -2546,5 +2552,377 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
       // the store has no door back to none held: an empty desktop stands for it when none was
       setPluginRegistrySnapshot(before ?? { generation: 0, problems: [], plugins: [] });
     }
+  });
+});
+
+describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installed', MK-5b's drawing)", () => {
+  /** The window's app preferences as fieldd's effective snapshot says them, community plugins off. */
+  const preferences = {
+    showTray: true,
+    backgroundShell: true,
+    syncPosture: "automatic",
+    communityPlugins: false,
+  } as const;
+
+  /** What the fixture's fieldd streams as each plugin's runtime, how it answers a plugin's switch — refusing one
+   * request, or holding one unanswered until the test answers it — and whether this window's client is ready. */
+  interface FielddHow {
+    readonly runtime: unknown;
+    readonly refuse?: "plugins.enable" | "plugins.disable";
+    readonly hold?: "plugins.enable" | "plugins.disable";
+    readonly status?: "ready" | "reconnecting";
+  }
+
+  /** The fixture's fieldd: its client, what a test reads of it, and what a test does to it. */
+  interface RuntimeFieldd {
+    readonly client: FielddClient;
+    /** each request but the list's, by its method and its plugin's id */
+    readonly sent: string[];
+    /** each subscription asked, by its method */
+    readonly subscribed: string[];
+    /** each subscription given back, by its method */
+    readonly unsubscribed: string[];
+    /** answers each request of the kind `hold` names, held until now */
+    readonly answer: () => void;
+    /** the runtime each later subscription to it is handed */
+    readonly streams: (runtime: unknown) => void;
+    /** ends the runtime's subscription, as the client does when fieldd refuses its replay */
+    readonly end: () => void;
+  }
+
+  /** A window's fieldd that streams each plugin's runtime (`plugins.runtime.subscribe`) as `how` says it, and the
+   * app preferences as `fielddAnswering`'s does; it answers the list fieldd holds with none configured, and every
+   * other request as `how` says. */
+  function fielddWithRuntime(how: FielddHow): RuntimeFieldd {
+    const sent: string[] = [];
+    const subscribed: string[] = [];
+    const unsubscribed: string[] = [];
+    const waiting: (() => void)[] = [];
+    let runtime = how.runtime;
+    let ended: ((error: Error) => void) | undefined;
+    const client = {
+      status: how.status ?? "ready",
+      onStatusChange: () => () => undefined,
+      request: vi.fn(async (method: string, params?: { id?: unknown }) => {
+        if (method.startsWith("plugins.catalog.")) return CATALOG_FIXTURES.unconfigured;
+        sent.push(`${method} ${String(params?.id ?? "")}`);
+        if (method === how.hold) await new Promise<void>((resolve) => waiting.push(resolve));
+        if (method === how.refuse) throw new Error(PLUGINS_FIXTURE_REFUSAL);
+        return {};
+      }),
+      subscribe: vi.fn(
+        async (
+          method: string,
+          _params: unknown,
+          _onEvent: unknown,
+          opts?: { onEnded?: (error: Error) => void },
+        ) => {
+          subscribed.push(method);
+          const read = method === "plugins.runtime.subscribe";
+          if (read) ended = opts?.onEnded;
+          return {
+            subId: method,
+            snapshot: read ? runtime : preferences,
+            unsubscribe: () => {
+              unsubscribed.push(method);
+            },
+          };
+        },
+      ),
+    } as unknown as FielddClient;
+    return {
+      client,
+      sent,
+      subscribed,
+      unsubscribed,
+      answer: () => {
+        for (const resolve of waiting.splice(0)) resolve();
+      },
+      streams: (next) => {
+        runtime = next;
+      },
+      end: () => ended?.(new Error("the fixture's fieldd refused the runtime read's replay")),
+    };
+  }
+
+  /** The frame's popup open on Installed, over `how`'s fieldd. */
+  async function openFrameOnInstalled(how: FielddHow): Promise<RuntimeFieldd> {
+    const fieldd = fielddWithRuntime(how);
+    act(() => root.render(<FrameWindow client={fieldd.client} surface="plugins" />));
+    await settle();
+    toInstalled();
+    return fieldd;
+  }
+
+  /** Simulators' line while it says its set: no board is mounted, so no place is said. */
+  const SIMULATORS_SET = "3 objects · 1.2.0 · comes with VibeField";
+  /** A row's Try again: the one act an Installed row carries. */
+  const againOf = (title: string): HTMLButtonElement | null =>
+    rowOf(title)?.querySelector<HTMLButtonElement>(".vf-plugins-act") ?? null;
+  /** The requests a plugin's one switch sends, in order. */
+  const switchCalls = (sent: readonly string[]): string[] =>
+    sent.filter(
+      (call) => call.startsWith("plugins.disable ") || call.startsWith("plugins.enable "),
+    );
+
+  // each sets the window's registry store, as the test above does, and sets it back
+  let held: PluginRegistrySnapshot | null = null;
+  beforeEach(() => {
+    held = getPluginRegistrySnapshot();
+    setPluginRegistrySnapshot(PLUGINS_FIXTURE_SNAPSHOT);
+  });
+  afterEach(() => {
+    setPluginRegistrySnapshot(held ?? { generation: 0, problems: [], plugins: [] });
+  });
+
+  it("reads each plugin's runtime while the popup stands, and says one whose runtime failed isn't working", async () => {
+    const { client, subscribed } = fielddWithRuntime({ runtime: PLUGINS_FIXTURE_RUNTIME });
+    act(() => root.render(<FrameWindow client={client} surface={null} />));
+    await settle();
+    // folded, the window reads no runtime
+    expect(subscribed).not.toContain("plugins.runtime.subscribe");
+    act(() => root.render(<FrameWindow client={client} surface="plugins" />));
+    await settle();
+    toInstalled();
+    // Simulators' renderer failed in a window still connected, and Key-value store's service failed
+    expect(lineSaid("Simulators")).toBe("Simulators isn't working right now");
+    expect(lineSaid("Key-value store")).toBe("Key-value store isn't working right now");
+    // Comment pad's failure is the last report of a window that left: not read
+    expect(lineSaid("Comment pad")).toBe("1 object · 0.1.0 · comes with VibeField");
+    // Desk clock is off, whatever its last report says
+    expect(lineSaid("Desk clock")).toBe(words.INSTALLED_LINE.off);
+    expect(subscribed).toContain("plugins.runtime.subscribe");
+    // never fieldd's own sentence
+    expect(document.body.textContent).not.toContain(PLUGINS_FIXTURE_RUNTIME_ERROR);
+  });
+
+  it("lets the read go as the popup folds, and reads it afresh as it opens again", async () => {
+    const fieldd = await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
+    expect(lineSaid("Simulators")).toBe("Simulators isn't working right now");
+    act(() => root.render(<FrameWindow client={fieldd.client} surface={null} />));
+    await settle();
+    expect(fieldd.unsubscribed).toContain("plugins.runtime.subscribe");
+    // opened again over a runtime read that names no plugin failed: Simulators says its set
+    fieldd.streams({ ...PLUGINS_FIXTURE_RUNTIME, plugins: [] });
+    act(() => root.render(<FrameWindow client={fieldd.client} surface="plugins" />));
+    await settle();
+    toInstalled();
+    expect(lineSaid("Simulators")).toBe(SIMULATORS_SET);
+    expect(againOf("Simulators")).toBeNull();
+  });
+
+  it("reads none as failed once the client ends the read, never its last data as live", async () => {
+    const fieldd = await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
+    expect(lineSaid("Simulators")).toBe("Simulators isn't working right now");
+    act(() => fieldd.end());
+    await settle();
+    expect(lineSaid("Simulators")).toBe(SIMULATORS_SET);
+    expect(againOf("Simulators")).toBeNull();
+  });
+
+  it("offers Try again on a Built in or Development plugin that isn't working alone, which turns it off and on", async () => {
+    const { sent } = await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
+    const again = againOf("Simulators");
+    // the act's look with no ↵ printed: ↵ opens the hot row's page
+    expect(again?.textContent).toBe(words.INSTALL_WORDS.tryAgain);
+    expect(again?.hasAttribute("aria-keyshortcuts")).toBe(false);
+    // a Sideloaded plugin's line stands with no Try again, and so does each plugin working or off
+    expect(againOf("Key-value store")).toBeNull();
+    expect(againOf("Comment pad")).toBeNull();
+    expect(againOf("Desk clock")).toBeNull();
+    act(() => again?.click());
+    await settle();
+    expect(switchCalls(sent)).toEqual([
+      "plugins.disable vibefield.simulator",
+      "plugins.enable vibefield.simulator",
+    ]);
+  });
+
+  it("says a refused off in the switch's words, nothing changed, and Try again stands", async () => {
+    const { sent } = await openFrameOnInstalled({
+      runtime: PLUGINS_FIXTURE_RUNTIME,
+      refuse: "plugins.disable",
+    });
+    act(() => againOf("Simulators")?.click());
+    await settle();
+    expect(switchCalls(sent)).toEqual(["plugins.disable vibefield.simulator"]);
+    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    expect(line?.textContent).toBe(words.SWITCH_WORDS.refused(false));
+    expect(line?.getAttribute("data-tone")).toBe("attention");
+    expect(againOf("Simulators")?.disabled).toBe(false);
+    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("true");
+    expect(document.body.textContent).not.toContain(PLUGINS_FIXTURE_REFUSAL);
+    // pressed again, it asks again from the start
+    act(() => againOf("Simulators")?.click());
+    await settle();
+    expect(switchCalls(sent)).toEqual([
+      "plugins.disable vibefield.simulator",
+      "plugins.disable vibefield.simulator",
+    ]);
+  });
+
+  it("says a refused on in the switch's words, by the request fieldd refused", async () => {
+    const { sent } = await openFrameOnInstalled({
+      runtime: PLUGINS_FIXTURE_RUNTIME,
+      refuse: "plugins.enable",
+    });
+    act(() => againOf("Simulators")?.click());
+    await settle();
+    expect(switchCalls(sent)).toEqual([
+      "plugins.disable vibefield.simulator",
+      "plugins.enable vibefield.simulator",
+    ]);
+    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    expect(line?.textContent).toBe(words.SWITCH_WORDS.refused(true));
+    expect(line?.getAttribute("data-tone")).toBe("attention");
+  });
+
+  it("takes no second press while its requests are out, and neither does the switch", async () => {
+    const { sent } = await openFrameOnInstalled({
+      runtime: PLUGINS_FIXTURE_RUNTIME,
+      hold: "plugins.disable",
+    });
+    act(() => {
+      againOf("Simulators")?.click();
+      againOf("Simulators")?.click();
+    });
+    await settle();
+    act(() => rowSwitch("Simulators")?.click());
+    await settle();
+    expect(switchCalls(sent)).toEqual(["plugins.disable vibefield.simulator"]);
+    expect(againOf("Simulators")?.disabled).toBe(true);
+    expect(rowSwitch("Simulators")?.disabled).toBe(true);
+  });
+
+  it("keeps the keyboard in the field as it is pressed, and stands, taking no press, until both are answered", async () => {
+    const fieldd = await openFrameOnInstalled({
+      runtime: PLUGINS_FIXTURE_RUNTIME,
+      hold: "plugins.enable",
+    });
+    const again = againOf("Simulators");
+    act(() => again?.focus());
+    expect(document.activeElement).toBe(again);
+    act(() => again?.click());
+    await settle();
+    // the press takes no second press while it runs, so the keyboard goes back to the field, as an Install's
+    expect(document.activeElement).toBe(field());
+    expect(switchCalls(fieldd.sent)).toEqual([
+      "plugins.disable vibefield.simulator",
+      "plugins.enable vibefield.simulator",
+    ]);
+    // fieldd's snapshot shows it off between the two: its row says so, and Try again stands, taking no press
+    act(() =>
+      setPluginRegistrySnapshot(turned(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator", false)),
+    );
+    await settle();
+    expect(lineSaid("Simulators")).toBe(words.INSTALLED_LINE.off);
+    expect(againOf("Simulators")?.disabled).toBe(true);
+    expect(rowSwitch("Simulators")?.disabled).toBe(true);
+    // the on answered while the snapshot still shows it off: Try again goes, and the switch takes a press
+    act(() => fieldd.answer());
+    await settle();
+    expect(againOf("Simulators")).toBeNull();
+    expect(rowSwitch("Simulators")?.disabled).toBe(false);
+    // on again and its runtime still failed: Try again stands once more, and takes a press
+    act(() => setPluginRegistrySnapshot(PLUGINS_FIXTURE_SNAPSHOT));
+    await settle();
+    expect(againOf("Simulators")?.disabled).toBe(false);
+  });
+
+  it("takes no press while this window's fieldd client isn't ready", async () => {
+    const { sent } = await openFrameOnInstalled({
+      runtime: PLUGINS_FIXTURE_RUNTIME,
+      status: "reconnecting",
+    });
+    expect(againOf("Simulators")?.disabled).toBe(true);
+    act(() => againOf("Simulators")?.click());
+    await settle();
+    expect(switchCalls(sent)).toEqual([]);
+  });
+
+  it("is a stop of Tab of its own beside the press, never inside it, and the switch stands with it", async () => {
+    await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
+    const again = againOf("Simulators");
+    expect(again?.closest(".vf-plugins-row")).toBeNull();
+    expect(again?.tabIndex).toBe(0);
+    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("offers Try again on a plugin that cannot start in this window too (item 476)", async () => {
+    nameUnstartedPlugin("vibefield.comment-pad", { reason: "activation" });
+    try {
+      await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
+      expect(lineSaid("Comment pad")).toBe("Comment pad isn't working right now");
+      expect(againOf("Comment pad")?.textContent).toBe(words.INSTALL_WORDS.tryAgain);
+    } finally {
+      resetUnstartedPlugins();
+    }
+  });
+});
+
+describe("Try again where VibeField's plugins don't answer (MK-5b; §8 'Its states, in the body')", () => {
+  const AWAY: PluginsFixtureRead = { catalog: "fails", refresh: "fails" };
+  const footAct = (): HTMLButtonElement | null =>
+    document.body.querySelector<HTMLButtonElement>(".vf-plugins-foot .vf-plugins-act");
+
+  it("offers Try again on Discover and Updates, which reads the list again as an opening does, once per press", async () => {
+    const { port, calls } = counting(pluginsFixturePort(AWAY));
+    await mount(port);
+    expect(bodyText()).toBe(words.PLUGINS_AWAY);
+    expect(footAct()?.textContent).toBe(`${words.INSTALL_WORDS.tryAgain}↵`);
+    act(() => footAct()?.focus());
+    act(() => footAct()?.click());
+    await settle();
+    expect(calls).toEqual({ catalog: 2, refresh: 2 });
+    expect(bodyText()).toBe(words.PLUGINS_AWAY);
+    // it left the foot while the read ran, so the keyboard went to the field
+    expect(document.activeElement).toBe(field());
+    // ↵ in the field presses it too
+    press("Enter");
+    await settle();
+    expect(calls).toEqual({ catalog: 3, refresh: 3 });
+    // Updates says the same, with the same press
+    act(() => part(words.PLUGINS_TAB_WORDS.updates)?.click());
+    expect(bodyText()).toBe(words.PLUGINS_AWAY);
+    act(() => footAct()?.click());
+    await settle();
+    expect(calls).toEqual({ catalog: 4, refresh: 4 });
+  });
+
+  it("shows what the doors answer once they answer again, and its press goes", async () => {
+    let answer = false;
+    const door = (): Promise<PluginsCatalog> =>
+      answer
+        ? Promise.resolve(CATALOG_FIXTURES.unconfigured)
+        : Promise.reject(new Error("the fixture's door does not answer"));
+    await mount({ ...NO_SWITCHES, catalog: door, refresh: door });
+    expect(bodyText()).toBe(words.PLUGINS_AWAY);
+    answer = true;
+    act(() => footAct()?.click());
+    await settle();
+    expect(bodyText()).toContain(words.NO_REGISTRY.title);
+    expect(footAct()?.textContent).toBe(`${words.NO_REGISTRY.act}↵`);
+  });
+
+  it("says it on Installed with no act while the window holds none of its plugins, and takes no press while fieldd isn't answering", async () => {
+    const { port, calls } = counting(pluginsFixturePort(AWAY));
+    await mount(port, null);
+    toInstalled();
+    expect(bodyText()).toBe(words.PLUGINS_AWAY);
+    expect(footAct()).toBeNull();
+    // with its plugins held, Installed lists them, as before
+    act(() => root.render(<Window port={port} snapshot={PLUGINS_FIXTURE_SNAPSHOT} open />));
+    await settle();
+    expect(rows()).toHaveLength(4);
+    // while fieldd isn't answering this window, Discover's Try again takes no press
+    act(() => root.render(<Window port={port} snapshot={PLUGINS_FIXTURE_SNAPSHOT} open away />));
+    await settle();
+    act(() => part(words.PLUGINS_TAB_WORDS.discover)?.click());
+    expect(bodyText()).toBe(words.PLUGINS_AWAY);
+    expect(footAct()?.disabled).toBe(true);
+    act(() => footAct()?.click());
+    press("Enter");
+    await settle();
+    expect(calls).toEqual({ catalog: 1, refresh: 1 });
   });
 });

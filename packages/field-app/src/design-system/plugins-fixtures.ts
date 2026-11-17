@@ -2,6 +2,7 @@ import {
   DeviceListResult,
   PluginRecord,
   PluginRegistrySnapshot,
+  PluginRuntimeDiagnosticsSnapshot,
   PluginsCatalog,
   PluginsInstallPrepareResult,
   SettingsGetResult,
@@ -22,8 +23,10 @@ import type { PluginsPort } from "../frame/plugins/plugins-port";
 // desktop's roster, and the install itself — and moves nothing. MK-UC's UC-C:
 // a list held with three updates for plugins the desktop has from it (one that
 // needs a newer VibeField), and what an update's download answers — the row and
-// what it can do that the version you have can't. No fieldd, no network, no
-// child.
+// what it can do that the version you have can't. MK-5b: each plugin's runtime
+// as fieldd's runtime read says it, each carrying a failure: Simulators' renderer
+// and Key-value store's service failed, Desk clock's failed while it is off, and
+// Comment pad's is in a window that left. No fieldd, no network, no child.
 
 /** The clock every plate reads: twelve minutes after its list was read. */
 export const PLUGINS_FIXTURE_READ_AT = 1762823100000;
@@ -402,6 +405,161 @@ export const PLUGINS_FIXTURE_SNAPSHOT = PluginRegistrySnapshot.parse({
       source: "sideload",
       service: "active",
     }),
+  ],
+});
+
+/** MK-5b: the text a fixture's failed runtime carries, fieldd's own sentence, which no row says (§9, VibeField's
+ * insides). */
+export const PLUGINS_FIXTURE_RUNTIME_ERROR = "fixture runtime: activation threw at module row 3";
+
+/** A runtime controller that failed, as fieldd's runtime read says it (`plugins.runtime.subscribe`): nothing it
+ * committed or wants, no scope and no close. */
+function failedController(): Record<string, unknown> {
+  return {
+    label: "fixture",
+    state: "failed",
+    desired: null,
+    committed: null,
+    desiredRevision: 0,
+    error: PLUGINS_FIXTURE_RUNTIME_ERROR,
+    blocked: null,
+    scope: null,
+    lastClose: null,
+    force: { confirmedCount: 0, last: null },
+    history: [],
+    omittedHistory: 0,
+  };
+}
+
+/** A plugin's renderer in one window, its controller failed: a window still connected, or one that left. */
+function failedRenderer(participant: string, connected: boolean): Record<string, unknown> {
+  return {
+    participantId: participant,
+    incarnation: "1",
+    connected,
+    status: "live",
+    sequence: 1,
+    receivedAt: PLUGINS_FIXTURE_READ_AT,
+    controller: failedController(),
+    behaviorGeneration: null,
+  };
+}
+
+/** One of the Doctor's issues, as fieldd says it (`plugin-runtime-diagnostics.ts`, `doctorIssues`): a failed
+ * controller, in the error ink, or a window that left, a warning. */
+function doctorIssue(
+  code: "controller-failed" | "renderer-disconnected",
+  face: "service" | "renderer",
+  participant?: string,
+): Record<string, unknown> {
+  const left = code === "renderer-disconnected";
+  return {
+    code,
+    severity: left ? "warning" : "error",
+    face,
+    ...(participant === undefined ? {} : { participantId: participant }),
+    message: left
+      ? "Renderer diagnostics are retained but the participant is disconnected."
+      : PLUGINS_FIXTURE_RUNTIME_ERROR,
+  };
+}
+
+/** One plugin's runtime: its record's facts, its service's controller, its renderers and the Doctor's issues. */
+function runtimeOf(fields: {
+  id: string;
+  enabled?: boolean;
+  renderer: "none" | "active";
+  service: "none" | "active";
+  serviceController?: Record<string, unknown>;
+  renderers?: readonly Record<string, unknown>[];
+  issues: readonly Record<string, unknown>[];
+}): Record<string, unknown> {
+  const enabled = fields.enabled ?? true;
+  return {
+    pluginId: fields.id,
+    registry: {
+      state: enabled ? "enabled" : "disabled",
+      installRevision: "fixture",
+      manifestHash: PIN,
+      grantGeneration: 0,
+      renderer: fields.renderer,
+      service: fields.service,
+    },
+    commitEpoch: null,
+    serviceController: fields.serviceController ?? null,
+    serviceControllerOmitted: false,
+    renderers: fields.renderers ?? [],
+    omittedRenderers: 0,
+    update: null,
+    issues: fields.issues,
+    omittedIssues: 0,
+  };
+}
+
+/** MK-5b: each plugin's runtime as fieldd's runtime read says it, for the desktop `PLUGINS_FIXTURE_SNAPSHOT` holds,
+ * in fieldd's order (by id): Desk clock, off, keeps the last report of a renderer that failed; Key-value store's
+ * service failed; Comment pad's renderer failed in a window that has since left, whose last report fieldd keeps;
+ * Simulators' renderer failed in a window still connected. */
+export const PLUGINS_FIXTURE_RUNTIME = PluginRuntimeDiagnosticsSnapshot.parse({
+  version: 1,
+  generation: 1,
+  capturedAt: PLUGINS_FIXTURE_READ_AT,
+  plugins: [
+    runtimeOf({
+      id: "example.desk-clock",
+      enabled: false,
+      renderer: "active",
+      service: "none",
+      renderers: [failedRenderer("fixture-window", true)],
+      issues: [doctorIssue("controller-failed", "renderer", "fixture-window")],
+    }),
+    runtimeOf({
+      id: "example.kv-service",
+      renderer: "none",
+      service: "active",
+      serviceController: failedController(),
+      issues: [doctorIssue("controller-failed", "service")],
+    }),
+    runtimeOf({
+      id: "vibefield.comment-pad",
+      renderer: "active",
+      service: "none",
+      renderers: [failedRenderer("fixture-gone", false)],
+      issues: [
+        doctorIssue("controller-failed", "renderer", "fixture-gone"),
+        doctorIssue("renderer-disconnected", "renderer", "fixture-gone"),
+      ],
+    }),
+    runtimeOf({
+      id: "vibefield.simulator",
+      renderer: "active",
+      service: "none",
+      renderers: [failedRenderer("fixture-window", true)],
+      issues: [doctorIssue("controller-failed", "renderer", "fixture-window")],
+    }),
+  ],
+  omittedPlugins: 0,
+  omittedControllers: 0,
+});
+
+/** MK-5b: the same desktop with a plugin this VibeField can't run — Gauge, in development, incompatible — for the
+ * plate whose runtime read is `PLUGINS_FIXTURE_RUNTIME`'s. */
+export const PLUGINS_FIXTURE_NOT_WORKING_SNAPSHOT = PluginRegistrySnapshot.parse({
+  generation: 6,
+  problems: [],
+  plugins: [
+    ...PLUGINS_FIXTURE_SNAPSHOT.plugins,
+    {
+      ...record({
+        id: "example.gauge",
+        title: "Gauge",
+        version: "0.1.0",
+        source: "dev-linked",
+        objects: [object("Gauge", "Gauge")],
+      }),
+      state: "incompatible",
+      compatible: false,
+    },
   ],
 });
 
