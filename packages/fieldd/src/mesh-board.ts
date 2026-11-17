@@ -44,6 +44,10 @@ import { RpcCallError } from "./native-link";
 //     dialled (dialling is what heals a silent door), and a `restarting` one
 //     reads `stale` while it sends no frames. The contracts-major test is the
 //     roster's own helper (`isAnotherContractsMajor`), so the two agree.
+//     DS: a `restarting` row can also have its node OFFLINE — the desktop
+//     announced an update's restart on its slice (`DeviceSlice.restart`) and
+//     the stop takes the node down too. That one reads `stale` and is NOT
+//     dialled: a dial needs a node, and the row moves when one is back.
 //
 // Upstreams are the existing federated subscriptions (C6-5, `federated-subs.ts`):
 // one per awake desktop per {projection, floor}, reference-counted there AND
@@ -617,6 +621,16 @@ class BoardHub {
         const now = this.opts.now();
         const lastSeen = row.lastSeenAt > 0 && row.lastSeenAt <= now ? row.lastSeenAt : now;
         this.#setState(peer, "asleep", lastSeen);
+        continue;
+      }
+      if (rosterState === "restarting" && !row.online) {
+        // DS — a desktop that ANNOUNCED an update's restart reads `restarting`
+        // on the roster with its node offline (the stop takes the node down
+        // too). Its board stays and reads `stale`, never `asleep`; it is not
+        // dialled, because no node answers a dial until the tailnet lists it
+        // again, and then the row moves.
+        this.#close(peer);
+        this.#setState(peer, "stale");
         continue;
       }
       // `awake` and `restarting` are both dialled — a dial that answers is
