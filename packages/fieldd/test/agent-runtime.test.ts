@@ -2072,10 +2072,10 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
   // declarations: the table's claim, and the composed provider's facts through the gate's one predicate.
   it("agent.providers says spark as the hatch would: claimed and passing, claimed on a pin that lacks the facts, unclaimed", async () => {
     const { daemon } = await setup({
-      // a claim the pin cannot honour (its adapter's MCP children start under a helper): R23 fails it at preflight,
-      // and the device answers false rather than the table's word
-      catalog: catalogWith("codex", {
-        offers: { ...(catalogEntry("codex")?.offers ?? NONE), spark: true },
+      // a claim the pin cannot honour (its adapter's MCP servers run `external`, in no process the door can name):
+      // R23 fails it at preflight, and the device answers false rather than the table's word
+      catalog: catalogWith("grok", {
+        offers: { ...(catalogEntry("grok")?.offers ?? NONE), spark: true },
       }),
     });
     await ready(daemon);
@@ -2083,12 +2083,27 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     const { providers } = (await win.call("agent.providers", {})) as AgentProvidersResult;
     const offered = (id: string) => providers.find((p) => p.id === id)?.offers?.spark;
     expect(offered("claude")).toBe(true);
-    expect(offered("codex")).toBe(false);
     expect(offered("grok")).toBe(false);
+    // unclaimed: the table's word for codex is false, whatever its pin declares
+    expect(offered("codex")).toBe(false);
     // the catalog door answers the table's word, undecorated
     const reader = await window(daemon, ["agent.observe"], "c1t");
     const { catalog } = (await reader.call("agent.catalog", {})) as AgentCatalogResult;
-    expect(catalog.find((r) => r.id === "codex")?.offers.spark).toBe(true);
+    expect(catalog.find((r) => r.id === "grok")?.offers.spark).toBe(true);
+  });
+
+  // OB-3d — a run's own helper, named to the host before anything starts a server, is a process the door can name: the
+  // pin's codex declares `run-helper` (one private app-server per run), so a claim of spark for it passes the gate.
+  it("agent.providers says spark for a claim whose pin runs its MCP servers in a run helper the door names (OB-3d)", async () => {
+    const { daemon } = await setup({
+      catalog: catalogWith("codex", {
+        offers: { ...(catalogEntry("codex")?.offers ?? NONE), spark: true },
+      }),
+    });
+    await ready(daemon);
+    const win = await window(daemon, ["agent.spawn"], "c1s");
+    const { providers } = (await win.call("agent.providers", {})) as AgentProvidersResult;
+    expect(providers.find((p) => p.id === "codex")?.offers?.spark).toBe(true);
   });
 
   it("agent.catalog answers the visible rows for the surface; the phone never sees the protocol row; a declined row never leaves fieldd; it reads on agent.observe", async () => {
