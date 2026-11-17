@@ -9490,11 +9490,25 @@ export async function bootstrap(
         }),
       );
     });
-    api.register("artifact.refreshPreview", (_ctx, params) => {
+    api.register("artifact.refreshPreview", async (ctx, params) => {
       const parsed = ArtifactRefreshPreviewParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { artifactId: ULID }", false);
-      return artifacts.refreshPreview(parsed.data.artifactId);
+      // Item 517: a person's Refresh preview is audited at its door with the
+      // person who asked, as publish, update and unpublish are. The capture it
+      // causes stays fieldd's own act (`artifact.preview.capture`, the system's).
+      return await audit.required(
+        ctx,
+        {
+          action: "artifact.preview.refresh",
+          target: { kind: "artifact", id: parsed.data.artifactId },
+        },
+        () => artifacts.refreshPreview(parsed.data.artifactId),
+        (result) => ({
+          outcome: result.captured ? "succeeded" : "cancelled",
+          ...(!result.captured ? { reasonCode: "PREVIEW_NOT_CAPTURED" } : {}),
+        }),
+      );
     });
     api.register("artifact.list", () => ({ artifacts: artifacts.artifacts() }));
     // SP-1 — whole lists (`ArtifactView[]`), the newest standing, at the
