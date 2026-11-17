@@ -4,7 +4,7 @@ import type { BloomModel } from "./bloom-model";
 import { CardBloomView } from "./CardBloomView";
 
 /**
- * THE CARD'S BLOOM, OPENED (lanes/ob-build/SEAM.md: the drop's own call). The window's size is read once, as it opens.
+ * THE CARD'S BLOOM, OPENED (DESIGN.md §8 "The hand": the drop's own call). The window's size is read once, as it opens.
  * `choose` answers once, with a face or null for nothing; `close()` folds it with no answer, for a change of view or a
  * place that has gone. Either way the buds go back along their spokes before it leaves the page.
  */
