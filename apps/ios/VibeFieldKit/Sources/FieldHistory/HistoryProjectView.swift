@@ -315,9 +315,8 @@ struct HistoryProjectView: View {
   private var sessionList: some View {
     LazyVStack(alignment: .leading, spacing: 0) {
       if sessions.isEmpty {
-        QuietNote(
-          title: awake ? "Reading the sessions…" : "No sessions read for this project",
-          text: awake ? "The listing arrives over the desktop's door." : "They arrive once \(corpus.desktop) answers.")
+        let note = FieldHistoryModel.projectSessionsNote(awake: awake, desktop: corpus.desktop)
+        QuietNote(title: note.title, text: note.text)
       }
       ForEach(sessions) { session in
         if let day = session.day { DayHeader(text: day) }

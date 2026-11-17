@@ -313,7 +313,7 @@ struct HistoryFoldTests {
     #expect(group.nativeSessionId == nil && group.folder == nil && group.provider == nil && group.projectKey == nil)
   }
 
-  @Test("the standing: live is connected, a reading phase is indexing with the build's counters, no answer is asleep, another version names both numbers")
+  @Test("the standing: connected, indexing with the build's counters, asleep, and a version mismatch in plain words")
   func standing() throws {
     let live = try IndexStatusResult(json: try Fixture.json("index-status.valid"))
     #expect(FieldHistoryModel.standing(status: live) == .connected)
@@ -327,7 +327,7 @@ struct HistoryFoldTests {
     let corpus = HistoryCorpus.mock
     #expect(
       FieldHistoryModel.headNote(corpus, standing: .incompatible(theirs: "0.2.0", ours: "0.1.0"), device: .iPhone)
-        == "studio speaks contracts 0.2.0 · this iPhone 0.1.0")
+        == "studio needs the same VibeField as this iPhone")
     #expect(FieldHistoryModel.liveHeader(corpus, standing: .incompatible(theirs: "0.2.0", ours: "0.1.0")).count == nil)
   }
 }

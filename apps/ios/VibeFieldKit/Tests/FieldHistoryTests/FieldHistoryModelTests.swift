@@ -48,7 +48,8 @@ struct FieldHistoryModelTests {
     #expect(FieldHistoryModel.headNote(corpus, standing: .connected, device: .iPhone) == nil)
     #expect(FieldHistoryModel.headNote(corpus, standing: .asleep, device: .iPhone) == "studio is asleep · read 11:42")
     let indexing = FieldHistoryModel.DesktopStanding.indexing(percent: 61, done: "8,400", total: "13,700")
-    #expect(FieldHistoryModel.headNote(corpus, standing: indexing, device: .iPhone) == "studio is indexing · 61%")
+    #expect(
+      FieldHistoryModel.headNote(corpus, standing: indexing, device: .iPhone) == "studio is reading its history · 61%")
     #expect(FieldHistoryModel.indexingDenominator(standing: indexing) == "8,400 of 13,700 sessions")
     #expect(FieldHistoryModel.indexingDenominator(standing: .connected) == nil)
   }
@@ -62,35 +63,102 @@ struct FieldHistoryModelTests {
         FieldHistoryModel.headNote(corpus, standing: incompatible, device: device) ?? "",
         FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: device).text,
         FieldHistoryModel.emptyLedger(standing: .connected, index: stopped, desktop: "studio", device: device).text,
-        FieldHistoryModel.projectNotRead(device: device).text, FieldHistoryModel.sessionNotRead(device: device).text,
-        FieldHistoryModel.noDesktopRead(device: device).text,
+        FieldHistoryModel.projectNotRead(device: device).title, FieldHistoryModel.projectNotRead(device: device).text,
+        FieldHistoryModel.sessionNotRead(device: device).text,
+        FieldHistoryModel.noDesktopRead(device: device).title, FieldHistoryModel.noDesktopRead(device: device).text,
+        FieldHistoryModel.projectSessionsNote(awake: true, desktop: "studio").text,
+        FieldHistoryModel.projectSessionsNote(awake: false, desktop: "studio").text,
       ]
       for word in words {
         #expect(!word.localizedCaseInsensitiveContains("phone"), "\(device): \(word)")
+        // item 505 — how History is reached and kept is its insides (DESIGN.md §9, items 280 and 282)
+        for inside in ["door", "index", "ledger"] {
+          #expect(!word.localizedCaseInsensitiveContains(inside), "\(device): \(word)")
+        }
       }
     }
     #expect(
       FieldHistoryModel.headNote(corpus, standing: incompatible, device: .iPad)
-        == "studio speaks contracts 0.2.0 · this iPad 0.1.0")
+        == "studio needs the same VibeField as this iPad")
     #expect(
       FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: .iPad).text
-        == "Nothing of your history is on this iPad; the ledger arrives when a desktop's door answers.")
+        == "Nothing of your history is on this iPad yet; your projects arrive when one of your desktops answers.")
     #expect(
       FieldHistoryModel.emptyLedger(standing: .connected, index: stopped, desktop: "studio", device: .unknown).text
-        == "Rosettad stopped. History on this device reads nothing from it until it runs again; its restart is in "
-        + "History on studio.")
+        == "Nothing new arrives on this device until it runs again. Try again from History on studio.")
     let project = FieldHistoryModel.projectNotRead(device: .iPad)
-    #expect(project.title == "This project is not in the ledger")
+    #expect(project.title == "This project has not been read here")
     #expect(project.text == "Nothing was read for it on this iPad.")
     let session = FieldHistoryModel.sessionNotRead(device: .iPad)
     #expect(session.title == "This session has no document here")
     #expect(session.text == "Its desktop does not answer, and this iPad has not read its turns before.")
     let none = FieldHistoryModel.noDesktopRead(device: .iPad)
-    #expect(none.title == "History reads your desktops' index over their doors")
+    #expect(none.title == "History comes from your desktops")
     #expect(
       none.text
-        == "No desktop of this account answers right now, and this iPad has read none before. The ledger, a project "
-        + "and a session's document arrive from the first desktop whose door answers.")
+        == "None of them is answering right now, and this iPad has read none before. Your projects and sessions "
+        + "arrive from the first one that answers.")
+  }
+
+  @Test("item 505: a project's empty session list names its desktop, awake or asleep, and never how it is reached")
+  func projectSessionsWait() {
+    let awake = FieldHistoryModel.projectSessionsNote(awake: true, desktop: "studio")
+    #expect(awake.title == "Reading the sessions…")
+    #expect(awake.text == "They arrive as studio answers.")
+    let asleep = FieldHistoryModel.projectSessionsNote(awake: false, desktop: "studio")
+    #expect(asleep.title == "No sessions read for this project")
+    #expect(asleep.text == "They arrive once studio answers.")
+  }
+
+  @Test("item 505: the line under a page's head says how History stands on the desktop, never its index")
+  func indexSentenceWords() {
+    let says: [(FieldHistoryModel.IndexStanding?, String?)] = [
+      (nil, nil), (.ready, nil),
+      (.starting(detail: "waking the index"), "History on studio is opening"),
+      (.rebuilding(detail: "schema 7 to 8"), "History on studio is updating"),
+      (.indexing(percent: 61, done: "8,400", total: "13,700"), "studio is reading its history · 61%"),
+      (.failed(reason: "rosettad stopped"), "History on studio has stopped"),
+      (.unconfigured(reason: "no index configured"), "studio keeps no history"),
+      (.stopped, "History on studio is stopped"),
+    ]
+    for (index, said) in says {
+      #expect(FieldHistoryModel.indexSentence(index, desktop: "studio") == said, "\(String(describing: index))")
+    }
+  }
+
+  @Test("item 505: an empty ledger says how History stands in its own words, and fieldd's words stay off the screen")
+  func emptyLedgerWords() {
+    let says: [(FieldHistoryModel.IndexStanding?, String, String)] = [
+      (.starting(detail: "waking the index"), "History on studio is opening", "Its projects arrive when it is open."),
+      (
+        .rebuilding(detail: "schema 7 to 8"), "History on studio is updating",
+        "Its projects arrive when the update ends."
+      ),
+      (
+        .indexing(percent: 61, done: "8,400", total: "13,700"), "studio is reading its history",
+        "8,400 of 13,700 sessions read; its projects arrive as it reads."
+      ),
+      (
+        .failed(reason: "rosettad stopped"), "History on studio has stopped",
+        "Nothing new arrives on this iPad until it runs again. Try again from History on studio."
+      ),
+      (.unconfigured(reason: "no index configured"), "studio keeps no history", "History is off on studio."),
+      (.unconfigured(reason: nil), "studio keeps no history", "History is off on studio."),
+      (.stopped, "History on studio is stopped", "Its projects arrive when it runs again."),
+      (
+        .ready, "No projects yet",
+        "Your desktops have recorded none. Choose whose history they keep on a desktop (Settings → Agents)."
+      ),
+      (
+        nil, "No projects yet",
+        "Your desktops have recorded none. Choose whose history they keep on a desktop (Settings → Agents)."
+      ),
+    ]
+    for (index, title, text) in says {
+      let note = FieldHistoryModel.emptyLedger(standing: .connected, index: index, desktop: "studio", device: .iPad)
+      #expect(note.title == title, "\(String(describing: index))")
+      #expect(note.text == text, "\(String(describing: index))")
+    }
   }
 
   @Test("the live head counts while the desktop is awake and remembers the read while it sleeps")

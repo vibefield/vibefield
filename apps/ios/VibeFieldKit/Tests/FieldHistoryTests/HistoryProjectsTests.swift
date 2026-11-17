@@ -284,7 +284,7 @@ struct HistoryProjectsTests {
   // its rosettad could not open) and the phone said "No project in your
   // desktops' index yet". The ledger reads its door's index beside it.
 
-  @Test("the index failed: the empty ledger says so in fieldd's words — never 'no project'")
+  @Test("the index failed: the empty ledger says History has stopped, without fieldd's reason — never 'no project'")
   @MainActor
   func indexFailed() async throws {
     let door = ProjectsDoor()
@@ -299,21 +299,21 @@ struct HistoryProjectsTests {
     #expect(projects.sourceName == "studio")
     let empty = FieldHistoryModel.emptyLedger(
       standing: projects.standing, index: projects.index, desktop: projects.sourceName, device: .iPhone)
-    #expect(empty.title == "studio's index has stopped")
-    #expect(empty.text.hasPrefix("Restart intensity exceeded (5 in 60000ms)"))
+    #expect(empty.title == "History on studio has stopped")
+    // item 505 — fieldd's reason is an inside: it stays off the screen
+    #expect(!empty.text.contains("Restart intensity"))
     // the restart is the desktop's (P2: the phone reads), and the phone says where
-    #expect(
-      empty.text.hasSuffix(
-        "History on this iPhone reads nothing from it until it runs again; its restart is in History on studio."))
+    #expect(empty.text == "Nothing new arrives on this iPhone until it runs again. Try again from History on studio.")
     #expect(!empty.title.contains("No project"))
-    #expect(FieldHistoryModel.indexSentence(projects.index, desktop: projects.sourceName) == "studio's index has stopped")
+    #expect(
+      FieldHistoryModel.indexSentence(projects.index, desktop: projects.sourceName) == "History on studio has stopped")
     // the index is asked on the ledger's door, before the listing it explains
     let order = door.asked.map(\.0).filter { $0 == "index.status" || $0 == "project.list" }
     #expect(order.prefix(2) == ["index.status", "project.list"])
     projects.close()
   }
 
-  @Test("the index starting, or rebuilding a projection of another schema: said as coming, in fieldd's words")
+  @Test("the index starting, or rebuilding a projection of another schema: said as coming, in History's words")
   @MainActor
   func indexComing() async throws {
     var starting = try #require(try Fixture.json("index-status.valid").objectValue)
@@ -330,8 +330,8 @@ struct HistoryProjectsTests {
     #expect(projects.index == .starting(detail: nil))
     let early = FieldHistoryModel.emptyLedger(
       standing: .connected, index: projects.index, desktop: "studio", device: .iPhone)
-    #expect(early.title == "studio's index is starting")
-    #expect(early.text == "Its projects arrive when it is ready.")
+    #expect(early.title == "History on studio is opening")
+    #expect(early.text == "Its projects arrive when it is open.")
     projects.close()
 
     let rebuilding = ProjectsDoor()
@@ -347,9 +347,10 @@ struct HistoryProjectsTests {
     #expect(detail?.contains("schema 24 where this rosettad reads 27") == true)
     let empty = FieldHistoryModel.emptyLedger(
       standing: .connected, index: upgrading.index, desktop: "studio", device: .iPhone)
-    #expect(empty.title == "studio is rebuilding its index")
-    #expect(empty.text.contains("The index's projection is schema 24 where this rosettad reads 27"))
-    #expect(FieldHistoryModel.indexSentence(upgrading.index, desktop: "studio") == "studio is rebuilding its index")
+    #expect(empty.title == "History on studio is updating")
+    // item 505 — fieldd's detail is an inside: the reader holds it, the screen does not say it
+    #expect(empty.text == "Its projects arrive when the update ends.")
+    #expect(FieldHistoryModel.indexSentence(upgrading.index, desktop: "studio") == "History on studio is updating")
     upgrading.close()
   }
 
@@ -366,7 +367,7 @@ struct HistoryProjectsTests {
     #expect(FieldHistoryModel.indexSentence(projects.index, desktop: "studio") == nil)
     let empty = FieldHistoryModel.emptyLedger(
       standing: projects.standing, index: projects.index, desktop: "studio", device: .iPhone)
-    #expect(empty.title == "No project in your desktops' index yet")
+    #expect(empty.title == "No projects yet")
     projects.close()
     // an older desktop's door offers no index.status: the listing is believed
     let older = ProjectsDoor()
@@ -378,7 +379,7 @@ struct HistoryProjectsTests {
     #expect(
       FieldHistoryModel.emptyLedger(
         standing: believed.standing, index: believed.index, desktop: "studio", device: .iPhone).title
-        == "No project in your desktops' index yet")
+        == "No projects yet")
     // and a door that does not answer: not read yet, never "no project"
     #expect(
       FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: .iPhone).title

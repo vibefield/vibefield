@@ -190,7 +190,15 @@ extension FieldHistoryModel {
     )
   }
 
-  /// No desktop's door answers and nothing is cached.
+  /// Item 505 — a project's session list while none has arrived: reading while its desktop answers, else waiting
+  /// for it to. Its desktop is named as the person named it.
+  public static func projectSessionsNote(awake: Bool, desktop: String) -> (title: String, text: String) {
+    awake
+      ? ("Reading the sessions…", "The listing arrives over the desktop's door.")
+      : ("No sessions read for this project", "They arrive once \(desktop) answers.")
+  }
+
+  /// No desktop answers and nothing is cached.
   public static func noDesktopRead(device: DeviceWord) -> (title: String, text: String) {
     (
       "History reads your desktops' index over their doors",
