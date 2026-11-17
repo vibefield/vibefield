@@ -10607,6 +10607,10 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   plugin gets a line of its own with no Try again, its words for James. "Plugins aren't available right now." stands
   on Installed with no act, for the window keeps its last plugins and heals on its own; **Try again** stands on
   Discover's and Updates' away state alone, where it reads the list again.
+  *Amended 2026-11-16 (item 476; James, 22:04:27Z: "yes on the wording"):* a plugin that cannot start in this window
+  reads "‹plugin› isn't working right now" on Installed and in Settings → Plugins, the same line a plugin fieldd
+  reports broken reads; and a page whose live feed cannot open says its own could-not-load line and keeps trying by
+  itself, never fieldd's reason. No new sentence.
   *Added 2026-11-12 (James's MK-O4 pick, 2026-11-11 22:34:05Z: "This desktop alone"), ‹draft› for his eye:* under
   **Remove ‹plugin› and its data?**, "This deletes its settings and data on ‹this desktop›. It can't be undone.
   ‹Your other desktops› remove ‹plugin› too, and keep their copy of its data." ‹this desktop› and ‹your other
