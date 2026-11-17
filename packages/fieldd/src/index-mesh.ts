@@ -131,6 +131,7 @@ const TABLES: readonly IndexReplicatedTable[] = ["projects", "sessions"];
 const KEPT_FILE = /^(.+)\.(projects|sessions)\.json$/;
 const KEPT_TMP = /^.+\.(projects|sessions)\.json\.\d+\.tmp$/;
 const ASLEEP_DETAIL = "this desktop is asleep; wake it to search its history";
+const RESTARTING_DETAIL = "this desktop's daemon is restarting; ask again in a moment";
 
 type Row<T extends IndexReplicatedTable> = T extends "projects"
   ? IndexCatalogProject
@@ -166,6 +167,10 @@ interface Peer {
   incompatible: boolean;
   inRoster: boolean;
   online: boolean;
+  /** DS — the roster reads it `restarting`. With its node OFFLINE that is its
+   * own announced update restart (`DeviceSlice.restart`): it stands `stale`,
+   * never `asleep`, and nothing dials or asks it (`#standing`) */
+  restarting: boolean;
   name: string | undefined;
 }
 
@@ -494,6 +499,11 @@ export class IndexMesh extends EventEmitter {
         return {
           answered: false,
           source: { device, state: "asleep", tookMs: 0, detail: ASLEEP_DETAIL },
+        };
+      if (this.#awayRestarting(peer))
+        return {
+          answered: false,
+          source: { device, state: "timeout", tookMs: 0, detail: RESTARTING_DETAIL },
         };
     }
     const started = this.#now();
@@ -870,6 +880,7 @@ export class IndexMesh extends EventEmitter {
       const wasAway = !peer.inRoster || !peer.online;
       peer.inRoster = true;
       peer.online = info.online;
+      peer.restarting = info.state === "restarting";
       peer.name = info.name;
       // DS-L9 — another contracts major is `incompatible` and NOT asked: the
       // link's pin says so once a dial was refused, and the roster's own state
@@ -901,6 +912,7 @@ export class IndexMesh extends EventEmitter {
         incompatible: false,
         inRoster: false,
         online: false,
+        restarting: false,
         name: undefined,
       };
       this.#peers.set(device, peer);
@@ -1082,10 +1094,25 @@ export class IndexMesh extends EventEmitter {
     if (peer.incompatible || this.#opts.link.linkState(peer.device) === "incompatible") {
       return "incompatible";
     }
-    if (!peer.inRoster || !peer.online) return "asleep";
+    if (!peer.inRoster) return "asleep";
+    // DS — a desktop mid-update announced its restart, and the roster holds it
+    // `restarting` with its node offline: it stands `stale` (as the mesh board
+    // reads it, S6), never `asleep`. The replica does not dial it (`#reconcile`
+    // attaches online peers only) and a search does not ask it
+    // (`#awayRestarting`); when its node is back, the row moves.
+    if (!peer.online) return peer.restarting ? "stale" : "asleep";
     const attached = peer.projects.sub !== null && peer.sessions.sub !== null;
     const fresh = peer.heardAt !== null && this.#now() - peer.heardAt <= this.#staleAfterMs;
     return attached && fresh ? "live" : "stale";
+  }
+
+  /** DS — a desktop the roster holds `restarting` with its node OFFLINE (its
+   * own announced update restart): not asked, because a dial needs a node and
+   * would only spend the whole fan-out budget to say what the roster says now.
+   * Its source is the one a refused ask of a restarting desktop already reads
+   * (`#refusedSource`): `timeout`, that sentence, `tookMs` 0 (not asked). */
+  #awayRestarting(peer: Peer): boolean {
+    return peer.inRoster && !peer.online && peer.restarting && !peer.incompatible;
   }
 
   /** A standing that moved is a change a visible page must hear. */
@@ -1325,6 +1352,12 @@ export class IndexMesh extends EventEmitter {
           source: { device, state: "asleep", tookMs: 0, detail: ASLEEP_DETAIL },
         };
       }
+      if (this.#awayRestarting(peer)) {
+        return {
+          hits: [],
+          source: { device, state: "timeout", tookMs: 0, detail: RESTARTING_DETAIL },
+        };
+      }
     }
     const started = this.#now();
     try {
@@ -1373,10 +1406,7 @@ export class IndexMesh extends EventEmitter {
     if (kind === "UNAVAILABLE" && (service === "peer-link" || service === undefined)) {
       return {
         state: "timeout",
-        detail:
-          roster === "restarting"
-            ? "this desktop's daemon is restarting; ask again in a moment"
-            : "this desktop did not answer",
+        detail: roster === "restarting" ? RESTARTING_DETAIL : "this desktop did not answer",
       };
     }
     if (kind === "TIMEOUT") return { state: "timeout" };

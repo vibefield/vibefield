@@ -100,7 +100,14 @@ export function hostDevicesOf(
       name: info?.name ?? source?.name ?? "a desktop",
       os: osOf(info?.platform),
       here: id === self,
-      asleep: id !== self && (state === "asleep" || (info !== undefined && !info.online)),
+      // DS — the roster's state decides when the row carries one (S6, as Godview reads it): a desktop the roster
+      // holds `restarting` with its node offline (its announced update restart) is drawn as it was, never asleep.
+      // `online` and the listing's standing decide only for an older roster's row with no state.
+      asleep:
+        id !== self &&
+        (info?.state !== undefined
+          ? info.state === "asleep"
+          : state === "asleep" || (info !== undefined && !info.online)),
       ...(source?.asOf !== undefined ? { asOf: source.asOf } : {}),
     };
   });

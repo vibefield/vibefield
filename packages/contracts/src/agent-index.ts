@@ -674,7 +674,13 @@ export type IndexCatalogSource = z.infer<typeof IndexCatalogSource>;
  * which let a failed call stand for the desktop's state — a retryable refusal
  * or a TIMEOUT from a desktop the roster calls awake or restarting read
  * `asleep`. The error is not the state: whether a desktop is away is the
- * roster's to say (DS-L8), and a silent awake desktop is a `timeout`. */
+ * roster's to say (DS-L8), and a silent awake desktop is a `timeout`.
+ *
+ * DS — one `timeout` is NOT asked: a desktop the roster holds `restarting` with
+ * its node offline (its own announced update restart, `DeviceSlice.restart`).
+ * A dial needs a node, so asking would only spend the fan-out budget to reach
+ * what a refused ask of a restarting desktop already says; it reads `timeout`
+ * with that sentence and `tookMs` 0. */
 export const IndexSearchSourceState = z.enum([
   "answered",
   "building",

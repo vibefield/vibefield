@@ -134,7 +134,12 @@ export type MeshScope = z.infer<typeof MeshScope>;
 /** A device's standing in a mesh-scoped read (DS-L8 — asleep is a STATE):
  * `live` its stream is flowing · `stale` it has not answered within its own
  * cadence but its node is on the tailnet · `asleep` its door does not answer
- * · `incompatible` another contracts major; it is not asked (DS-L9). */
+ * · `incompatible` another contracts major; it is not asked (DS-L9).
+ * DS: `stale` also stands for a desktop the roster holds `restarting` with its
+ * node OFFLINE — it announced an update's restart on its own slice
+ * (`DeviceSlice.restart`), and the stop takes the node down too. It is not
+ * dialled until its node is back, and never `asleep` while the announcement
+ * stands. The mesh board and History's replica read it alike. */
 export const RowsDeviceState = z.enum(["live", "stale", "asleep", "incompatible"]);
 export type RowsDeviceState = z.infer<typeof RowsDeviceState>;
 
