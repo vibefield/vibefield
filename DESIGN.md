@@ -1558,8 +1558,21 @@ arc. It is worn nowhere else.
 | **Selection, sole** | `1.5px` inside ring, `--vf-select`, drawn *inside* the element so any transform carries it; 120ms fade — the fields explorer's current tile, the file tree's focused row (§8). |
 | **Selection, multi** | never N rings: a set is one union, or, in a list with no union, N fills and one ring (§8 "The file tree"). |
 | **Drag** (a chrome drag source) | opacity `0.75` for the whole hold and drag — a file row carried toward a chip (§8 "The file tree"). |
-| **Off** (a control that is off) | it says so the way assistive tech reads it, never by a styling hook alone: `disabled` on a control, and on a group of them `role="group"` with `aria-disabled="true"` (or a disabled `fieldset`). Its words wear t4 at full opacity, 3:1 or more on their ground (§2.4); its pictures (an emoji, a tile, a swatch) may dim further. Row 32 passes an off control's words over, says so and prints each one's ratio, never judging it (§8 "Its words read"). *Added 2026-11-01 (track FG, the catalog judged's follow-up 1; VF-PM's ruling at 03:00Z on row 32's red at run69b: the face deck dimmed whole while saving, its two head words at 2.1–2.6:1).* *Ruled 2026-11-07 (James, 20:53:00Z, item 241's leans); his picks on the Off Pill page 20:52:05–20:52:23Z):* **a pill that is off** gives up its own look for the quiet pill's, the quiet fill and its hairline, so a primary loses its inversion, and its words wear t4 at full opacity (`ChromePalette.inkT4` on the phone: black at 50% by day, white at 38% by night; the kit's older `inkFaint`, at 30% and 32%, is another ink, item 242): 3.2–3.9:1 on that fill, in both themes, on both platforms. A whole pill faded to 0.4 is not an off pill, since its words fall to 1.8–2.9:1 by day. A pill whose word says its own press is running ("Starting…", "Allow…") keeps its look, with its hits off (§8 "Needs you"); every other pill that cannot be pressed is off, Create while its hatch runs among them. The phone's `ChromePillStyle` draws it from the enabled state its view is given (241a). The Mac's `.vf-ui-button:disabled` draws it from the button's own `disabled` (241b): the quiet fill (the Mac's quiet pill draws no hairline), no lift, since a primary's shadow goes with its inversion, and its words in t4 (`--vf-text-faint`), 3.22:1 by day and 3.26:1 by night over the sheet's paper. A Mac pill whose word says its own press is running passes `UiButton`'s `running`: it is `disabled`, so its hits are off, and it keeps its look (`data-running`). |
+| **Off** (a control that is off) | it says so the way assistive tech reads it, never by a styling hook alone: `disabled` on a control, and on a group of them `role="group"` with `aria-disabled="true"` (or a disabled `fieldset`). Its words wear t4 at full opacity, 3:1 or more on their ground (§2.4); its pictures (an emoji, a tile, a swatch) may dim further. Row 32 passes an off control's words over, says so and prints each one's ratio, never judging it (§8 "Its words read"). *Added 2026-11-01 (track FG, the catalog judged's follow-up 1; VF-PM's ruling at 03:00Z on row 32's red at run69b: the face deck dimmed whole while saving, its two head words at 2.1–2.6:1).* *Ruled 2026-11-07 (James, 20:53:00Z, item 241's leans); his picks on the Off Pill page 20:52:05–20:52:23Z):* **a pill that is off** gives up its own look for the quiet pill's, the quiet fill and its hairline, so a primary loses its inversion, and its words wear t4 at full opacity (`ChromePalette.inkT4` on the phone: black at 50% by day, white at 38% by night; the kit's older `inkFaint`, at 30% and 32%, was another ink, retired by item 242 on 2026-11-17): 3.2–3.9:1 on that fill, in both themes, on both platforms. A whole pill faded to 0.4 is not an off pill, since its words fall to 1.8–2.9:1 by day. A pill whose word says its own press is running ("Starting…", "Allow…") keeps its look, with its hits off (§8 "Needs you"); every other pill that cannot be pressed is off, Create while its hatch runs among them. The phone's `ChromePillStyle` draws it from the enabled state its view is given (241a). The Mac's `.vf-ui-button:disabled` draws it from the button's own `disabled` (241b): the quiet fill (the Mac's quiet pill draws no hairline), no lift, since a primary's shadow goes with its inversion, and its words in t4 (`--vf-text-faint`), 3.22:1 by day and 3.26:1 by night over the sheet's paper. A Mac pill whose word says its own press is running passes `UiButton`'s `running`: it is `disabled`, so its hits are off, and it keeps its look (`data-running`). |
 | **Keyboard focus** | visible ring, always (quality floor); Esc = close/cancel, consistently. |
+
+**The phone kit's faint words, sorted** (item 242; VF-PM's ruling of 2026-11-08 06:10Z: §2.4's law binds; re-cut
+2026-11-17): the kit's `inkFaint`, at 30% by day and 32% by night, retires, and each of its 61 uses takes the tier
+§2.4's test gives it. The kit's `KitFaintWordsTests` holds each file's inks in their order.
+
+| §2.4's class | Ink | The uses |
+|---|---|---|
+| a word that must be read (42) | t3, `inkTertiary` (*erratum, 2026-11-08, item 248:* t3 by day reads 3.98:1 on the paper and 3.89:1 on the fill, under §2.4's 4.5:1 floor; by night 6.0 and 5.2 hold. Whether t3 darkens by day is James's call, put to him 2026-11-17) | a list's group head; About's foot lines; History's figures: a figure's unit, a tile's label, a figure's note, the projects' reading words, the unpriced note, a word's unit; History's ledger: the spend caption, the cut ledger's words, a project's path, "sessions"; a message's time, "(no words)" and its foot words; the older pull's words while not pressed; History's parts: "+N" more agents, a figure's unit, a row's time word, a rule's words; a picture row's words; History's project: the months under the chart, "Reading the figures…", a desktop group's words, a place's name (with a reason) and its reason or last, a session's meta line and its why; History's session: the day pill's after, a turn's model and its facts, a tool's result words, a ledger group's duration, the compaction line, a ledger line's directory and its result, a blank prompt's words; a tool's path line, a diff line's number, a read file's directory and its line range, a tool's quiet words |
+| a mark (19) | t4, `inkT4` | the desktop marks; the live dot asleep; the waiting picture's glyph, the photo glyph and a thumb's glyphs (two); a desktop group's chevron; a session's dot; a ledger group's chevron; a member's glyph and its chevron; a ledger line's glyph and its chevron; the doc glyph; a folder's page dots; search's idle and shell dot (§2.5); the Way In's dashed box and its page dots; the look preview's body spots |
+
+*History (2026-11-17):* the first cut (2026-11-08, on a base with 40 uses) sorted 29 words, 10 marks and one off
+control ("Earlier · needs …", whose button no longer wears `inkFaint`). It never landed; the re-cut sorts the 61
+uses on train 8's main.
 
 *History (renamed 2026-10-28; James, the housekeeping page (Q18)):* this section was "Interactive
 states (the living card)", and its table led with the DOM card's own rows: the **lift**
@@ -7689,8 +7702,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   (SP-D10's grouping is superseded). **A device is its OS mark** — the kept-exact Simple Icons
   marks (§13; the Mac's a laptop since LP-4, 2026-11-05), template assets on the phone, in the text's ink — and never a hue. The **ledger row**
   keeps identity · location · quantity; location is the marks, **one per desktop the project lives
-  on, left-aligned** in the roster's order (the home first) at 13 pt in `inkFaint`, a sleeping
-  desktop's at 40% — the path never shows. The **root's head** is one word and one count: **Projects**, and
+  on, left-aligned** in the roster's order (the home first) at 13 pt in t4 (`inkT4`; `inkFaint`
+  until item 242, 2026-11-17), a sleeping desktop's at 40% — the path never shows. The **root's head** is one word and one count: **Projects**, and
   beside it a bubble that holds how many the ledger lists (§8 "The roots' heads" rules the bubble; *item 390,
   2026-11-13. James, 23:28:32Z, session qa-01, of the root on his phone, its title and the line under it marked
   first: "[Image #16] redesign the first marked area, to just show Projects and a bubble that shows the project
@@ -7740,8 +7753,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   both recorded has one `contribution` row, the first desktop's; a row that speaks the other desktop's copy is
   not joined, and shows none. *Readings, not his rulings: "etc" is the rest of the desktop's line, which is the
   span, already here; the span keeps the phone's spelling (`313h 54m`, where the desktop writes `13d 1h`) and
-  `started 14:06` stays, at the line's end; the line keeps its size and ink (12.5 pt, `inkFaint`, tabular
-  digits), which is the desktop's faint; `msgs` is the desktop's word, for one message too; a session still
+  `started 14:06` stays, at the line's end; the line keeps its size (12.5 pt, tabular digits) and
+  takes t3 `inkTertiary`, a word that must be read (§2.4; until item 242, 2026-11-17, it wore
+  `inkFaint` and this said "which is the desktop's faint"); `msgs` is the desktop's word, for one message too; a session still
   being read whose row counts no message yet shows no figures, where the desktop shimmers.* **The line holds
   one line**: where its figures would run past the entry's width it is drawn smaller, down to 85% of its size,
   and past that it is cut at its end, where `started 14:06` stands. (*A reading, 2026-11-14, not his ruling: by
@@ -7809,11 +7823,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     `inkTertiary` on nothing. The figures stand OPEN until it folds them, the phone keeps the choice, and they fold
     and unfold in 0.3 s on the house curve. They are read only while they are open on the tab on screen.
   - **The four figures** (`sessions` · `messages` · `tokens` · `est. cost`) are one chip each, the project screen's
-    chip (`fill`, radius 12, 4 pt apart): the digits at 20 pt light in `ink`, their unit at 12 pt in `inkFaint`, the
-    label under them at 9 pt medium, uppercase, in `inkFaint`. Sessions are the ledger's own count, whole at once;
+    chip (`fill`, radius 12, 4 pt apart): the digits at 20 pt light in `ink`, their unit at 12 pt in t3, the
+    label under them at 9 pt medium, uppercase, in t3 (`inkTertiary`; both `inkFaint` until item 242,
+    2026-11-17). Sessions are the ledger's own count, whole at once;
     the other three are sums over the projects whose figures are read, and a dash before the first is. Cost is
     estimated at list prices and says so (`~`); a sum that is a lower bound says `+`.
-  - **One line under them says what is not whole, and nothing when all is** (11.5 pt, `inkFaint`): `reading figures
+  - **One line under them says what is not whole, and nothing when all is** (11.5 pt, t3 `inkTertiary`; `inkFaint` until item 242,
+    2026-11-17): `reading figures
     · 41 of 166 projects` · `figures for 3 projects failed · retrying` · `2 projects' days are not exact`.
     *Corrected 2026-11-13 (item 390): the line also said `messages are a lower bound` ("a desktop cuts a project's
     session rows for a phone at a hundred, and says so"). James removed it: 23:28:32Z, session qa-01, the line
@@ -8021,7 +8037,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Time cuts it into sittings** (362c), by the room's rule: a new sitting begins before a row that comes fifteen
     minutes or more after the row before it, or on another calendar day of this phone's. Each sitting opens with the
     room's pill, centred, 26 pt high on `fill`, 11.5 pt medium in `inkTertiary` with its trailing words in
-    `inkFaint`: `Mon 31 Aug` where the day turned, `Tue 1 Sep · 00:02` `after 44m` where a pause crossed a day, and
+    `inkTertiary` too (`inkFaint` until item 242, 2026-11-17): `Mon 31 Aug` where the day turned, `Tue 1 Sep · 00:02` `after 44m` where a pause crossed a day, and
     `12:31` `after 12h 18m` inside one. The day is `Today`, `Yesterday`, or named, and wears its year only when it is
     not this one (`24 Aug 2025`); a pause is said to the minute, and from two days on as `2d 3h`. A reply the cut
     falls inside continues under the pill with no second head, and a run never crosses a pill. A session of one
@@ -8196,7 +8212,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     when it named a range or more than one file, and **a search** to the paths it found: at most twenty-four,
     then `… 16 more`. **A line that failed** adds its summary under those, and opens to the summary alone only
     when that says more than the line does (more than one line, or past the 60 the line shows). All of it is
-    11.5 pt mono at the group's indent, the quiet lines 11.5 pt sans in `inkFaint`; a command and a summary sit
+    11.5 pt mono at the group's indent, the quiet lines 11.5 pt sans in t3 (`inkTertiary`; `inkFaint` until item 242,
+    2026-11-17); a command and a summary sit
     on `fill` with 6 pt corners. A line of a diff wraps, where the room scrolls sideways, and is cut at 200
     units. Never shown: a tool's output, which no record carries, and a failure's diagnostic (item 371). Nothing
     in it opens anything: a path is its words. Like the whole words above, these are kept only while the app
