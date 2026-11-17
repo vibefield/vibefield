@@ -61,7 +61,8 @@ treatment. VibeField keeps its own host mechanics, honest mock label, and render
 alpha, but does not reinterpret that reference through rounded cards, colorful agent fills, or
 floating pills — with the exceptions James named: the terminal deck's sheet edge (§8, 2026-09-28)
 and, since round 3 (2026-10-02), Godview's head (GV-D1) and the wrapper around its terminals
-(GV-D7, GV-D11, GV-D12). The scoped `--vf-godview-*` tokens are the exact reference palette. VibeField
+(GV-D7, GV-D11, GV-D12); and, since 2026-11-17 (TL-2), the scanlines and the vignette, which are
+the monitor's and end at the deck's top edge (§8). The scoped `--vf-godview-*` tokens are the exact reference palette. VibeField
 composites those status-body colors at 72% by default so they remain legible glass over the field;
 the temporary system-control panel exposes that alpha for live tuning. *(In development builds only since
 2026-11-05, LP-6: the panel is the surface lab, which HK Q3 (James, 2026-10-28, "B") made development's alone.)*
@@ -3386,7 +3387,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       ground, §2.7's panel.
     - **The scanlines and the vignette stand over the swarm only** (J-S3, drop). The desktop paints them on the
       stage over every view (`GodviewStage.tsx:178-179`); the phone differs on purpose. The row stands above them
-      and wears neither: the frame's glass carries neither.
+      and wears neither: the frame's glass carries neither. *(Since 2026-11-17, TL-2, the desktop's end at the
+      deck's top edge too: §8 "Godview's terminal deck", "The deck wears neither".)*
     - **Every view lights the open card's row** (J-S4, James 2026-11-04; added 2026-11-04): on the phone each view
       lights the row of the card standing open — the list's row, the timeline's lane, spend's line, the rain's
       stream — in text main (§2.7), and touch selects: no hover, no keys.
@@ -5968,6 +5970,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   96px, with the room's mask cleared; it is still paint and never a backdrop filter. His words and
   the recipe stand in "History is rosetta's room, on the cover's glass", under "Its ground".
   Over the monitor the card occludes the bodies exactly as much as Godview occludes the field.
+  **The deck wears neither the scanlines nor the vignette** (TL-2, 2026-11-17; James, on the look
+  check: "lift them off the text for me to review"). The two CRT layers (30) are the monitor's.
+  Where the sheet stands they end at its top edge, as the chrome layer does (§8 "Where the chrome
+  stands"), so a pane's text is drawn under nothing. While the terminals are maximized they are
+  not drawn, going with the stage, 260ms; while the terminals are away they cover the stage whole.
+  Under the curtain they cover the window whole, as they did: the curtain is the stage's question,
+  not a terminal, and it wears the scanlines (below). *(Until then they stood over the whole root,
+  the panes included: every row of text was crossed by a line, and the vignette, 75% black at the
+  corners by night, dimmed the outer panes.)*
+  **What a pane's text is held to** (TL-1, 2026-11-17). Terminal text is the program's to colour
+  (§3), and two of ghosttea's nets stand under it on every surface handed the deck's theme. **A
+  contrast floor of 3:1**: text keeps at least that against its own cell's ground, its hue kept;
+  box drawing, block elements and colour glyphs are exempt. **Light adaptation on auto**: under a
+  light ground, a program that paints most of its screen dark with its own backgrounds is redrawn
+  as a light design, pane by pane; a program that follows the terminal is left as it is. Neither
+  changes a colour that already reads.
   **The Lip** (GV-D7; built 2026-10-11) is the lip grown into the drag bar: **30** tall, on the
   frame's tone. **The groove** (GV-D12 — James's pick over the lean: "i like the groove one")
   stands in its middle, in its pill: a 40 × 6 slot pressed into the frame, the well's own depth
