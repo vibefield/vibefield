@@ -6432,6 +6432,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     no End key, so the legend under the pill's mark would name a key it lacks. The pill keeps its
     mark and its word; the window keeps its legend. It joins the phone's named deviations
     (`SpendModel.Dropped`), each a word the window says and the phone does not.
+  - **At a moment, and where the plot is narrow** (added 2026-11-17, the EL8 to puppeteer 0.4.2,
+    which carries 0.4.1's #81; item 291). At a set moment the burn reads "by 23:16 · $X/hr", with
+    no "then", and the list's head says only "Total by 23:16"; its two labels stand 8 apart, and
+    where both do not fit the first is cut and the second stays whole. The Now pill stands under
+    the chart's caption, 4 px clear of its line, and "$0" lifts 4 px clear of now's chip. The
+    chart's caption says "Last 10 minutes" wherever its long words, measured in its own face,
+    would overrun the plot. The phone says the same words in the same places, measured in its own
+    fonts.
 - **History is rosetta's room, on the cover's glass** (AR-8c, built 2026-10-03; One Frame §9
   "History, joined"; FC-D6, FC-D15, FC-D16; AR-D36…AR-D43): History is rosetta's own room — the
   projects, the sessions, the panels and charts, the transcript and its folds — mounted from the

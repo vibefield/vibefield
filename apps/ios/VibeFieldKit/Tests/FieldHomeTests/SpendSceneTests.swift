@@ -34,7 +34,8 @@ extension SpendParityTests {
 
   private static let ink = SwarmColor(hex: "#4a90d9") ?? .black
 
-  /// S1 — at now: the plot's box is the frame's; the grid is each money tick's line (its label sits 7 pt above it);
+  /// S1 — at now: the plot's box is the frame's; the grid is each money tick's line (its label sits 7 pt above
+  /// it, $0's 11: item 291 · 4);
   /// the now line is the now chip's x; every line is its window spend in points from `xOf`/`yOf`, a peer's (a total
   /// alone) none; one head a recorded line, at now, on what it spent, with its row's state; nothing pointed, no cross.
   @Test func theSceneAtNowIsTheFramesPlaces() throws {
@@ -42,7 +43,7 @@ extension SpendParityTests {
     let g = frame.g
     #expect(scene.width == g.width && scene.height == g.height)
     #expect(scene.x0 == g.x0 && scene.x1 == g.x1 && scene.y0 == g.y0 && scene.y1 == g.y1)
-    let ticks = frame.yTicks.map { $0.top + 7 }
+    let ticks = frame.yTicks.map { $0.top + ($0.text == "$0" ? 11 : 7) }
     #expect(scene.grid == ticks, "the grid is the money ticks")
     #expect(scene.grid.count == 8)
     let nowChip = frame.chips.first?.left

@@ -9,7 +9,9 @@ import Foundation
 // re-transcribed from 0.4.0 at `e6e4753de` (the EL8 of 2026-11-09; #101, `5a0ae86b`): `heroRoom` (dist `SpendView.js`
 // :103-108) and the hero's figure, burn and caption (:258-268). Every other line cited in this file is 0.3.3's dist:
 // 0.4.0 moved those lines (the hero, and a stage out of sight that rests its clock and paint, #103), not what they
-// cite. The rest out of sight is the view's, not this model's, and is not ported: it is owed.
+// cite. The rest out of sight is the view's, not this model's, and is not ported: it is owed. 0.4.1's #81 (item 291) is
+// ported from its dist at `e940419d7` at the EL8 to 0.4.2: the burn and the head at a moment
+// (`heroRate`, `headA`), the chart's caption measured (`colcapWords`), the Now pill under it, and "$0" lifted.
 //
 // React lays out the window's DOM from the view's state; here `frame` lays out the same from `State`, and each act
 // changes `State` as its handler does, after which the caller lays out again (React's re-render). The canvas's scene
@@ -26,7 +28,6 @@ enum SpendModel {
   static let compactBelow = 418.0
 
   // The view's fixed words (`SpendView.js` :616-643), the window's.
-  static let colcapText = "Spent in the last 10 minutes"
   static let emptyTitle = "NO ACTIVE AGENTS"
   /// The empty view's hint: the window's names a pane (`Dropped.emptyHint`), so the phone says the list's words, word
   /// for word. Draft word: James's eye (VF-PM 2026-11-04).
@@ -105,6 +106,18 @@ enum SpendModel {
       width: g.lx0 - SpendWords.NarrowHero.listInsetPx - g.x0 - before, measure: { measure($0, .row) })
   }
 
+  /// `colcapWords` (0.4.1, #81 · 3b): the chart's caption's words, the long ones wherever they fit the plot, the
+  /// short where they would overrun it, as on a phone. The long words are measured as `heroRoom` measures, in the
+  /// caption's face, in caps, with its tracking added (the measure leaves both out, as the window's canvas does);
+  /// the length in UTF-16 units, as JavaScript's.
+  static func colcapWords(_ g: Geometry, measure: (String, TextStyle) -> Double) -> String {
+    let long = SpendWords.Colcap.long
+    let width =
+      measure(long.uppercased(), .colcap)
+      + Double(long.utf16.count) * SpendWords.Colcap.trackingEm * SpendWords.Colcap.sizePx
+    return width > g.x1 - g.x0 ? SpendWords.Colcap.short : long
+  }
+
   /// A moment's x on the plot (`xOf`).
   static func xOf(_ g: Geometry, _ span: SpendScale.Window, _ t: Double) -> Double {
     g.x0 + ((t - span.ta) / (span.tb - span.ta)) * (g.x1 - g.x0)
@@ -116,8 +129,9 @@ enum SpendModel {
   }
 
   /// The faces words are measured in: the rows' two (`600 12px` the state, `400 12px` the task, which a narrow hero's
-  /// caption shares), and the narrow hero's number (`300 20px`) and burn (`550 13px`), as `NARROW_HERO` names them.
-  enum TextStyle: Sendable { case state, row, heroFigure, heroRate }
+  /// caption shares), the narrow hero's number (`300 20px`) and burn (`550 13px`), as `NARROW_HERO` names them, and
+  /// the chart's caption (`600 10px`, `COLCAP`'s face), whose long words are measured in caps (0.4.1, #81 · 3b).
+  enum TextStyle: Sendable { case state, row, heroFigure, heroRate, colcap }
 
   /// What the view lays out from: the rows as spend reads them, now, its own box, and how it measures and says time.
   struct Input {
@@ -374,8 +388,10 @@ enum SpendModel {
       perMinute += row.burn ?? 0
     }
     let heroFigure = "~\(SpendWords.money(spent))\(partial ? "+" : "")"
+    // at a moment the burn says by when and how fast; the moment's chip and "by" already say it is past, so it says
+    // no "then" (0.4.1, #81 · 1: at any moment, held or pointed)
     let heroRate =
-      tCross.map { "by \(clock($0)) · \(SpendWords.perHour(perMinute)) then" } ?? "\(SpendWords.perHour(perMinute)) now"
+      tCross.map { "by \(clock($0)) · \(SpendWords.perHour(perMinute))" } ?? "\(SpendWords.perHour(perMinute)) now"
     // its caption: what the figure is, and who it leaves out, the unpriced that had started by the moment (one not yet
     // running is not missing); a narrow stage keeps only who, cut to the room the number and the burn leave it
     let missing = set.unpriced.filter { $0.bornMs <= tView }
@@ -389,7 +405,8 @@ enum SpendModel {
     let all = rows.count + unpricedRows.count
     let started = (rows + unpricedRows).filter { $0.state.key != .before }.count
     let head = Head(
-      a: started < all ? "\(started) of \(all) started" : g.compact ? "" : "By spend",
+      // at a moment it says only what it must, so "Total by <clock>" stands whole (0.4.1, #81 · 2)
+      a: started < all ? "\(started) of \(all) started" : g.compact || tCross != nil ? "" : "By spend",
       b: tCross.map { "Total by \(clock($0))" } ?? "Total", slim: g.compact, x: g.lx0, y: g.ly0, width: g.listW)
 
     // ───────────────────────────── the list: whole rows, a "more" row, waiting rows docked at the foot
@@ -434,8 +451,9 @@ enum SpendModel {
     }
 
     // ───────────────────────────── the axes and their chips
+    // "$0" lifts 4 pt, so its 14 pt line ends above now's chip (0.4.1, #81 · 4)
     let yTicks = SpendScale.moneyTicks(max: yMax, step: target.step).map {
-      Label(text: SpendWords.axisMoney($0, step: target.step), left: g.x1 + 12, top: yOf($0) - 7)
+      Label(text: SpendWords.axisMoney($0, step: target.step), left: g.x1 + 12, top: yOf($0) - ($0 == 0 ? 11 : 7))
     }
     let chipXs = [xOf(span.tb)] + (tCross.map { [xOf($0)] } ?? [])
     let xTicks = SpendScale.timeTicks(ta: span.ta, tb: span.tb, x0: g.x0, x1: g.x1, chips: chipXs).map {
@@ -446,11 +464,14 @@ enum SpendModel {
       chips.append(Chip(text: clock(tCross), moment: true, held: pinned != nil, left: xOf(tCross), top: g.axisY - 2))
     }
 
+    // the chart's caption: the long words where they fit the plot, the short where they would overrun it (#81 · 3b);
+    // the Now pill stands under it, 4 pt clear of its 10 pt line (#81 · 3)
+    let colcap = colcapWords(g, measure: input.measure)
     return Frame(
       g: g, span: span, pinned: pinned, tCross: tCross, lines: lines, order: order, target: target, yMax: yMax,
-      sib: sib, fit: fit, hero: hero, colcap: Label(text: colcapText, left: g.x0, top: g.y0 + 8), head: head,
+      sib: sib, fit: fit, hero: hero, colcap: Label(text: colcap, left: g.x0, top: g.y0 + 8), head: head,
       yTicks: yTicks, xTicks: xTicks, chips: chips,
-      now: pinned == nil ? nil : NowPill(right: g.width - g.x1 + 4, top: g.y0 + 2), tag: tag, rows: listRows,
+      now: pinned == nil ? nil : NowPill(right: g.width - g.x1 + 4, top: g.y0 + 22), tag: tag, rows: listRows,
       more: more, empty: rows.isEmpty && unpricedRows.isEmpty)
   }
 

@@ -176,6 +176,17 @@ enum SpendWords {
     static let listInsetPx = 10.0
   }
 
+  /// `COLCAP` (0.4.1, item 291 · 3b): the chart's caption, its window in words, long and short, and the face
+  /// spend.css sets it in (`600 10px`, caps, 0.07 em; the sheet is the authority), which the view measures the long
+  /// words in. Where they would overrun the plot, as on a phone, the short words stand in their place. Its face is
+  /// `SpendModel.TextStyle`'s `.colcap`.
+  enum Colcap {
+    static let long = "Spent in the last 10 minutes"
+    static let short = "Last 10 minutes"
+    static let sizePx = 10.0
+    static let trackingEm = 0.07
+  }
+
   /// `heroCaption` (:112-125): the caption beside the hero's total and burn — what the figure is, then who it leaves
   /// out, the one by name, several by how many. A narrow stage keeps only who it leaves out, in short
   /// (rv-godview-honesty (2) B', ruled 2026-11-06), cut at a word to its room as a row's words are: the one by name

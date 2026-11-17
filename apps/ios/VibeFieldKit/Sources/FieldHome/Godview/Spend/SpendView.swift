@@ -8,7 +8,8 @@ import UIKit
 // PG-7 — SPEND, DRAWN (kit-only: the swarm's theme, its sprites and the words' measure are UIKit's). puppeteer-views
 // 0.3.3's spend (`52d09c8e`, the spend module `5abe8f75`: `SpendView.js` :116-644 and `spend.css`), with 0.4.0's
 // narrow hero at `e6e4753de` (#101: `measure` in the hero's two faces; its caption stays undrawn at narrow, below),
-// on the phone, over
+// and 0.4.1's #81 at `e940419d7` (item 291: `measure` in the chart's caption's face; the head's gap of 8, its first
+// label cut first), on the phone, over
 // `SpendModel` (what it lays out), `SpendScene` (what the canvas draws) and `SpendPaint` (the canvas). The view
 // stands in `GodviewStage.framed`, a FLOW stage (PG-4t: from the screen's top to the band's top). Its ground fills the
 // stage, and its own box starts below the Stories row's reserve (`input.insets(.flow).top`; insets are data,
@@ -100,7 +101,8 @@ struct SpendView: View {
 
   /// The window's `measure` (a canvas's `measureText`), in the system's sans: the state words at `600 12px`, a task
   /// (and a narrow hero's caption) at `400 12px`, the narrow hero's number at `300 20px` and its burn at `550 13px`
-  /// (550 as `SpendType.weight` maps it: medium). No tracking and no tabular figures, as the window's canvas has none.
+  /// (550 as `SpendType.weight` maps it: medium), and the chart's caption at `600 10px` (handed its words in caps;
+  /// the model adds the tracking). No tracking and no tabular figures, as the window's canvas has none.
   nonisolated static func measure(_ text: String, _ style: SpendModel.TextStyle) -> Double {
     let font: UIFont =
       switch style {
@@ -108,6 +110,7 @@ struct SpendView: View {
       case .row: UIFont.systemFont(ofSize: 12, weight: .regular)
       case .heroFigure: UIFont.systemFont(ofSize: 20, weight: .light)
       case .heroRate: UIFont.systemFont(ofSize: 13, weight: .medium)
+      case .colcap: UIFont.systemFont(ofSize: 10, weight: .semibold)
       }
     return Double((text as NSString).size(withAttributes: [.font: font]).width)
   }
@@ -404,10 +407,14 @@ struct SpendView: View {
   /// The list's head (`.vf-monitor-spend-head`): who had started, and what the money column means.
   private func head(_ head: SpendModel.Head, _ inks: SpendInks) -> some View {
     let size = head.slim ? 9.5 : 10.5
+    // the two labels 8 apart at least; where both do not fit, the first is cut and the second, which names the money
+    // column, stays whole (0.4.1, #81 · 2: `gap: 8px`, the first span's ellipsis, the last's `flex: none`)
     return HStack(spacing: 0) {
       Text(head.a)
-      Spacer(minLength: 0)
+        .truncationMode(.tail)
+      Spacer(minLength: 8)
       Text(head.b)
+        .fixedSize(horizontal: true, vertical: false)
     }
     .font(SpendType.font(size, 600))
     .tracking(0.06 * size)
