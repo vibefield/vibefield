@@ -17,6 +17,7 @@ const read = (file: string): string => readFileSync(join(testing, file), "utf8")
 const ROWS = [
   "smoke-covers.ts",
   "smoke-desk-copy.ts",
+  "smoke-desk-facts.ts",
   "smoke-desk-rig.ts",
   "smoke-market.ts",
   "smoke-more.ts",

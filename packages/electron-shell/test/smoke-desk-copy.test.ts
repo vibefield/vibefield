@@ -8,17 +8,16 @@ import {
   type CopiedSeen,
   type CopyRecorded,
   copiedToMain,
-  deskFactsWords,
   judgeBarStayed,
   judgeCard,
   judgePictured,
   judgeSelectionKept,
-  judgeSelectionTook,
   judgeStill,
   NOTE_LINE,
   NOTE_TITLE,
   picturedToMain,
 } from "../src/testing/smoke-desk-copy";
+import { deskFactsWords, judgeSelectionTook } from "../src/testing/smoke-desk-facts";
 
 const copiedSeen = (over: Partial<CopiedSeen> = {}): CopiedSeen => ({
   seq: 1,
