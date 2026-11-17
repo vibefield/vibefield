@@ -171,6 +171,16 @@ never goes to `store`.
 *Corrected 2026-11-12: build 6 was not archived before kinds landed. From this commit:
 `bash apps/ios/scripts/testflight.sh archive 6 review`, then `upload 6 store`.*
 
+The helper also refuses an archive that carries a real string (item 367, James's pick of
+2026-11-13: every one replaced by DESIGN.md's made-up names before build 6). It reads the
+sources it is about to build before `xcodebuild` (a short literal can compile to bytes a
+search cannot see), and every file of the archive's app after the build and again at
+upload: the census's literals and this Mac's own home and checkout, 0 each, and any other
+account's home inside a binary, 0 (item 374). A CI runner's home (a prebuilt library's own
+paths) and the dSYMs' build paths, which go to Apple when `uploadSymbols` is true, are
+printed as notices. Every count names its path; none is printed. An archive's strip keeps
+build paths out of the app; the dSYM keeps them by design.
+
 There are two exports of the same archive, chosen at upload:
 
 | Export | Options file | Where the build can go |

@@ -72,6 +72,10 @@ daemons) and stop any pnpm dev (Ctrl-C in its terminal, which reaps its pair), o
 upload from Xcode's Organizer by hand
 (apps/ios/TESTFLIGHT.md).
 
+Archive and upload refuse sources or an app carrying one of the owner's real strings
+(item 367) or another account's home in a binary (item 374). Every count names its
+path; none is printed.
+
 Archives and logs are in apps/ios/build/testflight/. Choose a new build number
 for each archive: an existing archive is never overwritten. Xcode also manages
 the uploaded build number to avoid clashes with previous uploads.
@@ -172,6 +176,158 @@ count_markers() {
   echo "$total $absent ($each)"
 }
 
+# Real strings (item 367, asked for 2026-11-13: every real string gives way to a made-up name before build 6 goes to
+# App Review). No archive leaves this Mac carrying a real string: the census's literals (each also in
+# main-tracked test data, never in a kit Source) and this Mac's own paths. Two reads, because each sees what the other
+# cannot:
+# - the SOURCE read, before xcodebuild, over the sources this archive is about to build: a string literal of 15 bytes
+#   or fewer can compile in Release to immediates in the instruction stream, which the bytes read cannot see;
+# - the BYTES read, after the build, over every file of the app: a resource or library a dependency bundles, and a
+#   build path the toolchain embeds, are in no source this script reads.
+# 0 wanted in each, for every kind. Derived paths are named, never printed.
+census_markers=(jamesyong42 SamsungRed project100 /p008/ /Users/james/ tail3f2a8c acme.dev)
+shipped_sources=(apps/ios/VibeFieldKit/Sources apps/ios/App)
+# The source read: prints "<total> (<literal> <files>; ...)" over the working tree, untracked files included, and up to
+# five repo-relative files a literal.
+count_real_sources() {
+  local repo m n total=0 each="" where="" f d
+  repo="$(cd "$ios_root/../.." && pwd -P)" || {
+    echo "unread (no checkout)"
+    return 1
+  }
+  for d in "${shipped_sources[@]}"; do
+    if [[ ! -d "$repo/$d" ]]; then
+      echo "unread ($d is not there)"
+      return 1
+    fi
+  done
+  for m in "${census_markers[@]}"; do
+    n="$(cd "$repo" && { LC_ALL=C grep -rlF -- "$m" "${shipped_sources[@]}" || true; } | wc -l | tr -d ' ')"
+    each+="${each:+; }$m $n"
+    total=$((total + n))
+    if [[ "$n" != 0 ]]; then
+      while IFS= read -r f; do
+        where+="  $m: $f"$'\n'
+      done < <(cd "$repo" && { LC_ALL=C grep -rlF -- "$m" "${shipped_sources[@]}" || true; } | awk 'NR <= 5')
+    fi
+  done
+  echo "$total ($each)"
+  printf '%s' "$where"
+}
+# The source read's check: refuses before xcodebuild, naming the files; else one line.
+real_sources_check() {
+  local found
+  found="$(count_real_sources)" || {
+    echo "The sources this archive would build could not be read for real strings: $found" >&2
+    return 1
+  }
+  if [[ "${found%% *}" != 0 ]]; then
+    echo "The sources this archive would build carry a real string: ${found%%$'\n'*}" >&2
+    printf '%s\n' "${found#*$'\n'}" >&2
+    echo "Nothing is archived with one (item 367). Replace it as DESIGN.md's made-up names say." >&2
+    return 1
+  fi
+  echo "Real strings in the sources: $found"
+}
+# The bytes read: prints "<total> (<label> <count>; ...)" over every file of the archive's app and, for each string
+# found, up to five of the app's files that hold it.
+count_real() {
+  local app m n i total=0 each="" where="" f
+  app="$(find "$1/Products/Applications" -maxdepth 1 -name '*.app' -print -quit 2>/dev/null)"
+  if [[ -z "$app" ]]; then
+    echo "unread (no app in the archive)"
+    return 1
+  fi
+  local strings=("${census_markers[@]}" "$HOME/" "$(cd "$ios_root/../.." && pwd -P)/")
+  local labels=("${census_markers[@]}" "this Mac's home" "this checkout")
+  i=0
+  for m in "${strings[@]}"; do
+    n="$({ LC_ALL=C grep -raoF -- "$m" "$app" || true; } | wc -l | tr -d ' ')"
+    each+="${each:+; }${labels[$i]} $n"
+    total=$((total + n))
+    if [[ "$n" != 0 ]]; then
+      while IFS= read -r f; do
+        where+="  ${labels[$i]}: ${f#"$app"/}"$'\n'
+      done < <({ LC_ALL=C grep -rlF -- "$m" "$app" || true; } | awk 'NR <= 5')
+    fi
+    i=$((i + 1))
+  done
+  echo "$total ($each)"
+  printf '%s' "$where"
+}
+# Other machines' builds (item 374): a prebuilt library carries its builder's paths (Rust panic locations, its debug
+# map). A CI runner's home (/Users/runner/, GitHub's hosted macOS account) names nobody: a notice with its count. Any
+# other account's home in a Mach-O names a person: refused, with the file and its class, the name never printed
+# (asked for 2026-11-13). The made-up names are DESIGN.md's table's, which the fixtures carry by design; add one only
+# by a dated line here. This Mac's own home is the bytes read's own label.
+made_up_users=(me you test kim ada)
+# Prints "<runner> <other>" and, for each other account's path, "<count> <file in the app> (<class>)", at most ten.
+count_other_machines() {
+  local app f name cls mine runner=0 other=0 where=""
+  app="$(find "$1/Products/Applications" -maxdepth 1 -name '*.app' -print -quit 2>/dev/null)"
+  if [[ -z "$app" ]]; then
+    echo "unread (no app in the archive)"
+    return 1
+  fi
+  mine="$(basename "$HOME")"
+  while IFS= read -r f; do
+    # Mach-O files only: the fixtures' JSON holds the made-up names by design.
+    case "$(LC_ALL=C head -c 4 "$f" | od -An -tx1 | tr -d ' \n')" in
+      cffaedfe | cafebabe) ;;
+      *) continue ;;
+    esac
+    while IFS=$'\t' read -r name cls; do
+      case " runner $mine ${made_up_users[*]} " in
+        *" $name "*)
+          if [[ "$name" == runner ]]; then
+            runner=$((runner + 1))
+          fi
+          ;;
+        *)
+          other=$((other + 1))
+          where+="${f#"$app"/} ($cls)"$'\n'
+          ;;
+      esac
+    done < <({ LC_ALL=C grep -aoE '/Users/[A-Za-z0-9._-]+/[[:graph:]]{0,160}' "$f" || true; } |
+      awk -F/ '{ c = ($4 != "" ? $4 : "(top)"); if ($5 != "") c = c "/" $5
+        x = ($NF ~ /\.[A-Za-z0-9]+$/ ? "*." substr($NF, match($NF, /\.[A-Za-z0-9]+$/) + 1) : "(no extension)")
+        print $3 "\t" c " " x }')
+  done < <(find "$app" -type f)
+  echo "$runner $other"
+  printf '%s' "$where" | LC_ALL=C sort | uniq -c | awk 'NR <= 10 { $1 = $1; print "  another account'"'"'s home: " $0 }'
+}
+# The bytes read's check, on one archive: refuses while its app carries a real string or another account's home,
+# naming the files; else one line, and a notice for a CI runner's paths.
+real_strings_check() {
+  local found other runner others
+  found="$(count_real "$1")" || {
+    echo "The archive's app could not be read for real strings: $found" >&2
+    return 1
+  }
+  other="$(count_other_machines "$1")" || {
+    echo "The archive's app could not be read for other machines' builds: $other" >&2
+    return 1
+  }
+  read -r runner others <<<"${other%%$'\n'*}"
+  if [[ "${found%% *}" != 0 ]]; then
+    echo "This archive's app carries a real string: ${found%%$'\n'*}" >&2
+    printf '%s\n' "${found#*$'\n'}" >&2
+    echo "Nothing goes to TestFlight or App Review with one (item 367)." \
+      "Replace it as DESIGN.md's made-up names say." >&2
+    return 1
+  fi
+  if [[ "$others" != 0 ]]; then
+    echo "This archive's app carries another account's home in a binary: $others (the names are never printed):" >&2
+    printf '%s\n' "${other#*$'\n'}" >&2
+    echo "A person's account name in a shipped binary is a person's name in the build (item 374)." \
+      "The library that carries it is fixed in its own release." >&2
+    return 1
+  fi
+  echo "Real strings in its app: $found"
+  if [[ "$runner" != 0 ]]; then
+    echo "Notice: other machines' builds: a CI runner's home (/Users/runner/) $runner (a prebuilt library's own paths)."
+  fi
+}
 # The dSYM notice (item 374; James on the board, 2026-11-13 23:55:16Z: "As is, with the notice, for build 6"):
 # uploadSymbols sends the archive's dSYMs to Apple for crash reports. They hold this Mac's build paths by design (the
 # debug info), they are never in the app, and no tester or reviewer sees them. One line at upload, never a refusal; its
@@ -213,6 +369,8 @@ case "$action" in
       echo "Archive already exists: $archive. Choose a new build number." >&2
       exit 1
     fi
+    # The source read (item 367), before the minutes of archiving.
+    real_sources_check || exit 1
     case "${ASC_ARCHIVE_KEY:-}" in
       "" | 0 | 1) ;;
       *)
@@ -259,6 +417,8 @@ case "$action" in
       fi
       echo "The ${recorded_kind:+review }archive carries no TestFlight-only page: $found."
     fi
+    # The bytes read (items 367, 374), for both exports: internal TestFlight reaches devices too.
+    real_strings_check "$archive" || exit 1
     # For both exports: internal TestFlight uploads its dSYMs too.
     dsym_notice "$archive"
     ;;
@@ -497,6 +657,7 @@ case "$action" in
         "VF_TESTFLIGHT did not reach every TestFlight-only page." >&2
       exit 1
     fi
+    real_strings_check "$archive" || exit 1
     if [[ "$archive_kind" == review ]]; then
       echo "Upload: bash $ios_root/scripts/testflight.sh upload $build_number store"
     else
