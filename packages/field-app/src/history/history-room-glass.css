@@ -1,18 +1,50 @@
-/* ROSETTA'S ROOM GLASS ON THE DESK (DK-15; docket N3 (a), 2026-10-12; DESIGN.md §8 "The
-   covers over the desk", the deck's note and its carve-out; R16). On a host surface the room's
-   paper fades — the transcript's top frost, the sticky day heads — FROST: a backdrop filter over
+/* ROSETTA'S ROOM GLASS ON THE DESK (DK-15; docket N3 (a), 2026-10-12; item 394, 2026-11-13;
+   DESIGN.md §8 "The covers over the desk", the deck's note and its carve-out, and "History is
+   rosetta's room, on the cover's glass", "Its ground"; R16). On a host surface the room's paper
+   fades — the transcript's top frost, the sticky day heads — FROST: a backdrop filter over
    whatever passes beneath, which under a cover is the desk's still, already blurred once, and
    which the compositor re-blurs on every frame anything beneath it moves. The transcript's top
-   fade is the cover's TINT here instead: the view's own chrome, feathered by the room's own
-   mask — its paper fade's recipe in the cover's colour, which cuts cleanly and costs the
-   compositor nothing. The sticky day heads (every head the room draws as `.ah-day`, a list's
-   days and its section heads) keep the room's own frost since N3 (a), its cost measured under a
-   cover before it landed, so this names them nowhere. Scoped to this view; the room's own sheet
-   (`@vibefield/rosetta-room`, not ours to edit) keeps its frost elsewhere. It rides the ROOM'S chunk (only
-   `HistoryRoomView` imports it, after the room's sheet): its selectors are the room's, and the
-   room's rules travel with the room (`pnpm bundle:assert`). */
+   fade is PAINT here instead: the view's own chrome, which cuts cleanly and costs the compositor
+   nothing. The sticky day heads (every head the room draws as `.ah-day`, a list's days and its
+   section heads) keep the room's own frost since N3 (a), its cost measured under a cover before
+   it landed, so this names them nowhere. Scoped to this view; the room's own sheet
+   (`@vibefield/rosetta-room`, not ours to edit) keeps its frost elsewhere. It rides the ROOM'S
+   chunk (only `HistoryRoomView` imports it, after the room's sheet): its selectors are the
+   room's, and the room's rules travel with the room (`pnpm bundle:assert`).
+
+   THE PAINT (item 394, asked for 2026-11-13: the fade at the top read too strong on the
+   glass). Until then it was the cover's raw colour whole, `--vf-chrome-solid`, under the room's
+   own mask on the room's 64px: 100% to 88% over the first 24px, then one straight ramp. The
+   cover's raw colour is the glass with the desk taken out of it, so the band stood on the glass
+   as a slab, and a straight ramp ends in an edge. Now:
+   - Its colour is the glass as it reads over the bare mat: the cover's tint at the view's own
+     72% (`history-room-view.css`, FC-D16) over the mat's ground, the colour the still's rim wears
+     under the cover. Over the mat it moves the ground by nothing, so only the lines thin.
+   - Its strength is the squares of 8 down to 0, a stop every 12px: 64% at the head's hairline,
+     nothing at 96px. A quadratic ease, so it has no level stretch and no edge at its foot, and
+     a line under it is never taken to nothing: the column's head cuts it.
+   - The room's mask is cleared, so these stops are the whole feather.
+   - The rest stays the room's: the element, its place under the pinned day pill (which stands
+     on its own ground), and its rise over the first 24px of scroll, so nothing lies over the
+     session's start at rest.
+   `ui-system-boundaries.test.ts` holds the stops, the height, and the 72% to the view's. */
 .vf-history .ah-frame[data-ah-surface="host"] .tr-frost::before {
+  --vf-history-fade-glass: color-mix(in srgb, var(--vf-chrome-solid) 72%, var(--vf-mat-ground));
+  height: 96px;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  background: var(--vf-chrome-solid);
+  -webkit-mask-image: none;
+  mask-image: none;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--vf-history-fade-glass) 64%, transparent) 0px,
+    color-mix(in srgb, var(--vf-history-fade-glass) 49%, transparent) 12px,
+    color-mix(in srgb, var(--vf-history-fade-glass) 36%, transparent) 24px,
+    color-mix(in srgb, var(--vf-history-fade-glass) 25%, transparent) 36px,
+    color-mix(in srgb, var(--vf-history-fade-glass) 16%, transparent) 48px,
+    color-mix(in srgb, var(--vf-history-fade-glass) 9%, transparent) 60px,
+    color-mix(in srgb, var(--vf-history-fade-glass) 4%, transparent) 72px,
+    color-mix(in srgb, var(--vf-history-fade-glass) 1%, transparent) 84px,
+    transparent 96px
+  );
 }
