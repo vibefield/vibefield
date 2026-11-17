@@ -10,9 +10,75 @@ import type { LaneInfo } from "../src/doc-sync";
 import type { DriveHoldersMesh } from "../src/drive/holders";
 import type { DriveLaneBytes, DriveLaneControl } from "../src/drive/lane-relay";
 import type { DrivePullsFloor } from "../src/drive/pulls";
-import { RpcCallError } from "../src/native-link";
+import type { MeshStreamWake } from "../src/mesh-stream";
+import { type NativeSubscribeOptions, RpcCallError } from "../src/native-link";
 
 type Handler = (payload: unknown, kind: "snapshot" | "delta") => void;
+/** A subscription's replay owner (`NativeSubscribeOptions.onReplayFailed`), or undefined for one with none. */
+type Owner = ((error: RpcCallError) => void) | undefined;
+
+/** The floor's node gate, as `error-data.mesh-not-up.json` holds it: what a store subscribe meets with no node up. */
+export const meshNotUp = (): RpcCallError =>
+  new RpcCallError(
+    "UNAVAILABLE",
+    "mesh node not up",
+    true,
+    { service: "mesh-gateway", state: "starting" },
+    -32006,
+  );
+
+/** A subscribe that read TIMEOUT: MeshStream asks it again on its pace (mesh-stream.ts "paced"). */
+export const timedOut = (): RpcCallError =>
+  new RpcCallError("TIMEOUT", "mgmt request exceeded its deadline", true);
+
+/** A retryable refusal that is not the node gate: MeshStream asks it again at the next moment. */
+export const unavailable = (message = "not connected"): RpcCallError =>
+  new RpcCallError("UNAVAILABLE", message, true);
+
+/** MeshClient's wake (NR, `MeshStreamWake`), in memory: the node's read, and its two moments, which a row fires.
+ * `onRearm` hears both (the lane table's stream); `onConnected` hears the link's "connected" alone (the holders',
+ * NR S3). */
+export class FakeWake implements MeshStreamWake {
+  up = false;
+  readonly #connected = new Set<() => void>();
+  readonly #nodeUp = new Set<() => void>();
+
+  nodeReadsUp(): boolean {
+    return this.up;
+  }
+
+  onRearm(fn: () => void): () => void {
+    this.#connected.add(fn);
+    this.#nodeUp.add(fn);
+    return () => {
+      this.#connected.delete(fn);
+      this.#nodeUp.delete(fn);
+    };
+  }
+
+  onConnected(fn: () => void): () => void {
+    this.#connected.add(fn);
+    return () => {
+      this.#connected.delete(fn);
+    };
+  }
+
+  /** The link connected (NativeLink's "connected"). */
+  reconnected(): void {
+    for (const fn of [...this.#connected]) fn();
+  }
+
+  /** The floor's health turned the node up (MeshClient's "node-up"). */
+  nodeComesUp(): void {
+    this.up = true;
+    for (const fn of [...this.#nodeUp]) fn();
+  }
+
+  /** How many listen for either moment. */
+  listeners(): number {
+    return new Set([...this.#connected, ...this.#nodeUp]).size;
+  }
+}
 
 const UNSUPPORTED_FIXTURE = new URL(
   "../../contracts/fixtures/error-data.file-transfer-unsupported.json",
@@ -50,8 +116,8 @@ const CONFLICT_FIXTURE = new URL(
 export const CONFLICT_GOLDEN = ErrorData.parse(JSON.parse(readFileSync(CONFLICT_FIXTURE, "utf8")));
 
 /** The drive's lane lifecycle, in memory: every open and close it was asked, and a stream a test announces on. A
- * subscription is one NativeLink entry: `subscribes - disposed` is how many the link would replay, and only an entry
- * with a route hears `announce`. */
+ * subscription is one NativeLink entry: `subscribes - disposed - ended` is how many the link would replay, and only an
+ * entry with a route hears `announce`. */
 export class FakeDriveLaneControl implements DriveLaneControl {
   readonly opened: Array<{ laneId: number; class: string; peer: string; protocol: string }> = [];
   readonly closed: number[] = [];
@@ -64,10 +130,15 @@ export class FakeDriveLaneControl implements DriveLaneControl {
   subscribes = 0;
   /** every subscription let go */
   disposed = 0;
+  /** every owned entry NativeLink ended on a refused replay (`replayRefused`) */
+  ended = 0;
   /** when set, the next subscribe is refused with it */
   refuseNextSubscribe: Error | null = null;
   /** while set, a subscribe waits for it before it answers or is refused */
   subscribeGate: Promise<void> | null = null;
+  /** NativeLink's entries: each one's replay owner */
+  readonly #entries = new Map<Handler, Owner>();
+  /** the entries that still hear */
   readonly #routes = new Set<Handler>();
 
   async open(req: {
@@ -85,7 +156,10 @@ export class FakeDriveLaneControl implements DriveLaneControl {
     this.closed.push(laneId);
   }
 
-  async subscribe(onEvent: Handler): Promise<{ lanes: LaneInfo[]; dispose: () => void }> {
+  async subscribe(
+    onEvent: Handler,
+    opts: NativeSubscribeOptions = {},
+  ): Promise<{ lanes: LaneInfo[]; dispose: () => void }> {
     this.subscribes += 1;
     if (this.subscribeGate !== null) await this.subscribeGate;
     if (this.refuseNextSubscribe !== null) {
@@ -93,11 +167,14 @@ export class FakeDriveLaneControl implements DriveLaneControl {
       this.refuseNextSubscribe = null;
       throw refusal;
     }
+    this.#entries.set(onEvent, opts.onReplayFailed);
     this.#routes.add(onEvent);
     return {
       lanes: this.lanes,
       dispose: () => {
+        if (!this.#entries.has(onEvent)) return;
         this.disposed += 1;
+        this.#entries.delete(onEvent);
         this.#routes.delete(onEvent);
       },
     };
@@ -107,9 +184,21 @@ export class FakeDriveLaneControl implements DriveLaneControl {
     for (const route of [...this.#routes]) route(payload, kind);
   }
 
-  /** NativeLink's replay was refused or read TIMEOUT: every entry stays, with no route, and nothing says so. */
-  replayRefused(): void {
-    this.#routes.clear();
+  /** NativeLink's replay answered: every entry hears the table's fresh snapshot (P5). */
+  replayAnswered(): void {
+    this.announce({ lanes: this.lanes }, "snapshot");
+  }
+
+  /** NativeLink's replay was refused or read TIMEOUT (`error`, TIMEOUT by default): an entry with an owner is ended
+   * and its owner told (native-link.ts `endRefusedReplays`); one with none stays, with no route, and nothing says so. */
+  replayRefused(error: RpcCallError = timedOut()): void {
+    for (const [entry, owner] of [...this.#entries]) {
+      this.#routes.delete(entry);
+      if (owner === undefined) continue;
+      this.#entries.delete(entry);
+      this.ended += 1;
+      owner(error);
+    }
   }
 }
 
@@ -162,14 +251,26 @@ export class FakeDriveStore {
   subscribes = 0;
   /** every subscription a member let go */
   disposed = 0;
-  /** the next member subscribe fails, as a store with no node up does */
+  /** every owned entry NativeLink ended on a refused replay (`replayRefused`) */
+  ended = 0;
+  /** the next member subscribe is refused by the node gate, as a store with no node up is (`meshNotUp`) */
   failNextSubscribe = false;
   /** while set, a member subscribe waits for it before it answers or fails */
   subscribeGate: Promise<void> | null = null;
+  /** the members' mesh: its node read and its moments (NR S3) */
+  readonly wake = new FakeWake();
+  /** NativeLink's entries: each one's replay owner */
+  readonly #entries = new Map<Handler, Owner>();
+  /** the entries that still hear */
   readonly #routes = new Set<Handler>();
 
-  member(deviceId: string): DriveHoldersMesh {
+  /** A member's view. It carries MeshClient's `onRearm` too, which the holders do not take (their wake is the link's
+   * "connected" alone, NR S3), so a row can tell which one they hear. */
+  member(deviceId: string): DriveHoldersMesh & { onRearm(fn: () => void): () => void } {
     return {
+      nodeReadsUp: () => this.wake.nodeReadsUp(),
+      onConnected: (fn: () => void) => this.wake.onConnected(fn),
+      onRearm: (fn: () => void) => this.wake.onRearm(fn),
       setSlice: async (storeId: string, data: unknown) => {
         if (this.setGate !== null) await this.setGate;
         if (this.failNextSet) {
@@ -184,18 +285,25 @@ export class FakeDriveStore {
         }
         return { storeId, version: this.writes.length };
       },
-      subscribeStoreManaged: async (storeId: string, onEvent: Handler) => {
+      subscribeStoreManaged: async (
+        storeId: string,
+        onEvent: Handler,
+        opts: NativeSubscribeOptions = {},
+      ) => {
         this.subscribes += 1;
         if (this.subscribeGate !== null) await this.subscribeGate;
         if (this.failNextSubscribe) {
           this.failNextSubscribe = false;
-          throw new Error("mesh node not up");
+          throw meshNotUp();
         }
+        this.#entries.set(onEvent, opts.onReplayFailed);
         this.#routes.add(onEvent);
         return {
           snapshot: this.snapshot(storeId),
           dispose: () => {
+            if (!this.#entries.has(onEvent)) return;
             this.disposed += 1;
+            this.#entries.delete(onEvent);
             this.#routes.delete(onEvent);
           },
         };
@@ -235,6 +343,23 @@ export class FakeDriveStore {
    * forwarder holding the old one. Only a new subscribe hears it. */
   rebuild(): void {
     this.#routes.clear();
+  }
+
+  /** NativeLink's replay answered: every entry hears the store's fresh snapshot (P5). */
+  replayAnswered(): void {
+    this.resnapshot();
+  }
+
+  /** NativeLink's replay was refused (the node gate, by default: a floor restarted with no node): an entry with an
+   * owner is ended and its owner told (native-link.ts `endRefusedReplays`); one with none stays, with no route. */
+  replayRefused(error: RpcCallError = meshNotUp()): void {
+    for (const [entry, owner] of [...this.#entries]) {
+      this.#routes.delete(entry);
+      if (owner === undefined) continue;
+      this.#entries.delete(entry);
+      this.ended += 1;
+      owner(error);
+    }
   }
 
   #emit(payload: unknown, kind: "snapshot" | "delta"): void {

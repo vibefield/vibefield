@@ -8,6 +8,7 @@ import {
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { LaneInfo } from "../doc-sync";
 import { DEFAULT_SEND_MAX_BUFFERED_BYTES } from "../mesh-lane";
+import type { MeshStreamWake } from "../mesh-stream";
 import { RpcCallError } from "../native-link";
 
 // DR-3b (W3, VF-RELAY) — the drive's lane relay: mille-drive's sync records between two desktops of the account, on a
@@ -57,6 +58,10 @@ export interface DriveLaneRelayOptions {
   allocateLaneId: () => number;
   /** Is this `PeerInfo.id` one of this account's (DeviceService's self-peer set)? Asked of every inbound lane. */
   isSelfPeer: (peer: string) => boolean;
+  /** NR S3's seam, taken by its next commit: when the lane table's stream asks again (MeshClient's `nodeReadsUp` and
+   * `onRearm`), and its paced re-ask's pace (tests). */
+  wake: MeshStreamWake;
+  backoff?: { baseMs: number; capMs: number };
   logger?: Logger;
   /** The send watermark (default MeshLaneLink's, DEFAULT_SEND_MAX_BUFFERED_BYTES). */
   sendWatermarkBytes?: number;

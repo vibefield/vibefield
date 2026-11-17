@@ -38,9 +38,11 @@ import {
   FakeDriveLaneBytes,
   FakeDriveLaneControl,
   FakeDriveStore,
+  FakeWake,
   gate,
   sleep,
   streamRefusedOnce,
+  unavailable,
   unsupportedFloor,
   until,
 } from "./drive-fakes";
@@ -100,20 +102,24 @@ function holders(
   return service;
 }
 
-/** The lane relay over fakes: these rows are the slice's. */
+/** The lane relay over fakes, on `wake` (MeshClient's, NR S3): these rows are the slice's. */
 function relay(
   control = new FakeDriveLaneControl(),
   bytes = new FakeDriveLaneBytes(),
+  wake = new FakeWake(),
 ): DriveLaneRelay {
   return new DriveLaneRelay({
     control,
     bytes,
     allocateLaneId: new OutboundLaneIdAllocator().allocate,
     isSelfPeer: () => true,
+    wake,
+    backoff: { baseMs: 20, capMs: 80 },
   });
 }
 
-/** The whole service over `store`, its lane planes in hand: an open drive, published as "studio". */
+/** The whole service over `store`, its lane planes in hand: an open drive, published as "studio". The lane table and
+ * the store share one mesh, the store's wake. */
 function composed(store: FakeDriveStore, pullsFloor: DrivePullsFloor = unsupportedFloor()) {
   const control = new FakeDriveLaneControl();
   const bytes = new FakeDriveLaneBytes();
@@ -124,13 +130,14 @@ function composed(store: FakeDriveStore, pullsFloor: DrivePullsFloor = unsupport
     bootId: () => "boot-1",
     linked: () => true,
   });
+  const studio = holders(store, "studio");
   const service = new DriveService({
-    relay: relay(control, bytes),
+    relay: relay(control, bytes, store.wake),
     pulls,
-    holders: holders(store, "studio"),
+    holders: studio,
   });
   cleanup.push(() => service.stop());
-  return { control, bytes, pulls, service };
+  return { control, bytes, pulls, service, studio, wake: store.wake };
 }
 
 /** A slice as a desktop publishes it. */
@@ -328,7 +335,7 @@ describe("DR-3b — the drive's holders slice", () => {
     mock.killClients();
     await redialled;
     expect(storeSubscribes()).toBe(2);
-    // "connected" asks at once, and the gate refuses that too
+    // a node-up while the gate still refuses: that ask is refused too
     await studio.nodeUp();
     expect(storeSubscribes()).toBe(3);
     // the node comes up, holding a store this desktop has not heard
@@ -455,8 +462,10 @@ describe("DR-3b — the drive's holders slice", () => {
       let race = false;
       const mesh: DriveHoldersMesh = {
         setSlice: (storeId, data) => member.setSlice(storeId, data),
-        subscribeStoreManaged: (storeId, onEvent) => {
-          const answer = member.subscribeStoreManaged(storeId, onEvent);
+        nodeReadsUp: () => member.nodeReadsUp(),
+        onConnected: (fn) => member.onConnected(fn),
+        subscribeStoreManaged: (storeId, onEvent, opts) => {
+          const answer = member.subscribeStoreManaged(storeId, onEvent, opts);
           if (race) {
             race = false;
             answer.catch(() => afterTurns(turns, () => void studio.start()));
@@ -604,20 +613,107 @@ describe("DR-3b — the drive's holders slice", () => {
     expect(withdrawn(store)).toEqual([false, true, false, true]);
   });
 
-  it("publishes the slice again at a reconnect, and hears the lane table anew", async () => {
+  it("S3: publishes the slice again at a reconnect whose replays answered, and subscribes nothing beside them", async () => {
     const store = new FakeDriveStore();
-    const { control, bytes, service } = composed(store);
+    store.put("laptop", slice("laptop"));
+    const { control, service, studio, wake } = composed(store);
     await service.start();
     expect(store.writes).toHaveLength(1);
-    control.replayRefused();
-    control.lanes = [INBOUND];
+    // NativeLink replayed both streams and the floor answered: "connected", then the service's reconnect
+    store.replayAnswered();
+    control.replayAnswered();
+    wake.reconnected();
     await service.connected();
-    expect(store.writes).toHaveLength(2);
-    expect(bytes.claimed(IN)).toBe(true);
-    expect(store.subscribes).toBe(2);
+    expect(store.writes, "published again").toHaveLength(2);
+    expect(store.subscribes, "the store's replay hears it: no second subscribe").toBe(1);
+    expect(control.subscribes, "nor the lane table's").toBe(1);
+    store.put("attic", slice("attic"));
+    expect(ids(studio), "the replayed stream is the one that hears").toEqual(["attic", "laptop"]);
   });
 
-  it("holds up neither the slice nor the lane table behind the pulls' unanswered subscribe at a reconnect", async () => {
+  it("S3: a reconnect's refused store replay is asked again at once while the node reads up, with no node-up", async () => {
+    const store = new FakeDriveStore();
+    store.wake.up = true;
+    const studio = holders(store, "studio");
+    await studio.start();
+    expect(store.subscribes).toBe(1);
+    // a floor anew whose gate refused the replay, under a node the health still reads up: "connected", then the owner
+    // is told (native-link.ts `endRefusedReplays`)
+    store.slices.set("attic", slice("attic"));
+    store.wake.reconnected();
+    store.replayRefused();
+    await until(() => store.subscribes === 2, "the stream's own ask");
+    await until(() => ids(studio).includes("attic"), "the store, heard again");
+    expect(store.ended, "the link ended the refused entry").toBe(1);
+    store.put("den", slice("den"));
+    expect(ids(studio)).toEqual(["attic", "den"]);
+  });
+
+  it("S3: a refused store replay waits for its next moment, and is asked at the reconnect after it", async () => {
+    const store = new FakeDriveStore();
+    const studio = holders(store, "studio");
+    await studio.start();
+    store.wake.reconnected();
+    store.replayRefused(unavailable());
+    await sleep(20);
+    expect(
+      store.subscribes,
+      "a refusal that is not the gate asks at the next moment, not now",
+    ).toBe(1);
+    store.put("attic", slice("attic"));
+    store.wake.reconnected();
+    await until(() => store.subscribes === 2, "the next reconnect's ask");
+    await until(() => ids(studio).includes("attic"), "the store, heard again");
+  });
+
+  it("S3 (F2): a fresh start's late node makes EXACTLY one ask: the holders hear node-up through the service alone", async () => {
+    const store = new FakeDriveStore();
+    store.put("laptop", slice("laptop"));
+    store.failNextSubscribe = true;
+    const { service, studio, wake } = composed(store, answeringFloor());
+    await service.start();
+    expect(store.subscribes, "start's ask, refused by the gate").toBe(1);
+    // the floor's health turns the node up (MeshClient's "node-up"), and the daemon hands it to the service
+    wake.nodeComesUp();
+    await service.nodeUp();
+    await sleep(20);
+    expect(store.subscribes, "the node-up's one ask, never a second at the wake").toBe(2);
+    expect(store.disposed, "nothing to let go: the refused ask made no entry").toBe(0);
+    expect(ids(studio)).toEqual(["laptop"]);
+  });
+
+  it("S3: at a node-up the slice is written after the pulls' roots", async () => {
+    const store = new FakeDriveStore();
+    const held = gate();
+    let holdRoots = false;
+    const floorAsked: string[] = [];
+    const pullsFloor: DrivePullsFloor = {
+      request: async (method) => {
+        floorAsked.push(method);
+        if (holdRoots) await held.waits;
+        return { roots: [] };
+      },
+      subscribe: async (method) => {
+        floorAsked.push(method);
+        return { snapshot: { transfers: [] }, dispose: () => undefined };
+      },
+    };
+    const { service } = composed(store, pullsFloor);
+    await service.start();
+    expect(store.writes).toHaveLength(1);
+    holdRoots = true;
+    const up = service.nodeUp();
+    const roots = () => floorAsked.filter((method) => method === "native.mesh.fileTransfer.roots");
+    expect(roots(), "start declared the roots once").toHaveLength(1);
+    await until(() => roots().length === 2, "the node-up's roots, held");
+    await sleep(20);
+    expect(store.writes, "no slice while the roots are in flight").toHaveLength(1);
+    held.open();
+    await up;
+    expect(store.writes, "the slice, once the roots are answered").toHaveLength(2);
+  });
+
+  it("holds up no slice behind the pulls' unanswered subscribe at a reconnect", async () => {
     const held = gate();
     let silent = false;
     const pullsFloor: DrivePullsFloor = {
@@ -628,7 +724,7 @@ describe("DR-3b — the drive's holders slice", () => {
       },
     };
     const store = new FakeDriveStore();
-    const { control, service } = composed(store, pullsFloor);
+    const { service } = composed(store, pullsFloor);
     await service.start();
     silent = true;
     let ended = false;
@@ -636,7 +732,6 @@ describe("DR-3b — the drive's holders slice", () => {
       ended = true;
     });
     await until(() => store.writes.length === 2, "the slice, past the pulls' silent subscribe");
-    await until(() => control.subscribes === 2, "the lane table, past the pulls' silent subscribe");
     expect(ended).toBe(false);
     // NativeLink's deadline ends that subscribe, and the reconnect with it
     held.open();
@@ -663,15 +758,16 @@ describe("DR-3b — the drive's holders slice", () => {
         return { snapshot: { transfers: [] }, dispose: () => undefined };
       },
     };
-    const { control, bytes, service } = composed(store, pullsFloor);
-    control.refuseNextSubscribe = new Error("mesh queue full");
+    const { control, bytes, service, wake } = composed(store, pullsFloor);
+    control.refuseNextSubscribe = unavailable("mesh queue full");
     await expect(service.start()).rejects.toThrow("mesh queue full");
     // start's own behaviour: nothing after the lane table ran
     expect(asked).toEqual([]);
     expect(store.writes).toEqual([]);
     control.lanes = [INBOUND];
+    wake.reconnected();
     await service.connected();
-    expect(bytes.claimed(IN)).toBe(true);
+    await until(() => bytes.claimed(IN), "the lane table, asked at the reconnect");
     expect(asked).toContain(SUBSCRIBE);
     expect(store.subscribes).toBe(1);
     expect(store.writes).toHaveLength(1);
@@ -680,17 +776,19 @@ describe("DR-3b — the drive's holders slice", () => {
   it("arms the lane table at the next node-up after it refused start, with no reconnect", async () => {
     const store = new FakeDriveStore();
     const pullsFloor = answeringFloor();
-    const { control, bytes, service } = composed(store, pullsFloor);
-    control.refuseNextSubscribe = new Error("mesh queue full");
+    const { control, bytes, service, wake } = composed(store, pullsFloor);
+    control.refuseNextSubscribe = unavailable("mesh queue full");
     await expect(service.start()).rejects.toThrow("mesh queue full");
     control.lanes = [INBOUND];
+    wake.nodeComesUp();
     await service.nodeUp();
-    expect(bytes.claimed(IN)).toBe(true);
+    await until(() => bytes.claimed(IN), "the lane table, asked at the node-up");
     expect(control.subscribes).toBe(2);
     expect(pullsFloor.asked).toContain(SUBSCRIBE);
     expect(store.subscribes).toBe(1);
     expect(store.writes).toHaveLength(1);
     // the table is the bridge's, not the node's: the next node-up keeps the stream that stands
+    wake.nodeComesUp();
     await service.nodeUp();
     expect(control.subscribes).toBe(2);
     expect(control.disposed).toBe(0);
@@ -699,13 +797,14 @@ describe("DR-3b — the drive's holders slice", () => {
   it("holds up no lane table behind the pulls' unanswered subscribe at a node-up", async () => {
     const store = new FakeDriveStore();
     const pullsFloor = answeringFloor();
-    const { control, bytes, service } = composed(store, pullsFloor);
-    control.refuseNextSubscribe = new Error("mesh queue full");
+    const { control, bytes, service, wake } = composed(store, pullsFloor);
+    control.refuseNextSubscribe = unavailable("mesh queue full");
     await expect(service.start()).rejects.toThrow("mesh queue full");
     const held = gate();
     pullsFloor.subscribeGate = held.waits;
     control.lanes = [INBOUND];
     let ended = false;
+    wake.nodeComesUp();
     const up = service.nodeUp().then(() => {
       ended = true;
     });
@@ -723,23 +822,20 @@ describe("DR-3b — the drive's holders slice", () => {
   it("holds up neither the pulls nor the slice behind the lane table's unanswered subscribe at a node-up", async () => {
     const store = new FakeDriveStore();
     const pullsFloor = answeringFloor();
-    const { control, bytes, service } = composed(store, pullsFloor);
-    control.refuseNextSubscribe = new Error("mesh queue full");
+    const { control, bytes, service, wake } = composed(store, pullsFloor);
+    control.refuseNextSubscribe = unavailable("mesh queue full");
     await expect(service.start()).rejects.toThrow("mesh queue full");
     const held = gate();
     control.subscribeGate = held.waits;
     control.lanes = [INBOUND];
-    let ended = false;
-    const up = service.nodeUp().then(() => {
-      ended = true;
-    });
+    wake.nodeComesUp();
+    const up = service.nodeUp();
     await until(() => store.writes.length === 1, "the slice, past the lane table's subscribe");
     expect(pullsFloor.asked).toContain(SUBSCRIBE);
     expect(control.subscribes).toBe(2);
     expect(bytes.claimed(IN)).toBe(false);
-    expect(ended).toBe(false);
     held.open();
     await up;
-    expect(bytes.claimed(IN)).toBe(true);
+    await until(() => bytes.claimed(IN), "the lane table, once its subscribe answers");
   });
 });

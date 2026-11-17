@@ -45,6 +45,7 @@ import {
   FakeDriveLaneBytes,
   FakeDriveLaneControl,
   FakeDriveStore,
+  FakeWake,
   refusingFloor,
   sleep,
   UNSUPPORTED_GOLDEN,
@@ -268,6 +269,7 @@ function serviceOver(drive: DrivePulls) {
     bytes: new FakeDriveLaneBytes(),
     allocateLaneId: new OutboundLaneIdAllocator().allocate,
     isSelfPeer: () => true,
+    wake: new FakeWake(),
   });
   const holders = new DriveHolders({
     mesh: new FakeDriveStore().member("studio"),

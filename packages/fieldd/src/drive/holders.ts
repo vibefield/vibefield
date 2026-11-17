@@ -6,6 +6,7 @@ import {
   StoreSnapshot,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import type { NativeSubscribeOptions } from "../native-link";
 
 // DR-3b (W3, VF-RELAY) — `field.drive.v1`, this desktop's holders slice (contracts drive.ts `DriveHoldersSlice`):
 // DocHoldersService's shape (library-doc.ts:382-559) for the drive. DEVICE-OWNED (DS-L2): this desktop writes its own
@@ -28,14 +29,18 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 // slice to, and the floor refuses `store.set` in one (MESH_CAPTURING, the belt; this is the suspenders).
 
 /** The mesh store, narrowed to the two calls the slice makes: MeshClient's `setSlice` and `subscribeStoreManaged`, as
- * `HoldersMesh` narrows them for the docs slice (library-doc.ts). `HoldersMesh` also carries MeshStream's wake (NR);
- * this slice takes it at S3. */
+ * `HoldersMesh` narrows them for the docs slice (library-doc.ts). NR S3's seam, taken by its next commit: the
+ * subscribe's replay option and the two halves of MeshStream's wake the slice will hear (the node read, and the link's
+ * "connected" alone, `MeshClient.onConnected`). */
 export interface DriveHoldersMesh {
   setSlice(storeId: string, data: unknown): Promise<unknown>;
   subscribeStoreManaged(
     storeId: string,
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
+    opts?: NativeSubscribeOptions,
   ): Promise<{ snapshot: unknown; dispose: () => void }>;
+  nodeReadsUp(): boolean;
+  onConnected(fn: () => void): () => void;
 }
 
 /** The drive as this desktop holds it, while it is open: what its slice says. Mapping mille-drive's status to it is
