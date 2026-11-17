@@ -693,16 +693,66 @@
   min-width: 0;
 }
 
+/* the plan's title, then its tier on the title's baseline 8 after it (DESIGN.md §8 "A plan's
+   tier"): the title's words give way, the badge never does */
 .vf-profiles-plan-title {
-  overflow: hidden;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
   margin: 0;
   color: var(--vf-text-primary);
   font-size: 14.5px;
   font-weight: 600;
   letter-spacing: -0.015em;
   line-height: 19px;
+}
+
+.vf-profiles-plan-title-words {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* DESIGN.md §8 "A plan's tier" — the mark after a plan's title (`PlanTierMark`),
+   here and in Godview's popover: the popover head's default tag, 10/600 padded 3 6, a capsule
+   ringed by the strong hairline in the secondary ink, with tabular figures, so 100x and 500x
+   stand the same width. It never gives way: a long label stops at 8 characters' width, cut
+   with an ellipsis inside the capsule. A host stands its own ring in `--vf-plan-tier-ring`
+   (the popover's, in Godview's mode) */
+.vf-plan-tier {
+  flex: none;
+  max-width: calc(8ch + 12px);
+  overflow: hidden;
+  padding: 3px 6px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--vf-plan-tier-ring, var(--vf-hairline-strong));
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: normal;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vf-text-secondary);
+}
+
+/* a tier not read beside a labelled sibling of its family: the same capsule empty, 16 tall and
+   twice as wide, its hairline dashed as the Bands' empty circle's (2 3) */
+.vf-plan-tier[data-unread] {
+  align-self: center;
+  max-width: none;
+  padding: 0;
+  box-shadow: none;
+}
+
+.vf-plan-tier[data-unread] > svg {
+  display: block;
+  fill: none;
+  stroke: var(--vf-plan-tier-ring, var(--vf-hairline-strong));
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
 }
 
 .vf-profiles-plan-account {

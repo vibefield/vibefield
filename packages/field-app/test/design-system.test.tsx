@@ -169,6 +169,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "several-near",
       "several-first",
       "popover",
+      "plan-tiers",
       "add",
       "limit",
       "unavailable",
@@ -230,6 +231,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(pop?.querySelector(".vf-profiles-pop-lens")?.textContent).toBe(
       "Showing only This Mac's sessions · click it again for all",
     );
+    // DESIGN.md §8 "A plan's tier": Studio's made-up tiers on the shipping popover,
+    // through the fixture data alone: three badges as given, one empty capsule beside a badge
+    const tiers = columnPlate("plan-tiers")?.querySelector('.vf-profiles-pop[role="dialog"]');
+    expect(
+      [...(tiers?.querySelectorAll(".vf-plan-tier:not([data-unread])") ?? [])]
+        .map((badge) => badge.textContent)
+        .sort(),
+    ).toEqual(["200", "20x", "Business"]);
+    expect(tiers?.querySelectorAll(".vf-plan-tier[data-unread]")).toHaveLength(1);
     // the add's card, and the limit moment in the card's place (AO-6b, UM-D23): the shipping card
     // over the shipping rule's fixture, beside the add
     expect(

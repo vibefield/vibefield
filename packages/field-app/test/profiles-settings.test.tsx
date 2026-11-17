@@ -2396,6 +2396,59 @@ describe("the plans a profile runs on (pass 19)", () => {
   });
 });
 
+describe("a plan's tier on its card (DESIGN.md §8 'A plan's tier')", () => {
+  const sheet = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "../src/panels/agents/profiles-settings.css"),
+    "utf8",
+  );
+  /** One rule of the sheet, by its exact selector. */
+  const rule = (selector: string): string => {
+    const escaped = selector.replace(/[.[\]]/gu, "\\$&");
+    return new RegExp(`\\n${escaped} \\{[^}]*\\}`, "u").exec(sheet)?.[0] ?? "";
+  };
+
+  it("is the popover head's default tag, tabular, and never gives way past 8 characters", () => {
+    const badge = rule(".vf-plan-tier");
+    for (const value of [
+      "flex: none;",
+      "max-width: calc(8ch + 12px);",
+      "overflow: hidden;",
+      "padding: 3px 6px;",
+      "border-radius: 999px;",
+      "box-shadow: inset 0 0 0 1px var(--vf-plan-tier-ring, var(--vf-hairline-strong));",
+      "font-size: 10px;",
+      "font-weight: 600;",
+      "font-variant-numeric: tabular-nums;",
+      "line-height: 1;",
+      "text-overflow: ellipsis;",
+      "white-space: nowrap;",
+      "color: var(--vf-text-secondary);",
+    ]) {
+      expect(badge, value).toContain(value);
+    }
+  });
+
+  it("draws a tier not read as the same capsule empty, dashed as the Bands' empty circle", () => {
+    expect(rule(".vf-plan-tier[data-unread]")).toContain("box-shadow: none;");
+    const stroke = rule(".vf-plan-tier[data-unread] > svg");
+    expect(stroke).toContain("fill: none;");
+    expect(stroke).toContain("stroke: var(--vf-plan-tier-ring, var(--vf-hairline-strong));");
+    expect(stroke).toContain("stroke-dasharray: 2 3;");
+  });
+
+  it("stands the badge 8 after the title on its baseline; the title's words alone give way", () => {
+    const title = rule(".vf-profiles-plan-title");
+    expect(title).toContain("display: flex;");
+    expect(title).toContain("align-items: baseline;");
+    expect(title).toContain("gap: 8px;");
+    expect(title).not.toContain("text-overflow");
+    const words = rule(".vf-profiles-plan-title-words");
+    for (const value of ["min-width: 0;", "overflow: hidden;", "text-overflow: ellipsis;"]) {
+      expect(words, value).toContain(value);
+    }
+  });
+});
+
 /** A real login answer's ticket (the contracts' own fixture), for one session id. */
 function ticket(sessionId: string) {
   const golden = JSON.parse(

@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentAccountUsageEntry, AgentProfileSet } from "@vibefield/contracts";
+import { type AgentAccountUsageEntry, AgentProfileSet } from "@vibefield/contracts";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,7 +11,9 @@ import {
   FIXTURE_DEMO,
   FIXTURE_NATIVE,
   FIXTURE_PROFILES_CONTEXT,
+  FIXTURE_PROFILES_CONTEXT_TIERS,
   FIXTURE_PROFILES_NOW,
+  FIXTURE_STUDIO,
   FIXTURE_WORK,
 } from "../src/design-system/profiles-fixtures";
 import { monitorHoldsKeys } from "../src/godview/monitor/launcher-keys";
@@ -562,6 +564,185 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
       const row = page.querySelector(`.vf-profiles-pop-row[data-plan="${entry.key}"]`);
       expect(row?.outerHTML).not.toContain(who);
     }
+  });
+
+  it("draws a plan's tier after its title: a badge, an empty capsule or nothing", () => {
+    // Studio's tiers are made up (profiles-fixtures.ts): no agent sends one yet
+    const studio: ColumnCircle = {
+      set: FIXTURE_STUDIO,
+      meters: metersOf(FIXTURE_STUDIO, FIXTURE_PROFILES_CONTEXT_TIERS.usage),
+    };
+    const page = mount(<ProfilePopoverView {...popover(studio)} />);
+    const row = (plan: string): HTMLElement | null =>
+      page.querySelector<HTMLElement>(`.vf-profiles-pop-row[data-plan="plan:${plan}"]`);
+    const mark = (plan: string): Element | null | undefined =>
+      row(plan)?.querySelector(".vf-profiles-pop-row-head > .vf-plan-tier");
+    // every plan is a reading, so each has its row
+    expect(studio.meters.entries.every((entry) => entry.kind === "reading")).toBe(true);
+    // a label, as given, the 8-character one whole: right after the title, its words said once
+    // for a reader, then the veiled sign-in
+    const order = [
+      "vf-profiles-pop-row-title",
+      "sr-only",
+      "vf-plan-tier",
+      "vf-profiles-pop-row-account",
+    ];
+    for (const [plan, label] of [
+      ["anthropic", "20x"],
+      ["openai", "200"],
+      ["xai", "Business"],
+    ] as const) {
+      expect(mark(plan)?.textContent, plan).toBe(label);
+      expect(mark(plan)?.hasAttribute("data-unread"), plan).toBe(false);
+      expect(mark(plan)?.getAttribute("aria-hidden"), plan).toBe("true");
+      const head = [...(row(plan)?.querySelector(".vf-profiles-pop-row-head")?.children ?? [])];
+      expect(
+        head.map((part) => part.className),
+        plan,
+      ).toEqual(order);
+      expect(head[1]?.textContent, plan).toBe(` ${label}`);
+    }
+    // the title stays the title: the tier rides beside it, never inside
+    expect(row("openai")?.querySelector(".vf-profiles-pop-row-title")?.textContent).toBe(
+      "ChatGPT Pro",
+    );
+    // ChatGPT Pro on a second sign-in, its tier not read, beside its family's "200": the capsule
+    // empty and dashed, the badge's height and twice as wide, and silent
+    const empty = mark("openai-2");
+    expect(empty?.hasAttribute("data-unread")).toBe(true);
+    expect(empty?.getAttribute("aria-hidden")).toBe("true");
+    expect(empty?.textContent).toBe("");
+    expect(empty?.querySelector("svg")?.getAttribute("width")).toBe("32");
+    expect(empty?.querySelector("svg")?.getAttribute("height")).toBe("16");
+    expect(row("openai-2")?.querySelector(".sr-only")).toBeNull();
+    // Claude Max whose agent says it has no tier, beside its family's "20x": nothing; Copilot,
+    // not read and alone in its family: nothing
+    expect(row("anthropic-2")?.querySelector(".vf-plan-tier")).toBeNull();
+    expect(row("github")?.querySelector(".vf-plan-tier")).toBeNull();
+    // the spoken name joins title and label with a space: the row's choice and its lines' list
+    expect(
+      row("openai")?.querySelector(".vf-profiles-pop-row-choose")?.getAttribute("aria-label"),
+    ).toBe("Show only ChatGPT Pro 200's sessions");
+    expect(
+      row("openai")?.querySelector('.vf-profiles-usage[role="list"]')?.getAttribute("aria-label"),
+    ).toBe("ChatGPT Pro 200 usage");
+    // with no badge the name is the title alone
+    expect(
+      row("openai-2")?.querySelector(".vf-profiles-pop-row-choose")?.getAttribute("aria-label"),
+    ).toBe("Show only ChatGPT Pro's sessions");
+  });
+
+  it("draws nothing after a title while no sign-in reads a tier", () => {
+    // the pinned puppeteer sends no tier, so every face draws what it drew before
+    const page = mount(<ProfilePopoverView {...popover(thisMac())} />);
+    expect(page.querySelector(".vf-plan-tier")).toBeNull();
+    expect(thisMac().meters.entries.some((entry) => entry.plan?.tier !== undefined)).toBe(false);
+  });
+
+  it("says a plan's tier in the circle's words, as its row does", () => {
+    const meters = metersOf(FIXTURE_STUDIO, FIXTURE_PROFILES_CONTEXT_TIERS.usage);
+    const plans = bandsGeometry(212, meters.entries).plans;
+    const of = (plan: string): string =>
+      plans.find((each) => each.key === `plan:${plan}`)?.words ?? "";
+    // a label joins the title; none, or a tier not read, leaves the title alone
+    expect(of("openai").startsWith("ChatGPT Pro 200: ")).toBe(true);
+    expect(of("anthropic").startsWith("Claude Max 20x: ")).toBe(true);
+    expect(of("xai")).toMatch(/ Business: \d+%/u);
+    expect(of("openai-2").startsWith("ChatGPT Pro: ")).toBe(true);
+    expect(of("anthropic-2").startsWith("Claude Max: ")).toBe(true);
+    // the circle's own words are its plans' words
+    const page = mount(<ProfilePopoverView {...popover({ set: FIXTURE_STUDIO, meters })} />);
+    const image = page.querySelector('[role="img"][aria-label^="Usage: "]');
+    const said = image?.getAttribute("aria-label");
+    expect(said).toMatch(/(?:^Usage: |; )ChatGPT Pro 200: \d+%/u);
+    expect(said).toMatch(/(?:^Usage: |; )ChatGPT Pro: \d+%/u);
+  });
+
+  it("keeps a plan's tier on its line with no meter, and in its family", () => {
+    // the tier names the plan, not its reading: ChatGPT Pro at "200" reads no window, so it is a
+    // line of its own, which still says its badge, and its sibling not read keeps the capsule
+    const namer = FIXTURE_STUDIO.plans?.find((plan) => plan.id === "openai")?.namedBy;
+    expect(namer).toBeDefined();
+    const rows = FIXTURE_PROFILES_CONTEXT_TIERS.usage.map((row) =>
+      row.profileId === namer ? { ...row, metrics: [] } : row,
+    );
+    const meters = metersOf(FIXTURE_STUDIO, rows);
+    const quiet = meters.entries.find((entry) => entry.key === "plan:openai");
+    expect(quiet?.kind === "no-meter" && quiet.why).toBe("no-windows");
+    const page = mount(<ProfilePopoverView {...popover({ set: FIXTURE_STUDIO, meters })} />);
+    const line = [...page.querySelectorAll(".vf-profiles-pop-none")].find((each) =>
+      each.textContent?.startsWith("ChatGPT Pro"),
+    );
+    expect(line?.querySelector(".vf-plan-tier")?.textContent).toBe("200");
+    expect(line?.querySelector(".sr-only")?.textContent).toBe(" 200");
+    const sibling = page.querySelector('.vf-profiles-pop-row[data-plan="plan:openai-2"]');
+    expect(sibling?.querySelector(".vf-plan-tier[data-unread]")).not.toBeNull();
+  });
+
+  it("counts a plan whose agent shows no meter in its family, and draws it no mark", () => {
+    // ChatGPT Pro at "200", its agent reporting no usage: its line names the agent, not the plan,
+    // so it holds no badge, and its sibling not read still wears the capsule, as on the phone
+    const namer = FIXTURE_STUDIO.plans?.find((plan) => plan.id === "openai")?.namedBy;
+    expect(namer).toBeDefined();
+    const rows = FIXTURE_PROFILES_CONTEXT_TIERS.usage.map((row) =>
+      row.profileId === namer ? { ...row, state: "unsupported" as const, metrics: [] } : row,
+    );
+    const meters = metersOf(FIXTURE_STUDIO, rows);
+    const quiet = meters.entries.find((entry) => entry.key === "plan:openai");
+    expect(quiet?.kind === "no-meter" && quiet.why).toBe("unreported");
+    const page = mount(<ProfilePopoverView {...popover({ set: FIXTURE_STUDIO, meters })} />);
+    const line = [...page.querySelectorAll(".vf-profiles-pop-none")].find((each) =>
+      each.textContent?.endsWith("shows no meter"),
+    );
+    expect(line).toBeDefined();
+    expect(line?.querySelector(".vf-plan-tier")).toBeNull();
+    expect(line?.querySelector(".sr-only")).toBeNull();
+    const sibling = page.querySelector('.vf-profiles-pop-row[data-plan="plan:openai-2"]');
+    expect(sibling?.querySelector(".vf-plan-tier[data-unread]")).not.toBeNull();
+  });
+
+  it("draws no badge for a tier the contract cannot read, and no capsule beside it", () => {
+    // labels past 8 characters, with a space or an underscore: the feed's parse reads each as not
+    // read, never as none, and keeps its plan
+    const malformed = AgentProfileSet.parse({
+      ...FIXTURE_STUDIO,
+      plans: (FIXTURE_STUDIO.plans ?? []).map((plan) =>
+        plan.id === "openai"
+          ? { ...plan, account: { ...plan.account, planTier: { label: "Pro 200" } } }
+          : plan.id === "anthropic"
+            ? { ...plan, account: { ...plan.account, planTier: { label: "max_20x" } } }
+            : plan.id === "xai"
+              ? { ...plan, account: { ...plan.account, planTier: { label: "Business1" } } }
+              : plan,
+      ),
+    });
+    expect(malformed.plans?.map((plan) => [plan.id, plan.account?.planTier])).toEqual([
+      ["anthropic", undefined],
+      ["openai", undefined],
+      ["xai", undefined],
+      ["openai-2", undefined],
+      ["github", undefined],
+      ["anthropic-2", {}],
+    ]);
+    const meters = metersOf(malformed, FIXTURE_PROFILES_CONTEXT_TIERS.usage);
+    const page = mount(<ProfilePopoverView {...popover({ set: malformed, meters })} />);
+    // no badge, and so no family with a label: no empty capsule either
+    expect(page.querySelector(".vf-plan-tier")).toBeNull();
+    expect(page.querySelector(".vf-profiles-pop-row .sr-only")).toBeNull();
+    expect(
+      page
+        .querySelector('.vf-profiles-pop-row[data-plan="plan:openai"] .vf-profiles-pop-row-choose')
+        ?.getAttribute("aria-label"),
+    ).toBe("Show only ChatGPT Pro's sessions");
+  });
+
+  it("hands the tier's capsule the head's default tag ring, in Godview's mode", () => {
+    // on the rows, so a row's head and a plan's line with no meter wear the same ring
+    expect(CSS).toMatch(
+      /\n\.vf-profiles-pop-rows \{\n {2}--vf-plan-tier-ring: var\(--vf-profiles-solid-ring\);/u,
+    );
+    // the column's sheet draws none of the badge's own look: that is the one view's, in Settings'
+    expect(CSS).not.toMatch(/\.vf-plan-tier\b/u);
   });
 
   it("draws Settings' C1 lines in a row at its width × 12 (§8), each with its words at its end", () => {

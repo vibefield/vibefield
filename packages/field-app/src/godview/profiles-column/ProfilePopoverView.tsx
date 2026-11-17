@@ -1,7 +1,9 @@
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { AgentIcon, ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
 import type { ReactElement } from "react";
+import { PlanTierMark } from "../../panels/agents/PlanTierMark";
 import { type UsageResetForm, UsageTimeline } from "../../panels/agents/ProfilesView";
+import { spokenPlanName, type TierMark, tierMarks } from "../../panels/agents/plan-tier";
 import type { UsageLine } from "../../panels/agents/profiles-model";
 import { bandsGeometry, bandsLabel } from "../../usage/bands";
 import type { PlanMeter, ProfileMeters } from "../../usage/meters";
@@ -16,6 +18,9 @@ import type { ColumnCircle } from "./ProfilesColumnView";
 // until then it drew the tightest window's line alone, UM-D13, and said its words at the row's head) — the shipping
 // `UsageTimeline`, never a copy (UM-D3: one meter everywhere). Controller-free: what it opens,
 // reads again or closes is handed back. A plan's row and its arc filter the field (UM-D14; UM-5a).
+// A plan's tier stands after its title as Settings' card draws it (DESIGN.md §8 "A plan's tier";
+// `PlanTierMark`, decided by `tierMarks` over every plan the card's circle carries), and the plan's
+// spoken name carries it.
 
 /** The popover's open size (§8: "the circle at 212 in a 212 column"). */
 export const POPOVER_CIRCLE = 212;
@@ -166,12 +171,21 @@ export function veiledAccount(words: string | undefined): string | undefined {
  * usage; a plan no agent named, or whose reading holds no window, says its title alone, as the phone does (UM-D3;
  * ‹for James›), since "shows no meter" would be false of an agent that meters. */
 function noneWords(entry: Extract<PlanMeter, { kind: "no-meter" }>): string {
-  return entry.why === "unreported" ? `${entry.agent} shows no meter` : entry.title;
+  return saysTitle(entry) ? entry.title : `${entry.agent} shows no meter`;
 }
 
-/** One plan on the circle: its mark, its title, and every window's C1 line, or its right words while it has none. */
+/** Whether a plan with no meter says its title (`noneWords`): then its tier stands after it, as a row's does, since
+ * the tier names the plan, not its reading. A line that names its agent instead names no plan and draws no mark,
+ * though its plan still counts in its family (DESIGN.md §8 "A plan's tier"). */
+function saysTitle(entry: Extract<PlanMeter, { kind: "no-meter" }>): boolean {
+  return entry.why !== "unreported";
+}
+
+/** One plan on the circle: its mark, its title and its tier, its sign-in veiled, and every
+ * window's C1 line, or its right words while it has none. */
 function PlanRow({
   entry,
+  tier,
   setId,
   focused,
   onFocusPlan,
@@ -181,6 +195,8 @@ function PlanRow({
   onToggle,
 }: {
   entry: Exclude<PlanMeter, { kind: "no-meter" }>;
+  /** what stands after its title (`tierMarks` over every plan the card's circle carries) */
+  tier: TierMark;
   setId: string;
   focused: boolean;
   onFocusPlan: (key: string | null) => void;
@@ -194,6 +210,8 @@ function PlanRow({
   const right = entry.right;
   const account = veiledAccount(entry.plan?.account);
   const choosable = entry.kind !== "needs-you";
+  // the badge is part of the plan's name, so the name a reader hears carries it ("ChatGPT Pro 200")
+  const named = spokenPlanName(entry.title, tier);
   return (
     // pointing at a row lights its arc, as pointing at the arc does; a click chooses it (UM-D14), through a button
     // stretched over the row so the row keeps its C1 line's list
@@ -213,7 +231,7 @@ function PlanRow({
           type="button"
           className="vf-profiles-pop-row-choose"
           aria-pressed={pressed}
-          aria-label={`Show only ${entry.title}'s sessions`}
+          aria-label={`Show only ${named}'s sessions`}
           onClick={onToggle}
         />
       ) : null}
@@ -222,6 +240,7 @@ function PlanRow({
       </span>
       <span className="vf-profiles-pop-row-head">
         <b className="vf-profiles-pop-row-title">{entry.title}</b>
+        <PlanTierMark mark={tier} />
         {account !== undefined ? (
           // the sign-in, veiled: whose account it is at a glance, never the address itself on a shared screen
           <span className="vf-profiles-pop-row-account" title={account}>
@@ -238,7 +257,7 @@ function PlanRow({
       </span>
       {entry.kind === "reading" ? (
         <span className="vf-profiles-pop-row-meter">
-          <UsageTimeline {...windowLines(entry)} label={entry.title} />
+          <UsageTimeline {...windowLines(entry)} label={named} />
         </span>
       ) : entry.kind === "first-read" ? (
         <span
@@ -304,6 +323,18 @@ export function ProfilePopoverView({
   // unavailable"), never a line per agent; an agent that meters nothing says so on a line of its own
   const unread = none.filter((entry) => entry.why === "unavailable");
   const quiet = none.filter((entry) => entry.why !== "unavailable");
+  // each plan's tier, keyed by entry, its family read among every plan the card's circle carries: a plan with no
+  // meter counts in it even where its line names its agent or the profile and so draws no mark, as on the phone
+  const marks = tierMarks(
+    meters.entries.map((entry) => ({
+      service: entry.plan?.service.id,
+      title: entry.title,
+      tier: entry.plan?.tier,
+    })),
+  );
+  const tiers = new Map(
+    meters.entries.map((entry, index): [string, TierMark] => [entry.key, marks[index]]),
+  );
   const choosable = new Set(rows.filter((row) => row.kind !== "needs-you").map((row) => row.key));
   // a row that needs you is not pressable, even while its plan is chosen (§8): the filter stands, its × is search's
   const drawnPressed = (key: string): boolean => choosable.has(key) && isPressed(key);
@@ -344,6 +375,7 @@ export function ProfilePopoverView({
             <PlanRow
               key={entry.key}
               entry={entry}
+              tier={tiers.get(entry.key)}
               setId={set.id}
               focused={focus === entry.key}
               onFocusPlan={onFocusPlan}
@@ -360,6 +392,7 @@ export function ProfilePopoverView({
                 <AgentIcon providerId={entry.provider} />
               </span>
               {noneWords(entry)}
+              <PlanTierMark mark={saysTitle(entry) ? tiers.get(entry.key) : undefined} />
             </p>
           ))}
         </div>

@@ -96,6 +96,11 @@ The catalog currently mounts these shipping views directly:
   - the add's card, and the limit moment in its place (AO-6b's plate, off the claims strip)
   - usage unavailable, and no profiles door
   - a first read held still (Godview's animations off, as under Reduce Motion)
+  - *added 2026-11-17 (item 495):* a plan's tier on a made-up profile, Studio: badges as
+    given, the empty dashed capsule beside a labelled plan of its family, and nothing where
+    the agent says there is none (DESIGN.md §8 "A plan's tier"). Settings → Agent Profiles
+    shows the same profile as its **plan tiers** state; both mount the shipping views over
+    fixture data alone
 
   Only what the controller keeps (what is open, pinned or pointed at) is stood in. The catalog's
   CSS may not own a `.vf-profiles-*` or `.vf-bands-*` rule (`ui-system-boundaries.test.ts`)

@@ -1,3 +1,4 @@
+import { spokenPlanTitle } from "../panels/agents/plan-tier";
 import type { MeterProfile, MeterWindow, PlanMeter, ReadingMeter } from "./meters";
 import { outranks, resetForm } from "./rules";
 
@@ -212,9 +213,11 @@ export function agedWords(entry: PlanMeter): string {
 }
 
 /** A reading's head alone, "Claude Max: 64% of 5 hours": its tightest window's figure and length, with no forecast,
- * reset or age (the spawn bloom says the age after it; `bandsPlanWords` says the rest). */
+ * reset or age (the spawn bloom says the age after it; `bandsPlanWords` says the rest). A plan whose tier was read is
+ * named with it, as its row says it (DESIGN.md §8 "A plan's tier"). */
 export function bandsReadingWords(entry: ReadingMeter): string {
-  return `${entry.title}: ${Math.round(entry.tightest.line.usedPercent)}% ${windowOf(entry.tightest)}`;
+  const title = spokenPlanTitle(entry.title, entry.plan?.tier);
+  return `${title}: ${Math.round(entry.tightest.line.usedPercent)}% ${windowOf(entry.tightest)}`;
 }
 
 /** What the middle says under a plan at full size, and the end of its words: its forecast, its reset, the age of a
@@ -250,17 +253,20 @@ export function bandsSay(entry: PlanMeter): { words: string; hot: boolean } {
   }
 }
 
-/** A plan in words: "Claude Max: 64% of 5 hours, out in ~35m"; "Kimi Code: not signed in"; "Codex: signing in". */
+/** A plan in words: "Claude Max: 64% of 5 hours, out in ~35m"; "Kimi Code: not signed in"; "Codex: signing in". A
+ * plan whose tier was read is named with it, as its row says it ("ChatGPT Pro 200: …"; DESIGN.md §8
+ * "A plan's tier"). */
 export function bandsPlanWords(entry: PlanMeter): string {
+  const title = spokenPlanTitle(entry.title, entry.plan?.tier);
   switch (entry.kind) {
     case "needs-you":
       return entry.need === "signing-in"
-        ? `${entry.title}: signing in`
-        : `${entry.title}: ${entry.right.words}`;
+        ? `${title}: signing in`
+        : `${title}: ${entry.right.words}`;
     case "first-read":
-      return `${entry.title}: reading`;
+      return `${title}: reading`;
     case "no-meter":
-      return entry.title;
+      return title;
     case "reading": {
       const say = bandsSay(entry).words;
       return `${bandsReadingWords(entry)}${say !== "" ? `, ${say}` : ""}`;

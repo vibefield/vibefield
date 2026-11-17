@@ -1003,6 +1003,13 @@ describe("UI system ownership boundaries", () => {
     expect(preview).toContain("columnCircles(");
     expect(preview).toContain("FIXTURE_PROFILES_CONTEXT");
     expect(preview).not.toMatch(/vf-(?:profiles|bands)(?:\b|-)/u);
+    // a plan's tier (DESIGN.md §8 "A plan's tier") reaches the plates as fixture data alone; the
+    // badge is the shipping view's, never a catalog copy of its markup, on the column's plates or
+    // Settings'
+    for (const plate of [preview, source("design-system/ProfilesSettingsPreview.tsx")]) {
+      expect(plate).not.toMatch(/vf-plan-tier|PlanTierMark|tierMarks/u);
+    }
+    expect(source("design-system/profiles-fixtures.ts")).toMatch(/\btier: \{ label: "/u);
     expect(source("godview/profiles-column/ProfilesColumn.tsx")).toMatch(
       /useMemo<ColumnCircle\[\]>\(\s*\(\) => columnCircles\(/u,
     );

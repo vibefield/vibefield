@@ -3540,6 +3540,55 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     2026-11-06, the model's review; ‹for James›.) Its numbers are a geometry module's, never
     read from the DOM (`packages/field-app/src/usage/bands.ts`, UM-1; its Swift twin is held to the same golden),
     and it is drawn as geometry, never as a glyph (§13).
+- **A plan's tier — a badge after its name** (item 495, 2026-11-17; James, in session, 01:06:35Z: "my codex plan
+  name should be ChatGPT Pro 200, maybe you design 200 as a badge so 100x, 500x use the same design, for claude 5hr,
+  some ultra plan have removed it, while some new ultra plan still has it, so it should depends on each sign in's
+  real read"). A plan is named as Agent Profiles names it ("ChatGPT Pro"), and its **tier** stands beside the name
+  as a **badge** ("200"): one design for every tier and every agent. The tier is a datum of its own, read by the
+  sign-in that named the plan's account (`AgentPlan.account.planTier`, beside `plan`), a record with three cases: a
+  **label** is the badge; an **empty record** is the agent saying the plan has no tier, and draws nothing; **no
+  record** is a tier not read. The label is drawn exactly as given, never parsed, cased, compared to a word or
+  derived from the plan's name (AR-L1). The contract holds it to one word of at most **8** characters (letters,
+  digits, `.`, `+`, `-`), and a label outside that reads as not read, so a badge is never handed a sentence. The
+  tier never rides inside the title: keeping it out is the data's job, and nothing here strips a word. The 5-hour
+  band already follows each sign-in's own reading (§8 "The Bands circle", two bands), so his ruling's second half
+  asks nothing of the circle.
+  - **The badge** is the popover head's **default** tag (§8 "Godview's profiles column", "The head"): 10/600, padded
+    3 6, so 16 tall, a capsule ringed by the strong hairline (in Godview's mode the popover's own ring), in the
+    secondary ink, with **tabular figures**, so 100x and 500x stand the same width. It never gives way: a long label
+    stops at **8 characters' width** (`8ch` inside its padding), cut with an ellipsis inside the capsule, and the
+    whole label stays in the plan's spoken name. No new colour, size or radius.
+  - **Where it stands:** right after the title, since it is part of what the plan is called. In a row that names a
+    sign-in the order is **mark · title · badge · veiled sign-in**: when the line is tight the veiled sign-in gives
+    way first, then the title; the badge never does. On the desktop it stands in Godview's popover, a plan's row
+    (§8 "Godview's profiles column", "The body"), and in Settings → Agent Profiles, a plan's card, **8** after the
+    title on its baseline, where the title alone gives way. The tier names the plan, not its reading, so a plan
+    with no meter keeps it: in the popover, a plan's line that says its title (its reading holds no window) holds
+    the badge after the title, at the line's own gap; a line that names the agent ("‹agent› shows no meter") or the
+    profile ("‹profile›: usage unavailable") names no plan and holds none, though its plan stays in its family
+    (below). Not on: a circle's middle, the arcs'
+    drawn words, the column's circles, the held face's buds and huge words, or the Me menu's row, which name
+    profiles or windows, not plans. ‹for James: three more places name a plan and are left as today: an agent
+    row's plan badges and a harness's Sign-ins lines in Settings, and the limit moment's card.›
+  - **A tier not read beside one read.** In one list or card in view (the plans of the popover's card; the cards on
+    one profile's page; the phone's Plans), a plan whose tier was not read, while another plan of its own
+    **family** there has a label,
+    wears the capsule **empty and dashed** in the badge's place, so a missing badge never reads as the lowest tier.
+    A family is the same sign-in service and the same title, compared value to value between the two plans, never
+    to a word. A plan with no meter counts in its family on every face, the desktop's and the phone's alike,
+    whatever its line says; where its line names its agent or its profile rather than the plan, it draws no mark of
+    its own. The empty capsule is the badge's own height (16) and **twice as wide as it is tall** (32), its
+    hairline dashed with the dash of the Bands' empty circle (2 3; "A profile with no plans" above): the app's own
+    picture for nothing read. A plan the agent says has no tier draws nothing, even beside a labelled one; with no
+    labelled sibling in view, a tier not read draws nothing.
+  - **Said:** the badge is never read as an element of its own. The plan's spoken name joins its title and its label
+    with a space, "ChatGPT Pro 200": the row's "Show only ‹plan›'s sessions", the card's name and its lines' list,
+    and each plan's arc words on the Bands circle, which the circle's own words join ("ChatGPT Pro 200: 34% of 5
+    hours"; §9 "The meters' words"). The empty capsule says nothing, so the name is the title alone, as today ‹for
+    James: a spoken word for "tier not read" would be a new word›.
+  - *Drawn over the contract's field before any agent sends one: until puppeteer's release that reads a tier, no
+    plan carries one and every face draws what it drew before. The catalog shows every case on fixture data
+    (Settings → Agent Profiles' **plan tiers**; the column's **plan-tiers** plate).*
 - **Godview's profiles column** (track UM, ruled 2026-11-06 from the page *The Bands Meter*: UM-D21, UM-D22 and
   UM-D23 A; UM-D19 A, James's chat word 2026-11-05 21:36Z; UM-D12 and UM-D14 carried A at the leans; SE-D2 A; the
   drawing is `draft/profile-meters/round4/src/p4f-frames.js` and `round4.css`). Your meters stand at the stage's top
@@ -3669,7 +3718,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       profiles (10/600, padded 3 6, a capsule ringed by the strong hairline, in the secondary ink); the reading's
       age at 11.5 in the tertiary ink; and × at the end, a 24 round on the ink at 6% holding `close` 11 in the
       secondary ink; under the pointer its fill steps to the ready fill's 14% and its ink to the primary, at once
-      (*added 2026-11-09, UM-R's review: the build's values, written down here first*).
+      (*added 2026-11-09, UM-R's review: the build's values, written down here first*). The same tag, holding a
+      plan's tier, is the badge after a plan's title (§8 "A plan's tier"; *added 2026-11-17, item 495*).
     - **The body:** the circle at **212** in a 212 column, its arcs answering the pointer (§8 "The Bands circle"),
       with **the bands key** under it: each of its three words led by its band drawn small (16 × 11), at 10.5/500 in
       the tertiary ink. **Its middle names the window its figure reads**, by that window's C1 label ("7D", "5H") at
@@ -3682,11 +3732,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       circle's order: the agent's mark
       (16), **level with the plan's title at the row's top** however many lines follow (*the same day: "vertical
       align the agent icon to its name at the top"*; a plan that needs you keeps its title beside its mark, its act in
-      the third column), the plan's title (as Agent Profiles names it), **its sign-in beside the title, veiled**
+      the third column), the plan's title (as Agent Profiles names it), **its tier as a badge right after the
+      title** when its sign-in read one, or the empty dashed capsule beside a labelled plan of its own family in the
+      card (§8 "A plan's tier"; *added 2026-11-17, item 495*), **its sign-in after them, veiled**
       (an email to its first letter, three dots, `@`, its domain's first letter, three dots and the domain's last
       part, "k•••@w•••.example"; a handle to its first letter and three dots; the organization left out; at 11/500 in
-      the tertiary ink, giving way first when the head is tight; never the address whole, its tooltip included —
-      *added 2026-11-16; James, in chat: "show the sign-in email by the agent name in redacted form"*), and
+      the tertiary ink, giving way first when the head is tight, then the title, never the badge; never the address
+      whole, its tooltip included — *added 2026-11-16; James, in chat: "show the sign-in email by the agent name in
+      redacted form"*), and
       **Settings' C1 lines, one for every window the plan reads**,
       at the row's width × 12, each saying at its end what Settings' line says: its forecast while it runs ahead,
       else its reset, and the reading's age for a window read before its reset or a kept reading (which forecasts
@@ -10439,7 +10492,11 @@ here.
   (the words would invite a click nothing takes; 2026-11-09, UM-5a's review, ‹for James›, wave 1's own silence
   extended). Then **Agent Profiles…**. *(Corrected 2026-11-09, UM-5a: this said that until
   UM-5 the one-profile foot says only **Agent Profiles…**.)* A plan's row is said "Show only ‹plan›'s sessions"
-  (‹for James›, 2026-11-09). *(Added 2026-11-06, UM-3's
+  (‹for James›, 2026-11-09). *(Item 495, 2026-11-17: there, on its C1 lines and on Settings' plan card, ‹plan›
+  carries the plan's tier when one was read, its label after the title with a space, "Show only ChatGPT Pro 200's
+  sessions"; §8 "A plan's tier". Each plan's arc words, and so the circle's words, say the same name: "Usage:
+  ChatGPT Pro 200: 34% of 5 hours, …".)* *(Added
+  2026-11-06, UM-3's
   review; ‹for James›: the head's other ages as built, "Read just now", "Read 5 minutes ago", "Read an hour ago",
   "Read 3 hours ago"; and while the usage cannot be read the popover says the profile's one line, "‹profile›: usage
   unavailable", in place of a line per agent, an agent with no meter keeping its own.)* *(Added 2026-11-10, item 274,

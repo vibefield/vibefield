@@ -1,3 +1,4 @@
+import type { AgentProfileSet } from "@vibefield/contracts";
 import { type ReactElement, useEffect, useMemo } from "react";
 import {
   AddServerView,
@@ -47,9 +48,11 @@ import {
   FIXTURE_PROFILES_CONTEXT,
   FIXTURE_PROFILES_CONTEXT_KEPT_METERS,
   FIXTURE_PROFILES_CONTEXT_READ_BEFORE_RESET,
+  FIXTURE_PROFILES_CONTEXT_TIERS,
   FIXTURE_PROFILES_NOW,
   FIXTURE_SERVER_SIGN_IN_OUTPUT,
   FIXTURE_SIGN_IN_OUTPUT,
+  FIXTURE_STUDIO,
   FIXTURE_WORK,
   type ProfilesFixtureState,
 } from "./profiles-fixtures";
@@ -177,15 +180,21 @@ export function profilesPreviewHead(state: ProfilesFixtureState): {
       current: "new",
     };
   }
-  const set =
-    state === "this mac" || state === "this mac, alone"
-      ? FIXTURE_NATIVE
-      : state === "empty"
-        ? FIXTURE_DEMO
-        : state === "draft"
-          ? { ...FIXTURE_DEMO, draft: true }
-          : FIXTURE_WORK;
+  const set = pageSet(state);
   return { head: { title: set.label, description: "Agent profile" }, current: set.id };
+}
+
+/** The profile a page state shows. */
+function pageSet(state: ProfilesFixtureState): AgentProfileSet {
+  return state === "this mac" || state === "this mac, alone"
+    ? FIXTURE_NATIVE
+    : state === "empty"
+      ? FIXTURE_DEMO
+      : state === "draft"
+        ? { ...FIXTURE_DEMO, draft: true }
+        : state === "plan tiers"
+          ? FIXTURE_STUDIO
+          : FIXTURE_WORK;
 }
 
 export function ProfilesSettingsPreview({
@@ -203,7 +212,9 @@ export function ProfilesSettingsPreview({
           ? FIXTURE_PROFILES_CONTEXT_READ_BEFORE_RESET
           : state === "kept meters"
             ? FIXTURE_PROFILES_CONTEXT_KEPT_METERS
-            : FIXTURE_PROFILES_CONTEXT,
+            : state === "plan tiers"
+              ? FIXTURE_PROFILES_CONTEXT_TIERS
+              : FIXTURE_PROFILES_CONTEXT,
     [state],
   );
   // "agent": a vendor agent in Work (one subscription); "sign-ins": OpenCode,
@@ -452,14 +463,7 @@ export function ProfilesSettingsPreview({
       />
     );
   }
-  const set =
-    state === "this mac" || state === "this mac, alone"
-      ? FIXTURE_NATIVE
-      : state === "empty"
-        ? FIXTURE_DEMO
-        : state === "draft"
-          ? { ...FIXTURE_DEMO, draft: true }
-          : FIXTURE_WORK;
+  const set = pageSet(state);
   const signing =
     state === "signing in" ? (
       <SignInCard

@@ -10,7 +10,9 @@ import {
   FIXTURE_NATIVE,
   FIXTURE_PROFILE_SETS,
   FIXTURE_PROFILES_CONTEXT,
+  FIXTURE_PROFILES_CONTEXT_TIERS,
   FIXTURE_PROFILES_NOW,
+  FIXTURE_STUDIO,
 } from "./profiles-fixtures";
 
 // UM-3 (DESIGN.md §8 "Godview's profiles column"; PLAN §4's plates) — THE PROFILES COLUMN ON FIXTURES: the SHIPPING
@@ -20,6 +22,8 @@ import {
 // yet. So no agent is named here (R23b). Each state is a plate of its own: a Godview root in the page's theme, as every
 // Godview specimen follows it (FC-D7). What the controller keeps (what is open, pinned or pointed at) is stood here,
 // and every act lands on no one. The plan a pointer is on inside the open popover is kept live, as the stage keeps it.
+// The plan-tiers plate (DESIGN.md §8 "A plan's tier") adds Studio alone, its plans carrying made-up tiers,
+// over its own rows (`FIXTURE_PROFILES_CONTEXT_TIERS`).
 
 /** This Mac's agents as Settings' This Mac page lists them (ruling 8): the fixture's installs. */
 const INSTALLED: ReadonlySet<string> = new Set(
@@ -81,6 +85,13 @@ const PLATES: readonly ColumnPlate[] = [
     sets: FIXTURE_PROFILE_SETS,
     rows: TYPICAL,
     pinned: FIXTURE_NATIVE.id,
+  },
+  {
+    id: "plan-tiers",
+    caption: "A plan's tier after its title, made up: badges, an empty capsule, none",
+    sets: [FIXTURE_STUDIO],
+    rows: FIXTURE_PROFILES_CONTEXT_TIERS.usage,
+    pinned: FIXTURE_STUDIO.id,
   },
   { id: "add", caption: "The add, pointed at: its card", sets: ONE, rows: TYPICAL, addOpen: true },
   {

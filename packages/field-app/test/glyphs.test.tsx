@@ -319,6 +319,9 @@ describe("the glyph set", () => {
     // Bands circle is geometry the meter model computes (`usage/bands.ts`), drawn
     // on one surface — one <svg>, which its bands key's small bands share; its
     // marks and the profile's glyph stay the toolkit's and the add's plus FieldGlyph.
+    // DESIGN.md §8 "A plan's tier": a tier not read is the badge's capsule
+    // empty and dashed, the Bands' empty dash on the badge's own box — geometry,
+    // one view, one <svg>; the badge itself is words.
     const allow = new Map<string, number>([
       // TS-D4 (DESIGN.md §13): Tailscale's logomark, a vendor mark kept exact
       ["account/tailscale-mark.tsx", 1],
@@ -327,6 +330,7 @@ describe("the glyph set", () => {
       ["field/desk/peers/PeersView.tsx", 1],
       ["godview/os-marks.tsx", 1],
       ["godview/profiles-column/BandsCircle.tsx", 1],
+      ["panels/agents/PlanTierMark.tsx", 1],
     ]);
     const found = new Map<string, number>();
     const visit = (base: string, relativeDir: string, skip: (rel: string) => boolean): void => {

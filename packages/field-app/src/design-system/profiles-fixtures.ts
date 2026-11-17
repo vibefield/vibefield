@@ -5,6 +5,7 @@ import type {
   AgentInstall,
   AgentPersona,
   AgentPlan,
+  AgentPlanTier,
   AgentProfileSet,
   AgentProviderSummary,
   AgentSignInService,
@@ -38,6 +39,8 @@ export type ProfilesFixtureState =
   | "read before reset"
   /** item 274 (UM-274-D7 A) — a push over a meter kept from an older read: each line says its own read */
   | "kept meters"
+  /** Studio, whose plans carry made-up tiers: a badge, an empty capsule, none */
+  | "plan tiers"
   | "empty"
   | "signing in"
   | "agent"
@@ -81,6 +84,7 @@ export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
   "refreshing usage",
   "read before reset",
   "kept meters",
+  "plan tiers",
   "empty",
   "signing in",
   "agent",
@@ -408,6 +412,120 @@ export const FIXTURE_DEMO: AgentProfileSet = {
 
 export const FIXTURE_PROFILE_SETS: AgentProfileSet[] = [FIXTURE_NATIVE, FIXTURE_WORK, FIXTURE_DEMO];
 
+// Studio (DESIGN.md §8 "A plan's tier"): a profile whose plans carry tiers, made up, as no agent sends one yet (the
+// contract's `planTier`, beside `plan`). Its two Claude Max plans are one family: one read at
+// "20x", one its agent says has none. Its two ChatGPT Pro plans are another: one read at "200",
+// one not read, which wears the empty capsule. xAI's label is the contract's longest, 8
+// characters, and GitHub's tier, not read, stands alone in its family. Studio is in none of
+// the lists above, so every other plate reads as it did.
+
+const XAI: AgentSignInService = { id: "xai", label: "xAI" };
+const STUDIO_HOME = `${PROFILES_HOME}/studio`;
+
+/** One of Studio's sign-ins, on a plan of its own. A sign-in with no `tier` is one whose tier was
+ * not read. */
+interface StudioSignIn {
+  plan: string;
+  service: AgentSignInService;
+  who: { email?: string; account?: string; plan: string };
+  tier?: AgentPlanTier;
+  /** its reading: the five hours' percent and when they reset */
+  used: number;
+  resetsInHours: number;
+}
+
+/** In `PROVIDERS`' order: the agent at the same place signs in, names the plan and reads its
+ * usage, so Studio names no agent of its own (R23b). */
+const STUDIO_SIGN_INS: readonly StudioSignIn[] = [
+  {
+    plan: "anthropic",
+    service: ANTHROPIC,
+    who: { email: "ada@example.com", plan: "max" },
+    tier: { label: "20x" },
+    used: 58,
+    resetsInHours: 2,
+  },
+  {
+    plan: "openai",
+    service: OPENAI,
+    who: { email: "ada@example.com", plan: "pro" },
+    tier: { label: "200" },
+    used: 34,
+    resetsInHours: 1.5,
+  },
+  {
+    plan: "xai",
+    service: XAI,
+    who: { email: "ada@example.com", plan: "supergrok" },
+    tier: { label: "Business" },
+    used: 47,
+    resetsInHours: 2.25,
+  },
+  {
+    plan: "openai-2",
+    service: OPENAI,
+    who: { email: "bo@example.com", plan: "pro" },
+    used: 12,
+    resetsInHours: 4,
+  },
+  {
+    plan: "github",
+    service: GITHUB,
+    who: { account: "studio-dev", plan: "individual" },
+    used: 8,
+    resetsInHours: 3,
+  },
+  {
+    plan: "anthropic-2",
+    service: ANTHROPIC,
+    who: { email: "cy@example.com", plan: "max" },
+    tier: {},
+    used: 21,
+    resetsInHours: 3.5,
+  },
+];
+
+type StudioRow = StudioSignIn & { agent: AgentProviderSummary };
+
+const STUDIO: readonly StudioRow[] = STUDIO_SIGN_INS.flatMap((signIn, index): StudioRow[] => {
+  const agent = PROVIDERS[index];
+  return agent === undefined ? [] : [{ ...signIn, agent }];
+});
+
+/** A Studio sign-in's persona: its agent's folder, its identity, and the one plan it holds. */
+const studioPersona = ({ agent, plan, service, who }: StudioRow): AgentPersona =>
+  persona({
+    profileId: `studio-${agent.id}`,
+    provider: agent.id,
+    label: "Studio",
+    set: "studio",
+    folder: `${STUDIO_HOME}/${agent.id}`,
+    identity: { loggedIn: true, ...who, verifiedAt: READ },
+    holds: [{ service, ...who, key: false, planId: plan, runsOn: true }],
+  });
+
+/** A Studio plan, named by its one holder, its tier beside the plan word when there is one. */
+const studioPlan = ({ agent, plan, service, who, tier }: StudioRow): AgentPlan => ({
+  id: plan,
+  service,
+  account: { ...who, ...(tier !== undefined ? { planTier: tier } : {}) },
+  namedBy: `studio-${agent.id}`,
+  holders: [`studio-${agent.id}`],
+  alsoIn: [],
+});
+
+export const FIXTURE_STUDIO: AgentProfileSet = {
+  id: "studio",
+  kind: "managed",
+  label: "Studio",
+  glyph: "star",
+  default: false,
+  createdAt: READ,
+  folder: STUDIO_HOME,
+  personas: STUDIO.map(studioPersona),
+  plans: STUDIO.map(studioPlan),
+};
+
 const window = (
   id: string,
   label: string,
@@ -540,6 +658,27 @@ export const FIXTURE_PROFILES_CONTEXT_KEPT_METERS: ProfilesContext = {
         }
       : entry,
   ),
+};
+
+/** Studio's readings: every sign-in read, so each plan has a row in the popover. */
+const studioReading = ({ agent, used, resetsInHours }: StudioRow): AgentAccountUsageEntry => ({
+  provider: agent.id,
+  label: agent.label,
+  profileId: `studio-${agent.id}`,
+  state: "available",
+  fetchedAt: READ,
+  metrics: [
+    window("5h", "5H", used, resetsInHours, 300),
+    window("7d", "7D", Math.round(used / 2), 96, 10_080),
+  ],
+});
+const STUDIO_USAGE: AgentAccountUsageEntry[] = STUDIO.map(studioReading);
+
+/** The doors' answers with Studio among the profiles: the plan tiers' plates. */
+export const FIXTURE_PROFILES_CONTEXT_TIERS: ProfilesContext = {
+  ...FIXTURE_PROFILES_CONTEXT,
+  usage: [...USAGE, ...STUDIO_USAGE],
+  sets: [...FIXTURE_PROFILE_SETS, FIXTURE_STUDIO],
 };
 
 /** What the catalog's sign-in terminal (Grok, into Work) shows while the

@@ -19,6 +19,8 @@ import { ageWords, meterReadAt, resetForm } from "../../usage/rules";
 import type { SettingsSubpage } from "../SettingsDialog";
 import { borderCls, fieldCls, labelCls, SettingsRow, SettingsSection } from "../settings-ui";
 import type { AgentsNotice } from "./AgentsView";
+import { PlanTierMark } from "./PlanTierMark";
+import { spokenPlanName, type TierMark, tierMarks } from "./plan-tier";
 import {
   defaultSwitchWords,
   deleteWords,
@@ -435,11 +437,20 @@ export interface PlanLight {
   onLight: (plan: string | null) => void;
 }
 
-/** One plan the profile runs on: the company's mark, the plan and whose it is,
- * then every usage window as a C1 line — or one sentence — and at its foot the
- * agents that spend it. One act when the plan needs one. */
+/** Each card's tier mark, its family read among the cards on one profile's page
+ * (DESIGN.md §8 "A plan's tier"). */
+export function planCardTiers(cards: readonly PlanCard[]): TierMark[] {
+  return tierMarks(
+    cards.map((card) => ({ service: card.service.id, title: card.title, tier: card.tier })),
+  );
+}
+
+/** One plan the profile runs on: the company's mark, the plan and its tier and
+ * whose it is, then every usage window as a C1 line — or one sentence — and at
+ * its foot the agents that spend it. One act when the plan needs one. */
 export function PlanCardView({
   card,
+  tier,
   now,
   light,
   busy = false,
@@ -447,6 +458,9 @@ export function PlanCardView({
   onAct,
 }: {
   card: PlanCard;
+  /** what stands after its title, decided by the page over all its cards
+   * (`planCardTiers`), since a family is read among the cards in view; undefined draws nothing */
+  tier: TierMark;
   now: Date;
   light?: PlanLight | undefined;
   busy?: boolean;
@@ -457,6 +471,8 @@ export function PlanCardView({
   const loading =
     refreshingUsage && card.named && card.namedBy !== undefined && card.act?.kind !== "reauth";
   const titleId = useId();
+  // the badge is part of the plan's name, so each name a reader hears carries it: "ChatGPT Pro 200"
+  const named = spokenPlanName(card.title, tier);
   return (
     <article
       className={`vf-profiles-plan${light?.lit === card.id ? " is-lit" : ""}${
@@ -473,7 +489,7 @@ export function PlanCardView({
           <span
             className="vf-profiles-plan-refresh"
             role="status"
-            aria-label={`${card.title}: Refreshing usage`}
+            aria-label={`${named}: Refreshing usage`}
             title="Refreshing usage…"
           >
             <span className="vf-profiles-usage-loading-dot" aria-hidden="true" />
@@ -481,7 +497,8 @@ export function PlanCardView({
         )}
         <div className="vf-profiles-plan-name">
           <h4 id={titleId} className="vf-profiles-plan-title">
-            {card.title}
+            <span className="vf-profiles-plan-title-words">{card.title}</span>
+            <PlanTierMark mark={tier} />
           </h4>
           <p className="vf-profiles-plan-account">{card.account}</p>
         </div>
@@ -506,7 +523,7 @@ export function PlanCardView({
             forecasts={forecasts}
             resetForms={resetForms}
             ages={ages}
-            label={card.title}
+            label={named}
             variant="card"
           />
         ) : card.sentence !== undefined ? (
@@ -519,7 +536,7 @@ export function PlanCardView({
             {card.sentence.text}
           </p>
         ) : null}
-        {loading && lines.length === 0 && <UsageLoading label={card.title} variant="card" />}
+        {loading && lines.length === 0 && <UsageLoading label={named} variant="card" />}
       </div>
       <footer className="vf-profiles-plan-foot">
         <span className="vf-profiles-plan-users" aria-hidden="true">
@@ -1014,6 +1031,8 @@ export function ProfilePageView({
       .filter((card) => meterWindows(card.metrics, at).some((window) => window.line.hot))
       .map((card) => card.id),
   );
+  // each card's tier, its family read among this page's cards
+  const tiers = planCardTiers(page.plans);
   const addItems: MenuItem[] = page.addable.map((agent) => ({
     key: agent.provider,
     label: agent.label,
@@ -1104,10 +1123,11 @@ export function ProfilePageView({
             <span className={labelCls}>What {set.label} runs on</span>
           </div>
           <div className="vf-profiles-plan-grid">
-            {page.plans.map((card) => (
+            {page.plans.map((card, index) => (
               <PlanCardView
                 key={card.id}
                 card={card}
+                tier={tiers[index]}
                 now={at}
                 light={light}
                 busy={busy !== null}

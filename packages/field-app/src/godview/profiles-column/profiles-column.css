@@ -507,7 +507,11 @@
   margin-left: 0;
 }
 
+/* DESIGN.md §8 "A plan's tier": a plan's tier after its title (`PlanTierMark`, its look in
+   profiles-settings.css), on a row's head or a plan's line with no meter, wears the ring of the head's default
+   tag, in Godview's mode */
 .vf-profiles-pop-rows {
+  --vf-plan-tier-ring: var(--vf-profiles-solid-ring);
   display: grid;
   gap: 2px;
   align-content: start;
