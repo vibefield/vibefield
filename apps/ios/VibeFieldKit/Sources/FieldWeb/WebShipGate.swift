@@ -5,6 +5,11 @@
 // (`swiftSettings: [.define("VF_WEB_RELAY")]`) only at SP-4d's land. A Release archive without it never compiles the
 // host, so the archive check (`apps/ios/scripts/testflight.sh`, the web markers) finds none. `relayBuilt` is DERIVED
 // from that condition, never set by hand; `apps/ios/ship-gates.txt` carries the gate's line.
+// Item 522 (2026-11-17): three targets hold code under that condition, so SP-4d's land gives the define to all three
+// together: FieldWeb (the host and its filtering front), FieldMesh (`MeshModel.peerStream`, the front's origin dial)
+// and FieldHome (the dials, and the view that mounts the host). Given to fewer, a build either fails to compile
+// (FieldHome's gated code names what FieldWeb or FieldMesh then did not compile) or compiles a host that no view
+// mounts (FieldWeb without FieldHome); none builds a mounted host without its front's dials.
 
 public enum WebShipGate {
   #if VF_WEB_RELAY

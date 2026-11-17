@@ -5,12 +5,13 @@ import WebKit
 
 @testable import FieldWeb
 
-/// SP-4c's host rows (SP-4/MA-5), on a simulator, each red first. The page's ONLY way out
-/// is the rig's stand-in proxy, which counts CONNECTs by name class and refuses all but the origin and the one
-/// declared host; the origin and the declared host are loopback HTTPS servers with the rig's test identity, which
-/// only the test target's `RigNavigation` trusts. The W rows come first: the rig is read from their answers, never
-/// guessed. R9's loopback literals go to counting traps instead (`RigTrap`): WebKit sends a loopback address around
-/// its proxy (route B's P1a-ip, 2026-11-14), so the content rule list is the only fence there.
+/// SP-4c's host rows (SP-4/MA-5), on a simulator, each red first. The page's ONLY way out is its own filtering front
+/// (item 522), whose dials carry what it admits on to the rig's stand-in proxy (`RigDial`), which counts CONNECTs by
+/// name class and refuses all but the origin and the one declared host, so a class the front refuses reads as the
+/// stand-in seeing none of it; the origin and the declared host are loopback HTTPS servers with the rig's test
+/// identity, which only the test target's `RigNavigation` trusts. The W rows come first: the rig is read from their
+/// answers, never guessed. R9's loopback literals go to counting traps instead (`RigTrap`): WebKit sends a loopback
+/// address around its proxy (route B's P1a-ip, 2026-11-14), so the content rule list is the only fence there.
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @MainActor
@@ -37,6 +38,14 @@ struct HostRowsTests {
         + "<img src=\"https://\(declaredName)/x.png\"></body></html>"),
     "/r4": .page(
       "<html><head></head><body><a id=\"go\" target=\"_blank\" href=\"\(undeclared)/\">go</a></body></html>"),
+    // Item 522: the same link without a target, so its click navigates the main frame in place.
+    "/i522-same": .page("<html><head></head><body><a id=\"go\" href=\"\(undeclared)/\">go</a></body></html>"),
+    // Item 522: a link to the fixture's other tailnet name, which the policy refuses (off the origin).
+    "/i522-tailnet": .page("<html><head></head><body><a id=\"go\" href=\"\(tailnetOther)/\">go</a></body></html>"),
+    // Item 522: a socket to an undeclared host.
+    "/i522-socket": .page(
+      "<html><head></head><body><script>try { new WebSocket(\"wss://undeclared.example.org/w\"); } catch (_) {}"
+        + "</script></body></html>"),
     "/download": RigServer.Answer(
       headers: ["Content-Type": "application/octet-stream", "Content-Disposition": "attachment; filename=\"x.bin\""],
       body: "x"),
@@ -65,13 +74,11 @@ struct HostRowsTests {
       proxyPort = try proxy.start()
     }
 
-    var configuration: ProxyConfiguration { proxyAt(proxyPort) }
+    /// The front's dials, to the stand-in.
+    var dials: WebFrontDials { dialsAt(proxyPort) }
 
-    func proxyAt(_ port: UInt16) -> ProxyConfiguration {
-      let configuration = ProxyConfiguration(
-        socksv5Proxy: .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port) ?? 9))
-      configuration.applyCredential(username: proxy.user, password: proxy.password)
-      return configuration
+    func dialsAt(_ port: UInt16) -> WebFrontDials {
+      RigDial.dials(port: port, user: proxy.user, password: proxy.password)
     }
 
     func stop() {
@@ -85,15 +92,15 @@ struct HostRowsTests {
     WebNavigationPolicy(origin: WebOrigin(claim: root)!, reach: [declaredName])
   }
 
-  /// Opens `path` on the origin through `proxy`, with the rig's trust, and waits for the page to settle.
-  func open(_ path: String, proxy: ProxyConfiguration?, events: @escaping @MainActor (WebAppEvent) -> Void = { _ in })
+  /// Opens `path` on the origin through its front and `dials`, with the rig's trust, and waits for the page to settle.
+  func open(_ path: String, dials: WebFrontDials?, events: @escaping @MainActor (WebAppEvent) -> Void = { _ in })
     async throws -> FieldWebAppHost
   {
     let pinned = try #require(RigIdentity.pinned)
     let navigation = RigNavigation(policy: Self.policy, pinned: pinned)
     let url = try #require(URL(string: Self.root + path))
     let host = try await FieldWebAppHost.open(
-      url: url, policy: Self.policy, proxy: proxy, appId: String(repeating: "a", count: 64), navigation: navigation,
+      url: url, policy: Self.policy, dials: dials, appId: String(repeating: "a", count: 64), navigation: navigation,
       events: events)
     try await settle(host.webView)
     return host
@@ -113,16 +120,18 @@ struct HostRowsTests {
 
   // MARK: - W: the rig, read before any row leans on it
 
-  @Test("W1 + W3: a page loads in this test process, through the stand-in, as its origin", .rigMade)
+  @Test("W1 + W3: a page loads in this test process, through its front and the stand-in, as its origin", .rigMade)
   func w1() async throws {
     let rig = try Rig()
     defer { rig.stop() }
-    let host = try await open("/", proxy: rig.configuration)
+    let host = try await open("/", dials: rig.dials)
     let read = try await page(host.webView, "return { body: document.body.textContent };")
     let body = read["body"] as? String
     #expect(body == "ok")
     let origins = rig.proxy.count(.origin)
+    let carried = host.front.origin
     #expect(origins >= 1)
+    #expect(carried >= 1)
   }
 
   @Test("W2: the test identity was made for this run, imports, and a TLS listener serves with it")
@@ -162,8 +171,8 @@ struct HostRowsTests {
   func r1() async throws {
     let rig = try Rig()
     defer { rig.stop() }
-    let top = try await open("/to-tailnet", proxy: rig.configuration)
-    let frame = try await open("/r1-frame", proxy: rig.configuration)
+    let top = try await open("/to-tailnet", dials: rig.dials)
+    let frame = try await open("/r1-frame", dials: rig.dials)
     let refusedTop = top.counts.refused[.tailnetOffOrigin, default: 0]
     let refusedFrame = frame.counts.refused[.tailnetOffOrigin, default: 0]
     #expect(refusedTop >= 1)
@@ -178,7 +187,7 @@ struct HostRowsTests {
   func r2() async throws {
     let rig = try Rig()
     defer { rig.stop() }
-    let host = try await open("/r2", proxy: rig.configuration)
+    let host = try await open("/r2", dials: rig.dials)
     let read = try await page(
       host.webView,
       """
@@ -199,7 +208,7 @@ struct HostRowsTests {
   func r2b() async throws {
     let rig = try Rig()
     defer { rig.stop() }
-    let host = try await open("/r2", proxy: rig.configuration)
+    let host = try await open("/r2", dials: rig.dials)
     let read = try await page(
       host.webView,
       """
@@ -254,7 +263,7 @@ struct HostRowsTests {
   func r3() async throws {
     let rig = try Rig()
     defer { rig.stop() }
-    _ = try await open("/r3", proxy: rig.configuration)
+    _ = try await open("/r3", dials: rig.dials)
     try await Task.sleep(for: .seconds(1))
     let tailnet = rig.proxy.count(.tailnetOther)
     let undeclared = rig.proxy.count(.undeclared)
@@ -268,22 +277,126 @@ struct HostRowsTests {
   func r4() async throws {
     let rig = try Rig()
     defer { rig.stop() }
-    let host = try await open("/r4", proxy: rig.configuration)
+    let host = try await open("/r4", dials: rig.dials)
     _ = try await page(
       host.webView,
       "document.getElementById('go').click(); window.open('\(Self.undeclared)/', '_blank'); return {};")
     try await Task.sleep(for: .seconds(1))
     let undeclared = rig.proxy.count(.undeclared)
     #expect(undeclared == 0)
-    print("SP4C-R4 popups=\(host.counts.popups)")
+    print("SP4C-R4 popups=\(host.counts.popups) front=\(host.front.refused[.undeclared, default: 0])")
+  }
+
+  // MARK: - Item 522: a navigation the rule cancels still asks for a connection; the front refuses it undialled
+
+  /// One reading: the page's counts, its front's, and the stand-in's asks by class (counts only).
+  private func said(_ row: String, _ host: FieldWebAppHost, _ rig: Rig, opened: Bool? = nil) {
+    let counts = host.counts
+    let front = host.front
+    let refused = counts.refused.values.reduce(0, +)
+    let classes: [RigProxy.Class] = [.origin, .declared, .tailnetOther, .undeclared, .address]
+    let asks = classes.map { rig.proxy.count($0) }
+    let window = opened.map { " opened=\($0)" } ?? ""
+    let barred = WebFrontRefusal.allCases.map { "\($0.rawValue)=\(front.refused[$0, default: 0])" }
+    print(
+      "I522-\(row) allowed=\(counts.allowed) outside=\(counts.outside) refused=\(refused) popups=\(counts.popups)"
+        + " failures=\(counts.failures) front origin=\(front.origin) declared=\(front.declared)"
+        + " \(barred.joined(separator: " ")) asks origin=\(asks[0]) declared=\(asks[1]) tailnet=\(asks[2])"
+        + " undeclared=\(asks[3]) address=\(asks[4])\(window)")
+  }
+
+  @Test("522-0: R4's page alone, no click: the front refuses nothing", .rigMade)
+  func i522Control() async throws {
+    let rig = try Rig()
+    defer { rig.stop() }
+    let host = try await open("/r4", dials: rig.dials)
+    try await Task.sleep(for: .seconds(1))
+    said("0", host, rig)
+    let barred = host.front.refused.values.reduce(0, +)
+    let undeclared = rig.proxy.count(.undeclared)
+    #expect(barred == 0)
+    #expect(undeclared == 0)
+  }
+
+  @Test("522-a: a target=_blank link to an undeclared host: its ask is refused by the front, undialled", .rigMade)
+  func i522Click() async throws {
+    let rig = try Rig()
+    defer { rig.stop() }
+    let host = try await open("/r4", dials: rig.dials)
+    _ = try await page(host.webView, "document.getElementById('go').click(); return {};")
+    try await Task.sleep(for: .seconds(1))
+    said("a", host, rig)
+    let barred = host.front.refused[.undeclared, default: 0]
+    let undeclared = rig.proxy.count(.undeclared)
+    #expect(barred >= 1)
+    #expect(undeclared == 0)
+  }
+
+  /// Unproven, and not driven here: window.open under a person's real tap. A test's script is no gesture, so WebKit
+  /// blocks the window before any decision (`opened` false). Under a tap it may reach the decision, and then may ask
+  /// as a click does (522-a, 522-c), which the front refuses as it does theirs.
+  @Test("522-b: window.open alone, on the origin's own page: nothing asked", .rigMade)
+  func i522Open() async throws {
+    let rig = try Rig()
+    defer { rig.stop() }
+    let host = try await open("/", dials: rig.dials)
+    let read = try await page(
+      host.webView, "return { opened: window.open('\(Self.undeclared)/', '_blank') !== null };")
+    let opened = read["opened"] as? Bool
+    try await Task.sleep(for: .seconds(1))
+    said("b", host, rig, opened: opened)
+    let barred = host.front.refused[.undeclared, default: 0]
+    let undeclared = rig.proxy.count(.undeclared)
+    #expect(barred == 0)
+    #expect(undeclared == 0)
+  }
+
+  @Test("522-c: the same link in place, the main frame: its ask is refused by the front, undialled", .rigMade)
+  func i522Same() async throws {
+    let rig = try Rig()
+    defer { rig.stop() }
+    let host = try await open("/i522-same", dials: rig.dials)
+    _ = try await page(host.webView, "document.getElementById('go').click(); return {};")
+    try await Task.sleep(for: .seconds(1))
+    said("c", host, rig)
+    let barred = host.front.refused[.undeclared, default: 0]
+    let undeclared = rig.proxy.count(.undeclared)
+    #expect(barred >= 1)
+    #expect(undeclared == 0)
+  }
+
+  @Test("522-d: a link to another tailnet name: its ask is refused by the front, undialled", .rigMade)
+  func i522Tailnet() async throws {
+    let rig = try Rig()
+    defer { rig.stop() }
+    let host = try await open("/i522-tailnet", dials: rig.dials)
+    _ = try await page(host.webView, "document.getElementById('go').click(); return {};")
+    try await Task.sleep(for: .seconds(1))
+    said("d", host, rig)
+    let barred = host.front.refused[.tailnet, default: 0]
+    let tailnet = rig.proxy.count(.tailnetOther)
+    #expect(barred >= 1)
+    #expect(tailnet == 0)
+  }
+
+  /// A pin: the rule list may stop the socket before it asks, so the front's count is said, not held.
+  @Test("522-e: a socket to an undeclared host reaches nothing", .rigMade)
+  func i522Socket() async throws {
+    let rig = try Rig()
+    defer { rig.stop() }
+    let host = try await open("/i522-socket", dials: rig.dials)
+    try await Task.sleep(for: .seconds(1))
+    said("e", host, rig)
+    let undeclared = rig.proxy.count(.undeclared)
+    #expect(undeclared == 0)
   }
 
   @Test("R5: an attachment and an <a download> are cancelled: no file", .rigMade)
   func r5() async throws {
     let rig = try Rig()
     defer { rig.stop() }
-    let attachment = try await open("/download", proxy: rig.configuration)
-    let link = try await open("/r5", proxy: rig.configuration)
+    let attachment = try await open("/download", dials: rig.dials)
+    let link = try await open("/r5", dials: rig.dials)
     _ = try await page(link.webView, "document.getElementById('go').click(); return {};")
     try await settle(link.webView)
     let first = attachment.counts.downloads
@@ -296,7 +409,7 @@ struct HostRowsTests {
   func r6() async throws {
     let rig = try Rig()
     defer { rig.stop() }
-    let host = try await open("/", proxy: rig.configuration)
+    let host = try await open("/", dials: rig.dials)
     let read = try await page(
       host.webView,
       """
@@ -312,7 +425,7 @@ struct HostRowsTests {
   func r7() async throws {
     let rig = try Rig()
     defer { rig.stop() }
-    let host = try await open("/r7", proxy: rig.configuration)
+    let host = try await open("/r7", dials: rig.dials)
     _ = try await page(
       host.webView,
       "navigator.sendBeacon('\(Self.undeclared)/b', 'x'); document.getElementById('go').click(); return {};")
@@ -321,26 +434,30 @@ struct HostRowsTests {
     #expect(undeclared == 0)
   }
 
-  @Test("R8: a dead proxy fails the load; no proxy, no web view; no link preview; counts carry no words", .rigMade)
+  @Test("R8: a dead dial fails the load; no dials, no web view; no link preview; counts carry no words", .rigMade)
   func r8() async throws {
     let rig = try Rig()
     defer { rig.stop() }
     final class Heard { var failed = 0 }
     let heard = Heard()
-    let dead = try await open("/", proxy: rig.proxyAt(9), events: { if $0 == .failed { heard.failed += 1 } })
+    let dead = try await open("/", dials: rig.dialsAt(9), events: { if $0 == .failed { heard.failed += 1 } })
     let reachedDead = dead.counts.allowed
+    let unreached = dead.front.unreached
     let failed = heard.failed
     #expect(failed >= 1)
     #expect(reachedDead >= 1)
+    #expect(unreached >= 1)
     await #expect(throws: FieldWebAppHost.Failure.noProxy) {
-      _ = try await open("/", proxy: nil)
+      _ = try await open("/", dials: nil)
     }
     #expect(dead.webView.allowsLinkPreview == false)
     // Failover off, read back off the live view: the rig cannot see a fallback (a fake name fails direct anyway).
     let failover = dead.webView.configuration.websiteDataStore.proxyConfigurations.first?.allowFailover
     #expect(failover == false)
     let strings = Mirror(reflecting: WebAppCounts()).children.filter { $0.value is String || $0.value is URL }
+    let frontStrings = Mirror(reflecting: WebFrontCounts()).children.filter { $0.value is String || $0.value is URL }
     #expect(strings.isEmpty)
+    #expect(frontStrings.isEmpty)
   }
 
   @Test("R9: loads to loopback and address literals, plain, behind userinfo or redirected, reach nothing", .rigMade)
@@ -352,7 +469,7 @@ struct HostRowsTests {
       "/r9": .page(Self.r9Page(trap)),
     ])
     defer { rig.stop() }
-    _ = try await open("/r9", proxy: rig.configuration)
+    _ = try await open("/r9", dials: rig.dials)
     try await Task.sleep(for: .milliseconds(1500))
     let said = trap.labels.map { "\($0)=\(trap.count($0))" }.joined(separator: " ")
     let address = rig.proxy.count(.address)

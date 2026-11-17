@@ -3,10 +3,12 @@
   import Network
   import WebKit
 
-  // SP-4c — one made app's page on the phone (SP-4/MA-5): its own ephemeral store whose ONLY way out is the
-  // proxy it is given (tsnet's, read back by R1; SP-4d's relay after), the app's rule list, the document-start script
-  // in every frame, and every navigation, redirect, response and window put to `WebNavigationPolicy`. It logs counts,
-  // never a URL, a host, a title or content. It decides no certificate: WebKit's own system evaluation does.
+  // SP-4c — one made app's page on the phone (SP-4/MA-5): its own ephemeral store whose ONLY proxy is the filtering
+  // front it makes for the page (`WebFront`, item 522), which holds the page's rule at every connection WebKit sends
+  // through it, before any dial, and carries on what it admits by the dials it is handed (whether WebRTC or
+  // WebTransport leave the page around a proxy is item 524's to measure); the app's rule list, the document-start
+  // script in every frame, and every navigation, redirect, response and window put to `WebNavigationPolicy`. It logs
+  // counts, never a URL, a host, a title or content. It decides no certificate: WebKit's own system evaluation does.
   // Item 373: this whole file compiles only in a Debug build or with SP-4d's relay, so a Release archive
   // without the relay carries none of it (`WebShipGate`, the archive check's markers).
 
@@ -108,6 +110,14 @@
       failed(error)
     }
 
+    /// The page's front stopped listening after it started (iOS may reclaim a loopback listener in the background):
+    /// a failed load, so the open screen reads its way out again and makes a new page and front once, then falls to
+    /// its honest screen, "Can't reach ‹desktop›", in today's words.
+    func frontLost() {
+      counts.failures += 1
+      events?(.failed)
+    }
+
     /// A content process that dies reloads once; a second death ends the page.
     public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
       counts.deaths += 1
@@ -167,7 +177,7 @@
   @MainActor
   public final class FieldWebAppHost {
     public enum Failure: Error, Equatable {
-      /// No proxy to send the page through: no web view is made.
+      /// No way out for the page (no dials, or its front did not start): no web view is made.
       case noProxy
       /// The app's rule list did not compile: nothing loads.
       case ruleList
@@ -175,38 +185,50 @@
 
     public let webView: WKWebView
     public let navigation: FieldWebAppNavigation
+    private let webFront: WebFront
     public var counts: WebAppCounts { navigation.counts }
+    /// What the page's front did with its connections, by count only.
+    public var front: WebFrontCounts { webFront.counts }
 
-    /// Makes the page and loads `url`. `navigation` is the TEST target's alone; the app passes none.
+    /// Makes the page and its front, and loads `url`. `dials` carry on what the front admits: the origin over the
+    /// mesh, a declared host by the system's own connection; nil, no page. `navigation` is the TEST target's alone.
     public static func open(
-      url: URL, policy: WebNavigationPolicy, proxy: ProxyConfiguration?, appId: String,
+      url: URL, policy: WebNavigationPolicy, dials: WebFrontDials?, appId: String,
       navigation: FieldWebAppNavigation? = nil, events: @escaping @MainActor (WebAppEvent) -> Void
     ) async throws -> FieldWebAppHost {
-      guard let proxy else { throw Failure.noProxy }
+      guard let dials else { throw Failure.noProxy }
       let rules: WKContentRuleList
       do {
         rules = try await ruleList(policy)
       } catch {
         throw Failure.ruleList
       }
+      let front = WebFront(rule: WebFrontRule(policy: policy), dials: dials)
+      let proxy: ProxyConfiguration
+      do {
+        proxy = try await front.start()
+      } catch {
+        throw Failure.noProxy
+      }
       let host = FieldWebAppHost(
-        policy: policy, proxy: proxy, appId: appId, rules: rules,
+        policy: policy, proxy: proxy, front: front, appId: appId, rules: rules,
         navigation: navigation ?? FieldWebAppNavigation(policy: policy), events: events)
       host.webView.load(URLRequest(url: url))
       return host
     }
 
     private init(
-      policy: WebNavigationPolicy, proxy: ProxyConfiguration, appId: String, rules: WKContentRuleList,
-      navigation: FieldWebAppNavigation, events: @escaping @MainActor (WebAppEvent) -> Void
+      policy: WebNavigationPolicy, proxy: ProxyConfiguration, front: WebFront, appId: String,
+      rules: WKContentRuleList, navigation: FieldWebAppNavigation, events: @escaping @MainActor (WebAppEvent) -> Void
     ) {
+      webFront = front
       let store: WKWebsiteDataStore =
         switch WebAppStore.chosen {
         case .ephemeral: .nonPersistent()
         case .perApp: WKWebsiteDataStore(forIdentifier: WebAppStore.identifier(appId: appId))
         }
-      // Failover OFF: a dead or stale proxy fails the load, never falls back to a direct one, which with the system
-      // VPN up would reach the tailnet past the proxy (probe5 run 1's L3x; the verdict of 02:20Z).
+      // Failover OFF: a dead front or a dead dial fails the load, never falls back to a direct one, which with the
+      // system VPN up would reach the tailnet past the front (probe5 run 1's L3x).
       var proxy = proxy
       proxy.allowFailover = false
       store.proxyConfigurations = [proxy]
@@ -226,14 +248,22 @@
       self.navigation = navigation
       webView.navigationDelegate = navigation
       webView.uiDelegate = navigation
+      front.whenLost { [weak navigation] in
+        Task { @MainActor [weak navigation] in navigation?.frontLost() }
+      }
     }
 
-    /// Lets the page go: nothing more loads, and its store goes with the view.
+    deinit {
+      webFront.stop()
+    }
+
+    /// Lets the page go: nothing more loads, its front stops with every tunnel, and its store goes with the view.
     public func release() {
       webView.stopLoading()
       webView.navigationDelegate = nil
       webView.uiDelegate = nil
       navigation.events = nil
+      webFront.stop()
     }
 
     /// The app's rule list (MA-L7), looked up by its identifier, else compiled.

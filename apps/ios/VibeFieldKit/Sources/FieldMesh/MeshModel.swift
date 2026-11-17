@@ -247,6 +247,33 @@ public final class MeshModel {
       desktopName: desktopName, deviceNoun: DeviceWord.current.noun)
   }
 
+  #if DEBUG || VF_WEB_RELAY
+    /// Item 522 (2026-11-17) — a RAW tailnet stream to the ONE peer whose MagicDNS name is `host`, at `port`: how an
+    /// app page's filtering front carries on a connection to the app's own origin, by the node's own dial as the
+    /// freeway's link is (`freewayDialing`), never TailscaleKit's loopback listener. The peer is looked up again at
+    /// every dial (`originPeer`). Throws `notInReach` while there is no runtime, or no one peer is that name. Inside
+    /// the web host's gate (item 373): a Release build has no use for it until the relay ships.
+    public func peerStream(host: String, port: UInt16) async throws -> any FreewayByteStream {
+      guard let runtime else { throw FreewayDialError.notInReach }
+      let peers = await runtime.peers()
+      let names = peers.map { $0.dnsName as String? }
+      guard let index = Self.originPeer(host, among: names) else { throw FreewayDialError.notInReach }
+      return MeshFreewayStream(connection: try await runtime.node.dial(to: peers[index], port: port))
+    }
+
+    /// Which ONE peer `host` names, by its index among the peers' own DNS names: the one whose canonical DNS name
+    /// (`canonicalPeerDNSName`) is `host`. Nil for none, and for more than one. A name is never built from a hostname:
+    /// Tailscale names a second machine of the same hostname `-1`, and a node shared in from another tailnet keeps its
+    /// own tailnet's name, so a built name can name another device. A peer with no DNS name is nobody's origin:
+    /// truffle lists one so while a peer's hello races ahead of the netmap (with no hostname either), or when
+    /// Tailscale reports none.
+    nonisolated static func originPeer(_ host: String, among dnsNames: [String?]) -> Int? {
+      guard let wanted = canonicalPeerDNSName(host) else { return nil }
+      let matches = dnsNames.indices.filter { canonicalPeerDNSName(dnsNames[$0]) == wanted }
+      return matches.count == 1 ? matches[0] : nil
+    }
+  #endif
+
   /// This node's own tailnet domain (`studio.tail1234.ts.net` → `tail1234.ts.net`).
   ///
   /// It is a fact about the tailnet we are ON, which is what makes it usable

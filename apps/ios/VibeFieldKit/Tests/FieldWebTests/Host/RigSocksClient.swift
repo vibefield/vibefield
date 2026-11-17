@@ -1,8 +1,9 @@
 import Foundation
 import Network
 
-/// SP-4c's rig — a SOCKS5 client for the stand-in's own row (W4): user and password, ONE CONNECT by name, then whatever
-/// the tunnel carries until it closes or `waitSeconds` runs out, counted and never kept.
+/// SP-4c's rig — a SOCKS5 client for the stand-in's own row (W4) and the front's (item 522): user and password, ONE
+/// CONNECT by name at `at` (443 unless said), then whatever the tunnel carries until it closes or `waitSeconds` runs
+/// out, counted and never kept.
 enum RigSocksClient {
   struct Heard: Sendable {
     /// The CONNECT's reply code; 0xFF when no reply came.
@@ -11,8 +12,9 @@ enum RigSocksClient {
     let after: Int
   }
 
-  static func connect(port: UInt16, user: String, password: String, name: String, waitSeconds: Double)
-    async throws -> Heard
+  static func connect(
+    port: UInt16, user: String, password: String, name: String, at: UInt16 = 443, waitSeconds: Double
+  ) async throws -> Heard
   {
     let queue = DispatchQueue(label: "sp4c.rig.client")
     let connection = NWConnection(host: .ipv4(.loopback), port: NWEndpoint.Port(rawValue: port) ?? 9, using: .tcp)
@@ -26,7 +28,7 @@ enum RigSocksClient {
     send(connection, [1, UInt8(user.count)] + user + [UInt8(password.count)] + password)
     guard await receive(connection, exactly: 2) == [1, 0] else { return none }
     let name = Array(name.utf8)
-    send(connection, [5, 1, 0, 3, UInt8(name.count)] + name + [1, 187])
+    send(connection, [5, 1, 0, 3, UInt8(name.count)] + name + [UInt8(at >> 8), UInt8(at & 0xFF)])
     guard let reply = await receive(connection, exactly: 10) else { return none }
     queue.asyncAfter(deadline: .now() + waitSeconds) { connection.cancel() }
     var after = 0
@@ -36,6 +38,37 @@ enum RigSocksClient {
       if chunk.closed { break }
     }
     return Heard(code: reply[1], after: after)
+  }
+
+  /// The front's socket rows (item 522): `bytes` sent at once, then up to `count` bytes read back, fewer if the far
+  /// side closes first or `waitSeconds` runs out. With a `count` of 0 nothing is read: the connection is held
+  /// `waitSeconds`, then closed, as a client that leaves.
+  static func raw(port: UInt16, send bytes: [UInt8], read count: Int, waitSeconds: Double) async throws -> [UInt8] {
+    let queue = DispatchQueue(label: "i522.rig.raw")
+    let connection = NWConnection(host: .ipv4(.loopback), port: NWEndpoint.Port(rawValue: port) ?? 9, using: .tcp)
+    try await ready(connection, queue)
+    defer { connection.cancel() }
+    if !bytes.isEmpty { send(connection, bytes) }
+    guard count > 0 else {
+      try await Task.sleep(for: .seconds(waitSeconds))
+      return []
+    }
+    queue.asyncAfter(deadline: .now() + waitSeconds) { connection.cancel() }
+    var heard: [UInt8] = []
+    while heard.count < count {
+      let (got, closed) = await receiveBytes(connection, max: count - heard.count)
+      heard += got
+      if closed { break }
+    }
+    return heard
+  }
+
+  private static func receiveBytes(_ connection: NWConnection, max: Int) async -> ([UInt8], Bool) {
+    await withCheckedContinuation { (done: CheckedContinuation<([UInt8], Bool), Never>) in
+      connection.receive(minimumIncompleteLength: 1, maximumLength: max) { data, _, complete, error in
+        done.resume(returning: (data.map { Array($0) } ?? [], complete || error != nil))
+      }
+    }
   }
 
   private struct Chunk: Sendable {
