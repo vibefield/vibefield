@@ -553,6 +553,9 @@ importers:
       '@vibefield/rosetta-protocol':
         specifier: 0.1.7
         version: 0.1.7
+      '@vibefield/trust':
+        specifier: workspace:*
+        version: link:../trust
       '@vibefield/users':
         specifier: workspace:*
         version: link:../users
@@ -624,6 +627,9 @@ importers:
       '@vibefield/logging':
         specifier: workspace:*
         version: link:../logging
+      '@vibefield/trust':
+        specifier: workspace:*
+        version: link:../trust
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
