@@ -562,13 +562,13 @@ describe("UI system ownership boundaries", () => {
     expect(view).toContain("portalContainer={layers}");
   });
 
-  it("keeps the transcript's top fade the cover's tint on the desk, and leaves the sticky day heads the room's own frost (DK-15, R16; docket N3 (a))", () => {
+  it("keeps the transcript's top fade paint on the desk, never a frost, and leaves the sticky day heads the room's own frost (DK-15, R16; docket N3 (a))", () => {
     // DESIGN.md §8 "The covers over the desk" and its N3 (a) carve-out: under a
-    // cover the transcript's top fade is the cover's tint, never a backdrop
-    // filter; the sticky day heads keep the room's host-surface frost (its 14px
-    // blur and its mask, room.css), so the override names them nowhere. vitest
-    // loads no CSS; the rule is held here and the computed style by
-    // smoke:canvas's COVER HISTORY row.
+    // cover the transcript's top fade is paint, never a backdrop filter (its
+    // recipe is the next row's, item 394); the sticky day heads keep the room's
+    // host-surface frost (its 14px blur and its mask, room.css), so the override
+    // names them nowhere. vitest loads no CSS; the rule is held here and the
+    // computed style by smoke:canvas's COVER HISTORY row.
     const css = source("history/history-room-glass.css");
     const rules = css.replace(/\/\*[\s\S]*?\*\//gu, "");
     const block =
@@ -577,7 +577,6 @@ describe("UI system ownership boundaries", () => {
       )?.[1] ?? "";
     expect(block).toContain("backdrop-filter: none;");
     expect(block).toContain("-webkit-backdrop-filter: none;");
-    expect(block).toContain("background: var(--vf-chrome-solid);");
     expect(rules).not.toContain(".ah-day");
     expect(rules).not.toMatch(/backdrop-filter:\s*blur/);
     // in the room's own chunk: only the room's view imports it, after the room's sheet
@@ -586,6 +585,56 @@ describe("UI system ownership boundaries", () => {
       view.indexOf('import "@vibefield/rosetta-room/styles/room.css";'),
     );
     expect(source("history/HistoryOpening.tsx")).not.toContain("history-room-glass.css");
+  });
+
+  it("draws the transcript's top fade on glass in the glass's own colour, the squares of 8 down to 0 over 96px (item 394)", () => {
+    // DESIGN.md §8 "History is rosetta's room, on the cover's glass", "Its ground", as amended
+    // 2026-11-13 (item 394). Until then the override painted the cover's raw colour whole under the
+    // room's mask, 100% to 88% over the first 24px of the room's 64 and then one straight ramp: a
+    // slab on the glass. The fade is the glass as it reads over the bare mat, at the squares of 8
+    // down to 0 with a stop every 12px, so 64% at the head's hairline and nothing at 96px; and the
+    // room's mask is cleared, so those stops are the whole feather. vitest loads no CSS: the rule's
+    // text is held here, and its look is for a person's eye.
+    const rules = source("history/history-room-glass.css").replace(/\/\*[\s\S]*?\*\//gu, "");
+    const block =
+      /\.vf-history \.ah-frame\[data-ah-surface="host"\] \.tr-frost::before \{([^}]*)\}/u.exec(
+        rules,
+      )?.[1] ?? "";
+
+    // Its colour: the cover's tint at the strength the view's own ground wears (FC-D16), over the
+    // mat's ground. The two sheets retype one figure, so this row holds them equal.
+    const view = source("history/history-room-view.css");
+    const ground = /^\.vf-history \{([^}]*)\}/mu.exec(view)?.[1] ?? "";
+    const cover = /var\(--vf-chrome-solid\) (\d+)%, transparent\)/u.exec(ground)?.[1];
+    expect(cover).toBe("72");
+    expect(block).toContain(
+      `--vf-history-fade-glass: color-mix(in srgb, var(--vf-chrome-solid) ${cover}%, var(--vf-mat-ground));`,
+    );
+    // And that colour is the glass DESIGN.md measured under History, each channel within one:
+    // (201, 209, 198) by day and (33, 37, 39) by night (§8 "The covers over the desk", the rim).
+    const tokens = readFileSync(join(PACKAGE_ROOT, "../design-kit/src/tokens.css"), "utf8");
+    const share = Number(cover) / 100;
+    const glassOverMat = (theme: ":root" | ".dark"): number[] => {
+      const tint = parseColour(tokenValue(tokens, theme, "--vf-chrome-solid")).rgb;
+      const mat = parseColour(tokenValue(tokens, theme, "--vf-mat-ground")).rgb;
+      const mix = (at: 0 | 1 | 2): number => Math.round(tint[at] * share + mat[at] * (1 - share));
+      return [mix(0), mix(1), mix(2)];
+    };
+    expect(glassOverMat(":root")).toEqual([201, 209, 197]);
+    expect(glassOverMat(".dark")).toEqual([34, 37, 40]);
+
+    // Its strength, head to foot: [percent of that colour, px under the head's hairline].
+    const stop =
+      /color-mix\(in srgb, var\(--vf-history-fade-glass\) (\d+)%, transparent\) (\d+)px,/gu;
+    const stops = [...block.matchAll(stop)].map((at) => [Number(at[1]), Number(at[2])]);
+    expect(stops).toEqual([8, 7, 6, 5, 4, 3, 2, 1].map((step) => [step * step, (8 - step) * 12]));
+    expect(block).toMatch(/,\s*transparent 96px\s*\);/u);
+    expect(block).toContain("height: 96px;");
+    // The room's mask is cleared, both spellings: the stops above are the whole feather.
+    expect(block).toContain("-webkit-mask-image: none;");
+    expect(block).toMatch(/(?<!-webkit-)mask-image: none;/u);
+    // And the cover's raw colour is never the fade's ground again.
+    expect(block).not.toContain("background: var(--vf-chrome-solid);");
   });
 
   it("keeps History's fixture an ADAPTER — the package's fixture ports, never the room's markup (AR-8c)", () => {
