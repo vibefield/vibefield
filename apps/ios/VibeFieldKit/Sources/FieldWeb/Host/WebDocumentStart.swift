@@ -2,9 +2,8 @@
   import WebKit
 
   // SP-4c — the script WebKit runs at the start of every document, in every frame of an app's page and in the page's
-  // own world, before the page's scripts. WebRTC is left as any website has it: MA-D14 (James,
-  // 2026-11-14T08:16:06.968Z: "Allow it, like any website"). So are WebTransport and the camera and microphone's
-  // door: MA-D15 (James, 2026-11-14T17:18:37.520Z: "Let iOS ask for camera and mic; allow WebTransport too").
+  // own world, before the page's scripts. WebRTC is left as any website has it (MA-D14,
+  // 2026-11-14). So are WebTransport and the camera and microphone's door: iOS asks (MA-D15, 2026-11-14).
   // `sendBeacon` stays stubbed (reach, not either question). The getters below also scrub a frame on the way out
   // of `contentWindow`/`contentDocument`. Item 373: this whole file compiles only in a Debug build or with SP-4d's
   // relay.

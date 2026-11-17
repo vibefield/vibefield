@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SP-4c / item 373 (James, 2026-11-13 01:44:27Z; the IOS lane's PLAN-373, VF-PM 01:50Z) — the app web host compiles
+// SP-4c / item 373 (2026-11-13) — the app web host compiles
 // only under `#if DEBUG || VF_WEB_RELAY`, and the archive check (`apps/ios/scripts/testflight.sh`) refuses a Release
 // app that carries either of its two web markers while ship-gates.txt holds an OPEN line. This is the source side:
 // - each marker stands ONLY inside that gate's own branch (never its #else, never a comment or string outside it);
@@ -7,7 +7,7 @@
 //   FieldHome view that mounts it;
 // - each marker stands somewhere, so a rename cannot leave the archive check searching for a name nothing carries;
 // - ship-gates.txt reads in its four forms, and anything else fails closed;
-// - no source and no app plist names a server-trust override (VF-PM 02:00Z (2)): James's phone runs Debug builds, so a
+// - no source and no app plist names a server-trust override: a developer's phone runs Debug builds, so a
 //   Debug-only override would be a door on it. The rig's trust lives in the TEST target alone.
 // Test targets are not scanned: no test is compiled into the app. `--self-test` runs its own cases.
 

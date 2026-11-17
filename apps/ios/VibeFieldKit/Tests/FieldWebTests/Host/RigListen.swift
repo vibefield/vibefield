@@ -1,8 +1,8 @@
 import Foundation
 import Network
 
-/// SP-4c's rig — every listener a row starts says where it binds, as `SP4C-LISTEN <who> <host>` (VF-PM 2026-11-14
-/// 07:19Z): the old mini's runner STOPs on any host other than 127.0.0.1 or ::1, and on a host row that printed none.
+/// SP-4c's rig — every listener a row starts says where it binds, as `SP4C-LISTEN <who> <host>`:
+/// the kit's runner STOPs on any host other than 127.0.0.1 or ::1, and on a host row that printed none.
 /// An NWListener's host is read back off the live listener's parameters once it is ready; `RigReset` passes its
 /// `getsockname` address. A loopback literal and a role, never a port, a name or a peer.
 enum RigListen {

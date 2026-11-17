@@ -1,9 +1,9 @@
 import CryptoKit
 import Foundation
 
-// SP-4c — where an app's page keeps what it saves (VF-PM 2026-11-13 02:00Z (1)). Ephemeral for the first cut: a store
+// SP-4c — where an app's page keeps what it saves. Ephemeral for the first cut: a store
 // that survives launches would let an agent's page keep cookies, storage and caches on the phone, and what survives,
-// what removing an app clears and what a backup carries are James's to rule (words-for-james.md, row 16). The choice
+// what removing an app clears and what a backup carries are still to be ruled. The choice
 // is the one line `chosen`.
 
 public enum WebAppStore: Sendable, Equatable {

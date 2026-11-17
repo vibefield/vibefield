@@ -3,11 +3,11 @@
   import Network
   import WebKit
 
-  // SP-4c — one made app's page on the phone (PLAN-sp4-ma5 §2c): its own ephemeral store whose ONLY way out is the
+  // SP-4c — one made app's page on the phone (SP-4/MA-5): its own ephemeral store whose ONLY way out is the
   // proxy it is given (tsnet's, read back by R1; SP-4d's relay after), the app's rule list, the document-start script
   // in every frame, and every navigation, redirect, response and window put to `WebNavigationPolicy`. It logs counts,
-  // never a URL, a host, a title or content. It decides no certificate: WebKit's own system evaluation does (VF-PM
-  // 02:00Z (2)). Item 373: this whole file compiles only in a Debug build or with SP-4d's relay, so a Release archive
+  // never a URL, a host, a title or content. It decides no certificate: WebKit's own system evaluation does.
+  // Item 373: this whole file compiles only in a Debug build or with SP-4d's relay, so a Release archive
   // without the relay carries none of it (`WebShipGate`, the archive check's markers).
 
   /// What the open screen hears from an app's page. `outside` carries the URL for the screen to hand to Safari; it is
@@ -129,13 +129,12 @@
     }
 
     /// What an app's page gets when it asks for the camera, the microphone or both: iOS's own ask, naming the page;
-    /// nothing is granted without a tap. MA-D15 (James, 2026-11-14T17:18:37.520Z: "Let iOS ask for camera and
-    /// mic; allow WebTransport too").
+    /// nothing is granted without a tap (MA-D15, 2026-11-14).
     nonisolated static func mediaCaptureDecision(_ type: WKMediaCaptureType) -> WKPermissionDecision {
       .prompt
     }
 
-    /// Device motion and orientation were not in James's answer: denied.
+    /// Device motion and orientation were not in MA-D15's answer: denied.
     nonisolated static func motionDecision() -> WKPermissionDecision {
       .deny
     }

@@ -1,11 +1,11 @@
 #!/bin/bash
-# SP-4c's rig: makes the TEST identity the host rows serve TLS with, per run (VF-PM 2026-11-13 02:11Z (a): never
+# SP-4c's rig: makes the TEST identity the host rows serve TLS with, per run (never
 # committed). A self-signed P-256 key and certificate for studio.tail1234.ts.net and declared.example (test names;
 # never a real one), written ONLY into the run's own work folder, which must be empty and outside any git work tree,
 # as a mode-600 PKCS#12 file (`rig.p12`, its passphrase the public constant "rig").
 # It writes `rig.env` there with two TEST_RUNNER_ lines that `xcodebuild test` hands the test process (prefix
 # stripped): VF_RIG_P12_PATH (the file's absolute path) and VF_RIG_P12_SHA256 (the file's digest). The KEY'S BYTES
-# never ride an environment (VF-PM 02:14Z): the test reads the file, checks the digest, and imports it.
+# never ride an environment: the test reads the file, checks the digest, and imports it.
 # This script removes nothing, and prints counts and the digest's first 16 characters, never the key.
 # Usage: make-rig-identity.sh <empty work folder outside the repository>
 set -euo pipefail

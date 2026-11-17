@@ -11,12 +11,12 @@ import WebKit
 /// The identity is made per run by `make-rig-identity.sh` into the run's own folder, outside the repository, as a
 /// mode-600 PKCS#12 file. The run's environment carries only its PATH and the file's SHA-256
 /// (`TEST_RUNNER_VF_RIG_P12_PATH`, `TEST_RUNNER_VF_RIG_P12_SHA256`, which `xcodebuild test` hands over without the
-/// prefix), never the key's bytes: an environment is what a red, a crash report or a child process copies (VF-PM
-/// 02:14Z). The test reads the file (a simulator test process reads the host's filesystem), checks its digest, and
-/// imports it. It is never committed and never written into the tree (VF-PM 02:11Z (a)). Without it W2 says "not
+/// prefix), never the key's bytes: an environment is what a red, a crash report or a child process copies.
+/// The test reads the file (a simulator test process reads the host's filesystem), checks its digest, and
+/// imports it. It is never committed and never written into the tree. Without it W2 says "not
 /// made" and fails, and every row that needs it is skipped by name.
 ///
-/// Server trust is decided nowhere in the kit's or the app's sources (VF-PM 02:00Z (2); `check-web-markers.mjs`
+/// Server trust is decided nowhere in the kit's or the app's sources (`check-web-markers.mjs`
 /// holds it). Only `RigNavigation`, declared here and passed by the rows alone, trusts a certificate, and only the
 /// rig's own, by its SHA-256.
 enum RigIdentity {
@@ -74,7 +74,7 @@ final class RigNavigation: FieldWebAppNavigation {
     super.init(policy: policy)
   }
 
-  /// First compile on the mini checks that this is the selector WebKit asks for (the superclass implements none).
+  /// The first compile checks that this is the selector WebKit asks for (the superclass implements none).
   @objc(webView:didReceiveAuthenticationChallenge:completionHandler:)
   func webView(
     _ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,

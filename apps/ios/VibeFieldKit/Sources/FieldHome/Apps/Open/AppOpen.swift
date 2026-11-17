@@ -5,7 +5,7 @@ import Foundation
 // MA-5a — opening an app on the phone, its pure decisions (MA §5.5, §5.7, §5.8; DESIGN.md §8 "The phone's Apps"):
 // what the phone asks `artifact.open`, what an answer means, and the words for each way it cannot open. Pure, so
 // every row is a unit row; `AppOpenModel` runs it over the home's door. The words are DESIGN.md §8's and MadeAppFacts'
-// own; the two refusals §8 has no words for say "This app can't run here yet" (ruled kept, item 273) until James's.
+// own; the two refusals §8 has no words for say "This app can't run here yet" (ruled kept, item 273) until §8 does.
 
 enum AppOpen {
   /// §8: "Opening on ‹desktop›…", late: nothing for 120 ms, then a fade.

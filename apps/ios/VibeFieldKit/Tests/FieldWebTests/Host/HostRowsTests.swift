@@ -5,7 +5,7 @@ import WebKit
 
 @testable import FieldWeb
 
-/// SP-4c's host rows (PLAN-sp4-ma5 §2b, §2c), on the mini's simulator only, each red first. The page's ONLY way out
+/// SP-4c's host rows (SP-4/MA-5), on a simulator, each red first. The page's ONLY way out
 /// is the rig's stand-in proxy, which counts CONNECTs by name class and refuses all but the origin and the one
 /// declared host; the origin and the declared host are loopback HTTPS servers with the rig's test identity, which
 /// only the test target's `RigNavigation` trusts. The W rows come first: the rig is read from their answers, never
@@ -172,7 +172,7 @@ struct HostRowsTests {
     #expect(reached == 0)
   }
 
-  /// MA-D14 (James, 2026-11-14T08:16:06.968Z: "Allow it, like any website"). A PIN of his ruling, green from the
+  /// MA-D14 (2026-11-14: WebRTC as on any website). A PIN of that ruling, green from the
   /// red commit on: an app's own view keeps WebRTC as any website has it, so a later block shows red here.
   @Test("R2: WebRTC is there, as any website has it: the main frame and a same-origin frame", .rigMade)
   func r2() async throws {
@@ -192,9 +192,8 @@ struct HostRowsTests {
     #expect(same == "function")
   }
 
-  /// WebTransport and `navigator.mediaDevices` stand as on any website: MA-D15 (James, 2026-11-14T17:18:37.520Z:
-  /// "Let iOS ask for camera and mic; allow WebTransport too"). `sendBeacon` stays stubbed (reach, not his
-  /// question): in the main frame, a same-origin and a srcdoc frame.
+  /// WebTransport and `navigator.mediaDevices` stand as on any website (MA-D15, 2026-11-14).
+  /// `sendBeacon` stays stubbed (reach, not that question): in the main frame, a same-origin and a srcdoc frame.
   @Test("R2b: WebTransport and the camera and microphone's door stand as on any website, sendBeacon sends nothing",
     .rigMade)
   func r2b() async throws {
@@ -234,7 +233,7 @@ struct HostRowsTests {
   }
 
   /// A page asking for the camera, the microphone or both gets iOS's own ask; nothing is granted without a tap
-  /// (MA-D15, James, 2026-11-14T17:18:37.520Z: "Let iOS ask for camera and mic; allow WebTransport too").
+  /// (MA-D15, 2026-11-14).
   /// Device motion was not asked about and stays denied.
   @Test("R2c: a page asking for the camera or the microphone gets iOS's own ask; device motion stays denied")
   func r2c() {
