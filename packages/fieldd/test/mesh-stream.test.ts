@@ -66,6 +66,12 @@ function meshOf(up: boolean): Mesh {
 interface Floor {
   asks: number;
   disposed: number;
+  /** Answers given so far. */
+  answered: number;
+  /** For each ask, in order: how many answers had been given, and how many streams let go, when it was made. */
+  askedAt: Array<{ answered: number; disposed: number }>;
+  /** Each answered stream's event road, in order: what the floor's forwarder writes to. */
+  heard: Array<(payload: unknown, kind: "snapshot" | "delta") => void>;
   /** The replay owner the last answered ask carried: what NativeLink calls on a refused replay. */
   owner: ((error: RpcCallError) => void) | null;
   subscribe(
@@ -79,14 +85,20 @@ function floorOf(script: Array<RpcCallError | "ok">, after: RpcCallError | "ok" 
   const floor: Floor = {
     asks: 0,
     disposed: 0,
+    answered: 0,
+    askedAt: [],
+    heard: [],
     owner: null,
-    subscribe: async (_onEvent, opts) => {
+    subscribe: async (onEvent, opts) => {
       floor.asks += 1;
+      floor.askedAt.push({ answered: floor.answered, disposed: floor.disposed });
       // answer on a later turn of the event loop, as a socket does: an ask loop then spins at the timer's pace, where a
       // row's beat and vitest's own timeout still fire, never on microtasks alone, where nothing else ever would
       await new Promise((resolve) => setImmediate(resolve));
       const next = script.shift() ?? after;
       if (next !== "ok") throw next;
+      floor.answered += 1;
+      floor.heard.push(onEvent);
       floor.owner = opts.onReplayFailed ?? null;
       return {
         snapshot: { asked: floor.asks },
@@ -101,6 +113,7 @@ function floorOf(script: Array<RpcCallError | "ok">, after: RpcCallError | "ok" 
 
 interface Seen {
   snapshots: Array<[unknown, boolean]>;
+  events: Array<[unknown, "snapshot" | "delta"]>;
   stopped: unknown[];
 }
 
@@ -110,12 +123,12 @@ afterEach(() => {
 });
 
 function streamOf(floor: Floor, mesh: MeshStreamWake): { stream: MeshStream; seen: Seen } {
-  const seen: Seen = { snapshots: [], stopped: [] };
+  const seen: Seen = { snapshots: [], events: [], stopped: [] };
   const stream = new MeshStream({
     label: "field.docs.v1",
     subscribe: (onEvent, opts) => floor.subscribe(onEvent, opts),
     wake: mesh,
-    onEvent: () => {},
+    onEvent: (payload, kind) => seen.events.push([payload, kind]),
     onSnapshot: (snapshot, again) => seen.snapshots.push([snapshot, again]),
     onStopped: (error) => seen.stopped.push(error),
     backoff: { baseMs: 20, capMs: 80 },
@@ -123,6 +136,14 @@ function streamOf(floor: Floor, mesh: MeshStreamWake): { stream: MeshStream; see
   streams.push(stream);
   return { stream, seen };
 }
+
+/** What a promise settled to: "ok", or what it rejected with. A renewal is held this way from its call, so a row reads
+ * its counts first and the settlement last. */
+const settle = (promise: Promise<unknown>): Promise<unknown> =>
+  promise.then(
+    () => "ok",
+    (error: unknown) => error,
+  );
 
 const beat = (ms = 60) => new Promise((resolve) => setTimeout(resolve, ms));
 /** A few real turns of the event loop: the scripted floor answers on one. */
@@ -265,6 +286,101 @@ describe("NR — MeshStream asks again by what refused it", () => {
     mesh.moment();
     await beat();
     expect(floor.asks).toBe(1);
+  });
+
+  // NR S3 — the owner's renewal (`renew`): a node built anew over a live link refuses nothing, so only the owner can
+  // ask for its store again (the drive's holders, `drive/holders.ts` `nodeUp`).
+  it("S3: a live stream's renew makes ONE ask, and lets the old stream go only after the new one answered", async () => {
+    const floor = floorOf([]);
+    const { stream, seen } = streamOf(floor, meshOf(true));
+    await stream.start();
+    const renewed = settle(stream.renew());
+    expect(floor.disposed, "nothing is let go while the renewal is in flight").toBe(0);
+    await beat();
+    expect(floor.asks, "one renewal, one ask").toBe(2);
+    expect(floor.askedAt[1], "the renewal asked while the old stream still stood").toEqual({
+      answered: 1,
+      disposed: 0,
+    });
+    expect(floor.disposed, "the old stream, let go once the new one answered").toBe(1);
+    expect(stream.live).toBe(true);
+    expect(seen.snapshots.at(-1), "the renewal's answer is a re-arm's (`again`)").toEqual([
+      { asked: 2 },
+      true,
+    ]);
+    expect(await renewed, "a renewal resolves").toBe("ok");
+  });
+
+  it("S3: a refused renew keeps the standing stream hearing, and the next moment asks", async () => {
+    const floor = floorOf(["ok", new RpcCallError("UNAVAILABLE", "not connected", true)]);
+    const mesh = meshOf(true);
+    const { stream, seen } = streamOf(floor, mesh);
+    await stream.start();
+    const renewed = settle(stream.renew());
+    await beat();
+    expect(floor.asks, "the renewal asked").toBe(2);
+    expect(floor.disposed, "a refused renewal lets nothing go").toBe(0);
+    expect(stream.live, "the standing stream still stands").toBe(true);
+    floor.heard[0]?.({ kind: "peerUpdated", deviceId: "studio" }, "delta");
+    expect(seen.events, "and its events still reach the owner").toEqual([
+      [{ kind: "peerUpdated", deviceId: "studio" }, "delta"],
+    ]);
+    mesh.moment();
+    await beat();
+    expect(floor.asks, "the refusal left the stream owed the next moment's ask").toBe(3);
+    expect(floor.disposed, "whose answer lets the standing one go").toBe(1);
+    expect(await renewed, "a refused renewal resolves: the refusal is the stream's").toBe("ok");
+  });
+
+  it("S3: renew during an ask in flight waits it out, then asks once (two asks in all, not three)", async () => {
+    const floor = floorOf([]);
+    const { stream, seen } = streamOf(floor, meshOf(true));
+    const starting = stream.start();
+    const renewed = settle(stream.renew());
+    await starting;
+    await beat();
+    expect(floor.asks, "the flight, then ONE renewal").toBe(2);
+    expect(
+      floor.askedAt.map((at) => at.answered),
+      "the renewal asked only after the flight was answered",
+    ).toEqual([0, 1]);
+    expect(floor.disposed, "the first stream, let go once the renewal answered").toBe(1);
+    expect(seen.snapshots).toEqual([
+      [{ asked: 1 }, false],
+      [{ asked: 2 }, true],
+    ]);
+    expect(await renewed).toBe("ok");
+  });
+
+  it("S3: a WAITING stream's renew is one ask, and no second ask comes at the next moment", async () => {
+    const refusal = nodeGate();
+    const floor = floorOf([refusal]);
+    const mesh = meshOf(false);
+    const { stream } = streamOf(floor, mesh);
+    await expect(stream.start()).rejects.toBe(refusal);
+    const renewed = settle(stream.renew());
+    await beat();
+    expect(floor.asks, "the refused start, then the renewal").toBe(2);
+    expect(stream.live).toBe(true);
+    mesh.up = true;
+    mesh.moment();
+    await beat();
+    expect(floor.asks, "the renewal answered the wait: the moment asks nothing").toBe(2);
+    expect(await renewed).toBe("ok");
+  });
+
+  it("S3: stop during a renew lets the late answer go, and nothing reaches the owner", async () => {
+    const floor = floorOf([]);
+    const { stream, seen } = streamOf(floor, meshOf(true));
+    await stream.start();
+    const renewed = settle(stream.renew());
+    stream.stop();
+    await beat();
+    expect(floor.asks, "the renewal had asked").toBe(2);
+    expect(floor.disposed, "the standing stream at stop, then the late answer").toBe(2);
+    expect(seen.snapshots, "the late answer reached no one").toEqual([[{ asked: 1 }, false]]);
+    expect(stream.live).toBe(false);
+    expect(await renewed).toBe("ok");
   });
 
   it("stop ends a live stream, lets go of its moments, and nothing asks after it", async () => {

@@ -109,6 +109,11 @@ export class MeshStream {
     await this.#ask(false);
   }
 
+  /** NR S3's renewal: its rows are written red first (`test/mesh-stream.test.ts`), and the next commit makes it. */
+  async renew(): Promise<void> {
+    throw new Error("MeshStream.renew is not made yet (NR S3)");
+  }
+
   /** The floor answered the stream's last ask, and nothing has refused it since. */
   get live(): boolean {
     return this.#dispose !== null;
