@@ -41,6 +41,22 @@ function hex(value: string, alpha: number): Rgba {
   return [r, g, b, alpha];
 }
 
+/**
+ * The nets under a pane's text (TL-1, 2026-11-17; DESIGN.md §8 "What a pane's text is held to").
+ * Text stays the program's to colour; these are ghosttea's own two guards for where a program's
+ * colours meet a ground they were not chosen for. A contrast floor of 3:1, hue kept (box drawing,
+ * block elements and colour glyphs are exempt in the renderer), and light adaptation on auto, which
+ * under a light ground redraws a program that paints most of its screen dark as a light design.
+ *
+ * They ride the theme because the renderer reads them off the theme it is handed: a theme that
+ * leaves them out draws with both off, whatever the floor's configuration document says, since
+ * the `theme` prop replaces the configuration's theme whole (above).
+ */
+const PANE_TEXT_NETS = {
+  lightAdaptation: "auto",
+  minimumContrast: 3,
+} as const satisfies Pick<TerminalTheme, "lightAdaptation" | "minimumContrast">;
+
 /** The terminal's ground, as the deck's frames read it (GT-6). */
 export interface TerminalGround {
   /** The theme's background, as CSS colour text — the ground a rounded pane's
@@ -101,6 +117,7 @@ export function godviewTerminalTheme(
       selection: hex(chosen.selection, 1),
       selectionForeground: hex(chosen.selectionForeground, 1),
       backgroundOpacityCells: appearance.opacityCells,
+      ...PANE_TEXT_NETS,
     };
   }
   const reference = godviewTheme === "dark" ? TERMINAL_THEMES.midnight : TERMINAL_THEMES.daylight;
@@ -115,6 +132,7 @@ export function godviewTerminalTheme(
       appearance.opacity,
     ],
     backgroundOpacityCells: appearance.opacityCells,
+    ...PANE_TEXT_NETS,
   };
 }
 
