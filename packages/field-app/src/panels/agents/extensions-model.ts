@@ -153,9 +153,11 @@ function columnState(
   | { kind: "read"; inApp: boolean; shared: boolean; partial?: string } {
   const words = WORDS[key];
   if (column.failure !== undefined) {
+    // Item 489 (2026-11-16) — VibeField's sentence alone; the adapter's own
+    // words go to the renderer log where the lens arrives (ExtensionsSection).
     return column.failure.status === "unsupported"
       ? { kind: "none", why: `VibeField does not read ${column.label}’s ${words.many} yet` }
-      : { kind: "unread", why: `${column.label} could not be read: ${column.failure.message}` };
+      : { kind: "unread", why: `${column.label} could not be read` };
   }
   const support = column.support[words.support];
   if (support === undefined) {
@@ -627,12 +629,13 @@ function heldOf(lens: AgentsExtensionsListResult, provider: string, key: AgentLi
   );
 }
 
-/** Why an agent that could not be read has nothing to show. */
+/** Why an agent that could not be read has nothing to show: VibeField's
+ * sentence alone (item 489); the adapter's words go to the renderer log. */
 function failureWords(column: AgentExtensionColumn): string | null {
   if (column.failure === undefined) return null;
   return column.failure.status === "unsupported"
     ? `VibeField doesn’t read ${column.label}’s plugins, servers and skills yet.`
-    : `${column.label}’s plugins, servers and skills couldn’t be read: ${column.failure.message}`;
+    : `${column.label}’s plugins, servers and skills couldn’t be read.`;
 }
 
 export interface AgentExtensionsRowModel {

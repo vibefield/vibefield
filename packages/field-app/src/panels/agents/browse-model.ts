@@ -250,12 +250,14 @@ export function browsePage(
     failure: null,
   };
   if (catalog.failure !== undefined) {
+    // Item 489 (2026-11-16) — VibeField's sentence alone; the adapter's own
+    // words go to the renderer log where the catalog arrives (ExtensionsSection).
     return {
       ...base,
       failure:
         catalog.failure.status === "unsupported"
           ? `VibeField doesn’t read ${label}’s catalogs.`
-          : `${label}’s catalogs couldn’t be read: ${catalog.failure.message}`,
+          : `${label}’s catalogs couldn’t be read.`,
     };
   }
   if (catalog.marketplaces.length === 0) {

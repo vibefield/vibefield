@@ -400,10 +400,12 @@ export function modelsPageGroups(
           : {}),
       });
     }
+    // Item 489 (2026-11-16) — the foot says VibeField's own words for a failed
+    // re-read; the adapter's sentence goes to the renderer log (launch-acts).
     const said = [
       pickerAge(catalog.observedAt, context.now),
       answer?.refreshing === true ? "reading again" : null,
-      answer?.failure !== undefined ? `the last read failed: ${answer.failure.message}` : null,
+      answer?.failure !== undefined ? "the last read failed" : null,
     ]
       .filter((part): part is string => part !== null)
       .join(" · ");

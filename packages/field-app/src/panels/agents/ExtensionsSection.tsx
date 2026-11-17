@@ -19,6 +19,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { refusalSentence } from "../../account/use-account";
+import { logAdapterFailure } from "../../agent-words-log";
 import {
   type AddServerRequest,
   AddServerView,
@@ -134,14 +135,61 @@ function useExtensionLens(set: string): ExtensionLens {
   const parsed = feed.data === null ? null : AgentsExtensionsListResult.safeParse(feed.data);
   const lens = parsed?.success === true ? parsed.data : null;
 
+  // Item 489 (2026-11-16) — an agent that could not be read: the page says
+  // VibeField's sentence, and the adapter's own words go to the log. A settled
+  // frame's failures are logged at debug ONCE per (agent, status, words) while
+  // they stand, and again when they change; the first settled frame after a
+  // press of Refresh logs each at warn. The read's time is in the key, so a
+  // new read after a press is seen even when its failure is the same.
+  const pressedRead = useRef(false);
+  const standing = useRef(new Map<string, string>());
+  const settledFailures =
+    lens === null || lens.reading
+      ? null
+      : JSON.stringify({
+          readAt: lens.readAt ?? null,
+          failed: lens.agents.flatMap((column) =>
+            column.failure !== undefined && column.failure.status !== "unsupported"
+              ? [{ provider: column.provider, ...column.failure }]
+              : [],
+          ),
+        });
+  useEffect(() => {
+    if (settledFailures === null) return;
+    const { failed } = JSON.parse(settledFailures) as {
+      failed: Array<{ provider: string; status: string; message: string; retryable: boolean }>;
+    };
+    const pressed = pressedRead.current;
+    pressedRead.current = false;
+    const seen = standing.current;
+    const stillFailed = new Set<string>();
+    for (const { provider, ...failure } of failed) {
+      stillFailed.add(provider);
+      const key = `${failure.status}\u0000${failure.message}`;
+      if (!pressed && seen.get(provider) === key) continue;
+      seen.set(provider, key);
+      logAdapterFailure(
+        "settings.extensions",
+        "renderer.extensions.read_failed",
+        pressed,
+        failure,
+        { provider, set },
+      );
+    }
+    for (const provider of [...seen.keys()]) if (!stillFailed.has(provider)) seen.delete(provider);
+  }, [settledFailures, set]);
+
   const refresh = useCallback(() => {
+    pressedRead.current = true;
     setRefreshing(true);
     setRefusal(null);
     client
       .request("agents.extensions.list", { set, refresh: true })
-      .catch((cause: unknown) =>
-        setRefusal(refusalSentence("Could not read the agents again", cause)),
-      )
+      .catch((cause: unknown) => {
+        // a refused press reads nothing new: the next frame is not its answer
+        pressedRead.current = false;
+        setRefusal(refusalSentence("Could not read the agents again", cause));
+      })
       .finally(() => setRefreshing(false));
   }, [client, set]);
 
@@ -268,27 +316,44 @@ function useAgentCatalog(
   const [loading, setLoading] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const asked = useRef(0);
-  const read = useCallback(() => {
-    const ask = ++asked.current;
-    setLoading(true);
-    setRefusal(null);
-    client
-      .request("agents.extensions.catalog", { set, provider })
-      .then((answer) => {
-        if (ask !== asked.current) return;
-        const parsed = AgentsExtensionsCatalogResult.safeParse(answer);
-        if (parsed.success) setCatalog(parsed.data);
-        else setRefusal("fieldd answered with a catalog this version cannot read.");
-      })
-      .catch((cause: unknown) => {
-        if (ask === asked.current)
-          setRefusal(refusalSentence("Could not read the catalogs", cause));
-      })
-      .finally(() => {
-        if (ask === asked.current) setLoading(false);
-      });
-  }, [client, set, provider]);
-  useEffect(() => read(), [read]);
+  /** `pressed`: a person asked for this read (the page's Refresh), not the
+   * page's opening read or the read after a finished act. */
+  const read = useCallback(
+    (pressed: boolean) => {
+      const ask = ++asked.current;
+      setLoading(true);
+      setRefusal(null);
+      client
+        .request("agents.extensions.catalog", { set, provider })
+        .then((answer) => {
+          if (ask !== asked.current) return;
+          const parsed = AgentsExtensionsCatalogResult.safeParse(answer);
+          if (parsed.success) {
+            // Item 489 (2026-11-16) — the page says VibeField's sentence; the
+            // adapter's own words go to the log (warn for a press, else debug).
+            const failure = parsed.data.failure;
+            if (failure !== undefined && failure.status !== "unsupported")
+              logAdapterFailure(
+                "settings.extensions",
+                "renderer.extensions.catalog_read_failed",
+                pressed,
+                failure,
+                { provider, set },
+              );
+            setCatalog(parsed.data);
+          } else setRefusal("fieldd answered with a catalog this version cannot read.");
+        })
+        .catch((cause: unknown) => {
+          if (ask === asked.current)
+            setRefusal(refusalSentence("Could not read the catalogs", cause));
+        })
+        .finally(() => {
+          if (ask === asked.current) setLoading(false);
+        });
+    },
+    [client, set, provider],
+  );
+  useEffect(() => read(false), [read]);
   // a finished act of this agent's that moves what it lists: read the catalog again
   const run = lens?.run;
   const finished =
@@ -306,9 +371,10 @@ function useAgentCatalog(
   useEffect(() => {
     if (finished === undefined || finished === seenRun.current) return;
     seenRun.current = finished;
-    read();
+    read(false);
   }, [finished, read]);
-  return { catalog, loading, error: refusal, refresh: read };
+  const refresh = useCallback(() => read(true), [read]);
+  return { catalog, loading, error: refusal, refresh };
 }
 
 /** AR-S4e2 — what the agent would run for a source being typed, or why not. */

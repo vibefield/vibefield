@@ -1,4 +1,5 @@
 import type { ProjectSummary } from "@vibefield/contracts";
+import { logAdapterFailure } from "../agent-words-log";
 import type { KeyedCallClient } from "../forwarded-call";
 import { readModels, thrownReason } from "./acts";
 import type { HistoryHostState } from "./host-inputs";
@@ -31,8 +32,9 @@ export function launchActs(client: Pick<KeyedCallClient, "request">, update: Upd
     return next;
   };
   /** "reading" until a first answer; a later ask keeps what is held while
-   * fieldd answers (at once, from its own last read, a read behind it) */
-  const ask = (provider: string, profileSet: string) => {
+   * fieldd answers (at once, from its own last read, a read behind it).
+   * `pressed`: a person opened the models page for this read. */
+  const ask = (provider: string, profileSet: string, pressed: boolean) => {
     const key = modelsKey(provider, profileSet);
     update((state) =>
       state.models.has(key)
@@ -40,11 +42,23 @@ export function launchActs(client: Pick<KeyedCallClient, "request">, update: Upd
         : { ...state, models: held(state.models, key, { state: "reading" }) },
     );
     void readModels(client, provider, profileSet).then(
-      (answer) =>
+      (answer) => {
+        // Item 489 (2026-11-16) — a failed read's own words go to the log, never
+        // the page: at warn when a person opened the page and no picker stands,
+        // at debug for a re-read failing behind an old picker or a recipe's read.
+        if (answer.failure !== undefined)
+          logAdapterFailure(
+            "history.launch",
+            "renderer.history.models_read_failed",
+            pressed && answer.catalog === undefined,
+            answer.failure,
+            { provider, ...(profileSet !== "" ? { profileSet } : {}) },
+          );
         update((state) => ({
           ...state,
           models: held(state.models, key, { state: "answered", answer }),
-        })),
+        }));
+      },
       (error: unknown) =>
         update((state) =>
           state.models.get(key)?.state === "answered"
@@ -59,12 +73,12 @@ export function launchActs(client: Pick<KeyedCallClient, "request">, update: Upd
   return {
     page(next) {
       update((state) => ({ ...state, page: next }));
-      if (next.kind === "models") ask(next.provider, next.profileSet);
+      if (next.kind === "models") ask(next.provider, next.profileSet, true);
       turnNewAgentPage(() => update((state) => ({ ...state, page: FIRST_PAGE })));
     },
     recipeShown(project) {
       const recipe = project?.recipe;
-      if (recipe !== undefined) ask(recipe.provider, recipe.profileSet);
+      if (recipe !== undefined) ask(recipe.provider, recipe.profileSet, false);
     },
   };
 }
