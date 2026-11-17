@@ -3,8 +3,11 @@
 // only under `#if DEBUG || VF_WEB_RELAY`, and the archive check (`apps/ios/scripts/testflight.sh`) refuses a Release
 // app that carries either of its two web markers while ship-gates.txt holds an OPEN line. This is the source side:
 // - each marker stands ONLY inside that gate's own branch (never its #else, never a comment or string outside it);
-// - the script tag stands only in FieldWeb's Host folder; the host's type name may also be named by the gated
-//   FieldHome view that mounts it;
+// - the script tag stands only in FieldWeb's Host folder;
+// - item 522 (2026-11-17): no app source outside FieldWeb names the host or its navigation type, gated or not, so no
+//   view mounts the web host before its filtering front stands. It is unconditional. It lifts only in the front's own
+//   green commit, which changes this rule and its self-test rows in the same breath as `FieldWebAppHost.open` comes
+//   to take the front, so that a host without its front is then a compile error;
 // - each marker stands somewhere, so a rename cannot leave the archive check searching for a name nothing carries;
 // - ship-gates.txt reads in its four forms, and anything else fails closed;
 // - no source and no app plist names a server-trust override: a developer's phone runs Debug builds, so a
@@ -18,6 +21,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const SOURCES = ["apps/ios/VibeFieldKit/Sources", "apps/ios/App"];
 const HOST = "apps/ios/VibeFieldKit/Sources/FieldWeb/Host/";
+const WEB = "apps/ios/VibeFieldKit/Sources/FieldWeb/";
 const SHIP_GATES = "apps/ios/ship-gates.txt";
 export const GATE = "DEBUG || VF_WEB_RELAY";
 export const MARKERS = [
@@ -36,6 +40,21 @@ export const TRUST_NAMES = [
 ];
 /** A use that stands, by path and exact count (R23b's form). None at main bf9ebb21c (read 2026-11-13 02:03Z). */
 const TRUST_ALLOWED = {};
+/** Item 522: the types that mount the web host, named in no app source outside FieldWeb. */
+export const MOUNT_NAMES = ["FieldWebAppHost", "FieldWebAppNavigation"];
+
+/** Each line of an app source outside FieldWeb that names a type which mounts the web host (item 522). */
+export function mountFindings(path, text) {
+  if (!SOURCES.some((dir) => path.startsWith(`${dir}/`)) || path.startsWith(WEB)) return [];
+  const findings = [];
+  text.split("\n").forEach((line, index) => {
+    for (const name of MOUNT_NAMES) {
+      if (line.includes(name))
+        findings.push(`${path}:${index + 1}: ${name} outside FieldWeb (item 522: no front yet)`);
+    }
+  });
+  return findings;
+}
 
 /** Each trust-override name one file holds past its allowed count. */
 export function trustFindings(path, text, allowed = TRUST_ALLOWED) {
@@ -125,7 +144,7 @@ function check() {
   for (const path of SOURCES.flatMap((dir) => files(dir, ".swift"))) {
     const text = readFileSync(join(ROOT, path), "utf8");
     const result = scan(path, text);
-    findings.push(...result.findings, ...trustFindings(path, text));
+    findings.push(...result.findings, ...trustFindings(path, text), ...mountFindings(path, text));
     for (const [name, count] of result.inside) totals.set(name, totals.get(name) + count);
   }
   for (const path of files("apps/ios/App", ".plist")) {
@@ -147,15 +166,34 @@ function check() {
 function selfTest() {
   const host = `${HOST}FieldWebAppHost.swift`;
   const home = "apps/ios/VibeFieldKit/Sources/FieldHome/Apps/Open/AppOpenScreen.swift";
+  const rows = "apps/ios/VibeFieldKit/Tests/FieldWebTests/Host/HostRowsTests.swift";
   const tag = `let t = "${MARKERS[1].name}"`;
   const gated = (...lines) => [`#if ${GATE}`, ...lines, "#endif"].join("\n");
   const cases = [
     ["the host, gated", host, gated("final class FieldWebAppHost {}", tag), 0],
     ["a comment on the #if", host, [`#if ${GATE} // the gate`, tag, "#endif"].join("\n"), 0],
     ["nested inside the gate", host, gated("#if os(iOS)", tag, "#endif"), 0],
-    ["the type in the gated FieldHome view", home, gated("FieldWebAppHost()"), 0],
+    ["item 522: the type in a gated FieldHome view", home, gated("FieldWebAppHost()"), 1],
+    [
+      "item 522: the navigation type in a FieldHome view",
+      home,
+      "let n: FieldWebAppNavigation? = nil",
+      1,
+    ],
+    [
+      "item 522: the host in FieldWeb's own Host folder",
+      host,
+      gated("let h: FieldWebAppHost? = nil"),
+      0,
+    ],
+    ["item 522: a test target naming the host", rows, gated("let h = FieldWebAppHost.self"), 0],
     ["in the gate's #else", host, gated("#else", "let h: FieldWebAppHost? = nil"), 1],
-    ["a comment outside the gate", home, "/// Mounts FieldWebAppHost.\nstruct S {}", 1],
+    [
+      "a comment outside the gate, outside FieldWeb",
+      home,
+      "/// Mounts FieldWebAppHost.\nstruct S {}",
+      2,
+    ],
     ["DEBUG alone is not the gate", host, ["#if DEBUG", tag, "#endif"].join("\n"), 1],
     ["the script tag outside Host, gated", home, gated(tag), 1],
     ["an #if with no #endif", host, `#if ${GATE}\nfinal class FieldWebAppHost {}`, 1],
@@ -171,7 +209,9 @@ function selfTest() {
   for (const [label, path, text, want] of cases) {
     const got = path.endsWith(".plist")
       ? trustFindings(path, text).length
-      : scan(path, text).findings.length + trustFindings(path, text).length;
+      : scan(path, text).findings.length +
+        trustFindings(path, text).length +
+        mountFindings(path, text).length;
     if (got !== want) {
       failed += 1;
       console.error(`self-test: ${label}: ${got} findings, want ${want}`);
