@@ -159,7 +159,12 @@ function selfTest() {
     ["DEBUG alone is not the gate", host, ["#if DEBUG", tag, "#endif"].join("\n"), 1],
     ["the script tag outside Host, gated", home, gated(tag), 1],
     ["an #if with no #endif", host, `#if ${GATE}\nfinal class FieldWebAppHost {}`, 1],
-    ["a trust override, gated", host, gated("FieldWebAppHost()", tag, "URLCredential(trust: t)"), 1],
+    [
+      "a trust override, gated",
+      host,
+      gated("FieldWebAppHost()", tag, "URLCredential(trust: t)"),
+      1,
+    ],
     ["a trust word in a plist", "apps/ios/App/Info.plist", "<key>NSAllowsArbitraryLoads</key>", 1],
   ];
   let failed = 0;
