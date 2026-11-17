@@ -1138,14 +1138,15 @@ describe("R5: New agent and the project's acts", () => {
     expect(signedOut?.groups[2]?.items.map((row) => [row.label, row.disabled])).toEqual([
       ["Sign in to see models", true],
     ]);
-    // an older picker beside the last read's failure, a read behind it
+    // an older picker beside the last read's failure, a read behind it; item 489:
+    // the foot says VibeField's words, never the adapter's ("Model discovery timed out.")
     const stale = newAgentMenu({
       page: MODELS_PAGE,
       models: held(PICKER_STALE),
       clock: () => observed + 2 * 3_600_000,
     });
     expect(stale?.groups[2]?.items.at(-1)?.label).toBe(
-      "As of 2 h ago · reading again · the last read failed: Model discovery timed out.",
+      "As of 2 h ago · reading again · the last read failed",
     );
     const unasked = newAgentMenu({
       page: MODELS_PAGE,

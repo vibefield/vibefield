@@ -32,6 +32,7 @@ import {
   FIXTURE_INSTALL_PANE,
   FIXTURE_SOURCE_PLAN,
 } from "../src/design-system/extensions-fixtures";
+import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
 import {
   browsePage,
   checkConfirm,
@@ -89,6 +90,19 @@ const buttonNamed = (name: string): HTMLButtonElement | undefined =>
     (button) => button.getAttribute("aria-label") === name || button.textContent === name,
   );
 const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+/** Item 489 — a catalog the agent could not read, in its adapter's own words. */
+const { readAt: _readAt, ...UNREAD_BASE } = CATALOG;
+const UNREAD = AgentsExtensionsCatalogResult.parse({
+  ...UNREAD_BASE,
+  marketplaces: [],
+  plugins: [],
+  failure: {
+    status: "unavailable",
+    message: "known_marketplaces.json could not be read",
+    retryable: true,
+  },
+});
 
 it("draws the catalog from the contracts fixture itself", () => {
   expect(FIXTURE_CATALOG).toEqual(read("agents-extensions-catalog.valid.json"));
@@ -175,6 +189,19 @@ describe("browsePage (pass 23's B1)", () => {
     const model = browsePage(noInstall, LENS, "in Work", FIXTURE_EXTENSIONS_NOW);
     expect(model.notice).toBe("Install it with `grok plugin install` in a terminal");
     expect(model.groups[0]?.rows.every((row) => row.state === "none")).toBe(true);
+  });
+
+  it("says a catalog it could not read in VibeField's words, never the agent's (item 489)", () => {
+    expect(browsePage(UNREAD, LENS, "in Work", FIXTURE_EXTENSIONS_NOW).failure).toBe(
+      `${UNREAD.label}’s catalogs couldn’t be read.`,
+    );
+    const unsupported = AgentsExtensionsCatalogResult.parse({
+      ...UNREAD,
+      failure: { status: "unsupported", message: "no catalogs here", retryable: false },
+    });
+    expect(browsePage(unsupported, LENS, "in Work", FIXTURE_EXTENSIONS_NOW).failure).toBe(
+      `VibeField doesn’t read ${UNREAD.label}’s catalogs.`,
+    );
   });
 });
 
@@ -619,6 +646,65 @@ describe("AgentBrowse and AgentListedPlugin (the controllers)", () => {
     );
     await settle();
     expect(reads()).toBe(2);
+  });
+
+  it("logs a catalog it could not read: at debug for the page's opening read, at warn for Read again, never on the page (item 489)", async () => {
+    const before = getRendererLogger();
+    const heard: Array<{ level: string; event: string; attrs: Record<string, unknown> }> = [];
+    const quiet = (): void => undefined;
+    const logger: RendererLogger = {
+      child: () => logger,
+      trace: quiet,
+      debug: (event, _message, attrs) => {
+        heard.push({ level: "debug", event, attrs: { ...attrs } });
+      },
+      info: quiet,
+      warn: (event, _message, attrs) => {
+        heard.push({ level: "warn", event, attrs: { ...attrs } });
+      },
+      error: quiet,
+      fatal: quiet,
+      isLevelEnabled: () => true,
+    };
+    setRendererLogger(logger);
+    try {
+      const fake = client({
+        onRequest: (method) => (method === "agents.extensions.catalog" ? UNREAD : undefined),
+      });
+      await mount(
+        createElement(
+          FielddProvider,
+          { client: fake.client },
+          createElement(AgentBrowse, {
+            set: "work",
+            provider: "claude",
+            where: "in Work",
+            onOpen: vi.fn(),
+          }),
+        ),
+      );
+      await settle();
+      const failed = () =>
+        heard
+          .filter((line) => line.event === "renderer.extensions.catalog_read_failed")
+          .map((line) => line.level);
+      expect(failed()).toEqual(["debug"]);
+      const said = heard.find((line) => line.event === "renderer.extensions.catalog_read_failed");
+      expect(said?.attrs).toMatchObject({
+        provider: "claude",
+        set: "work",
+        status: "unavailable",
+        retryable: true,
+        reason: "known_marketplaces.json could not be read",
+      });
+      expect(container?.textContent).toContain(`${UNREAD.label}’s catalogs couldn’t be read.`);
+      expect(container?.innerHTML ?? "").not.toContain("known_marketplaces.json");
+      await act(async () => buttonNamed("Read again")?.click());
+      await settle();
+      expect(failed()).toEqual(["debug", "warn"]);
+    } finally {
+      setRendererLogger(before);
+    }
   });
 
   it("opens an install that asks first in a pane through agents.extensions.terminal, and shows the pane it answers with", async () => {

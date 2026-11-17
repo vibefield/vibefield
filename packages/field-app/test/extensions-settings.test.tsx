@@ -36,6 +36,7 @@ import {
   FIXTURE_PLUGIN_RUN,
   FIXTURE_SKILL_PLAN,
 } from "../src/design-system/extensions-fixtures";
+import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
 import {
   AddServer,
   AddSkill,
@@ -162,9 +163,10 @@ describe("the Extensions model", () => {
       why: "Off · Codex keeps its settings",
     });
     expect(cellOf("servers", "postgres", "grok")).toEqual({ s: "off", why: "Off" });
+    // item 489: VibeField's words alone; the adapter's own go to the log
     expect(cellOf("servers", "linear", "kimi")).toMatchObject({
       s: "unread",
-      why: "Kimi could not be read: extension inventory failed for kimi",
+      why: "Kimi could not be read",
     });
     // a switchable skill in the shared folder is on or off; one Grok cannot switch is fixed
     expect(cellOf("skills", "release-notes", "codex")).toMatchObject({ s: "on" });
@@ -260,8 +262,7 @@ describe("one agent's Extensions (pass 23)", () => {
     ]);
     expect(agentExtensions(LENS, "kimi")).toMatchObject({
       rows: [],
-      failure:
-        "Kimi’s plugins, servers and skills couldn’t be read: extension inventory failed for kimi",
+      failure: "Kimi’s plugins, servers and skills couldn’t be read.",
     });
     expect(agentExtensions(LENS, "pi")).toBeNull();
   });
@@ -360,7 +361,7 @@ describe("one agent's Extensions (pass 23)", () => {
       empty: "OpenCode has no skills of its own in Work.",
     });
     expect(agentList(LENS, "kimi", "servers", "in Work")?.unread).toBe(
-      "Kimi’s plugins, servers and skills couldn’t be read: extension inventory failed for kimi",
+      "Kimi’s plugins, servers and skills couldn’t be read.",
     );
   });
 });
@@ -397,7 +398,7 @@ describe("a server's or skill's page (pass 24)", () => {
       ["Codex", "Another version", "Its own · reads LINEAR_TOKEN · sends Authorization"],
       ["Grok", "Claude’s", "Loaded from Claude, on This Mac · sends Authorization"],
       ["OpenCode", "Off", "OpenCode doesn’t have it; it changes its servers only inside its app"],
-      ["Kimi", "Not read", "Kimi could not be read: extension inventory failed for kimi"],
+      ["Kimi", "Not read", "Kimi could not be read"],
     ]);
     expect(linear.agents[2]?.place).toBe("~/.claude.json");
   });
@@ -914,6 +915,87 @@ describe("ProfileExtensions (the controller)", () => {
     );
     await act(async () => again?.click());
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs an agent that could not be read: once at debug while it stands, at warn after Read again, never on the page (item 489)", async () => {
+    const before = getRendererLogger();
+    const heard: Array<{ level: string; event: string; attrs: Record<string, unknown> }> = [];
+    const quiet = (): void => undefined;
+    const logger: RendererLogger = {
+      child: () => logger,
+      trace: quiet,
+      debug: (event, _message, attrs) => {
+        heard.push({ level: "debug", event, attrs: { ...attrs } });
+      },
+      info: quiet,
+      warn: (event, _message, attrs) => {
+        heard.push({ level: "warn", event, attrs: { ...attrs } });
+      },
+      error: quiet,
+      fatal: quiet,
+      isLevelEnabled: () => true,
+    };
+    setRendererLogger(logger);
+    try {
+      let push: ((frame: unknown) => void) | undefined;
+      const request = vi.fn(async () => {
+        // the press's read: a new frame, its time later, the same failure
+        push?.({ ...LENS, readAt: "2026-09-25T10:00:00.000Z" });
+        return LENS;
+      });
+      const client = {
+        status: "ready",
+        onStatusChange: () => () => undefined,
+        request,
+        subscribe: vi.fn(
+          async (_method: string, _params: unknown, onData: (frame: unknown) => void) => {
+            push = onData;
+            return {
+              subId: "extensions:work",
+              snapshot: { ...LENS, reading: true },
+              unsubscribe: () => undefined,
+            };
+          },
+        ),
+      } as unknown as FielddClient;
+      await mount(
+        createElement(
+          FielddProvider,
+          { client },
+          createElement(ProfileExtensions, { set: "work", profile: "Work" }),
+        ),
+      );
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      const failed = () =>
+        heard
+          .filter((line) => line.event === "renderer.extensions.read_failed")
+          .map((line) => [line.level, line.attrs.provider]);
+      // a reading frame says nothing; the settled one says Kimi's failure once, at debug
+      expect(failed()).toEqual([]);
+      await act(async () => push?.(LENS));
+      await act(async () => push?.(LENS));
+      expect(failed()).toEqual([["debug", "kimi"]]);
+      expect(heard.find((line) => line.attrs.provider === "kimi")?.attrs).toMatchObject({
+        set: "work",
+        status: "unavailable",
+        retryable: true,
+        reason: "extension inventory failed for kimi",
+      });
+      // a person pressed Read again: the read it brought is said at warn
+      const again = [...(container?.querySelectorAll("button") ?? [])].find(
+        (button) => button.textContent === "Read again",
+      );
+      await act(async () => again?.click());
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+      expect(failed()).toEqual([
+        ["debug", "kimi"],
+        ["warn", "kimi"],
+      ]);
+      // nor in a cell's title: the words are the log's alone
+      expect(container?.innerHTML ?? "").not.toContain("extension inventory failed");
+    } finally {
+      setRendererLogger(before);
+    }
   });
 
   it("asks agents.extensions.act for a cell's act, and says a refusal beside the lists", async () => {
