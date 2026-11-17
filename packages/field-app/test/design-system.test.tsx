@@ -910,7 +910,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     }
     // UM-3: the profiles column's plates follow the page into Godview's dark, every one
     const darkPlates = [...(container?.querySelectorAll("[data-profiles-plate]") ?? [])];
-    expect(darkPlates).toHaveLength(12);
+    expect(darkPlates).toHaveLength(13);
     for (const plate of darkPlates) expect(plate.classList.contains("theme-dark")).toBe(true);
   });
 
