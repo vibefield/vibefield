@@ -19,10 +19,13 @@ struct KitFaintWordsTests {
   /// Each file that held `inkFaint` at the base: its t3 and t4 inks on code lines (comment lines aside), in their
   /// order. Its own t3s stand where they stood. Each former `inkFaint` reads its class, by the census
   /// taken for item 242 on 2026-11-17: t3 42, t4 19.
+  ///
+  /// Item 516 (2026-11-17) — HistoryLedgerView reads one t3 fewer: `noDesktop` retired with its line "no desktop
+  /// has been read", one of the file's own t3s (never an `inkFaint`), so the census's 42 and 19 stand.
   static let inks: [String: String] = [
     "FieldDesign/ChromeList.swift": "t3 t3 t3 t3 t3",
     "FieldHistory/HistoryFiguresView.swift": "t3 t3 t3 t3 t3 t3 t3",
-    "FieldHistory/HistoryLedgerView.swift": "t3 t3 t3 t3 t3 t3 t3 t3 t3",
+    "FieldHistory/HistoryLedgerView.swift": "t3 t3 t3 t3 t3 t3 t3 t3",
     "FieldHistory/HistoryMessageView.swift": "t3 t3 t3",
     "FieldHistory/HistoryOlderPullView.swift": "t3",
     "FieldHistory/HistoryParts.swift": "t4 t3 t3 t3 t4 t3 t3",
