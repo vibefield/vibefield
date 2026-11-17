@@ -99,6 +99,15 @@ public final class DictationSession {
     /// never a claim that anything was heard. It cannot exist in Release.
     public static var demoListening = false
   #endif
+  #if DEBUG || VF_TESTFLIGHT
+    /// The Input card states lab's Listening state: the same LISTENING look,
+    /// held while the lab shows that state and let go when it leaves (the
+    /// Developer page's lab, DESIGN.md §8, asked for 2026-11-12). Like
+    /// `demoListening` it forces the FACE and touches neither Speech nor the
+    /// audio session; unlike it, no launch argument reaches it, so it compiles
+    /// into TestFlight builds too. The build for App Review has neither.
+    public static var labListening = false
+  #endif
 
   @ObservationIgnored private var engine: AVAudioEngine?
   @ObservationIgnored private var request: SFSpeechAudioBufferRecognitionRequest?
