@@ -10,31 +10,25 @@ import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { INSTALLED_LINE, SETTINGS_WORDS, SWITCH_WORDS } from "../src/frame/plugins/plugins-words";
+import { INSTALLED_LINE } from "../src/frame/plugins/plugins-words";
 import {
   PLUGINS_DIAGNOSTICS_WORDS,
   PluginsDiagnosticsSection,
 } from "../src/panels/PluginsDiagnosticsSection";
 import { PluginsSection, SETTINGS_PLUGINS_WORDS } from "../src/panels/PluginsSection";
 import { setPluginRegistrySnapshot } from "../src/plugin-host/plugin-registry-store";
-import {
-  clearUnstartedPlugin,
-  nameUnstartedPlugin,
-  resetUnstartedPlugins,
-  type UnstartedPlugin,
-} from "../src/plugin-host/unstarted-plugins";
+import { nameUnstartedPlugin, resetUnstartedPlugins } from "../src/plugin-host/unstarted-plugins";
 
 // MK-5. Settings → Diagnostics' Plugins section (MK-D10; item 282-6's plugin half, MK-E12;
 // DESIGN.md §8 "Settings → Diagnostics' Plugins section"): each plugin's runtime, moved here
 // from Settings → Plugins' Runtime disclosure, one block per plugin under its title, as rows,
 // with no disclosure; an issue in its ink; a plugin's last error and a folder that is not a
-// plugin said here; never a blank. And Settings → Plugins as VF-PM's ruling of 2026-11-14
-// 04:33Z keeps it (§8 "Settings → Plugins, until Plugins… holds every switch"): a plugin from
-// the plugin list or a Sideloaded one whole, no Built in or Development plugin (its settings and
-// their way back are on its page, MK-4c2c), and nothing the Plugins popup already holds; and, by
-// VF-PM's ruling of 06:56Z (C22), never fieldd's own text — a refusal said by its kind in one
-// plain line — and no Uninstall on a row fieldd never uninstalls. No real fieldd, no network, no
-// child.
+// plugin said here; never a blank. And Settings → Plugins (§8 "Settings → Plugins, until
+// Plugins… holds every switch"): VF-PM's ruling of 2026-11-14 04:33Z kept a plugin from the plugin
+// list or a Sideloaded one there whole until the Plugins popup carried its controls; N18 widened
+// the popup to them, so the page lists no plugin from any source, reads nothing and sends nothing,
+// and says where your plugins and their settings are; and, by VF-PM's ruling of 06:56Z (C22), it
+// never says fieldd's own text. No real fieldd, no network, no child.
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -396,206 +390,75 @@ async function mountSettings(
 
 const buttons = (): HTMLButtonElement[] =>
   Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? []);
-const pressNamed = (words: string): HTMLButtonElement[] =>
-  buttons().filter((button) => button.textContent === words);
-const switchNamed = (name: string): HTMLButtonElement | undefined =>
-  buttons().find((button) => button.getAttribute("aria-label") === name);
 
-async function press(target: HTMLElement | null | undefined): Promise<void> {
-  await act(async () => {
-    target?.click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-}
+/** One plugin of every source, each with settings (one kept), a power, or both: what the kept rows
+ * showed until N18. */
+const everySource = (): PluginRecord[] => [
+  plugin({ id: BUILT_IN, title: "Desk clock", contributions: { settings: SETTINGS } }),
+  plugin({ id: "com.example.lab", title: "Lab bench", source: "dev-linked" }),
+  plugin({
+    id: SIDELOADED,
+    title: "Pad",
+    source: "sideload",
+    requestedCapabilities: ["canvas.read"],
+    grantedCapabilities: ["canvas.read"],
+    contributions: { settings: SETTINGS },
+  }),
+  plugin({
+    id: LISTED,
+    title: "Kanban",
+    source: "registry",
+    contributions: { settings: SETTINGS },
+  }),
+];
 
-/** A kept row's text, by its place on the page. */
-const rowText = (at: number): string =>
-  container?.querySelectorAll("article").item(at)?.textContent ?? "";
-
-describe("Settings → Plugins, until Plugins… holds every switch (MK-5; DESIGN.md §8)", () => {
-  it("keeps a Sideloaded plugin's row whole — its switch, powers, settings and objects — with no Runtime, More or updates", async () => {
-    const pad = {
-      type: `${SIDELOADED}.pad`,
-      title: "Pad",
-      schemaVersion: 1,
-      size: { w: 220, h: 280 },
-      provides: ["desk.object"],
-      binding: { kind: "pad" },
-    };
-    await mountSettings([
-      plugin({
-        id: SIDELOADED,
-        title: "Pad",
-        source: "sideload",
-        requestedCapabilities: ["canvas.read"],
-        grantedCapabilities: ["canvas.read"],
-        contributions: { objects: [pad], settings: SETTINGS },
-      }),
-    ]);
-    expect(text()).toContain(SETTINGS_PLUGINS_WORDS.line);
-    expect(text()).toContain(SETTINGS_PLUGINS_WORDS.kept);
-    // DK-8: it counts OBJECT kinds; the widget count retired with `contributes.widgets`
-    expect(text()).toContain(`${SIDELOADED} · 1 object`);
-    expect(text()).not.toMatch(/\d widgets?\b/);
-    expect(switchNamed("Disable Pad")?.getAttribute("aria-checked")).toBe("true");
-    expect(pressNamed("Settings +")).toHaveLength(1);
-    expect(pressNamed("Capabilities +")).toHaveLength(1);
-    // what Plugins… and Diagnostics hold left: the Runtime disclosure, More + and the updates one
-    const words = buttons().map((button) => button.textContent ?? "");
-    expect(words.filter((label) => /Runtime|More|updates/u.test(label))).toEqual([]);
-  });
-
-  it("leaves out a Built in or Development plugin that declares no setting, and says where your plugins are", async () => {
-    await mountSettings([
-      plugin({ id: BUILT_IN, title: "Desk clock" }),
-      plugin({ id: "com.example.lab", title: "Lab bench", source: "dev-linked" }),
-    ]);
-    expect(text()).toContain(SETTINGS_PLUGINS_WORDS.line);
+describe("Settings → Plugins, now that Plugins… holds every switch (MK-5, N18; DESIGN.md §8)", () => {
+  it("lists no plugin, from any source, and says where your plugins and their settings are", async () => {
+    const asked = await mountSettings(everySource(), { rate: 45 });
+    // MK's words, ‹draft›, for James's eye (DESIGN.md §9 "Settings and Diagnostics")
+    expect(SETTINGS_PLUGINS_WORDS.line).toBe("Your plugins are in Plugins… in the Me menu.");
+    const page = "Each plugin's switches and settings are on its page there.";
+    expect(said(`${SETTINGS_PLUGINS_WORDS.line} ${page}`)).toBeDefined();
     expect(container?.querySelectorAll("article")).toHaveLength(0);
-    expect(text()).not.toContain("Desk clock");
-    expect(text()).not.toContain(SETTINGS_PLUGINS_WORDS.kept);
+    for (const title of ["Desk clock", "Lab bench", "Pad", "Kanban"]) {
+      expect(text()).not.toContain(title);
+    }
+    // no switch, no Settings +, no Reset, no Capabilities + and no Uninstall: nothing to press
+    expect(buttons()).toEqual([]);
+    expect(container?.querySelector('[role="switch"]')).toBeNull();
+    // and the kept rows' words left with them
+    expect(text()).not.toContain("A setting goes back to its default here");
+    expect(text()).not.toContain("keep their switches here");
+    expect(text()).not.toContain("Disabled plugin cards remain");
     expect(text()).not.toContain(PLUGINS_DIAGNOSTICS_WORDS.none);
-  });
-
-  it("leaves out a Built in plugin that declares a setting, one kept or not: its page has them and their way back (MK-4c2c)", async () => {
-    const asked = await mountSettings(
-      [plugin({ id: BUILT_IN, title: "Desk clock", contributions: { settings: SETTINGS } })],
-      { rate: 45 },
-    );
-    expect(container?.querySelectorAll("article")).toHaveLength(0);
-    expect(text()).not.toContain("Desk clock");
-    expect(pressNamed("Settings +")).toHaveLength(0);
-    expect(pressNamed("Reset")).toHaveLength(0);
+    // it reads nothing and sends nothing
     expect(asked).toEqual([]);
   });
 
-  it("reads a Sideloaded plugin fieldd stopped after it kept crashing as off, and turning it on asks fieldd to start it (N21)", async () => {
-    const asked = await mountSettings([
-      plugin({ id: SIDELOADED, title: "Pad", source: "sideload", service: "quarantined" }),
-    ]);
-    const toggle = switchNamed("Enable Pad");
-    expect(toggle?.getAttribute("aria-checked")).toBe("false");
-    // its state, beside its switch, says so
-    const state = Array.from(container?.querySelectorAll("span") ?? []).find(
-      (node) => node.textContent === SETTINGS_PLUGINS_WORDS.stopped,
-    );
-    expect(state).toBeDefined();
-    await press(toggle);
-    expect(asked).toEqual([["plugins.enable", { id: SIDELOADED }]]);
-  });
-
-  it("offers no Uninstall on a Sideloaded row, which fieldd never uninstalls, nor on a listed one (C22)", async () => {
-    const asked = await mountSettings([
-      plugin({ id: SIDELOADED, title: "Pad", source: "sideload" }),
-      plugin({ id: LISTED, title: "Kanban", source: "registry" }),
-    ]);
-    // both rows stand, each with its switch
-    expect(switchNamed("Disable Pad")).toBeDefined();
-    expect(switchNamed("Disable Kanban")).toBeDefined();
-    // and no act on either takes it away: a listed plugin's Remove… is on its page in Plugins…
-    const words = buttons().map((button) => button.textContent ?? "");
-    expect(words.filter((label) => /Uninstall|Remove|More/u.test(label))).toEqual([]);
-    expect(asked.some(([method]) => method === "plugins.uninstall")).toBe(false);
-  });
-
-  it("says a switch fieldd refused by the way it was being turned, never fieldd's text (C22)", async () => {
-    await mountSettings(
-      [
-        plugin({ id: SIDELOADED, title: "Pad", source: "sideload" }),
-        plugin({
-          id: LISTED,
-          title: "Kanban",
-          source: "registry",
-          enabled: false,
-          state: "disabled",
-        }),
-      ],
-      {},
-      ["plugins.enable", "plugins.disable"],
-    );
-    await press(switchNamed("Disable Pad"));
-    await press(switchNamed("Enable Kanban"));
-    expect(rowText(0)).toContain(SWITCH_WORDS.refused(false));
-    expect(rowText(1)).toContain(SWITCH_WORDS.refused(true));
-    expect(text()).not.toContain(FIELDD_SAYS);
-    expect(text()).not.toContain("registry installs");
-  });
-
-  it("says a kept plugin with a last error isn't working, never the error's own text (C22)", async () => {
+  it("says nothing of a plugin's trouble, which Plugins… or Settings → Diagnostics says, and never fieldd's text (C22, N21, item 476)", async () => {
+    // a stopped service (N21) and one that cannot start here (item 476) are said on its row in
+    // Plugins…; a last error in Diagnostics' Plugins section alone (N18), as a Built in plugin's
+    // has been since MK-5, for Plugins… never reads one
     const lastError = { kind: "PLUGIN_ACTIVATION_FAILED", message: "its service threw on start" };
-    await mountSettings([plugin({ id: SIDELOADED, title: "Pad", source: "sideload", lastError })]);
-    expect(rowText(0)).toContain(INSTALLED_LINE.broken("Pad"));
-    expect(text()).not.toContain(lastError.message);
-  });
-
-  it("says a kept plugin that cannot start in this window isn't working, whatever the reason, until it leaves the window's set or is turned off (item 476)", async () => {
-    const pad = { id: SIDELOADED, title: "Pad", source: "sideload" };
-    await mountSettings([plugin(pad)]);
-    const line = INSTALLED_LINE.broken("Pad");
-    expect(rowText(0)).not.toContain(line);
-    const reasons: UnstartedPlugin[] = [
-      { reason: "lane", room: true },
-      { reason: "lane", room: false },
-      { reason: "import" },
-      { reason: "activation" },
+    const plugins = [
+      plugin({ id: SIDELOADED, title: "Pad", source: "sideload", lastError }),
+      plugin({ id: LISTED, title: "Kanban", source: "registry", service: "quarantined" }),
     ];
-    for (const why of reasons) {
-      act(() => nameUnstartedPlugin(SIDELOADED, why));
-      expect(rowText(0)).toContain(line);
-      // the line and nothing of why
-      expect(rowText(0)).not.toMatch(/lane|import|activation|room/u);
-      act(() => clearUnstartedPlugin(SIDELOADED));
-      expect(rowText(0)).not.toContain(line);
-    }
-    // turned off while it is in the set, its row says it is off and nothing more
-    act(() => nameUnstartedPlugin(SIDELOADED, { reason: "import" }));
-    expect(rowText(0)).toContain(line);
-    const off = plugin({ ...pad, enabled: false, state: "disabled" });
-    act(() => setPluginRegistrySnapshot({ generation: 2, plugins: [off], problems: [] }));
-    expect(rowText(0)).not.toContain(line);
-    expect(switchNamed("Enable Pad")?.getAttribute("aria-checked")).toBe("false");
-  });
-
-  it("says a setting fieldd couldn't read, or couldn't set back to its default, in plain words, never fieldd's text (C22)", async () => {
-    await mountSettings(
-      [
-        plugin({
-          id: SIDELOADED,
-          title: "Pad",
-          source: "sideload",
-          contributions: { settings: SETTINGS },
-        }),
-      ],
-      { rate: 45 },
-      ["storage.settings.get:caption", "storage.settings.reset"],
-    );
-    await press(pressNamed("Settings +")[0]);
-    // the one it couldn't read
-    expect(text()).toContain(SETTINGS_WORDS.unread);
-    expect(text()).not.toContain(SETTINGS_WORDS.refused);
-    // the one it couldn't set back to its default
-    await press(pressNamed("Reset")[0]);
-    expect(text()).toContain(SETTINGS_WORDS.refused);
+    // a fieldd that would refuse every request the kept rows sent: none is sent
+    const every = [
+      "plugins.enable",
+      "plugins.disable",
+      "plugins.grants.set",
+      "storage.settings.get",
+      "storage.settings.reset",
+    ];
+    const asked = await mountSettings(plugins, {}, every);
+    act(() => nameUnstartedPlugin(LISTED, { reason: "import" }));
+    expect(text()).not.toContain(INSTALLED_LINE.broken("Pad"));
+    expect(text()).not.toContain(INSTALLED_LINE.broken("Kanban"));
+    expect(text()).not.toContain(lastError.message);
     expect(text()).not.toContain(FIELDD_SAYS);
-  });
-
-  it("says a power fieldd refused to change by the way it was being turned, never fieldd's text (C22)", async () => {
-    await mountSettings(
-      [
-        plugin({
-          id: SIDELOADED,
-          title: "Pad",
-          source: "sideload",
-          requestedCapabilities: ["canvas.read"],
-          grantedCapabilities: ["canvas.read"],
-        }),
-      ],
-      {},
-      ["plugins.grants.set"],
-    );
-    await press(pressNamed("Capabilities +")[0]);
-    await press(container?.querySelector<HTMLInputElement>('input[type="checkbox"]'));
-    expect(rowText(0)).toContain(SWITCH_WORDS.refused(false));
-    expect(text()).not.toContain(FIELDD_SAYS);
+    expect(text()).not.toMatch(/stopped|Uninstall|Remove/u);
+    expect(asked).toEqual([]);
   });
 });

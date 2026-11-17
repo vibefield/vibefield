@@ -188,11 +188,10 @@ describe("a plugin held while community plugins are off (MK-O3D; O3-C's `held`)"
       onOff: null,
     });
     const page = pluginPage(kanban, CATALOG_LISTED, PLUGINS_FIXTURE_HELD_SNAPSHOT, true);
-    expect([page.held, page.readOnly, page.onOff]).toEqual([
-      HELD_LINE.objects,
-      SWITCH_WORDS.readOnly,
-      null,
-    ]);
+    // its row's line alone says why: no page says its switches aren't here (N18)
+    expect([page.held, page.onOff, page.elsewhere]).toEqual([HELD_LINE.objects, null, null]);
+    expect(page.powers.every((power) => power.switch === null)).toBe(true);
+    expect(JSON.stringify(page)).not.toContain("aren't here yet");
     expect(installedFoot(PLUGINS_FIXTURE_HELD_SNAPSHOT)).toBe("5 plugins, 7 objects · 2 off");
   });
 
@@ -204,7 +203,28 @@ describe("a plugin held while community plugins are off (MK-O3D; O3-C's `held`)"
       "Keep your boards in step",
     ]);
     expect(page.nothing).toBeNull();
-    // any off plugin with no switches here: what it asked for, less one fieldd denies it
+    // held, with no switches here: what it asked for, less one fieldd denies it
+    const asked: PluginRecord = {
+      ...kanban,
+      contributions: { ...kanban.contributions, objects: [] },
+      requestedCapabilities: ["net.outbound", "process.spawn"],
+      deniedCapabilities: [{ capability: "process.spawn", reason: "source-policy" }],
+    };
+    const heldPage = pluginPage(asked, null, PLUGINS_FIXTURE_HELD_SNAPSHOT, true);
+    expect([heldPage.powers.map((power) => power.key), heldPage.nothing, heldPage.held]).toEqual([
+      ["net.outbound"],
+      null,
+      HELD_LINE.bare,
+    ]);
+    const none = pluginPage(
+      { ...asked, requestedCapabilities: [] },
+      null,
+      PLUGINS_FIXTURE_HELD_SNAPSHOT,
+      true,
+    );
+    expect(none.nothing).toBe(PAGE_WORDS.nothingNoObject);
+    // a Sideloaded plugin turned off has its switches here (N18): each power it asked for, as it
+    // would hold it once on, and why it can't have one
     const off: PluginRecord = {
       ...recordOf(PLUGINS_FIXTURE_SNAPSHOT, "example.kv-service"),
       enabled: false,
@@ -214,18 +234,11 @@ describe("a plugin held while community plugins are off (MK-O3D; O3-C's `held`)"
       deniedCapabilities: [{ capability: "process.spawn", reason: "source-policy" }],
     };
     const offPage = pluginPage(off, null, PLUGINS_FIXTURE_SNAPSHOT, true);
-    expect([offPage.powers.map((power) => power.key), offPage.nothing, offPage.held]).toEqual([
-      ["net.outbound"],
-      null,
-      null,
+    expect(offPage.powers.map((power) => [power.key, power.switch, power.cant])).toEqual([
+      ["net.outbound", true, null],
+      ["process.spawn", null, SWITCH_WORDS.cant["source-policy"]],
     ]);
-    const none = pluginPage(
-      { ...off, requestedCapabilities: [] },
-      null,
-      PLUGINS_FIXTURE_SNAPSHOT,
-      true,
-    );
-    expect(none.nothing).toBe(PAGE_WORDS.nothingNoObject);
+    expect([offPage.onOff, offPage.offLine]).toEqual([false, SWITCH_WORDS.off]);
   });
 
   it("decides nothing by `held`: a row on is read as on, and the line follows what it adds", () => {
@@ -596,7 +609,7 @@ describe("Discover's community tile, in a window (MK-O3D; §8 'The community til
 });
 
 describe("a held plugin, in a window (MK-O3D; §8 'Installed', 'Read only first')", () => {
-  it("says why on its row, with no switch, and on its page before its read-only line", async () => {
+  it("says why on its row, with no switch, and on its page as its one note (N18)", async () => {
     await mount({ snapshot: PLUGINS_FIXTURE_HELD_SNAPSHOT, community: false });
     press(part(PLUGINS_TAB_WORDS.installed));
     const kanban = [...document.body.querySelectorAll<HTMLLIElement>(".vf-plugins-item")].find(
@@ -608,9 +621,10 @@ describe("a held plugin, in a window (MK-O3D; §8 'Installed', 'Read only first'
     const notes = [...document.body.querySelectorAll(".vf-plugins-page-note")].map(
       (node) => node.textContent,
     );
-    expect(notes).toEqual([HELD_LINE.objects, SWITCH_WORDS.readOnly]);
-    expect(document.body.querySelector(".vf-plugins-page")?.textContent).not.toContain(
-      PAGE_WORDS.nothing,
-    );
+    expect(notes).toEqual([HELD_LINE.objects]);
+    const page = document.body.querySelector(".vf-plugins-page");
+    expect(page?.textContent).not.toContain(PAGE_WORDS.nothing);
+    // no switch on it: a switch would not move it (O3-C)
+    expect(page?.querySelector('[role="switch"]')).toBeNull();
   });
 });

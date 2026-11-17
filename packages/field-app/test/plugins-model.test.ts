@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   CATALOG_FIXTURES,
   CATALOG_LISTED,
+  PLUGINS_FIXTURE_HELD_SNAPSHOT,
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_READ_AT,
@@ -173,8 +174,8 @@ describe("Installed (§8 'Installed', read only)", () => {
         source: "Sideloaded",
         community: false,
         line: "No objects · a service",
-        // Sideloaded: no switch here (MK-4c2a)
-        onOff: null,
+        // Sideloaded: its switch here too, on (N18; MK-4c2a gave it none)
+        onOff: true,
       },
     ]);
   });
@@ -300,12 +301,12 @@ describe("Installed's honest rows (MK-5, N21; §9 'Installed, off and Remove…'
       service: "restarting",
     });
     expect(row(restarting, null, "vibefield.simulator")?.onOff).toBe(true);
-    // a plugin from the list says it too, with no switch here (item 321)
+    // a plugin from the list says it too, its switch off as a Built in one's is (N18)
     const kanban = changed(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban", {
       service: "quarantined",
     });
     const listed = row(kanban, CATALOG_LISTED, "acme.kanban");
-    expect([listed?.line, listed?.onOff]).toEqual([words.INSTALLED_LINE.stopped, null]);
+    expect([listed?.line, listed?.onOff]).toEqual([words.INSTALLED_LINE.stopped, false]);
   });
 
   it("says first that a plugin is off, or can't run, never that it stopped", () => {
@@ -341,12 +342,13 @@ describe("Installed's honest rows (MK-5, N21; §9 'Installed, off and Remove…'
       const catalog = PluginsCatalog.parse({ ...CATALOG_FIXTURES.ready, state });
       expect(kanban(catalog)?.line).toBe(words.INSTALLED_LINE.unlisted);
     }
-    // in the line's own ink, with its pill and no switch, as before
+    // in the line's own ink, with its pill and its switch, on (N18): the list naming it no more
+    // moves no switch, which fieldd decides
     const unlisted = kanban(CATALOG_FIXTURES.ready);
     expect([unlisted?.attention, unlisted?.source, unlisted?.onOff]).toEqual([
       undefined,
       "Community",
-      null,
+      true,
     ]);
     // no list held — none read, none configured, or none VibeField could use: nothing said of it
     const none = [
@@ -469,7 +471,6 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
       powersLive: true,
       // MK-O3D: it is not held while community plugins are off
       held: null,
-      readOnly: null,
       elsewhere: words.SWITCH_WORDS.elsewhere,
       offLine: null,
       // MK-4c2b: it declares no setting here, so its page has no Settings section
@@ -517,14 +518,15 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
       "Card",
       "1 tool for your agents",
     ]);
-    // a plugin from the list reads only: no switch on any power (MK-4c2a)
+    // a plugin from the list carries a switch on each power, as a Built in one does (N18; MK-4c2a
+    // gave it none)
     expect(page.powers).toEqual([
       {
         key: "canvas.write",
         words: "Change what's on the desk",
         under: null,
         whose: null,
-        switch: null,
+        switch: true,
         cant: null,
       },
       {
@@ -532,7 +534,7 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
         words: "Keep your boards in step",
         under: "Copies a board's cards to the boards you share.",
         whose: "A power of its own, named by Kanban",
-        switch: null,
+        switch: true,
         cant: null,
       },
     ]);
@@ -618,8 +620,8 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
   });
 
   it("says a power VibeField can't describe beside one it can, never its id (James's MK-O34 B), a line each (VF-PM 03:11Z)", () => {
-    // a page with no switches lists what it holds: a fieldd newer than the window can grant a power the window
-    // has no words for, and two such powers are two lines
+    // a Sideloaded page lists every power it asked for (its switches here since N18): a fieldd newer than the
+    // window can grant a power the window has no words for, and two such powers are two lines
     const held = ["canvas.read", "made.up", "made.up.too"];
     const sideloaded = {
       ...recordOf(PLUGINS_FIXTURE_SNAPSHOT, "example.kv-service"),
@@ -763,23 +765,36 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
 });
 
 describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)", () => {
-  it("stand for a Built in or Development plugin alone, whatever the list held says (item 321)", () => {
+  it("stand for every plugin, whatever its source or the list held says, but one held while community plugins are off (N18)", () => {
+    const simulators = recordOf(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator");
+    const clock = recordOf(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "example.desk-clock");
     const kanban = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban");
+    // a Sideloaded plugin that asked for a power, so its page has a power's switch to show
+    const store: PluginRecord = {
+      ...recordOf(PLUGINS_FIXTURE_SNAPSHOT, "example.kv-service"),
+      requestedCapabilities: ["canvas.read"],
+      grantedCapabilities: ["canvas.read"],
+    };
+    // fieldd keeps it held whatever its switch asks (O3-C), so it has none
+    const held = recordOf(PLUGINS_FIXTURE_HELD_SNAPSHOT, "acme.kanban");
     const asVibeField = PluginsCatalog.parse({
       ...CATALOG_LISTED,
       plugins: CATALOG_LISTED.plugins.map((entry) =>
         entry.id === "acme.kanban" ? { ...entry, listedAs: "vibefield" } : entry,
       ),
     });
-    const cases: [string, PluginRecord, PluginsCatalog | null, boolean][] = [
-      ["bundled", recordOf(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator"), null, true],
-      ["dev-linked", recordOf(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "example.desk-clock"), null, true],
-      ["registry, listed as VibeField", kanban, asVibeField, false],
-      ["registry, listed as community", kanban, CATALOG_LISTED, false],
-      ["registry, unlisted", kanban, CATALOG_FIXTURES.ready, false],
-      ["sideload", recordOf(PLUGINS_FIXTURE_SNAPSHOT, "example.kv-service"), null, false],
+    // whose they are, the list held, whether it carries them, and whether its page says they reach
+    // your other desktops (the install-set carries a Built in plugin's and a listed one's alone)
+    const cases: [string, PluginRecord, PluginsCatalog | null, boolean, boolean][] = [
+      ["bundled", simulators, null, true, true],
+      ["dev-linked", clock, null, true, false],
+      ["registry, listed as VibeField", kanban, asVibeField, true, true],
+      ["registry, listed as community", kanban, CATALOG_LISTED, true, true],
+      ["registry, unlisted", kanban, CATALOG_FIXTURES.ready, true, true],
+      ["sideload", store, null, true, false],
+      ["registry, held while community plugins are off", held, CATALOG_LISTED, false, false],
     ];
-    for (const [source, record, catalog, carries] of cases) {
+    for (const [source, record, catalog, carries, elsewhere] of cases) {
       const page = pluginPage(record, catalog, PLUGINS_FIXTURE_LISTED_SNAPSHOT, true);
       const row = installedRows({ generation: 1, problems: [], plugins: [record] }, catalog)[0];
       expect([
@@ -788,15 +803,10 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
         row?.onOff !== null,
         page.onOff !== null,
         page.powers.some((power) => power.switch !== null),
-        page.readOnly,
-      ]).toEqual([
-        source,
-        carries,
-        carries,
-        carries,
-        carries,
-        carries ? null : words.SWITCH_WORDS.readOnly,
-      ]);
+        page.elsewhere !== null,
+      ]).toEqual([source, carries, carries, carries, carries, elsewhere]);
+      // no page says its switches aren't here (MK-O22's words, retired at N18)
+      expect(JSON.stringify(page)).not.toContain("aren't here yet");
     }
     // a Built in plugin that isn't working has no one switch (as Settings → Plugins' row)
     const broken: PluginRecord = {
@@ -818,10 +828,9 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
       // its kind of plugin can't have it: no switch, and why
       ["process.spawn", null, words.SWITCH_WORDS.cant["entry-kind"]],
     ]);
-    expect([page.onOff, page.powersLive, page.readOnly, page.elsewhere, page.offLine]).toEqual([
+    expect([page.onOff, page.powersLive, page.elsewhere, page.offLine]).toEqual([
       true,
       true,
-      null,
       words.SWITCH_WORDS.elsewhere,
       null,
     ]);
@@ -840,7 +849,8 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
       false,
       false,
       words.SWITCH_WORDS.off,
-      // a Development plugin never enters the install-set (install-reconciler.ts:369)
+      // a Development plugin never enters the install-set (fieldd's install-reconciler.ts,
+      // `publishInner`)
       null,
     ]);
     // turned on, fieldd holds what it asked for less what was taken back
@@ -862,6 +872,7 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
     const simulators = recordOf(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator");
     const clock = recordOf(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "example.desk-clock");
     const kanban = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban");
+    const held = recordOf(PLUGINS_FIXTURE_HELD_SNAPSHOT, "acme.kanban");
     const asked = {
       ...simulators,
       requestedCapabilities: [...simulators.requestedCapabilities, "made.up"],
@@ -876,8 +887,10 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
       // off: what it would hold once on, taking no press
       powerSwitchOf(clock, "canvas.read"),
       powerSwitchOf(clock, "net.outbound"),
-      // a plugin from the list: none
+      // a plugin from the list: its own, as a Built in one's (N18)
       powerSwitchOf(kanban, "canvas.write"),
+      // held while community plugins are off: none, for no switch would move it
+      powerSwitchOf(held, "canvas.write"),
     ]).toEqual([
       { on: true, live: true },
       { on: false, live: true },
@@ -886,6 +899,7 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
       null,
       { on: true, live: false },
       { on: false, live: false },
+      { on: true, live: true },
       null,
     ]);
     // the page's switches are the same read
@@ -1025,10 +1039,34 @@ describe("a plugin's settings (MK-4c2b; §8 'Its settings', corrected for James'
     expect(settingAct(of("token"), noSecret)).toBeNull();
   });
 
-  it("carries no section on a page that reads only, nor for a plugin that declares no setting (U2)", () => {
-    for (const id of ["acme.kanban", "example.kv-service"]) {
-      expect(settingsOf(recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, id))).toBeNull();
-    }
+  it("carries a plugin from the list's settings, and a Sideloaded one's, as a Built in plugin's (N18)", () => {
+    const kanban = settingsOf(recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "acme.kanban"));
+    expect(kanban?.rows.map((row) => [row.key, row.title, row.kind])).toEqual([
+      ["columns", "Columns on a new board", "integer"],
+    ]);
+    expect([kanban?.live, kanban?.foot, kanban?.offLine]).toEqual([
+      true,
+      words.SETTINGS_WORDS.footSynced,
+      null,
+    ]);
+    const store = settingsOf(recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "example.kv-service"));
+    expect(store?.rows.map((row) => [row.key, row.title, row.kind])).toEqual([
+      ["limit", "Largest value", "integer"],
+    ]);
+    expect([store?.live, store?.foot]).toEqual([true, words.SETTINGS_WORDS.footHere]);
+  });
+
+  it("carries no section for a plugin held while community plugins are off, nor one that declares no setting (U2)", () => {
+    // fieldd keeps it held whatever is sent (O3-C), so its page has no switch and no settings
+    const listed = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "acme.kanban");
+    const held: PluginRecord = {
+      ...listed,
+      enabled: false,
+      state: "disabled",
+      held: "community-off",
+    };
+    expect(settingsOf(held)).toBeNull();
+    expect(pluginPage(held, null, PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, true).settings).toBeNull();
     const bare = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator");
     expect(settingsOf(bare)).toBeNull();
     const contributions = { ...bare.contributions, settings: { properties: {} } };

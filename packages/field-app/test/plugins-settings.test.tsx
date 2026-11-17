@@ -25,12 +25,12 @@ import { PluginSettingsForm } from "../src/panels/PluginSettingsForm";
 // MK-4c2b — a plugin's settings on its page in Plugins… (DESIGN.md §8 "Its settings", as corrected
 // for James's MK-O6 pick: no Undo and no Redo on the page). A Built in or Development plugin's
 // settings, each read as the page opens and after its own change, over the two requests Settings
-// → Plugins sends today, with the same parameters (C3: both forms mounted over recording clients);
-// no undo or redo (C2); no section and no request on a page that reads only (U2); the off, under
-// way, refused, unread and away states. MK-4c2c (James's click, 2026-11-14 08:19:36Z, "Yes, add
-// them to the plugin's page"): a kept setting's Back to default and a kept secret's removal, which
-// asks first, over the request Settings' Reset sends; the page learns only whether a secret is kept.
-// No real fieldd, no network, no child.
+// → Plugins' form sent until N18, with the same parameters; no undo or redo (C2); N18: a plugin
+// from the list's and a Sideloaded one's too, and no section and no request on a page held while
+// community plugins are off (U2); the off, under way, refused, unread and away states. MK-4c2c
+// (James's click, 2026-11-14 08:19:36Z, "Yes, add them to the plugin's page"): a kept setting's
+// Back to default and a kept secret's removal, which asks first, over the request Settings' Reset
+// sent; the page learns only whether a secret is kept. No real fieldd, no network, no child.
 
 const NO_REGISTRY: PluginsFixtureRead = {
   catalog: CATALOG_FIXTURES.unconfigured,
@@ -45,7 +45,12 @@ const TOKEN = "Account token";
 const PHONE = "Phone to show";
 const AIR = "iPhone Air";
 const KEYS = ["showFrame", "phone", "frameRate", "caption", "token", "sizes"];
-const READ_ONLY = { "acme.kanban": "Kanban", "example.kv-service": "Key-value store" };
+/** N18: a plugin from the list and a Sideloaded one, each with its one setting — its id, its title, the setting's
+ * key and title, and the foot it says (Kanban's syncs; the store's stays on this desktop). */
+const LISTED_AND_SIDELOADED = [
+  ["acme.kanban", "Kanban", "columns", "Columns on a new board", "footSynced"],
+  ["example.kv-service", "Key-value store", "limit", "Largest value", "footHere"],
+] as const;
 
 let host: HTMLDivElement;
 let root: Root;
@@ -506,15 +511,54 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
     expect(gets(sent, "frameRate")).toBe(2);
   });
 
-  it("a page that reads only — a plugin from the list, or a Sideloaded one — has no Settings section and asks fieldd nothing (U2)", async () => {
-    for (const [id, title] of Object.entries(READ_ONLY)) {
+  it("a plugin from the list's page, and a Sideloaded one's, carries its settings, each read once (N18)", async () => {
+    for (const [id, title, key, setting, said] of LISTED_AND_SIDELOADED) {
       const { port, sent } = recording(fixture());
       await openPage(port, id);
       expect(document.body.querySelector(".vf-plugins-page-title")?.textContent).toBe(title);
-      expect(section()).toBeNull();
-      expect(sent).toEqual([]);
+      expect(titles()).toEqual([setting]);
+      expect(foot()).toBe(words.SETTINGS_WORDS[said]);
+      expect(sent).toEqual([{ what: "get", id, key }]);
+      // a change sends the request Settings → Plugins' own form sent, with the same parameters
+      typeInto(fieldOf(setting), "4");
+      await enter(fieldOf(setting));
+      expect(sets(sent)).toEqual([{ what: "set", id, key, value: 4 }]);
       act(() => root.render(null));
     }
+  });
+
+  it("a plugin held while community plugins are off has no Settings section and asks fieldd nothing (U2)", async () => {
+    const held = {
+      ...PLUGINS_FIXTURE_SETTINGS_SNAPSHOT,
+      plugins: PLUGINS_FIXTURE_SETTINGS_SNAPSHOT.plugins.map((plugin) =>
+        plugin.id === "acme.kanban"
+          ? {
+              ...plugin,
+              enabled: false,
+              state: "disabled" as const,
+              held: "community-off" as const,
+            }
+          : plugin,
+      ),
+    };
+    const { port, sent } = recording(fixture());
+    act(() =>
+      root.render(
+        <Plugins
+          surface="plugins"
+          onSurfaceChange={() => undefined}
+          port={port}
+          snapshot={held}
+          initialTab="installed"
+          initialPage="acme.kanban"
+          now={() => PLUGINS_FIXTURE_NOW}
+        />,
+      ),
+    );
+    await settle();
+    expect(document.body.querySelector(".vf-plugins-page-title")?.textContent).toBe("Kanban");
+    expect(section()).toBeNull();
+    expect(sent).toEqual([]);
   });
 
   it("a plugin whose settings all stay on this desktop says so in the foot", async () => {

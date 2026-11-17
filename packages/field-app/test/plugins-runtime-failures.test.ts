@@ -95,7 +95,7 @@ describe("which plugins' runtime failed (MK-5b)", () => {
 });
 
 describe("Installed's rows of plugins that aren't working, and Try again (MK-5b)", () => {
-  it("says a plugin that is on and whose runtime failed isn't working, with Try again on a Built in or Development one alone", () => {
+  it("says a plugin that is on and whose runtime failed isn't working, with Try again wherever its switches stand", () => {
     const rows = rowsOf(PLUGINS_FIXTURE_SNAPSHOT, null);
     expect(rowOf(rows, "vibefield.simulator")).toEqual({
       id: "vibefield.simulator",
@@ -106,12 +106,13 @@ describe("Installed's rows of plugins that aren't working, and Try again (MK-5b)
       onOff: true,
       retry: true,
     });
-    // a Sideloaded plugin says it too, with no switch here and so no Try again
+    // a Sideloaded plugin says it too, its switch here and so Try again: N18 (2026-11-17; VF-PM 19:45:16Z), Try
+    // again follows the switch
     const store = rowOf(rows, "example.kv-service");
     expect([store?.line, store?.onOff, store?.retry]).toEqual([
       words.INSTALLED_LINE.broken("Key-value store"),
-      null,
-      undefined,
+      true,
+      true,
     ]);
     // working, or off whatever its last report says: its own line and no Try again
     const pad = rowOf(rows, "vibefield.comment-pad");
@@ -143,15 +144,17 @@ describe("Installed's rows of plugins that aren't working, and Try again (MK-5b)
     ]);
   });
 
-  it("offers no Try again on a plugin from the plugin list: its switch is Settings → Plugins'", () => {
+  // N18 (2026-11-17; VF-PM 19:45:16Z): a plugin from the plugin list's switch stands on its row, and Try again
+  // follows the switch, so its choices ride the install-set as its switch's do
+  it("offers Try again on a plugin from the plugin list too, whose switch stands here", () => {
     const none = new Set<string>();
     const only = new Set(["acme.kanban"]);
     const rows = rowsOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, CATALOG_LISTED, none, only);
     const kanban = rowOf(rows, "acme.kanban");
     expect([kanban?.line, kanban?.onOff, kanban?.retry]).toEqual([
       words.INSTALLED_LINE.broken("Kanban"),
-      null,
-      undefined,
+      true,
+      true,
     ]);
   });
 

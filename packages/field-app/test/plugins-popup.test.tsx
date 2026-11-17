@@ -21,6 +21,7 @@ import {
   CATALOG_UPDATES,
   PLUGINS_FIXTURE_CANDIDATE,
   PLUGINS_FIXTURE_DOWNLOADS,
+  PLUGINS_FIXTURE_HELD_SNAPSHOT,
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_OUTDATED_SNAPSHOT,
@@ -57,10 +58,11 @@ import { nameUnstartedPlugin, resetUnstartedPlugins } from "../src/plugin-host/u
 // goes to its field and back; every state is said, never a blank. MK-4b adds the Me row's count (every answer the
 // popup takes, and the window's one ask, over a fixture client in a FielddProvider) and the tab a door opens it on.
 // MK-4c adds a plugin's page, read only (it asks fieldd nothing), Installed's hot row and Updates' count. MK-4c2a adds
-// a Built in or Development plugin's switches, each held by the fixture port's recorded calls. MK-4e adds Discover's
-// shelf and the page of a set this desktop doesn't have; O2-C its Install, the install card, and the requests the
-// card sends and throws away, each held by the port's recorded calls, and a refusal worded by its kind alone. MK-4d
-// its Show them on the pegboard, held by the board's door (`boardReveal`), with no pegboard mounted.
+// a Built in or Development plugin's switches (N18: every plugin's but a held one's), each held by the fixture port's
+// recorded calls. MK-4e adds Discover's shelf and the page of a set this desktop doesn't have; O2-C its Install, the
+// install card, and the requests the card sends and throws away, each held by the port's recorded calls, and a refusal
+// worded by its kind alone. MK-4d its Show them on the pegboard, held by the board's door (`boardReveal`), with no
+// pegboard mounted.
 // MK-4d's names: where a set hangs, on Installed's lines and under What it adds, over a desk double
 // whose board names its categories. Item 433: Discover's categories, the pegboard's, over the same
 // desk double.
@@ -2639,7 +2641,7 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
     expect(bodyText()).toContain(words.PLUGINS_AWAY);
   });
 
-  it("gives a plugin from the list, or a Sideloaded one, no switch, and nothing on it sends a request (item 321)", async () => {
+  it("gives a plugin from the list, and a Sideloaded one, the switches a Built in one has, each press one request (N18)", async () => {
     const { port: read, calls } = counting(
       pluginsFixturePort({ catalog: CATALOG_LISTED, refresh: CATALOG_LISTED }),
     );
@@ -2647,20 +2649,32 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
     act(() => root.render(<Window port={port} snapshot={PLUGINS_FIXTURE_LISTED_SNAPSHOT} open />));
     await settle();
     toInstalled();
-    expect(rowSwitch("Kanban")).toBeNull();
-    expect(rowSwitch("Key-value store")).toBeNull();
-    expect(rowSwitch("Simulators")).not.toBeNull();
-    expect(rowSwitch("Desk clock")).not.toBeNull();
+    for (const title of ["Kanban", "Key-value store", "Simulators", "Desk clock"]) {
+      expect(rowSwitch(title), title).not.toBeNull();
+    }
+    act(() => rowSwitch("Key-value store")?.click());
+    await settle();
+    expect(sent).toEqual(["disable example.kv-service"]);
     openRow("Kanban");
     expect(pageTitle()).toBe("Kanban");
-    expect(switches()).toEqual([]);
-    expect(bodyText()).toContain(words.SWITCH_WORDS.readOnly);
-    expect(bodyText()).not.toContain(words.SWITCH_WORDS.elsewhere);
-    press("ArrowDown");
-    press("Enter");
-    press(" ");
+    expect(pageSwitch()?.getAttribute("aria-checked")).toBe("true");
+    // the install-set carries a listed plugin's choices to your other desktops, as a Built in one's
+    expect(bodyText()).toContain(words.SWITCH_WORDS.elsewhere);
+    expect(bodyText()).not.toContain("aren't here yet");
+    act(() => powerSwitch("Keep your boards in step")?.click());
     await settle();
-    expect(sent).toEqual([]);
+    act(() => pageSwitch()?.click());
+    await settle();
+    expect(sent).toEqual([
+      "disable example.kv-service",
+      "grant acme.kanban x.acme.kanban.sync false",
+      "disable acme.kanban",
+    ]);
+    // a Sideloaded plugin never enters the install-set: its page says nothing of your other desktops
+    esc();
+    openRow("Key-value store");
+    expect(pageSwitch()).not.toBeNull();
+    expect(bodyText()).not.toContain(words.SWITCH_WORDS.elsewhere);
     expect(calls).toEqual({ catalog: 1, refresh: 1 });
   });
 
@@ -2724,7 +2738,7 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
   });
 
   it("puts no control inside another: each switch is a stop of Tab of its own, and a row's press is none", async () => {
-    await mountSwitches();
+    const { port } = await mountSwitches();
     toInstalled();
     const nested = (): Element[] =>
       [...document.body.querySelectorAll('.vf-plugins button, .vf-plugins [role="switch"]')].filter(
@@ -2739,11 +2753,18 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
       (rowOf(title)?.querySelector(".vf-plugins-row .vf-plugins-chevron") ?? null) !== null;
     const chevronBeside = (title: string): boolean =>
       (rowOf(title)?.querySelector(":scope > .vf-plugins-chevron") ?? null) !== null;
-    expect([chevronIn("Key-value store"), chevronBeside("Key-value store")]).toEqual([true, false]);
+    // a Sideloaded plugin's row has its switch too (N18)
+    expect([chevronIn("Key-value store"), chevronBeside("Key-value store")]).toEqual([false, true]);
     expect([chevronIn("Simulators"), chevronBeside("Simulators")]).toEqual([false, true]);
     openRow("Simulators");
     expect(nested()).toEqual([]);
     expect(switches().length).toBe(4);
+    // the one row with no switch: a plugin held while community plugins are off
+    esc();
+    act(() => root.render(<Window port={port} snapshot={PLUGINS_FIXTURE_HELD_SNAPSHOT} open />));
+    await settle();
+    expect([chevronIn("Kanban"), chevronBeside("Kanban")]).toEqual([true, false]);
+    expect(nested()).toEqual([]);
   });
 
   // it sets the window's registry store, which no earlier test reads, and sets it back; MK-5b's rows below do the
@@ -2938,14 +2959,15 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
     expect(againOf("Simulators")).toBeNull();
   });
 
-  it("offers Try again on a Built in or Development plugin that isn't working alone, which turns it off and on", async () => {
+  it("offers Try again on a plugin that isn't working wherever its switches stand, which turns it off and on", async () => {
     const { sent } = await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
     const again = againOf("Simulators");
     // the act's look with no ↵ printed: ↵ opens the hot row's page
     expect(again?.textContent).toBe(words.INSTALL_WORDS.tryAgain);
     expect(again?.hasAttribute("aria-keyshortcuts")).toBe(false);
-    // a Sideloaded plugin's line stands with no Try again, and so does each plugin working or off
-    expect(againOf("Key-value store")).toBeNull();
+    // a Sideloaded plugin's row offers it too, N18 (2026-11-17; VF-PM 19:45:16Z): Try again follows the switch;
+    // each plugin working or off has none
+    expect(againOf("Key-value store")?.textContent).toBe(words.INSTALL_WORDS.tryAgain);
     expect(againOf("Comment pad")).toBeNull();
     expect(againOf("Desk clock")).toBeNull();
     act(() => again?.click());
@@ -2953,6 +2975,13 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
     expect(switchCalls(sent)).toEqual([
       "plugins.disable vibefield.simulator",
       "plugins.enable vibefield.simulator",
+    ]);
+    // the Sideloaded one's press sends its switch's two requests, as Simulators' did
+    act(() => againOf("Key-value store")?.click());
+    await settle();
+    expect(switchCalls(sent).slice(2)).toEqual([
+      "plugins.disable example.kv-service",
+      "plugins.enable example.kv-service",
     ]);
   });
 
