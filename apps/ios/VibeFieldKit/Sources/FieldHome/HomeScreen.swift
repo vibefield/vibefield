@@ -625,8 +625,10 @@ public struct HomeScreen: View {
 
   private var workspaceDesktops: [WorkspaceDesktop] {
     (link?.desktops ?? []).map { desktop in
+      // DS — drawn as it was while it answered while an update restart stands (`drawnState`); a launch it refuses
+      // meanwhile says the ordinary refused-launch line
       WorkspaceDesktop(id: desktop.deviceId, name: desktop.name, platform: desktop.platform,
-        online: desktop.state == .ready)
+        online: desktop.drawnState == .ready)
     }
   }
 
@@ -679,7 +681,8 @@ public struct HomeScreen: View {
   private var bloomMenu: BloomMenu? {
     guard let link else { return nil }
     let desktops = link.desktops.map { desktop in
-      let asleep = desktop.state != .ready
+      // DS — a desktop mid-update is drawn as it was while it answered (`drawnState`)
+      let asleep = desktop.drawnState != .ready
       // bare terminals carry no join, so they are not counted, as before
       let running = projected.filter { $0.agent?.join?.deviceID == desktop.deviceId }.count
       let profiles = (bloomProfiles[desktop.deviceId] ?? []).map { set in
@@ -833,7 +836,8 @@ public struct HomeScreen: View {
   /// mock or a stamped demo stamps its own page and never reads the absence, so the clock runs under it unread.
   private var reach: FieldHomeModel.Reach {
     FieldHomeModel.reach(
-      meshState: mesh.state, online: mesh.isOnline, answering: FieldHomeModel.answering(linkDesktops),
+      meshState: mesh.state, online: mesh.isOnline,
+      answering: FieldHomeModel.answering(linkDesktops, restarting: linkRestarting),
       attempt: reachAttempt)
   }
 
@@ -2426,7 +2430,8 @@ public struct HomeScreen: View {
     (link?.desktops ?? []).map { desktop in
       FieldHistoryModel.RosterDesktop(
         id: desktop.deviceId, name: desktop.name, platform: desktop.platform,
-        awake: desktop.state == .ready, isHome: desktop.deviceId == link?.home)
+        // DS — drawn as it was while it answered while an update restart stands (`drawnState`)
+        awake: desktop.drawnState == .ready, isHome: desktop.deviceId == link?.home)
     }
   }
 
@@ -3740,7 +3745,8 @@ public struct HomeScreen: View {
       machineName: mesh.machineName,
       adminConsole: mesh.adminConsoleURL,
       // IOS-10c — the meters' reading is the home's: its agents go to Settings only while it is this home's.
-      homeAgents: meters.reading.home == home ? FieldHomeModel.settingsAgents(meters.reading) : nil)
+      homeAgents: meters.reading.home == home ? FieldHomeModel.settingsAgents(meters.reading) : nil,
+      restarting: linkRestarting)
   }
 
   // MARK: - Attachment
@@ -3762,6 +3768,9 @@ public struct HomeScreen: View {
   /// The link's desktops, named so the modifier chain stays cheap to
   /// type-check. See the `.onChange` that reads it.
   private var linkDesktops: [FieldDesktop] { link?.desktops ?? [] }
+  /// DS — the desktops whose own slice announces an update restart that holds (`FieldLink.restarting`), named so
+  /// the call sites stay cheap to type-check. Every surface draws them as they were while they answered.
+  private var linkRestarting: Set<String> { Set(link?.restarting.keys.map { $0 } ?? []) }
 
   // RETIRED 2026-09-23 (IOS-8e): `linkFace`, the corner's token and line about
   // the doors (IOS-4e). Its facts are the account menu's rows and the dot now
@@ -3792,7 +3801,8 @@ public struct HomeScreen: View {
         desktopMemory.remembered(for: login).map { .init(deviceId: $0.deviceId, name: $0.name, platform: $0.platform) }
       } ?? [],
       foreignDoors: link?.foreignDoors.count ?? 0,
-      isHearing: link?.isHearing ?? false)
+      isHearing: link?.isHearing ?? false,
+      restarting: linkRestarting)
   }
 
   // MARK: - WI-1: the way in (TS-7's door, off the Field tab)
@@ -3818,7 +3828,7 @@ public struct HomeScreen: View {
       isGated: mesh.isGatedOnAccount,
       hasListed: link?.hasListed ?? false,
       listed: linkDesktops.count,
-      answering: FieldHomeModel.answering(linkDesktops),
+      answering: FieldHomeModel.answering(linkDesktops, restarting: linkRestarting),
       remembered: remembered.count,
       online: mesh.isOnline,
       firstWayIn: firstWayIn,

@@ -1287,6 +1287,31 @@ function phoneBudgetPin(key, swiftName) {
 }
 
 /**
+ * DS — the restart announcement's READER numbers (`DEVICE_RESTART`). The phone decides by itself whether a desktop's
+ * announced restart still holds (`DeviceRestart.holds`, mirroring `restartHolds`), so a window that moved on one side
+ * only would have the phone and the desktops' roster disagree about which desktop is restarting. Pinned verbatim.
+ *
+ * The origin pattern is ANCHORED to the `DEVICE_RESTART` block: a bare `^  KEY:` pattern returns the first match in
+ * the file, and a key of the same name elsewhere would be read instead while this one drifted.
+ */
+const DEVICE_RESTART_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldProduct/ProductShapes.swift";
+function deviceRestartPin(key, swiftName) {
+  return {
+    name: key,
+    origin: {
+      file: REGISTRIES,
+      pattern: new RegExp(`^export const DEVICE_RESTART = \\{[^}]*?^ {2}${key}: ([0-9_]+),$`, "m"),
+      label: `DEVICE_RESTART.${key}`,
+    },
+    copy: {
+      file: DEVICE_RESTART_SWIFT,
+      pattern: new RegExp(`^ {2}public static let ${swiftName}: Int64 = ([0-9_]+)$`, "m"),
+      label: `DeviceRestart.${swiftName}`,
+    },
+  };
+}
+
+/**
  * SP-2 (b) — the door's tick interval, which the phone's receive deadline is
  * measured in until the door's first `system.tick` names its own (2.5 × it).
  *
@@ -1390,6 +1415,9 @@ const pins = [
   phoneBudgetPin("DOORS_PER_DESKTOP", "doorsPerDesktop"),
   phoneBudgetPin("TERMINAL_LEGS", "terminalLegs"),
   phoneBudgetPin("WEB_VIEWS", "webViews"),
+  // DS — the restart announcement's window, which the phone judges for itself
+  deviceRestartPin("ANNOUNCE_TTL_MS", "announceTtlMs"),
+  deviceRestartPin("MAX_CLOCK_SKEW_MS", "maxClockSkewMs"),
 ];
 
 /**

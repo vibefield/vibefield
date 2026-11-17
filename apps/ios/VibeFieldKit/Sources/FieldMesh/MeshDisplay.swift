@@ -108,7 +108,8 @@ public enum MeshDisplay {
   /// healthy chip.
   public static func wantsTheUser(_ desktop: FieldDesktop) -> Bool {
     if desktop.fieldRefusal != nil { return true }
-    switch desktop.state {
+    // DS — a desktop mid-update is never the person's to fix (`drawnState`)
+    switch desktop.drawnState {
     case .failed, .refusedDoor: return true
     default: return false
     }
@@ -119,7 +120,8 @@ public enum MeshDisplay {
   /// is telling me" and "I am asking the door" are different facts about the
   /// same desktop and only one of them survives the floor's mesh being off.
   public static func linkLine(desktop: FieldDesktop) -> String {
-    switch desktop.state {
+    // DS — the sentence it had while it answered, while an announced update restart stands (`drawnState`)
+    switch desktop.drawnState {
     case .noDoor:
       return "\(desktop.name) — on the mesh, not serving its product surface"
     case .connecting:

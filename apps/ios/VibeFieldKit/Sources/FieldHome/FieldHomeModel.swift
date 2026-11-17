@@ -501,7 +501,8 @@ enum FieldHomeModel {
     desktops: [FieldDesktop],
     asleep: [AsleepDesktop],
     foreignDoors: Int,
-    isHearing: Bool
+    isHearing: Bool,
+    restarting: Set<String> = []
   ) -> AccountFace {
     let live = (login?.isEmpty ?? true) ? nil : login
     let remembered = (rememberedLogin?.isEmpty ?? true) ? nil : rememberedLogin
@@ -550,7 +551,9 @@ enum FieldHomeModel {
     }
 
     // The rows: what the link lists, in its order, then what the phone
-    // remembers and the tailnet does not list — asleep, by name.
+    // remembers and the tailnet does not list — asleep, by name. DS — one whose
+    // own slice announces an update restart that holds (`FieldLink.restarting`)
+    // is drawn as it was while it answered: no word (the ruled pick).
     var rows: [AccountFace.DesktopRow] = desktops.map { desktop in
       let word = AccountDisplay.desktopWord(desktop, isHearing: isHearing)
       return .init(
@@ -562,7 +565,9 @@ enum FieldHomeModel {
       .filter { !listed.contains($0.deviceId) }
       .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
       .map {
-        .init(id: $0.deviceId, name: $0.name, word: AccountDisplay.asleep, wantsTheUser: false, platform: $0.platform)
+        .init(
+          id: $0.deviceId, name: $0.name, word: restarting.contains($0.deviceId) ? nil : AccountDisplay.asleep,
+          wantsTheUser: false, platform: $0.platform)
       }
 
     // WI-W2e A — Try again stands with the notice "Couldn’t connect.": a start that failed, which nothing retries by
@@ -698,13 +703,18 @@ enum FieldHomeModel {
   /// That desktop is there, so the tabs stand and say why, as they did; "Can’t reach your computer." would be
   /// false of it. Asleep, connecting, reconnecting, or with no address to dial, a desktop is known and does
   /// not answer.
-  static func answering(_ desktops: [FieldDesktop]) -> Int {
-    desktops.filter { desktop in
-      switch desktop.state {
+  /// DS — a desktop mid-update counts as it was while it answered: a listed one by its `drawnState`, and one the
+  /// tailnet no longer lists whose own slice announces an update restart that holds (`FieldLink.restarting`), so
+  /// the page never says the computer can't be reached for an update's restart (the ruled pick, behaviour only).
+  static func answering(_ desktops: [FieldDesktop], restarting: Set<String> = []) -> Int {
+    let listed = desktops.filter { desktop in
+      switch desktop.drawnState {
       case .ready, .failed: return true
       case .noDoor, .connecting, .reconnecting, .refusedDoor: return false
       }
     }.count
+    let ids = Set(desktops.map(\.deviceId))
+    return listed + restarting.subtracting(ids).count
   }
 
   /// The desktop the gate's page names: the account's one desktop, or nil when it has none or several

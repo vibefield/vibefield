@@ -93,6 +93,10 @@ public struct DeviceInfo: Sendable, Equatable, Decodable, Identifiable {
   public let productEndpoint: ProductEndpoint?
   /// D31's honest per-device facts, as far as this phone reads them.
   public let capabilities: DeviceCapabilities?
+  /// DS — the desktop's own announced update restart (`DeviceSlice.restart`), as it published it. Whether it still
+  /// HOLDS is the reader's question (`DeviceRestart.holds`), never this row's. One this build cannot read is `nil` here
+  /// and named in `unknownFields`: the device survives, the claim does not, as the contracts read it on the desktops.
+  public let restart: DeviceRestart?
   public let unknownFields: [String]
 
   public var id: String { deviceId }
@@ -113,11 +117,89 @@ public struct DeviceInfo: Sendable, Equatable, Decodable, Identifiable {
     lastSeenAt = object.int("lastSeenAt")
     productEndpoint = try object.decodeObject("productEndpoint", ProductEndpoint.init(json:))
     capabilities = try object.decodeObject("capabilities", DeviceCapabilities.init(json:))
+    let announced = object.value("restart")
+    let read = announced.flatMap { try? DeviceRestart(json: $0) }
+    restart = read
+    if announced != nil, read == nil {
+      unknownFields = (object.unknownFields + ["restart"]).sorted()
+    } else {
+      unknownFields = object.unknownFields
+    }
+  }
+
+  public init(from decoder: any Decoder) throws {
+    try self.init(json: try JSONValue(from: decoder))
+  }
+}
+
+/// DS — a desktop's announced update restart (`DeviceSlice.restart`, devices.ts: fieldd's `RestartScheduled`, the
+/// same object). A desktop whose update stops its floor takes its NODE down too, so the tailnet says offline; this is
+/// the desktop's own word, written before the stop, that it is restarting rather than asleep. Nothing a person reads
+/// names it: a desktop it holds is drawn as it was while it answered (the ruled pick, behaviour only).
+///
+/// It PARSES exactly what the desktops' roster parses: a reason or a plane this build does not know, no plane at all,
+/// no `at` or one before the epoch is NOT an announcement (the contracts `.catch` it to absent there). The two sets
+/// are the contracts' own (`NativeRestartReason`, `UPDATE_PLANES`).
+public struct DeviceRestart: Sendable, Equatable, Decodable {
+  /// `DEVICE_RESTART.ANNOUNCE_TTL_MS` — the READER's window from `at`, never something the desktop publishes.
+  /// `pnpm check:ios-fixtures` pins it.
+  public static let announceTtlMs: Int64 = 300_000
+  /// `DEVICE_RESTART.MAX_CLOCK_SKEW_MS` — an `at` this far ahead of the phone's clock still reads; one further ahead
+  /// does not. Pinned the same way.
+  public static let maxClockSkewMs: Int64 = 5_000
+  /// `NativeRestartReason` and `UPDATE_PLANES` (contracts).
+  public static let reasons: Set<String> = ["update", "quit", "logout", "idle"]
+  public static let knownPlanes: Set<String> = ["shell", "fieldd", "field-native"]
+
+  public let reason: String
+  public let planes: [String]
+  /// The desktop's clock, epoch milliseconds.
+  public let at: Int64
+  public let unknownFields: [String]
+
+  public init(reason: String, planes: [String], at: Int64) {
+    self.reason = reason
+    self.planes = planes
+    self.at = at
+    self.unknownFields = []
+  }
+
+  public init(json: JSONValue) throws {
+    var object = try WireObject(shape: "DeviceRestart", value: json)
+    let reason = try object.requiredString("reason")
+    guard Self.reasons.contains(reason) else {
+      throw WireDecodeError(shape: "DeviceRestart", reason: "a reason this build does not know")
+    }
+    let planes = try object.requiredArray("planes").map { $0.stringValue ?? "" }
+    guard !planes.isEmpty, planes.allSatisfy(Self.knownPlanes.contains) else {
+      throw WireDecodeError(shape: "DeviceRestart", reason: "a plane this build does not know")
+    }
+    let at = try object.requiredInt("at")
+    guard at >= 0 else { throw WireDecodeError(shape: "DeviceRestart", reason: "an `at` before the epoch") }
+    self.reason = reason
+    self.planes = planes
+    self.at = at
     unknownFields = object.unknownFields
   }
 
   public init(from decoder: any Decoder) throws {
     try self.init(json: try JSONValue(from: decoder))
+  }
+
+  /// `restartHolds` (devices.ts), mirrored: from `at` for `announceTtlMs`, and never for an `at` more than
+  /// `maxClockSkewMs` ahead of `now`.
+  public func holds(nowMs: Int64) -> Bool {
+    if at > nowMs + Self.maxClockSkewMs { return false }
+    return nowMs < at + Self.announceTtlMs
+  }
+
+  public func holds(now: Date) -> Bool { holds(nowMs: Self.epochMs(now)) }
+
+  /// When the announcement stops holding, on the desktop's clock.
+  public var lapsesAt: Date { Date(timeIntervalSince1970: Double(at + Self.announceTtlMs) / 1000) }
+
+  static func epochMs(_ date: Date) -> Int64 {
+    Int64((date.timeIntervalSince1970 * 1000).rounded(.down))
   }
 }
 

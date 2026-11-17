@@ -1,3 +1,4 @@
+import FieldProduct
 import Testing
 
 @testable import FieldMesh
@@ -14,6 +15,35 @@ struct AccountDisplayTests {
     FieldDesktop(
       deviceId: "dev-1", name: "studio", platform: "darwin", state: state, feed: feed,
       fieldRefusal: fieldRefusal)
+  }
+
+  /// DS — the ruled pick (behaviour only, no new word): a desktop whose announced update restart stands is drawn
+  /// exactly as it was while it answered, in the row's word and in the sheet's sentence, and wants nobody.
+  @Test("a desktop mid-update is drawn as it was while it answered: no new word")
+  func midUpdateDrawsAsItWas() {
+    let restart = DeviceRestart(reason: "update", planes: ["shell", "fieldd", "field-native"], at: 1_792_065_409_912)
+    let awake = desktop(state: .ready, feed: .door)
+    for state: FieldDesktop.State in [.noDoor, .connecting, .reconnecting, .refusedDoor("no address")] {
+      let held = FieldDesktop(
+        deviceId: "dev-1", name: "studio", platform: "darwin", state: state, feed: .door, restart: restart)
+      #expect(held.drawnState == .ready)
+      #expect(AccountDisplay.desktopWord(held, isHearing: true) == AccountDisplay.desktopWord(awake, isHearing: true))
+      #expect(MeshDisplay.linkLine(desktop: held) == MeshDisplay.linkLine(desktop: awake))
+      #expect(!MeshDisplay.wantsTheUser(held))
+    }
+    // with none, the door's own state is what is drawn
+    #expect(desktop(state: .reconnecting).drawnState == .reconnecting)
+  }
+
+  /// DS — fieldd's roster rule, mirrored: the daemon speaking outranks any announcement.
+  @Test("an announcement stands over a silent or unheard door, never over one that answers or refused, or a live board")
+  func restartStandsRule() {
+    for state: FieldDesktop.State in [.noDoor, .connecting, .reconnecting, .refusedDoor("no address")] {
+      #expect(FieldDesktop.restartStands(over: state, homeHearsItLive: false))
+      #expect(!FieldDesktop.restartStands(over: state, homeHearsItLive: true))
+    }
+    #expect(!FieldDesktop.restartStands(over: .ready, homeHearsItLive: false))
+    #expect(!FieldDesktop.restartStands(over: .failed("INCOMPATIBLE"), homeHearsItLive: false))
   }
 
   @Test("a desktop that answers and feeds needs no word")

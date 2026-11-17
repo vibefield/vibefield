@@ -919,6 +919,44 @@ private final class Refusal: @unchecked Sendable {
     #expect(link.desktops.first?.name == "studio")
   }
 
+  /// DS — a desktop's own announced update restart rides its presence slice, and the link reads it there: it holds
+  /// for the reader's window, a listed desktop whose door this phone cannot hear is drawn as it was while it answered,
+  /// and a lapsed announcement is none.
+  @Test func aDesktopsAnnouncedRestartIsReadOffThePresenceStore() async throws {
+    let (link, mesh, _, _) = try await storeBusLink()
+    defer { link.stop() }
+    let at: Int64 = 1_757_808_001_000  // the rig's clock
+    let planes: [JSONValue] = [.string("shell"), .string("fieldd"), .string("field-native")]
+    var fields = try #require(deviceSlice(name: "studio", url: nil).objectValue)
+    fields["restart"] = .object(["reason": .string("update"), "planes": .array(planes), "at": .int(at)])
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "full",
+        payload: sliceFrame("full", deviceId: "dev-studio", version: 1, data: .object(fields))),
+      to: devicesNamespace)
+    try await waitUntil("the announcement read") { link.restarting["dev-studio"] != nil }
+    #expect(
+      link.restarting["dev-studio"]
+        == DeviceRestart(reason: "update", planes: ["shell", "fieldd", "field-native"], at: at))
+    // listed, its door not answering this phone: the announcement stands, and it is drawn as it was
+    if let studio = link.desktops.first(where: { $0.deviceId == "dev-studio" }), studio.state != .ready {
+      #expect(studio.restart != nil)
+      #expect(studio.drawnState == .ready)
+    }
+
+    // a lapsed announcement is no announcement
+    fields["restart"] = .object([
+      "reason": .string("update"), "planes": .array(planes), "at": .int(at - DeviceRestart.announceTtlMs - 1),
+    ])
+    await mesh.deliver(
+      inbound(
+        from: "node-studio", deviceId: "dev-studio", msgType: "full",
+        payload: sliceFrame("full", deviceId: "dev-studio", version: 2, data: .object(fields))),
+      to: devicesNamespace)
+    try await waitUntil("the lapsed announcement dropped") { link.restarting.isEmpty }
+    #expect(link.desktops.first(where: { $0.deviceId == "dev-studio" })?.restart == nil)
+  }
+
   /// The store's conflict rule, still enforced by the reader that owns it.
   @Test func theAttributionRefusalStillHolds() async throws {
     let (link, mesh, _, _) = try await storeBusLink()

@@ -30,7 +30,8 @@ public enum AccountDisplay {
   /// nothing", and a corner that stayed silent over it would be the blank the
   /// corpus forbids wearing a healthy face.
   public static func desktopWord(_ desktop: FieldDesktop, isHearing: Bool) -> DesktopWord {
-    switch desktop.state {
+    // DS — drawn as it was while it answered while an announced update restart stands (`drawnState`)
+    switch desktop.drawnState {
     case .ready:
       if desktop.fieldRefusal != nil { return DesktopWord(word: "field refused", wantsTheUser: true) }
       if desktop.feed == FieldFeedSource.none, !isHearing {

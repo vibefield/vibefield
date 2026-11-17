@@ -31,13 +31,27 @@ struct SettingsAccountTests {
   private func settings(
     meshState: MeshModel.State, remembered: String? = nil, login: String? = nil, name: String? = nil,
     face: UserFace? = nil, home: String? = "dev-1", homeAnswered: Bool = false, desktops: [FieldDesktop] = [],
-    asleep: [FieldHomeModel.AsleepDesktop] = [], isHearing: Bool = true
+    asleep: [FieldHomeModel.AsleepDesktop] = [], isHearing: Bool = true, restarting: Set<String> = []
   ) -> SettingsAccount {
     FieldHomeModel.settingsAccount(
       meshState: meshState, rememberedLogin: remembered, login: login, domain: domain, name: name, face: face,
       seed: login ?? remembered ?? "", home: home, homeAnswered: homeAnswered, desktops: desktops,
       asleep: asleep, isHearing: isHearing, machineName: "iphone-17-pro",
-      adminConsole: URL(string: "https://login.tailscale.com/admin/machines"))
+      adminConsole: URL(string: "https://login.tailscale.com/admin/machines"), restarting: restarting)
+  }
+
+  /// DS — the ruled pick: a remembered desktop mid-update (its own announcement holds) is drawn connected, as it was
+  /// while it answered, never "Asleep · last heard"; one that announced nothing is asleep as before.
+  @Test("a remembered desktop mid-update reads connected in Settings, never asleep")
+  func rememberedMidUpdateIsConnected() {
+    let account = settings(
+      meshState: .up, login: login,
+      asleep: [
+        .init(deviceId: "dev-2", name: "mini", lastSeen: heard), .init(deviceId: "dev-3", name: "air", lastSeen: heard),
+      ],
+      restarting: ["dev-3"])
+    #expect(account.desktops.first { $0.id == "dev-3" }?.reach == .connected)
+    #expect(account.desktops.first { $0.id == "dev-2" }?.reach == .asleep(lastHeard: heard))
   }
 
   @Test("where the account stands, for every state the mesh can be in")

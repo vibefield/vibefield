@@ -177,6 +177,10 @@ struct DoorPageTests {
     #expect(FieldHomeModel.answering([desktop("a", .ready), desktop("b", .noDoor), desktop("c", .ready)]) == 2)
     // a door that answered and stopped this phone is there: the tabs say why, and the gate would be false of it
     #expect(FieldHomeModel.answering([desktop("a", .failed("INCOMPATIBLE")), desktop("b", .noDoor)]) == 1)
+    // DS — a desktop mid-update counts as it did while it answered: an unlisted one whose own announcement holds,
+    // once, and never twice for a listed one (the ruled pick: no "Can’t reach your computer." over an update)
+    #expect(FieldHomeModel.answering([], restarting: ["dev-gone"]) == 1)
+    #expect(FieldHomeModel.answering([desktop("a", .ready)], restarting: ["a"]) == 1)
     #expect(FieldHomeModel.awaitedDesktop(["studio"]) == "studio")
     #expect(FieldHomeModel.awaitedDesktop(["studio", "mini"]) == nil, "several: on your computer")
     #expect(FieldHomeModel.awaitedDesktop([]) == nil)

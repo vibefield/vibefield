@@ -234,6 +234,39 @@ import Testing
     }
   }
 
+  /// DS — the announcement itself: the contracts' three fields, the same object on the slice and its row.
+  @Test func theAnnouncementReadsAsTheDesktopsRestartScheduled() throws {
+    let announced = DeviceRestart(reason: "update", planes: ["shell", "fieldd", "field-native"], at: 1_792_065_409_912)
+    #expect(try DeviceInfo(json: try Fixture.json("device-slice.restarting")).restart == announced)
+    #expect(try DeviceInfo(json: try Fixture.json("device-info.restarting")).restart == announced)
+    // an older desktop's slice announces nothing
+    #expect(try DeviceInfo(json: try Fixture.json("device-slice.valid")).restart == nil)
+    // the contracts' reasons, every one (`NativeRestartReason`): this build reads what the desktops read
+    for reason in ["update", "quit", "logout", "idle"] {
+      let read = try DeviceRestart(
+        json: .object(["reason": .string(reason), "planes": .array([.string("fieldd")]), "at": .int(1)]))
+      #expect(read.reason == reason)
+    }
+    #expect(throws: WireDecodeError.self) {
+      try DeviceRestart(
+        json: .object(["reason": .string("update"), "planes": .array([.string("fieldd")]), "at": .int(-1)]))
+    }
+  }
+
+  /// DS — `restartHolds` (devices.ts), mirrored: from `at` for the reader's TTL, and never for a far-ahead `at`.
+  @Test func anAnnouncementHoldsForTheReadersWindowOnly() {
+    let at: Int64 = 1_792_065_409_912
+    let restart = DeviceRestart(reason: "update", planes: ["shell", "fieldd", "field-native"], at: at)
+    let ttl = DeviceRestart.announceTtlMs
+    let skew = DeviceRestart.maxClockSkewMs
+    #expect(restart.holds(nowMs: at))
+    #expect(restart.holds(nowMs: at + ttl - 1))
+    #expect(!restart.holds(nowMs: at + ttl))
+    #expect(restart.holds(nowMs: at - skew))
+    #expect(!restart.holds(nowMs: at - skew - 1))
+    #expect(restart.lapsesAt == Date(timeIntervalSince1970: Double(at + ttl) / 1000))
+  }
+
   @Test func oneUnreadableRowCostsItsOwnRowAndNotTheRoster() throws {
     let good = try Fixture.json("device-info.valid")
     let result = try DeviceListResult(

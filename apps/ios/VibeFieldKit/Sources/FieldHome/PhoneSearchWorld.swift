@@ -64,7 +64,7 @@ enum PhoneSearchWorld {
   static func desks(_ desktops: [FieldDesktop], home: String?) -> [PhoneSearch.Desk] {
     desktops.map { desktop in
       PhoneSearch.Desk(
-        id: desktop.deviceId, name: desktop.name, platform: desktop.platform, asleep: desktop.state != .ready,
+        id: desktop.deviceId, name: desktop.name, platform: desktop.platform, asleep: desktop.drawnState != .ready,
         isHome: desktop.deviceId == home)
     }
   }

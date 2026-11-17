@@ -70,13 +70,22 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
   /// PG-3e — this desktop's STANDING on the home's remote board (`AgentMeshDeviceState`), for Settings' "Watch its
   /// agents". nil: the home's board does not list it (yet). `state` stays the connection's word (3d §7's last bullet).
   public let board: AgentMeshDeviceState?
+  /// DS — this desktop's own announced update restart, while it HOLDS (`FieldLink.restarting`) AND STANDS over what
+  /// this phone hears of the desktop itself (`restartStands`): nil whenever the daemon is heard over it. Never a word:
+  /// while it is set the desktop is drawn as it was while it answered (the ruled pick, behaviour only).
+  public let restart: DeviceRestart?
 
   public var id: String { deviceId }
+
+  /// DS — the state every surface DRAWS: the door's own, except while an announced update restart stands over it
+  /// (`restart`), when the desktop is drawn as it was while it answered (`ready`): no "asleep", no "dialing", no
+  /// "reconnecting", and no new word (the ruled pick, behaviour only). `state` stays the connection's fact.
+  public var drawnState: State { restart != nil ? .ready : state }
 
   public init(
     deviceId: String, name: String, platform: String?, state: State, feed: FieldFeedSource,
     publishesTerminalDoors: Bool? = nil, fieldRefusal: String? = nil, userId: String? = nil,
-    person: DesktopPerson? = nil, board: AgentMeshDeviceState? = nil
+    person: DesktopPerson? = nil, board: AgentMeshDeviceState? = nil, restart: DeviceRestart? = nil
   ) {
     self.deviceId = deviceId
     self.name = name
@@ -88,6 +97,24 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
     self.userId = userId
     self.person = person
     self.board = board
+    self.restart = restart
+  }
+
+  /// DS — whether a LISTED desktop's announced restart still stands over what this phone hears of it. ONE rule with
+  /// the desktops' roster, mirrored (`deviceState`, `packages/fieldd/src/device-service.ts`), so the phone and every
+  /// desktop agree about which desktop is mid-update.
+  ///
+  /// The daemon speaking outranks any announcement, because it is newer than one: a door that answers this phone
+  /// (`ready`), a door that refused it (`failed`: fieldd's `incompatible` outranks the announcement the same way), or
+  /// the HOME hearing this desktop live on its board. A door silent, unheard, still being dialled or with no address
+  /// to dial, and the announcement stands. An UNLISTED desktop has no row to judge: `FieldLink.restarting` speaks for
+  /// it alone, as fieldd's offline arm does.
+  public static func restartStands(over state: State, homeHearsItLive: Bool) -> Bool {
+    if homeHearsItLive { return false }
+    switch state {
+    case .ready, .failed: return false
+    case .noDoor, .connecting, .reconnecting, .refusedDoor: return true
+    }
   }
 }
 
@@ -310,6 +337,18 @@ public final class FieldLink {
   /// — it is somebody else's machine, which is an ordinary thing for a tailnet
   /// to contain and not a row this phone has any business drawing.
   public private(set) var desktops: [FieldDesktop] = []
+
+  /// DS — the desktops whose OWN slice announces an update's restart that still holds (`DeviceSlice.restart`,
+  /// `DeviceRestart.holds`), by durable device id.
+  ///
+  /// Read off the presence store and nowhere else, so it holds for a desktop the tailnet no longer lists, which is
+  /// the point: an update's stop takes the node down with the app, and a desktop this phone cannot reach is then
+  /// mid-update, not asleep. truffle keeps an offline peer's slice (a sleep is `online: false`, never `left`), so the
+  /// announcement is still there to read. Empty on an ungated node, where no store is read at all (UA-P-5).
+  ///
+  /// The CLAIM, for an unlisted desktop's row (the corner's and Settings' remembered desktops). A listed desktop's
+  /// row carries it only while it stands over the door (`FieldDesktop.restart`, `FieldDesktop.restartStands`).
+  public private(set) var restarting: [String: DeviceRestart] = [:]
   /// Bounded, deduplicated, never fatal.
   public private(set) var notes: [String] = []
   public private(set) var isPaused = false
@@ -501,6 +540,9 @@ public final class FieldLink {
   /// Every peer truffle has shown us, by durable device id, and what the door
   /// there last said.
   @ObservationIgnored private var found: [String: Found] = [:]
+  /// DS — wakes the link when the earliest announcement lapses: nothing else would, because a lapse is the clock's
+  /// and not the mesh's.
+  @ObservationIgnored private var restartLapse: Task<Void, Never>?
   @ObservationIgnored private var peerTask: Task<Void, Never>?
   @ObservationIgnored private var sweepTask: Task<Void, Never>?
   /// The sweep's latch, set synchronously — two overlapping sweeps would probe
@@ -714,6 +756,9 @@ public final class FieldLink {
     fieldIsLive = false
     endpointRefusals = [:]
     foreignDoors = [:]
+    restartLapse?.cancel()
+    restartLapse = nil
+    restarting = [:]
   }
 
   // MARK: The card's asks — each over its OWNER's door (DS-L4)
@@ -2045,10 +2090,12 @@ public final class FieldLink {
   /// A peer whose door refused this login is deliberately ABSENT: it is not
   /// this account's desktop, and `foreignDoors` is where that fact is kept.
   private func refreshDesktops() {
+    refreshRestarting()
     desktops = found.keys.sorted().compactMap { deviceId in
       guard let entry = found[deviceId] else { return nil }
       if case .notThisAccount = entry.admission { return nil }
       let row = describe(deviceId, entry)
+      let doorState = state(of: deviceId, entry: entry)
       return FieldDesktop(
         deviceId: deviceId,
         name: row?.name.isEmpty == false ? row!.name : fallbackName(entry),
@@ -2056,14 +2103,50 @@ public final class FieldLink {
         // UA-P-0e a peer row carries no `platform` at all, and "" would be this
         // phone inventing an empty answer where the wire said nothing.
         platform: row?.platform ?? nil,
-        state: state(of: deviceId, entry: entry),
+        state: doorState,
         feed: feed(of: deviceId),
         publishesTerminalDoors: row?.capabilities?.terminalMesh,
         // S1 — the ladder's words while it stands, wherever the desktop has been (a sleep forgets `entry`'s own)
         fieldRefusal: remoteRefusals[deviceId]?.reason ?? entry.fieldRefusal,
         userId: entry.userId,
         person: entry.person,
-        board: standing(of: deviceId))
+        board: standing(of: deviceId),
+        restart: standingRestart(of: deviceId, over: doorState))
+    }
+  }
+
+  /// DS — the announcement a LISTED desktop's row carries: the one that holds (`restarting`), only while it stands
+  /// over what this phone hears of the desktop (`FieldDesktop.restartStands`, fieldd's roster rule mirrored). The
+  /// home's board counts only while the home is live: a board copy kept from a lost home is a moment old, never the
+  /// daemon speaking now.
+  private func standingRestart(of deviceId: String, over doorState: FieldDesktop.State) -> DeviceRestart? {
+    guard let restart = restarting[deviceId] else { return nil }
+    let homeHearsItLive = homeIsLive && standing(of: deviceId) == .live
+    return FieldDesktop.restartStands(over: doorState, homeHearsItLive: homeHearsItLive) ? restart : nil
+  }
+
+  /// DS — re-read which desktops announce a restart that still holds, and arm the one wake for the earliest lapse.
+  /// A slice whose door refused this login is somebody else's desktop and says nothing here (UA-P-5).
+  private func refreshRestarting() {
+    var holding: [String: DeviceRestart] = [:]
+    if storeBus {
+      let at = now()
+      for (deviceId, slice) in devices.slices {
+        if case .notThisAccount = found[deviceId]?.admission { continue }
+        if foreignDoors[deviceId] != nil { continue }
+        guard let restart = (try? slice.decode(DeviceInfo.self))?.restart, restart.holds(now: at) else { continue }
+        holding[deviceId] = restart
+      }
+    }
+    if holding != restarting { restarting = holding }
+    restartLapse?.cancel()
+    restartLapse = nil
+    guard let next = holding.values.map(\.lapsesAt).min() else { return }
+    let waitMs = max(Int64((next.timeIntervalSince(now()) * 1000).rounded(.up)), 0) + 1
+    restartLapse = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .milliseconds(waitMs))
+      guard let self, !Task.isCancelled, self.started else { return }
+      self.refreshDesktops()
     }
   }
 
@@ -2101,7 +2184,9 @@ public final class FieldLink {
         fieldRefusal: desktop.fieldRefusal,
         userId: desktop.userId,
         person: desktop.person,
-        board: standing(of: desktop.deviceId))
+        board: standing(of: desktop.deviceId),
+        // judged again: a board frame can be the home hearing this desktop live
+        restart: standingRestart(of: desktop.deviceId, over: desktop.state))
     }
   }
 

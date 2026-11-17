@@ -26,11 +26,27 @@ struct AccountFaceTests {
   private func face(
     meshState: MeshModel.State, remembered: String? = nil, login: String? = nil, domain: String? = nil,
     name: String? = nil, face: UserFace? = nil, desktops: [FieldDesktop] = [],
-    asleep: [FieldHomeModel.AsleepDesktop] = [], foreignDoors: Int = 0, isHearing: Bool = false
+    asleep: [FieldHomeModel.AsleepDesktop] = [], foreignDoors: Int = 0, isHearing: Bool = false,
+    restarting: Set<String> = []
   ) -> FieldHomeModel.AccountFace {
     FieldHomeModel.accountFace(
       meshState: meshState, rememberedLogin: remembered, login: login, domain: domain, name: name,
-      face: face, desktops: desktops, asleep: asleep, foreignDoors: foreignDoors, isHearing: isHearing)
+      face: face, desktops: desktops, asleep: asleep, foreignDoors: foreignDoors, isHearing: isHearing,
+      restarting: restarting)
+  }
+
+  /// DS — the ruled pick (behaviour only): a remembered desktop the tailnet no longer lists, whose own slice
+  /// announces an update restart that holds, is drawn as a desktop that answers (no word), never asleep; the one
+  /// beside it that announced nothing is asleep as before.
+  @Test("a remembered desktop mid-update reads as it did while it answered, never asleep")
+  func rememberedMidUpdateIsNotAsleep() {
+    let corner = face(
+      meshState: .up, login: login, domain: domain,
+      asleep: [.init(deviceId: "dev-2", name: "mini"), .init(deviceId: "dev-3", name: "studio")],
+      isHearing: true, restarting: ["dev-3"])
+    #expect(corner.desktops.first { $0.id == "dev-3" }?.word == nil)
+    #expect(corner.desktops.first { $0.id == "dev-3" }?.wantsTheUser == false)
+    #expect(corner.desktops.first { $0.id == "dev-2" }?.word == AccountDisplay.asleep)
   }
 
   @Test("not signed in: the corner is the act, and there is nothing to sign out of")

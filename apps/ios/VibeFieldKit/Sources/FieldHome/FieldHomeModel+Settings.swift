@@ -28,7 +28,8 @@ extension FieldHomeModel {
     isHearing: Bool,
     machineName: String?,
     adminConsole: URL?,
-    homeAgents: [SettingsAgent]? = nil
+    homeAgents: [SettingsAgent]? = nil,
+    restarting: Set<String> = []
   ) -> SettingsAccount {
     let live = (login?.isEmpty ?? true) ? nil : login
     let remembered = (rememberedLogin?.isEmpty ?? true) ? nil : rememberedLogin
@@ -50,7 +51,9 @@ extension FieldHomeModel {
       .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
       .map {
         SettingsDesktop(
-          id: $0.deviceId, name: $0.name, platform: $0.platform, reach: .asleep(lastHeard: $0.lastSeen),
+          id: $0.deviceId, name: $0.name, platform: $0.platform,
+          // DS — mid-update (its own announcement holds): drawn as it was while it answered
+          reach: restarting.contains($0.deviceId) ? .connected : .asleep(lastHeard: $0.lastSeen),
           isHome: false, servesTerminals: nil)
       }
 
@@ -106,7 +109,7 @@ extension FieldHomeModel {
     guard let text = word.word else { return .connected }
     guard word.wantsTheUser else { return .working(text) }
     let reason: String? =
-      switch desktop.state {
+      switch desktop.drawnState {
       case .failed(let reason), .refusedDoor(let reason): reason
       case .ready: desktop.fieldRefusal
       case .noDoor, .connecting, .reconnecting: nil
