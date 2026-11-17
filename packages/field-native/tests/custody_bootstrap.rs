@@ -310,8 +310,14 @@ fn refusal(records: &[Value]) -> String {
 fn names_no_secret(what: &str, hex_secret: &str, output: &Output, raw_log: &str) {
     let needle = &hex_secret[..16];
     let places = [
-        ("stdout", String::from_utf8_lossy(&output.stdout).into_owned()),
-        ("stderr", String::from_utf8_lossy(&output.stderr).into_owned()),
+        (
+            "stdout",
+            String::from_utf8_lossy(&output.stdout).into_owned(),
+        ),
+        (
+            "stderr",
+            String::from_utf8_lossy(&output.stderr).into_owned(),
+        ),
         ("log", raw_log.to_owned()),
     ];
     for (place, text) in places {

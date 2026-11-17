@@ -224,7 +224,9 @@ async fn no_log_line_at_any_level_says_an_entrys_values() {
 
     // the capture heard the floor: its hellos are there, at their own level
     let log = said.text();
-    let heard = log.matches("field_native.mgmt.client_authenticated").count();
+    let heard = log
+        .matches("field_native.mgmt.client_authenticated")
+        .count();
     assert!(heard >= 4, "the capture heard {heard} hellos");
     // and nothing the floor said holds a planted string, the path among them
     for canary in CANARIES.into_iter().chain([path.as_str()]) {

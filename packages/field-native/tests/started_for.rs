@@ -399,7 +399,10 @@ async fn a_sealed_floor_that_holds_nothing_says_no_key_and_still_keeps_the_table
     // absent and empty are one thing to a reader, so a floor with nothing to hand says no key, as with `marks`
     assert!(ack.get("startedFor").is_none(), "{ack}");
     // it is the verb that tells this floor from one booted from the file: it answers about the session it is asked
-    assert!(daemon.state.started_for().is_some(), "a sealed floor's table");
+    assert!(
+        daemon.state.started_for().is_some(),
+        "a sealed floor's table"
+    );
     let answer = fieldd.set("nobody", None).await;
     assert_eq!(refusal(&answer), ("NOT_FOUND", None), "{answer}");
     daemon.shutdown().await;
