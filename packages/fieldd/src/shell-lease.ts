@@ -41,6 +41,8 @@ export class ShellLease {
   private readonly now: () => number;
   private writes: Promise<void> = Promise.resolve();
   private sealed = false;
+  /** Item 486 — the record THIS stop kept (`stoppedBy`, `leftForUpdate`), for `markIncomplete`. */
+  private keptByStop: ShellLastExit | null = null;
 
   constructor(private readonly opts: ShellLeaseOptions) {
     this.path = join(opts.dataDir, ...LAYOUT.SHELL_EXIT);
@@ -89,7 +91,8 @@ export class ShellLease {
    * pair is no shell leaving one that keeps running, and a record still owed must survive the stop (AL-7). */
   stoppedBy(reason: NativeRestartReason, sessions: number): void {
     this.seal();
-    this.keep({ planned: true, stopped: reason, at: this.now(), sessions });
+    this.keptByStop = { planned: true, stopped: reason, at: this.now(), sessions };
+    this.keep(this.keptByStop);
   }
 
   /** AL-12 — a shell's `system.shutdown {reason: "update"}` without a floor stop (the update's B3: the release leaves
@@ -97,7 +100,23 @@ export class ShellLease {
    * the lease is sealed. */
   leftForUpdate(): void {
     this.seal();
-    this.keep({ planned: true, why: "update", at: this.now(), sessions: this.opts.liveSessions() });
+    this.keptByStop = {
+      planned: true,
+      why: "update",
+      at: this.now(),
+      sessions: this.opts.liveSessions(),
+    };
+    this.keep(this.keptByStop);
+  }
+
+  /** Item 486 — this stop did not finish: the record THIS stop kept (a shell's quit, logout or update) is kept
+   * again with the first failed step's name (`STOP_STEPS`, never an error's words). A stop no shell asked for kept
+   * none, and the record stays as it was (AL-12). false = there was nothing to mark. */
+  markIncomplete(step: string): boolean {
+    if (this.keptByStop === null) return false;
+    this.keptByStop = { ...this.keptByStop, incomplete: step };
+    this.keep(this.keptByStop);
+    return true;
   }
 
   /** `diagnostics.lastExit`: how a shell last left this pair, null before any has. */

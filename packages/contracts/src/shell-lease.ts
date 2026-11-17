@@ -54,9 +54,14 @@ export type ShellExitRecord = z.infer<typeof ShellExitRecord>;
  * floor, that stop: `stopped` is its reason and `sessions` the consented set it ended. An update's stop that leaves
  * the floor (B3) is `why: "update"` with the floor's count. Each exit replaces it and
  * nothing takes it, unlike `LAYOUT.SHELL_EXIT`, whose record is said once. fieldd's own stop (the idle bound, a
- * signal) is no shell's exit and leaves it as it was. */
+ * signal) is no shell's exit and leaves it as it was.
+ *
+ * Item 486 — `incomplete`: the stop that kept this record did not finish, and this names its first failed step
+ * (fieldd's `STOP_STEPS`, a closed list; never an error's words). Only a stop a shell asked for marks it, on the
+ * record it kept; a reader that does not know it ignores it. */
 export const ShellLastExit = ShellExitRecord.extend({
   stopped: NativeRestartReason.optional(),
+  incomplete: z.string().optional(),
 }).passthrough();
 export type ShellLastExit = z.infer<typeof ShellLastExit>;
 

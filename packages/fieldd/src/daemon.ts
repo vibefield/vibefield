@@ -285,7 +285,7 @@ import {
   noteSocketAliasParent,
   splitPathList,
 } from "./boot-env";
-import type { StopStep } from "./daemon-stop";
+import { runStopSteps, type StopStep, stopFailure } from "./daemon-stop";
 import { openSwarmReplay } from "./debug/swarm-replay";
 import { DeviceRemoval } from "./device-removal";
 import {
@@ -9794,101 +9794,201 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       stopPromise ??= (async () => {
         logger.info("fieldd.lifecycle.stopping", "fieldd is stopping");
         try {
-          shellAbsenceRef?.dispose(); // AL-5 — a stopping pair watches for nothing
-          // AL-7 — the sockets this stop closes are no shell leaving, and a record already owed is on disk first
-          shellLeaseRef?.seal();
-          await shellLeaseRef?.flush();
-          // the record is this stop's to remove below, never to rewrite again
-          productClosed = true;
-          supervisor.off("floor-of-record", onFloorOfRecord);
-          supervisor.stop(); // stop watching FIRST: a teardown is not a wedge
-          await updateManager.dispose();
-          if (config.stopFaultAt === "plugin-services")
-            throw new Error("stop fault at plugin-services");
-          await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
-          runtimeDiagnostics.dispose();
-          await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown
-          agentUsage.stop(); // AR-5d — the polling ends before the runtime it asks
-          // AR-7b — no launch is taken from here on: the gateway closes and its
-          // rendezvous is withdrawn, and the list of our shells STAYS (a
-          // launcher in a pane waits for the fieldd that comes next)
-          await gateway?.stop();
-          lastRun?.dispose(); // LR — the last picture, taken while the board still stands
-          monitor?.dispose(); // MV-3a — the backend leaves the runtime's bus before the runs are released
-          await agents.dispose(); // AR-2/AR-4 — the runs RELEASED (their PTYs outlive us) before the index
-          indexTail.dispose(); // SP-6 — every session socket closes before its daemon stops
-          index.dispose(); // AC-D8 — stop reacting to the daemon's transitions
-          indexCatalog.dispose(); // DS-6 — the stream closes before its daemon stops
-          indexApps.dispose(); // MA-3e — and no library read outlives it
-          await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
-          placeScanner.dispose(); // PJ-1 — no scan asks a worker that is stopping
-          await projectRecords.dispose(); // PJ-2 — an act already running lands before the library closes
-          projectGroups.dispose();
-          offActed();
-          await workspace.stop(); // FS-1a — the files worker stops with the daemon (FS-D11 (b))
-          await transcriptHost.stop(); // TH-1 — and the transcript worker
-          detachHealthSources?.();
-          endpoints.dispose();
-          mcp.dispose();
-          await settingsDoc.dispose(); // D29′ — the doc's writes are already durable
-          await settleDocHolders(); // DS-5d — the slice closes, its ledger settled or bounded
-          for (const off of systemDocs?.unregister ?? []) off();
-          await systemDocs?.library.dispose(); // DS-5 — every library write is durable
-          api.close();
-          docLane.close();
-          await presenceRooms?.stop();
-          toolPlane?.stop();
-          needsQueue?.stop();
-          docSync?.stop();
-          laneLink.close();
-          docs.dispose();
-          const artifactDrain = artifacts.dispose();
-          // MA-3e — every made serve stays up (field-native outlives fieldd)
-          const madeAppsDrain = madeAppsRef?.dispose();
-          board.dispose(); // DS-3 — its hubs' upstreams close before the manager goes
-          indexMesh?.dispose(); // DS-6 — the replicas are written before the links go
-          appsMesh?.dispose(); // MA-3e — and the made apps' replicas, the same way
-          federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
-          peers.dispose();
-          indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
-          transcriptServe.dispose(); // SP-7a — and the transcript worker's
-          freewayServe.dispose(); // F1 — the floor keeps the serve: FW-L10
-          freewayFloor.dispose();
-          // DS-1b — the egress routes this daemon placed come off the floor
-          // while the mgmt link still stands: the rewriter gives back its
-          // references (the last release removes each route), and the port
-          // waits, bounded, for the floor to answer the removals
-          egressCellRewriter?.dispose();
-          indexForwarding.dispose(); // DS-7 — the index routes, the same way
-          await Promise.race([
-            egressRoutes.dispose(),
-            new Promise<void>((resolve) => setTimeout(resolve, 2_000).unref()),
-          ]);
-          terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
-          devices.dispose();
-          // The fatal and rollback ladders always dropped the terminal control
-          // client; this one did not, so a cleanly stopping fieldd left its
-          // socket to the floor open and made the floor read a clean shutdown
-          // as an abrupt disconnect (found by GT-1's fake-floor test, which
-          // hung waiting for the connection fieldd never closed).
-          terminals.dispose();
-          services.dispose();
-          settings.dispose();
-          plugins.dispose();
-          diagnosticsService.dispose();
-          await native.detach(); // AL-8a — the floor records this stop planned, never as a crash
-          native.close();
-          await artifactDrain;
-          await madeAppsDrain;
-          // a superseding fieldd rewrites these for the same dataDir — never
-          // delete what is no longer ours
-          if (!native.superseded) {
-            rmSync(tokenPath, { force: true });
-            rmSync(productPath, { force: true });
+          let artifactDrain: unknown;
+          let madeAppsDrain: unknown;
+          // Item 486 — design-02's Shutdown order, each step in its own try (`runStopSteps`): a
+          // step that fails is logged by its name and the next one runs, so one failed step no
+          // longer skips the rest of the teardown; the stop rejects at its END, with the first
+          // failure.
+          const steps: Array<readonly [StopStep, () => unknown]> = [
+            // AL-5 — a stopping pair watches for nothing
+            ["shell-absence", () => shellAbsenceRef?.dispose()],
+            // AL-7 — the sockets this stop closes are no shell leaving, and a record already
+            // owed is on disk first
+            [
+              "shell-lease",
+              async () => {
+                shellLeaseRef?.seal();
+                await shellLeaseRef?.flush();
+              },
+            ],
+            // the record is this stop's to remove below, never to rewrite again
+            [
+              "product-record",
+              () => {
+                productClosed = true;
+              },
+            ],
+            // stop watching FIRST: a teardown is not a wedge
+            [
+              "supervisor",
+              () => {
+                supervisor.off("floor-of-record", onFloorOfRecord);
+                supervisor.stop();
+              },
+            ],
+            ["plugin-updates", () => updateManager.dispose()],
+            // §18.6 — service deactivation before the API falls
+            ["plugin-services", () => serviceHost?.stopAll()],
+            ["runtime-diagnostics", () => runtimeDiagnostics.dispose()],
+            // §17.1 — children die no later than fieldd shutdown
+            ["processes", () => processes.stopAll()],
+            // AR-5d — the polling ends before the runtime it asks
+            ["agent-usage", () => agentUsage.stop()],
+            // AR-7b — no launch is taken from here on: the gateway closes and its
+            // rendezvous is withdrawn, and the list of our shells STAYS (a
+            // launcher in a pane waits for the fieldd that comes next)
+            ["gateway", () => gateway?.stop()],
+            // LR — the last picture, taken while the board still stands
+            ["last-run", () => lastRun?.dispose()],
+            // MV-3a — the backend leaves the runtime's bus before the runs are released
+            ["monitor", () => monitor?.dispose()],
+            // AR-2/AR-4 — the runs RELEASED (their PTYs outlive us) before the index
+            ["agents", () => agents.dispose()],
+            // SP-6 — every session socket closes before its daemon stops
+            ["index-tail", () => indexTail.dispose()],
+            // AC-D8 — stop reacting to the daemon's transitions
+            ["index", () => index.dispose()],
+            // DS-6 — the stream closes before its daemon stops
+            ["index-catalog", () => indexCatalog.dispose()],
+            // MA-3e — and no library read outlives it
+            ["index-apps", () => indexApps.dispose()],
+            // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
+            ["rosettad", () => rosettad?.stop()],
+            // PJ-1 — no scan asks a worker that is stopping
+            ["place-scanner", () => placeScanner.dispose()],
+            // PJ-2 — an act already running lands before the library closes
+            ["project-records", () => projectRecords.dispose()],
+            ["project-groups", () => projectGroups.dispose()],
+            ["acted", () => offActed()],
+            // FS-1a — the files worker stops with the daemon (FS-D11 (b))
+            ["workspace", () => workspace.stop()],
+            // TH-1 — and the transcript worker
+            ["transcript-host", () => transcriptHost.stop()],
+            ["health-sources", () => detachHealthSources?.()],
+            ["endpoints", () => endpoints.dispose()],
+            ["mcp", () => mcp.dispose()],
+            // D29′ — the doc's writes are already durable
+            ["settings-doc", () => settingsDoc.dispose()],
+            // DS-5d — the slice closes, its ledger settled or bounded
+            ["doc-holders", () => settleDocHolders()],
+            [
+              "system-doc-routes",
+              () => {
+                for (const off of systemDocs?.unregister ?? []) off();
+              },
+            ],
+            // DS-5 — every library write is durable
+            ["system-docs", () => systemDocs?.library.dispose()],
+            ["api", () => api.close()],
+            ["doc-lane", () => docLane.close()],
+            ["presence-rooms", () => presenceRooms?.stop()],
+            ["tool-plane", () => toolPlane?.stop()],
+            ["needs-queue", () => needsQueue?.stop()],
+            ["doc-sync", () => docSync?.stop()],
+            ["lane-link", () => laneLink.close()],
+            ["docs", () => docs.dispose()],
+            [
+              "artifacts",
+              () => {
+                artifactDrain = artifacts.dispose();
+              },
+            ],
+            // MA-3e — every made serve stays up (field-native outlives fieldd)
+            [
+              "made-apps",
+              () => {
+                madeAppsDrain = madeAppsRef?.dispose();
+              },
+            ],
+            // DS-3 — its hubs' upstreams close before the manager goes
+            ["board", () => board.dispose()],
+            // DS-6 — the replicas are written before the links go
+            ["index-mesh", () => indexMesh?.dispose()],
+            // MA-3e — and the made apps' replicas, the same way
+            ["apps-mesh", () => appsMesh?.dispose()],
+            // before peers: a dying link must not trigger recovery
+            ["federated-subs", () => federatedSubs.dispose()],
+            ["peers", () => peers.dispose()],
+            // SP-3 — stop re-aiming rosettad's serve before the mesh goes
+            ["index-serve", () => indexServe?.dispose()],
+            // SP-7a — and the transcript worker's
+            ["transcript-serve", () => transcriptServe.dispose()],
+            // F1 — the floor keeps the serve: FW-L10
+            ["freeway-serve", () => freewayServe.dispose()],
+            ["freeway-floor", () => freewayFloor.dispose()],
+            // DS-1b — the egress routes this daemon placed come off the floor
+            // while the mgmt link still stands: the rewriter gives back its
+            // references (the last release removes each route), and the port
+            // waits, bounded, for the floor to answer the removals
+            ["egress-rewriter", () => egressCellRewriter?.dispose()],
+            // DS-7 — the index routes, the same way
+            ["index-forwarding", () => indexForwarding.dispose()],
+            [
+              "egress-routes",
+              async () => {
+                await Promise.race([
+                  egressRoutes.dispose(),
+                  new Promise<void>((resolve) => setTimeout(resolve, 2_000).unref()),
+                ]);
+              },
+            ],
+            // TM-2 — stop reconciling routes before the mesh goes
+            ["terminal-serve", () => terminalServe.dispose()],
+            ["devices", () => devices.dispose()],
+            // The fatal and rollback ladders always dropped the terminal control
+            // client; this one did not, so a cleanly stopping fieldd left its
+            // socket to the floor open and made the floor read a clean shutdown
+            // as an abrupt disconnect (found by GT-1's fake-floor test, which
+            // hung waiting for the connection fieldd never closed).
+            ["terminals", () => terminals.dispose()],
+            ["services", () => services.dispose()],
+            ["settings", () => settings.dispose()],
+            ["plugins", () => plugins.dispose()],
+            ["diagnostics", () => diagnosticsService.dispose()],
+            // AL-8a — the floor records this stop planned, never as a crash
+            ["native-detach", () => native.detach()],
+            ["native-close", () => native.close()],
+            ["artifacts-drain", () => artifactDrain],
+            ["made-apps-drain", () => madeAppsDrain],
+            // a superseding fieldd rewrites these for the same dataDir — never
+            // delete what is no longer ours. Item 486: both go on every stop, the
+            // secret first, each its own step.
+            [
+              "token-file",
+              () => {
+                if (!native.superseded) rmSync(tokenPath, { force: true });
+              },
+            ],
+            [
+              "product-file",
+              () => {
+                if (!native.superseded) rmSync(productPath, { force: true });
+              },
+            ],
+          ];
+          const failures = await runStopSteps(steps, logger, config.stopFaultAt);
+          // Item 486 — the record a shell's stop kept (its quit, logout or update) says this stop
+          // did not finish, by the first failed step's name; a stop no shell asked for kept none,
+          // and the record stays as it was (AL-12). Written and flushed before the audit and the
+          // log close.
+          const firstFailed = failures[0]?.step;
+          const lastSteps: Array<readonly [StopStep, () => unknown]> = [
+            [
+              "last-exit",
+              async () => {
+                if (firstFailed !== undefined) shellLeaseRef?.markIncomplete(firstFailed);
+                await shellLeaseRef?.flush();
+              },
+            ],
+            ["audit", () => audit.close()],
+          ];
+          failures.push(...(await runStopSteps(lastSteps, logger, config.stopFaultAt)));
+          if (failures.length === 0) {
+            logger.info("fieldd.lifecycle.stopped", "fieldd stopped");
+            return;
           }
-          await audit.close();
-          logger.info("fieldd.lifecycle.stopped", "fieldd stopped");
-        } catch (error) {
+          const error = stopFailure(failures);
           logger.error("fieldd.lifecycle.stop_failed", "fieldd resource shutdown failed", error);
           throw error;
         } finally {
