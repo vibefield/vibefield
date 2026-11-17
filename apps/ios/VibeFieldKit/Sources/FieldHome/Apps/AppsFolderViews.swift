@@ -305,7 +305,7 @@ struct AppsFolderLayer: View {
     HStack(spacing: AppsFolderMotion.dotGap) {
       ForEach(0..<count, id: \.self) { index in
         Circle()
-          .fill(index == (page ?? 0) ? ChromePalette.ink : ChromePalette.inkFaint)
+          .fill(index == (page ?? 0) ? ChromePalette.ink : ChromePalette.inkT4)
           .frame(width: AppsFolderMotion.dot, height: AppsFolderMotion.dot)
       }
     }

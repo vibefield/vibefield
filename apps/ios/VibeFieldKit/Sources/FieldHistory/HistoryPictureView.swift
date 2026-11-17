@@ -172,7 +172,7 @@ struct HistoryPictureCell: View {
       .frame(width: side, height: side)
       .overlay {
         HistoryPictureGlyph(size: 12, waiting: true)
-          .foregroundStyle(ChromePalette.inkFaint)
+          .foregroundStyle(ChromePalette.inkT4)
       }
       .overlay { shape.strokeBorder(ChromePalette.cardHairline, lineWidth: 0.5) }
       .accessibilityElement(children: .ignore)
@@ -189,7 +189,7 @@ struct HistoryPlaceholderLine: View {
     HStack(spacing: 8) {
       Image(systemName: "photo")
         .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(ChromePalette.inkFaint)
+        .foregroundStyle(ChromePalette.inkT4)
       Text(words)
         .font(ChromeType.sans(12.5))
         .foregroundStyle(ChromePalette.inkTertiary)
@@ -502,7 +502,7 @@ struct HistoryGalleryPage: View {
         .aspectRatio(1, contentMode: .fit)
         .overlay {
           HistoryPictureGlyph(size: 12, waiting: !failed)
-            .foregroundStyle(ChromePalette.inkFaint)
+            .foregroundStyle(ChromePalette.inkT4)
         }
         .overlay { shape.strokeBorder(ChromePalette.cardHairline, lineWidth: 0.5) }
         .accessibilityElement(children: .ignore)
@@ -569,7 +569,7 @@ struct HistoryGalleryThumb: View {
             .padding(HistoryPictureLayout.thumbInset)
         } else {
           HistoryPictureGlyph(size: 12, waiting: face == .waiting)
-            .foregroundStyle(ChromePalette.inkFaint)
+            .foregroundStyle(ChromePalette.inkT4)
         }
       }
       .frame(width: HistoryPictureLayout.thumb, height: HistoryPictureLayout.thumb)
@@ -736,7 +736,7 @@ struct HistoryPictureNote: View {
         .font(ChromeType.sans(11.5))
         .lineLimit(1)
     }
-    .foregroundStyle(ChromePalette.inkFaint)
+    .foregroundStyle(ChromePalette.inkTertiary)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(words)
   }

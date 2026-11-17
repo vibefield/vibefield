@@ -205,7 +205,7 @@ struct HistoryOlderLine: View {
             .font(ChromeType.sans(10.5, .medium))
             .textCase(.uppercase)
             .tracking(ChromeType.tracking(0.07, of: 10.5))
-            .foregroundStyle(presses ? ChromePalette.inkSecondary : ChromePalette.inkFaint)
+            .foregroundStyle(presses ? ChromePalette.inkSecondary : ChromePalette.inkTertiary)
             .fixedSize()
         }
         .buttonStyle(.plain)

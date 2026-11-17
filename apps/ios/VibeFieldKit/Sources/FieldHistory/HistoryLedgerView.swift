@@ -190,7 +190,7 @@ public struct HistoryLedgerView: View {
             ? "Estimated cost, all time · the wash is scaled to \(FieldHistoryModel.costliest(corpus.projects)?.name ?? "the costliest project")"
             : "Spend over 30 days · the wash is scaled to \(FieldHistoryModel.projects(corpus.projects, rankedBy: .spend).first?.name ?? "the biggest project")")
           .font(ChromeType.sans(11.5))
-          .foregroundStyle(ChromePalette.inkFaint)
+          .foregroundStyle(ChromePalette.inkTertiary)
           .padding(.horizontal, HistoryParts.sidePadding)
           .padding(.top, 14)
           .padding(.bottom, projects.cut ? 6 : 24)
@@ -198,7 +198,7 @@ public struct HistoryLedgerView: View {
           // Item 352 — the listing went on past the phone's bound: said, never a silent cut
           Text(FieldHistoryModel.cutLedger(corpus.projects.count, desktop: projects.sourceName))
             .font(ChromeType.sans(11.5))
-            .foregroundStyle(ChromePalette.inkFaint)
+            .foregroundStyle(ChromePalette.inkTertiary)
             .padding(.horizontal, HistoryParts.sidePadding)
             .padding(.bottom, 24)
         }
@@ -360,7 +360,7 @@ public struct HistoryLedgerView: View {
             Text(project.path)
               .font(ChromeType.mono(11.5))
               .italic(project.missing)
-              .foregroundStyle(ChromePalette.inkFaint)
+              .foregroundStyle(ChromePalette.inkTertiary)
               .lineLimit(1)
               .truncationMode(.middle)
               .padding(.top, 2)
@@ -378,7 +378,7 @@ public struct HistoryLedgerView: View {
               // honestly labelled, until `project.figures` answers
               Text("sessions")
                 .font(ChromeType.sans(11))
-                .foregroundStyle(ChromePalette.inkFaint)
+                .foregroundStyle(ChromePalette.inkTertiary)
             }
             // Item 353 — the row's "how much" is the desktop's: lifetime estimated cost, once its figures are read
             if let lifetime = project.lifetime {

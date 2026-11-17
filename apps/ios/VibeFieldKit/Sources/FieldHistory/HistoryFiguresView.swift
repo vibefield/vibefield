@@ -60,7 +60,7 @@ struct StatChip: View {
         if let unit, !unit.isEmpty {
           Text(unit)
             .font(ChromeType.sans(12))
-            .foregroundStyle(ChromePalette.inkFaint)
+            .foregroundStyle(ChromePalette.inkTertiary)
         }
       }
       .lineLimit(1)
@@ -69,7 +69,7 @@ struct StatChip: View {
         .font(ChromeType.sans(9, .medium))
         .textCase(.uppercase)
         .tracking(ChromeType.tracking(0.04, of: 9))
-        .foregroundStyle(ChromePalette.inkFaint)
+        .foregroundStyle(ChromePalette.inkTertiary)
         .lineLimit(1)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -103,7 +103,7 @@ struct HistoryFiguresPanel: View {
         Text(note)
           .font(ChromeType.sans(11.5))
           .monospacedDigit()
-          .foregroundStyle(ChromePalette.inkFaint)
+          .foregroundStyle(ChromePalette.inkTertiary)
           .padding(.horizontal, 4)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -135,7 +135,7 @@ struct HistoryFiguresPanel: View {
       if portfolio.tiles.isEmpty {
         Text(portfolio.isWhole || !awake ? "No priced project usage" : "Reading the projects' figures")
           .font(ChromeType.sans(11.5))
-          .foregroundStyle(ChromePalette.inkFaint)
+          .foregroundStyle(ChromePalette.inkTertiary)
           .frame(maxWidth: .infinity)
           .frame(height: Self.plotHeight)
       } else {
@@ -147,7 +147,7 @@ struct HistoryFiguresPanel: View {
       if let unpriced = FieldHistoryModel.unpricedNote(portfolio.unpriced) {
         Text(unpriced)
           .font(ChromeType.sans(11))
-          .foregroundStyle(ChromePalette.inkFaint)
+          .foregroundStyle(ChromePalette.inkTertiary)
           .frame(maxWidth: .infinity)
       }
     }
@@ -222,7 +222,7 @@ struct SpendText: View {
         .frame(minWidth: 34, alignment: .trailing)
       Text(word.unit)
         .font(ChromeType.sans(11))
-        .foregroundStyle(ChromePalette.inkFaint)
+        .foregroundStyle(ChromePalette.inkTertiary)
         .frame(minWidth: 9, alignment: .leading)
     }
     .lineLimit(1)

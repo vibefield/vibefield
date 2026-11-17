@@ -40,7 +40,7 @@ struct DeviceMarks: View {
           .opacity(desktop?.asleep == true ? HistoryParts.asleepMark : 1)
       }
     }
-    .foregroundStyle(ChromePalette.inkFaint)
+    .foregroundStyle(ChromePalette.inkT4)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(
       ids.map { id in desktops.first { $0.id == id }.map { $0.asleep ? "\($0.name), asleep" : $0.name } ?? "a desktop" }
@@ -144,7 +144,7 @@ struct AgentMarks: View {
       if more > 0 {
         Text("+\(more)")
           .font(ChromeType.sans(10, .medium))
-          .foregroundStyle(ChromePalette.inkFaint)
+          .foregroundStyle(ChromePalette.inkTertiary)
       }
     }
   }
@@ -185,7 +185,7 @@ struct FigureText: View {
         .frame(minWidth: 34, alignment: .trailing)
       Text(unit)
         .font(ChromeType.sans(11))
-        .foregroundStyle(ChromePalette.inkFaint)
+        .foregroundStyle(ChromePalette.inkTertiary)
         .frame(width: 9, alignment: .leading)
     }
   }
@@ -201,7 +201,7 @@ struct LastWord: View {
     Text(word)
       .font(ChromeType.sans(12, isLive && awake ? .medium : .regular))
       .monospacedDigit()
-      .foregroundStyle(isLive && awake ? ChromePalette.green : ChromePalette.inkFaint)
+      .foregroundStyle(isLive && awake ? ChromePalette.green : ChromePalette.inkTertiary)
       .lineLimit(1)
   }
 }
@@ -262,7 +262,7 @@ struct LivePulse: View {
 
   var body: some View {
     Circle()
-      .fill(awake ? ChromePalette.green : ChromePalette.inkFaint)
+      .fill(awake ? ChromePalette.green : ChromePalette.inkT4)
       .frame(width: 6, height: 6)
       .opacity(breathing ? 0.35 : 1)
       .onAppear {
@@ -276,7 +276,7 @@ struct LivePulse: View {
 /// A rule with words in it: `SESSION START · SAT 12 SEP`, `LIVE · NEW SINCE 11:45`.
 struct RuleLine: View {
   let text: String
-  var tone: Color = ChromePalette.inkFaint
+  var tone: Color = ChromePalette.inkTertiary
   var rule: Color = ChromePalette.ruleStrong
 
   var body: some View {

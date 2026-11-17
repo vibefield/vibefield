@@ -37,9 +37,9 @@ public enum ChromePalette {
   /// Tertiary: a fan key's subtitle, a row's summary. `.pk small` / `.srow .sum`.
   public static let inkTertiary = dynamic(
     light: 0x000000, lightAlpha: 0.50, dark: 0xFFFFFF, darkAlpha: 0.55)
-  /// t4: the words of a pill that is off (DESIGN.md §7 "Off", item 241; §2.4's t4, black at 50% by day and white at
-  /// 38% by night), 3.2–3.9:1 on the quiet fill. Never a word that must be read. Not `inkFaint` below, the History
-  /// ramp's last step at 30% and 32% (item 242).
+  /// t4, the kit's one (DESIGN.md §2.4's t4, black at 50% by day and white at 38% by night): the words of a pill that
+  /// is off (§7 "Off", item 241), 3.2–3.9:1 on the quiet fill, and the kit's marks. Never a word that must be read,
+  /// which takes `inkTertiary` (§7, "The phone kit's faint words, sorted", item 242).
   public static let inkT4 = dynamic(
     light: 0x000000, lightAlpha: 0.50, dark: 0xFFFFFF, darkAlpha: 0.38)
   /// The placeholder, and the one step below tertiary. `.field .ph`.
@@ -232,9 +232,6 @@ public enum ChromePalette {
   public static let paper = dynamic(light: 0xFFFFFF, dark: 0x1C1C1E)
   /// `--vf-fill`: the prompt panel, a stat card, a live row, a pressed row.
   public static let fill = dynamic(light: 0xF2F2F7, dark: 0xFFFFFF, darkAlpha: 0.08)
-  /// `--vf-text-faint` — the ramp's last step (30% light, 32% dark): a path,
-  /// a time, a group head.
-  public static let inkFaint = dynamic(light: 0x1C1C1E, lightAlpha: 0.30, dark: 0xFFFFFF, darkAlpha: 0.32)
   /// `--vf-hairline-strong`: the rules between turns.
   public static let ruleStrong = dynamic(light: 0x000000, lightAlpha: 0.10, dark: 0xFFFFFF, darkAlpha: 0.14)
   /// IOS-12f — `--vf-spark-night`: the New spark sheet's sky, night in both themes, one value (§8 "The phone's Chat").

@@ -45,7 +45,7 @@ struct HistoryMessageView: View {
         Text(verbatim: message.at)
           .font(ChromeType.sans(12.5))
           .monospacedDigit()
-          .foregroundStyle(ChromePalette.inkFaint)
+          .foregroundStyle(ChromePalette.inkTertiary)
         Spacer(minLength: 8)
         Button("Done") { dismiss() }
           .font(ChromeType.sans(15, .medium))
@@ -62,7 +62,7 @@ struct HistoryMessageView: View {
         LazyVStack(alignment: .leading, spacing: HistoryWords.reply.blockGap) {
           switch reading {
           case .blank:
-            words("(no words)").foregroundStyle(ChromePalette.inkFaint)
+            words("(no words)").foregroundStyle(ChromePalette.inkTertiary)
           case .typed(let typed):
             words(typed).foregroundStyle(ChromePalette.ink)
           case .blocks(let blocks):
@@ -106,7 +106,7 @@ struct HistoryCutNote: View {
         .monospacedDigit()
         .lineLimit(1)
     }
-    .foregroundStyle(ChromePalette.inkFaint)
+    .foregroundStyle(ChromePalette.inkTertiary)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(words)
   }

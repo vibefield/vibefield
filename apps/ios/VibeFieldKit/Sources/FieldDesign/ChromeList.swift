@@ -35,7 +35,7 @@ extension View {
       .font(font)
       .textCase(.uppercase)
       .tracking(ChromeType.tracking(0.08, of: 11))
-      .foregroundStyle(ChromePalette.inkFaint)
+      .foregroundStyle(ChromePalette.inkTertiary)
   }
 
   /// A page of settings: the inset-grouped list on paper, with the system's

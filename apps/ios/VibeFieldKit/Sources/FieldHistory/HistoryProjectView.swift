@@ -163,7 +163,7 @@ struct HistoryProjectView: View {
         }
       }
       .font(ChromeType.sans(9.5))
-      .foregroundStyle(ChromePalette.inkFaint)
+      .foregroundStyle(ChromePalette.inkTertiary)
       if let facts = project.stats?.facts {
         Text(facts)
           .font(ChromeType.sans(12.5))
@@ -172,7 +172,7 @@ struct HistoryProjectView: View {
       } else if awake {
         Text("Reading the figures…")
           .font(ChromeType.sans(12.5))
-          .foregroundStyle(ChromePalette.inkFaint)
+          .foregroundStyle(ChromePalette.inkTertiary)
       }
     }
     .padding(14)
@@ -275,10 +275,10 @@ struct HistoryProjectView: View {
               Text(group.words)
                 .font(ChromeType.sans(12.5))
                 .monospacedDigit()
-                .foregroundStyle(group.working > 0 && device?.asleep != true ? ChromePalette.green : ChromePalette.inkFaint)
+                .foregroundStyle(group.working > 0 && device?.asleep != true ? ChromePalette.green : ChromePalette.inkTertiary)
               Image(systemName: "chevron.right")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(ChromePalette.inkFaint)
+                .foregroundStyle(ChromePalette.inkT4)
                 .rotationEffect(.degrees(open ? 90 : 0))
             }
             .padding(.horizontal, 12)
@@ -293,13 +293,13 @@ struct HistoryProjectView: View {
               HStack(spacing: 8) {
                 Text(place.branch.map { "\(place.name) · \($0)" } ?? place.name)
                   .font(ChromeType.sans(13.5))
-                  .foregroundStyle(place.reason == nil ? ChromePalette.inkSecondary : ChromePalette.inkFaint)
+                  .foregroundStyle(place.reason == nil ? ChromePalette.inkSecondary : ChromePalette.inkTertiary)
                   .lineLimit(1)
                 Spacer(minLength: 8)
                 Text(place.reason ?? place.last)
                   .font(ChromeType.sans(12))
                   .monospacedDigit()
-                  .foregroundStyle(ChromePalette.inkFaint)
+                  .foregroundStyle(ChromePalette.inkTertiary)
               }
               .padding(.leading, 41)
               .padding(.trailing, 12)
@@ -334,7 +334,7 @@ struct HistoryProjectView: View {
     } label: {
       HStack(alignment: .top, spacing: 12) {
         Circle()
-          .fill(session.tone == .orange ? ChromePalette.attention : ChromePalette.inkFaint)
+          .fill(session.tone == .orange ? ChromePalette.attention : ChromePalette.inkT4)
           .frame(width: 8, height: 8)
           .padding(.top, 6)
         VStack(alignment: .leading, spacing: 3) {
@@ -350,7 +350,7 @@ struct HistoryProjectView: View {
           Text(session.meta)
             .font(ChromeType.sans(12.5))
             .monospacedDigit()
-            .foregroundStyle(ChromePalette.inkFaint)
+            .foregroundStyle(ChromePalette.inkTertiary)
             .lineLimit(1)
             .minimumScaleFactor(0.85)
             .opacity(awake ? 1 : 0.55)
@@ -383,7 +383,7 @@ struct HistoryProjectView: View {
             case .why(let reason):
               Text(reason)
                 .font(ChromeType.sans(12))
-                .foregroundStyle(ChromePalette.inkFaint)
+                .foregroundStyle(ChromePalette.inkTertiary)
             case nil:
               LastWord(word: session.last, isLive: session.isLive, awake: awake)
             default:

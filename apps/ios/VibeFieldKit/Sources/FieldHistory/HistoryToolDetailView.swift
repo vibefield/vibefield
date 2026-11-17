@@ -45,7 +45,7 @@ struct HistoryToolDetailView: View, Equatable {
         .lineLimit(1)
         .truncationMode(.head)
     }
-    .foregroundStyle(ChromePalette.inkFaint)
+    .foregroundStyle(ChromePalette.inkTertiary)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("Working folder: \(folder)")
   }
@@ -89,7 +89,7 @@ struct HistoryToolDetailView: View, Equatable {
     HStack(alignment: .firstTextBaseline, spacing: 0) {
       Text(verbatim: line.number.map(String.init) ?? "")
         .monospacedDigit()
-        .foregroundStyle(ChromePalette.inkFaint)
+        .foregroundStyle(ChromePalette.inkTertiary)
         .lineLimit(1)
         .frame(width: 30, alignment: .trailing)
         .padding(.trailing, 6)
@@ -149,10 +149,10 @@ struct HistoryToolDetailView: View, Equatable {
     return HStack(spacing: 6) {
       Image(systemName: "doc.text")
         .font(.system(size: 10, weight: .medium))
-        .foregroundStyle(ChromePalette.inkFaint)
+        .foregroundStyle(ChromePalette.inkT4)
       HStack(spacing: 0) {
         if let dir {
-          Text(verbatim: dir).foregroundStyle(ChromePalette.inkFaint)
+          Text(verbatim: dir).foregroundStyle(ChromePalette.inkTertiary)
         }
         Text(verbatim: name).foregroundStyle(ChromePalette.inkSecondary)
       }
@@ -163,7 +163,7 @@ struct HistoryToolDetailView: View, Equatable {
         Text(verbatim: range)
           .font(ChromeType.sans(11.5))
           .monospacedDigit()
-          .foregroundStyle(ChromePalette.inkFaint)
+          .foregroundStyle(ChromePalette.inkTertiary)
           .fixedSize()
       }
     }
@@ -178,6 +178,6 @@ struct HistoryToolDetailView: View, Equatable {
     Text(verbatim: words)
       .font(ChromeType.sans(11.5))
       .monospacedDigit()
-      .foregroundStyle(ChromePalette.inkFaint)
+      .foregroundStyle(ChromePalette.inkTertiary)
   }
 }

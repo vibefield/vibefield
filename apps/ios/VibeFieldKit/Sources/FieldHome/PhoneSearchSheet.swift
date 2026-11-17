@@ -546,7 +546,7 @@ private struct LiveSearchRow: View {
     switch state {
     case .blocked: ChromePalette.attention
     case .working: ChromePalette.green
-    case .idle, .shell: ChromePalette.inkFaint
+    case .idle, .shell: ChromePalette.inkT4
     }
   }
 }

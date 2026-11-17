@@ -510,7 +510,7 @@ struct HistorySessionView: View {
           Text(pill.leadWords(now: context.date))
         }
         if let after = pill.after {
-          Text(after).foregroundStyle(ChromePalette.inkFaint)
+          Text(after).foregroundStyle(ChromePalette.inkTertiary)
         }
       }
       .font(ChromeType.sans(11.5, .medium))
@@ -557,13 +557,13 @@ struct HistorySessionView: View {
         .foregroundStyle(ChromePalette.inkTertiary)
       Text(turn.model)
         .font(ChromeType.sans(10.5))
-        .foregroundStyle(ChromePalette.inkFaint)
+        .foregroundStyle(ChromePalette.inkTertiary)
         .lineLimit(1)
       Spacer(minLength: 4)
       Text(turn.facts)
         .font(ChromeType.sans(10.5))
         .monospacedDigit()
-        .foregroundStyle(turn.isLive && awake ? ChromePalette.green : ChromePalette.inkFaint)
+        .foregroundStyle(turn.isLive && awake ? ChromePalette.green : ChromePalette.inkTertiary)
     }
     .frame(height: 22)
     .padding(.top, 16)
@@ -626,7 +626,7 @@ struct HistorySessionView: View {
         if !result.isEmpty {
           Text(verbatim: result)
             .font(ChromeType.sans(11.5))
-            .foregroundStyle(failed ? ChromePalette.red : ChromePalette.inkFaint)
+            .foregroundStyle(failed ? ChromePalette.red : ChromePalette.inkTertiary)
         }
       }
       Spacer(minLength: 0)
@@ -699,11 +699,11 @@ struct HistorySessionView: View {
                 .fontWeight(.medium)
             }
             Text(duration)
-              .foregroundStyle(isLive && awake ? ChromePalette.green : ChromePalette.inkFaint)
+              .foregroundStyle(isLive && awake ? ChromePalette.green : ChromePalette.inkTertiary)
             Image(systemName: "chevron.right")
               .font(.system(size: 10, weight: .semibold))
               .rotationEffect(.degrees(open ? 90 : 0))
-              .foregroundStyle(ChromePalette.inkFaint)
+              .foregroundStyle(ChromePalette.inkT4)
           }
           .font(ChromeType.sans(12))
           .monospacedDigit()
@@ -762,7 +762,7 @@ struct HistorySessionView: View {
           if line.kind == .compaction {
             Text("Agent-generated context for continuing this session.")
               .font(ChromeType.sans(11.5))
-              .foregroundStyle(ChromePalette.inkFaint)
+              .foregroundStyle(ChromePalette.inkTertiary)
           }
           HistoryWordsView(text: words, blank: "", measure: HistoryWords.member)
             .equatable()
@@ -780,7 +780,7 @@ struct HistorySessionView: View {
     HStack(spacing: 8) {
       Image(systemName: memberSymbol(line))
         .font(.system(size: 11, weight: .medium))
-        .foregroundStyle(line.state == .failed ? ChromePalette.red : ChromePalette.inkFaint)
+        .foregroundStyle(line.state == .failed ? ChromePalette.red : ChromePalette.inkT4)
         .frame(width: 14)
       Text(line.verb)
         .font(ChromeType.sans(12.5, .medium))
@@ -797,7 +797,7 @@ struct HistorySessionView: View {
         Image(systemName: "chevron.right")
           .font(.system(size: 9, weight: .semibold))
           .rotationEffect(.degrees(open ? 90 : 0))
-          .foregroundStyle(ChromePalette.inkFaint)
+          .foregroundStyle(ChromePalette.inkT4)
       }
     }
     .frame(minHeight: 26)
@@ -859,7 +859,7 @@ struct HistorySessionView: View {
         }
       }
       .font(.system(size: 11, weight: .medium))
-      .foregroundStyle(ChromePalette.inkFaint)
+      .foregroundStyle(ChromePalette.inkT4)
       .frame(width: 14)
       Text(line.verb)
         .font(ChromeType.sans(12.5, .medium))
@@ -867,7 +867,7 @@ struct HistorySessionView: View {
         .frame(width: 58, alignment: .leading)
       HStack(spacing: 0) {
         if let dir = line.dir {
-          Text(dir).foregroundStyle(ChromePalette.inkFaint)
+          Text(dir).foregroundStyle(ChromePalette.inkTertiary)
         }
         Text(line.object).foregroundStyle(ChromePalette.inkSecondary)
       }
@@ -878,13 +878,13 @@ struct HistorySessionView: View {
       Text(line.result)
         .font(ChromeType.sans(11.5))
         .monospacedDigit()
-        .foregroundStyle(line.state == .running && awake ? ChromePalette.green : line.state == .failed ? ChromePalette.red : ChromePalette.inkFaint)
+        .foregroundStyle(line.state == .running && awake ? ChromePalette.green : line.state == .failed ? ChromePalette.red : ChromePalette.inkTertiary)
         .lineLimit(1)
       if let open {
         Image(systemName: "chevron.right")
           .font(.system(size: 9, weight: .semibold))
           .rotationEffect(.degrees(open ? 90 : 0))
-          .foregroundStyle(ChromePalette.inkFaint)
+          .foregroundStyle(ChromePalette.inkT4)
       }
     }
     .frame(minHeight: 26)
@@ -1003,7 +1003,7 @@ private struct HistoryWordsView: View, Equatable {
   var body: some View {
     switch HistoryWords.reading(text) {
     case .blank:
-      plain(blank).foregroundStyle(ChromePalette.inkFaint)
+      plain(blank).foregroundStyle(ChromePalette.inkTertiary)
     case .typed(let typed):
       plain(typed).foregroundStyle(ChromePalette.ink)
     case .blocks(let blocks):

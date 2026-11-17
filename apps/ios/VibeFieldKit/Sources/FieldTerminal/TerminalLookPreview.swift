@@ -218,7 +218,7 @@ private struct FieldDepiction: View {
         ChromePalette.paper
         ForEach(Array(Self.bodies.enumerated()), id: \.offset) { _, spot in
           Circle()
-            .fill(ChromePalette.inkFaint)
+            .fill(ChromePalette.inkT4)
             .frame(width: spot.diameter, height: spot.diameter)
             .position(x: geometry.size.width * spot.x, y: geometry.size.height * spot.y)
         }

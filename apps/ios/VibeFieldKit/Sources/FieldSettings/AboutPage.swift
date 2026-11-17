@@ -66,7 +66,7 @@ struct AboutPage: View {
         }
       }
       .font(ChromeListType.detail)
-      .foregroundStyle(ChromePalette.inkFaint)
+      .foregroundStyle(ChromePalette.inkTertiary)
       .frame(maxWidth: .infinity)
       .multilineTextAlignment(.center)
       .listRowBackground(Color.clear)

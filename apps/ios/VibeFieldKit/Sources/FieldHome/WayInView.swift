@@ -345,7 +345,7 @@ struct WayInView: View {
       .frame(maxHeight: .infinity)
       .background {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
-          .strokeBorder(ChromePalette.inkFaint, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+          .strokeBorder(ChromePalette.inkT4, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
       }
       .accessibilityElement(children: .combine)
     case .tailscale(let words):
@@ -436,7 +436,7 @@ struct StepsCapsule: View {
         HStack(spacing: 7) {
           ForEach(0..<4, id: \.self) { dot in
             Circle()
-              .fill(dot == page ? ChromePalette.ink : ChromePalette.inkFaint)
+              .fill(dot == page ? ChromePalette.ink : ChromePalette.inkT4)
               .frame(width: 7, height: 7)
           }
         }
