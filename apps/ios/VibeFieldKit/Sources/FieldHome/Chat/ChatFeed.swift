@@ -116,7 +116,7 @@ final class ChatFeed {
   /// @ names its agents by the catalog's labels, with or without an item that waits.
   @ObservationIgnored private var labelsWanted = false
   @ObservationIgnored private var offScreenSaid = 0
-  #if DEBUG
+  #if DEBUG || VF_TESTFLIGHT
     /// The stills' sessions for @ under `-vf-mock`, which has no board.
     @ObservationIgnored var stagedAtBoard: [ChatAtRun]?
   #endif
@@ -148,7 +148,7 @@ final class ChatFeed {
   /// IOS-12f's M-f2 — what @ reads of the board for a spark (Q3): the agent runs of its own desktop, once the board is
   /// live. The phone's board is the row list or nothing, so it has no failed reading.
   func atBoard(of spark: SparkSummary) -> ChatAtReading<[ChatAtRun]> {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if let stagedAtBoard { return .read(stagedAtBoard) }
     #endif
     guard boardLive else { return .reading }

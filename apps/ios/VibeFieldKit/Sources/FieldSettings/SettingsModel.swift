@@ -265,18 +265,13 @@ public enum SettingsModel {
   // MARK: - This phone
 
   /// RB-1 — This phone's rows, in order (DESIGN.md §8 "The phone's Settings", amended 2026-11-12): Appearance,
-  /// Terminal, then Notifications in every build but the review build (`SettingsBuild`), then Lock where a lock is
-  /// held (WI-3). The root draws This phone from it.
+  /// Terminal, then Notifications and Developer in every build but the review build (`SettingsBuild`), then Lock
+  /// where a lock is held (WI-3). The root draws This phone from it.
   public static func thisPhoneRows(build: SettingsBuild, hasLock: Bool) -> [SettingsRoute] {
     var rows: [SettingsRoute] = [.appearance, .terminal]
     #if DEBUG || VF_TESTFLIGHT
       if build.drawsNotifications { rows.append(.notifications) }
-      // RB-2 — until the gate widens (PLAN-2c §1C, after item 367's pick), Developer is drawn in development builds
-      // alone: a TestFlight build has no made-up field or state to stand in yet (VF-PM 00:10Z, 11-13, (a)). The
-      // widening removes this gate.
-      #if DEBUG
-        if build.drawsDeveloper { rows.append(.developer) }
-      #endif
+      if build.drawsDeveloper { rows.append(.developer) }
     #endif
     if hasLock { rows.append(.lock) }
     return rows

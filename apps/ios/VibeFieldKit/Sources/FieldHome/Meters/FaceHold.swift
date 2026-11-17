@@ -341,7 +341,7 @@ enum FaceHold {
       + [Action(name: "Show every profile", act: .showAll)]
   }
 
-  #if DEBUG
+  #if DEBUG || VF_TESTFLIGHT
     static let mockArgument = "-vf-mock-hold"
 
     /// `-vf-mock-hold[=hub|<profile>|cancel]`: the face held for a photograph, reaching the hub (bare too), a

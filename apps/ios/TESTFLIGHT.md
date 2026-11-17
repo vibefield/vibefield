@@ -158,8 +158,8 @@ There are two kinds of archive, chosen at archive time (RB-1, 2026-11-12):
 
 | Kind | Built with | What it draws |
 | --- | --- | --- |
-| `review` | no extra condition | no TestFlight-only row (Notifications): the build App Review sees |
-| `testflight` | `-DVF_TESTFLIGHT` in `OTHER_SWIFT_FLAGS` | TestFlight's own rows, read in `SettingsBuild.swift` alone |
+| `review` | no extra condition | no TestFlight-only row (Notifications, Developer): the build App Review sees |
+| `testflight` | `-DVF_TESTFLIGHT` in `OTHER_SWIFT_FLAGS` | TestFlight's own rows and the Developer page's demos |
 
 The kind is written beside the archive as `VibeField-N.kind`. After each archive the
 helper counts the TestFlight-only pages in its app: a review archive must carry none,

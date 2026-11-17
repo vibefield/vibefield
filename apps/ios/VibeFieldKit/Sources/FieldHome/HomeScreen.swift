@@ -88,7 +88,7 @@ public struct HomeScreen: View {
   /// that await and the assignment below is exactly where a second caller
   /// used to build a second link.
   @State private var linkOpening = false
-  #if DEBUG
+  #if DEBUG || VF_TESTFLIGHT
     /// Whether the scripted fleet is driving the field. Since IOS-4b the mock
     /// is NOT the live path: it runs only behind the lab and the demo
     /// arguments, because a preview that cannot be told from a daemon is the
@@ -99,6 +99,8 @@ public struct HomeScreen: View {
     /// question: the scripted fleet and the demo peer own the field's ROWS
     /// and install no link at all.
     @State private var fixtureLink = false
+  #endif
+  #if DEBUG
     /// WI-1's OWED witness — `-vf-demo-field-slice-signed-out`: false while the welcome stands over the slice, true
     /// once the phone has signed in by itself, nil when the launch does not stamp it. Read here, before the first
     /// frame, so the way in stands from the first frame and the tabs never mount before the sign-in.
@@ -174,7 +176,7 @@ public struct HomeScreen: View {
   /// door answers (over the link's doors), the cache's reader for one that
   /// does not; the mock and the demo arguments mount a fixed one instead.
   @State private var historyDesktops = HistoryDesktops()
-  #if DEBUG
+  #if DEBUG || VF_TESTFLIGHT
     /// `-vf-demo-history` (the mock's corpus, no tailnet) and
     /// `-vf-demo-history-door` / `-offline` (the REAL reads over an in-process
     /// door answering the contracts' goldens; the latter then replays them
@@ -197,7 +199,7 @@ public struct HomeScreen: View {
   @State private var lensTokenWidth: CGFloat = 0
   /// The screen's full height, read beside `homeInset`: where the search field's top stands (`searchFieldTop`).
   @State private var screenHeight: CGFloat = 874
-  #if DEBUG
+  #if DEBUG || VF_TESTFLIGHT
     /// `-vf-mock`: Live now's rows and the home's profiles (`MockAccount.searchRows`, `searchProfiles`), read once.
     @State private var mockSearchRows: [RemoteFieldRow] = []
     @State private var mockProfiles: [AgentProfileSet] = []
@@ -221,12 +223,12 @@ public struct HomeScreen: View {
   /// into its folded circle) and, apart, the tab pill's slide.
   @Namespace private var barGlass
   @Namespace private var tabPill
-  #if DEBUG
+  #if DEBUG || VF_TESTFLIGHT
     /// `-vf-mock`: the whole phone over invented facts and no tailnet (IOS-9d).
     @State private var mock: MockAccount?
   #endif
   // --- end IOS-9a/9e -------------------------------------------------------
-  #if DEBUG
+  #if DEBUG || VF_TESTFLIGHT
     /// `-vf-demo-account=<state>`: the corner's inputs, stamped (IOS-8e), and
     /// the Field page's door with them (TS-7).
     @State private var demoAccount: AccountFixtures.Demo?
@@ -276,6 +278,8 @@ public struct HomeScreen: View {
   // by `RetiredWriteKeyCleanup.runOnce()` in `onAppear`, which never reads one.
   #if DEBUG
     @State private var demoRemoteActive = false
+  #endif
+  #if DEBUG || VF_TESTFLIGHT
     /// `-vf-swarm-lab[=section[:page]]`: the design lab over the field (IOS-6c, D-i15).
     @State private var swarmLabOpen = false
     @State private var swarmLabFocus: LabFocus?
@@ -340,7 +344,7 @@ public struct HomeScreen: View {
   /// the link alone (the v2 check's M1).
   private var projected: [FieldBubble] {
     let sessions = remoteField.snapshot.rows.map(fieldBubble(from:))
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if mockActive { return liveAgents.compactMap(fieldBubble(from:)) + sessions }
     #endif
     return (link?.bubbles ?? []) + sessions
@@ -349,7 +353,7 @@ public struct HomeScreen: View {
   /// The scripted fleet's rows, while it owns the field. Outside the mock this
   /// is empty: the live field is `FieldLink.bubbles`.
   private var liveAgents: [AgentSnapshot] {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       // The lab and the demo arguments own the field while they are up: what
       // they show is our own pixels, and a daemon arriving mid-screenshot
       // would be the fixture lying about what it is.
@@ -893,7 +897,7 @@ public struct HomeScreen: View {
   /// The way in's screen standing, or nil for signed in: How it works over the welcome, the way in's own end,
   /// else the page the decision stands.
   private var wayInStep: FieldHomeModel.WayInStep? {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if let stamped = demoAccount?.wayIn { return stamped }
     #endif
     if let wayInEnding { return wayInEnding }
@@ -994,7 +998,7 @@ public struct HomeScreen: View {
   /// instead of at its backoff's end, a mesh that is up asks every desktop that did not answer again
   /// (`FieldLink.lookAgain`), and the hold looks for another patience (the clock's key counts the attempt).
   private func tryAgain() {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       // Defensive only: on RB-2 a demo stands whenever the mock or a stamped corner does, and the dispatch holds
       // Try again before it reaches here (`WayInDispatch.reachesOutside`). The mock's Sign in would bring studio
       // back; a stamped corner is a photograph.
@@ -1024,7 +1028,7 @@ public struct HomeScreen: View {
       // SE-2 — the lens keys on the home's profiles: read again whenever the home's answer moves
       .onChange(of: homeProfiles, initial: true) { _, sets in
         lens.adopt(sets)
-        #if DEBUG
+        #if DEBUG || VF_TESTFLIGHT
           // the mock's lens door stands once its profiles do: the first call can carry the profiles read before the
           // mock set its own, and adopting those lets a lens chosen at launch go (M-phone's pre-light stills)
           if let id = mockLens, sets.contains(where: { $0.id == id }) {
@@ -1190,7 +1194,7 @@ public struct HomeScreen: View {
 
   /// ES-5c (E2) — the home's runs for the night's starters: held until a live home answers for the board.
   private var chatNightRuns: ChatStarters.Read<ChatStarters.Run> {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       // the stills: under `-vf-mock` no link answers for the board, so the night reads an empty one, a new install's
       if mock != nil { return .rows([]) }
     #endif
@@ -1221,7 +1225,7 @@ public struct HomeScreen: View {
         syncChatDoor()
         chat.board((link?.rows ?? []).map(\.board), live: live == true)
       }
-      #if DEBUG
+      #if DEBUG || VF_TESTFLIGHT
         .onChange(of: mockActive) { syncChatDoor() }
       #endif
       .onChange(of: link?.rows) { _, rows in chat.board((rows ?? []).map(\.board), live: link?.fieldIsLive == true) }
@@ -1324,7 +1328,7 @@ public struct HomeScreen: View {
   /// Chat's door: the home's own client while the home answers; none while
   /// it does not, and the list stands as the home last said (PC-L4).
   private func syncChatDoor() {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if mockActive {
         chat.attach(ChatFixtureDoor.shared, home: ChatFixtureDoor.home)
         chat.stagedAtBoard = ChatFixtureDoor.stagedAtBoard()
@@ -1358,7 +1362,7 @@ public struct HomeScreen: View {
         syncMetersDoor()
         if phase != .active { cancelHold() }
       }
-      #if DEBUG
+      #if DEBUG || VF_TESTFLIGHT
         .onChange(of: mockActive) { syncMetersDoor() }
         .onChange(of: mockDesktopIsUp) { syncMetersDoor() }
       #endif
@@ -1368,7 +1372,7 @@ public struct HomeScreen: View {
   /// phone runs no poll, and a phone in the background watches nothing; none otherwise, and the meters keep the
   /// home's last word. Under `-vf-mock` it is the fixture door, read at the fixtures' own stamp.
   private func syncMetersDoor() {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if let mock {
         meters.clock = { MetersFixtureDoor.now }
         meters.attach(scenePhase == .active ? mock.metersDoor : nil, home: mock.home)
@@ -1390,7 +1394,7 @@ public struct HomeScreen: View {
 
   /// Nothing of the mock's account reaches the disk: its ledger is a value, as its sign-out is.
   private static var appsCuesStore: AppsCuesStore? {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       // RB-2 — Demo field, by its argument or by the Developer page
       if thisLaunch.demoField { return nil }
     #endif
@@ -1398,7 +1402,7 @@ public struct HomeScreen: View {
   }
 
   private var appsAccount: String? {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if let mock { return mock.login }
     #endif
     return accountLogin
@@ -1588,7 +1592,7 @@ public struct HomeScreen: View {
 
   /// `-vf-apps-open` — the stills' door to the shelf, under `-vf-mock` alone (VF-PM's Q4).
   private func openShelfForStills() {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if mock != nil, ProcessInfo.processInfo.arguments.contains(AppsFixtureDoor.openArgument) {
         appsDoor.openShelf(showing: apps.reading.apps.map(\.foldKey))
       }
@@ -1596,7 +1600,7 @@ public struct HomeScreen: View {
   }
 
   private static var appsPreviewsDirectory: URL? {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       // RB-2 — Demo field, by its argument or by the Developer page
       if thisLaunch.demoField { return nil }
     #endif
@@ -1606,7 +1610,7 @@ public struct HomeScreen: View {
 
   /// The home's name in the meters' words (§9: "Read a minute ago, from studio").
   private var metersHomeName: String {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if let mock { return mock.homeName }
     #endif
     return linkDesktops.first { $0.deviceId == linkHome }?.name ?? "your home"
@@ -1624,7 +1628,7 @@ public struct HomeScreen: View {
   /// A desktop's name for Chat's words: the field's, else the demo's; the
   /// home's when nothing names one.
   private func chatName(_ device: String?) -> String {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if mockActive, let name = ChatFixtureDoor.names[device ?? ChatFixtureDoor.home] { return name }
     #endif
     let id = device ?? linkHome
@@ -1659,7 +1663,7 @@ public struct HomeScreen: View {
   /// before the feed answers. *(Until SE-P5b, 2026-11-06, this was the bloom's read of the home, a draft included,
   /// adopted beside the meters'.)*
   private var homeProfiles: [AgentProfileSet] {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if mock != nil { return mockProfiles }
     #endif
     return meters.reading.profiles
@@ -1668,7 +1672,7 @@ public struct HomeScreen: View {
   /// Live now's world: the window's drawn rows (the mock's witness under `-vf-mock`), the desktops, the lens's
   /// profiles and the live ask's lines.
   private var searchLive: PhoneSearch.Live {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if mock != nil {
         return PhoneSearchWorld.live(
           rows: mockSearchRows, desks: PhoneSearchWorld.desks(rows: mockSearchRows), lens: lens,
@@ -1706,7 +1710,7 @@ public struct HomeScreen: View {
   /// UM-5b — the field while it is live, for the page's and the hold's sessions; nil while it is not, and they keep
   /// to the plans' reads. The mock's rows are its world, so they are live.
   private var metersLive: PhoneSearch.Live? {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if mock != nil { return searchLive }
     #endif
     return link?.fieldIsLive == true ? searchLive : nil
@@ -1715,7 +1719,7 @@ public struct HomeScreen: View {
   /// SE-2i — Live now's world as it stands: the home's live board, or why none answers yet. The mock's rows are its
   /// world, so they are live.
   private var searchFeed: PhoneSearch.Feed {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if mock != nil { return .live }
     #endif
     return PhoneSearchWorld.feed(
@@ -2379,7 +2383,7 @@ public struct HomeScreen: View {
   /// replay the cache as `asleep`. The mock and the demo arguments own the
   /// readers while they stand.
   private func syncHistoryDesktops() {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if mock != nil || demoHistory { return }
     #endif
     guard let link else {
@@ -2438,7 +2442,7 @@ public struct HomeScreen: View {
   /// The link's home, named so the modifier chain stays cheap to type-check.
   private var linkHome: String? { link?.home }
 
-  #if DEBUG
+  #if DEBUG || VF_TESTFLIGHT
     /// The mock's standing as History reads it (`-vf-mock`: Disconnect puts
     /// studio to sleep, Connect wakes it).
     private var mockDesktopIsUp: Bool? { mock?.desktopIsUp }
@@ -3652,9 +3656,9 @@ public struct HomeScreen: View {
       // WI-W2e A — Try again, under the card's "Couldn’t connect.": Settings stays open, so the card's Connecting… is
       // read where it was asked for
       tryAgain: { tryConnectingAgain() })
-    #if DEBUG
-      // RB-2 — the Developer page's Swarm lab: Settings leaves, then the lab opens over the home (`afterSettings`). It
-      // is DEBUG's until the gate widens (PLAN-2c §1C, after item 367's pick), as the lab's door is (`swarmLabBinding`).
+    #if DEBUG || VF_TESTFLIGHT
+      // RB-2 — the Developer page's Swarm lab: Settings leaves, then the lab opens over the home (`afterSettings`), in
+      // TestFlight and development builds, as the lab's door is (`swarmLabBinding`).
       var labs = actions
       labs.openSwarmLab = {
         swarmLabAfterSettings = true
@@ -3672,7 +3676,7 @@ public struct HomeScreen: View {
 
   /// RB-2 — what the Developer page asked for once Settings has left: two pages are never presented at once.
   private func afterSettings() {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if swarmLabAfterSettings {
         swarmLabAfterSettings = false
         swarmLabFocus = nil
@@ -3713,7 +3717,7 @@ public struct HomeScreen: View {
   /// Settings' account, decided in `FieldHomeModel.settingsAccount` from the
   /// corner's own inputs, where it is tested without a simulator.
   private var settingsAccount: SettingsAccount {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if let demoAccount { return demoAccount.settings }
       if let mock { return mock.settings }
     #endif
@@ -3783,7 +3787,7 @@ public struct HomeScreen: View {
   /// account's memory (IOS-8c); a signed-in corner is the plain circle only
   /// until a door has said who you are.
   private var accountFace: FieldHomeModel.AccountFace {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if let demoAccount { return demoAccount.face }
       if let mock { return mock.face }
     #endif
@@ -3811,11 +3815,16 @@ public struct HomeScreen: View {
   /// `FieldHomeModel.doorPage`, where it is tested without a simulator.
   private var doorPage: FieldHomeModel.DoorPage? {
     var fixtureOwnsTheField = false
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if let demoAccount { return demoAccount.door }
       if let mock { return mock.door }
+    #endif
+    #if DEBUG
       if let signedIn = fieldSliceSignedIn { return FieldSliceSignIn.door(signedIn: signedIn) }
-      fixtureOwnsTheField = Self.fixtureArguments || mockActive || fixtureLink || demoRemoteActive
+      fixtureOwnsTheField = demoRemoteActive
+    #endif
+    #if DEBUG || VF_TESTFLIGHT
+      fixtureOwnsTheField = fixtureOwnsTheField || Self.fixtureArguments || mockActive || fixtureLink
     #endif
     _ = identityEpoch
     // the desktops this account has, by the phone's memory: how many, and the one the gate's page can name
@@ -3877,12 +3886,9 @@ public struct HomeScreen: View {
   // RB-2 — the demo this open stands in, read ONCE for the process (a static is read once): a scripted run's launch
   // argument first, the Developer page's choices second, a chosen account state let go as it is read (D5 A), so a
   // return from the background reads nothing. The build submitted for App Review has no demo and compiles no reader.
-  #if DEBUG
+  #if DEBUG || VF_TESTFLIGHT
     static let thisLaunch = LaunchFixtures.read(arguments: ProcessInfo.processInfo.arguments, defaults: .standard)
   #else
-    // Until the gate widens (PLAN-2c §1C, after item 367's pick), a TestFlight build stands in no demo: the mock and
-    // the stamped states are DEBUG's, so a demo read there would hold your own field's acts over nothing made up
-    // (VF-PM 00:10Z, 11-13, (a)). The widening makes this line's gate `DEBUG || VF_TESTFLIGHT`.
     static let thisLaunch = LaunchFixtures.off
   #endif
   #if DEBUG || VF_TESTFLIGHT
@@ -3891,7 +3897,7 @@ public struct HomeScreen: View {
     static let thisLaunchScripted = LaunchFixtures.fromArguments(ProcessInfo.processInfo.arguments) != nil
   #endif
 
-  #if DEBUG
+  #if DEBUG || VF_TESTFLIGHT
     /// A launch argument that stages this phone's own pixels owns the field
     /// from the first frame: a door page over its photograph would be the
     /// simulator's mesh (`.off`, nothing remembered) speaking over the
@@ -3908,7 +3914,7 @@ public struct HomeScreen: View {
   /// usual place, or the scripted fleet's spawn under the mock.
   private var fieldHold: (SIMD2<Double>) -> String? {
     { _ in
-      #if DEBUG
+      #if DEBUG || VF_TESTFLIGHT
         if mockActive { return feed.spawn() }
       #endif
       beginCreate(fieldContext())
@@ -3951,7 +3957,7 @@ public struct HomeScreen: View {
   /// The account the way in's question names: under a demo, the fixtures' made-up login (item 367: a demo names
   /// nobody real), as the face's seed does; else the account this phone would sign out of.
   private var wayInSignOutLogin: String? {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if demoAccount != nil || mock != nil { return AccountFixtures.login }
     #endif
     return accountLogin
@@ -3960,7 +3966,7 @@ public struct HomeScreen: View {
   /// The tilt's seed: the login, so the face sits at one angle on every
   /// launch of this account.
   private var accountSeed: String {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if demoAccount != nil || mock != nil { return AccountFixtures.login }
     #endif
     return mesh.loginName ?? mesh.rememberedLogin ?? ""
@@ -3973,7 +3979,7 @@ public struct HomeScreen: View {
   private func signOut() {
     // RB-2 (Q1) — under a demo the page chose, a Sign out signs nothing out, the mock's included
     if accountActsHeld { return }
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       // The mock forgets nothing on disk: its account is a value, and the
       // sign-out is the standing moving.
       if let mock {
@@ -4009,7 +4015,7 @@ public struct HomeScreen: View {
   private func performSignIn() {
     // RB-2 (Q1) — under a demo the page chose, a Sign in starts nothing, the mock's included
     if accountActsHeld { return }
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if let mock {
         mock.signIn()
         return
@@ -4054,7 +4060,7 @@ public struct HomeScreen: View {
   /// The real mesh keeps itself up, unless the mock or a stamped demo owns the
   /// corner: no node may start under invented facts.
   private var meshKeepsItselfUp: Bool {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       if mockActive || demoAccount != nil { return false }
     #endif
     return true
@@ -4471,7 +4477,7 @@ public struct HomeScreen: View {
   /// The lab's door exists only in DEBUG; in Release the binding is constant
   /// false and the cover never presents.
   private var swarmLabBinding: Binding<Bool> {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       return $swarmLabOpen
     #else
       return .constant(false)
@@ -4479,7 +4485,7 @@ public struct HomeScreen: View {
   }
 
   private var swarmLabFocusValue: LabFocus? {
-    #if DEBUG
+    #if DEBUG || VF_TESTFLIGHT
       return swarmLabFocus
     #else
       return nil

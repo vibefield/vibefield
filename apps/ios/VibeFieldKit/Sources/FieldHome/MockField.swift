@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG || VF_TESTFLIGHT
   import FieldDesign
   import FieldMesh
   import FieldProduct

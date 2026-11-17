@@ -18,8 +18,9 @@ Usage: bash apps/ios/scripts/testflight.sh archive BUILD_NUMBER review|testfligh
                         no TestFlight-only row (Notifications, Developer), as
                         James ruled (the Settings page, 2026-11-12; RB-2).
   archive 8 testflight  The same code with VF_TESTFLIGHT set, so TestFlight's
-                        own rows are compiled in: its app must carry every one of
-                        them. Each archive has its own number.
+                        own rows and the Developer page's made-up field and
+                        states are compiled in: its app must carry every marker.
+                        Each archive has its own number.
   upload 7 store        Upload a review archive, or one made before kinds, for
                         the App Store and external TestFlight
                         (ExportOptions-AppStore.plist). It refuses a testflight
@@ -143,17 +144,18 @@ kind_file="$output/VibeField-$build_number.kind"
 mkdir -p "$output"
 
 # What a review archive must not carry, and a TestFlight archive must carry every one of
-# (RB-1's Notifications, RB-2's Developer): each TestFlight-only page's type name, which
-# Swift's reflection metadata keeps in a Release build, and one literal of its words,
-# longer than Swift's 15-byte inline strings so it is a C string. Until RB-2's gate widens
-# (its §1C), a TestFlight app carries Developer's two while This phone does not draw the
-# row: the page is compiled in and unreachable. The count says the code is in the app,
-# never that the page can be reached.
+# (RB-1's Notifications, RB-2's Developer, and the made-up field and account states the
+# Developer page stands in, item 367's widening): each one's type name, which Swift's
+# reflection metadata keeps in a Release build, and one literal of its own, longer than
+# Swift's 15-byte inline strings so it is a C string. The count says the code is in the
+# app, never that a page can be reached.
 markers=(
   "NotificationsPage"
   "A title and nothing more: what your agents said stays on your desktop."
   "DeveloperPage"
   "For testing. TestFlight and development builds show this page; the build in the App Store does not."
+  "MockAccount"
+  "01J8F2ZQ9K3M4N5P6Q7R8S9T0V"
 )
 # Prints "<total> <absent> (<marker> <count>; ...)" for the archive's app, every file in it
 # read: absent is how many markers it carries none of.
