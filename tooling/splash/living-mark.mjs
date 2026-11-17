@@ -4,7 +4,8 @@
 // GENERATED from the vendored splash (packages/field-app/src/boot/splash/vibefield-splash.js): the mark's shader
 // constants (BAKED.mark.wgsl), its moving uniforms (BAKED.mark.dyn) and the clock its runtime runs (`phases`), so a
 // new bake reaches the kit only by running this, never by a hand edit.
-//   node tooling/splash/living-mark.mjs           writes packages/design-kit/src/living-mark/
+//   node tooling/splash/living-mark.mjs           writes packages/design-kit/src/living-mark/, and the phone's
+//                                                 numbers beside them (the iOS kit's LivingMarkData.swift)
 //   node tooling/splash/living-mark.mjs --check   fails if a committed file differs
 //
 // How the shader's mark becomes SVG:
@@ -339,6 +340,8 @@ const restAt = (k) => {
   const i = Math.floor(f);
   return ((restS[i] + (restS[Math.min(i + 1, N)] - restS[i]) * (f - i)) / LOOP) * P;
 };
+// a stroke's dash, in thousandths of the edge: its layer's length less its round caps (each reaches width/2)
+const dashOf = (width, layer) => Math.max(2 * layer.half * P - (width / LOOP) * P, 0.5);
 
 // ── the SVG ───────────────────────────────────────────────────────────────────────────────────
 const r2 = (v) => +v.toFixed(2);
@@ -381,7 +384,7 @@ function svgFor(ground, resting = false) {
   ];
   for (const [kind, width, layers] of KINDS)
     layers.forEach((layer, j) => {
-      const len = Math.max(2 * layer.half * P - (width / LOOP) * P, 0.5); // a round cap reaches width/2 each end
+      const len = dashOf(width, layer);
       css.push(
         `.vf-lm-${kind}${j}{stroke-width:${r2(width * GRID)};stroke-opacity:${r4(layer.o)};stroke-dasharray:${r2(len)} ${r2(P - len)};stroke-dashoffset:calc(var(--o) + ${r2(len / 2)})}`,
       );
@@ -405,6 +408,176 @@ ${css.join("\n")}
 `;
 }
 
+// ── the phone's copy (item 516): the same numbers, as the kit's Swift reads them ─────────────────
+// The kit draws the mark itself (LivingMark, FieldDesign) from LivingMarkData.swift, which this writes beside the
+// SVG, so a new bake reaches the phone the same way and `--check` holds the two together. Every number is the one
+// the SVG writes, rounded as it rounds it; a path is the SVG's own text, on one line when it fits ONE_LINE, else
+// broken before an `s` or an `L` to keep each line within WIDTH.
+const SWIFT = join(
+  ROOT,
+  "apps/ios/VibeFieldKit/Sources/FieldDesign/LivingMark/LivingMarkData.swift",
+);
+const ONE_LINE = 120;
+const WIDTH = 100;
+const EASES = frames.slice(0, STEPS).map((f) => f.ease.map(r4).join(", "));
+frames.slice(0, -1).forEach((f, i) => {
+  assume(f.ease.map(r4).join(", ") === EASES[i % STEPS], "the twist's eases repeating each step");
+});
+const swiftPath = (d) => {
+  const one = `    "${d}",`;
+  if (one.length <= ONE_LINE) return [one];
+  const lines = [];
+  let line = "";
+  for (const part of d.split(/(?=[sL])/)) {
+    if (line !== "" && 4 + line.length + part.length > WIDTH) {
+      lines.push(`    ${line}`);
+      line = "";
+    }
+    line += part;
+  }
+  lines.push(`    ${line}`);
+  return ['    """', ...lines, '    """,'];
+};
+const swiftPaths = (name, doc, paths) =>
+  [
+    ...doc.map((d) => `  /// ${d}`),
+    `  static let ${name}: [String] = [`,
+    ...paths.flatMap((d, i) => [`    // ${pct(frames[i].tau)}`, ...swiftPath(d)]),
+    "  ]",
+  ].join("\n");
+
+function swiftFor() {
+  const [x, y, w, h] = BOX.map(q);
+  const keys = frames.map((f) => r4((f.tau / PERIOD) * 100)).join(", ");
+  const twist = frames.map((f) => r2((-P * f.x) / 4)).join(", ");
+  const eases = EASES.map((e) => {
+    const [x1, y1, x2, y2] = e.split(", ");
+    return `    Ease(x1: ${x1}, y1: ${y1}, x2: ${x2}, y2: ${y2}),`;
+  }).join("\n");
+  const strokes = KINDS.flatMap(([, width, layers]) =>
+    layers.map((layer) => {
+      const len = dashOf(width, layer);
+      const o = r4(layer.o);
+      return `    Stroke(width: ${r2(width * GRID)}, opacity: ${o}, dash: ${r2(len)}, lead: ${r2(len / 2)}),`;
+    }),
+  ).join("\n");
+  const lights = COLOURS.map(
+    (colour, k) => `    Light(color: "${colour}", offset: ${r2(P - restAt(k))}),`,
+  ).join("\n");
+  const lead = -PH.livRestLights * TRAVEL;
+  const travel = `vf-lm-travel ${s(TRAVEL)} linear ${s(lead)}`;
+  const loop = swiftPaths(
+    "loop",
+    ["The edge at each key (`vf-lm-loop`): the ink's outline, and the line the lights run on."],
+    LOOPS,
+  );
+  const cover = swiftPaths(
+    "cover",
+    ["The crossing's cover at each key (`vf-lm-cover`): the near strand, drawn over the ink."],
+    COVERS,
+  );
+  const hole = swiftPaths(
+    "hole",
+    [
+      "The lights' clip at each key (`vf-lm-hole`): a box about the mark and, cut out of it even-odd, the near strand",
+      "at the crossing, which the lights pass under.",
+    ],
+    HOLES,
+  );
+  return `import CoreGraphics
+
+// THE LIVING MARK'S NUMBERS (item 417b, 2026-11-14; written by the generator since item 516, 2026-11-17). Every
+// figure and every path in this file is the generated SVG's:
+//   packages/design-kit/src/living-mark/living-mark-light.svg
+//   (living-mark-dark.svg differs from it in its ink alone, and the two \`-rest\` stills are its first key)
+//   GENERATED by tooling/splash/living-mark.mjs from the vendored splash's look "${BAKED.look.name}" (${BAKED.look.hash})
+// Do not edit: run the generator, which writes this file beside the SVG from the same numbers, and whose \`--check\`
+// holds the two together. A path's text is the SVG's own, character for character; only line breaks are added,
+// before an \`s\` or an \`L\`, and the reader takes them as space. LivingMarkTests holds this file's own numbers.
+// DESIGN.md §8 "The living mark, drawn as SVG".
+
+/// The living mark as the generated SVG states it.
+enum LivingMarkData {
+  /// The generator's stamp: the look the SVG was generated from, and its hash.
+  static let look = "${BAKED.look.name}"
+  static let stamp = "${BAKED.look.hash}"
+
+  /// The SVG's \`viewBox\`, and the size it is drawn at by itself: a hundred of its units to the point.
+  static let viewBox = CGRect(x: ${x}, y: ${y}, width: ${w}, height: ${h})
+  static let size = CGSize(width: ${BOX[2]}, height: ${BOX[3]})
+  /// The ink's hairline, in points at every size (\`stroke-width:${RIM}px\` with \`non-scaling-stroke\`).
+  static let hairline: CGFloat = ${RIM}
+
+  /// The twist's period in seconds: the edge, the cover, the hole and the lights' ride share it (\`${s(PERIOD)}\`).
+  static let twistPeriod: Double = ${r4(PERIOD)}
+  /// The lights' lap in seconds, and how far into it they begin (\`${travel}\`).
+  static let travelPeriod: Double = ${r4(TRAVEL)}
+  static let travelLead: Double = ${-r4(lead)}
+  /// The edge's length as the lights count it (\`pathLength="${P}"\`).
+  static let edgeLength: Double = ${P}
+
+  /// The keys' places in the twist's period, in percent. The four keyframe rules share them.
+  static let keys: [Double] = [
+    ${keys},
+  ]
+
+  /// A timing function: \`cubic-bezier(x1, y1, x2, y2)\`.
+  struct Ease: Equatable, Sendable {
+    let x1: Double
+    let y1: Double
+    let x2: Double
+    let y2: Double
+  }
+
+  /// The timing functions of the stretches between keys, in turn from the first key. The three repeat.
+  static let eases: [Ease] = [
+${eases}
+  ]
+
+  /// What the twist adds to every light's \`stroke-dashoffset\` at each key (\`vf-lm-twist\`).
+  static let twist: [Double] = [
+    ${twist},
+  ]
+
+  /// One stroke of a light, as its class states it.
+  struct Stroke: Equatable, Sendable {
+    /// \`stroke-width\`, in the SVG's units.
+    let width: CGFloat
+    /// \`stroke-opacity\`.
+    let opacity: Double
+    /// How much of the edge's 1000 the stroke covers: \`stroke-dasharray\`'s first number. Its second is the rest of
+    /// the lap, so there is one dash on the edge.
+    let dash: Double
+    /// What the class adds to its light's place in \`stroke-dashoffset\`: half its dash, as the SVG rounds it, so
+    /// the dash stands about the light's place.
+    let lead: Double
+  }
+
+  /// A light's five strokes, in the order they are drawn: the glows \`g0\`, \`g1\`, \`g2\`, then the cores \`k0\`, \`k1\`.
+  static let strokes: [Stroke] = [
+${strokes}
+  ]
+
+  /// A light: its colour as the SVG writes it, and its place on the edge (\`--o\`).
+  struct Light: Equatable, Sendable {
+    let color: String
+    let offset: Double
+  }
+
+  /// The three lights, in the order they are drawn. They are the same on both grounds.
+  static let lights: [Light] = [
+${lights}
+  ]
+
+${loop}
+
+${cover}
+
+${hole}
+}
+`;
+}
+
 // ── write, or check ───────────────────────────────────────────────────────────────────────────
 let stale = 0;
 for (const [ground, resting] of Object.keys(GROUNDS).flatMap((g) => [
@@ -420,6 +593,15 @@ for (const [ground, resting] of Object.keys(GROUNDS).flatMap((g) => [
     mkdirSync(OUT, { recursive: true });
     writeFileSync(path, svg);
     console.log(`wrote ${path} (${Buffer.byteLength(svg)} bytes)`);
+  }
+}
+const swift = swiftFor();
+if (!(existsSync(SWIFT) && readFileSync(SWIFT, "utf8") === swift)) {
+  stale++;
+  if (check) console.error(`stale: ${SWIFT}`);
+  else {
+    writeFileSync(SWIFT, swift);
+    console.log(`wrote ${SWIFT} (${Buffer.byteLength(swift)} bytes)`);
   }
 }
 if (check) {
