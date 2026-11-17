@@ -251,8 +251,11 @@ pub const FAILURE_LOGGING_REQUIRED: &str = "logging_required";
 /// requires client logs refused an opted-out node (truffle-core 0.7.24
 /// provider.rs, the status processor's `LoggingRequired` arm: "this tailnet
 /// requires client logging (network flow logs are on), …"). Read because the
-/// typed event can be lost with a failed build; a typed refusal is a candidate
-/// truffle petition.
+/// typed event could be lost with a failed build. *2026-11-17:* since truffle
+/// 0.7.28 (#263, T12's non-breaking half) a failed build hands the hook what
+/// the start reported before it returns its error, so the typed event comes
+/// first; these words stay as a second reading. The typed refusal (T12's other
+/// half) is still a candidate petition.
 const LOGGING_REQUIRED_REFUSAL: &str = "requires client logging";
 
 /// TS-1 (P7) — a Tailscale auth key on its way to a capture's builder. It is
@@ -1237,12 +1240,15 @@ fn spawn_bring_up(
             Err(e) => {
                 // TS-D16 — a tailnet that requires client logs refuses an
                 // opted-out node at its start. truffle raises `LoggingRequired`
-                // just before the start fails, but aborts the status forwarder
-                // with the failed build (truffle-core 0.7.24 node.rs, the
-                // `status_task.abort()` after `provider.start()`), so the hook
-                // can miss it: the refusal is read from the start error as
-                // well. Anything else the hook named during this bring-up
-                // stays named: the facts were reset when it began.
+                // just before the start fails. Through 0.7.27 it aborted the
+                // status forwarder with the failed build (truffle-core 0.7.24
+                // node.rs, the `status_task.abort()` after `provider.start()`),
+                // so the hook could miss it. *2026-11-17:* since 0.7.28 (#263)
+                // the build drains the forwarder before it returns, so the hook
+                // has the event before this error; the refusal is still read
+                // from the start error as a second reading. Anything else the
+                // hook named during this bring-up stays named: the facts were
+                // reset when it began.
                 let refused_for_logs = e.to_string().contains(LOGGING_REQUIRED_REFUSAL);
                 {
                     let mut facts = shared.facts.lock().unwrap();

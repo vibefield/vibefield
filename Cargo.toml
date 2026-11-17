@@ -220,7 +220,19 @@ opt-level = 3
 # field-native builds truffle's two proxy structs (ProxyConfig, ProxyRoute) literally, so 0.7.27's new `headers`
 # field is supplied empty at each of the fifteen sites: no response header rides a serve or a route until DR-1 (B)
 # asks for one.
-truffle-core = "=0.7.27"
+#
+# 0.7.27 -> 0.7.28 (2026-11-17): the cargo plane and the five npm sidecars move TOGETHER again; sidecar
+# protocol 13 stands (`sidecarProtocolVersion = 13` at both tags). `truffle-v0.7.28` = 2fa7d6516. What it
+# carries: #261 (every sidecar built with Go 1.27.4, GO-2026-6859: the net/http HTTP/1 server crash that the
+# sidecar's egress proxy and loopback listener could meet) and #263 (T12's non-breaking half: a failed build
+# hands its status hook what the start reported, `LoggingRequired` and `SidecarExited` among them, before it
+# returns its error). truffle-core's own dependencies did not move (its Cargo.toml changed only its version),
+# so Cargo.lock moves by truffle-core alone. The kit's Swift plane STAYS 0.7.26, which ghosttea 0.15.0 declares
+# exact; 0.7.28 changes nothing under apple/, so the phone's TailscaleKit keeps go1.27.3 until truffle rebuilds
+# it. TB's LP-5 rider (the Go licence record, apps/desktop/packaging/notices/go-modules.json) is NOT run in this
+# event: since item 379 it reads both Go binaries, and this host holds no truffle checkout at Package.resolved's
+# revision nor TailscaleKit's artifact. The record is owed before the 0.9 tag; until then it names sidecar 0.7.27.
+truffle-core = "=0.7.28"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
 # 0.6.0 → 0.7.0 for the G7/G8/G9 petition landings (shutdown drain, silent serve,

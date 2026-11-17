@@ -163,18 +163,20 @@ const PIN_EXPECTATIONS = [
   // 0.7.24 → 0.7.27 on 2026-11-07 (the Drive's EL8-TRUFFLE): the crate and the five npm sidecars (protocols 12
   // and 13) move together; the Swift row stays 0.7.26, which ghosttea 0.14.0 declares exact.
   // 2026-11-12 (the EL8 to ghosttea 0.15.0): the Swift row stays 0.7.26, which ghosttea 0.15.0 declares exact too.
+  // 0.7.27 → 0.7.28 on 2026-11-17: the crate and the five npm sidecars (protocol 13 stands; Go 1.27.4,
+  // #261; T12's non-breaking half, #263) move together; the Swift row stays 0.7.26, which ghosttea 0.15.0 declares.
   // The Swift row stands aside while the dev overlay links truffle and renders it nil (RD-3).
   // Cargo.toml's closure note carries every event and every place they touched.
   {
     file: "Cargo.toml",
-    re: /^truffle-core\s*=\s*"=0\.7\.27"$/m,
-    label: 'truffle-core = "=0.7.27"',
+    re: /^truffle-core\s*=\s*"=0\.7\.28"$/m,
+    label: 'truffle-core = "=0.7.28"',
   },
   {
     file: "apps/ios/VibeFieldKit/Package.swift",
     re: /^let truffleRelease: Version\? = "0\.7\.26"$/m,
     label:
-      'let truffleRelease: Version? = "0.7.26" (matches Ghosttea 0.15.0; desktop Rust/sidecar at 0.7.27)',
+      'let truffleRelease: Version? = "0.7.26" (matches Ghosttea 0.15.0; desktop Rust/sidecar at 0.7.28)',
     overlay: "truffle",
   },
   // The FINAL 0.16.0 on `latest` since PORTALS PT-6b (M24 LT1–LT5; LT5 — I52 — the reference

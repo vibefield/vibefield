@@ -529,8 +529,8 @@ minimumReleaseAgeExclude:
   # from Hostinfo.App) and 13 (#254: response headers per serve and per route), and #256's klauspost/compress
   # 1.20.2. The cargo plane moves with it; the kit's Swift plane stays 0.7.26 (ghosttea 0.14.0 declares it
   # exact). The 0.7.24 rows went after the one install.
-  - '@vibecook/truffle-sidecar-darwin-arm64@0.7.27'
-  - '@vibecook/truffle-sidecar-darwin-x64@0.7.27'
-  - '@vibecook/truffle-sidecar-linux-arm64@0.7.27'
-  - '@vibecook/truffle-sidecar-linux-x64@0.7.27'
-  - '@vibecook/truffle-sidecar-win32-x64@0.7.27'
+  # 0.7.27 -> 0.7.28 (2026-11-17): published 2026-11-12 08:06-08:09Z, OUTSIDE the release-age window on
+  # the day the pin moves (this file sets no minimumReleaseAge, so pnpm 11.13.1's default of 1440 minutes holds),
+  # so 0.7.28 needs no row, and the five 0.7.27 rows went with this event: 0.7.27 is past the window too. #261
+  # builds every sidecar with Go 1.27.4 (GO-2026-6859); protocol 13 stands. The kit's Swift plane stays 0.7.26
+  # (ghosttea 0.15.0 declares it exact).
