@@ -2170,6 +2170,27 @@
     opacity 120ms ease;
 }
 
+/* THE CRT LAYERS ARE THE MONITOR'S (TL-2, 2026-11-17; DESIGN.md §8 "The deck wears neither the
+   scanlines nor the vignette"). Where the sheet stands they end at its top edge, as the chrome
+   layer does, so a pane's text is drawn under nothing. They stay whole while the terminals are
+   away, and under the curtain, which is the stage's question and wears them. */
+.vf-godview[data-godview-deck-edge]:not([data-godview-deck="away"], [data-godview-curtain])
+:is(.vf-godview-scanlines, .vf-godview-vignette) {
+  clip-path: inset(
+    0 0 max(0px, calc(100% - var(--vf-godview-deck-rest) - var(--vf-godview-deck-shift, 0px))) 0
+  );
+}
+
+/* …and under a maximized deck, which is laid out at the window's top, they go with the stage. */
+.vf-godview[data-godview-deck="maximized"]:not([data-godview-curtain])
+:is(.vf-godview-scanlines, .vf-godview-vignette) {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 260ms ease,
+    visibility 0s linear 260ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .vf-godview,
   .vf-godview[data-godview-open="true"] {
