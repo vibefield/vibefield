@@ -139,7 +139,7 @@ export const FORWARDER_RUNTIME_UNAVAILABLE = "FORWARDER_RUNTIME_UNAVAILABLE";
 export const INTERPRETER_UNAVAILABLE = "INTERPRETER_UNAVAILABLE";
 
 /** DESIGN.md §9's reason ("When an agent's own install can't be found";
- * James's A on j-278-hermes-words, 2026-11-13 00:36:05Z). Bare, as the
+ * item 278, asked for 2026-11-13). Bare, as the
  * forwarder's: the door answers this clause ("then try again"), and a pane's
  * line puts its command in ("then run ‹command› again"). The agent is named
  * by its label, never by a literal here (R23b). */

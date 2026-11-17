@@ -9814,7 +9814,7 @@ In development an agent's forwarder runs on puppeteer's own script runner (a rea
 these lines can be reached.
 
 **When an agent's own install can't be found** (item 278, V1, at the EL8 to puppeteer 0.4.2, which carries 0.4.1's
-#80; the words James's, A on `j-278-hermes-words`, 2026-11-13 00:36:05Z). Since puppeteer 0.4.1 a Hermes launch
+#80; the words James's, 2026-11-13 00:36:05Z). Since puppeteer 0.4.1 a Hermes launch
 starts Hermes only through the Python its own install names. When VibeField can't find that install, nothing
 starts, and Hermes's adapter refuses the launch (`INTERPRETER_UNAVAILABLE`, a neutral code). Its sentence is about
 interpreters and wrappers, nothing a person can act on, so VibeField says its own, naming the agent by its label:

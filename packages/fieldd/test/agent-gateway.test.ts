@@ -559,7 +559,7 @@ describe("the refusal table — VibeField's sentences (AR-7b)", () => {
 
   // item 278 (V1): a managed launch the agent's own adapter refuses because this Mac's install of it names no
   // interpreter (`INTERPRETER_UNAVAILABLE`, puppeteer 0.4.1's Hermes gateway) is a missing install, VibeField's to say
-  // in James's words (A on j-278-hermes-words, 2026-11-13 00:36:05Z), naming the agent by its label. The adapter's
+  // in DESIGN.md §9's words (item 278, asked for 2026-11-13), naming the agent by its label. The adapter's
   // sentence is about interpreters and wrappers, and "Change that" is no step a person can take.
   it("says a launch refused for want of the agent's own install in DESIGN.md §9's pane line, naming the agent by its label", () => {
     const refused = {

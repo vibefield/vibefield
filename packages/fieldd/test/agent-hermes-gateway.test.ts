@@ -1,9 +1,9 @@
 // Item 278 (V1) — HERMES'S GATEWAY AS fieldd STARTS IT (puppeteer 0.4.1's #80, carried by the EL8 to 0.4.2). Since
 // 0.4.1 the gateway runs the Python the `hermes` wrapper names (found on the launch's PATH), else fieldd's own
 // HERMES_PYTHON; with neither it starts nothing and refuses INTERPRETER_UNAVAILABLE, which fieldd says in DESIGN.md
-// §9's words (James's A on j-278-hermes-words, 2026-11-13 00:36:05Z). On darwin and linux the gateway's script runs
+// §9's words (item 278, asked for 2026-11-13). On darwin and linux the gateway's script runs
 // as `-I -B -c <source>`: no file, bundled or not (so item 278's plan's bundled half proves nothing more and is
-// dropped, VF-PM 2026-11-13 00:54Z).
+// dropped on 2026-11-13).
 //
 // Nothing of the host is reached. fieldd's real built-in providers run, but Hermes is pinned to this row's wrapper
 // (PUPPETEER_HERMES_BIN), claude and codex to the runtime suite's stand-ins, and HERMES_PYTHON and HERMES_HOME are

@@ -465,7 +465,7 @@ const REFUSAL_WORDS: Record<SpawnThroughDeclineCode, (facts: RefusalFacts) => st
   // sentence IS the reason (one plain line; the kit's bound is already on it)
   // — except one refusal that is VibeField's to say (RV #1, item 203): a copy that lost its sealed forwarder, in
   // DESIGN.md §9's pane line. The adapter's sentence is about hosts and forwarders, nothing a person can change
-  // — and one more (item 278, V1): an agent whose own install can't be found, in James's words, naming it by its
+  // — and one more (item 278, V1): an agent whose own install can't be found, in §9's words, naming it by its
   // label; its adapter's sentence is about interpreters and wrappers
   "launch-refused": ({ command, label, reason, providerCode }) =>
     providerCode === FORWARDER_RUNTIME_UNAVAILABLE

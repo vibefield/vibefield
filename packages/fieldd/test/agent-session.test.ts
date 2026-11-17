@@ -2955,7 +2955,7 @@ describe("RV #1 — a launch refused for want of the file it observes agents wit
 
 // item 278 (V1) — puppeteer 0.4.1's Hermes adapter refuses a managed launch when this Mac's install of it names no
 // interpreter (`INTERPRETER_UNAVAILABLE`, neutral: no vendor's word). The person reads DESIGN.md §9's sentence
-// (James's A on j-278-hermes-words, 2026-11-13 00:36:05Z), naming the agent by its label, never the adapter's
+// (item 278, asked for 2026-11-13), naming the agent by its label, never the adapter's
 // sentence about interpreters and wrappers. The door answers it bare, as it does the forwarder's, for the app says
 // every door refusal after its own words. It is PRECONDITION_FAILED: a step the person takes, not a service down.
 describe("item 278 — a launch refused for want of the agent's own install (INTERPRETER_UNAVAILABLE)", () => {

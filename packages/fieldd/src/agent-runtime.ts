@@ -5379,7 +5379,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       const label = this.labelFor(provider, provider);
       // item 278 (V1) — a launch the agent's own adapter refused because this Mac's install of it names no
       // interpreter (puppeteer 0.4.1's Hermes gateway): a missing install, said in DESIGN.md §9's sentence
-      // (James's A, 2026-11-13), bare as the forwarder's, never puppeteer's sentence about interpreters
+      // (asked for 2026-11-13), bare as the forwarder's, never puppeteer's sentence about interpreters
       if (refusal === INTERPRETER_UNAVAILABLE) {
         return new RpcCallError("PRECONDITION_FAILED", agentInstallMissing(label), false, {
           ...details,
