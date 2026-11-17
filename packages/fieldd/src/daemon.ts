@@ -285,6 +285,7 @@ import {
   noteSocketAliasParent,
   splitPathList,
 } from "./boot-env";
+import type { StopStep } from "./daemon-stop";
 import { openSwarmReplay } from "./debug/swarm-replay";
 import { DeviceRemoval } from "./device-removal";
 import {
@@ -523,6 +524,9 @@ export interface FielddConfig {
   /** DS-5d test seam: the bound on the holders ledger's last write at stop
    * (`DOC_HOLDERS_STOP_MS` by default). */
   docHoldersStopMs?: number;
+  /** Item 486 test seam: the stop throws a test error at this step (`STOP_STEPS`). A code seam: no
+   * environment variable reaches it. */
+  stopFaultAt?: StopStep;
   /** Item 430 test seam: the bound on an unseen node's pass at the door
    * (`DEVICE_LIMITS.UNSEEN_NODE_PASS_MS` by default). */
   unseenNodePassMs?: number;
@@ -9799,6 +9803,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           supervisor.off("floor-of-record", onFloorOfRecord);
           supervisor.stop(); // stop watching FIRST: a teardown is not a wedge
           await updateManager.dispose();
+          if (config.stopFaultAt === "plugin-services")
+            throw new Error("stop fault at plugin-services");
           await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls
           runtimeDiagnostics.dispose();
           await processes.stopAll(); // §17.1 — children die no later than fieldd shutdown

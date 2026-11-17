@@ -65,6 +65,7 @@ async function main(): Promise<void> {
   // the same bundle runs as the files worker and the agent shim (below), which
   // must not carry it
   const { bootstrap } = await import("./daemon");
+  const { exitAfterStop } = await import("./daemon-stop");
   // UA-1 — a supervisor-spawned fieldd receives the resolved USER root
   // explicitly; a standalone/headless run receives the VibeField ROOT (or the
   // platform default, mirroring config.rs default_data_dir() exactly — UA-0)
@@ -241,7 +242,10 @@ async function main(): Promise<void> {
   );
 
   const shutdown = () => {
-    void daemon.stop().finally(() => process.exit(0));
+    void exitAfterStop(
+      () => daemon.stop(),
+      (code) => process.exit(code),
+    );
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
