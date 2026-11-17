@@ -4634,6 +4634,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   frame the board's category, but Discover draws no categories yet (its shelf waits, §8 "Plugins —
   the frame's second popup"), so until it does the pill opens Discover where the Me menu's
   **Plugins…** does.
+  *Built 2026-11-17 (item 433):* Discover draws its categories (§8 "Plugins — the frame's second popup",
+  Discover), so "until it does" above no longer holds: the press opens Discover on the board's chosen category,
+  or on All, at Discover's top, when the board's is All or one Discover's categories do not offer (no set it
+  shows hangs there). Every other door opens Discover on All.
 
   **After an install** (MK-D8, ruled A by James 2026-11-11; VF-PM's MK-E2 of the same day builds the
   plugin market page's fallback B): the popup's **Show them on the pegboard** folds the popup and
@@ -7269,6 +7273,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     counts; then **the grid of sets**, VibeField's first, and **the community tile** at its end. The featured set is
     the hot tile as it opens. What a set says and shows is the index's `listing`, which the registry's CI writes
     from the manifest it rebuilt (MK-D12; additive, as index v2 is passthrough).
+    *Built 2026-11-17 (item 433), narrowing "those the listed objects hang under" at its source, ruled at its lean
+    (James, vibe-field-b0, 2026-11-17T18:23:17Z: "go with leans, land ice soon"):* the row offers only the categories
+    the board here names, for the list says a category by its id alone and the row never shows an id. A listed set
+    whose objects hang only under a category the board doesn't name stands under All alone, and a desk offers no
+    category its board does not hang yet (no row at all on a board that names none a listed set hangs under). The list
+    carrying each category's name would lift it: a contract change of its own, not made here.
     - **A set is laid out on the mat** (MK-D3, MK-D4). Its picture is the registry's **spread** — the set laid out
       together, as it will sit on your desk — with its count on the picture ("3 objects"); a set of more than six
       shows its first six and "+N" ("+4"). A plugin with no object shows its icon on the mat. The registry renders
@@ -7291,6 +7301,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       *Corrected 2026-11-14 (MK-4d's third part, the names; VF-PM 06:56Z, C25):* the pegboard's names reach the
       popup with MK-4d for a page's What it adds and Installed's line alone (below, and §9). The shelf still draws
       no categories, and a tile none among its facts, until a part of its own draws them.
+      *Corrected 2026-11-17 (item 433):* that part is drawn and built (below, after **Search**): the shelf draws
+      the pegboard's categories. A tile still names none among its facts.
       - **The shelf** is the body's grid, padded 16: as many columns as fit 200 wide with 12 between them (four in
         the full 960, one at the narrowest), its tiles 12 apart. While no words are typed the featured set — the
         first of the list's `featured` the shelf shows — takes the first row whole. Then the sets VibeField
@@ -7317,6 +7329,37 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         shelf's order, with no featured row; a set found by one of its objects says which. When none is found
         the body says so, centred as Installed's state is; while community plugins are off and the list holds
         community sets, the results say their objects aren't searched (§9).
+    - *Drawn and built 2026-11-17 (item 433; MK-D2's categories, the part MK-4e left owed above), ‹draft› for
+      James's eye, its words in §9 "The plugins' words":*
+      - **The categories** stand in a row of their own across the shelf's grid, after the featured set and before
+        the other sets, 12 from each (the grid's gap): the kit's segmented control (R19) at its small size, at the
+        row's start, its segments at their own widths and never stretched, scrolling inside the row past its width,
+        the end where more lies fading over 24 as the pegboard's filters' far end does (theirs over 36, at their
+        regular size), so the row says there is more without a scrollbar.
+        **All** first, then each category one of the shown sets' objects hangs under, by the pegboard's own name for
+        it and in the board's order (the names MK-4d's third part reads from the board's door), with no counts and
+        never a category's id. The list says a category by its id alone, so one the board here does not name stays
+        out of the row, and a set that hangs only there stands under All alone. The board's names are every
+        category it hangs, so a category whose plugins are all turned off, which the board's own filters leave out,
+        is still offered here: Discover shows sets whether they are on or off. With no desk mounted (the catalog),
+        nothing is named and no row stands. While community plugins are off, their sets' categories are not
+        offered, as their sets are not shown.
+      - **A category chosen** keeps the sets one of whose objects hangs under it, in the shelf's order (VibeField's
+        by title, then the community's), with no featured row: the featured set stands only under All (MK-D2), so
+        the row then leads the body. Its first tile is the hot one, as the featured one is as Discover opens. A
+        category no shown set hangs under any more (the list read again, community plugins turned off) shows All.
+      - **Keys**: the row is one stop of Tab, its chosen segment, and ← → Home End choose, as the pegboard's
+        filters' do (R19); the field keeps ↑ ↓ ← → for the tiles. A press on a category gives the keyboard back to
+        the field, as a tile's press does, so ↵ and the field's keys go on working; pressing the chosen one again
+        leaves the hot tile where it is. The thumb slides 300ms on the island curve (the kit's); under reduced
+        motion it stands under the new choice at once.
+      - **Typed words** search every set, whatever the category: while the field holds words the row does not
+        stand, as the featured row does not, and the category chosen comes back with the row once they are gone.
+      - **Its door**: each opening starts on All, but **More in Plugins…** opens Discover on the board's chosen
+        category (§8 "The pegboard"), or on All when the board's is All or one the row does not offer.
+      - *Not here:* a tile's categories among its facts, a listed set's What it adds by its listing's categories,
+        and a catalog plate with the row (the Plugins plates mount no desk, so nothing is named there); each waits
+        for a part of its own.
     - **The community tile** (MK-D6; TD-17) stands at Discover's end, its switch off by default. Turned on the first
       time, it asks once, in place, with trust-and-distribution §7's statement word for word: "Community plugins run
       with the app's access. VibeField reviews the first listing and rebuilds every version from source; nothing
@@ -10986,6 +11029,7 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   no "…", as ruled (below). The pegboard's foot says **More in Plugins…**, which opens Discover on the board's
   category. *Built 2026-11-14 (MK-4d), in the ruled words: until Discover draws its categories it opens Discover
   where Plugins… does (§8 "The pegboard").*
+  *Built 2026-11-17 (item 433): Discover draws its categories, and the pill opens it on the board's.*
 - **The popup** (MK-D2, MK-D4). Its field says "Search plugins and objects…", with **Discover** · **Installed** ·
   **Updates** at its end, Updates carrying the Me row's count. A set's picture says how many objects it holds, "3
   objects"; a set of more than six shows its first six and "+‹n›" ("+4" for a set of ten). A set found by one of its
@@ -11003,6 +11047,11 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     "None of your plugins matches …" is its pattern.) While community plugins are off, the results end with
     their ruled line, "Community plugins are off, so their objects aren't searched." (below).
   - To assistive tech, Discover's grid is named "Discover", as Installed's list is named "Installed".
+  *Added 2026-11-17 (item 433, Discover's categories), ‹draft› for James's eye:*
+  - The categories say **All**, the pegboard's filters' own first word, then each ‹category› by the board's own
+    name for it, never its id and with no count.
+  - To assistive tech, the row is named "Categories" (MK's). It stands in Discover's grid as an item of its own,
+    after the featured set, so the grid holds one item more than the sets it shows while the row stands.
 - **Reading the list** (MK-D5). Opening the popup reads the plugin list, and the list it already holds shows at once,
   its time always said and never implied fresh. While a read runs the foot says **Reading the plugin list…**
   ‹draft› · "showing the list from 14:02" (with no list held yet, **Reading the plugin list…** alone

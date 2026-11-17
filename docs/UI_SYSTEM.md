@@ -264,7 +264,9 @@ The catalog currently mounts these shipping views directly:
   O3-D); and a narrow window, the popup clamped to it and a plugin's page in one column (MK-6), as
   `sections/PluginsSection.tsx` holds them — never a copy of its markup or
   CSS, and no catalog CSS owning a rule of the popup's. Owed: a plate of the statement at a
-  desktop's first community install (O3-D e), and Remove…'s question (O2-C's follow-up).
+  desktop's first community install (O3-D e), Remove…'s question (O2-C's follow-up), and
+  Discover's categories row (item 433, 2026-11-17): the catalog mounts no desk, so no board names
+  a category there, and a plate waits on the board's names handed in (C25/Q3's K9).
   *Corrected 2026-11-14 (MK's records): this said "not mounted yet — owed with the popup (MK-4
   builds it, MK-6 its plates)" and named Discover's empty plate "No plugin registry yet". MK-4a
   mounted it with its plates (DESIGN.md §8's own correction, MK-4a's Q7), and Discover's words are
