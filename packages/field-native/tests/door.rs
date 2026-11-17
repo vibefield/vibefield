@@ -513,6 +513,7 @@ async fn a_door_from_a_named_helper_says_its_root_and_a_cleared_root_says_nothin
     let doors = daemon.state.door.snapshot().doors;
     assert!(doors[1].root.is_none(), "{:?}", doors[1]);
     assert!(doors[1].pane.is_none(), "{:?}", doors[1]);
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -554,6 +555,7 @@ async fn a_pid_the_kernel_cannot_read_or_another_root_holds_is_refused_by_name()
         json!("pid-held"),
         "{held}"
     );
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
