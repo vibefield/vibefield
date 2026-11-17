@@ -289,6 +289,38 @@ describe("the host model — one per listing (PJ-4)", () => {
       [LAPTOP, "Laptop", "windows", false, true],
     ]);
   });
+
+  // DS — the restart announcement: a desktop mid-update is `restarting` on the roster with its node OFFLINE. History
+  // reads the roster's state (S6), so it is not asleep here; `online` decides only for a row that carries no state.
+  // Nothing a person reads says so: it is drawn exactly as it was while awake.
+  const laptopOf = (laptop: Record<string, unknown>, standing: "live" | "stale" | "asleep") =>
+    hostModelOf(
+      {
+        ...LISTING,
+        sources: [
+          { device: STUDIO, name: "studio", self: true, state: "live", rows: 6 },
+          { device: LAPTOP, name: "laptop", self: false, state: standing, rows: 2 },
+        ],
+      },
+      [ROSTER[0], { ...(ROSTER[1] as unknown as object), ...laptop }] as never[],
+      RUNS,
+      PROVIDERS,
+    ).devices.find((device) => device.id === LAPTOP);
+
+  it("a desktop the roster holds restarting with its node offline is not asleep; a row with no state falls back to online", () => {
+    expect(laptopOf({ state: "restarting", online: false }, "stale")?.asleep).toBe(false);
+    // the roster's verdict wins over a listing that said asleep
+    expect(laptopOf({ state: "restarting", online: false }, "asleep")?.asleep).toBe(false);
+    expect(laptopOf({ state: "asleep", online: false }, "stale")?.asleep).toBe(true);
+    // an older roster's row, no state: the tailnet's online decides
+    expect(laptopOf({ online: false }, "stale")?.asleep).toBe(true);
+    expect(laptopOf({ online: true }, "live")?.asleep).toBe(false);
+  });
+
+  it("a desktop mid-update is drawn exactly as it was while awake: no new word", () => {
+    const awake = laptopOf({ state: "awake", online: true }, "live");
+    expect(laptopOf({ state: "restarting", online: false }, "stale")).toEqual(awake);
+  });
 });
 
 describe("R1–R3: the ledger", () => {

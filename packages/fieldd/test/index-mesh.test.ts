@@ -1176,6 +1176,61 @@ describe("IndexMesh — search by asking (DS-D8)", () => {
       },
     });
   });
+
+  // DS — the restart announcement: a desktop mid-update is `restarting` on the roster with its node OFFLINE. It
+  // stands `stale`, as the mesh board reads it (S6), never `asleep`; nothing dials it, and a search or a figures ask
+  // answers for it at once, not asked: a dial needs a node, and asking would spend the fan-out budget on a node the
+  // tailnet does not list. Its source is the one a refused ask of a restarting desktop already reads.
+  it("DS: a desktop restarting with its node offline stands stale, is not dialled and is not asked", async () => {
+    const a = desktop("dev-a");
+    const b = desktop("dev-b");
+    b.sessions.upsert([session("dev-b", "b1", 800)]);
+    const figures = { projectId: "r-app", heatmap: [] };
+    const restarting = {
+      device: "dev-b",
+      state: "timeout",
+      tookMs: 0,
+      detail: "this desktop's daemon is restarting; ask again in a moment",
+    };
+    const behaviour = new Map<string, Behaviour>([
+      // were it asked, it would hang to the budget
+      ["dev-b", { search: "hang", answers: { "index.project": figures } }],
+    ]);
+    const { aggregator, people, wire } = mesh({
+      self: a,
+      desktops: [a, b],
+      peers: [{ deviceId: "dev-b", online: true, state: "awake" }],
+      behaviour,
+    });
+    const standing = () =>
+      aggregator.sessions({ scope: "mesh" }).sources?.find((source) => source.device === "dev-b")
+        ?.state;
+    await until(() => standing() === "live", 3_000, "B live");
+    const dialled = wire.subscribes.length;
+
+    // the update's stop: the announcement holds the row restarting, the node drops
+    people.set([{ deviceId: "dev-b", online: false, state: "restarting" }]);
+    expect(standing()).toBe("stale");
+    // its rows stay (DS-L8)
+    expect(aggregator.sessions({ scope: "mesh" }).rows.map((row) => row.sessionId)).toContain("b1");
+    const result = await aggregator.search({ q: "needle", scope: "mesh" });
+    expect(result.sources?.find((source) => source.device === "dev-b")).toEqual(restarting);
+    expect(await aggregator.ask("dev-b", "index.project", { projectId: "r-app" })).toEqual({
+      answered: false,
+      source: restarting,
+    });
+    // nothing re-dials a node the tailnet does not list, on any retry
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(wire.subscribes).toHaveLength(dialled);
+
+    // the announcement lapsed with the node still gone: asleep, the ordinary rules
+    people.set([{ deviceId: "dev-b", online: false, state: "asleep" }]);
+    expect(standing()).toBe("asleep");
+
+    // its node is back (the new fieldd's slice not landed yet): dialled again
+    people.set([{ deviceId: "dev-b", online: true, state: "restarting" }]);
+    await until(() => wire.subscribes.length > dialled, 3_000, "B dialled once its node is back");
+  });
 });
 
 describe("IndexMesh — the change pings", () => {
