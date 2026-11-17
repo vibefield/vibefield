@@ -14,7 +14,7 @@
 // and custody-boot.test.ts's under the real entry.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import {
   encodeMeshDataJsonFrame,
   isPipeEndpoint,
@@ -233,7 +233,9 @@ async function checkingBridge(secretHex: string): Promise<{
   const dataDir = shortTmpRoot("vf-cust-");
   cleanup.push(() => removeTempRoot(dataDir));
   const endpoint = nativeEndpoint(dataDir, SOCKETS.MESHDATA);
-  if (!isPipeEndpoint(endpoint)) mkdirSync(dirname(endpoint), { recursive: true });
+  if (!isPipeEndpoint(endpoint)) {
+    mkdirSync(join(dataDir, ...LAYOUT.NATIVE_RUN_DIR), { recursive: true });
+  }
   let refused = 0;
   let accepted = 0;
   const server: Server = createServer((sock) => {

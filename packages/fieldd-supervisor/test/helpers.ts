@@ -3,7 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONTRACTS_VERSION, type CustodyHandoff, type Scope } from "@vibefield/contracts";
+import {
+  CONTRACTS_VERSION,
+  type CustodyHandoff,
+  type Scope,
+  SOCKET_ALIAS_PARENT_ENV,
+} from "@vibefield/contracts";
 import { ProductApi } from "@vibefield/fieldd";
 import type { FielddSupervisor, FielddSupervisorEvent } from "../src/index";
 
@@ -76,6 +81,14 @@ export function sealedObservePath(root: string): string {
 
 export function readSealedObserved(root: string): SealedObserved {
   return JSON.parse(readFileSync(sealedObservePath(root), "utf8")) as SealedObserved;
+}
+
+/** Item 345: the run's own socket alias parent, when this process has one, for a child a row starts from an
+ * environment that is not this process's (fieldd's native-harness.ts `runAliasParentEnv`, which this package's tests
+ * do not import). The sealed stand-in binds TCP alone today; it carries the parent as every such spawn does. */
+function runAliasParentEnv(): Record<string, string> {
+  const parent = process.env[SOCKET_ALIAS_PARENT_ENV];
+  return parent === undefined ? {} : { [SOCKET_ALIAS_PARENT_ENV]: parent };
 }
 
 export interface Harness {
@@ -196,6 +209,7 @@ export function createHarness(): Harness {
           CV: CONTRACTS_VERSION,
           FIELDD_DATA_DIR: root,
           OBSERVE_FILE: sealedObservePath(root),
+          ...runAliasParentEnv(),
           SEALED_MODE: o.mode ?? "prove",
           ...(o.handoff !== undefined ? { FIELDD_CUSTODY: "stdin" } : {}),
           ...(o.bootId !== undefined ? { SEALED_BOOT_ID: o.bootId } : {}),

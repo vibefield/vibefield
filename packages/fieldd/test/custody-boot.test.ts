@@ -49,7 +49,7 @@ import {
 } from "./custody-harness";
 import { bundleFielddBin } from "./fieldd-bin-bundle";
 import { CLAUDE, fixtureRoutes, freshFloor } from "./inventory-age-fixture";
-import { nativeEndpoint, removeTempRoot, shortTmpRoot } from "./native-harness";
+import { nativeEndpoint, removeTempRoot, runAliasParentEnv, shortTmpRoot } from "./native-harness";
 import type { WsRpc } from "./ws-rpc";
 
 const cleanup: Cleanup = [];
@@ -569,6 +569,7 @@ function runFieldd(
       FIELDD_AGENT_SEARCH_PATH: agents,
       FIELD_LOG_DIR: logs,
       FIELDD_ALLOW_LOG_DIR_OVERRIDE: "1",
+      ...runAliasParentEnv(),
       ...env,
     },
     stdio: [stdin, "pipe", "pipe"],

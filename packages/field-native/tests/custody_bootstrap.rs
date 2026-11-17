@@ -30,6 +30,13 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::time::{timeout_at, Instant};
 
+// Item 345: a floor this file spawns as a daemon takes the run's own socket alias parent, `RunAliasParent`, from the
+// shared support, as native_logging.rs's does.
+#[path = "support/native_child.rs"]
+mod native_child;
+use field_native::registries::SOCKET_ALIAS_PARENT_ENV;
+use native_child::RunAliasParent;
+
 /// The boot id this file's fieldd says its hellos under, and the challenge it offers (WIN-10).
 const BOOT: &str = "fieldd-custody-test";
 const NONCE: &str = "9f8e7d6c5b4a39281706f5e4d3c2b1a0";
@@ -152,14 +159,18 @@ async fn byte_plane_pairs(daemon: &RunningDaemon, secret: &[u8]) -> bool {
 struct Floor {
     child: Option<Child>,
     stdin: Option<ChildStdin>,
+    /// The daemon's socket alias parent, dropped after `Drop::drop` has stopped the child; a role's is none.
+    _alias_parent: Option<RunAliasParent>,
 }
 
 impl Floor {
     /// `flag` is `FIELD_NATIVE_CUSTODY`'s value, or `None` for a floor never told of custody.
     fn spawn(data_dir: &Path, log_root: &Path, flag: Option<&str>) -> Self {
+        let alias_parent = RunAliasParent::make();
         let mut command = Command::new(env!("CARGO_BIN_EXE_field-native"));
         command
             .env("FIELD_NATIVE_DATA_DIR", data_dir)
+            .env(SOCKET_ALIAS_PARENT_ENV, alias_parent.path())
             .env("FIELD_LOG_DIR", log_root)
             .env("FIELD_NATIVE_ALLOW_LOG_DIR_OVERRIDE", "1")
             .env_remove("FIELD_NATIVE_ALLOW_LOG_FILTER")
@@ -177,6 +188,7 @@ impl Floor {
         Self {
             child: Some(child),
             stdin,
+            _alias_parent: Some(alias_parent),
         }
     }
 
@@ -197,6 +209,7 @@ impl Floor {
         Self {
             child: Some(child),
             stdin,
+            _alias_parent: None,
         }
     }
 

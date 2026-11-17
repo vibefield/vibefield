@@ -112,7 +112,7 @@ function fakeSpawn(child: BootstrapChild): { spawn: SpawnBootstrapChild; calls: 
   };
 }
 
-describe("the floor's sealed spawn (C3)", () => {
+describe("the sealed spawn of the floor (C3)", () => {
   it("the bootstrap line is one JSON line and stdin is closed after it", async () => {
     const child = new FakeChild(4_242);
     const { spawn, calls } = fakeSpawn(child);
