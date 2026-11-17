@@ -72,6 +72,19 @@ const AGENT_SHIM_ROLE_ARG = "--vibefield-role=agent-shim";
 // status lines run (fieldd agent-forwarder.ts lends it to puppeteer). Probe G runs it.
 const AGENT_FORWARDER_ROLE_ARG = "--vibefield-role=agent-forwarder";
 
+// MK-6 (item 435) — the plugin list's development seam: contracts' FIELDD_PLUGIN_REGISTRY_URL_ENV
+// and FIELDD_PLUGIN_REGISTRY_KEY_ENV, which fieldd's registry-seam.ts reads, and the line a
+// packaged fieldd handed either fails its boot with (bin.ts's catch over `pluginRegistryOf`'s
+// throw; exit 1). Spelled again here: this script depends only on builtins and postject (the
+// header), so it does not load contracts' TypeScript as stage-market-fixture.mjs does. fieldd's
+// registry-seam.test.ts holds the names and the words equal to their sources; probe H holds the
+// line on the executable.
+const PLUGIN_REGISTRY_URL_ENV = "FIELDD_PLUGIN_REGISTRY_URL";
+const PLUGIN_REGISTRY_KEY_ENV = "FIELDD_PLUGIN_REGISTRY_KEY";
+const PLUGIN_LIST_SEAM_REFUSAL =
+  `fieldd failed to start: ${PLUGIN_REGISTRY_URL_ENV} or ${PLUGIN_REGISTRY_KEY_ENV}` +
+  " is set, and a packaged fieldd reads no plugin list from its environment: it is a development seam (MK-6); unset both";
+
 // AR-7j (electron-security-packaging.md §9.3, fuse-matrix.mjs's RunAsNode row) — the role makes
 // this executable the program every typed agent's launcher runs, in a pane whose environment a
 // same-uid process may have shaped. A SEA never parses its command line as Node's (every argument
@@ -803,6 +816,59 @@ async function agentForwarderProbe({ exe, root, deadlineMs = 30_000 }) {
   }
 }
 
+/** MK-6 (item 435) — the daemon started as a package starts it, with no argument, but handed the
+ * plugin list's development seam: both variables, an address of example.com's and a word that is
+ * no key. A packaged fieldd reads no plugin list from its environment, so bin.ts fails its boot by
+ * name before it writes a root or loads the daemon: one line, exit 1, no readiness line, and no
+ * data directory where fieldd's variables name one. Nothing is read from either value, and the
+ * line says neither. The shell blanks both for a package too; this is fieldd's own refusal, on the
+ * executable, where `node:sea` answers for itself (registry-seam-packaged.test.ts makes a plain
+ * Node say it is one, by a preload, over fieldd's bundle). */
+function pluginListSeamProbe({ exe, root, deadlineMs = 30_000 }) {
+  mkdirSync(root, { recursive: true });
+  const data = join(root, "data");
+  const url = "https://plugins.example.com/index.json";
+  const key = "not-a-key";
+  return new Promise((done) => {
+    const child = spawn(exe, [], {
+      cwd: "/",
+      env: {
+        PATH: "/usr/bin:/bin",
+        HOME: root,
+        FIELDD_DATA_DIR: data,
+        FIELDD_CONTROL_PORT: "0",
+        [PLUGIN_REGISTRY_URL_ENV]: url,
+        [PLUGIN_REGISTRY_KEY_ENV]: key,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    const timer = setTimeout(() => child.kill("SIGKILL"), deadlineMs);
+    const report = (code, signal, error) => {
+      clearTimeout(timer);
+      done({
+        error,
+        code,
+        signal,
+        stdout,
+        stderr,
+        saidAValue: stderr.includes(url) || stderr.includes(key),
+        dataTouched: existsSync(data),
+      });
+    };
+    child.once("error", (e) => report(null, null, e.message));
+    // `close`, not `exit`: what the program said is all read only once its stdio has closed
+    child.once("close", (code, signal) => report(code, signal));
+  });
+}
+
 /** TH-1 — run the executable as fieldd runs its transcript worker: the role argument, an IPC pipe, the folder and
  * its key on the pipe (never the environment), then one ticket registered and a shutdown. */
 function transcriptHostProbe({ exe, folder, deadlineMs = 30_000 }) {
@@ -1441,6 +1507,23 @@ async function verify({ exe, manifest }) {
     say(
       !g.dataTouched,
       "agent-forwarder role: no daemon ran — the FIELDD_* data directory was never made",
+    );
+
+    // Probe H (MK-6, item 435) — the daemon handed the plugin list's development seam: a packaged
+    // fieldd refuses its boot by name (bin.ts over registry-seam.ts `pluginRegistryOf`), one line
+    // and exit 1, before it writes a root or loads the daemon; no readiness line, and the line
+    // names the variables, never the values it was handed.
+    const h = await pluginListSeamProbe({ exe: cleanExe, root: join(sandbox, "seam-run") });
+    say(
+      h.error === undefined &&
+        h.code === 1 &&
+        h.stdout === "" &&
+        h.stderr === `${PLUGIN_LIST_SEAM_REFUSAL}\n` &&
+        !h.saidAValue &&
+        !h.dataTouched,
+      h.error !== undefined
+        ? `the plugin list's development seam: spawn failed: ${h.error}`
+        : `the plugin list's development seam (MK-6): the daemon's boot refused in one line, no readiness line, no root (${h.signal ?? h.code}, want 1; data directory ${h.dataTouched ? "MADE" : "untouched"}; the values handed ${h.saidAValue ? "SAID" : "never said"}; stdout ${JSON.stringify(h.stdout.slice(0, 200))}) — ${JSON.stringify(h.stderr.trim())}`,
     );
 
     // Probe B — the same files, plus a node_modules that would break the daemon if it
