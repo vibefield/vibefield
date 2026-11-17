@@ -1,4 +1,4 @@
-// OB custody (C2; CUSTODY-SPEC §2.3, §2.6) — the shell pairing's recipe as fieldd takes it, and the verifier the
+// OB custody (C2) — the shell pairing's recipe as fieldd takes it, and the verifier the
 // door asks (`src/shell-pairing.ts`).
 //
 // The recipe has ONE home, `@vibefield/trust` (the supervisor makes the MAC there, fieldd checks it there), so the
@@ -64,7 +64,7 @@ function vectorCases(): VectorCase[] {
 }
 
 describe("fieldd's shell pairing recipe", () => {
-  // CUSTODY-SPEC §2.6: trust is the one home of the recipes. Red while `src/shell-pairing.ts` makes an HMAC of its
+  // : trust is the one home of the recipes. Red while `src/shell-pairing.ts` makes an HMAC of its
   // own: a second spelling is how a maker and a verifier come to disagree about one message.
   it("fieldd spells the recipe nowhere of its own: its verifier takes trust's", () => {
     const source = readFileSync(join(HERE, "../src/shell-pairing.ts"), "utf8");
@@ -87,8 +87,8 @@ describe("fieldd's shell pairing recipe", () => {
       const mac = trustPairingMac(asked(c));
       const ackMac = trustAckMac(asked(c));
       if (c.mac === UNCOMPUTED || c.ackMac === UNCOMPUTED) {
-        // the secret is the fixture's repeated byte, so what this side computes may be said: the lead fills the
-        // vector from a run, and holds it to the maker's side saying the same
+        // the secret is the fixture's repeated byte, so what this side computes may be said: a run fills the
+        // vector, which is then held to the maker's side saying the same
         throw new Error(
           `the vector's outputs are computed by the first admitted row (userId "${c.userId}": this side computes mac ${mac}, ackMac ${ackMac})`,
         );

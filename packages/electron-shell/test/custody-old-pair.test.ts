@@ -33,7 +33,7 @@ import {
   vibefieldTree,
 } from "./custody-fakes";
 
-// OB custody, C1 (CUSTODY-SPEC §7.2 with its v0.12 items 9 to 17, §7.4; OB-D21 A) — a root MADE this boot (none was
+// OB custody, C1 (OB-D21 A) — a root MADE this boot (none was
 // kept, or the kept one did not open) can never reach a pair an earlier root sealed: the old floor refuses the new
 // fieldd and keeps its old client, and every start after that fails. So, by itself and before anything is spawned,
 // main looks for those processes and stops the ones that are its own.
@@ -525,7 +525,7 @@ describe("the older pair's stop (C1)", () => {
   it("the seam says whose ruling it stands on, what its identifier does not prove, and custody alone asks it", () => {
     const seam = source("main/custody/old-pair.ts");
     expect(seam).toContain(
-      "OB-D21 A, ruled by VF-PM inside James's rule of 2026-11-10 00:46Z: an exception to WP12 D10",
+      "OB-D21 A (`draft/thinking-objects-at-work.md`): an exception to WP12 D10",
     );
     // `field-native door` is the same program as the floor: the identifier is not proof of "the daemon"
     expect(seam).toContain("field-native door");
@@ -940,7 +940,7 @@ describe("where an older floor is looked for: a file nominates, the check decide
 
   it("the limit: a floor no file names ends itself after ten idle minutes", () => {
     const limit =
-      "CUSTODY-SPEC §7.2 (the limit, as ruled): a floor with no log writer open and no session " +
+      "The limit: a floor with no log writer open and no session " +
       "is named by no file, the start fails, and that floor ends itself after " +
       "ORPHAN_BOUND.IDLE_EXIT_MS, ten minutes. If the constant moved, that sentence and " +
       "old-pair.ts's header move with it.";
@@ -949,7 +949,7 @@ describe("where an older floor is looked for: a file nominates, the check decide
 });
 
 describe("the walk has a total budget (C1)", () => {
-  // CUSTODY-SPEC §7.2 item 18 — sixteen processes each waited for eight seconds would be two minutes of splash
+  // item 18 — sixteen processes each waited for eight seconds would be two minutes of splash
   // before a start that then fails. So the whole walk has ONE budget, measured from its first look on a clock of its
   // own. When it is spent the walk ends: whoever was signalled and is still there is `left`, whoever was not reached
   // is `left` with `over-budget`, and nothing more is looked at, asked about or signalled. Each row's clock is the

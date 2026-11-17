@@ -1,5 +1,5 @@
 //! OB custody (C5) — MARKS: what this floor remembers for fieldd, so a store put back as it was earlier is seen to be
-//! stale (`CUSTODY-SPEC.md` §2.5; contracts mgmt.ts `NativeMarksSet*`, envelope.ts `HelloAck.marks`).
+//! stale (contracts mgmt.ts `NativeMarksSet*`, envelope.ts `HelloAck.marks`).
 //!
 //! A mark is a named number that ONLY RISES. fieldd tells the floor a value (`native.marks.set`), the floor keeps the
 //! highest it was ever told under that name and answers what it keeps, and every hello ack carries what is held. The

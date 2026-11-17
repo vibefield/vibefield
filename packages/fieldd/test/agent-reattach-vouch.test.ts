@@ -1,4 +1,4 @@
-// OB custody (CUSTODY-SPEC §8.1.0, rule 6) — WHO a run is after a fieldd restart. A run's record is signed under a key
+// OB custody (rule 6) — WHO a run is after a fieldd restart. A run's record is signed under a key
 // file an agent can read, so at `sealed` the next fieldd does not take the record's word: the floor outlives fieldd,
 // only a holder of the pairing secret speaks to it, and it hands the next fieldd, in its hello ack, what the last one
 // said each terminal was started for. `reattach` reads that table ONCE, joins it to the running rows of the inventory

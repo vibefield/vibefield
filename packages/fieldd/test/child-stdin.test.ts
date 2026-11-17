@@ -1,4 +1,4 @@
-// OB custody (C2; CUSTODY-SPEC §2.3, fieldd's side of the order) — NO CHILD OF FIELDD IS GIVEN FD 0.
+// OB custody (C2; fieldd's side of the order) — NO CHILD OF FIELDD IS GIVEN FD 0.
 //
 // A fieldd handed custody is handed its secrets as one line on its stdin (custody-handoff.ts). `bin.ts` reads that
 // line to its newline before it starts anything; what is left to hold is that nothing fieldd starts is ever given
@@ -203,7 +203,7 @@ function loadsDaemon(call: ts.CallExpression): boolean {
   return ts.isStringLiteral(asked) && asked.text === "./daemon";
 }
 
-describe("no child of fieldd is given fd 0 (CUSTODY-SPEC §2.3)", () => {
+describe("no child of fieldd is given fd 0", () => {
   const sources = sourceFiles().map((file) => ({ file, source: parse(file) }));
 
   it("reads fieldd's source: the files are there", () => {

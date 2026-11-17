@@ -42,7 +42,7 @@ export interface BornFor {
 }
 
 /** OB-D18, the spec's §8.1.5 — what becomes, at the settle, of what a plain run held when fieldd booted. `"end"` is
- * James's pick (A) and the only value anything passes: it ends, whether or not fieldd vouches for the run again.
+ * OB-D18's pick (A) and the only value anything passes: it ends, whether or not fieldd vouches for the run again.
  * `"keep-vouched"` keeps it for a live run fieldd vouches for; it is wired nowhere, and nothing here chooses it. */
 export type PlainHoldAtBoot = "end" | "keep-vouched";
 

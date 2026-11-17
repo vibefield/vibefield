@@ -1,5 +1,5 @@
 //! OB custody (§8.1) — `native.terminal.startedFor.set`: fieldd says what it started in a terminal, or that nothing
-//! is started there any more (`CUSTODY-SPEC.md` §8.1.0; contracts mgmt.ts `NativeTerminalStartedForSet*`). The table,
+//! is started there any more (contracts mgmt.ts `NativeTerminalStartedForSet*`). The table,
 //! its rules and why it exists are `crate::started_for`.
 //!
 //! In order:

@@ -1,5 +1,5 @@
-//! OB custody (§8.1, the PM's condition 4) — NO LOG LINE OF THE FLOOR, AT ANY LEVEL, SAYS AN ENTRY'S VALUES
-//! (`CUSTODY-SPEC.md` §8.1.0: "never logged by value: counts only, at every level").
+//! OB custody — NO LOG LINE OF THE FLOOR, AT ANY LEVEL, SAYS AN ENTRY'S VALUES
+//! ("never logged by value: counts only, at every level").
 //!
 //! An entry names a run, a spark and a helper root, and the floor's log stream is passed on by fieldd's diagnostics.
 //! This row plants a string in each of them and reads everything the floor's code says while the verb is refused,
@@ -175,7 +175,7 @@ async fn no_log_line_at_any_level_says_an_entrys_values() {
     let config = NativeConfig::for_data_dir(dir.path().to_path_buf());
     let daemon = bootstrap_handed(config, HANDED).await.expect("bootstrap");
     plant(&daemon);
-    // a PATH under this test's home, planted as a second pane's root (the PM, 2026-11-10): a home directory rides
+    // a PATH under this test's home, planted as a second pane's root: a home directory rides
     // into a support bundle with any log line that prints one
     let path = format!("{}/canary-planted-path", dir.path().display());
     assert!(path.len() <= 128, "the planted path fits an entry's field");

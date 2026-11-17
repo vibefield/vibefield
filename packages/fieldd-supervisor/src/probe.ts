@@ -16,7 +16,7 @@ import type { ProbeFailure } from "./types";
 // answers must prove the same secret back, or it is a foreign listener that was told nothing. The secret is never
 // sent and never logged.
 //
-// WHICH of the two a probe proves itself with is the caller's to name, every time (C2b; CUSTODY-SPEC §10). There is no
+// WHICH of the two a probe proves itself with is the caller's to name, every time (C2b). There is no
 // default: the token file is the weaker road (any process of the same user reads it), and a caller that named
 // nothing used to be put on it in silence. The one thing `tryAdopt` throws is that mistake of its caller's.
 

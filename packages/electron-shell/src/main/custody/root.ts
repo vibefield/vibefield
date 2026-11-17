@@ -15,7 +15,7 @@ import { basename, dirname, join } from "node:path";
 import { LAYOUT } from "@vibefield/contracts";
 import type { Keystore } from "./keystore";
 
-// OB custody, C1 (EL7-PLAN §3.2; CUSTODY-SPEC §7.1, v0.11) — the shell's ONE secret: a 32-byte root, kept at
+// OB custody, C1 (the shell's ONE secret: a 32-byte root, kept at
 // LAYOUT.CUSTODY_KEY only as the OS keystore wrapped it. Nothing else is stored; every user root's secrets are
 // derived from it (provider.ts). An agent in a pane can read the file and learns nothing: it opens under a key the OS
 // releases to the signed shell alone.

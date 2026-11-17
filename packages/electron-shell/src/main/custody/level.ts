@@ -1,6 +1,6 @@
 import type { CodeIdentity } from "@vibefield/trust";
 
-// OB custody, C1 (CUSTODY-SPEC §1, §7; EL7-PLAN §3) — which of the two levels this boot runs at. It is decided from
+// OB custody, C1 — which of the two levels this boot runs at. It is decided from
 // what the BUILD is and never from what the disk holds, so there is nothing on disk to delete that downgrades it:
 //   · `sealed` — a packaged shell on macOS whose own signature carries a team and the hardened runtime (trust's
 //     `ownIdentity`). The shell keeps one root under the OS keystore and hands each daemon pair its secrets.

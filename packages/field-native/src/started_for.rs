@@ -1,4 +1,4 @@
-//! OB custody (§8.1, rule 6) — WHAT EACH TERMINAL WAS STARTED FOR (`CUSTODY-SPEC.md` §8.1.0; contracts custody.ts
+//! OB custody (rule 6) — WHAT EACH TERMINAL WAS STARTED FOR (contracts custody.ts
 //! `TerminalStartedFor`, envelope.ts `HelloAck.startedFor`, registries.ts `CUSTODY.STARTED_FOR_MAX`).
 //!
 //! An agent fieldd launched goes on running in its terminal after fieldd is gone, and the fieldd that pairs next has
@@ -10,12 +10,12 @@
 //! - **An entry stands on a process, not on a number.** At the set the floor reads the pane root's start from the
 //!   kernel itself and keeps it. An entry stands while its session is a running pane still rooted at that pid AND
 //!   the process holding that pid has that start. The ack hands on the entries that stand and drops the rest.
-//! - **A root that execs keeps its entry** (the PM, condition 3). Another image under the same pid has the same
+//! - **A root that execs keeps its entry**. Another image under the same pid has the same
 //!   kernel start: it is still the process fieldd launched.
 //! - **The door's walk reads the same start** (`root_starts`; `services/door`): a pane with an entry is known by pid
 //!   and that exact start, as a helper root is, never by the minute a pane without one is allowed (§8.1.12).
 //! - **Bounded** (`STARTED_FOR_MAX`): a new session at the bound first drops what no longer stands.
-//! - **Never said in a log, at any level** (the PM, condition 4). An entry names runs and sparks, and the floor's log
+//! - **Never said in a log, at any level**. An entry names runs and sparks, and the floor's log
 //!   stream is passed on by fieldd's diagnostics. So nothing here formats an entry, the types that hold one derive no
 //!   `Debug`, and a caller logs `count` and nothing else (`tests/started_for_canary.rs`).
 //! - **Only a floor that was handed its pairing secret has this table at all** (`DaemonState::started_for`). Where
@@ -30,7 +30,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
 
 /// The lowest pid an entry's `process` may name (`TerminalStartedForProcess.pid`, contracts: an integer of 2 or
-/// more). The generated type carries no such bound, so the floor holds it by hand (the PM, 2026-11-10): neither side
+/// more). The generated type carries no such bound, so the floor holds it by hand: neither side
 /// trusts the other's generator, and nothing out of bound is kept or handed back.
 const LOWEST_PID: i128 = 2;
 

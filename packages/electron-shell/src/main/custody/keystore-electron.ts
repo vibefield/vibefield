@@ -1,7 +1,7 @@
 import { safeStorage } from "electron";
 import type { Keystore } from "./keystore";
 
-// OB custody, C1 (CUSTODY-SPEC §7) — the shell's keystore: Electron's own, and the ONLY file that names it (a row
+// OB custody, C1 — the shell's keystore: Electron's own, and the ONLY file that names it (a row
 // reads the tree for that). On macOS its key is a Keychain item of the app's, the one a packaged app's cookie
 // encryption already uses, released without a prompt to the app that made it. That is read from Electron's
 // documentation and Chromium's, not measured: what the Keychain does on a signed build (its prompt, its access list,

@@ -1,11 +1,11 @@
-// OB custody (rule 6; CUSTODY-SPEC §8.1.0, "fieldd", the `NativeLink` bullet) — WHAT EACH TERMINAL WAS STARTED FOR,
+// OB custody (rule 6) — WHAT EACH TERMINAL WAS STARTED FOR,
 // as the link reads it and says it.
 //
 // A sealed fieldd may not learn what a run is from a file an agent can rewrite. So it tells the FLOOR at each launch
 // and adoption (`native.terminal.startedFor.set`), the floor keeps that in memory, and the next fieldd is handed the
 // table in its hello ack (`HelloAck.startedFor`). The link's half is here:
 //   · the ack's table is read BY HAND, field by field, as every field of that ack is. An entry that fails its shape
-//     is skipped ALONE; the rest of the table stands; nothing throws (the PM's condition 2);
+// is skipped ALONE; the rest of the table stands; nothing throws;
 //   · this side holds two bounds by its own check, because neither side trusts the other's generator: a typed run's
 //     `process.pid` is 2 or more, and a `spark` is a `SparkId`;
 //   · the link holds the table of the LATEST hello until it is taken. `takeStartedFor()` hands it over ONCE, and
@@ -13,7 +13,7 @@
 //   · `setStartedFor` answers one word of five and never throws, inside two seconds;
 //   · nothing of an entry's values reaches a log line at any level.
 //
-// GIVEN AN INJECTED FLOOR (the PM's rows rule, v0.19): the floor here is the mock, which keeps a table as field-native
+// GIVEN AN INJECTED FLOOR: the floor here is the mock, which keeps a table as field-native
 // is specified to and hands the ack whatever a row plants. These rows show the LINK's rule given that floor. That a
 // sealed daemon binds this link as its runtime's table, and that a `files` daemon binds none (`daemon.ts`,
 // `startedFor: native` only when custody was handed), is proved through the real daemon by the runtime's rows:
@@ -143,7 +143,7 @@ describe("the ack's started-for table, as the link reads it", () => {
     });
   });
 
-  // K5, point 2 (the PM, 02:02:04Z): typify gives the Rust type no minimum of 2, so the floor refuses a set below it
+  // K5, point 2: typify gives the Rust type no minimum of 2, so the floor refuses a set below it
   // by hand, and this reader holds the SAME bound by its own check. Neither side trusts the other's generator.
   it("a typed run's pid below 2 is skipped by this side's own check: 0 and 1 are, 2 is taken", async () => {
     const mock = await floor();
@@ -306,8 +306,8 @@ describe("telling the floor what a terminal was started for", () => {
     await expect(link.setStartedFor("term-1", PLAIN)).resolves.toBe("unanswered");
   });
 
-  // THE MOCK FLOOR ANSWERS AS field-native DOES (`field-native/src/mgmt/started_for.rs`, read at `ob/custody-floor`
-  // `8eadd9e10`; CUSTODY-SPEC §8.1.0, corrected v0.22): the error registry has no kind for invalid params, so params
+  // THE MOCK FLOOR ANSWERS AS field-native DOES (`field-native/src/mgmt/started_for.rs`): the error registry has no
+  // kind for invalid params, so params
   // that are not the contract's are `PRECONDITION_FAILED` with NO `details.reason`, and a floor that keeps no table
   // says so before a word of the params is read. This row pins the mock to that, at the pid's bound.
   it("params that are not the contract's, a pid below 2 among them, are refused `PRECONDITION_FAILED` with no reason, which this side has no word for; 2 is a pid; and a floor that keeps no table says `not-sealed` before it reads them", async () => {
@@ -366,7 +366,7 @@ describe("an entry's values and the log", () => {
   }
 
   // The PM's condition 4, the link's half: a table's values are counts in a log, never values. The canary is a
-  // string in each field of an entry, and (the PM, 02:05:49Z) a PATH under a home.
+  // string in each field of an entry, and a PATH under a home.
   it("no log line at any level holds a value of an entry, read or sent, taken or skipped or refused", async () => {
     const home = join(tmpdir(), "canary-home", "Library", "VibeField");
     const canary: StartedFor = {

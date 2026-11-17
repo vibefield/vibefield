@@ -1,4 +1,4 @@
-//! OB custody (C5) — MARKS on the management channel (`CUSTODY-SPEC.md` §2.5; contracts mgmt.ts `NativeMarksSet*`,
+//! OB custody (C5) — MARKS on the management channel (contracts mgmt.ts `NativeMarksSet*`,
 //! envelope.ts `HelloAck.marks`, registries.ts `CUSTODY`). A mark is a named number that only rises. fieldd tells the
 //! floor (`native.marks.set`); the floor keeps the highest value per name IN MEMORY and says what it holds in its hello
 //! ack. So a mark outlives fieldd and dies with the floor, and a store put back as it was earlier is seen to be stale.

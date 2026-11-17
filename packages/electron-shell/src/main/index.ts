@@ -1190,12 +1190,12 @@ async function main(
         return;
     }
   };
-  // OB custody, C1 (EL7-PLAN §3.2; CUSTODY-SPEC §7) — the level, decided ONCE per boot and before the first supervisor
+  // OB custody, C1 — the level, decided ONCE per boot and before the first supervisor
   // is built, from what this build is (a packaged shell on macOS whose own signature carries a team and the hardened
   // runtime) and never from what the disk holds. `files` is every other build: no keystore is made (its maker is
   // handed here and never called) and nothing below changes. At `sealed` the shell's root is read under the OS
-  // keystore here and each pair is handed its secrets on stdin. Nothing of it reaches a window or a person (James,
-  // 2026-11-10): a root that is unavailable starts no pair through the gate in `ensurePairBundle`, as any failed
+  // keystore here and each pair is handed its secrets on stdin. Nothing of it reaches a window or a person:
+  // a root that is unavailable starts no pair through the gate in `ensurePairBundle`, as any failed
   // start, and every later start reads it again by itself; a root made in this boot has the older pair it can no
   // longer reach stopped before the first start goes on.
   const custody = createShellCustody<FielddHandle>({

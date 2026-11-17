@@ -155,7 +155,7 @@ const TIMED_OUT_RECORD_CAP = 256;
 const PING_METHOD = "native.lifecycle.ping";
 const HELLO_METHOD = "native.lifecycle.hello";
 
-/** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — the verb that tells the floor what a terminal was started for, and how
+/** OB custody (rule 6) — the verb that tells the floor what a terminal was started for, and how
  * long its answer is waited for: a launch never waits on it, and its caller's retry is what an unanswered one meets. */
 const STARTED_FOR_SET = "native.terminal.startedFor.set";
 const STARTED_FOR_SET_MS = 2_000;
@@ -436,7 +436,7 @@ export class NativeLink extends EventEmitter {
    * HELLO, read again at every hello and never in between: `setMark` answers the floor's word for one name and
    * does not rewrite this. fieldd's own view of the marks is `CustodyMarks`'s (custody-marks.ts), which reads this. */
   marks: ReadonlyMap<string, number> = new Map();
-  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — what the floor said each terminal was started for, by its session
+  /** OB custody (rule 6) — what the floor said each terminal was started for, by its session
    * id, in the hello ack of the LATEST hello (`HelloAck.startedFor`): held here only until it is taken. Empty before
    * any hello, and for a floor that holds none, is not sealed, or predates the table. Never logged by value. */
   private startedFor: ReadonlyMap<string, StartedFor> = new Map();
@@ -785,7 +785,7 @@ export class NativeLink extends EventEmitter {
     this.emit("terminal-endpoints");
   }
 
-  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — hand over what the floor said each terminal was started for: the
+  /** OB custody (rule 6) — hand over what the floor said each terminal was started for: the
    * table of the LATEST hello, by terminal session id. ONCE: this empties it, and every later ack's table is dropped
    * unread. The one caller is the runtime's re-attach, at `sealed`, with the first inventory of the connection that
    * is paired then, so the table and the inventory are one connection's. A `files` fieldd never calls it. */
@@ -1638,9 +1638,9 @@ const isWholeFrom = (value: unknown, least: number): value is number =>
 
 type StartedForRow = { sessionId: string; startedFor: StartedFor };
 
-/** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — a hello ack's `startedFor`, read BY HAND as every field of that ack
+/** OB custody (rule 6) — a hello ack's `startedFor`, read BY HAND as every field of that ack
  * is: the shape a live floor sent decides, never the schema this build carries. Anything but an array is no table.
- * Inside one, an entry that fails its shape is skipped ALONE and the rest stands (the PM's condition 2); a second
+ * Inside one, an entry that fails its shape is skipped ALONE and the rest stands; a second
  * entry for a terminal the table already holds is skipped too, so a terminal's first word stands; and no more than
  * `CUSTODY.STARTED_FOR_MAX` are kept (the floor holds no more). Nothing here throws, and nothing here logs. */
 function ackStartedFor(value: unknown): ReadonlyMap<string, StartedFor> {
@@ -1689,7 +1689,7 @@ function startedForRowOf(value: unknown): StartedForRow | undefined {
 
 /** A typed run's process as an entry names it, or undefined. Its pid is 2 or more BY THIS SIDE'S OWN CHECK (the
  * kernel's pid and launchd's are never a person's process): the generated Rust type cannot say so, the floor
- * refuses one by hand, and neither side trusts the other's generator (the PM, 02:02:04Z). */
+ * refuses one by hand, and neither side trusts the other's generator. */
 function startedForProcessOf(value: unknown): StartedFor["process"] {
   if (typeof value !== "object" || value === null) return undefined;
   const { pid, startedAtMs } = value as { pid?: unknown; startedAtMs?: unknown };

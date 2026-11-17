@@ -1,5 +1,5 @@
-//! OB custody (§8.1, rule 6) — WHAT EACH TERMINAL WAS STARTED FOR: on the management channel, on the table itself and
-//! at the door's walk (`CUSTODY-SPEC.md` §8.1.0 "The floor", §8.1.12; contracts custody.ts `TerminalStartedFor*`,
+//! OB custody (rule 6) — WHAT EACH TERMINAL WAS STARTED FOR: on the management channel, on the table itself and
+//! at the door's walk (contracts custody.ts `TerminalStartedFor*`,
 //! mgmt.ts `NativeTerminalStartedForSet*`, envelope.ts `HelloAck.startedFor`, and registries.ts's
 //! `CUSTODY.STARTED_FOR_MAX`).
 //!
@@ -13,7 +13,7 @@
 //! itself; the ack hands an entry on only while that pid still has that start; and the door's walk knows a pane with
 //! an entry by that exact start, never by the minute a pane without one is allowed.
 //!
-//! WHAT IS INJECTED, AND WHICH ROW PROVES THE REAL THING (the PM's rule, 2026-11-10):
+//! WHAT IS INJECTED, AND WHICH ROW PROVES THE REAL THING:
 //! - Most rows plant the inventory themselves (`observed_tx`, as `tests/door.rs` does), so a pane's root is a process
 //!   of this test's own. Everything else is the floor's own: its boot, its management channel, the kernel it reads.
 //!   `on_a_real_terminal_the_entry_stands_on_the_ptys_own_root_and_ends_with_it` plants nothing: the inventory is the
@@ -406,7 +406,7 @@ async fn a_sealed_floor_that_holds_nothing_says_no_key_and_still_keeps_the_table
 }
 
 /// The contract holds a typed run's pid to 2 or more, and the generated type on this side carries no such bound. So
-/// the floor holds it by hand (the PM, 2026-11-10): nothing out of bound is kept, and none is handed back.
+/// the floor holds it by hand: nothing out of bound is kept, and none is handed back.
 #[tokio::test]
 async fn a_typed_runs_pid_below_two_is_refused_by_hand_and_two_is_taken() {
     let (_dir, daemon) = sealed().await;

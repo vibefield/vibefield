@@ -367,11 +367,11 @@ const TYPED_PROOF_RETRY_MS = 500;
  * the shell's child, so there is no code and no signal to report. */
 const PROCESS_EXITED = { exitCode: null, signal: null, reason: "process-exited" } as const;
 
-/** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — how long until a set the floor did not take (no answer, or its table
+/** OB custody (rule 6) — how long until a set the floor did not take (no answer, or its table
  * full) is said again: one timer per run, the same values, until the floor takes it or the run ends. */
 const STARTED_FOR_RETRY_MS = 5_000;
 
-/** OB custody (rule 6; CUSTODY-SPEC §8, v0.10) — the most runs launch memory answers for. It answers for the
+/** OB custody (rule 6) — the most runs launch memory answers for. It answers for the
  * process's whole life and is never dropped at a run's exit; this bound is generous and evicts oldest-first, and an
  * evicted run reads as not born here. */
 const BORN_MAX = 16_384;
@@ -459,7 +459,7 @@ export interface AgentAdoption {
   ): Promise<void>;
 }
 
-/** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — the floor's memory of what each terminal was started for, as much of
+/** OB custody (rule 6) — the floor's memory of what each terminal was started for, as much of
  * it as the runtime needs. `NativeLink` is one. */
 export interface StartedForFloor {
   /** the table the floor handed this fieldd at its hello, by terminal session id; handed over ONCE */
@@ -486,7 +486,7 @@ type RunStanding =
 interface UntoldSet {
   readonly sessionId: string;
   readonly startedFor: StartedFor;
-  /** the run's row has been seen running in an inventory, and the set was said then (CUSTODY-SPEC §8.1.0 "v0.24").
+  /** the run's row has been seen running in an inventory, and the set was said then.
    * Until it is, nothing is sent; after it, no later sighting says it again */
   said: boolean;
   /** a set for this run is on the wire: never more than one */
@@ -569,7 +569,7 @@ export interface AgentRuntimeServiceOptions {
   typedWatch?: TypedWatchOptions;
   /** OB-3d — the floor's door for a run's helper root; absent, a helper's run holds nothing at the door */
   helperRoots?: HelperRootFloor;
-  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — the floor's started-for table. Given ONLY by a fieldd that was handed
+  /** OB custody (rule 6) — the floor's started-for table. Given ONLY by a fieldd that was handed
    * custody, and its presence IS the level (never a file, an env var, or the floor's word): with it (`sealed`) every
    * launch and adoption is said to the floor; without it (`files`) the verb is never called. Launch memory
    * (`bornFor`) is kept at both. */
@@ -800,7 +800,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private readonly managed = new Map<string, ManagedEntry>();
   /** OB-3d — the helpers this fieldd named to the floor, by attempt */
   private readonly helperRoots: RunHelperRoots;
-  /** OB custody (rule 6; CUSTODY-SPEC §8) — LAUNCH MEMORY: who each run is, for a grant, as THIS process knows it
+  /** OB custody (rule 6) — LAUNCH MEMORY: who each run is, for a grant, as THIS process knows it
    * from launching or adopting it. Never read back from a record (an agent can rewrite its own run's), never
    * dropped at a run's exit (`bornFor`). Filled by `remember` alone, which says the same to the floor. */
   private readonly born = new Map<string, { spark?: SparkId }>();
@@ -811,7 +811,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** OB custody (rule 6; §8.1.0 "v0.25") — a wake that asked for another spark than launch memory holds was said
    * once in the log, for this process's life */
   private askMismatchSaid = false;
-  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — what the LAST fieldd told the floor of its launches, as the floor
+  /** OB custody (rule 6) — what the LAST fieldd told the floor of its launches, as the floor
    * handed it to this one at its hello: read ONCE (`readStartedFor`), joined to the running rows of the inventory
    * the re-attach was handed, by terminal session. Undefined until that read; never read at `files`. An entry here
    * is the only thing that vouches for a run this process did not launch (`standingOf`). */
@@ -1620,7 +1620,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     params: AgentResumeParams,
     principal: GrantPrincipal,
     forwardedFor?: ForwardedFor,
-    /** OB custody (rule 6; CUSTODY-SPEC §8.1.0, the resume rule's case 1) — the spark fieldd's OWN wake asked this
+    /** OB custody (rule 6; the resume rule's case 1) — the spark fieldd's OWN wake asked this
      * resume FOR (`tool-plane/sparks.ts` `#wake`, through daemon.ts's wrapper), as a spawn's `compose.spark` is the
      * launch call's own argument. Never a door's params: the `agent.resume` door passes none. At `sealed` it names
      * the resumed run for launch memory and the floor's entry (`resumedAs`); at `files` it is not read. */
@@ -2581,7 +2581,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     };
   }
 
-  /** OB custody (rule 6; CUSTODY-SPEC §8, §8.1.0) — LAUNCH MEMORY: who a run is, for a grant.
+  /** OB custody (rule 6) — LAUNCH MEMORY: who a run is, for a grant.
    *  · `{ spark }` — this process launched it FOR that spark: the id is the launch call's own argument;
    *  · `{}` — this process launched or adopted it as a plain run;
    *  · undefined — nothing this process did vouches for it: it holds nothing.
@@ -2594,7 +2594,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   }
 
   /** OB custody (rule 6) — THE one place launch memory is filled, and the floor is told the same from the same
-   * values (CUSTODY-SPEC §8.1.0), so what this life remembers and what the next fieldd is handed cannot differ.
+   * values, so what this life remembers and what the next fieldd is handed cannot differ.
    * Called right after `enter` returns and never awaited: a launch waits on nothing here. `root` is the creation
    * request the launch announced, which is also the id its helper root is named by. At `files` no floor was given:
    * the memory is kept and nothing is said.
@@ -2655,7 +2655,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** OB custody (rule 6) — a run this process ADOPTED: a person's own typed launch, taken in through the gateway on
    * a bearer an agent can read by design. It is born PLAIN, whatever its request or its record names, so this
-   * setter HAS NO spark parameter: the adoption path cannot pass one (CUSTODY-SPEC §8, §8.1.0). Its process (pid and
+   * setter HAS NO spark parameter: the adoption path cannot pass one. Its process (pid and
    * the kernel's start) is what proves a typed run at the next boot; one this side cannot state exactly is left
    * out, and the entry then vouches for no typed run. */
   private rememberAdopted(
@@ -3804,7 +3804,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     });
   }
 
-  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0, "a RESUME is the hard one") — who a RESUMED run is, for launch memory
+  /** OB custody (rule 6; "a RESUME is the hard one") — who a RESUMED run is, for launch memory
    * and the floor's entry and nothing else. `previous` is the run it continues. At `files` the record names it, as
    * it always did, and `asked` is not read. At `sealed` the record's word is not taken, and the order is
    * (§8.1.0 "v0.25", LAUNCH MEMORY BEATS THE ASK):
@@ -4078,7 +4078,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (unreadSince === undefined) void this.profiles.sweepDrafts();
   }
 
-  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — THE ONE PLACE the floor's started-for table is read. Once, at the
+  /** OB custody (rule 6) — THE ONE PLACE the floor's started-for table is read. Once, at the
    * first re-attach, for the inventory it was handed: the link gives the table of the hello that is paired then,
    * and drops every later one unread. THE JOIN IS TO RUNNING ROWS ONLY: an entry whose session is not a row
    * `runningRowOf` returns in THIS inventory is dropped here and never kept, so a terminal that appears later has
@@ -4099,7 +4099,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     );
   }
 
-  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — WHO a run this process did not launch is, as it re-attaches (entered
+  /** OB custody (rule 6) — WHO a run this process did not launch is, as it re-attaches (entered
    * or held). THE ONE `if` between the levels is here.
    *
    * At `files` the record names it, as it always did: its spark, its typed process, its creation request.

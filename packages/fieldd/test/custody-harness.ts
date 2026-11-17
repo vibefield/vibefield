@@ -1,5 +1,5 @@
 // OB custody — what the custody rows share (test-local, not shipped): a daemon over the mock floor at either level,
-// and a shell that pairs by CUSTODY-SPEC §2.3's recipe.
+// and a shell that pairs by 's recipe.
 //
 // The recipe is spelled HERE, on its own, from the spec's words, and never through `src/shell-pairing.ts`: the door
 // is held to the spec, not to its own copy of it. `shell-pairing.vector.json` pins the same recipe across packages
@@ -136,7 +136,7 @@ export async function bootFiles(cleanup: Cleanup, opts: BootOptions = {}): Promi
  * the secret is the one line (`handFloorPairing`). */
 export const SEALED_FLOOR_ENV = { [CUSTODY.NATIVE_ENV]: CUSTODY.STDIN } as const;
 
-/** CUSTODY-SPEC §2.4 — hand a real floor its pairing: ONE line on its stdin, then the end of it. The line is spelled
+/** — hand a real floor its pairing: ONE line on its stdin, then the end of it. The line is spelled
  * here from the spec's words, never through `src/native-bootstrap.ts`: that module asks first whose code the child
  * is, and a test's floor is nobody's signed build. The child must have been spawned with a piped stdin. */
 export function handFloorPairing(child: ChildProcess, custody: FielddCustody): void {

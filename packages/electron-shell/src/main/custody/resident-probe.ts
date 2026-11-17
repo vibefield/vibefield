@@ -1,7 +1,7 @@
 import type { ProbeResult, tryAdopt } from "@vibefield/fieldd-supervisor";
 import type { ShellCustody } from "./custody";
 
-// OB custody, C1 (CUSTODY-SPEC §7; AL-3's quit gate) — a person's quit looks for every other user's resident pair with
+// OB custody, C1 (AL-3's quit gate) — a person's quit looks for every other user's resident pair with
 // an adopt-only probe (never a spawn: a quit must not start what it means to stop). At `files` that probe reads the
 // pair's token file, as it always has, and SAYS so: the supervisor's probe has no default credential (a call that
 // names none is refused before anything is read or dialled), so each call below names its own. At `sealed` there is

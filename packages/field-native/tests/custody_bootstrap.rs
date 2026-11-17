@@ -1,4 +1,4 @@
-//! OB custody (C3) — the floor is handed its pairing secret (`CUSTODY-SPEC.md` §2.4; contracts mgmt.ts
+//! OB custody (C3) — the floor is handed its pairing secret (contracts mgmt.ts
 //! `NativeBootstrap`, registries.ts `CUSTODY`). Under `FIELD_NATIVE_CUSTODY=stdin` the floor reads ONE line from its
 //! stdin and holds the secret in memory: it never makes, reads or removes `native/pairing`, and a line that is absent,
 //! late, too long or not a bootstrap it reads is a refusal to boot that names no secret, never a fall back to the

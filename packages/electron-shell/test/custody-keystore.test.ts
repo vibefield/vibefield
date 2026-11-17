@@ -27,12 +27,12 @@ import {
   vibefieldTree,
 } from "./custody-fakes";
 
-// OB custody, C1 (EL7-PLAN §3.2; CUSTODY-SPEC §7.0, §7.1, §7.3, v0.11) — the shell keeps ONE secret, a 32-byte root,
+// OB custody, C1 (the shell keeps ONE secret, a 32-byte root,
 // and keeps it only as the OS keystore wrapped it. Reading it answers one of two things, `ready` or `unavailable`,
 // and never a third that waits for a person: a key that is absent, or present and not opening, is made anew BY
 // ITSELF, and only after the keystore has wrapped and opened test bytes in the same reading (a keychain that is
 // merely locked gives the same error as a wrong key, and must never be read as "the key no longer opens").
-// `unavailable` starts no pair, and its refusal is a plain Error whose words name no key: James's rule (2026-11-10)
+// `unavailable` starts no pair, and its refusal is a plain Error whose words name no key: the custody rule
 // is that no key or custody concept reaches a person. Every keystore here is the rows' own arithmetic
 // (custody-fakes.ts): no row reaches a keychain.
 
@@ -725,7 +725,7 @@ describe("below `sealed` (C1)", () => {
 });
 
 describe("no key or custody concept reaches a person (C1)", () => {
-  // CUSTODY-SPEC §7.0 — James, 2026-11-10: it is either the app runs or it crashed. No sheet, no act a person
+  // It is either the app runs or it crashed. No sheet, no act a person
   // presses, no bridge row, no words constant in main.
 
   it("the window has no custody door: the preload, the handlers and the page's types name none", () => {

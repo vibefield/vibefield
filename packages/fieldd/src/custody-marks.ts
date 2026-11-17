@@ -26,7 +26,7 @@ const MARK_NAME = new RegExp(CUSTODY.MARK_NAME);
 const isCount = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
-/** What `note` refuses a caller for, by a word a log line may print (CUSTODY-SPEC v0.19: a custody log line prints an
+/** What `note` refuses a caller for, by a word a log line may print (a custody log line prints an
  * error's `code`, never its message, and the grants file prints this one as `grants_mark_unanswered`'s reason):
  *  · `mark-name` — the name is off `CUSTODY.MARK_NAME`;
  *  · `mark-count` — the value is no count;
@@ -52,7 +52,7 @@ const codeOf = (error: unknown): string => {
 
 /** A mark as another side said it (the spawner, the floor): a whole number from 0 up, or undefined when it is not
  * one. The floor's count is a u64 with no ceiling of its own, so one past the safe integers reads as THE TOP and
- * never as nothing: a mark that read as nothing would be a mark that fell (CUSTODY-SPEC §8, "the count never wraps":
+ * never as nothing: a mark that read as nothing would be a mark that fell ("the count never wraps":
  * a store whose next count would pass the top cannot write, which is the safe side). */
 export function markOf(value: unknown): number | undefined {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0) return undefined;

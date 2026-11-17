@@ -284,7 +284,7 @@ describe("OB custody — how long main waits on its own root's account", () => {
 // Two clocks, one on each side of a spawn. The SPAWNER counts `CHILD_CHECK_BUDGET_MS` from the spawn: everything
 // that stands between it and the hand-off's write. The CHILD counts `HANDOFF_WAIT_MS` from its own start, waiting for
 // that write. A check slower than the child's wait would write to a child that has already left, so the wait is
-// held past the budget. The numbers are the lead's choice, not a measurement: the row pins how they stand to each
+// held past the budget. The numbers are a choice, not a measurement: the row pins how they stand to each
 // other, and neither value.
 describe("OB custody — a child waits longer for its line than its spawner may take", () => {
   it("holds the child's wait at least two seconds past the spawner's whole budget", () => {

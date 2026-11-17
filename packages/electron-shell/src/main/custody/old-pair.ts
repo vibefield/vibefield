@@ -11,14 +11,14 @@ import {
 } from "@vibefield/trust";
 import type { CodeIdentityCheck } from "./level";
 
-// OB custody, C1 (CUSTODY-SPEC §7.2, v0.14) — what follows a custody root MADE in this boot (none was kept, or the
+// OB custody, C1 (what follows a custody root MADE in this boot (none was kept, or the
 // one kept did not open): the pair an older root sealed can never be reached again. An old floor refuses a hello
 // under any other secret and keeps its old client; the new fieldd then starts no floor and exits; every start after
 // that fails the same way. So, by itself and before anything is spawned, main looks for those processes and stops
 // the ones that are its own. Nothing a person presses reaches this file, and below custody's `sealed` level nothing
 // reaches it at all: a build with no signature has none to check against.
 //
-// OB-D21 A, ruled by VF-PM inside James's rule of 2026-11-10 00:46Z: an exception to WP12 D10.
+// OB-D21 A (`draft/thinking-objects-at-work.md`): an exception to WP12 D10.
 // THE ONE PLACE this shell signals a pid it read from a file. WP12 D10 stands everywhere else (no signal to a pid
 // read from a file), and here it is bought with a rule: A FILE ONLY EVER NOMINATES A PID. THE CHECK DECIDES.
 //   · Three files nominate. `product.json` under each user root names the old fieldd and its floor. It is removed by

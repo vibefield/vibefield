@@ -225,7 +225,7 @@ export interface FloorConfig {
   /** Item 192 (RV #6) — the catalog the doors answer from (default `TYPED_CATALOG`, whose scripted row claims
    * re-attach): a row that does not claim it is what a fieldd-only stop counts */
   catalog?: readonly AgentCatalogEntry[];
-  /** OB custody (CUSTODY-SPEC §8.1) — boot SEALED: the floor is told its pairing comes on stdin and is written the
+  /** OB custody — boot SEALED: the floor is told its pairing comes on stdin and is written the
    * one line, and fieldd is handed this custody (`FielddConfig.custody`, the seam a pipe fills in `bin.ts`). The
    * box's window pairs, for a sealed fieldd has no shell token. A restart of a sealed box names it again. Absent:
    * `files`, as every row on this harness was. */
@@ -272,7 +272,7 @@ export async function windowAt(
 }
 
 /** OB custody — `windowOf` for a SEALED fieldd. It has no shell token: the shell PAIRS under the secret it was
- * handed (CUSTODY-SPEC §2.3; custody-harness.ts spells the recipe), then mints the window's token as any shell
+ * handed (custody-harness.ts spells the recipe), then mints the window's token as any shell
  * does. */
 export async function sealedWindowOf(
   daemon: Pick<FielddDaemon, "controlPort" | "bootId">,

@@ -1,4 +1,4 @@
-// OB custody (C3; CUSTODY-SPEC §2.4, EL7-PLAN §3.4) — THE FLOOR IS HANDED ITS PAIRING.
+// OB custody (C3) — THE FLOOR IS HANDED ITS PAIRING.
 //
 // At `files` the floor makes `native/pairing` and fieldd reads it at every hello; whoever else reads that file may
 // say `native.lifecycle.hello`, supersede fieldd and hold every `native.*` row (T2). A fieldd handed custody takes the

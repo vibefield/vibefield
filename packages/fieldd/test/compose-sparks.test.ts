@@ -180,7 +180,7 @@ function service(
   const root = tmp();
   const calls: string[] = [];
   const launched: { launch: SparkLaunch; spark: string }[] = [];
-  // OB custody (CUSTODY-SPEC §8.1.0) — the spark each resume was asked FOR: the wake's own last argument
+  // OB custody — the spark each resume was asked FOR: the wake's own last argument
   const resumedFor: Array<string | undefined> = [];
   let resumable = true;
   // a resume that takes its time until the test lets it answer, or refuse
@@ -358,7 +358,7 @@ describe("hatch, list and open (CP-1c; NS-D1, NS-D5, CR-D11)", () => {
     expect(h.svc.list().map((s) => s.name)).toEqual(["Vela"]);
   });
 
-  // OB custody (CUSTODY-SPEC §8.1.0, the resume rule's case 1) — GIVEN AN INJECTED `resume` (this file's harness): the
+  // OB custody (the resume rule's case 1) — GIVEN AN INJECTED `resume` (this file's harness): the
   // service's half of the rule. That the daemon's wrapper hands the id on to the runtime, and what the runtime does
   // with it at each level, are agent-session.test.ts's rows through the real daemon ("after a restart, a wake of S").
   it("a wake names the spark it is waking to the resume: the id it was asked to open, as the resume's last argument", async () => {

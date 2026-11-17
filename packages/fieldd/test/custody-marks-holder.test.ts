@@ -1,4 +1,4 @@
-// OB custody (C5; CUSTODY-SPEC §2.5) — THE MARKS' HOLDER (`src/custody-marks.ts`), by itself.
+// OB custody (C5) — THE MARKS' HOLDER (`src/custody-marks.ts`), by itself.
 //
 // fieldd's own view of every mark: a name and a number that only rises. It starts from what the spawner remembered
 // (`CustodyHandoff.expect`), is raised by the floor's word at each hello (`HelloAck.marks`) and by a store's `note`,
@@ -258,7 +258,7 @@ describe("the marks' holder (C5)", () => {
     expect(marks.get(GRANTS)).toBe(4);
   });
 
-  // CUSTODY-SPEC §8 (v0.11): the floor's count has no ceiling of its own (a u64), and a number past the safe integers
+  // : the floor's count has no ceiling of its own (a u64), and a number past the safe integers
   // that read as NOTHING would be a mark that fell. It reads as the top, and a store whose next count would pass the
   // top cannot write: the safe side.
   it("a mark past the safe integers reads as the top, never as nothing", async () => {
@@ -292,7 +292,7 @@ describe("the marks' holder (C5)", () => {
     expect(said).toEqual([{ marks: { [GRANTS]: 3 } }]);
   });
 
-  // CUSTODY-SPEC v0.19 (the lead 02:04:54Z, accepted by the PM 02:05:49Z): a custody log line prints an error's
+  // A custody log line prints an error's
   // `code`, never its message. Node's file errors name a whole path, which holds the person's home and rides into a
   // support bundle. What `note` rejects with is printed by its caller (the grants file's `grants_mark_unanswered`),
   // which prints a code too, so a rejection carries one.

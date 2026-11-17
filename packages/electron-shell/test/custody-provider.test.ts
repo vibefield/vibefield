@@ -10,7 +10,7 @@ import {
 } from "../src/main/custody/provider";
 import { fakeDerive, OWN, PLAIN_ROOT, vibefieldTree } from "./custody-fakes";
 
-// OB custody, C1 (CUSTODY-SPEC §7, §2.3) — one user root's custody, as the supervisor is handed it: the hand-off it
+// OB custody, C1 — one user root's custody, as the supervisor is handed it: the hand-off it
 // writes on fieldd's stdin, the check it awaits before writing, and the marks it gives back. Nothing but the root is
 // stored anywhere: each secret is derived from it under its own label and the user root's real path, so every user
 // of an install has secrets of its own. The rows inject the derivation and the child check; one row names trust's.

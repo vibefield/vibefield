@@ -20,16 +20,16 @@ import {
 // C6's seam is here: a verifier, when one is configured, is asked whether the child is ours BEFORE anything is
 // written to it. A child fieldd spawned and has not reaped cannot change pid, so the answer is about that child's
 // image and no other process's. A child it refuses is ended and never written to.
-// *Corrected 2026-11-10 (item 288; CUSTODY-SPEC §2.4 "v0.21"): this said "the check is sound for this pid". The
+// *Corrected 2026-11-10 (item 288): this said "the check is sound for this pid". The
 // answer is about the right process, at the moment of asking; what a yes does not say is at `floorVerifier`.*
 //
-// The hand has ONE budget (CUSTODY-SPEC §2.4 "v0.21"; `CUSTODY.CHILD_CHECK_BUDGET_MS`): everything between the spawn
+// The hand has ONE budget (`CUSTODY.CHILD_CHECK_BUDGET_MS`): everything between the spawn
 // and the write. The verifier is up to three runs of a tool, and the floor waits only so long for its line
 // (`CUSTODY.HANDOFF_WAIT_MS`, longer than the budget by a margin a contracts row holds). So a check that has not
 // answered inside the budget is a refusal like any other: the child is ended and never written to, and an answer
 // that comes later is not listened to. A line that IS written is written to a child still waiting for it.
 //
-// And C6's verifier is here (`floorVerifier`; CUSTODY-SPEC §2.4 "v0.15"): the one `bin.ts` hands every sealed spawn.
+// And C6's verifier is here (`floorVerifier`): the one `bin.ts` hands every sealed spawn.
 // The check itself (the code signature's, asked of macOS's own tool) is `packages/trust`'s; this file asks its two
 // questions in order and turns every doubt into a refusal. This module is loaded only by a fieldd that was handed
 // custody (`bin.ts` imports it behind the hand-off), so at `files` nothing of trust's is loaded or asked.
@@ -107,11 +107,9 @@ export interface SealedNativeSpawned {
  * could leave unbound. Its rows run fieldd's real entry and stand in only for the tool below trust
  * (custody-boot.test.ts). It resolves `true` only on trust's own `true`.
  *
- * What a `true` does NOT say (read from how processes work, nothing run; reported to the lead with this slice): it
- * is about the image at that pid at the moment it is asked. It does not say that image chose its own arguments,
- * environment and descriptors, and it does not say nobody else holds the read end of the pipe. A process that forks
- * and THEN becomes the floor's image keeps its pid, verifies, and has left a second reader of its stdin. So this
- * stops a wrong binary that stays what it is; whether anything stops one that does that is not decided here. */
+ * What a `true` does NOT say: it is about the image at that pid at the moment it is asked, and no more. So this
+ * stops a wrong binary that stays what it is (item 288, named here; whether anything stops more is not decided
+ * here). */
 export function floorVerifier(): (pid: number) => Promise<boolean> {
   // asked NOW, not at the first child. Trust answers null for every doubt and does not throw; were it ever to, that
   // is one more doubt, held here as a null so that no rejection is left for nobody to hear.

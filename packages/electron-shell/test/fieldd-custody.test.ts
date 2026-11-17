@@ -5,7 +5,7 @@ import { createNoopLogger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { tempDir } from "./temp-dir";
 
-// OB custody, C1 (CUSTODY-SPEC §7, §2.3) — the one thing `buildSupervisor` does for custody: at `sealed` it hands
+// OB custody, C1 — the one thing `buildSupervisor` does for custody: at `sealed` it hands
 // the supervisor this user root's custody (the hand-off, the child check, the marks it gives back), and at `files`
 // it hands nothing, so the supervisor takes the path it takes today. `electron` and the supervisor are mocked, the
 // house way (fieldd-native.test.ts): what is proven is what the pair would be built with.

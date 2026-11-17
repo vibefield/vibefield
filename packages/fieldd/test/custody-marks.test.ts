@@ -1,4 +1,4 @@
-// OB custody (C5; CUSTODY-SPEC §2.5, EL7-PLAN §3.5) — MARKS: WHAT A SURVIVOR REMEMBERS OF A STORE.
+// OB custody (C5) — MARKS: WHAT A SURVIVOR REMEMBERS OF A STORE.
 //
 // A mark is a named number that only rises. A store that is put back as it was earlier is below its mark, and is
 // seen to be stale. fieldd's own memory dies with fieldd, so a mark is kept by two that outlive it: the floor, told

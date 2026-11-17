@@ -1,4 +1,4 @@
-//! OB custody (C3) — no child is ever given the floor's stdin (CUSTODY-SPEC §2.4, v0.11; the PM, 2026-11-10).
+//! OB custody (C3) — no child is ever given the floor's stdin.
 //!
 //! Under `FIELD_NATIVE_CUSTODY=stdin` the floor's fd 0 is the pipe its pairing secret came down, and nothing closes
 //! or re-points it once the line is read (`custody.rs`). Rust's `Command`, std's and tokio's over it, hands a child

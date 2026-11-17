@@ -143,7 +143,7 @@ export class RunHelperRoots {
     return named === undefined ? undefined : { entering: true, ...named };
   }
 
-  /** OB custody (CUSTODY-SPEC §8.1.0) — a run this fieldd RE-ATTACHED to: its helper root is named again, in this
+  /** OB custody — a run this fieldd RE-ATTACHED to: its helper root is named again, in this
    * process's memory only. The floor still holds the root from the fieldd that announced it, and is told nothing;
    * before this, the next fieldd had forgotten the name, and the run's helper held nothing at the door (OB-3d).
    * The id is the record's creation request at `files` and the floor's entry's `root` at `sealed`

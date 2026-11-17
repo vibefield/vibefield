@@ -10,7 +10,7 @@ import { FielddHandleCoordinator } from "../src/main/fieldd-handle-coordinator";
 import { readCensus, readPlainCensus } from "../src/main/pair-stop";
 import { type FakeKeystore, fakeDerive, fakeKeystore, OWN, vibefieldTree } from "./custody-fakes";
 
-// OB custody, C1 (CUSTODY-SPEC §7.3 "v0.19"; the PM, 2026-11-10 02:07:45Z) — while the custody root is unavailable,
+// OB custody, C1 — while the custody root is unavailable,
 // ONLY A PERSON'S ASK reads it again. A timer reaches the gate (the updater's census watch, every minute while an
 // update is staged and with no window open), and a reading is a call to the OS keystore: on a locked keychain it
 // may be a prompt. So the gate reads for `person: true` alone, and every other ask is answered from the last reading.
@@ -22,7 +22,7 @@ import { type FakeKeystore, fakeDerive, fakeKeystore, OWN, vibefieldTree } from 
 // real ensure, the real census reads. They are GIVEN an injected keystore, an injected clock and an injected start
 // (a supervisor's `ensure` that says what it was asked). `index.ts`, which binds them in production, is Electron's
 // main module and cannot be loaded by a row: its lines are PINNED by the rows at the foot that read it, and the proof
-// through the real root is owed to the signed build's witness (CUSTODY-SPEC §10, v0.20).
+// through the real root is owed to the signed build's witness (.
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (relativePath: string): string =>

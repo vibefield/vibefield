@@ -207,7 +207,7 @@ describe("LOG-L6 append-only audit ledger", () => {
     expect(read[0]?.attrs).toEqual({ webContentsId: 3, bytes: 12 });
   });
 
-  // OB custody (CUSTODY-SPEC §7.4) — red until the two actions are registered: main's append of what it did with its
+  // OB custody — red until the two actions are registered: main's append of what it did with its
   // own custody root is refused as not shell-owned. A record says an outcome and what was stopped, never a secret;
   // one made before a pair existed says when the thing happened and that it was deferred.
   it("admits what main records of its custody root from the shell: a root it made, an older pair it stopped", async () => {

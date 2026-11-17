@@ -1,4 +1,4 @@
-// OB custody (C2; CUSTODY-SPEC §2.3, EL7-PLAN §3.3) — THE SHELL PAIRS, IT DOES NOT BEAR.
+// OB custody (C2) — THE SHELL PAIRS, IT DOES NOT BEAR.
 //
 // At `files` the shell's whole authority is a bearer in `fieldd/run/shell.token`, which every process of the same
 // user can read (EL7's adversary, T1). A fieldd handed custody mints no such bearer: a `shell-main` hello carries a

@@ -7,7 +7,7 @@ import { createShellCustody } from "../src/main/custody/custody";
 import { probeResidentPair } from "../src/main/custody/resident-probe";
 import { fakeDerive, fakeKeystore, OWN, vibefieldTree } from "./custody-fakes";
 
-// OB custody, C1 (CUSTODY-SPEC §7; AL-3's quit gate) — a person's quit looks for every other user's resident pair
+// OB custody, C1 (AL-3's quit gate) — a person's quit looks for every other user's resident pair
 // with an adopt-only probe. Under `sealed` there is no token file to read: each pair is paired with ITS OWN shell
 // secret, derived for that user's root, so one user's secret is never offered at another's door. At `files` the
 // probe is the call it was. The supervisor's `tryAdopt` is a fake here: no socket is dialled.

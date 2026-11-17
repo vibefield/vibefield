@@ -1,4 +1,4 @@
-// OB custody (C2; CUSTODY-SPEC §1, §2.1) — the hand-off's reader (`src/custody-handoff.ts`): what `bin.ts` asks of
+// OB custody (C2) — the hand-off's reader (`src/custody-handoff.ts`): what `bin.ts` asks of
 // its stdin when its environment says `FIELDD_CUSTODY=stdin`.
 //
 // One line of JSON, a newline, then nothing more is read. The flag set and no valid line (absent, late, too long,

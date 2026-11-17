@@ -1516,7 +1516,7 @@ export async function bootstrap(
       set: (rootId, pid) => native.request("native.door.roots.set", { rootId, pid }),
       clear: (rootId) => native.request("native.door.roots.clear", { rootId }),
     },
-    // OB custody (rule 6; CUSTODY-SPEC §8.1.0) — THE LEVEL, for the runtime: what THIS process was booted with. A
+    // OB custody (rule 6) — THE LEVEL, for the runtime: what THIS process was booted with. A
     // fieldd handed custody gives the runtime the floor's started-for table (the link), so its launches are said to
     // the floor; a fieldd handed nothing gives it none, and the verb is never called. Never a file, an env var, or
     // the floor's word.
@@ -3479,7 +3479,7 @@ export async function bootstrap(
       },
       resume: async (runtimeRunId, principal, spark) => {
         try {
-          // OB custody (rule 6; CUSTODY-SPEC §8.1.0, the resume rule's case 1) — the spark the wake is waking, handed
+          // OB custody (rule 6; the resume rule's case 1) — the spark the wake is waking, handed
           // on as the launch call's own argument. A caller that names none resumes exactly as before
           const asked = spark !== undefined ? { spark } : undefined;
           const resumed = await agents.resume({ runtimeRunId }, principal, undefined, asked);
@@ -3796,7 +3796,7 @@ export async function bootstrap(
     // restart), the intent table the window answers, presence and the agents' undo. Its doors are registered below,
     // beside the needs-you queue's; the window's token is what they hold to.
     //
-    // OB custody (C4, C5, rule 6; CUSTODY-SPEC §8.1.0, §10) — THREE things the grants rest on are bound HERE and
+    // OB custody (C4, C5, rule 6) — THREE things the grants rest on are bound HERE and
     // nowhere else. The rows through this daemon, with nothing handed in at any of the three, are
     // custody-boot.test.ts's "the desk's store as the real daemon binds it" and agent-session.test.ts's "the desk
     // hands an object to a run the runtime launched".

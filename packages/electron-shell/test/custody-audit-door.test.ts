@@ -8,7 +8,7 @@ import { createShellCustody } from "../src/main/custody/custody";
 import { FielddHandleCoordinator } from "../src/main/fieldd-handle-coordinator";
 import { fakeDerive, fakeKeystore, keptLog, OWN, vibefieldTree } from "./custody-fakes";
 
-// OB custody, C1 (CUSTODY-SPEC §7.4 "v0.17" and "v0.18"; the PM, 2026-11-10 01:58:44Z) — what custody recorded before
+// OB custody, C1 — what custody recorded before
 // a pair existed is appended to the audit trail through the HANDLE of the pair that just came up, never through
 // main's `appendShellAudit`: that door begins with an ensure, and an append must never be what starts a pair. The
 // condition on that: if the handle is dead or the append fails, the record goes to main's LOG, and nothing starts a
@@ -18,7 +18,7 @@ import { fakeDerive, fakeKeystore, keptLog, OWN, vibefieldTree } from "./custody
 // the audit door spelled as `index.ts` spells it. They are GIVEN an injected keystore, an injected process table
 // and an injected handle (a pair whose client answers as the row says). `index.ts` is Electron's main module and
 // cannot be loaded by a row: its line is PINNED by the row at the foot that reads it, and the proof through the real
-// root is owed to the signed build's witness (CUSTODY-SPEC §10, v0.20).
+// root is owed to the signed build's witness (.
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const source = (relativePath: string): string =>

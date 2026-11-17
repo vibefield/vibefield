@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PLAIN_ROOT } from "./custody-fakes";
 
-// OB custody, C1 (CUSTODY-SPEC §7) — the one keystore the shell ships: Electron's own, which on macOS is the Keychain
+// OB custody, C1 — the one keystore the shell ships: Electron's own, which on macOS is the Keychain
 // item the packaged app's cookie encryption already uses. This file's `electron` is a stand-in that marks what it is
 // given, so the rows prove the adapter and never the Keychain: availability is the keystore's own answer, the bytes
 // cross as their base64 text (the API wraps text), and what comes back is refused unless it is that text again.

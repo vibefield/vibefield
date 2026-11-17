@@ -16,7 +16,7 @@ import { RecordSigner, type SignedRead } from "../src/signed-record";
 // making), `marks` (who remembers the grants' count: `survivor()` below), `key` (the handed record key, when a row
 // gives one), the grants file's write (`writeFile`), the clock (`now`) and the timers (`retryMs`, `noteMs`). So each
 // such row is a row GIVEN AN INJECTED `bornFor`, `marks` and `key`: it shows the store's rule given those. None of
-// them shows that production hands the store the real ones: that binding is proved by ob-d's rows through the real
+// them shows that production hands the store the real ones: that binding is proved by the rows through the real
 // daemon, `packages/fieldd/test/custody-boot.test.ts`.
 //
 // OB custody (C4, C5). Who a run is, for a grant, is what THIS fieldd launched or vouches for (`bornFor`): every run

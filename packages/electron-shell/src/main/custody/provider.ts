@@ -8,7 +8,7 @@ import {
 } from "@vibefield/trust";
 import type { CodeIdentityCheck } from "./level";
 
-// OB custody, C1 (CUSTODY-SPEC §7, §2.3) — ONE user root's custody, as the supervisor is handed it at the `sealed`
+// OB custody, C1 — ONE user root's custody, as the supervisor is handed it at the `sealed`
 // level. Nothing but the shell's root is stored anywhere: each of a user root's three secrets is derived from it
 // (trust's `deriveCustody`: HKDF, one label per secret, the user root's real path as the context), made when it is
 // asked for and dropped. So each user of an install has secrets of its own, a secret is never one user's at another's
@@ -20,11 +20,9 @@ import type { CodeIdentityCheck } from "./level";
 //     `childIsOurs`, asked ALWAYS with fieldd's signing identifier ("our team, hardened" is true of every binary the
 //     team signs, and only one of them is fieldd), and only about a child the supervisor spawned and has not reaped.
 //     It adds no wait of its own: how long a spawn may wait for it is the supervisor's.
-//     What a `true` does NOT say (read from how processes work, nothing run; item 288, not ruled): it is about the
-//     image at that pid at the moment it is asked. It does not say that image chose its own arguments, environment
-//     and descriptors, and it does not say nobody else holds the read end of the pipe. A process that forks and THEN
-//     becomes fieldd's image keeps its pid, passes, and has left a second reader of its stdin. So this stops a wrong
-//     binary that stays itself; whether anything stops one that does that is not decided here.
+//     What a `true` does NOT say: it is about the image at that pid at the moment it is asked, and no more. So
+//     this stops a wrong binary that stays itself (item 288, named here; whether anything stops more is not decided
+//     here).
 //   · `noted(marks)` — what the supervisor heard on fieldd's marks stream. The highest value per name is kept in
 //     memory and rides the NEXT hand-off as `expect`, so a store put back older than a survivor remembers reads as
 //     stale. The shell is one of a mark's two survivors (the floor is the other); a mark dies with both.

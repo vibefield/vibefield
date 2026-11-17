@@ -300,7 +300,7 @@ describe("tryAdopt: the non-adoption taxonomy (§12.2)", () => {
   });
 });
 
-// OB custody (CUSTODY-SPEC §10, "the default is the weaker path") — a probe proves itself with the bearer in
+// OB custody ("the default is the weaker path") — a probe proves itself with the bearer in
 // `shell.token` or with the shell's pairing secret, and the token file is the weaker of the two: any process of the
 // same user reads it. So `tryAdopt` has NO default. A caller that names no credential is a caller's mistake, said
 // at once, and is never put on the token file in silence.

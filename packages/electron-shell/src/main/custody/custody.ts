@@ -18,10 +18,10 @@ import {
   openCustodyRoot,
 } from "./root";
 
-// OB custody, C1 (EL7-PLAN §3.2; CUSTODY-SPEC §7, v0.14) — the shell's custody, whole: the level this boot runs at,
+// OB custody, C1 (the shell's custody, whole: the level this boot runs at,
 // the root under the OS keystore, each user root's hand-off, and the gate every pair's start goes through.
 //
-// NO KEY OR CUSTODY CONCEPT REACHES A PERSON (James, 2026-11-10): the app runs, or a start failed. There is no sheet,
+// NO KEY OR CUSTODY CONCEPT REACHES A PERSON: the app runs, or a start failed. There is no sheet,
 // no door for a window, no act a person presses and no sentence about any of this. Everything here happens by itself.
 //
 // At `files` it is inert on purpose: no keystore is made (the maker is never called), nothing is read or written,
@@ -295,7 +295,7 @@ export function createShellCustody<Pair = unknown>(
     else log?.info("desktop.custody.old_pairs_walked", message, walked);
   };
 
-  /** CUSTODY-SPEC §7.2, for the whole machine, once. Never rejects: whatever it could not do, the starts go on. */
+  /** For the whole machine, once. Never rejects: whatever it could not do, the starts go on. */
   const judgeOldPairs = async (): Promise<void> => {
     try {
       const users = options.userRoots();

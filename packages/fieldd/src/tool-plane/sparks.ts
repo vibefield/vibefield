@@ -201,7 +201,7 @@ export interface SparkServiceOptions {
   resume(
     runtimeRunId: string,
     principal: GrantPrincipal,
-    /** OB custody (CUSTODY-SPEC §8.1.0; the PM, 2026-11-10 01:58:44Z) — the spark this wake is waking */
+    /** OB custody — the spark this wake is waking */
     spark?: SparkId,
   ): Promise<{ runtimeRunId: string } | undefined>;
   now(): Date;

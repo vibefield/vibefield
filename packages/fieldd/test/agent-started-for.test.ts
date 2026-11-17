@@ -1,4 +1,4 @@
-// OB custody (CUSTODY-SPEC §8.1.0, rule 6) — a TYPED run and the floor's started-for table, on the REAL floor and
+// OB custody (rule 6) — a TYPED run and the floor's started-for table, on the REAL floor and
 // through the REAL daemon (agent-gateway-floor.ts, booted `sealed` or `files`).
 //
 // A typed run is a person's own launch, taken into the fold through the gateway on a bearer an agent can read by
@@ -8,7 +8,7 @@
 // THE FIRST TWO ROWS GO THROUGH THE REAL DAEMON with nothing injected. `daemon.ts` hands the runtime its link as the
 // floor's table only when custody was handed (the level), and the rows WATCH that link's `setStartedFor` with a spy
 // that calls through, so every answer is the real floor's. A typed run's terminal was listed long before its
-// adoption: it is the case of CUSTODY-SPEC §8.1.0 "v0.24" in which the row is already listed when the run enters,
+// adoption: it is the case of in which the row is already listed when the run enters,
 // so the set is said right then, once, and the floor takes it.
 //
 // The last row reads the source: that the adoption path cannot pass a spark is a property of a signature.

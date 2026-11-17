@@ -1,4 +1,4 @@
-// OB custody (C3; CUSTODY-SPEC §2.4) — THE FLOOR'S SEALED SPAWN (`src/native-bootstrap.ts`).
+// OB custody (C3) — THE FLOOR'S SEALED SPAWN (`src/native-bootstrap.ts`).
 //
 // A sealed fieldd spawns its floor with a piped stdin and `FIELD_NATIVE_CUSTODY=stdin`, writes ONE line, mgmt.ts's
 // `NativeBootstrap`, and closes the pipe. Nothing of the secret rides the environment or an argument. C6's seam is
@@ -8,7 +8,7 @@
 // The child is a fake with a stdin the row reads back. custody-boot.test.ts runs the same spawn under fieldd's real
 // entry, against a stand-in floor that writes down how it was born; native-pairing-sealed.test.ts holds the links.
 //
-// GIVEN AN INJECTED `verifyNativeChild` (the PM's rows rule, CUSTODY-SPEC v0.19): the C3 rows here hand the spawn a
+// GIVEN AN INJECTED `verifyNativeChild` (the C3 rows here hand the spawn a
 // verifier of their own and a fake child. They show the hand's own rule given that verifier (asked first; then
 // written, or ended and never written to) and are NO proof that production binds one. The binding is proved through
 // the real composition root in custody-boot.test.ts: "sealed, a floor that is not ours is written nothing and the

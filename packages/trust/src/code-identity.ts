@@ -10,15 +10,12 @@
 // line of their own stdin as a bootstrap, and an agent starts `field-native door` at will. One of them in a daemon's
 // place would pass a team check and be handed the custody line. The requirement therefore names the identifier first.
 //
-// What this is NOT: a check on a peer. A pid proves nothing about who holds a socket (fork, then exec the genuine
-// binary: the pid passes and the first process speaks). And for a spawned child, a `true` is about the IMAGE at that
-// pid at the moment it is asked, and about nothing else. It does not say that image chose its own arguments,
-// environment and descriptors, and it does not say that nobody else holds the read end of the pipe: a program that
-// forks and THEN becomes the genuine binary keeps its pid, passes, and has left a second reader of its stdin.
-// What a child its caller spawned and has not reaped does give is narrower: its pid cannot have been taken by another
-// process, so the answer is about that child's image and nobody else's. `processIsOurs` says what it is not about
-// itself.
-// *Corrected 2026-11-10 (item 288; James's pick, NOT ruled). The opening said a swapped binary is "never handed a
+// What this is NOT: a check on a peer, or on who else may hold a child's pipe. For a spawned child, a `true` is about
+// the IMAGE at that pid at the moment it is asked, and about nothing else: it stops a wrong binary that stays itself,
+// and no more (item 288, named here; nothing in this module stops a program written to pass). What a child its caller
+// spawned and has not reaped does give is narrower: its pid cannot have been taken by another process, so the answer
+// is about that child's image and nobody else's. `processIsOurs` says what it is not about itself.
+// *Corrected 2026-11-10 (item 288). The opening said a swapped binary is "never handed a
 // secret", with no condition, and this paragraph said `childIsOurs` "is sound" for a child its caller spawned.
 // Neither holds for a program written to pass, and nothing in this module stops that one.*
 //
@@ -165,11 +162,9 @@ async function satisfies(
  * runtime: the dynamic check (`codesign --verify -R … +pid`), then its runtime flag. Only for a child the caller
  * spawned and has not reaped: its pid is then that child's and no other process's, so the answer is about that
  * child's image and nobody else's. Await it BEFORE writing anything to the child. It stops a wrong binary that stays
- * itself. A `true` does not say that image chose its own arguments, environment and descriptors, or that nobody
- * else holds the read end of the child's stdin.
- * *Corrected 2026-11-10 (item 288; James's pick, NOT ruled): this said the pid's being the child's "is what makes a
- * pid check sound here". It makes the answer be about the right process. It does not make a hand-off on that answer
- * safe from a program that forks and then becomes this binary.*
+ * itself, and no more (item 288, named here).
+ * *Corrected 2026-11-10 (item 288): this said the pid's being the child's "is what makes a
+ * pid check sound here". It makes the answer be about the right process, and no more.*
  */
 export function childIsOurs(
   pid: number,

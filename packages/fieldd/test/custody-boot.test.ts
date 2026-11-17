@@ -1,4 +1,4 @@
-// OB custody (C2; CUSTODY-SPEC §1, §2.3; EL7-PLAN §3.2, §3.3) — THE TWO LEVELS AT BOOT.
+// OB custody (C2) — THE TWO LEVELS AT BOOT.
 //
 // `files` is today, byte for byte: `fieldd/run/shell.token` (0600, every scope) beside `product.json`. `sealed` is a
 // fieldd whose spawner handed it custody on stdin: it writes no `shell.token`, `product.json` says which level it is
@@ -174,7 +174,7 @@ describe("a fieldd handed nothing (files)", () => {
   });
 });
 
-// ---- the desk's store, as the real daemon binds it (C4, C5, rule 6; CUSTODY-SPEC §10, rows 2 to 4) ----
+// ---- the desk's store, as the real daemon binds it (C4, C5, rule 6) ----
 //
 // Three things the desk's grants rest on are handed to the store and the desk by `daemon.ts` and by nothing else:
 //   · the KEY the grants are signed under (`ObjectsStoreOptions.key`: the spawner's `records`, on no disk);
@@ -192,9 +192,8 @@ describe("a fieldd handed nothing (files)", () => {
 // nothing. A hand to a run the runtime really launched, on the real floor, is agent-session.test.ts's "the desk hands
 // an object to a run the runtime launched".
 //
-// These rows load only on the JOINED tree: `LAYOUT.OBJECTS_GRANTS_FILE` (ob-k's K2), the store's `grantsPath`, `key`
-// and `marks`, the signer's `key` and the desk's `bornFor` (ob-o, `ob/custody-objects`) are not on
-// `ob/custody-fieldd` alone.
+// These rows need the custody contracts (`LAYOUT.OBJECTS_GRANTS_FILE`, K2) and the store's `grantsPath`, `key`
+// and `marks`, the signer's `key` and the desk's `bornFor` (C4): they load on the joined tree alone.
 
 /** The run the desk is asked about: the scripted agent's, on the fixture's agent PTY. */
 const RUN = "run-desk";
@@ -478,8 +477,8 @@ describe("the desk's store as the real daemon binds it (C4, C5, rule 6)", () => 
     expect(daemon.custodyMarks.get(MARK)).toBe(file.generation);
   });
 
-  // THE STOP (the lead, 2026-11-10, on ob-d's note at `9675e5a08`; the PM's bound of 04:39:21Z: the stop releases
-  // the desk's store and its one timer, and nothing of what the stop removes moves). The store writes a take-back
+  // THE STOP: the stop releases
+  // the desk's store and its one timer, and nothing of what the stop removes moves. The store writes a take-back
   // the disk would not take AGAIN on a timer (grants-file.ts `RETRY_MS`, 5 s; production hands the store no other).
   // That timer belongs to a fieldd that is alive. Left armed past the stop, it writes a signed grants file under a
   // root that is the next fieldd's by then, or a test's temp root that is gone.
@@ -863,7 +862,7 @@ setInterval(() => {}, 1_000);
 
   /** A stand-in for `/usr/bin/codesign` INSIDE the fieldd a row starts, and nowhere else: a script the row hands
    * Node as `--require`, so it is loaded before fieldd's bundle and answers `execFile` for that one file. It sits
-   * BELOW `@vibefield/trust` (CUSTODY-SPEC §2.4 "v0.15": a row "may replace only what sits below the binding (the
+   * BELOW `@vibefield/trust` (a row "may replace only what sits below the binding (the
    * `codesign` tool trust runs)"): fieldd's entry, its verifier and trust's own two questions all run as they are.
    * It answers the two invocations trust makes, in the words codesign's manual gives them, from what the row says
    * of the two processes, and it writes every question down.
@@ -1060,7 +1059,7 @@ childProcess.execFile = execFile;
       expect(stream, what).not.toContain(FLOOR_PAIRING);
   }
 
-  // C3 and C6 under the real entry (CUSTODY-SPEC §2.4 "v0.15"; the PM's rule of v0.18: a seam's rows go through the
+  // C3 and C6 under the real entry (a seam's rows go through the
   // real composition root, nothing injected at the seam). Every row from here to the `files` guard is fieldd's own
   // entry, bundled as its build bundles it and run as a process, with NO verifier handed in: what asks is `bin.ts`'s
   // own wiring, fieldd's verifier and trust's two questions. A fieldd handed custody asks whose code its floor is

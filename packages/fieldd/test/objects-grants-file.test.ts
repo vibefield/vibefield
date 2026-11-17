@@ -30,7 +30,7 @@ import {
 //
 // Given an injected `key`: a store is `sealed` here because a row hands it 32 bytes (`HANDED`), with `marks` and
 // `bornFor` of desk-fixtures.ts's making, and the rows show the store's rule given them. None shows that a spawner
-// really hands a key, or that the daemon passes it to the store: that is proved by ob-d's rows through the real
+// really hands a key, or that the daemon passes it to the store: that is proved by the rows through the real
 // daemon, `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(cleanupWorlds);

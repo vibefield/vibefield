@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createDeskVerbs } from "../src/tool-plane/rooms/desk/verbs";
 import { cleanupWorlds, type DeskWorld, DOC, world } from "./desk-fixtures";
 
-// OB custody, C4 (OB-D18 A; rev-custody B3) — who a run is, for a grant, is fieldd's own memory of what it launched
+// OB custody, C4 (OB-D18 A) — who a run is, for a grant, is fieldd's own memory of what it launched
 // (`bornFor`), never a record read back from disk: the sessions' key is a file an agent can read, so a run's record can
 // be rewritten to name any spark. Nothing in objects reads a session's record, to give or to take. A run nothing
 // vouches for (re-attached at boot, and not named again by fieldd's launch memory) holds nothing, and a hand to it
@@ -15,7 +15,7 @@ import { cleanupWorlds, type DeskWorld, DOC, world } from "./desk-fixtures";
 // Given an injected `bornFor`: every row here is handed one of desk-fixtures.ts's making (what a world's runs were
 // named as, and which of them a restart vouches for), with a survivor for `marks`, and shows the store's rule given
 // it. None shows what fieldd's launch memory really answers, or that the daemon hands it to the store: that is proved
-// by ob-d's rows through the real daemon, `packages/fieldd/test/custody-boot.test.ts`.
+// by the rows through the real daemon, `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(cleanupWorlds);
 
@@ -221,7 +221,7 @@ describe("a resume carries grants only between runs this fieldd launched (OB-D18
 });
 
 // OB-D18 is ONE rule, at the settle (the spec's §8.1.5): what a plain run held when fieldd booted ends, whether or not
-// fieldd vouches for the run again. `plainHoldAtBoot` decides it, never `bornFor`; `"end"` is James's pick and the only
+// fieldd vouches for the run again. `plainHoldAtBoot` decides it, never `bornFor`; `"end"` is OB-D18's pick (A) and the only
 // value anything passes. What stood at boot serves nobody from the boot on, and the settle writes that down.
 describe("a plain run's hold at boot ends, vouched or not (OB-D18 A; `plainHoldAtBoot`)", () => {
   it("under `end`, a vouched plain run's old grant is gone after the boot, and a new hand to it is granted", () => {
@@ -278,7 +278,7 @@ describe("a plain run's hold at boot ends, vouched or not (OB-D18 A; `plainHoldA
     const again = h.reopen({ vouched: ["run-a"] });
     // until the settle has judged it, what stood at boot serves nobody, whichever rule it will be
     expect(again.grantOf(ref, "run-a")).toBeUndefined();
-    // OB-D18 is James's pick, and it is "end": nothing but this row passes the other value
+    // OB-D18's pick is A, "end": nothing but this row passes the other value
     again.reconcile({ plainHoldAtBoot: "keep-vouched" });
     expect(again.grantOf(ref, "run-a")?.how).toBe("handed");
     // a run nothing vouches for keeps nothing under either rule

@@ -34,7 +34,7 @@ import {
 //
 // Given an injected `marks`: every row here hands the store its survivor (one of desk-fixtures.ts's making), its
 // write, its timers and, through the world, `bornFor`, and shows the store's rule given those. That production binds
-// the real ones is proved by ob-d's rows through the real daemon, `packages/fieldd/test/custody-boot.test.ts`.
+// the real ones is proved by the rows through the real daemon, `packages/fieldd/test/custody-boot.test.ts`.
 
 afterEach(() => {
   cleanupWorlds();

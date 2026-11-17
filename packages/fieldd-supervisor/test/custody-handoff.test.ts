@@ -225,7 +225,7 @@ describe("a sealed spawn hands fieldd custody", () => {
   });
 });
 
-// C6c (CUSTODY-SPEC §2.4, "one budget for the check") — the supervisor is fieldd's SPAWNER: the spawn, the wait on
+// C6c ("one budget for the check") — the supervisor is fieldd's SPAWNER: the spawn, the wait on
 // the check and the hand-off's write are all its own, so everything between a spawn and its write is its to bound,
 // here and not behind the seam it asks.
 //

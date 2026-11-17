@@ -709,7 +709,7 @@ interface SetupConfig {
    * running and its records on disk: the restart */
   restartOf?: Box;
   resumeWhenIdle?: { afterMs: number; pollMs: number };
-  /** OB custody (CUSTODY-SPEC §8.1) — boot SEALED: a real floor is told its pairing comes on stdin and is written
+  /** OB custody — boot SEALED: a real floor is told its pairing comes on stdin and is written
    * the one line, and fieldd is handed this custody (`FielddConfig.custody`, the seam a pipe fills in `bin.ts`). A
    * sealed fieldd has no shell token: its windows pair (`sealedWindow`). A restart of a sealed box names it again.
    * Absent: `files`, as every row here was. */
@@ -1009,7 +1009,7 @@ async function window(daemon: FielddDaemon, scopes: string[], suffix: string): P
 }
 
 /** OB custody — `window` for a SEALED fieldd (`setup({ custody })`). It has no shell token: the shell PAIRS under
- * the secret it was handed (CUSTODY-SPEC §2.3; custody-harness.ts spells the recipe), then mints the window's token
+ * the secret it was handed (custody-harness.ts spells the recipe), then mints the window's token
  * as any shell does. */
 async function sealedWindow(
   daemon: FielddDaemon,
@@ -6824,15 +6824,15 @@ describe("item 121 — a run TC-D4's fallback put on the interactive cell re-att
   }, 150_000);
 });
 
-// OB custody (CUSTODY-SPEC §8.1.0, rule 6) — LAUNCH MEMORY, and the floor is told what each terminal was started for.
+// OB custody (rule 6) — LAUNCH MEMORY, and the floor is told what each terminal was started for.
 // A run's record is signed under a key file an agent can read, so who a run is, for a grant, is never read back from
 // it. fieldd remembers what IT launched (`agents.bornFor`), and a fieldd that was handed custody says the same to the
 // floor, so that the next fieldd is handed it in the hello ack. A fieldd handed nothing keeps the memory and tells
 // the floor nothing.
 //
-// WHEN it is said (CUSTODY-SPEC §8.1.0 "v0.24"): ONCE, when the run's row is first seen running in an inventory.
+// WHEN it is said: ONCE, when the run's row is first seen running in an inventory.
 // The floor takes a set only for a terminal its own inventory lists, and a set sent in the turn a new terminal is
-// born can reach it first (ob-d's finding of 2026-11-10). A row already listed when the run enters is said right
+// born can reach it first. A row already listed when the run enters is said right
 // then; a run that leaves the fold before its row is ever seen is never said; a later inventory says nothing more.
 //
 // THE ROWS TITLED "through the real daemon" run on the real floor with nothing injected. `daemon.ts` hands the
@@ -6845,7 +6845,7 @@ describe("item 121 — a run TC-D4's fallback put on the interactive cell re-att
 // The rows titled "GIVEN AN INJECTED FLOOR" replace `setStartedFor`'s ANSWER on the same real daemon, to show the
 // runtime's rule for each word the link can say. They prove nothing of the binding.
 //
-// COUNTED, NOT GATED (the PM's row 4): of the first row's launches, how many sayings the real floor answered
+// COUNTED, NOT GATED: of the first row's launches, how many sayings the real floor answered
 // `not-found`. It prints `STARTED_FOR_COUNT` and asserts nothing of it; none is expected in this form.
 describe("OB custody §8.1 — launch memory, and the floor is told what each terminal was started for", () => {
   const SEALED = { floor: "real", custody: HANDED } as const;
@@ -6982,7 +6982,7 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
     const panes = [plain.terminal.sessionId, paneId, ...others];
     expect(said.mock.calls.map(([sessionId]) => sessionId).sort()).toEqual([...panes].sort());
 
-    // THE COUNT (the PM's row 4), for whoever reads this row's output; nothing is asserted of it
+    // THE COUNT, for whoever reads this row's output; nothing is asserted of it
     const answers = await Promise.all(said.mock.results.map((result) => result.value));
     const notFound = answers.filter((answer) => answer === "not-found").length;
     const count = { launches: panes.length, notFound, answers };
@@ -7352,7 +7352,7 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
   // ── RE-ATTACH (§8.1.0): the next fieldd reads the floor's table once, and a run is vouched iff the entry for its
   // terminal names it. Here the table is the real floor's, holding what the FIRST fieldd said of its own launches:
   // the whole chain, with nothing injected. The mock-floor rows for each rule are agent-reattach-vouch.test.ts's.
-  it("sealed, through the real daemon (the PM's row 4): a run launched at sealed is vouched after a fieldd restart, a plain run plain and a spark's run its spark's although its record was rewritten to name another; and a door resume of that vouched run is the spark's", async () => {
+  it("sealed, through the real daemon: a run launched at sealed is vouched after a fieldd restart, a plain run plain and a spark's run its spark's although its record was rewritten to name another; and a door resume of that vouched run is the spark's", async () => {
     const config: SetupConfig = {
       floor: "real",
       attach: true,
@@ -7470,7 +7470,7 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
     expect(logged(box, mismatch)).toBe(1);
   }, 240_000);
 
-  // ── THE DESK (CUSTODY-SPEC §10, rows 2 to 4; §8.1.0's `daemon.ts` lines). `daemon.ts` alone hands the objects store
+  // ── THE DESK. `daemon.ts` alone hands the objects store
   // its key and the marks, and hands the desk the runtime's launch memory. Here the runs are ones the runtime really
   // LAUNCHED, on the real floor, and the real floor keeps the count: nothing is injected, and the link's `setMark` is
   // WATCHED. The mock-floor rows (a re-attached run with and without an entry on the ack, an older grants file put

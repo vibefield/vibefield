@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { resolveCustodyLevel } from "../src/main/custody/level";
 import { OWN } from "./custody-fakes";
 
-// OB custody, C1 (CUSTODY-SPEC §7; EL7-PLAN §3) — the level is decided by the shell from what the BUILD is, never from
+// OB custody, C1 — the level is decided by the shell from what the BUILD is, never from
 // what the disk holds, so there is nothing on disk to delete that downgrades it: `sealed` for a packaged shell on
 // macOS whose own signature carries a team and the hardened runtime, `files` for every other build. Whose code this
 // process is comes from trust's `ownIdentity`, which the rows stand in for; no row runs codesign.

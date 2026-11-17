@@ -407,14 +407,14 @@ export class MockMgmtServer {
   verifyClientMac = false;
   /** OB custody (C3) — the hellos `verifyClientMac` refused */
   refusedHellos = 0;
-  /** OB custody (C5) — the marks this floor holds, as field-native is specified to keep them (CUSTODY-SPEC §2.5): a
+  /** OB custody (C5) — the marks this floor holds, as field-native is specified to keep them: a
    * name and the highest value it was told, in memory. The hello ack carries them when there are any, as they
    * stand (a row may seed one no floor would hold, to see the client drop it). They are the floor's, not a
    * connection's: `killClients()` leaves them. A floor that DIED and came back is `marks.clear()` beside it. */
   readonly marks = new Map<string, number>();
   /** OB custody (C5) — every `native.marks.set` whose params parsed, in order, as asked: answered or refused. */
   readonly markSets: Array<{ name: string; value: number }> = [];
-  /** OB custody (rule 6; CUSTODY-SPEC §8.1.0) — the started-for table this floor holds, as field-native is specified
+  /** OB custody (rule 6) — the started-for table this floor holds, as field-native is specified
    * to keep it: what each terminal was started for, by its session id, in memory (custody.ts `TerminalStartedFor`).
    * The hello ack hands it when there is any. It is the floor's, not a connection's: `killClients()` leaves it. */
   readonly startedFor = new Map<string, object>();
@@ -633,7 +633,7 @@ export class MockMgmtServer {
       return;
     }
     if (msg.method === "native.marks.set") {
-      // OB custody (C5) — as the floor is specified to answer it (CUSTODY-SPEC §2.5, mgmt.ts `NativeMarksSet*`): a
+      // OB custody (C5) — as the floor is specified to answer it (mgmt.ts `NativeMarksSet*`): a
       // mark only rises, a name off the pattern is the params' own parse failure, and one name more than
       // `CUSTODY.MARKS_MAX` is refused with the door's roots' error shape.
       const refuse = (message: string, details?: unknown): void => {
@@ -677,7 +677,7 @@ export class MockMgmtServer {
       return;
     }
     if (msg.method === "native.terminal.startedFor.set") {
-      // OB custody (rule 6) — as the floor answers it (CUSTODY-SPEC §8.1.0; mgmt.ts `NativeTerminalStartedForSet*`;
+      // OB custody (rule 6) — as the floor answers it (mgmt.ts `NativeTerminalStartedForSet*`;
       // field-native `mgmt/started_for.rs`), in the floor's order: a floor not booted by the hand-off keeps no table,
       // and says so before a word of the params is read; params that are not the contract's are refused; the
       // terminal must be one it lists as running; a set with no `startedFor` clears (clearing nothing is no error);

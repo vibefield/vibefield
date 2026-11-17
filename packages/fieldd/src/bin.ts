@@ -192,7 +192,7 @@ async function main(): Promise<void> {
   // OB custody (C3; native-bootstrap.ts) — a fieldd handed custody hands its floor the pairing: the floor is spawned
   // with a piped stdin and its own flag, written ONE line, and its stdin closed. Nothing of the secret is in the
   // environment above or in an argument. A fieldd handed nothing loads none of this and spawns as it always has.
-  // C6 (CUSTODY-SPEC §2.4 "v0.15") — and only to OUR floor. Before the line is written the child is asked about, by
+  // C6 — and only to OUR floor. Before the line is written the child is asked about, by
   // the verifier made here ONCE for the life of this process: the boot's spawn and every respawn share it. It
   // takes nothing from here, so nothing can stand in for its questions, which are trust's own (packages/trust): whose
   // code this fieldd is, asked once, then whether the child is the floor's signing identifier, of the same team,
