@@ -28,7 +28,6 @@
 // and a decoy beside it.
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -114,6 +113,7 @@ import { SparkStore } from "../src/tool-plane/sparks";
 import { RootsRegistry } from "../src/workspace/roots";
 import { born } from "./agent-birth";
 import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
+import { installFakeClaude } from "./fake-claude";
 import {
   type FloorScene,
   killDaemonTree,
@@ -131,7 +131,6 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BIN = nativeBinPath(ROOT);
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const FAKE_ROSETTAD = join(FIXTURES, "fake-rosettad.mjs");
-const FAKE_CLAUDE = join(FIXTURES, "fake-claude");
 const fakeSpawner = (mode: string, extra: Record<string, string> = {}): typeof spawn =>
   ((_bin: string, args: readonly string[], options: object) =>
     spawn(process.execPath, [FAKE_ROSETTAD, ...args], {
@@ -729,7 +728,7 @@ async function setup(config: SetupConfig): Promise<Box> {
   if (restart === undefined) {
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     mkdirSync(bin);
-    copyFileSync(FAKE_CLAUDE, join(bin, "claude"));
+    installFakeClaude(bin);
     mkdirSync(envOut);
     mkdirSync(home, { recursive: true });
   }
@@ -761,14 +760,14 @@ async function setup(config: SetupConfig): Promise<Box> {
   // this variable at construction); the real-agent block leaves it unset so
   // the vendor's own binary is launched.
   // Codex, the other adapter that reads who is signed in, is pinned to a path
-  // that does not exist, so no row can run a developer's own codex; the fake
-  // claude keeps This Mac's signed-out mark in the test's own folder.
+  // that does not exist, so no row can run a developer's own codex. The fake
+  // claude keeps This Mac's signed-out mark in the test's own folder, named by
+  // its wrapper (`installFakeClaude`: a variable set here never reaches a probe).
   const pins: Record<string, string | undefined> = config.realAgent
     ? { PUPPETEER_CLAUDE_BIN: undefined }
     : {
         PUPPETEER_CLAUDE_BIN: join(bin, "claude"),
         PUPPETEER_CODEX_BIN: join(bin, "no-real-codex"),
-        FAKE_CLAUDE_STATE_DIR: bin,
       };
   for (const [name, value] of Object.entries(pins)) {
     const previous = process.env[name];

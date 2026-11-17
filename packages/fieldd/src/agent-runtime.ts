@@ -96,7 +96,7 @@ import {
 import { birthWithDoor, refusedTheDoor, UNSUPPORTED_LAUNCH_FIELD } from "./agent-door-launch";
 import { AgentExtensionStore } from "./agent-extension-store";
 import { AgentExtensionService } from "./agent-extensions";
-import { createTerminalAgentHost, type TerminalAgentHost } from "./agent-host";
+import { agentEnvironment, createTerminalAgentHost, type TerminalAgentHost } from "./agent-host";
 import type { IndexService } from "./agent-index";
 import { AgentModelCatalogs } from "./agent-models";
 import { type CellVerdict, cellAdmits } from "./agent-placement";
@@ -869,9 +869,23 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // A home given here is a test's: puppeteer's native-default roots and the
     // extension readers hang off it, and never follow this machine's own
     // variables. Production passes none, so each agent reads where it would.
+    const home = opts.home !== undefined ? { home: opts.home } : {};
+    // item 50 (EL7) — what the composition starts ON ITS OWN (an install's
+    // `--version` and `--help`, an identity read, a sign-in and a sign-out, an
+    // update check, account usage and model listings, and the helpers those
+    // run) runs under the PTY path's law, never the daemon's own environment:
+    // `agentEnvironment`'s allow-list, FIELD_*/FIELDD_* stripped last, with no
+    // adapter variables. Before, those runs inherited fieldd's whole environment
+    // (its FIELDD_* keys, FIELD_LOG_DIR, ELECTRON_RUN_AS_NODE and the launching
+    // shell's tokens; the godview smoke's stub saw them, 2026-10-19).
+    // puppeteer 0.4.2's `serviceEnvironment` is the seam: the composition hands
+    // it to every service it builds. One snapshot at composition,
+    // as fieldd's environment never changes in its lifetime. A probe that needs
+    // another variable grows AGENT_ENV_PASSTHROUGH, the one list both read.
     const builtin = createBuiltinProviders({
       executables: executables as BuiltinProviderOptions["executables"],
-      ...(opts.home !== undefined ? { home: opts.home } : {}),
+      ...home,
+      serviceEnvironment: agentEnvironment(home),
     });
     // AR-S4d (pass 24, S1) — a profile's server values, in the keychain; an
     // agent is given those of the servers VibeField gave it, when it starts.

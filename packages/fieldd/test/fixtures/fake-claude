@@ -13,7 +13,9 @@
 # afterwards, as the vendor's does — the adapter confirms a sign-out that way. A
 # bound root (CLAUDE_CONFIG_DIR) keeps the mark inside itself; the agent's own
 # folder keeps it under FAKE_CLAUDE_STATE_DIR when a test names one, and nowhere
-# otherwise: never in the developer's real ~/.claude.
+# otherwise: never in the developer's real ~/.claude. A test names it in the
+# wrapper it runs this through (test/fake-claude.ts), since the adapter's probes
+# run under the PTY path's allow-list (item 50) and never see the test's own.
 # PJ-6: `--print --input-format stream-json …` is the model picker read
 # (puppeteer's Claude model service): one `initialize` control request on
 # stdin, answered with the vendor's own `models` rows — two of them, the first

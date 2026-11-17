@@ -6826,6 +6826,18 @@ async function typedAgentRows(ctx: {
     if (leaked.length > 0) {
       throw new Error(`the agent was handed variables it must never see: ${leaked.join(", ")}`);
     }
+    // item 50 (EL7) — and so was no run of it this boot made on its own: the
+    // launch's probes (`--version`, `--help`), the model picker's read and the
+    // install reads run under the PTY path's law too, never fieldd's own
+    // environment (the stub saw FIELDD_* keys in them, 2026-10-19).
+    for (const call of readTypedAgentCalls(staged.calls)) {
+      const named = leakedVariables(call);
+      if (named.length > 0) {
+        throw new Error(
+          `the stub's run \`${call.argv.join(" ")}\` was handed variables it must never see: ${named.join(", ")}`,
+        );
+      }
+    }
     if (stub.ppid !== shellPid) {
       throw new Error(`the agent's parent is ${stub.ppid}, not the pane's shell ${shellPid}`);
     }

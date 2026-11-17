@@ -52,6 +52,7 @@ import {
   type AgentsSetActiveResult,
   type AgentsUpdateResult,
   catalogEntry,
+  ENV_PREFIXES,
   type IndexDiscoveriesResult,
   type IndexEnrollmentRecord,
   type IndexStatus,
@@ -72,6 +73,7 @@ import { bootstrap, type FielddDaemon } from "../src/index";
 import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { catalogWith } from "./agent-catalog-fixture";
+import { fakeClaudeEnvNames, installFakeClaude } from "./fake-claude";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
@@ -125,7 +127,6 @@ function pinClaude(bin: string): void {
   const pins: Record<string, string> = {
     PUPPETEER_CLAUDE_BIN: join(bin, "claude"),
     PUPPETEER_CODEX_BIN: join(bin, "no-real-codex"),
-    FAKE_CLAUDE_STATE_DIR: bin,
   };
   for (const [name, value] of Object.entries(pins)) {
     const previous = process.env[name];
@@ -166,7 +167,7 @@ async function setup(
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
   const bin = join(root, "bin");
   mkdirSync(bin);
-  copyFileSync(FAKE_CLAUDE, join(bin, "claude"));
+  installFakeClaude(bin);
   pinClaude(bin);
   if (config.profiles !== undefined) {
     mkdirSync(join(dataDir, ...LAYOUT.AGENTS_DIR), { recursive: true });
@@ -1524,7 +1525,7 @@ async function setupAt(
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
   const bin = join(root, "bin");
   mkdirSync(bin, { recursive: true });
-  copyFileSync(FAKE_CLAUDE, join(bin, "claude"));
+  installFakeClaude(bin);
   pinClaude(bin);
   if (config.profiles !== undefined) {
     mkdirSync(join(dataDir, ...LAYOUT.AGENTS_DIR), { recursive: true });
@@ -1850,6 +1851,32 @@ describe("distribution (AR-2) — native evidence in, the one machine-scope reco
     const embedded = await setup();
     await ready(embedded.daemon);
     expect(existsSync(join(embedded.root, "logs"))).toBe(false);
+  }, 20_000);
+
+  it("an install's probe runs under the PTY path's law, never the daemon's environment (item 50, EL7)", async () => {
+    // The godview smoke's stub saw it (2026-10-19): what puppeteer starts on
+    // its own inherited fieldd's whole environment. It takes the allow-list
+    // of `agentEnvironment()` now (puppeteer 0.4.2's `serviceEnvironment`), so
+    // neither a FIELDD_* key nor a variable no list names reaches a probe, and
+    // PATH and HOME do.
+    for (const name of ["FIELDD_PROBE_SENTINEL", "VF_PROBE_UNLISTED"]) {
+      const previous = process.env[name];
+      process.env[name] = "1";
+      cleanup.push(() => {
+        if (previous === undefined) delete process.env[name];
+        else process.env[name] = previous;
+      });
+    }
+    const product = await setup({ warm: true });
+    await ready(product.daemon);
+    // the boot's inventory read classifies the scripted claude by its `--version`
+    await until(() => fakeClaudeEnvNames(product.bin).size > 0, 10_000);
+    const names = [...fakeClaudeEnvNames(product.bin)];
+    expect(names.filter((name) => ENV_PREFIXES.some((prefix) => name.startsWith(prefix)))).toEqual(
+      [],
+    );
+    expect(names).not.toContain("VF_PROBE_UNLISTED");
+    expect(names).toEqual(expect.arrayContaining(["PATH", "HOME"]));
   }, 20_000);
 
   it("agents.update.stop: says when nothing is running, is audited, and needs agents.manage", async () => {
