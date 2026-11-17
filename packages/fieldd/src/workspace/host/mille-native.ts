@@ -12,9 +12,10 @@ declare const __MILLE_PACKAGE_VERSION__: string | undefined;
 // a packaged fieldd is a single-executable application with no node_modules to
 // search, and a development one loads exactly the file fieldd staged.
 //
-// The shape is mille 0.3.4's `native.js` export surface: `native` (the
-// binding) and `nativeLoadInfo` (its provenance, read by `buildIdentity`).
-// A pin move re-checks it (EL8): the bundle's own test loads the engine.
+// The shape is mille 0.3.6's `native.js` export surface: `native` (the
+// binding) and `nativeLoadInfo` (`source`, `resolvedPath` and
+// `packageVersion`, read by `buildIdentity`). A pin move re-checks it (EL8):
+// the bundle's own test loads the engine.
 
 const resolvedPath = milleNativePath();
 const loaded = { exports: {} as Record<string, unknown> };
