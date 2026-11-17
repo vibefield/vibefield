@@ -1,5 +1,6 @@
 import type { CallerContext, ObjectIntent } from "@vibefield/contracts";
 import { METHODS, TAILNET_SCOPES } from "@vibefield/contracts";
+import { AuditActionV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
 import { type ObjectDoorsApi, registerObjectDoors } from "../src/objects/doors";
 import type { ToolPlaneAudit } from "../src/tool-plane";
@@ -37,6 +38,8 @@ function doors(h: ReturnType<typeof world>) {
   const audited: unknown[] = [];
   const audit: ToolPlaneAudit = {
     required: async (ctx, mutation, effect, describe) => {
+      // the real writer refuses an action outside the audit's own grammar: the fake holds the door to it as well
+      AuditActionV1.parse(mutation.action);
       const value = await effect();
       audited.push({
         action: mutation.action,
@@ -151,7 +154,7 @@ describe("the window's door (OB-3a)", () => {
         outcome: "succeeded",
       }),
       expect.objectContaining({ action: "objects.hand", outcome: "denied" }),
-      expect.objectContaining({ action: "objects.takeBack", attrs: { run: "run-a" } }),
+      expect.objectContaining({ action: "objects.take_back", attrs: { run: "run-a" } }),
     ]);
     expect(h.desk.registry.grantOf(ref, "run-a")).toBeUndefined();
   });

@@ -106,7 +106,7 @@ export function registerObjectDoors(api: ObjectDoorsApi, deps: ObjectDoorsDeps):
     const { ref, run } = parsed.data;
     return audit.required(
       ctx,
-      { action: "objects.undoAgent", target: target(ref), attrs: { run } },
+      { action: "objects.undo_agent", target: target(ref), attrs: { run } },
       () => objects.undoAgent(ref, run),
       (value) => ({ outcome: value.undone ? "succeeded" : "denied" }),
     );
@@ -120,7 +120,7 @@ export function registerObjectDoors(api: ObjectDoorsApi, deps: ObjectDoorsDeps):
     objects.registry.readable();
     return audit.required(
       ctx,
-      { action: "objects.takeBack", target: target(ref), attrs: { run } },
+      { action: "objects.take_back", target: target(ref), attrs: { run } },
       () => {
         objects.takeBack(ref, run);
         return { taken: true as const };
