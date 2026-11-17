@@ -42,8 +42,14 @@ public struct WebFrontRule: Sendable, Equatable {
 
   /// The admit for one CONNECT: `name` as the page asked for it, `isName` false when it asked by address.
   public func admit(name: String, port: Int, isName: Bool) -> Admit {
-    // RED: no rule yet: the origin by its own dial, every other CONNECT carried on.
-    WebOrigin.bare(name) == policy.origin.host ? .origin : .declared(WebOrigin.bare(name))
+    var name = WebOrigin.bare(name)
+    // One root dot, as a DNS name may carry; never a leading one, and never two.
+    if name.hasSuffix(".") { name.removeLast() }
+    guard isName, !Self.isAddress(name) else { return .refused(.address) }
+    if name == policy.origin.host { return port == policy.origin.port ? .origin : .refused(.port) }
+    if WebNavigationPolicy.isTailnet(host: name) { return .refused(.tailnet) }
+    if let declared = policy.reach.first(where: { $0 == name }) { return .declared(declared) }
+    return .refused(.undeclared)
   }
 
   /// An address: an IPv6 literal (it holds a colon), or a name whose LAST label is all digits, or `0x` and any hex

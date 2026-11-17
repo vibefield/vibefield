@@ -5,9 +5,9 @@
 // - each marker stands ONLY inside that gate's own branch (never its #else, never a comment or string outside it);
 // - the script tag stands only in FieldWeb's Host folder;
 // - item 522 (2026-11-17): no app source outside FieldWeb names the host or its navigation type, gated or not, so no
-//   view mounts the web host before its filtering front stands. It is unconditional. It lifts only in the front's own
-//   green commit, which changes this rule and its self-test rows in the same breath as `FieldWebAppHost.open` comes
-//   to take the front, so that a host without its front is then a compile error;
+//   view mounts the web host. It is unconditional. Item 522's filtering front now stands (the host opens a page only
+//   through it); the rule waits on item 524's reading, whether WebRTC or WebTransport leave a page around its proxy,
+//   and lifts in the commit that records that reading and its ruling;
 // - each marker stands somewhere, so a rename cannot leave the archive check searching for a name nothing carries;
 // - ship-gates.txt reads in its four forms, and anything else fails closed;
 // - no source and no app plist names a server-trust override: a developer's phone runs Debug builds, so a
@@ -40,7 +40,7 @@ export const TRUST_NAMES = [
 ];
 /** A use that stands, by path and exact count (R23b's form). None at main bf9ebb21c (read 2026-11-13 02:03Z). */
 const TRUST_ALLOWED = {};
-/** Item 522: the types that mount the web host, named in no app source outside FieldWeb. */
+/** Items 522 and 524: the types that mount the web host, named in no app source outside FieldWeb. */
 export const MOUNT_NAMES = ["FieldWebAppHost", "FieldWebAppNavigation"];
 
 /** Each line of an app source outside FieldWeb that names a type which mounts the web host (item 522). */
@@ -50,7 +50,9 @@ export function mountFindings(path, text) {
   text.split("\n").forEach((line, index) => {
     for (const name of MOUNT_NAMES) {
       if (line.includes(name))
-        findings.push(`${path}:${index + 1}: ${name} outside FieldWeb (item 522: no front yet)`);
+        findings.push(
+          `${path}:${index + 1}: ${name} outside FieldWeb (item 524: not yet measured)`,
+        );
     }
   });
   return findings;
