@@ -5808,6 +5808,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   offscreen at 60 fps, History under its cover, 181 rows and 45 day heads scrolled 8 s an arm, paired A/B with a null
   A/A): no frame cost (rAF p95 16.7 ms in both arms, no long frames); the GPU process about 5 points of a core higher
   (+37 %) while the list scrolls, every pair above the null's spread; a still list costs nothing.
+  *Amended 2026-11-13 (item 394; James, 23:38:00Z, session qa-01):* the transcript's top fade is no
+  longer the cover's raw tint under the room's mask. It is the glass's own colour over the mat
+  (`--vf-chrome-solid` at 72% over `--vf-mat-ground`), at most 64%, on its own eased stops over
+  96px, with the room's mask cleared; it is still paint and never a backdrop filter. His words and
+  the recipe stand in "History is rosetta's room, on the cover's glass", under "Its ground".
   Over the monitor the card occludes the bodies exactly as much as Godview occludes the field.
   **The Lip** (GV-D7; built 2026-10-11) is the lip grown into the drag bar: **30** tall, on the
   frame's tone. **The groove** (GV-D12 — James's pick over the lean: "i like the groove one")
@@ -6443,6 +6448,39 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     note), which this line was not corrected for. Since N3 (a) the **sticky day heads frost** as
     above; **the transcript's top fade is the cover's tint** (`--vf-chrome-solid`, feathered by the
     room's mask), never a frost.
+    *Amended 2026-11-13 (item 394; James, 23:38:00Z, session qa-01, with a screenshot of one
+    session's transcript by night: "[Image #19] for desktop ui, the shadow fade at the top now looks
+    bad on our blured background, it just feels too strong now, help me redesign it."):* **the
+    transcript's top fade is the glass's own colour, at most 64%, eased over 96px.** This overturns
+    "the transcript's top fade is the cover's tint (`--vf-chrome-solid`, feathered by the room's
+    mask)" here and in the deck's note; "never a frost" stands.
+    **What it was, and why it was too strong.** `--vf-chrome-solid` whole, under the room's mask
+    (100% at the head, 88% at 38%, nothing at the foot) on the room's 64px. So the cover's raw colour
+    lay at 100% to 88% over the first 24px, then fell in one straight ramp of 40px. Three faults:
+    the cover's raw colour is the glass with the desk taken out of it (`#1C1C1E` by night, where the
+    glass over the mat reads (33, 37, 39); white by day, where it reads (201, 209, 198): §8 "The
+    covers over the desk", the rim's measure), so the band stood apart from the glass around it, a
+    slab darker by night and whiter by day; its first 24px left a line 12% of its ink or less; and a
+    straight ramp of 2.2% a px ends in a corner the eye finds, across a line of text.
+    **What it is.** Made of **the glass as it reads over the bare mat**: `--vf-chrome-solid` at the
+    cover's 72% over `--vf-mat-ground`, the colour the still's own rim wears under the cover. Over
+    the mat it moves the ground by nothing, so only the lines thin. Its strength is **the squares of
+    8 down to 0, a stop every 12px**: 64% at the head's hairline, then 49, 36, 25, 16, 9, 4 and 1,
+    and nothing at **96px**. That is a quadratic ease: no level stretch, and a foot that ends at a
+    twelfth of a percent a px, which has no edge. It never reaches 100%: a line keeps 36% of its ink
+    at the hairline, 64% at 24px, 84% at 48px and 96% at 72px, and the column's head cuts it. The
+    day pill needs no ground from the fade: it stands above it on its own (`--vf-chrome-solid`
+    whole, its ring, and the island shadow while pinned).
+    **Kept from the old recipe.** It is paint, never a backdrop filter: under a cover the desk is a
+    still (R16), a backdrop filter is drawn again on every frame the rows under it move, and N3 (a)
+    measured and ruled the frost for the day heads alone. The room's own element, its place under
+    the pinned pill, its rise over the first 24px of scroll and its 120ms, so nothing lies over the
+    session's start at rest. **Dropped:** the room's mask; the override clears it and states its own
+    stops. Where it lives: `history/history-room-glass.css`, held by `ui-system-boundaries.test.ts`.
+    **Its known limit.** Where the still under the cover is not the mat (an object of the desk,
+    blurred), the fade pulls that patch toward the mat's glass, by 64% at the hairline and less
+    below. Paint cannot do better: a line dissolves exactly only under a mask on the rows, and a mask
+    on the scroller fades the room's pinned chrome with them (above), which is the room's to change.
   - **Its edges are the frame's.** The columns end at **692** — the reserve of 88 above the window's
     foot (FC-D15) — and run to the window's sides (built at HN-8, 2026-10-30: they kept **8** clear
     at each side for the notches' slivers until the edges left the frame); the top band, 0–52, is
