@@ -652,6 +652,33 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     r.dispose();
   });
 
+  // DS — the restart announcement: a desktop whose update stopped the floor is `restarting` on the roster with its
+  // NODE offline. Its board is kept and reads stale, never asleep, and nothing dials a node the tailnet does not list
+  // until it lists it again.
+  it("a desktop RESTARTING with its node offline keeps its board, reads stale, and is not dialled until the node is back", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const [first] = h.upstreams.attaches;
+    if (first === undefined) throw new Error("an awake desktop was not dialled");
+    h.upstreams.answer(first, peerSnapshot());
+    await tick();
+    expect(r.frames).toContainEqual({ device: "dev-b", state: "live", asOf: expect.any(String) });
+
+    // the update's stop: the announcement holds the row restarting, the node drops
+    h.roster.set([selfRow, desktop("dev-b", { state: "restarting", online: false })]);
+    expect(r.frames.at(-1)).toMatchObject({ device: "dev-b", state: "stale" });
+    expect(r.frames.some((frame) => "state" in frame && frame.state === "asleep")).toBe(false);
+    expect(h.upstreams.standing()).toEqual([]); // the upstream closed with the node
+    expect(h.upstreams.attaches).toHaveLength(1); // and nothing dialled it again
+    vi.advanceTimersByTime(60_000);
+    expect(h.upstreams.attaches).toHaveLength(1); // not on a retry either
+
+    // the node is back (its new fieldd's slice not landed yet): restarting and online is dialled, as a silent door is
+    h.roster.set([selfRow, desktop("dev-b", { state: "restarting" })]);
+    expect(h.upstreams.attaches).toHaveLength(2);
+    r.dispose();
+  });
+
   it("names this desktop per answer: a hub opened before the mesh identity speaks it once it lands", () => {
     // DeviceService answers its persisted fallback id until its first sync
     let self = "local-1234";
