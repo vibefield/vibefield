@@ -1675,7 +1675,7 @@ describe("UI system ownership boundaries", () => {
   });
 
   it("stands the stage's chrome over the CRT layers, as the head does (DESIGN.md §8 'Where the chrome stands')", () => {
-    // James, 2026-11-16: "do not overlay the scanline pattern and the vagette on top of this, it should be same level
+    // Asked 2026-11-16: "do not overlay the scanline pattern and the vagette on top of this, it should be same level
     // as all other chrome uis". The CRT layers are 30 and come first in the root; the chrome layer and the cards
     // layer stand at that 30 after them, so over them, and under the head's 31.
     const godview = source("godview/godview.css");

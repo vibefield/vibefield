@@ -189,7 +189,7 @@
 
 /* ── the cards beside the column: a menu's solid in Godview's mode, 16 right of the pill (UM-R1, §8 "Where the cards
    stand"). They stand in the cards layer the stage keeps beside itself, over the deck (10), its veil (11), its
-   readout (12) and the CRT layers (30, 2026-11-16, James: chrome wears neither the scanlines nor the vignette): at
+   readout (12) and the CRT layers (30, 2026-11-16: chrome wears neither the scanlines nor the vignette): at
    their 30, after them and after the chrome layer in the root, so over the pill too, and under the head (31); hidden
    under the curtain (20) with the column (godview.css). The layer's box is exactly the room a card may have, from the
    pill's top to the panes' foot. ── */
@@ -493,7 +493,7 @@
 }
 
 /* its band's box, 16 × 11, holds the drawing: `.vf-bands-drawing` fills the nearest positioned box, and without this
-   one the three bands left their words and stacked at the card's top-left corner (James, 2026-11-16: "this icon here
+   one the three bands left their words and stacked at the card's top-left corner (asked 2026-11-16: "this icon here
    is weird") */
 .vf-profiles-key-band {
   position: relative;
@@ -514,7 +514,7 @@
 }
 
 /* one row per plan: its mark (16), its title, the right words at its end, and Settings' C1 lines, every window the plan
-   reads, at the row's width × 12 (2026-11-16, James: "show all the meters of this agent, not just showing one") */
+   reads, at the row's width × 12 (2026-11-16, asked: "show all the meters of this agent, not just showing one") */
 .vf-profiles-pop-row {
   position: relative;
   display: grid;
@@ -559,7 +559,7 @@
   pointer-events: none;
 }
 
-/* the mark stands level with the plan's title at the row's top, however many lines follow (2026-11-16, James:
+/* the mark stands level with the plan's title at the row's top, however many lines follow (2026-11-16, asked:
    "vertical align the agent icon to its name at the top"); its 16 box centres on the title's 12.5 × 1.25 line */
 .vf-profiles-pop-row-mark {
   grid-row: span 2;
@@ -597,7 +597,7 @@
 }
 
 /* the sign-in, veiled (`veiledAccount`), after the title in the tertiary ink: it gives way first when the head is tight
-   (2026-11-16, James: "show the sign-in email by the agent name in redacted form") */
+   (2026-11-16, asked: "show the sign-in email by the agent name in redacted form") */
 .vf-profiles-pop-row-account {
   min-width: 0;
   overflow: hidden;

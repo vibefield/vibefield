@@ -149,7 +149,7 @@ export interface BandsOptions {
    * profile ("Usage unavailable"). */
   every?: boolean;
   /** the middle names the window its figure reads, by its C1 line's label ("7D"), where the agent's mark stood: the
-   * popover's circle, whose arcs and rows already show each agent's mark (2026-11-16, James: the icon "is too
+   * popover's circle, whose arcs and rows already show each agent's mark (2026-11-16: the icon "is too
    * redundant … make it to show this current highlighted meter … display 7D there"). A plan with no reading keeps its
    * mark. Absent, the middle is as it always was (the golden's circles and the phone's). */
   centreWindow?: boolean;

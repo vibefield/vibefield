@@ -187,7 +187,7 @@ describe("the Bands circle (UM-D16): the model's geometry drawn, never re-derive
   });
 
   it("names the window its figure reads in the popover's middle, where the agent's mark stood (2026-11-16)", () => {
-    // James: the icon in the middle "is too redundant … this 99% is the 7d meter, so display 7D there"
+    // Asked: the icon in the middle "is too redundant … this 99% is the 7d meter, so display 7D there"
     const meters = metersOf(FIXTURE_NATIVE);
     const plain = bandsGeometry(212, meters.entries, { hit: true });
     const named = bandsGeometry(212, meters.entries, { hit: true, centreWindow: true });
@@ -513,7 +513,7 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(rows.map((row) => row.querySelector(".vf-profiles-pop-row-title")?.textContent)).toEqual(
       shown.map((entry) => entry.title),
     );
-    // 2026-11-16 (James: "show all the meters of this agent, not just showing one"): every reading's row draws a
+    // 2026-11-16 (asked: "show all the meters of this agent, not just showing one"): every reading's row draws a
     // line per window, in the reading's order, and its lines say their own words, so its head says none
     const readings = shown.filter((entry) => entry.kind === "reading");
     expect(readings.some((entry) => entry.windows.length > 1)).toBe(true);
@@ -581,7 +581,7 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
 
   it("holds each band of the key in its own 16 × 11 box, so the bands stand before their words (2026-11-16)", () => {
     // `.vf-bands-drawing` is absolute at inset 0: in an unpositioned span the three bands left their words and
-    // stacked at the card's top-left corner, the "weird" icon James pointed at
+    // stacked at the card's top-left corner, the icon called "weird" (2026-11-16)
     const rule = /\n\.vf-profiles-key-band \{[^}]*\}/u.exec(CSS)?.[0] ?? "";
     expect(rule).toContain("position: relative;");
     expect(rule).toContain("width: 16px;");
@@ -1326,7 +1326,7 @@ describe("the reach (UM-R2): the pointer can cross to its card", () => {
   });
 
   it("a move to another circle takes the card at once when it is not on its way into the card (2026-11-16)", () => {
-    // James: "make it more instant". A pass up or down the pill swaps the card on every circle it reaches
+    // Asked: "make it more instant". A pass up or down the pill swaps the card on every circle it reaches
     const { item, stand } = setup();
     over(item("native"));
     out(item("native"));

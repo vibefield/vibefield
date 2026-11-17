@@ -12,8 +12,8 @@ import type { ColumnCircle } from "./ProfilesColumnView";
 // UM-3 (DESIGN.md §8 "Godview's profiles column", the popover; §9 "The meters' words") — ONE PROFILE'S METERS, OPENED
 // beside its circle: the circle at 212 with its arcs answering the pointer and the bands key under it, and one row per
 // plan in the circle's order (UM-D15), each its agent's mark, the plan as Agent Profiles names it, and Settings' own C1
-// lines for every window it reads, each saying its forecast while it runs ahead (UM-D4), else its reset (2026-11-16,
-// James; it drew the tightest window's line alone, UM-D13, and said its words at the row's head) — the shipping
+// lines for every window it reads, each saying its forecast while it runs ahead (UM-D4), else its reset (2026-11-16:
+// until then it drew the tightest window's line alone, UM-D13, and said its words at the row's head) — the shipping
 // `UsageTimeline`, never a copy (UM-D3: one meter everywhere). Controller-free: what it opens,
 // reads again or closes is handed back. A plan's row and its arc filter the field (UM-D14; UM-5a).
 
@@ -112,7 +112,7 @@ function NeedAct({
   );
 }
 
-/** Every window of a plan's reading as Settings' C1 lines (UM-D3: one meter everywhere; James, 2026-11-16: "show all
+/** Every window of a plan's reading as Settings' C1 lines (UM-D3: one meter everywhere; asked 2026-11-16: "show all
  * the meters of this agent, not just showing one"), each with its own words at its end: its forecast while it runs
  * ahead (UM-D4), else its reset, said as Settings says it (the leaf's `resetForm`). A reading kept after a failed
  * refresh says its age on every line and forecasts nothing, and a window read before its reset says the age in its

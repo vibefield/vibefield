@@ -1,4 +1,4 @@
-// DESIGN.md §8 "The reach" (2026-11-16; James: "make it more instant") — WHERE THE POINTER IS HEADING. A card stands
+// DESIGN.md §8 "The reach" (2026-11-16; asked: "make it more instant") — WHERE THE POINTER IS HEADING. A card stands
 // right of the pill, so a pointer travelling from its circle to it can brush a neighbouring circle on the way. Only that
 // trip waits: the pointer is heading into the card while its newest point lies inside the triangle its older point
 // makes with the card's near (left) edge, the edge held out by a few pixels so a trip aimed at a corner still counts.

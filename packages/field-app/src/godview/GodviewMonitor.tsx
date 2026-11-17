@@ -1070,7 +1070,7 @@ export function GodviewMonitor({
           </ChromeBoundary>
         ) : null}
       </section>
-      {/* The chrome layer (DESIGN.md §8 "Where the chrome stands"; James, 2026-11-16): the column and the claims
+      {/* The chrome layer (DESIGN.md §8 "Where the chrome stands"; asked 2026-11-16): the column and the claims
           strip are chrome, so they stand over the CRT layers as the head does and wear neither the scanlines nor
           the vignette. Inside the stage no z-index could lift them past those layers (its head mask is a stacking
           context), so they stand in this sibling, laid out in the stage's own box (`mirrorStageBox`) so every
