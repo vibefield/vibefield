@@ -31,9 +31,10 @@ enum SpendModel {
   /// The empty view's hint: the window's names a pane (`Dropped.emptyHint`), so the phone says the list's words, word
   /// for word. Draft word: James's eye (VF-PM 2026-11-04).
   static let emptyHint = "Launch an agent from a terminal."
-  /// The key that lets go of a set moment (`NOW_KEY`), and its legend from the toolkit's one table (`keys.js` :16).
+  /// The key that lets go of a set moment (`NOW_KEY`). Its legend, from the toolkit's one table (`keys.js` :16), is the
+  /// window's alone: the phone has no End key, so its Now pill prints none (`Dropped.nowLegend`, item 291).
   static let nowKey = "End"
-  static let nowLegend = "↘"
+  static let nowLegend: String? = nil
   static let nowWords = "Now"
   static let nowLabel = "Back to now"
   /// The Now pill's title: the window's, less its key (`Dropped.nowTitle`).
@@ -51,6 +52,8 @@ enum SpendModel {
     static let rowLabel = " Open in your pane."
     /// The Now pill's title: its key.
     static let nowTitle = " (End)"
+    /// The Now pill's legend under its mark: its key's (item 291).
+    static let nowLegend = "↘"
     /// The empty view's hint, whole: the window's names a pane.
     static let emptyHint = "Launch an agent from a terminal pane."
   }

@@ -235,7 +235,8 @@ extension SpendParityTests {
       #expect(now["title"]?.stringValue == title, "\(at): Now title, less its key")
       #expect(now["label"]?.stringValue == SpendModel.nowLabel, "\(at): Now label")
       #expect(now["keys"]?.stringValue == SpendModel.nowKey, "\(at): Now key")
-      #expect(now["legend"]?.stringValue == SpendModel.nowLegend, "\(at): Now legend")
+      // the window prints its End key's legend; the phone prints none (fd's words rule, the fifth deviation)
+      #expect(now["legend"]?.stringValue == SpendModel.Dropped.nowLegend, "\(at): Now legend, the window's alone")
       #expect(now["words"]?.stringValue == SpendModel.nowWords, "\(at): Now words")
       #expect(SpendDOM.near(pill.right, now["right"]), "\(at): Now right")
       #expect(SpendDOM.near(pill.top, now["top"]), "\(at): Now top")
@@ -304,6 +305,7 @@ extension SpendParityTests {
     #expect(SpendModel.nowTitle == "Back to now" && SpendModel.nowLabel == "Back to now")
     let legend: String? = SpendModel.nowLegend
     #expect(legend == nil, "the Now pill prints no legend: it would name the End key")
+    #expect(SpendModel.Dropped.nowLegend == "↘")
     #expect(SpendModel.emptyHint == "Launch an agent from a terminal.")
     #expect(SpendModel.Dropped.emptyHint == "Launch an agent from a terminal pane.")
     let banned = ["pane", "Pane", "Up and down", "Return opens", "End lets go", "(End)", "hover", "Hover"]

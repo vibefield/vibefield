@@ -24,7 +24,7 @@ import UIKit
 //   order and lights its row; a drag on the list steps it a whole row at a time, and a tap opens a row. There are no
 //   keys, no hover and no focus ring. A gesture's end comes twice, its lift and its state's reset, in either order;
 //   every act names its touch by token, so either order is the same one tap (H15, H16).
-// - The words name no key, hover or pane (fd's words rule; the four named deviations are `SpendModel.Dropped`).
+// - The words name no key, hover or pane (fd's words rule; the five named deviations are `SpendModel.Dropped`).
 // - SwiftUI names no 450, 550 or 650 weight, so each is the named weight at or below it (`SpendType.weight`). The
 //   Now pill's backdrop blur is not drawn: its ground is the panel at 88 %, as the window's is under the blur.
 
@@ -310,7 +310,8 @@ struct SpendView: View {
       .accessibilityHidden(true)
   }
 
-  /// The Now pill (`.vf-monitor-spend-back`): back to now, its mark over the legend the window prints under it.
+  /// The Now pill (`.vf-monitor-spend-back`): back to now, its mark, and under it the legend the model names. The
+  /// window's legend names its End key, so the phone's model names none (item 291) and the pill prints its mark alone.
   private func nowPill(_ inks: SpendInks) -> some View {
     let t1 = inks.main.withAlpha(0.88).spendColor
     let shape = RoundedRectangle(cornerRadius: 17)
@@ -320,10 +321,12 @@ struct SpendView: View {
       HStack(spacing: 6) {
         VStack(spacing: 3) {
           SpendMark(path: SpendMark.now, colour: t1, size: 14)
-          Text(SpendModel.nowLegend)
-            .font(SpendType.font(9, 600))
-            .tracking(0.02 * 9)
-            .foregroundStyle(inks.main.withAlpha(0.68).spendColor)
+          if let legend = SpendModel.nowLegend {
+            Text(legend)
+              .font(SpendType.font(9, 600))
+              .tracking(0.02 * 9)
+              .foregroundStyle(inks.main.withAlpha(0.68).spendColor)
+          }
         }
         Text(SpendModel.nowWords).font(SpendType.font(12, 600)).foregroundStyle(t1)
       }
