@@ -151,7 +151,7 @@ struct AppsShelfStandingTests {
     #expect(blank.isEmpty)
   }
 
-  @Test("a shelf with no apps says why, in the home's words and the interim ones")
+  @Test("an empty shelf says why for each state of the home, and says nothing while it reads")
   func emptyWords() {
     let off = AppsShelf.emptyLine(phase: .off, here: "studio")
     #expect(off == "This phone isn't connected to its home desktop")
