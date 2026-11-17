@@ -58,6 +58,26 @@ function subIdOf(state: State | undefined): string {
   return data.install;
 }
 
+/** Item 476 — from here the row's clock is a fake one, put back when the row
+ * ends. The fake daemon's answers and the feed's backoff both ride
+ * `setTimeout`, so nothing after this waits in real time (and `settle` and
+ * `until`, which do, are not for such a row: `lands` is). */
+function fakeClock(): void {
+  vi.useFakeTimers();
+  cleanup.push(() => vi.useRealTimers());
+}
+
+/** Under the fake clock: turn it, a millisecond at a time, until `landed`
+ * holds. The fake daemon answers a frame at the clock's next turn (the same
+ * millisecond, or the one after for a frame sent from inside a turn), so the
+ * clock stops AT the answer: a wait counted from here is counted from the
+ * refusal itself, and "not a millisecond sooner" can be asked exactly. */
+async function lands(landed: () => boolean): Promise<void> {
+  await vi.advanceTimersByTimeAsync(0);
+  for (let ms = 0; ms < 20 && !landed(); ms += 1) await vi.advanceTimersByTimeAsync(1);
+  if (!landed()) throw new Error("lands: the answer did not land");
+}
+
 describe("shared feeds — one wire subscription per feed (item 467)", () => {
   it("three holders of one feed: ONE subscribe on the wire; each hears the snapshot and every later event", async () => {
     const { client, daemon } = clientOn();
@@ -256,7 +276,7 @@ describe("shared feeds — THE RECONNECT replays a shared feed once (items 467, 
   });
 });
 
-describe("shared feeds — refused for want of room asks once more per release (item 467)", () => {
+describe("shared feeds — refused for want of room asks once more per release (item 467), and again by itself on a backoff (item 476)", () => {
   /** A socket whose budget is filled by `client.subscribe`'s own (non-hook) callers. */
   async function full(limit: number) {
     const { client, daemon } = clientOn();
@@ -268,11 +288,12 @@ describe("shared feeds — refused for want of room asks once more per release (
     return { client, daemon, others, line: daemon.line() };
   }
 
-  it("each holder sees RESOURCE_EXHAUSTED; no timer re-asks; ONE ask per release; a second refusal waits for the next release", async () => {
+  it("each holder sees RESOURCE_EXHAUSTED; no ask ahead of the backoff's step, and none for a newcomer; ONE ask per release, at once; a second refusal waits for the next release or its own step", async () => {
     const { client, daemon, others, line } = await full(2);
+    fakeClock();
     const asks = () => line.subscribes("thing.subscribe").length;
     const holders = [hold(client, { a: 1 }), hold(client, { a: 1 })];
-    await settle();
+    await lands(() => holders.every((holder) => holder.seen.length === 1));
     expect(asks()).toBe(1);
     for (const holder of holders) {
       expect(holder.last()).toMatchObject({
@@ -283,27 +304,245 @@ describe("shared feeds — refused for want of room asks once more per release (
     // a newcomer is handed the refusal at once: nothing has made room
     const newcomer = hold(client, { a: 1 });
     expect(newcomer.last()?.status).toBe("error");
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    expect(asks()).toBe(1); // no timer, and no newcomer's ask
+    await vi.advanceTimersByTimeAsync(60);
+    expect(asks()).toBe(1); // no newcomer's ask, and the backoff's own is a second off
 
-    // someone else takes the room first: the one re-ask is refused again
+    // someone else takes the room first: the release's one ask is refused again
     daemon.limit = 1;
     others[0]?.unsubscribe();
-    await settle();
+    await lands(() => holders[0]?.seen.length === 2);
     expect(asks()).toBe(2);
     const sent = line.sent.map((frame) => frame.method);
     const released = sent.lastIndexOf("system.unsubscribe");
     expect(released).toBeLessThan(sent.lastIndexOf("thing.subscribe")); // the release left first
     expect(holders[0]?.last()?.status).toBe("error");
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    expect(asks()).toBe(2); // the second refusal waits for the next release
+    await vi.advanceTimersByTimeAsync(60);
+    expect(asks()).toBe(2); // it waits for the next release (its own step is 2 s off)
 
     daemon.limit = 2;
     others[1]?.unsubscribe();
-    await settle();
+    await lands(() => newcomer.last()?.status === "live");
     expect(asks()).toBe(3);
     for (const holder of [...holders, newcomer]) expect(holder.last()?.status).toBe("live");
     expect(line.live.size).toBe(1);
+  });
+
+  it("refused for room with NO release, the feed asks again by itself: 1 s after the refusal, then 2 s, then 4 s, and not a millisecond sooner (item 476)", async () => {
+    const { client, line } = await full(1);
+    fakeClock();
+    const asks = () => line.subscribes("thing.subscribe").length;
+    const holder = hold(client, { a: 1 });
+    await lands(() => holder.seen.length === 1);
+    expect(asks()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(asks()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(asks()).toBe(2); // nothing was released: before item 476 this ask never came
+    await lands(() => holder.seen.length === 2);
+    expect(holder.last()).toMatchObject({
+      status: "error",
+      error: { kind: "RESOURCE_EXHAUSTED", details: { resource: "subscriptions" } },
+    });
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(asks()).toBe(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(asks()).toBe(3);
+    await lands(() => holder.seen.length === 3);
+
+    await vi.advanceTimersByTimeAsync(3_999);
+    expect(asks()).toBe(3);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(asks()).toBe(4);
+    holder.release();
+  });
+
+  it("THE CEILING: after the 16 s step every wait is 30 s, and it stays 30 s (item 476)", async () => {
+    const { client, line } = await full(1);
+    fakeClock();
+    const asks = () => line.subscribes("thing.subscribe").length;
+    const holder = hold(client, { a: 1 });
+    // each wait is counted from its own refusal; the last three are the ceiling's
+    const waits = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000, 30_000];
+    for (const [step, wait] of waits.entries()) {
+      await lands(() => holder.seen.length === step + 1);
+      await vi.advanceTimersByTimeAsync(wait - 1);
+      expect(asks()).toBe(step + 1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(asks()).toBe(step + 2);
+    }
+    holder.release();
+  });
+
+  it("NEVER TWO TIMERS: three holders of one refused feed, and a fourth joining part-way through the wait, cause ONE ask per step (item 476)", async () => {
+    const { client, line } = await full(1);
+    fakeClock();
+    const asks = () => line.subscribes("thing.subscribe").length;
+    const holders = [hold(client, { a: 1 }), hold(client, { a: 1 }), hold(client, { a: 1 })];
+    await lands(() => holders.every((holder) => holder.seen.length === 1));
+    expect(asks()).toBe(1);
+    expect(vi.getTimerCount()).toBe(1); // the feed's one wait, not one for each holder
+
+    // 400 ms into the wait: the newcomer is handed the refusal and starts no wait of its own
+    await vi.advanceTimersByTimeAsync(400);
+    const late = hold(client, { a: 1 });
+    expect(late.last()?.status).toBe("error");
+    expect(vi.getTimerCount()).toBe(1);
+    await vi.advanceTimersByTimeAsync(599);
+    expect(asks()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(asks()).toBe(2); // one ask for the four of them, a second after the refusal
+    await lands(() => late.seen.length === 2);
+    for (const holder of [...holders, late]) expect(holder.last()?.status).toBe("error");
+    expect(vi.getTimerCount()).toBe(1);
+
+    // across 1.4 s (when a wait started by the late join would be due) and on to the 2 s step
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(asks()).toBe(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(asks()).toBe(3);
+    for (const holder of [...holders, late]) holder.release();
+  });
+
+  it("a release asks AT ONCE and the pending timer does not ALSO ask: the wait starts over from the refusal that follows, one step on (item 476)", async () => {
+    const { client, daemon, others, line } = await full(2);
+    fakeClock();
+    const asks = () => line.subscribes("thing.subscribe").length;
+    const holder = hold(client, { a: 1 });
+    await lands(() => holder.seen.length === 1);
+    expect(asks()).toBe(1);
+
+    // 600 ms into the 1 s wait someone else takes the room: the release's ask is refused again
+    await vi.advanceTimersByTimeAsync(600);
+    daemon.limit = 1;
+    others[0]?.unsubscribe();
+    await lands(() => holder.seen.length === 2);
+    expect(asks()).toBe(2); // at the release, not at the timer's due time
+
+    // across the first timer's due time, 400 ms on: it was cleared, so it does not ask as well
+    await vi.advanceTimersByTimeAsync(399);
+    expect(asks()).toBe(2);
+    await vi.advanceTimersByTimeAsync(2);
+    expect(asks()).toBe(2);
+
+    // the wait started over at the second refusal, one step on: 2 s from it, and no sooner
+    await vi.advanceTimersByTimeAsync(1_598);
+    expect(asks()).toBe(2);
+    daemon.limit = 2; // room, with no release on this client to say so
+    await vi.advanceTimersByTimeAsync(1);
+    expect(asks()).toBe(3);
+
+    // granted: live, and no wait is left standing behind it
+    await lands(() => holder.last()?.status === "live");
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(asks()).toBe(3);
+    expect(line.live.size).toBe(2);
+  });
+
+  it("the last holder leaving clears the timer: while one holder stays the feed asks; after the last has left it never does, however long the clock runs (item 476)", async () => {
+    const { client, line } = await full(1);
+    fakeClock();
+    const asks = () => line.subscribes("thing.subscribe").length;
+    const staying = hold(client, { a: 1 });
+    const leaving = hold(client, { a: 1 });
+    await lands(() => staying.seen.length === 1 && leaving.seen.length === 1);
+    leaving.release();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(asks()).toBe(2); // a holder is left, so the feed still asks
+    await lands(() => staying.seen.length === 2);
+    expect(leaving.seen).toHaveLength(1); // a released holder hears nothing
+    expect(vi.getTimerCount()).toBe(1); // the 2 s step, waiting
+
+    staying.release();
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(asks()).toBe(2);
+    expect(staying.seen).toHaveLength(2);
+    // it never held a subscription, so it had none to give back
+    expect(line.subscribes("system.unsubscribe")).toHaveLength(0);
+  });
+
+  it("a success resets the step: granted after two refusals, then refused for room again at a replay, the first wait is 1 s again (item 476)", async () => {
+    const { client, daemon, line } = await full(1);
+    fakeClock();
+    const asks = () => line.subscribes("thing.subscribe").length;
+    const holder = hold(client, { a: 1 });
+    await lands(() => holder.seen.length === 1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(asks()).toBe(2);
+    await lands(() => holder.seen.length === 2);
+
+    // the daemon's bound moves with no release on this client: only the timer can find the room
+    daemon.limit = 2;
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(asks()).toBe(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(asks()).toBe(3);
+    await lands(() => holder.last()?.status === "live");
+    const lastData = holder.last()?.data;
+
+    // the socket drops, and on the new one the feed's replay is refused for room: it ends there
+    daemon.limit = 1;
+    line.drop();
+    await lands(() => holder.last()?.status === "error");
+    const next = daemon.line();
+    expect(next).not.toBe(line);
+    const again = () => next.subscribes("thing.subscribe").length;
+    expect(again()).toBe(1); // the refused replay
+    expect(holder.last()).toMatchObject({
+      status: "error",
+      data: lastData,
+      error: { kind: "RESOURCE_EXHAUSTED", details: { resource: "subscriptions" } },
+    });
+
+    // the first step again (1 s from the end), not the third (4 s)
+    await vi.advanceTimersByTimeAsync(999);
+    expect(again()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(again()).toBe(2);
+    holder.release();
+  });
+
+  it("a refusal that is NOT for room sets no timer, before a refusal for room and after one: the feed asks by itself only while room is what it lacks (item 476)", async () => {
+    const { client, daemon } = clientOn();
+    daemon.refuse = () => ({ kind: "FORBIDDEN_SCOPE", message: "not for this window" });
+    fakeClock();
+    const holder = hold(client, { a: 1 });
+    await lands(() => holder.seen.length === 1);
+    const line = daemon.line();
+    const asks = () => line.subscribes("thing.subscribe").length;
+    expect(holder.last()).toMatchObject({ status: "error", error: { kind: "FORBIDDEN_SCOPE" } });
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(asks()).toBe(1);
+
+    // the same feed refused for ROOM (a newcomer's ask, as a fresh mount always asked)
+    daemon.limit = 0;
+    const newcomer = hold(client, { a: 1 });
+    await lands(() => holder.seen.length === 2);
+    expect(asks()).toBe(2);
+    expect(holder.last()).toMatchObject({
+      status: "error",
+      error: { kind: "RESOURCE_EXHAUSTED", details: { resource: "subscriptions" } },
+    });
+
+    // now it asks by itself; there is room by then, and the answer is the other refusal again
+    daemon.limit = 32;
+    await vi.advanceTimersByTimeAsync(999);
+    expect(asks()).toBe(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(asks()).toBe(3);
+    await lands(() => holder.seen.length === 3);
+    expect(holder.last()).toMatchObject({ status: "error", error: { kind: "FORBIDDEN_SCOPE" } });
+
+    // and that refusal arms nothing: no wait stands, and no ask comes however long the clock runs
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(asks()).toBe(3);
+    holder.release();
+    newcomer.release();
   });
 
   it("room made while the ask was out: the refusal is older than the room, so it asks again at once", async () => {
@@ -478,6 +717,38 @@ describe("shared feeds on a stand-in client with `subscribe` alone (item 467)", 
     expect(newcomer.last()?.status).toBe("error");
     expect(unhandled).toEqual([]);
     for (const holder of [...holders, newcomer]) holder.release();
+  });
+
+  it("refused for room with no release seam to park on: the feed still asks again by itself, on the same steps, until its holder leaves (item 476)", async () => {
+    fakeClock();
+    const refusal = Object.assign(new Error("this connection holds too many live subscriptions"), {
+      kind: "RESOURCE_EXHAUSTED",
+      details: { resource: "subscriptions", limit: 8 },
+    });
+    // no subscriptionsReleased, no onSubscriptionReleased: the timer needs neither
+    const subscribe = vi.fn(async () => {
+      throw refusal;
+    });
+    const client = { subscribe } as unknown as FielddClient;
+    const holder = hold(client, { a: 1 });
+    // a stand-in answers in the same turn, so the waits are counted from the clock's start
+    await vi.advanceTimersByTimeAsync(0);
+    expect(subscribe).toHaveBeenCalledTimes(1);
+    expect(holder.last()).toEqual({ status: "error", data: null, error: refusal });
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(subscribe).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(subscribe).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(subscribe).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(subscribe).toHaveBeenCalledTimes(3);
+
+    holder.release();
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(subscribe).toHaveBeenCalledTimes(3);
   });
 });
 

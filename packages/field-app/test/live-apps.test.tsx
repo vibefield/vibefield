@@ -439,6 +439,40 @@ describe('LiveApps says Live, in Apps\' words (MA-4c; MA-D13 (a); DESIGN.md §8 
     );
   });
 
+  it("says a catalog fieldd refused for room in the load's own line, never as the app limit, which a limit of the apps' own still reads (item 476)", async () => {
+    /** A client whose catalog is refused with `refusal`. */
+    const refused = (refusal: unknown): MadeAppsClient => ({
+      request: vi.fn(async () => ({})),
+      subscribe: vi.fn(async () => {
+        throw refusal;
+      }),
+    });
+    // fieldd's refusal of a subscribe for want of room wears the kind a limit wears, and its
+    // details say what ran out: subscriptions, never apps
+    await mount(
+      refused({
+        kind: "RESOURCE_EXHAUSTED",
+        message: "this connection holds too many live subscriptions",
+        details: { resource: "subscriptions", limit: 8 },
+      }),
+    );
+    expect(quietWords()).toEqual({
+      title: "Live apps unavailable",
+      detail: "Could not load live apps. Try again.",
+    });
+    expect(container?.textContent).not.toContain("The app limit has been reached.");
+    // and none of fieldd's words for it is drawn or named
+    expect(screenWords().filter((words) => /connection|subscriptions/iu.test(words))).toEqual([]);
+    // a limit that names no subscriptions is the apps' own: the load reads it as an act does
+    await remount(refused({ kind: "RESOURCE_EXHAUSTED" }));
+    expect(quietWords()).toEqual({
+      title: "Live apps unavailable",
+      detail: "The app limit has been reached.",
+    });
+    await remount(refused({ kind: "RESOURCE_EXHAUSTED", details: { limit: 64 } }));
+    expect(quietWords().detail).toBe("The app limit has been reached.");
+  });
+
   it('never says "artifact" — the code\'s word — in anything it draws or names, in any state (MA-D13 (a); L17)', async () => {
     const said: string[] = [];
     const away: ArtifactView = {

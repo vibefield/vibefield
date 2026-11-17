@@ -17,6 +17,12 @@ import {
 } from "../src/panels/PluginsDiagnosticsSection";
 import { PluginsSection, SETTINGS_PLUGINS_WORDS } from "../src/panels/PluginsSection";
 import { setPluginRegistrySnapshot } from "../src/plugin-host/plugin-registry-store";
+import {
+  clearUnstartedPlugin,
+  nameUnstartedPlugin,
+  resetUnstartedPlugins,
+  type UnstartedPlugin,
+} from "../src/plugin-host/unstarted-plugins";
 
 // MK-5. Settings → Diagnostics' Plugins section (MK-D10; item 282-6's plugin half, MK-E12;
 // DESIGN.md §8 "Settings → Diagnostics' Plugins section"): each plugin's runtime, moved here
@@ -250,6 +256,8 @@ afterEach(() => {
   container?.remove();
   container = null;
   setPluginRegistrySnapshot({ generation: 0, plugins: [], problems: [] });
+  // item 476: the window's set of plugins that cannot start is a module's too
+  resetUnstartedPlugins();
 });
 
 describe("Settings → Diagnostics' Plugins section (MK-5; DESIGN.md §8)", () => {
@@ -518,6 +526,34 @@ describe("Settings → Plugins, until Plugins… holds every switch (MK-5; DESIG
     await mountSettings([plugin({ id: SIDELOADED, title: "Pad", source: "sideload", lastError })]);
     expect(rowText(0)).toContain(INSTALLED_LINE.broken("Pad"));
     expect(text()).not.toContain(lastError.message);
+  });
+
+  it("says a kept plugin that cannot start in this window isn't working, whatever the reason, until it leaves the window's set or is turned off (item 476)", async () => {
+    const pad = { id: SIDELOADED, title: "Pad", source: "sideload" };
+    await mountSettings([plugin(pad)]);
+    const line = INSTALLED_LINE.broken("Pad");
+    expect(rowText(0)).not.toContain(line);
+    const reasons: UnstartedPlugin[] = [
+      { reason: "lane", room: true },
+      { reason: "lane", room: false },
+      { reason: "import" },
+      { reason: "activation" },
+    ];
+    for (const why of reasons) {
+      act(() => nameUnstartedPlugin(SIDELOADED, why));
+      expect(rowText(0)).toContain(line);
+      // the line and nothing of why
+      expect(rowText(0)).not.toMatch(/lane|import|activation|room/u);
+      act(() => clearUnstartedPlugin(SIDELOADED));
+      expect(rowText(0)).not.toContain(line);
+    }
+    // turned off while it is in the set, its row says it is off and nothing more
+    act(() => nameUnstartedPlugin(SIDELOADED, { reason: "import" }));
+    expect(rowText(0)).toContain(line);
+    const off = plugin({ ...pad, enabled: false, state: "disabled" });
+    act(() => setPluginRegistrySnapshot({ generation: 2, plugins: [off], problems: [] }));
+    expect(rowText(0)).not.toContain(line);
+    expect(switchNamed("Enable Pad")?.getAttribute("aria-checked")).toBe("false");
   });
 
   it("says a setting fieldd couldn't read, or couldn't set back to its default, in plain words, never fieldd's text (C22)", async () => {

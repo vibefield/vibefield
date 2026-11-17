@@ -1,15 +1,23 @@
 import { PLUGIN_LIMITS, type PluginRecord, PluginRegistrySnapshot } from "@vibefield/contracts";
 import type { RendererPluginContext } from "@vibefield/plugin-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
 import { isCommandBound } from "../src/plugin-host/command-registry";
+import { RendererWindowController } from "../src/plugin-host/renderer-controller";
 import { activateStagedRenderer } from "../src/plugin-host/renderer-harness";
 import {
   createRendererModuleLoader,
   ensureStyleLink,
   prepareRendererPlugins,
   type StagedLoaderDeps,
+  stageAdditionalPlugins,
 } from "../src/plugin-host/staged-loader";
 import { getSurfacesSnapshot } from "../src/plugin-host/surface-registry";
+import {
+  getUnstartedPlugins,
+  nameUnstartedPlugin,
+  resetUnstartedPlugins,
+} from "../src/plugin-host/unstarted-plugins";
 
 // P8b-3 — the staged loader and the async activation path it feeds.
 //
@@ -125,6 +133,8 @@ afterEach(() => {
   // The loader defaults to the live document; the rows above that let it do so
   // must not leave a plugin stylesheet behind for the next file.
   for (const node of [...document.querySelectorAll("[data-vf-plugin-style]")]) node.remove();
+  // Item 476: the window's set of plugins that cannot start is the realm's; a row leaves none of it.
+  resetUnstartedPlugins();
 });
 
 describe("the staged loader", () => {
@@ -350,6 +360,222 @@ describe("the staged loader", () => {
       deps("defaulted", { importModule: async () => ({ default: bindingModule("defaulted") }) }),
     );
     expect(prepared.staged.map((s) => s.activation.state)).toEqual(["active"]);
+  });
+});
+
+/** fieldd's refusal of a subscribe for want of room, as the window's client hands it on. */
+const refusedForWantOfRoom = (): Error =>
+  Object.assign(new Error("RESOURCE_EXHAUSTED"), {
+    kind: "RESOURCE_EXHAUSTED",
+    details: { resource: "subscriptions", limit: 8 },
+  });
+
+/** A refusal of another kind, which asking again cannot cure. */
+const refusedUnavailable = (): Error =>
+  Object.assign(new Error("UNAVAILABLE"), {
+    kind: "UNAVAILABLE",
+    details: { service: "plugins", state: "starting" },
+  });
+
+/** A renderer logger that keeps each line as "‹level› ‹event›", its children with it. */
+function levelsLogger(said: string[]): RendererLogger {
+  const say = (level: string) => (event: string) => {
+    said.push(`${level} ${event}`);
+  };
+  const logger: RendererLogger = {
+    child: () => logger,
+    trace: say("trace"),
+    debug: say("debug"),
+    info: say("info"),
+    warn: say("warn"),
+    error: say("error"),
+    fatal: say("fatal"),
+    isLevelEnabled: () => true,
+  };
+  return logger;
+}
+
+/** A window's fieldd for plugins with update lanes: it approves `ids`, opens each one's lane but
+ * those `refuse` names, which it refuses with that error, and answers a leave. Its registry lists
+ * every one of `ids` but those `unlisted` names. */
+function laneDeps(
+  ids: readonly string[],
+  refuse: Readonly<Record<string, () => Error>>,
+  unlisted: readonly string[] = [],
+): StagedLoaderDeps {
+  return {
+    request: async (method) => {
+      if (method === "plugins.modules") {
+        return { generation: 7, modules: ids.map((id) => moduleRow(id)) };
+      }
+      if (method === "plugins.list") {
+        return snapshotOf(...ids.filter((id) => !unlisted.includes(id)).map((id) => record(id)));
+      }
+      if (method === "plugins.update.leave") return { retired: true };
+      throw new Error(`unexpected method ${method}`);
+    },
+    subscribe: async (method, params) => {
+      if (method !== "plugins.update.subscribe") throw new Error(`unexpected method ${method}`);
+      const { pluginId } = params as { pluginId: string };
+      const refusal = refuse[pluginId];
+      if (refusal !== undefined) throw refusal();
+      return {
+        snapshot: {
+          pluginId,
+          status: "live",
+          artifact: {
+            pluginId,
+            installRevision: "rev-1",
+            manifestHash: `sha256:${"b".repeat(64)}`,
+          },
+          commitEpoch: 1,
+          pendingCommand: null,
+        },
+        unsubscribe: () => undefined,
+      };
+    },
+    pluginClientBackend: {
+      windowClient: {
+        url: "ws://127.0.0.1:1",
+        request: async () => ({}),
+      },
+    } as NonNullable<StagedLoaderDeps["pluginClientBackend"]>,
+    snapshot: () => null,
+    importModule: async (url) =>
+      bindingModule(ids.find((id) => moduleRow(id).moduleUrl === url) ?? "unapproved"),
+  };
+}
+
+describe("the staged loader names a plugin that cannot start in this window (item 476)", () => {
+  it("at boot: a plugin whose update lane fails is left OUT of the staged set and named, for room or not; the others are staged as before", async () => {
+    const prepared = await prepareRendererPlugins(
+      laneDeps(["lane-open", "lane-full", "lane-away"], {
+        "lane-full": refusedForWantOfRoom,
+        "lane-away": refusedUnavailable,
+      }),
+    );
+    // written before the boot returned, so the first registry snapshot is planned with them
+    const named = new Map([
+      ["lane-full", { reason: "lane", room: true }],
+      ["lane-away", { reason: "lane", room: false }],
+    ]);
+    expect(getUnstartedPlugins()).toEqual(named);
+    // never staged as a failed activation: that would define its types in this realm
+    expect(prepared.staged.map((s) => s.record.id)).toEqual(["lane-open"]);
+    expect(prepared.staged[0]?.activation.state).toBe("active");
+    expect(isCommandBound("lane-open.run")).toBe(true);
+    await prepared.runtime?.close();
+  });
+
+  it("mid-session: a lane that fails is named the same way, and a plugin staged live leaves the set", async () => {
+    // as the retry finds it: its lane was refused for room before, and opens now
+    nameUnstartedPlugin("late-open", { reason: "lane", room: true });
+    const ids = ["late-open", "late-full", "late-away"];
+    const runtime = new RendererWindowController();
+    const staged = await stageAdditionalPlugins(
+      ids,
+      laneDeps(ids, { "late-full": refusedForWantOfRoom, "late-away": refusedUnavailable }),
+      runtime,
+    );
+    const named = new Map([
+      ["late-full", { reason: "lane", room: true }],
+      ["late-away", { reason: "lane", room: false }],
+    ]);
+    expect(getUnstartedPlugins()).toEqual(named);
+    expect(staged.map((s) => s.record.id)).toEqual(["late-open"]);
+    expect(staged[0]?.activation.state).toBe("active");
+    await runtime.close();
+  });
+
+  it("mid-session: a room-refused plugin whose lane opens and which still is not staged is named as a lane no asking cures, so the timer never opens its lane again", async () => {
+    // as the retry finds it: refused for room before; now its lane opens, and the registry the
+    // loader reads has no record of it, so it is not staged and its lane is closed
+    nameUnstartedPlugin("late-unlisted", { reason: "lane", room: true });
+    const runtime = new RendererWindowController();
+    const deps = laneDeps(["late-unlisted"], {}, ["late-unlisted"]);
+    const methods: string[] = [];
+    const staged = await stageAdditionalPlugins(
+      ["late-unlisted"],
+      {
+        ...deps,
+        request: async (method, params) => {
+          methods.push(method);
+          return deps.request(method, params);
+        },
+      },
+      runtime,
+    );
+    expect(staged).toEqual([]);
+    expect(methods).toContain("plugins.update.leave");
+    expect(getUnstartedPlugins().get("late-unlisted")).toEqual({ reason: "lane", room: false });
+    await runtime.close();
+  });
+
+  it("says a lane refused for room at error ONCE: refused again while the plugin is named for it, the line is at debug; a failure of another kind, and the first refusal for room after one, are at error", async () => {
+    const said: string[] = [];
+    const previous = getRendererLogger();
+    setRendererLogger(levelsLogger(said));
+    try {
+      const refuse: Record<string, () => Error> = { "late-loud": refusedForWantOfRoom };
+      const deps = laneDeps(["late-loud"], refuse);
+      const runtime = new RendererWindowController();
+      const failed = "renderer.plugins.update_subscribe_failed";
+      /** One ask of its lane, as the window's retry makes it; the level its failure was said at. */
+      const ask = async (): Promise<string[]> => {
+        said.length = 0;
+        expect(await stageAdditionalPlugins(["late-loud"], deps, runtime)).toEqual([]);
+        return said.filter((line) => line.endsWith(` ${failed}`));
+      };
+      // the first refusal for room names it, at error
+      expect(await ask()).toEqual([`error ${failed}`]);
+      // asked again every 30 s while a holder stays: at debug, and it stays named
+      expect(await ask()).toEqual([`debug ${failed}`]);
+      expect(await ask()).toEqual([`debug ${failed}`]);
+      expect(getUnstartedPlugins().get("late-loud")).toEqual({ reason: "lane", room: true });
+      // a failure of another kind ends the run, at error
+      refuse["late-loud"] = refusedUnavailable;
+      expect(await ask()).toEqual([`error ${failed}`]);
+      // so the next refusal for room starts a run: at error once, then at debug
+      refuse["late-loud"] = refusedForWantOfRoom;
+      expect(await ask()).toEqual([`error ${failed}`]);
+      expect(await ask()).toEqual([`debug ${failed}`]);
+      await runtime.close();
+    } finally {
+      setRendererLogger(previous);
+    }
+  });
+
+  it("names a staged plugin whose module will not import, or whose activation fails, and none that starts", async () => {
+    const unimported = await prepareRendererPlugins(
+      deps("unstarted-import", {
+        importModule: async () => {
+          throw new Error("404");
+        },
+      }),
+    );
+    expect(getUnstartedPlugins().get("unstarted-import")).toEqual({ reason: "import" });
+    // staged all the same, as a failed row (its prefabs still register): only a lane keeps one out
+    expect(unimported.staged.map((s) => s.activation.state)).toEqual(["failed"]);
+    // a module that is no renderer module is the import's failure too
+    await prepareRendererPlugins(
+      deps("unstarted-shapeless", { importModule: async () => ({ notActivate: () => {} }) }),
+    );
+    expect(getUnstartedPlugins().get("unstarted-shapeless")).toEqual({ reason: "import" });
+    const thrown = await prepareRendererPlugins(
+      deps("unstarted-activate", {
+        importModule: async () => ({
+          activate() {
+            throw new Error("boom");
+          },
+        }),
+      }),
+    );
+    expect(getUnstartedPlugins().get("unstarted-activate")).toEqual({ reason: "activation" });
+    expect(thrown.staged).toHaveLength(1);
+    // and one that starts is in no set
+    const live = await prepareRendererPlugins(deps("unstarted-none"));
+    expect(live.staged.map((s) => s.activation.state)).toEqual(["active"]);
+    expect(getUnstartedPlugins().has("unstarted-none")).toBe(false);
   });
 });
 
