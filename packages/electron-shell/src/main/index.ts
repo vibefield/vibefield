@@ -39,6 +39,7 @@ import {
 import { type Logger, resolvePlatformLogRoot } from "@vibefield/logging";
 import { ScreenshotTool } from "@vibefield/screenshot";
 import { isQuiet, quietEnd } from "@vibefield/sound";
+import { ownIdentity } from "@vibefield/trust";
 import {
   createUser,
   ensureUsersRoot,
@@ -74,6 +75,10 @@ import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
 import { ConnectAsks, workingAgents } from "./connect-asks";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
+import { createShellCustody } from "./custody/custody";
+import { createElectronKeystore } from "./custody/keystore-electron";
+import { resolveCustodyLevel } from "./custody/level";
+import { probeResidentPair } from "./custody/resident-probe";
 import { createDesktopSound, type DesktopSound } from "./desktop-sound";
 import { desktopDevelopmentExtension } from "./development-extension";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
@@ -1185,6 +1190,37 @@ async function main(
         return;
     }
   };
+  // OB custody, C1 (EL7-PLAN §3.2; CUSTODY-SPEC §7) — the level, decided ONCE per boot and before the first supervisor
+  // is built, from what this build is (a packaged shell on macOS whose own signature carries a team and the hardened
+  // runtime) and never from what the disk holds. `files` is every other build: no keystore is made (its maker is
+  // handed here and never called) and nothing below changes. At `sealed` the shell's root is read under the OS
+  // keystore here and each pair is handed its secrets on stdin. Nothing of it reaches a window or a person (James,
+  // 2026-11-10): a root that is unavailable starts no pair through the gate in `ensurePairBundle`, as any failed
+  // start, and every later start reads it again by itself; a root made in this boot has the older pair it can no
+  // longer reach stopped before the first start goes on.
+  const custody = createShellCustody<FielddHandle>({
+    level: await resolveCustodyLevel({
+      platform: process.platform,
+      packaged: app.isPackaged,
+      ownIdentity: () => ownIdentity(),
+    }),
+    vibefieldRoot: user.rootReal,
+    keystore: createElectronKeystore,
+    // in fuid order: the order the older pairs are judged in, and each user named by their id, never by a path
+    userRoots: () =>
+      [...(readUsersFile(user.rootReal)?.users ?? [])]
+        .sort((a, b) => a.fuid - b.fuid)
+        .map((record) => ({ userId: record.userId, root: userRootFor(user.rootReal, record) })),
+    logRoot,
+    // fieldd's `audit.append` on the pair that just came up. Never through `appendShellAudit`: that door begins
+    // with an ensure, and what custody recorded before a pair existed must never be what starts one
+    audit: (pair, record) => pair.client.request("audit.append", record),
+    log: logger.child({ component: "custody" }),
+  });
+  logger.info("desktop.custody.level", "The shell's custody level for this boot", {
+    level: custody.level,
+    state: custody.state(),
+  });
   const pairBundles = new Map<string, PairBundle>();
   // Item 290 (D4; DESIGN.md §9 "The quit's words") — the quit's latch: the quit gate's hold sets it and its release
   // clears it (the gate port below). A switch or a new user is refused under it in James's words; the log hears which.
@@ -1208,6 +1244,9 @@ async function main(
   ): PairBundle => {
     const existing = pairBundles.get(userId);
     if (existing !== undefined) return existing;
+    // OB custody, C1 — this user root's custody: its own derived secrets, the same provider each time (it remembers
+    // the marks a rebuilt supervisor would otherwise forget); undefined at `files`
+    const pairCustody = custody.forUserRoot(userRoot);
     const sup = buildSupervisor({
       mode: MODE,
       rendererPolicyMode: RENDERER_POLICY_MODE,
@@ -1219,11 +1258,16 @@ async function main(
       userId,
       ...(environment !== undefined ? { environment } : {}),
       personPath: async () => (await personPath())?.path,
+      ...(pairCustody !== undefined ? { custody: pairCustody } : {}),
     });
+    // OB custody, C1 — every start of this pair goes through custody's gate: while the root is unavailable, or the
+    // older pair a new root can no longer reach is still being stopped, the supervisor is never asked (at `files`
+    // the gate is the function it is given)
+    const startPair: FielddSupervisor["ensure"] = (options) => sup.ensure(options);
     // Item 212 (RV #29) — each pair has its own coordinator, so its own bounded recovery under the house intensity
     // (the soak's in its lab); only the attached pair's moves the link (fielddLink ignores the others).
     const handles: FielddHandleCoordinator = new FielddHandleCoordinator({
-      upstreamEnsure: (options) => sup.ensure(options),
+      upstreamEnsure: custody.gate(startPair),
       intensity: recoveryIntensity,
       // Item 290 — a bundle born while a person's quit holds every pair starts held, so it starts nothing
       heldAtBirth: quitLatch.held,
@@ -2758,14 +2802,17 @@ async function main(
             .filter((user) => !reached.has(user.userId))
             .map(async (user) => {
               const root = userRootFor(attached.rootReal, user);
-              const probe = await tryAdopt(
+              // OB custody, C1 — at `sealed` each resident pair is paired with ITS OWN shell secret, derived for
+              // that user's root (never one user's at another's door); at `files` this is the token-file probe it
+              // was. No probe (null) while the root is unavailable: that pair is left running, as any unread pair is.
+              const probe = await probeResidentPair({
                 root,
-                RESIDENT_PROBE_MS,
-                undefined,
-                undefined,
-                user.userId,
-              );
-              if (!probe.ok) return null;
+                userId: user.userId,
+                probeMs: RESIDENT_PROBE_MS,
+                custody,
+                adopt: tryAdopt,
+              });
+              if (probe === null || !probe.ok) return null;
               return quitPair({
                 label: user.name,
                 attached: user.userId === attached.userId,

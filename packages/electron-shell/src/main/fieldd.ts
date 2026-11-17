@@ -13,6 +13,7 @@ import { createFielddSupervisor, type FielddSupervisor } from "@vibefield/fieldd
 import type { Logger } from "@vibefield/logging";
 import { app } from "electron";
 import { APP_ORIGIN } from "./app-protocol";
+import type { CustodyProvider } from "./custody/provider";
 import { isSmokeLike, type ShellMode, shutdownPolicy } from "./modes";
 import { type DesktopResources, readBundledTrust } from "./resources";
 import { SMOKE_HOME_PREFIX, type SmokeProfile, smokeHomeParent } from "./smoke-profile";
@@ -107,6 +108,11 @@ export function buildSupervisor(opts: {
    * adoption never wait on it. Every other mode keeps the PATH it was launched
    * with. */
   personPath?: () => Promise<string | undefined>;
+  /** OB custody, C1 (custody/provider.ts) — this user root's custody at the `sealed` level: the hand-off the
+   * supervisor writes on a spawned fieldd's stdin, the check it awaits before writing, and the marks it gives back.
+   * Absent at `files` (every dev run, smoke and unsigned package), where the supervisor takes today's path. Nothing
+   * of it rides the environment or the arguments built here. */
+  custody?: Pick<CustodyProvider, "handoff" | "verifyChild" | "noted">;
 }): FielddSupervisor {
   // Env overrides still win — they are how smoke harnesses and a developer
   // testing a packaged layout redirect the daemon — but the DEFAULT now comes
@@ -243,6 +249,8 @@ export function buildSupervisor(opts: {
     dataPort: 0,
     ...(expectedBuildId ? { expectedBuildId, buildMismatch } : {}),
     ...(opts.userId !== undefined ? { userId: opts.userId } : {}),
+    // OB custody, C1 — handed as it came, and only at `sealed`: the supervisor asks it for the hand-off when it spawns
+    ...(opts.custody !== undefined ? { custody: opts.custody } : {}),
     shutdownPolicy: policy,
     ...(policy === "stop-owned"
       ? { stopDeadlineMs: PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS + 2_000 }

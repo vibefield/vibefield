@@ -58,6 +58,18 @@ export class FielddCrashLoopError extends Error {
   }
 }
 
+/** OB custody, C1 (CUSTODY-SPEC §7.3 "v0.19") — what an attempt hands upstream: the caller's signal, as before, and
+ * `person` when a person asked, and nothing else. In main the upstream is custody's gate over the supervisor's own
+ * ensure: the gate alone reads `person` (only a person's ask reads an unavailable custody root again) and takes it
+ * off, so the supervisor is handed what it always was. */
+function upstreamAsk(options?: FielddEnsureOptions): FielddEnsureOptions | undefined {
+  if (options?.person !== true) {
+    return options?.signal === undefined ? undefined : { signal: options.signal };
+  }
+  if (options.signal === undefined) return { person: true };
+  return { signal: options.signal, person: true };
+}
+
 export interface FielddHandleCoordinatorOptions {
   readonly upstreamEnsure: FielddSupervisor["ensure"];
   readonly onEnsureError?: (error: unknown) => void;
@@ -269,9 +281,7 @@ export class FielddHandleCoordinator {
   private async attempt(options?: FielddEnsureOptions): Promise<FielddHandle> {
     let handle: FielddHandle;
     try {
-      handle = await this.upstreamEnsure(
-        options?.signal === undefined ? undefined : { signal: options.signal },
-      );
+      handle = await this.upstreamEnsure(upstreamAsk(options));
     } catch (error) {
       this.onEnsureError?.(error);
       throw error;
