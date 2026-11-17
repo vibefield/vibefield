@@ -169,6 +169,15 @@ export class MeshClient extends EventEmitter {
     };
   }
 
+  /** NR S3 — the link's "connected" alone: the wake of a stream whose owner hears node-up itself (the drive's holders,
+   * which follow the pulls at a node-up, drive/holders.ts). Returns its off. */
+  onConnected(fn: () => void): () => void {
+    this.link.on("connected", fn);
+    return () => {
+      this.link.off("connected", fn);
+    };
+  }
+
   /** Replace the desired serve set and reconcile now. */
   async setServes(specs: ServeSpec[]): Promise<ServeState[]> {
     this.desired = new Map(specs.map((s) => [serveKey(s), s]));

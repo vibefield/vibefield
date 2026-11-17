@@ -15,6 +15,13 @@
 //   is. A held floor can come back with no redial and no turn of its node, so no moment would follow it.
 // - any other retryable refusal: the next moment.
 // - a refusal that is not retryable: the stream stops, and its owner hears it (`onStopped`) and reads UNAVAILABLE.
+// NR S3 — `renew()`, the owner's own ask, whatever the stream's state: a node built anew over a live link refuses
+// nothing, so the stream that stands stays on the old store and hears nothing again (field-native `mgmt/mesh.rs`,
+// `spawn_store_forwarder`). Only its owner knows the node is new (the drive's holders, at the drive's node-up). A
+// renewal waits out any ask in flight (it may have left before this node), then asks once. Answered, the new stream
+// replaces the standing one, whose `dispose` runs only then; refused, the standing one stays and still hears, and the
+// refusal decides the next ask as above. A refused ASK never ends a stream that stands; a refused REPLAY does (the
+// link ended that entry).
 // The event is in-process and owes no wire schema. Its witnesses are `test/native-rearm-matrix.test.ts` and
 // `test/mesh-stream.test.ts`.
 import { MeshNotUpDetails } from "@vibefield/contracts";
@@ -85,6 +92,8 @@ export class MeshStream {
   #off: (() => void) | null = null;
   #dispose: (() => void) | null = null;
   #asking = false;
+  /** The ask in flight, which a renewal waits out. */
+  #flight: Promise<void> | null = null;
   #started = false;
   #stopped = false;
   /** A refusal left the stream owed an ask at the next moment. */
@@ -109,9 +118,14 @@ export class MeshStream {
     await this.#ask(false);
   }
 
-  /** NR S3's renewal: its rows are written red first (`test/mesh-stream.test.ts`), and the next commit makes it. */
+  /** The owner's ask (the header's NR S3): every ask in flight is waited out, one after another, then ONE ask is made.
+   * Answered, it replaces the stream that stands, which is let go only then; refused, that one stays and still hears.
+   * Never rejects: a refusal is the stream's, as a re-arm's is. Before `start`, or after `stop`, it does nothing. */
   async renew(): Promise<void> {
-    throw new Error("MeshStream.renew is not made yet (NR S3)");
+    if (!this.#started) return;
+    while (this.#flight !== null) await this.#flight.catch(() => undefined);
+    if (this.#stopped) return;
+    await this.#ask(true).catch(() => undefined);
   }
 
   /** The floor answered the stream's last ask, and nothing has refused it since. */
@@ -137,7 +151,18 @@ export class MeshStream {
     void this.#ask(true).catch(() => undefined);
   }
 
-  async #ask(again: boolean): Promise<void> {
+  /** One ask, held as the flight a renewal waits out. */
+  #ask(again: boolean): Promise<void> {
+    const flight = this.#asked(again);
+    this.#flight = flight;
+    const landed = () => {
+      if (this.#flight === flight) this.#flight = null;
+    };
+    flight.then(landed, landed);
+    return flight;
+  }
+
+  async #asked(again: boolean): Promise<void> {
     if (this.#stopped) return;
     this.#asking = true;
     this.#waiting = false;
@@ -149,11 +174,11 @@ export class MeshStream {
         (payload, kind) => {
           if (!this.#stopped) this.#opts.onEvent(payload, kind);
         },
-        { onReplayFailed: (error) => this.#refused(error) },
+        { onReplayFailed: (error) => this.#refused(error, true) },
       );
     } catch (error) {
       this.#asking = false;
-      this.#refused(error);
+      this.#refused(error, false);
       if (!again) throw error;
       return;
     }
@@ -162,15 +187,19 @@ export class MeshStream {
       answer.dispose();
       return;
     }
+    // replace, then let go: the stream that stood heard until this one answered (a renewal's, `renew`)
+    const stood = this.#dispose;
     this.#dispose = answer.dispose;
+    stood?.();
     this.#spentNow = false;
     this.#timeouts = 0;
     this.#opts.onSnapshot(answer.snapshot, again);
   }
 
-  #refused(error: unknown): void {
-    // a refused replay was ended by the link, and a refused ask never stood: either way nothing is left to dispose
-    this.#dispose = null;
+  /** `replay`: the link ended the entry of the stream that stands (`onReplayFailed`), so nothing is left to dispose.
+   * A refused ask never stood, and leaves a stream that stands as it was (a refused renewal, the header). */
+  #refused(error: unknown, replay: boolean): void {
+    if (replay) this.#dispose = null;
     if (this.#stopped) return;
     const refusal = meshStreamRefusal(error);
     this.#log.info("fieldd.mesh_stream.refused", "A native mesh stream was refused", {
