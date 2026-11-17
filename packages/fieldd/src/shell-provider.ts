@@ -184,6 +184,8 @@ function safeCaller(ctx: CallerContext): ShellProviderCallParams["caller"] {
 export class ShellProviderBroker {
   private provider: Provider | null = null;
   private readonly pending = new Map<string, PendingCall>();
+  /** Item 517 — the last of fieldd's preview captures, or null while none is in flight. */
+  private captureTail: Promise<void> | null = null;
 
   /** In-process capability fact only; this never exposes provider identity or
    * grants a caller access to the internal capture method. */
@@ -284,18 +286,38 @@ export class ShellProviderBroker {
 
   /** AH-4's capture door is deliberately not a ProductAPI method. Only
    * fieldd's ArtifactService adapter can enter here, and the provider sees an
-   * explicit fieldd caller rather than inheriting a renderer's authority. */
+   * explicit fieldd caller rather than inheriting a renderer's authority.
+   *
+   * Item 517: Electron's provider holds one capture at a time and refuses a
+   * second while one runs. Two of fieldd's services capture (live artifacts and
+   * made apps), each in its own queue, and this door is where they meet, so it
+   * holds them to one at a time: neither is refused because the other is in
+   * flight. A queued capture is dispatched when the one before it settles, and
+   * its deadline starts then. */
   callInternal(method: ShellInternalProviderMethod, raw: unknown): Promise<unknown> {
-    return this.dispatch(
-      {
-        principal: { kind: "local-token", tokenId: "artifact-service", scopes: [] },
-        transport: "inproc-port",
-        receivedAt: Date.now(),
-        clientKind: "fieldd",
-      },
-      method,
-      raw,
+    const ctx: CallerContext = {
+      principal: { kind: "local-token", tokenId: "artifact-service", scopes: [] },
+      transport: "inproc-port",
+      receivedAt: Date.now(),
+      clientKind: "fieldd",
+    };
+    if (method !== "shell.webcontents.captureArtifactPreview") {
+      return this.dispatch(ctx, method, raw);
+    }
+    const previous = this.captureTail;
+    const run =
+      previous === null
+        ? this.dispatch(ctx, method, raw)
+        : previous.then(() => this.dispatch(ctx, method, raw));
+    const settled = run.then(
+      () => undefined,
+      () => undefined,
     );
+    this.captureTail = settled;
+    void settled.then(() => {
+      if (this.captureTail === settled) this.captureTail = null;
+    });
+    return run;
   }
 
   private async dispatch(
