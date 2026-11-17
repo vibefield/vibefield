@@ -43,6 +43,15 @@ struct SpendView: View {
   @GestureState private var chartTouching = false
   @GestureState private var listTouching = false
 
+  /// The view on its stage, its own state starting at `seed` (every shipping caller takes the default, the view's
+  /// first state, so nothing it draws moves). It exists for a still at a set moment (item 285, 2026-11-10): a set
+  /// moment is a drag on the chart, which no row may send, so `SpendParityTests.theSpendHeroAtASetMomentIsStilled()`
+  /// seeds the held moment instead. Internal, never public.
+  init(input: GodviewStageInput, seed: SpendModel.State = SpendModel.State()) {
+    self.input = input
+    _state = SwiftUI.State(initialValue: seed)
+  }
+
   /// What lets a set moment go or the top ease: the frame's target and whether a held moment has slid out.
   private struct Settle: Equatable {
     let target: Double

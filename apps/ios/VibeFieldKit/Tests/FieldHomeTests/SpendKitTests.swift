@@ -4,12 +4,15 @@ import FieldSwarm
 import Foundation
 import SwiftUI
 import Testing
+import UIKit
 
 @testable import FieldHome
 
 // PG-7 — THE SPEND VIEW IN THE KIT (kit-only: SwarmTheme and the swarm's sprites are UIKit's, so the host loop leaves
 // this file out): its inks against the swarm's resolved theme and the stage's skin (K2), and the view itself on the
-// phone's stage over the witness (K3). An extension of the one suite, so `-only-testing` by its name takes both.
+// phone's stage over the witness (K3). An extension of the one suite, so `-only-testing` by its name takes both. R1
+// and R2 read the narrow hero and assert nothing: R1 prints its caption, R2 stills it at a set moment when
+// `VF_STILL_DIR` is set (item 285).
 //
 // No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 
@@ -103,6 +106,49 @@ extension SpendParityTests {
               + " rate=\(hero.rate) room=\(points)pt what=\(said)")
         }
       }
+    }
+  }
+
+  /// R2 — A STILL, NOT A ROW (item 285, 2026-11-10): with `VF_STILL_DIR` set, the shipping view on
+  /// the phone's stage (402 × 781, light and dark) at a set moment, R1's `at=moment` (the witness's open, now frozen at
+  /// 1790803300000, the moment held at 1790803000000), drawn by `ImageRenderer` at scale 3 into
+  /// `spend-hero-moment-402x781-<scheme>.png` there. One `PG-HERO-MOMENT ` line per appearance gives the same measure
+  /// R1 makes: the number's and the burn's widths, the hero's line and its room, and where the burn ends against the
+  /// list's column and its head's words. It writes those two files and nothing else, nowhere but there. With the
+  /// variable unset it returns at once; it asserts nothing either way.
+  @Test @MainActor func theSpendHeroAtASetMomentIsStilled() throws {
+    guard let dir = ProcessInfo.processInfo.environment["VF_STILL_DIR"], !dir.isEmpty else { return }
+    let steps = try HomeFixture.witnessSteps()
+    let rows = try #require(steps.first { $0.at == "open" }?.rows)
+    let frozen = try #require(GodviewViewChoice.frozenNow(["-vf-godview-now=1790803300000"]))
+    var seed = SpendModel.State()
+    seed.held = 1_790_803_000_000
+    func points(_ value: Double) -> String { String(format: "%.1f", value) }
+    for scheme in [ColorScheme.light, .dark] {
+      let name = scheme == .dark ? "dark" : "light"
+      let input = GodviewStageInput(
+        isActive: true, rows: rows, fieldIsLive: true, unreadIds: Set(rows.filter { $0.unread }.map { $0.id }),
+        activeId: nil, colour: { _ in nil }, now: { frozen }, bandHeight: 93, topInset: 108,
+        skin: GodviewSkin(scheme: scheme), isStill: true, onOpen: { _ in })
+      let frame = SpendModel.frame(SpendView.modelInput(input, size: CGSize(width: 402, height: 781)), seed)
+      let g = frame.g
+      let hero = frame.hero
+      let figure = SpendView.measure(hero.big, .heroFigure)
+      let burn = SpendView.measure(hero.rate, .heroRate)
+      let line = g.lx0 - SpendWords.NarrowHero.listInsetPx - g.x0
+      let room = SpendModel.heroRoom(g, figure: hero.big, rate: hero.rate, measure: SpendView.measure).width
+      let ends = g.x0 + figure + SpendWords.NarrowHero.gapPx + burn
+      let renderer = ImageRenderer(
+        content: SpendView(input: input, seed: seed).frame(width: 402, height: 781).environment(\.colorScheme, scheme))
+      renderer.scale = 3
+      let image = renderer.uiImage
+      let png = try #require(image?.pngData(), "\(name): it renders")
+      let file = "spend-hero-moment-402x781-\(name).png"
+      try png.write(to: URL(fileURLWithPath: dir).appendingPathComponent(file))
+      print(
+        "PG-HERO-MOMENT scheme=\(name) big=\(hero.big) rate=\(hero.rate) figure=\(points(figure))pt"
+          + " burn=\(points(burn))pt line=\(points(line))pt room=\(points(room))pt burnEnds=x\(points(ends))"
+          + " listColumn=x\(points(g.lx0)) headWords=x\(points(g.lx0 + 10)) file=\(file)")
     }
   }
 }
