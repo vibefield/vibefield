@@ -258,8 +258,8 @@ enum FieldHomeModel {
   /// Item 41: the held screen anchors at the grid's foot while ANOTHER client
   /// holds the seat (DESIGN.md §8), so its empty rows are at the top. This
   /// phone's seat, an empty one and no seat keep the grid at its top: the grid
-  /// is the PTY's then. The readout's words do not follow the rows: James's
-  /// review of 2026-11-02 centres them between the header and the input controls.
+  /// is the PTY's then. The readout's words do not follow the rows: the review
+  /// of 2026-11-02 centres them between the header and the input controls.
   static func anchorsGridAtFoot(_ seat: RoutedSessionSeat?) -> Bool {
     guard let seat, case .another = seat.driver else { return false }
     return true

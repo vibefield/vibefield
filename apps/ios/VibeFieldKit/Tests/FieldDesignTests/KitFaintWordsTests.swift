@@ -3,8 +3,8 @@ import Testing
 
 @testable import FieldDesign
 
-/// Item 242 (DESIGN.md §7, "The phone kit's faint words, sorted"; VF-PM's ruling of 2026-11-08 06:10Z: §2.4's law
-/// binds; re-cut 2026-11-17 on train 8's main): the kit's `inkFaint`, at 30% by day and 32% by night, retires, and
+/// Item 242 (DESIGN.md §7, "The phone kit's faint words, sorted"; asked for 2026-11-08: §2.4's law binds; re-cut
+/// 2026-11-17 on train 8's main): the kit's `inkFaint`, at 30% by day and 32% by night, retires, and
 /// each of its 61 uses takes the tier §2.4's test gives it. A word that must be read takes t3,
 /// `ChromePalette.inkTertiary` (42). A mark takes t4, `ChromePalette.inkT4` (19). Read on the kit's sources, from this
 /// file's own path: the palette may not offer `inkFaint`, no view may name it, and each file that held it reads its
