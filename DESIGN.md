@@ -6271,8 +6271,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   terminal is born under a profile, not a plan (ruled 2026-11-17, James, in part: "every plan that profile holds,
   the same circle the profiles column draws"). The bud keeps puppeteer's glyph, 20 at 48 and 18 at 42 (2026-11-11,
   James, f4: "20"), and its middle stays that glyph. It wears no hot dot: its top right is the blocked dot, and the
-  orange fill says it (2026-11-11, James, f3: "none"). It inverts with the reached bud. *(Written 2026-11-17, ahead
-  of PU-R's build: until it lands, the bud is plain, as the EL8 to puppeteer 0.4.0 left it.)* **Labels** (the name in
+  orange fill says it (2026-11-11, James, f3: "none"). It inverts with the reached bud. **Labels** (the name in
   9.5px mono 700 at 78% ink over a 7.5px 800 state line, haloed in the ground, 8px off the rim) do not sit on
   anything: one that would touch another bud at its hot size, another label, the hub, a spoke or the
   field's edge moves round its own bud 15° at a time to the nearest clear place, then keeps only the name;
@@ -10475,10 +10474,11 @@ here.
 - **The spawn bloom's words** (2026-11-09, James, the picks page, b3: "age"). After who is signed in, a profile bud's
   line names its deciding plan, "‹plan›: 64% of 5 hours", in the line's own capitals, with no forecast and no reset.
   A reading kept after a failed refresh, or a window read before its reset, says its age as "A reading" does:
-  "Claude Max: 64% of 5 hours, as of 5m ago". With no reading it says the column's words: "‹plan›: not signed in",
-  "‹plan›: couldn't read", "‹plan›: signing in" or "‹plan›: reading"; "usage unavailable" while the usage cannot be
-  read; "No meters" for a profile with none. The line is one tone; the bands carry the orange. When one plan reads
-  and another needs you, the words name the reading and the circle draws both.
+  "Claude Max: 64% of 5 hours, as of 5m ago", the age of its tightest window's own read (§8 "A meter a later reading
+  did not carry"). With no reading it says the column's words: "‹plan›: not signed in", "‹plan›: couldn't read",
+  "‹plan›: signing in" or "‹plan›: reading"; "usage unavailable" while the usage cannot be read; "No meters" for a
+  profile with none. The line is one tone; the bands carry the orange. When one plan reads and another needs you, the
+  words name the reading and the circle draws both.
 - **The page** is **Agent Profiles**: "Read a minute ago, from ‹home›" or "Reading usage…"; **Profiles**, with **All
   profiles** ("3 profiles · 5 plans") and each profile's line ("default · the agents' own sign-ins · 2 plans");
   **Plans**, **Every plan** or **Plans in ‹profile›**; and its foot, "Manage profiles in Settings → Agent Profiles.

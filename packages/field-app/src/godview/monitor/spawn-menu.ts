@@ -45,23 +45,25 @@ export function signedInLabels(set: AgentProfileSet): string[] {
  * first answers (letting go on it then opens an unbound terminal, today's
  * hold), then `ready` with its Agent Profiles in the tabs' order — the tab's
  * fields (`ProfileTab`, its orange dot included) plus who is signed in. One
- * profile is no choice: the views create at once, under it. PU-R, RED: the
- * fuel map is taken and not yet worn.
+ * profile is no choice: the views create at once, under it. PU-R: each
+ * profile wears its fuel when the map holds one for it (`usage/spawn-fuel.ts`).
  */
 export function spawnMenuOf(
   sets: readonly AgentProfileSet[] | null,
   tabs: readonly ProfileTab[],
   /** this desktop, in its platform's word (`thisDeviceWord`) */
   here: string = thisDeviceWord(undefined),
-  /** each profile's fuel by its set's id (`spawnFuelMap`). RED: not worn. */
-  _fuel?: ReadonlyMap<string, MonitorSpawnFuel>,
+  /** each profile's fuel by its set's id (`spawnFuelMap`). It is THIS desktop's: every desktop's own profile is
+   * `native`, so SB-6 keys it by desktop when a peer's profiles bloom. */
+  fuel?: ReadonlyMap<string, MonitorSpawnFuel>,
 ): MonitorSpawnMenu {
   if (sets === null) {
     return { devices: [{ id: HERE_DEVICE_ID, label: here, self: true, state: "reading" }] };
   }
   const blocked = new Set(tabs.filter((tab) => tab.blocked === true).map((tab) => tab.id));
-  const profiles = sets.map(
-    (set): MonitorSpawnProfile => ({
+  const profiles = sets.map((set): MonitorSpawnProfile => {
+    const worn = fuel?.get(set.id);
+    return {
       id: set.id,
       label: set.label,
       ...(set.glyph !== undefined ? { glyph: set.glyph } : {}),
@@ -69,8 +71,9 @@ export function spawnMenuOf(
       isDefault: set.default,
       ...(blocked.has(set.id) ? { blocked: true } : {}),
       signedIn: signedInLabels(set),
-    }),
-  );
+      ...(worn !== undefined ? { fuel: worn } : {}),
+    };
+  });
   return {
     devices: [{ id: HERE_DEVICE_ID, label: here, self: true, state: "ready", profiles }],
   };
