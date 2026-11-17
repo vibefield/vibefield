@@ -176,8 +176,8 @@ describe("the rows a run runs", () => {
     const narrowed = marketRows("listed", { [MARKET_ROWS_ENV]: " READ,DOOR ,NOPE" });
     expect(narrowed.rows.map((r) => r.name)).toEqual(["READ", "DOOR"]);
     expect(narrowed.unknown).toEqual(["NOPE"]);
-    // a narrowed run still says the parked rows it leaves out (C36)
-    expect(narrowed.parked.map((r) => r.name)).toEqual(["PICTURES", "CARRY"]);
+    // a narrowed run still says the parked row it leaves out (C36)
+    expect(narrowed.parked.map((r) => r.name)).toEqual(["PICTURES"]);
     // one list for every run: a run runs those of its own it names, and another run's are no error
     expect(marketRows("update", { [MARKET_ROWS_ENV]: "READ,COUNT" })).toEqual({
       rows: [{ name: "COUNT", needs: null }],
@@ -186,8 +186,10 @@ describe("the rows a run runs", () => {
     });
   });
 
-  it("park CARRY and PICTURES, and run a parked row VF_MARKET_ROWS names (C36)", () => {
+  it("park PICTURES alone, run CARRY after RISE, and run a parked row VF_MARKET_ROWS names (C36; item 433)", () => {
     const listed = marketRows("listed", {});
+    // CARRY by default since Discover draws its categories (item 433), after INSTALL and RISE:
+    // the clock's category hangs on the board while the clock is installed, until REMOVE
     expect(listed.rows.map((r) => r.name)).toEqual([
       "READ",
       "COMMUNITY-CLOSED",
@@ -195,10 +197,12 @@ describe("the rows a run runs", () => {
       "SHELF",
       "INSTALL",
       "RISE",
+      "CARRY",
       "REMOVE",
       "COMMUNITY",
     ]);
-    expect(listed.parked.map((r) => r.name)).toEqual(["PICTURES", "CARRY"]);
+    expect(listed.parked.map((r) => r.name)).toEqual(["PICTURES"]);
+    expect(MARKET_ROWS.listed.find((r) => r.name === "CARRY")?.parked).toBeUndefined();
     // each parked row waits on a part, and says why it is parked
     for (const row of listed.parked) {
       expect(row.needs, row.name).not.toBeNull();
@@ -212,11 +216,14 @@ describe("the rows a run runs", () => {
         unknown: [],
       });
     }
-    // named, a parked row runs and is no longer said as parked; the one not named still is
-    const named = marketRows("listed", { [MARKET_ROWS_ENV]: "CARRY" });
-    expect(named.rows.map((r) => r.name)).toEqual(["CARRY"]);
-    expect(named.parked.map((r) => r.name)).toEqual(["PICTURES"]);
+    // named, the parked row runs and is no longer said as parked; naming another leaves it said
+    const named = marketRows("listed", { [MARKET_ROWS_ENV]: "PICTURES" });
+    expect(named.rows.map((r) => r.name)).toEqual(["PICTURES"]);
+    expect(named.parked).toEqual([]);
     expect(named.unknown).toEqual([]);
+    const carry = marketRows("listed", { [MARKET_ROWS_ENV]: "CARRY" });
+    expect(carry.rows.map((r) => r.name)).toEqual(["CARRY"]);
+    expect(carry.parked.map((r) => r.name)).toEqual(["PICTURES"]);
   });
 
   it("say each parked row with its reason on the run's SMOKE_MARKET_ROWS line (C36)", () => {
@@ -232,7 +239,7 @@ describe("the rows a run runs", () => {
     const listed = said("listed");
     expect(listed.run).toBe("listed");
     expect(listed.rows).toEqual(marketRows("listed", {}).rows.map((r) => r.name));
-    expect(Object.keys(listed.parked)).toEqual(["PICTURES", "CARRY"]);
+    expect(Object.keys(listed.parked)).toEqual(["PICTURES"]);
     for (const [name, why] of Object.entries(listed.parked))
       expect(why, name).toBe(MARKET_ROWS.listed.find((r) => r.name === name)?.parked);
     expect(said("listed", { [MARKET_ROWS_ENV]: "CARRY,PICTURES" }).parked).toEqual({});
@@ -488,13 +495,17 @@ describe("smoke:market's row", () => {
     expect(gates).toContain(`| \`${MARKET_ROWS_ENV}\` |`);
   });
 
-  it("says in row 37 that each parked row is parked, by name (C36)", () => {
+  it("says in row 37 that each parked row is parked, by name, and CARRY runs (C36; item 433)", () => {
     const lines = read("docs/desk-gates.md").split("\n");
     const row37 = lines.find((line) => line.startsWith("| 37 | smoke:market |")) ?? "";
-    expect(row37).toContain("**Two rows are parked**");
+    expect(row37).toContain("**One row is parked**");
     const parked = MARKET_RUNS.flatMap((run) => marketRows(run, {}).parked.map((r) => r.name));
-    expect(parked).toEqual(["PICTURES", "CARRY"]);
+    expect(parked).toEqual(["PICTURES"]);
     for (const name of parked) expect(row37).toContain(`**${name}** — item `);
+    expect(row37).not.toContain("**CARRY**, parked");
+    // the doors' table says the same of an unset VF_MARKET_ROWS
+    const door = lines.find((line) => line.startsWith(`| \`${MARKET_ROWS_ENV}\` |`)) ?? "";
+    expect(door).toContain("unset, every row but the parked (PICTURES, row 37)");
     // and where they are said: each run's rows line, and the stager's last line, which the
     // landing gate's verdict quotes
     expect(row37).toContain("`SMOKE_MARKET_ROWS {run, rows, parked}`");

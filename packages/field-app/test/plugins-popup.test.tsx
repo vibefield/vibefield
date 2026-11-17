@@ -62,7 +62,8 @@ import { nameUnstartedPlugin, resetUnstartedPlugins } from "../src/plugin-host/u
 // card sends and throws away, each held by the port's recorded calls, and a refusal worded by its kind alone. MK-4d
 // its Show them on the pegboard, held by the board's door (`boardReveal`), with no pegboard mounted.
 // MK-4d's names: where a set hangs, on Installed's lines and under What it adds, over a desk double
-// whose board names its categories.
+// whose board names its categories. Item 433: Discover's categories, the pegboard's, over the same
+// desk double.
 // MK-O3D adds the community statement at this desktop's first community install, over a fixture mark.
 // MK-UC's UC-C adds Updates' rows, the update card, Update all and Check again, and the note the window comes back
 // fresh by (MK-E6), each held by the port's recorded calls and the window's own session, which each test leaves
@@ -1181,6 +1182,112 @@ describe("Discover's shelf (MK-4e; §8 'Discover')", () => {
     await settle();
     expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things", "Kanban"]);
     expect(bodyText()).not.toContain(words.SHELF_WORDS.communityOff);
+  });
+});
+
+/** Discover's categories as drawn (item 433): each segment's id, never on screen, its words, and
+ * the chosen one's id. */
+const categoriesSaid = (): {
+  ids: (string | null)[];
+  words: (string | null)[];
+  chosen: string | null;
+} => {
+  const segments = [
+    ...document.body.querySelectorAll<HTMLButtonElement>(".vf-plugins-body button[data-id]"),
+  ];
+  const pressed = segments.find((node) => node.getAttribute("aria-pressed") === "true");
+  return {
+    ids: segments.map((node) => node.getAttribute("data-id")),
+    words: segments.map((node) => node.textContent),
+    chosen: pressed?.getAttribute("data-id") ?? null,
+  };
+};
+/** The category's segment, by its id (`""` All). */
+const categorySegment = (id: string): HTMLButtonElement | null =>
+  document.body.querySelector<HTMLButtonElement>(`.vf-plugins-body button[data-id="${id}"]`);
+/** A board that names four categories, in its order; Paper hangs no set the shelf's list holds. */
+const NAMING_BOARD: readonly BoardCategory[] = [
+  { id: "things", label: "Things", count: 4 },
+  { id: "paper", label: "Paper", count: 2 },
+  { id: "devices", label: "Devices", count: 1 },
+  { id: "tools", label: "Tools", count: 1 },
+];
+
+describe("Discover's categories (item 433; §8 'Discover', MK-D2)", () => {
+  it("draws the pegboard's categories after the featured set, by the board's names, and a category chosen keeps its sets", async () => {
+    const board = mountBoard(NAMING_BOARD);
+    try {
+      await mount(SHELF);
+      // All, then each category a shown set hangs under, in the board's order: Paper hangs none
+      expect(categoriesSaid()).toEqual({
+        ids: ["", "things", "devices", "tools"],
+        words: ["All", "Things", "Devices", "Tools"],
+        chosen: "",
+      });
+      // a category's id is never on screen
+      expect(bodyText()).not.toContain("devices");
+      expect(bodyText()).not.toContain("tools");
+      // a row of its own, after the featured set and before the other sets, named to assistive tech
+      const row = categorySegment("")?.closest("li") ?? null;
+      const featured = document.body.querySelector('.vf-plugins-tile-item[data-featured="true"]');
+      expect(row?.previousElementSibling).toBe(featured);
+      expect(row?.nextElementSibling?.querySelector(".vf-plugins-tile-title")?.textContent).toBe(
+        "Burndown",
+      );
+      expect(row?.querySelector("fieldset")?.getAttribute("aria-label")).toBe("Categories");
+      // a category chosen keeps the sets one of whose objects hangs under it, by title, with no
+      // featured row; its first tile is hot, and the field's keys walk them
+      act(() => categorySegment("things")?.click());
+      expect(categoriesSaid().chosen).toBe("things");
+      expect(tileTitles()).toEqual(["Burndown", "Desk things"]);
+      expect(document.body.querySelector('.vf-plugins-tile-item[data-featured="true"]')).toBeNull();
+      expect(hotTile()).toBe("Burndown");
+      press("ArrowRight");
+      expect(hotTile()).toBe("Desk things");
+      act(() => categorySegment("devices")?.click());
+      expect(tileTitles()).toEqual(["Simulators"]);
+      expect(hotTile()).toBe("Simulators");
+      // All again: the featured set first
+      act(() => categorySegment("")?.click());
+      expect(categoriesSaid().chosen).toBe("");
+      expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things"]);
+    } finally {
+      board.unmount();
+    }
+  });
+
+  it("gives the keyboard back to the field after a press on a category, so ↵ opens the hot tile", async () => {
+    const board = mountBoard(NAMING_BOARD);
+    /** A segment pressed as the window's pointer presses it: the button takes the focus, then the
+     * click counts one. A key's click (↵ or space on the segment) counts none. */
+    const pressSegment = (id: string, detail: number): void =>
+      act(() => {
+        const segment = categorySegment(id);
+        segment?.focus();
+        segment?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail }));
+      });
+    try {
+      await mount(SHELF);
+      pressSegment("things", 1);
+      expect(categoriesSaid().chosen).toBe("things");
+      expect(document.activeElement).toBe(field());
+      expect(hotTile()).toBe("Burndown");
+      // the chosen one pressed again keeps the hot tile where the keys left it
+      press("ArrowRight");
+      expect(hotTile()).toBe("Desk things");
+      pressSegment("things", 1);
+      expect(hotTile()).toBe("Desk things");
+      // ↵ reaches the field and opens the hot tile's page (Desk things: the foot's Install)
+      press("Enter");
+      expect(pageTitle()).toBe("Desk things");
+      esc();
+      // a key's click leaves the keyboard on the row, for ← → Home End
+      pressSegment("devices", 0);
+      expect(categoriesSaid().chosen).toBe("devices");
+      expect(document.activeElement).toBe(categorySegment("devices"));
+    } finally {
+      board.unmount();
+    }
   });
 });
 

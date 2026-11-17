@@ -170,10 +170,11 @@ test("five runs, each on its own copy of a list signed by dev keys, keyed to it 
   assert.equal(update.fixture.next.version, "0.2.0");
   assert.deepEqual(update.fixture.next.asks, ["canvas.write"]);
 
-  // every run's exit, and listed's two parked rows by name (C36): the line the landing gate quotes
+  // every run's exit, and listed's parked row by name (C36; CARRY runs since item 433): the line
+  // the landing gate quotes
   assert.deepEqual(result.lines("MARKET_FIXTURE_DONE")[0], {
     runs: { listed: 0, tampered: 0, forged: 0, offline: 0, update: 0 },
-    parked: { listed: ["PICTURES", "CARRY"] },
+    parked: { listed: ["PICTURES"] },
   });
   const [removed] = result.lines("MARKET_FIXTURE_REMOVED");
   assert.equal(removed.root, staged.root);
@@ -187,7 +188,7 @@ test("a red run is the stager's exit, and the runs after it still run", () => {
   assert.equal(result.status, 3);
   assert.deepEqual(result.lines("MARKET_FIXTURE_DONE")[0], {
     runs: { listed: 0, tampered: 0, forged: 3, offline: 0, update: 0 },
-    parked: { listed: ["PICTURES", "CARRY"] },
+    parked: { listed: ["PICTURES"] },
   });
   assert.equal(existsSync(result.lines("MARKET_FIXTURE")[0].root), false);
 });
@@ -207,10 +208,14 @@ test("--runs picks runs by name; an unknown run, a third plugin or a missing com
 test("the DONE line names the parked rows a run leaves out, and none it runs (C36)", () => {
   const only = (run, env) =>
     stager(["--plugins", plugins, "--runs", run, "--", process.execPath, PROBE], env);
-  // named, a parked row runs and is no longer said; the one not named still is
-  const named = only("listed", { VF_MARKET_ROWS: "CARRY" });
+  // named, the parked row runs and is no longer said, so the run is left out of `parked`
+  const named = only("listed", { VF_MARKET_ROWS: "PICTURES" });
   assert.equal(named.status, 0, named.stderr);
-  assert.deepEqual(named.lines("MARKET_FIXTURE_DONE")[0], {
+  assert.deepEqual(named.lines("MARKET_FIXTURE_DONE")[0], { runs: { listed: 0 }, parked: {} });
+  // naming another row leaves it said
+  const other = only("listed", { VF_MARKET_ROWS: "CARRY" });
+  assert.equal(other.status, 0, other.stderr);
+  assert.deepEqual(other.lines("MARKET_FIXTURE_DONE")[0], {
     runs: { listed: 0 },
     parked: { listed: ["PICTURES"] },
   });

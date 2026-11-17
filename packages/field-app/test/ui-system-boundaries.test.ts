@@ -740,11 +740,13 @@ describe("UI system ownership boundaries", () => {
     expect(hits[0]).toBeGreaterThan(opens);
     expect(hits[0]).toBeLessThan(closes);
     // every door reaches it, and the popup opens on the tab its door asked for — the pegboard's More in Plugins…
-    // (MK-4d) on Discover, as the Me menu's row does
+    // (MK-4d) on Discover, as the Me menu's row does, and (item 433) on the board's category, which only it hands
     expect(chrome).toMatch(/onOpenPlugins=\{openPluginsOnDiscover\}/u);
     expect(chrome).toMatch(/case "plugins":\s*openPlugins\(run\.tab\)/u);
     expect(chrome).toMatch(/openOn=\{pluginsOpenOn\}/u);
-    expect(chrome).toMatch(/<Pegboard\s[^>]*onMorePlugins=\{openPluginsOnDiscover\}/u);
+    expect(chrome).toMatch(/openCategory=\{pluginsCategory\}/u);
+    expect(chrome).toMatch(/<Pegboard\s[^>]*onMorePlugins=\{openPluginsFromBoard\}/u);
+    expect(chrome).toMatch(/\(category: string\) => openPlugins\("discover", category\)/u);
     for (const name of ["account/MeMenu.tsx", "frame/palette-acts.ts", "hud/CommandPalette.tsx"]) {
       expect(source(name), name).not.toContain("onSurfaceChange(");
       expect(source(name), name).not.toMatch(sets);
@@ -805,8 +807,9 @@ describe("UI system ownership boundaries", () => {
     // palette's run kind, act and two runs, ChromeLayer's surface call and case, and the Me menu's row key (VF-PM
     // 13:03:43Z: the table grows only by MK-4b's own lines). A new line anywhere is a red that makes someone read
     // it. The pegboard's More in Plugins… (MK-4d) adds none: it reaches the popup through ChromeLayer's
-    // `openPlugins`, by its `openPluginsOnDiscover`. The field's second line is the desk's recede under the popup
-    // over Canvas (MK-4d, the MK inventory's A1: `pluginsOverCanvas`).
+    // `openPlugins`, by its `openPluginsFromBoard` (item 433, with the board's category). The field's
+    // second line is the desk's recede under the popup over Canvas (MK-4d, the MK inventory's A1:
+    // `pluginsOverCanvas`).
     const PINNED: Readonly<Record<string, number>> = {
       "account/MeMenu.tsx": 1,
       "field.tsx": 2,
