@@ -1584,6 +1584,49 @@ describe("Artifact Hub over a real daemon", () => {
     expect(persistedAudit).not.toContain("thumbnail.jpg");
   }, 30_000);
 
+  it("item 517: audits a person's Refresh preview at its door, with the person who asked", async () => {
+    const dataDir = makeDataDir();
+    const source = await localSource();
+    const { mock, daemon } = await boot(dataDir);
+    cleanup.push(() => mock.stop());
+    cleanup.push(() => daemon.stop());
+    const shell = await rpcFor(daemon.controlPort, daemon.shellToken);
+    await shell.call("shell.provider.register", { methods: [...SHELL_PROVIDER_METHODS] });
+    const captures = () =>
+      shell.notifications.filter((notification) => notification.method === "shell.provider.call");
+
+    await shell.call("artifact.publish", {
+      artifactId: A,
+      title: `localhost:${source.port}`,
+      source: { kind: "proxy", port: source.port, scheme: "http" },
+    });
+    await until(() => captures().length === 1);
+    await shell.call("shell.provider.resolve", {
+      callId: ShellProviderCallParams.parse(captures()[0]?.params).callId,
+      outcome: { result: { captured: true } },
+    });
+    await until(() => daemon.artifacts.statuses()[0]?.previewRevision === 1);
+
+    const refresh = shell.call("artifact.refreshPreview", { artifactId: A });
+    await until(() => captures().length === 2);
+    await shell.call("shell.provider.resolve", {
+      callId: ShellProviderCallParams.parse(captures()[1]?.params).callId,
+      outcome: { result: { captured: true } },
+    });
+    await expect(refresh).resolves.toMatchObject({ artifactId: A, captured: true });
+    await daemon.stop();
+
+    const refreshes = (await auditRecords(dataDir)).filter(
+      (record) => record.action === "artifact.preview.refresh",
+    );
+    expect(refreshes.map((record) => record.phase)).toEqual(["attempt", "outcome"]);
+    expect(refreshes[1]).toMatchObject({
+      actor: { kind: "shell-main" },
+      target: { kind: "artifact", id: A },
+      outcome: "succeeded",
+    });
+  }, 30_000);
+
   it("does not open a remote URL from a DeviceSlice-authored DNS claim", async () => {
     const dataDir = makeDataDir();
     const started = await boot(dataDir, (mock) => {
