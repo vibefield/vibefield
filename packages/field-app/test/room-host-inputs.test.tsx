@@ -579,6 +579,9 @@ function desktop(): { host: HostPort; opened: string[] } {
 }
 
 describe("R6 — ③'s head as the host's folder list", () => {
+  // The file's longest walk: one room, then ten waits on its renders (`until`, 5 s each)
+  // and one 50 ms pause; no clock of its own. A loaded CI runner ran past the 5 s default
+  // once (2026-11-17), so it has 20 s, as history-view's room tests have.
   it("lists every folder by group, checks the shown one by key, follows the session, and never opens one elsewhere", async () => {
     const shown: (string | null)[] = [];
     const contexts: RoomProjectContext[] = [];
@@ -707,7 +710,7 @@ describe("R6 — ③'s head as the host's folder list", () => {
     await until(() => shown.at(-1) === "studio:vf", "s1 again");
     act(() => sessionRowOf(el, "s0")?.click());
     await until(() => shown.at(-1) === "mac:vf", "s0 followed, its old pick gone");
-  });
+  }, 20_000);
 
   it("a filter narrows the list by path", async () => {
     const { el } = await room({
