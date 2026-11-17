@@ -227,6 +227,72 @@ struct HistoryProjectsTests {
     await settle("the move") { projects.moved("p1:asked-before-it-moved") == moved }
   }
 
+  // Item 516 (James, 2026-11-17 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon") — until the
+  // door has answered the listing once, an empty ledger is History's first read, and its place holds
+  // (`HistoryOpening.ledger`; the rule is held in HistoryHoldsTests).
+
+  @Test("item 516 — the ledger is answered once the listing it read is drawn, or once the listing is refused")
+  @MainActor
+  func answeredOnce() async throws {
+    let door = ProjectsDoor()
+    let projects = HistoryProjects(source: studio, door: door, roster: roster)
+    #expect(projects.answered == false, "nothing is asked before it starts")
+    projects.start()
+    await settle("the answer") { projects.answered }
+    #expect(projects.corpus.projects.count == 2, "the rows it answered are drawn when it is answered")
+    // an empty listing is an answer too
+    let empty = ProjectsDoor()
+    empty.emptyList = true
+    let none = HistoryProjects(source: studio, door: empty, roster: roster)
+    none.start()
+    await settle("the empty answer") { none.answered }
+    #expect(none.corpus.projects.isEmpty)
+    // and so is a refusal: the hold leaves for what the ledger says then
+    let refusing = ProjectsDoor()
+    refusing.refuse = FieldProductError(kind: "UNAVAILABLE", message: "the door is gone", retryable: true)
+    let refused = HistoryProjects(source: studio, door: refusing, roster: roster)
+    refused.start()
+    await settle("the refusal") { refused.answered }
+    #expect(refused.standing == .asleep)
+    // but a desktop whose projects are not grouped yet still answers, and still waits: no "no project" over it
+    let grouping = ProjectsDoor()
+    grouping.refuse = FieldProductError(
+      kind: "UNAVAILABLE", message: "grouping", retryable: true,
+      details: try Fixture.json("error-data.projects-grouping")["details"])
+    let waiting = HistoryProjects(source: studio, door: grouping, roster: roster)
+    waiting.start()
+    await settle("the grouping's refusal") { waiting.failure != nil }
+    #expect(waiting.standing == .connected)
+    #expect(waiting.answered == false, "its place still holds while the desktop groups its projects")
+    // a ledger given whole was never asked, and is answered, its projects' sessions with it
+    let fixed = HistoryProjects.fixed(corpus: projects.corpus, standing: .connected)
+    #expect(fixed.answered)
+    #expect(fixed.sessionsRead(vibeField))
+    projects.close()
+    none.close()
+    refused.close()
+    waiting.close()
+  }
+
+  @Test("item 516 — a project's sessions are answered once a page of them lands, or once their read is refused")
+  @MainActor
+  func sessionsAnsweredOnce() async throws {
+    let door = ProjectsDoor()
+    let projects = HistoryProjects(source: studio, door: door, roster: roster)
+    projects.start()
+    await settle("the ledger") { projects.corpus.projects.count == 2 }
+    projects.open(vibeField)
+    await settle("the sessions answered") { projects.sessionsRead(vibeField) }
+    #expect(!projects.corpus.sessions(of: vibeField).isEmpty, "the rows it answered are held when it is answered")
+    // a project the door refuses (its own read or its sessions'): answered, so its list stops holding
+    door.refuse = FieldProductError(kind: "NOT_FOUND", message: "no such project")
+    projects.open("p1:not-here")
+    await settle("the refusal") { projects.sessionsRead("p1:not-here") }
+    #expect(projects.standing == .connected, "a wrong ask leaves the standing")
+    #expect(projects.sessionsRead("p1:never-asked") == false)
+    projects.close()
+  }
+
   // Item 393 (James, 2026-11-13 23:28:32Z, session qa-01: "for session entry item, they should also show the
   // message count, token count, cost, etc,just like as how desktop session entry is designed, align it") — the
   // reader hands the project's `contribution` to its session rows. The rules are held in SessionFiguresTests.

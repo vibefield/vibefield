@@ -49,6 +49,11 @@ public final class HistoryProjects {
   public private(set) var cut = false
   /// Item 353 — the projects whose figures the door refused at the last ask (the panel's "failed · retrying").
   public private(set) var figuresFailed: Set<String> = []
+  /// Item 516 — the door has answered the ledger's listing once (red: a stub, never set).
+  public private(set) var answered = false
+
+  /// Item 516 — a project's sessions have been answered once (red: a stub that says never).
+  public func sessionsRead(_ key: String) -> Bool { false }
   public var isReplaying: Bool { door == nil || !standing.isAwake }
   /// The desktop whose door answers, by name: the roster's, else the answer's.
   public var sourceName: String {

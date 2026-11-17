@@ -438,15 +438,16 @@ struct HistoryOlderMeasuresTests {
     #expect(HistoryOlderPull.strong(.nothing) == false)
   }
 
-  @Test("while it reads the ring is an arc of seven tenths that turns once in 0.9 s; the mark's changes take 200 ms")
-  func theTurn() {
-    #expect(HistoryOlderPull.arc == 0.7)
-    #expect(HistoryOlderPull.Mark.reading.fill == 0.7)
-    #expect(HistoryOlderPull.turn == 0.9)
+  /// Item 516 (P2; James, 2026-11-17 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon", on the
+  /// page "The Mark in a Pocket") — while a batch is read the living mark stands in the ring's place, and the arc
+  /// that turned there (an arc of seven tenths, once round in 0.9 s) is retired.
+  @Test("while it reads the living mark stands in the ring's place, 40 wide and the ring's height; changes take 200 ms")
+  func theReadingMark() {
+    #expect(HistoryOlderPull.markWidth == 40)
+    // the mark's box is 99 by 44: at 40 wide it is 17.8 tall, the ring's 18, so the pill grows in its width alone
+    let tall = HistoryOlderPull.markWidth * 44 / 99
+    #expect(abs(tall - HistoryOlderPull.ring) < 0.5)
+    #expect(HistoryOlderPull.Mark.reading == HistoryOlderPull.Mark(face: .reading, presence: 1, fill: 1))
     #expect(HistoryOlderPull.fade == 0.2)
-    #expect(HistoryOlderPull.angle(at: 0) == 0)
-    #expect(HistoryOlderPull.angle(at: 0.45) == 180)
-    let round = HistoryOlderPull.angle(at: 1.35)
-    #expect(abs(round - 180) < 0.000_001, "a turn and a half is half a turn round")
   }
 }

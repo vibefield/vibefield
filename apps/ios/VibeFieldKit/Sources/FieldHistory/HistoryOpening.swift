@@ -35,6 +35,15 @@ enum HistoryOpening {
     case leaves
   }
 
+  /// Item 516 — what a hold says: its line, what stands under it (a count, or where the words come from), and
+  /// whether its work moves.
+  struct Words: Equatable, Sendable {
+    let line: String
+    var sub: String? = nil
+    /// Nothing is working: the mark stands still, in the pose it rests in (HG-L1).
+    var resting = false
+  }
+
   /// Nothing shows for this long: a session read sooner shows no hold at all.
   static let late: Duration = .milliseconds(120)
   /// A hold that has begun to show stands at least this long: the mark's coming in, then a beat to read the line.
@@ -49,6 +58,14 @@ enum HistoryOpening {
   static let lineSize: CGFloat = 14
   /// What the hold keeps clear at each side of its place.
   static let side: CGFloat = 24
+  /// Item 516 — what stands under the line, this far under it, and its size (red: stubs).
+  static let subUnder: CGFloat = 0
+  static let subSize: CGFloat = 0
+  /// Item 516 — a changed line goes over `lineOut`, the next comes over `lineIn` (red: stubs).
+  static let lineOut: Double = 0
+  static let lineIn: Double = 0
+  /// Item 516 — the box a project's list of sessions holds in (red: a stub).
+  static let listBox: CGFloat = 0
 
   /// What the page of a session waits on: whether its document is `held`, whether its desktop is `awake`, and
   /// whether a search `landed` in it. A session whose document is held has no hold. Neither has one whose desktop
@@ -64,6 +81,24 @@ enum HistoryOpening {
     case .loading: return "Loading messages…"
     case .finding: return "Finding message…"
     }
+  }
+
+  /// Item 516 — a session's hold's words (red: a stub that says nothing).
+  static func words(_ wait: Wait) -> Words {
+    Words(line: "")
+  }
+
+  /// Item 516 (P1, P4) — what the ledger's place holds while it shows no project (red: a stub that holds nothing).
+  static func ledger(
+    hasProjects: Bool, standing: FieldHistoryModel.DesktopStanding, answered: Bool,
+    index: FieldHistoryModel.IndexStanding?, desktop: String
+  ) -> Words? {
+    nil
+  }
+
+  /// Item 516 (P3) — what a project's list holds while none of its sessions has arrived (red: a stub).
+  static func sessions(listed: Bool, awake: Bool, desktop: String) -> Words? {
+    nil
   }
 
   /// What a hold does once its wait is over, having shown for `shownFor`; nil never began to show.

@@ -49,6 +49,8 @@ struct HistoryOlderPull: Equatable, Sendable {
   static let type: CGFloat = 13
   static let gap: CGFloat = 7
   static let padding: CGFloat = 14
+  /// Item 516 (P2) — the living mark's width while a batch is read, in the ring's place (red: a stub).
+  static let markWidth: CGFloat = 0
   /// While a batch is read the ring is an arc this much of a circle, and turns once in this many seconds.
   static let arc: CGFloat = 0.7
   static let turn: Double = 0.9
