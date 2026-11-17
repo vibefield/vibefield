@@ -2,7 +2,15 @@
 // rule, the never-exported folders, the browse enumerator (one fixture per
 // platform), the worker's launch (development bundle, packaged executable,
 // source run) and the installed engine's resolution.
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { WORKSPACE_ROOT_ID_PATTERN, WorkspaceRootId } from "@vibefield/contracts";
@@ -13,6 +21,7 @@ import {
   FILES_HOST_ROLE_ARG,
   type FilesHostFacts,
   installedMilleNative,
+  isMusl,
   milleNativeFileName,
   milleTriple,
 } from "../src/workspace/launch";
@@ -285,6 +294,36 @@ describe("the worker's launch (L1: fieldd's own executable in a files-host role)
     cleanup.push(() => rmSync(empty, { recursive: true, force: true }));
     mkdirSync(join(empty, "node_modules"), { recursive: true });
     expect(installedMilleNative(empty)).toBeNull();
+  });
+
+  it("reads mille's registry layout as its JS twin does: the platform package beside mille, by its main", async () => {
+    // RD-5 (the EL8 to mille 0.3.6): the installed mille is the registry's, whose folder holds no addon, so
+    // both twins take the platform package beside it. The linked checkout before it held the addon itself,
+    // and the row above read only that branch on this host (item 337).
+    const triple = milleTriple(process.platform, process.arch, isMusl());
+    if (triple === null) return;
+    const dir = mkdtempSync(join(tmpdir(), "vf-fh-registry-"));
+    cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+    const scope = join(dir, "node_modules", "@vibecook");
+    mkdirSync(join(scope, "mille"), { recursive: true });
+    writeFileSync(join(scope, "mille", "package.json"), '{"name":"@vibecook/mille"}\n');
+    const platform = join(scope, `mille-${triple}`);
+    mkdirSync(platform, { recursive: true });
+    writeFileSync(join(platform, "package.json"), JSON.stringify({ main: `addon.${triple}.node` }));
+    writeFileSync(join(platform, `addon.${triple}.node`), "");
+    const found = installedMilleNative(dir);
+    expect(found).toBe(join(realpathSync(platform), `addon.${triple}.node`));
+    const twin = (await import(join(PACKAGE_ROOT, "scripts", "files-host-build.mjs"))) as {
+      installedMilleNativeFile: (fielddRoot: string) => { file: string } | null;
+    };
+    expect(twin.installedMilleNativeFile(dir)?.file).toBe(found);
+  });
+
+  it("names the row that keeps its JS twin in step, and that row exists (item 337)", () => {
+    const source = readFileSync(join(PACKAGE_ROOT, "scripts", "files-host-build.mjs"), "utf8");
+    const named = [...source.matchAll(/\btest\/[\w./-]+\.test\.ts\b/g)].map((m) => m[0]);
+    expect(named).toContain("test/workspace-units.test.ts");
+    for (const file of named) expect(existsSync(join(PACKAGE_ROOT, file)), file).toBe(true);
   });
 });
 
