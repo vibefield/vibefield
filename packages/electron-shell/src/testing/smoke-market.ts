@@ -40,7 +40,15 @@ import {
   PluginsListResult,
 } from "@vibefield/contracts";
 import type { BrowserWindow } from "electron";
-import { handsOver, openInstalledPage, type Point, riseRows, sleep, wordsAt } from "./smoke-more";
+import {
+  BOARD_SETTLED,
+  handsOver,
+  openInstalledPage,
+  type Point,
+  riseRows,
+  sleep,
+  wordsAt,
+} from "./smoke-more";
 
 /** The flag the stager passes after `--smoke-canvas`: the market's rows, not the canvas's. */
 export const MARKET_FLAG = "--market";
@@ -70,10 +78,10 @@ export interface MarketRow {
   readonly parked?: string;
 }
 
-// C36's two (VF-PM, 2026-11-14 06:56Z): each waits on a part that no slice of MK's order builds.
-// Desk-gates row 37 says both, with the item and the owner each was given at the packet.
-const PARKED_CARRY =
-  "waits on the part that draws Discover's categories; no slice of MK's order builds it";
+// C36's (VF-PM, 2026-11-14 06:56Z): a row that waits on a part no slice of MK's order builds.
+// Desk-gates row 37 says it, with the item and the owner it was given. CARRY was the other, until
+// item 433 drew Discover's categories (2026-11-17): it runs by default now, after RISE, while the
+// clock INSTALL took hangs its category on the board.
 const PARKED_PICTURES =
   "waits on MK-E9's window half, behind ob/ui's custody fix; no slice of MK's order builds it";
 
@@ -89,13 +97,14 @@ export const MARKET_ROWS: Readonly<Record<MarketRun, readonly MarketRow[]>> = {
       needs: "the pictures through main's plugin scheme (MK-E9's window half)",
       parked: PARKED_PICTURES,
     },
-    {
-      name: "CARRY",
-      needs: "More in Plugins… (MK-4d) and Discover's categories (the part that draws them)",
-      parked: PARKED_CARRY,
-    },
     { name: "INSTALL", needs: `${ACTS}, the install card and its progress` },
     { name: "RISE", needs: "Show on the pegboard, MK-D8's fallback B (MK-4d)" },
+    // after INSTALL and RISE: the clock's category hangs on the board only while the clock is
+    // installed (the stager hands no development plugin), and REMOVE takes it away
+    {
+      name: "CARRY",
+      needs: "More in Plugins… (MK-4d), Discover's categories (item 433), the clock INSTALL took",
+    },
     { name: "REMOVE", needs: ACTS },
     { name: "COMMUNITY", needs: "the community tile and its switch (O3-D, mk-o3d)" },
   ],
@@ -536,6 +545,11 @@ const POPUP_OPEN = `document.querySelector('${POPUP}') !== null`;
 const POPUP_SHUT = `document.querySelector('${POPUP}') === null`;
 /** "Reading the plugin list…" (§9), the foot while a read runs */
 const READING = "Reading the plugin list…";
+/** The read on open done: the foot says it no more. */
+const READ_DONE = `!(document.querySelector('${POPUP} .vf-plugins-said')?.textContent ?? "").startsWith(${JSON.stringify(READING)})`;
+/** Discover's category chosen (item 433): the id its segment carries (the kit's `data-id`, `""`
+ * All), or null while no category row stands. */
+const CATEGORY_CHOSEN = `document.querySelector('${POPUP} .vf-plugins-body [data-id][aria-pressed="true"]')?.getAttribute("data-id") ?? null`;
 
 /** The popup read whole: its tab, Updates' count, the foot, the body, its words, its pictures, and
  * its sets (MK-4's shelf, as this module asks it to mark them: `data-plugin` on a set's tile,
@@ -662,11 +676,7 @@ export async function marketRunRows(
     );
     await hands.pressAt(`.vf-command-palette [data-row="${act}"]`);
     await until("Plugins open", 5_000, POPUP_OPEN);
-    await until(
-      "the read on open done",
-      25_000,
-      `!(document.querySelector('${POPUP} .vf-plugins-said')?.textContent ?? "").startsWith(${JSON.stringify(READING)})`,
-    );
+    await until("the read on open done", 25_000, READ_DONE);
   };
   const fold = async (): Promise<void> => {
     for (let i = 0; i < 3 && !(await js<boolean>(POPUP_SHUT)); i += 1) await key("Escape");
@@ -837,27 +847,44 @@ export async function marketRunRows(
       await js(`globalThis.vibefield.theme.set("light")`);
       await until("the desk dressed light", 10_000, `globalThis.__vfDesk.theme() === "light"`);
     },
-    // More in Plugins… opens Discover on the board's chosen category
+    // More in Plugins… opens Discover on the board's chosen category (item 433): the board raised
+    // and its slide done (its filters fade in over the slide's last 40 %, so a press before then
+    // lands on the dimmed desk), then on All and then on the installed clock's category, each press
+    // waited on (RISE left the board on that category, so a press on it alone would prove nothing),
+    // the pill pressed, and Discover's categories read once the read on open is done (they are
+    // drawn from the list it holds); the set on the shelf is the clock's, with no featured row
+    // (the featured set stands under All alone), and the board folded as the popup opened
     CARRY: async () => {
+      const boardOn = (category: string): string =>
+        `globalThis.__vfDesk.pegboard()?.anchor.category === ${JSON.stringify(category)}`;
       await hands.pressAt(".vf-line-create");
-      await until("the board out", 5_000, "globalThis.__vfDesk.pegboard()?.anchor.open === true");
+      await until("the board's slide done", 10_000, BOARD_SETTLED);
+      await sleep(350); // the filters' fade, the thumb's 300 ms (MORE's settled)
+      await hands.pressAt('.vf-pegboard-track button[data-id=""]');
+      await until("the board on All", 5_000, boardOn(""));
       await hands.pressAt(`.vf-pegboard-track button[data-id="${firstObject.category}"]`);
-      await until(
-        `the board on ${firstObject.category}`,
-        5_000,
-        `globalThis.__vfDesk.pegboard()?.anchor.category === ${JSON.stringify(firstObject.category)}`,
-      );
+      await until(`the board on ${firstObject.category}`, 5_000, boardOn(firstObject.category));
       if (!(await hands.pressWords(".vf-pegboard", ["More in Plugins…"])))
         throw new Error("no More in Plugins… at the board's foot");
       await until("Plugins open from the pill", 5_000, POPUP_OPEN);
-      const chosen = await js<string | null>(
-        `document.querySelector('${POPUP} .vf-plugins-body [role="radio"][aria-checked="true"]')?.getAttribute("data-id") ?? null`,
-      );
+      await until("the read on open done", 25_000, READ_DONE);
+      await until("Discover's categories drawn", 5_000, `(${CATEGORY_CHOSEN}) !== null`);
+      const chosen = await js<string | null>(CATEGORY_CHOSEN);
       if (chosen !== firstObject.category)
         problems.push(
           `CARRY: Discover opened on ${JSON.stringify(chosen)}, not ${firstObject.category}`,
         );
-      facts["CARRY"] = { chosen };
+      const seen = await read("CARRY");
+      if (!seen.shelf.sets.includes(installed.id))
+        problems.push(`CARRY: ${installed.title} is not on the shelf under its category`);
+      const featured = await js<boolean>(
+        `document.querySelector('${POPUP} .vf-plugins-body [data-featured="true"]') !== null`,
+      );
+      if (featured) problems.push("CARRY: the featured row stood under a category");
+      const folded = await js<boolean>("globalThis.__vfDesk.pegboard()?.anchor.open !== true");
+      if (!folded) problems.push("CARRY: the board did not fold as the pill opened Plugins");
+      facts["CARRY"] = { chosen, sets: seen.shelf.sets, featured, folded };
+      await hands.shoot("mk-6-market-carry.png");
       await fold();
     },
     // Install grows into the card; Cancel throws the download away; Install again, ↵, Installed

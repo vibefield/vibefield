@@ -260,6 +260,11 @@ export const SHELF_WORDS = {
   none: (query: string) => `No plugin in the list matches “${query.trim()}”.`,
   /** while community plugins are off, at the results' end (§9 "Community plugins") */
   communityOff: "Community plugins are off, so their objects aren't searched.",
+  /** Discover's categories (item 433; §9 "The popup"): the first, the pegboard's filters' own word (§8 "The
+   * pegboard"); each other is the board's own name for it */
+  all: "All",
+  /** the categories' row, to assistive tech (item 433; MK's, ‹draft›) */
+  categories: "Categories",
 } as const;
 
 /** The install card (O2-C; DESIGN.md §9 "The install card", and its O2-C block under "Installing, and after"): §9's

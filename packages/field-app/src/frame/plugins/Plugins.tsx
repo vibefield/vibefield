@@ -74,6 +74,7 @@ import {
   discoverShelf,
   isShelfKey,
   listedPage,
+  shelfCategories,
   shelfColumns,
   shelfOrder,
   shelfShows,
@@ -201,6 +202,14 @@ import { RemoveView } from "./RemoveQuestion";
 // on it, which reads the list again as an opening does, once per press (MK-D5:
 // the person's act); Installed says the same sentence with no act while it
 // holds no plugins.
+// Item 433: Discover draws the pegboard's categories (`shelfCategories`), by
+// the board's names this controller already reads (`useBoardNames`), and a
+// category chosen keeps the sets that hang there. Each opening starts on the
+// category its door asked for (`initialCategory`: the pegboard's More in
+// Plugins… hands the board's; every other door All); one Discover does not
+// offer shows All, and so does a list held with none. Typed words search every
+// set, and the category comes back once they are gone. A press on the row by
+// the pointer gives the keyboard back to the field, as a tile's press does.
 
 function boxOf(container: HTMLElement | null | undefined): { width: number; height: number } {
   if (container !== null && container !== undefined) {
@@ -229,6 +238,8 @@ export interface PluginsProps {
   takeFocus?: boolean;
   /** The tab each opening starts on (Discover; a plate may start elsewhere). */
   initialTab?: PluginsTab;
+  /** Item 433: the category Discover starts on each opening, `""` All (More in Plugins… hands the board's). */
+  initialCategory?: string;
   /** Over Godview the stage holds its keys while the popup stands (QL-D2). */
   holdKeys?: (() => () => void) | undefined;
   /** Every answer the popup takes, in the order it takes them (MK-4b: the Me row's count). A plate passes none. */
@@ -285,6 +296,7 @@ export function Plugins({
   container,
   takeFocus = true,
   initialTab = "discover",
+  initialCategory = "",
   holdKeys,
   onCatalog,
   updates = null,
@@ -304,6 +316,9 @@ export function Plugins({
   const open = surface === "plugins";
   const [tab, setTab] = useState<PluginsTab>(initialTab);
   const [query, setQuery] = useState("");
+  // item 433: the category Discover's shelf was asked to show, `""` All; it shows All while Discover
+  // offers no such category (below)
+  const [category, setCategory] = useState(initialCategory);
   const [read, setRead] = useState<PluginsRead>({ kind: "asking" });
   const [reading, setReading] = useState(false);
   const [box, setBox] = useState(() => boxOf(container));
@@ -383,6 +398,7 @@ export function Plugins({
     if (open) {
       setTab(initialTab);
       setQuery("");
+      setCategory(initialCategory);
       setPage(pageAt(initialPage, initialTab));
       setHot(0);
       setRefused(new Map());
@@ -894,13 +910,38 @@ export function Plugins({
       ? rows
       : rows.map((row) => (retrying.has(row.id) ? { ...row, retry: true as const } : row));
   }, [snapshot, catalog, query, names, unstarted, failed, retrying]);
+  // Item 433: Discover's categories over a held list, by the board's names (none with no board, or while words
+  // are typed), and the one the shelf shows: the one asked for while Discover offers it, else All
+  const categories = useMemo(
+    () =>
+      catalog === null || shelf.kind !== "counted"
+        ? []
+        : shelfCategories(catalog, community === true, names, query),
+    [catalog, shelf.kind, community, names, query],
+  );
+  const shownCategory = categories.some((offered) => offered.id === category) ? category : "";
+  // a category chosen on the row: the hot tile starts at its first, as a tab's does; the one shown
+  // pressed again (the kit hands on every press) keeps the hot tile where it is
+  const onCategory = useCallback(
+    (id: string) => {
+      setCategory(id);
+      if (id !== shownCategory) setHot(0);
+    },
+    [shownCategory],
+  );
+  // a press on the row by the pointer gives the keyboard back to the field, as a tile's press does,
+  // so ↵ and the field's keys go on working (§8 "Discover", item 433); the row reached by Tab keeps
+  // ← → Home End, the kit's
+  const onCategoryPressed = useCallback(() => {
+    if (takeFocus) inputRef.current?.focus({ preventScroll: true });
+  }, [takeFocus]);
   // MK-4e: Discover's shelf, over a held list with a set to show or typed words to answer; its columns fit the
-  // popup's width, and its tiles in the order the keys walk them
+  // popup's width, and its tiles in the order the keys walk them. Item 433: the category it shows, too
   const discover = useMemo(() => {
     if (catalog === null || shelf.kind !== "counted") return null;
-    const built = discoverShelf(catalog, snapshot, query, community === true);
+    const built = discoverShelf(catalog, snapshot, query, community === true, shownCategory);
     return shelfShows(built) ? built : null;
-  }, [catalog, shelf.kind, snapshot, query, community]);
+  }, [catalog, shelf.kind, snapshot, query, community, shownCategory]);
   const columns = shelfColumns(layout.width);
   const tiles = useMemo(() => (discover === null ? [] : shelfOrder(discover)), [discover]);
   // MK-UC's UC-C: Updates' rows over a held list — every one, which a page and an Update read, and those that hold
@@ -1385,6 +1426,10 @@ export function Plugins({
       hot={hotAt}
       discover={discover}
       columns={columns}
+      categories={categories}
+      category={shownCategory}
+      onCategory={onCategory}
+      onCategoryPressed={onCategoryPressed}
       page={shown}
       pageSettings={
         shown !== null && shown.settings !== null ? (
@@ -1537,18 +1582,23 @@ function RuntimeRead({ onRead }: { onRead: (failed: ReadonlySet<string>) => void
  * desktop's statement mark over fieldd's two doors for it (MK-O1 B). Item 476:
  * and the window's own set of plugins that cannot start in it, read from its
  * store as the snapshot is. MK-5b: and, while the popup stands, the plugins
- * whose runtime fieldd says failed (`RuntimeRead`). */
+ * whose runtime fieldd says failed (`RuntimeRead`). Item 433: Discover opens on
+ * the category its door asked for (`openCategory`: the pegboard's More in
+ * Plugins… hands the board's; `""` All from every other door), never on a
+ * note's opening. */
 export function FramePlugins({
   view,
   surface,
   onSurfaceChange,
   openOn = "discover",
+  openCategory = "",
   onMac = false,
 }: {
   view: FrameView;
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
   openOn?: PluginsTab;
+  openCategory?: string;
   onMac?: boolean;
 }): ReactElement | null {
   const fieldd = useFielddClient();
@@ -1601,6 +1651,7 @@ export function FramePlugins({
         unstarted={unstarted}
         failed={failed}
         initialTab={carried === null ? openOn : (carried.page?.from ?? "updates")}
+        initialCategory={carried === null ? openCategory : ""}
         initialPage={carried?.page?.id ?? null}
         resume={carried}
         holdKeys={view === "godview" ? godview?.holdKeys : undefined}

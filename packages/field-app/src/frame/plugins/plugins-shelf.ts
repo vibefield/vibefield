@@ -13,10 +13,13 @@ import { INSTALLED_LINE, PAGE_WORDS, SHELF_WORDS, SOURCE_WORDS } from "./plugins
 // already read and the registry snapshot the window already holds. The featured set first while no
 // words are typed, then the sets VibeField publishes, then, while community plugins are on, the
 // community's; a plugin the list holds with no listing is not shown (MK-1). The shelf stands before
-// its pictures (main's plugin scheme, MK-E9's second half) and its categories (the pegboard's
-// names, MK-4d). A set this desktop does not have opens a page read from the list alone, with no
-// powers: the list carries none, and the install card says them (MK-O2). Pure: the controller and
-// the tests read the same functions. Nothing here asks fieldd anything.
+// its pictures (main's plugin scheme, MK-E9's second half). Item 433: its categories, the
+// pegboard's (MK-D2): each one a shown set's object hangs under that the board names, by the
+// board's own name and in its order, the names the controller reads from the board's door; a
+// category chosen keeps the sets that hang there, with no featured row. A set this desktop does
+// not have opens a page read from the list alone, with no powers: the list carries none, and the
+// install card says them (MK-O2). Pure: the controller and the tests read the same functions.
+// Nothing here asks fieldd anything.
 
 /** The grid (§8, MK-4e): columns at least 200 wide, 12 apart, the body padded 16. */
 export const SHELF_TILE_MIN = 200;
@@ -121,6 +124,65 @@ type Listed = PluginsCatalogEntry & { readonly listing: RegistryListing };
 
 const isListed = (entry: PluginsCatalogEntry): entry is Listed => entry.listing !== undefined;
 
+/** The sets the shelf shows, in its order: VibeField's by title, then, while community plugins are
+ * on, the community's by title; a plugin the list holds with no listing never (MK-1). */
+function shownSets(catalog: PluginsCatalog, community: boolean): Listed[] {
+  const byTitle = (a: Listed, b: Listed): number => a.listing.title.localeCompare(b.listing.title);
+  const listed = catalog.plugins.filter(isListed);
+  return [
+    ...listed.filter((entry) => entry.listedAs === "vibefield").sort(byTitle),
+    ...(community ? listed.filter((entry) => entry.listedAs === "community").sort(byTitle) : []),
+  ];
+}
+
+/** A set lists under every category one of its objects hangs in (MK-D4). */
+const hangsIn = (entry: Listed, category: string): boolean =>
+  entry.listing.objects.some((object) => object.category === category);
+
+/** One of Discover's categories (item 433): its id, the pegboard category's and never shown, and
+ * the board's own name for it. All, the first, is the view's. */
+export interface ShelfCategory {
+  readonly id: string;
+  readonly label: string;
+}
+
+/**
+ * Discover's categories (§8 "Discover", item 433; MK-D2: "the pegboard's categories, All and then
+ * those the listed objects hang under, as the pegboard's own filters read"): each category one of
+ * the shown sets' objects hangs under that the board names (`names`, the board's door's: id → its
+ * own name, in the board's order), in that order, by that name. The list says a category by its id
+ * alone, so one the board does not name is not offered. The board's names are every category it
+ * hangs, one whose every plugin is turned off among them, which the board's own filters leave out:
+ * Discover offers it, for it shows sets on or off. None with no board to read (`names` null: no
+ * desk, as in the catalog), and none while words are typed: the search spans every set.
+ */
+export function shelfCategories(
+  catalog: PluginsCatalog,
+  community: boolean,
+  names: ReadonlyMap<string, string> | null,
+  query = "",
+): ShelfCategory[] {
+  if (names === null || typed(query).length > 0) return [];
+  const shown = shownSets(catalog, community);
+  return [...names]
+    .filter(([id]) => shown.some((entry) => hangsIn(entry, id)))
+    .map(([id, label]) => ({ id, label }));
+}
+
+/** Where more of Discover's categories lies past the row's width (§8 "Discover", item 433): the
+ * end that fades, `start`, `end` or `both`, or nothing while the row shows them all. The
+ * pegboard's filters read their track the same way (`PegboardView`'s `moreOf`); the popup takes
+ * nothing of the desk's but the board's door, so the reading is its own here. */
+export function categoriesMore(track: {
+  readonly scrollLeft: number;
+  readonly clientWidth: number;
+  readonly scrollWidth: number;
+}): "start" | "end" | "both" | null {
+  const start = track.scrollLeft > 1;
+  const end = track.scrollLeft + track.clientWidth < track.scrollWidth - 1;
+  return start && end ? "both" : start ? "start" : end ? "end" : null;
+}
+
 function tileOf(entry: Listed, record: PluginRecord | undefined, has: string | null): ShelfTile {
   const objects = entry.listing.objects.length;
   return {
@@ -136,22 +198,30 @@ function tileOf(entry: Listed, record: PluginRecord | undefined, has: string | n
 
 /** Discover's shelf from the list held (§8 "Discover", MK-4e). `community`: whether community
  * plugins are on, so their sets join after VibeField's; off, they are neither shown nor searched,
- * and the results say so. */
+ * and the results say so. `category` (item 433): the category chosen, `""` All; one chosen keeps
+ * the sets one of whose objects hangs under it, with no featured row (MK-D2: the featured set
+ * stands while the category is All). Typed words search every set, whatever the category. */
 export function discoverShelf(
   catalog: PluginsCatalog,
   snapshot: PluginRegistrySnapshot | null,
   query: string,
   community: boolean,
+  category = "",
 ): Shelf {
   const records = new Map((snapshot?.plugins ?? []).map((record) => [record.id, record]));
-  const byTitle = (a: Listed, b: Listed): number => a.listing.title.localeCompare(b.listing.title);
   const listed = catalog.plugins.filter(isListed);
-  const shown = [
-    ...listed.filter((entry) => entry.listedAs === "vibefield").sort(byTitle),
-    ...(community ? listed.filter((entry) => entry.listedAs === "community").sort(byTitle) : []),
-  ];
+  const shown = shownSets(catalog, community);
   const words = typed(query);
   const hidden = !community && listed.some((entry) => entry.listedAs === "community");
+  if (words.length === 0 && category !== "") {
+    const under = shown.filter((entry) => hangsIn(entry, category));
+    return {
+      featured: null,
+      tiles: under.map((entry) => tileOf(entry, records.get(entry.id), null)),
+      none: null,
+      communityOff: null,
+    };
+  }
   if (words.length === 0) {
     const pick = catalog.featured.find((id) => shown.some((entry) => entry.id === id));
     const tiles = shown.map((entry) => tileOf(entry, records.get(entry.id), null));

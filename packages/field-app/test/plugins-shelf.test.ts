@@ -8,10 +8,12 @@ import {
 } from "../src/design-system/plugins-fixtures";
 import type { PageLine } from "../src/frame/plugins/plugins-model";
 import {
+  categoriesMore,
   discoverShelf,
   isShelfKey,
   listedPage,
   type ShelfKey,
+  shelfCategories,
   shelfColumns,
   shelfOrder,
   shelfShows,
@@ -22,7 +24,8 @@ import * as words from "../src/frame/plugins/plugins-words";
 // MK-4e — Discover's shelf (DESIGN.md §8 "Plugins — the frame's second popup", Discover; §9 "The
 // popup"'s MK-4e block): the sets the list held offers, in the shelf's order, the featured one
 // first; search by title, summary and objects' labels; the walk of its hot tile; and the page of a
-// set this desktop doesn't have, read from the list. Pure: no window, no fieldd.
+// set this desktop doesn't have, read from the list. Item 433: its categories, the pegboard's, by
+// the board's names, and the sets a category chosen keeps. Pure: no window, no fieldd.
 
 const titles = (catalog: PluginsCatalog, query = "", community = false): string[] => {
   const shelf = discoverShelf(catalog, PLUGINS_FIXTURE_SNAPSHOT, query, community);
@@ -129,6 +132,95 @@ describe("Discover's shelf from the list held (§8 'Discover', MK-4e)", () => {
       shelfShows(discoverShelf(communityOnly, PLUGINS_FIXTURE_SNAPSHOT, "", community));
     expect(shows(false)).toBe(false);
     expect(shows(true)).toBe(true);
+  });
+});
+
+/** The pegboard's names as the board's door hands them (MK-4d's names): each category's id and the
+ * board's own name for it, in the board's order. Paper hangs no set the list holds. */
+const BOARD: ReadonlyMap<string, string> = new Map([
+  ["things", "Things"],
+  ["paper", "Paper"],
+  ["devices", "Devices"],
+  ["tools", "Tools"],
+]);
+
+describe("Discover's categories (§8 'Discover', item 433; MK-D2)", () => {
+  it("offers each category a shown set hangs under, by the board's own name, in the board's order", () => {
+    expect(shelfCategories(CATALOG_SHELF, false, BOARD)).toEqual([
+      { id: "things", label: "Things" },
+      { id: "devices", label: "Devices" },
+      { id: "tools", label: "Tools" },
+    ]);
+    // the board's order, never the list's, and the board's name, never the id
+    const renamed = new Map([
+      ["tools", "On the bench"],
+      ["devices", "Devices"],
+      ["things", "Things"],
+    ]);
+    expect(shelfCategories(CATALOG_SHELF, false, renamed)).toEqual([
+      { id: "tools", label: "On the bench" },
+      { id: "devices", label: "Devices" },
+      { id: "things", label: "Things" },
+    ]);
+  });
+
+  it("offers none with no board to read, none the board doesn't name, and none while words are typed", () => {
+    expect(shelfCategories(CATALOG_SHELF, false, null)).toEqual([]);
+    expect(shelfCategories(CATALOG_SHELF, false, new Map([["paper", "Paper"]]))).toEqual([]);
+    expect(shelfCategories(CATALOG_SHELF, false, BOARD, "ruler")).toEqual([]);
+    // spaces are no words
+    expect(shelfCategories(CATALOG_SHELF, false, BOARD, "  ").map((c) => c.id)).toEqual([
+      "things",
+      "devices",
+      "tools",
+    ]);
+    // a list with no set to show offers none
+    expect(shelfCategories(CATALOG_FIXTURES.unconfigured, false, BOARD)).toEqual([]);
+  });
+
+  it("offers a community set's categories only while community plugins are on", () => {
+    // Kanban, by other people, hangs its Board and Card under Things alone
+    const communityOnly = PluginsCatalog.parse({
+      ...CATALOG_SHELF,
+      featured: [],
+      plugins: CATALOG_SHELF.plugins.filter((entry) => entry.listedAs === "community"),
+    });
+    expect(shelfCategories(communityOnly, false, BOARD)).toEqual([]);
+    expect(shelfCategories(communityOnly, true, BOARD)).toEqual([
+      { id: "things", label: "Things" },
+    ]);
+  });
+
+  it("keeps the sets one of whose objects hangs under the category chosen, in the shelf's order, with no featured row", () => {
+    const under = (category: string, community = false, query = ""): string[] =>
+      shelfOrder(
+        discoverShelf(CATALOG_SHELF, PLUGINS_FIXTURE_SNAPSHOT, query, community, category),
+      ).map((tile) => tile.title);
+    const things = discoverShelf(CATALOG_SHELF, PLUGINS_FIXTURE_SNAPSHOT, "", false, "things");
+    expect(things.featured).toBeNull();
+    expect(under("things")).toEqual(["Burndown", "Desk things"]);
+    // the featured set too stands under its category, as a tile of the grid
+    expect(under("devices")).toEqual(["Simulators"]);
+    expect(under("tools")).toEqual(["Desk things"]);
+    // a community set joins after VibeField's while community plugins are on
+    expect(under("things", true)).toEqual(["Burndown", "Desk things", "Kanban"]);
+    // All is the shelf as it was
+    expect(discoverShelf(CATALOG_SHELF, PLUGINS_FIXTURE_SNAPSHOT, "", false, "")).toEqual(
+      discoverShelf(CATALOG_SHELF, PLUGINS_FIXTURE_SNAPSHOT, "", false),
+    );
+    // typed words search every set, whatever the category
+    expect(under("devices", false, "ruler")).toEqual(["Desk things"]);
+  });
+
+  it("fades the end of the row where more categories lie past its width, and none while all show", () => {
+    const at = (scrollLeft: number, clientWidth: number, scrollWidth: number) =>
+      categoriesMore({ scrollLeft, clientWidth, scrollWidth });
+    expect(at(0, 400, 400)).toBeNull();
+    expect(at(0, 300, 400)).toBe("end");
+    expect(at(50, 300, 400)).toBe("both");
+    expect(at(100, 300, 400)).toBe("start");
+    // a pixel's rounding is no more
+    expect(at(1, 300, 302)).toBeNull();
   });
 });
 

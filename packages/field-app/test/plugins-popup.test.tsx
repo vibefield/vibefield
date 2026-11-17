@@ -1291,6 +1291,117 @@ describe("Discover's categories (item 433; §8 'Discover', MK-D2)", () => {
   });
 });
 
+describe("Discover's categories: their door, typed words and the board they follow (item 433)", () => {
+  it("opens on the category its door asked for, each opening, and on All where Discover offers none", async () => {
+    const board = mountBoard(NAMING_BOARD);
+    try {
+      const port = pluginsFixturePort(SHELF);
+      const render = (surface: FrameSurface | null, initialCategory: string): void =>
+        act(() =>
+          root.render(
+            <Plugins
+              surface={surface}
+              onSurfaceChange={() => undefined}
+              port={port}
+              snapshot={PLUGINS_FIXTURE_SNAPSHOT}
+              initialCategory={initialCategory}
+              now={() => PLUGINS_FIXTURE_NOW}
+            />,
+          ),
+        );
+      render("plugins", "tools");
+      await settle();
+      expect(categoriesSaid().chosen).toBe("tools");
+      expect(tileTitles()).toEqual(["Desk things"]);
+      // the next opening starts on its own door's: All, as the Me menu's Plugins… asks
+      render(null, "");
+      render("plugins", "");
+      await settle();
+      expect(categoriesSaid().chosen).toBe("");
+      expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things"]);
+      // a category no shown set hangs under (Paper): All, the featured set first
+      render(null, "paper");
+      render("plugins", "paper");
+      await settle();
+      expect(categoriesSaid().chosen).toBe("");
+      expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things"]);
+    } finally {
+      board.unmount();
+    }
+  });
+
+  it("searches every set while words are typed, its row gone, and the category comes back with it", async () => {
+    const board = mountBoard(NAMING_BOARD);
+    try {
+      await mount(SHELF);
+      act(() => categorySegment("devices")?.click());
+      typeWords("ruler");
+      expect(categoriesSaid().ids).toEqual([]);
+      expect(tileTitles()).toEqual(["Desk things"]);
+      expect(bodyText()).toContain(words.SHELF_WORDS.has("Ruler"));
+      typeWords("");
+      expect(categoriesSaid().chosen).toBe("devices");
+      expect(tileTitles()).toEqual(["Simulators"]);
+    } finally {
+      board.unmount();
+    }
+  });
+
+  it("draws no row with no board, nor while the board names none the sets hang under, and follows the board", async () => {
+    // no desk mounted, as in the catalog: nothing is named
+    await mount(SHELF);
+    expect(categoriesSaid().ids).toEqual([]);
+    act(() => root.unmount());
+    root = createRoot(host);
+    const board = mountBoard([{ id: "paper", label: "Paper", count: 2 }]);
+    try {
+      await mount(SHELF);
+      expect(categoriesSaid().ids).toEqual([]);
+      // the board's next frame names them: the row follows
+      board.publish(NAMING_BOARD);
+      expect(categoriesSaid()).toEqual({
+        ids: ["", "things", "devices", "tools"],
+        words: [words.SHELF_WORDS.all, "Things", "Devices", "Tools"],
+        chosen: "",
+      });
+      act(() => categorySegment("tools")?.click());
+      expect(tileTitles()).toEqual(["Desk things"]);
+    } finally {
+      board.unmount();
+    }
+    // the desk gone (a remount's gap): no name, so no row, and the shelf shows All
+    expect(categoriesSaid().ids).toEqual([]);
+    expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things"]);
+  });
+
+  it("in the frame, opens Discover on the category its door asked for (More in Plugins…)", async () => {
+    const board = mountBoard(NAMING_BOARD);
+    resetPluginUpdates();
+    try {
+      const { client } = fielddAnswering(async () => CATALOG_SHELF);
+      const frame = (surface: FrameSurface | null): ReactElement => (
+        <FielddProvider client={client}>
+          <FramePlugins
+            view="canvas"
+            surface={surface}
+            onSurfaceChange={() => undefined}
+            openCategory="devices"
+          />
+        </FielddProvider>
+      );
+      act(() => root.render(frame(null)));
+      await settle();
+      act(() => root.render(frame("plugins")));
+      await settle();
+      expect(categoriesSaid().chosen).toBe("devices");
+      expect(tileTitles()).toEqual(["Simulators"]);
+    } finally {
+      board.unmount();
+      resetPluginUpdates();
+    }
+  });
+});
+
 /** The install's requests a port sent, in order (O2-C). */
 function installs(inner: PluginsPort): { port: PluginsPort; sent: string[] } {
   const sent: string[] = [];

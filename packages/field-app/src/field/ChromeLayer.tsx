@@ -197,17 +197,25 @@ export function ChromeLayer({
   // MK-4b — the Plugins popup's one way in (DESIGN.md §9 "The doors"): the Me
   // menu's Plugins… opens it on Discover, the palette's Plugins… too, and its
   // Check plugins for updates on Updates (MK-E7); the pegboard's More in
-  // Plugins… on Discover (MK-4d). Every door calls this; nothing else outside
-  // the popup's own files hands the frame `plugins`.
+  // Plugins… on Discover (MK-4d), on the board's chosen category (item 433:
+  // Discover's categories are the pegboard's; every other door opens on All,
+  // `""`). Every door calls this; nothing else outside the popup's own files
+  // hands the frame `plugins`.
   const [pluginsOpenOn, setPluginsOpenOn] = useState<"discover" | "updates">("discover");
+  const [pluginsCategory, setPluginsCategory] = useState("");
   const openPlugins = useCallback(
-    (tab: "discover" | "updates") => {
+    (tab: "discover" | "updates", category = "") => {
       setPluginsOpenOn(tab);
+      setPluginsCategory(category);
       onSurfaceChange("plugins");
     },
     [onSurfaceChange],
   );
   const openPluginsOnDiscover = useCallback(() => openPlugins("discover"), [openPlugins]);
+  const openPluginsFromBoard = useCallback(
+    (category: string) => openPlugins("discover", category),
+    [openPlugins],
+  );
   // AO-6b — the limit moment's Add a profile…, handed to the cover while
   // Settings is closed (AO-6b3): an open panel takes no new page, so the
   // moment would retire without its form ever showing
@@ -464,12 +472,14 @@ export function ChromeLayer({
           under it. One of the frame's open surfaces (`plugins`). Its doors
           (MK-4b) are the Me menu's Plugins… and the palette's two acts, and
           the pegboard's More in Plugins… (MK-4d), each through `openPlugins`
-          above, which says the tab it opens on. */}
+          above, which says the tab it opens on and (item 433) Discover's
+          category. */}
       <FramePlugins
         view={view}
         surface={surface}
         onSurfaceChange={onSurfaceChange}
         openOn={pluginsOpenOn}
+        openCategory={pluginsCategory}
         onMac={getHost().platform === "darwin"}
       />
 
@@ -622,13 +632,13 @@ export function ChromeLayer({
           addendum 47); the selection persists, and the bar returns as the
           board folds. MK-4d: its foot's More in Plugins… opens the Plugins
           popup on Discover through `openPlugins`, as the Me menu's row does,
-          and a set shown on it after an install goes to Canvas first over a
-          covered view (MK-E14). */}
+          on the board's chosen category (item 433), and a set shown on it
+          after an install goes to Canvas first over a covered view (MK-E14). */}
       <Pegboard
         surface={surface}
         onSurfaceChange={onSurfaceChange}
         covered={covered}
-        onMorePlugins={openPluginsOnDiscover}
+        onMorePlugins={openPluginsFromBoard}
       />
 
       {/* THE STATUS LINE (DESIGN.md §8, §10): the desk's notices under the

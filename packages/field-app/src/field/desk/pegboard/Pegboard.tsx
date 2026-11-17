@@ -209,7 +209,8 @@ export function Pegboard({
   covered: boolean;
   /**
    * More in Plugins… pressed (MK-D1): the frame opens the Plugins popup on Discover. It is handed the board's
-   * category ("" All), which Discover's categories will take once Discover draws them (DESIGN.md §8 "The pegboard").
+   * category ("" All), which Discover opens on, its categories being the pegboard's (item 433; DESIGN.md §8 "The
+   * pegboard").
    */
   onMorePlugins: (category: string) => void;
 }): ReactElement {

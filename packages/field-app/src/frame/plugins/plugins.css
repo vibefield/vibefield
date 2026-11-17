@@ -514,6 +514,54 @@
   text-align: center;
 }
 
+/* ── Discover's categories (item 433; §8 "Discover", drawn 2026-11-17, ‹draft›): a row of its own
+   across the grid, after the featured set and before the other sets, 12 from each (the grid's
+   gap): the kit's segmented control at its small size, at the row's start, its segments at their
+   own widths and never stretched, scrolling inside the row past its width, the end where more lies
+   fading over 24 (the shelf's view measures which, as the pegboard's view does for its filters).
+   Its look is the kit's (primitives.css); this is its place alone. ── */
+.vf-plugins-categories {
+  display: flex;
+  min-width: 0;
+  grid-column: 1 / -1;
+}
+
+.vf-plugins-cats.vf-ui-segmented {
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.vf-plugins-cats.vf-ui-segmented::-webkit-scrollbar {
+  display: none;
+}
+
+/* past the row's width the end where more lies fades over 24 (`data-more`, the shelf's measure) */
+.vf-plugins-cats.vf-ui-segmented[data-more="end"] {
+  mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+}
+
+.vf-plugins-cats.vf-ui-segmented[data-more="start"] {
+  mask-image: linear-gradient(to left, black calc(100% - 24px), transparent);
+}
+
+.vf-plugins-cats.vf-ui-segmented[data-more="both"] {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 24px,
+    black calc(100% - 24px),
+    transparent
+  );
+}
+
+.vf-plugins-cats.vf-ui-segmented button {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* ── a plugin's page, read only (MK-4c; §8 "Read only first", drawn 2026-11-11,
    ‹draft›): its back row at its top, 36 tall, padded 0 10, corners 10, the
    `chevron` 12 turned back and the tab's word at 12/500 in secondary ink, the

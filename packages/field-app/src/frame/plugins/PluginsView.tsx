@@ -13,7 +13,7 @@ import type {
   ShelfState,
 } from "./plugins-model";
 import { PLUGINS_TABS, switchKey } from "./plugins-model";
-import type { Shelf } from "./plugins-shelf";
+import type { Shelf, ShelfCategory } from "./plugins-shelf";
 import {
   INSTALL_WORDS,
   NO_REGISTRY,
@@ -54,6 +54,7 @@ import "./plugins.css";
 // a plugin held while community plugins are off says its row's line on its page.
 // MK-4e: over a held list Discover draws its shelf (`PluginsShelf.tsx`), and a
 // page of a set this desktop doesn't have, read from the list, says no power.
+// Item 433: the shelf draws the pegboard's categories, the controller's.
 // O2-C: the page's act — Installed, Install, the install card — is the
 // controller's, handed here, and the foot on Discover offers the hot tile's
 // Install. MK-4f: Remove… and its question stand at the second column's foot,
@@ -82,6 +83,14 @@ export interface PluginsViewProps {
   discover?: Shelf | null;
   /** MK-4e: the shelf's columns (`shelfColumns`) */
   columns?: number;
+  /** Item 433: the categories after All, by the board's names (`shelfCategories`); none: no row */
+  categories?: readonly ShelfCategory[];
+  /** Item 433: the category the shelf shows, `""` All */
+  category?: string;
+  /** Item 433: a category chosen on the row; none: no row */
+  onCategory?: ((id: string) => void) | undefined;
+  /** Item 433: the row pressed by the pointer (the controller gives the field the keyboard back) */
+  onCategoryPressed?: (() => void) | undefined;
   /** The page shown in the body, and the tab it opened from; null: the tab's own body */
   page: PluginPage | null;
   /** MK-4c2b: the page's settings section, which the controller mounts and owns; null: none */
@@ -440,6 +449,7 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
   const { open, layout, tab, query, shelf, foot, installed, installedFoot, inputRef } = props;
   const { hot, page, pageFrom, updates, listRef, away, under, refused } = props;
   const { pageSettings = null, discoverEnd = null, discover = null, columns = 1 } = props;
+  const { categories = [], category = "", onCategory, onCategoryPressed } = props;
   const { pageAct = null, onInstallHot = null, pageRemove = null } = props;
   const { updatesList = null, onCheckAgain = null, checking = false } = props;
   const { onQuery, onTab, onClose, onShowInstalled, onOpenPage, onBack, onKeyDown } = props;
@@ -487,6 +497,10 @@ export function PluginsView(props: PluginsViewProps): ReactElement {
           listRef={listRef}
           label={PLUGINS_TAB_WORDS.discover}
           onOpen={onOpenPage}
+          categories={categories}
+          category={category}
+          onCategory={onCategory}
+          onCategoryPressed={onCategoryPressed}
         />
         {discoverEnd}
       </>

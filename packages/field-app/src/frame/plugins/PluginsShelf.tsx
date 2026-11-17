@@ -1,7 +1,13 @@
-import { EmptyState, UiPill } from "@vibefield/design-kit";
+import { EmptyState, SegmentedControl, UiPill } from "@vibefield/design-kit";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import type { ReactElement, RefObject } from "react";
-import type { Shelf, ShelfTile, TileAct } from "./plugins-shelf";
+import { type ReactElement, type RefObject, useLayoutEffect, useRef } from "react";
+import {
+  categoriesMore,
+  type Shelf,
+  type ShelfCategory,
+  type ShelfTile,
+  type TileAct,
+} from "./plugins-shelf";
 import { PAGE_WORDS, SHELF_WORDS, SOURCE_WORDS } from "./plugins-words";
 
 // DISCOVER'S SHELF, AS DRAWN (MK-4e; DESIGN.md §8 "Plugins — the frame's second popup", Discover):
@@ -10,7 +16,13 @@ import { PAGE_WORDS, SHELF_WORDS, SOURCE_WORDS } from "./plugins-words";
 // the `plugin` glyph and the set's count until a picture reaches the window (main's plugin scheme).
 // Its numbers are §8's, in `plugins.css`; its words are `plugins-words.ts`'s. The view holds no
 // state: the controller owns the hot tile and the columns. A tile carries its plugin's id as
-// `data-plugin`, never on screen, for the market's smoke rows (MK-6) to find a set by.
+// `data-plugin`, never on screen, for the market's smoke rows (MK-6) to find a set by. Item 433:
+// the pegboard's categories, a row of their own after the featured set and before the other sets:
+// the kit's segmented control at its small size, All and then each category by the board's own
+// name; each segment carries its category's id as `data-id` (the kit's), never on screen. The
+// controller owns which is chosen. Past the row's width the end where more lies fades (the row's
+// own measure, as the pegboard's filters'), and a press on the row by the pointer is handed on, so
+// the controller gives the field the keyboard back.
 
 const ACT_WORDS: Readonly<Record<TileAct, string>> = {
   install: SHELF_WORDS.install,
@@ -74,6 +86,10 @@ export function PluginsShelf({
   listRef,
   label,
   onOpen,
+  categories = [],
+  category = "",
+  onCategory,
+  onCategoryPressed,
 }: {
   shelf: Shelf;
   /** the hot tile, in the walk's order (the featured tile first) */
@@ -83,8 +99,57 @@ export function PluginsShelf({
   /** the grid's name to assistive tech: the tab's word */
   label: string;
   onOpen: (id: string) => void;
+  /** item 433: the categories after All, by the board's own names; none: no row stands */
+  categories?: readonly ShelfCategory[];
+  /** item 433: the category chosen, `""` All */
+  category?: string;
+  onCategory?: ((id: string) => void) | undefined;
+  /** item 433: the row pressed by the pointer, never by a key */
+  onCategoryPressed?: (() => void) | undefined;
 }): ReactElement {
   const first = shelf.featured === null ? 0 : 1;
+  // the row's track: the end where more lies fades past its width (`data-more`, as the pegboard's
+  // filters' does), measured again as its categories change; and a press on it by the pointer (a
+  // click that counts one; a key's click counts none) is handed on
+  const trackRef = useRef<HTMLFieldSetElement | null>(null);
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (track === null || categories.length === 0) return;
+    const mark = (): void => {
+      const more = categoriesMore(track);
+      if (more === null) delete track.dataset["more"];
+      else track.dataset["more"] = more;
+    };
+    const pressed = (event: MouseEvent): void => {
+      if (event.detail > 0) onCategoryPressed?.();
+    };
+    mark();
+    track.addEventListener("scroll", mark, { passive: true });
+    track.addEventListener("click", pressed);
+    const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(mark);
+    resize?.observe(track);
+    return () => {
+      track.removeEventListener("scroll", mark);
+      track.removeEventListener("click", pressed);
+      resize?.disconnect();
+    };
+  }, [categories, onCategoryPressed]);
+  const row =
+    categories.length > 0 && onCategory !== undefined ? (
+      // a row of its own across the grid, after the featured set (its place in the walk is none:
+      // the field keeps ↑ ↓ ← →, and the row is a stop of Tab of its own, the kit's)
+      <li className="vf-plugins-categories">
+        <SegmentedControl
+          ref={trackRef}
+          className="vf-plugins-cats"
+          size="small"
+          options={[{ id: "", label: SHELF_WORDS.all }, ...categories]}
+          value={category}
+          onChange={onCategory}
+          label={SHELF_WORDS.categories}
+        />
+      </li>
+    ) : null;
   return (
     <div className="vf-plugins-shelf" data-none={shelf.none !== null ? "true" : undefined}>
       {shelf.none !== null ? (
@@ -103,6 +168,7 @@ export function PluginsShelf({
           {shelf.featured !== null && (
             <Tile tile={shelf.featured} featured hot={hot === 0} onOpen={onOpen} />
           )}
+          {row}
           {shelf.tiles.map((tile, index) => (
             <Tile
               key={tile.id}

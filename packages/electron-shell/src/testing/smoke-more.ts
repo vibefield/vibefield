@@ -302,7 +302,9 @@ interface PopupBrief {
 }
 
 const BOARD_OPEN = "globalThis.__vfDesk.pegboard()?.anchor.open === true";
-const BOARD_SETTLED = `(() => {
+/** The board out and its slide done (the drawer whole): its filters and its pill take a press only
+ * then (smoke:market's CARRY waits on it too, item 433). */
+export const BOARD_SETTLED = `(() => {
   const b = globalThis.__vfDesk.pegboard();
   return b !== null && b.anchor.open && b.anchor.drawer !== null && b.anchor.drawer.p >= 0.999;
 })()`;
