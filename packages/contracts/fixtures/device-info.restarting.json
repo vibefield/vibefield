@@ -1,0 +1,23 @@
+{
+  "deviceId": "nodeid-3c7d5e1f9a",
+  "name": "studio",
+  "platform": "darwin",
+  "headless": false,
+  "fielddVersion": "0.1.0",
+  "contractsVersion": "0.1.0",
+  "capabilities": { "terminalHost": true, "terminalMesh": true, "docHost": true, "push": false },
+  "productEndpoint": { "serve": "product", "url": "http://studio.tail1234.ts.net:9423" },
+  "bootId": "fieldd-a1b2c3d4e5f60718",
+  "publishedAt": 1792065409912,
+  "restart": {
+    "reason": "update",
+    "planes": ["shell", "fieldd", "field-native"],
+    "at": 1792065409912
+  },
+  "self": false,
+  "online": false,
+  "state": "restarting",
+  "lastSeenAt": 1792065409912,
+  "tailscaleId": "nQRJl4CNTRL",
+  "tailnetDnsName": "studio.tail1234.ts.net"
+}

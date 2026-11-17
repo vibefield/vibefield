@@ -304,3 +304,54 @@ describe("406 — Remove for a phone: the act, the refusal, the known phones, th
       expect(DeviceUnidentifiedDetails.safeParse(details).success).toBe(false);
   });
 });
+
+// DS — the restart announcement (WP12 L2b's owed phone/peer half). An update that stops the
+// floor takes the desktop's node down with it, so a reader with only the tailnet's `online`
+// reads it `asleep`. The desktop says so first, on its own slice, and the roster's row carries
+// what the slice said. These rows hold the FIELD, not the passthrough: both shapes are
+// `.passthrough()`, so a raw `restart` key rides through untouched with no field behind it.
+describe("DS — the restart announcement on the slice and the row", () => {
+  const at = 1_792_065_409_912;
+
+  it("reads the announcement a slice and its row carry", () => {
+    // a FIELD of both shapes, not a key the passthrough carries
+    expect(Object.keys(DeviceSlice.shape)).toContain("restart");
+    expect(Object.keys(DeviceInfo.shape)).toContain("restart");
+    expect(DeviceSlice.parse(golden("device-slice.restarting.json")).restart).toEqual({
+      reason: "update",
+      planes: ["shell", "fieldd", "field-native"],
+      at,
+    });
+    const row = DeviceInfo.parse(golden("device-info.restarting.json"));
+    expect(row).toMatchObject({ self: false, online: false, state: "restarting" });
+    expect(row.restart).toEqual(DeviceSlice.parse(golden("device-slice.restarting.json")).restart);
+  });
+
+  it("reads an older peer's slice, and its row, as announcing nothing", () => {
+    expect(DeviceSlice.parse(golden("device-slice.valid.json")).restart).toBeUndefined();
+    expect(DeviceInfo.parse(golden("device-info.valid.json")).restart).toBeUndefined();
+  });
+
+  it("drops an announcement it cannot read ALONE, never the slice or the row", () => {
+    const slice = golden("device-slice.restarting.json");
+    const row = golden("device-info.restarting.json");
+    for (const restart of [
+      { reason: "nap", planes: ["fieldd"], at }, // a reason this build does not know
+      { reason: "update", planes: ["freeway-host"], at }, // a plane this build does not know
+      { reason: "update", planes: [], at }, // no plane at all
+      { reason: "update", planes: ["fieldd"] }, // no `at`
+      { reason: "update", planes: ["fieldd"], at: -1 }, // an `at` before the epoch
+      "soon", // not an object
+    ]) {
+      const parsedSlice = DeviceSlice.safeParse({ ...slice, restart });
+      expect(parsedSlice.success, JSON.stringify(restart)).toBe(true);
+      expect(parsedSlice.data?.restart, JSON.stringify(restart)).toBeUndefined();
+      // the claims beside it survive: this is what a refused slice would have lost
+      expect(parsedSlice.data?.capabilities.terminalMesh).toBe(true);
+      const parsedRow = DeviceInfo.safeParse({ ...row, restart });
+      expect(parsedRow.success, JSON.stringify(restart)).toBe(true);
+      expect(parsedRow.data?.restart, JSON.stringify(restart)).toBeUndefined();
+      expect(parsedRow.data?.state).toBe("restarting");
+    }
+  });
+});
