@@ -15,9 +15,10 @@
 //   - The notices then describe exactly the bits that stage ships. A snapshot goes stale at every
 //     dependency move (a Dependabot bump, an EL8 event) and its freshness test needs the very
 //     sources stage time already has, so it would add a second truth without removing a dependency.
-//   - The release build runs with no dependency cache (EDP §12.1) but BUILDS field-native, rosettad
-//     and mille's engine itself (release.yml `build`: `pnpm siblings:build`, prepare-mille,
-//     `package:stage` → build:native-release), so cargo has extracted every crate it linked into
+//   - The release build runs with no dependency cache (EDP §12.1) but BUILDS field-native and
+//     rosettad itself (release.yml `build`: `pnpm siblings:build`, `package:stage` →
+//     build:native-release; mille's engine is npm's since its EL8 to 0.3.6, its platform
+//     package's notices with it), so cargo has extracted every crate it linked into
 //     `$CARGO_HOME/registry/src` before the stager runs. A crate in a Cargo.lock graph whose source is
 //     ABSENT was therefore not built for this host and is not in the package: it is skipped and
 //     counted, never guessed. A root's own direct dependency missing means the binary was not built

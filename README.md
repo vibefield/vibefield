@@ -78,11 +78,8 @@ lives in the manifests (`Cargo.toml`, `pnpm-workspace.yaml`); cite them from the
 
 ```sh
 node scripts/siblings.mjs fetch rosetta  # clone at its pin; preserves existing checkouts
-node scripts/siblings.mjs fetch mille
 pnpm install
 node scripts/electron-binary.mjs # Electron's binary: Electron 43 has no postinstall (fetched lazily otherwise)
-node scripts/siblings.mjs install-js mille # frozen install of mille, with the host's React peers
-node scripts/siblings.mjs build-js mille   # build mille and mille-ui
 pnpm siblings       # the sibling checkouts: path, pin, dirtiness, built binaries
 pnpm siblings:build # rosettad from ../rosetta-pin (and any unreleased sibling's JavaScript)
 pnpm preflight      # tool versions + sibling pins + import-boundary walls
@@ -94,10 +91,12 @@ pnpm dev:design:web # optional browser-only catalog loop (no live app authority)
 pnpm verify         # full gate: typecheck · biome · rustfmt/clippy · TS+Rust tests · gen freshness
 ```
 
-mille exports generated `dist` files, so rebuild after editing its sources with
-`node scripts/siblings.mjs build-js mille`. CI runs the same lock-driven commands in the same order
-(`.github/workflows/verify.yml`, `.github/actions/prepare-mille`). A released sibling (truffle,
-ghosttea, puppeteer) is linked back only through the dev overlay: `pnpm siblings use NAME`.
+CI runs the same lock-driven commands in the same order (`.github/workflows/verify.yml`). A released
+sibling (truffle, ghosttea, puppeteer, mille) is linked back only through the dev overlay:
+`pnpm siblings use NAME`; a linked mille exports generated `dist` files, so rebuild it after editing
+its sources with `node scripts/siblings.mjs build-js mille`.
+*(Corrected 2026-11-17, the EL8 to mille 0.3.6: the block fetched, installed and built mille, and CI's
+`.github/actions/prepare-mille` did the same; mille comes from npm with the install since.)*
 *(Corrected 2026-10-28, the housekeeping pass: the block fetched, installed and built ghosttea,
 released on every plane since the EL8 to ghosttea 0.13.1, and left out rosetta and mille.)*
 

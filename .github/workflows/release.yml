@@ -220,7 +220,6 @@ jobs:
       # dist/ (LP-5's notices), and nothing else here fetches it. verify's step, verbatim (item 240, run 42398362320).
       - name: Electron's binary (its own install.js; path.txt and an executable binary)
         run: node scripts/electron-binary.mjs
-      - uses: ./.github/actions/prepare-mille
       - name: Build rosettad and the Ghosttea renderer from their pinned siblings
         run: pnpm siblings:build
       # field-native's release build is NOT a step here: `package:stage` runs THE one entry, `build:native-release`

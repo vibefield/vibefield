@@ -14,6 +14,9 @@
 # 2026-10-26 (RD-5's exit for puppeteer's npm plane): puppeteer's packages are exact registry
 # pins too (`@vibefield/puppeteer-*` 0.2.3), so no job fetches ../puppeteer, and the
 # prepare-puppeteer composite retired with its link: rows.
+# 2026-11-17 (RD-5's exit for mille's npm plane, the EL8 to 0.3.6): mille's packages are exact
+# registry pins (`@vibecook/mille*` 0.3.6), so no job fetches or builds ../mille-pin, and the
+# prepare-mille composite retired with its link: rows.
 #
 # RFC 025 WINDOW (2026-09-16) — READ THIS BEFORE TRUSTING A RED RUN. truffle 0.7.14 closed
 # the cargo and npm halves the same day (UA-P-X): the [patch.crates-io] row is gone and the
@@ -129,7 +132,6 @@ jobs:
       # Electron's own install.js and proven executable, or red here in words.
       - name: Electron's binary (its own install.js; path.txt and an executable binary)
         run: node scripts/electron-binary.mjs
-      - uses: ./.github/actions/prepare-mille
 
       # rosettad from the pinned sibling (rustup picks its rust-toolchain.toml). The fieldd
       # supervisor's kill matrix runs against a scripted daemon in every gate; the one row

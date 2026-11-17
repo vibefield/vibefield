@@ -2345,7 +2345,7 @@ esac
         steps += 1;
       }
     }
-    expect(steps).toBe(4); // verify, release, audit, prepare-mille
+    expect(steps).toBe(3); // verify, release, audit (prepare-mille retired at mille 0.3.6's EL8)
   });
 });
 
