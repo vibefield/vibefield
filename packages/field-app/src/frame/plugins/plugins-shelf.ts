@@ -311,7 +311,6 @@ export function listedPage(entry: PluginsCatalogEntry): PluginPage | null {
     // O3-D's line for a plugin held while community plugins are off: a set this desktop doesn't
     // have is held by nothing, so its page says none
     held: null,
-    readOnly: null,
     elsewhere: null,
     offLine: null,
     settings: null,

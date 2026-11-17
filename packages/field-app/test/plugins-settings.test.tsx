@@ -1,7 +1,4 @@
 // @vitest-environment happy-dom
-import type { SettingsContribution } from "@vibefield/contracts";
-import type { FielddClient } from "@vibefield/fieldd-client";
-import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -20,7 +17,6 @@ import {
 import { Plugins } from "../src/frame/plugins/Plugins";
 import { type PluginsPort, pluginsPortOver } from "../src/frame/plugins/plugins-port";
 import * as words from "../src/frame/plugins/plugins-words";
-import { PluginSettingsForm } from "../src/panels/PluginSettingsForm";
 
 // MK-4c2b — a plugin's settings on its page in Plugins… (DESIGN.md §8 "Its settings", as corrected
 // for James's MK-O6 pick: no Undo and no Redo on the page). A Built in or Development plugin's
@@ -691,94 +687,5 @@ describe("a setting's way back on its page (MK-4c2c; James's click, 2026-11-14 0
     await openPage(port, SIMULATORS, true);
     for (const title of [FRAME, PHONE, TOKEN]) expect(actsOf(title)).toEqual([]);
     expect(sent).toEqual([]);
-  });
-});
-
-type Asked = [string, Record<string, unknown>][];
-
-/** A window's fieldd: settings kept in a fixture port's store, the plugin list answered as
- * unconfigured. */
-function fielddKeeping(): { client: FielddClient; asked: Asked } {
-  const store = fixture();
-  const asked: Asked = [];
-  const client = {
-    status: "ready",
-    onStatusChange: () => () => undefined,
-    request: async (method: string, params: Record<string, unknown>) => {
-      asked.push([method, params]);
-      const id = String(params.pluginId);
-      const key = String(params.key);
-      if (method === "storage.settings.get") return store.settingsGet(id, key);
-      if (method === "storage.settings.set") return store.settingsSet(id, key, params.value);
-      if (method === "storage.settings.reset") return store.settingsReset(id, key);
-      if (method.startsWith("plugins.catalog.")) return CATALOG_FIXTURES.unconfigured;
-      throw new Error(`the fixture's fieldd has no ${method}`);
-    },
-  } as unknown as FielddClient;
-  return { client, asked };
-}
-
-const settingsAsked = (asked: Asked): Asked =>
-  asked.filter(([method]) => method.startsWith("storage.settings."));
-
-function simulatorsSettings(): SettingsContribution["properties"] {
-  const simulators = PLUGINS_FIXTURE_SETTINGS_SNAPSHOT.plugins.find((p) => p.id === SIMULATORS);
-  const properties = simulators?.contributions.settings?.properties;
-  if (properties === undefined) throw new Error("the fixture's Simulators has no settings");
-  return properties;
-}
-
-interface FormProps {
-  readonly client: FielddClient;
-  readonly properties: SettingsContribution["properties"];
-}
-
-/** Settings → Plugins' own form for Simulators, in a window's fieldd. */
-function SettingsForm({ client, properties }: FormProps): ReactElement {
-  return (
-    <FielddProvider client={client}>
-      <PluginSettingsForm pluginId={SIMULATORS} properties={properties} />
-    </FielddProvider>
-  );
-}
-
-describe("the page asks fieldd what Settings → Plugins asks (C3)", () => {
-  it("reads each setting, and keeps a switch's new value, with Settings' own requests and parameters, in order", async () => {
-    // Settings → Plugins' own form, over one recording fieldd
-    const form = fielddKeeping();
-    const properties = simulatorsSettings();
-    act(() => root.render(<SettingsForm client={form.client} properties={properties} />));
-    await settle();
-    act(() => switchIn(host, FRAME)?.click());
-    await settle();
-    act(() => root.render(null));
-    // the page, over another, through the port's own requests
-    const page = fielddKeeping();
-    await openPage(pluginsPortOver(page.client), SIMULATORS);
-    act(() => switchOf(FRAME)?.click());
-    await settle();
-    expect(settingsAsked(form.asked)).toHaveLength(KEYS.length + 2);
-    expect(settingsAsked(page.asked)).toEqual(settingsAsked(form.asked));
-  });
-
-  it("sets a setting back with Settings' own request and parameters (MK-4c2c): its Reset, the page's Back to default", async () => {
-    const form = fielddKeeping();
-    const properties = simulatorsSettings();
-    act(() => root.render(<SettingsForm client={form.client} properties={properties} />));
-    await settle();
-    // Settings' form: the kept frame setting's Reset (its first; the phone's and the token's follow)
-    const reset = [...host.querySelectorAll("button")].find((b) => b.textContent === "Reset");
-    act(() => reset?.click());
-    await settle();
-    act(() => root.render(null));
-    const page = fielddKeeping();
-    await openPage(pluginsPortOver(page.client), SIMULATORS);
-    await press(actOf(FRAME, words.SETTINGS_WORDS.toDefault));
-    const resetsAsked = (asked: Asked): Asked =>
-      asked.filter(([method]) => method === "storage.settings.reset");
-    expect(resetsAsked(form.asked)).toEqual([
-      ["storage.settings.reset", { pluginId: SIMULATORS, key: "showFrame" }],
-    ]);
-    expect(resetsAsked(page.asked)).toEqual(resetsAsked(form.asked));
   });
 });

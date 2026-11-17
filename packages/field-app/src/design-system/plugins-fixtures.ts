@@ -660,8 +660,8 @@ export const PLUGINS_FIXTURE_SWITCHES_SNAPSHOT = PluginRegistrySnapshot.parse({
 
 /** The same desktop as a plugin's settings show it (MK-4c2b's plates): Simulators, on, declares one setting of
  * each kind the page draws, and one it can't; Desk clock, in development and off, one that syncs; Comment pad, on,
- * one kept on this desktop alone; a plugin from the list and a Sideloaded one declare settings their read-only pages
- * never show or ask for (U2). */
+ * one kept on this desktop alone; a plugin from the list, one that syncs, and a Sideloaded one, one kept on this
+ * desktop alone, which their pages carry since N18, as a Built in plugin's does. */
 export const PLUGINS_FIXTURE_SETTINGS_SNAPSHOT = PluginRegistrySnapshot.parse({
   generation: 4,
   problems: [],

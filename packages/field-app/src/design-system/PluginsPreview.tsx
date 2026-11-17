@@ -59,9 +59,14 @@ import {
 // needs a newer VibeField, and its note; and adds a row's Update pressed as the
 // plate opens, its update card naming the one new power. MK-5b adds Installed
 // with plugins that aren't working, read by the product's own `runtimeFailures`
-// from a fixture runtime read, Try again on the Built in one alone, and one
+// from a fixture runtime read, Try again on the Built in one, and one
 // this VibeField can't run; its Try again goes to the fixture port, which
 // answers and moves nothing. The away plate now carries Discover's Try again.
+// N18: a plugin from the list's page carries its switches now (`controlsHere`),
+// so "page-listed" draws Kanban's page with its one switch, its powers' and the
+// line that they reach your other desktops; "community-held-page" is the one
+// installed page that reads only. N18 (2026-11-17; VF-PM 19:45:16Z): Try again
+// follows the switch, so the Sideloaded Key-value store's row offers it too.
 
 export type PluginsPlateState =
   | "no-registry"

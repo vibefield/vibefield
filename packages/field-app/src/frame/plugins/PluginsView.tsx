@@ -42,9 +42,10 @@ import "./plugins.css";
 // `plugins-words.ts`'s. The view holds no state: the controller (`Plugins.tsx`)
 // owns the read, the tab, the page, the hot row and the keyboard. MK-4c: each
 // of Installed's rows is a press that opens its page (the field keeps ↑ ↓ ↵, as
-// the Peek's does, so a row is no stop of Tab), a plugin's page reads only, and
-// Updates carries the Me row's count. MK-4c2a: a Built in or Development
-// plugin's one switch stands on its row, beside the row's press and never inside
+// the Peek's does, so a row is no stop of Tab), a plugin's page read only (now
+// a held plugin's alone, below), and Updates carries the Me row's count.
+// MK-4c2a: a Built in or Development plugin's one switch (N18: every plugin's
+// but a held one's) stands on its row, beside the row's press and never inside
 // it, with a stop of Tab of its own, and again on its page beside "Installed";
 // its powers' switches stand at their lines' ends. Each switch is the kit's,
 // named by what it turns and never by its state. MK-4c2b: a page's settings
@@ -380,7 +381,6 @@ function PageView({
             )}
             {/* MK-O3D: held while community plugins are off, it says its row's line */}
             {page.held !== null && <p className="vf-plugins-page-note">{page.held}</p>}
-            {page.readOnly !== null && <p className="vf-plugins-page-note">{page.readOnly}</p>}
             {page.elsewhere !== null && <p className="vf-plugins-page-note">{page.elsewhere}</p>}
           </div>
           {/* MK-4e: a set this desktop doesn't have says no power: the install card says them */}

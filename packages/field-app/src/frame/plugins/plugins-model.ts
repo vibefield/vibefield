@@ -240,15 +240,17 @@ function paletteCommands(record: PluginRecord): PluginRecord["contributions"]["c
   return record.contributions.commands.filter((command) => command.placements.includes("palette"));
 }
 
-/** Whether a plugin's switches stand in Plugins (MK-4c2a; VF-PM 2026-11-11
- * 18:36:34Z, 2): a Built in or Development plugin's alone. A record's source and
- * id are what its folder can say (item 321), so a plugin from the plugin list —
- * whatever the list held says of it, a "VibeField" listing included — and a
- * Sideloaded one are read only here. Settings → Plugins keeps their switches
- * until this widens to them, and asks this same function (MK-5; VF-PM 2026-11-14
- * 04:33Z). The row, the page and every power's switch ask this one function. */
+/** Whether a plugin's switches stand in Plugins (MK-4c2a; N18, the MK inventory's A2 at its lean): every plugin's,
+ * whatever its source — Built in, Development, Sideloaded, or from the plugin list, whatever the list held says of
+ * it — but one held while community plugins are off (`heldLine`). The window reads no source to decide it: fieldd
+ * decides the stop (O3-C), keeping a held plugin held whatever its switch asks (`plugin-registry.ts`, `setEnabled`),
+ * and reads no installed plugin while no plugin list is configured (item 279's S2). A held plugin's switch would not
+ * move, so it has none, and its line says why. MK-4c2a gave the switches to a Built in or Development plugin alone
+ * (VF-PM 2026-11-11 18:36:34Z, 2), before fieldd held any; Settings → Plugins kept the others' until this widened
+ * (MK-5; VF-PM 2026-11-14 04:33Z) and keeps none now. The row, the page, every power's switch and the settings ask
+ * this one function. */
 export function controlsHere(record: PluginRecord): boolean {
-  return record.source === "bundled" || record.source === "dev-linked";
+  return heldLine(record) === null;
 }
 
 /** A switch's key, never shown: a plugin's one switch, or one of its powers'.
@@ -607,8 +609,8 @@ export interface PluginPage {
   /** What it adds: each object, then each command it puts in the palette, its tools and its
    * service, or "No objects" */
   readonly adds: readonly PageLine[];
-  /** What it can do: each power it holds; off with no switches here, each it would hold once on
-   * (MK-O3D); with switches here, each it asked for (`powersListed`) */
+  /** What it can do: with switches here, each power it asked for; held while community plugins are off, with none,
+   * each it would hold once on (MK-O3D; N18; `powersListed`) */
   readonly powers: readonly PagePower[];
   /** said under What it can do when that list is empty; null when it lists any, named or not */
   readonly nothing: string | null;
@@ -621,9 +623,8 @@ export interface PluginPage {
   readonly powersLive: boolean;
   /** MK-O3D: said under its act while it is held because community plugins are off: its row's line */
   readonly held: string | null;
-  /** said where its switches would stand, when it has none here */
-  readonly readOnly: string | null;
-  /** said under its act, for a Built in plugin with switches: they reach your other desktops */
+  /** said under its act, for a Built in plugin, or (N18) one from the plugin list, with switches: they reach your
+   * other desktops */
   readonly elsewhere: string | null;
   /** said under What it can do's head while it is off and its powers have switches */
   readonly offLine: string | null;
@@ -717,22 +718,21 @@ export function powerWords(
 }
 
 /** The powers a page lists, before one it can't name is left out: with switches here, each it
- * asked for (MK-4c2a); with none, each it holds while it is on (MK-4c), and while it is off —
- * turned off, or held while community plugins are off, when it holds none — each it asked for that
- * fieldd does not deny it, which it would hold once on (MK-O3D; §8 "Read only first"). */
+ * asked for (MK-4c2a; N18, every plugin but a held one); held while community plugins are off, when
+ * it holds none, each it asked for that fieldd does not deny it, which it would hold once on
+ * (MK-O3D; §8 "Read only first"). A held plugin is never on (`heldLine`), so no page with no
+ * switches lists what a plugin holds while it is on, as MK-4c's did. */
 function powersListed(record: PluginRecord): readonly string[] {
   if (controlsHere(record)) return record.requestedCapabilities;
-  if (record.enabled) return record.grantedCapabilities;
   return record.requestedCapabilities.filter(
     (id) => !record.deniedCapabilities.some((entry) => entry.capability === id),
   );
 }
 
-/** What it can do. A plugin with no switches here lists `powersListed`'s
- * powers, read only (MK-4c). One with switches here (MK-4c2a,
- * §8 "Its switches") lists each power it asked for: its switch as
- * `powerSwitchOf` reads it, and for one it can't have here (any reason but
- * `revoked`), no switch and why. */
+/** What it can do. A plugin held while community plugins are off has no switches here, and lists
+ * `powersListed`'s powers, read only (MK-O3D). Every other (MK-4c2a; N18; §8 "Its switches") lists
+ * each power it asked for: its switch as `powerSwitchOf` reads it, and for one it can't have here
+ * (any reason but `revoked`), no switch and why. */
 function powersOf(
   record: PluginRecord,
   snapshot: PluginRegistrySnapshot,
@@ -779,6 +779,9 @@ export function pluginPage(
   const powerSwitches = powers.some((power) => power.switch !== null);
   // whether its powers' switches take a press: `powerSwitchOf`'s `live`, the same for each of them
   const live = powers.some((power) => powerSwitchOf(record, power.key)?.live === true);
+  // the install-set carries a Built in plugin's choices and (N18) a plugin from the plugin list's, never a
+  // Development or Sideloaded one's (`fieldd/src/install-reconciler.ts`, `publishInner` and `applyEntry`)
+  const synced = record.source === "bundled" || record.source === "registry";
   return {
     id: record.id,
     title: record.title,
@@ -801,20 +804,15 @@ export function pluginPage(
     onOff,
     powersLive: live,
     held: heldLine(record),
-    readOnly: switches ? null : SWITCH_WORDS.readOnly,
-    // the install-set carries a Built in plugin's choices, never a Development one's (install-reconciler.ts:369)
-    elsewhere:
-      record.source === "bundled" && (onOff !== null || powerSwitches)
-        ? SWITCH_WORDS.elsewhere
-        : null,
+    elsewhere: synced && (onOff !== null || powerSwitches) ? SWITCH_WORDS.elsewhere : null,
     offLine: switches && !record.enabled && powerSwitches ? SWITCH_WORDS.off : null,
     settings: settingsOf(record),
     installed: true,
   };
 }
 
-/** How the page draws a setting (MK-4c2b; §8 "Its settings"): Settings → Plugins' own kinds, read from the same
- * declared schema in the same order (`panels/PluginSettingsForm.tsx`, `controlKind`). A yes-or-no takes the kit's
+/** How the page draws a setting (MK-4c2b; §8 "Its settings"): the kinds Settings → Plugins' form drew, read from the
+ * same declared schema in the same order (its `controlKind`; N18 deleted the form). A yes-or-no takes the kit's
  * switch, a choice a menu, words or a number a field, and a secret a masked field. */
 export type SettingKind =
   | "secret"
@@ -873,8 +871,9 @@ export interface PageSettings {
   readonly offLine: string | null;
 }
 
-/** A plugin's settings: null unless its switches stand here (`controlsHere`; a read-only page carries no section and
- * asks fieldd nothing, U2) and it declares a setting. */
+/** A plugin's settings: null unless its switches stand here (`controlsHere`: every plugin's, whatever its source, but
+ * one held while community plugins are off, N18; a held page carries no section and asks fieldd nothing, U2) and it
+ * declares a setting. */
 export function settingsOf(record: PluginRecord): PageSettings | null {
   if (!controlsHere(record)) return null;
   const entries = Object.entries(record.contributions.settings?.properties ?? {});
@@ -901,9 +900,9 @@ export function settingsOf(record: PluginRecord): PageSettings | null {
   };
 }
 
-/** What a setting's control shows for fieldd's answer, as Settings reads it (`PluginSettingsForm.tsx`): a secret's
- * field is empty (fieldd never sends a window what is kept); a switch is on when the value, or the default while
- * nothing is kept, is `true`; a choice is its option's place, "" with none; a field holds the value's words. */
+/** What a setting's control shows for fieldd's answer, as Settings' form read it until N18 deleted it: a
+ * secret's field is empty (fieldd never sends a window what is kept); a switch is on when the value, or the default
+ * while nothing is kept, is `true`; a choice is its option's place, "" with none; a field holds the value's words. */
 export function settingDraft(setting: PageSetting, got: SettingsGetResult): string {
   if (setting.kind === "secret") return "";
   const current = got.isSet ? got.value : setting.fallback;
@@ -935,7 +934,7 @@ export function settingToSend(
 }
 
 /** A setting's way back on its page (MK-4c2c; James's click, 2026-11-14 08:19:36Z, "Yes, add them to the plugin's
- * page"): as Settings' Reset stands (`PluginSettingsForm.tsx`, while one is kept), a kept value goes back to its default
+ * page"): as Settings' Reset stood (on its form, while one is kept, until N18), a kept value goes back to its default
  * in one press, and a kept secret is removed, asking first, since only typing it again brings it back. None while
  * nothing is kept. fieldd's one door does both (`storage.settings.reset`). */
 export type SettingAct = "toDefault" | "forget";

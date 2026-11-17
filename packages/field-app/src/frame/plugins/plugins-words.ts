@@ -116,8 +116,9 @@ export const INSTALLED_LINE = {
   builtInNoObject: "Comes with VibeField · no object on the desk",
   off: "Off · its objects on your desks draw as missing until it's on",
   offNoObject: "Off · its service is stopped",
-  /** a plugin that is on whose runtime failed, or that cannot start in this window (item 476); a Built in or
-   * Development one's row offers Try again (`INSTALL_WORDS.tryAgain`), which turns it off and on (MK-5b). The line
+  /** a plugin that is on whose runtime failed, or that cannot start in this window (item 476); its row offers Try
+   * again (`INSTALL_WORDS.tryAgain`) where its switch stands, which turns it off and on (MK-5b; N18, 2026-11-17:
+   * Try again follows the switch, not a Built in or Development one's alone, VF-PM 19:45:16Z). The line
    * and its Try again are §9's ruled words (IS-282-6), not ‹draft›; a refusal of Try again says the switch's
    * words (`SWITCH_WORDS.refused`, ruled; `SWITCH_WORDS.updating`, ‹draft›) */
   broken: (title: string) => `${title} isn't working right now`,
@@ -182,15 +183,14 @@ export const PAGE_WORDS = {
 } as const;
 
 /** A plugin's switches (MK-4c2a; DESIGN.md §8 "Its switches", §9 MK-4c2a's block): MK's words (VF-PM 2026-11-11
- * 18:36:34Z, 18:39:16Z, 18:43:08Z), each James's since his picks at A, as built, on 2026-11-12: `readOnly` (MK-O22),
- * `elsewhere` (MK-O21), `off` (MK-O27), `cant` (MK-O23) and `refused` (MK-O26). A switch is named by what it turns —
- * the plugin's title, or a power's plain words — and never by its state, which it says as a switch does. Settings →
- * Plugins keeps its own words until Plugins… carries those plugins' switches (MK-5; VF-PM
- * 2026-11-14 04:33Z). */
+ * 18:36:34Z, 18:39:16Z, 18:43:08Z), each James's since his picks at A, as built, on 2026-11-12: `elsewhere`
+ * (MK-O21), `off` (MK-O27), `cant` (MK-O23) and `refused` (MK-O26). A switch is named by what it turns —
+ * the plugin's title, or a power's plain words — and never by its state, which it says as a switch does. N18: Plugins…
+ * carries every plugin's switches but a held one's, so MK-O22's "Its switches aren't here yet." is said nowhere and
+ * left this module, and Settings → Plugins says no switch's words of its own. */
 export const SWITCH_WORDS = {
-  /** A page of a plugin from the plugin list, or a Sideloaded one: no switches here (item 321). */
-  readOnly: "Its switches aren't here yet.",
-  /** A Built in plugin's page: the install-set carries its choices to your other desktops. */
+  /** A Built in plugin's page, and (N18) a plugin from the plugin list's: the install-set carries its choices to your
+   * other desktops. */
   elsewhere: "Turning it off, or a power off, does the same on your other desktops.",
   /** An off plugin's page, under What it can do. */
   off: "Turn it on to change what it can do.",
@@ -212,8 +212,8 @@ export const SWITCH_WORDS = {
  * pick): MK's words, ‹draft›, for James's eye (VF-PM 2026-11-11 19:40:52Z). James's: `off`, `refused`, `saved`,
  * `choose` and `cantDraw` (his MK-O31 pick A, 2026-11-12 06:11:57Z), `unread` (his MK-O35 pick A) and `footHere`
  * (his MK-O33 pick B). A setting is named by its plugin's own title for it. The page has no Undo and no Redo: going
- * back stays in Settings. Settings → Plugins keeps its own words until Plugins… carries those
- * plugins' switches (MK-5; VF-PM 2026-11-14 04:33Z). */
+ * back stays in Settings. N18: every plugin's page but a held one's carries its settings, and Settings → Plugins
+ * carries none, nor its form's words. */
 export const SETTINGS_WORDS = {
   /** The section's head (§8 "Its settings"). */
   head: "Settings",

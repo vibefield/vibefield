@@ -20,9 +20,9 @@ import type { PluginsPort } from "./plugins-port";
 import { REMOVE_WORDS, SETTINGS_WORDS } from "./plugins-words";
 
 // A PLUGIN'S SETTINGS ON ITS PAGE (MK-4c2b; DESIGN.md §8 "Its settings", as corrected for James's
-// MK-O6 pick): a Built in or Development plugin's settings, each a row with its own control, over
-// the port's three requests — `storage.settings.get`, `.set` and `.reset`, the ones Settings →
-// Plugins sends today, with the same parameters. MK-4c2c (James's click, 2026-11-14 08:19:36Z,
+// MK-O6 pick): every plugin's settings but a held one's (N18), each a row with its own control,
+// over the port's three requests — `storage.settings.get`, `.set` and `.reset`, the ones Settings
+// → Plugins sent, with the same parameters. MK-4c2c (James's click, 2026-11-14 08:19:36Z,
 // "Yes, add them to the plugin's page"): a kept setting has Back to default, one press; a kept
 // secret has Remove the saved secret…, which asks first, in place, in RemoveQuestion.tsx's pattern
 // (MK-4f; §8 "The destructive uninstall affordance"): its consequence line, Cancel leading and
@@ -35,8 +35,8 @@ import { REMOVE_WORDS, SETTINGS_WORDS } from "./plugins-words";
 // secret typed and refused stays in its masked field, and fieldd never sends a window what is kept.
 // A setting fieldd refuses to read says so under it in §9's words and takes no input (Unread): a
 // failed read sets no `readFor`, so it is read again at the page's next opening or once fieldd
-// answers after being away, and nothing retries it on its own. Settings → Plugins keeps its own
-// form until MK-5.
+// answers after being away, and nothing retries it on its own. Since N18 Settings → Plugins shows
+// no form: every plugin's settings are on its page here.
 
 interface RowProps {
   id: string;

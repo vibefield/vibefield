@@ -335,7 +335,6 @@ export function SettingsPanel({
   const [undoAvailable, setUndoAvailable] = useState(true);
   const [redoAvailable, setRedoAvailable] = useState(true);
   const [historyNote, setHistoryNote] = useState<string | null>(null);
-  const [settingsRevision, setSettingsRevision] = useState(0);
 
   const cameraLimits = engine.world.getResource(CameraLimits);
   const [minZoom, setMinZoom] = useState(cameraLimits?.minZoom ?? 0.1);
@@ -417,7 +416,6 @@ export function SettingsPanel({
           {},
         )) as SettingsUndoResult;
         if (result.applied) {
-          setSettingsRevision((revision) => revision + 1);
           setUndoAvailable(true);
           setRedoAvailable(true);
           setHistoryNote(direction === "undo" ? "Last synced change undone" : "Change restored");
@@ -635,9 +633,8 @@ export function SettingsPanel({
   } else if (activePage === "history") {
     pageContent = <HistorySettings />;
   } else if (activePage === "plugins") {
-    pageContent = (
-      <PluginsSection settingsRevision={settingsRevision} onSettingsChanged={markSettingsChanged} />
-    );
+    // N18: Plugins… holds every switch, so this page lists no plugin and sends nothing
+    pageContent = <PluginsSection />;
   } else if (activePage === "devices") {
     pageContent = (
       <DevicesSection

@@ -109,17 +109,19 @@ import { RemoveView } from "./RemoveQuestion";
 // read — no page asks fieldd anything — and ↑ ↓ walk its hot row, kept in
 // sight, ↵ opening its page; Esc goes back from a page before it folds the
 // popup; Updates carries the Me row's count. MK-4c2a: a Built in or
-// Development plugin's one switch, on its row and its page, and its powers'
-// switches (§8 "Its switches"), each a request Settings → Plugins sends today.
+// Development plugin's one switch (N18: every plugin's but a held one's, below),
+// on its row and its page, and its powers' switches (§8 "Its switches"), each a
+// request Settings → Plugins sent with the same parameters until N18.
 // A switch moves only when fieldd's next snapshot does; while its request is
 // out it takes no press (a second press sends nothing), a refusal is said in
 // §9's words (never the error's text) until a press or fieldd's snapshot shows
 // the switch the way it was turning, and while fieldd isn't answering no switch
-// takes a press. Every other plugin's page reads only (item 321). MK-4c2b: a
-// Built in or Development plugin's settings on its page (§8 "Its settings"),
-// a section the controller mounts once per page opening and hands the view, so
-// the view holds no state; each setting reads and keeps its value over the
-// requests Settings → Plugins sends today. No Undo and no Redo on the page
+// takes a press. Every other plugin's page read only (item 321) until N18.
+// MK-4c2b: a Built in or Development plugin's settings (N18: every plugin's but
+// a held one's) on its page (§8 "Its settings"), a section the controller
+// mounts once per page opening and hands the view, so the view holds no state;
+// each setting reads and keeps its value over the requests Settings → Plugins
+// sent until N18. No Undo and no Redo on the page
 // (James's MK-O6 pick): going back stays in Settings. MK-4e: over a held list
 // Discover draws its shelf (`plugins-shelf.ts`) from the list this popup
 // already read and the snapshot the window holds; ↑ ↓ walk its tiles a row at
@@ -193,15 +195,16 @@ import { RemoveView } from "./RemoveQuestion";
 // MK-5b (§8 "Installed", MK-5b's drawing): so does a plugin whose runtime
 // fieldd says failed, which the frame reads while the popup stands
 // (`plugins.runtime.subscribe`, `runtimeFailures`) and hands in (`failed`).
-// A Built in or Development plugin's row then offers Try again, which turns it
-// off and on over its switch's two requests and its switch's key, so neither
-// takes a press until both are answered; it stands meanwhile, and the keyboard
-// stays in the field. A refusal is the switch's, said by the request fieldd
-// refused. A read the client ended reads as none failed. And where neither
-// door answered, Discover and Updates offer Try again in the foot, ↵ printed
-// on it, which reads the list again as an opening does, once per press (MK-D5:
-// the person's act); Installed says the same sentence with no act while it
-// holds no plugins.
+// A row whose switch stands here then offers Try again (N18, 2026-11-17: Try
+// again follows the switch, not a Built in or Development one's alone, VF-PM
+// 19:45:16Z), which turns it off and on over its switch's two requests and its
+// switch's key, so neither takes a press until both are answered; it stands
+// meanwhile, and the keyboard stays in the field. A refusal is the switch's,
+// said by the request fieldd refused. A read the client ended reads as none
+// failed. And where neither door answered, Discover and Updates offer Try again
+// in the foot, ↵ printed on it, which reads the list again as an opening does,
+// once per press (MK-D5: the person's act); Installed says the same sentence
+// with no act while it holds no plugins.
 // Item 433: Discover draws the pegboard's categories (`shelfCategories`), by
 // the board's names this controller already reads (`useBoardNames`), and a
 // category chosen keeps the sets that hang there. Each opening starts on the
@@ -210,6 +213,12 @@ import { RemoveView } from "./RemoveQuestion";
 // offer shows All, and so does a list held with none. Typed words search every
 // set, and the category comes back once they are gone. A press on the row by
 // the pointer gives the keyboard back to the field, as a tile's press does.
+// N18 (the MK inventory's A2 at its lean): the switches and the settings above
+// stand for every plugin, whatever its source, but one held while community
+// plugins are off (`controlsHere`): a plugin from the plugin list and a
+// Sideloaded one read only no more. fieldd decides the stop (O3-C), so the
+// window reads no source to decide them. Settings → Plugins sends none of
+// these requests now: this popup is their one place.
 
 function boxOf(container: HTMLElement | null | undefined): { width: number; height: number } {
   if (container !== null && container !== undefined) {
@@ -901,7 +910,8 @@ export function Plugins({
   // Q6: the field's words filter Installed's rows and (MK-4e) Discover's shelf;
   // Updates' search waits for its rows, and the words are kept across the switch.
   // Item 476: a row of a plugin in the window's own set says it isn't working. MK-5b: so does one
-  // whose runtime fieldd says failed, and a Built in or Development one's offers Try again, which
+  // whose runtime fieldd says failed, and one whose switch stands here offers Try again (N18,
+  // 2026-11-17: Try again follows the switch, not a Built in or Development one's alone), which
   // stands while its press is under way, the plugin off between its two requests included.
   const installed = useMemo(() => {
     if (snapshot === null) return null;
