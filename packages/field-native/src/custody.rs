@@ -30,7 +30,7 @@
 use crate::contracts::NativeBootstrap;
 use crate::registries::custody as registry;
 use serde_json::error::Category;
-use std::io::{BufRead, Read};
+use std::io::BufRead;
 use std::time::Duration;
 use tokio::sync::oneshot;
 
