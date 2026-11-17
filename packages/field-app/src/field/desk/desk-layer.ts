@@ -50,7 +50,8 @@ export const DESK_TRAY = { foot: 4, footFade: 16 } as const;
  * blows before its 2 s ease (ICE's `ambientIdleMs`, 20 000 by default). The explorer's owed still waits for the desk's rest
  * (`desk-stills.ts`), so a thumbnail follows an edit by this and the ease. It is the time the desk already takes a pointer to have
  * stopped (`PEERS.idleMs`, §8 "Peers on the mat"): the desk rests ≈ 10 s after the last touch, where ICE's default read
- * 22,033–22,085 ms on smoke:canvas's REST row.
+ * 22,026–22,116 ms on smoke:canvas's REST row (79 rows at the 20 s budget, in 76 saved logs). Corrected 2026-11-17: this said
+ * 22,033–22,085 ms: real readings, but a narrower range than the logs hold.
  */
 export const DESK_WIND_IDLE_MS = PEERS.idleMs;
 
