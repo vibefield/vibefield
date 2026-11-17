@@ -13,6 +13,7 @@
         "^default",
         "{workspaceRoot}/Cargo.toml",
         "{workspaceRoot}/Cargo.lock",
+        "{workspaceRoot}/apps/desktop/packaging/build-fieldd-sea.mjs",
         { "runtime": "cargo --version" },
         { "runtime": "rustc --version" }
       ]
