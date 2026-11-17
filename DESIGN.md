@@ -5842,9 +5842,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     setting." when fieldd couldn't read it, and "Couldn't save that. Try again." when it couldn't
     keep it or set it back to its default. A plugin with a last error says "‹plugin› isn't working
     right now", whatever its kind, its details in Diagnostics' Plugins section (above), with no
-    **Try again** here (MK-5b's). No row offers **Uninstall**: fieldd uninstalls a plugin from the
-    plugin list alone (`plugin-install.ts`, `uninstall`), whose **Remove…** stands on its page (§8
-    "The destructive uninstall affordance"), and never a Sideloaded one.
+    **Try again** here (MK-5b built it for Plugins…' Built in and Development rows alone, below). No
+    row offers **Uninstall**: fieldd uninstalls a plugin from the plugin list alone
+    (`plugin-install.ts`, `uninstall`), whose **Remove…** stands on its page (§8 "The destructive
+    uninstall affordance"), and never a Sideloaded one.
+    *Built 2026-11-17 (MK-5b):* the **Try again** named above stands on Plugins…' Installed row of a Built in or
+    Development plugin that isn't working (§8 "Plugins — the frame's second popup", Installed, MK-5b's drawing),
+    and turns it off and on. A row here, a plugin from the plugin list's or a Sideloaded one's, still offers none.
   - **What left:** a Built in or Development plugin's switch, its **Capabilities +** and its settings'
     controls (its page has them, MK-4c2a, MK-4c2b); **Runtime +** (above); the "updates ▸" disclosure
     (§8 "The updates flow"); **More +** (§8 "The destructive uninstall affordance"); the folders that
@@ -7410,6 +7414,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     when the list holds no set it shows.
     *Corrected 2026-11-14 (MK-UC's UC-C):* with a list held, Updates shows its head, its rows and its note
     ("Updates", below), never the list's count.
+    *Drawn 2026-11-17 (MK-5b; VF-PM 2026-11-14 04:33Z, MK-5's ask 3 at its lean), ‹draft› for James's eye, its
+    words in §9 "Installed, off and Remove…":* when neither door answers, Discover and Updates say IS-282-2's
+    ruled "Plugins aren't available right now." and carry one press, **Try again**, the foot's act with ↵ printed
+    on it, which ↵ in the field presses. It reads the list again as an opening does — the list fieldd holds and
+    the fresh read, once per press, the person's act (MK-D5) — and the body says the read until a door answers;
+    it leaves the foot meanwhile, so the keyboard goes to the field as it is pressed, as Show installed sends it.
+    It takes no press while fieldd isn't answering this window. Installed says the same sentence with no act when
+    neither door answered and the window holds none of its plugins, for the window keeps the last plugins it was
+    sent and heals on its own; otherwise "Reading your plugins…" stands until they come, as before.
   - **The read on open** (MK-D5): opening the popup is your act, so each opening reads the registry's signed list —
     one read, carrying no identity, on no timer and with no push feed. The list it last read shows at once, with its
     time in the foot ("checked 14:02"), never implied fresh, and the foot says a read is under way until it lands;
@@ -7474,6 +7487,40 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     fieldd says which are held (the row's `held`, said only for one the person wants on; one they turned off is
     off for their own reason and its line says off); the window decides nothing by it, for on or off is fieldd's
     `enabled`. The tab's foot counts it among the off.
+    *Drawn 2026-11-17 (MK-5b; VF-PM 2026-11-14 04:33Z, MK-5's ask 2 at its lean), ‹draft› for James's eye, its
+    words in §9 "Installed, off and Remove…":*
+    - **A plugin that isn't working** is one that is on and that fieldd runs (its record `enabled`), not stopped
+      after it kept crashing (that row keeps its own line, "The read on open" above), whose runtime failed:
+      fieldd's runtime read (`plugins.runtime.subscribe`, the one Settings → Diagnostics' Plugins section reads)
+      has the Doctor name its service's controller failed, or, in a window still connected, its renderer's
+      controller failed, a behavior generation failed or a breaker suspended — read by the issue's code, never
+      its words. A window that left keeps its last report as evidence (the Doctor marks it disconnected, and
+      its renderer's own record says so too: either is enough), which is not read here. One that cannot
+      start in this window (item 476) isn't working too. Its row says "‹plugin› isn't working right now" in
+      the line's own ink, its details in Settings → Diagnostics.
+    - **Try again** stands on such a row of a Built in or Development plugin (its switches stand here), 12 after
+      its text and 12 before its switch: the foot's act's look (32 tall, padded 0 14, corners 16, 12.5/600 on the
+      ready fill, 14% under the pointer) with no ↵ printed, for ↵ opens the hot row's page, as before. It is a
+      control of its own beside the press, with its own stop of Tab in the rows' order, as the switch is. A press
+      turns the plugin off and on — the switch's two requests, `plugins.disable` and then `plugins.enable` — and
+      the row says what fieldd's snapshots say meanwhile. Under way, it stands, the plugin off between the two
+      included, and it and the switch take no press and nothing spins; the keyboard goes to the field as it
+      is pressed, as an Install's press keeps it there. While fieldd isn't answering, neither takes a press.
+      Refused, the row's line says the switch's refusal for the request fieldd refused, "Couldn't turn it off.
+      Try again." or "Couldn't turn it on. Try again.", or, refused while the plugin updates, the switch's own
+      updating line (item 440), in the attention ink, and goes as a switch's does. A Built in plugin's choices
+      ride the install-set to your other desktops, as its switch's do (its page says so), a Development
+      one's never: Try again turns a Built in plugin off and on there too, and an on refused leaves it off
+      there as here. A plugin from the plugin list, or a Sideloaded one, says the line with no Try again: its
+      switch is Settings → Plugins' (§8 "Settings → Plugins, until Plugins… holds every switch").
+    - **The read** stands while the popup does: opening it asks, and folding it lets the read go. Until it
+      answers, or when it fails, the client ends it, or the window can't read what fieldd sent, no runtime is
+      read as failed and the rows say what the registry says: never a guess, and never a read that ended
+      shown as live.
+    - **An invalid or incompatible plugin** — one fieldd couldn't read as a plugin, or one this VibeField can't
+      run — says a line of its own, "‹plugin› can't run on this VibeField" ‹draft› (MK's, for James's eye),
+      with no Try again and no switch, for turning it off and on fails the same way until it or VibeField
+      changes; its details are in Diagnostics.
   - **Updates** is what the last read found, its time at its head. Each update says how it changes the set before
     you take it — the objects it adds or removes (MK-D4) — over its notes, with **Update**; one that removes an
     object asks first, because the objects of that kind on your desks would wear the missing face. Nothing installs
@@ -11153,6 +11200,22 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   reads "‹plugin› isn't working right now" on Installed and in Settings → Plugins, the same line a plugin fieldd
   reports broken reads; and a page whose live feed cannot open says its own could-not-load line and keeps trying by
   itself, never fieldd's reason. No new sentence.
+  *Corrected 2026-11-17 (MK-5b):* not "the same line a plugin fieldd reports broken reads" on Installed. There a
+  plugin fieldd reports invalid or incompatible now says its own line, "‹plugin› can't run on this VibeField"
+  ‹draft›, and "‹plugin› isn't working right now" stands on one whose runtime failed or that cannot start here.
+  Settings → Plugins still says it for a plugin with a last error, whatever its kind (§8 "Settings → Plugins,
+  until Plugins… holds every switch").
+  *Built 2026-11-17 (MK-5b; VF-PM 2026-11-14 04:33Z, MK-5's asks 2 and 3 at their leans), ‹draft› for James's eye:*
+  "‹plugin› isn't working right now" stands on a plugin that is on and whose runtime failed, or that cannot start in
+  this window (§8 "Plugins — the frame's second popup", Installed, MK-5b's drawing), with **Try again** on a Built in
+  or Development one alone; a refusal of its press says the switch's words by the request refused, "Couldn't turn it
+  off. Try again." or "Couldn't turn it on. Try again.", or, refused while the plugin updates, "This plugin is
+  updating. Try again in a moment." ‹draft› (item 440). A Built in plugin's Try again turns it off and on on your
+  other desktops too, as its switch does. An invalid or incompatible plugin says "‹plugin› can't run on this
+  VibeField", MK's words ‹draft›, the line of its own whose words are James's to choose, with no Try again.
+  "Plugins aren't available right now." stands on Discover and Updates with **Try again** when neither door
+  answers, and on Installed with no act when, besides, the window holds none of its plugins. "‹plugin› can't run
+  on this VibeField" ‹draft› is MK-5b's one new sentence.
   *Added 2026-11-12 (James's MK-O4 pick, 2026-11-11 22:34:05Z: "This desktop alone"), ‹draft› for his eye:* under
   **Remove ‹plugin› and its data?**, "This deletes its settings and data on ‹this desktop›. It can't be undone.
   ‹Your other desktops› remove ‹plugin› too, and keep their copy of its data." ‹this desktop› and ‹your other
