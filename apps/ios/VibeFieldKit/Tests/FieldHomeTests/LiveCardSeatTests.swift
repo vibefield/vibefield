@@ -88,6 +88,16 @@ struct SeatReadoutTests {
     #expect(FieldHomeModel.seatReadout(nil, lineHeight: 19) == nil)
   }
 
+  @Test("item 41: only another client's hold anchors the held screen at the grid's foot; this phone's, an empty seat and no seat keep it at the top")
+  func onlyAnotherAnchorsAtTheFoot() {
+    #expect(FieldHomeModel.anchorsGridAtFoot(SeatFixtures.seat(.another(SeatFixtures.studio))))
+    #expect(FieldHomeModel.anchorsGridAtFoot(SeatFixtures.seat(.another(SeatFixtures.peer))))
+    #expect(!FieldHomeModel.anchorsGridAtFoot(SeatFixtures.seat(.mine(SeatFixtures.phone))))
+    #expect(!FieldHomeModel.anchorsGridAtFoot(SeatFixtures.seat(.nobody(letGo: nil))))
+    #expect(!FieldHomeModel.anchorsGridAtFoot(SeatFixtures.seat(.nobody(letGo: SeatFixtures.studio))))
+    #expect(!FieldHomeModel.anchorsGridAtFoot(nil))
+  }
+
   @Test("the words win, a cooled terminal keeps its own veil: the readout stands only on a live terminal with nothing else to say")
   func theReadoutYields() {
     #expect(FieldHomeModel.showsSeatReadout(live: true, cooled: false, hasWords: false))

@@ -3549,6 +3549,8 @@ public struct HomeScreen: View {
         scene: attachment.scene,
         visible: true,
         configuration: attachment.presentation,
+        // Item 41: another client's held screen anchors at the grid's foot.
+        anchorsGridAtFoot: FieldHomeModel.anchorsGridAtFoot(attachment.seat),
         // --- IOS-5a: two modes, two first responders. The kit's own
         // fifteen-key row is off (K-D3) — the card's rail replaces it.
         // --- IOS-5c: the flag, not the mode — the keyboard can be down while

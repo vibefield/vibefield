@@ -21,6 +21,12 @@ public struct TerminalSurface: UIViewRepresentable {
   let visible: Bool
   let configuration: GhostteaTerminalPresentationConfig
   let controlsGridSize: Bool
+  /// Item 41 (DESIGN.md §8, "The phone's live card is its terminal"): while
+  /// another client holds the seat, the held screen anchors at the grid's foot,
+  /// so its empty rows are at the top. ghosttea's renderer does it
+  /// (`gridAlignment`): a translate here would move the Metal view onto the
+  /// safe area, and ghosttea would measure a shorter grid.
+  let anchorsGridAtFoot: Bool
   /// The kit ships its own fifteen-key accessory row above the keyboard and
   /// defaults it ON. IOS-5a switches it off (K-D3): the input card's rail
   /// replaces it, and two rows of terminal keys stacked on each other would be
@@ -78,6 +84,7 @@ public struct TerminalSurface: UIViewRepresentable {
     visible: Bool,
     configuration: GhostteaTerminalPresentationConfig,
     controlsGridSize: Bool = true,
+    anchorsGridAtFoot: Bool = false,
     showsKitAccessoryRow: Bool = false,
     focus: ResponderRole = .release,
     focusEpoch: Int = 0,
@@ -103,6 +110,7 @@ public struct TerminalSurface: UIViewRepresentable {
     self.visible = visible
     self.configuration = configuration
     self.controlsGridSize = controlsGridSize
+    self.anchorsGridAtFoot = anchorsGridAtFoot
     self.showsKitAccessoryRow = showsKitAccessoryRow
     self.focus = focus
     self.focusEpoch = focusEpoch
@@ -381,6 +389,8 @@ public struct TerminalSurface: UIViewRepresentable {
     // swipe must scroll without raising the keyboard after it was dismissed.
     if view.focusesInputOnTap { view.focusesInputOnTap = false }
     if view.focusesInputOnScroll { view.focusesInputOnScroll = false }
+    let alignment: GhostteaTerminalGridAlignment = anchorsGridAtFoot ? .bottom : .top
+    if view.gridAlignment != alignment { view.gridAlignment = alignment }
     if view.keyboardAppearance != keyboardAppearance {
       view.keyboardAppearance = keyboardAppearance
     }

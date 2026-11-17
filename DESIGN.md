@@ -8368,11 +8368,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   its reply chips float over the last rows, each on a local clearing of the ground. The open input
   card is as it was. The attachment's words ride over the grid 10pt below the band. A cooled
   terminal dims toward its ground (a veil of the ground at 45%), not toward the glass. While another
-  device holds the seat, the held screen **anchors at the grid's foot** (a ghosttea renderer option,
-  riding its 0.10.2 pin: a translate in the kit would move the Metal view onto the safe area, and
-  ghosttea would measure a shorter grid), so its empty rows are at the top. *Status 2026-10-19:
-  until that option ships, the held screen stands top-left, as a desktop pane's does, and its empty
-  rows are at the foot.* The peer, absence and ended faces keep the stacked card on the glass. While
+  device holds the seat, the held screen **anchors at the grid's foot** (ghosttea's renderer option,
+  `gridAlignment = .bottom`: a translate in the kit would move the Metal view onto the safe area, and
+  ghosttea would measure a shorter grid), so its empty rows are at the top. *(2026-10-19 until item
+  41's re-cut, 2026-11-17: the held screen stood top-left, as a desktop pane's does, with its empty
+  rows at the foot. The 0.10.2 pin that was to carry the option was overtaken by the EL8s that
+  followed (0.13.1 carries it forward, Package.swift's note), and the kit did not set it until now.
+  The readout's words do not follow the empty rows: they stand centred, by James's review of
+  2026-11-02 below.)* The peer, absence and ended faces keep the stacked card on the glass. While
   the phone holds the seat, that grid is the PTY's. *(2026-10-19: this said the header stood on a
   fade of the ground, solid to 24pt above its foot and clear 8pt below, with the grid's top rows
   under it: "at 13pt the grid gains about five rows, three or four of them under the header, so a

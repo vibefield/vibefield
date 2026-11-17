@@ -255,6 +255,16 @@ enum FieldHomeModel {
       name: holder.face?.name ?? seatHolderFallback, heldRows: seat.rows, lineHeight: lineHeight)
   }
 
+  /// Item 41: the held screen anchors at the grid's foot while ANOTHER client
+  /// holds the seat (DESIGN.md §8), so its empty rows are at the top. This
+  /// phone's seat, an empty one and no seat keep the grid at its top: the grid
+  /// is the PTY's then. The readout's words do not follow the rows: James's
+  /// review of 2026-11-02 centres them between the header and the input controls.
+  static func anchorsGridAtFoot(_ seat: RoutedSessionSeat?) -> Bool {
+    guard let seat, case .another = seat.driver else { return false }
+    return true
+  }
+
   /// Whether the readout stands, and the held veil with it: only on a live
   /// terminal with no words of its own. The attachment's words win, and a
   /// cooled terminal keeps its own 45% veil, so a card never wears two veils and
