@@ -315,7 +315,7 @@ struct HistoryProjectView: View {
     }
   }
 
-  /// Item 516 (James, 2026-11-17 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon"; P3) —
+  /// Item 516 (asked for 2026-11-17: the phone's History loads in the living mark; P3) —
   /// while none of the project's sessions has arrived and its desktop answers, the list holds in a box at its top
   /// (`HistoryOpening.sessions`); the head, the figures and the desktops above it stand at once. Once its sessions
   /// are answered, an empty list stands empty under its head: no mark moves where no work does (HG-L1). Asleep, the

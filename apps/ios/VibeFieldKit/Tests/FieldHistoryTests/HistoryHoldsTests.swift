@@ -4,8 +4,8 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 516 (James, 2026-11-17 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon", on the page
-/// "The Mark in a Pocket") — History's own waits on the phone stand in the hold a session's first reading stands in
+/// Item 516 (asked for 2026-11-17: the phone's History loads in the living mark) — History's own waits on the phone
+/// stand in the hold a session's first reading stands in
 /// (item 417): the ledger's first read (P1) and a project's list of sessions (P3), and, with no desktop answering and
 /// nothing kept, the ledger's place with the mark at rest (P4). DESIGN.md §8 "The phone's History waits in the hold".
 ///

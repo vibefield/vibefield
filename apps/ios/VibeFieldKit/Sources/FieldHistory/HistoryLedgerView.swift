@@ -48,7 +48,7 @@ public struct HistoryLedgerView: View {
     FieldHistoryModel.rootHead(projects: projects.corpus.projects.count, cut: projects.cut)
   }
 
-  /// Item 516 (James, 2026-11-17 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon"; P1, P4) —
+  /// Item 516 (asked for 2026-11-17: the phone's History loads in the living mark; P1, P4) —
   /// what the ledger's place holds while it shows no project: History's first read, in the Setup Assistant's words,
   /// or no desktop answering with nothing kept, the mark at rest (`HistoryOpening.ledger`).
   private var held: HistoryOpening.Words? {

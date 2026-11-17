@@ -227,7 +227,7 @@ struct HistoryProjectsTests {
     await settle("the move") { projects.moved("p1:asked-before-it-moved") == moved }
   }
 
-  // Item 516 (James, 2026-11-17 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon") — until the
+  // Item 516 (asked for 2026-11-17: the phone's History loads in the living mark) — until the
   // door has answered the listing once, an empty ledger is History's first read, and its place holds
   // (`HistoryOpening.ledger`; the rule is held in HistoryHoldsTests).
 

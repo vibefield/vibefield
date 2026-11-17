@@ -104,7 +104,7 @@ final class HistoryOlderSight {
 /// only between its faces. It takes no touch and is not read out: the line under the document's head says the same
 /// to VoiceOver, and takes its press.
 ///
-/// Item 516 (P2; James, 2026-11-17 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon") — while
+/// Item 516 (asked for 2026-11-17: the phone's History loads in the living mark; P2) — while
 /// the batch is read the living mark stands in the ring's place, 40 wide and the ring's own height, moving while the
 /// read does; the ring and the mark cross over the pill's own ease. The ring that measured the finger is no wait,
 /// so it keeps the pull and the release. Until that item the ring stayed, an arc that turned.

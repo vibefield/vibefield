@@ -15,8 +15,8 @@ import SwiftUI
 // desktop's does: it is the desktop's generated SVG, drawn by the phone. Until that item the hold wore the
 // launch's still (`SplashMark`, the app's own asset), at rest, which by the desktop's rule says a wait is paused.
 //
-// Item 516 (James, 2026-11-17 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon", on the page
-// "The Mark in a Pocket") — HISTORY'S OWN WAITS STAND IN THE SAME HOLD. The ledger's first read (P1) and a project's
+// Item 516 (asked for 2026-11-17: the phone's History loads in the living mark) — HISTORY'S OWN WAITS STAND IN THE SAME
+// HOLD. The ledger's first read (P1) and a project's
 // list of sessions (P3) hold where a sentence stood at the top left, and with no desktop answering and nothing kept
 // the ledger's place holds with the mark at rest (P4; HG-L1, motion means working). A hold is CARRIED: while its
 // wait goes on in other words the mark stays and only the line changes, and a count or the desktop stands under the

@@ -438,8 +438,8 @@ struct HistoryOlderMeasuresTests {
     #expect(HistoryOlderPull.strong(.nothing) == false)
   }
 
-  /// Item 516 (P2; James, 2026-11-17 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon", on the
-  /// page "The Mark in a Pocket") — while a batch is read the living mark stands in the ring's place, and the arc
+  /// Item 516 (asked for 2026-11-17: the phone's History loads in the living mark; P2) — while a batch is read the
+  /// living mark stands in the ring's place, and the arc
   /// that turned there (an arc of seven tenths, once round in 0.9 s) is retired.
   @Test("while it reads the living mark stands in the ring's place, 40 wide and the ring's height; changes take 200 ms")
   func theReadingMark() {

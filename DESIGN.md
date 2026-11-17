@@ -5324,7 +5324,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   file to the SVG yet.** Rows hold its own numbers (the stamp, the box, thirteen keys of one structure, the
   periods, the timing functions, the lights), so a regenerated SVG is followed by hand until
   `pnpm check:ios-fixtures` gains a row for it. The splash's Metal mark stays the splash's alone.
-  *Amended 2026-11-17 (item 516; James, 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon",
+  *Amended 2026-11-17 (item 516; James, 18:40:49Z: "all go with lean, work and land soon",
   on the page "The Mark in a Pocket"):* **the generator writes the Swift file**, beside the SVG and from the same
   numbers, rounded as the SVG rounds them (a path on one line when its line fits 120 columns, else broken before
   an `s` or an `L` within 100), and its `--check` holds the two together, so a regenerated SVG reaches the phone
@@ -7984,7 +7984,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   note put fieldd's own words after its sentence. The phone's other notes that named a door, the ledger or the
   contracts versions moved with them (`FieldHistoryModel`'s `emptyLedger`, `noDesktopRead`, `projectNotRead`,
   `headNote`, and a project's empty session list).
-  *Amended 2026-11-17 (item 516; James, 18:40:49Z, session vibe-field-d5: "all go with lean, work and land soon"):*
+  *Amended 2026-11-17 (item 516; James, 18:40:49Z: "all go with lean, work and land soon"):*
   an EMPTY ledger no longer says three of these as its note. While History on the desktop opens, updates or reads,
   and while no desktop answers, the ledger's place HOLDS instead ("The phone's History waits in the hold", below),
   so "History on studio is opening" over "Its projects arrive when it is open.", "History on studio is updating"
@@ -8048,7 +8048,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     to and to which project.
   - **What stays the phone's:** the path never shows (PJ-L9: a path stays on its desktop), and the desktop row's
     `···` (pin, hide) is not offered: the phone reads (P2).
-- **The phone's History waits in the hold** (item 516, 2026-11-17. James, 18:40:49Z, session vibe-field-d5, on the
+- **The phone's History waits in the hold** (item 516, 2026-11-17. James, 18:40:49Z, on the
   page "The Mark in a Pocket", round 2: "all go with lean, work and land soon", which picked its four leans and its
   words). History's own waits on the phone take the hold a session's first reading stands in (below, "Its first
   reading is the hold"; §6 "History's holds"; HG-W1 on the desktop), so the phone waits in one hand with the Mac: the
@@ -8226,7 +8226,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       ring opens to an arc of seven tenths that turns once in 0.9 s (it stands still under Reduce Motion) and
       the words become "Reading earlier messages…". The batch is asked for once the page has come to rest, so
       the rows it brings meet a page at rest. A pull while a batch is owed or being read is ignored, not queued.
-      *Amended 2026-11-17 (item 516, P2; James, 18:40:49Z, session vibe-field-d5: "all go with lean, work and land
+      *Amended 2026-11-17 (item 516, P2; James, 18:40:49Z: "all go with lean, work and land
       soon"):* **the living mark stands in the ring's place** while the batch is read, 40 pt wide and so 17.8 tall,
       the ring's own height, in the pill's ink (black by day, white by night) with its three lights; the pill grows
       in its width alone. Ring and mark cross over the pill's own 200 ms plain `ease`, and the mark moves while the
