@@ -93,7 +93,8 @@ struct MeterModelTests {
   /// 0.4.0 a push carries only the meters it reads, so a plan holds meters of two readings, each kept meter with its
   /// own `fetchedAt`. Every age said is the age of the numbers beside it. The twins of the desktop's U1-U3
   /// (`packages/field-app/test/usage-meters.test.ts`), read at the mock door's `now`, 2026-09-16 12:00Z.
-  static func anthropicRight(_ set: String, _ batch: AgentAccountUsageBatch) throws -> MeterRight? {
+  /// The door is the main actor's (`MetersFixtureDoor`), so this helper and the three rows that call it run there.
+  @MainActor static func anthropicRight(_ set: String, _ batch: AgentAccountUsageBatch) throws -> MeterRight? {
     let sets = try AgentProfileSetsResult(json: try HomeFixture.json("agents-profile-sets.meters")).sets
     let rows = try AgentCatalogResult(json: try HomeFixture.json("agent-catalog.valid")).catalog
     let profile = try #require(sets.first { $0.id == set })
@@ -103,7 +104,7 @@ struct MeterModelTests {
   }
 
   @Test("item 274, U1: a kept reading says its tightest window's own age, not the push's")
-  func keptSaysItsTightestsAge() throws {
+  @MainActor func keptSaysItsTightestsAge() throws {
     // Side's: kept after a refused refresh; its Fable week, the tightest at 96%, was read at 10:00Z, the push 11:59:30Z
     let batch = try AgentAccountUsageBatch(json: try HomeFixture.json("agent-usage.kept-meters"))
     let right = try Self.anthropicRight("side", batch)
@@ -111,7 +112,7 @@ struct MeterModelTests {
   }
 
   @Test("item 274, U2: a model week kept from before its reset leaves a pushed tightest its reset")
-  func keptPassedWeekAgesNothingElse() throws {
+  @MainActor func keptPassedWeekAgesNothingElse() throws {
     // This Mac's: the push at 11:59:30Z carried the five hours and the week; the Fable week, read at 11:20Z, reset at
     // 11:45Z. The tightest (the week, 47%) was read after it, so the plan keeps its reset
     let batch = try AgentAccountUsageBatch(json: try HomeFixture.json("agent-usage.kept-meters"))
@@ -120,7 +121,7 @@ struct MeterModelTests {
   }
 
   @Test("item 274, U3: a tightest kept from an earlier read than a passed window is aged by it, with its own age")
-  func olderTightestIsAgedByItsOwnRead() throws {
+  @MainActor func olderTightestIsAgedByItsOwnRead() throws {
     // pushed at 11:59Z: a five hours spent at 100% whose reset came at 11:55Z; the week, the tightest at 70%, was kept
     // from a read at 10:30Z
     let metric = { (id: String, used: Double, minutes: Int64, resetsAt: String, read: String?) -> JSONValue in
