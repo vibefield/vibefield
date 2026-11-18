@@ -279,6 +279,8 @@ test("parseArgs: a launch takes its mode and a command after --; enum, --preflig
   });
   assert.deepEqual(parseArgs(["none", "--", "node"]), { mode: "none", command: ["node"] });
   assert.deepEqual(parseArgs(["enum"]), { mode: "enum" });
+  assert.deepEqual(parseArgs(["benchmark"]), { mode: "benchmark" });
+  assert.match(parseArgs(["benchmark", "--", "another-command"]).error, /^usage:/u);
   assert.deepEqual(parseArgs(["--preflight-only"]), { mode: "preflight" });
   assert.deepEqual(parseArgs(["--sweep", "l2-t1"]), { mode: "sweep", runId: "l2-t1" });
   for (const bad of [
@@ -2340,6 +2342,37 @@ test("handleDoor: every request needs the token (401 without); the routes; anoth
   );
 });
 
+test("only a loaded benchmark page can publish timed guest cadence", async () => {
+  const run = ownRun();
+  const { deps } = fakeHost();
+  const samples = [];
+  const host = { ...deps, say: (line) => samples.push(line) };
+  const request = {
+    method: "POST",
+    url: `/cadence?n=ff8800&t=${run.token}`,
+    body: JSON.stringify({ frames: 59, ms: 1000 }),
+  };
+  const page = { method: "GET", url: `/motion?n=ff8800&t=${run.token}` };
+  assert.doesNotMatch((await handleDoor(page, run, host)).body, /sendBeacon\("\/cadence/);
+  run.windowBenchmark = true;
+  assert.match((await handleDoor(page, run, host)).body, /sendBeacon\("\/cadence/);
+  assert.equal((await handleDoor(request, run, host)).status, 404);
+  run.loaded.set("ff8800", 1);
+  assert.equal(
+    (await handleDoor({ ...request, body: '{"frames":0,"ms":1000}' }, run, host)).status,
+    400,
+  );
+  assert.equal((await handleDoor(request, run, host)).status, 204);
+  const sample = JSON.parse(
+    samples
+      .find((line) => line.startsWith("PHONE_GUEST_CADENCE "))
+      .slice("PHONE_GUEST_CADENCE ".length),
+  );
+  assert.equal(sample.frames, 59);
+  assert.equal(sample.ms, 1000);
+  assert.ok(Number.isFinite(sample.at));
+});
+
 test("startDoor: a loopback server on a random port, answering 401 without the token", async () => {
   const run = ownRun();
   const { deps } = fakeHost();
@@ -2436,6 +2469,29 @@ test("simulatorSettled: a run that launched Simulator.app and finds none looks a
 // ─── /row: the HID pair and the press gate ────────────────────────────────────────────────────────────────────────────
 
 const sample = (s, idle, locked = "No") => ({ at: ARMED + s * 1000, locked, idle });
+
+test("the background benchmark accepts an active unlocked console and refuses input", async () => {
+  const active = { ...CLEAR, windowBenchmark: true, hid: { locked: "No", idle: 0 } };
+  assert.equal(armGate(active).armed, true);
+  assert.equal(armGate({ ...active, hid: { locked: "Yes", idle: 0 } }).armed, false);
+  assert.equal(armGate({ ...active, fence: { clear: false, busy: 1 } }).armed, false);
+  const last = sample(0, 0);
+  const current = sample(10, 0);
+  assert.deepEqual(rowVerdict({ name: "SIM-COST", sample: current, last, windowBenchmark: true }), {
+    go: true,
+  });
+  assert.equal(
+    endVerdict({ name: "SIM-COST", sample: current, began: last, windowBenchmark: true }).void,
+    undefined,
+  );
+  for (const phase of ["input", "press"]) {
+    const run = ownRun();
+    run.windowBenchmark = true;
+    run.open = { name: "SIM-COST", began: last, pressed: false };
+    const answer = await doorRow({ name: "SIM-COST", phase }, run, fakeHost().deps);
+    assert.equal(answer.body.stop, true);
+  }
+});
 
 test("doorRow: a row's begin and end write its two HID lines and say PHONE_ROW; the door counts it", async () => {
   const run = ownRun();

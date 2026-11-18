@@ -80,6 +80,7 @@ import type { ElectronLogging } from "../main/logging";
 import { sharedProfilePath, smokeHomeParent } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
+import { browserPerf } from "./browser-perf";
 import { deckAwayRung, deckEdgeRung, deckMaximizeRung } from "./deck-away-rungs";
 import { labProfileProof } from "./godview-lab-profile";
 import {
@@ -1308,6 +1309,10 @@ export async function runSmokeCanvas(opts: {
     await loadRenderer(win, "smoke-canvas", opts.viteUrl, {
       [SEED_EXAMPLES]: "1",
       presenceRelay: "1",
+      ...(process.env["VF_PHONE_WINDOW_BENCHMARK"] === "1" ? { simulatorBenchmark: "1" } : {}),
+      ...(process.env["VF_PHONE_COMPARE_PREVIEW_PACING"] === "1"
+        ? { simulatorPreviewBatch: "1" }
+        : {}),
       deskFaults: "1",
       godviewMarkers: "1",
     });
@@ -1346,7 +1351,8 @@ export async function runSmokeCanvas(opts: {
       // FG-2: the rows start on the revealed desk, as they did while the reveal followed the stable desk at once (the
       // theme stills are the grader's)
       await bootRevealed(win, "the boot's reveal");
-      problems.push(...(await deskWitnesses(win, shotDir)));
+      if (!process.argv.includes("--browser-perf") && !process.argv.includes("--phone-benchmark"))
+        problems.push(...(await deskWitnesses(win, shotDir)));
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
       deskSaid.stop();
       const runPeers = async (): Promise<void> => {
@@ -1423,6 +1429,8 @@ export async function runSmokeCanvas(opts: {
           await win.webContents.executeJavaScript("globalThis.__vfCards?.clear()", true);
         }
         problems.push(...(await restRows({ win, say: (line) => console.log(line) })));
+      } else if (process.argv.includes("--browser-perf")) {
+        problems.push(...(await browserPerf({ win, shotDir, say: (line) => console.log(line) })));
       } else if (process.argv.includes(LIVE_FLAG)) {
         // PT-2 — the live page's rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs --smoke-canvas
         // --live-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
@@ -2654,7 +2662,11 @@ async function phoneRows(
       | undefined;
   },
 ): Promise<string[]> {
-  const fixture = await startLiveFixture();
+  const fixture = await startLiveFixture(
+    process.env["VF_PHONE_WINDOW_BENCHMARK"] === "1"
+      ? join(app.getAppPath(), "../../fixtures/live-panes")
+      : undefined,
+  );
   const dbg = win.webContents.debugger;
   let attachedHere = false;
   try {

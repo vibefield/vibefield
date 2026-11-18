@@ -316,6 +316,7 @@ export interface PhoneCensus {
     readonly helperExits: number;
     readonly activeSessions: number;
     readonly framesReceived: number;
+    readonly simulatorFramebufferStarts?: number;
   } | null;
   readonly vetted: string | null;
   readonly simctl?: Readonly<Record<string, number>>;
@@ -1937,12 +1938,12 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     return k;
   };
   /** A browser pane on the smoke's fixture, playing, beside slot `i`'s phone (the cap's other page): one view frames both. */
-  const placePane = async (slot: number): Promise<string> => {
+  const placePane = async (slot: number, url = d.fixture.url, gap = 600): Promise<string> => {
     const at = await groundAt();
-    d.fixture.setPlaying(true);
+    if (url === d.fixture.url) d.fixture.setPlaying(true);
     const e = Number(
       await js<string>(
-        `globalThis.__vfFieldSmoke.spawnWidget(${JSON.stringify(PANE.type)}, { x: ${at.x + slot * 3_000 + PHONE.size.w + 600}, y: ${at.y}, w: 698.16, h: 461.94, props: { url: ${JSON.stringify(d.fixture.url)} } })`,
+        `globalThis.__vfFieldSmoke.spawnWidget(${JSON.stringify(PANE.type)}, { x: ${at.x + slot * 3_000 + PHONE.size.w + gap}, y: ${at.y}, w: 698.16, h: 461.94, props: { url: ${JSON.stringify(url)} } })`,
       ),
     );
     const k = await waitKey("the fixture's pane", e);
@@ -1980,8 +1981,12 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     return f;
   };
   const putDown = async (): Promise<boolean> => {
-    await ownInput();
-    await keyPress("Escape");
+    if (d.env["VF_PHONE_WINDOW_BENCHMARK"] === "1")
+      await js("globalThis.__vfFieldSmoke.useWidget(null)");
+    else {
+      await ownInput();
+      await keyPress("Escape");
+    }
     try {
       await until("the phone put down", 10_000, "globalThis.__vfDesk.held() === null");
       await sleep(400);
@@ -2273,7 +2278,7 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
       out = await body();
     } catch (error) {
       if (error instanceof NoPermission) {
-        await metPermission(name, error.key);
+        if (d.env["VF_PHONE_WINDOW_BENCHMARK"] !== "1") await metPermission(name, error.key);
         stopped = `${name}: no-permission read — TCC dialog suspected`;
         out = { problems: [], void: "no-permission met (TCC dialog suspected)" };
       } else if (error instanceof PhoneStop) {
@@ -2377,6 +2382,14 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     say(`PHONE_ROWS_END n=${served}`);
   }
   const problems = phoneProblems(results);
+  if (
+    d.env["VF_PHONE_WINDOW_BENCHMARK"] === "1" &&
+    !results.some((r) => r.name === "SIM-COST" && r.mark === "RECORDED")
+  ) {
+    const row = results.find((r) => r.name === "SIM-COST");
+    const reason = row?.why || row?.problems.join(", ") || "missing results";
+    problems.push(`The simulator benchmark did not complete: ${reason}`);
+  }
   if (stopped !== null) problems.push(`PT-S3 PHONE: the console acts STOPPED — ${stopped}`);
   return problems;
 
@@ -3497,13 +3510,26 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
   async function costRows(): Promise<void> {
     await row("SIM-COST", "OBSERVATION", async () => {
       // P13: RECORDED, never a gate; the stage samples the helper, Simulator.app and the device by pid beside it
+      const benchmark = d.env["VF_PHONE_WINDOW_BENCHMARK"] === "1";
       const p = await placePhone("φP", 0, typeOf(1));
       const booted = await ensure(1, "Booted");
-      if (booted !== null) return { problems: [], staging: booted, recorded: true };
+      if (booted !== null) {
+        if (benchmark) throw new Error(booted);
+        return { problems: [], staging: booted, recorded: true };
+      }
       const shown = await doorAct("show-app", 1);
       await sleep(3_000);
-      const page = await openProven(1, "/motion", nonce());
+      const band = nonce();
+      let page = await openProven(1, "/motion", band);
+      // A fresh Safari sometimes finishes launching after simctl openurl times out.
+      if (benchmark) {
+        for (let retry = 0; retry < 2 && (page.opened === "failed" || page.loaded === 0); retry++) {
+          await sleep(2000);
+          page = await openProven(1, "/motion", band);
+        }
+      }
       const unproven = stimulusStaging([page]);
+      if (benchmark && unproven !== null) throw new Error(unproven);
       if (unproven !== null)
         return {
           problems: [],
@@ -3511,6 +3537,171 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
           recorded: true,
           seen: { shown: shown.state, page },
         };
+      if (benchmark) {
+        const { simulatorBenchmark } = await import("./simulator-browser-benchmark");
+        const bench = simulatorBenchmark(d, h, p, typeOf(1), env.runtime, frames);
+        await view([p]);
+        const live = await liveProven(p);
+        const problems = judgeLiveProven("SIM-COST phone alone", live);
+        if (problems.length) return { problems, seen: live };
+        const framebufferStarts = census()?.helper?.simulatorFramebufferStarts ?? 0;
+        if (d.env["VF_SIMULATOR_FRAMEBUFFER"] !== "0" && framebufferStarts === 0)
+          throw new Error("Native helper did not confirm a direct simulator framebuffer session");
+        const device = (await faceOf(p))?.simulator?.name ?? null;
+        if (!env.runId || !isOwnDevice(device, env.runId, 1))
+          throw new Error("The phone is not showing the staged device");
+        const color = bandColour(band);
+        let first: Measure | null = null;
+        let coverage = 0;
+        let moving = false;
+        const proofDeadline = Date.now() + 8_000;
+        while (Date.now() < proofDeadline) {
+          const shot = await glassOf(p, false, color);
+          if (shot && shot.px > 0 && shot.band >= BAND_FLOOR * shot.px) {
+            first ??= shot;
+            coverage = shot.band / shot.px;
+            if (gridsDiffer(first.grid, shot.grid)) {
+              moving = true;
+              break;
+            }
+          }
+          await sleep(310);
+        }
+        await shootDesk("simulator-motion-proof.png");
+        say(
+          `PHONE_BENCH_STIMULUS ${JSON.stringify({ loaded: page.loaded, firstCoverage: first ? first.band / first.px : null, coverage, moving })}`,
+        );
+        if (!moving)
+          throw new Error(
+            "The loaded test page's identifying band and motion were not both visible on the canvas",
+          );
+        const use = async (key: string | null) => {
+          const entity = key === null ? null : await entityOf(key);
+          if (key !== null && entity === null) throw new Error("Benchmark object disappeared");
+          if (!(await js(`globalThis.__vfFieldSmoke.useWidget(${entity})`))) {
+            throw new Error("The desk refused its Open or Done operation");
+          }
+          await until(
+            "the benchmark pose to settle",
+            10_000,
+            entity === null
+              ? "globalThis.__vfDesk.held() === null"
+              : `globalThis.__vfDesk.held()?.entity === ${entity} && globalThis.__vfDesk.held()?.frame?.settled === true`,
+          );
+        };
+        await js("globalThis.__vfDesk.liveGrace(1000)");
+        const phoneEntity = await entityOf(p);
+        if (phoneEntity === null) throw new Error("Missing phone for the matched controls");
+        const bind = async (deviceType: string, runtime: string) => {
+          const props = JSON.stringify({ binding: { deviceType, runtime } });
+          if (!(await js(`globalThis.__vfDesk.writeProps(${phoneEntity}, ${props})`))) {
+            throw new Error("Failed to change the benchmark phone's binding");
+          }
+        };
+        const releasePhone = async () => {
+          await bind("", "");
+          await until(
+            "the unbound phone to release its face",
+            15_000,
+            `!globalThis.__vfDesk.live().faces.some(f => f.key === ${JSON.stringify(p)})`,
+          );
+          const deadline = Date.now() + 15_000;
+          while ((census()?.helper?.activeSessions ?? 0) !== 0) {
+            if (Date.now() >= deadline)
+              throw new Error("SCK continued running for an unbound phone");
+            await sleep(150);
+          }
+        };
+        const verifySettledPhone = async (mixed = false) => {
+          const stillBand = nonce();
+          const page = await openProven(1, "/still", stillBand);
+          const issue = stimulusStaging([page]);
+          if (issue) throw new Error(issue);
+          const until = Date.now() + 8000;
+          while (Date.now() < until) {
+            const shot = await glassOf(p, false, bandColour(stillBand));
+            if (shot && shot.px > 0 && shot.band / shot.px >= BAND_FLOOR) {
+              bench.recordStillCoverage(shot.band / shot.px, mixed);
+              return;
+            }
+            await sleep(200);
+          }
+          throw new Error("The final static page did not reach the phone texture");
+        };
+        const rebindPhone = async () => {
+          await bind(typeOf(1), env.runtime);
+          const resume = judgeLiveProven("SIM-COST phone rebound", await liveProven(p));
+          if (resume.length) throw new Error(resume.join(", "));
+        };
+        try {
+          await bench.measure("phone-alone-rest", null, null);
+          await use(p);
+          await bench.measure("phone-alone-held", null, "phone");
+          await use(null);
+          const pane = await placePane(0, bench.pageUrl, 48);
+          await view([p, pane]);
+          await bench.attachBrowser(pane);
+          const comparePreviews = async (afterPickup: boolean) => {
+            if (d.env["VF_PHONE_COMPARE_PREVIEW_PACING"] !== "1") return;
+            const order = afterPickup ? [false, true, true, false] : [true, false, false, true];
+            try {
+              for (const [index, immediate] of order.entries()) {
+                await js(`globalThis.__vfImmediatePreviews = ${immediate}; true`);
+                await bench.measure(
+                  `preview-${afterPickup ? "returned" : "initial"}-${index + 1}-${immediate ? "immediate" : "batched"}`,
+                  pane,
+                  null,
+                );
+              }
+            } finally {
+              await js("delete globalThis.__vfImmediatePreviews");
+            }
+          };
+          await comparePreviews(false);
+          await bench.measure("both-rest", pane, null);
+          await use(p);
+          await bench.measure("phone-held-with-browser", pane, "phone");
+          await use(null);
+          await view([p, pane]);
+          await use(pane);
+          await bench.measure("browser-held-with-phone", pane, "browser");
+          await use(null);
+          await view([p, pane]);
+          await comparePreviews(true);
+          await bench.measure("both-rest-again", pane, null);
+          if (d.env["VF_PHONE_COMPARE_PREVIEW_PACING"] === "1") {
+            await verifySettledPhone(true);
+            const motion = await openProven(1, "/motion", nonce());
+            const issue = stimulusStaging([motion]);
+            if (issue) throw new Error(issue);
+          }
+          // Leave the view in place for a phone-only control at the mixed layout's exact zoom.
+          await releasePhone();
+          await bench.measure("browser-only-matched-rest", pane, null, false);
+          await use(pane);
+          await bench.measure("browser-only-held", pane, "browser", false);
+          await use(null);
+          await view([p, pane]);
+          await rebindPhone();
+          await remove(pane);
+          await bench.waitForBrowserClose();
+          await bench.measure("phone-alone-matched-rest", null, null);
+          await verifySettledPhone();
+          bench.complete();
+          return {
+            problems: [],
+            recorded: true,
+            seen: {
+              live,
+              bandCoverage: coverage,
+              report: "shots/simulator-browser.json",
+            },
+          };
+        } finally {
+          bench.detachBrowser();
+          await js("globalThis.__vfDesk.liveGrace(null)");
+        }
+      }
       const pane = await placePane(0);
       await view([pane, p]);
       const atRest = await liveProven(p);

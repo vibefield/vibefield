@@ -7,6 +7,7 @@
 // Usage (after `apps/desktop/packaging/stage-kind-fixtures.mjs`'s shape):
 //   node scripts/stage-simulator-fixture.mjs <none|devices|cost> -- <command…>   one console launch (L1, L2, L3)
 //   node scripts/stage-simulator-fixture.mjs enum                                 L0: may the launching app enumerate?
+//   node scripts/stage-simulator-fixture.mjs benchmark                            phone + local GPU page, window-local Open/Done, one device
 //   node scripts/stage-simulator-fixture.mjs --preflight-only                     the files alone (no simctl): exit 0/1
 //   node scripts/stage-simulator-fixture.mjs --sweep <runId>                      the run's `pts3-<runId>-n` shut down
 // Options come by ENV, since a pnpm script's trailing arguments reach Electron:
@@ -191,7 +192,7 @@ export const fieldNativePath = (env) =>
   env.FIELDD_NATIVE_BIN ?? join(ROOT, "target/debug/field-native");
 
 const USAGE =
-  "usage: stage-simulator-fixture.mjs <none|devices|cost> -- <command…> | enum | --preflight-only | --sweep <runId>";
+  "usage: stage-simulator-fixture.mjs <none|devices|cost> -- <command…> | enum | benchmark | --preflight-only | --sweep <runId>";
 
 // ─── names ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -220,6 +221,7 @@ export function parseArgs(argv) {
       ? { mode: "sweep", runId: rest[0] }
       : { error: `--sweep takes a run id (${RUN_ID.source})` };
   if (first === "enum" && rest.length === 0) return { mode: "enum" };
+  if (first === "benchmark" && rest.length === 0) return { mode: "benchmark" };
   if (MODES.includes(first) && rest[0] === "--" && rest.length > 1)
     return { mode: first, command: rest.slice(1) };
   return { error: USAGE };
@@ -539,12 +541,12 @@ export function hidRecord(path, say, append = appendFileSync) {
 }
 
 /** A row's begin: a locked console, or input since the last sample (a hand), STOPS the console acts. */
-export function rowVerdict({ name, sample, last }) {
+export function rowVerdict({ name, sample, last, windowBenchmark = false }) {
   if (sample.idle === null) return { stop: true, why: `HID unreadable at ${name}'s begin` };
   if (sample.locked !== "No")
     return { stop: true, why: `the console is locked (${sample.locked}) at ${name}'s begin` };
   const since = Math.floor((sample.at - last.at) / 1000);
-  if (sample.idle < since)
+  if (!windowBenchmark && sample.idle < since)
     return {
       stop: true,
       hand: true,
@@ -557,12 +559,12 @@ export function rowVerdict({ name, sample, last }) {
  * INPUT row — the first the smoke presses, drags or keys in by `sendInputEvent` (L2's SIM-STAGED lays the phone by a
  * drag; a press-gate row comes later) — a reset with the console unlocked is the run's own input moving HIDIdleTime —
  * P10's assumption failed — and the run STOPS on it (RM4.5), never loops. */
-export function endVerdict({ name, sample, began, firstInput = false }) {
+export function endVerdict({ name, sample, began, firstInput = false, windowBenchmark = false }) {
   const secs = Math.floor((sample.at - began.at) / 1000);
   if (sample.idle === null) return { void: true, secs, why: `HID unreadable at ${name}'s END` };
   if (sample.locked !== "No")
     return { void: true, secs, why: `${name}'s END reads locked ${sample.locked}` };
-  if (sample.idle < secs) {
+  if (!windowBenchmark && sample.idle < secs) {
     if (firstInput)
       return { stop: true, own: true, secs, why: "HID moved by the run's own input — RM4.5" };
     return {
@@ -706,7 +708,7 @@ export function armGate(r) {
     if (r.hid === null || r.hid.idle === null) why.push("HID unreadable (ioreg)");
     else {
       if (r.hid.locked !== "No") why.push(`the console is locked (${r.hid.locked})`);
-      if (r.hid.idle < HID_IDLE_FLOOR_S)
+      if (!r.windowBenchmark && r.hid.idle < HID_IDLE_FLOOR_S)
         why.push(`someone is at the Mac (HID idle ${r.hid.idle}s < ${HID_IDLE_FLOOR_S}s)`);
     }
   }
@@ -1058,11 +1060,21 @@ export const tokenOk = (given, token) =>
 
 /** A stimulus page: `motion` a full-screen hue sweep, `still` a flat page — each with a band of `#<n>` — beaconing
  * `/loaded`, and `/input` on pointerdown, touchstart and keydown. */
-export function stimulusPage(kind, n, token) {
+export function stimulusPage(kind, n, token, measureCadence = false) {
   const query = `?n=${n}&t=${token}`;
   const motion = [
     "var h = 0;",
-    "function step() {",
+    ...(measureCadence ? ["var previousReport = null, intervals = 0;"] : []),
+    "function step(now) {",
+    ...(measureCadence
+      ? [
+          "  if (previousReport === null) previousReport = now; else intervals++;",
+          "  if (now - previousReport >= 1000) {",
+          '    navigator.sendBeacon("/cadence" + q, JSON.stringify({ frames: intervals, ms: now - previousReport }));',
+          "    previousReport = now; intervals = 0;",
+          "  }",
+        ]
+      : []),
     "  h = (h + 4) % 360;",
     '  document.body.style.background = "linear-gradient(90deg, hsl(" + h + ",90%,55%), hsl(" + ((h + 120) % 360) + ",90%,55%), hsl(" + ((h + 240) % 360) + ",90%,55%))";',
     "  requestAnimationFrame(step);",
@@ -1507,6 +1519,7 @@ export async function doorAct(body, run, deps) {
   const r = await deps.exec(
     OPEN,
     [
+      ...(run.windowBenchmark ? ["-g"] : []),
       "-a",
       join(run.devDir, "Applications/Simulator.app"),
       "--args",
@@ -1544,7 +1557,12 @@ export async function doorRow(body, run, deps) {
     const sample = await deps.probe();
     deps.hid(hidLine(sample));
     deps.say(`PHONE_ROW ${name} BEGIN`);
-    const verdict = rowVerdict({ name, sample, last: run.last });
+    const verdict = rowVerdict({
+      name,
+      sample,
+      last: run.last,
+      windowBenchmark: run.windowBenchmark,
+    });
     run.last = sample;
     if (verdict.stop) {
       if (verdict.hand) run.hands += 1;
@@ -1556,6 +1574,11 @@ export async function doorRow(body, run, deps) {
   }
   if (run.open === null || run.open.name !== name)
     return refuse(run, "row", 409, { stop: true, why: `${name} is not the open row` });
+  if (run.windowBenchmark && (phase === "input" || phase === "press")) {
+    const why = "The window benchmark does not send input or press device controls";
+    stopRun(run, deps, why, { final: true });
+    return refuse(run, "input", 409, { stop: true, why });
+  }
   if (phase === "input") {
     // the row the run first injects input in: its END reads RM4.5's own-input case, never a hand
     if (run.firstInput === null) {
@@ -1612,6 +1635,7 @@ export async function doorRow(body, run, deps) {
     sample,
     began: run.open.began,
     firstInput: run.firstInput === name,
+    windowBenchmark: run.windowBenchmark,
   });
   run.last = sample;
   run.open = null;
@@ -1653,7 +1677,31 @@ export async function handleDoor(request, run, deps) {
     if (method !== "GET") return refuse(run, "method", 405, { n: null, state: "refused" });
     if (n === null || !NONCE.test(n))
       return refuse(run, "nonce", 400, { n: null, state: "refused" });
-    return { status: 200, type: "html", body: stimulusPage(route.slice(1), n, run.token) };
+    return {
+      status: 200,
+      type: "html",
+      body: stimulusPage(route.slice(1), n, run.token, run.windowBenchmark),
+    };
+  }
+  if (route === "/cadence" && run.windowBenchmark && method === "POST" && run.loaded.has(n)) {
+    let sample;
+    try {
+      sample = JSON.parse(request.body);
+    } catch {}
+    if (
+      !Number.isSafeInteger(sample?.frames) ||
+      sample.frames < 1 ||
+      sample.frames > 30000 ||
+      !Number.isFinite(sample.ms) ||
+      sample.ms < 900 ||
+      sample.ms > 120000
+    ) {
+      return refuse(run, "body", 400, { state: "refused" });
+    }
+    deps.say(
+      `PHONE_GUEST_CADENCE ${JSON.stringify({ at: Date.now(), frames: sample.frames, ms: sample.ms })}`,
+    );
+    return { status: 204, type: "none", body: null };
   }
   if (route === "/loaded" || route === "/input") {
     if (n === null || !NONCE.test(n))
@@ -2470,6 +2518,7 @@ export function newRun(mode, opts, redactor) {
   return {
     mode,
     runId: opts.run,
+    windowBenchmark: opts.windowBenchmark === true,
     token: randomBytes(32).toString("hex"),
     port: 0,
     origin: "",
@@ -2547,6 +2596,7 @@ async function arm(run, deps, { hidWaived, cpuGate, rules }) {
   const gate = armGate({
     rules,
     hidWaived,
+    windowBenchmark: run.windowBenchmark,
     requireApp: hidWaived,
     hid,
     guard,
@@ -2590,7 +2640,7 @@ function releasePerfLock(run) {
 }
 
 async function makeOwnDevices(run, deps) {
-  for (const [i, type] of run.types.slice(0, 3).entries()) {
+  for (const [i, type] of run.types.slice(0, run.windowBenchmark ? 1 : 3).entries()) {
     const n = i + 1;
     const name = ownName(run.runId, n);
     const r = await simctl(run, deps, ["create", name, type, run.runtime], 60_000);
@@ -3009,14 +3059,18 @@ async function launch(mode, command, opts) {
       run.port = door.port;
       run.origin = `http://127.0.0.1:${door.port}`;
       mkdirSync(opts.shotDir, { recursive: true });
-      const env = commandEnv(mode, deps.env, {
-        origin: run.origin,
-        token: run.token,
-        runtime: run.runtime,
-        types: run.types,
-        shotDir: opts.shotDir,
-        devDirBy: armed.developerDir.by,
-      });
+      const env = commandEnv(
+        mode,
+        run.windowBenchmark ? { ...deps.env, VF_PHONE_WINDOW_BENCHMARK: "1" } : deps.env,
+        {
+          origin: run.origin,
+          token: run.token,
+          runtime: run.runtime,
+          types: run.types,
+          shotDir: opts.shotDir,
+          devDirBy: armed.developerDir.by,
+        },
+      );
       deps.say(
         `PHONE_COMMAND_ENV ${JSON.stringify({ DEVELOPER_DIR: env.DEVELOPER_DIR === undefined ? "absent" : "SET", VF_SMOKE_SIMCTL_DEVELOPER_DIR: env.VF_SMOKE_SIMCTL_DEVELOPER_DIR ?? "absent", VF_PHONE_MODE: mode, VF_PHONE_RUNTIME: run.runtime, VF_PHONE_DEVICES: env.VF_PHONE_DEVICES, VF_PHONE_DEVDIR_BY: env.VF_PHONE_DEVDIR_BY, VF_SMOKE_SHOT_DIR: env.VF_SMOKE_SHOT_DIR })}`,
       );
@@ -3235,6 +3289,23 @@ async function main() {
   if (reused !== null) {
     process.stderr.write(`${reused}\n`);
     return 2;
+  }
+  // This fixed benchmark operates on its own Electron window through desk operations. The console
+  // can remain in use. The regular interaction and cost gates still require an idle console.
+  if (args.mode === "benchmark") {
+    return launch(
+      "cost",
+      [
+        process.execPath,
+        join(ROOT, "apps/desktop/packaging/run-smoke.mjs"),
+        "--smoke-canvas",
+        "--phone",
+        "--phone-benchmark",
+        "-ApplePersistenceIgnoreState",
+        "YES",
+      ],
+      { ...opts, windowBenchmark: true },
+    );
   }
   return launch(args.mode, args.command ?? [], opts);
 }

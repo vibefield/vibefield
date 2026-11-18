@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pane media fixture</title>
+<style>
+  body { margin: 0; background: #151515; }
+  #player { position: relative; width: 80vw; height: 70vh; background: black; }
+  #player:fullscreen { width: 100vw; height: 100vh; }
+  video { width: 100%; height: 100%; object-fit: contain; }
+  nav { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 8px; }
+</style>
+<main id="player">
+  <video loop playsinline><track kind="captions" src="/tone.vtt" srclang="en" label="English"></video>
+  <nav><button id="play" type="button" disabled>Play</button>
+  <button id="fullscreen" type="button">Fullscreen</button></nav>
+</main>
+<script>
+  const video = document.querySelector("video");
+  const play = document.querySelector("#play");
+  const player = document.querySelector("#player");
+  play.onclick = () => video.play();
+  document.querySelector("#fullscreen").onclick = () => document.fullscreenElement
+    ? document.exitFullscreen() : player.requestFullscreen();
+  // A locally generated two-second test pattern and tone. A blob makes looping independent of HTTP range support.
+  fetch("/clip.webm").then(response => response.blob()).then(clip => {
+    video.src = URL.createObjectURL(clip);
+    play.disabled = false;
+  });
+</script>
+</html>

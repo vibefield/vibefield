@@ -106,8 +106,10 @@
 //                  (`paint(name)`): it commits and does not paint; what reaches its document before then, the script at
 //                  the head of it hears (`heard`, said with each ask once the page runs its own) (HELD-PAINT).
 
+import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { type AddressInfo, createServer as createTcpServer } from "node:net";
+import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 
 /** The fixture's ground: a saturated blue, far from the mat's green and the sample page's warm whites. */
@@ -1123,7 +1125,19 @@ export function actsHtml(): string {
 }
 
 /** The fixture server, on an ephemeral loopback port; the page starts still. */
-export async function startLiveFixture(): Promise<LiveFixture> {
+export async function startLiveFixture(paneFixtureDir?: string): Promise<LiveFixture> {
+  // Read the fixed files before listening so an incomplete benchmark fails at startup.
+  const benchmarkFiles = new Map<string, { type: string; data: Buffer }>();
+  if (paneFixtureDir) {
+    for (const [file, type] of [
+      ["gpu.html", "text/html; charset=utf-8"],
+      ["media.html", "text/html; charset=utf-8"],
+      ["clip.webm", "video/webm"],
+      ["tone.vtt", "text/vtt; charset=utf-8"],
+    ] as const) {
+      benchmarkFiles.set("/" + file, { type, data: readFileSync(join(paneFixtureDir, file)) });
+    }
+  }
   let loads = 0;
   let nexts = 0;
   let playing = false;
@@ -1170,6 +1184,12 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   };
   const handle = (req: IncomingMessage, res: ServerResponse): void => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    const benchmarkFile = benchmarkFiles.get(url.pathname);
+    if (benchmarkFile) {
+      res.writeHead(200, { "content-type": benchmarkFile.type, "cache-control": "no-store" });
+      res.end(benchmarkFile.data);
+      return;
+    }
     asks.set(url.pathname, (asks.get(url.pathname) ?? 0) + 1);
     if (url.pathname !== "/beacon" && url.pathname !== "/held")
       agents.set(url.pathname + url.search, String(req.headers["user-agent"] ?? ""));
