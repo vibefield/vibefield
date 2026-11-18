@@ -57,8 +57,13 @@ export function watchTypedProcess(
 }
 
 /** One read of the whole process table — the kit's (`ps`, once): every pid,
- * its parent, and when it started. Undefined when `ps` cannot say. */
-export function readProcesses(): Promise<ProcessTable | undefined> {
+ * its parent, and when it started. Undefined when `ps` cannot say.
+ *
+ * item 537 (2026-11-18, EL7) — the environment `ps` is to start under, the agents' allow-list snapshot the runtime is
+ * handed, is taken here; the next commit starts `ps` under it. */
+export function readProcesses(
+  _environment: Readonly<Record<string, string>>,
+): Promise<ProcessTable | undefined> {
   return readProcessTable();
 }
 

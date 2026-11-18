@@ -2469,7 +2469,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     const end = await endTypedRun(typed, {
       shellPid: this.listed(terminals, sessionId) ? terminals.get(sessionId)?.pid : undefined,
-      readTable: this.opts.processTable ?? readProcesses,
+      readTable: this.opts.processTable ?? (() => readProcesses(this.serviceEnvironment)),
       watch: (pid, onExit) => watchTypedProcess(pid, onExit, this.opts.typedWatch),
     });
     const placed = end === "signalled" || end === "gone";
@@ -4760,7 +4760,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     terminalId: string,
   ): Promise<boolean> {
     const verified = this.records.verifies(onDisk);
-    const read = this.opts.processTable ?? readProcesses;
+    const read = this.opts.processTable ?? (() => readProcesses(this.serviceEnvironment));
     let verdict = await typedRunProof({ record, verified, terminal: row, table: await read() });
     for (
       let attempt = 1;
