@@ -17,7 +17,8 @@ public enum ArtifactOpenState: String, Sendable, Equatable {
 }
 
 /// `MadeAppReach`: a made app's declared hosts. `MADE_APP_LIMITS.REACH_HOSTS` at most, each a bare public DNS host
-/// (`isReachHost`): canonical, its last label not all digits, never `ts.net` or under it.
+/// (`isReachHost`): canonical, its last label neither all digits nor `0x` and any hex (item 525: never an IPv4 address
+/// in another spelling), never `ts.net` or under it. `made-app-reach-host.vector.json` is the shared vector.
 public enum MadeAppReach {
   /// `MADE_APP_LIMITS.REACH_HOSTS`
   public static let maxHosts = 16
@@ -25,10 +26,17 @@ public enum MadeAppReach {
   public static func isHost(_ host: String) -> Bool {
     guard !host.isEmpty, host.utf8.count <= 253 else { return false }
     let labels = host.split(separator: ".", omittingEmptySubsequences: false)
-    guard labels.count >= 2, labels.allSatisfy(isLabel), let last = labels.last,
-      !last.allSatisfy({ $0.isASCII && $0.isNumber })
-    else { return false }
+    guard labels.count >= 2, labels.allSatisfy(isLabel), let last = labels.last, !isAddressLabel(last) else {
+      return false
+    }
     return host != "ts.net" && !host.hasSuffix(".ts.net")
+  }
+
+  /// A last label a resolver may read as an address: all digits, or `0x` and any hex (a bare `0x` reads as 0).
+  private static func isAddressLabel(_ label: Substring) -> Bool {
+    if label.allSatisfy({ $0.isASCII && $0.isNumber }) { return true }
+    guard label.hasPrefix("0x") else { return false }
+    return label.dropFirst(2).allSatisfy { $0.isASCII && $0.isHexDigit }
   }
 
   /// `DNS_LABEL`: 1…63 of lowercase letters, digits and hyphens, a letter or digit at each end.

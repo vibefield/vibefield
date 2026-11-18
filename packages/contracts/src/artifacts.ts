@@ -349,9 +349,10 @@ function isHostedLink(raw: string): boolean {
 
 /** A host a made app's page loads from besides its own origin (the export's `environment.hosts`, as data, MA-L9): the
  * open answer's `reach` and the capture's `allowHosts` (shell.ts). A BARE DNS name in canonical form, so no scheme, no
- * port, no path and no wildcard. Its last label is not all digits, so it is never an IPv4 literal (an IPv6 one cannot
- * be spelled in the grammar). It is never a tailnet name either: the app's own origin is admitted on its own, and no
- * other `*.ts.net` host is a page's to reach (MA-L7). */
+ * port, no path and no wildcard. Its last label is neither all digits nor `0x` and any hex (item 525, 2026-11-18), so
+ * it is never an IPv4 address in a spelling a resolver reads (`127.1`, `0x7f.0x1`; an IPv6 one cannot be spelled in
+ * the grammar). It is never a tailnet name either: the app's own origin is admitted on its own, and no other `*.ts.net`
+ * host is a page's to reach (MA-L7). `made-app-reach-host.vector.json` is its cross-language vector. */
 export const MadeAppReachHost = z
   .string()
   .min(1)
@@ -362,7 +363,12 @@ export type MadeAppReachHost = z.infer<typeof MadeAppReachHost>;
 function isReachHost(host: string): boolean {
   if (!isCanonicalDnsName(host)) return false;
   const last = host.slice(host.lastIndexOf(".") + 1);
-  return !/^[0-9]+$/.test(last) && host !== "ts.net" && !host.endsWith(".ts.net");
+  return (
+    !/^[0-9]+$/.test(last) &&
+    !/^0x[0-9a-f]*$/.test(last) &&
+    host !== "ts.net" &&
+    !host.endsWith(".ts.net")
+  );
 }
 
 /** A made app's hosts, the union of its export's directives (`madeAppReachOf`), at most MADE_APP_LIMITS.REACH_HOSTS. */
