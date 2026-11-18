@@ -32,6 +32,7 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  AGENT_CATALOG,
   AGENT_CATALOG_READERS,
   type AgentCatalogEntry,
   type AgentProvidersResult,
@@ -41,6 +42,7 @@ import {
   type TerminalInfo,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
+import { createBuiltinProviders } from "@vibefield/puppeteer-builtin-providers";
 import type { AgentInstallation, AgentRunBriefing, BoundIngress } from "@vibefield/puppeteer-core";
 import {
   type AgentProvider,
@@ -809,6 +811,12 @@ interface UnitOptions {
   registry?: boolean;
   /** PU-J — a typed launch's briefing, as the daemon lends `forRun` */
   runBriefing?: (provider: string) => Promise<AgentRunBriefing>;
+  /** Item 372 — the runtime's providers in place of the scripted one (a real adapter's row), made in the row's root */
+  providers?: (root: string) => AgentProvider[];
+  /** Item 372 — the catalog's rows in place of the scripted catalog */
+  catalog?: readonly AgentCatalogEntry[];
+  /** Item 372 — the executable each offered agent's launcher names, by provider id */
+  executables?: ReadonlyMap<string, string>;
 }
 
 async function unit(options: UnitOptions = {}): Promise<Unit> {
@@ -821,7 +829,7 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
   const runtime = createAgentRuntime({
     host: noTerminalHost(),
     defaultCwd: work,
-    providers: [provider],
+    providers: options.providers?.(root) ?? [provider],
     creationRegistry: createFileCreationRequestRegistry({ directory: join(root, "runs") }),
     ...(options.registry === true
       ? {
@@ -837,7 +845,7 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
   const table = new Map<number, ProcessRecord>();
   const reads = { count: 0 };
   const unread = { now: false, times: 0 };
-  const catalog = [...TYPED_CATALOG];
+  const catalog = [...(options.catalog ?? TYPED_CATALOG)];
   const logged: Logged[] = [];
   const ledger: Ledgered[] = [];
   const kit: Unit["kit"] = { gateway: [], materialized: [], rendezvous: [], hosts: [] };
@@ -860,7 +868,7 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
     catalog: createAgentCatalogReaders(catalog),
     terminals: () => (options.floor === false ? null : terminals),
     fold,
-    executables: () => new Map(),
+    executables: () => new Map(options.executables ?? []),
     shimScript: options.shimScript ?? shimScript,
     ...(options.launcher === null
       ? {}
@@ -4669,5 +4677,136 @@ describe("a typed run across a fieldd restart — the REAL floor (AR-7c)", () =>
       expect(next.spawnedBy).toBe("user-shell");
     },
     FLOOR_BUDGET_MS,
+  );
+});
+
+// ── item 372: a typed `hermes`, through puppeteer's real Hermes adapter ──
+
+// Item 372 — the TYPED half of item 278's row (agent-hermes-gateway.test.ts holds the launch door's): a `hermes` typed in
+// a pane reaches puppeteer's real Hermes adapter through the gateway's `prepareInvocation`, and its gateway runs the
+// Python the `hermes` wrapper names, with no file and no daemon variable; with an install that names no Python the pane
+// is refused in DESIGN.md §9's typed words and nothing starts. Both held on arrival, at puppeteer 0.4.2: a guard pair.
+//
+// Nothing of the host is reached: the runtime holds the built-in Hermes provider alone, its executable this row's
+// wrapper; HERMES_PYTHON and HERMES_HOME are taken out of this process's environment for the row and put back after;
+// the row's own `bin` leads PATH, so a bare `python3` is this row's stub too. Each stub writes one line per run, by
+// SHAPE, and its environment by NAMES; never a value.
+describe("item 372 — a typed hermes, through puppeteer's real Hermes adapter", () => {
+  const MOVED = ["HERMES_PYTHON", "HERMES_HOME", "PATH", "FIELDD_ROW_372_CANARY"] as const;
+
+  /** Set (or, `undefined`, delete) a variable for this row, put back by the row's cleanup. */
+  const moveEnv = (name: (typeof MOVED)[number], value: string | undefined): void => {
+    const previous = process.env[name];
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+    cleanup.push(() => {
+      if (previous === undefined) delete process.env[name];
+      else process.env[name] = previous;
+    });
+  };
+
+  /** A stub interpreter: one line per run in `runs`, by shape alone, and its environment's NAMES in `names`. */
+  const stubInterpreter = (path: string, who: string, root: string): void => {
+    writeFileSync(
+      path,
+      [
+        "#!/bin/sh",
+        "# item 372's row: a stub interpreter. Shapes and names only, never a value.",
+        'lead=other; if [ "$1" = -I ] && [ "$2" = -B ] && [ "$3" = -c ]; then lead=gateway; fi',
+        'files=0; for arg in "$@"; do if [ -f "$arg" ]; then files=$((files + 1)); fi; done',
+        `printf 'run who=${who} argc=%s lead=%s files=%s\\n' "$#" "$lead" "$files" >> '${join(root, "runs")}'`,
+        `awk 'BEGIN { for (name in ENVIRON) print name }' >> '${join(root, `names-${who}`)}'`,
+        "exit 1",
+        "",
+      ].join("\n"),
+    );
+    chmodSync(path, 0o755);
+  };
+
+  /** The row's box: the real Hermes provider over a `hermes` wrapper that names a Python, or one that names none. */
+  const hermesBox = async (names: "a python" | "no python") => {
+    const stubs = realpathSync(mkdtempSync(join(tmpdir(), "vf-372-")));
+    cleanup.push(() => rmSync(stubs, { recursive: true, force: true }));
+    const bin = join(stubs, "bin");
+    const install = join(stubs, "install");
+    for (const dir of [bin, join(install, "venv", "bin")]) mkdirSync(dir, { recursive: true });
+    stubInterpreter(join(install, "venv", "bin", "python"), "wrapper-python", stubs);
+    stubInterpreter(join(bin, "python3"), "python3", stubs);
+    const hermes = join(bin, "hermes");
+    const body =
+      names === "a python"
+        ? `exec "${join(install, "venv", "bin", "python")}" "${join(install, "hermes")}" "$@"`
+        : "exit 0";
+    writeFileSync(hermes, `#!/bin/sh\n${body}\n`);
+    chmodSync(hermes, 0o755);
+    moveEnv("HERMES_PYTHON", undefined);
+    moveEnv("HERMES_HOME", undefined);
+    moveEnv("PATH", `${bin}:${process.env["PATH"] ?? ""}`);
+    moveEnv("FIELDD_ROW_372_CANARY", "row-372");
+    const box = await unit({
+      providers: (root) =>
+        createBuiltinProviders({ home: root, executables: { hermes } }).filter(
+          (provider) => provider.descriptor.id === "hermes",
+        ),
+      catalog: AGENT_CATALOG.filter((row) => row.id === "hermes"),
+      executables: new Map([["hermes", hermes]]),
+    });
+    onePane(box);
+    await box.gateway.start();
+    const lines = (path: string) =>
+      existsSync(path) ? readFileSync(path, "utf8").split("\n").filter(Boolean) : [];
+    return {
+      box,
+      runs: () => lines(join(stubs, "runs")),
+      names: (who: string) => lines(join(stubs, `names-${who}`)),
+    };
+  };
+
+  it(
+    "T1: runs the Python the hermes wrapper names, with no file, and hands it no daemon variable",
+    async () => {
+      const row = await hermesBox("a python");
+      expect(row.box.gateway.state().names).toEqual(["hermes"]);
+      // the stub exits 1, so the gateway never comes up; what it ran, and how, is the row
+      await row.box.launch(600, { providerId: "hermes", command: "hermes" });
+      const runs = row.runs();
+      const gateway = runs.filter(
+        (run) => run.includes("who=wrapper-python") && run.includes("lead=gateway"),
+      );
+      expect(gateway.length, "the wrapper's Python ran the gateway").toBe(1);
+      expect(runs.filter((run) => run.includes("who=python3")).length, "a bare python3 ran").toBe(
+        0,
+      );
+      expect(
+        gateway.filter((run) => run.endsWith(" files=0")).length,
+        "an argument named a file",
+      ).toBe(1);
+      // EL7: no daemon variable, and not the row's canary, reaches the gateway (names alone are compared)
+      const names = row.names("wrapper-python");
+      expect(names.length > 0, "the stub recorded its environment's names").toBe(true);
+      expect(names.filter((name) => /^FIELDD?_/u.test(name)).length, "FIELD_/FIELDD_ names").toBe(
+        0,
+      );
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "T2: refuses a typed hermes whose install names no Python in DESIGN.md §9's typed words, and starts nothing",
+    async () => {
+      const row = await hermesBox("no python");
+      const answer = await row.box.launch(600, { providerId: "hermes", command: "hermes" });
+      expect(answer).toMatchObject({
+        action: "refuse",
+        code: "launch-refused",
+        placed: true,
+        message:
+          "hermes was not started: VibeField can't find this Mac's Hermes install. Reinstall Hermes, then run hermes again.",
+      });
+      const message = answer !== undefined && "message" in answer ? answer.message : "";
+      expect(message).not.toMatch(/interpreter|wrapper|python/iu);
+      expect(row.runs().length, "an interpreter was started").toBe(0);
+    },
+    PROCESS_BUDGET_MS,
   );
 });
