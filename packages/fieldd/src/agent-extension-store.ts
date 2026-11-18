@@ -88,9 +88,16 @@ const MAX_KEPT_SKILLS = 512;
 const empty = (): ExtensionKeep => ({ version: 1, servers: {}, values: [], given: {} });
 
 /** What a person reads when values can't be added because the ones the profile already keeps can't be read (item 548,
- * 2026-11-18): saving would replace them, so nothing is saved. */
+ * 2026-11-18): saving would replace them, so nothing is saved. Deleting the profile deletes its entry unread, the one
+ * way out. A draft for review. */
 export const KEPT_VALUES_UNREADABLE =
-  "Couldn't save these values: the values this profile already keeps in your keychain can't be read, and saving would replace them. Nothing was changed.";
+  "Couldn't save these values: the values this profile already keeps in your keychain can't be read, and saving would replace them. Nothing was changed. Deleting this profile removes them.";
+
+/** The keychain tool's answer for a value outside printable ASCII: the hex of its bytes, an even count of hex digits
+ * and nothing else (item 542's probes). A profile's entry is a JSON object, whose text opens with "{", so its text is
+ * never this (item 548, 2026-11-18). */
+const HEX_FORM = /^(?:[0-9a-fA-F]{2})+$/u;
+const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
 
 /** JSON with every character outside printable ASCII escaped as `\uXXXX` (a character past U+FFFF as its two
  * halves): the same JSON, all printable ASCII, which the keychain tool hands back as its text (item 548). */
@@ -408,16 +415,25 @@ export class AgentExtensionStore {
 
   /**
    * The profile's keychain entry: its text values, and whether it was read
-   * whole. No entry is whole and empty. An entry that is not a map of text (one
-   * the keychain hands back in another form included) is not whole; its text
-   * values are still read for a launch (item 548).
+   * whole. No entry is whole and empty. An entry the keychain hands back in its
+   * hex form is read through it: the bytes must be UTF-8. An entry that is not
+   * then a map of text is not whole; its text values are still read for a
+   * launch (item 548).
    */
   private async entry(setId: string): Promise<{ values: Record<string, string>; whole: boolean }> {
     const raw = await this.opts.secrets.get(EXTENSION_VALUES_SERVICE, setId);
     if (raw === null) return { values: {}, whole: true };
+    let text = raw;
+    if (HEX_FORM.test(raw)) {
+      try {
+        text = strictUtf8.decode(Buffer.from(raw, "hex"));
+      } catch {
+        return { values: {}, whole: false };
+      }
+    }
     let parsed: unknown;
     try {
-      parsed = JSON.parse(raw);
+      parsed = JSON.parse(text);
     } catch {
       return { values: {}, whole: false };
     }
