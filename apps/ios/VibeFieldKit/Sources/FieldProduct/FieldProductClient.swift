@@ -226,6 +226,9 @@ public final class FieldProductClient {
   /// before the replay answered. The id they must unsubscribe does not exist
   /// yet; `handle` fires it the moment the door names one.
   @ObservationIgnored private var cancelledBeforeRouted: Set<Int> = []
+  /// Item 477 (2026-11-18) — the re-asks of refused replays that may pass, by
+  /// subscription key; each ends with the socket it was asked on.
+  @ObservationIgnored private var replayRetryTasks: [Int: Task<Void, Never>] = [:]
   @ObservationIgnored private var nextSubKey = 1
   @ObservationIgnored private var attempts = 0
   @ObservationIgnored private var closedByUser = false
@@ -298,6 +301,7 @@ public final class FieldProductClient {
     trafficTask = nil
     reconnectTask?.cancel()
     reconnectTask = nil
+    cancelReplayRetries()
     dialTask?.cancel()
     dialTask = nil
     receiveTask?.cancel()
@@ -416,8 +420,10 @@ public final class FieldProductClient {
   ///
   /// A socket that is not up does nothing here: the re-dial replays every
   /// subscription, and a replay IS a fresh snapshot (P5). A re-subscribe the
-  /// door refuses takes the socket down for the same reason a failed replay
-  /// does — the re-dial puts every subscription back from the top.
+  /// door refuses takes the socket down — the re-dial puts every subscription
+  /// back from the top. Item 477 (2026-11-18): a refused REPLAY no longer does,
+  /// so this re-dial happens once, and the replay then judges that subscription
+  /// alone (`replayOne`).
   func resnapshot(key: Int, because reason: String) {
     guard var entry = subs[key], !entry.resnapshotting else { return }
     guard case .ready = state, connection != nil else { return }
@@ -562,6 +568,7 @@ public final class FieldProductClient {
   }
 
   func unsubscribe(key: Int) {
+    replayRetryTasks.removeValue(forKey: key)?.cancel()
     guard let entry = subs.removeValue(forKey: key) else {
       cancelledBeforeRouted.remove(key)
       return
@@ -880,6 +887,9 @@ public final class FieldProductClient {
     /// A re-subscribe for a fresh snapshot is in flight: the gapped stream's
     /// route is retired, and a second gap cannot start a second one.
     var resnapshotting = false
+    /// Item 477 — refused replays of this subscription asked again since its
+    /// last answer: its rung on the ladder.
+    var replayRetries = 0
     /// A paged rows snapshot being assembled: its cursor and the rows so far.
     var paging: (cursor: SubscriptionCursor, rows: [JSONValue])?
     /// SP-2 (h) — the open traffic window: when it began, and what it holds.
@@ -1013,39 +1023,87 @@ public final class FieldProductClient {
 
   /// Every established subscription, re-sent for a fresh snapshot (P5).
   ///
-  /// TWO RULES, both of them scars. A subscription that vanished mid-replay
-  /// (its handle was cancelled while we awaited) skips — it does NOT end the
-  /// loop, because the boards after it in the key order are still owned and
-  /// their routes were cleared when the socket went. And a replay that FAILS
-  /// takes the socket down rather than returning quietly: the door answering
-  /// `NOT_FOUND` for a board that is gone, or a deadline on a slow radio, are
-  /// ordinary weather, and the old code left every remaining subscription
-  /// unsent with the client sitting in `.ready` — a frozen field under a state
-  /// that said fine, for the life of that socket. Dropping the socket puts the
-  /// re-dial in charge, which replays all of them from the top.
+  /// A subscription that vanished mid-replay (its handle was cancelled while we
+  /// awaited) skips — it does NOT end the loop, because the boards after it in
+  /// the key order are still owned and their routes were cleared when the
+  /// socket went.
   ///
-  /// This is the TypeScript client's shape: its replay rejection reaches
-  /// hello's own catch, which closes the socket (`client.ts:302`).
+  /// Item 477 (2026-11-18) — each replay is judged ALONE (`replayOne`), the
+  /// TypeScript client's shape since the DS landing review's S3 (2026-10-01,
+  /// `client.ts`'s `replayOne`): a refusal belongs to its subscription, never
+  /// to the socket, and `.ready`, the socket and every other subscription
+  /// stand. Until then a refused replay took the socket down so that the
+  /// re-dial replayed them all from the top (one refused replay had left every
+  /// later subscription unsent under a state that said fine); a refusal that
+  /// came every time then re-dialed every 500 ms without end, and the boards
+  /// after it in the key order were never replayed at all.
   private func replaySubscriptions(token: Int) async {
     for key in subs.keys.sorted() {
       guard token == generation else { return }
       guard let entry = subs[key], entry.sentOnce else { continue }
-      do {
-        // A rows table asks for what it missed from the cursor it kept; the
-        // open answer is handed over in `handle`, as every open answer is.
-        _ = try await send(
-          method: entry.method, params: subscribeParams(for: entry, resuming: true), subKey: key)
-        guard token == generation else { return }
-      } catch {
-        guard token == generation else { return }
-        let refusal = Self.refusal(from: error)
-        record(refusal, for: token)
-        note("replaying \(entry.method) failed — re-dialing: \(refusal.message)")
-        retireConnection()
-        socketDown(token: token, error: refusal)
+      await replayOne(key: key, token: token)
+    }
+  }
+
+  /// One replay, and what its answer means for that subscription alone: an
+  /// answer stands it up again; a refusal that may pass is asked again for it
+  /// alone (`retryReplay`); any other refusal ends it on this client, in one
+  /// line of the log (`ReplayEnded`). Its owner is not told (item 540).
+  private func replayOne(key: Int, token: Int) async {
+    guard let entry = subs[key] else { return }
+    do {
+      // A rows table asks for what it missed from the cursor it kept; the
+      // open answer is handed over in `handle`, as every open answer is.
+      _ = try await send(
+        method: entry.method, params: subscribeParams(for: entry, resuming: true), subKey: key)
+      subs[key]?.replayRetries = 0
+    } catch {
+      // The socket went under the replay (every pending call hears "connection
+      // closed"), or a newer dial began: nothing to judge. The next hello
+      // replays whatever still stands.
+      guard token == generation, connection != nil else { return }
+      // Cancelled while it was in flight: it is gone already.
+      guard subs[key] != nil else {
+        cancelledBeforeRouted.remove(key)
         return
       }
+      let refusal = Self.refusal(from: error)
+      if refusal.retryable {
+        note("replaying \(entry.method) was refused — asking again for it alone: \(refusal.message)")
+        retryReplay(key: key, token: token)
+        return
+      }
+      note("replaying \(entry.method) was refused — it ends here: \(refusal.message)")
+      subs.removeValue(forKey: key)
+      options.endedLog(ReplayEnded.line(method: entry.method, kind: refusal.kind))
     }
+  }
+
+  /// Item 477 (2026-11-18) — a refused replay that may pass, asked again for
+  /// that subscription alone on the re-dial's own ladder (`backoff`) while the
+  /// socket that refused it stands. The rung is the subscription's, and an
+  /// answer resets it; a new socket replays every standing subscription anyway,
+  /// so a drop cancels every one of these (`cancelReplayRetries`).
+  private func retryReplay(key: Int, token: Int) {
+    replayRetryTasks.removeValue(forKey: key)?.cancel()
+    guard var entry = subs[key] else { return }
+    let delay = Self.backoff(attempt: entry.replayRetries, ceiling: options.maxBackoff)
+    entry.replayRetries += 1
+    subs[key] = entry
+    replayRetryTasks[key] = Task { [weak self] in
+      try? await Task.sleep(for: delay)
+      guard let self, !Task.isCancelled else { return }
+      self.replayRetryTasks[key] = nil
+      guard token == self.generation, self.connection != nil, case .ready = self.state,
+        self.subs[key] != nil
+      else { return }
+      await self.replayOne(key: key, token: token)
+    }
+  }
+
+  private func cancelReplayRetries() {
+    for task in replayRetryTasks.values { task.cancel() }
+    replayRetryTasks.removeAll()
   }
 
   private func handle(frame: RpcFrame, bytes: Int) {
@@ -1159,6 +1217,7 @@ public final class FieldProductClient {
     record(Self.refusal(from: error), for: token)
     failPending(FieldProductError(kind: "UNAVAILABLE", message: "connection closed", retryable: true))
     subRoutes.removeAll()
+    cancelReplayRetries()
     if closedByUser { return }
     switch state {
     case .failed, .closed: return
@@ -1234,6 +1293,7 @@ public final class FieldProductClient {
     dialTask = nil
     receiveTask?.cancel()
     receiveTask = nil
+    cancelReplayRetries()
     state = .failed(error)
     failPending(error)
     flushReadyWaiters(error)
