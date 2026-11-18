@@ -89,7 +89,7 @@ struct LabAgentSpec {
   var tokens: Double?
   /// The owner's priced total in USD, as the remote cut carries it (PG-3e): what the bottom figure reads. Set on the
   /// stages with a burn and no tokens, about ten minutes at their rate, so a lit body never reads `~$0.00` — a state
-  /// no real owner sends (fd, 2026-11-02).
+  /// no real owner sends (PG-3e, 2026-11-02).
   var usd: Double?
   /// Estimated USD per minute: what the burn ladder reads.
   var ratePerMin: Double?

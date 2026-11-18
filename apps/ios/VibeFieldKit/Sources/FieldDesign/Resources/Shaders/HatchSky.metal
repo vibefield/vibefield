@@ -1,12 +1,12 @@
 // IOS-12f's f5 (PC-D8 A; DESIGN.md §2.10, amended 2026-11-07) — NEW SPARK'S SKY IN METAL: the desktop's vendored star
-// engine's programs (`packages/design-kit/src/spark-face/vendor/star-spark.js` :71–520, James's Star Spark, vendored
+// engine's programs (`packages/design-kit/src/spark-face/vendor/star-spark.js` :71–520, Star Spark, vendored
 // byte for byte; sha256 e4c142f2b52e8b52f4cda371232bda9aaa211c7c9535e07f18a63a19b0d9ead6) transcribed from GLSL ES 3.0
 // to MSL: the night ground, the trail, the body's burst, the particles, the bloom's two passes and the composite.
 //
 // It reads each star's 32 vec4 rows (StarSpark.rows, the engine's `_write`) from a 32×N RGBA32F texture, one row of
 // texels per star, and HatchSkyRenderer draws a frame as `SparkEngine.render(t)` draws one (:634). Held to the
 // engine's own pixels by the hatch's frames golden (`spark-hatch-frames/*.png`, SparkHatchFramesTests), within 12e's
-// bound, which VF-PM rules for good on the first report.
+// bound, which is ruled for good on the first report.
 //
 // The transcription is the GLSL text, changed only where the languages differ, so a diff against the engine reads
 // line for line, as SparkStar.metal's does:
@@ -28,12 +28,12 @@
 //   fma(fj, k2, seed * k1), the first product rounded to its own float and the second fused with the sum. Left to
 //   itself the kit's compiler fuses the first product instead, and h11 makes that one ulp whole pixels: kit-f5f2's
 //   G2 had a ray recoloured and a chip moved 74 px (f5f 4/4). HatchSkyHinTests holds `hin` to that form bit for bit.
-//   *Corrected 2026-11-07 (IOS-12f's f5h; VF-PM's ruling 17:34:30Z): this said "`hin` rounds each product to its own
+//   *Corrected 2026-11-07 (IOS-12f's f5h, decided that day): this said "`hin` rounds each product to its own
 //   float, as WebGL does". WebGL fixes no rounding. The engine's host fused the second product, as kit-f5f4's read
 //   measured: b's dust j31 sits on its plain place and j30 on its fused one, in one frame. At G4, rounding both left
 //   13 of 13 placements off this form. The rays cannot tell the two forms apart in either deal's frames.*
 //
-// Only what the hatch draws is transcribed (VF-PM's Q3 ruling, 2026-11-07 13:58:40Z). The hatch's sky is the night,
+// Only what the hatch draws is transcribed (Q3, decided 2026-11-07). The hatch's sky is the night,
 // and its star draws its burst alone (`mask: LAYERS.BURST`, :231). So these are not here, and nothing the hatch draws
 // reads them:
 // - the ground's day branch (`uNight < .5`). The other programs keep their few night-or-day choices as written;
@@ -41,7 +41,7 @@
 //   echo, orbs and glint, and its debug and outline views. Each sits behind a layer bit the hatch never sets; under
 //   BURST alone the body draws the shadow pocket, the shock ring, the rays and needles, and the flash;
 // - `spring` and `ramp5`, which only those read.
-// One kernel here is not the engine's: `hatch_sky_hin_probe` (IOS-12f's f5h, VF-PM's ruling 17:38:20Z), at the foot,
+// One kernel here is not the engine's: `hatch_sky_hin_probe` (IOS-12f's f5h, decided 2026-11-07), at the foot,
 // runs `hin` on the GPU for HatchSkyHinTests, which hold it bit for bit to the engine's form. Nothing draws it.
 // A newer engine is a design event (§2.10): both goldens move, and this file follows them.
 

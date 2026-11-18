@@ -6,7 +6,8 @@ import Testing
 
 // PG-8 — THE RAIN'S ROW, WORDS AND PALETTE (pair 3, read-pg8 §7): G4 and G7 read `phone-rain.golden.json`; the hand
 // rows H6 (J-S4's lit row, its words), H9 and H10 edit one witness row and read it through the phone's own copy, their
-// lines computed by the shipping toolkit the rain imports (`lanes/pg8-rain/light/p3-probe.mjs`, its log beside it).
+// lines computed by the shipping toolkit the rain imports (PG-8, 2026-11-04, by a probe that is not in the
+// repository, so no reader can compute them again from it).
 
 extension RainViewTests.Parity {
   /// G4 — the rain's palette is the desktop reader's over `tokens.css`, string for string (`readMonitorPalette().rain`

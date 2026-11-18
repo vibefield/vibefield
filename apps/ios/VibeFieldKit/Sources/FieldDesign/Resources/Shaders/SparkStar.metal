@@ -1,10 +1,10 @@
 // IOS-12e (PC-D6 A; DESIGN.md §2.10, amended 2026-11-06) — THE STAR IN METAL: the desktop's vendored spark engine's
-// vertex and fragment shaders (`packages/design-kit/src/spark-face/vendor/sparks.js` :187–840, James's Agent Sparks,
+// vertex and fragment shaders (`packages/design-kit/src/spark-face/vendor/sparks.js` :187–840, Agent Sparks,
 // vendored byte for byte; sha256 baa846eecc702dc4f7bcf3d1f7da20d1eb01051c87ce20685a29de1de6e67716) transcribed from GLSL ES 3.0 to MSL.
 //
 // It reads each face's 32 vec4 rows (SparkBuddy.write) from a 32×N RGBA32F texture, one row of texels per face, and
 // draws every face with one instanced quad, as `Engine.render` draws them. Held to the engine's own pixels by the
-// stills golden (`spark-stills/*.png`, SparkStarStillTests), within the bound VF-PM rules on the first report.
+// stills golden (`spark-stills/*.png`, SparkStarStillTests), within the bound that is ruled on the first report.
 //
 // The transcription is the GLSL text, changed only where the languages differ, so a diff against the engine reads
 // line for line:

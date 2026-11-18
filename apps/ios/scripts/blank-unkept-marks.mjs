@@ -2,7 +2,7 @@
 // Blanks, IN PLACE, every tile of the swarm's mark atlas (FieldSwarm/Resources/marks.png) that the
 // app does not draw, so the bundle carries no mark it has no use for (DECISIONS LP-D7).
 // - LP-4 (2026-11-05, the 0.9 launch) kept two vendor logos, Claude Code's and Codex's.
-// - Item 359 (2026-11-12; James: "overturn this ruling, bring back those icons now") keeps every
+// - Item 359 (asked for 2026-11-12: that ruling overturned and those marks brought back now) keeps every
 //   mark the design chose for an agent, nine, and blanks the eleven neighbours the bake set beside
 //   them. This script cannot restore a tile it blanked, so the seven came back from git first:
 //   `git show 40c794263:apps/ios/VibeFieldKit/Sources/FieldSwarm/Resources/marks.png` is the bake

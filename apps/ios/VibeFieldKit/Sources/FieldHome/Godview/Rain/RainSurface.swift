@@ -207,7 +207,7 @@ final class RainRowElement: UIAccessibilityElement {
   }
 }
 
-/// How the rain paints over a window of drawn frames (DEBUG, the kit's witness; fd: with and without 4t's mask at the
+/// How the rain paints over a window of drawn frames (DEBUG, the kit's witness; PG-8: with and without 4t's mask at the
 /// slot, as the swarm's `SwarmFrameMeter`): the rate it reached, the drawn interval and the CPU's encode time.
 struct RainFrameMeter {
   static let window: Double = 5

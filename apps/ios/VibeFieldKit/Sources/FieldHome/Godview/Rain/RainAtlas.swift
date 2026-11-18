@@ -11,7 +11,7 @@ import Metal
 // and CoreGraphics only, so the host builds it (the swarm's `GlyphAtlas` is UIKit's).
 //
 // A head's glow is a sprite of its own: the glyph's coverage blurred once per blur. FROM MEMORY, not read from source
-// (fd: so marked here and in the packet): Chromium paints a canvas shadow ignoring the transform
+// (PG-8: so marked here and in the packet): Chromium paints a canvas shadow ignoring the transform
 // (`DrawLooperBuilder::kShadowIgnoresTransforms`), so the blur is in DEVICE pixels, at Skia's σ = 0.288675 × blur
 // + 0.5 (`BlurRadiusToStdDev`), not the spec's blur / 2 in points. The kit's still beside the desktop's settles it;
 // if they differ, `glowSigma` is the one constant to fix, the stills its evidence.

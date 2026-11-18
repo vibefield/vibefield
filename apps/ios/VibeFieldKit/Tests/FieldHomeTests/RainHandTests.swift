@@ -5,8 +5,9 @@ import Testing
 @testable import FieldHome
 
 // PG-8 — THE RAIN'S HAND ROWS: what the witness run lacks (read-pg8 §7). Each row's expectation is what puppeteer-
-// views 0.3.3's own `rain-streams.js` says for it (computed by the shipping code:
-// `lanes/pg8-rain/light/hand-probe.mjs`, its log beside it), and each says what the witness does not carry.
+// views 0.3.3's own `rain-streams.js` says for it (computed by that shipping code, PG-8, 2026-11-04, by a probe that
+// is not in the repository, so no reader can compute them again from it), and each says what the witness does not
+// carry.
 
 extension RainViewTests {
   @Suite("hand rows: what the witness lacks")

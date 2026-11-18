@@ -30,6 +30,6 @@ fragment float4 fs(BodyVertex in [[stage_in]], constant Frame& frame [[buffer(0)
   float halo = pow(clamp(1.0 - outer / reach, 0.0, 1.0), 2.65);
   float a = clamp(strength * (0.45 * rim + 0.6 * halo), 0.0, 1.0) * breathe * outside;
   // The light beyond the band is the band's colour: the theme's ink, black by
-  // day and white by night, never a pane colour (James, 2026-10-18).
+  // day and white by night, never a pane colour (asked for 2026-10-18).
   return premul(float4(body.link.rgb, a));
 }

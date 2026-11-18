@@ -72,8 +72,8 @@ enum TimelineLayout {
 
   /// `dayLabel`: a midnight tick's words, the short weekday and the day, upper-cased. The desktop asks its own ICU in
   /// the user's locale (`toLocaleDateString(undefined, {weekday: 'short', day: 'numeric'})`); the phone asks the
-  /// platform's for the same skeleton in the same locale, so the ORDER is each platform's — a named deviation, fd
-  /// RULED keep (2026-11-04): en_US is `d EEE`, `4 WED`, on Node (ICU 78.3, CLDR 48) and `EEE d`, `WED 4`, on Apple's
+  /// platform's for the same skeleton in the same locale, so the ORDER is each platform's — a named deviation, kept
+  /// (decided 2026-11-04): en_US is `d EEE`, `4 WED`, on Node (ICU 78.3, CLDR 48) and `EEE d`, `WED 4`, on Apple's
   /// Foundation. A fixed pattern would be wrong in every other locale.
   /// The desktop's skeleton: `{weekday: 'short', day: 'numeric'}` is CLDR's `Ed`.
   static let daySkeleton = "Ed"

@@ -8,7 +8,8 @@ import Testing
 // PG-8 — THE RAIN'S FRAME, DICE AND CADENCE (pair 4, read-pg8 §7): G6 holds the still frame and the generator to
 // `phone-rain.golden.json`; the hand rows hold what a still cannot show — a moving frame (H7), the weights (H8), the
 // lit row's head (H6), a gone row (H11), the lifetime (H13), the wrap (H14), the tap (H15) and the loop (H16, its ticks
-// computed by the shipping `createMotionLoop`: `lanes/pg8-rain/light/p4-probe.mjs`, its log beside it).
+// computed by the shipping `createMotionLoop`, PG-8, 2026-11-04, by a probe that is not in the repository, so no
+// reader can compute them again from it).
 
 extension RainViewTests.Parity {
   /// G6 — the generator is the golden's (its first draws), and the still frame at the open is the desktop's, op for
