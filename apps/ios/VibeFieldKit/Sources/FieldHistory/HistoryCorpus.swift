@@ -32,7 +32,7 @@ public struct HistoryCorpus: Equatable, Sendable, Codable {
   /// term filter then stands aside: the index widened word fragments, and a
   /// hit it found is a hit). nil: `hits` is the whole corpus's, filtered here.
   public var searchedQuery: String?
-  // RETIRED 2026-11-06 (SE-2o; the lead's ruling 24): `recentSearches`, the last eight searches per desktop. Search's
+  // RETIRED 2026-11-06 (SE-2o): `recentSearches`, the last eight searches per desktop. Search's
   // page, its one reader, retired at SE-2e, and search keeps no recent searches. A ledger cached with the field still
   // reads: the synthesized decoding passes over a key it does not know.
   public var documents: [String: HistoryDocument]

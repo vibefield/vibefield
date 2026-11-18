@@ -343,7 +343,7 @@ enum FieldHomeModel {
 
   /// Whether the live card takes its session's EMPTY seat itself: the holder let
   /// go while the card is on the screen. The card is the phone's one pane in
-  /// front, so this is Q1's ruling — a focused pane takes the empty seat —
+  /// front, so this is the desktop's rule (item 42, 2026-10-19) — a focused pane takes the empty seat —
   /// applied to the phone (DESIGN.md §8). On the screen is the app in front
   /// (`.active`; `.inactive` is a shade or the switcher, not a person at the
   /// card) with this card the one presented. A card in the background or behind

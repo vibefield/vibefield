@@ -376,7 +376,7 @@ struct SearchLeadGlyph: View {
     }
   }
 
-  /// A profile's glyph, through the phone's one table (UM-4, ruling 20: `ProfileGlyphSymbols`): This Mac's laptop, a
+  /// A profile's glyph, through the phone's one table (UM-4, 2026-11-06: `ProfileGlyphSymbols`): This Mac's laptop, a
   /// token's symbol — outlined, and filled for the default profile, as the Bands circle's middle draws it — and the star
   /// for a token this build does not draw. *(Until SE-P5b, 2026-11-06, a lead kept a rule of its own: the token's name
   /// when the system had a symbol of it, else the laptop for This Mac and `person.crop.circle` otherwise. Until SE-2r

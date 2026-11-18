@@ -11,7 +11,7 @@ import UIKit
 // picture, the placeholder stands as it always did; nothing on screen names the way a document is read.
 //
 // The room's strip at the phone's width (rosetta's clients/room, components/transcript/Attachments.tsx and
-// styles/attachments.css), at the figures the art director ruled (2026-11-13): a square tile on the fill inside
+// styles/attachments.css), at the figures set for item 362g on 2026-11-13: a square tile on the fill inside
 // a hairline, 104 pt with 8 between, three across every phone. A picture on its way holds its tile's square, as
 // the room's does, so a row is the height it will be when the picture lands. One thing is the phone's: the strip
 // WRAPS, where the room's runs on and scrolls sideways, because a page that scrolls down does not also scroll

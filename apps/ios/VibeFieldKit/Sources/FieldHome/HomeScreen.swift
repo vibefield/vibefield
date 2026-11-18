@@ -1664,7 +1664,7 @@ public struct HomeScreen: View {
 
   // MARK: - SE-2: search, a glass sheet over the page that stands
 
-  /// The home's profiles that stand on a circle — the lens's ONE list (UM-4's seam keys on the home's; ruling 7: a
+  /// The home's profiles that stand on a circle — the lens's ONE list (UM-4's seam keys on the home's; 2026-11-06: a
   /// draft no agent signed in to has no circle, so it is never a lens): the meters' read of the home
   /// (`MetersReading.profiles`, through `MeterModel.hasCircle`), which the hold's buds, the page's rows and the token's
   /// menu read too; under `-vf-mock`, the same read of the meters' fixture, taken at launch so the lens door stands
@@ -3342,7 +3342,7 @@ public struct HomeScreen: View {
       attachment?.followBottom()
     }
     // Item 42 — the holder let go while this card is on the screen: the card
-    // takes the empty seat itself (Q1's ruling on the phone, DESIGN.md §8). On
+    // takes the empty seat itself (the desktop's rule on the phone, 2026-10-19, DESIGN.md §8). On
     // the screen is the scene active and this card the one presented — the
     // attachment is only ever the presented card's, and a closed card's is
     // parked in `keptAttachments`, where nothing takes. When, and the once, are
