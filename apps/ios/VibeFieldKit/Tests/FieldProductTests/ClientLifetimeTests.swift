@@ -300,6 +300,44 @@ private let liveAck = JSONValue.object([
     #expect(ended.lines == ["g.subscribe ended: its replay was refused NOT_FOUND"])
   }
 
+  /// Item 477 (2026-11-18) — a replay the DEADLINE ends says the socket is
+  /// suspect, not the board: it keeps the old rule and takes the socket down.
+  /// Asked again on the same socket instead, each answer the door gave too late
+  /// would stand on the door, unrouted, until that socket closed.
+  @Test func aReplayThatTimesOutTakesTheSocketDown() async throws {
+    let snapshot = JSONValue.object(["rows": .array([])])
+    // Call 1 is answered; call 2 (the first replay) is never answered; call 3
+    // is answered.
+    let calls = Tally()
+    let door = FakeDoor { method, id, _ in
+      switch method {
+      case "system.hello": return [Frame.result(id: id, liveAck)]
+      case "a.subscribe":
+        if calls.next() == 2 { return [] }
+        return [Frame.result(id: id, .object(["subId": .string("a"), "snapshot": snapshot]))]
+      default: return []
+      }
+    }
+    let ended = EndedLines()
+    let client = FieldProductClient(
+      url: URL(string: "ws://door.test/t/x")!, transport: door,
+      options: .init(
+        maxBackoff: .milliseconds(5), callTimeout: .milliseconds(100), endedLog: { ended.add($0) }))
+    defer { client.close() }
+
+    let a = Counter()
+    _ = try await client.subscribe(
+      "a.subscribe", params: nil, onSnapshot: { _ in a.record(1) }, onDelta: { _ in })
+
+    await door.connection(0)?.drop()
+    try await waitFor("a back", timeout: .seconds(2)) { a.values.count >= 2 }
+    #expect(await door.dials == 3)
+    #expect(await door.connection(1)?.methods.filter { $0 == "a.subscribe" }.count == 1)
+    #expect(await door.connection(1)?.isDropped == true)
+    #expect(await door.connection(2)?.methods.contains("a.subscribe") == true)
+    #expect(ended.lines.isEmpty)
+  }
+
   /// A handle cancelled DURING a replay must not end the loop either: the
   /// boards after it in key order are still owned.
   @Test func aBoardCancelledMidReplayDoesNotStrandTheNextOne() async throws {
