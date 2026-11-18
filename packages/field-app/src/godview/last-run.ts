@@ -316,8 +316,14 @@ export async function restoreLastRun(client: KeyedCallClient): Promise<void> {
   const outcomes = await Promise.all(
     question.agents.map(async (agent): Promise<LastRunFailure | null> => {
       try {
+        // item 468 (2026-11-18): the pane that showed the old session takes the new one (the
+        // rehydration's hand-over), so the birth names it, as item 464's hand-offs do, and other
+        // screens draw the two as one body. fieldd keeps the claim only while its floor still
+        // lists that session; a floor that restarted drops it with one line, and the resume goes
+        // on as without it.
         const answered = await requestResolvingOutcome(client, "agent.resume", {
           runtimeRunId: agent.id,
+          ...(agent.sessionId !== undefined ? { succeeds: agent.sessionId } : {}),
         });
         const born = adoptCreatedTerminal(AgentSpawnResult.parse(answered).terminal);
         if (agent.sessionId !== undefined) resumedPanes.set(agent.sessionId, born.session);
