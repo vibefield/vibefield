@@ -107,25 +107,27 @@ private let liveAck = JSONValue.object([
 
 @MainActor
 @Suite struct ReplayLifetimeTests {
-  /// THE BLOCKER. A door that refuses ONE board on the replay — a restarted
-  /// desktop answering NOT_FOUND for a board that is gone — used to end the
-  /// whole loop: every subscription after it went unsent, its route had been
-  /// cleared with the socket, and the client sat in `.ready`. A frozen field
-  /// under a state that said fine, for the life of that socket.
+  /// THE BLOCKER, and item 477 (2026-11-18). A door that refuses ONE board on
+  /// the replay — a restarted desktop answering NOT_FOUND for a board that is
+  /// gone — used to end the whole loop: every subscription after it went
+  /// unsent, its route had been cleared with the socket, and the client sat in
+  /// `.ready`. The repair took the socket down instead, so that the re-dial
+  /// replayed them all from the top; a refusal that came EVERY time then
+  /// re-dialed without end, and the boards after it were never replayed.
   ///
-  /// Now the failure takes the socket down, and the re-dial replays all of
-  /// them from the top.
-  @Test func aRefusedReplayReDialsInsteadOfFreezingTheRest() async throws {
+  /// Now the refusal is that board's own: a refusal for good ends it on this
+  /// client, in one line of the log, and the socket and every other board
+  /// stand.
+  @Test func aRefusedReplayEndsItselfAndTheRestStand() async throws {
     let snapshot = JSONValue.object(["rows": .array([])])
-    // Call 1 is the original subscribe and is answered; call 2 is the first
-    // REPLAY and is refused — a restarted desktop that no longer has that
-    // board; every later call is answered again.
+    // Call 1 is the original subscribe and is answered; every REPLAY of `a` is
+    // refused — a restarted desktop that no longer has that board.
     let calls = Tally()
-    let door = FakeDoor { method, id, params in
+    let door = FakeDoor { method, id, _ in
       switch method {
       case "system.hello": return [Frame.result(id: id, liveAck)]
       case "a.subscribe":
-        if calls.next() == 2 {
+        if calls.next() > 1 {
           return [Frame.failure(id: id, kind: "NOT_FOUND", message: "that board is gone")]
         }
         return [Frame.result(id: id, .object(["subId": .string("a"), "snapshot": snapshot]))]
@@ -134,9 +136,74 @@ private let liveAck = JSONValue.object([
       default: return []
       }
     }
+    let ended = EndedLines()
     let client = FieldProductClient(
       url: URL(string: "ws://door.test/t/x")!, transport: door,
-      options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5)))
+      options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5), endedLog: { ended.add($0) }))
+    defer { client.close() }
+
+    let a = Counter()
+    let b = Counter()
+    _ = try await client.subscribe(
+      "a.subscribe", params: .object(["sessionId": .string("s-private-7")]),
+      onSnapshot: { _ in a.record(1) }, onDelta: { _ in })
+    _ = try await client.subscribe(
+      "b.subscribe", params: nil, onSnapshot: { _ in b.record(1) }, onDelta: { _ in })
+    #expect(a.values.count == 1)
+    #expect(b.values.count == 1)
+
+    // The socket dies. The replay refuses `a` — and `b` must not be stranded.
+    await door.connection(0)?.drop()
+    try await waitFor("b back", timeout: .seconds(2)) { b.values.count >= 2 }
+    // Far longer than this client's backoff ceiling: a client that re-dialed on
+    // the refusal would have dialed many times over by now.
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(await door.dials == 2)
+    #expect(a.values.count == 1)
+    #expect(await door.connection(1)?.methods.filter { $0 == "a.subscribe" }.count == 1)
+    if case .ready = client.state {} else {
+      Issue.record("expected ready beside the refusal, got \(client.state)")
+    }
+    // One line, naming the method and the refusal's kind: never its params.
+    #expect(ended.lines == ["a.subscribe ended: its replay was refused NOT_FOUND"])
+    #expect(!ended.lines.joined().contains("s-private-7"))
+
+    // Ended for good: the next socket replays `b` and never asks for `a`.
+    await door.connection(1)?.drop()
+    try await waitFor("b back again", timeout: .seconds(2)) { b.values.count >= 3 }
+    #expect(await door.connection(2)?.methods.contains("a.subscribe") == false)
+    #expect(ended.lines.count == 1)
+  }
+
+  /// Item 477 (2026-11-18) — a refusal that may pass (a board still starting
+  /// after its desktop's restart) is asked again for that board ALONE, on the
+  /// re-dial's own ladder, while the socket stands: no re-dial, and the board
+  /// after it is replayed once.
+  @Test func aRetryableRefusedReplayIsAskedAgainAloneOnTheSameSocket() async throws {
+    let snapshot = JSONValue.object(["rows": .array([])])
+    // Call 1 is the original subscribe; calls 2 and 3 (the replay and its first
+    // re-ask) are refused as retryable; call 4 is answered.
+    let calls = Tally()
+    let door = FakeDoor { method, id, _ in
+      switch method {
+      case "system.hello": return [Frame.result(id: id, liveAck)]
+      case "a.subscribe":
+        let call = calls.next()
+        if call == 2 || call == 3 {
+          return [
+            Frame.failure(id: id, kind: "UNAVAILABLE", message: "the board is starting", retryable: true)
+          ]
+        }
+        return [Frame.result(id: id, .object(["subId": .string("a"), "snapshot": snapshot]))]
+      case "b.subscribe":
+        return [Frame.result(id: id, .object(["subId": .string("b"), "snapshot": snapshot]))]
+      default: return []
+      }
+    }
+    let ended = EndedLines()
+    let client = FieldProductClient(
+      url: URL(string: "ws://door.test/t/x")!, transport: door,
+      options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5), endedLog: { ended.add($0) }))
     defer { client.close() }
 
     let a = Counter()
@@ -145,18 +212,92 @@ private let liveAck = JSONValue.object([
       "a.subscribe", params: nil, onSnapshot: { _ in a.record(1) }, onDelta: { _ in })
     _ = try await client.subscribe(
       "b.subscribe", params: nil, onSnapshot: { _ in b.record(1) }, onDelta: { _ in })
-    #expect(a.values.count == 1)
-    #expect(b.values.count == 1)
 
-    // The socket dies. The replay refuses `a` — and `b` must not be stranded.
     await door.connection(0)?.drop()
-    try await waitFor("both boards back") { a.values.count >= 2 && b.values.count >= 2 }
-    #expect(await door.dials >= 3)
-    // And the client is not sitting in `.ready` pretending: it re-dialed and
-    // came back up.
+    try await waitFor("a back", timeout: .seconds(2)) { a.values.count >= 2 }
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(await door.dials == 2)
+    #expect(await door.connection(1)?.methods.filter { $0 == "a.subscribe" }.count == 3)
+    #expect(await door.connection(1)?.methods.filter { $0 == "b.subscribe" }.count == 1)
+    #expect(b.values.count == 2)
+    #expect(ended.lines.isEmpty)
     if case .ready = client.state {} else {
-      Issue.record("expected ready after the repair, got \(client.state)")
+      Issue.record("expected ready while a board was asked again, got \(client.state)")
     }
+  }
+
+  /// Item 477 (2026-11-18) — a socket that dies under a replay judges nothing:
+  /// the "connection closed" every pending call then hears is not the board's
+  /// own refusal, so the next socket replays it.
+  @Test func aSocketLostUnderAReplayLeavesItStanding() async throws {
+    let snapshot = JSONValue.object(["rows": .array([])])
+    // Call 1 is answered; call 2 (the first replay) is never answered, and its
+    // socket dies under it; call 3 is answered.
+    let calls = Tally()
+    let door = FakeDoor { method, id, _ in
+      switch method {
+      case "system.hello": return [Frame.result(id: id, liveAck)]
+      case "a.subscribe":
+        if calls.next() == 2 { return [] }
+        return [Frame.result(id: id, .object(["subId": .string("a"), "snapshot": snapshot]))]
+      default: return []
+      }
+    }
+    let ended = EndedLines()
+    let client = FieldProductClient(
+      url: URL(string: "ws://door.test/t/x")!, transport: door,
+      options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5), endedLog: { ended.add($0) }))
+    defer { client.close() }
+
+    let a = Counter()
+    _ = try await client.subscribe(
+      "a.subscribe", params: nil, onSnapshot: { _ in a.record(1) }, onDelta: { _ in })
+
+    await door.connection(0)?.drop()
+    try await waitFor("the replay sent") {
+      await door.connection(1)?.methods.contains("a.subscribe") == true
+    }
+    await door.connection(1)?.drop()
+    try await waitFor("a back", timeout: .seconds(2)) { a.values.count >= 2 }
+    #expect(await door.connection(2)?.methods.contains("a.subscribe") == true)
+    #expect(ended.lines.isEmpty)
+  }
+
+  /// Item 477 (2026-11-18) — the gap's repair keeps its rule: a re-subscribe
+  /// the door refuses takes the socket down, ONCE. The re-dial's replay then
+  /// judges that board alone, so a refusal for good ends it there and nothing
+  /// loops.
+  @Test func aRefusedReSubscribeAfterAGapReDialsOnceAndNoMore() async throws {
+    // Call 1 is the original subscribe; every later one (the gap's re-subscribe,
+    // then the re-dial's replay) is refused.
+    let calls = Tally()
+    let door = FakeDoor { method, id, _ in
+      switch method {
+      case "system.hello": return [Frame.result(id: id, liveAck)]
+      case "g.subscribe":
+        if calls.next() > 1 {
+          return [Frame.failure(id: id, kind: "NOT_FOUND", message: "that board is gone")]
+        }
+        return [Frame.result(id: id, .object(["subId": .string("g"), "snapshot": gapSnapshot(64)]))]
+      default: return []
+      }
+    }
+    let ended = EndedLines()
+    let client = FieldProductClient(
+      url: URL(string: "ws://door.test/t/x")!, transport: door,
+      options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5), endedLog: { ended.add($0) }))
+    defer { client.close() }
+
+    _ = try await client.subscribe(
+      "g.subscribe", params: nil, shape: .snapshotDelta(), onSnapshot: { _ in }, onDelta: { _ in })
+    // A delta that does not continue 64: a gap, and the repair's re-subscribe.
+    await door.connection(0)?.deliver(
+      Frame.subscriptionEvent(method: "g.subscribe.delta", subId: "g", payload: gapDelta(since: 70, revision: 71)))
+    try await waitFor("the re-dial", timeout: .seconds(2)) { await door.dials >= 2 }
+    try await waitFor("the replay refused", timeout: .seconds(2)) { !ended.lines.isEmpty }
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(await door.dials == 2)
+    #expect(ended.lines == ["g.subscribe ended: its replay was refused NOT_FOUND"])
   }
 
   /// A handle cancelled DURING a replay must not end the loop either: the
@@ -291,4 +432,27 @@ private final class Tally: @unchecked Sendable {
 private final class Counter {
   private(set) var values: [Int] = []
   func record(_ value: Int) { values.append(value) }
+}
+
+/// The lines the client wrote when a replay ended a subscription (item 477).
+private final class EndedLines: @unchecked Sendable {
+  private let lock = NSLock()
+  private var said: [String] = []
+  func add(_ line: String) { lock.withLock { said.append(line) } }
+  var lines: [String] { lock.withLock { said } }
+}
+
+/// The chain the gap row's board stands on (item 477): a snapshot at a
+/// revision, and a step from one revision to the next.
+private let gapEpoch = "fieldd-5d1e2a7c90b3f418.1"
+
+private func gapSnapshot(_ revision: Int64) -> JSONValue {
+  .object(["epoch": .string(gapEpoch), "revision": .int(revision), "rows": .array([])])
+}
+
+private func gapDelta(since: Int64, revision: Int64) -> JSONValue {
+  .object([
+    "epoch": .string(gapEpoch), "since": .int(since), "revision": .int(revision),
+    "upserts": .array([]), "removed": .array([]),
+  ])
 }

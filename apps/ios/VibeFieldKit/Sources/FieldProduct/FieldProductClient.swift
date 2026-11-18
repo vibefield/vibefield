@@ -141,6 +141,9 @@ public final class FieldProductClient {
     /// SP-2 (g) — the phone's budget this door's socket counts against. Nil:
     /// no budget (a loopback door, most tests).
     public var doorBudget: ProductDoorBudget?
+    /// Item 477 (2026-11-18) — where the one line goes when a replay's refusal
+    /// ends a subscription (`ReplayEnded`); a test passes its own.
+    public var endedLog: @Sendable (String) -> Void
 
     public init(
       maxBackoff: Duration = .seconds(10),
@@ -155,7 +158,8 @@ public final class FieldProductClient {
       measuresRoundTrip: Bool = false,
       roundTripLog: @escaping @Sendable (String?, Duration) -> Void = DoorRoundTrip.log,
       logLabel: String? = nil,
-      doorBudget: ProductDoorBudget? = nil
+      doorBudget: ProductDoorBudget? = nil,
+      endedLog: @escaping @Sendable (String) -> Void = ReplayEnded.log
     ) {
       self.maxBackoff = maxBackoff
       self.callTimeout = callTimeout
@@ -170,6 +174,7 @@ public final class FieldProductClient {
       self.roundTripLog = roundTripLog
       self.logLabel = logLabel
       self.doorBudget = doorBudget
+      self.endedLog = endedLog
     }
   }
 
