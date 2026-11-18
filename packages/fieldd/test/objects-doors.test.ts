@@ -1,8 +1,11 @@
-import { writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { CallerContext, ObjectIntent } from "@vibefield/contracts";
 import { METHODS, ObjectsTakeBackResult, TAILNET_SCOPES } from "@vibefield/contracts";
 import { AuditActionV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
+import { AuditService } from "../src/audit-service";
 import type { DeskObjects } from "../src/objects/desk-objects";
 import {
   type ObjectDoorsApi,
@@ -24,6 +27,11 @@ import { cleanupWorlds, DOC, type Survivor, world } from "./desk-fixtures";
 
 afterEach(cleanupWorlds);
 
+const trails: string[] = [];
+afterEach(() => {
+  for (const dir of trails.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
 const TEN = [
   "objects.intents.subscribe",
   "objects.intent.answer",
@@ -44,7 +52,8 @@ type SubHandler = (
   emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
 ) => { snapshot: unknown; start?: () => void; dispose(): void };
 
-function doors(h: ReturnType<typeof world>, desk: DeskObjects = h.desk) {
+/** `real`: the audit the door is given in place of the recording fake (item 526's rows through the real writer). */
+function doors(h: ReturnType<typeof world>, desk: DeskObjects = h.desk, real?: ObjectDoorsAudit) {
   const rows = new Map<string, Handler>();
   const subs = new Map<string, SubHandler>();
   const audited: unknown[] = [];
@@ -64,8 +73,8 @@ function doors(h: ReturnType<typeof world>, desk: DeskObjects = h.desk) {
     });
     return value;
   };
-  // the fake's revoke records as its required does (item 526)
-  const audit: ObjectDoorsAudit = { required: record, revoke: record };
+  // the fake's revoke records as its required does: a refused attempt is the real writer's, in the rows below
+  const fake: ObjectDoorsAudit = { required: record, revoke: record };
   const api: ObjectDoorsApi = {
     register: (method, handler) => rows.set(method, handler as Handler),
     registerSubscription: (method, handler) => subs.set(method, handler as SubHandler),
@@ -79,7 +88,7 @@ function doors(h: ReturnType<typeof world>, desk: DeskObjects = h.desk) {
   };
   registerObjectDoors(api, {
     objects: desk,
-    audit,
+    audit: real ?? fake,
     isWindowToken: (id) => windows.has(id),
     presenceIntervalMs: 1,
   });
@@ -403,5 +412,61 @@ describe("a take-back's line says whom it took the object from (OB-D18 A)", () =
     await ask("objects.takeBack", WINDOW, { ref, run: "run-a" });
     expect(audited.at(-1)).toMatchObject({ action: "objects.take_back", after: {} });
     expect((audited.at(-1) as { after?: object }).after).not.toHaveProperty("holders");
+  });
+});
+
+describe("a take-back always takes (item 526)", () => {
+  /** A real audit service over a temp root, whose writer refuses every write while `fail.now` holds. */
+  async function realAudit() {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-doors-revoke-"));
+    trails.push(dataDir);
+    const fail = { now: false };
+    const service = new AuditService({
+      dataDir,
+      bootId: "fieldd-doors-revoke",
+      hooks: {
+        beforeWrite: () => {
+          if (fail.now) throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+        },
+      },
+    });
+    await service.start();
+    return { service, fail };
+  }
+
+  it("ends the grant when its attempt record cannot be written, and answers AUDIT_UNAVAILABLE with the act applied", async () => {
+    // main's revocation law: evidence failure is surfaced, but may never leave a grant live. The attempt's evidence
+    // is owed, as a recovery marker, until the writer takes a line again.
+    const { service, fail } = await realAudit();
+    const h = world();
+    const { ask } = doors(h, h.desk, service);
+    const ref = h.refOf("k1", "desk.note");
+    await expect(ask("objects.hand", WINDOW, { ref, run: "run-a" })).resolves.toEqual({
+      handed: true,
+    });
+    expect(h.desk.grantOf(ref, "run-a")).toBeDefined();
+    fail.now = true;
+    await expect(ask("objects.takeBack", WINDOW, { ref, run: "run-a" })).rejects.toMatchObject({
+      kind: "AUDIT_UNAVAILABLE",
+      details: { actionApplied: true },
+    });
+    expect(h.desk.grantOf(ref, "run-a")).toBeUndefined();
+    expect(service.health()).toMatchObject({ state: "degraded", pendingRecoveryMarkers: 1 });
+    fail.now = false;
+    await service.close();
+  });
+
+  it("writes a take-back's attempt and outcome when the writer takes them, and answers as it always did", async () => {
+    const { service } = await realAudit();
+    const h = world();
+    const { ask } = doors(h, h.desk, service);
+    const ref = h.refOf("k1", "desk.note");
+    await ask("objects.hand", WINDOW, { ref, run: "run-a" });
+    await expect(ask("objects.takeBack", WINDOW, { ref, run: "run-a" })).resolves.toEqual({
+      taken: true,
+    });
+    expect(h.desk.grantOf(ref, "run-a")).toBeUndefined();
+    expect(service.health()).toMatchObject({ state: "healthy", pendingRecoveryMarkers: 0 });
+    await service.close();
   });
 });

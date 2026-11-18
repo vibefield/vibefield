@@ -337,6 +337,87 @@ describe("LOG-L6 append-only audit ledger", () => {
     await service.close();
   });
 
+  it("takes a revocation whose attempt cannot be made durable, and owes its evidence (item 526)", async () => {
+    // main's revocation law: evidence failure is surfaced, but may never leave a grant live. The act runs, a
+    // recovery marker says it was applied, and the caller is told AUDIT_UNAVAILABLE with the act applied.
+    const dataDir = await root();
+    let fail = true;
+    const service = new AuditService({
+      dataDir,
+      bootId: "fieldd-revoke-owed",
+      hooks: {
+        beforeWrite: () => {
+          if (fail) throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+        },
+      },
+    });
+    await service.start();
+    let applied = false;
+    await expect(
+      service.revoke(
+        shellContext(),
+        { action: "objects.take_back", target: { kind: "object", id: "vf:obj/7hk2qx4m" } },
+        () => {
+          applied = true;
+          return { taken: true as const };
+        },
+      ),
+    ).rejects.toMatchObject({
+      kind: "AUDIT_UNAVAILABLE",
+      details: { operation: "write", code: "ENOSPC", actionApplied: true },
+    });
+    expect(applied).toBe(true);
+    expect(service.health()).toMatchObject({
+      state: "degraded",
+      records: 0,
+      pendingRecoveryMarkers: 1,
+    });
+
+    fail = false;
+    await service.appendFromCaller(shellContext(), {
+      action: "support.bundle.export",
+      target: { kind: "support-bundle", id: "bundle_after_revoke" },
+      phase: "attempt",
+      operationId: "op_after_revoke",
+    });
+    expect(service.health()).toMatchObject({ state: "healthy", pendingRecoveryMarkers: 0 });
+    await service.close();
+    expect(await records(service.root)).toContainEqual(
+      expect.objectContaining({
+        action: "audit.outcome.recovery",
+        phase: "outcome",
+        reasonCode: "OUTCOME_DURABILITY_UNCONFIRMED",
+        actor: { kind: "system", id: "fieldd" },
+        attrs: expect.objectContaining({
+          originalAction: "objects.take_back",
+          intendedOutcome: "succeeded",
+          effectResolution: "applied",
+        }),
+      }),
+    );
+  });
+
+  it("writes a revocation whose attempt is durable as a required act: attempt, act, outcome (item 526)", async () => {
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-revoke-durable" });
+    await service.start();
+    await expect(
+      service.revoke(
+        shellContext(),
+        { action: "objects.take_back", target: { kind: "object", id: "vf:obj/7hk2qx4m" } },
+        () => ({ taken: true as const }),
+      ),
+    ).resolves.toEqual({ taken: true });
+    expect(service.health()).toMatchObject({
+      state: "healthy",
+      records: 2,
+      pendingRecoveryMarkers: 0,
+    });
+    await service.close();
+    const kept = (await records(service.root)).filter((r) => r.action === "objects.take_back");
+    expect(kept.map((r) => r.phase)).toEqual(["attempt", "outcome"]);
+  });
+
   it("reports an applied action whose outcome sync failed and writes a recovery marker later", async () => {
     const dataDir = await root();
     let syncs = 0;
