@@ -216,6 +216,8 @@ import {
   TerminalRenewAttachParams,
   type TerminalRosterResult,
   type TerminalRuntimeSessionsResult,
+  TerminalSchemeSetParams,
+  type TerminalSchemeSetResult,
   TerminalSessionParams,
   TerminalTakeGeometryParams,
   UserLinkBeginParams,
@@ -439,6 +441,7 @@ import { oweSyncQuestion } from "./sync-question";
 import { peerAnswerBytes, tailnetRowLimit } from "./tailnet-rows";
 import { runtimeProfileBinding, TerminalBindingStore } from "./terminal-bindings";
 import { createTerminalLinkDoor } from "./terminal-links";
+import { TerminalSchemeStore } from "./terminal-scheme";
 import {
   cellEndpointsFrom,
   publishedTerminalRoutes,
@@ -2451,6 +2454,12 @@ export async function bootstrap(
       bindings: new TerminalBindingStore({
         file: join(config.dataDir, ...LAYOUT.TERMINAL_BINDINGS_FILE),
         logger: logger.child({ component: "terminal.bindings" }),
+      }),
+      // TL-4a — the scheme every local session is told, on disk under this
+      // user's root: a session born with the app closed is told it too
+      scheme: new TerminalSchemeStore({
+        file: join(config.dataDir, ...LAYOUT.TERMINAL_SCHEME_FILE),
+        logger: logger.child({ component: "terminal.scheme" }),
       }),
       // item 42 — the roster each attach grant's holder face is named from
       // (`holderFaceFor`), read at the mint: the DeviceService is bound further
@@ -6519,6 +6528,39 @@ export async function bootstrap(
             accepted: result.ok,
             effectiveChanged: result.effectiveChanged,
             diagnostics: result.diagnostics.length,
+          },
+        }),
+      );
+    });
+    // TL-4a — the terminal scheme (scope settings.manage, the trusted desktop
+    // window alone). Setting it changes what the programs in every local
+    // session are told about their terminal, sessions this caller never opened
+    // among them, so it is an audited act like the config write. The attrs
+    // record the ground and how many palette slots were named; the outcome
+    // records whether anything changed and how the cells answered.
+    api.register("terminal.scheme.set", async (ctx, params) => {
+      const parsed = TerminalSchemeSetParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { scheme: { foreground, background, cursor: #rrggbb, palette: [{ index, color }] } }",
+          false,
+        );
+      const { scheme } = parsed.data;
+      return await audit.required(
+        ctx,
+        {
+          action: "terminal.scheme.set",
+          target: { kind: "terminal", id: "scheme" },
+          attrs: { background: scheme.background.toLowerCase(), palette: scheme.palette.length },
+        },
+        async (): Promise<TerminalSchemeSetResult> => await terminals.setScheme(scheme),
+        (result) => ({
+          outcome: "succeeded",
+          attrs: {
+            changed: result.changed,
+            told: result.cells.filter((cell) => cell.state === "told").length,
+            unavailable: result.cells.filter((cell) => cell.state !== "told").length,
           },
         }),
       );

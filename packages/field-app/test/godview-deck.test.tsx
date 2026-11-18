@@ -1014,8 +1014,12 @@ describe("every birth goes through the product door (TP-S1)", () => {
       "terminal.create",
     );
     // LR — the one ask is the window's restore question, of the BOARD (what
-    // the last run left), never of the floor
-    expect(requests).toEqual(["agent.lastRun"]);
+    // the last run left), never of the floor. TL-4a: the deck also SAYS its
+    // scheme once its look has settled, which is no ask of the floor either
+    // and is counted by its own rows (godview-deck-scheme.test.tsx).
+    expect(requests.filter((method) => method !== "terminal.scheme.set")).toEqual([
+      "agent.lastRun",
+    ]);
   });
 
   // ("creates its first session through fieldd when there is nothing to

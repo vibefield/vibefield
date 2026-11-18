@@ -32,7 +32,7 @@ import type { GodviewTheme } from "./GodviewTuningPanel";
 // viewer-local appearance possible at all: the colors a pane draws come from
 // this viewer's own choice, not from the floor's configuration document.
 
-type TerminalTheme = NonNullable<GhostteaWorkspaceProps["theme"]>;
+export type TerminalTheme = NonNullable<GhostteaWorkspaceProps["theme"]>;
 type TerminalEffects = NonNullable<GhostteaWorkspaceProps["effects"]>;
 type Rgba = TerminalTheme["background"];
 

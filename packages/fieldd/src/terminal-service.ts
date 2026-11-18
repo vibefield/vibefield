@@ -64,6 +64,9 @@ import {
   type TerminalRouteSnapshot,
   TerminalRuntimeSession,
   TerminalRuntimeSessionsResult,
+  type TerminalScheme,
+  type TerminalSchemeCell,
+  type TerminalSchemeSetResult,
   type TerminalTerminateResult,
   type TerminalWorkloadClass,
   type TicketEndpointSet,
@@ -88,6 +91,7 @@ import {
   projectRoster,
   TerminalGrantMinter,
 } from "./terminal-grants";
+import { sameScheme, schemeColors, TerminalSchemeStore, withSchemeHint } from "./terminal-scheme";
 
 /** DS-4 — the doors a forwarding daemon refuses to carry for a caller it
  * would itself mint read-only: they MINT, and the owner mints for the
@@ -229,7 +233,8 @@ export interface TerminalInventoryTimings {
 /** AR-3 — what an agent's PTY is born with: puppeteer's `TerminalSpec`
  * (command, argv, cwd, geometry) and the COMPLETE environment the agent host
  * composed. Nothing here is a vendor's: the recipe is the adapter's, the
- * allow-list is `agent-host.ts`'s, the floor gets exactly `variables`. */
+ * allow-list is `agent-host.ts`'s, the floor gets exactly `variables` (and,
+ * since TL-4a, the kept terminal scheme's `COLORFGBG` when they name none). */
 export interface AgentTerminalSpec {
   command: string;
   args: readonly string[];
@@ -339,6 +344,10 @@ export interface TerminalServiceOptions {
    * the daemon's is on disk under the user root, so it outlives a restart;
    * absent = one kept in memory. */
   bindings?: TerminalBindingStore;
+  /** TL-4a — the scheme every local session is told (`terminal-scheme.ts`):
+   * the daemon's is on disk under the user root, so a session born with the
+   * app closed is still told it; absent = one kept in memory. */
+  scheme?: TerminalSchemeStore;
   /** item 42 — the device roster each attach grant's holder face is read from
    * (`holderFaceFor`), as a GETTER like `shell`: the daemon's DeviceService is
    * built after this service. Absent, or answering null, a grant carries no
@@ -640,6 +649,19 @@ export class TerminalService {
    * recorded at the birth, reported by the create and the roster, ended by
    * the inventory that no longer lists the session. */
   private readonly bindings: TerminalBindingStore;
+  /** TL-4a — the scheme every local session is told, kept across restarts. */
+  private readonly scheme: TerminalSchemeStore;
+  /** TL-4a — one chain, so two scheme changes never interleave their tells. */
+  private schemeChain: Promise<unknown> = Promise.resolve();
+  /** TL-4a — how many schemes this fieldd has kept, and the count each cell
+   * was last told at, by key. A cell behind the count is told when it is next
+   * reached. The scheme found on disk at boot counts as told (0): the fieldd
+   * before this one told it. In memory, so a cell still behind when fieldd
+   * restarts is told at the next change. */
+  private schemeCount = 0;
+  private readonly schemeToldAt = new Map<string, number>();
+  /** TL-4a — per cell, the tell in flight; the next one waits for it. */
+  private readonly schemeTells = new Map<string, Promise<unknown>>();
   private readonly releases: TerminalReleases;
   private readonly creation = new AsyncLocalStorage<string>();
   private readonly bornCreationIds = new Map<string, string>();
@@ -702,6 +724,7 @@ export class TerminalService {
   constructor(private readonly opts: TerminalServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
     this.bindings = opts.bindings ?? new TerminalBindingStore({ logger: this.logger });
+    this.scheme = opts.scheme ?? new TerminalSchemeStore({ logger: this.logger });
     this.releases = new TerminalReleases({
       file: opts.releasesFile,
       logger: this.logger,
@@ -791,6 +814,14 @@ export class TerminalService {
     // IL-D4 — while fieldd's own half holds, the cells it names stale are the
     // ones it knows, and these rows are among them
     this.judgeAge(true);
+    // TL-4a — a cell behind the kept scheme (it did not answer when the scheme
+    // changed, or the link was down and named no cell at all) is told now that
+    // the floor names it
+    for (const row of routes.cells) {
+      if (!this.schemeBehind(row.cellBootId)) continue;
+      const cell = { key: row.cellBootId, endpoints: row.endpoints, ...rowExtrasOf(row) };
+      void this.tellCell(cell, undefined, true);
+    }
     if (previous === undefined) return;
     const live = new Set(routes.cells.map((cell) => cell.cellBootId));
     // TC-S3 — an UNTAGGED session can be attributed to exactly one reading: a
@@ -801,6 +832,9 @@ export class TerminalService {
     const legacySingleCell = previous.length === 1 && previous[0]?.workloadClass === undefined;
     for (const gone of previous) {
       if (live.has(gone.cellBootId)) continue;
+      // TL-4a — a cell that is gone is told nothing more
+      this.schemeToldAt.delete(gone.cellBootId);
+      this.schemeTells.delete(gone.cellBootId);
       // Counted from the last inventory fieldd actually observed; before the
       // first observation there is nothing it can honestly claim was lost.
       const lostSessionIds = this.terminals
@@ -1881,12 +1915,20 @@ export class TerminalService {
       const creationId = options.creationId ?? this.creation.getStore();
       // item 464 — the claim the door kept, read with the creation id, recorded once the floor answers
       const carried = this.succession.getStore();
+      // TL-4a — the kept scheme reaches a birth twice, here and nowhere else: as
+      // the `COLORFGBG` it is spawned with, and as the colours it is told once
+      // it exists. ghosttea 0.15 takes no colours at create, so a program whose
+      // first act is to ask its terminal can be answered from the floor's
+      // configuration one step before it is told. The tell is SENT here, right
+      // behind the create on the cell's one connection, and never waited for:
+      // a floor that takes it and does not answer costs the birth nothing.
       const summary = await client.createSession({
-        ...options,
+        ...withSchemeHint(options, this.scheme.get()),
         ...(creationId === undefined ? {} : { creationId }),
       });
       if (cell.key !== LEGACY_CELL_KEY) this.bornIn.set(summary.id, cell.key);
       this.bornUnseen.add(summary.id);
+      void this.tellBorn(client, summary.id);
       // The routed renderer needs the engine's real decimal handle before it
       // can mount. Carry the summary from the birth that already has it;
       // waiting for observed inventory here would recreate GT-1's race.
@@ -2144,6 +2186,163 @@ export class TerminalService {
       }
       if (!client.connected) throw this.unavailable("the terminal floor died mid-terminate", error);
       throw new RpcCallError("INTERNAL", `terminate failed: ${errorMessage(error)}`, true);
+    }
+  }
+
+  /** TL-4a — THE DEVICE'S TERMINAL SCHEME: keep it, then tell every live local
+   * session, in every cell, its ground, ink and cursor. A program that asks
+   * its terminal whether the ground is dark then hears the deck's answer, pane
+   * or no pane, an agent a phone started included.
+   *
+   * A scheme equal to the kept one answers `changed: false` and tells nobody,
+   * so the deck saying it at every mount sends no program a change notice. A
+   * scheme that cannot be kept is UNAVAILABLE `scheme-unkept` and nobody is
+   * told it: what a restart restores is what the sessions were told. A cell
+   * that does not answer is said so in its row and told when it next does.
+   *
+   * What this does not reach on ghosttea 0.15, by name: the palette (no door
+   * takes it), and the instant of spawn (`birth`). Both wait for the ghosttea
+   * release that takes a session's colours at create. */
+  async setScheme(next: TerminalScheme): Promise<TerminalSchemeSetResult> {
+    const run = this.schemeChain.then(() => this.applyScheme(next));
+    this.schemeChain = run.catch(() => undefined);
+    return await run;
+  }
+
+  private async applyScheme(next: TerminalScheme): Promise<TerminalSchemeSetResult> {
+    const kept = this.scheme.get();
+    if (kept !== null && sameScheme(kept, next)) return { changed: false, cells: [] };
+    try {
+      this.scheme.keep(next);
+    } catch (error) {
+      throw new RpcCallError("UNAVAILABLE", "the terminal scheme could not be kept", true, {
+        service: "terminal",
+        state: "scheme-unkept",
+        detail: errorMessage(error),
+      });
+    }
+    this.schemeCount += 1;
+    const cells = await Promise.all(this.schemeCells().map((cell) => this.tellCell(cell)));
+    return { changed: true, cells };
+  }
+
+  /** Whether a cell has yet to be told the scheme kept now. */
+  private schemeBehind(key: string): boolean {
+    return this.scheme.get() !== null && (this.schemeToldAt.get(key) ?? 0) < this.schemeCount;
+  }
+
+  /** The cells a scheme change reaches: the link's CURRENT rows, because a
+   * client is only ever opened against the row that vouches for it
+   * (`currentToken`), or the one legacy cell of a floor that publishes none. */
+  private schemeCells(): CellTarget[] {
+    const rows = this.opts.link.terminalRoutes?.cells;
+    if (rows !== undefined) {
+      return rows.map((row) => ({
+        key: row.cellBootId,
+        endpoints: row.endpoints,
+        ...rowExtrasOf(row),
+      }));
+    }
+    const endpoints = this.opts.link.terminalEndpoints;
+    return endpoints === undefined ? [] : [{ key: LEGACY_CELL_KEY, endpoints }];
+  }
+
+  /** Tell every live session of one cell the kept scheme, and answer the
+   * cell's row. Never rejects: a cell that does not answer is `unavailable`,
+   * stays behind the kept scheme, and is told when it is next reached (a
+   * route change that names it, or a client connecting to it). One tell at a
+   * time per cell, so the last thing a session is told is the scheme kept
+   * last. `onlyIfBehind` is for those catch-up calls: by the time one runs,
+   * an earlier tell may already have brought the cell up to date. */
+  private tellCell(
+    cell: CellTarget,
+    dialed?: GhostteaAutomationClient,
+    onlyIfBehind = false,
+  ): Promise<TerminalSchemeCell> {
+    const before = this.schemeTells.get(cell.key) ?? Promise.resolve();
+    const run = before.then(() => this.tellCellNow(cell, dialed, onlyIfBehind));
+    this.schemeTells.set(cell.key, run);
+    return run;
+  }
+
+  private async tellCellNow(
+    cell: CellTarget,
+    dialed: GhostteaAutomationClient | undefined,
+    onlyIfBehind: boolean,
+  ): Promise<TerminalSchemeCell> {
+    const row = {
+      ...(cell.key === LEGACY_CELL_KEY ? {} : { cellBootId: cell.key }),
+      ...(cell.workloadClass === undefined ? {} : { workloadClass: cell.workloadClass }),
+    };
+    if (this.scheme.get() === null || (onlyIfBehind && !this.schemeBehind(cell.key))) {
+      return { ...row, state: "told", sessions: 0 };
+    }
+    try {
+      const client = dialed ?? (await this.connectedClient(cell));
+      const live = (await client.listSessions()).filter((session) => !session.exited);
+      // read at the moment of sending, never before the list: whatever was
+      // kept while this waited is what goes out
+      const scheme = this.scheme.get();
+      const count = this.schemeCount;
+      if (scheme === null) return { ...row, state: "told", sessions: 0 };
+      const told = await Promise.all(
+        live.map(async (session) => {
+          try {
+            await this.tellSession(client, session.id, scheme);
+            return true;
+          } catch (error) {
+            // the floor's own answer about this session (it ended between the
+            // list and the tell) is the session's alone; a tell nothing
+            // answered, or a connection that died, is the cell's failure
+            if (!(error instanceof GhostteaRequestError)) throw error;
+            this.logger.debug(
+              "fieldd.terminal.scheme_session_untold",
+              "A session was not told the terminal scheme",
+              { sessionId: session.id, error: errorMessage(error) },
+            );
+            return false;
+          }
+        }),
+      );
+      if ((this.schemeToldAt.get(cell.key) ?? 0) < count) this.schemeToldAt.set(cell.key, count);
+      return { ...row, state: "told", sessions: told.filter(Boolean).length };
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.terminal.scheme_cell_untold",
+        "A terminal cell did not answer the scheme; it is told when it is next reached",
+        { ...row, error: errorMessage(error) },
+      );
+      return { ...row, state: "unavailable", sessions: 0 };
+    }
+  }
+
+  /** THE ONE PLACE a session is told its colours. `request` with a typed
+   * command is the ghosttea client's public door (0.15 has no `setColors`
+   * method of its own); the bytes come from the parsed scheme. */
+  private async tellSession(
+    client: GhostteaAutomationClient,
+    sessionId: string,
+    scheme: TerminalScheme,
+  ): Promise<void> {
+    await client.request({ type: "set-colors", sessionId, ...schemeColors(scheme) });
+  }
+
+  /** A newborn session is told the kept scheme. Its birth stands whatever
+   * happens here and does not wait for it (`birth` calls this unawaited): a
+   * session that could not be told is a logged fact, never a failed or a late
+   * create. Never rejects. The request is sent before the first await, so it
+   * rides the cell's connection right behind the create. */
+  private async tellBorn(client: GhostteaAutomationClient, sessionId: string): Promise<void> {
+    const scheme = this.scheme.get();
+    if (scheme === null) return;
+    try {
+      await this.tellSession(client, sessionId, scheme);
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.terminal.scheme_birth_untold",
+        "A new session was not told the terminal scheme",
+        { sessionId, error: errorMessage(error) },
+      );
     }
   }
 
@@ -3090,7 +3289,18 @@ export class TerminalService {
         { error },
       );
     });
+    // TL-4a — a cell whose configuration is reloaded and changed (fieldd's own
+    // config write among the causes) gives every session of it the
+    // configuration's colours again and then announces the reload: ghosttea
+    // 0.15 keeps no host's colours across one. The kept scheme is said to the
+    // cell again on that announcement. Retires with the ghosttea release that
+    // keeps a host's colours across a reload.
+    client.on("config-changed", () => {
+      void this.tellCell(cell, client);
+    });
     this.clients.set(key, { client, token: endpoints.authToken });
+    // TL-4a — a cell behind the kept scheme is told now that it answers
+    if (this.schemeBehind(key)) void this.tellCell(cell, client, true);
     return client;
   }
 
