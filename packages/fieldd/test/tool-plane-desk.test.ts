@@ -50,6 +50,9 @@ const DOOR: NativeDoorOpen = {
   pane: { terminalSessionId: "sess-plain", depth: 1 },
 };
 
+/** How long a row waits for a call's own answer before it fails by name (item 557, 2026-11-18). */
+const CALL_ANSWER_MS = 10_000;
+
 /** `real`: the audit the plane is given in place of the recording fake (item 526's real-trail row). `actTurns` (item
  * 557, 2026-11-18): the window answers an act only this many turns after it arrives, as a window slower than a
  * reader's count. */
@@ -131,16 +134,27 @@ function harness(real?: ToolPlaneAudit, actTurns = 0) {
         `${JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { _meta: META, name, arguments: args } })}\n`,
       ),
     );
-    for (let i = 0; i < 20; i += 1) await new Promise((r) => setTimeout(r, 0));
-    const lines = (sent.get(1) ?? "")
-      .split("\n")
-      .filter(Boolean)
-      .map((l) => JSON.parse(l));
-    return lines.find((l: { id: number }) => l.id === id)?.result as {
-      isError?: boolean;
-      structuredContent?: Record<string, unknown>;
-      content?: { text: string }[];
-    };
+    // item 557, 2026-11-18 — this call's own answer, waited for, never a count of turns: the plane answers only once
+    // its audit lines are written, and a real writer's lines take the machine's own time
+    const deadline = Date.now() + CALL_ANSWER_MS;
+    for (;;) {
+      const answer = (sent.get(1) ?? "")
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => JSON.parse(l))
+        .find((l: { id: number }) => l.id === id);
+      if (answer !== undefined)
+        return answer.result as
+          | {
+              isError?: boolean;
+              structuredContent?: Record<string, unknown>;
+              content?: { text: string }[];
+            }
+          | undefined;
+      if (Date.now() > deadline)
+        throw new Error(`call ${id} (${name}) had no answer within ${CALL_ANSWER_MS} ms`);
+      await new Promise((r) => setTimeout(r, 0));
+    }
   };
   return { h, plane, call, audited, order };
 }
@@ -157,6 +171,7 @@ describe("the desk room through the plane (OB-3b)", () => {
       tool: "write_text",
       input: { text: "milk" },
     });
+    expect(result).toBeDefined();
     expect(result?.isError).toBeUndefined();
     const line = audited.find((a) => a.action === "tools.object_act");
     expect(line?.attrs).toMatchObject({ verb: "object_act", ref, tool: "write_text" });
@@ -180,6 +195,7 @@ describe("the desk room through the plane (OB-3b)", () => {
       tool: "write_text",
       input: { text: "milk" },
     });
+    expect(result).toBeDefined();
     expect(result?.isError).toBeUndefined();
     await service.close();
     const lines = (await trailOf(service.root)).filter((r) => r.action === "tools.object_act");
@@ -205,6 +221,7 @@ describe("the desk room through the plane (OB-3b)", () => {
       tool: "write_text",
       input: { text: "milk" },
     });
+    expect(result).toBeDefined();
     expect(result?.isError).toBeUndefined();
     await service.close();
     const lines = (await trailOf(service.root)).filter((r) => r.action === "tools.object_act");

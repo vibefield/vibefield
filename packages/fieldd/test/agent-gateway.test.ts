@@ -2931,6 +2931,9 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
         await box.gateway.start();
         const seen = failing(box, CREATE_FAILED, 2);
         const answer = await box.launch(600);
+        // item 557, 2026-11-18: a launch is always answered (a failed one with a coded decline),
+        // so no answer is not a pass
+        expect(answer).toBeDefined();
         expect(answer?.action).not.toBe("exec");
         expect(seen).toHaveLength(2);
         expect(box.fold.abandoned).toEqual(seen.map((each) => each.creationRequestId));
