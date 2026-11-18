@@ -366,7 +366,7 @@ import {
   UNKNOWN_FLOOR_CENSUS,
 } from "./native-supervisor";
 import { DeskObjects } from "./objects/desk-objects";
-import { registerObjectDoors } from "./objects/doors";
+import { boardKnownIn, registerObjectDoors } from "./objects/doors";
 import { type DeskKind, deskKinds, pluginDeskKinds } from "./objects/kinds";
 import { ObjectsStore } from "./objects/store";
 import { PeerLink } from "./peer-link";
@@ -8218,6 +8218,7 @@ export async function bootstrap(
       objects: deskObjects,
       audit,
       isWindowToken: (tokenId) => windowTokenIds.has(tokenId),
+      boardKnown: boardKnownIn(docs),
     });
     api.register("needs.answer", async (ctx, params) => {
       admitSparkActor(ctx, "needs.answer");

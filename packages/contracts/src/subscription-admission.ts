@@ -245,6 +245,12 @@ export const SUBSCRIPTION_ADMISSION: Readonly<Record<string, SubscriptionAdmissi
     identity: { spark: {} },
     reason: "One spark's crews for Chat's crew card, so one key per spark at the default holders.",
   },
+  "objects.intents.subscribe": {
+    class: "things",
+    identity: { docId: {} },
+    reason:
+      "One board's intents for the window that holds it, and the handler refuses a board fieldd's documents do not list (item 521), so one key per board at the default holders: a window follows the one desk mounted now, so it holds a board's key once (twice for a moment under React's StrictMode in a development window).",
+  },
 
   // ── bounded: an open key space, the method bounded instead ──
   "diagnostics.subscribe": {
@@ -260,13 +266,6 @@ export const SUBSCRIPTION_ADMISSION: Readonly<Record<string, SubscriptionAdmissi
     bound: 8,
     reason:
       "Every transcript exists and each session opens its own rosetta socket, so 8 live per connection (a phone's reader holds 1).",
-  },
-  "objects.intents.subscribe": {
-    class: "bounded",
-    identity: {},
-    bound: 4,
-    reason:
-      "Its identity is a board's open id, and the handler opens a board's feed without asking whether the board exists, so the method is bounded: a window follows the one desk mounted now, so it holds 1 (2 for a moment at a board switch, and twice that under React's StrictMode in a development window), so 4 live per connection.",
   },
 };
 

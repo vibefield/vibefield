@@ -49,7 +49,7 @@ export interface ObjectDoorsDeps {
   readonly objects: DeskObjects;
   readonly audit: ObjectDoorsAudit;
   /** whether fieldd holds a board (item 521; `boardKnownIn`) */
-  readonly boardKnown?: (docId: string) => boolean;
+  readonly boardKnown: (docId: string) => boolean;
   /** a window's own token, by its id */
   isWindowToken(tokenId: string): boolean;
   /** the product API's stream floor on `objects.presence.subscribe` (tests) */
@@ -82,7 +82,7 @@ const bad = (shape: string): RpcCallError =>
 const target = (ref: string) => ({ kind: "object", id: ref });
 
 export function registerObjectDoors(api: ObjectDoorsApi, deps: ObjectDoorsDeps): void {
-  const { objects, audit, isWindowToken } = deps;
+  const { objects, audit, isWindowToken, boardKnown } = deps;
 
   const windowToken = (ctx: CallerContext, method: string): string => {
     if (ctx.principal.kind === "local-token" && isWindowToken(ctx.principal.tokenId))
@@ -95,6 +95,9 @@ export function registerObjectDoors(api: ObjectDoorsApi, deps: ObjectDoorsDeps):
     const parsed = ObjectsIntentsSubscribeParams.safeParse(params ?? {});
     if (!parsed.success) throw bad("{ docId }");
     const { docId } = parsed.data;
+    // item 521: a board fieldd does not hold is refused before anything is installed, so the method is admitted by its
+    // board (`things`, subscription-admission.ts), never by a bound of its own
+    if (!boardKnown(docId)) throw new RpcCallError("NOT_FOUND", `no such board: ${docId}`, false);
     // the door opens only once the window holds its subId: an intent sent sooner would be dropped by the client
     let close: (() => void) | undefined;
     return {
