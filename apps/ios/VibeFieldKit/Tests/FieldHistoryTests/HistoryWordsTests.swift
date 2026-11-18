@@ -5,11 +5,12 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 362d (James, 2026-11-12 18:40:35Z, of the phone's History session view against the desktop's: "i think all
-/// message type and views are different from desktop") — a recorded message's words are read as the phone's Chat
+/// Item 362d (asked for 2026-11-12, of the phone's History session view against the desktop's: every message type
+/// and view like the desktop's, where they all differed) — a recorded message's words are read as the phone's Chat
 /// reads a spark's, and drawn at the document's own measure. Never markup (EL7): a link is its words.
 ///
-/// These rows hold what the words are READ into and the figures they are set in. How they look is his to see.
+/// These rows hold what the words are READ into and the figures they are set in. How they look is to be seen on
+/// a device.
 @Suite("item 362d — a recorded message's words are read as Chat reads a spark's")
 struct HistoryWordsTests {
   /// Every run's own characters, in order.
@@ -133,8 +134,8 @@ struct HistoryWordsTests {
   }
 }
 
-/// Item 362f (James, 2026-11-12 18:40:35Z, of the phone's History session view against the desktop's: "i think all
-/// message type and views are different from desktop, needs thorough audit") — a long message is drawn to the
+/// Item 362f (asked for 2026-11-12, of the phone's History session view against the desktop's: a thorough audit of
+/// every message type and view, which differ from the desktop's) — a long message is drawn to the
 /// room's bound, and the whole is one press away. The rule is the room's `messageExcerpt` (rosetta at the pin,
 /// clients/room/src/components/transcript/message-preview.ts), ported as it is written.
 ///
@@ -248,11 +249,11 @@ struct HistoryExcerptTests {
   }
 }
 
-/// Item 380 (James, 2026-11-13 05:29:39Z, of the first build that reads a desktop directly: "the long message does
-/// not seem to be capped in short view like desktop, and they dont have the same gradient fade at cap bottom which
-/// is not good") — the room bounds a message by height as well as by length: a window of 21.7 em whose words fade
+/// Item 380 (asked for 2026-11-13, of the first build that reads a desktop directly: a long message is capped in
+/// the short view as on the desktop, with the same gradient fade at the cap's foot, where it had
+/// neither) — the room bounds a message by height as well as by length: a window of 21.7 em whose words fade
 /// under `View full message` (rosetta at the pin, clients/room/src/styles/message-preview.css). These rows hold the
-/// window's height, whether more is left to read, and the fade's stops. How it looks is his to see.
+/// window's height, whether more is left to read, and the fade's stops. How it looks is to be seen on a device.
 @Suite("item 380 — a long message stands in the room's window, and fades")
 struct HistoryWindowTests {
   private typealias Window = HistoryWords.Window

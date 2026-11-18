@@ -8,7 +8,7 @@ import Testing
 
 // PG-6 — THE TIMELINE'S HAND ROWS: what no golden reaches, each held to the desktop source line it cites (the read's
 // §7, H1–H9; H10, the words rule). TimelineView's layout is its own (never exported), the phone's tolerance and its
-// joins are the phone's, and J-S4's active treatment is James's. The golden rows are `Timeline*ParityTests`.
+// joins are the phone's, and the active treatment is J-S4's (2026-11-04). The golden rows are `Timeline*ParityTests`.
 //
 // No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 
@@ -62,7 +62,7 @@ struct TimelineViewTests {
 
   /// H1 — `dayLabel` (:83-85) for a midnight tick in en_US. The phone asks the platform for the desktop's own
   /// skeleton, CLDR's `Ed` (`{weekday: 'short', day: 'numeric'}`), so the ORDER is each platform's: Apple's data
-  /// says `EEE d`, `WED 4`, where Node's (ICU 78.3, CLDR 48) says `d EEE`, `4 WED`. fd RULED keep (2026-11-04): the
+  /// says `EEE d`, `WED 4`, where Node's (ICU 78.3, CLDR 48) says `d EEE`, `4 WED`. Kept, decided 2026-11-04: the
   /// desktop asks the user's locale, so the platform's localized order is the intent.
   @Test func theDayLabelIsThePlatformsShortWeekdayAndDay() throws {
     let utc = try #require(TimeZone(identifier: "UTC"))
@@ -125,7 +125,7 @@ struct TimelineViewTests {
   // MARK: - H4 empty
 
   /// H4 — no rows, no lanes; the empty stage says upstream's title (TimelineView.js:882) and the phone's hint, its pane
-  /// dropped by the words rule (H10; draft word: James's eye (VF-PM 2026-11-04)).
+  /// dropped by the words rule (H10; draft word: for the eye on a device (decided 2026-11-04)).
   @Test func anEmptyFieldSaysSo() {
     let set = TimelineLanes.lanes([], nowMs: TimelineGolden.nowMs)
     #expect(set.all.isEmpty)
@@ -269,13 +269,13 @@ struct TimelineViewTests {
 
   // MARK: - H10 the words rule
 
-  /// H10 — THE WORDS RULE (VF-PM via fd, 2026-11-04): on the phone no word, label or title names a key, hover or a
+  /// H10 — THE WORDS RULE (decided 2026-11-04): on the phone no word, label or title names a key, hover or a
   /// pane. Every word the view says, pinned: the desktop's where it names none, and the named drops where it did —
   /// the body's label keeps its first sentence (TimelineView.js:861; "Up and down light a lane, Enter opens it, left
   /// and right move through time, minus and equals zoom." dropped) and the empty hint loses its pane (:882; draft
-  /// word: James's eye (VF-PM 2026-11-04)). NOW's key legend (`keyLegend(NOW_KEY)`, :859) and the map's hover title
-  /// (:856, "The whole day. Press to put the head there; drag to play it back.") are never drawn, so no word here
-  /// carries them. Then every word and every preset is scanned for a key, hover or pane.
+  /// word: for the eye on a device (decided 2026-11-04)). NOW's key legend (`keyLegend(NOW_KEY)`, :859) and the
+  /// map's hover title (:856, "The whole day. Press to put the head there; drag to play it back.") are never drawn,
+  /// so no word here carries them. Then every word and every preset is scanned for a key, hover or pane.
   @Test func thePhonesWordsNameNoKeyHoverOrPane() {
     let pinned: [(phone: String, words: String)] = [
       (TimelineWords.noAgents, "NO ACTIVE AGENTS"),

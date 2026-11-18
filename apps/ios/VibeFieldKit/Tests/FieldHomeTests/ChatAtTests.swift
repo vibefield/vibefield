@@ -4,7 +4,7 @@ import Testing
 
 @testable import FieldHome
 
-/// IOS-12f's M-f2 (PC-L1, one Chat; plan-12f's Q8 A; VF-PM 2026-11-09 02:24:16Z) — the phone's @ is the Mac's. Each golden
+/// IOS-12f's M-f2 (PC-L1, one Chat; plan-12f's Q8 A; decided 2026-11-09) — the phone's @ is the Mac's. Each golden
 /// is written by field-app's own models (`packages/field-app/test/at-rows-goldens.test.ts`) and copied here byte for byte
 /// (`pnpm check:ios-fixtures`). A board row goes in as facts; the seam from the phone's remote row to those facts is a row
 /// of its own at the foot, where Q3's residual lives.

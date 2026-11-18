@@ -7,7 +7,7 @@ import Testing
 @testable import FieldHome
 
 // PG-6 — THE TIMELINE GOLDEN'S READERS over the witness run, step by step. The run is PG-4t's shared
-// `HomeFixture.witnessSteps()` (fd's Q10 ruling, 2026-11-04: the open, frames 0…7, PG-1c's resync after frame 7, then
+// `HomeFixture.witnessSteps()` (PG's Q10, decided 2026-11-04: the open, frames 0…7, PG-1c's resync after frame 7, then
 // the old chain's delta at 8, which is the gap; each step's drawn rows as `RemoteMeshCopy` draws them).
 // `rows(_:ledger:)` joins a step's drawn rows as HomeScreen's `godviewInput` does.
 //

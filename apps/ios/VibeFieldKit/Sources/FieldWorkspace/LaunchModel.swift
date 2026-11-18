@@ -76,7 +76,7 @@ public struct ProfileChoice: Equatable, Sendable, Identifiable {
 
 public enum LaunchModel {
   /// Q5 — the agents' own folders, on the phone: every desktop is elsewhere,
-  /// and "This Mac" is a desktop's word for itself (SB-D10, James's word).
+  /// and "This Mac" is a desktop's word for itself (SB-D10, 2026-10-14).
   public static let nativeLabel = "Default"
 
   /// PJ-D12 (a), PJ-D6 on the phone: the place the project's last launch

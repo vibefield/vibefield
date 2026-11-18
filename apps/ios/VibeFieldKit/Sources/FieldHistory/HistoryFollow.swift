@@ -1,7 +1,7 @@
 import CoreGraphics
 
-// Item 362a (James, 2026-11-12 18:40:35Z, of the phone's History session view against the desktop's: "it somehow
-// scroll start from top, does not like chat message flow in chat app") — WHERE A SESSION'S DOCUMENT STANDS: it opens
+// Item 362a (asked for 2026-11-12, of the phone's History session view against the desktop's: that it flow as a
+// chat app's messages do, not start at the top) — WHERE A SESSION'S DOCUMENT STANDS: it opens
 // at its end and keeps its end in view, as the desktop's does (rosetta's room, `lib/transcript/tail-scroll.ts`), by
 // the phone's Chat's figures (`ChatThreadView.rows`: the foot within 24 pt, a rest off the foot stops the following).
 // DESIGN.md §8 "The phone's session document".
@@ -187,8 +187,8 @@ struct HistoryFollow: Equatable, Sendable {
   /// side eases to a top that near (item 396); since item 418 nothing is read in for standing there.
   static func nearTop(offset: CGFloat, container: CGFloat) -> Bool { offset <= container }
 
-  // RETIRED 2026-11-14 (item 418; James, 08:13:38Z, session qa-01: "it seems still trying to load everything …
-  // you pull down for load more"): `asksEarlier(nearTop:cursor:stalled:awake:reading:)`, item 362b's "whether the
+  // RETIRED 2026-11-14 (item 418, asked for that day: the page no longer loads everything by itself, and a pull
+  // down loads more): `asksEarlier(nearTop:cursor:stalled:awake:reading:)`, item 362b's "whether the
   // rows above are asked for now, by themselves", and with it `touched` ("a finger has moved this page at least
   // once"), which nothing else read. Within a screen of the top it asked, and again after each batch for as long as
   // the page stood there; a session whose first batch was under two screens tall was asked for at once. The rows

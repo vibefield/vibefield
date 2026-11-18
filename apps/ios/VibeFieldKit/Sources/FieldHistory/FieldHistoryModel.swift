@@ -71,7 +71,7 @@ public enum FieldHistoryModel {
     projects.filter { lifetimeCost($0) > 0 }.max { lifetimeCost($0) < lifetimeCost($1) }
   }
 
-  /// Item 390 (James, 2026-11-13) — the line under the root's head: nothing while the ledger's desktop answers, and
+  /// Item 390 (asked for 2026-11-13) — the line under the root's head: nothing while the ledger's desktop answers, and
   /// that desktop's own sentence while it does not. The device is named as its platform names it (`DeviceWord`;
   /// L4's word pass).
   public static func headNote(_ corpus: HistoryCorpus, standing: DesktopStanding, device: DeviceWord) -> String? {
@@ -90,7 +90,7 @@ public enum FieldHistoryModel {
 
   // RETIRED 2026-11-13 (item 390): `scopeLine`, the line under the title. Its asleep, indexing and contracts
   // sentences are `headNote`'s, word for word. Its first, `N projects · N sessions across N agents`, said while the
-  // desktop answers, is the line James removed: the head's bubble holds the count.
+  // desktop answers, is the line that was removed (item 390, 2026-11-13): the head's bubble holds the count.
 
   /// A head as its page says it (items 390 and 392): the title, the count in the bubble beside it, and the one line
   /// VoiceOver reads for the two.
@@ -114,7 +114,7 @@ public enum FieldHistoryModel {
       : Head(title: title, count: count, spoken: "\(title), \(count)")
   }
 
-  /// Item 392 (James, 2026-11-13) — a project's head: its name and how many sessions its page lists, the root's
+  /// Item 392 (asked for 2026-11-13) — a project's head: its name and how many sessions its page lists, the root's
   /// head over again and in the root's bubble. The spoken line names what is counted, since a project's name does
   /// not: `rosetta, 62 sessions`. A project whose sessions are not read yet wears no bubble, never a 0.
   public static func projectHead(name: String, sessions: Int) -> Head {

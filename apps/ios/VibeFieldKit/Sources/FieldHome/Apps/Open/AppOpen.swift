@@ -11,7 +11,7 @@ enum AppOpen {
   /// §8: "Opening on ‹desktop›…", late: nothing for 120 ms, then a fade.
   static let lateAfter: Duration = .milliseconds(120)
   /// `starting`: the serve is on its way up and the caller asks again (MA-1a's fixture). A second apart, fifteen asks
-  /// at most; then the phone stops and says it cannot reach the desktop. ‹for James: the bound, and its words›.
+  /// at most; then the phone stops and says it cannot reach the desktop. ‹to pick: the bound, and its words›.
   static let askAgainAfter: Duration = .seconds(1)
   static let maxAsks = 15
 
@@ -45,7 +45,7 @@ enum AppOpen {
   }
 
   /// The words for a refused or failed `artifact.open`: an apps refusal by its state, anything else as the desktop
-  /// out of reach (§8: "Can't reach ‹desktop›" with its reason; ‹for James: the reason›).
+  /// out of reach (§8: "Can't reach ‹desktop›" with its reason; ‹to pick: the reason›).
   static func refused(_ error: any Error, desktop: String) -> MadeAppFacts.Why {
     guard let door = error as? FieldProductError, let refusal = MadeAppRefusal(details: door.details) else {
       return cantReach(desktop)
@@ -65,7 +65,7 @@ enum AppOpen {
     MadeAppFacts.Why(title: "Can't reach \(desktop)", detail: "It isn't answering.")
   }
 
-  /// Still starting after `maxAsks`: §8's "Can't reach ‹desktop›" with its reason. ‹for James: the reason›.
+  /// Still starting after `maxAsks`: §8's "Can't reach ‹desktop›" with its reason. ‹to pick: the reason›.
   static func didNotStart(_ desktop: String) -> MadeAppFacts.Why {
     MadeAppFacts.Why(title: "Can't reach \(desktop)", detail: "It didn't start this app.")
   }

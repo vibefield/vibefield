@@ -9,7 +9,7 @@ import Foundation
 // (`views/rain/RainView.tsx:66-74`, dist `RainView.js:29-35`): a status's head, tail and the speed the view gives it.
 //
 // The rain paints the dark material in BOTH themes, so nothing here is keyed per mode. The phone's lit stream (J-S4,
-// James 2026-11-04; VF-PM 01:40Z) heads in the DARK palette's text main, `--vf-godview-dark-text-main` (`litHead`),
+// decided 2026-11-04) heads in the DARK palette's text main, `--vf-godview-dark-text-main` (`litHead`),
 // never `#111111`: by day that would be black on black.
 
 struct RainPalette: Equatable, Sendable {

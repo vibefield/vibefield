@@ -23,7 +23,7 @@ struct SystemRainRandom: RainRandom, Sendable {
 extension Mulberry32: RainRandom {}
 
 extension Mulberry32 {
-  /// `-vf-godview-rain-seed=<n>` (fd's Q7): the seed a still is rolled with.
+  /// `-vf-godview-rain-seed=<n>` (PG's Q7): the seed a still is rolled with.
   static let argument = "-vf-godview-rain-seed"
 
   /// The first `-vf-godview-rain-seed=<n>`: a seeded generator, or nil when it is absent or names no 32-bit word (the

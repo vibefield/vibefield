@@ -3,7 +3,7 @@ import FieldHistory
 import SwiftUI
 import UIKit
 
-// IOS-12f's M-f2 (VF-PM 2026-11-09 02:24:16Z, Q1 (a); DESIGN.md §8 "The phone's Chat", the chip) — THE DRAFT'S FIELD:
+// IOS-12f's M-f2 (Q1 (a), decided 2026-11-09; DESIGN.md §8 "The phone's Chat", the chip) — THE DRAFT'S FIELD:
 // a `UITextView` behind `UIViewRepresentable`, as `ComposerField` is, because a SwiftUI `TextField` holds no token in
 // its sentence and the kit's floor (iOS 18.1) is under the attributed `TextEditor`. Each chip is one
 // `NSTextAttachment`, so Backspace takes it as one character for free. `ChatDraft`'s parts are the truth; the field

@@ -3,12 +3,12 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 391 (James, 2026-11-13 23:28:32Z, session qa-01, of a session's document on his phone, the area over its
-/// foot marked: "[Image #17] make the messages start fade, blur and dim at the marked area like how it looks at the
-/// top edge area") — a band stands over the document's foot, under the pill, the slot and the bar.
+/// Item 391 (asked for 2026-11-13, of a session's document on a phone, the area over its foot marked: the
+/// messages begin to fade, blur and dim in the marked area, as they do at the
+/// top edge) — a band stands over the document's foot, under the pill, the slot and the bar.
 ///
 /// These rows hold the band's RULE: where it begins, and that it deepens from nothing at its top to its strongest
-/// at the screen's edge. How it looks beside the head is his to see.
+/// at the screen's edge. How it looks beside the head is to be seen on a device.
 @Suite("item 391 — a session's document fades, blurs and dims over its foot")
 struct HistoryFootFadeTests {
   private typealias Stop = HistoryFootFade.Stop

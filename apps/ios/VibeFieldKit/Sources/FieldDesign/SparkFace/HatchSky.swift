@@ -8,7 +8,7 @@ import Foundation
 // hatch's rows golden (`spark-hatch.golden.json`, SparkHatchGoldenTests): each deal's geometry, its star's rows and its
 // face's rows on the golden's clock.
 //
-// What the phone does differently is said (VF-PM's Q3 ruling, 2026-11-07 13:58:40Z):
+// What the phone does differently is said (Q3, decided 2026-11-07):
 // - no pointer is watched: the face is made with `watch: true`, and the phone has no pointer, as the golden has none;
 // - the deal's three draws are the system's random, except under `-vf-spark-time`, where they are Mulberry32 of the
 //   face's seed (`Draws.seeded`), so a still is the same every run;

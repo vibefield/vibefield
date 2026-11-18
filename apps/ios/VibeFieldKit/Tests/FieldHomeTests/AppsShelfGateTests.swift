@@ -4,7 +4,7 @@ import Testing
 
 @testable import FieldHome
 
-/// MA-6's gate (VF-PM, 2026-11-09 13:07Z): nothing inert lands. The shelf is drawn, so the sheet mounts the strip, All
+/// MA-6's gate (decided 2026-11-09): nothing inert lands. The shelf is drawn, so the sheet mounts the strip, All
 /// apps and the Apps group, each of whose taps now goes somewhere. The door's commit turned these over.
 ///
 /// What this holds is what the sheet is given to mount; HomeScreen's two slots read `inSheet`.

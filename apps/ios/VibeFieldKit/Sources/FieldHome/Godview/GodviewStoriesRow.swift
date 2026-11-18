@@ -1,7 +1,7 @@
 import FieldDesign
 import SwiftUI
 
-// PG-4t — THE STORIES ROW ON THE FIELD PAGE (DESIGN.md §8 "The phone's Stories row"; James ruled J-S1 A, J-S2 (ii),
+// PG-4t — THE STORIES ROW ON THE FIELD PAGE (DESIGN.md §8 "The phone's Stories row"; 2026-11-04: J-S1 A, J-S2 (ii),
 // J-S3 drop and J-S4 accept): Godview's head, carried to the phone. A frame piece over the stage and its overlays,
 // outside the swarm: it never moves when the view changes; only its ring does. Kit only: it wears the chrome palette
 // and the bar's glass. Its numbers are `GodviewStories`', its marks `GodviewViewMarks`', its name `GodviewStorySaying`.

@@ -2,7 +2,7 @@ import FieldDesign
 import FieldProduct
 import Foundation
 
-// IOS-12d (PC-D4 A, PC-L1, PC-L3, PC-L4; VF-PM's rulings on its Q1–Q10, 2026-11-06 19:12Z; DESIGN.md §8 "The phone's
+// IOS-12d (PC-D4 A, PC-L1, PC-L3, PC-L4; its Q1–Q10, decided 2026-11-06; DESIGN.md §8 "The phone's
 // Chat", Needs you and the thread's card; §9 "Chat on the phone") — WHAT WAITS ON YOU, on the phone: the cards the
 // Needs you group and a thread stand, read from the home's merged queue and from what this phone answers. The Mac
 // keeps one card standing per thread (`needs-card-stand.ts`); the phone has a group as well, so what it answers is
@@ -117,13 +117,13 @@ enum ChatNeedsWords {
   static let group = "Needs you"
   /// The pane's act (§9), where the Mac says Show.
   static let answerInPane = "Answer in its pane"
-  /// Answer in its pane with no pane on the board (Q5; ruled (a) by James 2026-11-06 22:56Z).
+  /// Answer in its pane with no pane on the board (Q5; ruled (a) 2026-11-06).
   static let paneMissing = "Couldn't open its pane: it isn't on your field"
 
   /// The group's eyebrow (Q2): who asks.
   static func asks(_ card: NeedsCard) -> String { "\(card.names.from) asks" }
 
-  /// A card whose desktop is away (Q8; the three lines ruled (a) by James 2026-11-06 22:56Z, §9). The device is named
+  /// A card whose desktop is away (Q8; the three lines ruled (a) 2026-11-06, §9). The device is named
   /// as its platform names it (`DeviceWord`).
   static func away(_ desktop: String, _ standing: ChatAway.Standing, device: DeviceWord) -> String {
     switch standing {

@@ -11,8 +11,8 @@ import UIKit
 // - its radius running to the row's;
 // - past 0.45 of the way, the disc it wears in its row.
 // `SparkFlight` is the model, pure, held by SparkFlightTests. `SparkFlightWindow` draws it in a window of its own over
-// the sheet, for the flight alone, as hatch.tsx draws it on a canvas over the whole window (VF-PM's Q1 ruling,
-// 17:10:10Z). What flies is the face engine's buddy of the hero's seed, `ready` and free, as hatch.tsx's is.
+// the sheet, for the flight alone, as hatch.tsx draws it on a canvas over the whole window (Q1, decided
+// 2026-11-07). What flies is the face engine's buddy of the hero's seed, `ready` and free, as hatch.tsx's is.
 
 /// One flight: from the hero's place to a row face's box, from `t0` of the flight's own clock.
 public struct SparkFlight: Equatable, Sendable {

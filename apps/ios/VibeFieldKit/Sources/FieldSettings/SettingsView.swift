@@ -29,8 +29,8 @@ public struct SettingsView: View {
   @AppStorage(PhoneAppearance.storageKey) private var look: PhoneAppearance = .auto
   @Environment(\.dismiss) private var dismiss
   #if DEBUG || VF_TESTFLIGHT
-    /// RB-2 (VF-PM 21:59:10Z, Q2) — under a demo, This phone › Lock changes nothing: the lock is this phone's real one,
-    /// and a demo never turns it on or off. The home says whether a demo stands (`lockHeld(_:)`).
+    /// RB-2 (Q2, decided 2026-11-12) — under a demo, This phone › Lock changes nothing: the lock is this phone's real
+    /// one, and a demo never turns it on or off. The home says whether a demo stands (`lockHeld(_:)`).
     private var holdsLock = false
   #endif
 

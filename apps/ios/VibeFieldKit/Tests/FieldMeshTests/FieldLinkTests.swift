@@ -12,7 +12,7 @@ import Testing
 //
 // **UA-P-1a rewrote what drives these.** Discovery used to be the
 // `field.devices.v1` store: a desktop published a slice naming its capability
-// URL and the phone dialed it. James ruled on 2026-09-15 that a store is scoped
+// URL and the phone dialed it. It was ruled on 2026-09-15 that a store is scoped
 // to the login identity, and that until truffle can gate by login nothing
 // content-bearing rides the bus — so that store is not published, and the
 // driver is truffle's PEER LIST. The rows below are the same rules asked of the
@@ -866,7 +866,7 @@ private final class Refusal: @unchecked Sendable {
   /// THE SWITCH, and what it is keyed to since UA-P-5.
   ///
   /// The FLAG says the bus exists again — truffle gates a node by login now
-  /// (RFC 025), which is the condition James's ruling set. The LINK still
+  /// (RFC 025), which is the condition the 2026-09-15 ruling set. The LINK still
   /// reads nothing unless its node is gated, and a link that names neither
   /// reads nothing at all: an ungated node is on the whole tailnet, which is
   /// the audience the ruling forbids. Both halves in one row, because it is

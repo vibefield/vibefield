@@ -131,7 +131,7 @@ struct TerminalSlotTests {
 
 // MARK: - The live card is its terminal (item 41)
 
-/// T1 (James, 2026-10-19 21:38Z): the live card wears Godview's pane frame — a
+/// T1 (asked for 2026-10-19): the live card wears Godview's pane frame — a
 /// 44pt band whose readout says the agent's model · effort · context, and a
 /// line and a glow that follow the sheet's corners. The band holds no rows.
 @Suite("item 41 — the live card's band and frame")
@@ -281,7 +281,7 @@ struct CardFaceTests {
 
 // MARK: - Writes
 
-// RETIRED 2026-10-28 with `FieldHomeModel.writeInvitation` (James: no pre-attach write mark; a peer is writable by
+// RETIRED 2026-10-28 with `FieldHomeModel.writeInvitation` (asked for: no pre-attach write mark; a peer is writable by
 // default). The card's status note alone stands before a tap; the live attachment's "view only" stays its own.
 
 

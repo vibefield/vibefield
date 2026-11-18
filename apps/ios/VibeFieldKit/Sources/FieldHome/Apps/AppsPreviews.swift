@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-// MA-6e — the previews this phone holds, by digest (MA-D10 B; VF-PM's Q6): fetched through the node's URL session from
-// the app's own desktop, kept on the phone, and gone at sign-out. A real fetch over the tailnet is a device row owed
-// beside P6.
+// MA-6e — the previews this phone holds, by digest (MA-D10 B; Q6, decided 2026-11-09): fetched through the node's
+// URL session from the app's own desktop, kept on the phone, and gone at sign-out. A real fetch over the tailnet is a
+// device row owed beside P6.
 
 @MainActor
 @Observable

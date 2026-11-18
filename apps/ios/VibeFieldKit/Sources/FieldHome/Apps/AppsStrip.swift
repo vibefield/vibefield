@@ -6,7 +6,7 @@ import UIKit
 // MA-6c — what MA-D7's two slots hold (DESIGN.md §8 "The phone's Apps", as amended by SE-D3): the strip above the switch
 // before any word, and the group first in Everything once a word is typed. An icon is its fallback until 6e's previews.
 
-/// The strip: **Apps**, the Recent row and **All apps**. Absent at zero apps (VF-PM's Q7).
+/// The strip: **Apps**, the Recent row and **All apps**. Absent at zero apps (Q7, decided 2026-11-09).
 struct AppsStripContent: Equatable {
   let head: String
   let all: String
@@ -47,7 +47,7 @@ struct AppsSearchGroup: Equatable {
   }
 }
 
-/// MA-6's gate (VF-PM, 2026-11-09 13:07Z, A + B): nothing inert lands. Until 6e draws the shelf, an app's tap and
+/// MA-6's gate (decided 2026-11-09, A + B): nothing inert lands. Until 6e draws the shelf, an app's tap and
 /// **All apps** had nowhere to go, so the sheet mounted neither the strip nor the group. The shelf is drawn now.
 enum AppsShelfGate {
   static let drawn = true

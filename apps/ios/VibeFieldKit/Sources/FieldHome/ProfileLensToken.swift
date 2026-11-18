@@ -56,7 +56,7 @@ enum LensToken {
 
   /// The × says what it does (the drawing's `aria-label`).
   static let clearWords = "Show every profile"
-  /// UM-5b — a plan's form says what it does too (§9 "The token", ‹for James›).
+  /// UM-5b — a plan's form says what it does too (§9 "The token", ‹to pick›).
   static let planClearWords = "Show every plan"
   /// What the name does, said after it.
   static let menuHint = "Opens the profiles to show"

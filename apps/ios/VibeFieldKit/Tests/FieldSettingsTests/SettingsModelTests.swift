@@ -182,7 +182,7 @@ struct SettingsModelTests {
     #expect(SettingsModel.tailscaleState(.connecting) == .init("Connecting…"))
     #expect(SettingsModel.tailscaleState(.signInAgain) == .init("Sign in to Tailscale again", wantsTheUser: true))
     #expect(SettingsModel.tailscaleState(.waitingForApproval) == .init("Waiting for approval", wantsTheUser: true))
-    // P1b (2026-11-11, W2a's sentence by James's rule of 10 Nov): the mesh's reason is never said
+    // P1b (2026-11-11, W2a's sentence by the rule of 10 Nov): the mesh's reason is never said
     #expect(
       SettingsModel.tailscaleState(.couldNotConnect("the network went away"))
         == .init("Couldn’t connect.", wantsTheUser: true))
@@ -195,7 +195,7 @@ struct SettingsModelTests {
     }
   }
 
-  // MARK: - WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z; §8 "The phone's Settings", amended that day)
+  // MARK: - WI-W2e A (asked for on the page The Way In, 2026-11-14; §8 "The phone's Settings", amended that day)
 
   @Test("Couldn’t connect. carries its next step, Try again, on the row under the card; Sign in again stands as it did")
   func tailscaleAct() {

@@ -4,7 +4,7 @@ import Testing
 
 @testable import FieldHistory
 
-// ITEM 109 (VF-PM's (a), N = 6, 2026-11-05) — a tail reset past the rows held. A tailnet caller's tail answers a
+// ITEM 109 ((a), N = 6, decided 2026-11-05) — a tail reset past the rows held. A tailnet caller's tail answers a
 // snapshot of the session's newest `INDEX_TAILNET_LIMITS.MAX_ROWS` (100) rows, and a `.snapshot` RESETS the copy.
 // The reader kept every held row below the reset's oldest, and its older cursor points below the first page it
 // read, so when more than 100 rows arrived after the newest row held (an app switch through a busy session), the

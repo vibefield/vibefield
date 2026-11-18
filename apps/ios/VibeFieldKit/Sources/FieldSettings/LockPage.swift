@@ -10,7 +10,7 @@ import SwiftUI
 struct LockPage: View {
   let lock: FieldLock
   #if DEBUG || VF_TESTFLIGHT
-    /// RB-2 (VF-PM 21:59:10Z, Q2) — a demo stands: the page draws the lock as it is and changes nothing, either way.
+    /// RB-2 (Q2, decided 2026-11-12) — a demo stands: the page draws the lock as it is and changes nothing, either way.
     var held = false
   #endif
   /// A change is asking: the controls wait for its answer.

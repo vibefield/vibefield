@@ -78,7 +78,7 @@ public enum HistoryReads {
   /// when it becomes ready, and two cheap reads every few seconds is a
   /// phone's pace for a state a person is watching.
   public static let indexRecheckSeconds: Int64 = 5
-  /// ITEM 109 (VF-PM's (a), N = 6, 2026-11-05) — how many pages of `pageRows` a tail reset's fill reads from
+  /// ITEM 109 ((a), N = 6, decided 2026-11-05) — how many pages of `pageRows` a tail reset's fill reads from
   /// the head: 240 rows, so a reset's newest `INDEX_TAILNET_LIMITS.MAX_ROWS` (100) and a hole of up to 140
   /// rows below them close. Past them the rows below the last page read are dropped, and the log says so.
   public static let fillPages = 6

@@ -37,7 +37,7 @@ public enum FreewayApproval {
   /// kept, so whoever retries still reads the door's own taxonomy. A refusal the phone has no words
   /// for keeps the door's own. `device` names the phone's device as its platform names it — "iPhone", "iPad" or
   /// "device", FieldDesign's `DeviceWord.noun`, which the UI layer gives, since FieldFreeway imports no UI (L4's
-  /// word pass; VF-PM 2026-11-06 04:27Z, ruled (b)).
+  /// word pass; decided (b), 2026-11-06).
   public static func said(_ error: FieldProductError, desktop: String, device: String) -> FieldProductError {
     guard let words = words(error, desktop: desktop, device: device) else { return error }
     return FieldProductError(

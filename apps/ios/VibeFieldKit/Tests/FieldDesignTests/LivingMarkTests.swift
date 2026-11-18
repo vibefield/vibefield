@@ -4,15 +4,15 @@ import Testing
 
 @testable import FieldDesign
 
-/// Item 417b (2026-11-14; on James's item 417, 08:13:38Z, session qa-01: "message view initial loading should adopt
-/// latest desktop design that uses our logo mark") — the phone draws the living mark itself, from the desktop's
+/// Item 417b (2026-11-14; on item 417, asked for that day: a message view's first load adopts the desktop's latest
+/// design, the one with our logo mark) — the phone draws the living mark itself, from the desktop's
 /// generated SVG (`packages/design-kit/src/living-mark/living-mark-light.svg`, look "Wormhole · edited",
 /// 517b24464e65), whose numbers are carried into LivingMarkData.swift.
 ///
 /// These rows hold what a value can: the carried file's own numbers, that every key reads to one structure, and
 /// the rules the drawing is made from (the reader, the mix, the clock, a light's run, the path). They do NOT read
 /// the SVG: a regenerated SVG is seen here only once the carried file is made to follow it. How the mark looks is
-/// his to see.
+/// to be seen on a device.
 @Suite("item 417b — the phone's living mark is the desktop's generated SVG, read as a browser reads it")
 struct LivingMarkTests {
   private typealias Place = LivingMarkClock.Place

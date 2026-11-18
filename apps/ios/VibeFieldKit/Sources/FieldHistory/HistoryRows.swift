@@ -1,7 +1,7 @@
 import CoreGraphics
 
-// Item 381 (James, 2026-11-13 05:29:39Z, of the first build that reads a desktop directly: "some long session shows
-// up blank and only shows when i try to scroll") — THE DOCUMENT'S ROWS. The session's document is laid out lazily,
+// Item 381 (asked for 2026-11-13, of the first build that reads a desktop directly: a long session shows at once,
+// where it was blank until scrolled) — THE DOCUMENT'S ROWS. The session's document is laid out lazily,
 // and what it lays out lazily is a row: a row that was a whole turn stood thousands of points tall once a message
 // came whole, and the page's first offset, reckoned on an estimate of rows not yet laid out, overshot its end (a
 // reading of the code, not yet shown on a device). A row is ONE PART of a turn, in the order the turn is drawn.
@@ -78,9 +78,9 @@ enum HistoryRow: Identifiable, Equatable, Sendable {
   }
 }
 
-// Item 396 (James, 2026-11-13 23:38:00Z, session qa-01: "a good addition design should be added to both desktop and
-// mobile is that we should have a floating button on the side for user to quick jump to previous user message so user
-// can quick navigate, help me design and implement nicely") — THE MESSAGE BEFORE. A round button at the document's
+// Item 396 (asked for 2026-11-13: on the desktop and the phone alike, a floating button at the side that jumps to
+// the person's previous message, so a session is quick to move through, designed and built
+// with care) — THE MESSAGE BEFORE. A round button at the document's
 // side goes to the nearest message of the person's own that begins above the top of the view. DESIGN.md §8 "The
 // phone's session document", "A button at the side goes to the message before".
 //
@@ -185,8 +185,8 @@ extension HistoryRow {
   /// its own row is laid out a screen above at most. With no such message the answer is the document's top
   /// while rows above are not yet read (`unread`), and nothing once they all are.
   ///
-  /// A message of the person's own is a human prompt alone, as in the desktop's room (VF-PM's ruling, 2026-11-13
-  /// 23:47Z): a prompt the fold marked as a setting command or a machine's (`HistoryTurn.promptKind`) is passed
+  /// A message of the person's own is a human prompt alone, as in the desktop's room (decided
+  /// 2026-11-13): a prompt the fold marked as a setting command or a machine's (`HistoryTurn.promptKind`) is passed
   /// over, and does not make the button show.
   static func before(_ rows: [HistoryRow], standing: [String: Standing], unread: Bool) -> HistoryBefore {
     let otherwise: HistoryBefore = unread ? .top : .nothing

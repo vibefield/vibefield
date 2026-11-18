@@ -9,7 +9,7 @@ import Foundation
 // `phone-timeline.golden.json` without a canvas (`TimelineGeometryParityTests`). `toPath2D` :227-242, the replay into a
 // path, belongs to the paint (`TimelinePaint.swift`).
 //
-// RUNTIME ONLY (fd's Q1 ruling, 2026-11-04): a lane's wake is its current state alone, one segment. NOT transcribed,
+// RUNTIME ONLY (PG's Q1, decided 2026-11-04): a lane's wake is its current state alone, one segment. NOT transcribed,
 // history alone reaches them: `RECORDED` :14, `recordedSegments` :20, `wakeRuns` :69, `unrecordedStretches` :89,
 // `wakeSeam` :115, `capsRun` :136, `wakeSegments`' ended and recorded arms (:44-47, :48-50), `capsStart`'s ended
 // arm, and the `bounds` status (the record's floor), so a segment's status is a lane's.

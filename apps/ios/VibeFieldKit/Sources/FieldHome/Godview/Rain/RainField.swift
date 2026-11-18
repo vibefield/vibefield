@@ -10,7 +10,7 @@ import Foundation
 // the surface steps it. Host-buildable; the surface (`RainSurface.swift`) is the kit's.
 
 /// The rain's dice as the field holds them: the system's for the live rain, or mulberry32 from the DEBUG seed flag
-/// (fd's Q7), one concrete type so the field needs no existential.
+/// (PG's Q7), one concrete type so the field needs no existential.
 enum RainDice: RainRandom {
   case system(SystemRainRandom)
   case seeded(Mulberry32)
@@ -36,9 +36,10 @@ enum RainDice: RainRandom {
 
 @MainActor
 final class RainField {
-  /// The empty stage's words (RainView.js:261; fd's Q8): the desktop's title verbatim, and its line in the phone's
+  /// The empty stage's words (RainView.js:261; PG's Q8): the desktop's title verbatim, and its line in the phone's
   /// words, as the list and spend say it. A NAMED DEVIATION (the words rule: on the phone no word names a key, hover
-  /// or a pane): the desktop says "Launch an agent from a terminal pane.". Draft word: James's eye (VF-PM 2026-11-04).
+  /// or a pane): the desktop says "Launch an agent from a terminal pane.". Draft word: for the eye on a device
+  /// (decided 2026-11-04).
   static let emptyTitle = "NO ACTIVE AGENTS"
   static let emptyLine = "Launch an agent from a terminal."
 
@@ -127,7 +128,7 @@ final class RainField {
 
 /// OPEN (H3), rain's touch tooltip, proposed in light/read-pg8.md §8; not built. The slot where the card would stand
 /// and the column's `hovered` id, always nil: the desktop's hover lights a column and shows a card, and the phone's
-/// touch form is James's to pick. A tap opens the card, as the desktop's click selects.
+/// touch form is still to pick. A tap opens the card, as the desktop's click selects.
 enum RainTouchPeek {
   static let hovered: String? = nil
 }

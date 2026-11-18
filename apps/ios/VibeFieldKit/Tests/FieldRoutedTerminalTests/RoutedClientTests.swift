@@ -307,7 +307,7 @@ import Testing
   }
 
   /// …but a refusal the DOOR marks final is not asked again (fix8: never waits
-  /// forever). On 2026-10-19 James's floor was respawned under a live card, and
+  /// forever). On 2026-10-19 a desktop's floor was respawned under a live card, and
   /// the phone asked for the lost session's ticket 254 times over three hours.
   /// The door had answered that it no longer had the session, and that asking
   /// again would not change it.
@@ -1056,7 +1056,7 @@ import Testing
   /// `active` state, not a seed. Reading `.applying` as not ready closed input
   /// for the length of every frame's render: while a TUI streamed, keystrokes
   /// were declined ("waiting for the terminal to catch up") and the card's
-  /// phase fell to `connecting` on every frame (James's phone, 2026-10-17).
+  /// phase fell to `connecting` on every frame (on a phone, 2026-10-17).
   @Test func aFrameInFlightOverAnAppliedSceneKeepsPresentationAndInput() async throws {
     let transport = ScriptedTransport()
     let sink = HeldApplySink(holding: 2)
@@ -1094,7 +1094,7 @@ import Testing
     client.close()
   }
 
-  /// The keyboard's bottom (James, 2026-10-17): the contract's largest
+  /// The keyboard's bottom (asked for 2026-10-17): the contract's largest
   /// `scroll-to` row, which the engine pins to the active area whatever has
   /// scrolled in since the last frame — never a total read off that frame.
   @Test func scrollToBottomAsksForTheContractsLargestRow() async throws {
@@ -1458,7 +1458,7 @@ import Testing
     client.close()
   }
 
-  /// The History lead's D6 (2026-10-17) — a paste larger than the cell's
+  /// History's D6 (2026-10-17) — a paste larger than the cell's
   /// control-message cap closed the WHOLE control leg: the cell's reader drops
   /// a connection on an oversize message. Past the announced cap it is refused
   /// here, with the text's own size and how much of IT one message carries, and

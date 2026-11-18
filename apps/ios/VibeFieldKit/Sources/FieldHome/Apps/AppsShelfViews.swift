@@ -4,7 +4,7 @@ import SwiftUI
 
 // MA-6e — what the shelf draws (DESIGN.md §8 "The phone's Apps", MA-D9 A, D10 B, D11 A, D12 A): the shelf, its folders,
 // the receded tab, the honest screen an app zooms to before MA-5, and its glass row at rest. How it looks and feels on a
-// device is owed to James (P6); the row's fold on scroll waits for MA-5, which gives it a page to scroll.
+// device is owed (P6); the row's fold on scroll waits for MA-5, which gives it a page to scroll.
 
 /// Where an icon finds its preview. Absent, an icon is its fallback.
 struct AppsIconSource: Sendable {
@@ -173,7 +173,7 @@ private struct AppsFolderTile: View {
           .opacity(lifted ? 0 : 1)
         Text(folder.name)
           .font(ChromeType.sans(AppsShelfChrome.folderName, .semibold))
-          // Ruled 2026-11-12 (James, 06:07:01Z, PM board): the primary ink. Item 273.
+          // Ruled 2026-11-12: the primary ink. Item 273.
           .foregroundStyle(ChromePalette.ink)
           .lineLimit(1)
           .opacity(unnamed ? 0 : 1)
@@ -518,7 +518,7 @@ struct AppsCardShape: Shape {
 /// Where the card is drawn: smaller about the screen's top centre, and lower. For drawing only (`ignoredByLayout`):
 /// the pages keep the screen's own safe area and their own layout while the card moves, so the card and what is in it
 /// are one picture. A transform the layout reads (`offset`, `scaleEffect`) moves the pages out of the status bar's
-/// inset and lays them out again inside the card, at every step of the finger (James's screenshot, 2026-11-12).
+/// inset and lays them out again inside the card, at every step of the finger (item 348's screenshot, 2026-11-12).
 struct AppsCardPlace: GeometryEffect {
   var scale: CGFloat
   var offset: CGFloat

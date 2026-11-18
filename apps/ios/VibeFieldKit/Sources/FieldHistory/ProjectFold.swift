@@ -203,8 +203,8 @@ extension FieldHistoryModel {
   // opens when one wakes." (`HistoryOpening.ledger`).
 
   // RETIRED 2026-11-13 (item 390): `ledgerScope`, the scope line over the ledger before the desktops' marks (`12
-  // projects · 1,405 sessions across 9 agents on`). James removed the line; the root's head says how many projects
-  // in its bubble (`rootHead`).
+  // projects · 1,405 sessions across 9 agents on`). The line was removed (item 390, 2026-11-13); the root's head
+  // says how many projects in its bubble (`rootHead`).
 
   /// Item 352 — the ledger's last line when the listing went on past the phone's bound of pages.
   public static func cutLedger(_ count: Int, desktop: String) -> String {
@@ -342,9 +342,9 @@ extension FieldHistoryModel {
   }
 }
 
-// Item 393 (James, 2026-11-13 23:28:32Z, session qa-01, of a project's page on his phone: "for session entry item,
-// they should also show the message count, token count, cost, etc,just like as how desktop session entry is
-// designed, align it") — A SESSION ENTRY'S FIGURES. The desktop's entry (rosetta's room, `SessionListItem`) prints
+// Item 393 (asked for 2026-11-13, of a project's page on a phone: a session's entry shows its message count,
+// token count, cost and the rest, laid out as the desktop's session entry is
+// designed) — A SESSION ENTRY'S FIGURES. The desktop's entry (rosetta's room, `SessionListItem`) prints
 // `N msgs · span · tokens · cost`, and its figures are the session's row in its project's `contribution`
 // (`HistoryRoom.tsx`: "Per-session facts (tokens + messages) from every loaded contribution."). The phone reads the
 // same rows with `project.figures` and summed them for the project's messages alone; these rules join them to the

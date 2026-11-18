@@ -187,8 +187,9 @@ import Testing
     #expect(peerBody.title == "Loft · notes")
   }
 
-  /// M6b (PG-3e, the review's [1]; J-E3 as James picked) — a bubble with neither facet, a bare terminal on the home or
-  /// on a peer, wears the terminal prompt on its card's header and badge, never nothing; an agent wears its mark.
+  /// M6b (PG-3e, the review's [1]; J-E3 as picked 2026-11-02) — a bubble with neither facet, a bare terminal on the
+  /// home or on a peer, wears the terminal prompt on its card's header and badge, never nothing; an agent wears its
+  /// mark.
   @Test func aBareTerminalWearsThePrompt() throws {
     let shell = try Self.bubble(try R.row("pty-h2"))
     #expect(shell.glyph == .terminalPrompt)

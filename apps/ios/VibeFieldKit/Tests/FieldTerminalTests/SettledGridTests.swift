@@ -4,8 +4,8 @@ import Testing
 @testable import FieldTerminal
 
 /// The seat is told only a settled grid (2026-10-17): a grid at rest when its
-/// run loop turn ends; the keyboard's motion held until it stops (James's
-/// ruling, "settled size only"); and a card being dismissed never (the swipe
+/// run loop turn ends; the keyboard's motion held until it stops (TM,
+/// 2026-10-17: the settled size only); and a card being dismissed never (the swipe
 /// down that left the desktop at 45×5).
 @Suite struct SettledGridTests {
   private func grid(_ rows: UInt16) -> GhostteaTerminalGridSize {
@@ -25,7 +25,7 @@ import Testing
     #expect(settled.turnEnded() == .send(grid(25)))
   }
 
-  /// James's phone, 03:56Z: one toggle measured 31 → 28 → 13, each a resize.
+  /// On a phone (TM, 2026-10-17): one toggle measured 31 → 28 → 13, each a resize.
   @Test func theKeyboardsMotionIsHeldAndOnlyWhereItStoppedIsTold() {
     var settled = SettledGrid()
     _ = settled.measured(grid(31), leaving: false)
@@ -42,7 +42,7 @@ import Testing
     #expect(settled.keyboardDidMove() == .unchanged)
   }
 
-  /// James's phone, 05:22Z: the layout the keyboard's frame triggered measured
+  /// On a phone (TM, 2026-10-17): the layout the keyboard's frame triggered measured
   /// 45×10 BEFORE this value heard the will-notification. In the same turn, the
   /// notification still makes it the keyboard's motion.
   @Test func aGridMeasuredBeforeTheWillInItsTurnIsTheKeyboards() {
@@ -65,7 +65,7 @@ import Testing
     #expect(settled.turnEnded() == .unchanged)
   }
 
-  /// James's phone, 03:57Z: the swipe down measured 45×16 … 45×1, and the park
+  /// On a phone (TM, 2026-10-17): the swipe down measured 45×16 … 45×1, and the park
   /// released the seat at 45×5.
   @Test func aLeavingCardsGridsAreNeverTold() {
     var settled = SettledGrid()

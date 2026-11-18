@@ -95,7 +95,7 @@ struct AccountDisplayTests {
   func notice() {
     #expect(AccountDisplay.notice(state: .needsLogin) == "Sign in to Tailscale again to reach your desktops.")
     #expect(AccountDisplay.notice(state: .needsMachineAuth) == "An admin of your Tailscale network approves new devices.")
-    // P1b (2026-11-11, W2a's sentence by James's rule of 10 Nov): the mesh's reason is never said
+    // P1b (2026-11-11, W2a's sentence by the rule of 10 Nov): the mesh's reason is never said
     #expect(AccountDisplay.notice(state: .failed("boom")) == "Couldn’t connect.")
     #expect(AccountDisplay.notice(state: .failed("tsnet: dial tcp 100.64.0.1:443: i/o timeout")) == "Couldn’t connect.")
     // WI-W2e A (2026-11-14) — and its next step, the menu's row under it

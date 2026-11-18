@@ -10,8 +10,8 @@ import SwiftUI
 /// material, gradient, hairline, one soft shadow) beneath it, so a view asks
 /// for "a glass circle" once and gets the honest material for the OS it is on.
 ///
-/// The open Me menu is NOT glass on either OS (§8, James: "do not make it
-/// transparent"); only the closed circle, the pill and the accessory are.
+/// The open Me menu is NOT glass on either OS (§8; IOS-9b, 2026-09-23: never
+/// transparent); only the closed circle, the pill and the accessory are.
 extension View {
   /// A round glass control: the account corner's face, the search circle.
   /// Interactive on iOS 26, so a touch presses the glass the way the system's

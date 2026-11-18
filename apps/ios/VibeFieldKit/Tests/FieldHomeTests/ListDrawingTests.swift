@@ -73,7 +73,7 @@ struct ListDrawingTests {
     #expect(unlinked == nil)
   }
 
-  /// D5 — the grid at the phone's width (LC:63-71, fd's Q8: the desktop's defaults). At 402 pt (the iPhone 17 Pro's
+  /// D5 — the grid at the phone's width (LC:63-71, PG's Q8: the desktop's defaults). At 402 pt (the iPhone 17 Pro's
   /// portrait) the agent column is 43.04 and the detail 66.96: 402 − 2×13 (the rows' box) − 3 − 1 (the borders) −
   /// 2×9 (the inset) − 10 − 150 − 44 (the fixed columns) − 4×10 (the gaps) = 110, shared .9 : 1.4. Never below 0.
   @Test func theColumnsAtThePhonesWidth() {
@@ -111,7 +111,7 @@ struct ListDrawingTests {
     #expect(chosen == .list)
   }
 
-  /// D7 — the cells' lines (VF-PM's (B), 2026-11-04, deviation 6): every cell is the desktop's ONE line with the tail
+  /// D7 — the cells' lines ((B), decided 2026-11-04, deviation 6): every cell is the desktop's ONE line with the tail
   /// ellipsis (LC:137-157, :180-186: `nowrap`, `text-overflow: ellipsis`), but the detail, TWO lines then the ellipsis,
   /// and the model, at most TWO lines broken only at a space.
   @Test func theCellsLines() {
@@ -142,7 +142,7 @@ struct ListDrawingTests {
     #expect(empty == [""])
   }
 
-  /// D9 — the agent column's FIXED floor (deviation 6, fd's ruling): the mark, its gap and 8 glyphs of the mono, 60.51
+  /// D9 — the agent column's FIXED floor (deviation 6, 2026-11-04): the mark, its gap and 8 glyphs of the mono, 60.51
   /// pt at 9 pt, whatever the rows say (the grid never reflows with its data). At the phone's 402 pt it comes out of the
   /// detail's share (49.49 pt, 8 glyphs a line, 2 lines). At every witness step, every model line holds whole words
   /// that fit, and the terminal's and the host's words fit alone. 0 is still D5's desktop grid.
@@ -199,7 +199,7 @@ struct ListDrawingTests {
     /// provider with none wears its letter, and no id wears `?`. On the main actor: `AgentGlyph.drawnAsset(for:)` is
     /// a View's static, main-actor-isolated (the early kit compile's four Swift 6 isolation warnings).
     /// *Corrected 2026-11-12 (item 359):* deviation 4 ("the SDK draws a path for six the phone letters") is over.
-    /// James overturned LP-4's two-mark ruling (DECISIONS LP-D7), so the phone draws a path for every agent the SDK
+    /// LP-4's two-mark ruling was overturned (DECISIONS LP-D7), so the phone draws a path for every agent the SDK
     /// does (Pi's since item 360 closed); ACP, which the SDK letters too, is the letter's row here.
     @MainActor
     @Test func theMarks() {

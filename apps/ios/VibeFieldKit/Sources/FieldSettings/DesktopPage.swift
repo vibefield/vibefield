@@ -9,7 +9,7 @@ import SwiftUI
 /// with it is drawn only while it is connected.
 ///
 /// Later slices read more, each a glance like these and each through the home
-/// (FW-R6, DS-L4; James's ruling of 2026-10-31 22:08Z): its agent catalog and
+/// (FW-R6, DS-L4; the ruling of 2026-10-31): its agent catalog and
 /// profile sets, its History's index, its VibeField version (the roster's
 /// `appVersion`). Its running agents are the Field's, read through the home
 /// (PG-L4.6), never here. IOS-10c read the first for the home's own page:
@@ -42,7 +42,7 @@ struct DesktopPage: View {
       .chromeRows()
       .opacity(desktop.isAsleep ? 0.62 : 1)
       // IOS-10c — the home's agents, as its catalog and profiles say them. Only the home's row carries them, so every
-      // other desktop's page has no section, and none is ever empty (VF-PM 23:20:56Z).
+      // other desktop's page has no section, and none is ever empty (decided 2026-11-11).
       if let agents = desktop.agents, !agents.isEmpty {
         Section {
           ForEach(agents) { agent in

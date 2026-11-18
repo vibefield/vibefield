@@ -2,9 +2,9 @@ import Foundation
 
 /// UA-P-5 — the account gate: this phone's node admits only its own login.
 ///
-/// James's ruling of 2026-09-15 (UA-P-D2): *"the VibeField ecosystem linked
-/// with this account interacts only with the nodes under this user's tailscale
-/// account."* truffle answers it as RFC 025: a node started with a non-empty
+/// The ruling of 2026-09-15 (UA-P-D2): what VibeField links to this account
+/// deals only with the nodes under this user's Tailscale
+/// account. truffle answers it as RFC 025: a node started with a non-empty
 /// `loginAllow` reports only peers whose Layer 3 login matches, and refuses
 /// every inbound hello whose WhoIs login does not — with close code 4004,
 /// before our own hello is revealed. The gate is PER NODE and fixed for the

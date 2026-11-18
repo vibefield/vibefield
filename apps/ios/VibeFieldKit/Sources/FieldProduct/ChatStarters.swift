@@ -10,9 +10,9 @@ import Foundation
 // - The handle is the live run, no spark's own, worked in last, named by its agent and its place among that agent's live
 //   runs. The reviewer is an agent the home has, the ruled one first, another than the run's own where there is one.
 // - An agent slot with nothing to fill keeps its ruled word. A project or a run with nothing to fill drops out and the
-//   starter reads bare (ES-Q1, James 2026-11-09). A read that cannot be had counts as nothing to fill.
+//   starter reads bare (ES-Q1, picked 2026-11-09). A read that cannot be had counts as nothing to fill.
 // - Which agent a ruled word names is the catalog's to say (`starterAgent`), so no agent id is a literal here (R23b).
-// - The home's agents fill them (E2, VF-PM 2026-11-09), by the rule that puts the phone's profiles on the home alone.
+// - The home's agents fill them (E2, decided 2026-11-09), by the rule that puts the phone's profiles on the home alone.
 
 public enum ChatStarters {
   /// One agent as the rule reads it.
@@ -135,7 +135,7 @@ public enum ChatStarters {
 
   /// One of the home's rows as a run, nil for a bare terminal, which is no agent's run. `workedMs` is
   /// `activity?.since ?? statusSince`; it is the remote row's nearest to last evidence, not equal to it; a
-  /// `lastActivityAt` on the monitor row is a contracts widening, not this slice's (VF-PM 2026-11-09 08:27:37Z).
+  /// `lastActivityAt` on the monitor row is a contracts widening, not this slice's (decided 2026-11-09).
   public static func run(_ row: AgentRemoteRow) -> Run? {
     let monitor = row.monitorRow
     guard let kind = monitor.provider?.id else { return nil }

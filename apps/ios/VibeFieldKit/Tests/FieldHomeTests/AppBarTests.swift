@@ -7,8 +7,8 @@ import Testing
 
 @testable import FieldHome
 
-/// IOS-9e — the bar's geometry, as decisions: James (2026-09-23) "why the
-/// account circle is not in left corner, why their size not match". What is
+/// IOS-9e — the bar's geometry, as decisions (asked for 2026-09-23: the
+/// account circle in the left corner, at the search circle's size). What is
 /// pinned here is exactly that — the corner and the search circle are ONE
 /// size, the corner stands in the LEFT corner as the search circle's mirror,
 /// the capsule is centred between them with equal gaps — and that every
@@ -73,7 +73,7 @@ struct AppBarTests {
     #expect(pillInsetTop == 4)
   }
 
-  /// VF-PM's Q1 (2026-11-05, at the lean; DESIGN.md §8): Chat's `tab-chat` is drawn at History's 22, Field's own
+  /// Q1 (decided 2026-11-05, at the lean; DESIGN.md §8): Chat's `tab-chat` is drawn at History's 22, Field's own
   /// asset keeps its 26.
   @Test("Chat stands third, its glyph History's size, 22")
   func chatGlyph() {
@@ -86,9 +86,9 @@ struct AppBarTests {
     #expect(titles == ["Field", "History", "Chat"])
   }
 
-  /// PC-D5 A, "one need, one count" (VF-PM's Q2; DESIGN.md §8): Chat's mark is the orange count of the sparks that
-  /// need you; with none, a cyan dot while a thread is unread; else nothing. Field's is its own agents waiting.
-  /// History wears none.
+  /// PC-D5 A, "one need, one count" (Q2, decided 2026-11-05; DESIGN.md §8): Chat's mark is the orange count of the
+  /// sparks that need you; with none, a cyan dot while a thread is unread; else nothing. Field's is its own agents
+  /// waiting. History wears none.
   @Test("Chat's mark: the count of sparks that need you, else the cyan dot while a thread is unread")
   func chatMark() {
     #expect(TabMark.chat(needing: 2, unread: false) == .count(2))

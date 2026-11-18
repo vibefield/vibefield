@@ -3,7 +3,7 @@ import Testing
 
 @testable import FieldTerminal
 
-/// IOS-13a S5b (VF-PM 2026-11-05 03:59Z; DESIGN.md §9 "The phone's legal words") — Settings › Terminal names the device
+/// IOS-13a S5b (decided 2026-11-05; DESIGN.md §9 "The phone's legal words") — Settings › Terminal names the device
 /// as its platform names it. Its two tags (Look, Drawn over the terminal) and Look's foot take `DeviceWord`, as every
 /// Settings word does.
 @Suite("Settings › Terminal names the device as its platform does")

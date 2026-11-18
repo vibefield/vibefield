@@ -31,8 +31,8 @@ enum AppTab: Hashable {
 /// **Why it is ours and not `TabView`'s.** iOS 26's tab bar pins its capsule to
 /// the leading edge the moment search is a tab, and it has no seat for a
 /// control before the tabs — so IOS-9a's corner could only stand beside the
-/// search circle, at a size of its own. James (2026-09-23): "why the account
-/// circle is not in left corner, why their size not match, fix them". So the
+/// search circle, at a size of its own. Asked for 2026-09-23: the account
+/// circle in the left corner, at the search circle's size. So the
 /// bar is composed here from the system's glass (`GlassEffectContainer`,
 /// `glassEffect`, `glassEffectID`) with every number taken off the system bar
 /// in the simulator (iPhone 17, iOS 26.5, 3× pixels): the row 62 pt tall and
@@ -64,7 +64,7 @@ enum AppBar {
   static let iconHeight: CGFloat = 28
   static let fieldGlyph: CGFloat = 26
   static let symbolSize: CGFloat = 22
-  /// Chat's `tab-chat`, at History's size (VF-PM's Q1; DESIGN.md §8).
+  /// Chat's `tab-chat`, at History's size (Q1, decided 2026-11-05; DESIGN.md §8).
   static let chatGlyph: CGFloat = 22
   static let labelSize: CGFloat = 10
   static let badgeSize: CGFloat = 20

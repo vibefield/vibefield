@@ -110,7 +110,7 @@ private func seatTakenByTheDesk(
 
   /// A PARKED session presents no view (demand none detaches it), so the cell
   /// refuses every geometry verb for it — and a closed card's last layout pass
-  /// sent one anyway, refused VIEW_NOT_PRESENTING on James's phone (03:57Z).
+  /// sent one anyway, refused VIEW_NOT_PRESENTING on a phone (TM, 2026-10-17).
   /// None is sent; the grid waits for the take that brings the view back.
   @Test func aParkedSessionSendsNoResize() async throws {
     let (client, control) = try await attached()

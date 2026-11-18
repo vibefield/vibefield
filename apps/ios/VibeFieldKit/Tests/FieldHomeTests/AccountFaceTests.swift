@@ -173,7 +173,7 @@ struct AccountFaceTests {
     #expect(!corner.canSignOut)
   }
 
-  // MARK: - WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z; DESIGN.md §9 "The way in", ruled that day)
+  // MARK: - WI-W2e A (asked for on the page The Way In, 2026-11-14; DESIGN.md §9 "The way in", ruled that day)
 
   @Test("a start that failed says Couldn’t connect. and offers its next step, Try again, in Sign in's place")
   func couldNotConnect() {

@@ -10,7 +10,7 @@ import Testing
 ///
 /// It is a claim about this CLIENT — that it speaks the protocol over a socket
 /// and not only over a seam — and never a claim about that cell. The real door
-/// is Phase 0's: James's hardware run at TM-5.
+/// is Phase 0's: a hardware run at TM-5.
 @MainActor
 @Suite(.serialized) struct FakeCellDoorTests {
   private let session = "sess-01J8Z3K9"

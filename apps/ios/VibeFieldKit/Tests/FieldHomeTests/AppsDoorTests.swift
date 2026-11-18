@@ -5,7 +5,7 @@ import Testing
 @testable import FieldHome
 
 /// MA-6d — the door to the phone's Apps (DESIGN.md §8 "The phone's Apps", MA-D7 A and MA-D8 A): the pull, the first
-/// peek, what is new and what has been seen, the drop. A real pull's gesture on a device is owed to James (P6).
+/// peek, what is new and what has been seen, the drop. A real pull's gesture on a device is owed (P6).
 ///
 /// No key path, no `try` and no `mutating` call inside an #expect/#require argument: hoisted into a `let` first (T10f's
 /// kit trap, and run263's compile error).

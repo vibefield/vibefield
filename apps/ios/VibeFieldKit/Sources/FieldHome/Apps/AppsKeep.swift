@@ -2,7 +2,7 @@ import FieldProduct
 import Foundation
 
 // MA-3h (Keep), K4 — the phone keeps an app through its home: `artifact.mark {foldKey, kept}`, which the home answers
-// and its settings document carries to every desktop (James's short path, 2026-11-13). The long press offers it
+// and its settings document carries to every desktop (the short path, picked 2026-11-13). The long press offers it
 // (DESIGN.md §8 "The phone's Apps"); Versions waits for its view, which is undrawn. The shelf learns of a keep from the
 // door's next page, read on the home's ping, as it learns everything else: nothing here writes a row.
 
@@ -25,9 +25,9 @@ enum AppsTileAct: Hashable {
   }
 }
 
-/// What a keep the home did not take says (MA-L10: words, never a code): DESIGN.md §9 "Keep's words", James's
+/// What a keep the home did not take says (MA-L10: words, never a code): DESIGN.md §9 "Keep's words", the
 /// pick. Its fourth and fifth lines are the phone's. Its first and third are the desk's, said
-/// here too for the same two refusals: James's word, 2026-11-15 10:11:20Z, "go with lean".
+/// here too for the same two refusals: the lean, picked 2026-11-15.
 enum AppsKeepWords {
   static func failed(_ error: (any Error)?, kept: Bool, title: String) -> String {
     let refusal = error as? FieldProductError

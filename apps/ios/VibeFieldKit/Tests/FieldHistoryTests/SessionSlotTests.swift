@@ -2,13 +2,13 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 388 (James, 2026-11-13 23:18:12Z, of the slot over the bar on a session's document: "this is too busy
-/// [Image #14] just make it a resume button, no need for the device stuff") — the slot carries the session's act
+/// Item 388 (asked for 2026-11-13, of the slot over the bar on a session's document: less busy, a resume button
+/// alone, without the device's details) — the slot carries the session's act
 /// and nothing beside it: the act's word, and after it only what the act itself has to say. Where the session runs
 /// (the desktop's mark and name, the folder) is not part of it: the rule is handed neither, so it cannot say them.
 ///
 /// These rows hold the WORDS. That the button is as wide as they are, and unbroken with the bar folded, is the
-/// view's, and his to see.
+/// view's, and to be seen on a device.
 @Suite("item 388 — a session's act in the slot is its word, and what it has to say")
 struct SessionSlotTests {
   @Test("Resume stands alone until it has an answer; its answer stands after it")

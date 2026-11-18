@@ -9,7 +9,7 @@ import Foundation
 // Transcribed as the desktop draws, kept where it surprises: a glyph is placed at its cell's centre and its row's
 // alphabetic BASELINE (`row × cell`), so row 0 sits above the stage's top edge; a drop wraps (`y − tail > rows` → 0)
 // in a still too; the head skips the tail's nearest cell. Not transcribed, named: the pane wash (:126-146; the phone
-// mounts no panes, fd's Q4). The phone's one addition is J-S4's lit row (`RainAgent.lit`), heading in the dark
+// mounts no panes, PG's Q4). The phone's one addition is J-S4's lit row (`RainAgent.lit`), heading in the dark
 // palette's text main with the active row's glow ×1.5.
 
 /// `measureCanvas` (:7-24): the stage in points, cut into cells of the font's size.
@@ -95,7 +95,7 @@ struct RainFrame {
 
   /// `draw` (:109-211): one frame's ops over `agents` (the window's rows, `agentsRef`). `elapsed` nil is a still (no
   /// drop falls, no glyph scrambles, a receded column sits at its weight); otherwise it is the frame's `deltaMs`.
-  /// `hovered` is the row a pointer rests on: the desktop's; the phone's peek is James's (`RainTouchPeek`, nil today).
+  /// `hovered` is the row a pointer rests on: the desktop's; the phone's peek is to pick (`RainTouchPeek`, nil today).
   mutating func plan(
     agents: [RainAgent], parameters: RainParameters, palette: RainPalette, hovered: String? = nil, elapsed: Double?,
     random: inout some RainRandom

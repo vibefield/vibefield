@@ -62,7 +62,7 @@ import UIKit
     }
   }
 
-  /// UM-4 (ruling 20) — the bloom's buds draw a profile's glyph through the phone's ONE table, so a profile looks the
+  /// UM-4 (2026-11-06) — the bloom's buds draw a profile's glyph through the phone's ONE table, so a profile looks the
   /// same on the field's bloom, the held face's and the Agent Profiles page: This Mac the laptop, a token the
   /// vocabulary's symbol, and one this build does not draw the star (puppeteer's `profileMarkName`), never a person.
   @Test func theBudsDrawAProfileThroughThePhonesOneGlyphTable() {

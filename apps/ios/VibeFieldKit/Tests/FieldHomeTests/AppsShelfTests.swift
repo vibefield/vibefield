@@ -4,7 +4,7 @@ import Testing
 
 @testable import FieldHome
 
-/// MA-6a — the phone's shelf (DESIGN.md §8 "The phone's Apps", MA-D9 A; VF-PM's rulings Q2, Q3 and Q6, 2026-11-09):
+/// MA-6a — the phone's shelf (DESIGN.md §8 "The phone's Apps", MA-D9 A; Q2, Q3 and Q6, decided 2026-11-09):
 /// Recent, Kept, the project folders and the last group, from what the door answered. The door has folded already, so
 /// nothing here folds. The grouping has no owner in field-app (the desk groups by day), so these rows are its witness.
 ///

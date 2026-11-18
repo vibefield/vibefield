@@ -14,8 +14,8 @@ import Foundation
 /// One row of the model as the phone's replica holds it: the backend's `MonitorAgentRow`, as the remote cut carried
 /// it, with the reader's one fact joined — whether the row lives on the home (`modelRowFrom`, `model-board.ts`).
 ///
-/// Equality is the synthesized `==`, where the window asks `sameJson`. Four divergences (VF-PM, Q-D3 (a); the fourth
-/// the review's [0]):
+/// Equality is the synthesized `==`, where the window asks `sameJson`. Four divergences (Q-D3 (a), decided
+/// 2026-11-02; the fourth the review's [0]):
 /// - `unknownFields` keeps a key's NAME, not its value: a change in an unknown value is not seen here;
 /// - `writable` is compared as it came (`writable?`), where the window fills it from `attachable` before comparing;
 /// - an unrecognized `device.os` is kept (`.unrecognized`), where the window drops it before comparing;
@@ -229,8 +229,8 @@ public struct RemoteModelReplica: Sendable {
   }
 
   /// The frame: publishes what moved since the last one, or nil when nothing did (`flush`, `replica.js`). The order
-  /// is sorted on every publication (VF-PM, Q-D5 (a)): the window sorts only when a sort key, a birth or a death
-  /// moved, and between those its order is already sorted, so the two orders are the same.
+  /// is sorted on every publication (Q-D5 (a), decided 2026-11-02): the window sorts only when a sort key, a
+  /// birth or a death moved, and between those its order is already sorted, so the two orders are the same.
   public mutating func flush() -> RemotePublication? {
     var shown: [String: RemoteModelRow] = [:]
     var hidden: Set<String> = []

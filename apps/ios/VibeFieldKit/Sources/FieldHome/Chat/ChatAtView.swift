@@ -2,7 +2,7 @@ import FieldDesign
 import FieldHistory
 import SwiftUI
 
-// IOS-12f's M-f2 (plan-12f's Q8 A; VF-PM 2026-11-09 02:24:16Z, Q4 (a); DESIGN.md §8 "The phone's Chat") — @'S LIST on
+// IOS-12f's M-f2 (plan-12f's Q8 A; Q4 (a), decided 2026-11-09; DESIGN.md §8 "The phone's Chat") — @'S LIST on
 // the phone: the Mac's `AtRowsView` and `AtAgentMenuView` at touch pitch, a solid menu from the composer up, as wide as
 // the field, its foot 8 above it, read bottom-up. A row is a tap (the phone has no ↑ ↓ walk), so the hot row is only
 // the nearest drawn. Taking an agent turns the list into that agent's menu, in the list's own box.

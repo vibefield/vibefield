@@ -15,8 +15,8 @@ import Testing
     #expect(AgentGlyph.drawnAsset(for: "codex") == "agent-codex")
   }
 
-  /// Item 359 (James, 2026-11-12 17:50:31Z: "overturn this ruling, bring back
-  /// those icons now") — LP-4's two-mark rule is overturned: every agent the
+  /// Item 359 (asked for 2026-11-12: that ruling overturned and those marks
+  /// brought back now) — LP-4's two-mark rule is overturned: every agent the
   /// catalog offers a phone draws its own mark, by the catalog's mark key. The
   /// roster is the catalog's fixture, so an agent admitted later with no
   /// imageset is red here until its mark is in the folder, or this row says

@@ -5,12 +5,13 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 353 (James, 2026-11-12 11:38:00Z: "port the stats and treemap of the desktop to mobile as well") — the
+/// Item 353 (asked for 2026-11-12: the desktop's stats and treemap ported to the phone as well) — the
 /// ledger's figures as values: a project's lifetime from `project.figures` asked over every recorded day, the four
 /// figures over the projects listed, the treemap's tiles and their layout, and the row's estimated cost with its
 /// coverage. The rules are rosetta's room's (`lib/spend.ts`, `SummaryPanels`, `charts/treemap-layout.ts`).
 ///
-/// How it reads on a phone, and whether the phone's sums equal the desktop's on real history, are James's.
+/// How it reads on a phone, and whether the phone's sums equal the desktop's on real history, are to be seen on
+/// a device.
 @Suite("item 353 — the ledger's figures and its treemap")
 struct HistoryStatsTests {
   private static func day(_ year: Int, _ month: Int, _ day: Int) -> Date {
@@ -158,7 +159,7 @@ struct HistoryStatsTests {
       FieldHistoryModel.portfolioNote(reading, failed: 2, awake: true) == "figures for 2 projects failed · retrying")
     #expect(
       FieldHistoryModel.portfolioNote(reading, failed: 0, awake: false) == "figures for 1 of 3 projects were read")
-    // Item 390 (James, 2026-11-13 23:28:32Z, session qa-01: "remove the second marked text") — RE-CUT: this row
+    // Item 390 (asked for 2026-11-13: the second marked text removed) — RE-CUT: this row
     // held `messages are a lower bound · 1 project's days are not exact`. The line no longer says a cut project's
     // messages are a lower bound; the figure's own `+` does (`portfolio`, above), and the days' sentence stays.
     let bounded = FieldHistoryModel.portfolio(

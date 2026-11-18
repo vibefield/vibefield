@@ -115,7 +115,7 @@ public struct HomeMemory {
 ///
 /// The desktop's own word comes first (IOS-8f, `user.me`): the HOME's answer —
 /// the face its windows show, the name its user row holds — is adopted as it
-/// arrives, replacing a deal and an earlier home's word (VF-PM 2026-10-29, the
+/// arrives, replacing a deal and an earlier home's word (decided 2026-10-29, the
 /// lean recorded: between two self desktops the home's answer wins, and the
 /// home is sticky per login, DS-8). Until a home answers — a desktop older than
 /// the door, one that serves no user — the phone DEALS a face from the same deck

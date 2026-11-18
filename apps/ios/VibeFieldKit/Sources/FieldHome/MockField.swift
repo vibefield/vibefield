@@ -190,8 +190,9 @@
     /// SE-2 — the home's profiles under `-vf-mock`, the lens's one list (SE-P5b): the meters' fixture door's own
     /// answer (`agents-profile-sets.meters`: This Mac, Work, Side and a draft) through `MeterModel.hasCircle`, the
     /// list the meters' feed holds once it reads — so the lens, the hold's buds, the page's rows and the token's menu
-    /// name the same profiles, and the draft stands on none (ruling 7). *(Until SE-P5b, 2026-11-06, the contracts'
-    /// `agents-profile-sets.valid` through FieldWorkspace's fixture door: This Mac and Work, a second list.)*
+    /// name the same profiles, and the draft stands on none (SE-2p, 2026-11-06). *(Until SE-P5b, 2026-11-06, the
+    /// contracts' `agents-profile-sets.valid` through FieldWorkspace's fixture door: This Mac and Work, a second
+    /// list.)*
     static func searchProfiles() -> [AgentProfileSet] {
       guard let answer = MetersFixtureDoor.fixture("agents-profile-sets.meters"),
         let result = try? AgentProfileSetsResult(json: answer)

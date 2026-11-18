@@ -7,7 +7,7 @@ import os
 // IOS-12f's f5 (PC-D8 A; DESIGN.md §2.10, amended 2026-11-07) — NEW SPARK'S SKY ON SCREEN: hatch.tsx's `Live` (:155)
 // on the phone. The Mac draws two canvases, one over the other: the star engine's sky and the face engine's faces.
 // Here they are two Metal layers in one view, on one clock:
-// - the sky, opaque, at the screen's scale capped at the star engine's 2 (`HatchSkyRenderer`, VF-PM's Q3 ruling);
+// - the sky, opaque, at the screen's scale capped at the star engine's 2 (`HatchSkyRenderer`; Q3, decided 2026-11-07);
 // - the faces over it, transparent, at the screen's scale, as 12e's stage draws them (`SparkStarRenderer`);
 // - the clock is the hatch's (`#draw`, :284): each frame it moves on by the time since the last, clamped to 0.05 s,
 //   and both engines draw at it (`HatchSky.Live.frame(at:)`).

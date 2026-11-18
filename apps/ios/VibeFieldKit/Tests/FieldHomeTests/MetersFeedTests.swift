@@ -4,7 +4,7 @@ import Testing
 
 @testable import FieldHome
 
-/// UM-4 (UM-D8 A; rulings 17 and 18) — the meters' feed reads the HOME's cached batch and the home's profiles through
+/// UM-4 (UM-D8 A, 2026-11-06) — the meters' feed reads the HOME's cached batch and the home's profiles through
 /// the home's one door: `agents.usage` asked with no `refresh`, `agents.usage.subscribe` watched while the door is
 /// held, the profiles and catalog read on attach and on every open; a home that refuses `agent.usage` is said, a door
 /// that cannot answer is "usage unavailable" — still watched, and asked again when a meter view opens — and without a
@@ -176,7 +176,7 @@ struct MetersFeedTests {
 
   // Correction (2026-11-06, M-phone's pre-light stills): this row attaches a home, so it never read a feed's first
   // attach with none. A phone signed in to no home said "reading…" for ever; `noHomeYetIsUnavailable` reads it.
-  @Test("no door and no answer yet is usage unavailable — never a first read that never ends (ruling 10)")
+  @Test("no door and no answer yet is usage unavailable — never a first read that never ends (UM-4c, 2026-11-06)")
   func noDoorIsUnavailable() async throws {
     let feed = MetersFeed()
     feed.attach(nil, home: "dev-home")
@@ -196,7 +196,7 @@ struct MetersFeedTests {
     }
   }
 
-  @Test("a phone with no home yet is usage unavailable too — the first attach is never skipped (ruling 10)")
+  @Test("a phone with no home yet is usage unavailable too — the first attach is never skipped (UM-4c, 2026-11-06)")
   func noHomeYetIsUnavailable() {
     let feed = MetersFeed()
     feed.attach(nil, home: nil)

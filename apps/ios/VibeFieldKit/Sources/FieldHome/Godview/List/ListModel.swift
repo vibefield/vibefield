@@ -13,9 +13,9 @@ import Foundation
 // Every word is the toolkit's (REUSE, never re-transcribed): `MonitorWords.projectName`, `.modelWord`, `.detailLine`,
 // `.deviceWord`, `StateWords.kindTerminal`/`.kindRemote`, `GodviewFormat.formatPercent` and `GodviewRecede.every`.
 // Held to `phone-list.golden.json` (the shipping view over the home's window, step by step) by FieldHomeTests'
-// ListViewTests. Not transcribed: the spawn menu (PG-D10 (a)), and `＋ TERMINAL` is not drawn on the phone (fd's Q1
+// ListViewTests. Not transcribed: the spawn menu (PG-D10 (a)), and `＋ TERMINAL` is not drawn on the phone (PG's Q1
 // ruling, a named deviation: the golden records it, `drawsNewTerminal` pins its absence). The empty hint names no
-// pane (deviation 5, fd's words rule; pinned by H12, which scans every word the list says).
+// pane (deviation 5, PG's words rule; pinned by H12, which scans every word the list says).
 
 /// One row as the list reads it on the phone: the remote cut's row, and what only this window joins (the desktop's
 /// `AgentView`): whether it lives on the home, its greying, the open card, receding and a pane's attachment.
@@ -23,7 +23,7 @@ struct ListRowInput: Equatable {
   var monitor: MonitorAgentRow
   /// `device.self`: the row lives on the home (`RemoteFieldRow.isSelf`).
   var isSelf: Bool
-  /// `row.stale || !fieldIsLive` (GodviewStageInput's rule, GodviewViewChoice.swift:48; fd's Q10).
+  /// `row.stale || !fieldIsLive` (GodviewStageInput's rule, GodviewViewChoice.swift:48; PG's Q10).
   var stale: Bool
   /// The open card's row, while `ListModel.lightsOpenCard` (J-S4).
   var active: Bool
@@ -78,22 +78,22 @@ struct ListModel: Equatable {
   /// The list's name for a screen reader (AgentList.tsx:81).
   static let listLabel = "Running agent list"
   /// The empty state's two lines (AgentList.tsx:116-119), drawn when there are no rows. The hint drops the desktop's
-  /// "pane" (deviation 5, fd's words rule: no phone view names a key, hover or a pane; the phone's one pane is the
+  /// "pane" (deviation 5, PG's words rule: no phone view names a key, hover or a pane; the phone's one pane is the
   /// open card, D-i12).
   static let emptyTitle = "NO ACTIVE AGENTS"
-  /// Draft word: James's eye (VF-PM 2026-11-04). New copy he has not seen; his change is this line and E1's pin.
+  /// Draft word: for the eye on a device (decided 2026-11-04). New copy, unseen; a change is this line and E1's pin.
   static let emptyHint = "Launch an agent from a terminal."
-  /// The toolbar's button as the desktop words it (AgentList.tsx:96). The phone does not draw it (fd's Q1: no create
+  /// The toolbar's button as the desktop words it (AgentList.tsx:96). The phone does not draw it (PG's Q1: no create
   /// door in the stage input; the phone's spawn is its bloom, PG-D10 (a)).
   static let newTerminalWord = "＋ TERMINAL"
   static let drawsNewTerminal = false
 
-  /// J-S4 (James, accepted 2026-11-04 01:14Z): the open card's row is lit. The ONE place a reversal edits.
+  /// J-S4 (accepted 2026-11-04): the open card's row is lit. The ONE place a reversal edits.
   static let lightsOpenCard = true
 
   var isEmpty: Bool { rows.isEmpty }
 
-  /// The view's tunable numbers (`ListParameters`): the phone passes none, so it draws at the defaults (fd's Q8).
+  /// The view's tunable numbers (`ListParameters`): the phone passes none, so it draws at the defaults (PG's Q8).
   struct Parameters: Equatable {
     var rowHeight: Double
     var projectWidth: Double

@@ -7,7 +7,7 @@ import Testing
 /// (`FaceHold.Touch`): let go inside the slop it is the menu's tap; left there until the hold's clock runs out it
 /// opens the held face, and its let-go is the lens's; carried past the slop first it is neither.
 ///
-/// These rows hold the decision only. What they cannot hold is the fault itself: on James's iPhone (iOS 26.6) the two
+/// These rows hold the decision only. What they cannot hold is the fault itself: on an iPhone (iOS 26.6) the two
 /// gestures the face wore, `holdGesture.exclusively(before: tap)`, gave the hold and never the tap. That is SwiftUI's
 /// arbitration on a device, which no package-hosted run touches; its witness is the phone's own trace (the item's
 /// record).

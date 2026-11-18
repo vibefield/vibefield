@@ -53,7 +53,7 @@ public final class HistoryDesktops {
     projects.start()
   }
 
-  /// PJ-7 — which door the ledger reads (the lead's call, build-pj7.md): the
+  /// PJ-7 — which door the ledger reads (decided 2026-10-14, build-pj7.md): the
   /// HOME's while it answers, else the first other desktop that answers (the
   /// readers' order: the home first, then by name). It asks through that
   /// desktop's reader's own door, so History holds one door per desktop. No

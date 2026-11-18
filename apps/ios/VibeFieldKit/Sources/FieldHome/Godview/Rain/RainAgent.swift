@@ -8,8 +8,8 @@ import Foundation
 // (PG-3e, Q-E11), reused, never re-transcribed: `projectName`, `modelWord` and `detailLine`.
 //
 // What the rain does NOT read, named: cost, `unread` and `stale` (rain draws none of them, as the desktop's: §10;
-// fd's Q9) and the home's `fieldIsLive`; a pane's `attachment` (the phone mounts no panes, PG:429 — the pane wash
-// `RainView.js:130-146` is not transcribed, fd's Q4). `receded` is the phone's lens (SE-2, `GodviewRecede.byLens`):
+// PG's Q9) and the home's `fieldIsLive`; a pane's `attachment` (the phone mounts no panes, PG:429 — the pane wash
+// `RainView.js:130-146` is not transcribed, PG's Q4). `receded` is the phone's lens (SE-2, `GodviewRecede.byLens`):
 // PG:428-433 joined it false while the phone had no profile filter; the recede steps stood transcribed for it.
 // *Corrected 2026-11-06 (SE-2h, the S2 review's finding 2):* this said the phone joins none.
 
@@ -37,7 +37,7 @@ struct RainAgent: Equatable, Sendable {
   /// The host's join: under the phone's lens, every column but the home's under the chosen profile (SE-2).
   var receded = false
 
-  /// J-S4 — ACCEPTED by James (2026-11-04 01:12–01:14Z): a view lights the open card's row. The ONE switch: false
+  /// J-S4 — ACCEPTED (2026-11-04): a view lights the open card's row. The ONE switch: false
   /// stops the rain lighting it (its head back to its status's, its glow ×1, no "open"), whatever else stands.
   static let lightsOpenCard = true
 

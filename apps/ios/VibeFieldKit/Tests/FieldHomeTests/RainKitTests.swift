@@ -8,7 +8,7 @@ import UIKit
 
 // PG-8 — THE RAIN'S KIT-ONLY ROWS (read-pg8 §7): what only the phone's own frameworks can say — the face resolves by
 // name, the surface mounts with a device, and its accessibility elements are the window's rows, in order, saying the
-// desktop's button lines. The host cannot build UIKit; these run in the kit on fd's word.
+// desktop's button lines. The host cannot build UIKit; these run in the kit on PG's word.
 
 extension RainViewTests {
   @Suite("the surface on the phone")

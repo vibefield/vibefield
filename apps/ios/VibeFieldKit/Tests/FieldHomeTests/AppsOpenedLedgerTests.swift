@@ -3,7 +3,7 @@ import Testing
 
 @testable import FieldHome
 
-/// MA-6e — the apps this account opened on this phone, which head Recent (VF-PM's Q2, 2026-11-09): the ledger's newest
+/// MA-6e — the apps this account opened on this phone, which head Recent (Q2, decided 2026-11-09): the ledger's newest
 /// four, and an open is also a seeing (DESIGN.md §8: "An app is seen once it has shown on the open shelf, or been
 /// opened").
 ///

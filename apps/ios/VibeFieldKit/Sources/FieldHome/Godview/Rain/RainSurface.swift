@@ -8,7 +8,7 @@ import UIKit
 
 // PG-8 — THE RAIN'S SURFACE: the one Metal view the rain paints on, the swarm's proven pattern on this phone
 // (`FieldSwarm/SwarmMetalView.swift`, `SwarmField.swift`): an `MTKView` at the display's rate while the field is on
-// screen (`isPaused = !isActive`, fd's Q1), its frames stepped by the transcribed cap (`RainMotion`) so the fall keeps
+// screen (`isPaused = !isActive`, PG's Q1), its frames stepped by the transcribed cap (`RainMotion`) so the fall keeps
 // the desktop's chunky 30. Stopped by Reduce Motion or a still (`input.isStill`), it paints one still per change, as
 // the desktop's stopped loop does (RainView.js:231-238). It owns no meaning: `RainField` plans, `RainRenderer` paints.
 //

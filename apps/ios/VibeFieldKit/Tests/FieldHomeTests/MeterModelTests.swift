@@ -175,7 +175,7 @@ struct MeterModelTests {
     #expect(products == pinned)
   }
 
-  @Test("a draft profile no agent has signed in to stands on no circle (ruling 7)")
+  @Test("a draft profile no agent has signed in to stands on no circle (UM-4b, 2026-11-06)")
   func draftsHaveNoCircle() throws {
     let sets = try AgentProfileSetsResult(json: try HomeFixture.json("agents-profile-sets.meters")).sets
     let circles = sets.map(MeterModel.hasCircle)

@@ -38,10 +38,10 @@ enum ChatWords {
   }
 
   /// A desktop that did not answer (PC-L4), in the fact that holds: asleep; not answering (a timeout, or
-  /// unreachable — the same fact to the person); or answering with a build the phone can't read (VF-PM's ruling,
+  /// unreachable — the same fact to the person); or answering with a build the phone can't read (decided
   /// 2026-11-05: never "isn't answering" about a desktop that answered and was refused). `carried`: the list holds a
-  /// row of it, its last word; else the phone never heard it, and says so, never "as it last said" (§9, VF-PM
-  /// 2026-11-05 02:06Z). The device is named as its platform names it (`DeviceWord`; L4's word pass, 2026-11-06).
+  /// row of it, its last word; else the phone never heard it, and says so, never "as it last said" (§9, decided
+  /// 2026-11-05). The device is named as its platform names it (`DeviceWord`; L4's word pass, 2026-11-06).
   static func away(_ desktop: String, _ standing: ChatAway.Standing, carried: Bool, device: DeviceWord) -> String {
     switch (standing, carried) {
     case (.asleep, true):
@@ -99,7 +99,7 @@ struct ChatAway: Equatable, Identifiable {
   let carried: Bool
   var id: String { device }
 
-  /// The lines under the subtitle, in the merge's order (PC-L4; §9, VF-PM 2026-11-05 02:06Z). A desktop the merge
+  /// The lines under the subtitle, in the merge's order (PC-L4; §9, decided 2026-11-05). A desktop the merge
   /// says did not answer says its last word only while the reading carries a spark or an ask of it, and is said as
   /// never heard otherwise. With no door the home answers for every desktop: it says the whole list's last word while
   /// the reading carries any row, and is never heard otherwise (a cold start, the common case: the list lives in
@@ -224,7 +224,7 @@ struct ChatPage: View {
     NavigationStack(path: path) {
       // IOS-12e (§2.10): Chat's list is one stage; a row's face moves on it while its spark works
       SparkStageHost { nightOrList }
-      // Item 350 (James, 2026-11-12): "Chat" and its ✦ stand in the band Field's Stories row stands in. The system's
+      // Item 350 (asked for 2026-11-12): "Chat" and its ✦ stand in the band Field's Stories row stands in. The system's
       // bar is hidden here; its name stays for a thread's back button.
       .underRootHead { rootHead }
       .navigationTitle(ChatWords.title)

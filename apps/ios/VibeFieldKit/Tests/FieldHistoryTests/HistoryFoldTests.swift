@@ -332,8 +332,8 @@ struct HistoryFoldTests {
   }
 }
 
-/// Item 362c (James, 2026-11-12 18:40:35Z, of the phone's History session view: "there is no chat message time
-/// grouping like desktop") — time cuts a session's document into SITTINGS by the room's rule (rosetta
+/// Item 362c (asked for 2026-11-12, of the phone's History session view: chat messages grouped by time, as the
+/// desktop groups them) — time cuts a session's document into SITTINGS by the room's rule (rosetta
 /// `lib/transcript/sittings.ts`, `document-plan.ts`, `DayPill.tsx`): a new sitting before a row fifteen minutes or
 /// more after the row before it, or on another calendar day, each opened by the room's pill. The phone had one
 /// pill, before a prompt sixty minutes or more after the turn before it, with no day in it.
@@ -519,9 +519,9 @@ struct HistorySittingTests {
 
 // MARK: - Item 395
 
-/// Item 395 (James, 2026-11-13 23:38:00Z, session qa-01, of a sitting's pill that read `20:21 · after 3h 37m` over
-/// a message a week old: "it only show time when it is today, show weekday if it was within a week, and show date
-/// if outside a week ago") — a pill that carries a clock says how far back it is, by this phone's calendar days
+/// Item 395 (asked for 2026-11-13, of a sitting's pill that read `20:21 · after 3h 37m` over a message a week old:
+/// the clock alone when it is today, the weekday within a week, and the date
+/// past a week) — a pill that carries a clock says how far back it is, by this phone's calendar days
 /// counted from today (DESIGN.md §8 "The phone's session document", "Time cuts it into sittings"). Until this item
 /// a pill inside one day said the clock alone however old the day was, and a pill's words were made once, when
 /// the document was folded.
@@ -539,7 +539,7 @@ struct HistoryPillLeadTests {
     Int64(moment(month, day, hour, minute, year: year).timeIntervalSince1970 * 1000)
   }
 
-  /// Friday 2026-11-13 21:00 on this phone: the evening James read a sitting of Friday the 6th.
+  /// Friday 2026-11-13 21:00 on this phone: the evening a sitting of Friday the 6th was read (item 395).
   private var now: Date { moment(11, 13, 21, 0) }
 
   private func row(_ id: String, _ ordinal: Int, at: Int64) throws -> IndexTimelineRow {
@@ -586,7 +586,7 @@ struct HistoryPillLeadTests {
     #expect(FieldHistoryModel.clockLead(at(12, 25, 10, 0, year: 2025), now: newYear) == "25 Dec 2025 · 10:00")
   }
 
-  /// The ruling of 2026-11-13 23:47Z (VF-PM, so the phone matches the room): a sitting stamped ahead of now, where
+  /// The ruling of 2026-11-13 (so the phone matches the room): a sitting stamped ahead of now, where
   /// two devices' clocks disagree, reads in today's form, the clock alone, and never as a distance. This row said a
   /// day after today was its day and its clock, `Sat 14 Nov · 00:05`.
   @Test("a stamp ahead of now, where two devices' clocks disagree, reads as today's: the clock alone")
@@ -613,14 +613,14 @@ struct HistoryPillLeadTests {
     #expect(FieldHistoryModel.clockLead(at(11, 7, 21, 0), now: now) == "Sat · 21:00", "six days, to the minute")
     #expect(FieldHistoryModel.clockLead(at(11, 6, 21, 0), now: now) == "Fri 6 Nov · 21:00", "seven, to the minute")
     #expect(FieldHistoryModel.clockLead(at(11, 5, 21, 0), now: now) == "Thu 5 Nov · 21:00", "and beyond")
-    // James's own case, as it is drawn: seen on Fri 13 Nov 2026, a sitting of Fri 6 Nov 2026 that resumed at 20:21
+    // Item 395's own case, as it is drawn: seen on Fri 13 Nov 2026, a sitting of Fri 6 Nov 2026 that resumed at 20:21
     let rows = [try row("a1", 1, at: at(11, 6, 16, 44)), try row("a2", 2, at: at(11, 6, 20, 21))]
     let pill = try #require(FieldHistoryModel.sittings(rows, now: now).last?.pill)
     #expect(pill.leadWords(now: now) == "Fri 6 Nov · 20:21")
     #expect(pill.after == "after 3h 37m")
   }
 
-  @Test("James's pill: a sitting of a week past says its day before its clock, and keeps the stamp it is said of")
+  @Test("Item 395's pill: a sitting of a week past says its day before its clock, and keeps the stamp it is said of")
   func aWeekPast() throws {
     let rows = [try row("a1", 1, at: at(11, 6, 16, 44)), try row("a2", 2, at: at(11, 6, 20, 21))]
     #expect(
@@ -723,8 +723,8 @@ struct HistoryPillLeadTests {
 
 // MARK: - Item 362e
 
-/// Item 362e (James, 2026-11-12 18:40:35Z, of a session opened in the phone's History against the desktop's: "i
-/// think all message type and views are different from desktop, needs thorough audit") — the kinds a row already
+/// Item 362e (asked for 2026-11-12, of a session opened in the phone's History against the desktop's: a thorough
+/// audit of every message type and view, which differ from the desktop's) — the kinds a row already
 /// carries, drawn by the room's rule (rosetta at the pin, clients/room/src: `buildSegments` in
 /// lib/transcript/turns.ts, then `activityPlan` and `summarizeActivity` in components/transcript/activity-plan.ts).
 /// Between two replies everything the agent did is ONE group, and each thing in it keeps its own form. The phone
@@ -1017,7 +1017,7 @@ struct HistoryGroupTests {
   }
 }
 
-/// Item 368 (found porting 362f, 2026-11-12; VF-PM numbered it 23:02:13Z) — a text past rosetta's 32 KiB is a file
+/// Item 368 (found porting 362f, 2026-11-12; numbered that day) — a text past rosetta's 32 KiB is a file
 /// on the desktop: its row carries the text's opening and the file's size (`textByteLen`). The door sets its cut
 /// flag (`textClipped`) only when that opening is itself over the door's bound, so an opening within it arrives
 /// with the size and without the flag, and the phone, which marked a cut by the flag alone, drew it as a whole
@@ -1095,8 +1095,8 @@ struct HistoryCutMarkTests {
   }
 }
 
-/// Item 370 (found reading the room for 362f's f3, 2026-11-12; VF-PM numbered it 23:19:02Z and settled its two
-/// parts at 23:21:26Z) — two places where the phone's own fold said something other than the room, from a row that
+/// Item 370 (found reading the room for 362f's f3, 2026-11-12; numbered that day, with its two
+/// parts settled) — two places where the phone's own fold said something other than the room, from a row that
 /// already carries what the room reads. Rows are built in code; no fixture is added.
 ///
 /// The row's `failure` is the failure's summary, or its KIND where it had none (`summary ?? kind`, fieldd's
@@ -1221,8 +1221,8 @@ struct HistoryRoomWordsTests {
   }
 }
 
-/// Item 362g (James's board pick, 2026-11-12 20:43Z: "images through a rosetta release"; VF-PM's rulings,
-/// 2026-11-13 00:24Z) — pictures in the phone's History, the document's part. A reply's attachment was a segment
+/// Item 362g (picked 2026-11-12: pictures come through a rosetta release; decided further
+/// 2026-11-13) — pictures in the phone's History, the document's part. A reply's attachment was a segment
 /// with an id; a prompt's was its words alone; a tool's was drawn nowhere. For the view to find the picture a
 /// direct read holds, each has to be named in the document, by an id and nothing more: the document is written to
 /// the phone's cache, and nothing that says where a picture is kept may go into it. The room gathers a group's

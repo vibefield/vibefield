@@ -423,7 +423,7 @@ private func model(
   }
 
   @Test func namesThePeerFirstInTheAccessibleNameAndNoWritePolicy() {
-    // a peer is writable by default (James, 2026-10-28): the name says no write policy either way
+    // a peer is writable by default (asked for 2026-10-28): the name says no write policy either way
     for writable in [false, true] {
       #expect(
         model(remoteRow(hostWritable: writable)).accessibilityLabel
@@ -432,7 +432,7 @@ private func model(
   }
 
   @Test func wearsTheHostOnTheBodyAsTheDeskNameAlone() {
-    // no write mark in the line or the hover, whichever way the host is configured (James, 2026-10-28)
+    // no write mark in the line or the hover, whichever way the host is configured (asked for 2026-10-28)
     for writable in [false, true] {
       let body = model(remoteRow(hostWritable: writable))
       #expect(body.copy.first { $0.key == "host" }?.text == "studio-mini")

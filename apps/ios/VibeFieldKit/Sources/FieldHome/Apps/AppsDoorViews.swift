@@ -4,7 +4,7 @@ import SwiftUI
 
 // MA-6d — what the door draws (DESIGN.md §8 "The phone's Apps"): the Recent icons pouring out of the island, the capsule
 // that drops from it, and search's dot. Each reads the door's model in its own body, so a pull redraws these and not
-// the home screen. How a real pull feels on a device is owed to James (P6).
+// the home screen. How a real pull feels on a device is owed (P6).
 
 /// The four Recent icons, out of the island and toward their row, and the line under them.
 struct AppsPourLayer: View {

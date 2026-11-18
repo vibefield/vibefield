@@ -5,7 +5,7 @@ import Testing
 @testable import FieldHome
 
 /// MA-6e — the shelf's standing on the door's model: open and closed, the folder, the zoom, what is seen and what is not
-/// yet opened (DESIGN.md §8 "The phone's Apps"). How any of it looks and feels is the stills' and James's (P6).
+/// yet opened (DESIGN.md §8 "The phone's Apps"). How any of it looks and feels is for the stills and a device (P6).
 ///
 /// No key path, no `try` and no `mutating` call inside an #expect/#require argument: hoisted into a `let` first.
 @MainActor

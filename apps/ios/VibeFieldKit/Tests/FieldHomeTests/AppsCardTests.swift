@@ -6,7 +6,7 @@ import Testing
 
 /// Item 348 (DESIGN.md §8 "The phone's Apps": "One pull on every tab", "As you pull", "Open", "The first peek") —
 /// where the one pull may begin on each tab, and the one card the tabs stand in, by the finger's travel: its numbers,
-/// its outline and where it is drawn. How it looks under a finger is James's, on his phone; his answers are in the
+/// its outline and where it is drawn. How it looks under a finger is to be seen on a device; the answers are in the
 /// item's commit.
 ///
 /// No key path, no `try` and no `mutating` call inside an #expect/#require argument: hoisted into a `let` first.

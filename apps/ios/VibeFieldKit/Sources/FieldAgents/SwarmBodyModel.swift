@@ -384,7 +384,7 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
     }
     // A peer's session wears its host on the body, the desk's name alone, so it
     // cannot be read as one of this machine's terminals. No write mark: a peer is
-    // writable by default (James, 2026-10-28); whether your keys arrive is the
+    // writable by default (asked for 2026-10-28); whether your keys arrive is the
     // pane's to say at attach.
     if let host { copy.append(hostLine(host)) }
     let status = bubble.status.rawValue

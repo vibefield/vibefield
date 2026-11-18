@@ -4,13 +4,13 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 352 (James, 2026-11-12 11:38:00Z: "the history items on the phone does not match the items on the desktop,
-/// desktop have more items") — a desktop answers a phone a page of at most `HistoryReads.listRows` rows with a cursor
-/// to the next. The ledger's reader asked the first page and never the next (his phone, 16:50Z: rows=100,
+/// Item 352 (asked for 2026-11-12: the phone's History lists the items the desktop's does, where the desktop's
+/// had more) — a desktop answers a phone a page of at most `HistoryReads.listRows` rows with a cursor
+/// to the next. The ledger's reader asked the first page and never the next (on a phone, 2026-11-12: rows=100,
 /// cursor=true, 99 drawn), so the phone's ledger stopped at a hundred projects, and an opened project at a hundred
 /// sessions. The reader follows the cursor to the listing's end.
 ///
-/// Whether his phone's ledger then holds what his desktop's does is his to see.
+/// Whether a phone's ledger then holds what its desktop's does is to be seen on a device.
 
 private let studio = "01J9ZK3M5Q8XR2V7N4B6C1D0EF"
 
@@ -266,13 +266,13 @@ private func opened(_ door: TimelineDoor) async -> HistoryDesktopReader {
   return reader
 }
 
-/// Item 362b (James, 2026-11-12 18:40:35Z, of the phone's History session view: "it does not load message
-/// progressively like desktop") — the rows above a document's top are read a batch at a time, by the room's rule
+/// Item 362b (asked for 2026-11-12, of the phone's History session view: messages loaded progressively, as the
+/// desktop loads them) — the rows above a document's top are read a batch at a time, by the room's rule
 /// (rosetta `lib/transcript/history-window.ts`): on until they hold six messages, in at most five asks; one read
 /// at a time; and nothing that asks in a loop.
 ///
-/// *Corrected 2026-11-14 (item 418; James, 08:13:38Z, session qa-01: "it seems still trying to load everything …
-/// you pull down for load more"):* this said the rows above "are read as the reader nears it", and the suite was
+/// *Corrected 2026-11-14 (item 418, asked for that day: the page no longer loads everything by itself, and a pull
+/// down loads more):* this said the rows above "are read as the reader nears it", and the suite was
 /// named "are read in as the reader nears its top". That was the page's half of 362b (`HistoryFollow.asksEarlier`):
 /// within a screen of the top the page asked by itself, and again after each batch. Item 418 overturned it: a batch
 /// is asked for by a pull at the top, or a press, and its rows are in HistoryOlderPullTests.swift. What these rows

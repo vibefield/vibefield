@@ -31,9 +31,9 @@ extension View {
   }
 }
 
-/// What a root list tells the door, from where it stands and how it moves (item 348; James, 2026-11-12 11:20:08Z:
-/// "if i'm still scrolling the history items, it should not trigger the pull down, only when i scroll all the way top
-/// i can pull down"). The list gives the pull only to a finger that came down while it rested at its top. A list
+/// What a root list tells the door, from where it stands and how it moves (item 348, asked for 2026-11-12: a list
+/// still scrolling never starts the pull down; only one scrolled all the way to its top
+/// does). The list gives the pull only to a finger that came down while it rested at its top. A list
 /// still moving, or caught in flight, keeps the touch, even where its flight has reached the top.
 struct TopStand: Equatable {
   /// Where the list stands now.

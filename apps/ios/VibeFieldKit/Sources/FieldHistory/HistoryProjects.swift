@@ -6,7 +6,7 @@ import Observation
 // amended: "its reads become `project.*`"; SP-D10's grouping by desktop is
 // superseded). Every self desktop answers the same grouping over every
 // desktop's places, so ONE reader asks ONE door — the home's, or another
-// answering desktop's while the home sleeps (the lead's call, build-pj7.md):
+// answering desktop's while the home sleeps (decided 2026-10-14, build-pj7.md):
 // `project.list` for the ledger, `project.sessions` for a project's rows (and
 // the live ones), `project.get` for an opened project, `project.figures` for
 // its numbers, and `project.subscribe`'s pings to read again. A session's
@@ -307,8 +307,8 @@ public final class HistoryProjects {
   /// Read the ledger. `whole` follows the listing to its end; without it the newest page is read and laid over
   /// what is held, unless the last walk is old.
   ///
-  /// Item 352 (James, 2026-11-12 11:38:00Z: "the history items on the phone does not match the items on the desktop,
-  /// desktop have more items") — a desktop answers a phone a page of at most `listRows` projects with a cursor to the
+  /// Item 352 (asked for 2026-11-12: the phone's History lists the items the desktop's does, where the desktop's
+  /// had more) — a desktop answers a phone a page of at most `listRows` projects with a cursor to the
   /// next (fieldd's `tailnetRowLimit`; "a page with a cursor, never a silent cut"). This reader asked the first page
   /// and never the next, so a ledger of more than a hundred projects stopped at a hundred here while the desktop's
   /// window, which walks every page, showed them all.
@@ -715,8 +715,8 @@ public final class HistoryProjects {
       sources: sources, roster: roster, source: source, ledger: corpus, clock: now())
   }
 
-  /// Item 364 (James, 2026-11-12 20:07:53Z: "when first open history view on the phone, everything is very janky,
-  /// after a while seems when things all load it is back to normal") — something the ledger is folded from changed:
+  /// Item 364 (asked for 2026-11-12: History opens smoothly on the phone, where it was very janky at first, until
+  /// everything had loaded) — something the ledger is folded from changed:
   /// fold it again, OFF the main actor, and while answers stream no sooner than `foldEvery` after the fold before.
   ///
   /// It was the whole fold on the main actor at every answer. Since item 353 the ledger reads `project.figures` for

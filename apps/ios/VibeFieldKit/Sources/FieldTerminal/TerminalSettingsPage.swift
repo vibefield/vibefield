@@ -528,7 +528,7 @@ public enum TerminalCredits {
   }
 }
 
-/// IOS-13a S5b (DESIGN.md §9 "The phone's legal words"; VF-PM 2026-11-05 03:59Z) — Settings › Terminal's words that
+/// IOS-13a S5b (DESIGN.md §9 "The phone's legal words"; decided 2026-11-05) — Settings › Terminal's words that
 /// name the device, by substitution from `DeviceWord`, as every Settings word does.
 enum TerminalSettingsWords {
   /// The tag on Look and on Drawn over the terminal: whose these settings are.

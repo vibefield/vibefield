@@ -10,7 +10,7 @@ import Truffle
 /// A tailnet is the one thing these tests cannot have, so they hold the two
 /// things that decide the outcome before any packet moves: the app id the node
 /// is CONFIGURED with, and truffle's own admission function applied to a
-/// desktop's hostname. Between them they are the whole of James's finding 1 —
+/// desktop's hostname. Between them they are the whole of finding 1 (IOS-4i) —
 /// a phone and a desktop that were online, signed in, and invisible.
 @Suite struct FieldTruffleRuntimeNamespaceTests {
   @Test func theNodeIsConfiguredWithTheContractsAppID() {

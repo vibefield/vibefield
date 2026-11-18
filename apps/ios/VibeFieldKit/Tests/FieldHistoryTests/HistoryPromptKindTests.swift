@@ -4,10 +4,10 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 396 (James, 2026-11-13 23:38:00Z, session qa-01: "a good addition design should be added to both desktop and
-/// mobile is that we should have a floating button on the side for user to quick jump to previous user message so user
-/// can quick navigate, help me design and implement nicely"), and VF-PM's ruling of 2026-11-13 23:47Z as qa-01
-/// relayed it, so the phone matches the desktop's room: a message of the person's own is a human prompt alone. A
+/// Item 396 (asked for 2026-11-13: on the desktop and the phone alike, a floating button at the side that jumps to
+/// the person's previous message, so a session is quick to move through, designed and built
+/// with care), and what was decided 2026-11-13,
+/// so the phone matches the desktop's room: a message of the person's own is a human prompt alone. A
 /// setting command and a prompt a machine wrote are no target of the button, and do not make it show.
 ///
 /// The room tells them in `lib/transcript/turns.ts` (`buildPrompt`, `looksLocalCommand`, `localSetting`). These rows

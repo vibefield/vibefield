@@ -154,7 +154,7 @@ extension SpendParityTests {
     let rootClasses = SpendDOM.classes(root?["className"], base: "vf-monitor-spend")
     #expect(rootClasses == (g.compact ? ["is-compact"] : []), "\(at): root classes")
     #expect(SpendDOM.px(root?["list"]) == g.listW, "\(at): the list's width")
-    // the phone's words name no key (fd's words rule): the window's label is the phone's and its key sentence
+    // the phone's words name no key (PG's words rule): the window's label is the phone's and its key sentence
     let viewLabel = SpendModel.viewLabel + SpendModel.Dropped.viewLabel
     #expect(root?["label"]?.stringValue == viewLabel, "\(at): the view's label, less its key sentence")
 
@@ -225,7 +225,7 @@ extension SpendParityTests {
 
     let empty = view?["empty"].map(SpendGolden.strings)
     #expect(frame.empty == (empty != nil), "\(at): empty")
-    // the window's hint names a pane; the phone's does not (fd's words rule, the fourth deviation)
+    // the window's hint names a pane; the phone's does not (PG's words rule, the fourth deviation)
     if let empty { #expect(empty == [SpendModel.emptyTitle, SpendModel.Dropped.emptyHint], "\(at): empty words") }
 
     let now = view?["now"]
@@ -235,7 +235,7 @@ extension SpendParityTests {
       #expect(now["title"]?.stringValue == title, "\(at): Now title, less its key")
       #expect(now["label"]?.stringValue == SpendModel.nowLabel, "\(at): Now label")
       #expect(now["keys"]?.stringValue == SpendModel.nowKey, "\(at): Now key")
-      // the window prints its End key's legend; the phone prints none (fd's words rule, the fifth deviation)
+      // the window prints its End key's legend; the phone prints none (PG's words rule, the fifth deviation)
       #expect(now["legend"]?.stringValue == SpendModel.Dropped.nowLegend, "\(at): Now legend, the window's alone")
       #expect(now["words"]?.stringValue == SpendModel.nowWords, "\(at): Now words")
       #expect(SpendDOM.near(pill.right, now["right"]), "\(at): Now right")
@@ -280,7 +280,7 @@ extension SpendParityTests {
       #expect(row.stateTone?.rawValue == said["stateTone"]?.stringValue, "\(tag): state tone")
       #expect(row.glyph?.rawValue == said["glyph"]?.stringValue, "\(tag): glyph")
       #expect(row.title == said["title"]?.stringValue, "\(tag): title")
-      // the phone's words name no pane (fd's words rule): every row the window says it opens in your pane, the
+      // the phone's words name no pane (PG's words rule): every row the window says it opens in your pane, the
       // phone says less those words; a row not yet started the window never said it of
       let label = SpendGolden.clocks(said["label"]?.stringValue ?? "?", zone: zone)
       let dropped = row.state.key == .before ? "" : SpendModel.Dropped.rowLabel
@@ -288,12 +288,13 @@ extension SpendParityTests {
     }
   }
 
-  /// H10 — the phone's words (fd's words rule for every PG lane): a view's words, its accessibility labels and titles
+  /// H10 — the phone's words (PG's words rule for every PG lane): a view's words, its accessibility labels and titles
   /// included, never name a key, hover or a pane, for the phone has none. Four NAMED deviations from the window, each
   /// pinned against the golden in P7: the view's label drops its key sentence, each row's label "Open in your
   /// pane.", the Now pill's title "(End)", and the empty view's hint says "a terminal", not "a terminal pane", word
-  /// for word as the list's (a draft word: James's eye, VF-PM 2026-11-04). A fifth (item 291, DESIGN.md "On the phone
-  /// the Now pill prints no `↘`"): the pill prints no legend under its mark, for its legend names the End key.
+  /// for word as the list's (a draft word: for the eye on a device, decided 2026-11-04). A fifth (item 291,
+  /// DESIGN.md "On the phone the Now pill prints no `↘`"): the pill prints no legend under its mark, for its legend
+  /// names the End key.
   @Test func thePhonesWordsNameNoKeyNorPane() throws {
     let phoneLabel =
       "Spend: what each agent spent in the last ten minutes, a line each from $0, and each run's total in the list."
@@ -418,7 +419,7 @@ extension SpendParityTests {
     #expect(row.glyph == nil)
   }
 
-  /// H3 — active (J-S4 (a), fd's Q9): the open card's row carries `is-active` and nothing else changes; the phone
+  /// H3 — active (J-S4 (a), PG's Q9): the open card's row carries `is-active` and nothing else changes; the phone
   /// mounts no pane, so it draws nothing for it.
   @Test func anActiveRowChangesOnlyItsFlag() throws {
     let agent = try Self.witnessAgent("pty-h1")
@@ -462,7 +463,7 @@ extension SpendParityTests {
     #expect(frame.pinned == SpendWitness.nowMs - 60_000)
   }
 
-  /// H9 — touch (fd's Q3, the pointer's own semantics): a lift more than 4 pt from its press is no tap and sets
+  /// H9 — touch (PG's Q3, the pointer's own semantics): a lift more than 4 pt from its press is no tap and sets
   /// nothing; a tap on empty chart sets the moment there; a tap on the set moment (within 8 pt) lets it go; a tap on a
   /// line within reach opens it and sets nothing; a cancelled touch (its gesture's reset, and no lift) taps nothing; a
   /// drag on the list steps whole rows.
@@ -516,7 +517,7 @@ extension SpendParityTests {
     #expect(list.listOffset == end, "never past its end")
   }
 
-  /// H15 — a chart touch ends the same in either order (fd's order-proof cancel). A gesture's end comes to the view
+  /// H15 — a chart touch ends the same in either order (PG's order-proof cancel). A gesture's end comes to the view
   /// twice, its lift (`onEnded`) and its reset (the gesture state's), in an order no host row or still can witness, and
   /// a cancelled touch is its reset alone. So each names the press it began by its token: lift-then-reset and
   /// reset-then-lift each tap once, on empty chart and on a line; a second lift taps nothing; a reset alone taps

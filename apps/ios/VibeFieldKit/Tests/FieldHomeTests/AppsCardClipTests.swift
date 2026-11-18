@@ -4,7 +4,7 @@ import Testing
 
 @testable import FieldHome
 
-/// The card's outline (DESIGN.md §8 "The phone's Apps", amended 2026-11-12 twice: the phone's bands, James's
+/// The card's outline (DESIGN.md §8 "The phone's Apps", amended 2026-11-12 twice: the phone's bands, a
 /// screenshot of 12 Nov; then item 348). The pages' bounds are the safe area, and the field draws past them. At rest
 /// the outline reaches past the bounds and cuts nothing, so the full-bleed field draws under the status bar and the
 /// home indicator. Open, it is the whole screen as a card: its top is the screen's, its top corners rounded at 44.

@@ -4,10 +4,10 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 384 (James, 2026-11-13 23:05:55Z, of the first build that drew a recorded picture on his phone: "it should
-/// be a proper image preview ui that has image in full size that are pannable and zoomable, and has row of
-/// thumbnails of all other images in the same row that can click and navigate, and i can also swipe left right to
-/// navigate images"; 23:06:26Z: "and it should not be a card ui") — a pressed picture opens its ROW's pictures in a
+/// Item 384 (asked for 2026-11-13, of the first build that drew a recorded picture on a phone: a proper viewer
+/// that shows a picture at full size, to pan and zoom, with a rail of thumbnails of the row's other
+/// pictures, each a tap away, and a swipe left or right between them; and not a
+/// card) — a pressed picture opens its ROW's pictures in a
 /// viewer that is the whole screen. These rows hold what the viewer decides without a screen: which of the row's
 /// attachments are its pictures, the one it opens on, the rail's count, which pictures are read at the larger
 /// size, and how a picture is fitted inside its page. The paging, the zoom and the rail's scroll are the view's,

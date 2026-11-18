@@ -3,8 +3,8 @@ import Foundation
 
 // Item 419 — how the phone's shelf moves, as values (DESIGN.md §8 "The phone's Apps": "A folder, open", "Under a
 // finger", "The open app"): the Home Screen's folder and the system's app launch at the shelf's measure. Every number
-// that decides a motion stands here, once, and the views read it; how each feels under a finger is James's, on his
-// phone.
+// that decides a motion stands here, once, and the views read it; how each feels under a finger is to be tried on a
+// device.
 
 /// An icon under a finger.
 enum AppsPress {

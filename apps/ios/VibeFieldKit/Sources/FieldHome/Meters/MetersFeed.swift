@@ -2,7 +2,7 @@ import FieldProduct
 import Foundation
 import Observation
 
-// UM-4 (UM-D8 A; the lead's rulings 17 and 18) — THE METERS' FEED on the phone: the HOME's cached usage batch and the
+// UM-4 (UM-D8 A; 2026-11-06) — THE METERS' FEED on the phone: the HOME's cached usage batch and the
 // home's profiles, read through the home's one door (DS-8), as Chat's feed reads its lists (`ChatFeed`). The phone
 // runs no poll of its own and never asks for a fresh reading (`AgentsUsageParams.cached`, no `refresh`): it asks
 // `agents.usage` once when a door is handed over, then watches `agents.usage.subscribe` (whole batches at the stream
@@ -13,9 +13,9 @@ import Observation
 //
 // A home that refuses `agent.usage` (an older desktop: `FORBIDDEN_SCOPE`) is said, never drawn blank: the page and
 // the hold say "‹home› doesn't share usage yet" (§9). A door that cannot answer leaves "usage unavailable", the
-// dashed circles (ruling 10), and is still watched — the stream's open snapshot repairs it when the home answers — and
-// asked again (cached, free) whenever a meter view opens. Without a door the last word stands; with no word yet it is
-// "usage unavailable" too, never a first read with no read in flight (the U3 review).
+// dashed circles (UM-4c, 2026-11-06), and is still watched — the stream's open snapshot repairs it when the home
+// answers — and asked again (cached, free) whenever a meter view opens. Without a door the last word stands; with no
+// word yet it is "usage unavailable" too, never a first read with no read in flight (the U3 review).
 
 /// What the meters know of the home.
 struct MetersReading: Equatable {
@@ -50,7 +50,7 @@ struct MetersReading: Equatable {
     }
   }
 
-  /// The profiles that stand on a circle (ruling 7), in the home's order: the lens's (`ProfileLens.adopt`).
+  /// The profiles that stand on a circle (UM-4c, 2026-11-06), in the home's order: the lens's (`ProfileLens.adopt`).
   var profiles: [AgentProfileSet] { sets.filter(MeterModel.hasCircle) }
 
   /// The batch's readings; none before the first answer.
@@ -84,7 +84,7 @@ final class MetersFeed {
   @ObservationIgnored private var watch: (any ChatWatch)?
   @ObservationIgnored private var ask = 0
   /// Whether `attach` has run: its first call always does, so a feed handed no door and no home says "usage
-  /// unavailable", never a first read that never ends (ruling 10). Only a true repeat is skipped.
+  /// unavailable", never a first read that never ends (UM-4c, 2026-11-06). Only a true repeat is skipped.
   @ObservationIgnored private var attached = false
 
   /// The home's door, handed over when it changes or the app comes forward (nil: none — the watch ends and the last
@@ -105,7 +105,7 @@ final class MetersFeed {
       next.home = home
     }
     // no door and no answer yet: nothing is being read, so it is unavailable — never a first read that never ends
-    // (ruling 10); the next door's read replaces it
+    // (UM-4c, 2026-11-06); the next door's read replaces it
     if door == nil, next.usage == .waiting { next.usage = .unavailable }
     if next != reading { reading = next }
     guard door != nil else { return }

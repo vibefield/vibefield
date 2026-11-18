@@ -20,7 +20,7 @@ public enum SettingsModel {
 
   // MARK: - IOS-10c: the home desktop's agents
 
-  /// The words under an agent on the home's page (‹draft› for James, DESIGN.md §8 "The phone's Settings", amended
+  /// The words under an agent on the home's page (‹draft›, DESIGN.md §8 "The phone's Settings", amended
   /// 2026-11-11): one profile says its word alone; several say each profile's name with its word, in the home's
   /// order; an agent no profile holds a sign-in for is not signed in.
   public static func agentSignIns(_ agent: SettingsAgent) -> String {
@@ -191,7 +191,7 @@ public enum SettingsModel {
     }
   }
 
-  /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z; §8 "The phone's Settings", amended that day) — the
+  /// WI-W2e A (asked for on the page The Way In, 2026-11-14; §8 "The phone's Settings", amended that day) — the
   /// act on the row under Tailscale's card, by its state: Sign in again while Tailscale asks, Try again after a start
   /// that failed ("Couldn’t connect.": a failure says the act and its next step, IS-282-1), none otherwise. The admin
   /// console is a link, drawn beside approval.

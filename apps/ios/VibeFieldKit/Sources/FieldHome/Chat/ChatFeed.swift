@@ -16,7 +16,7 @@ import Observation
 // IOS-12d — an item is answered through the same door (`needs.answer`, by the act's place, carried by the home to the
 // item's desktop), once for every window and device. What this phone answers is kept by item for the app's life, so
 // the group and the thread stand the same card. The catalog's labels are the home's (`agent.catalog`, asked once per
-// door when a card first names an agent; Q1, VF-PM 19:26Z).
+// door when a card first names an agent; Q1, decided 2026-11-06).
 
 /// The door Chat reads through: the home's own client.
 @MainActor
@@ -197,7 +197,7 @@ final class ChatFeed {
     return try SparkSayResult(json: try await door.call(SparkSay.method, params: params.json))
   }
 
-  // MARK: IOS-12f — New spark, on the home (VF-PM 2026-11-07 13:11:45Z: zero door changes, the sheet rides Chat's door)
+  // MARK: IOS-12f — New spark, on the home (decided 2026-11-07: zero door changes, the sheet rides Chat's door)
   // The four asks are the Mac's sheet's port (`newSparkPortOver`, field-app/src/chat/new-spark.ts), asked of the home
   // the phone already holds. Each throws what the home answered; with no door, that no home answers.
 

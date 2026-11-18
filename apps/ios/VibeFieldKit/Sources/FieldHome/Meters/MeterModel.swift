@@ -3,7 +3,7 @@ import FieldProduct
 import Foundation
 import os
 
-// UM-4 (track UM; UM-D16 = E "Bands", UM-D3, D4, D12, D13 and D15 at their leans, James 2026-11-06 03:11Z) — THE
+// UM-4 (track UM; UM-D16 = E "Bands", UM-D3, D4, D12, D13 and D15 at their leans, picked 2026-11-06) — THE
 // PROFILES' METERS ON THE PHONE, PURE: the desktop's meter model (`packages/field-app/src/usage/meters.ts` and its
 // leaf `rules.ts`) and the part of Settings' join it reads (`panels/agents/profiles-model.ts`: `usageOf`,
 // `signInState`, `accountWords`, `isHot`, `usageLines`, `resetWords`), transcribed so the phone and the desktop never
@@ -328,7 +328,7 @@ struct MeterWindow: Equatable, Sendable {
   let resetIn: Double?
   /// its `resetsAt` is at or before now, whether its reset came before or after its reading: what it metered is
   /// gone, so it is never hot, has no forecast, presses 0 and ranks below every running window (`outranks`), and its
-  /// fill draws at the kept half (DESIGN.md §8 "A window read before its reset"; ‹for James›)
+  /// fill draws at the kept half (DESIGN.md §8 "A window read before its reset"; ‹to pick›)
   let passed: Bool
   /// UM-D13's rank: 0 once passed
   let pressure: Double
@@ -470,7 +470,7 @@ struct MetersOptions: Sendable {
   /// This Mac's agents as Settings lists them; nil, every agent
   var installed: Set<String>? = nil
   var title: PlanTitle = PlanTitles.settings
-  /// false when the home's usage door could not answer (ruling 10; ruling 17's home that does not share usage)
+  /// false when the home's usage door could not answer (UM-4b, 2026-11-06; a home that does not share usage too)
   var usageReadable: Bool = true
 }
 

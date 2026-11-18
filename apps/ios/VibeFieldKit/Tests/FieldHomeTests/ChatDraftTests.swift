@@ -5,7 +5,7 @@ import Testing
 
 @testable import FieldHome
 
-/// IOS-12f's M-f2 (PC-L1; plan-12f's Q8 A; VF-PM 2026-11-09 02:24:16Z, Q1 (a)) — the phone's draft is the Mac's: where an
+/// IOS-12f's M-f2 (PC-L1; plan-12f's Q8 A; Q1 (a), decided 2026-11-09) — the phone's draft is the Mac's: where an
 /// @ opens the list, what a chip says, and what a send carries. Each golden is written by field-app's own model
 /// (`packages/field-app/test/at-rows-goldens.test.ts`) and copied here byte for byte (`pnpm check:ios-fixtures`).
 ///

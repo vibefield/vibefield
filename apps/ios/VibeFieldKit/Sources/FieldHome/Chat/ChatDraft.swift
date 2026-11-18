@@ -1,7 +1,7 @@
 import FieldProduct
 import Foundation
 
-// IOS-12f's M-f2 (PC-L1; plan-12f's Q8 A; VF-PM 2026-11-09 02:24:16Z, Q1 (a); DESIGN.md §8 "The phone's Chat", the
+// IOS-12f's M-f2 (PC-L1; plan-12f's Q8 A; Q1 (a), decided 2026-11-09; DESIGN.md §8 "The phone's Chat", the
 // composer) — THE DRAFT, the Mac's (`field-app/src/chat/composer-draft.ts`) ported for what the phone sets in it: runs of
 // text and the chips set into them. A card chip is the Mac's alone (the hand). The field draws these parts; these parts
 // are the truth. Held to the goldens the Mac's own model writes (`Tests/FieldHomeTests/Fixtures/at-rows/`).

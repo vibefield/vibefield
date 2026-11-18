@@ -6,7 +6,7 @@ import Foundation
 // `columnsFor` :46-50, `layoutLanes` :51-73 and `dayLabel` :83-85. These are TimelineView's own, never exported, so no
 // golden reaches them: the kit's hand row H1 holds them (`TimelineViewTests`).
 //
-// RUNTIME ONLY (fd's Q1 ruling, 2026-11-04): `OVERSCAN` :45 and the tall canvas ended runs make are not transcribed.
+// RUNTIME ONLY (PG's Q1, decided 2026-11-04): `OVERSCAN` :45 and the tall canvas ended runs make are not transcribed.
 
 enum TimelineLayout {
   /// The map of the day's strip (TL-D17).

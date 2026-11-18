@@ -325,7 +325,7 @@ struct HistoryReadsTests {
     #expect(FieldHistoryModel.liveHeader(offline.corpus, standing: offline.standing).count == nil)
   }
 
-  /// SE-2o (the lead's ruling 24; DESIGN.md §8 "The phone's search", as amended) — recent searches retired from
+  /// SE-2o (2026-11-06; DESIGN.md §8 "The phone's search", as amended) — recent searches retired from
   /// search, and nothing read them since search's page retired, so the cache keeps none: a ledger holds only what the
   /// phone reads again.
   @Test("a kept ledger holds no recent searches")

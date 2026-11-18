@@ -14,7 +14,7 @@ import Foundation
 // float32 once on the store (`a[i] = Float(Double(a[i]) + x)`, never `a[i] += Float(x)`). The sums and maxima over
 // them are doubles, as JavaScript's numbers are.
 //
-// RUNTIME ONLY (fd's Q1 ruling, 2026-11-04): each agent gives the map its current state alone, so `pulseMap`'s `past`
+// RUNTIME ONLY (PG's Q1, decided 2026-11-04): each agent gives the map its current state alone, so `pulseMap`'s `past`
 // is always empty. NOT transcribed, history alone reaches them: `PulsePast`, `WORKED` :16, `workedOf` :18-25,
 // `pulsePastFor` :27-37, `NO_PAST` :74, `pulseMap`'s record loop :104-109, and `pulseRowsFor`'s ended filter.
 

@@ -14,7 +14,7 @@ import Testing
 /// `HatchSkyRenderer` draws the same moment through `HatchSky.metal`, offscreen, as the engine's `render(t)` draws
 /// it: the night ground, the deal's star from the rows golden's own rows, the bloom and the composite. The rows are
 /// held by SparkHatchGoldenTests, so what is measured here is the shader alone. Each frame must be the engine's within
-/// 12e's bound, which VF-PM rules for good on the first report (DESIGN.md §2.10):
+/// 12e's bound, which is ruled for good on the first report (DESIGN.md §2.10):
 /// - per channel |Δ| ≤ 6/255 on ≥ 99.5% of a frame's pixels;
 /// - mean |Δ| ≤ 1/255;
 /// - any pixel past 32/255 named.

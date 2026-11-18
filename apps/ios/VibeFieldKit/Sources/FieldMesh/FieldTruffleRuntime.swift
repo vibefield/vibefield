@@ -12,7 +12,7 @@ import TruffleTailscale
 /// Swift runtime hardcoded its own app id and kept its `init(node:)` private,
 /// so the phone joined `ghosttea-terminal` while every desktop floor joins
 /// `vibefield`, and a signed-in phone beside a serving desktop read
-/// `online · 0 peers in reach` — James's QA of 2026-09-13, finding 1.
+/// `online · 0 peers in reach` — the QA of 2026-09-13, finding 1.
 ///
 /// **TM-5 emptied the rest of it.** This was a COMPOSITION of upstream's
 /// pieces around a ghosttea peer directory, because the phone's attach path
@@ -313,7 +313,7 @@ public actor FieldTruffleRuntime {
   ///
   /// The phone signed in under `ghosttea-terminal`, so its Tailscale keys and
   /// its device ULID live in that directory; starting under `vibefield` on
-  /// truffle's derived default would find an empty one and ask James to sign
+  /// truffle's derived default would find an empty one and ask the person to sign
   /// in again. A single `moveItem` is a `rename(2)` within one volume —
   /// atomic, so there is no half-moved state anyone has to recover from — and
   /// it runs only when the destination is absent, which makes it idempotent.

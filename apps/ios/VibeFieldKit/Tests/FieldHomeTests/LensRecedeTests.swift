@@ -99,7 +99,7 @@ struct LensRecedeTests {
   // with its reader). *Back 2026-11-06 (SE-2n), with its reader:* the swarm's recede (`GodviewRecede.swarm`).
 
   /// SE-2n — a body carries the home's profile on the home's own rows, agents and bare terminals alike; a peer's
-  /// carries none, its profile being its own desktop's (the lead's ruling 17).
+  /// carries none, its profile being its own desktop's (SE-2n, 2026-11-06).
   @Test("a body carries the home's profile on the home's rows, and none on a peer's")
   func bubbleCarriesTheProfile() throws {
     let rows = try HomeFixture.witnessRows()

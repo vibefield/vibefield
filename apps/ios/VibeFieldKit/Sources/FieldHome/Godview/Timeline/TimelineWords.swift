@@ -9,7 +9,7 @@ import Foundation
 // `projectName`, `modelWord`, `waitWord` and `StateWords`; GodviewFormat's `formatShort` and `formatWords`; and
 // TimelineFormat's `elapsed` (the SDK's `formatElapsed`). Held to `phone-timeline.golden.json`.
 //
-// RUNTIME ONLY (fd's Q1 ruling, 2026-11-04): NOT transcribed, history alone reaches them — `BOUNDS_WORDS` :10,
+// RUNTIME ONLY (PG's Q1, decided 2026-11-04): NOT transcribed, history alone reaches them — `BOUNDS_WORDS` :10,
 // `recordedReadout` :23-37, `readoutAt`'s past and ended arms :52-63, `recordState` :83-87, `endedName` :89-91,
 // `OPENS_IN_HISTORY` :110, and the ended arms of `laneName`, `laneSubLine` and `laneLabel`. So the `bounds` and
 // `ended` tones never occur here.
@@ -36,7 +36,7 @@ enum TimelineWords {
   static let noLength = "–"
 
   // THE VIEW'S OWN WORDS (TimelineView.js), every one the phone says, here so the hand row H10 reads them all. THE
-  // WORDS RULE (VF-PM via fd, 2026-11-04): on the phone no word, label or title names a key, hover or a pane. Its
+  // WORDS RULE (decided 2026-11-04): on the phone no word, label or title names a key, hover or a pane. Its
   // named drops: the empty hint's pane and the body label's keys (below); NOW's key legend (`keyLegend(NOW_KEY)`,
   // :859) and the map's hover title (:856, "The whole day. Press to put the head there; drag to play it back."),
   // which the phone never draws.
@@ -44,7 +44,7 @@ enum TimelineWords {
   /// The empty stage's words (`TimelineView.js:882`). The title is upstream's. The hint drops upstream's "pane"
   /// ("Launch an agent from a terminal pane."): the same words in every view's empty stage.
   static let noAgents = "NO ACTIVE AGENTS"
-  // draft word: James's eye (VF-PM 2026-11-04)
+  // draft word: for the eye on a device (decided 2026-11-04)
   static let noAgentsHint = "Launch an agent from a terminal."
   /// The body's group label (`TimelineView.js:861`, its aria-label): its first sentence. The keys' sentence ("Up and
   /// down light a lane, Enter opens it, left and right move through time, minus and equals zoom.") is dropped; the

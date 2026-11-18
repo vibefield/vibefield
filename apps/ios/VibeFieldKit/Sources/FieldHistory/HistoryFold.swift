@@ -755,8 +755,8 @@ extension FieldHistoryModel {
   /// A sitting's pill. Where the reader came back after a pause it carries a clock and `after 44m`; where the day
   /// turned with no pause it is the day alone, `Mon 31 Aug`; a sitting that is neither has none.
   ///
-  /// Item 395 (James, 2026-11-13 23:38:00Z, session qa-01: "it only show time when it is today, show weekday if
-  /// it was within a week, and show date if outside a week ago") — a pill that carries a clock says how far back
+  /// Item 395 (asked for 2026-11-13: the clock alone when it is today, the weekday within a week, and the date past
+  /// a week) — a pill that carries a clock says how far back
   /// it is (`clockLead`), where the day turned and inside a day alike. It was the room's `pillText` as it stood
   /// (`DayPill.tsx`): the day in the lead only where the day turned (`Tue 1 Sep · 00:02`, the day said as
   /// `Today`, `Yesterday` or its name), and the clock alone inside one day, `12:31`, however old the day. A pill
@@ -786,7 +786,7 @@ extension FieldHistoryModel {
   ///   not this one, `6 Nov 2025 · 20:21`.
   ///
   /// A stamp ahead of now, where two devices' clocks disagree, reads in today's form, the clock alone, and never
-  /// as a distance (VF-PM's ruling, 2026-11-13 23:47Z, so the phone matches the room): later today, and on any
+  /// as a distance (decided 2026-11-13, so the phone matches the room): later today, and on any
   /// day after today. It was said by its day, `Sat 14 Nov · 00:05`.
   static func clockLead(_ ms: Int64, now: Date) -> String {
     let today = calendar.startOfDay(for: now)
@@ -881,8 +881,8 @@ extension FieldHistoryModel {
   /// boundary: a reply with words or an attachment closes the group before it, and everything between two of them
   /// (tool lines, thoughts, notices, summaries, team messages) is ONE group, in order.
   ///
-  /// Item 362e (James, 2026-11-12 18:40:35Z: "i think all message type and views are different from desktop, needs
-  /// thorough audit"):
+  /// Item 362e (asked for 2026-11-12: a thorough audit of every message type and view, which differ from the
+  /// desktop's):
   /// - a blank agent row said nothing, so it closes nothing and is not drawn (it was `(no words)`, and it cut the
   ///   group in two);
   /// - a question to the reader and a request for permission stand alone between groups (the room's `request`

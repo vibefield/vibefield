@@ -316,7 +316,7 @@ import Testing
   /// DS-D5 — the person engaging the pane (its keyboard coming up) is a focus
   /// gain too: it takes the seat again, with the grid measured since. Without
   /// it a pane that lost the seat stayed at another pane's size until the card
-  /// was opened again (James, 2026-10-17: "cant restore back no matter what").
+  /// was opened again (asked for 2026-10-17: the size comes back, where nothing brought it back).
   @MainActor
   @Test func engagingThePaneTakesTheSeatAgain() async throws {
     let door = CellDoorHarness()

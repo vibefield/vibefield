@@ -2,7 +2,7 @@ import Testing
 
 @testable import FieldHome
 
-/// RB-2 — the home's acts outside the way in, under a demo (VF-PM 21:59:10Z on PLAN-2c: Q1, Q2, and the way to
+/// RB-2 — the home's acts outside the way in, under a demo (decided 2026-11-12 on PLAN-2c: Q1, Q2, and the way to
 /// Developer): under a demo the Developer page chose, the corner's and Settings' Sign in and Sign out are held, while a
 /// scripted run's mock keeps its own; under any demo This phone › Lock changes nothing, either way; and under any demo
 /// the way to Developer, its switch and its picker are never held, so a demo can always be switched off. With no demo
@@ -33,7 +33,7 @@ struct DemoHoldTests {
     #expect(none == false)
   }
 
-  /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z): the corner's and Settings' Try again, under
+  /// WI-W2e A (asked for on the page The Way In, 2026-11-14): the corner's and Settings' Try again, under
   /// "Couldn’t connect.", starts your account's network, and no demo has one to start.
   @Test("under any demo Try again starts nothing, a scripted run's included; with none it is made")
   func tryAgain() {

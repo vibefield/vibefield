@@ -53,7 +53,7 @@ struct AgentProfilesWords: Equatable {
       /// what it needs, said with no act
       case needs(String)
       /// "Codex shows no meter" (an agent that reports no usage), "Claude Max: usage unavailable", or — a plan no
-      /// agent named, or whose reading holds no window — its title alone: its own words are ‹for James›, and "shows
+      /// agent named, or whose reading holds no window — its title alone: its own words are ‹to pick›, and "shows
       /// no meter" would be false of an agent that meters (the U3 review)
       case none(String)
     }
@@ -176,7 +176,7 @@ struct AgentProfilesWords: Equatable {
 
   /// UM-D13 — a circle's word: its tightest percent ("42%"), orange when it runs hot; "reading…" while the first
   /// reading is out; nothing when nothing reads (or, for the Me menu's row, while the home does not share usage —
-  /// that word is ‹for James›; the page says it).
+  /// that word is ‹to pick›; the page says it).
   static func word(_ meters: ProfileMeters, firstRead: Bool, notShared: Bool) -> (word: String?, hot: Bool) {
     if notShared { return (nil, false) }
     if let tightest = meters.tightest, let reading = tightest.reading {

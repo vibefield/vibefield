@@ -2,7 +2,7 @@ import FieldDesign
 import Testing
 import UIKit
 
-// UM-4 (DESIGN.md §13; the lead's ruling 20) — a profile's glyph on the phone is ONE table: puppeteer's `ProfileGlyph`
+// UM-4 (DESIGN.md §13; 2026-11-06) — a profile's glyph on the phone is ONE table: puppeteer's `ProfileGlyph`
 // vocabulary as SF Symbols. The vocabulary is `Fixtures/presentation-tables.golden.json`, which field-app's generator
 // writes from puppeteer-view-sdk's `PROFILE_GLYPHS` at the pin, so an EL8 that changes the vocabulary reddens this row
 // once the fixture is re-blessed (`pnpm check:ios-fixtures` holds the copy).

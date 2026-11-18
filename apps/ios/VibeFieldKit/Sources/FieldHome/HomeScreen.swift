@@ -3505,7 +3505,7 @@ public struct HomeScreen: View {
       //
       // Text is taken only when the terminal took it: a draft or a paste too
       // large for the link's control message is refused and said, and the card
-      // keeps it (the History lead's D6, 2026-10-17) — the gate read before the
+      // keeps it (History's D6, 2026-10-17) — the gate read before the
       // act would have cleared a draft that was never sent.
       switch act {
       case .keystroke(let stroke):

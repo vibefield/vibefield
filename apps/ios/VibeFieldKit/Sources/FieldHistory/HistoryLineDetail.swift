@@ -1,7 +1,7 @@
 import FieldProduct
 
-// Item 362f (James, 2026-11-12 18:40:35Z, of the phone's History session view against the desktop's: "i think all
-// message type and views are different from desktop, needs thorough audit") — WHAT AN ENTRY SAYS BEYOND ITS ROW.
+// Item 362f (asked for 2026-11-12, of the phone's History session view against the desktop's: a thorough audit of
+// every message type and view, which differ from the desktop's) — WHAT AN ENTRY SAYS BEYOND ITS ROW.
 //
 // The document is read two ways. Through the home desktop a row is what fieldd projects (`IndexTimelineRow`): its
 // words cut at 2,000 units, its tool a line. Read straight from the desktop's index the phone holds rosetta's whole

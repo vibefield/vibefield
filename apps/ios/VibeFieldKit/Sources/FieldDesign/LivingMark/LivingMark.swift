@@ -1,7 +1,7 @@
 import SwiftUI
 
-// Item 417b (2026-11-14; on James's item 417, 08:13:38Z, session qa-01: "message view initial loading should adopt
-// latest desktop design that uses our logo mark") — THE LIVING MARK, DRAWN BY THE PHONE. The desktop's mark is a
+// Item 417b (2026-11-14; on item 417, asked for that day: a message view's first load adopts the desktop's latest
+// design, the one with our logo mark) — THE LIVING MARK, DRAWN BY THE PHONE. The desktop's mark is a
 // generated SVG that animates itself (`packages/design-kit/src/living-mark`). The phone reads that SVG's own
 // numbers (LivingMarkData.swift) by that SVG's own rules, in a Canvas. DESIGN.md §8 "The living mark, drawn as
 // SVG".

@@ -3,7 +3,7 @@ import Testing
 @testable import FieldLock
 
 /// WI-3 — the lock's words (DESIGN.md §9 "The lock"): Face ID's as ruled, and every word naming the method the
-/// phone has. The Touch ID swap and the passcode-only set are drafts pending James (the lane's notes; VF-PM, 01:02Z).
+/// phone has. The Touch ID swap and the passcode-only set are drafts still to pick (the lane's notes; 2026-11-04).
 /// L4's word pass (2026-11-06): the four words that name the device take it as its platform names it, the noun the UI
 /// layer reads from FieldDesign's `DeviceWord` ("iPhone", "iPad", "device"), since FieldLock imports no UI.
 @Suite("the lock says §9's words, each naming the method this phone has")

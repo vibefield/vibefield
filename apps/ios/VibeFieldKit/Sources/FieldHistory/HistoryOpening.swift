@@ -1,8 +1,8 @@
 import FieldDesign
 import SwiftUI
 
-// Item 417 (James, 2026-11-14 08:13:38Z, session qa-01: "message view initial loading should adopt latest desktop
-// design that uses our logo mark") — A SESSION'S FIRST READING IS THE HOLD. While a session's document is first
+// Item 417 (asked for 2026-11-14: a message view's first load adopts the desktop's latest design, the one with
+// our logo mark) — A SESSION'S FIRST READING IS THE HOLD. While a session's document is first
 // read from its desktop, its page is the hold the desktop's History stands a conversation's wait in: the mark at the
 // centre of the page's place and the room's line under it. DESIGN.md §8 "The phone's session document", "Its first
 // reading is the hold"; the motion is §6's "History's holds".

@@ -119,8 +119,8 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
     }
   }
 
-  /// Item 359 (James, 2026-11-12 17:50:31Z: "overturn this ruling, bring back
-  /// those icons now") — LP-4's two-mark ruling is overturned, so every mark
+  /// Item 359 (asked for 2026-11-12: that ruling overturned and those marks
+  /// brought back now) — LP-4's two-mark ruling is overturned, so every mark
   /// the design chose for an agent is in the png the bundle ships. Read from
   /// the png itself (its upload), not from the table: each chosen tile carries
   /// ink. What LP-D7 ruled beside it stands: a neighbour the bake set beside a
@@ -169,7 +169,7 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
   /// Item 359 (2026-11-12) — the table's side of it: every pick is kept, so
   /// the keys the app draws a tile for are the nine, and no neighbour is
   /// drawn. (LP-4, 2026-11-05, kept Claude's and Codex's and no other; this
-  /// row was `onlyClaudeAndCodexMarksAreDrawn` until James overturned it.)
+  /// row was `onlyClaudeAndCodexMarksAreDrawn` until it was overturned (item 359, 2026-11-12).)
   @Test func everyChosenMarkIsDrawnAndNoNeighbourIs() {
     let nine = ["claude", "codex", "grok", "kimi", "opencode", "hermes", "antigravity", "copilot", "pi"]
     #expect(MarksAtlas.providers == nine)
@@ -313,7 +313,7 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
   }
 
   @Test func theOnePanesBandAndLightAreTheThemesInkNeverAPaneColour() {
-    // James 2026-10-18: the phone has one pane, so its light is black by day
+    // Asked for 2026-10-18: the phone has one pane, so its light is black by day
     // and white by night (text main), whatever the project's colour.
     for theme in [lightTheme, darkTheme] {
       let lit = packedBody(render(bubble(active: true, mounted: true)), frameGlow: glow, theme: theme)
@@ -554,7 +554,7 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
     #expect(plain == [1, 1])
   }
 
-  /// One recede rule across Field's views (the UM lead's ruling for M-phone, 2026-11-06): a stale body under the
+  /// One recede rule across Field's views (decided for M-phone, 2026-11-06): a stale body under the
   /// lens weighs the recede's weight, as a stale row does in the list (`ListPaint.weight`: the recede's rule comes
   /// after the stale one's, so a row both stale and receded weighs the recede's) — never the stale weight times it.
   /// Shown, a stale body keeps the stale weight; stepping back, its weight follows the recede's until that passes the

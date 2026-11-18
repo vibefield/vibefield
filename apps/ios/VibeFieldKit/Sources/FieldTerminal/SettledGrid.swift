@@ -5,8 +5,8 @@ import GhostteaTerminal
 /// The pane's grid moves with every layout pass, and two kinds of pass are not
 /// the terminal's size, though the phone sent both to the desktop's PTY while it
 /// held the seat:
-/// - The keyboard's own motion. One toggle measured 31 → 28 → 13 rows on James's
-///   phone and codex redrew at each; his ruling (item 24): "settled size only".
+/// - The keyboard's own motion. One toggle measured 31 → 28 → 13 rows on a
+///   phone and codex redrew at each; item 24 (2026-10-17): the settled size only.
 ///   Grids measured between UIKit's keyboard will- and did-notification are
 ///   held, and the newest goes out once the keyboard has stopped.
 /// - A card being dismissed. A swipe down with the keyboard up squeezes the pane
@@ -20,7 +20,7 @@ import GhostteaTerminal
 /// reach this value after the pass that measured its first grid (SwiftUI's own
 /// observer may lay out first), and in the same turn it still turns that grid
 /// into the keyboard's motion. The first build told from inside the pass and
-/// sent 45×10 mid-motion (James's phone, 05:22Z).
+/// sent 45×10 mid-motion (on a phone; TM, 2026-10-17).
 struct SettledGrid {
   enum Report: Equatable {
     /// Tell the seat this grid.

@@ -3,7 +3,7 @@ import Testing
 
 @testable import FieldHome
 
-/// IOS-10b — the Me menu's Theme row (theme-row, James on the page Settings in a Pocket, 2026-11-11; DESIGN.md §8
+/// IOS-10b — the Me menu's Theme row (theme-row, asked for on the page Settings in a Pocket, 2026-11-11; DESIGN.md §8
 /// "The phone's corner", amended that day): the Mac's row at touch pitch, the one setting Settings › Appearance keeps.
 @Suite("the Me menu's Theme row: above Settings…, above Lock now, Light · Dark · Auto")
 struct ThemeMenuRowTests {

@@ -136,7 +136,7 @@ struct AppsKeepTests {
   func refusedKeepSaysItsWords() async throws {
     let (home, feed, app) = try await live()
     home.refusal = FieldProductError(kind: "INTERNAL", message: "the settings document did not write")
-    // DESIGN.md §9 "Keep's words" (James's pick): its fourth line
+    // DESIGN.md §9 "Keep's words" (the pick; MA-3h, 2026-11-14): its fourth line
     let failed = await feed.mark(app, kept: true)
     #expect(failed == "Couldn't keep Release notes.")
     // its fifth line

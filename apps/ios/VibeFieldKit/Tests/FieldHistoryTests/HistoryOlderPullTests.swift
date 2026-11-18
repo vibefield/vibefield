@@ -3,18 +3,18 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 418 (James, 2026-11-14 08:13:38Z, session qa-01: "i feel message progressive load is not there, because it
-/// seems still trying to load everything, what i want is when you scroll to the top of the current loaded batch, there
-/// should be a clear pull down action like real world chat apps, you pull down for load more, there will be visual
-/// indicator when you pull down, there will be loading indicator when you release, all these motions should designs
-/// intuitively and nicely with clear feedbacks") — the rows above a session's document are read in by a pull down
+/// Item 418 (asked for 2026-11-14: a message's view loads progressively, where it still seemed to load everything:
+/// when the reader scrolls to the top of the batch loaded, there is a clear pull down, as in real chat apps, that
+/// loads more, with a sign shown while the page is pulled down and a loading sign once it is let go, and every one
+/// of these motions is designed to be intuitive and
+/// pleasing, with clear feedback) — the rows above a session's document are read in by a pull down
 /// at its top, one batch for each pull, and never by themselves. It overturns item 362b's rule, by which a page
 /// within a screen of its top asked for the rows above by itself.
 ///
 /// These rows hold the RULE: what the page tells the pull (how far it stands past its top, whether a finger is on
 /// it, when it comes to rest, what the read did) and what the pull answers (whether the batch above is asked for,
 /// what the mark draws, what the line says). That a finger on a phone moves the page as the rule is fed, how the
-/// mark looks over the gap, and where the rows land are his to see.
+/// mark looks over the gap, and where the rows land are to be seen on a device.
 ///
 /// Every mutating call is taken into a `let` first, so no macro has to expand one.
 @Suite("item 418 — the rows above a session's document are read in by a pull at its top, never by themselves")

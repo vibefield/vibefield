@@ -3,8 +3,8 @@ import FieldMarkdown
 import FieldProduct
 import Foundation
 
-// Item 362d (James, 2026-11-12 18:40:35Z, of the phone's History session view against the desktop's: "i think all
-// message type and views are different from desktop") — A RECORDED MESSAGE'S WORDS, READ: a prompt's and a reply's
+// Item 362d (asked for 2026-11-12, of the phone's History session view against the desktop's: every message type
+// and view like the desktop's, where they all differed) — A RECORDED MESSAGE'S WORDS, READ: a prompt's and a reply's
 // words go through the phone's one reader (`ChatMarkdown.blocks`, field-app's `markdownBlocksOf` ported and held to
 // its golden) and are drawn by the view Chat draws a spark's words with (`ChatMarkdownView`), as the desktop's
 // transcript reads both through one renderer (rosetta's room, `components/transcript/Prose.tsx`). A recorded text is

@@ -13,11 +13,11 @@ import SwiftUI
 // THE PAINT IS AN EMITTER AND A REPLAY. `TimelinePaint` emits the 2D context's calls as `TimelineCanvas` values, in the
 // desktop's order, so the wakes' stream is held call for call to `phone-timeline.golden.json`'s `paint`
 // (`TimelinePaintParityTests`; its ticks' hairlines elided there, their zone being the host's). `TimelineCanvasReplay`
-// draws a stream into a SwiftUI `GraphicsContext` (held by eye: the still pair). The map's paint is by eye alone (fd's
+// draws a stream into a SwiftUI `GraphicsContext` (held by eye: the still pair). The map's paint is by eye alone (PG's
 // Q7: its hours read the local zone), so `pulse` hands the replay its three layers in the order they composite — the
 // desktop draws the hours and the ridge's light `destination-over`, UNDER what is drawn, so the phone draws them first.
 //
-// RUNTIME ONLY (fd's Q1 ruling, 2026-11-04): NOT transcribed, history alone reaches them — `BOUNDS_ALPHA` :14 and
+// RUNTIME ONLY (PG's Q1, decided 2026-11-04): NOT transcribed, history alone reaches them — `BOUNDS_ALPHA` :14 and
 // `wakeColour`'s bounds arm, `paintRecorded` :73-106, and `paintWakes`' `top` (the tall canvas ended runs make,
 // :110, :123-124, :159-160), so a lane is drawn in the rows' y from the canvas's top.
 

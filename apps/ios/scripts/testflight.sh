@@ -16,7 +16,7 @@ Usage: bash apps/ios/scripts/testflight.sh archive BUILD_NUMBER review|testfligh
 
   archive 7 review      Build a signed Release archive for App Review: it draws
                         no TestFlight-only row (Notifications, Developer), as
-                        James ruled (the Settings page, 2026-11-12; RB-2).
+                        decided for the Settings page (2026-11-12; RB-2).
   archive 8 testflight  The same code with VF_TESTFLIGHT set, so TestFlight's
                         own rows and the Developer page's made-up field and
                         states are compiled in: its app must carry every marker.
@@ -66,7 +66,7 @@ running as you can rename itself.
                   reads the key with agents running anyway. Then revoke the key
                   in App Store Connect when the run ends. Any other value is
                   refused.
-Releases run in your own macOS account (James, 2026-11-05). For the length of the
+Releases run in your own macOS account (decided 2026-11-05). For the length of the
 upload, quit every agent CLI (claude, codex, and any other you run; the guard's
 three names are a sample, not the set), quit VibeField (Cmd-Q, which stops its
 daemons) and stop any pnpm dev (Ctrl-C in its terminal, which reaps its pair), or
@@ -330,7 +330,7 @@ real_strings_check() {
     echo "Notice: other machines' builds: a CI runner's home (/Users/runner/) $runner (a prebuilt library's own paths)."
   fi
 }
-# The dSYM notice (item 374; James on the board, 2026-11-13 23:55:16Z: "As is, with the notice, for build 6"):
+# The dSYM notice (item 374, picked 2026-11-13: kept as it is, with the notice, for build 6):
 # uploadSymbols sends the archive's dSYMs to Apple for crash reports. They hold this Mac's build paths by design (the
 # debug info), they are never in the app, and no tester or reviewer sees them. One line at upload, never a refusal; its
 # counts name the paths, never print them.
@@ -454,7 +454,7 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM HUP
 
-# The accident guard (VF-PM's ruling on LP-4's signing review, 2026-11-05). Before the
+# The accident guard (decided on LP-4's signing review, 2026-11-05). Before the
 # key is read, count this user's processes by exact name and refuse while an agent
 # runs. It prevents ACCIDENTS (an upload started from, or beside, an agent) and is NO
 # BOUNDARY: macOS's pgrep matches the name a process gives itself (its argv[0]'s last

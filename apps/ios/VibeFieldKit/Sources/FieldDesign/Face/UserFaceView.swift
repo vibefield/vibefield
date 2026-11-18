@@ -23,7 +23,7 @@ public struct UserFaceView: View {
   ///   - seed: what the sticker's tilt is dealt from — the user id, so a user
   ///     sits at one angle everywhere they appear.
   ///   - held: the lifted pose — the corner's face while its menu is open.
-  ///   - label: the accessible name ("James, 🦊"). Omit it where the face sits
+  ///   - label: the accessible name ("Robin, 🦊"). Omit it where the face sits
   ///     beside the name already; a decorative face is hidden from assistive
   ///     tech (I-4).
   public init(face: UserFace, size: CGFloat, seed: String, held: Bool = false, label: String? = nil) {

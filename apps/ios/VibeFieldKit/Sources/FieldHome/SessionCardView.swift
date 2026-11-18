@@ -136,7 +136,7 @@ struct SessionCardView<Terminal: View>: View {
   // MARK: - The live card (item 41)
 
   /// The live card is its terminal, edge to edge (DESIGN.md §8, "The phone's
-  /// live card is its terminal"; James, 2026-10-19, T1 and F1). It wears
+  /// live card is its terminal"; asked for 2026-10-19, T1 and F1). It wears
   /// Godview's pane frame: a line and an inner glow that follow the sheet's
   /// corners. The header floats over the grid on a blur that fades away below
   /// its words. The Metal surface also paints behind the home indicator; its
@@ -429,8 +429,8 @@ struct SessionCardView<Terminal: View>: View {
           // The attachment's words ride OVER the terminal, never beside it: a
           // line in a row of its own resized the pane each time it came or
           // went, and a resize is a round trip to the desktop's PTY that, until
-          // 2026-10-17, brought the line back (James: "a line of status text
-          // jumping around"). Top, because the bottom rows are where a prompt
+          // 2026-10-17, brought the line back (asked for that day: a status line
+          // that never jumps around). Top, because the bottom rows are where a prompt
           // and the typing are.
           .overlay(alignment: .top) {
             statusPanel.animation(FieldMotion.ease(0.24), value: statusNote)
@@ -506,7 +506,7 @@ struct SessionCardView<Terminal: View>: View {
         .foregroundStyle(FieldPalette.textMuted)
 
       if remote.attachable {
-        // No pre-attach write mark (James, 2026-10-28: a peer is writable by default). Whether THIS device may
+        // No pre-attach write mark (asked for 2026-10-28: a peer is writable by default). Whether THIS device may
         // type is decided per attach by the grant in its ticket, and the live attachment says so in its own words
         // when a desktop grants read without input.
         if let statusNote {

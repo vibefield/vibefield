@@ -9,11 +9,11 @@ import SwiftUI
 // :54-66, the canvas :72-79, the dims :82-102, the head and its knob :106-135, the tip :137-152, the tools :157-259 and
 // SINCE :261-273. The map's paint is `TimelinePaint.pulse`, composited bottom first.
 //
-// TOUCH (the read's §5, fd's Q12): pressing or dragging on the map puts the head there, snapping to now in its last
+// TOUCH (the read's §5, PG's Q12): pressing or dragging on the map puts the head there, snapping to now in its last
 // 5 pt, with the tip over the finger; the narrow head's ONE preset button cycles 15M → 1H → 4H → 12H; NOW glides home.
 // VoiceOver adjusts the map by 5 minutes (the desktop's ← →). No hover, no keys.
 //
-// RUNTIME ONLY (fd's Q1 ruling, 2026-11-04): the record's sentence under SINCE (:274-314) is not transcribed.
+// RUNTIME ONLY (PG's Q1, decided 2026-11-04): the record's sentence under SINCE (:274-314) is not transcribed.
 
 /// The strip: the map box, the tools in the head column, and SINCE under them. Its numbers are the view's draw's.
 struct TimelineMapStrip: View {
@@ -163,7 +163,7 @@ struct TimelineMapStrip: View {
   }
 
   /// The tools: the narrow head's one preset button that cycles (the wide head's group), and NOW. No key legend:
-  /// the phone has no keys (fd's Q2) and names none (the words rule), so NOW is the 22 pt tool its siblings are.
+  /// the phone has no keys (PG's Q2) and names none (the words rule), so NOW is the 22 pt tool its siblings are.
   private var tools: some View {
     let index = preset.flatMap { current in TimelineScale.presets.firstIndex { $0.id == current.id } }
     let next = TimelineScale.presets[((index ?? -1) + 1) % TimelineScale.presets.count]

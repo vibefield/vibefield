@@ -4,9 +4,9 @@ import Testing
 
 @testable import FieldTerminal
 
-/// Item 358 (James, 2026-11-12 17:50:31Z, of the phone's Settings › Terminal: "it is missing the preview window") —
+/// Item 358 (asked for 2026-11-12, of the phone's Settings › Terminal: the preview window it lacked) —
 /// the preview as values: the theme's colours as the picture uses them, a run's ink and ground, the sample, and the
-/// caption's words. The picture itself, and whether it reads as the desktop's preview does, are James's to see.
+/// caption's words. The picture itself, and whether it reads as the desktop's preview does, are to be seen on a device.
 @Suite("item 358 — Settings › Terminal's preview, as values")
 struct TerminalLookPreviewTests {
   private typealias Model = TerminalLookPreviewModel

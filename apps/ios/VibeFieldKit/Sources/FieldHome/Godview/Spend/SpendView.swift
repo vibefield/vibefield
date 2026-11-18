@@ -19,13 +19,13 @@ import UIKit
 // The DOM is laid as the window lays it, every element absolutely placed at the model's own numbers (P7 holds them
 // to the shipping view's DOM). Its typography and inks are spend.css's, and the paint is by eye on the stills (Q2).
 // Where the phone differs:
-// - Touch is the pointer (fd's Q3, held by H9 on the acts and H14 on the list). A finger on the chart is the
+// - Touch is the pointer (PG's Q3, held by H9 on the acts and H14 on the list). A finger on the chart is the
 //   pointer. A lift within 4 pt of its press is the click: it opens a line in reach, else sets the moment, else lets
 //   it go within 8 pt of it. A drag sets nothing, and a cancelled touch taps nothing. A finger on the list holds its
 //   order and lights its row; a drag on the list steps it a whole row at a time, and a tap opens a row. There are no
 //   keys, no hover and no focus ring. A gesture's end comes twice, its lift and its state's reset, in either order;
 //   every act names its touch by token, so either order is the same one tap (H15, H16).
-// - The words name no key, hover or pane (fd's words rule; the five named deviations are `SpendModel.Dropped`).
+// - The words name no key, hover or pane (PG's words rule; the five named deviations are `SpendModel.Dropped`).
 // - SwiftUI names no 450, 550 or 650 weight, so each is the named weight at or below it (`SpendType.weight`). The
 //   Now pill's backdrop blur is not drawn: its ground is the panel at 88 %, as the window's is under the blur.
 
@@ -164,7 +164,7 @@ struct SpendView: View {
     if next != state { state = next }
   }
 
-  // MARK: - The chart's touch (fd's Q3)
+  // MARK: - The chart's touch (PG's Q3)
 
   private func chartHit(_ g: SpendModel.Geometry, _ model: SpendModel.Input) -> some View {
     Color.clear
@@ -260,7 +260,7 @@ struct SpendView: View {
   /// The hero (`.vf-monitor-spend-hero`): what was spent, its rate and what the figure counts. Compact on a short or
   /// narrow stage (its words on one baseline); narrow, the figure smaller and its caption undrawn. The model carries
   /// 0.4.0's short narrow caption (`heroCaption`: who the total leaves out, cut to its room); the phone does not draw
-  /// it until James rules on the words the phone's own fonts leave (VF-PM 2026-11-09; DESIGN.md, Godview's spend view;
+  /// it until the words the phone's own fonts leave are ruled on (decided 2026-11-09; DESIGN.md, Godview's spend view;
   /// the mint prints them, `SpendParityTests.thePhonesNarrowHeroWordsAreRead`).
   @ViewBuilder
   private func hero(_ hero: SpendModel.Hero, _ inks: SpendInks) -> some View {

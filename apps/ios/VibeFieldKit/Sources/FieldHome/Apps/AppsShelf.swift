@@ -1,7 +1,7 @@
 import FieldProduct
 import Foundation
 
-// MA-6a — the phone's shelf as a value (DESIGN.md §8 "The phone's Apps", MA-D9 A; VF-PM's rulings 2026-11-09 04:46Z):
+// MA-6a — the phone's shelf as a value (DESIGN.md §8 "The phone's Apps", MA-D9 A; decided 2026-11-09):
 // Recent, Kept, then the projects as folders, then the apps with no project. The door has folded already (MA-D4), so
 // nothing here folds; a row seen on two pages counts once. An app stands in Recent and in its folder both, as App
 // Library's do.
@@ -85,14 +85,14 @@ struct AppsShelf: Equatable {
     away = Set(newest.filter { MadeAppFacts.away(MadeAppFacts.source(of: $0, in: sources)) }.map(\.appKey))
   }
 
-  /// The last group's head. Ruled 2026-11-12 (James, 03:38:38Z, PM board): kept. Item 273.
+  /// The last group's head. Ruled 2026-11-12: kept. Item 273.
   static let noProjectHead = "No project"
   /// What the shelf says when the walk stopped at the phone's bound.
-  /// Ruled 2026-11-12 (James, 03:38:38Z, PM board): kept. Item 273.
+  /// Ruled 2026-11-12: kept. Item 273.
   static let clippedLine = "Not every app is shown here"
 
   /// What a shelf with no apps says. Off is the home's own words (§9). The waiting line and the empty one:
-  /// Ruled 2026-11-12 (James, 03:38:38Z, PM board): kept. Item 273.
+  /// Ruled 2026-11-12: kept. Item 273.
   /// A library still reading says so per desktop (`readingLines`).
   static func emptyLine(phase: AppsFeed.Phase, here: String) -> String? {
     switch phase {

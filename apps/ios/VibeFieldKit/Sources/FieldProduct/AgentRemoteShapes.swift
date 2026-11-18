@@ -11,7 +11,7 @@ import Foundation
 // `.optional()` (only `project.branch` is nullable), a CLOSED word it does not know, a length or sign bound broken —
 // and never for an OPEN word, which is kept as it came (`.unrecognized`, or a plain `String`). Length bounds count
 // UTF-16 code units, as zod's `.min`/`.max` do. That departs, for this cut only, from the kit's keep-the-word
-// precedent (`AgentTerminalJoin.hosted`, `AgentRowStatus`), which stays for the `field` cut (VF-PM, Q-C1).
+// precedent (`AgentTerminalJoin.hosted`, `AgentRowStatus`), which stays for the `field` cut (Q-C1, decided 2026-11-01).
 //
 // A refused row costs only itself: an envelope reads every row on its own and names the refused ones by key
 // (`AgentRemoteRowRefusal`), and `RemoteBoardScreen` turns that into the window's `incompatible`. An envelope's OWN
@@ -657,8 +657,8 @@ public struct AgentRemoteRow: Sendable, Equatable, Identifiable {
 
 /// A row an envelope could not read, named by its key as the screen holds it.
 public struct AgentRemoteRowRefusal: Sendable, Equatable {
-  /// The row's `runtimeRunId` when that is a non-empty string, else nil: keyless. `""` is keyless too (VF-PM, Q-C3),
-  /// as the window's `keyOf` reads it since item 150 (`47ee475bd`, main 2026-11-01): a key is `min(1)`.
+  /// The row's `runtimeRunId` when that is a non-empty string, else nil: keyless. `""` is keyless too (Q-C3, decided
+  /// 2026-11-01), as the window's `keyOf` reads it since item 150 (`47ee475bd`, main 2026-11-01): a key is `min(1)`.
   public let key: String?
   public let reason: String
 
@@ -784,7 +784,7 @@ public struct AgentRemoteMeshDelta: Sendable, Equatable {
 /// One desktop's entry in the mesh open: its state, when that was established (ISO-8601 as the home wrote it), and —
 /// once it has answered — its board. An unknown STATE word stays `.unrecognized` (the kit's DS-L9 posture), though
 /// the contracts' `RowsDeviceState` is closed: the phone is more tolerant than the window here, which does no harm,
-/// and it is the one place the remote cut keeps a word zod would refuse (VF-PM, Q-C2).
+/// and it is the one place the remote cut keeps a word zod would refuse (Q-C2, decided 2026-11-01).
 public struct AgentRemoteMeshDevice: Sendable, Equatable {
   public let device: String
   public let state: AgentMeshDeviceState

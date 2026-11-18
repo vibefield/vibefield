@@ -1,5 +1,5 @@
-// Item 362g (James's pick on the board, 2026-11-12 20:43Z, as VF-PM relayed it: "Both A and B for 0.9: images
-// through a rosetta release, and full detail on the direct road") — WHICH RECORDED PICTURE AN ATTACHMENT IS.
+// Item 362g (picked 2026-11-12: A and B both, for 0.9, so pictures come through a rosetta release, and the direct
+// road carries their full detail) — WHICH RECORDED PICTURE AN ATTACHMENT IS.
 //
 // Through the home desktop an attachment is a ref (`IndexTimelineAttachment`): what was attached and whether its
 // bytes exist, with no digest and no address, so the document draws a line of words (`image shot.png on studio`).

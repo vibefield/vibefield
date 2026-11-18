@@ -58,7 +58,7 @@ public func fieldBubble(
   // here.
   let paneWithheld = board.terminal == nil
   // SE-2 — the home's profile the run is under, which the phone's lens keys on (the swarm's recede reads it): a peer's
-  // is its own desktop's, so it carries none (the lead's ruling 17).
+  // is its own desktop's, so it carries none (SE-2n, 2026-11-06).
   let profileSet = row.isSelf ? monitor.profileSet : nil
 
   guard monitor.kind == .agent else {

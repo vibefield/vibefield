@@ -18,7 +18,7 @@ import Testing
 ///
 /// **What it is not.** The door here answers from a script written against
 /// `field-native/src/tp/door.rs`; it is a claim about THIS CLIENT, never about
-/// that cell. The real door is Phase 0's — James's hardware run (TM-5).
+/// that cell. The real door is Phase 0's — a hardware run (TM-5).
 ///
 /// **One divergence, stated:** the real cell serves `/control` and `/frames` on
 /// ONE port and refuses a hello whose `channel` disagrees with its path

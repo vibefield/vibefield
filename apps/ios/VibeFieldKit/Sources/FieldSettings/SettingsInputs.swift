@@ -174,7 +174,7 @@ public struct SettingsOpening: Equatable, Sendable {
 public struct SettingsActions {
   public var signIn: () -> Void
   public var signOut: () -> Void
-  /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z) — Try again, on the row under Tailscale's card while
+  /// WI-W2e A (asked for on the page The Way In, 2026-11-14) — Try again, on the row under Tailscale's card while
   /// it says "Couldn’t connect.": the network starts again. It signs no one in or out, and Settings stays open (§8 "The
   /// phone's Settings", amended that day).
   public var tryAgain: () -> Void
@@ -200,8 +200,8 @@ public struct SettingsActions {
   }
 }
 
-/// IOS-10c — one agent on the home desktop's page (agents, a read-only glance: James on the page Settings in a
-/// Pocket, 2026-11-11; VF-PM's (a), the home's page alone): the home catalog's name for it, its mark key, and the
+/// IOS-10c — one agent on the home desktop's page (agents, a read-only glance: asked for on the page Settings in a
+/// Pocket, 2026-11-11; decided (a), the home's page alone): the home catalog's name for it, its mark key, and the
 /// profiles that hold a sign-in for it, in the home's order. Settings draws what it is handed and reads nothing.
 public struct SettingsAgent: Identifiable, Equatable, Sendable {
   /// One profile's sign-in for the agent, as its personas last said it.
@@ -242,7 +242,7 @@ public struct SettingsAgent: Identifiable, Equatable, Sendable {
 
 /// Words said in more than one place, written once.
 public enum SettingsWords {
-  /// IOS-10c — the home desktop's Agents section: its head and foot (the foot ‹draft› for James).
+  /// IOS-10c — the home desktop's Agents section: its head and foot (the foot ‹draft›).
   public static let agentsHead = "Agents"
   public static let agentsFoot = "Sign in and manage agents on this desktop."
 

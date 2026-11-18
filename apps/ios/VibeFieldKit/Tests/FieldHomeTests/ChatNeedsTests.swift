@@ -5,7 +5,7 @@ import Testing
 
 @testable import FieldHome
 
-/// IOS-12d (PC-D4 A, PC-L2, PC-L3, PC-L4; VF-PM's rulings on its Q1–Q10, 2026-11-06 19:12Z) — what waits on you, on the
+/// IOS-12d (PC-D4 A, PC-L2, PC-L3, PC-L4; its Q1–Q10, decided 2026-11-06) — what waits on you, on the
 /// phone: the Needs you group and a thread's card, read from the home's merged queue and from what this phone answers,
 /// and an answer through the home (`needs.answer`, by the act's place, carried to the item's desktop). The card's
 /// words are the Mac's, held by NeedsCardGoldenTests; these rows hold the phone's own part: which cards stand, in

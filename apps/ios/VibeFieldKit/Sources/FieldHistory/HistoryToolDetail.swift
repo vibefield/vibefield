@@ -1,5 +1,5 @@
-// Item 362f (James, 2026-11-12 18:40:35Z, of the phone's History session view against the desktop's: "i think all
-// message type and views are different from desktop, needs thorough audit") — WHAT A TOOL LINE OPENS TO.
+// Item 362f (asked for 2026-11-12, of the phone's History session view against the desktop's: a thorough audit of
+// every message type and view, which differ from the desktop's) — WHAT A TOOL LINE OPENS TO.
 //
 // In the room a tool line opens: a command to its folder and its source, an edit to its diff, a read to the files
 // and ranges it named, a search to the paths it found (`LineDetail.tsx`, `detail-parts.tsx`). None of that is on

@@ -815,7 +815,7 @@ public final class TerminalAttachment {
   /// write wins — with the grid the surface measured. A pane that lost the
   /// seat (another pane took it, or a take did not land) otherwise stays at
   /// that pane's size until the card is opened again, because a mere resize
-  /// never claims (James, 2026-10-17: "cant restore back no matter what"). A
+  /// never claims (asked for 2026-10-17: the size comes back, where nothing brought it back). A
   /// pane that still holds it claims its own seat, which the cell commits as
   /// a resize.
   public func engage() {
@@ -826,7 +826,7 @@ public final class TerminalAttachment {
 
   /// Item 42 — the holder let go, and this pane is the card on the screen: it
   /// takes the empty seat itself (DESIGN.md §8, "A live card another client is
-  /// driving"; Q1's ruling — a focused pane takes the empty seat — applied to
+  /// driving"; Q1, decided 2026-10-19 — a focused pane takes the empty seat — applied to
   /// the phone). The host decides WHEN (`FieldHomeModel.takesEmptySeat`: once,
   /// on the let-go, while the card is on the screen); this is the take a focus
   /// gain sends, with the grid the surface measured, said in its own line so
@@ -1004,7 +1004,7 @@ public final class TerminalAttachment {
   }
 
   /// What the last scroll did, said when it CHANGES — one line per state, not
-  /// one per event. James's swipes scrolled codex nowhere on the phone
+  /// one per event. Swipes scrolled codex nowhere on the phone
   /// (2026-10-17 05:25Z) and nothing said whether a swipe went out as the
   /// program's wheel, as viewport rows, or was dropped while input was held.
   @ObservationIgnored private var scrollNote: String?
@@ -1022,8 +1022,8 @@ public final class TerminalAttachment {
   }
 
   /// The keyboard is coming up: put the view back on the bottom, where the
-  /// prompt is (James, 2026-10-17: "when keyboard is up, it suppose to scroll
-  /// the terminal content all the way botton so i can input"). Asked at the
+  /// prompt is (asked for 2026-10-17: with the keyboard up, the terminal scrolls
+  /// all the way to the bottom, where the input goes). Asked at the
   /// INTENT, before the keyboard's resize lands — the input that resize holds
   /// cannot drop it — and a view already at the bottom moves nowhere. The
   /// viewport is the session's, so the desktop's pane follows it down too.
@@ -1354,8 +1354,8 @@ public final class TerminalAttachment {
       // would be the blank this design refuses. Past that first frame it stays
       // live: a reseed holds input until the scene catches up, and reading it
       // as `connecting` hid the input card and raised a status line on every
-      // resize, each of which resized the pane again (James, 2026-10-17: "the
-      // entire tab just jumps up down like crazy").
+      // resize, each of which resized the pane again (asked for 2026-10-17: a
+      // tab that holds still, where the whole tab jumped up and down).
       if session?.presentationReady == true { return .live }
       guard presented else { return .connecting }
       // …but a cell that STOPPED presenting this viewer is not catching up: its
@@ -1485,7 +1485,7 @@ public final class TerminalAttachment {
       // desktop is linked. The refusal is retryable for exactly that reason:
       // linking makes the same mint succeed.
       //
-      // TOLERATED, NOT EXPECTED (2026-09-15, UA-P-1d). Under James's UA-P-D1
+      // TOLERATED, NOT EXPECTED (2026-09-15, UA-P-1d). Under the UA-P-D1
       // ruling an unlinked desktop is OFFLINE — no node, no serve, no store —
       // so a desktop that could answer this is one whose door should not have
       // been reachable at all. The sentence stays anyway: it is the honest

@@ -6,7 +6,7 @@ import SwiftUI
 /// the environment. Without one, the agent's letter stands in History's recipe (`AgentMark`), so a mark is never
 /// blank.
 /// *Corrected 2026-11-12 (item 359; at its source):* this said "the asset catalog's two since LP-4". The catalog
-/// holds every catalog agent's mark again (James overturned LP-4's two-mark ruling, 2026-11-12 17:50:31Z).
+/// holds every catalog agent's mark again (LP-4's two-mark ruling overturned, item 359, 2026-11-12).
 public struct SettingsAgentMark: Sendable {
   public let draw: @MainActor @Sendable (String) -> AnyView
 

@@ -5,7 +5,7 @@ import Testing
 
 /// SP-7a — the spark's transcript, read on the phone (`SparkTranscriptReader`), as the Mac reads it. These are the
 /// Mac's own rows (`packages/field-app/test/transcript-port.test.ts`, the reader `readTranscript`), so one Chat reads
-/// one way (PC-L1; IOS-12c's plan, VF-PM 05:17Z), over a scripted door and a scripted socket and the contracts'
+/// one way (PC-L1; IOS-12c's plan, decided 2026-11-06), over a scripted door and a scripted socket and the contracts'
 /// goldens:
 /// - a ticket from fieldd over the home's door, the worker's socket dialled by the phone itself (EL2);
 /// - the latest conversation's runs named, each after the last line held; the lines, `caught-up`, then the tail;

@@ -4,7 +4,7 @@ import Foundation
 // on the wire: `compose.sparks.hatch`'s params and its answer (`ComposeSparksHatchParams` and
 // `ComposeSparksHatchResult`, packages/contracts/src/compose.ts). The method is `local`: the home the phone asks
 // answers it itself, so the params carry no device and nothing is forwarded. A spark lives on the desktop that hatched
-// it (PC-L2), and a phone's sparks on its home. Asked on Chat's door, the home's own client (VF-PM 2026-11-07 13:11:45Z:
+// it (PC-L2), and a phone's sparks on its home. Asked on Chat's door, the home's own client (decided 2026-11-07:
 // zero door changes). The params are the Mac's (`newSparkPortOver`, field-app/src/chat/new-spark.ts), held byte for
 // byte to the contracts' own `compose-sparks-hatch-params.valid` by ChatFeedTests.
 

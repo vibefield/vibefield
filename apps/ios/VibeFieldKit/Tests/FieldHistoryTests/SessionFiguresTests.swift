@@ -4,16 +4,16 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 393 (James, 2026-11-13 23:28:32Z, session qa-01, of a project's page on his phone: "for session entry item,
-/// they should also show the message count, token count, cost, etc,just like as how desktop session entry is
-/// designed, align it") — a session's entry carries the desktop entry's figures where the phone holds them: its row
+/// Item 393 (asked for 2026-11-13, of a project's page on a phone: a session's entry shows its message count,
+/// token count, cost and the rest, laid out as the desktop's session entry is
+/// designed) — a session's entry carries the desktop entry's figures where the phone holds them: its row
 /// in its project's `contribution`, joined by the desktop that recorded it and its id there, and said in the
 /// desktop's order (`N msgs · span · tokens · cost`) in the phone's own formatters.
 ///
 /// The cut these rows hold too: a desktop answers a phone a hundred of a project's rows, so an entry past them has
 /// no figures and keeps the line it had. The door that would answer the rest is item 398, and is not built here.
 ///
-/// How the line reads on a phone, and whether it fits one line there, are James's.
+/// How the line reads on a phone, and whether it fits one line there, are to be seen on a device.
 @Suite("item 393 — a session's entry carries the desktop entry's figures")
 struct SessionFiguresTests {
   private static let studio = "01J9ZK3M5Q8XR2V7N4B6C1D0EF"

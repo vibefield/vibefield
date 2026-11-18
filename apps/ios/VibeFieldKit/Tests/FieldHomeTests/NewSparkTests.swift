@@ -5,7 +5,7 @@ import Testing
 
 @testable import FieldHome
 
-/// IOS-12f (PC-L1, one Chat; NS-D1 A, NS-D2 B, NS-D5; VF-PM 2026-11-07 12:35:44Z) — the phone's New spark sheet is the
+/// IOS-12f (PC-L1, one Chat; NS-D1 A, NS-D2 B, NS-D5; decided 2026-11-07) — the phone's New spark sheet is the
 /// Mac's. Each golden is written by field-app's own model (`packages/field-app/test/new-spark-goldens.test.ts`) and
 /// copied here byte for byte (`pnpm check:ios-fixtures`): what the sheet reads, in (the home's `agent.providers` rows,
 /// its Agent Profiles, an agent's `agent.models` answer, a hatch's refusal); what the model says, out. Each input is

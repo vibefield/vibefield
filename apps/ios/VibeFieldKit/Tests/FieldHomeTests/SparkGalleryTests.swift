@@ -4,7 +4,7 @@
 
   @testable import FieldHome
 
-  /// IOS-12e (its plan's §4, ruled (a) by VF-PM 07:52Z) — the spark gallery's flag, which the stills script launches
+  /// IOS-12e (its plan's §4, decided (a) 2026-11-06) — the spark gallery's flag, which the stills script launches
   /// the app with: a look, scrolled or not, and reduced motion, which simctl cannot turn on. A value it does not know
   /// opens nothing, so a typo in a script is the app, not a page that looks right.
   @Suite("IOS-12e — the spark gallery's flags (DEBUG)")

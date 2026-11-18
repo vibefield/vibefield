@@ -150,7 +150,7 @@ struct ProfileLensTokenTests {
     #expect(LensToken.pageWord == "Agent Profiles…")
   }
 
-  /// UM-5b (§8 "A plan chosen", ‹for James›) — the token also stands for a plan, for everyone, with one profile too:
+  /// UM-5b (§8 "A plan chosen", ‹to pick›) — the token also stands for a plan, for everyone, with one profile too:
   /// the plan's agent's mark and title, its name opens the page where **Showing** stands, and its × clears the plan
   /// alone. With a lens and a plan both it names the plan, and the × brings back the profile's form.
   @Test("a plan's form: its mark and title, the name opens the page, the × clears only the plan")
@@ -217,7 +217,7 @@ struct ProfileLensTokenTests {
     #expect(row.geometry == drawn)
   }
 
-  /// SE-P5b (ruling 20; the S2 review's finding 10) — search's leads (a chip, a token, an offer, a pill, the token's
+  /// SE-P5b (2026-11-06; the S2 review's finding 10) — search's leads (a chip, a token, an offer, a pill, the token's
   /// menu) draw a profile through the phone's ONE glyph table, as the bloom's buds do (`SpawnBloomOverlay.symbol`):
   /// This Mac the laptop, a token the vocabulary's symbol — outlined, and filled for the default profile (DESIGN.md §8,
   /// the M-phone review's m2) — and one this build does not draw, or none, the star (puppeteer's `profileMarkName`),

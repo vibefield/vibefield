@@ -29,7 +29,7 @@ public enum MeshDisplay {
 
   /// The account line (UA-P-1c, D3 interim).
   ///
-  /// James's chain is *tailscale login → the account bound to it → that
+  /// The chain (UA-P-1c, 2026-09-16) is *tailscale login → the account bound to it → that
   /// account's mesh → the services on top*, and the phone drew no part of it:
   /// "signed in" was a truffle PHASE, never a WHO. UA-P-1c drew the one
   /// account-adjacent fact this phone then held — the tailnet domain it

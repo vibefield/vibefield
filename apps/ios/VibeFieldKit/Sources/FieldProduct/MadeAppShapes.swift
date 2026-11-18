@@ -1,6 +1,6 @@
 import Foundation
 
-// MA-6a (absorbing MA-1b, which never landed; VF-PM 2026-11-09 04:46Z) — the apps doors, as the phone READS them:
+// MA-6a (absorbing MA-1b, which never landed; decided 2026-11-09) — the apps doors, as the phone READS them:
 // `index.apps.list`'s page (`IndexAppsResult`, `packages/contracts/src/agent-index.ts`) and an apps refusal
 // (`MadeAppOpenRefusal`, artifacts.ts). Hand-written tolerant readers of the contracts' shapes, as every reader in this
 // target is: the goldens under `Tests/FieldProductTests/Fixtures` are the contracts' own bytes

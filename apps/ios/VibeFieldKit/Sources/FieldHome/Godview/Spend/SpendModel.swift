@@ -15,7 +15,7 @@ import Foundation
 //
 // React lays out the window's DOM from the view's state; here `frame` lays out the same from `State`, and each act
 // changes `State` as its handler does, after which the caller lays out again (React's re-render). The canvas's scene
-// and its colours are the paint's (SpendPaint, with the view). On the phone there are no keys and no hover (fd's Q3):
+// and its colours are the paint's (SpendPaint, with the view). On the phone there are no keys and no hover (PG's Q3):
 // a finger on the chart is the pointer while it is down, a lift within 4 pt the click, a drag on the list the wheel;
 // so `focus` is never set (the window's `hover ?? focus` reads `hover`), and no row is ever mounted in a pane
 // (`is-mounted`, `agent.attachment`). JavaScript's double arithmetic in its own order, so a place is the window's to
@@ -30,7 +30,7 @@ enum SpendModel {
   // The view's fixed words (`SpendView.js` :616-643), the window's.
   static let emptyTitle = "NO ACTIVE AGENTS"
   /// The empty view's hint: the window's names a pane (`Dropped.emptyHint`), so the phone says the list's words, word
-  /// for word. Draft word: James's eye (VF-PM 2026-11-04).
+  /// for word. Draft word: for the eye on a device (decided 2026-11-04).
   static let emptyHint = "Launch an agent from a terminal."
   /// The key that lets go of a set moment (`NOW_KEY`). Its legend, from the toolkit's one table (`keys.js` :16), is the
   /// window's alone: the phone has no End key, so its Now pill prints none (`Dropped.nowLegend`, item 291).
@@ -44,7 +44,7 @@ enum SpendModel {
   static let viewLabel =
     "Spend: what each agent spent in the last ten minutes, a line each from $0, and each run's total in the list."
 
-  /// The window's words the phone does not say (fd's words rule for every PG lane: a view's words never name a key,
+  /// The window's words the phone does not say (PG's words rule for every PG lane: a view's words never name a key,
   /// hover or a pane, for the phone has none), each a NAMED deviation pinned against the golden.
   enum Dropped {
     /// The view's label: its key sentence.
@@ -529,7 +529,7 @@ enum SpendModel {
     if before { flags.insert(.before) }
     if docked != nil { flags.insert(.docked) }
     if docked == 0 { flags.insert(.dockFirst) }
-    // J-S4 (a), fd's Q9: the open card's row; spend draws it only through the pane square, which the phone has not
+    // J-S4 (a), PG's Q9: the open card's row; spend draws it only through the pane square, which the phone has not
     if row.agent.active { flags.insert(.active) }
     return Row(
       id: row.id, state: row.state, dir: docked == nil ? nil : index < fit.offset ? .up : .down,
@@ -572,7 +572,7 @@ enum SpendModel {
     Swift.min(1000, Swift.max(250, SpendScale.windowMs / Swift.max(1, g.x1 - g.x0)))
   }
 
-  /// A drag on the list as the wheel's steps (fd's Q3): every whole row of travel from where the drag began is one
+  /// A drag on the list as the wheel's steps (PG's Q3): every whole row of travel from where the drag began is one
   /// step, a finger moving up stepping the list down. Not finite, or no row height: no steps.
   static func listSteps(from: Double, to: Double, rowH: Double) -> Int {
     guard from.isFinite, to.isFinite, rowH.isFinite, rowH > 0 else { return 0 }
@@ -620,7 +620,7 @@ enum SpendModel {
 
   // The view hears a gesture's end twice, its lift (`onEnded`) and its gesture state's reset, in an order no host
   // row can witness; a cancelled touch is its reset alone. So every touch has a token, and each act names the touch
-  // it began: either order is the same one tap (fd's order-proof cancel, H15 and H16).
+  // it began: either order is the same one tap (PG's order-proof cancel, H15 and H16).
 
   /// A finger comes down on the chart (`onHitDown`): a new press, its token the next touch's.
   @discardableResult

@@ -93,7 +93,7 @@ struct PhoneSearchTests {
     #expect(mixedIds == ["d-asks"])
   }
 
-  /// The lens is self-only (the lead's rulings 16 and 17; ‹for James›): under a profile only the home's runs under it
+  /// The lens is self-only (SE-2b, 2026-11-06; ‹to pick›): under a profile only the home's runs under it
   /// stay, so a peer's run leaves Live now; the desktop token keeps one desktop's runs.
   @Test("a profile keeps the home's runs under it — a peer's run leaves; a desktop keeps its own")
   func liveFilters() throws {
@@ -485,7 +485,7 @@ struct PhoneSearchTests {
         == "Your latest sessions in billing-api · every profile; Work comes back on Field")
   }
 
-  /// UM-5b — the plan's clause on Everything's foot, in its two forms (‹for James›, §9).
+  /// UM-5b — the plan's clause on Everything's foot, in its two forms (‹to pick›, §9).
   @Test("Everything's foot says a plan comes back on Field, alone and with a profile (UM-5b)")
   func pastFootPlan() {
     let plan = PhoneSearch.pastFoot(rows: 3, query: "", project: nil, kind: .any, lens: nil, plan: "Claude Max", asked: .settled)
@@ -533,7 +533,7 @@ struct PhoneSearchTests {
         == "Your latest sessions")
   }
 
-  @Test("Everything's empty list with words; before a word its words are James's, so none is said")
+  @Test("Everything's empty list with words; before a word its words are yet to be picked, so none is said")
   func pastEmpty() {
     let empty = PhoneSearch.pastEmpty(query: " zebra ", asked: .settled)
     #expect(empty == PhoneSearch.Empty(sentence: "Nothing in your past holds every word of “zebra”. Try fewer words.", act: nil))

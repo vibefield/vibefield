@@ -6,7 +6,7 @@ import SwiftUI
 // the rain paints ALL of it — its black ground and its streams from y 0 — while 4t's dissolve masks it under the
 // Stories row (DESIGN.md §8 "The phone's Stories row"; never a fade of the rain's own). Its own words, the empty
 // stage's, stand below the reserve (`input.insets(.flow).top`). No scanlines and no vignette over it (J-S3, drop).
-// The desktop's touch tooltip is James's to pick (`RainTouchPeek`); a tap opens the card, as the click selects.
+// The desktop's touch tooltip is still to pick (`RainTouchPeek`); a tap opens the card, as the click selects.
 
 struct RainView: View {
   let input: GodviewStageInput
@@ -27,7 +27,7 @@ struct RainView: View {
   }
 }
 
-/// The empty stage (RainView.js:261, `rain.css:173-200`): the desktop's two lines (fd's Q8; the second in the phone's
+/// The empty stage (RainView.js:261, `rain.css:173-200`): the desktop's two lines (PG's Q8; the second in the phone's
 /// words, `RainField.emptyLine`), in the rain's type — the stream's green at 65%, Courier New, centred; the line below
 /// in the skin's faint text.
 struct RainEmpty: View {

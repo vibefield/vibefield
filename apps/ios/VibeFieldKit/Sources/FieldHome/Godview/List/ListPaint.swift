@@ -10,15 +10,15 @@ import Foundation
 //
 // THE NAMED DEVIATIONS (each from the desktop's list, on purpose; the packet carries them; 1 and 5 are words, the
 // model's):
-//   1. no `＋ TERMINAL` (fd's Q1, PG-D10 (a)): the toolbar keeps the button's height, so the rows stand where the
+//   1. no `＋ TERMINAL` (PG's Q1, PG-D10 (a)): the toolbar keeps the button's height, so the rows stand where the
 //      desktop's do;
-//   2. no hover (fd's Q2/Q3: touch has none), LC:81-84 and :45-49 are not drawn, and no press look is added;
-//   3. the lit row's border is TEXT MAIN (James's J-S4 drawing, accepted 2026-11-04 01:14Z), not the row's colour
+//   2. no hover (PG's Q2/Q3: touch has none), LC:81-84 and :45-49 are not drawn, and no press look is added;
+//   3. the lit row's border is TEXT MAIN (the J-S4 drawing, accepted 2026-11-04), not the row's colour
 //      (LC:90-94); its ground stays the skin's control hover;
-//   4. a provider the phone's glyph catalog has no asset for wears its letter (fd's Q4; AgentGlyph);
-//   5. the empty hint says "Launch an agent from a terminal.", not the desktop's "… from a terminal pane." (fd's words
+//   4. a provider the phone's glyph catalog has no asset for wears its letter (PG's Q4; AgentGlyph);
+//   5. the empty hint says "Launch an agent from a terminal.", not the desktop's "… from a terminal pane." (PG's words
 //      rule: no phone view names a key, hover or a pane); `ListModel.emptyHint`, pinned by H12 and E1;
-//   6. at the phone's 402 pt (VF-PM's (B) and the fixed floor, 2026-11-04): the desktop draws every cell ONE line
+//   6. at the phone's 402 pt ((B) and the fixed floor, decided 2026-11-04): the desktop draws every cell ONE line
 //      (`nowrap`, the tail ellipsis; the model clipped bare; LC:137-157, :159-163, :180-186). The phone keeps that
 //      line for every cell but two: the MODEL breaks only at a space, two lines at most, and the DETAIL runs two lines
 //      before the ellipsis. The agent column takes a FIXED floor of 8 glyphs after the mark (60.51 pt), out of the
@@ -152,7 +152,7 @@ enum ListPaint {
   static let detailLines: Int? = 2
   /// The model: at most two lines, broken ONLY at a space (deviation 6; the desktop's is one line, clipped bare).
   static let modelLinesMax: Int? = 2
-  /// The agent column's FIXED floor, in glyphs of the model after the mark and its gap (deviation 6, fd's ruling): 8
+  /// The agent column's FIXED floor, in glyphs of the model after the mark and its gap (deviation 6, 2026-11-04): 8
   /// fits `terminal`, the longest word the list itself draws, and the witness's widest model word, "GPT-5.5". Fixed,
   /// so the grid never reflows with its data, as the desktop's never does; a longer word is cut, never broken.
   static let agentFloorGlyphs = 8

@@ -3,7 +3,7 @@ import Testing
 
 @testable import FieldProduct
 
-/// IOS-12d (PC-L1, one Chat; Q1 (a), VF-PM 2026-11-06 19:12Z) — the phone's needs-you card is the Mac's. Each golden is
+/// IOS-12d (PC-L1, one Chat; Q1 (a), decided 2026-11-06) — the phone's needs-you card is the Mac's. Each golden is
 /// written by field-app's own card (`packages/field-app/test/needs-card-goldens.test.ts`) and copied here byte for
 /// byte (`pnpm check:ios-fixtures`): what the card reads of Vela's entry (her id and name, the runs that are her own
 /// session, her open items) and the item it draws, in; the card's facts and its words, out. The order a thread stands

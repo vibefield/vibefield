@@ -1,10 +1,10 @@
 import CoreGraphics
 
-// Item 418 (James, 2026-11-14 08:13:38Z, session qa-01: "i feel message progressive load is not there, because it
-// seems still trying to load everything, what i want is when you scroll to the top of the current loaded batch, there
-// should be a clear pull down action like real world chat apps, you pull down for load more, there will be visual
-// indicator when you pull down, there will be loading indicator when you release, all these motions should designs
-// intuitively and nicely with clear feedbacks") — THE PULL AT A SESSION DOCUMENT'S TOP. A session opens on its
+// Item 418 (asked for 2026-11-14: a message's view loads progressively, where it still seemed to load everything:
+// when the reader scrolls to the top of the batch loaded, there is a clear pull down, as in real chat apps, that
+// loads more, with a sign shown while the page is pulled down and a loading sign once it is let go, and every one
+// of these motions is designed to be intuitive and
+// pleasing, with clear feedback) — THE PULL AT A SESSION DOCUMENT'S TOP. A session opens on its
 // latest batch and reads nothing above it by itself; the rows above are read in by a pull down at the document's top,
 // one batch for each pull. DESIGN.md §8 "The phone's session document", "The rows above are read in when you pull
 // down at the top".

@@ -175,7 +175,7 @@ struct ProfileLensTests {
     #expect(lens.profile == "work")
   }
 
-  @Test("search's desktop: kept to one, and cleared when search closes while the profile outlives it (ruling 21)")
+  @Test("search's desktop: kept to one, cleared when search closes while the profile outlives it (UM-4, 2026-11-06)")
   func deskClearsOnClose() throws {
     var lens = Self.lens(try Self.three())
     lens.show("work")

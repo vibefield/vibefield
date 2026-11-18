@@ -153,7 +153,7 @@ struct AccountCornerView: View {
     .animation(reduceMotion ? .easeInOut(duration: 0.12) : Self.grow, value: isOpen)
   }
 
-  /// Solid chrome when open (§8, James: "do not make it transparent"); the
+  /// Solid chrome when open (§8; IOS-8b, 2026-09-23: never transparent); the
   /// system's glass when it is only the circle — Liquid Glass on iOS 26, the
   /// chrome family's recipe before it.
   @ViewBuilder
@@ -180,7 +180,7 @@ struct AccountCornerView: View {
   /// folds or grows the menu.
   ///
   /// *Corrected 2026-11-12 (item 346): this said "a tap gesture after the hold's", and the face wore two gestures,
-  /// `holdGesture.exclusively(before: tap)`. On James's iPhone (iOS 26.6) that pair gave the hold and never the tap:
+  /// `holdGesture.exclusively(before: tap)`. On an iPhone (iOS 26.6) that pair gave the hold and never the tap:
   /// a short touch reached the sequence's long press and the tap's `onEnded` never ran, so the menu could not be
   /// opened. No simulator run had tapped it.*
   private var faceButton: some View {
@@ -442,7 +442,7 @@ enum AccountMenuRowKind: Hashable, Sendable {
   case settings
 }
 
-/// IOS-10b — the Me menu's Theme row (theme-row, James on the page Settings in a Pocket, 2026-11-11; DESIGN.md §8
+/// IOS-10b — the Me menu's Theme row (theme-row, asked for on the page Settings in a Pocket, 2026-11-11; DESIGN.md §8
 /// "The phone's corner", amended that day): the Mac's own row at touch pitch. `sun` (or `moon`, by night) in the
 /// glyph's column, then a small segmented control, Light · Dark · Auto. It keeps the one setting Settings ›
 /// Appearance keeps, so the window changes at once, and choosing leaves the menu open while it does.

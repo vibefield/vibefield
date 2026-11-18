@@ -1,9 +1,9 @@
 import FieldDesign
 import SwiftUI
 
-// Item 391 (James, 2026-11-13 23:28:32Z, session qa-01, of a session's document on his phone, the area over its foot
-// marked: "[Image #17] make the messages start fade, blur and dim at the marked area like how it looks at the top
-// edge area") — THE BAND OVER A SESSION'S DOCUMENT'S FOOT. At the head the system softens what scrolls under its own
+// Item 391 (asked for 2026-11-13, of a session's document on a phone, the area over its foot marked: the messages
+// begin to fade, blur and dim in the marked area, as they do at the top
+// edge) — THE BAND OVER A SESSION'S DOCUMENT'S FOOT. At the head the system softens what scrolls under its own
 // navigation bar. The bar at the foot and the slot above it are the home screen's overlay, so the system gives the
 // foot nothing, and the document draws its own band there. DESIGN.md §8 "The phone's session document", "Its foot
 // fades as its head does".

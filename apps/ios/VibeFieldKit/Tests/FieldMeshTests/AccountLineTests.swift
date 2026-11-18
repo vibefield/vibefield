@@ -4,7 +4,7 @@ import Testing
 
 /// UA-P-1c and UA-P-5 — the account line.
 ///
-/// James's chain is *tailscale login → the account bound to it → that account's
+/// The chain (UA-P-1c, 2026-09-16) is *tailscale login → the account bound to it → that account's
 /// mesh → the services on top*, and the phone drew no part of it: "signed in"
 /// was a truffle PHASE and never a WHO. UA-P-1c drew the tailnet domain and
 /// said in its own row that it claimed nothing about who. **UA-P-5 is where

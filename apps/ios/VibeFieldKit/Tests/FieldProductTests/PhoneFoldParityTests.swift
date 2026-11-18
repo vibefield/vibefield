@@ -3,7 +3,7 @@ import Testing
 
 @testable import FieldProduct
 
-// PG-3d — THE FOLD GOLDEN, STEP BY STEP (Q-J1 (a), James 2026-11-01: the phone equals its home's window row for row).
+// PG-3d — THE FOLD GOLDEN, STEP BY STEP (Q-J1 (a), picked 2026-11-01: the phone equals its home's window row for row).
 // `phone-fold.golden.json` is the home's window over PG-3a's witness (`field-app/perf/lib/phone-goldens.ts`), copied
 // here byte for byte (the named set "remote", `pnpm check:ios-fixtures`). The phone's copy is driven exactly as the
 // computation drives the window — the open, frames 0…7, PG-1c's resync delivered as an open, then the old chain's

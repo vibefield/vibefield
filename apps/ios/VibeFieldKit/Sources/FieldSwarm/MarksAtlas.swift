@@ -14,8 +14,8 @@ import UIKit
 //
 // WHICH ARE KEPT. LP-4 (2026-11-05, the 0.9 launch) kept two vendor logos,
 // Claude's and Codex's, and every other agent wore its LETTER. Item 359
-// (2026-11-12; James, 17:50:31Z: "overturn this ruling, bring back those
-// icons now") overturned that: every pick is kept, so each of the nine agents
+// (asked for 2026-11-12: that ruling overturned and those marks brought
+// back now) overturned that: every pick is kept, so each of the nine agents
 // with a tile draws its own mark again. `kept` stays in the table, so one
 // mark can be withdrawn by its row; an agent whose pick is not kept, or that
 // has no tile, wears its letter, the swarm's own path (`SwarmRenderer`'s
@@ -29,7 +29,7 @@ import UIKit
 // kept tiles are the bake's bytes (the seven LP-4 had blanked came back from
 // git, the png at 40c794263) and no tile moved. The DEBUG lab's sheet
 // (`-vf-swarm-lab=marks`) lists the kept marks alone, read from this table
-// (VF-PM's ruling (a)): a shipped lab shows only what the atlas holds. The
+// (LP-4's (a), decided 2026-11-05): a shipped lab shows only what the atlas holds. The
 // design's record of the blanked candidates is the gitignored
 // draft/launch/swarm-marks-candidates.md. A re-bake is the generator's, and
 // the generator is not in this repo.

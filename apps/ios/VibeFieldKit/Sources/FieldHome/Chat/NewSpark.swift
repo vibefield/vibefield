@@ -267,7 +267,7 @@ enum NewSpark {
     }.count
   }
 
-  /// The person's live sessions on the home, as the phone's board holds them (VF-PM 2026-11-07 13:37:20Z, ruled (a)):
+  /// The person's live sessions on the home, as the phone's board holds them (decided (a), 2026-11-07):
   /// the home's rows that live and are no spark's own session, each under the profile the board says. The Mac reads
   /// its own field board's `{profileSet, profileId}` (`personSessionsOf`); a remote row carries the monitor's resolved
   /// set and no persona, so a retired sign-in counts as Default here, where the rule places it nowhere

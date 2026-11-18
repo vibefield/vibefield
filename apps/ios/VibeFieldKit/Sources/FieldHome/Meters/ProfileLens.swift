@@ -6,7 +6,7 @@ import FieldProduct
 // above search and its menu, and search's sheet all read and set this one value, so the phone never holds two
 // answers to "whose sessions am I looking at" (the desktop's echo is SE-D2's one filter).
 //
-// It keys on the HOME's profiles (the lead's ruling 17): a profile id is a desktop's own, so the lens names the home's
+// It keys on the HOME's profiles (UM-4, 2026-11-06): a profile id is a desktop's own, so the lens names the home's
 // sets, and the other desktops' sessions recede under it (§8 "The phone's profile token", the lens on Field). With one
 // profile nothing names a profile (UM-D12): no lens can be chosen.
 
@@ -14,7 +14,7 @@ import FieldProduct
 /// desktop search keeps to (none: every desktop).
 struct ProfileLens: Equatable, Sendable {
   /// The home's profiles, in the home's order — the ones that stand on a circle (the caller hands them in through the
-  /// meter model's `hasCircle`: a draft no agent signed in to has none, the lead's ruling 7).
+  /// meter model's `hasCircle`: a draft no agent signed in to has none; UM-4, 2026-11-06).
   private(set) var profiles: [AgentProfileSet] = []
   /// The chosen profile's id, one of `profiles`; nil shows every profile.
   private(set) var profile: String?
@@ -61,7 +61,7 @@ struct ProfileLens: Equatable, Sendable {
   }
 
   /// UM-5b — shows one plan's sessions (`key`), or every plan's (nil). A key the home does not hold changes nothing;
-  /// choosing a plan lets go of a lens it is not in (‹for James›), so the field never says a false "No sessions".
+  /// choosing a plan lets go of a lens it is not in (‹to pick›), so the field never says a false "No sessions".
   mutating func showPlan(_ key: String?) {
     guard let key else {
       plan = nil
@@ -97,7 +97,7 @@ struct ProfileLens: Equatable, Sendable {
   /// Keeps search to one desktop (`id`), or to none (nil).
   mutating func keep(desk id: String?) { desk = id }
 
-  /// Search closed: the profile and a plan chosen outlive it (the lead's ruling 21, the plan's part ‹for James›) — the
+  /// Search closed: the profile and a plan chosen outlive it (UM-5, 2026-11-09, the plan's part ‹to pick›) — the
   /// desktop's token clears. *(Corrected 2026-11-09, UM-5b's review: this said only the profile outlives it.)*
   mutating func searchClosed() { desk = nil }
 }

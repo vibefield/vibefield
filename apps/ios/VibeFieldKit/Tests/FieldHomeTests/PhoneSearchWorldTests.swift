@@ -435,7 +435,7 @@ struct PhoneSearchWorldTests {
       #expect(rows.count == 11)
       let desks = PhoneSearchWorld.desks(rows: rows).map { $0.name }
       #expect(desks == ["Studio", "Loft", "Attic"])
-      // SE-P5b (ruling 7) — the lens's one list is the meters': the mock home's profiles as its meters' fixture door
+      // SE-P5b (2026-11-06) — the lens's one list is the meters': the mock home's profiles as its meters' fixture door
       // answers them (`agents-profile-sets.meters`), through `MeterModel.hasCircle`, so the hold's buds, the page's
       // rows and the token's menu name the same profiles; the draft ("New profile") stands on none
       let sets = MockAccount.searchProfiles()

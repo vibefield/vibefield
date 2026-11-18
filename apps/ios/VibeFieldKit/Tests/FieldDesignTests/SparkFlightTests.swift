@@ -12,7 +12,7 @@ import Testing
 /// - past u = 0.45 the face wears its row's disc, at faceScale 1.12.
 /// Each value below is that arithmetic done by hand (in doubles) for one flight: from (200, 300) at R 120 / 2 / 1.26 to
 /// a row face's box at (16, 120), 48 square. No golden: the hatch golden carries no flight, and no script is
-/// retro-fitted (VF-PM's Q6 ruling, 17:10:10Z).
+/// retro-fitted (Q6, decided 2026-11-07).
 @Suite("Created, the face flies to its row as hatch.tsx flies it")
 struct SparkFlightTests {
   static let from = SparkFlight.Start(x: 200, y: 300, R: 120 / 2 / 1.26)

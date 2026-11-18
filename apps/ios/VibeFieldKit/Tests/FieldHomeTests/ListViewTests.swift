@@ -8,7 +8,7 @@ import Testing
 // PG-5 — THE LIST VIEW (host + kit): the phone's list model held to `phone-list.golden.json` (puppeteer-views' list,
 // the shipping view, over the home's window at every step of PG-3a's witness: `packages/field-app/perf/lib/
 // phone-goldens-list.ts`), copied here byte for byte (`pnpm check:ios-fixtures`). The copy is replayed by
-// `HomeFixture.witnessSteps` (PG-4t's, fd's Q7 ruling), and at every step `ListModel` over the drawn rows is compared
+// `HomeFixture.witnessSteps` (PG-4t's, PG's Q7), and at every step `ListModel` over the drawn rows is compared
 // field by field with what the desktop's list drew. The hand rows cover what the witness lacks (an account, a pending
 // run, one not yet observed, a permission's tool, receding, the lit row, a dead link, the empty list), each said.
 // The mark's drawing is the kit's (the drawn suite); here a mark is its provider's id.
@@ -69,7 +69,7 @@ struct ListViewTests {
   /// The desktop's empty hint (AgentList.tsx:118), as a golden records it; the phone's names no pane (H12).
   static let desktopEmptyHint = "Launch an agent from a terminal pane."
 
-  /// What a phone view never says (fd's words rule): a key, hover or a pane, by word or by symbol.
+  /// What a phone view never says (PG's words rule): a key, hover or a pane, by word or by symbol.
   static let neverOnThePhone: Set<String> = [
     "pane", "panes", "hover", "hovers", "hovered", "hovering", "key", "keys", "keyboard", "shortcut",
     "shortcuts", "return", "enter", "esc", "escape", "tab", "end", "arrow", "arrows", "press", "click",
@@ -351,7 +351,7 @@ struct ListViewTests {
     #expect(unknownLit == 0)
   }
 
-  /// H10 — a home that does not answer greys every row (fd's Q10: `row.stale || !fieldIsLive`).
+  /// H10 — a home that does not answer greys every row (PG's Q10: `row.stale || !fieldIsLive`).
   @Test func aDeadLinkGreysEveryRow() throws {
     let rows = try HomeFixture.witnessRows()
     let dead = ListModel.inputs(rows: rows, activeId: nil, fieldIsLive: false)
@@ -363,7 +363,7 @@ struct ListViewTests {
     #expect(liveStale == owners)
   }
 
-  /// H11 — `＋ TERMINAL` is recorded and not drawn (fd's Q1: a named deviation, PG-D10 (a)).
+  /// H11 — `＋ TERMINAL` is recorded and not drawn (PG's Q1: a named deviation, PG-D10 (a)).
   @Test func theNewTerminalButtonIsNotDrawn() throws {
     let golden = try HomeFixture.json("phone-list.golden")
     let toolbar = golden["steps"]?.arrayValue?.first?["toolbar"]?.stringValue
@@ -371,7 +371,7 @@ struct ListViewTests {
     #expect(ListModel.drawsNewTerminal == false)
   }
 
-  /// H12 — fd's words rule for every PG view: on the phone a view's words, its accessibility labels and titles
+  /// H12 — PG's words rule for every PG view: on the phone a view's words, its accessibility labels and titles
   /// among them, never name a key, hover or a pane (the phone's one pane is the open card, D-i12). Every word the
   /// list says: its name, the empty state, and at every witness step the count and each row's words and label. The
   /// desktop's empty hint names "a terminal pane"; the phone's drops the pane (deviation 5). The desktop's row

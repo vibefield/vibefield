@@ -3,8 +3,8 @@ import Foundation
 
 // MA-6a — what the phone says of one app, the Mac's reading (field-app's `made-apps.ts`), held to it by
 // `Tests/FieldHomeTests/Fixtures/made-apps/made-app-facts.golden.json`. The phone asks `artifact.open` nothing before
-// MA-5 (VF-PM's Q1, 2026-11-09), so an app's state comes from its row and its desktop's standing alone. Words not in
-// DESIGN.md §9 are the desk's provisional ones, owed to James.
+// MA-5 (Q1, decided 2026-11-09), so an app's state comes from its row and its desktop's standing alone. Words not in
+// DESIGN.md §9 are the desk's provisional ones, owed.
 
 enum MadeAppFacts {
   /// §2.5's tone of a state. Every state from a row alone is muted; MA-5's opens bring the others.

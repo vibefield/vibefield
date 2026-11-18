@@ -17,8 +17,8 @@ import Foundation
 /// with different app ids are invisible to each other however healthy both
 /// are. *Corrected 2026-11-07 (EL8-TRUFFLE): it said the hostname alone decides.
 /// Desktops announce the tag from this EL8; the phone's truffle announces none,
-/// so a desktop reads the phone's row by the prefix.* That is exactly what James's QA of 2026-09-13 found: a signed-in phone
-/// reading `online · 0 peers in reach` beside a desktop whose mesh was up.
+/// so a desktop reads the phone's row by the prefix.* That is exactly what the QA of 2026-09-13 found: a signed-in
+/// phone reading `online · 0 peers in reach` beside a desktop whose mesh was up.
 public enum FieldMeshContract {
   /// = `APP_ID` in `packages/contracts/src/registries.ts`.
   public static let appID = "vibefield"

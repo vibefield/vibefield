@@ -1,4 +1,4 @@
-// UM-4 (DESIGN.md §13 "A meter is never a glyph"; the lead's ruling 20) — A PROFILE'S GLYPH ON THE PHONE: puppeteer's
+// UM-4 (DESIGN.md §13 "A meter is never a glyph"; 2026-11-06) — A PROFILE'S GLYPH ON THE PHONE: puppeteer's
 // `ProfileGlyph` vocabulary drawn as SF Symbols through ONE presentation table, which every phone surface that draws a
 // profile reads — the spawn bloom's buds (`SpawnBloomOverlay`), the Bands circle's middle, the held face's buds, the
 // Agent Profiles page and the profile token. The vocabulary is puppeteer-view-sdk's `PROFILE_GLYPHS` (0.3.3,

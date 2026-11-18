@@ -3,8 +3,8 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 381 (James, 2026-11-13 05:29:39Z, of the first build that reads a desktop directly: "some long session shows
-/// up blank and only shows when i try to scroll") — the session's document is laid out a PART of a turn to a row,
+/// Item 381 (asked for 2026-11-13, of the first build that reads a desktop directly: a long session shows at once,
+/// where it was blank until scrolled) — the session's document is laid out a PART of a turn to a row,
 /// never a whole turn to a row. That the blank open came of whole-turn rows is a reading of the code, not yet shown
 /// on a device.
 ///

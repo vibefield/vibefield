@@ -2,9 +2,9 @@ import CoreGraphics
 import FieldProduct
 import Foundation
 
-// Item 353 (James, 2026-11-12 11:38:00Z: "port the stats and treemap of the desktop to mobile as well … match
-// mobile's history ui design more like the desktop one, we can have a stats toggle button at the right top
-// position") — the ledger's FIGURES, as values: every listed project's lifetime, the four figures over them, and the
+// Item 353 (asked for 2026-11-12: the desktop's stats and treemap ported to the phone as well, the phone's History
+// drawn more like the desktop's, and a toggle at the top right that shows the
+// stats) — the ledger's FIGURES, as values: every listed project's lifetime, the four figures over them, and the
 // treemap of the ten that cost most. The desktop draws these in rosetta's room (`clients/room/src`, `SummaryPanels`,
 // `charts/treemap-layout.ts`, `lib/spend.ts`); the words, the rules and the layout here are the room's, read from
 // the same door the phone already reads (`project.figures`), with nothing added to it.
@@ -197,7 +197,7 @@ extension FieldHistoryModel {
   /// The line under the figures while they are not whole, or when some are not exact; nil when there is nothing to
   /// say.
   ///
-  /// Item 390 (James, 2026-11-13) — it no longer says `messages are a lower bound`: he removed that sentence. A cut
+  /// Item 390 (asked for 2026-11-13) — it no longer says `messages are a lower bound`: that sentence was removed. A cut
   /// project's messages still wear their `+` on the figure (`messagesLowerBound`).
   public static func portfolioNote(_ portfolio: HistoryPortfolio, failed: Int, awake: Bool) -> String? {
     var parts: [String] = []

@@ -3,11 +3,11 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 362a (James, 2026-11-12 18:40:35Z, of the phone's History session view: "it somehow scroll start from top,
-/// does not like chat message flow in chat app") — a session's document opens at its end and keeps its end in view,
+/// Item 362a (asked for 2026-11-12, of the phone's History session view: that it flow as a chat app's messages
+/// do, not start at the top) — a session's document opens at its end and keeps its end in view,
 /// as the desktop's transcript does, and a document a search landed in still opens on the landed row.
 ///
-/// These rows hold the RULE. Where the page stands on a phone is his to see.
+/// These rows hold the RULE. Where the page stands on a phone is to be seen on a device.
 @Suite("item 362a — a session's document opens at its end and follows")
 struct HistoryFollowTests {
   @Test("a document opens at its end, following")
@@ -85,7 +85,7 @@ struct HistoryFollowTests {
     #expect(follow.pill(arrivals: 0, endOnScreen: false, away: true) == nil, "on its way to the end")
   }
 
-  // Item 386 (James, 2026-11-13 23:18:12Z, of a session's document on his phone: "Latest button does not work") —
+  // Item 386 (asked for 2026-11-13, of a session's document on a phone: the Latest button works, where it did not) —
   // the two rows below. The cause is a reading of the code, not yet shown on a device: the press eased to the end
   // whatever the distance, an eased move over rows not yet laid out aims at an estimate of the end and rests short
   // of it, and that rest stopped the following, so the pill came back over a page that had not arrived.
@@ -139,9 +139,9 @@ struct HistoryFollowTests {
   }
 }
 
-/// Items 387 and 389 (James, 2026-11-13 23:18:12Z, of a session's document on his phone: "UIs are stacking and
-/// overlapping here [Image #13]" and "the message bottom is not leaving enough safe and empty space [Image #15]
-/// looks bad") — the document's end and its pill clear whatever stands over the page's foot: the bar, and the slot
+/// Items 387 and 389 (asked for 2026-11-13, of a session's document on a phone: nothing stacked or overlapping
+/// there, and enough safe, empty space left under the last message, where it
+/// looked bad) — the document's end and its pill clear whatever stands over the page's foot: the bar, and the slot
 /// above it when a session has an act or a search has landed. The page cleared the bar alone.
 ///
 /// The measure is what stands over the foot above the safe area's line (`RootHead.bar`): 57 for the bar on a phone
@@ -173,7 +173,7 @@ struct HistoryFootTests {
   }
 }
 
-/// Item 381 (James, 2026-11-13 05:29:39Z: "some long session shows up blank and only shows when i try to scroll") —
+/// Item 381 (asked for 2026-11-13: a long session shows at once, where it was blank until scrolled) —
 /// a page found at rest with the screen's foot below the document's own is put back on its end; a page a finger
 /// holds there is left alone. That the blank open is a page past its end is a reading of the code, not yet shown
 /// on a device.

@@ -6,7 +6,7 @@ import Testing
 @testable import FieldHome
 
 /// MA-6d — the door's standing state: the account's ledger on the phone, what a reading says, the first peek, the pull's
-/// one tick. The gesture itself on a device is owed to James (P6).
+/// one tick. The gesture itself on a device is owed (P6).
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @MainActor

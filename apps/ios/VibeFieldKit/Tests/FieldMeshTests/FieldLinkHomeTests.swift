@@ -498,7 +498,7 @@ private func desktopLive(_ key: String, in link: FieldLink) -> Bool? {
     #expect(ledger.waiting(for: .door(desktop: "dev-laptop")) == 0)
   }
 
-  /// SP-7b's 7c-2 (D-c2 (a), VF-PM 2026-11-06 23:17Z) — a terminal ticket, its renewal and Resume
+  /// SP-7b's 7c-2 (D-c2 (a), decided 2026-11-06) — a terminal ticket, its renewal and Resume
   /// for a session on ANOTHER desktop are asked of the HOME, `{device}` added, which forwards each
   /// whole to that desktop (DS-4) — as F1b's approval is. The owner still mints: its grants, and the
   /// TAILNET doors this phone's own node dials. The other desktop's door is never dialled for them,

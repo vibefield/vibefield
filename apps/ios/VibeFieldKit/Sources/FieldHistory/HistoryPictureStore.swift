@@ -1,7 +1,7 @@
 import Foundation
 
-// Item 362g (James's board pick, 2026-11-12 20:43Z: "images through a rosetta release, and full detail on the direct
-// road") — THE PICTURES A SESSION RECORDED, AS THE PHONE HOLDS THEM.
+// Item 362g (picked 2026-11-12: pictures come through a rosetta release, and the direct road carries their full
+// detail) — THE PICTURES A SESSION RECORDED, AS THE PHONE HOLDS THEM.
 //
 // Read straight from the desktop's index, an entry names its recorded pictures (`HistoryPicture`, beside the row),
 // and the direct read fetches one rendition of one when its tile asks (`HistoryDirectRead.picture`). What comes

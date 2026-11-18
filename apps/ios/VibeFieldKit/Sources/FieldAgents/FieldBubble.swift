@@ -153,7 +153,7 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
   public var active: Bool
   /// Shown in the phone's one pane, the open card (D-i12). Its band and light
   /// are the theme's ink, never a pane colour: one pane needs no colour to
-  /// tell it from another (James, 2026-10-18).
+  /// tell it from another (asked for 2026-10-18).
   public var mounted: Bool
   /// A reply nobody has looked at, by its OWNER's mark (`MonitorAgentRow.unread`) since PG-3e: a row the desktop's
   /// window showed is never unread. (Corrected 2026-11-02, PG-3e: it was the phone's own `UnreadLedger`'s, "finished
@@ -176,7 +176,7 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
   public let ofSpark: Bool
   /// SE-2 (SE-P6; DESIGN.md §8 "The phone's profile token", the lens on Field) — the home's profile the run is under
   /// (`MonitorAgentRow.profileSet`), which the phone's lens keys on: only on the home's own rows, a profile id being a
-  /// desktop's own (the lead's ruling 17). nil on a peer's row and on every source with no desktop. The swarm's recede
+  /// desktop's own (SE-2n, 2026-11-06). nil on a peer's row and on every source with no desktop. The swarm's recede
   /// reads it (`GodviewRecede.swarm`, FieldHome), as the list, the rain and the timeline read the row's.
   public let profileSet: String?
 

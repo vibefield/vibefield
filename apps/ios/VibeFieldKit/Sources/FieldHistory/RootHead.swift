@@ -1,7 +1,7 @@
 import FieldDesign
 import SwiftUI
 
-/// Item 350 (James, 2026-11-12) — a root tab's head: History's and Chat's titles stand in the band Field's Stories
+/// Item 350 (asked for 2026-11-12) — a root tab's head: History's and Chat's titles stand in the band Field's Stories
 /// row stands in, so the view circles, the two titles and Chat's ✦ share one top line. The home screen says where
 /// that band is, from the screen's own edges; the pages draw their heads in it.
 ///
@@ -45,7 +45,7 @@ extension EnvironmentValues {
   }
 }
 
-/// Item 390 (James, 2026-11-13) — a head's count in its bubble: how many the page under the head holds, beside its
+/// Item 390 (asked for 2026-11-13) — a head's count in its bubble: how many the page under the head holds, beside its
 /// title. The look is the one a project's page wore beside its name before any text ruled it (DESIGN.md §8 "The
 /// roots' heads", A head's bubble): 12 medium and tabular in the secondary ink, on a `fill` capsule 22 tall. The
 /// count is never cut: a long title gives way to it.

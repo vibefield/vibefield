@@ -6,8 +6,8 @@ import Testing
 /// Item 419 (DESIGN.md §8 "The phone's Apps": "A folder, open", "Under a finger", "The open app") — the shelf moves as
 /// the Home Screen does, held where a decision is a pure rule: where the panel stands, the square on its way from the
 /// tile, what rides it, the pages, what is behind, the pinch, the drawing's own standing, the dark under a finger,
-/// what a long press lifts, and which icon a screen zooms out of. How any of it feels under a finger is James's, on
-/// his phone.
+/// what a long press lifts, and which icon a screen zooms out of. How any of it feels under a finger is to be tried on
+/// a device.
 ///
 /// No key path, no `try` and no `mutating` call inside an #expect/#require argument: hoisted into a `let` first. No
 /// side of a comparison is arithmetic on bare literals (read as Int, which a CGFloat never equals).

@@ -32,9 +32,9 @@ struct BubbleGlyph: View {
 /// (the godview's toolkit, `agentMark`, and History's room), so the surfaces
 /// draw identical marks.
 ///
-/// Item 359 (James, 2026-11-12 17:50:31Z: "overturn this ruling, bring back
-/// those icons now, i see many other apps on app store do the same thing and
-/// they are fine"; DECISIONS LP-D7, built by LP-4): every agent the catalog
+/// Item 359 (asked for 2026-11-12: that ruling overturned and those marks
+/// brought back now, as many other apps in the App Store show such marks
+/// and are fine; DECISIONS LP-D7, built by LP-4): every agent the catalog
 /// offers a phone has its own mark in the folder, written from the toolkit's
 /// path data by the recipe that wrote Codex's (every path argument separated:
 /// Xcode misreads compact arc flags). Nine today: Grok's is restored, and
@@ -50,8 +50,8 @@ struct BubbleGlyph: View {
 /// was "Lobe Icons v5.14.0"; the notices and the toolkit name
 /// `@lobehub/icons-static-svg` 1.94.0. And from LP-4 (2026-11-05, the 0.9
 /// launch) until item 359 the folder kept Claude's and Codex's marks only,
-/// "the two vendor logos James kept for v1", with Grok's removed and every
-/// other agent wearing its letter; that ruling is the one he overturned. The
+/// the two vendor logos kept for v1, with Grok's removed and every
+/// other agent wearing its letter; that ruling was overturned (item 359, 2026-11-12). The
 /// swarm's atlas (`MarksAtlas`' `kept`) is item 359's second step.
 ///
 /// A mark with no drawn glyph wears its LETTER, which is the reference's own

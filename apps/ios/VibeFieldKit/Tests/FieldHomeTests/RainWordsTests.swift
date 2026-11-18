@@ -48,7 +48,7 @@ extension RainViewTests.Hand {
     return RainAgent(row: row)
   }
 
-  /// H6 — J-S4, ACCEPTED (James 01:12–01:14Z): the open card's row is lit, and only it; its button says the same words
+  /// H6 — J-S4, ACCEPTED (2026-11-04): the open card's row is lit, and only it; its button says the same words
   /// and is "open". The host's join finds it by the card's subject (`GodviewStageInput.activeId`). With the switch
   /// thrown nothing is lit. The goldens light nothing (PG:430); the frame's half (its head, its glow) is pair 4's.
   @Test func theOpenCardsRowIsLit() throws {

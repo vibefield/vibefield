@@ -45,7 +45,7 @@ enum ChatNight {
     return nil
   }
 
-  /// §9's Off sentence, by the home's name (interim, James's eye): "A spark thinks with Claude Code, which isn't on
+  /// §9's Off sentence, by the home's name (interim, yet to be seen): "A spark thinks with Claude Code, which isn't on
   /// studio yet."; with two, "Claude Code or Codex, which aren't …"; with more, "Claude Code, Codex or Grok, which aren't …".
   static func offWords(_ names: [String], home: String) -> String {
     let which = names.count == 1 ? "which isn't" : "which aren't"

@@ -225,7 +225,7 @@ private struct LabClusterSection: View {
   }
 }
 
-/// The marks the atlas holds, as the field draws them. LP-4 (VF-PM's ruling
+/// The marks the atlas holds, as the field draws them. LP-4 (decided
 /// (a), 2026-11-05): a shipped lab, even a DEBUG-only one, shows only what the
 /// atlas holds. So the sheet lists `MarksAtlas`' KEPT candidates and no other:
 /// the neighbours the design weighed beside them are blank in `marks.png`, and

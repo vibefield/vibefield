@@ -2,7 +2,7 @@ import Foundation
 
 // UA-P-1a — discovery by the door.
 //
-// James's ruling of 2026-09-15 (UA-P-D2): a store is scoped to the login
+// The ruling of 2026-09-15 (UA-P-D2): a store is scoped to the login
 // identity, and until truffle can gate by login NOTHING CONTENT-BEARING RIDES
 // THE BUS. `field.devices.v1` stops being published, so the phone stops
 // learning desktops from it. What it has instead is truffle's peer list — every

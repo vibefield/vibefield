@@ -227,7 +227,7 @@ enum Script {
   /// `protocolLimits` — the writer-side numbers this client happens not to read
   /// — so every row here drove the reader against a body no cell would ever
   /// send, and a limit the schema added would have reached the phone first on
-  /// James's hardware. Deriving makes the fixture the source: a field added
+  /// real hardware. Deriving makes the fixture the source: a field added
   /// upstream arrives the moment `check:ios-fixtures` refreshes the copy, and
   /// nothing has to remember to add it twice.
   ///

@@ -29,7 +29,7 @@ struct SpendInks: Equatable, Sendable {
 
   /// The moment tag's words (`.vf-monitor-spend-tag`, spend.css:234-235): `--vf-card-deep` at 92 %, the deep card ink
   /// (tokens.css:52, `#000000`), in both looks. The stage's skin names no such ink, so DESIGN.md §2.2's
-  /// `--vf-card-deep` row says the phone's spend tag reads it here (fd's Q5).
+  /// `--vf-card-deep` row says the phone's spend tag reads it here (PG's Q5).
   static let deep = SwarmColor(r: 0, g: 0, b: 0, a: 0.92)
 
   init(theme: SwarmTheme, skin: GodviewSkin) {

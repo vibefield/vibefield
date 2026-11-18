@@ -6,8 +6,8 @@ import Testing
 @testable import FieldHome
 @testable import FieldMesh
 
-/// IOS-10c — the home desktop's agents on its Settings page (agents, a read-only glance: James on the page Settings
-/// in a Pocket, 2026-11-11; VF-PM's (a), the home's page alone; DESIGN.md §8 "The phone's Settings", amended that
+/// IOS-10c — the home desktop's agents on its Settings page (agents, a read-only glance: asked for on the page Settings
+/// in a Pocket, 2026-11-11; decided (a), the home's page alone; DESIGN.md §8 "The phone's Settings", amended that
 /// day): every agent the home's catalog offers, in its order, with the profiles that hold a sign-in for it, from the
 /// meters' own reading. No other desktop's page gets a section, and none is ever empty.
 @Suite("the home's page lists the home's agents and their sign-ins; no other page has the section")

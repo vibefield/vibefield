@@ -19,8 +19,8 @@ enum FaceHold {
   static let hold = FieldMotion.longPressDuration
   static let slop: CGFloat = 10
   /// The first four buds' spokes, 160 from the face's centre; a fifth to an eighth stand at 276, half a step (11°) on
-  /// (the lead's placement, ‹for James›), far enough out that a first-arc label stands between two second-arc buds.
-  /// Past eight ‹for James›: the bloom holds eight, the page lists every one.
+  /// (a placement ‹to pick›, 2026-11-17), far enough out that a first-arc label stands between two second-arc buds.
+  /// Past eight ‹to pick›: the bloom holds eight, the page lists every one.
   static let angles: [Double] = [-92, -70, -48, -26]
   static let radius: Double = 160
   static let outerRadius: Double = 276
@@ -182,8 +182,8 @@ enum FaceHold {
   /// A label's lines stop at these lengths, cut to one less and "…": the name at 14 (79.8 wide), the state at 17
   /// (76.5, never wider than the name's most). A profile's name may run to 64 (the contract's `label`, max 64) and a
   /// window's word is the adapter's own, unbounded; past these lengths the labels stood on each other. The whole name
-  /// stands in the huge words while its bud is reached. ‹for James›: the lead's placement, the longest a check by
-  /// port found clear at two to eight profiles on 375 to 440 wide screens.
+  /// stands in the huge words while its bud is reached. ‹to pick›: the placement of 2026-11-17, the longest a
+  /// check by port found clear at two to eight profiles on 375 to 440 wide screens.
   static let nameMost = 14
   static let stateMost = 17
 

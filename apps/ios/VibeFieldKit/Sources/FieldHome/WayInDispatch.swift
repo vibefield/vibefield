@@ -1,11 +1,11 @@
 import FieldMesh
 import Foundation
 
-// RB-2 (DESIGN.md §8 "The phone's Settings", amended 2026-11-12; VF-PM's ruling, 2026-11-12 18:06:27Z) — the way in's
+// RB-2 (DESIGN.md §8 "The phone's Settings", amended 2026-11-12; decided 2026-11-12) — the way in's
 // acts, out of the view so a test sees which real call each one makes. Under a demo, every act that would reach this
 // phone's real account, its lock, the code reader or Safari is held, and nothing is called; the acts that only move
 // between the way in's pages, and the lock's own Unlock, are made. Whether a demo stands is answered in one place: the
-// `LaunchFixtures` value the home reads. WI-G3 A (James on the page The Way In, 2026-11-14 03:47:00Z): Use another
+// `LaunchFixtures` value the home reads. WI-G3 A (asked for on the page The Way In, 2026-11-14): Use another
 // account asks the corner's question first. The asking reaches nothing, so it is made under a demo; the question's
 // Sign out reaches the account, so it is held.
 extension FieldHomeModel {
@@ -26,7 +26,7 @@ extension FieldHomeModel {
     var openReader: () -> Void
     /// A desktop's code, by the reader or by a link: the account to expect.
     var receive: (PhoneCode, PhoneCodeExpectation.Arrival) -> Void
-    /// WI-G3 A (James on the page The Way In, 2026-11-14 03:47:00Z) — Use another account, on Can’t reach your
+    /// WI-G3 A (asked for on the page The Way In, 2026-11-14) — Use another account, on Can’t reach your
     /// computer. and on Sign in to Tailscale again.: the corner's own Sign out question, asked first. It moves nothing.
     var askSignOut: () -> Void
     /// The question's Sign out, after Use another account: the corner's own Sign out, the full sign-out.

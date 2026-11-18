@@ -5,10 +5,10 @@ import Testing
 
 @testable import FieldMesh
 
-/// 2026-10-18 — James: "the phone should automatically connect to desktop as
-/// long as the account is logged in, user should not need to manually tap
-/// connect or disconnect, it is auto connected and maintained connection all
-/// the time". What `keepUp()` does in every state, the re-dial's ladder, and
+/// 2026-10-18 — asked for: the phone connects to the desktop by itself for as
+/// long as the account is signed in, with nothing to tap to connect or
+/// disconnect, and keeps that connection up all the
+/// time. What `keepUp()` does in every state, the re-dial's ladder, and
 /// that a signed-out phone starts nothing.
 @Suite("the mesh keeps itself up while signed in")
 struct MeshKeepUpTests {
@@ -93,7 +93,7 @@ struct MeshKeepUpTests {
     #expect(!mesh.isRunning)
   }
 
-  // MARK: - WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z): Try again, under "Couldn’t connect."
+  // MARK: - WI-W2e A (asked for on the page The Way In, 2026-11-14): Try again, under "Couldn’t connect."
 
   @Test("Try again starts the network again from a failed start, for a kept login or one the node reported")
   func tryAgainStarts() {

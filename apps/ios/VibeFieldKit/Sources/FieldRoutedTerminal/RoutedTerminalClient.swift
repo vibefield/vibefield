@@ -2195,7 +2195,7 @@ public final class RoutedTerminalClient {
 
   /// What a ticket refusal means for the asking (fix8: never waits forever).
   ///
-  /// Both re-mint loops asked again for EVERY refusal. On 2026-10-19 James's
+  /// Both re-mint loops asked again for EVERY refusal. On 2026-10-19 a desktop's
   /// floor was respawned under a live card, and the phone asked for the lost
   /// session's ticket 254 times over three hours while the card said nothing:
   /// the door had answered that it no longer had the session, and said that
@@ -2533,7 +2533,7 @@ public final class RoutedTerminalClient {
   /// here, with its numbers, and never sent. It is measured by the one encoder
   /// the leg sends with, never a mirror of its escaping: `JSONEncoder` escapes
   /// `/` where `JSON.stringify` does not, and quotes and controls cost more
-  /// than their own bytes (the History lead's D6, 2026-10-17).
+  /// than their own bytes (History's D6, 2026-10-17).
   private func sendText(
     _ text: String, _ kind: RoutedInputRefusal.Kind, to sessionId: String
   ) -> RoutedInputRefusal? {

@@ -13,13 +13,13 @@ import Foundation
 // its true start however old, and every reader clamps to its own window (the paint `TimelinePaint.lanes`, the wakes
 // `WakeGeometry.segments`, the map `PulseMap` and `dayStart`), each of which already did.
 //
-// RUNTIME ONLY (fd's Q1 ruling, 2026-11-04): the phone is lent no `history` (puppeteer-view-sdk `view.d.ts:132-137`;
+// RUNTIME ONLY (PG's Q1, decided 2026-11-04): the phone is lent no `history` (puppeteer-view-sdk `view.d.ts:132-137`;
 // DESIGN.md "Runtime only where no record is lent … the whole drawing on the phone"), so no lane has a recorded past
 // or an end. NOT transcribed, a named deviation from the brief's §10 list (a puppeteer change to any of them is still
 // a phone item): `pastBefore` :13, `endedLane` :55, `historyLanes` :69, `mergeByBirth` :81, `scrolledOutKey` :111,
 // `withoutScrolledOut` :120, `spanIndexAt` :127, `recordedAt` :143, `ENDED_ALPHA` :162, `pastKey` :190, and the past
 // and ended arms of `laneFor`, `timelineLanes`, `stateAt`, `laneAlpha` and `laneContentKey`. Nor `stepLight` :179, the
-// keyboard's light: the phone's stage has no keys (fd's Q2).
+// keyboard's light: the phone's stage has no keys (PG's Q2).
 
 /// The row as the timeline reads it (`AgentView`, puppeteer-view-sdk `model.d.ts:327-337`): the replica's row and the
 /// host's joins, each where the phone holds it — `isSelf` the window's (`RemoteFieldRow.isSelf`), `unread` the swarm's

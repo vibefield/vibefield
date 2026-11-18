@@ -20,8 +20,8 @@ struct SpendAgent: Equatable, Sendable {
   let monitor: MonitorAgentRow
   let isSelf: Bool
   let unread: Bool
-  /// J-S4 accepted (James 2026-11-04): the open card's row. Spend draws it only through the pane square, which shows
-  /// only for a row mounted in a pane, and the phone mounts none: so it draws nothing (fd's Q9, desktop parity).
+  /// J-S4 accepted (2026-11-04): the open card's row. Spend draws it only through the pane square, which shows
+  /// only for a row mounted in a pane, and the phone mounts none: so it draws nothing (PG's Q9, desktop parity).
   let active: Bool
 
   var id: String { monitor.id }

@@ -29,11 +29,11 @@ import SwiftUI
 // band below it) and runs from the screen's top; its words start at `input.insets(.flow).top` (the Stories row's
 // reserve), and its ground fills the stage. It draws no scanlines, no vignette and no dissolve (the stage's).
 //
-// TOUCH (the read's §5, fd's Q12): a tap opens a lane's card (`input.onOpen`); a horizontal drag in the track pans; a
+// TOUCH (the read's §5, PG's Q12): a tap opens a lane's card (`input.onOpen`); a horizontal drag in the track pans; a
 // pinch zooms about its centre (240 ms, island); the map is pressed or dragged to put the head there. No hover, no
-// keys, no focus ring (fd's Q2), so no lane is ever lit (`lit` −1).
+// keys, no focus ring (PG's Q2), so no lane is ever lit (`lit` −1).
 //
-// RUNTIME ONLY (fd's Q1 ruling, 2026-11-04): no history is lent, so nothing of the record is drawn — the ended runs'
+// RUNTIME ONLY (PG's Q1, decided 2026-11-04): no history is lent, so nothing of the record is drawn — the ended runs'
 // rows and pointer (TV:344-355, :821-855), the record's sentence (TV:859-861), the tall canvas (TV:427-445).
 
 /// How the stage redraws.

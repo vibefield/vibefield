@@ -1,6 +1,6 @@
 import Foundation
 
-// IOS-12d (PC-D4 A, PC-L1; Q1 (a), VF-PM 2026-11-06 19:12Z; DESIGN.md §8 "Chat's thread", the needs-you card, and
+// IOS-12d (PC-D4 A, PC-L1; Q1 (a), decided 2026-11-06; DESIGN.md §8 "Chat's thread", the needs-you card, and
 // §8 "The phone's Chat", Needs you; §9 "The person's queue's words") — THE NEEDS-YOU CARD, AS DATA, on the phone: the
 // Mac's `packages/field-app/src/chat/needs-card.ts`, ported, and held to the goldens its own functions write
 // (`packages/field-app/test/needs-card-goldens.test.ts`, copied to `Tests/FieldProductTests/Fixtures/needs-card/`).

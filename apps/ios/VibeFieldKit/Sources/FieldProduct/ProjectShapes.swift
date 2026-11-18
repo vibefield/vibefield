@@ -9,7 +9,7 @@ import Foundation
 // the contracts' own bytes (`pnpm check:ios-fixtures` names the project set
 // REQUIRED).
 //
-// P1 (a), James 2026-10-08: a REQUEST names a place by `PlaceRef {device,
+// P1 (a), picked 2026-10-08: a REQUEST names a place by `PlaceRef {device,
 // placeId}` and never by its path — no params shape below can carry one. An
 // ANSWER to the person's own phone may carry a place's `path`; the phone does
 // not draw it (TP §6.3: the folder's name, never its path).

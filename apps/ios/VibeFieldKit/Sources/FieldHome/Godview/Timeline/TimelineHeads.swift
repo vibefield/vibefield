@@ -14,12 +14,12 @@ import SwiftUI
 // TimelineWords'; the colours are the inks' and the skin's; the type is the system face (names-4t) at the desktop's
 // sizes and weights.
 //
-// J-S4 (James, 2026-11-04; fd's Q3): the open card's lane wears the desktop's own active treatment — the name
+// J-S4 (accepted 2026-11-04; Q3): the open card's lane wears the desktop's own active treatment — the name
 // underlined and the 4 px band at the lane's edge — in TEXT MAIN where the desktop wears the pane's colour, decided in
 // ONE place, `TimelineActive.lights(row:activeId:)`. `laneAlpha` is untouched by it (the desktop's hover, never
 // `active`).
 //
-// RUNTIME ONLY (fd's Q1 ruling, 2026-11-04): the ended run's rows (`is-ended`, its own name and device) and the
+// RUNTIME ONLY (PG's Q1, decided 2026-11-04): the ended run's rows (`is-ended`, its own name and device) and the
 // recorded readout's two lines (:759-765) are not transcribed. The keyboard's focus ring (:802-815) neither: the phone
 // has no keys.
 

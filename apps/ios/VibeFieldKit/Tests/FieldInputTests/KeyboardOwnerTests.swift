@@ -133,7 +133,7 @@ struct KeyboardOwnerTests {
     #expect(acts.isEmpty)
   }
 
-  /// James, 2026-10-17: a tap on the terminal raised the bare system keyboard
+  /// TM (2026-10-17): a tap on the terminal raised the bare system keyboard
   /// while a separate chip raised the designed one. The tap is the card's now:
   /// down → the designed input in the current mode, up → read mode.
   @Test("a tap on the terminal raises the designed input, in the current mode")

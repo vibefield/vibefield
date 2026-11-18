@@ -793,7 +793,7 @@ private func hundredByTheDoor(_ params: FieldProduct.JSONValue?) -> FieldProduct
 
   // MARK: - The road changes under an open document (item 366)
 
-  /// Item 366 (found reading for 362f; VF-PM numbered it 2026-11-12 21:05:29Z) — the direct read lost under an
+  /// Item 366 (found reading for 362f; numbered 2026-11-12) — the direct read lost under an
   /// open document `reopen`ed the session: the rows went, and the door's newest forty stood where up to two
   /// hundred and the pages above them had been. `ids` are the document's segment ids: what the view keeps a
   /// reader's place and its opened groups by, so the same ids in the same order are the same page.
@@ -961,8 +961,8 @@ private func hundredByTheDoor(_ params: FieldProduct.JSONValue?) -> FieldProduct
 
   // MARK: - Recorded pictures, read straight from the desktop (item 362g)
 
-  /// Item 362g (James's board pick, 2026-11-12 20:43Z: "images through a rosetta release, and full detail on the
-  /// direct road") — a recorded picture's tile is asked of rosettad itself: the stored member's own address with
+  /// Item 362g (picked 2026-11-12: pictures come through a rosetta release, and the direct road carries their
+  /// full detail) — a recorded picture's tile is asked of rosettad itself: the stored member's own address with
   /// the `tile2x` recipe, under the ticket's grant. Nothing is read until a tile asks, and the face holds the
   /// bytes as they were answered.
   @Test func aRecordedPicturesTileIsAskedAtItsMemberUnderTheGrant() async {

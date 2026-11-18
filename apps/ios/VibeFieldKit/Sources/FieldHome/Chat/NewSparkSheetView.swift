@@ -7,8 +7,8 @@ import SwiftUI
 // NEW SPARK SHEET on the phone: the Mac's sheet (`NewSparkSheet.tsx` and `NewSparkSheetView.tsx`) at touch pitch, in
 // the system's sheet at its large detent, on the paper. The sky deals the face; the name holds a free star; the agent
 // pill pulls down the system's menu; "Runs on studio, your home" is said, not asked; the profiles' chips stand once
-// the home has more than Default; Cancel and Create stand at the foot. Every ask is the home's, on Chat's door (VF-PM
-// 13:11:45Z), and every word is §9's. The sky is the hatch (FieldDesign's `HatchSkyView`, f5): a star falls at an
+// the home has more than Default; Cancel and Create stand at the foot. Every ask is the home's, on Chat's door (decided
+// 2026-11-07), and every word is §9's. The sky is the hatch (FieldDesign's `HatchSkyView`, f5): a star falls at an
 // angle and the face is born where it lands; ↻ deals again. Created (f6), the face flies from the sky to its row in
 // Chat's list as the sheet folds, and then Chat opens its thread (`NewSparkLanding`).
 

@@ -18,7 +18,7 @@ import UniformTypeIdentifiers
 /// - per channel |Δ| ≤ 6/255 on ≥ 99.5% of a still's pixels;
 /// - mean |Δ| ≤ 1/255;
 /// - any pixel past 32/255 named.
-/// VF-PM rules the bound for good on the first report. Both pictures are compared premultiplied, in sRGB, 8 bits a
+/// The bound is ruled for good on the first report. Both pictures are compared premultiplied, in sRGB, 8 bits a
 /// channel, drawn into one kind of bitmap.
 ///
 /// The report: one line per still in the test's output (`SPARK-STILL …`). With `VF_SPARK_STILLS_REPORT` naming a

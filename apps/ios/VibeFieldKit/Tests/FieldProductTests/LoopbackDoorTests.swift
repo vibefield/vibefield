@@ -18,7 +18,7 @@ import Testing
 //
 // It is NOT a claim about fieldd. The door here answers from a script, and what
 // it witnesses is the transport and the framing — that a desktop's tailnet door
-// answers this client is James's device run (see the slice's report).
+// answers this client is a real device run (see the slice's report).
 
 /// A WebSocket door on 127.0.0.1, made of `Network.framework`.
 private actor LoopbackDoor {

@@ -340,8 +340,8 @@ private let attachment: [String: JSONValue] = [
   }
 }
 
-/// Item 362f (James, 2026-11-12 18:40:35Z: "i think all message type and views are different from desktop, needs
-/// thorough audit") — beyond the row. Read straight from the desktop the phone holds the whole entry; the row it
+/// Item 362f (asked for 2026-11-12: a thorough audit of every message type and view, which differ from the
+/// desktop's) — beyond the row. Read straight from the desktop the phone holds the whole entry; the row it
 /// projects stays the door's row (the pairs above), and what the entry says beyond it is kept beside it. These rows
 /// hold the first such thing: the body's whole words, where the row's were cut.
 @Suite("item 362f — what an entry carries beyond its row")
@@ -421,8 +421,8 @@ struct HistoryLineDetailTests {
   }
 }
 
-/// Item 362f (James, 2026-11-12 18:40:35Z: "i think all message type and views are different from desktop, needs
-/// thorough audit") — what a tool line opens to. In the room a command opens to its folder and its source, a
+/// Item 362f (asked for 2026-11-12: a thorough audit of every message type and view, which differ from the
+/// desktop's) — what a tool line opens to. In the room a command opens to its folder and its source, a
 /// change to its diff, a read and a search to their paths. The door's row carries none of that; the entry does.
 /// These rows hold what the phone keeps of it beside the row, by the room's own rules and figures (rosetta at the
 /// pin 811e554c6: lib/transcript/families.ts, components/transcript/detail-parts.tsx,
@@ -685,8 +685,8 @@ struct HistoryToolDetailTests {
     #expect(HistoryProjection.projected(entry: reply)?.detail == nil)
   }
 
-  /// VF-PM's row (2026-11-12 23:27:01Z): "a document rebuilt with details present encodes to the same bytes as one
-  /// without". The document is written to the cache at every rebuild; a tool detail must never ride in that write.
+  /// The row, decided 2026-11-12: a document rebuilt with details present encodes to the same bytes as one
+  /// without. The document is written to the cache at every rebuild; a tool detail must never ride in that write.
   @Test("a document folded with a tool detail present encodes to the same bytes as one folded without")
   func theDocumentDoesNotCarryIt() throws {
     let raw = toolEntry(action: action("shell", ["command": inline("ls"), "cwd": folder("/work/marker-362f")]))
@@ -711,13 +711,13 @@ struct HistoryToolDetailTests {
   }
 }
 
-/// Item 362g (James's pick on the board, 2026-11-12 20:43Z, as VF-PM relayed it: "Both A and B for 0.9: images
-/// through a rosetta release, and full detail on the direct road") — the pictures an entry carries. Through the
+/// Item 362g (picked 2026-11-12: A and B both, for 0.9, so pictures come through a rosetta release, and the direct
+/// road carries their full detail) — the pictures an entry carries. Through the
 /// door an attachment is a ref with no digest and no address; rosetta's entry names the stored member. These rows
 /// hold which attachments the phone keeps a picture for, beside the row and never in it, by the room's own rule
 /// (rosetta at the pin 811e554c6: `isRecordedImageAsset` in clients/room/src/lib/image-media.ts, whose own cases
 /// in clients/app/test/transcript-activity-images.test.mjs are ported here), and that neither the row nor the
-/// document changes for it (VF-PM's rulings 2 and 8, 2026-11-13 00:24Z).
+/// document changes for it (362g, decided 2026-11-13).
 @Suite("item 362g — the pictures an entry carries")
 struct HistoryPictureProjectionTests {
   /// Sixty-four of one hex digit: a digest as the room's own tests make one.
@@ -1135,8 +1135,8 @@ struct HistoryPictureProjectionTests {
     #expect(HistoryLineDetail.pictured([:]).isEmpty)
   }
 
-  /// VF-PM's ruling 8 (2026-11-13 00:24Z): "a document folded from rows with pictures beside them encodes to the
-  /// same bytes as one folded without". The document is written to the phone's cache at every rebuild (ruling 2):
+  /// 362g, decided 2026-11-13: a document folded from rows with pictures beside them encodes to the
+  /// same bytes as one folded without. The document is written to the phone's cache at every rebuild (362g, that day):
   /// no digest, no address and no byte may ride in that write. What it does carry is the attachment segment's id,
   /// which is the key a picture is found by.
   @Test("a document folded with picture details present encodes to the same bytes as one folded without")

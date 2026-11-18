@@ -295,9 +295,10 @@ enum Remote {
     #expect(stop.sentAt == "2026-09-30T21:14:30.000Z")
   }
 
-  /// IOS-12b (PC-D5 A, one need, one count; VF-PM's Q2) — whose a run is. A spark's own session (`spark`, whoever its
-  /// origin names) and an agent a spark started (`origin.by == "spark"`, its spark named or not) are a spark's: their
-  /// waits are counted on Chat, with their spark. A run a person or a flow started is no spark's, and Field counts it.
+  /// IOS-12b (PC-D5 A, one need, one count; Q2, decided 2026-11-05) — whose a run is. A spark's own session
+  /// (`spark`, whoever its origin names) and an agent a spark started (`origin.by == "spark"`, its spark named or
+  /// not) are a spark's: their waits are counted on Chat, with their spark. A run a person or a flow started is no
+  /// spark's, and Field counts it.
   @Test("a run is a spark's by its own spark, or by an origin a spark started")
   func ofSpark() throws {
     let agent = try Fixture.json("agent-remote-row.valid")

@@ -4,7 +4,7 @@ import Testing
 
 @testable import FieldDesign
 
-/// IOS-12f's f5h (VF-PM's ruling 17:38:20Z) — THE HATCH'S HASH INPUT ON THIS GPU, BIT FOR BIT. Two sites in
+/// IOS-12f's f5h (decided 2026-11-07) — THE HATCH'S HASH INPUT ON THIS GPU, BIT FOR BIT. Two sites in
 /// HatchSky.metal hash a sum of two products, `seed * k1 + fj * k2`: the burst's rays (star-spark.js :200) and the
 /// particles (:378). The engine's frames were drawn by ANGLE's Metal on the goldens' host (an M4), and its compiler
 /// computes that sum as fma(fj, k2, seed * k1): the first product rounded to its own float, the second fused with the

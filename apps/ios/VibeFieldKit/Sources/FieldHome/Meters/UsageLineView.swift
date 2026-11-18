@@ -56,7 +56,7 @@ struct UsageLinesView: View {
 }
 
 /// One window's line: its label (26), the track, and the reset (58); or, for a window read before its reset, the
-/// reading's age in the reset's place, at its own width, the track giving way (‹for James›).
+/// reading's age in the reset's place, at its own width, the track giving way (‹to pick›).
 struct UsageLineView: View {
   let line: UsageLine
   /// how its reset is said: by its length, by its day, or now

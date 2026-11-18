@@ -1,11 +1,11 @@
 import Foundation
 
 // IOS-12e (PC-D6 A; DESIGN.md §2.10, amended 2026-11-06) — THE NINETEEN STATUSES' RECIPES, transcribed from the
-// desktop's vendored engine (`packages/design-kit/src/spark-face/vendor/sparks.js` :62–105, James's Agent Sparks byte
+// desktop's vendored engine (`packages/design-kit/src/spark-face/vendor/sparks.js` :62–105, Agent Sparks byte
 // for byte). A recipe is the pose a status's springs chase, its motion, its gaze and its signs. The engine keeps each
 // status as `r` (the pose), `m` (its mouth, for a face that has one) and `b` (what a mouthless face uses instead), and
 // `recipe(e, mouthSet)` (:108) resolves it: `r` then `m`, or `r` then `b` and no mouth. Spark faces are the mouthless
-// set (James, 2026-10-29). Held field by field to the rows golden's `recipes` (SparkBuddyGoldenTests).
+// set (asked for 2026-10-29). Held field by field to the rows golden's `recipes` (SparkBuddyGoldenTests).
 //
 // Coding and Debugging are an agent's work and never a spark's face (§2.10), so they are not here.
 

@@ -13,7 +13,7 @@ import Foundation
 //
 // The profile is the phone's ONE lens (`ProfileLens`, UM-4's seam): Live now's profile token IS the lens, the desktop
 // token is the lens's `desk`, and the profiles named here are the lens's while it offers them (UM-D12: with one
-// profile nothing names a profile, so callers hand none). The lens is self-only (the lead's rulings 16 and 17): a
+// profile nothing names a profile, so callers hand none). The lens is self-only (SE-2b, 2026-11-06): a
 // profile id is the home's, so only the home's runs carry one, and a peer's run leaves Live now under a profile.
 
 public enum PhoneSearch {
@@ -657,8 +657,8 @@ public enum PhoneSearch {
   }
 
   /// Everything's empty list with words, only once they are answered: never "no matches" for a question nobody
-  /// answered (§8 "Search — the Peek"; the foot says why). Before a word its words are James's (§9), so none is said
-  /// here.
+  /// answered (§8 "Search — the Peek"; the foot says why). Before a word its words are yet to be picked (§9), so none
+  /// is said here.
   public static func pastEmpty(query: String, asked: Asked) -> Empty? {
     let words = query.trimmingCharacters(in: .whitespaces)
     guard !words.isEmpty, asked.answered else { return nil }

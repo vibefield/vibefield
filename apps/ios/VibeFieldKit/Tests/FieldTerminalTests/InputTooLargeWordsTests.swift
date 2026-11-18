@@ -3,7 +3,7 @@ import Testing
 
 @testable import FieldTerminal
 
-/// The History lead's D6 (2026-10-17) — an input too large for the link is SAID,
+/// History's D6 (2026-10-17) — an input too large for the link is SAID,
 /// in the desktop's own sentence and its numbers, never dropped: its size and how
 /// much of it one paste carries, both counted in thousands as Finder counts them
 /// (DESIGN.md §9), the size rounded up and what fits down.

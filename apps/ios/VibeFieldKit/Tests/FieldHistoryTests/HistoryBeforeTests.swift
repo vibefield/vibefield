@@ -3,14 +3,14 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 396 (James, 2026-11-13 23:38:00Z, session qa-01: "a good addition design should be added to both desktop and
-/// mobile is that we should have a floating button on the side for user to quick jump to previous user message so user
-/// can quick navigate, help me design and implement nicely") — a round button at the document's side goes to the
+/// Item 396 (asked for 2026-11-13: on the desktop and the phone alike, a floating button at the side that jumps to
+/// the person's previous message, so a session is quick to move through, designed and built
+/// with care) — a round button at the document's side goes to the
 /// nearest message of the person's own that begins above the top of the view, and is there only while a press has
 /// somewhere to go.
 ///
 /// These rows hold the RULE: given the document's rows and where each laid-out row begins, where a press goes.
-/// That a row on a phone says where it begins, and where the page then stands, is his to see.
+/// That a row on a phone says where it begins, and where the page then stands, is to be seen on a device.
 @Suite("item 396 — a button at the side goes to the message before")
 struct HistoryBeforeTests {
   private func prose(_ id: String) -> HistorySegment {

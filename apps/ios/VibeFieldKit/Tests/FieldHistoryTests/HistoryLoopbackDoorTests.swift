@@ -11,7 +11,7 @@ import Testing
 // `HistoryDoor`, which is right: the fold and the states are the part worth
 // testing and they want no server. But it also means the seam the phone will
 // actually cross — the real product client, its framing, a rows subscription
-// resumed by cursor — would carry no History bytes at all before James's
+// resumed by cursor — would carry no History bytes at all before a real
 // device run. This row stands an RFC 6455 door on loopback and puts the real
 // client between the reader and it: hello, the ledger's reads, a session's
 // header and page, the tail opened as a rows subscription at the floor, and a

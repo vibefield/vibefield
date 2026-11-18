@@ -1,9 +1,9 @@
 import FieldDesign
 import SwiftUI
 
-// Item 396 (James, 2026-11-13 23:38:00Z, session qa-01: "a good addition design should be added to both desktop and
-// mobile is that we should have a floating button on the side for user to quick jump to previous user message so user
-// can quick navigate, help me design and implement nicely") — THE BUTTON AT THE DOCUMENT'S SIDE, and how a session's
+// Item 396 (asked for 2026-11-13: on the desktop and the phone alike, a floating button at the side that jumps to
+// the person's previous message, so a session is quick to move through, designed and built
+// with care) — THE BUTTON AT THE DOCUMENT'S SIDE, and how a session's
 // document knows which of its rows begin above the top of the view. The rules are pure and stand beside the rows
 // (`HistoryBefore`, `HistoryRow.before`, HistoryRows.swift). DESIGN.md §8 "The phone's session document", "A button
 // at the side goes to the message before".

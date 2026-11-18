@@ -1,4 +1,4 @@
-/// RB-1 — which build this is, for the rows James ruled by build (DESIGN.md §8 "The phone's Settings", amended
+/// RB-1 — which build this is, for the rows ruled by build (DESIGN.md §8 "The phone's Settings", amended
 /// 2026-11-12: Notifications is drawn in TestFlight and development builds only, and the build submitted for App
 /// Review draws neither it nor Developer).
 ///

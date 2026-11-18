@@ -4,7 +4,7 @@ import UIKit
 
 @testable import FieldDesign
 
-/// Item 241 (DESIGN.md §7 "Off", ruled 2026-11-07, James 20:53:00Z): a pill that is off gives up its own look for
+/// Item 241 (DESIGN.md §7 "Off", ruled 2026-11-07): a pill that is off gives up its own look for
 /// the quiet pill's, the quiet fill and its hairline, so a primary loses its inversion, and its words wear t4 at full
 /// opacity: black at 50% by day, white at 38% by night. Read on pixels: each kind drawn live and `.disabled(true)` on
 /// the sheet's paper at 2×, in both looks; its fill sampled clear of its words and its hairline, its hairline on its

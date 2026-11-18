@@ -237,7 +237,7 @@ public struct FieldResumeTiming: Sendable {
 /// **UA-P-1a changed the first link of that chain (2026-09-15).** It used to be
 /// `field.devices.v1` — every desktop on the tailnet published a slice naming
 /// its capability URL, and this phone dialed every URL whose sender the mesh
-/// vouched for. Under James's ruling (UA-P-D2) that store is not published at
+/// vouched for. Under UA-P-D2 (2026-09-15) that store is not published at
 /// all: a synced store reaches every node in the app's namespace, a namespace
 /// is not an account, and until truffle can gate a store by login nothing
 /// content-bearing rides the bus. So the shape now is:
@@ -798,7 +798,7 @@ public final class FieldLink {
   /// while History already holds its door, and no forwarding through home.
   /// PJ-7: the launch sheet's profile and model reads, and History's Resume —
   /// each asked of the desktop it is about, never through the home.
-  /// *SP-7b's 7c-2 (2026-11-06; VF-PM ruled D-c2's fourth ask (b) at 23:43Z):
+  /// *SP-7b's 7c-2 (2026-11-06; D-c2's fourth ask decided (b)):
   /// the card's ticket, its renewal and its Resume ride the home now
   /// (`homeAsk`, D-c2's three). History's Resume, the `agent.resume` here,
   /// stays on History's open reading door: it costs no extra socket. It moves
@@ -833,7 +833,7 @@ public final class FieldLink {
   /// this ask and let go after (`ownerDoor`). The home never mints for another
   /// desktop: its forwarded ticket would answer loopback endpoints a phone
   /// cannot dial, and the phone has its own node.
-  /// *Corrected 2026-11-06 (SP-7b's 7c-2, D-c2 (a), VF-PM 23:17Z): stale since
+  /// *Corrected 2026-11-06 (SP-7b's 7c-2, D-c2 (a), decided that day): stale since
   /// DS-4 (2026-09-30). The home carries the phone's ticket whole
   /// (`TerminalService.forwardVia`), and the OWNER mints it: for a self peer
   /// daemon it answers its cell's TAILNET doors, which the home hands the
@@ -939,7 +939,7 @@ public final class FieldLink {
         kind: "UNAVAILABLE", message: "no door to \(deviceId)", retryable: false))
   }
 
-  /// SP-7b's 7c-2 (D-c2 (a), VF-PM 2026-11-06 23:17Z) — an ask about a session or a run, asked of
+  /// SP-7b's 7c-2 (D-c2 (a), decided 2026-11-06) — an ask about a session or a run, asked of
   /// the HOME's door: `params` as they are for the home's own, `device` added for another desktop's,
   /// which the home forwards whole to that desktop (DS-4's `forwardVia`), as F1b's approval rides it.
   /// The owner still answers — it mints, CASes and resumes — and its answer or its honest refusal

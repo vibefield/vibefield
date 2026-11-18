@@ -2,15 +2,15 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 390 (James, 2026-11-13 23:28:32Z, session qa-01, of History's root on his phone: "[Image #16] redesign the
-/// first marked area, to just show Projects and a bubble that shows the project count and thats it, keep it
-/// minimal, remove the second marked text") — a head is its title and how many it holds. These rows hold what a
+/// Item 390 (asked for 2026-11-13, of History's root on a phone, the first marked area redrawn: Projects and a
+/// bubble with the project count and nothing more, kept minimal, and the second marked text
+/// removed) — a head is its title and how many it holds. These rows hold what a
 /// head says without a screen: its title, the words in its bubble, and the one line VoiceOver reads for the two.
-/// How the bubble sits beside the title is the view's, and his to see.
+/// How the bubble sits beside the title is the view's, and to be seen on a device.
 ///
-/// Item 392 (James, 2026-11-13 23:28:32Z, session qa-01, of a project's page: "[Image #18] redesign this header area
-/// to match same redesign of the project header, so it is simple showing project name and a bubble showing the
-/// session count, and remove other text") — a project's head is the root's over again: its name, and its sessions
+/// Item 392 (asked for 2026-11-13, of a project's page: this header redrawn to match the same redesign, simple: the
+/// project's name and a bubble with the session count, and no other
+/// text) — a project's head is the root's over again: its name, and its sessions
 /// in the same bubble.
 @Suite("items 390 and 392 — a head says its name and how many, and nothing else")
 struct HistoryHeadTests {

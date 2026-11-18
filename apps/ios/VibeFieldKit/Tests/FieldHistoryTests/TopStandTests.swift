@@ -2,10 +2,10 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 348 (DESIGN.md §8 "The phone's Apps": "One pull on every tab", on History and Chat; James, 2026-11-12
-/// 11:20:08Z: "if i'm still scrolling the history items, it should not trigger the pull down, only when i scroll all
-/// the way top i can pull down") — a root list gives the pull only to a finger that came down while it rested at its
-/// top. The list's own motion on a phone is James's (his answer is in the item's commit).
+/// Item 348 (DESIGN.md §8 "The phone's Apps": "One pull on every tab", on History and Chat; asked for 2026-11-12:
+/// a list still scrolling never starts the pull down; only one scrolled all the way to its top
+/// does) — a root list gives the pull only to a finger that came down while it rested at its
+/// top. The list's own motion on a phone is to be seen on a device (the answer is in the item's commit).
 ///
 /// No `mutating` call inside an #expect argument: each is its own statement.
 @Suite("item 348 — a root list gives the pull only to a finger that came down while it rested at its top")

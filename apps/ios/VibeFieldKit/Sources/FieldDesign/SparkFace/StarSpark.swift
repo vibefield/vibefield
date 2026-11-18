@@ -1,7 +1,7 @@
 import Foundation
 
 // IOS-12f's f5 (PC-D8 A; DESIGN.md §2.10, amended 2026-11-07) — THE HATCH'S STAR: the desktop's vendored star engine's
-// CPU half (`packages/design-kit/src/spark-face/vendor/star-spark.js`, James's Star Spark, vendored byte for byte;
+// CPU half (`packages/design-kit/src/spark-face/vendor/star-spark.js`, Star Spark, vendored byte for byte;
 // sha256 e4c142f2b52e8b52f4cda371232bda9aaa211c7c9535e07f18a63a19b0d9ead6) transcribed: its twelve palettes and its
 // confetti, its layer bits, `makeDNA` (:43) and `_write` (:593). A star's rows are written once, when it is added;
 // every motion after that is `HatchSky.metal`'s, a pure function of the rows and the time. Held float for float to

@@ -74,10 +74,10 @@ extension SpendParityTests {
     }
   }
 
-  /// R1 — A READ, NOT A ROW (VF-PM, 2026-11-09): it asserts nothing. At each witness step, on the phone's stage at the
+  /// R1 — A READ, NOT A ROW (decided 2026-11-09): it asserts nothing. At each witness step, on the phone's stage at the
   /// golden's three heights (and, at the open, at a set moment), it prints the narrow hero's caption as the phone's
   /// own fonts cut it (`SpendView.measure`), beside the room the number and the burn leave it. The view does not draw
-  /// that caption at narrow; these words go to James with one question, whether it should and in what form. Each line
+  /// that caption at narrow; these words wait on one question ‹to pick›, whether it should and in what form. Each line
   /// starts `PG-HERO-WORDS `.
   @Test @MainActor func thePhonesNarrowHeroWordsAreRead() throws {
     let frozen = try #require(GodviewViewChoice.frozenNow(["-vf-godview-now=1790803300000"]))

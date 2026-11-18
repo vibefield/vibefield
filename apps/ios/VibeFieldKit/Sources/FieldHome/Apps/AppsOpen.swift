@@ -2,7 +2,7 @@ import CoreGraphics
 import FieldProduct
 import Foundation
 
-// MA-6e — what opening an app lands on before MA-5 (VF-PM's Q1, 2026-11-09): the honest screen from the row's facts,
+// MA-6e — what opening an app lands on before MA-5 (Q1, decided 2026-11-09): the honest screen from the row's facts,
 // with Open in ‹host› when it has a hosted link, and About. The phone asks `artifact.open` nothing.
 
 /// The screen an app zooms to while the phone cannot run it: its state's words and its one act (MA-L10).
@@ -19,7 +19,7 @@ struct AppsHonest: Equatable {
   let act: Act?
 
   /// An app that could open, on a phone that cannot run it yet (§9 "About").
-  /// Ruled 2026-11-12 (James, 03:38:38Z, PM board): kept. Item 273.
+  /// Ruled 2026-11-12: kept. Item 273.
   static let cannotRunYet = "This app can't run here yet"
 
   static func of(_ app: IndexAppRow, sources: [IndexAppsSource], here: String) -> AppsHonest {

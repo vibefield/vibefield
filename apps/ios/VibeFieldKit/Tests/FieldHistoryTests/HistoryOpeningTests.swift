@@ -3,13 +3,14 @@ import Testing
 
 @testable import FieldHistory
 
-/// Item 417 (James, 2026-11-14 08:13:38Z, session qa-01: "message view initial loading should adopt latest desktop
-/// design that uses our logo mark") — while a session's document is first read, its page is the hold the desktop
+/// Item 417 (asked for 2026-11-14: a message view's first load adopts the desktop's latest design, the one with
+/// our logo mark) — while a session's document is first read, its page is the hold the desktop
 /// stands a conversation's wait in: the mark at the centre, the room's line under it.
 ///
 /// These rows hold the hold's RULE: when a page waits, what it says, how long it is late, how long it stands once
 /// it has shown, and the figures of its fades and its box. The figures are the desktop's (DESIGN.md §6 "History's
-/// holds"; rosetta's room, `hold.css` and `use-standing-hold.ts`). How the mark looks on the page is his to see.
+/// holds"; rosetta's room, `hold.css` and `use-standing-hold.ts`). How the mark looks on the page is to be seen
+/// on a device.
 @Suite("item 417 — a session's first reading is the hold: the mark, the room's line, late, standing out its floor")
 struct HistoryOpeningTests {
   private typealias After = HistoryOpening.After

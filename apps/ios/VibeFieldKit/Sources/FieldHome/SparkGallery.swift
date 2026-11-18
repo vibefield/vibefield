@@ -3,7 +3,7 @@
   import FieldProduct
   import SwiftUI
 
-  // IOS-12e (its plan's §4, ruled (a) by VF-PM 07:52Z) — THE SPARK GALLERY, a DEBUG page for the stills, never in
+  // IOS-12e (its plan's §4, decided (a) 2026-11-06) — THE SPARK GALLERY, a DEBUG page for the stills, never in
   // Release. Under `-vf-mock` the phone's Chat list holds only an asking spark and two asleep ones, so no face there is
   // live. This page shows every status that list can say, live beside still. It mounts the SHIPPING `SparkFaceView` on
   // one `SparkStageHost` (docs/UI_SYSTEM.md: the shipping view under a fixture, never a copy), so what it shows is what

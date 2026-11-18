@@ -51,7 +51,7 @@ struct WayInScreenTests {
     // a code that named the account, or a first sign-in that failed: still the welcome, still its foot
     let named = screen(.welcome(failure: nil, expecting: login)).acts.last
     #expect(named == .legal(SettingsModel.aboutLinks))
-    // every other screen of the way in: no legal line (Q3, VF-PM 02:29Z; WI-L4's three places stand)
+    // every other screen of the way in: no legal line (Q3, decided 2026-11-05; WI-L4's three places stand)
     var steps: [FieldHomeModel.WayInStep] = (0...3).map { .tour($0) }
     steps += [
       .page(.fromCode(desktop: "Studio", login: login)), .page(.signInAgain(note: nil)),
@@ -70,7 +70,7 @@ struct WayInScreenTests {
     }
   }
 
-  /// IOS-13a S3b (VF-PM 23:38Z) — what the acts' glass DRAWS, not only what the screen holds: the glass has three
+  /// IOS-13a S3b (decided 2026-11-05) — what the acts' glass DRAWS, not only what the screen holds: the glass has three
   /// slots and a foot. The welcome's legal line is its foot, under the third slot (§8, amended 2026-11-05); before
   /// S3b the glass drew `acts.prefix(3)` and the welcome's fourth act, the legal line, was never on the screen (the
   /// stills at ea3e37465 were the first witness that could see it). No screen may hold an act its glass drops.
@@ -105,7 +105,7 @@ struct WayInScreenTests {
     }
   }
 
-  /// WI-W2a A (James, 2026-11-11 23:00Z; DESIGN.md §9, ruled that day) — a join that fails keeps its hold and says
+  /// WI-W2a A (asked for 2026-11-11; DESIGN.md §9, ruled that day) — a join that fails keeps its hold and says
   /// "Couldn’t connect." The network's own reason is VibeField's insides: whatever it says, none of it reaches the
   /// screen.
   @Test("WI-W2a: a join that fails says Couldn’t connect., and never the network's own reason")
@@ -120,7 +120,7 @@ struct WayInScreenTests {
     #expect(screen(.joining(login: login, note: nil)).words.note == nil, "no failure, no note")
   }
 
-  /// WI-W4 B (James, 2026-11-11 23:00Z; DESIGN.md §8, WI-L4 amended) — the acts' glass fits what it holds: 18 above
+  /// WI-W4 B (asked for 2026-11-11; DESIGN.md §8, WI-L4 amended) — the acts' glass fits what it holds: 18 above
   /// its first slot, 18 under the last thing it holds, the slots as before. One act 86, two 146, three 182, the
   /// welcome with its foot 206; a hold holds nothing, and its glass steps away. No glass is taller than the 210 every
   /// glass was.
@@ -163,7 +163,7 @@ struct WayInScreenTests {
     }
   }
 
-  /// WI-W2c B (James, 2026-11-11 23:00Z; DESIGN.md §8) — the note under the words wears the line's own ink, so it
+  /// WI-W2c B (asked for 2026-11-11; DESIGN.md §8) — the note under the words wears the line's own ink, so it
   /// holds where the field's rays cross it.
   @Test("WI-W2c: the note under the words is in the secondary ink, the line's own")
   func noteInk() {
@@ -224,7 +224,7 @@ struct WayInScreenTests {
   @Test("the welcome's note: the account a code named, or Couldn’t connect. when a first sign-in failed")
   func welcomeNote() {
     #expect(screen(.welcome(failure: nil, expecting: login)).words.note == "At Tailscale, pick me@example.com.")
-    // P1b (2026-11-11, W2a's sentence by James's rule of 10 Nov): a failure is said, its own text never
+    // P1b (2026-11-11, W2a's sentence by the rule of 10 Nov): a failure is said, its own text never
     #expect(screen(.welcome(failure: "the network went away", expecting: login)).words.note == "Couldn’t connect.")
     #expect(screen(.welcome(failure: "the network went away")).words.note == "Couldn’t connect.")
   }
@@ -321,7 +321,7 @@ struct WayInScreenTests {
     #expect(looking.acts.isEmpty)
   }
 
-  /// WI-L2 as amended 2026-11-13 (James, in session; DESIGN.md §9 "The way in", its words ruled as written
+  /// WI-L2 as amended 2026-11-13 (asked for that day; DESIGN.md §9 "The way in", its words ruled as written
   /// 2026-11-14) — the gate's three screens. They are no step of the first way in: no bars, no back, no note. What
   /// stands in the mark's place is `gateFace`'s row (WI-G9 B), and the line's bold run `gateBoldName`'s (WI-G1 A).
   @Test("WI-L2 amended: the gate says Looking for your computer…, then Can’t reach your computer., or You’re offline.")
@@ -355,7 +355,7 @@ struct WayInScreenTests {
     #expect(screen(.looking(login: login)).words.title == hold.words.title)
   }
 
-  /// WI-G9 B (James on the page The Way In, 2026-11-14 03:46:00Z; DESIGN.md §9 "The way in", ruled that day) — your
+  /// WI-G9 B (asked for on the page The Way In, 2026-11-14; DESIGN.md §9 "The way in", ruled that day) — your
   /// face where the mark stands on the gate's three screens that have words, as on Sign in to Tailscale again (WI-D8
   /// A). A launch's bare hold keeps the mark: the launch picture cannot hold a face. The screen says what it asks for;
   /// the view keeps the mark where the phone holds no face, and while the mark cannot fade
@@ -383,7 +383,7 @@ struct WayInScreenTests {
     return runs
   }
 
-  /// WI-G1 A, refined (James on the page The Way In, 2026-11-14 03:46:06Z; §9, ruled that day) — the one desktop's
+  /// WI-G1 A, refined (asked for on the page The Way In, 2026-11-14; §9, ruled that day) — the one desktop's
   /// name in bold, as the way in sets the account to pick (Connect to ‹desktop›.'s login), so "on studio" reads as a
   /// name; with several desktops the line names none, and nothing in it is bold. The words are unchanged.
   @Test("WI-G1 A: Can’t reach your computer. sets the one desktop's name in bold, and nothing with several")

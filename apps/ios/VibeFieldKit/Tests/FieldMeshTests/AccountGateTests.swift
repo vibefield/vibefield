@@ -255,7 +255,7 @@ import Truffle
 
   /// The device is signed into another tailscale account. Re-gate on the new
   /// login — and CLEAR NOTHING. What a phone forgets when the account changes
-  /// is UA-P-D4, which is open and James's; this lane builds none of it, and
+  /// is UA-P-D4, which is open and still to pick; this lane builds none of it, and
   /// this row is the boundary written down as a test.
   @Test func anAccountSwitchReGatesAndForgetsNothingElse() throws {
     let directory = try scratch()

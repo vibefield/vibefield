@@ -3,15 +3,15 @@ import Foundation
 import ImageIO
 import UIKit
 
-// Item 362g (James's board pick, 2026-11-12 20:43Z: "images through a rosetta release"; VF-PM's rulings,
-// 2026-11-13 00:24Z) — A RECORDED PICTURE IN THE DOCUMENT, AS VALUES. What the view decides about a picture is
+// Item 362g (picked 2026-11-12: pictures come through a rosetta release; decided further
+// 2026-11-13) — A RECORDED PICTURE IN THE DOCUMENT, AS VALUES. What the view decides about a picture is
 // decided here, so `FieldHistoryTests` holds it without a screen (H-D4): which attachments stand together as one
 // strip, which of them is asked for as a picture and under what key it is found, what a cell draws for the face
 // its reader holds and how much room that takes, where the cells of a strip stand, how many pixels a picture is
 // read to, and how a picture is zoomed. The viewer a pressed tile opens has its own part below (item 384).
 //
 // The strip is the room's (rosetta's clients/room: components/transcript/Attachments.tsx and
-// styles/attachments.css, read at the pin, 811e554c6), at the figures the art director ruled for a phone
+// styles/attachments.css, read at the pin, 811e554c6), at the figures ruled for a phone
 // (2026-11-13). The views that draw from these are in HistoryPictureView.swift.
 
 /// One attachment as a strip draws it.
@@ -198,9 +198,9 @@ extension HistoryPictureLayout {
 
 // MARK: - The viewer (item 384)
 
-// Item 384 (James, 2026-11-13 23:05:55Z: "a proper image preview ui that has image in full size that are pannable
-// and zoomable, and has row of thumbnails of all other images in the same row that can click and navigate, and i
-// can also swipe left right to navigate images"; 23:06:26Z: "and it should not be a card ui") — A ROW'S PICTURES
+// Item 384 (asked for 2026-11-13: a proper viewer that shows a picture at full size, to pan and zoom, with a rail
+// of thumbnails of the row's other pictures, each a tap away, and a swipe left or right between them; and not a
+// card) — A ROW'S PICTURES
 // IN A VIEWER THAT IS THE WHOLE SCREEN, AS VALUES: which of a row's attachments it shows, the one it opens on,
 // what its rail counts, which pictures are read at the larger size, how a picture is fitted inside its page and
 // where it stands there. The rail is the room's (rosetta's clients/room, components/file-viewer/

@@ -160,9 +160,9 @@ struct SettingsAccountTests {
     #expect(unsaid == [nil, nil, nil, false, nil])
   }
 
-  /// W3 (PG-3e, the review's [8]; §5.3, J-E1 (iii) as James picked) — a sole old home: its door refused the remote cut
-  /// (PRECONDITION_FAILED), so the phone hears no board at all, and its page reads "Watch its agents" unavailable,
-  /// as its corner row reads "the field was refused".
+  /// W3 (PG-3e, the review's [8]; §5.3, J-E1 (iii) as picked 2026-11-02) — a sole old home: its door refused the
+  /// remote cut (PRECONDITION_FAILED), so the phone hears no board at all, and its page reads "Watch its agents"
+  /// unavailable, as its corner row reads "the field was refused".
   @Test("a sole old home is not watchable while the phone hears nothing")
   func aSoleOldHomeIsNotWatchable() {
     let studio = desktop(

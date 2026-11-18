@@ -7,10 +7,10 @@ import SwiftUI
 ///
 /// **IOS-5v — the card speaks VibeField.** It used to speak godview: mono
 /// labels, `FieldPalette`, a key that inverted rather than filled. That was the
-/// integrator's reading of D-i2 and James reversed it on seeing the built card
-/// (K-D7, 2026-09-11): *"the bubble swarm view and terminal do have their own
-/// style, but they are a small part of our app; our app itself should follow
-/// VibeField style."* DESIGN.md §1.1 already said as much — the godview
+/// integrator's reading of D-i2, and it was reversed on seeing the built card
+/// (K-D7, 2026-09-11): the bubble swarm view and the terminal have their own
+/// style but are a small part of the app, and the app itself follows
+/// VibeField's style. DESIGN.md §1.1 already said as much — the godview
 /// instrument palette is "the deliberate control-room exception", scoped to the
 /// agent stage and the terminal deck. So the swarm field and the terminal
 /// surface keep `FieldType`/`FieldPalette`, and this card is the CHROME family:

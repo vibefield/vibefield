@@ -317,7 +317,7 @@ func packedBody(_ body: RenderBody, frameGlow: SwarmGlow, theme: SwarmTheme) -> 
   data[34] = Float(body.staleDim)
   data[35] = Float(body.opacity)
   // The band and the light are the theme's ink: with one pane, a pane colour
-  // would tell nothing (James, 2026-10-18).
+  // would tell nothing (asked for 2026-10-18).
   rgba(36, body.mounted ? ink : .transparent, body.opacity)
   return data
 }

@@ -10,7 +10,7 @@ import Metal
 //   premultiplied (ONE, ONE_MINUS_SRC_ALPHA), every star's rows in a 32×N RGBA32F texture;
 // - the bloom: the scene down to the half above 0.6, down again to a quarter, and four blurs between the quarters;
 // - the composite into the frame: the scene, the bloom at 0.45, the shoulder, the grain and the dither.
-// The pixel ratio is the view's, capped at the engine's 2 (VF-PM's Q3 ruling, 2026-11-07 13:58:40Z).
+// The pixel ratio is the view's, capped at the engine's 2 (Q3, decided 2026-11-07).
 
 /// The hatch's Metal on one device. Nothing changes after it is built, and Metal's device, pipelines and buffers may
 /// be used from any thread, so one renderer serves the frames golden (any thread) and the sheet's sky (the main

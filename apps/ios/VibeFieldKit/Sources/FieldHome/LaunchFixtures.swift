@@ -56,14 +56,14 @@ struct LaunchFixtures: Equatable, Sendable {
 
 #if DEBUG || VF_TESTFLIGHT
   extension LaunchFixtures {
-    /// RB-2 — the home's acts outside the way in, and which of them a demo holds (VF-PM 21:59:10Z on PLAN-2c: Q1,
+    /// RB-2 — the home's acts outside the way in, and which of them a demo holds (decided 2026-11-12 on PLAN-2c: Q1,
     /// Q2, and the way to Developer). The way in's own acts are `WayInDispatch`'s.
     enum HomeAct: CaseIterable, Sendable {
       /// The corner's and Settings' Sign in and Sign out.
       case account
       /// This phone › Lock: its switch, either way, and the time it asks again.
       case lock
-      /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z) — the corner's and Settings' Try again, under
+      /// WI-W2e A (asked for on the page The Way In, 2026-11-14) — the corner's and Settings' Try again, under
       /// "Couldn’t connect.": it starts your account's network, and no demo has one to start, so any demo holds it, a
       /// scripted run's included (the mock has no failed start of its own), as the way in's Try again is held.
       case tryAgain

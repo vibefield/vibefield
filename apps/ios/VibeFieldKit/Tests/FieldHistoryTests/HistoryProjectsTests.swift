@@ -293,8 +293,8 @@ struct HistoryProjectsTests {
     projects.close()
   }
 
-  // Item 393 (James, 2026-11-13 23:28:32Z, session qa-01: "for session entry item, they should also show the
-  // message count, token count, cost, etc,just like as how desktop session entry is designed, align it") — the
+  // Item 393 (asked for 2026-11-13: a session's entry shows its message count, token count, cost and the rest,
+  // laid out as the desktop's session entry is designed) — the
   // reader hands the project's `contribution` to its session rows. The rules are held in SessionFiguresTests.
 
   @Test("item 393 — an opened project's sessions wear their figures once the project's figures are read")
@@ -668,10 +668,10 @@ private func goldenInputs(
   return inputs
 }
 
-/// Item 364 (James, 2026-11-12 20:07:53Z, on his phone: "when first open history view on the phone, everything is
-/// very janky, after a while seems when things all load it is back to normal") — the ledger was folded whole, and
+/// Item 364 (asked for 2026-11-12, on a phone: History opens smoothly, where it was very janky at first, until
+/// everything had loaded) — the ledger was folded whole, and
 /// written whole to the cache, on the main actor at every answer, and since item 353 there is an answer for every
-/// project. Measured on his phone at a ledger of 166 projects: 171 folds (16,757 ms, the longest 196 ms) and 171
+/// project. Measured on a phone at a ledger of 166 projects: 171 folds (16,757 ms, the longest 196 ms) and 171
 /// writes (3,238 ms) in the first 25.6 s.
 ///
 /// These rows hold what replaced it: the same fold, as a pure function over a snapshot; folds a window apart with

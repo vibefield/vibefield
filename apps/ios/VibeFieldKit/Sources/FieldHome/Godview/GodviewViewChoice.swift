@@ -44,7 +44,7 @@ enum GodviewViewChoice: String, CaseIterable, Sendable {
   }
 
   /// PG-4t — the views the Stories row draws: every case the phone has, in the registry's order, and nothing else
-  /// (VF-PM, 2026-11-04: never a placeholder; one ringed circle while only the swarm exists).
+  /// (decided 2026-11-04: never a placeholder; one ringed circle while only the swarm exists).
   static var shown: [GodviewViewChoice] {
     ordered(Set(allCases.map { $0.rawValue })).compactMap(GodviewViewChoice.init(rawValue:))
   }

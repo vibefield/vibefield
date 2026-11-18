@@ -4,8 +4,8 @@ import Testing
 
 @testable import FieldDesign
 
-/// IOS-12b (PC-D6 A; DESIGN.md §2.10; VF-PM's Q3) — the flat star the phone draws is design-kit's `flat-star.ts`, held
-/// to `spark-flat-star.golden.json` (written beside the DNA golden by
+/// IOS-12b (PC-D6 A; DESIGN.md §2.10; Q3, decided 2026-11-05) — the flat star the phone draws is design-kit's
+/// `flat-star.ts`, held to `spark-flat-star.golden.json` (written beside the DNA golden by
 /// `packages/design-kit/scripts/spark-dna-golden.mjs`,
 /// held to flat-star.ts by field-app's spark-face test, copied in byte for byte by `pnpm check:ios-fixtures`).
 ///

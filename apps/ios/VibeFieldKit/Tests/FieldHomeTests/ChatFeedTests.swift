@@ -146,7 +146,7 @@ struct ChatFeedTests {
     #expect(door.count("compose.sparks.list") >= 2)
   }
 
-  /// IOS-12f (f2; VF-PM 2026-11-07 13:11:45Z, (a): zero door changes) — New spark rides Chat's door, the home's own
+  /// IOS-12f (f2; decided (a) 2026-11-07: zero door changes) — New spark rides Chat's door, the home's own
   /// client, beside the say and Wake: the home's agents, its Agent Profiles and an agent's models under a profile, then
   /// the hatch with the sheet's params (the contracts' own fixture) and no device, since the home answers it itself.
   @Test("New spark asks the home on Chat's door: its agents, its profiles, an agent's models, and the hatch, no device")
@@ -341,7 +341,7 @@ struct ChatFeedTests {
       ChatWords.away("mini", .incompatible, carried: true, device: .iPhone)
         == "mini runs a build this iPhone can't read. These are as it last said; "
         + "your words wait here until it's updated.")
-    // a desktop the phone never heard: the same fact, never a last word (VF-PM 02:06Z, §9)
+    // a desktop the phone never heard: the same fact, never a last word (decided 2026-11-05, §9)
     #expect(
       ChatWords.away("studio", .asleep, carried: false, device: .iPhone)
         == "studio is asleep. Its sparks show here when it wakes.")
@@ -387,7 +387,7 @@ struct ChatFeedTests {
   @Test("a desktop never heard is said as never heard, never as its last word")
   func neverHeard() throws {
     // mini is asleep with no spark of its own in the reading: "as it last said" would claim a last word the phone
-    // never heard (VF-PM 2026-11-05, IOS-12b's Found, ruled (a) then (i)); it is said as never heard
+    // never heard (decided 2026-11-05, IOS-12b's Found, ruled (a) then (i)); it is said as never heard
     var reading = try Self.merged()
     let mini = ChatAway(device: "dev-01HQ9S7Y44", name: "mini", standing: .asleep, carried: false)
     let calm = ChatAway.lines(reading, home: ChatFixtureDoor.home, homeListed: true, name: Self.name)

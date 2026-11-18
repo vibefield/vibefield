@@ -42,7 +42,7 @@ private let dialableSchemes: Set<String> = ["ws", "wss", "http", "https"]
 ///
 /// **DORMANT since UA-P-1b (`FieldStoreBus`).** This is the STORE leg's check:
 /// it exists because `field.devices.v1` carried a URL a desktop wrote, and
-/// under James's ruling of 2026-09-15 no desktop publishes that slice. The
+/// under the ruling of 2026-09-15 no desktop publishes that slice. The
 /// phone builds its own dial target now (`peerProductDoorURL` below), so
 /// nothing in the product path calls this. It stays with the reader it belongs
 /// to — UA-P-4 turns the bus back on — and its tests stay and run.

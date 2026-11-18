@@ -508,8 +508,8 @@ public final class InputCardModel {
     keyboardRequests += 1
   }
 
-  /// A tap on the terminal (James, 2026-10-17: "just popup the designed one
-  /// when click terminal"). The card owns the keyboard, so the terminal never
+  /// A tap on the terminal (asked for 2026-10-17: the designed card pops up
+  /// at the tap). The card owns the keyboard, so the terminal never
   /// raises one of its own (`TerminalSurface` turns ghosttea's tap focus off):
   /// with the keyboard down a tap asks for it in the CURRENT mode — nothing
   /// switches modes on its own — and with it up a tap puts it down, the read
@@ -857,7 +857,7 @@ public final class InputCardModel {
   /// IOS-5c recorded when it moved the review sheet off the root. So the menu
   /// goes first and the door follows it — when the menu has LEFT, on its own
   /// signal (`menuDidLeave`). Corrected 2026-10-17: the door used to follow a
-  /// 260 ms sleep, a guess at the popover's animation; James's rule is no
+  /// 260 ms sleep, a guess at the popover's animation; the rule is no
   /// sleeps, and the menu's disappearance is the fact the guess stood in for.
   public func requestSurface(_ wanted: CardSurface) {
     pendingSurface = wanted

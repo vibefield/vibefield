@@ -87,7 +87,7 @@ extension SpendParityTests {
     #expect(SpendModel.clockEveryMs(huge) == 250)
   }
 
-  /// H14 — a drag on the list (fd's Q3): every whole row of travel FROM WHERE IT BEGAN is one step of the wheel, a
+  /// H14 — a drag on the list (PG's Q3): every whole row of travel FROM WHERE IT BEGAN is one step of the wheel, a
   /// finger moving up stepping the list down; back where it began, no steps. *(Corrected 2026-11-04, the order-proof
   /// pair: this row held the rows' boundaries crossed, not the travel, and its `(-108, -60)` said -1 for 48 pt of
   /// travel against its own words; from 280, the first step came after 54 pt only by chance of where the finger was.)*

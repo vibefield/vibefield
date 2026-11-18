@@ -33,7 +33,7 @@ import Testing
     // holds INPUT until the scene catches up, but the screen is up. Reading it
     // as connecting hid the input card and raised a status line on every
     // resize, and each of those re-laid the pane into the next one — the
-    // phone's terminal tab jumping up and down (James, 2026-10-17).
+    // phone's terminal tab jumping up and down (TM, 2026-10-17).
     #expect(TerminalAttachment.phase(for: .attached, session: nil, presented: true) == .live)
     #expect(TerminalAttachment.phase(for: .attached, session: nil, presented: false) == .connecting)
   }

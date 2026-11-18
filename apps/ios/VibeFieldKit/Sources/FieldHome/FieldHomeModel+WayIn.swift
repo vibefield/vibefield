@@ -120,7 +120,7 @@ extension FieldHomeModel {
     /// offer it (WI-3), so it never promises a step that does not come.
     static let steps = ["Sign in", "Your computer"]
     static let sendTheLink = "Send the link to my computer"
-    /// WI-W2a A (James, 2026-11-11; §9, ruled that day): a join that fails says so and nothing more. The network's
+    /// WI-W2a A (asked for 2026-11-11; §9, ruled that day): a join that fails says so and nothing more. The network's
     /// own reason is VibeField's insides, and it stays off the screen.
     static let couldNotConnect = "Couldn’t connect."
     /// WI-1's hold, and the gate's (WI-L2 as amended 2026-11-13): one title for a phone looking for a desktop.
@@ -249,7 +249,7 @@ extension FieldHomeModel {
         acts: [.computerWaiting, .share(words.sendTheLink, primary: false)])
 
     // WI-L2 as amended 2026-11-13 — the gate's three screens: no step of the first way in, so no bars, and no found
-    // beat after them (§9 "The way in"; where each stands is §8 "The phone's way in"). WI-G9 B (James, 2026-11-14):
+    // beat after them (§9 "The way in"; where each stands is §8 "The phone's way in"). WI-G9 B (asked for 2026-11-14):
     // your face where the mark stands on the three that have words, as on Sign in to Tailscale again (WI-D8 A)
     case .page(.reaching(let quiet)):
       // WI-1's title alone, since the phone has been here before. Under a launch's grace it is not drawn at all
@@ -358,7 +358,7 @@ extension FieldHomeModel {
     return line
   }
 
-  /// WI-G1 A, refined (James on the page The Way In, 2026-11-14 03:46:06Z) — Can’t reach your computer.'s line: the
+  /// WI-G1 A, refined (asked for on the page The Way In, 2026-11-14) — Can’t reach your computer.'s line: the
   /// account's one desktop by its name, in bold as the way in sets the account to pick, so "on studio" reads as a
   /// name; with several, "your computer" in the line's own ink.
   static func unreachableLine(desktop: String?) -> AttributedString {

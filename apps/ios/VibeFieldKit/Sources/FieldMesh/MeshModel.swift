@@ -23,9 +23,9 @@ public struct MeshPeerView: Identifiable, Sendable, Equatable {
 /// The phone's mesh presence: an app-owned Truffle node with interactive
 /// Tailscale login, wrapped as honest UI state.
 ///
-/// It keeps itself up (2026-10-18, James: "the phone should automatically
-/// connect to desktop as long as the account is logged in … it is auto
-/// connected and maintained connection all the time"). While this phone
+/// It keeps itself up (asked for 2026-10-18: the phone connects to the desktop
+/// by itself for as long as the account is signed in, and keeps that
+/// connection up all the time). While this phone
 /// remembers a login, `keepUp()` — at launch, on coming to the front and when
 /// the network returns — starts the node, replaces a dead one and re-dials a
 /// drop on the product client's backoff. Signing in and signing out are the
@@ -282,7 +282,7 @@ public final class MeshModel {
     }
   }
 
-  /// WI-W2e A (James on the page The Way In, 2026-11-14 03:47:45Z; DESIGN.md §9 "The way in", ruled that day) — what
+  /// WI-W2e A (asked for on the page The Way In, 2026-11-14; DESIGN.md §9 "The way in", ruled that day) — what
   /// `tryAgain()` does, pure (pinned by tests): `keepUp()`'s own step, for the account the phone shows, which is the
   /// login it keeps or the one the node reported. That second is the one "Couldn’t connect." a phone with an account
   /// stands in: `dropped` re-dials only a kept login, so `.failed` follows a start that failed on a phone that could

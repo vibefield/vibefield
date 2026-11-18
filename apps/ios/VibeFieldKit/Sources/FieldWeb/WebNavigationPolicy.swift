@@ -9,7 +9,7 @@ import Foundation
 // - A public link at the top opens outside, in `SFSafariViewController`.
 // - A frame or a socket reaches only the hosts the page was written for (`reach`), over TLS.
 //
-// The words for a refusal are DESIGN.md's to give (‹for James›); this file names the reason, never the sentence.
+// The words for a refusal are DESIGN.md's to give (‹to pick›); this file names the reason, never the sentence.
 
 /// What the host does with a navigation.
 public enum WebNavigation: Sendable, Equatable {
@@ -21,7 +21,7 @@ public enum WebNavigation: Sendable, Equatable {
   case refuse(WebRefusal)
 }
 
-/// Why a navigation is refused. The words are DESIGN.md's (‹for James›).
+/// Why a navigation is refused. The words are DESIGN.md's (‹to pick›).
 public enum WebRefusal: String, Sendable, Equatable {
   /// A tailnet address off the app's origin: another device, or another app on this one.
   case tailnetOffOrigin

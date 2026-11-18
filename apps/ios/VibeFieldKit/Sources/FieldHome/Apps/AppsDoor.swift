@@ -230,7 +230,7 @@ struct AppsDrop: Equatable {
   static let height: CGFloat = 60
   static let radius: CGFloat = 30
   static let icon: CGFloat = 40
-  /// Its top under the island's foot. Whether that is each phone's own island is James's, open (DESIGN.md §8).
+  /// Its top under the island's foot. Whether that is each phone's own island is open, still to pick (DESIGN.md §8).
   static let underIsland: CGFloat = 4
   /// §6's island curve: out of the island, and back into it.
   static let falls: Double = 0.56
@@ -239,7 +239,7 @@ struct AppsDrop: Equatable {
   var head: String {
     switch say {
     case .one: "New app"
-    // Ruled 2026-11-12 (James, 03:38:38Z, PM board): kept. Item 273.
+    // Ruled 2026-11-12: kept. Item 273.
     case .burst(let count): "\(count) new apps"
     }
   }

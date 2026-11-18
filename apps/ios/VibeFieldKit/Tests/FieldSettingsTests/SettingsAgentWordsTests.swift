@@ -2,7 +2,7 @@ import FieldSettings
 import Testing
 
 /// IOS-10c — the words under an agent on the home desktop's page (DESIGN.md §8 "The phone's Settings", amended
-/// 2026-11-11; ‹draft› for James).
+/// 2026-11-11; ‹draft›).
 @Suite("an agent's sign-ins, in the page's words")
 struct SettingsAgentWordsTests {
   private func agent(_ profiles: [SettingsAgent.Profile]) -> SettingsAgent {

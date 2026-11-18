@@ -40,8 +40,8 @@ struct FieldHistoryModelTests {
     #expect(FieldHistoryModel.share(of: vf, among: []) == 0)
   }
 
-  // Item 390 (James, 2026-11-13 23:28:32Z, session qa-01) — RE-CUT: this row held the scope line's three states, the
-  // first of them the summary `7 projects · 1,405 sessions across 9 agents`. He removed that line from the head, so
+  // Item 390 (asked for 2026-11-13) — RE-CUT: this row held the scope line's three states, the
+  // first of them the summary `7 projects · 1,405 sessions across 9 agents`. That line was removed from the head, so
   // a desktop that answers has nothing said under the head; the other two states keep the record's words.
   @Test("the line under the head says nothing while the desktop answers, and its other states in the record's words")
   func headNote() {

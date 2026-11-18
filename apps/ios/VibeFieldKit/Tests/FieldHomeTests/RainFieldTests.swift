@@ -30,9 +30,9 @@ extension RainViewTests {
     }
 
     /// H12 — an empty window: no stream, no element to say, the bare stage, and the desktop's two lines
-    /// (RainView.js:261; fd's Q8) — the second with the phone's words, as the list and spend say it: the desktop's
+    /// (RainView.js:261; PG's Q8) — the second with the phone's words, as the list and spend say it: the desktop's
     /// "Launch an agent from a terminal pane." names a pane, which the phone has none of (the words rule; a draft
-    /// word for James's eye). The mock fleet draws this.
+    /// word for the eye on a device). The mock fleet draws this.
     @Test func anEmptyWindowShowsTheDesktopsWords() {
       let field = Self.field([])
       #expect(field.isEmpty)

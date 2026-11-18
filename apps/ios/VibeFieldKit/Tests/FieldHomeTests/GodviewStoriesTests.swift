@@ -103,7 +103,7 @@ struct GodviewStoriesViewsTests {
     #expect(none.isEmpty)
   }
 
-  /// S12 (PIN; VF-PM 2026-11-04) — the row's circles are the views the phone has, every case and nothing else, in
+  /// S12 (PIN; decided 2026-11-04) — the row's circles are the views the phone has, every case and nothing else, in
   /// the registry's order: never a placeholder. While the swarm is the only case, the row is its one circle.
   @Test func theRowDrawsEveryViewThePhoneHasAndNoOther() {
     let shown = GodviewViewChoice.shown
@@ -302,8 +302,8 @@ enum StageInputs {
 }
 
 /// Item 350 (DESIGN.md §8 "The roots' heads") — History's and Chat's heads stand in the Stories row's band, and their
-/// roots clear the bar, by the screen's own measures. That the four stand on one line on a phone is James's answer
-/// (2026-11-12 10:58:14Z, "All aligned").
+/// roots clear the bar, by the screen's own measures. That the four stand on one line on a phone was confirmed
+/// on a device (2026-11-12: all aligned).
 @Suite("item 350 — the roots' heads stand in the Stories row's band")
 struct RootHeadTests {
   @Test func theHeadIsTheRowsBandAndTheFootClearsTheBar() {

@@ -1,7 +1,7 @@
 import Foundation
 
 // IOS-12b (PC-D6 A; DESIGN.md §2.10) — A SPARK'S FACE, DEALT ON THE PHONE: the desktop's vendored engine
-// (`packages/design-kit/src/spark-face/vendor/sparks.js`, James's Agent Sparks byte for byte) transcribed, so a spark
+// (`packages/design-kit/src/spark-face/vendor/sparks.js`, Agent Sparks byte for byte) transcribed, so a spark
 // wears the same face on both. Held row for row to IOS-12a's golden (`spark-dna.golden.json`, SparkDnaGoldenTests).
 // Every draw is the engine's, in the engine's order: a reordered draw is a different face.
 //
