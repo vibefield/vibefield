@@ -67,12 +67,19 @@ const PLACE_GAP = 24;
 
 const objects = defineQuery([Position, Size, PrefabId, Not(Specimen)]);
 
-/** What the window's half of the door needs. */
+/** What the window's half of the door needs. A feed's `onEnded`: the client ended it for good (a replay refused). */
 export interface DeskAgentDoor {
-  intents(docId: string, onIntent: (payload: unknown) => void): Promise<() => void>;
+  intents(
+    docId: string,
+    onIntent: (payload: unknown) => void,
+    onEnded?: (error: unknown) => void,
+  ): Promise<() => void>;
   answer(answer: ObjectIntentAnswer): Promise<unknown>;
   /** The objects agents are at work on, whole, on every change. */
-  presence(onSnapshot: (payload: unknown) => void): Promise<() => void>;
+  presence(
+    onSnapshot: (payload: unknown) => void,
+    onEnded?: (error: unknown) => void,
+  ): Promise<() => void>;
   held(params: {
     readonly docId: string;
     readonly key: string;
@@ -87,23 +94,35 @@ export function deskAgentDoorOver(
     method: string,
     params: unknown,
     onEvent: (payload: unknown) => void,
+    onEnded?: (error: unknown) => void,
   ): Promise<() => void> => {
-    const subscription = await client.subscribe(method, params, (payload, kind) => {
-      if (kind !== "snapshot") onEvent(payload);
-    });
+    const subscription = await client.subscribe(
+      method,
+      params,
+      (payload, kind) => {
+        if (kind !== "snapshot") onEvent(payload);
+      },
+      onEnded === undefined ? undefined : { onEnded },
+    );
     return () => subscription.unsubscribe();
   };
   return {
-    intents: (docId, onIntent) => stream("objects.intents.subscribe", { docId }, onIntent),
+    intents: (docId, onIntent, onEnded) =>
+      stream("objects.intents.subscribe", { docId }, onIntent, onEnded),
     answer: (answer) => client.request("objects.intent.answer", answer),
-    presence: async (onSnapshot) => {
+    presence: async (onSnapshot, onEnded) => {
       // whole values: one that arrives before the first answer must not be overwritten by it
       let ready = false;
       const early: unknown[] = [];
-      const subscription = await client.subscribe("objects.presence.subscribe", {}, (payload) => {
-        if (ready) onSnapshot(payload);
-        else early.push(payload);
-      });
+      const subscription = await client.subscribe(
+        "objects.presence.subscribe",
+        {},
+        (payload) => {
+          if (ready) onSnapshot(payload);
+          else early.push(payload);
+        },
+        onEnded === undefined ? undefined : { onEnded },
+      );
       onSnapshot(subscription.snapshot);
       ready = true;
       for (const payload of early) onSnapshot(payload);
