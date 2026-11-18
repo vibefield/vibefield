@@ -122,7 +122,7 @@ describe("the hand-off's reader", () => {
     expect(error.reason).toBe("late");
     expect(Date.now() - started).toBeLessThan(2_000);
     // the wait is the registry's when no row shortens it
-    expect(CUSTODY.HANDOFF_WAIT_MS).toBe(5_000);
+    expect(CUSTODY.HANDOFF_WAIT_MS).toBe(10_000);
     // a line that comes after the refusal changes nothing
     stdin.end(line(VALID));
     expect(stdin.listenerCount("data")).toBe(0);
