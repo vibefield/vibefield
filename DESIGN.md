@@ -2836,7 +2836,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **its faces** — each face as its type's glyph at 7.4 on 152.6, 10 apart from the column, in the order the
       bloom opens them; the first, what it is, in `--vf-card-face-ink`, the rest in `--vf-card-face-ink-2`.
       *(2026-11-14, item 405: the card's bloom waits for OB-1b; until then each card has one face, so the foot shows
-      its one glyph.)*
+      its one glyph.)* *Corrected 2026-11-18: OB-1b and the card's bloom landed with OB's custody fix, so a card
+      shows each of its faces along its foot, in the bloom's order.*
     The fan's top 68 shows the glyph, the name and the window's top 39. No index is printed in its corners any more
     (round 5 retires HN-D1's two). **Said, not printed:** what it is and how big (`about`: "PDF · 2.4 MB",
     "PNG · 1440 × 900") is said in bold in the bar over a card picked up, before where it came from; where it came
@@ -12045,7 +12046,8 @@ the hand's six indexes, HN-D1): one glyph says a card's type — `type-text` (ra
 picture in its frame) · `document` (a file) · `link` · `agents` (a session) · `type-ref` (a ◇ with its heart, the mark a design
 tool gives a live instance: the object itself) — in the card's ink, never a colour of its own (§5). It heads the card's name,
 marks each of its faces along its foot, and is what the bloom's buds wear (*2026-11-14, item 405: the card's bloom waits
-for OB-1b; until then each card has one face, so the foot shows its one glyph*). `type-text`, `type-image` and
+for OB-1b; until then each card has one face, so the foot shows its one glyph*; *corrected 2026-11-18: OB-1b and
+the bloom landed, so the foot marks each face*). `type-text`, `type-image` and
 `type-ref` are Instrument drawings, the desktop's alone and not among the phone's picks; they made the set 68, so every
 "the 65" above was true when it was written. `document` left Studio only with them. `snippets`, `capture`, `code`,
 `terminal` and `message` keep their other wearers. `clipboard` left the selection bar with CS-D12 and is the phone's

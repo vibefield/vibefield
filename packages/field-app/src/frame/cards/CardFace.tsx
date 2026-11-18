@@ -109,8 +109,8 @@ export function faceName(card: Card): string {
   return name.replace(/\s+/gu, " ").trim();
 }
 
-/** THE ROUND 5 FACE: its type, then its name; the window; its faces along its foot, in the bloom's order. Until the
- * card's bloom (OB-1b) a card has one face, so its foot shows its one glyph. */
+/** THE ROUND 5 FACE: its type, then its name; the window; its faces along its foot, in the bloom's order, each by its
+ * glyph (corrected 2026-11-18: since OB-1b and the card's bloom a card has more than one face). */
 function PrintedFace({ card }: { readonly card: Card }): ReactElement {
   const type = cardType(card);
   const name = nameOnFace(faceName(card), type === "file");
