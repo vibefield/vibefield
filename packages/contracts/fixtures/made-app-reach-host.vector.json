@@ -1,0 +1,105 @@
+{
+  "note": "Item 525 (2026-11-18) \u2014 a made app's declared host, the cross-language vector: `MadeAppReachHost` (TS, src/artifacts.ts `isReachHost`, pinned by test/made-app-reach-host.test.ts) and the phone's `MadeAppReach.isHost` (apps/ios FieldProduct/ArtifactOpenShapes.swift, pinned by Tests/FieldProductTests/MadeAppReachHostTests.swift, reading a copy check:ios-fixtures holds byte-identical) must accept every `hosts` row and refuse every `refused` row. A last label of all digits, or of `0x` and any hex, is an address in another spelling, never a host. `moved` marks the rows item 525 moved from admitted to refused; every other row reads as it did before it. A deliberate change to the rule edits this file in the same commit.",
+  "hosts": [
+    {
+      "host": "cdn.jsdelivr.net",
+      "why": "a public name"
+    },
+    {
+      "host": "0x7f.example.com",
+      "why": "0x in a label that is not the last"
+    },
+    {
+      "host": "x.0xg",
+      "why": "0x then a letter that is not hex: a name"
+    },
+    {
+      "host": "a1.b2.com",
+      "why": "digits inside labels"
+    },
+    {
+      "host": "xn--bcher-kva.de",
+      "why": "an A-label"
+    }
+  ],
+  "refused": [
+    {
+      "host": "0x7f.0x1",
+      "why": "127.0.0.1 in hex",
+      "moved": true
+    },
+    {
+      "host": "0x64.0x65.0x66.0x67",
+      "why": "100.101.102.103 in hex, a tailnet address",
+      "moved": true
+    },
+    {
+      "host": "a.0xbeef",
+      "why": "a last label of 0x and hex",
+      "moved": true
+    },
+    {
+      "host": "a.0xff",
+      "why": "a last label of 0x and hex",
+      "moved": true
+    },
+    {
+      "host": "1.0x",
+      "why": "a bare 0x reads as 0",
+      "moved": true
+    },
+    {
+      "host": "a.0x",
+      "why": "a bare 0x reads as 0",
+      "moved": true
+    },
+    {
+      "host": "0X7F.0X1",
+      "why": "not canonical: uppercase"
+    },
+    {
+      "host": "1.2.3.4",
+      "why": "an IPv4 literal"
+    },
+    {
+      "host": "0177.0.0.1",
+      "why": "a last label of digits"
+    },
+    {
+      "host": "127.1",
+      "why": "a last label of digits"
+    },
+    {
+      "host": "2130706433",
+      "why": "one label"
+    },
+    {
+      "host": "cdn.jsdelivr.net.",
+      "why": "a root dot: not canonical"
+    },
+    {
+      "host": "0x7f.0x1.",
+      "why": "a root dot: not canonical"
+    },
+    {
+      "host": "cdn.jsdelivr.net:443",
+      "why": "a port"
+    },
+    {
+      "host": "[::1]",
+      "why": "an IPv6 literal in brackets"
+    },
+    {
+      "host": "::1",
+      "why": "an IPv6 literal"
+    },
+    {
+      "host": "ts.net",
+      "why": "the tailnet's own suffix"
+    },
+    {
+      "host": "x.ts.net",
+      "why": "a tailnet name"
+    }
+  ]
+}

@@ -443,6 +443,8 @@ const requiredMirrors = [
   ["launch", sheetFixtures.slice(0, 2), ["Sources/FieldWorkspace"]],
   // TS-7b — the phone code's vector: the Swift parser reads the bytes the TypeScript one does
   ["phone-code", ["phone-code.vector.json"], ["Tests/FieldMeshTests"]],
+  // Item 525 — a made app's declared host: MadeAppReach.isHost reads the bytes the contract's check does
+  ["reach-host", ["made-app-reach-host.vector.json"], ["Tests/FieldProductTests"]],
   // IOS-8f — the face deal's vector: the phone deals from the desktop's own deck and hash
   ["face", ["face-deal.vector.json"], ["Tests/FieldDesignTests"]],
   // UM-4 — the pinned packages' presentation tables, which ProfileGlyphSymbolsTests holds the glyph table to
