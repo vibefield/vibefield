@@ -2,9 +2,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { AgentExtensionStore } from "../src/agent-extension-store";
+import { AgentExtensionStore, KEPT_VALUES_UNREADABLE } from "../src/agent-extension-store";
 import { RpcCallError } from "../src/native-link";
-import { createDarwinSecretStore, type SecretToolCall } from "../src/plugin-settings";
+import {
+  createDarwinSecretStore,
+  type SecretToolCall,
+  SecretToolError,
+} from "../src/plugin-settings";
 
 // Item 542 (2026-11-18): a secret store's child process. No row here runs the real keychain tool: each hands the
 // store a stub of its own, written into the row's own folder and named by its absolute path, which the row checks
@@ -93,13 +97,20 @@ const TOO_LONG = "Couldn't save to your keychain: these values are too long to k
 const TOO_LONG_NAMED = `${TOO_LONG} (about 1,900 characters at most). Nothing was changed.`;
 const TOO_LONG_UNNAMED = `${TOO_LONG}. Nothing was changed.`;
 
-/** A store whose calls are recorded and never run: a read answers nothing, every other call succeeds. */
-function recorded() {
+/** A store whose calls are recorded and never run: a read hands back `read`, or finds no item (the tool's not-found
+ * exit, 44) when it is not given; every other call succeeds. (Item 548, 2026-11-18: a read answered an empty text,
+ * which the tool never hands back for an item fieldd wrote; a profile's kept entry read so is not whole, and a save
+ * over it is refused.) */
+function recorded(read?: string) {
   const calls: SecretToolCall[] = [];
   const store = createDarwinSecretStore({
     platform: "darwin",
     run: async (call) => {
       calls.push(call);
+      if (call.args[0] === "find-generic-password") {
+        if (read === undefined) throw new SecretToolError(44, false);
+        return { stdout: read };
+      }
       return { stdout: "" };
     },
   });
@@ -150,7 +161,9 @@ describe("a secret store's child process (item 542)", () => {
   });
 
   it("holds a profile's server values out of its arguments too", async () => {
-    const { store: secrets, read, root } = await stubbed();
+    // a profile that keeps no values yet: the keychain holds no entry for it (item 548, 2026-11-18: the stub's read
+    // word is no entry fieldd writes, and a save over it is refused)
+    const { store: secrets, read, root } = await stubbed("absent");
     const extensions = join(root, "extensions");
     await mkdir(extensions);
     const store = new AgentExtensionStore({
@@ -249,6 +262,31 @@ describe("a secret store's child process (item 542)", () => {
     const said = await refusal(store.keepValues("work", { D_TOKEN: "d".repeat(LINE_MAX) }));
     expect(said.kind).toBe("PRECONDITION_FAILED");
     expect(said.text).toContain(TOO_LONG_NAMED);
+    expect(calls.map((call) => call.args[0])).toEqual(["find-generic-password"]);
+  });
+
+  it("refuses a profile's server values over a kept entry it cannot read before their length, and writes nothing", async () => {
+    // item 548, 2026-11-18: the kept entry as the tool hands back a value outside printable ASCII, the hex of its
+    // bytes (item 542's probes). An entry not read whole is refused before any write, and at any length, so that
+    // refusal is the one a person reads, and the length's words are not said.
+    const kept = Buffer.from(JSON.stringify({ A_TOKEN: "a-548-t\u00f6k\u00e9n" }), "utf8").toString(
+      "hex",
+    );
+    const { store: secrets, calls } = recorded(`${kept}\n`);
+    const root = await mkdtemp(join(tmpdir(), "fieldd-secret-child-"));
+    dir = root;
+    const extensions = join(root, "extensions");
+    await mkdir(extensions);
+    const store = new AgentExtensionStore({
+      dir: extensions,
+      skillsDir: join(root, "skills"),
+      home: join(root, "home"),
+      secrets,
+    });
+    const said = await refusal(store.keepValues("work", { D_TOKEN: "d".repeat(LINE_MAX) }));
+    expect(said.kind).toBe("PRECONDITION_FAILED");
+    expect(said.text).toContain(KEPT_VALUES_UNREADABLE);
+    expect(said.text).not.toContain(TOO_LONG);
     expect(calls.map((call) => call.args[0])).toEqual(["find-generic-password"]);
   });
 
