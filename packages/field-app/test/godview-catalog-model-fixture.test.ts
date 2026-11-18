@@ -141,6 +141,29 @@ describe("M37 — the catalog's fixture backend says what fieldd's says", () => 
     expect(terminal?.monitorRow?.profileSet).toBe("work");
   });
 
+  it("PS-D5 — a shell running a job reads working on both boards", async () => {
+    const rows = profileTabRows(new Date(NOW).toISOString());
+    const session = {
+      id: "catalog-terminal-busy",
+      exited: false,
+      createdAtMs: NOW,
+      cwd: "/Users/you/Projects/scratch",
+      title: "sleep 60",
+      activity: { kind: "foreground-job" },
+    } as unknown as Parameters<typeof terminalInfoOf>[0];
+    const catalog = catalogModelBoard({ device: THIS_MAC, rows });
+    disposers.push(() => catalog.dispose());
+    catalog.born(session);
+    const fieldd = fielddBoard({ rows, device: THIS_MAC, terminals: [terminalInfoOf(session)] });
+    const [ours, theirs] = await Promise.all([openOf(catalog.port), openOf(fieldd.port)]);
+    expect(windowReads(ours)).toEqual(windowReads(theirs));
+    const terminal = windowReads(ours)[0]?.rows.find((row) => row.kind === "terminal");
+    expect(terminal?.monitorRow).toMatchObject({
+      status: "working",
+      activity: { kind: "foreground-job" },
+    });
+  });
+
   it("three other desktops on the board: live, asleep, and stale with no board", async () => {
     const nowIso = new Date(NOW).toISOString();
     const rows = profileTabRows(nowIso);
