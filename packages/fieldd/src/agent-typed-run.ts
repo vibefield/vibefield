@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import type { AgentSessionRecord, AgentSpawnedBy, TerminalInfo } from "@vibefield/contracts";
 import {
   findOwningProcess,
@@ -59,12 +60,38 @@ export function watchTypedProcess(
 /** One read of the whole process table — the kit's (`ps`, once): every pid,
  * its parent, and when it started. Undefined when `ps` cannot say.
  *
- * item 537 (2026-11-18, EL7) — the environment `ps` is to start under, the agents' allow-list snapshot the runtime is
- * handed, is taken here; the next commit starts `ps` under it. */
+ * item 537 (2026-11-18, EL7) — `ps` is started under `environment`, the agents' allow-list snapshot the runtime is
+ * handed (`AgentRuntimeService`), never this process's own. The kit's table reader takes the runner as an option, and
+ * the kit parses; this only starts `ps`, in the C locale the kit's own reading needs, as the kit's own runner does. */
 export function readProcesses(
-  _environment: Readonly<Record<string, string>>,
+  environment: Readonly<Record<string, string>>,
 ): Promise<ProcessTable | undefined> {
-  return readProcessTable();
+  return readProcessTable({ ps: (args) => runPs(environment, args) });
+}
+
+/** item 537 (2026-11-18, EL7) — when one pid started, from that same table read: the kit's own reading of `ps`'s
+ * start (its table's records carry it "as `processStartedAt` reports it"). A pid the table does not hold reads
+ * `undefined`, as `processStartedAt` reads a pid that is gone. One whole table where one pid was asked. */
+export async function processStartedAtUnder(
+  environment: Readonly<Record<string, string>>,
+  pid: number,
+): Promise<string | undefined> {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return undefined;
+  return (await readProcesses(environment))?.get(pid)?.startedAt;
+}
+
+function runPs(
+  environment: Readonly<Record<string, string>>,
+  args: readonly string[],
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "ps",
+      [...args],
+      { env: { ...environment, LC_ALL: "C" }, timeout: 5_000, maxBuffer: 16 * 1024 * 1024 },
+      (error, stdout) => (error ? reject(error) : resolve(stdout)),
+    );
+  });
 }
 
 /** Whether no process holds the pid now. A pid that belongs to someone else

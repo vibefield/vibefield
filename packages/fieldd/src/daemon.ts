@@ -2526,9 +2526,11 @@ export async function bootstrap(
             ...(config.agentGateway?.retryMs !== undefined
               ? { retryMs: config.agentGateway.retryMs }
               : {}),
-            ...(config.agentGateway?.processTable !== undefined
-              ? { processTable: config.agentGateway.processTable }
-              : {}),
+            // item 537 (2026-11-18, EL7) — the gateway reads the process table, and a pid's start, the runtime's
+            // way: `ps` under the agents' allow-list snapshot, never this process's own environment (a test's
+            // table, when one is given, stands in for the table: `agents.processTable` defers to it)
+            processTable: agents.processTable,
+            processStartedAt: agents.processStartedAt,
             ...(config.agentGateway?.runtimeFacts !== undefined
               ? { runtimeFacts: config.agentGateway.runtimeFacts }
               : {}),

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { processStartedAt } from "@vibefield/puppeteer-runtime/spawn-through";
 import { afterEach, describe, expect, it } from "vitest";
 import { agentEnvironment } from "../src/agent-host";
-import { readProcesses } from "../src/agent-typed-run";
+import { processStartedAtUnder, readProcesses } from "../src/agent-typed-run";
 
 // item 537 (2026-11-18, EL7) — fieldd reads the process table (the runtime's typed-run proofs, the gateway's
 // placement and adoption) through the kit's `readProcessTable`, whose one `ps` is started by a runner the kit takes as
@@ -84,8 +84,11 @@ describe("the process table fieldd reads (item 537, EL7)", () => {
     expect(kit).toBe(new Date(Date.parse(LSTART)).toISOString());
     const table = await readProcesses(agentEnvironment());
     expect(table?.get(PID)?.startedAt).toBe(kit);
+    // …and the one-pid read the gateway's adoption asks, which is that lookup
+    expect(await processStartedAtUnder(agentEnvironment(), PID)).toBe(kit);
     // a pid the table does not hold reads undefined, as the kit reads a pid whose `ps` says nothing
     expect(table?.get(PID + 1)).toBeUndefined();
     expect(await processStartedAt(PID + 1)).toBeUndefined();
+    expect(await processStartedAtUnder(agentEnvironment(), PID + 1)).toBeUndefined();
   });
 });

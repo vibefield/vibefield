@@ -138,6 +138,7 @@ import {
   endTypedRun,
   isTypedRun,
   processIsGone,
+  processStartedAtUnder,
   readProcesses,
   SPAWNED_BY_SHELL,
   type TypedWatchOptions,
@@ -791,6 +792,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** item 537 (2026-11-18, EL7) — what the composition starts on its own runs with: `agentEnvironment`'s allow-list,
    * one snapshot at composition (item 50, 2026-11-17). The services and the runtime are handed this same value. */
   private readonly serviceEnvironment: Record<string, string>;
+  /** item 537 (2026-11-18, EL7) — one read of the process table, its `ps` started under that same snapshot (a test's
+   * table, when one is given, stands in). The runtime's typed-run proofs read it, and so does the gateway. */
+  readonly processTable = (): Promise<ProcessTable | undefined> =>
+    this.opts.processTable?.() ?? readProcesses(this.serviceEnvironment);
+  /** item 537 (2026-11-18, EL7) — when a pid started, from one such read: the gateway's adoption asks it where the
+   * kit's `processStartedAt` read `ps` under this process's own environment */
+  readonly processStartedAt = (pid: number): Promise<string | undefined> =>
+    processStartedAtUnder(this.serviceEnvironment, pid);
   /** PJ-6 — each agent's own model picker, per Agent Profile, as last read */
   private readonly modelCatalogs: AgentModelCatalogs;
   private readonly records: SessionRecordStore;
@@ -2469,7 +2478,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     const end = await endTypedRun(typed, {
       shellPid: this.listed(terminals, sessionId) ? terminals.get(sessionId)?.pid : undefined,
-      readTable: this.opts.processTable ?? (() => readProcesses(this.serviceEnvironment)),
+      readTable: this.processTable,
       watch: (pid, onExit) => watchTypedProcess(pid, onExit, this.opts.typedWatch),
     });
     const placed = end === "signalled" || end === "gone";
@@ -4760,7 +4769,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     terminalId: string,
   ): Promise<boolean> {
     const verified = this.records.verifies(onDisk);
-    const read = this.opts.processTable ?? (() => readProcesses(this.serviceEnvironment));
+    const read = this.processTable;
     let verdict = await typedRunProof({ record, verified, terminal: row, table: await read() });
     for (
       let attempt = 1;
