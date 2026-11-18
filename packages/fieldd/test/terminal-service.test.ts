@@ -10,7 +10,15 @@
 import { AsyncResource } from "node:async_hooks";
 import { execFileSync } from "node:child_process";
 import { createHash, createHmac } from "node:crypto";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -50,6 +58,9 @@ import {
   TerminalRosterResult,
   type TerminalRouteSnapshot,
   TerminalRuntimeSessionsResult,
+  type TerminalScheme,
+  TerminalSchemeFile,
+  TerminalSchemeSetResult,
   type TerminalWorkloadClass,
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
@@ -58,6 +69,7 @@ import WebSocket from "ws";
 import { bootstrap, NativeLink, RpcCallError } from "../src/index";
 import { terminalCreateTarget } from "../src/native-link";
 import { TerminalBindingStore } from "../src/terminal-bindings";
+import { TerminalSchemeStore } from "../src/terminal-scheme";
 import {
   blockingConfigDiagnostics,
   projectConfigSnapshot,
@@ -161,6 +173,15 @@ interface FakeConfigDocument {
   contents: string;
 }
 
+/** TL-4a — one `set-colors` as a fake floor received it: the session, and the
+ * three colours as the bytes fieldd sent. */
+interface FakeColors {
+  sessionId: string;
+  foreground: number[];
+  background: number[];
+  cursor: number[];
+}
+
 /** One loader diagnostic, in the protocol's own shape. */
 interface FakeDiagnostic {
   severity: "info" | "warning" | "error";
@@ -225,7 +246,12 @@ const fakeRevision = (prefix: string, contents: string): string =>
  * this floor creates.
  * `ids` (item 464) are the sessions successive create-sessions answer, in
  * order, for a row that tells one birth from the next; past them, and by
- * default, every birth is `createdSessionId`. */
+ * default, every birth is `createdSessionId`.
+ * TL-4a: `set-colors` is answered `ok` and every one is recorded (`colors()`);
+ * `colorsRefused` names the one session it refuses, in the words the real
+ * floor uses for a session it does not hold; `colorsSilent` takes each one,
+ * records it and never answers (a wedged cell). `reload()` announces a reload
+ * of the configuration (`config-changed`), as the floor does after one. */
 async function startFakeFloor(
   opts: {
     ids?: readonly string[];
@@ -242,6 +268,8 @@ async function startFakeFloor(
     loader?: FakeLoader;
     concurrentWrite?: string;
     listed?: Array<Record<string, unknown>>;
+    colorsRefused?: string;
+    colorsSilent?: boolean;
   } = {},
 ): Promise<{
   endpoints: TerminalEndpoints;
@@ -259,6 +287,10 @@ async function startFakeFloor(
   commands: () => string[];
   /** AR-S4c — the floor's own exit fact for one session, to every connected client */
   exit: (sessionId: string) => void;
+  /** TL-4a — every `set-colors` this floor was sent, in order */
+  colors: () => FakeColors[];
+  /** TL-4a — the floor's own reload announcement, to every connected client */
+  reload: () => void;
 }> {
   // The root is the harness's (short on unix for the sun_path budget, tmpdir()
   // on win32 where no /tmp exists), and the fake binds the endpoint the real
@@ -289,6 +321,7 @@ async function startFakeFloor(
   let effectiveDiagnostics = loader(effectiveContents, document.path);
   let pendingConcurrentWrite = opts.concurrentWrite;
   const commands: string[] = [];
+  const colors: FakeColors[] = [];
   /** the sessions THIS floor created — what its terminate recognizes */
   const born = new Set<string>();
   let births = 0;
@@ -362,6 +395,22 @@ async function startFakeFloor(
           });
         } else if (msg.type === "list-sessions") {
           reply({ type: "sessions", sessions: opts.listed ?? [fakeSession(createdSessionId)] });
+        } else if (msg.type === "set-colors") {
+          // TL-4a — a session's colours, taken and answered; the refused one
+          // is recorded too, since it was asked
+          colors.push({
+            sessionId: String(msg.sessionId),
+            foreground: msg.foreground,
+            background: msg.background,
+            cursor: msg.cursor,
+          });
+          if (opts.colorsSilent === true) {
+            // taken and never answered: the caller's own bound is all that ends it
+          } else if (msg.sessionId === opts.colorsRefused) {
+            reply({ type: "error", message: "unknown session" });
+          } else {
+            reply({ type: "ok" });
+          }
         } else if (msg.type === "terminate" && opts.dieOnTerminate === true) {
           sock.destroy(); // the floor dies mid-call
         } else if (msg.type === "terminate") {
@@ -460,6 +509,16 @@ async function startFakeFloor(
         exitSignal: null,
         requestedTermination: null,
         exitOutcome: "completed",
+      };
+      for (const sock of live) sock.write(packet(Buffer.from(JSON.stringify(event))));
+    },
+    colors: () => [...colors],
+    reload: (): void => {
+      // a WHOLE snapshot, as every config event carries one (see `fakeConfig`)
+      const event = {
+        requestId: 0,
+        type: "config-changed",
+        config: fakeConfig(configRevision, effectiveDiagnostics),
       };
       for (const sock of live) sock.write(packet(Buffer.from(JSON.stringify(event))));
     },
@@ -899,6 +958,8 @@ describe("TerminalService (NF-3, mock native)", () => {
       "terminal.config.import": "settings.manage",
       "terminal.config.export": "settings.manage",
       "terminal.config.reveal": "settings.manage",
+      // TL-4a: what every local session is told its ground is — the config surface's power
+      "terminal.scheme.set": "settings.manage",
       // GT-8a: its own scope, the window's alone — never plugin-eligible shell.open
       "terminal.link.open": "terminal.link",
     };
@@ -5055,5 +5116,603 @@ describe("item 59 — a termination fieldd asked for is marked until its exit (t
     expect(service.terminationAskedAt(born.sessionId)).toBeTypeOf("number");
     expect(service.terminationAskedAt(born.sessionId, Date.now() + 61_000)).toBeUndefined();
     expect(service.terminationAskedAt(born.sessionId)).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TL-4a (2026-11-18) — the terminal scheme: what every local session is told
+// its ground, ink and cursor are. The deck says it (`terminal.scheme.set`);
+// fieldd keeps it, tells every live session of every cell through ghosttea's
+// `set-colors`, tells a birth after it at its create, and tells a cell again
+// when the cell announces a reload. The pure rows and the store are
+// terminal-scheme.test.ts's.
+
+/** TL-4a — a light scheme and a dark one, and the bytes each tells a session. */
+const LIGHT_SCHEME: TerminalScheme = {
+  foreground: "#1e2227",
+  background: "#ece8dc",
+  cursor: "#2b6aa6",
+  palette: [
+    { index: 1, color: "#a34d49" },
+    { index: 4, color: "#2b6aa6" },
+  ],
+};
+const LIGHT_BYTES = {
+  foreground: [30, 34, 39],
+  background: [236, 232, 220],
+  cursor: [43, 106, 166],
+};
+const DARK_SCHEME: TerminalScheme = {
+  foreground: "#abb2bf",
+  background: "#282c34",
+  cursor: "#528bff",
+  palette: [],
+};
+const DARK_BYTES = {
+  foreground: [171, 178, 191],
+  background: [40, 44, 52],
+  cursor: [82, 139, 255],
+};
+
+/** TL-4a — a session the floor still lists after its process ended */
+const husk = (id: string): Record<string, unknown> => ({ ...fakeSession(id), exited: true });
+
+/** TL-4a — what a fake floor's sessions were told, session by session, each in
+ * the order it was told. */
+function toldBySession(floor: { colors: () => FakeColors[] }): FakeColors[] {
+  return [...floor.colors()].sort((a, b) => a.sessionId.localeCompare(b.sessionId));
+}
+
+/** TL-4a — two class cells, each its own fake floor (the TC-S3 rows' shape). */
+function schemeRoutes(
+  interactive: TerminalEndpoints,
+  agent: TerminalEndpoints,
+  revision = 1,
+): TerminalRouteSnapshot {
+  return classRoutes(revision, [
+    {
+      cellInstanceId: 1,
+      cellBootId: "cell-i",
+      endpoints: interactive,
+      workloadClass: "interactive",
+      role: "class",
+    },
+    {
+      cellInstanceId: 2,
+      cellBootId: "cell-a",
+      endpoints: agent,
+      workloadClass: "agent",
+      role: "class",
+    },
+  ]);
+}
+
+/** TL-4a — a link that is DOWN (it names no cell and no legacy floor) until
+ * `up` gives it its rows, as NativeLink is between a loss and its redial. */
+function downLink(): {
+  link: ConstructorParameters<typeof TerminalService>[0]["link"];
+  up: (rows: TerminalRouteSnapshot) => void;
+} {
+  const listeners: Array<() => void> = [];
+  let snapshot: TerminalRouteSnapshot | undefined;
+  return {
+    link: {
+      subscribe: async () => ({ snapshot: observed([]) }),
+      get terminalEndpoints() {
+        return snapshot === undefined
+          ? undefined
+          : terminalCreateTarget(snapshot, "interactive")?.endpoints;
+      },
+      get terminalRoutes() {
+        return snapshot;
+      },
+      on: (_event: "terminal-endpoints", fn: () => void) => listeners.push(fn),
+    },
+    up: (rows: TerminalRouteSnapshot) => {
+      snapshot = rows;
+      for (const fn of listeners) fn();
+    },
+  };
+}
+
+/** TL-4a — a service over those two cells, its scheme kept in memory. */
+function twoCellService(
+  interactive: { endpoints: TerminalEndpoints },
+  agent: { endpoints: TerminalEndpoints },
+): TerminalService {
+  const routed = routedLink(schemeRoutes(interactive.endpoints, agent.endpoints));
+  const service = new TerminalService({ link: routed.link });
+  cleanup.push(() => service.dispose());
+  return service;
+}
+
+/** TL-4a — a daemon over the mock whose legacy mirror is one fake floor
+ * listing one live pane (the GT-3 rows' composition), a window holding exactly
+ * `scopes`, where the daemon keeps the scheme, and the door's audit records. */
+async function schemeDaemon(scopes: Scope[]) {
+  const dataDir = makeDataDir();
+  const mock = await startMock(dataDir);
+  const floor = await startFakeFloor({ listed: [fakeSession("pane-1")] });
+  mock.helloTerminal = floor.endpoints;
+  mock.observedState = observed([]);
+  const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+  cleanup.push(() => daemon.stop());
+  const rpc = await openRpc(daemon.controlPort);
+  await helloAs(rpc, daemon.tokens.mint(scopes, "scheme-test").token);
+  const schemeFile = join(dataDir, ...LAYOUT.TERMINAL_SCHEME_FILE);
+  const schemeRecords = async () =>
+    (await readAuditRecords(dataDir)).filter((r) => r.action === "terminal.scheme.set");
+  return { dataDir, floor, daemon, rpc, schemeFile, schemeRecords };
+}
+
+describe("the terminal scheme (TL-4a)", () => {
+  it("a change tells every live session in every cell, never a husk, and answers one row per cell", async () => {
+    const interactive = await startFakeFloor({
+      listed: [fakeSession("pane-1"), fakeSession("pane-2"), husk("husk-1")],
+    });
+    const agent = await startFakeFloor({ listed: [fakeSession("agent-1")] });
+    const service = twoCellService(interactive, agent);
+
+    const result = await service.setScheme(LIGHT_SCHEME);
+    expect(TerminalSchemeSetResult.parse(result)).toEqual({
+      changed: true,
+      cells: [
+        { cellBootId: "cell-i", workloadClass: "interactive", state: "told", sessions: 2 },
+        { cellBootId: "cell-a", workloadClass: "agent", state: "told", sessions: 1 },
+      ],
+    });
+    // the ghosttea command each floor took: the session and the three colours as bytes
+    expect(toldBySession(interactive)).toEqual([
+      { sessionId: "pane-1", ...LIGHT_BYTES },
+      { sessionId: "pane-2", ...LIGHT_BYTES },
+    ]);
+    expect(toldBySession(agent)).toEqual([{ sessionId: "agent-1", ...LIGHT_BYTES }]);
+  });
+
+  it("the same scheme again answers changed: false and tells nobody, whatever its letter case or palette order; so does a restarted fieldd", async () => {
+    const floor = await startFakeFloor({ listed: [fakeSession("pane-1")] });
+    const file = join(makeDataDir(), ...LAYOUT.TERMINAL_SCHEME_FILE);
+    const service = fakeFloorService(floor, { scheme: new TerminalSchemeStore({ file }) });
+    expect((await service.setScheme(LIGHT_SCHEME)).changed).toBe(true);
+    expect(floor.colors()).toHaveLength(1);
+    const commands = floor.commands().length;
+
+    const shouted: TerminalScheme = {
+      foreground: "#1E2227",
+      background: "#ECE8DC",
+      cursor: "#2B6AA6",
+      palette: [
+        { index: 1, color: "#A34D49" },
+        { index: 4, color: "#2B6AA6" },
+      ],
+    };
+    const reordered: TerminalScheme = {
+      ...LIGHT_SCHEME,
+      palette: [...LIGHT_SCHEME.palette].reverse(),
+    };
+    for (const same of [LIGHT_SCHEME, shouted, reordered]) {
+      expect(await service.setScheme(same)).toEqual({ changed: false, cells: [] });
+    }
+    expect(floor.colors(), "no session was told again").toHaveLength(1);
+    expect(floor.commands(), "nor was the floor asked anything").toHaveLength(commands);
+
+    // fieldd restarted: a new service over the same file holds the same scheme
+    const restarted = fakeFloorService(floor, { scheme: new TerminalSchemeStore({ file }) });
+    const connections = floor.connections();
+    expect(await restarted.setScheme(shouted)).toEqual({ changed: false, cells: [] });
+    expect(floor.connections(), "a restarted fieldd dials nobody to say it").toBe(connections);
+    expect(floor.colors()).toHaveLength(1);
+  });
+
+  it("a cell that does not answer is said so, and its sessions are told once, as soon as the floor names it again", async () => {
+    const interactive = await startFakeFloor({ listed: [fakeSession("pane-1")] });
+    const agent = await startFakeFloor({ listed: [fakeSession("agent-1")] });
+    // the agent cell's socket is not there: nothing answers at its row's doors
+    const routed = routedLink(schemeRoutes(interactive.endpoints, paperEndpoints("agent")));
+    const service = new TerminalService({ link: routed.link });
+    cleanup.push(() => service.dispose());
+
+    expect(await service.setScheme(LIGHT_SCHEME)).toEqual({
+      changed: true,
+      cells: [
+        { cellBootId: "cell-i", workloadClass: "interactive", state: "told", sessions: 1 },
+        { cellBootId: "cell-a", workloadClass: "agent", state: "unavailable", sessions: 0 },
+      ],
+    });
+    expect(toldBySession(interactive)).toEqual([{ sessionId: "pane-1", ...LIGHT_BYTES }]);
+    expect(agent.connections()).toBe(0);
+
+    // the cell answers again (its row re-minted under the same boot): its
+    // sessions are told with no second change asked for and nothing dialing it
+    routed.move(schemeRoutes(interactive.endpoints, agent.endpoints, 2));
+    await until(
+      () => agent.colors().some((entry) => entry.sessionId === "agent-1"),
+      4000,
+      "the cell that was behind told when the floor named it again",
+    );
+    // a birth in it dials the cell once more: the listed session is not told twice
+    const born = await service.create({ workloadClass: "agent" });
+    await until(() => agent.colors().length === 2, 4000, "the newborn told");
+    // the listed session by the catch-up, the newborn by its own birth
+    expect(toldBySession(agent)).toEqual([
+      { sessionId: "agent-1", ...LIGHT_BYTES },
+      { sessionId: born.sessionId, ...LIGHT_BYTES },
+    ]);
+    expect(interactive.colors(), "the cell that answered is told once").toHaveLength(1);
+  });
+
+  it("a change made while the floor names no cell is kept, and every cell is told when the floor names them", async () => {
+    const interactive = await startFakeFloor({ listed: [fakeSession("pane-1")] });
+    const agent = await startFakeFloor({ listed: [fakeSession("agent-1"), husk("husk-1")] });
+    const down = downLink();
+    const service = new TerminalService({ link: down.link });
+    cleanup.push(() => service.dispose());
+
+    // no cell to tell: the change is kept, and the answer names no cell
+    expect(await service.setScheme(LIGHT_SCHEME)).toEqual({ changed: true, cells: [] });
+    expect(await service.setScheme(DARK_SCHEME)).toEqual({ changed: true, cells: [] });
+    expect(interactive.connections() + agent.connections()).toBe(0);
+
+    // the link is back: each cell is told the scheme kept LAST, once
+    down.up(schemeRoutes(interactive.endpoints, agent.endpoints));
+    await until(
+      () => interactive.colors().length === 1 && agent.colors().length === 1,
+      4000,
+      "both cells told when the floor named them",
+    );
+    // a later reading of the same rows tells nobody again
+    down.up(schemeRoutes(interactive.endpoints, agent.endpoints, 2));
+    const born = await service.create({ workloadClass: "agent" });
+    await until(() => agent.colors().length === 2, 4000, "the newborn told");
+    expect(interactive.colors()).toEqual([{ sessionId: "pane-1", ...DARK_BYTES }]);
+    expect(toldBySession(agent)).toEqual([
+      { sessionId: "agent-1", ...DARK_BYTES },
+      { sessionId: born.sessionId, ...DARK_BYTES },
+    ]);
+    // and it is the same scheme still: the deck saying it again changes nothing
+    expect(await service.setScheme(DARK_SCHEME)).toEqual({ changed: false, cells: [] });
+  });
+
+  it("a reload announced by one cell tells that cell alone, once", async () => {
+    const interactive = await startFakeFloor({
+      listed: [fakeSession("pane-1"), fakeSession("pane-2")],
+    });
+    const agent = await startFakeFloor({ listed: [fakeSession("agent-1")] });
+    const service = twoCellService(interactive, agent);
+    await service.setScheme(LIGHT_SCHEME);
+    expect(interactive.colors()).toHaveLength(2);
+    expect(agent.colors()).toHaveLength(1);
+
+    interactive.reload();
+    await until(() => interactive.colors().length === 4, 4000, "the reloaded cell told again");
+    // a birth in that cell rides the same connection, behind anything the
+    // announcement set going: had the cell been told twice, it would stand here
+    const born = await service.create({ workloadClass: "interactive" });
+    await until(() => interactive.colors().length === 5, 4000, "the newborn told");
+    expect(interactive.colors().map((entry) => entry.sessionId)).toEqual([
+      "pane-1",
+      "pane-2",
+      "pane-1",
+      "pane-2",
+      born.sessionId,
+    ]);
+    expect(interactive.colors().every((entry) => entry.background[0] === 236)).toBe(true);
+    expect(agent.colors(), "the cell that announced nothing is told nothing").toEqual([
+      { sessionId: "agent-1", ...LIGHT_BYTES },
+    ]);
+  });
+
+  it("a session born after a scheme is kept is born with its COLORFGBG and told the scheme right behind its create; before one is kept, neither", async () => {
+    const floor = await startFakeFloor({
+      listed: [fakeSession("born-1")],
+      ids: ["born-1", "born-2", "born-3"],
+    });
+    const service = fakeFloorService(floor);
+
+    // nothing kept: the birth is byte for byte as before, and told nothing
+    const before = await service.create({});
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+    expect(floor.commands()).not.toContain("set-colors");
+
+    expect(await service.setScheme(LIGHT_SCHEME)).toEqual({
+      changed: true,
+      cells: [{ state: "told", sessions: 1 }],
+    });
+    const after = await service.create({});
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: { COLORFGBG: "0;15" },
+    });
+    await until(() => floor.colors().length === 2, 4000, "the newborn told");
+    const lastTwo = floor.commands().slice(-2);
+    expect(lastTwo, "told right behind its create").toEqual(["create-session", "set-colors"]);
+    expect(floor.colors()).toEqual([
+      { sessionId: before.sessionId, ...LIGHT_BYTES },
+      { sessionId: after.sessionId, ...LIGHT_BYTES },
+    ]);
+
+    // a dark ground: the other value, and the other colours
+    await service.setScheme(DARK_SCHEME);
+    const dark = await service.create({});
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: { COLORFGBG: "15;0" },
+    });
+    await until(() => floor.colors().length === 4, 4000, "the dark newborn told");
+    expect(floor.colors().slice(2)).toEqual([
+      { sessionId: before.sessionId, ...DARK_BYTES },
+      { sessionId: dark.sessionId, ...DARK_BYTES },
+    ]);
+  });
+
+  it("a birth that names its own COLORFGBG keeps it: an agent's clean environment, and a shell's overrides", async () => {
+    const floor = await startFakeFloor({ listed: [] });
+    const { agent } = programs();
+    const service = fakeFloorService(floor, {
+      defaultShell: () => "/bin/zsh",
+      shellIntegration: () => ({ ...INTEGRATION, COLORFGBG: "15;0" }),
+    });
+    await service.setScheme(LIGHT_SCHEME);
+
+    const variables = { TERM: "xterm-256color", COLORFGBG: "15;0" };
+    await service.spawn({ command: agent, args: [], cwd: dirname(agent), variables });
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({ mode: "clean", variables });
+    // one that names none is given the kept scheme's
+    const bare = { TERM: "xterm-256color" };
+    await service.spawn({ command: agent, args: [], cwd: dirname(agent), variables: bare });
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "clean",
+      variables: { ...bare, COLORFGBG: "0;15" },
+    });
+    // a shell whose integration names one keeps the integration's
+    await service.create({});
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: { ...INTEGRATION, COLORFGBG: "15;0" },
+    });
+    // the hint is the birth's own; the colours each is told are the device's
+    await until(() => floor.colors().length === 3, 4000, "all three births told");
+    expect(floor.colors()).toEqual([
+      { sessionId: floor.createdSessionId, ...LIGHT_BYTES },
+      { sessionId: floor.createdSessionId, ...LIGHT_BYTES },
+      { sessionId: floor.createdSessionId, ...LIGHT_BYTES },
+    ]);
+  });
+
+  it("a scheme that cannot be kept is UNAVAILABLE scheme-unkept, and no session is told it", async () => {
+    const root = makeDataDir();
+    // fieldd's folder is a regular file: nothing can be written beneath it
+    writeFileSync(join(root, "fieldd"), "not a folder");
+    const file = join(root, ...LAYOUT.TERMINAL_SCHEME_FILE);
+    const floor = await startFakeFloor({ listed: [fakeSession("pane-1")] });
+    const service = fakeFloorService(floor, { scheme: new TerminalSchemeStore({ file }) });
+
+    const refused = await refusalOf(service.setScheme(LIGHT_SCHEME));
+    expect(refused.kind).toBe("UNAVAILABLE");
+    expect(refused.retryable).toBe(true);
+    expect(refused.details).toMatchObject({ service: "terminal", state: "scheme-unkept" });
+    expect(floor.connections(), "no cell was dialed").toBe(0);
+    expect(floor.colors()).toEqual([]);
+
+    // nothing was kept, so a birth after it is born and told as before
+    await service.create({});
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+    expect(floor.colors()).toEqual([]);
+  });
+
+  it("a floor that takes the tell and never answers costs a birth nothing: the caller has its session while the tell is still unanswered", async () => {
+    const floor = await startFakeFloor({ listed: [], colorsSilent: true });
+    const events: CapturedLog[] = [];
+    const scheme = new TerminalSchemeStore();
+    scheme.keep(LIGHT_SCHEME);
+    const service = fakeFloorService(floor, { scheme, logger: captureLogger(events) });
+
+    const born = await service.create({});
+    expect(born.sessionId).toBe(floor.createdSessionId);
+    // the tell did go out, behind the create
+    await until(() => floor.colors().length === 1, 4000, "the newborn was asked");
+    expect(floor.colors()).toEqual([{ sessionId: born.sessionId, ...LIGHT_BYTES }]);
+    // and nothing has given up on it yet: a birth that waited for the tell
+    // could only have come back after this was logged
+    expect(events.map((entry) => entry.event)).not.toContain("fieldd.terminal.scheme_birth_untold");
+  });
+
+  it("a cell that lists its sessions and never answers a tell is said unavailable, not told", async () => {
+    const floor = await startFakeFloor({ listed: [fakeSession("pane-1")], colorsSilent: true });
+    const service = fakeFloorService(floor, { requestTimeoutMs: 300 });
+    expect(await service.setScheme(LIGHT_SCHEME)).toEqual({
+      changed: true,
+      cells: [{ state: "unavailable", sessions: 0 }],
+    });
+    expect(floor.colors()).toEqual([{ sessionId: "pane-1", ...LIGHT_BYTES }]);
+  });
+
+  it("a session that ends between the list and the tell is not counted, and the rest of its cell is told", async () => {
+    const floor = await startFakeFloor({
+      listed: [fakeSession("pane-1"), fakeSession("pane-gone")],
+      colorsRefused: "pane-gone",
+    });
+    const service = fakeFloorService(floor);
+    expect(await service.setScheme(DARK_SCHEME)).toEqual({
+      changed: true,
+      cells: [{ state: "told", sessions: 1 }],
+    });
+    // both were asked; the floor no longer held one of them
+    expect(toldBySession(floor)).toEqual([
+      { sessionId: "pane-1", ...DARK_BYTES },
+      { sessionId: "pane-gone", ...DARK_BYTES },
+    ]);
+    // and the connection the refusal came back on is still the cell's
+    await service.create({});
+    expect(floor.connections()).toBe(1);
+  });
+
+  it("a cell that announces a reload of its configuration is told the scheme again; with none kept, it is told nothing", async () => {
+    const floor = await startFakeFloor({ listed: [fakeSession("pane-1"), husk("husk-1")] });
+    const service = fakeFloorService(floor);
+    // a control connection and no scheme kept: the announcement asks the cell nothing
+    await service.readConfig();
+    floor.reload();
+    // the announcement went out before this read, so it was heard before its answer
+    await service.readConfig();
+    expect(floor.commands()).not.toContain("list-sessions");
+    expect(floor.colors()).toEqual([]);
+
+    await service.setScheme(DARK_SCHEME);
+    expect(floor.colors()).toEqual([{ sessionId: "pane-1", ...DARK_BYTES }]);
+    floor.reload();
+    await until(() => floor.colors().length === 2, 4000, "the reloaded cell told again");
+    expect(floor.colors()).toEqual([
+      { sessionId: "pane-1", ...DARK_BYTES },
+      { sessionId: "pane-1", ...DARK_BYTES },
+    ]);
+  });
+
+  it("two changes in a row never interleave: every session hears the first and then the second", async () => {
+    const interactive = await startFakeFloor({
+      listed: [fakeSession("pane-1"), fakeSession("pane-2")],
+    });
+    const agent = await startFakeFloor({ listed: [fakeSession("agent-1")] });
+    const service = twoCellService(interactive, agent);
+
+    // the second is asked before the first has answered
+    const [first, second] = await Promise.all([
+      service.setScheme(LIGHT_SCHEME),
+      service.setScheme(DARK_SCHEME),
+    ]);
+    expect(first.changed).toBe(true);
+    expect(second.changed).toBe(true);
+    // every tell of the first reached the floor before any of the second
+    expect(interactive.colors().map((entry) => entry.background)).toEqual([
+      LIGHT_BYTES.background,
+      LIGHT_BYTES.background,
+      DARK_BYTES.background,
+      DARK_BYTES.background,
+    ]);
+    // so each session's last word is the second's
+    expect(toldBySession(interactive)).toEqual([
+      { sessionId: "pane-1", ...LIGHT_BYTES },
+      { sessionId: "pane-1", ...DARK_BYTES },
+      { sessionId: "pane-2", ...LIGHT_BYTES },
+      { sessionId: "pane-2", ...DARK_BYTES },
+    ]);
+    expect(toldBySession(agent)).toEqual([
+      { sessionId: "agent-1", ...LIGHT_BYTES },
+      { sessionId: "agent-1", ...DARK_BYTES },
+    ]);
+    // and what is kept is the second
+    expect(await service.setScheme(DARK_SCHEME)).toEqual({ changed: false, cells: [] });
+  });
+
+  it("through the daemon: settings.manage sets it, every session is told, the file holds it, and the audit records the act", async () => {
+    const box = await schemeDaemon(["settings.manage"]);
+    const set = TerminalSchemeSetResult.parse(
+      await box.rpc.call("terminal.scheme.set", { scheme: LIGHT_SCHEME }),
+    );
+    expect(set).toEqual({ changed: true, cells: [{ state: "told", sessions: 1 }] });
+    expect(box.floor.colors()).toEqual([{ sessionId: "pane-1", ...LIGHT_BYTES }]);
+    const kept = TerminalSchemeFile.parse(JSON.parse(readFileSync(box.schemeFile, "utf8")));
+    expect(kept.scheme).toEqual(LIGHT_SCHEME);
+
+    // the real ledger: an attempt naming the ground and the slot count, and its outcome
+    const records = await box.schemeRecords();
+    expect(records.map((record) => record.phase)).toEqual(["attempt", "outcome"]);
+    const [attempt, outcome] = records;
+    expect(attempt?.action).toMatch(/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/);
+    expect(attempt?.target).toEqual({ kind: "terminal", id: "scheme" });
+    expect(attempt?.attrs).toEqual({ background: "#ece8dc", palette: 2 });
+    expect(outcome?.outcome).toBe("succeeded");
+    expect(outcome?.attrs).toEqual({ changed: true, told: 1, unavailable: 0 });
+  });
+
+  it("through the daemon: a window without settings.manage is refused, and nothing is kept or told", async () => {
+    const box = await schemeDaemon(["terminal.attach"]);
+    const refused = await box.rpc.callErr("terminal.scheme.set", { scheme: LIGHT_SCHEME });
+    expect(refused.data?.kind).toBe("FORBIDDEN_SCOPE");
+    const required = (refused.data?.details as { required?: string } | undefined)?.required;
+    expect(required).toBe("settings.manage");
+    expect(existsSync(box.schemeFile), "nothing was kept").toBe(false);
+    expect(box.floor.colors(), "and nobody was told").toEqual([]);
+    expect(await box.schemeRecords(), "a refusal at the scope wall is no act").toEqual([]);
+
+    // the same scheme from the trusted window is a change: nothing was kept before it
+    const trusted = await openRpc(box.daemon.controlPort);
+    await helloAs(trusted, box.daemon.tokens.mint(["settings.manage"], "scheme-test").token);
+    const set = TerminalSchemeSetResult.parse(
+      await trusted.call("terminal.scheme.set", { scheme: LIGHT_SCHEME }),
+    );
+    expect(set.changed).toBe(true);
+  });
+
+  it("through the daemon: a scheme that is not one is PRECONDITION_FAILED, and nothing is kept or told", async () => {
+    const box = await schemeDaemon(["settings.manage"]);
+    const twice = [
+      { index: 1, color: "#000000" },
+      { index: 1, color: "#ffffff" },
+    ];
+    for (const params of [
+      { scheme: { ...LIGHT_SCHEME, background: "red" } },
+      { scheme: { ...LIGHT_SCHEME, palette: twice } },
+      { scheme: { ...LIGHT_SCHEME, cursor: "#2b6aa" } },
+      { scheme: "#ece8dc" },
+      {},
+    ]) {
+      const refused = await box.rpc.callErr("terminal.scheme.set", params);
+      expect(refused.data?.kind, JSON.stringify(params)).toBe("PRECONDITION_FAILED");
+    }
+    expect(existsSync(box.schemeFile)).toBe(false);
+    expect(box.floor.colors()).toEqual([]);
+    expect(await box.schemeRecords(), "refused before the act is recorded").toEqual([]);
+  });
+
+  it("through the daemon: the scheme survives a restart of fieldd, which then answers the same scheme changed: false", async () => {
+    const box = await schemeDaemon(["settings.manage"]);
+    await box.rpc.call("terminal.scheme.set", { scheme: LIGHT_SCHEME });
+    expect(box.floor.colors()).toHaveLength(1);
+
+    await box.daemon.stop();
+    const restarted = await bootstrap({ dataDir: box.dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => restarted.stop());
+    const rpc = await openRpc(restarted.controlPort);
+    await helloAs(rpc, restarted.tokens.mint(["settings.manage"], "scheme-test").token);
+
+    const same = { ...LIGHT_SCHEME, background: "#ECE8DC" };
+    expect(await rpc.call("terminal.scheme.set", { scheme: same })).toEqual({
+      changed: false,
+      cells: [],
+    });
+    expect(box.floor.colors(), "nobody is told the scheme they already hold").toHaveLength(1);
+    // a different one is a change, and is told
+    const set = TerminalSchemeSetResult.parse(
+      await rpc.call("terminal.scheme.set", { scheme: DARK_SCHEME }),
+    );
+    expect(set).toEqual({ changed: true, cells: [{ state: "told", sessions: 1 }] });
+    expect(toldBySession(box.floor)).toEqual([
+      { sessionId: "pane-1", ...LIGHT_BYTES },
+      { sessionId: "pane-1", ...DARK_BYTES },
+    ]);
+    // each boot writes its own ledger file, so the outcomes are counted, not ordered
+    const outcomes = (await box.schemeRecords()).filter((r) => r.phase === "outcome");
+    expect(outcomes).toHaveLength(3);
+    expect(outcomes.filter((r) => r.attrs?.["changed"] === true)).toHaveLength(2);
+    expect(outcomes.map((r) => r.attrs)).toContainEqual({
+      changed: false,
+      told: 0,
+      unavailable: 0,
+    });
+  });
+
+  it("through the daemon: a call that names another device is refused before the door, as every local method is", async () => {
+    const box = await schemeDaemon(["settings.manage"]);
+    const params = { scheme: LIGHT_SCHEME, device: "dev-elsewhere" };
+    const routed = await box.rpc.callErr("terminal.scheme.set", params);
+    expect(routed.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(routed.data?.details).toMatchObject({
+      method: "terminal.scheme.set",
+      locality: "local",
+    });
+    expect(existsSync(box.schemeFile)).toBe(false);
+    expect(box.floor.colors()).toEqual([]);
+    expect(await box.schemeRecords()).toEqual([]);
   });
 });
