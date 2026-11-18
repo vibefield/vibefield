@@ -27,6 +27,7 @@ import {
   type ThreadSendOutcome,
 } from "../src/chat/thread-send";
 import { HAND_OVER_WORDS } from "../src/frame/cards/hand-over";
+import { type RendererLogger, setRendererLogger } from "../src/logging";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -164,9 +165,7 @@ describe('Send queues your words (TH-1; DESIGN.md §8 "Chat\'s composer")', () =
       1,
       { state: "failed", reason: "that request id is another spark's" },
     ]);
-    expect(sendNote(said, "Vela")).toBe(
-      "Couldn't send to Vela: that request id is another spark's",
-    );
+    expect(sendNote(said, "Vela")).toBe("Couldn't send to Vela. Try again.");
     // a step that throws is the send's outcome, never a rejection
     const broken = deps({
       stillKept: async () => {
@@ -349,5 +348,82 @@ describe("what a send carries beyond its words (OB-L1, OB-D10 A)", () => {
     expect(asked).toEqual(["/h/vibefield-hand-1.png"]);
     expect(steps, "no bubble, no wake").toEqual([]);
     expect(sendNote(outcome, "Vela")).toBe("Not sent — that picture's file is no longer kept");
+  });
+});
+
+describe("a send that is not taken leaves its cause in the log by its kind (item 293's rider)", () => {
+  const QUIET: RendererLogger = {
+    child: () => QUIET,
+    trace() {},
+    debug() {},
+    info() {},
+    warn() {},
+    error() {},
+    fatal() {},
+    isLevelEnabled: () => false,
+  };
+  afterEach(() => {
+    setRendererLogger(QUIET);
+  });
+  /** What Chat's send warns, by event and attrs; nothing else is kept. */
+  function capture() {
+    const warned: Array<{ event: string; attrs: unknown }> = [];
+    const logger: RendererLogger = {
+      ...QUIET,
+      child: () => logger,
+      warn: (event, _message, attrs) => {
+        warned.push({ event, attrs });
+      },
+    };
+    setRendererLogger(logger);
+    return warned;
+  }
+
+  it("says a refused send's act and next step, and logs its kind, never fieldd's words", async () => {
+    const warned = capture();
+    const refused = deps({
+      say: async () => {
+        throw new FielddRpcError(
+          "PRECONDITION_FAILED",
+          "that request id is another spark's",
+          false,
+        );
+      },
+    });
+    const said = await sendToThread(refused.deps, MESSAGE, []);
+    expect(sendNote(said, "Vela")).toBe("Couldn't send to Vela. Try again.");
+    expect(warned).toEqual([
+      {
+        event: "renderer.chat.send_refused",
+        attrs: { kind: "PRECONDITION_FAILED", retryable: false },
+      },
+    ]);
+    expect(JSON.stringify(warned)).not.toContain("another spark");
+  });
+
+  it("keeps a refused wake's own words, which may be the person's next step, and logs its kind", async () => {
+    const warned = capture();
+    const refused = deps({
+      needsWake: true,
+      wake: async () => {
+        // fieldd's own words for a launch whose agent is not installed (roles.ts): a step the person can take
+        throw new FielddRpcError(
+          "PRECONDITION_FAILED",
+          "VibeField can't find this Mac's Claude Code install. Reinstall Claude Code, then try again.",
+          false,
+        );
+      },
+    });
+    const said = await sendToThread(refused.deps, MESSAGE, []);
+    expect(sendNote(said, "Vela")).toBe(
+      "Couldn't wake Vela: VibeField can't find this Mac's Claude Code install. Reinstall Claude Code, then try again.",
+    );
+    expect(warned).toEqual([
+      {
+        event: "renderer.chat.wake_refused",
+        attrs: { kind: "PRECONDITION_FAILED", retryable: false },
+      },
+    ]);
+    expect(JSON.stringify(warned)).not.toContain("Reinstall");
   });
 });

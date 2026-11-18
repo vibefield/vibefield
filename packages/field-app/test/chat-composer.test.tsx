@@ -799,9 +799,7 @@ describe('Send (DESIGN.md §8 "Chat\'s composer")', () => {
         { start: 4, length: words.length - "ask ".length - " to rebase".length, kind: "session" },
       ],
     });
-    expect(mounted.said).toEqual([
-      "Couldn't send to Vela: the spark has no session to take your words yet",
-    ]);
+    expect(mounted.said).toEqual(["Couldn't send to Vela. Try again."]);
     expect(chipLabels()).toEqual(["vibe-field"]);
     expect(editor().textContent).toContain("to rebase");
     expect(write).not.toHaveBeenCalled();

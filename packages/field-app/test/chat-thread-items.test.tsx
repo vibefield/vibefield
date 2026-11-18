@@ -341,7 +341,7 @@ describe('the hello and its starters (DESIGN.md §8 "Chat\'s thread"; NS-D4; TH-
     expect(hello()).toBeNull();
     await act(async () => finish({ state: "failed", reason: "fieldd isn't running" }));
     await settle();
-    expect(said).toEqual(["Couldn't send to Vela: fieldd isn't running"]);
+    expect(said).toEqual(["Couldn't send to Vela. Try again."]);
     // a send refused leaves no bubble, so the hello and its starters stand, at rest
     expect(hello()).not.toBeNull();
     expect($(".vf-chat-starters")?.hasAttribute("aria-busy")).toBe(false);
@@ -453,7 +453,7 @@ describe('a hatched spark\'s first job (track ES, ES-2; ES-D2 A; DESIGN.md §8 "
     await act(async () => chooseSpark(VELA.id, STARTERS[1]?.words));
     await settle();
     expect(road.sent).toEqual([{ text: STARTERS[1]?.words, stills: [] }]);
-    expect(said).toEqual(["Couldn't send to Vela: fieldd isn't running"]);
+    expect(said).toEqual(["Couldn't send to Vela. Try again."]);
     // a send refused leaves no bubble: the hello and its starters stand, and the job is not sent again
     expect(hello()).not.toBeNull();
     await act(async () => chooseSpark(VELA.id));
